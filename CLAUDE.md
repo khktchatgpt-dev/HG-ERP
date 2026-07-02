@@ -96,6 +96,36 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Identifiers**: `uuid primary key default gen_random_uuid()`. FKs use explicit `on delete` policy — never leave it implicit.
 - **After applying** (`supabase db push` or SQL editor): ask Claude to **"sync types"** to regen `src/lib/database.types.ts`. See `.claude/skills/sync-types/`.
 
+## Frontend & UI conventions (admin/workspace)
+
+- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô. Các mảnh chuẩn: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`. Mẫu tham chiếu: `admin/users/UsersManager.tsx`, `technical/products/ProductsManager.tsx`.
+- **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
+- **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
+- **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.
+
+## Cross-module side effects — Event Bus
+
+- KHÔNG gọi service module khác trực tiếp cho side-effect (notify/audit/KPI). `emit()` một domain event từ `@/events/bus`, khai type ở `src/events/types.ts`, viết handler ở `src/events/handlers/` (đăng ký trong `register.ts`). Handler lỗi được nuốt + log, không làm rollback caller. Mẫu: `tasks.service.ts` → `task.notifications.ts`.
+
+## Testing & quality gates
+
+- **Vitest** (`npm test`). Test file co-located `*.test.ts`. Bắt buộc test cho: logic thuần rủi ro cao (tính tiền/tồn/công nợ), `permissions.can()`, zod schema quan trọng, event bus. UI để verify tay.
+- **Trước khi coi là xong**: `npm run check` (typecheck + lint + test) phải sạch. Format: `npm run format` (Prettier + tự sắp class Tailwind). Hook tự chạy prettier+eslint `--fix` trên file vừa sửa.
+- **Đừng** mark hoàn thành khi typecheck/test còn đỏ.
+
+## Skills (`.claude/skills/`)
+
+Skill nội bộ (commit trong repo) — gọi khi hợp:
+- `sync-types` — regen `database.types.ts` sau migration.
+- `add-module` — scaffold domain module 3 lớp + route.
+- `add-migration` — file SQL đúng chuẩn RLS + đánh số.
+- `add-erp-page` — trang workspace dùng ERP kit.
+- `check-rls` — rà RLS + Supabase security advisor.
+
+Skill ngoài (official Supabase, nguồn `.agents/skills/`, symlink vào `.claude/skills` theo máy — chạy `npx skills add supabase/agent-skills` sau khi clone):
+- `supabase` — mọi task Supabase (auth/RLS/migration/storage), luôn verify theo changelog.
+- `supabase-postgres-best-practices` — chuẩn Postgres.
+
 ## Environment
 
 Copy `.env.local.example` → `.env.local`. Required:

@@ -1,0 +1,11 @@
+# Chuẩn hoá line-ending về LF cho mọi file text (tránh CRLF churn trên Windows)
+* text=auto eol=lf
+
+# Nhị phân — không đụng
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary

@@ -1,0 +1,16 @@
+# Build output & deps
+.next/
+out/
+build/
+node_modules/
+coverage/
+
+# Lockfiles & generated
+package-lock.json
+src/lib/database.types.ts
+*.tsbuildinfo
+next-env.d.ts
+
+# Docs/data giữ nguyên format
+docs/
+scripts/seed_users.json

@@ -43,3 +43,9 @@ next-env.d.ts
 # claude code — local machine settings + worktrees (skills are shared)
 .claude/settings.local.json
 .claude/worktrees/
+
+# External skills (npx skills add): commit source in .agents/, ignore the
+# machine-specific absolute symlinks. Re-create per machine with:
+#   npx skills add supabase/agent-skills
+.claude/skills/supabase
+.claude/skills/supabase-postgres-best-practices
