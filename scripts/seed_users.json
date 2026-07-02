@@ -1,0 +1,273 @@
+{
+  "password_hash": "$2b$12$5PYRc3jsKUIt5gu0p8Zy.u6U5a6YLWg.kL1wt.6rrsBq6CsTUuctK",
+  "departments": [
+    "Ban Giám Đốc",
+    "Bán Hàng",
+    "Cắt Vải",
+    "Hành Chính Nhân Sự",
+    "Kho",
+    "Kế Hoạch Sản Xuất-cung ứng",
+    "Kỹ Thuật",
+    "QC",
+    "Tài Chính Kế Toán",
+    "Xưởng Sản Xuất"
+  ],
+  "users": [
+    {
+      "email": "dir1@hoanggia.de",
+      "name": "Điền Hg",
+      "dept": "Ban Giám Đốc",
+      "title": "Giám Đốc",
+      "role": "admin",
+      "phone": ""
+    },
+    {
+      "email": "hrm1@hoanggia.de",
+      "name": "Trương Văn Hùng",
+      "dept": "Hành Chính Nhân Sự",
+      "title": "Trưởng Phòng HR",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "ketoan3@hoanggia.de",
+      "name": "Huỳnh Ngọc Thiệt",
+      "dept": "Tài Chính Kế Toán",
+      "title": "Kế Toán Trưởng",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "ketoan2@hoanggia.de",
+      "name": "Vũ Phương Thảo",
+      "dept": "Tài Chính Kế Toán",
+      "title": "Kế Toán Trưởng",
+      "role": "manager",
+      "phone": "0967971519"
+    },
+    {
+      "email": "ketoan@hoanggia.de",
+      "name": "Phạm Thị Diện",
+      "dept": "Tài Chính Kế Toán",
+      "title": "NV Kế toán",
+      "role": "employee",
+      "phone": "0935602099"
+    },
+    {
+      "email": "ketoan1@hoanggia.de",
+      "name": "Võ Thị Thu Hồng",
+      "dept": "Tài Chính Kế Toán",
+      "title": "NV Kế toán",
+      "role": "employee",
+      "phone": "0337216487"
+    },
+    {
+      "email": "sale1@hoanggia.de",
+      "name": "Nguyễn T.Minh Hằng",
+      "dept": "Bán Hàng",
+      "title": "NV Sales",
+      "role": "employee",
+      "phone": ""
+    },
+    {
+      "email": "sale2@hoanggia.de",
+      "name": "Nguyễn Phạm Thanh Phương",
+      "dept": "Bán Hàng",
+      "title": "NV Sales",
+      "role": "employee",
+      "phone": ""
+    },
+    {
+      "email": "kehoach@hoanggia.de",
+      "name": "Phan Thị Lệ Hằng",
+      "dept": "Kế Hoạch Sản Xuất-cung ứng",
+      "title": "Kế Hoạch Sản Xuất",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "kehoach1@hoanggia.de",
+      "name": "Đặng Thị Thanh Nga",
+      "dept": "Kế Hoạch Sản Xuất-cung ứng",
+      "title": "mua hàng",
+      "role": "employee",
+      "phone": "0356033340"
+    },
+    {
+      "email": "kehoach2@hoanggia.de",
+      "name": "Lê Thị Phương Nhân",
+      "dept": "Kế Hoạch Sản Xuất-cung ứng",
+      "title": "mua hàng",
+      "role": "employee",
+      "phone": "0935967641"
+    },
+    {
+      "email": "wh1@hoanggia.de",
+      "name": "Lê Khắc Hào",
+      "dept": "Kho",
+      "title": "Thủ kho",
+      "role": "manager",
+      "phone": "0384915497"
+    },
+    {
+      "email": "wh2@hoanggia.de",
+      "name": "Hà Nguyễn Nữ",
+      "dept": "Kho",
+      "title": "Kho NVL",
+      "role": "employee",
+      "phone": "0328635551"
+    },
+    {
+      "email": "qc1@hoanggia.de",
+      "name": "Nguyễn Thị Kim Loan",
+      "dept": "QC",
+      "title": "Thống Kê kiêm QC",
+      "role": "employee",
+      "phone": "0373084755"
+    },
+    {
+      "email": "qc2@hoanggia.de",
+      "name": "Trần Thị Ánh Nguyệt",
+      "dept": "QC",
+      "title": "Thống Kê kiêm QC",
+      "role": "employee",
+      "phone": "0396412291"
+    },
+    {
+      "email": "qc3@hoanggia.de",
+      "name": "Lê Thị Phúc",
+      "dept": "QC",
+      "title": "Thống Kê kiêm QC",
+      "role": "employee",
+      "phone": "0769773028"
+    },
+    {
+      "email": "nv20@hoanggia.de",
+      "name": "Trần Văn Đạo",
+      "dept": "Xưởng Sản Xuất",
+      "title": "Trưởng BP SX",
+      "role": "manager",
+      "phone": "0934913788"
+    },
+    {
+      "email": "nv21@hoanggia.de",
+      "name": "Nguyễn Bá Thuận",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ cơ điện",
+      "role": "manager",
+      "phone": "0768567988"
+    },
+    {
+      "email": "nv22@hoanggia.de",
+      "name": "Phạm Thị Thành",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT May",
+      "role": "manager",
+      "phone": "0335029677"
+    },
+    {
+      "email": "nv23@hoanggia.de",
+      "name": "Lê Văn Bảy",
+      "dept": "Xưởng Sản Xuất",
+      "title": "QL Xưởng X2",
+      "role": "manager",
+      "phone": "0907823870"
+    },
+    {
+      "email": "nv24@hoanggia.de",
+      "name": "Đinh Ngọc Quân",
+      "dept": "Xưởng Sản Xuất",
+      "title": "QL Xưởng X3",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "nv25@hoanggia.de",
+      "name": "Lê Quốc Dương",
+      "dept": "Xưởng Sản Xuất",
+      "title": "QL Xưởng X3",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "nv26@hoanggia.de",
+      "name": "Đồng Văn Đạt",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ hàn",
+      "role": "manager",
+      "phone": "0397822709"
+    },
+    {
+      "email": "nv27@hoanggia.de",
+      "name": "Phùng Sẵn",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ nguội",
+      "role": "manager",
+      "phone": "0963242678"
+    },
+    {
+      "email": "nv28@hoanggia.de",
+      "name": "Trương Thị Ngọc Hằng",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ phôi",
+      "role": "manager",
+      "phone": "0333788103"
+    },
+    {
+      "email": "nv29@hoanggia.de",
+      "name": "Nguyễn Thị Xuân Hồng",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ Sơn sắt",
+      "role": "manager",
+      "phone": "0865321241"
+    },
+    {
+      "email": "nv30@hoanggia.de",
+      "name": "Phạm Thị Sinh",
+      "dept": "Xưởng Sản Xuất",
+      "title": "TT Tổ sơn nhôm",
+      "role": "manager",
+      "phone": "0975210611"
+    },
+    {
+      "email": "nv31@hoanggia.de",
+      "name": "Dương Thái Quang",
+      "dept": "Kỹ Thuật",
+      "title": "TT Kỹ thuật xưởng",
+      "role": "manager",
+      "phone": ""
+    },
+    {
+      "email": "nv32@hoanggia.de",
+      "name": "Nguyễn Viết Phong",
+      "dept": "Cắt Vải",
+      "title": "NV Cắt Vải",
+      "role": "employee",
+      "phone": ""
+    },
+    {
+      "email": "kehoach3@hoanggia.de",
+      "name": "Nguyễn Thị Mộng cam",
+      "dept": "Kế Hoạch Sản Xuất-cung ứng",
+      "title": "mua hàng",
+      "role": "employee",
+      "phone": "0382691673"
+    },
+    {
+      "email": "kehoach4@hoanggia.de",
+      "name": "Lê Nhật Hằng",
+      "dept": "Kế Hoạch Sản Xuất-cung ứng",
+      "title": "mua hàng",
+      "role": "employee",
+      "phone": ""
+    },
+    {
+      "email": "it@hoanggia.de",
+      "name": "Trần Đại Việt",
+      "dept": "Kỹ Thuật",
+      "title": "Nhân Viên IT",
+      "role": "employee",
+      "phone": "0388948810"
+    }
+  ]
+}
