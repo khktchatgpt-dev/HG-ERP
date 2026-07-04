@@ -47,7 +47,7 @@ export default async function TechnicalHome() {
         {/* Recent products */}
         <section className="lg:col-span-2">
           <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+            <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
               Sản phẩm gần đây
             </h2>
             <Link
@@ -64,7 +64,7 @@ export default async function TechnicalHome() {
           ) : (
             <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
               <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+                <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wider text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
                   <tr>
                     <th className="px-3 py-2">Mã / Tên</th>
                     <th className="px-3 py-2">Danh mục</th>
@@ -101,11 +101,12 @@ export default async function TechnicalHome() {
 
         {/* Quick actions */}
         <section>
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <h2 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
             Thao tác nhanh
           </h2>
           <div className="flex flex-col gap-2">
             <QuickAction href="/technical/products" title="Mở thư viện sản phẩm" />
+            <QuickAction href="/technical/load-cont" title="Tính load cont" />
             {canEdit && (
               <QuickAction href="/technical/products?new=1" title="+ Thêm sản phẩm mới" />
             )}
