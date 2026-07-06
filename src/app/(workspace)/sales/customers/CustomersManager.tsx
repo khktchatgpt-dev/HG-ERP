@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/ui/Button'
-import { Field, Input, Select, Textarea } from '@/components/ui/Input'
+import { Input } from '@/components/ui/Input'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -118,7 +118,7 @@ export function CustomersManager({
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
               <tr>
                 <th className="px-4 py-2.5">Mã / Tên</th>
                 <th className="px-4 py-2.5">Liên hệ</th>
@@ -153,7 +153,11 @@ export function CustomersManager({
                     )}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <Button size="sm" disabled={busy || !canEdit(c)} onClick={() => setEditing(c)}>
+                    <Button
+                      size="sm"
+                      disabled={busy || !canEdit(c)}
+                      onClick={() => setEditing(c)}
+                    >
                       Sửa
                     </Button>
                     <Button
@@ -169,7 +173,10 @@ export function CustomersManager({
                           confirmLabel: 'Xoá',
                         })
                         if (ok) {
-                          const ok2 = await send(`/api/dept/sales/customers/${c.id}`, 'DELETE')
+                          const ok2 = await send(
+                            `/api/dept/sales/customers/${c.id}`,
+                            'DELETE',
+                          )
                           if (ok2) toast.success('Đã xoá', c.name)
                         }
                       }}

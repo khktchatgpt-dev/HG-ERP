@@ -1,0 +1,91 @@
+import { materialsRepo, type Material } from './warehouse.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { type User } from '@/modules/core/users/users.repo'
+import { Conflict, Forbidden, NotFound } from '@/server/http'
+
+/** Tên phòng Kho trong `public.departments` (không hard-code UUID). */
+const WAREHOUSE_DEPT_NAME = 'Kho'
+
+async function isWarehouseUser(user: User): Promise<boolean> {
+  if (user.role === 'admin') return true
+  if (!user.department_id) return false
+  const dept = await departmentsRepo.findById(user.department_id)
+  return dept?.name === WAREHOUSE_DEPT_NAME
+}
+
+/** Chỉ Kho + admin được sửa danh mục vật tư. */
+function canEdit(user: User): boolean {
+  return user.role === 'admin' || user.role === 'manager'
+}
+
+type CreateInput = {
+  code: string
+  name: string
+  unit: string
+  group_name?: string | null
+  min_stock: number
+  shelf_location?: string | null
+  note?: string | null
+}
+
+type UpdateInput = Partial<CreateInput & { is_active: boolean }>
+
+export const materialsService = {
+  async list(
+    user: User,
+    opts: {
+      q?: string
+      group_name?: string
+      active_only?: boolean
+      page: number
+      page_size: number
+    },
+  ) {
+    if (!(await isWarehouseUser(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    return materialsRepo.list({
+      q: opts.q,
+      group_name: opts.group_name,
+      active_only: opts.active_only ?? false,
+      page: opts.page,
+      page_size: opts.page_size,
+    })
+  },
+
+  async create(user: User, input: CreateInput): Promise<Material> {
+    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
+      throw Forbidden('Chỉ quản lý Kho / admin tạo được vật tư')
+    }
+    const dup = await materialsRepo.findByCode(input.code)
+    if (dup) throw Conflict(`Mã vật tư "${input.code}" đã tồn tại`)
+
+    return materialsRepo.insert({
+      code: input.code,
+      name: input.name,
+      unit: input.unit,
+      group_name: input.group_name ?? null,
+      min_stock: input.min_stock,
+      shelf_location: input.shelf_location ?? null,
+      note: input.note ?? null,
+    })
+  },
+
+  async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
+    if (!(await isWarehouseUser(user)) || !canEdit(user)) throw Forbidden()
+    const before = await materialsRepo.findById(id)
+    if (!before) throw NotFound('Vật tư không tồn tại')
+    if (patch.code && patch.code !== before.code) {
+      const dup = await materialsRepo.findByCode(patch.code)
+      if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
+    }
+    return materialsRepo.patch(id, patch)
+  },
+
+  async remove(user: User, id: string): Promise<void> {
+    if (!(await isWarehouseUser(user)) || !canEdit(user)) throw Forbidden()
+    const before = await materialsRepo.findById(id)
+    if (!before) throw NotFound('Vật tư không tồn tại')
+    await materialsRepo.delete(id)
+  },
+}
+
+export { isWarehouseUser }

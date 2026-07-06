@@ -41,7 +41,17 @@ export type WorkspaceConfig = {
   /** Route base. Home dashboard = `${route}/`. */
   route: string
   /** Tailwind color name — dùng để tô accent bar, badge, hover. */
-  accent: 'orange' | 'emerald' | 'amber' | 'sky' | 'violet' | 'slate' | 'red' | 'yellow' | 'zinc' | 'purple'
+  accent:
+    | 'orange'
+    | 'emerald'
+    | 'amber'
+    | 'sky'
+    | 'violet'
+    | 'slate'
+    | 'red'
+    | 'yellow'
+    | 'zinc'
+    | 'purple'
   /** 2 ký tự viết tắt hiện trong logo box. */
   logoText: string
   /** Sidebar sections. */
@@ -80,8 +90,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/sales',
     accent: 'orange',
     logoText: 'SL',
-    // Tắt để tập trung xây IT admin trước. Code UI vẫn còn ở app/(workspace)/sales.
-    ready: false,
+    // Đã migrate sang (workspace)/sales — bật để login đưa NV Sales vào workspace.
+    ready: true,
     sections: [
       {
         heading: 'Sales',
@@ -93,8 +103,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Quản lý',
         items: [
-          { href: '/sales/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
-          { href: '/sales/reports', label: 'Báo cáo', icon: '☰', roles: ['manager', 'admin'] },
+          // Đội nhóm / Báo cáo dùng chung trang quản lý (chưa có bản riêng cho Sales).
+          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          {
+            href: '/reports/weekly',
+            label: 'Báo cáo',
+            icon: '☰',
+            roles: ['manager', 'admin'],
+          },
         ],
       },
     ],
@@ -107,7 +123,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/finance',
     accent: 'emerald',
     logoText: 'KT',
-    ready: false,
+    // Đã migrate sang (workspace)/finance.
+    ready: true,
     sections: [
       {
         heading: 'Kế toán',
@@ -119,8 +136,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Quản lý',
         items: [
-          { href: '/finance/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
-          { href: '/finance/reports', label: 'Báo cáo', icon: '☰', roles: ['manager', 'admin'] },
+          // Dùng chung trang quản lý (chưa có bản riêng cho Finance).
+          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          {
+            href: '/reports/weekly',
+            label: 'Báo cáo',
+            icon: '☰',
+            roles: ['manager', 'admin'],
+          },
         ],
       },
     ],
@@ -133,11 +156,15 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/warehouse',
     accent: 'amber',
     logoText: 'KH',
-    ready: false,
+    ready: true,
     sections: [
       {
         heading: 'Kho',
-        items: [{ href: '/warehouse', label: 'Trang chủ', icon: '◧' }],
+        items: [
+          { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
+          { href: '/warehouse/stock', label: 'Tồn kho', icon: '▦' },
+          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
+        ],
       },
     ],
   },
@@ -156,6 +183,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/technical', label: 'Trang chủ', icon: '◧' },
           { href: '/technical/products', label: 'Thư viện sản phẩm', icon: '◇' },
+          { href: '/technical/load-cont', label: 'Tính load cont', icon: '▣' },
         ],
       },
     ],
@@ -216,7 +244,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/hr',
     accent: 'yellow',
     logoText: 'HR',
-    ready: false,
+    // Đã migrate sang (workspace)/hr.
+    ready: true,
     sections: [
       {
         heading: 'Nhân sự',
@@ -260,8 +289,18 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/admin', label: 'Tổng quan', icon: '◧', roles: ['admin'] },
           { href: '/admin/users', label: 'Người dùng', icon: '◍', roles: ['admin'] },
           { href: '/admin/departments', label: 'Phòng ban', icon: '◑', roles: ['admin'] },
-          { href: '/admin/audit', label: 'Nhật ký thao tác', icon: '☰', roles: ['admin'] },
-          { href: '/admin/health', label: 'Sức khoẻ hệ thống', icon: '♥', roles: ['admin'] },
+          {
+            href: '/admin/audit',
+            label: 'Nhật ký thao tác',
+            icon: '☰',
+            roles: ['admin'],
+          },
+          {
+            href: '/admin/health',
+            label: 'Sức khoẻ hệ thống',
+            icon: '♥',
+            roles: ['admin'],
+          },
           { href: '/admin/settings', label: 'Cấu hình', icon: '⚙', roles: ['admin'] },
         ],
       },
@@ -272,21 +311,84 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
 export const WORKSPACE_IDS = Object.keys(WORKSPACES) as readonly WorkspaceId[]
 
 /** Tailwind class map cho accent — dùng ở Topbar, Sidebar highlight, badge. */
-export const ACCENT_CLASSES: Record<WorkspaceConfig['accent'], {
-  bg: string
-  bgSoft: string
-  text: string
-  border: string
-  ring: string
-}> = {
-  orange: { bg: 'bg-orange-500', bgSoft: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-500', ring: 'ring-orange-500' },
-  emerald: { bg: 'bg-emerald-500', bgSoft: 'bg-emerald-50', text: 'text-emerald-600', border: 'border-emerald-500', ring: 'ring-emerald-500' },
-  amber: { bg: 'bg-amber-500', bgSoft: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-500', ring: 'ring-amber-500' },
-  sky: { bg: 'bg-sky-500', bgSoft: 'bg-sky-50', text: 'text-sky-600', border: 'border-sky-500', ring: 'ring-sky-500' },
-  violet: { bg: 'bg-violet-500', bgSoft: 'bg-violet-50', text: 'text-violet-600', border: 'border-violet-500', ring: 'ring-violet-500' },
-  slate: { bg: 'bg-slate-500', bgSoft: 'bg-slate-100', text: 'text-slate-600', border: 'border-slate-500', ring: 'ring-slate-500' },
-  red: { bg: 'bg-red-600', bgSoft: 'bg-red-50', text: 'text-red-600', border: 'border-red-600', ring: 'ring-red-600' },
-  yellow: { bg: 'bg-yellow-500', bgSoft: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-500', ring: 'ring-yellow-500' },
-  zinc: { bg: 'bg-zinc-800', bgSoft: 'bg-zinc-100', text: 'text-zinc-800', border: 'border-zinc-800', ring: 'ring-zinc-800' },
-  purple: { bg: 'bg-purple-600', bgSoft: 'bg-purple-50', text: 'text-purple-600', border: 'border-purple-600', ring: 'ring-purple-600' },
+export const ACCENT_CLASSES: Record<
+  WorkspaceConfig['accent'],
+  {
+    bg: string
+    bgSoft: string
+    text: string
+    border: string
+    ring: string
+  }
+> = {
+  orange: {
+    bg: 'bg-orange-500',
+    bgSoft: 'bg-orange-50',
+    text: 'text-orange-600',
+    border: 'border-orange-500',
+    ring: 'ring-orange-500',
+  },
+  emerald: {
+    bg: 'bg-emerald-500',
+    bgSoft: 'bg-emerald-50',
+    text: 'text-emerald-600',
+    border: 'border-emerald-500',
+    ring: 'ring-emerald-500',
+  },
+  amber: {
+    bg: 'bg-amber-500',
+    bgSoft: 'bg-amber-50',
+    text: 'text-amber-700',
+    border: 'border-amber-500',
+    ring: 'ring-amber-500',
+  },
+  sky: {
+    bg: 'bg-sky-500',
+    bgSoft: 'bg-sky-50',
+    text: 'text-sky-600',
+    border: 'border-sky-500',
+    ring: 'ring-sky-500',
+  },
+  violet: {
+    bg: 'bg-violet-500',
+    bgSoft: 'bg-violet-50',
+    text: 'text-violet-600',
+    border: 'border-violet-500',
+    ring: 'ring-violet-500',
+  },
+  slate: {
+    bg: 'bg-slate-500',
+    bgSoft: 'bg-slate-100',
+    text: 'text-slate-600',
+    border: 'border-slate-500',
+    ring: 'ring-slate-500',
+  },
+  red: {
+    bg: 'bg-red-600',
+    bgSoft: 'bg-red-50',
+    text: 'text-red-600',
+    border: 'border-red-600',
+    ring: 'ring-red-600',
+  },
+  yellow: {
+    bg: 'bg-yellow-500',
+    bgSoft: 'bg-yellow-50',
+    text: 'text-yellow-700',
+    border: 'border-yellow-500',
+    ring: 'ring-yellow-500',
+  },
+  zinc: {
+    bg: 'bg-zinc-800',
+    bgSoft: 'bg-zinc-100',
+    text: 'text-zinc-800',
+    border: 'border-zinc-800',
+    ring: 'ring-zinc-800',
+  },
+  purple: {
+    bg: 'bg-purple-600',
+    bgSoft: 'bg-purple-50',
+    text: 'text-purple-600',
+    border: 'border-purple-600',
+    ring: 'ring-purple-600',
+  },
 }
