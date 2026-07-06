@@ -156,11 +156,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/warehouse',
     accent: 'amber',
     logoText: 'KH',
-    ready: false,
+    ready: true,
     sections: [
       {
         heading: 'Kho',
-        items: [{ href: '/warehouse', label: 'Trang chủ', icon: '◧' }],
+        items: [
+          { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
+          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
+        ],
       },
     ],
   },

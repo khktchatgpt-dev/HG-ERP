@@ -303,6 +303,48 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_materials: {
+        Row: {
+          code: string
+          created_at: string
+          group_name: string | null
+          id: string
+          is_active: boolean
+          min_stock: number
+          name: string
+          note: string | null
+          shelf_location: string | null
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          group_name?: string | null
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name: string
+          note?: string | null
+          shelf_location?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          group_name?: string | null
+          id?: string
+          is_active?: boolean
+          min_stock?: number
+          name?: string
+          note?: string | null
+          shelf_location?: string | null
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       settings: {
         Row: {
           key: string
