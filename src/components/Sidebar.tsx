@@ -39,8 +39,7 @@ const SECTIONS: { heading: string; items: Item[] }[] = [
         href: '/reports/weekly',
         label: 'Báo cáo tuần',
         icon: '☰',
-        visible: ({ role, isHead }) =>
-          role === 'manager' || role === 'admin' || isHead,
+        visible: ({ role, isHead }) => role === 'manager' || role === 'admin' || isHead,
       },
     ],
   },
@@ -60,16 +59,31 @@ const SECTIONS: { heading: string; items: Item[] }[] = [
 // Dept-specific links keyed by department `name` in DB.
 const DEPT_NAV: Record<string, Item[]> = {
   'Bán Hàng': [
-    { href: '/dept/sales/customers', label: 'Khách hàng', icon: '◍', visible: () => true },
+    { href: '/sales/customers', label: 'Khách hàng', icon: '◍', visible: () => true },
   ],
   'Hành Chính Nhân Sự': [
-    { href: '/dept/hr/leave?scope=pending', label: 'Duyệt đơn', icon: '✓', visible: () => true },
+    {
+      href: '/dept/hr/leave?scope=pending',
+      label: 'Duyệt đơn',
+      icon: '✓',
+      visible: () => true,
+    },
   ],
   'Kỹ Thuật': [
-    { href: '/dept/technical/products', label: 'Thư viện SP', icon: '◇', visible: () => true },
+    {
+      href: '/dept/technical/products',
+      label: 'Thư viện SP',
+      icon: '◇',
+      visible: () => true,
+    },
   ],
   'Tài Chính Kế Toán': [
-    { href: '/dept/accounting/invoices', label: 'Hoá đơn', icon: '₫', visible: () => true },
+    {
+      href: '/dept/accounting/invoices',
+      label: 'Hoá đơn',
+      icon: '₫',
+      visible: () => true,
+    },
   ],
 }
 
@@ -104,10 +118,10 @@ export async function Sidebar({ current }: { current?: string } = {}) {
           HG
         </span>
         <div className="flex flex-col">
-          <span className="text-sm font-semibold leading-tight text-white">
+          <span className="text-sm leading-tight font-semibold text-white">
             Hoàng Gia
           </span>
-          <span className="text-[10px] uppercase tracking-wider text-slate-400">
+          <span className="text-[10px] tracking-wider text-slate-400 uppercase">
             Task Manager
           </span>
         </div>
@@ -117,7 +131,12 @@ export async function Sidebar({ current }: { current?: string } = {}) {
         const items = sec.items.filter((i) => i.visible(ctx))
         if (items.length === 0) return null
         return (
-          <NavSection key={sec.heading} heading={sec.heading} items={items} current={current} />
+          <NavSection
+            key={sec.heading}
+            heading={sec.heading}
+            items={items}
+            current={current}
+          />
         )
       })}
 
@@ -152,13 +171,12 @@ function NavSection({
 }) {
   return (
     <div className="mb-2">
-      <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
         {heading}
       </div>
       {items.map((i) => {
         const active =
-          current === i.href ||
-          (i.href !== '/' && current?.startsWith(i.href))
+          current === i.href || (i.href !== '/' && current?.startsWith(i.href))
         return (
           <Link
             key={i.href}

@@ -90,8 +90,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/sales',
     accent: 'orange',
     logoText: 'SL',
-    // Tắt để tập trung xây IT admin trước. Code UI vẫn còn ở app/(workspace)/sales.
-    ready: false,
+    // Đã migrate sang (workspace)/sales — bật để login đưa NV Sales vào workspace.
+    ready: true,
     sections: [
       {
         heading: 'Sales',
@@ -103,9 +103,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Quản lý',
         items: [
-          { href: '/sales/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          // Đội nhóm / Báo cáo dùng chung trang quản lý (chưa có bản riêng cho Sales).
+          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
           {
-            href: '/sales/reports',
+            href: '/reports/weekly',
             label: 'Báo cáo',
             icon: '☰',
             roles: ['manager', 'admin'],

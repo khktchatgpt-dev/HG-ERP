@@ -4,8 +4,7 @@ import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { db } from '@/server/db'
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
-// Tái sử dụng manager component từ vị trí cũ — sẽ move hẳn sang đây ở Phase 3a.
-import { CustomersManager } from '@/app/(app)/dept/sales/customers/CustomersManager'
+import { CustomersManager } from './CustomersManager'
 
 const workspace = WORKSPACES.sales
 
