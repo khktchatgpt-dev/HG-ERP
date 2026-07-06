@@ -63,7 +63,7 @@ const DEPT_NAV: Record<string, Item[]> = {
   ],
   'Hành Chính Nhân Sự': [
     {
-      href: '/dept/hr/leave?scope=pending',
+      href: '/hr/leave?scope=pending',
       label: 'Duyệt đơn',
       icon: '✓',
       visible: () => true,
@@ -71,7 +71,7 @@ const DEPT_NAV: Record<string, Item[]> = {
   ],
   'Kỹ Thuật': [
     {
-      href: '/dept/technical/products',
+      href: '/technical/products',
       label: 'Thư viện SP',
       icon: '◇',
       visible: () => true,
@@ -79,7 +79,7 @@ const DEPT_NAV: Record<string, Item[]> = {
   ],
   'Tài Chính Kế Toán': [
     {
-      href: '/dept/accounting/invoices',
+      href: '/finance/invoices',
       label: 'Hoá đơn',
       icon: '₫',
       visible: () => true,

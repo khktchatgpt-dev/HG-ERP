@@ -123,7 +123,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/finance',
     accent: 'emerald',
     logoText: 'KT',
-    ready: false,
+    // Đã migrate sang (workspace)/finance.
+    ready: true,
     sections: [
       {
         heading: 'Kế toán',
@@ -135,9 +136,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Quản lý',
         items: [
-          { href: '/finance/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          // Dùng chung trang quản lý (chưa có bản riêng cho Finance).
+          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
           {
-            href: '/finance/reports',
+            href: '/reports/weekly',
             label: 'Báo cáo',
             icon: '☰',
             roles: ['manager', 'admin'],
@@ -238,7 +240,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/hr',
     accent: 'yellow',
     logoText: 'HR',
-    ready: false,
+    // Đã migrate sang (workspace)/hr.
+    ready: true,
     sections: [
       {
         heading: 'Nhân sự',
