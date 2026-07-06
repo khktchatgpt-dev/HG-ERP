@@ -3,7 +3,13 @@ import {
   materialCreateSchema,
   materialUpdateSchema,
   materialListQuerySchema,
+  receiptSchema,
+  issueSchema,
+  stockListQuerySchema,
+  movementListQuerySchema,
 } from './warehouse.schema'
+
+const UUID = '11111111-1111-4111-8111-111111111111'
 
 describe('materialCreateSchema', () => {
   const valid = {
@@ -86,5 +92,93 @@ describe('materialListQuerySchema', () => {
 
   it('reject page_size vượt 1000', () => {
     expect(() => materialListQuerySchema.parse({ page_size: '5000' })).toThrow()
+  })
+})
+
+describe('receiptSchema (nhập kho)', () => {
+  it('parse OK: mặc định ref_type=external, qty_rejected=0', () => {
+    const p = receiptSchema.parse({ material_id: UUID, qty: 50 })
+    expect(p.ref_type).toBe('external')
+    expect(p.qty_rejected).toBe(0)
+  })
+
+  it('cho QC không đạt + theo đơn đặt', () => {
+    const p = receiptSchema.parse({
+      material_id: UUID,
+      qty: 80,
+      qty_rejected: 20,
+      qc_status: 'partial',
+      ref_type: 'po',
+      ref_no: 'PO-001',
+    })
+    expect(p.qty).toBe(80)
+    expect(p.qty_rejected).toBe(20)
+    expect(p.qc_status).toBe('partial')
+  })
+
+  it('reject qty ≤ 0', () => {
+    expect(() => receiptSchema.parse({ material_id: UUID, qty: 0 })).toThrow()
+  })
+
+  it('reject qty_rejected âm', () => {
+    expect(() =>
+      receiptSchema.parse({ material_id: UUID, qty: 10, qty_rejected: -1 }),
+    ).toThrow()
+  })
+
+  it('reject material_id không phải UUID', () => {
+    expect(() => receiptSchema.parse({ material_id: 'x', qty: 5 })).toThrow()
+  })
+
+  it('reject ref_type lạ', () => {
+    expect(() =>
+      receiptSchema.parse({ material_id: UUID, qty: 5, ref_type: 'lsx' }),
+    ).toThrow()
+  })
+})
+
+describe('issueSchema (xuất kho)', () => {
+  it('parse OK: mặc định ref_type=daily', () => {
+    const p = issueSchema.parse({ material_id: UUID, qty: 5 })
+    expect(p.ref_type).toBe('daily')
+  })
+
+  it('xuất theo LSX', () => {
+    const p = issueSchema.parse({
+      material_id: UUID,
+      qty: 12,
+      ref_type: 'lsx',
+      ref_no: 'LSX-2026-001',
+    })
+    expect(p.ref_type).toBe('lsx')
+    expect(p.ref_no).toBe('LSX-2026-001')
+  })
+
+  it('reject qty ≤ 0', () => {
+    expect(() => issueSchema.parse({ material_id: UUID, qty: 0 })).toThrow()
+  })
+
+  it('reject ref_type external (xuất không nhận external)', () => {
+    expect(() =>
+      issueSchema.parse({ material_id: UUID, qty: 5, ref_type: 'external' }),
+    ).toThrow()
+  })
+})
+
+describe('stockListQuerySchema & movementListQuerySchema', () => {
+  it('stock: low_only mặc định false, ép từ chuỗi', () => {
+    expect(stockListQuerySchema.parse({}).low_only).toBe(false)
+    expect(stockListQuerySchema.parse({ low_only: 'true' }).low_only).toBe(true)
+  })
+
+  it('movement: mặc định page=1, page_size=50', () => {
+    const p = movementListQuerySchema.parse({})
+    expect(p.page).toBe(1)
+    expect(p.page_size).toBe(50)
+  })
+
+  it('movement: direction chỉ nhận in/out', () => {
+    expect(movementListQuerySchema.parse({ direction: 'in' }).direction).toBe('in')
+    expect(() => movementListQuerySchema.parse({ direction: 'sideways' })).toThrow()
   })
 })

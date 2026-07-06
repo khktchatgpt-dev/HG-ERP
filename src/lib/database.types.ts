@@ -345,6 +345,66 @@ export type Database = {
         }
         Relationships: []
       }
+      warehouse_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          direction: string
+          id: string
+          material_id: string
+          note: string | null
+          qc_status: string | null
+          qty: number
+          qty_rejected: number
+          ref_no: string | null
+          ref_type: string
+          shelf_location: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          direction: string
+          id?: string
+          material_id: string
+          note?: string | null
+          qc_status?: string | null
+          qty: number
+          qty_rejected?: number
+          ref_no?: string | null
+          ref_type: string
+          shelf_location?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          id?: string
+          material_id?: string
+          note?: string | null
+          qc_status?: string | null
+          qty?: number
+          qty_rejected?: number
+          ref_no?: string | null
+          ref_type?: string
+          shelf_location?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'warehouse_movements_material_id_fkey'
+            columns: ['material_id']
+            isOneToOne: false
+            referencedRelation: 'warehouse_materials'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'warehouse_movements_created_by_fkey'
+            columns: ['created_by']
+            isOneToOne: false
+            referencedRelation: 'users'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       settings: {
         Row: {
           key: string
@@ -634,6 +694,20 @@ export type Database = {
           task_code: string | null
           title: string | null
           updated_at: string | null
+        }
+        Relationships: []
+      }
+      warehouse_stock: {
+        Row: {
+          code: string | null
+          group_name: string | null
+          is_active: boolean | null
+          material_id: string | null
+          min_stock: number | null
+          name: string | null
+          on_hand: number | null
+          shelf_location: string | null
+          unit: string | null
         }
         Relationships: []
       }
