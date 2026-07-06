@@ -25,6 +25,12 @@ export type ListFilter = {
   page_size: number
 }
 
+// Postgres `numeric` về qua PostgREST là CHUỖI (vd "20.00") → ép về number để
+// đúng type + sắp xếp/so sánh số chuẩn.
+function toMaterial(row: Record<string, unknown>): Material {
+  return { ...(row as Material), min_stock: Number(row.min_stock ?? 0) }
+}
+
 export const materialsRepo = {
   async list(filter: ListFilter): Promise<{ rows: Material[]; total: number }> {
     let q = db()
@@ -41,7 +47,10 @@ export const materialsRepo = {
     q = q.range(from, to)
 
     const { data, count } = await q
-    return { rows: (data as Material[] | null) ?? [], total: count ?? 0 }
+    return {
+      rows: ((data as Record<string, unknown>[] | null) ?? []).map(toMaterial),
+      total: count ?? 0,
+    }
   },
 
   async findById(id: string): Promise<Material | null> {
@@ -50,7 +59,7 @@ export const materialsRepo = {
       .select(COLS)
       .eq('id', id)
       .maybeSingle()
-    return (data as Material | null) ?? null
+    return data ? toMaterial(data) : null
   },
 
   async findByCode(code: string): Promise<Material | null> {
@@ -59,7 +68,7 @@ export const materialsRepo = {
       .select(COLS)
       .eq('code', code)
       .maybeSingle()
-    return (data as Material | null) ?? null
+    return data ? toMaterial(data) : null
   },
 
   async insert(
@@ -73,7 +82,7 @@ export const materialsRepo = {
       .select(COLS)
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert material failed')
-    return data as Material
+    return toMaterial(data)
   },
 
   async patch(id: string, patch: Partial<Material>): Promise<Material> {
@@ -84,7 +93,7 @@ export const materialsRepo = {
       .select(COLS)
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Update material failed')
-    return data as Material
+    return toMaterial(data)
   },
 
   async delete(id: string): Promise<void> {
