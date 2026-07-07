@@ -1,5 +1,11 @@
 # Kế hoạch hoàn thiện phân hệ Quản lý Kho (FR-WMS-01..10)
 
+> **✅ Phase 0–3 + 5 HOÀN THÀNH 07/2026** (0017/0019 + module + UI + in + scan +
+> cảnh báo tồn min — xem commit `feat(warehouse)`). **Phase 4 (điều chuyển DCK /
+> kiểm kê KK) đang chờ chốt OI-08/09** — schema đã sẵn (`ref_type` transfer/adjust,
+> `transfer_group`, doc kind), chỉ cần thêm form khi doanh nghiệp xác nhận.
+> Flow 1 dòng cũ (StockManager) giữ nguyên hoạt động song song với phiếu nhiều dòng.
+
 Lập 07/2026, sau khi schema GĐ1 (0011–0016) đã apply. Mục tiêu: đưa Kho từ mức
 "nhập/xuất đơn lẻ, tham chiếu text" lên **đúng chuẩn ERP đã thiết kế**: phiếu
 nhiều dòng có số chứng từ, nối FK với PO/LSX, in được mẫu 01-VT/02-VT, scan,

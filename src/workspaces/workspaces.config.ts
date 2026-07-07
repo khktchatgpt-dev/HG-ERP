@@ -165,6 +165,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kho',
         items: [
           { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
+          { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: '▥' },
           { href: '/warehouse/stock', label: 'Tồn kho', icon: '▦' },
           { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
         ],

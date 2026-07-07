@@ -7,6 +7,8 @@ import {
   issueSchema,
   stockListQuerySchema,
   movementListQuerySchema,
+  receiptDocSchema,
+  issueDocSchema,
 } from './warehouse.schema'
 
 const UUID = '11111111-1111-4111-8111-111111111111'
@@ -180,5 +182,46 @@ describe('stockListQuerySchema & movementListQuerySchema', () => {
   it('movement: direction chỉ nhận in/out', () => {
     expect(movementListQuerySchema.parse({ direction: 'in' }).direction).toBe('in')
     expect(() => movementListQuerySchema.parse({ direction: 'sideways' })).toThrow()
+  })
+})
+
+
+describe('receiptDocSchema — phiếu nhập nhiều dòng', () => {
+  it('parse OK: theo PO với QC', () => {
+    const p = receiptDocSchema.parse({
+      po_id: UUID,
+      counterparty: 'Tài xế NCC Tiến Đạt',
+      lines: [
+        { material_id: UUID, qty: '60', qty_rejected: '5', qc_status: 'partial', po_line_id: UUID },
+      ],
+    })
+    expect(p.lines[0].qty).toBe(60)
+    expect(p.lines[0].qty_rejected).toBe(5)
+  })
+
+  it('từ chối phiếu 0 dòng và qty ≤ 0', () => {
+    expect(() => receiptDocSchema.parse({ lines: [] })).toThrow()
+    expect(() =>
+      receiptDocSchema.parse({ lines: [{ material_id: UUID, qty: 0 }] }),
+    ).toThrow()
+  })
+})
+
+describe('issueDocSchema — BR-09 ở tầng schema', () => {
+  it('xuất theo LSX bắt buộc production_order_id', () => {
+    expect(() =>
+      issueDocSchema.parse({ kind: 'lsx', lines: [{ material_id: UUID, qty: 1 }] }),
+    ).toThrow()
+    const p = issueDocSchema.parse({
+      kind: 'lsx',
+      production_order_id: UUID,
+      lines: [{ material_id: UUID, qty: 1 }],
+    })
+    expect(p.production_order_id).toBe(UUID)
+  })
+
+  it('xuất thường ngày không cần LSX', () => {
+    const p = issueDocSchema.parse({ kind: 'daily', lines: [{ material_id: UUID, qty: 2 }] })
+    expect(p.kind).toBe('daily')
   })
 })

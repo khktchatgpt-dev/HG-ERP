@@ -14,6 +14,8 @@ export type NotificationType =
   | 'quote_submitted'
   | 'quote_approved'
   | 'quote_rejected'
+  | 'wh_receipt'
+  | 'wh_stock_low'
 
 export type Notification = {
   id: string

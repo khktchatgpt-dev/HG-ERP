@@ -13,6 +13,8 @@ const TYPE_LABEL: Record<string, string> = {
   quote_submitted: 'gửi báo giá chờ bạn duyệt',
   quote_approved: 'đã duyệt báo giá',
   quote_rejected: 'đã từ chối báo giá',
+  wh_receipt: 'đã lập phiếu nhập kho',
+  wh_stock_low: 'cảnh báo tồn dưới mức tối thiểu',
   approved: 'đã duyệt công việc của bạn',
   rejected: 'đã trả lại công việc',
   commented: 'đã bình luận',

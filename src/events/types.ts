@@ -83,6 +83,26 @@ export type DomainEvent =
       reason?: string
     }
 
+  // ── Kho (FR-WMS-02/08 — liên kết Kho ↔ Cung ứng 2 chiều) ─────────────
+  | {
+      name: 'warehouse.receipt.created'
+      doc_id: string
+      code: string
+      po_code: string | null
+      created_by: string
+      notify_ids: string[]
+    }
+  | {
+      name: 'warehouse.stock.low'
+      material_id: string
+      material_code: string
+      material_name: string
+      on_hand: number
+      min_stock: number
+      caused_by: string
+      notify_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */
