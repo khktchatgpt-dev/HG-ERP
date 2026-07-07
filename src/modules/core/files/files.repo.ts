@@ -65,6 +65,18 @@ export const filesRepo = {
     return (data as FileRow | null) ?? null
   },
 
+  /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */
+  async listByProduct(productId: string): Promise<FileRow[]> {
+    const { data } = await db()
+      .from('files')
+      .select('*')
+      .eq('product_id', productId)
+      .is('deleted_at', null)
+      .not('finalized_at', 'is', null)
+      .order('created_at', { ascending: false })
+    return (data ?? []) as FileRow[]
+  },
+
   async markFinalized(id: string, checksum: string | null): Promise<void> {
     const { error } = await db()
       .from('files')

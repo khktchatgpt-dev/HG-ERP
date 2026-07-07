@@ -4,11 +4,7 @@ import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { db } from '@/server/db'
-import {
-  filesRepo,
-  type FileParentColumns,
-  type FileRow,
-} from './files.repo'
+import { filesRepo, type FileParentColumns, type FileRow } from './files.repo'
 import {
   ALLOWED_MIME,
   MAX_UPLOAD_BYTES,
@@ -124,10 +120,7 @@ export const filesService = {
       owner_id: user.id,
       parent: parentColumns(input),
     })
-    const { uploadUrl, token } = await storage.createSignedUploadUrl(
-      input.bucket,
-      path,
-    )
+    const { uploadUrl, token } = await storage.createSignedUploadUrl(input.bucket, path)
     return { fileId: row.id, uploadUrl, token, path }
   },
 
@@ -137,6 +130,14 @@ export const filesService = {
     if (file.owner_id !== user.id && user.role !== 'admin')
       throw Forbidden('Not the uploader')
     await filesRepo.markFinalized(fileId, checksum ?? null)
+  },
+
+  /**
+   * File kỹ thuật của 1 SP (FR-ENG-03). Thư viện SP là tài sản chung — mọi NV
+   * đã đăng nhập đọc được (xưởng tra bản vẽ, các phòng tham chiếu).
+   */
+  async listForProduct(_user: User, productId: string): Promise<FileRow[]> {
+    return filesRepo.listByProduct(productId)
   },
 
   async getDownloadUrl(user: User, fileId: string): Promise<string> {

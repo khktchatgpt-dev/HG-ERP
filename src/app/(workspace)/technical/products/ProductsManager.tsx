@@ -15,6 +15,7 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { FileUploader } from '@/components/FileUploader'
 
 type Packing = {
   l_cm?: number
@@ -48,6 +49,15 @@ type Product = {
 
 type CustomerOption = { id: string; name: string }
 type MaterialOption = { id: string; code: string; name: string; unit: string }
+
+/** File kỹ thuật đính theo SP (FR-ENG-03). */
+type ProductFile = {
+  id: string
+  filename: string
+  mime_type: string
+  size_bytes: number
+  created_at: string
+}
 
 /** Dòng BOM đang biên tập (id chỉ có với dòng đã lưu). */
 type BomRow = { material_id: string; qty_per_unit: number | ''; note: string }
@@ -85,7 +95,10 @@ export function ProductsManager({
   // Deep-link ?new=1 mở sẵn form tạo (chỉ đọc lúc mount).
   const [openCreate, setOpenCreate] = useState(() => canEdit && sp.get('new') === '1')
   const [editing, setEditing] = useState<Product | null>(null)
-  const [viewing, setViewing] = useState<Product | null>(null)
+  const [viewing, setViewing] = useState<{
+    product: Product
+    files: ProductFile[]
+  } | null>(null)
   const [cloning, setCloning] = useState<Product | null>(null)
   const [bomFor, setBomFor] = useState<{ product: Product; rows: BomRow[] } | null>(null)
 
@@ -163,6 +176,27 @@ export function ProductsManager({
     if (ok2) toast.success('Đã xoá', p.name)
   }
 
+  /** Mở chi tiết: nạp danh sách file kỹ thuật trước rồi mở modal. */
+  async function openView(p: Product) {
+    setBusy(true)
+    try {
+      const data = await api<{ files: ProductFile[] }>(`/api/files?product_id=${p.id}`)
+      setViewing({ product: p, files: data.files })
+    } catch (e) {
+      toast.error('Không tải được tài liệu', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function reloadViewFiles() {
+    if (!viewing) return
+    const data = await api<{ files: ProductFile[] }>(
+      `/api/files?product_id=${viewing.product.id}`,
+    )
+    setViewing((v) => (v ? { ...v, files: data.files } : v))
+  }
+
   /** Mở BOM editor: nạp dòng hiện có rồi mới mở modal (tránh setState trong effect). */
   async function openBom(p: Product) {
     setBusy(true)
@@ -225,7 +259,7 @@ export function ProductsManager({
       sortValue: (p) => p.code,
       cell: (p) => (
         <button
-          onClick={() => setViewing(p)}
+          onClick={() => void openView(p)}
           className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
         >
           <span className="font-mono text-xs text-zinc-400">
@@ -310,8 +344,8 @@ export function ProductsManager({
       width: '56px',
       align: 'right',
       cell: (p) => {
-        const items = [
-          { label: 'Xem chi tiết', onClick: () => setViewing(p) },
+        const items: { label: string; onClick: () => void; danger?: boolean }[] = [
+          { label: 'Xem chi tiết', onClick: () => void openView(p) },
           { label: 'BOM định mức', onClick: () => void openBom(p) },
         ]
         if (canEdit) {
@@ -593,18 +627,22 @@ export function ProductsManager({
       <Modal
         open={!!viewing}
         onClose={() => setViewing(null)}
-        title={viewing?.name ?? 'Chi tiết sản phẩm'}
+        title={viewing?.product.name ?? 'Chi tiết sản phẩm'}
         maxWidth="sm:max-w-2xl"
       >
         {viewing && (
           <ProductDetail
-            product={viewing}
+            product={viewing.product}
+            files={viewing.files}
             customerName={
-              viewing.customer_id ? (customerName.get(viewing.customer_id) ?? null) : null
+              viewing.product.customer_id
+                ? (customerName.get(viewing.product.customer_id) ?? null)
+                : null
             }
             canEdit={canEdit}
+            onFilesChanged={() => void reloadViewFiles()}
             onEdit={() => {
-              setEditing(viewing)
+              setEditing(viewing.product)
               setViewing(null)
             }}
           />
@@ -618,13 +656,17 @@ export function ProductsManager({
 
 function ProductDetail({
   product,
+  files,
   customerName,
   canEdit,
+  onFilesChanged,
   onEdit,
 }: {
   product: Product
+  files: ProductFile[]
   customerName: string | null
   canEdit: boolean
+  onFilesChanged: () => void
   onEdit: () => void
 }) {
   const pk = product.packing ?? {}
@@ -711,6 +753,15 @@ function ProductDetail({
         />
       )}
       <Row label="Trạng thái" value={product.is_active ? 'Đang dùng' : 'Ngừng sử dụng'} />
+
+      {/* File kỹ thuật (FR-ENG-03): BOM Excel / CAD / ảnh / PDF — nhiều bản = lịch sử */}
+      <ProductFilesSection
+        productId={product.id}
+        files={files}
+        canEdit={canEdit}
+        onChanged={onFilesChanged}
+      />
+
       {product.notes && (
         <div className="rounded-md bg-zinc-50 p-3 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
           <div className="mb-1 text-xs font-semibold text-zinc-500 uppercase">
@@ -1115,7 +1166,9 @@ function BomEditor({
   bomStatus: BomStatus
   materials: MaterialOption[]
   canEdit: boolean
-  onSave: (rows: { material_id: string; qty_per_unit: number; note: string }[]) => Promise<void>
+  onSave: (
+    rows: { material_id: string; qty_per_unit: number; note: string }[],
+  ) => Promise<void>
 }) {
   const [rows, setRows] = useState<BomRow[]>(initialRows)
   const [busy, setBusy] = useState(false)
@@ -1152,7 +1205,10 @@ function BomEditor({
   }
 
   const invalid =
-    dup || rows.some((r) => !r.material_id || r.qty_per_unit === '' || Number(r.qty_per_unit) <= 0)
+    dup ||
+    rows.some(
+      (r) => !r.material_id || r.qty_per_unit === '' || Number(r.qty_per_unit) <= 0,
+    )
 
   return (
     <div className="flex flex-col gap-3">
@@ -1166,7 +1222,7 @@ function BomEditor({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
               <th className="py-2 pr-2">Vật tư</th>
               <th className="w-28 py-2 pr-2">Định mức / SP</th>
               <th className="w-16 py-2 pr-2">ĐVT</th>
@@ -1195,14 +1251,20 @@ function BomEditor({
                       >
                         <option value="">— chọn vật tư —</option>
                         {materials.map((m) => (
-                          <option key={m.id} value={m.id} disabled={usedIds.has(m.id) && m.id !== r.material_id}>
+                          <option
+                            key={m.id}
+                            value={m.id}
+                            disabled={usedIds.has(m.id) && m.id !== r.material_id}
+                          >
                             {m.code} — {m.name}
                           </option>
                         ))}
                       </select>
                     ) : (
                       <span>
-                        <span className="font-mono text-xs text-zinc-400">{mat?.code}</span>{' '}
+                        <span className="font-mono text-xs text-zinc-400">
+                          {mat?.code}
+                        </span>{' '}
                         {mat?.name ?? '?'}
                       </span>
                     )}
@@ -1216,7 +1278,8 @@ function BomEditor({
                         value={r.qty_per_unit}
                         onChange={(e) =>
                           setRow(i, {
-                            qty_per_unit: e.target.value === '' ? '' : Number(e.target.value),
+                            qty_per_unit:
+                              e.target.value === '' ? '' : Number(e.target.value),
                           })
                         }
                         className={cls}
@@ -1281,6 +1344,115 @@ function BomEditor({
             {busy ? 'Đang lưu…' : 'Lưu BOM'}
           </button>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── File kỹ thuật theo SP (FR-ENG-03) ────────────────────────────────────
+
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function fileIcon(mime: string): string {
+  if (mime.startsWith('image/')) return '🖼'
+  if (mime === 'application/pdf') return '📄'
+  if (mime.includes('spreadsheet') || mime.includes('excel') || mime === 'text/csv')
+    return '📊'
+  if (mime.includes('zip')) return '🗜'
+  return '📎'
+}
+
+function ProductFilesSection({
+  productId,
+  files,
+  canEdit,
+  onChanged,
+}: {
+  productId: string
+  files: ProductFile[]
+  canEdit: boolean
+  onChanged: () => void
+}) {
+  const toast = useToast()
+  const confirm = useConfirm()
+
+  async function download(f: ProductFile) {
+    try {
+      const { url } = await api<{ url: string }>(`/api/files/${f.id}`)
+      window.open(url, '_blank', 'noopener')
+    } catch (e) {
+      toast.error('Không tải được file', e instanceof ApiError ? e.message : 'Có lỗi')
+    }
+  }
+
+  async function remove(f: ProductFile) {
+    const ok = await confirm({
+      title: `Xoá file "${f.filename}"?`,
+      description: 'File sẽ bị gỡ khỏi sản phẩm.',
+      tone: 'danger',
+      confirmLabel: 'Xoá',
+    })
+    if (!ok) return
+    try {
+      await api(`/api/files/${f.id}`, { method: 'DELETE' })
+      toast.success('Đã xoá file', f.filename)
+      onChanged()
+    } catch (e) {
+      toast.error('Xoá thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    }
+  }
+
+  return (
+    <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-900">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-xs font-semibold text-zinc-500 uppercase">
+          Tài liệu kỹ thuật ({files.length})
+        </span>
+        {canEdit && (
+          <FileUploader
+            parent={{ kind: 'product', id: productId }}
+            bucket="attachments"
+            label="+ Tải file lên"
+            onUploaded={onChanged}
+          />
+        )}
+      </div>
+      {files.length === 0 ? (
+        <p className="py-2 text-center text-xs text-zinc-400">
+          Chưa có file nào — bản vẽ CAD, BOM Excel, ảnh SP, hướng dẫn PDF.
+        </p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+          {files.map((f) => (
+            <li key={f.id} className="flex items-center gap-2 py-1.5 text-sm">
+              <span aria-hidden>{fileIcon(f.mime_type)}</span>
+              <button
+                onClick={() => void download(f)}
+                className="min-w-0 flex-1 truncate text-left text-sky-600 hover:underline dark:text-sky-400"
+                title={f.filename}
+              >
+                {f.filename}
+              </button>
+              <span className="shrink-0 text-xs text-zinc-400">
+                {fmtSize(f.size_bytes)} ·{' '}
+                {new Date(f.created_at).toLocaleDateString('vi-VN')}
+              </span>
+              {canEdit && (
+                <button
+                  onClick={() => void remove(f)}
+                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                  aria-label="Xoá file"
+                >
+                  ✕
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
