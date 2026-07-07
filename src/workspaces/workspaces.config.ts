@@ -99,6 +99,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/sales', label: 'Trang chủ', icon: '◧' },
           { href: '/sales/customers', label: 'Khách hàng', icon: '◍' },
           { href: '/sales/quotes', label: 'Báo giá', icon: '▤' },
+          { href: '/sales/orders', label: 'Đơn hàng', icon: '◫' },
         ],
       },
       {
