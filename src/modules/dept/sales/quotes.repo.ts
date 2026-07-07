@@ -203,3 +203,58 @@ export const quotesRepo = {
     return count ?? 0
   },
 }
+
+/** Dòng báo giá + đủ thuộc tính SP để in mẫu Quotation (packing, mô tả EN). */
+export type QuotePrintLine = {
+  qty: number
+  unit_price: number
+  note: string | null
+  product_code: string
+  product_name: string
+  product_unit: string
+  customer_item_code: string | null
+  description_en: string | null
+  packing: {
+    l_cm?: number
+    w_cm?: number
+    h_cm?: number
+    carton_l_cm?: number
+    carton_w_cm?: number
+    carton_h_cm?: number
+    qty_per_carton?: number
+    loading_40hc?: number
+  }
+}
+
+export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrintLine[]> {
+  const { data } = await db()
+    .from('sales_quote_lines')
+    .select(
+      'qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing)',
+    )
+    .eq('quote_id', quoteId)
+    .order('sort_order')
+  type P = {
+    code: string
+    name: string
+    unit: string
+    customer_item_code: string | null
+    description_en: string | null
+    packing: QuotePrintLine['packing'] | null
+  }
+  type Raw = { qty: number; unit_price: number; note: string | null; product: P | P[] | null }
+  return ((data ?? []) as Raw[]).map((r) => {
+    const p = Array.isArray(r.product) ? r.product[0] : r.product
+    return {
+      qty: r.qty,
+      unit_price: r.unit_price,
+      note: r.note,
+      product_code: p?.code ?? '?',
+      product_name: p?.name ?? '?',
+      product_unit: p?.unit ?? '',
+      customer_item_code: p?.customer_item_code ?? null,
+      description_en: p?.description_en ?? null,
+      packing: p?.packing ?? {},
+    }
+  })
+}

@@ -1,5 +1,11 @@
 # Kế hoạch hoàn thiện phân hệ Kinh doanh (Sales) & Kỹ thuật
 
+> **✅ HOÀN THÀNH 07/2026** — T1/T2/T3 + S1/S2/S3/S4/S5 đã build đủ (xem git log
+> các commit `feat(technical)`/`feat(sales)`/`feat(production)`/`feat(exec)`).
+> Ghi chú lệch so với plan: notify đổi cờ BOM (T2) hoãn — SRS chỉ yêu cầu hiển
+> thị cờ; ảnh SP trên bản in (S4) chờ chọn "ảnh đại diện" ở GĐ sau; OI-11 (ai
+> nhập spec in LSX) vẫn chờ chốt — form spec sẽ làm trong sprint Cung ứng/SX.
+
 Lập 07/2026. Schema nền đã có đủ (0012 products/BOM, 0013 quotes/orders, 0014
 LSX, 0016 files) — sprint này là **module + UI + luồng duyệt + in ấn**.
 

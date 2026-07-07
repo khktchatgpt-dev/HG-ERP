@@ -2,11 +2,7 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { db } from '@/server/db'
-import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
-import { WORKSPACES } from '@/workspaces/workspaces.config'
 import { CustomersManager } from './CustomersManager'
-
-const workspace = WORKSPACES.sales
 
 export default async function SalesCustomersPage({
   searchParams,
@@ -35,23 +31,17 @@ export default async function SalesCustomersPage({
     .order('name')
 
   return (
-    <WorkspaceShell
-      workspace={workspace}
-      title="Khách hàng"
-      subtitle={`${total} khách hàng`}
-    >
-      <CustomersManager
-        initial={rows}
-        total={total}
-        page={page}
-        q={q ?? ''}
-        currentUserId={user.id}
-        role={user.role}
-        members={(salesMembers ?? []).map((m) => ({
-          id: m.id,
-          label: m.name ?? m.email,
-        }))}
-      />
-    </WorkspaceShell>
+    <CustomersManager
+      initial={rows}
+      total={total}
+      page={page}
+      q={q ?? ''}
+      currentUserId={user.id}
+      role={user.role}
+      members={(salesMembers ?? []).map((m) => ({
+        id: m.id,
+        label: m.name ?? m.email,
+      }))}
+    />
   )
 }

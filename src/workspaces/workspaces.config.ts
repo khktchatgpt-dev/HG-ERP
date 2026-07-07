@@ -267,11 +267,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/exec',
     accent: 'zinc',
     logoText: 'GĐ',
-    ready: false,
+    ready: true,
     sections: [
       {
         heading: 'Điều hành',
-        items: [{ href: '/exec', label: 'Trang chủ', icon: '◧' }],
+        items: [
+          { href: '/exec', label: 'Phê duyệt', icon: '✓' },
+          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+        ],
       },
     ],
   },

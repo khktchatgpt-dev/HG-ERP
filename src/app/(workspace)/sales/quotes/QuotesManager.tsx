@@ -572,6 +572,14 @@ function QuoteDetail({
       {quote.note && <p className="text-zinc-500">{quote.note}</p>}
 
       <div className="mt-1 flex justify-end gap-2">
+        <a
+          href={`/print/quotes/${quote.id}`}
+          target="_blank"
+          rel="noopener"
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+        >
+          🖨 In báo giá
+        </a>
         {canEdit && quote.status === 'draft' && (
           <>
             <button
