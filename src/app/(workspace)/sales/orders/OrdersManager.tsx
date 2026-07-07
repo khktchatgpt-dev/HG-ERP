@@ -112,12 +112,14 @@ export function OrdersManager({
   customers,
   products,
   canEdit,
+  canIssue,
 }: {
   orders: Order[]
   approvedQuotes: QuoteOption[]
   customers: CustomerOption[]
   products: ProductOption[]
   canEdit: boolean
+  canIssue: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -130,6 +132,7 @@ export function OrdersManager({
     changes: OrderChange[]
   } | null>(null)
   const [editing, setEditing] = useState<{ order: Order; lines: LineRow[] } | null>(null)
+  const [issuing, setIssuing] = useState<Order | null>(null)
 
   const [q, setQ] = useState('')
   const [customerFilter, setCustomerFilter] = useState('all')
@@ -316,6 +319,9 @@ export function OrdersManager({
         const items: { label: string; onClick: () => void; danger?: boolean }[] = [
           { label: 'Xem chi tiết', onClick: () => void openView(o) },
         ]
+        if (canIssue && o.status === 'confirmed') {
+          items.push({ label: 'Phát LSX', onClick: () => setIssuing(o) })
+        }
         if (canEdit && editable(o)) {
           items.push(
             { label: 'Sửa (khách thay đổi)', onClick: () => void openEdit(o) },
@@ -462,6 +468,26 @@ export function OrdersManager({
               if (ok) {
                 setEditing(null)
                 toast.success('Đã cập nhật + ghi lịch sử', editing.order.code)
+              }
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Phát LSX (FR-SAL-06 — GĐ xác nhận; BR-01 DB chặn trùng) */}
+      <Modal
+        open={!!issuing}
+        onClose={() => setIssuing(null)}
+        title={issuing ? `Phát LSX — ${issuing.code} (${issuing.customer_name})` : ''}
+      >
+        {issuing && (
+          <IssueLsxForm
+            order={issuing}
+            onSubmit={async (body) => {
+              const ok = await send('/api/dept/production/lsx', 'POST', body)
+              if (ok) {
+                setIssuing(null)
+                toast.success('Đã phát LSX', issuing.code)
               }
             }}
           />
@@ -996,5 +1022,69 @@ function OrderDetail({
         </div>
       )}
     </div>
+  )
+}
+
+// ── Phát LSX (FR-SAL-06) ─────────────────────────────────────────────────
+
+function IssueLsxForm({
+  order,
+  onSubmit,
+}: {
+  order: Order
+  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
+}) {
+  const [busy, setBusy] = useState(false)
+  const cls =
+    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+
+  async function handle(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    setBusy(true)
+    await onSubmit({
+      order_id: order.id,
+      ship_date: String(fd.get('ship_date') ?? '') || null,
+      container_summary:
+        String(fd.get('container_summary') ?? '').trim() || order.container_summary,
+      note: String(fd.get('note') ?? '').trim() || null,
+    })
+    setBusy(false)
+  }
+
+  return (
+    <form onSubmit={handle} className="flex flex-col gap-3">
+      <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+        Một đơn chỉ phát đúng 1 LSX (BR-01). Không bắt buộc đủ BOM/vật tư (BR-07) —
+        kiểm tra cảnh báo BOM trong chi tiết đơn trước khi xác nhận.
+      </p>
+      <label className="flex flex-col gap-1 text-sm">
+        Thời gian xuất hàng dự kiến
+        <input name="ship_date" type="date" defaultValue={order.due_date ?? ''} className={cls} />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Container
+        <input
+          name="container_summary"
+          maxLength={100}
+          defaultValue={order.container_summary ?? ''}
+          placeholder="3 x 40'HC"
+          className={cls}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Ghi chú cho xưởng / kế hoạch
+        <textarea name="note" rows={2} maxLength={2000} className={cls} />
+      </label>
+      <div className="flex justify-end">
+        <button
+          disabled={busy}
+          className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+        >
+          {busy && <Spinner size={14} />}
+          {busy ? 'Đang phát…' : 'Xác nhận phát LSX'}
+        </button>
+      </div>
+    </form>
   )
 }

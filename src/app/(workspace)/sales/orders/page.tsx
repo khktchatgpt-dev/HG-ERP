@@ -12,6 +12,7 @@ export default async function SalesOrdersPage() {
     ? await departmentsRepo.findById(user.department_id)
     : null
   const canEdit = user.role === 'admin' || dept?.name === 'Kinh Doanh'
+  const canIssue = user.role === 'admin' || user.role === 'manager'
 
   const [
     { rows: orders },
@@ -61,6 +62,7 @@ export default async function SalesOrdersPage() {
         bom_status: p.bom_status,
       }))}
       canEdit={!!canEdit}
+      canIssue={canIssue}
     />
   )
 }
