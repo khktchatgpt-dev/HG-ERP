@@ -4,6 +4,7 @@ import {
   productCreateSchema,
   productUpdateSchema,
   productCloneSchema,
+  bomSaveSchema,
   productListQuerySchema,
 } from './technical.schema'
 
@@ -74,6 +75,45 @@ describe('productUpdateSchema', () => {
     )
     expect(productUpdateSchema.parse({ bom_status: 'done' }).bom_status).toBe('done')
     expect(() => productUpdateSchema.parse({ bom_status: 'approved' })).toThrow()
+  })
+})
+
+describe('bomSaveSchema', () => {
+  const UUID2 = '22222222-2222-4222-8222-222222222222'
+
+  it('parse OK: nhiều dòng, ép kiểu số từ chuỗi', () => {
+    const p = bomSaveSchema.parse({
+      lines: [
+        { material_id: UUID, qty_per_unit: '4', note: 'chân trước' },
+        { material_id: UUID2, qty_per_unit: 0.326 },
+      ],
+    })
+    expect(p.lines[0].qty_per_unit).toBe(4)
+    expect(p.lines[1].qty_per_unit).toBe(0.326)
+  })
+
+  it('BOM rỗng hợp lệ (xoá hết dòng)', () => {
+    expect(bomSaveSchema.parse({ lines: [] }).lines).toEqual([])
+  })
+
+  it('từ chối định mức ≤ 0 (logic tồn/mua phụ thuộc số này)', () => {
+    expect(() =>
+      bomSaveSchema.parse({ lines: [{ material_id: UUID, qty_per_unit: 0 }] }),
+    ).toThrow()
+    expect(() =>
+      bomSaveSchema.parse({ lines: [{ material_id: UUID, qty_per_unit: -1 }] }),
+    ).toThrow()
+  })
+
+  it('từ chối vật tư trùng dòng (unique product+material ở DB)', () => {
+    expect(() =>
+      bomSaveSchema.parse({
+        lines: [
+          { material_id: UUID, qty_per_unit: 1 },
+          { material_id: UUID, qty_per_unit: 2 },
+        ],
+      }),
+    ).toThrow()
   })
 })
 

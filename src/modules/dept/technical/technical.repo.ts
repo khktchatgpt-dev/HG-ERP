@@ -40,6 +40,12 @@ export type BomLine = {
   sort_order: number
 }
 
+export type BomLineWithMaterial = BomLine & {
+  material_code: string
+  material_name: string
+  material_unit: string
+}
+
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
   'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, notes, is_active, created_at, updated_at'
@@ -127,6 +133,62 @@ export const bomLinesRepo = {
       .eq('product_id', productId)
       .order('sort_order')
     return (data ?? []) as BomLine[]
+  },
+
+  /** Dòng BOM kèm thông tin vật tư (mã kho = mã BOM — đặc tả 4.2). */
+  async listWithMaterials(productId: string): Promise<BomLineWithMaterial[]> {
+    const { data } = await db()
+      .from('technical_bom_lines')
+      .select(
+        'id, product_id, material_id, qty_per_unit, note, sort_order, material:warehouse_materials(code, name, unit)',
+      )
+      .eq('product_id', productId)
+      .order('sort_order')
+    type Raw = BomLine & {
+      material:
+        | { code: string; name: string; unit: string }
+        | { code: string; name: string; unit: string }[]
+        | null
+    }
+    return ((data ?? []) as Raw[]).map((r) => {
+      const m = Array.isArray(r.material) ? r.material[0] : r.material
+      return {
+        id: r.id,
+        product_id: r.product_id,
+        material_id: r.material_id,
+        qty_per_unit: r.qty_per_unit,
+        note: r.note,
+        sort_order: r.sort_order,
+        material_code: m?.code ?? '?',
+        material_name: m?.name ?? '?',
+        material_unit: m?.unit ?? '',
+      }
+    })
+  },
+
+  /** Ghi đè trọn bộ BOM của 1 SP (delete + insert — bộ nhỏ, chấp nhận không transaction). */
+  async replaceAll(
+    productId: string,
+    lines: { material_id: string; qty_per_unit: number; note?: string | null }[],
+  ): Promise<void> {
+    const { error: delErr } = await db()
+      .from('technical_bom_lines')
+      .delete()
+      .eq('product_id', productId)
+    if (delErr) throw new Error(delErr.message)
+    if (lines.length === 0) return
+    const { error } = await db()
+      .from('technical_bom_lines')
+      .insert(
+        lines.map((l, i) => ({
+          product_id: productId,
+          material_id: l.material_id,
+          qty_per_unit: l.qty_per_unit,
+          note: l.note ?? null,
+          sort_order: i,
+        })),
+      )
+    if (error) throw new Error(error.message)
   },
 
   async copyAll(fromProductId: string, toProductId: string): Promise<number> {

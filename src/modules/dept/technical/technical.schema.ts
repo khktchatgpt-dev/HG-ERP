@@ -44,6 +44,23 @@ export const productListQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(1000).default(20),
 })
 
+/** BOM per-SP (FR-ENG-04): PUT ghi đè trọn bộ dòng định mức. */
+export const bomLineInputSchema = z.object({
+  material_id: z.string().uuid(),
+  qty_per_unit: z.coerce.number().positive(),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+export const bomSaveSchema = z.object({
+  lines: z
+    .array(bomLineInputSchema)
+    .max(500)
+    .refine(
+      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
+      'Vật tư bị trùng dòng trong BOM',
+    ),
+})
+
 /** Nhân bản mẫu cũ cho khách khác (FR-ENG-02) — copy thuộc tính + BOM. */
 export const productCloneSchema = z.object({
   code: z.string().trim().min(1).max(100),

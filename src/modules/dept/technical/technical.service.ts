@@ -145,6 +145,38 @@ export const productsService = {
     return created
   },
 
+  /** Đọc BOM: mọi NV xem được (các phòng đọc trạng thái/định mức — đặc tả 4.2). */
+  async getBom(user: User, productId: string) {
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const lines = await bomLinesRepo.listWithMaterials(productId)
+    return { product, lines }
+  },
+
+  /**
+   * Bóc tách / cập nhật BOM (FR-ENG-04): Kỹ thuật + Sales (manager/admin).
+   * Ghi đè trọn bộ dòng; nếu SP đang 'none' và BOM có dòng → tự nâng cờ 'drawing'
+   * (bước 'done' vẫn do người dùng xác nhận tay — BR-03).
+   */
+  async saveBom(
+    user: User,
+    productId: string,
+    lines: { material_id: string; qty_per_unit: number; note?: string | null }[],
+  ) {
+    if (!(await isTechnicalOrSales(user)) || !canEdit(user)) {
+      throw Forbidden('Chỉ Kỹ thuật / Kinh doanh (quản lý) cập nhật được BOM')
+    }
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+
+    await bomLinesRepo.replaceAll(productId, lines)
+
+    if (product.bom_status === 'none' && lines.length > 0) {
+      await productsRepo.patch(productId, { bom_status: 'drawing' })
+    }
+    return bomLinesRepo.listWithMaterials(productId)
+  },
+
   async remove(user: User, id: string): Promise<void> {
     if (!(await isTechnicalStaff(user)) || !canEdit(user)) throw Forbidden()
     const before = await productsRepo.findById(id)
