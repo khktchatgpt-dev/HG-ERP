@@ -10,7 +10,7 @@ import {
   type DocKind,
 } from './stock.repo'
 import { materialsRepo } from './warehouse.repo'
-import { isWarehouseUser } from './warehouse.service'
+import { isWarehouseUser, canViewWarehouse } from './warehouse.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
@@ -46,7 +46,7 @@ export const stockService = {
     user: User,
     opts: { q?: string; group_name?: string; low_only?: boolean },
   ) {
-    if (!(await isWarehouseUser(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     return stockRepo.list({
       q: opts.q,
       group_name: opts.group_name,
@@ -113,7 +113,7 @@ export const stockService = {
       page_size: number
     },
   ) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     return movementsRepo.list({
       material_id: opts.material_id,
       direction: opts.direction,
@@ -125,12 +125,12 @@ export const stockService = {
   // ── Phiếu kho nhiều dòng (0017) ──
 
   async listDocs(user: User, opts: { kind?: DocKind; page: number; page_size: number }) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     return docsRepo.list(opts)
   },
 
   async docDetail(user: User, id: string) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     const doc = await docsRepo.findById(id)
     if (!doc) throw NotFound('Phiếu không tồn tại')
     const lines = await docsRepo.listLines(id)
@@ -139,18 +139,18 @@ export const stockService = {
 
   /** Nhu cầu vật tư còn phải xuất cho 1 LSX (FR-WMS-05 — cần vs đã xuất). */
   async lsxNeeds(user: User, productionOrderId: string) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     return lsxNeedsRepo(productionOrderId)
   },
 
   /** Dữ liệu cho form nhập theo đơn: PO đang mở + dòng còn thiếu (FR-WMS-02). */
   async poOptions(user: User) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     return supplyRepo.listOpenPos()
   },
 
   async poLines(user: User, poId: string) {
-    if (!(await isWarehouseUser(user))) throw Forbidden()
+    if (!(await canViewWarehouse(user))) throw Forbidden()
     return supplyRepo.lineStatus(poId)
   },
 

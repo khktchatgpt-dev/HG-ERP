@@ -13,6 +13,12 @@ async function isWarehouseUser(user: User): Promise<boolean> {
   return dept?.name === WAREHOUSE_DEPT_NAME
 }
 
+/** Xem chéo read-only (FR-ADM-02): manager/admin xem được Kho; ghi vẫn cần phòng Kho. */
+async function canViewWarehouse(user: User): Promise<boolean> {
+  if (user.role === 'admin' || user.role === 'manager') return true
+  return isWarehouseUser(user)
+}
+
 /** Chỉ Kho + admin được sửa danh mục vật tư. */
 function canEdit(user: User): boolean {
   return user.role === 'admin' || user.role === 'manager'
@@ -41,7 +47,7 @@ export const materialsService = {
       page_size: number
     },
   ) {
-    if (!(await isWarehouseUser(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     return materialsRepo.list({
       q: opts.q,
       group_name: opts.group_name,
@@ -88,4 +94,4 @@ export const materialsService = {
   },
 }
 
-export { isWarehouseUser }
+export { isWarehouseUser, canViewWarehouse }

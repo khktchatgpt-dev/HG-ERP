@@ -31,6 +31,7 @@ export default async function TechnicalProductsPage() {
         packing: p.packing ?? {},
         drawing_url: p.drawing_url,
         bom_url: p.bom_url,
+        image_file_id: p.image_file_id,
         notes: p.notes,
         is_active: p.is_active,
       }))}

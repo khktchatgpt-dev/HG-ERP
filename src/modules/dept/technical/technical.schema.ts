@@ -32,6 +32,7 @@ export const productCreateSchema = z.object({
 export const productUpdateSchema = productCreateSchema.partial().extend({
   is_active: z.boolean().optional(),
   bom_status: z.enum(BOM_STATUSES).optional(), // FR-ENG-05: chưa có / đang vẽ / đã vẽ
+  image_file_id: z.string().uuid().optional().nullable(), // ảnh đại diện (in BG/LSX)
 })
 
 export const productListQuerySchema = z.object({

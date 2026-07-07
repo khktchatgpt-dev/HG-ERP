@@ -214,6 +214,7 @@ export type QuotePrintLine = {
   product_unit: string
   customer_item_code: string | null
   description_en: string | null
+  image_file_id: string | null
   packing: {
     l_cm?: number
     w_cm?: number
@@ -230,7 +231,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   const { data } = await db()
     .from('sales_quote_lines')
     .select(
-      'qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing)',
+      'qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id)',
     )
     .eq('quote_id', quoteId)
     .order('sort_order')
@@ -241,6 +242,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
     customer_item_code: string | null
     description_en: string | null
     packing: QuotePrintLine['packing'] | null
+    image_file_id: string | null
   }
   type Raw = { qty: number; unit_price: number; note: string | null; product: P | P[] | null }
   return ((data ?? []) as Raw[]).map((r) => {
@@ -254,7 +256,47 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
       product_unit: p?.unit ?? '',
       customer_item_code: p?.customer_item_code ?? null,
       description_en: p?.description_en ?? null,
+      image_file_id: p?.image_file_id ?? null,
       packing: p?.packing ?? {},
     }
   })
+}
+
+/** Giá bán gần nhất theo (khách, SP) — gợi ý khi lập báo giá, tránh báo lệch giá. */
+export type LastPrice = {
+  product_id: string
+  unit_price: number
+  quote_code: string
+  quoted_at: string
+}
+
+export async function lastPricesForCustomer(customerId: string): Promise<LastPrice[]> {
+  const { data } = await db()
+    .from('sales_quote_lines')
+    .select('product_id, unit_price, quote:sales_quotes!inner(code, customer_id, created_at)')
+    .eq('quote.customer_id', customerId)
+    .order('created_at', { ascending: false, referencedTable: 'quote' })
+    .limit(500)
+  type Raw = {
+    product_id: string
+    unit_price: number
+    quote:
+      | { code: string; customer_id: string; created_at: string }
+      | { code: string; customer_id: string; created_at: string }[]
+  }
+  const seen = new Map<string, LastPrice>()
+  for (const r of ((data ?? []) as Raw[])) {
+    const q = Array.isArray(r.quote) ? r.quote[0] : r.quote
+    if (!q) continue
+    const cur = seen.get(r.product_id)
+    if (!cur || q.created_at > cur.quoted_at) {
+      seen.set(r.product_id, {
+        product_id: r.product_id,
+        unit_price: r.unit_price,
+        quote_code: q.code,
+        quoted_at: q.created_at,
+      })
+    }
+  }
+  return [...seen.values()]
 }

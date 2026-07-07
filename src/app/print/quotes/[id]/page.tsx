@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { quotesRepo, listQuoteLinesForPrint } from '@/modules/dept/sales/quotes.repo'
+import { filesService } from '@/modules/core/files/files.service'
 import { PrintToolbar } from '../../PrintToolbar'
 
 /**
@@ -23,6 +24,18 @@ export default async function QuotePrintPage({
     listQuoteLinesForPrint(id),
     settingsService.getAll(),
   ])
+
+  // Ảnh đại diện SP (cột Picture của mẫu in) — signed URL ngắn hạn, lỗi thì bỏ ảnh.
+  const imageUrls = new Map<string, string>()
+  await Promise.all(
+    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
+      try {
+        imageUrls.set(fid as string, await filesService.getDownloadUrl(user, fid as string))
+      } catch {
+        /* thiếu ảnh không chặn in */
+      }
+    }),
+  )
 
   const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '…')
   const dim = (l: (typeof lines)[number]) =>
@@ -74,6 +87,9 @@ export default async function QuotePrintPage({
             <td rowSpan={2} className="border border-black px-1">
               #
             </td>
+            <td rowSpan={2} className="border border-black px-1">
+              Picture
+            </td>
             <td rowSpan={2} className="border border-black px-2">
               Description
             </td>
@@ -116,6 +132,16 @@ export default async function QuotePrintPage({
             return (
               <tr key={i}>
                 <td className="border border-black px-1">{i + 1}</td>
+                <td className="border border-black p-1">
+                  {l.image_file_id && imageUrls.get(l.image_file_id) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={imageUrls.get(l.image_file_id)}
+                      alt={l.product_name}
+                      className="mx-auto h-16 w-20 object-contain"
+                    />
+                  ) : null}
+                </td>
                 <td className="border border-black px-2 text-left">
                   <div className="font-semibold text-red-700">
                     {l.product_name}
@@ -151,7 +177,7 @@ export default async function QuotePrintPage({
             )
           })}
           <tr className="font-bold">
-            <td colSpan={13} className="border border-black px-2 text-right">
+            <td colSpan={14} className="border border-black px-2 text-right">
               TOTAL
             </td>
             <td className="border border-black px-1">

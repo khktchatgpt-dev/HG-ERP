@@ -637,6 +637,25 @@ function QuoteForm({
   const [busy, setBusy] = useState(false)
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
   const [lines, setLines] = useState<LineRow[]>(initialLines ?? [])
+  // Giá gần nhất theo khách: product_id → {price, code} (gợi ý + tự điền)
+  const [lastPrices, setLastPrices] = useState<
+    Map<string, { unit_price: number; quote_code: string }>
+  >(new Map())
+
+  async function loadLastPrices(cid: string) {
+    if (!cid) {
+      setLastPrices(new Map())
+      return
+    }
+    try {
+      const data = await api<{
+        prices: { product_id: string; unit_price: number; quote_code: string }[]
+      }>(`/api/dept/sales/quotes/last-prices?customer_id=${cid}`)
+      setLastPrices(new Map(data.prices.map((x) => [x.product_id, x])))
+    } catch {
+      setLastPrices(new Map())
+    }
+  }
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
@@ -700,7 +719,10 @@ function QuoteForm({
           Khách hàng <span className="text-red-500">*</span>
           <select
             value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
+            onChange={(e) => {
+              setCustomerId(e.target.value)
+              void loadLastPrices(e.target.value)
+            }}
             required
             className={cls}
           >
@@ -779,7 +801,14 @@ function QuoteForm({
             <div key={i} className="grid grid-cols-12 items-center gap-2">
               <select
                 value={l.product_id}
-                onChange={(e) => setLine(i, { product_id: e.target.value })}
+                onChange={(e) => {
+                  const last = lastPrices.get(e.target.value)
+                  setLine(i, {
+                    product_id: e.target.value,
+                    // tự điền giá lần trước nếu chưa nhập giá (sửa lại được)
+                    ...(l.unit_price === '' && last ? { unit_price: last.unit_price } : {}),
+                  })
+                }}
                 className={`${cls} col-span-5`}
               >
                 <option value="">— chọn SP —</option>
@@ -810,19 +839,27 @@ function QuoteForm({
                 }
                 className={`${cls} col-span-2`}
               />
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="Đơn giá"
-                value={l.unit_price}
-                onChange={(e) =>
-                  setLine(i, {
-                    unit_price: e.target.value === '' ? '' : Number(e.target.value),
-                  })
-                }
-                className={`${cls} col-span-2`}
-              />
+              <div className="col-span-2 flex flex-col">
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Đơn giá"
+                  value={l.unit_price}
+                  onChange={(e) =>
+                    setLine(i, {
+                      unit_price: e.target.value === '' ? '' : Number(e.target.value),
+                    })
+                  }
+                  className={cls}
+                />
+                {l.product_id && lastPrices.get(l.product_id) && (
+                  <span className="mt-0.5 text-[10px] text-zinc-400">
+                    Lần trước: {lastPrices.get(l.product_id)!.unit_price.toLocaleString('en-US')}{' '}
+                    ({lastPrices.get(l.product_id)!.quote_code})
+                  </span>
+                )}
+              </div>
               <input
                 placeholder="Ghi chú"
                 value={l.note}

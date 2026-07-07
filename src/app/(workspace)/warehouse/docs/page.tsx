@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { stockService } from '@/modules/dept/warehouse/stock.service'
+import { isWarehouseUser } from '@/modules/dept/warehouse/warehouse.service'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -8,7 +9,8 @@ import { DocsManager } from './DocsManager'
 /** Phiếu kho: lập phiếu nhập (PNK) / xuất (PXK) nhiều dòng + danh sách phiếu. */
 export default async function WarehouseDocsPage() {
   const user = (await authService.currentUser())!
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const isWh = await isWarehouseUser(user)
+  const canEdit = user.role === 'admin' || (user.role === 'manager' && isWh)
 
   const [{ rows: docs }, { rows: materials }, pos, { rows: lsxAll }] = await Promise.all([
     stockService.listDocs(user, { page: 1, page_size: 100 }),

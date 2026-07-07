@@ -43,6 +43,7 @@ type Product = {
   packing: Packing
   drawing_url: string | null
   bom_url: string | null
+  image_file_id: string | null
   notes: string | null
   is_active: boolean
 }
@@ -758,6 +759,7 @@ function ProductDetail({
       <ProductFilesSection
         productId={product.id}
         files={files}
+        imageFileId={product.image_file_id}
         canEdit={canEdit}
         onChanged={onFilesChanged}
       />
@@ -1369,16 +1371,34 @@ function fileIcon(mime: string): string {
 function ProductFilesSection({
   productId,
   files,
+  imageFileId,
   canEdit,
   onChanged,
 }: {
   productId: string
   files: ProductFile[]
+  imageFileId: string | null
   canEdit: boolean
   onChanged: () => void
 }) {
   const toast = useToast()
   const confirm = useConfirm()
+  const router = useRouter()
+
+  /** Ảnh đại diện: in kèm hình trên báo giá (cột Picture của mẫu in thật). */
+  async function setMainImage(f: ProductFile | null) {
+    try {
+      await api(`/api/dept/technical/products/${productId}`, {
+        method: 'PATCH',
+        body: { image_file_id: f?.id ?? null },
+      })
+      toast.success(f ? 'Đã đặt ảnh đại diện' : 'Đã bỏ ảnh đại diện', f?.filename)
+      router.refresh()
+      onChanged()
+    } catch (e) {
+      toast.error('Thao tác thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    }
+  }
 
   async function download(f: ProductFile) {
     try {
@@ -1437,6 +1457,15 @@ function ProductFilesSection({
               >
                 {f.filename}
               </button>
+              {f.id === imageFileId && <Badge tone="green">Ảnh đại diện</Badge>}
+              {canEdit && f.mime_type.startsWith('image/') && f.id !== imageFileId && (
+                <button
+                  onClick={() => void setMainImage(f)}
+                  className="shrink-0 rounded border border-zinc-300 px-1.5 py-0.5 text-[10px] text-zinc-500 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700"
+                >
+                  Đặt đại diện
+                </button>
+              )}
               <span className="shrink-0 text-xs text-zinc-400">
                 {fmtSize(f.size_bytes)} ·{' '}
                 {new Date(f.created_at).toLocaleDateString('vi-VN')}

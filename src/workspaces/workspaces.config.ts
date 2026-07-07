@@ -308,6 +308,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/admin/users', label: 'Người dùng', icon: '◍', roles: ['admin'] },
           { href: '/admin/departments', label: 'Phòng ban', icon: '◑', roles: ['admin'] },
           {
+            href: '/admin/catalogs',
+            label: 'Danh mục dùng chung',
+            icon: '▤',
+            roles: ['admin'],
+          },
+          {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',
             icon: '☰',

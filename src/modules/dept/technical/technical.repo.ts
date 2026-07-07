@@ -25,6 +25,7 @@ export type Product = {
   packing: ProductPacking
   drawing_url: string | null
   bom_url: string | null
+  image_file_id: string | null
   notes: string | null
   is_active: boolean
   created_at: string
@@ -48,7 +49,7 @@ export type BomLineWithMaterial = BomLine & {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, notes, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, is_active, created_at, updated_at'
 
 export const productsRepo = {
   async list(filter: {

@@ -1464,6 +1464,7 @@ export type Database = {
           description_en: string | null
           drawing_url: string | null
           id: string
+          image_file_id: string | null
           is_active: boolean
           name: string
           notes: string | null
@@ -1482,6 +1483,7 @@ export type Database = {
           description_en?: string | null
           drawing_url?: string | null
           id?: string
+          image_file_id?: string | null
           is_active?: boolean
           name: string
           notes?: string | null
@@ -1500,6 +1502,7 @@ export type Database = {
           description_en?: string | null
           drawing_url?: string | null
           id?: string
+          image_file_id?: string | null
           is_active?: boolean
           name?: string
           notes?: string | null
@@ -1513,6 +1516,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_products_image_file_id_fkey"
+            columns: ["image_file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
             referencedColumns: ["id"]
           },
         ]
