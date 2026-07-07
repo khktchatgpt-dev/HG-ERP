@@ -103,6 +103,26 @@ export type DomainEvent =
       notify_ids: string[]
     }
 
+  // ── Cung ứng — đơn đặt vật tư (BR-05, FR-ADM-03) ─────────────────────
+  | {
+      name: 'po.submitted'
+      po_id: string
+      code: string
+      supplier_name: string
+      lsx_code: string
+      submitted_by: string
+      approver_ids: string[]
+    }
+  | {
+      name: 'po.decided'
+      po_id: string
+      code: string
+      decision: 'approved' | 'rejected'
+      decided_by: string
+      created_by: string | null
+      reason?: string
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

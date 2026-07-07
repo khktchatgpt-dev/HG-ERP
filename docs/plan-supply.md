@@ -1,5 +1,10 @@
 # Kế hoạch phân hệ Kế hoạch & Cung ứng (FR-SUP-01..07, BR-05/06/08)
 
+> **✅ HOÀN THÀNH 07/2026** — P1–P5 đã build (commit `feat(supply)`): NCC + PO từ
+> LSX (gợi ý BOM + tồn), duyệt GĐ ở `/exec` và `/planning/pos` (BR-05 có test),
+> gửi NCC → hàng về do Kho tự cập nhật, in đơn đặt hàng, workspace planning bật.
+> Migration 0020 (notification PO) đã apply. Bảng giá NCC (G-1) vẫn là GĐ2.
+
 Lập 07/2026. Mảnh **cuối cùng của trục xương sống GĐ1**: LSX → đặt vật tư →
 GĐ duyệt → gửi NCC → hàng về (Kho đã sẵn). Sau sprint này, chuỗi nghiệm thu
 end-to-end của SRS mục 7 chạy trọn trên UI.

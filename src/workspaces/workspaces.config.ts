@@ -200,11 +200,22 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/planning',
     accent: 'violet',
     logoText: 'KH',
-    ready: false,
+    ready: true,
     sections: [
       {
-        heading: 'Kế hoạch',
-        items: [{ href: '/planning', label: 'Trang chủ', icon: '◧' }],
+        heading: 'Cung ứng',
+        items: [
+          { href: '/planning', label: 'Trang chủ', icon: '◧' },
+          { href: '/planning/pos', label: 'Đơn đặt vật tư', icon: '▩' },
+          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◒' },
+        ],
+      },
+      {
+        heading: 'Theo dõi',
+        items: [
+          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+          { href: '/warehouse/docs', label: 'Phiếu kho', icon: '▥' },
+        ],
       },
     ],
   },

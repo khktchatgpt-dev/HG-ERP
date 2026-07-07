@@ -116,3 +116,72 @@ export const supplyRepo = {
     return (data as { code: string } | null)?.code ?? null
   },
 }
+
+// ── Nhà cung cấp (FR-SUP-06) ────────────────────────────────────────────────
+
+export type Supplier = {
+  id: string
+  code: string | null
+  name: string
+  email: string | null
+  phone: string | null
+  address: string | null
+  tax_no: string | null
+  note: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+const SUPPLIER_COLS =
+  'id, code, name, email, phone, address, tax_no, note, is_active, created_at, updated_at'
+
+export const suppliersRepo = {
+  async list(filter: {
+    q?: string
+    active_only: boolean
+    page: number
+    page_size: number
+  }): Promise<{ rows: Supplier[]; total: number }> {
+    let q = db()
+      .from('supply_suppliers')
+      .select(SUPPLIER_COLS, { count: 'exact' })
+      .order('name')
+    if (filter.active_only) q = q.eq('is_active', true)
+    if (filter.q) q = q.or(`name.ilike.%${filter.q}%,code.ilike.%${filter.q}%`)
+    const from = (filter.page - 1) * filter.page_size
+    q = q.range(from, from + filter.page_size - 1)
+    const { data, count } = await q
+    return { rows: (data ?? []) as Supplier[], total: count ?? 0 }
+  },
+
+  async findById(id: string): Promise<Supplier | null> {
+    const { data } = await db()
+      .from('supply_suppliers')
+      .select(SUPPLIER_COLS)
+      .eq('id', id)
+      .maybeSingle()
+    return (data as Supplier | null) ?? null
+  },
+
+  async insert(row: Partial<Supplier> & Pick<Supplier, 'name'>): Promise<Supplier> {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .insert(row)
+      .select(SUPPLIER_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Insert supplier failed')
+    return data as Supplier
+  },
+
+  async patch(id: string, patch: Partial<Supplier>): Promise<Supplier> {
+    const { data, error } = await db()
+      .from('supply_suppliers')
+      .update(patch)
+      .eq('id', id)
+      .select(SUPPLIER_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Update supplier failed')
+    return data as Supplier
+  },
+}
