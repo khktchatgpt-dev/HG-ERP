@@ -52,7 +52,7 @@ const QUOTE = {
 function mockDept(name: string | null) {
   vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
     id === 'd-sales'
-      ? ({ id, name: 'Kinh Doanh' } as never)
+      ? ({ id, name: 'Bán Hàng' } as never)
       : ({ id, name: name ?? 'Kỹ Thuật' } as never),
   )
 }

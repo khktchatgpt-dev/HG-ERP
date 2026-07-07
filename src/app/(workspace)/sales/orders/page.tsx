@@ -11,7 +11,7 @@ export default async function SalesOrdersPage() {
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Kinh Doanh'
+  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
   const canIssue = user.role === 'admin' || user.role === 'manager'
 
   const [

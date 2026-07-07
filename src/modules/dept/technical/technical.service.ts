@@ -10,7 +10,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 const TECH_DEPT_NAME = 'Kỹ Thuật'
-const SALES_DEPT_NAME = 'Kinh Doanh'
+const SALES_DEPT_NAME = 'Bán Hàng'
 
 async function isTechnicalStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true

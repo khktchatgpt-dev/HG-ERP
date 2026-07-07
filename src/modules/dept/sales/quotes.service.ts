@@ -11,7 +11,7 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
-const SALES_DEPT_NAME = 'Kinh Doanh'
+const SALES_DEPT_NAME = 'Bán Hàng'
 
 async function isSalesStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
