@@ -1,7 +1,7 @@
 import { customersRepo, type Customer, type CustomerWithOwner } from './sales.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { Conflict, Forbidden, NotFound } from '@/server/http'
+import { Forbidden, NotFound } from '@/server/http'
 
 /**
  * The "Bán Hàng" department's name as stored in `public.departments`.
