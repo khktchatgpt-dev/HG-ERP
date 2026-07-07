@@ -1,9 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import {
-  quoteCreateSchema,
-  quoteDecideSchema,
-  quoteListQuerySchema,
-} from './quotes.schema'
+import { quoteCreateSchema, quoteListQuerySchema } from './quotes.schema'
 
 const UUID = '11111111-1111-4111-8111-111111111111'
 const UUID2 = '22222222-2222-4222-8222-222222222222'
@@ -71,30 +67,10 @@ describe('quoteCreateSchema', () => {
   })
 })
 
-describe('quoteDecideSchema (BR-04 — GĐ duyệt)', () => {
-  it('approve không cần lý do', () => {
-    expect(quoteDecideSchema.parse({ decision: 'approve' }).decision).toBe('approve')
-  })
-
-  it('reject BẮT BUỘC kèm lý do', () => {
-    expect(() => quoteDecideSchema.parse({ decision: 'reject' })).toThrow()
-    expect(() => quoteDecideSchema.parse({ decision: 'reject', reason: '' })).toThrow()
-    const p = quoteDecideSchema.parse({
-      decision: 'reject',
-      reason: 'Giá chưa duyệt được',
-    })
-    expect(p.reason).toBe('Giá chưa duyệt được')
-  })
-
-  it('từ chối decision lạ', () => {
-    expect(() => quoteDecideSchema.parse({ decision: 'maybe' })).toThrow()
-  })
-})
-
 describe('quoteListQuerySchema', () => {
   it('lọc theo trạng thái + khách', () => {
-    const p = quoteListQuerySchema.parse({ status: 'pending', customer_id: UUID })
-    expect(p.status).toBe('pending')
+    const p = quoteListQuerySchema.parse({ status: 'sent', customer_id: UUID })
+    expect(p.status).toBe('sent')
     expect(p.page).toBe(1)
   })
 

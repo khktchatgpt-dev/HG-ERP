@@ -1,6 +1,8 @@
 import { z } from 'zod'
 
-export const QUOTE_STATUSES = ['draft', 'pending', 'approved', 'rejected'] as const
+// Báo giá là hồ sơ riêng của Sales — KHÔNG qua Giám đốc duyệt.
+// draft: đang soạn (sửa/xoá được) · sent: đã chốt & gửi khách (bất biến, tạo được đơn).
+export const QUOTE_STATUSES = ['draft', 'sent'] as const
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
 
 export const quoteLineInputSchema = z.object({
@@ -43,13 +45,3 @@ export const quoteListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(100),
 })
-
-/** GĐ duyệt / từ chối (BR-04, FR-ADM-03). */
-export const quoteDecideSchema = z
-  .object({
-    decision: z.enum(['approve', 'reject']),
-    reason: z.string().trim().max(1000).optional(),
-  })
-  .refine((d) => d.decision !== 'reject' || (d.reason && d.reason.length > 0), {
-    message: 'Từ chối phải kèm lý do',
-  })

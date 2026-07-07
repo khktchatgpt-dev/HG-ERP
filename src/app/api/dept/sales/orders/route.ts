@@ -14,7 +14,7 @@ export const GET = handle(async (req: Request) => {
   return NextResponse.json(result)
 })
 
-/** Tạo đơn từ báo giá đã duyệt (FR-SAL-04, BR-04 — service kiểm). */
+/** Tạo đơn — từ báo giá đã chốt hoặc trực tiếp không cần báo giá (service kiểm). */
 export const POST = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const input = await parseJson(req, orderCreateSchema)

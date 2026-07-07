@@ -5,7 +5,7 @@ import type { OrderStatus } from './orders.schema'
 export type Order = {
   id: string
   code: string
-  quote_id: string
+  quote_id: string | null
   customer_id: string
   customer_po_no: string | null
   status: OrderStatus
@@ -158,7 +158,7 @@ export const ordersRepo = {
   async insert(
     row: {
       code: string
-      quote_id: string
+      quote_id: string | null
       customer_id: string
       customer_po_no?: string | null
       currency: string

@@ -16,12 +16,12 @@ export default async function SalesOrdersPage() {
 
   const [
     { rows: orders },
-    { rows: approvedQuotes },
+    { rows: sentQuotes },
     { rows: customers },
     { rows: products },
   ] = await Promise.all([
     ordersService.list(user, { page: 1, page_size: 500 }),
-    quotesService.list(user, { status: 'approved', page: 1, page_size: 500 }),
+    quotesService.list(user, { status: 'sent', page: 1, page_size: 500 }),
     customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     productsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
   ])
@@ -45,7 +45,7 @@ export default async function SalesOrdersPage() {
         note: o.note,
         created_at: o.created_at,
       }))}
-      approvedQuotes={approvedQuotes.map((q) => ({
+      sentQuotes={sentQuotes.map((q) => ({
         id: q.id,
         code: q.code,
         customer_name: q.customer_name,

@@ -10,9 +10,9 @@ export default async function SalesHomePage() {
   const user = (await authService.currentUser())!
   const accent = ACCENT_CLASSES[workspace.accent]
 
-  const [{ total: customerCount }, pendingQuotes, openOrders] = await Promise.all([
+  const [{ total: customerCount }, draftQuotes, openOrders] = await Promise.all([
     salesService.list(user, { page: 1, page_size: 1, active_only: true }),
-    quotesService.list(user, { status: 'pending', page: 1, page_size: 1 }),
+    quotesService.list(user, { status: 'draft', page: 1, page_size: 1 }),
     ordersService.list(user, { status: 'in_production', page: 1, page_size: 1 }),
   ])
 
@@ -29,9 +29,9 @@ export default async function SalesHomePage() {
           accentBg={accent.bg}
         />
         <Widget
-          label="Báo giá chờ duyệt"
-          value={pendingQuotes.total.toString()}
-          hint="Đang đợi Giám đốc"
+          label="Báo giá nháp"
+          value={draftQuotes.total.toString()}
+          hint="Chưa chốt gửi khách"
           accentBg={accent.bg}
         />
         <Widget
@@ -50,12 +50,12 @@ export default async function SalesHomePage() {
           <QuickLink
             href="/sales/quotes"
             title="Báo giá"
-            desc="Lập báo giá, gửi Giám đốc duyệt"
+            desc="Lập & chốt báo giá — hồ sơ riêng của Sales"
           />
           <QuickLink
             href="/sales/orders"
             title="Đơn hàng"
-            desc="Tạo đơn từ báo giá đã duyệt, phát LSX"
+            desc="Tự tạo đơn từ báo giá đã chốt, phát LSX"
           />
           <QuickLink
             href="/sales/tracking"

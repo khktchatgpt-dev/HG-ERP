@@ -63,26 +63,6 @@ export type DomainEvent =
       notify_ids: string[]
     }
 
-  // ── Sales — báo giá (FR-SAL-03, BR-04) ───────────────────────────────
-  | {
-      name: 'quote.submitted'
-      quote_id: string
-      code: string
-      customer_name: string
-      submitted_by: string
-      // GĐ/Ban QL nhận yêu cầu duyệt.
-      approver_ids: string[]
-    }
-  | {
-      name: 'quote.decided'
-      quote_id: string
-      code: string
-      decision: 'approved' | 'rejected'
-      decided_by: string
-      created_by: string | null
-      reason?: string
-    }
-
   // ── Kho (FR-WMS-02/08 — liên kết Kho ↔ Cung ứng 2 chiều) ─────────────
   | {
       name: 'warehouse.receipt.created'

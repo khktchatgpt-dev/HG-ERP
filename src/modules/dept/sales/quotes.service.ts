@@ -7,8 +7,7 @@ import {
 import { customersRepo } from './sales.repo'
 import type { QuoteStatus } from './quotes.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { usersRepo, type User } from '@/modules/core/users/users.repo'
-import { emit } from '@/events/bus'
+import { type User } from '@/modules/core/users/users.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 const SALES_DEPT_NAME = 'Bán Hàng'
@@ -18,11 +17,6 @@ async function isSalesStaff(user: User): Promise<boolean> {
   if (!user.department_id) return false
   const dept = await departmentsRepo.findById(user.department_id)
   return dept?.name === SALES_DEPT_NAME
-}
-
-/** Duyệt báo giá: GĐ/Ban quản lý (đặc tả mục 6 — duyệt báo giá là của Giám đốc). */
-function canApprove(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
 }
 
 type QuoteInput = {
@@ -112,75 +106,30 @@ export const quotesService = {
     await quotesRepo.delete(id)
   },
 
-  /** Gửi GĐ duyệt (FR-SAL-03): draft → pending, phải có ít nhất 1 dòng SP. */
-  async submit(user: User, id: string): Promise<Quote> {
-    if (!(await isSalesStaff(user))) throw Forbidden()
+  /**
+   * Chốt & gửi khách (FR-SAL-03): draft → sent. Sale tự làm, KHÔNG cần duyệt.
+   * Sau khi chốt, báo giá bất biến và tạo được đơn hàng.
+   */
+  async send(user: User, id: string): Promise<Quote> {
+    if (!(await isSalesStaff(user))) throw Forbidden('Chỉ Kinh doanh chốt được báo giá')
     const before = await quotesRepo.findById(id)
     if (!before) throw NotFound('Báo giá không tồn tại')
-    if (before.status !== 'draft') throw BadRequest('Báo giá đã gửi duyệt rồi')
+    if (before.status !== 'draft') throw BadRequest('Báo giá đã chốt rồi')
     if ((await quotesRepo.countLines(id)) === 0) {
       throw BadRequest('Báo giá chưa có dòng sản phẩm nào')
     }
-    const quote = await quotesRepo.patch(id, { status: 'pending' })
-
-    const approvers = (await usersRepo.list()).filter(
-      (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
-    )
-    await emit({
-      name: 'quote.submitted',
-      quote_id: id,
-      code: before.code,
-      customer_name: before.customer_name,
-      submitted_by: user.id,
-      approver_ids: approvers.map((a) => a.id),
-    })
-    return quote
-  },
-
-  /** GĐ duyệt / từ chối (BR-04 nửa đầu): pending → approved | rejected. */
-  async decide(
-    user: User,
-    id: string,
-    decision: 'approve' | 'reject',
-    reason?: string,
-  ): Promise<Quote> {
-    if (!canApprove(user)) throw Forbidden('Chỉ Ban quản lý/Giám đốc duyệt báo giá')
-    const before = await quotesRepo.findById(id)
-    if (!before) throw NotFound('Báo giá không tồn tại')
-    if (before.status !== 'pending') {
-      throw BadRequest('Chỉ duyệt được báo giá đang chờ duyệt')
-    }
-    const quote = await quotesRepo.patch(
-      id,
-      decision === 'approve'
-        ? {
-            status: 'approved',
-            approved_by: user.id,
-            approved_at: new Date().toISOString(),
-          }
-        : { status: 'rejected', rejected_reason: reason ?? null },
-    )
-    await emit({
-      name: 'quote.decided',
-      quote_id: id,
-      code: before.code,
-      decision: decision === 'approve' ? 'approved' : 'rejected',
-      decided_by: user.id,
-      created_by: before.created_by,
-      reason,
-    })
-    return quote
+    return quotesRepo.patch(id, { status: 'sent' })
   },
 
   /**
-   * BR-04 (nửa sau) — dùng ở service Đơn hàng (S2): chỉ báo giá approved mới
-   * tạo được đơn. Đặt ở đây để logic trạng thái báo giá nằm một chỗ.
+   * Cổng tạo đơn hàng — dùng ở service Đơn hàng (S2): chỉ báo giá đã chốt (sent)
+   * mới tạo được đơn. Đặt ở đây để logic trạng thái báo giá nằm một chỗ.
    */
-  async assertApproved(quoteId: string): Promise<QuoteWithCustomer> {
+  async assertSent(quoteId: string): Promise<QuoteWithCustomer> {
     const quote = await quotesRepo.findById(quoteId)
     if (!quote) throw NotFound('Báo giá không tồn tại')
-    if (quote.status !== 'approved') {
-      throw BadRequest('BR-04: chỉ báo giá đã được Giám đốc duyệt mới tạo được đơn hàng')
+    if (quote.status !== 'sent') {
+      throw BadRequest('Chỉ tạo được đơn hàng từ báo giá đã chốt (gửi khách)')
     }
     return quote
   },

@@ -17,15 +17,43 @@ export const orderLineInputSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 })
 
-/** Tạo đơn TỪ BÁO GIÁ ĐÃ DUYỆT (BR-04) — dòng SP snapshot từ báo giá ở service. */
-export const orderCreateSchema = z.object({
-  quote_id: z.string().uuid(),
-  customer_po_no: z.string().trim().max(100).optional().nullable(), // PO# của khách — in trên LSX
-  due_date: z.string().date().optional().nullable(),
-  deposit_percent: z.coerce.number().min(0).max(100).optional().nullable(),
-  container_summary: z.string().trim().max(100).optional().nullable(), // "1 x 40'HC"
-  note: z.string().trim().max(2000).optional().nullable(),
-})
+/**
+ * Tạo đơn — 2 cách:
+ *  - TỪ BÁO GIÁ đã chốt: gửi `quote_id`, dòng SP + điều khoản snapshot từ báo giá.
+ *  - TRỰC TIẾP (không báo giá): gửi `customer_id` + `lines` (≥1), tuỳ chọn
+ *    currency/price_term/payment_terms. Đơn là bản ghi của sale, mốc phát LSX.
+ */
+export const orderCreateSchema = z
+  .object({
+    quote_id: z.string().uuid().optional().nullable(),
+    // Chỉ dùng khi KHÔNG có quote_id:
+    customer_id: z.string().uuid().optional().nullable(),
+    currency: z.string().trim().toUpperCase().length(3).optional(),
+    price_term: z.string().trim().max(100).optional().nullable(),
+    payment_terms: z.string().trim().max(500).optional().nullable(),
+    lines: z
+      .array(orderLineInputSchema)
+      .max(200)
+      .refine(
+        (lines) => new Set(lines.map((l) => l.product_id)).size === lines.length,
+        'Sản phẩm bị trùng dòng',
+      )
+      .optional(),
+    // Header dùng chung cho cả 2 cách:
+    customer_po_no: z.string().trim().max(100).optional().nullable(), // PO# của khách — in trên LSX
+    due_date: z.string().date().optional().nullable(),
+    deposit_percent: z.coerce.number().min(0).max(100).optional().nullable(),
+    container_summary: z.string().trim().max(100).optional().nullable(), // "1 x 40'HC"
+    note: z.string().trim().max(2000).optional().nullable(),
+  })
+  .refine((o) => !!o.quote_id || !!o.customer_id, {
+    message: 'Chọn báo giá, hoặc chọn khách hàng để tạo đơn trực tiếp',
+    path: ['customer_id'],
+  })
+  .refine((o) => !!o.quote_id || (o.lines?.length ?? 0) >= 1, {
+    message: 'Đơn không từ báo giá phải có ít nhất 1 dòng sản phẩm',
+    path: ['lines'],
+  })
 
 /** Cập nhật khi khách thay đổi (FR-SAL-05) — mọi thay đổi được ghi lịch sử. */
 export const orderUpdateSchema = z.object({

@@ -823,7 +823,7 @@ export type Database = {
           note: string | null
           payment_terms: string | null
           price_term: string | null
-          quote_id: string
+          quote_id: string | null
           status: string
           updated_at: string
         }
@@ -841,7 +841,7 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
-          quote_id: string
+          quote_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -859,7 +859,7 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
-          quote_id?: string
+          quote_id?: string | null
           status?: string
           updated_at?: string
         }

@@ -15,7 +15,7 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 
-type QuoteStatus = 'draft' | 'pending' | 'approved' | 'rejected'
+type QuoteStatus = 'draft' | 'sent'
 
 type Quote = {
   id: string
@@ -29,7 +29,6 @@ type Quote = {
   price_term: string | null
   payment_terms: string | null
   note: string | null
-  rejected_reason: string | null
   created_at: string
 }
 
@@ -65,15 +64,11 @@ type LineRow = {
 
 const STATUS_LABEL: Record<QuoteStatus, string> = {
   draft: 'Nháp',
-  pending: 'Chờ duyệt',
-  approved: 'Đã duyệt',
-  rejected: 'Từ chối',
+  sent: 'Đã gửi khách',
 }
-const STATUS_TONE: Record<QuoteStatus, 'gray' | 'amber' | 'green' | 'red'> = {
+const STATUS_TONE: Record<QuoteStatus, 'gray' | 'green'> = {
   draft: 'gray',
-  pending: 'amber',
-  approved: 'green',
-  rejected: 'red',
+  sent: 'green',
 }
 
 function fmtMoney(n: number, currency: string): string {
@@ -85,13 +80,11 @@ export function QuotesManager({
   customers,
   products,
   canEdit,
-  canApprove,
 }: {
   quotes: Quote[]
   customers: CustomerOption[]
   products: ProductOption[]
   canEdit: boolean
-  canApprove: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -118,12 +111,7 @@ export function QuotesManager({
   }, [quotes, q, customerFilter, statusFilter])
 
   const stats = useMemo(() => {
-    const by: Record<QuoteStatus, number> = {
-      draft: 0,
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-    }
+    const by: Record<QuoteStatus, number> = { draft: 0, sent: 0 }
     for (const it of quotes) by[it.status]++
     return by
   }, [quotes])
@@ -174,36 +162,17 @@ export function QuotesManager({
     }
   }
 
-  async function submitQuote(quote: Quote) {
+  async function sendQuote(quote: Quote) {
     const ok = await confirm({
-      title: `Gửi ${quote.code} lên Giám đốc duyệt?`,
-      description: 'Sau khi gửi sẽ không sửa được nữa.',
-      confirmLabel: 'Gửi duyệt',
+      title: `Chốt & gửi khách ${quote.code}?`,
+      description:
+        'Sau khi chốt sẽ không sửa được nữa và có thể tạo đơn hàng từ báo giá này.',
+      confirmLabel: 'Chốt & gửi khách',
     })
     if (!ok) return
-    const ok2 = await send(`/api/dept/sales/quotes/${quote.id}/submit`, 'POST')
-    if (ok2) toast.success('Đã gửi duyệt', quote.code)
-  }
-
-  async function decide(quote: Quote, decision: 'approve' | 'reject') {
-    let reason: string | undefined
-    if (decision === 'reject') {
-      reason = window.prompt(`Lý do từ chối ${quote.code}:`)?.trim() || undefined
-      if (!reason) return
-    } else {
-      const ok = await confirm({
-        title: `Duyệt báo giá ${quote.code}?`,
-        description: `Khách: ${quote.customer_name}. Báo giá duyệt rồi mới tạo được đơn hàng (BR-04).`,
-        confirmLabel: 'Duyệt',
-      })
-      if (!ok) return
-    }
-    const ok2 = await send(`/api/dept/sales/quotes/${quote.id}/decide`, 'POST', {
-      decision,
-      reason,
-    })
+    const ok2 = await send(`/api/dept/sales/quotes/${quote.id}/send`, 'POST')
     if (ok2) {
-      toast.success(decision === 'approve' ? 'Đã duyệt' : 'Đã từ chối', quote.code)
+      toast.success('Đã chốt báo giá', quote.code)
       setViewing(null)
     }
   }
@@ -280,14 +249,8 @@ export function QuotesManager({
         if (canEdit && it.status === 'draft') {
           items.push(
             { label: 'Sửa', onClick: () => void openEdit(it) },
-            { label: 'Gửi duyệt', onClick: () => void submitQuote(it) },
+            { label: 'Chốt & gửi khách', onClick: () => void sendQuote(it) },
             { label: 'Xoá', onClick: () => void deleteQuote(it), danger: true },
-          )
-        }
-        if (canApprove && it.status === 'pending') {
-          items.push(
-            { label: 'Duyệt', onClick: () => void decide(it, 'approve') },
-            { label: 'Từ chối', onClick: () => void decide(it, 'reject'), danger: true },
           )
         }
         return <RowMenu items={items} />
@@ -304,7 +267,7 @@ export function QuotesManager({
       <PageHeader
         breadcrumbs={[{ label: 'Kinh doanh', href: '/sales' }, { label: 'Báo giá' }]}
         title="Báo giá"
-        description={`${filtered.length} / ${quotes.length} báo giá. Nháp → gửi duyệt → Giám đốc duyệt → tạo đơn hàng.`}
+        description={`${filtered.length} / ${quotes.length} báo giá. Nháp → chốt & gửi khách → tạo đơn hàng. Hồ sơ riêng của Sales, không cần duyệt.`}
         actions={
           canEdit && (
             <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
@@ -318,17 +281,7 @@ export function QuotesManager({
         stats={[
           { label: 'Tổng', value: quotes.length, tone: 'default' },
           { label: 'Nháp', value: stats.draft, tone: 'gray' },
-          {
-            label: 'Chờ duyệt',
-            value: stats.pending,
-            tone: stats.pending ? 'amber' : 'gray',
-          },
-          { label: 'Đã duyệt', value: stats.approved, tone: 'green' },
-          {
-            label: 'Từ chối',
-            value: stats.rejected,
-            tone: stats.rejected ? 'red' : 'gray',
-          },
+          { label: 'Đã gửi khách', value: stats.sent, tone: 'green' },
         ]}
       />
 
@@ -357,9 +310,7 @@ export function QuotesManager({
                 options={[
                   { value: 'all' as const, label: 'Mọi trạng thái' },
                   { value: 'draft' as const, label: 'Nháp' },
-                  { value: 'pending' as const, label: 'Chờ duyệt' },
-                  { value: 'approved' as const, label: 'Đã duyệt' },
-                  { value: 'rejected' as const, label: 'Từ chối' },
+                  { value: 'sent' as const, label: 'Đã gửi khách' },
                 ]}
               />
             </>
@@ -460,9 +411,7 @@ export function QuotesManager({
             quote={viewing.quote}
             lines={viewing.lines}
             canEdit={canEdit}
-            canApprove={canApprove}
-            onSubmit={() => void submitQuote(viewing.quote)}
-            onDecide={(d) => void decide(viewing.quote, d)}
+            onSend={() => void sendQuote(viewing.quote)}
             onEdit={() => {
               const v = viewing
               setViewing(null)
@@ -481,17 +430,13 @@ function QuoteDetail({
   quote,
   lines,
   canEdit,
-  canApprove,
-  onSubmit,
-  onDecide,
+  onSend,
   onEdit,
 }: {
   quote: Quote
   lines: QuoteLine[]
   canEdit: boolean
-  canApprove: boolean
-  onSubmit: () => void
-  onDecide: (d: 'approve' | 'reject') => void
+  onSend: () => void
   onEdit: () => void
 }) {
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
@@ -512,12 +457,6 @@ function QuoteDetail({
           </span>
         )}
       </div>
-
-      {quote.status === 'rejected' && quote.rejected_reason && (
-        <div className="rounded-md bg-red-50 p-3 text-red-700 dark:bg-red-950 dark:text-red-300">
-          <b>Lý do từ chối:</b> {quote.rejected_reason}
-        </div>
-      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -589,26 +528,10 @@ function QuoteDetail({
               Sửa
             </button>
             <button
-              onClick={onSubmit}
+              onClick={onSend}
               className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
             >
-              Gửi duyệt
-            </button>
-          </>
-        )}
-        {canApprove && quote.status === 'pending' && (
-          <>
-            <button
-              onClick={() => onDecide('reject')}
-              className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-            >
-              Từ chối
-            </button>
-            <button
-              onClick={() => onDecide('approve')}
-              className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700"
-            >
-              Duyệt báo giá
+              Chốt & gửi khách
             </button>
           </>
         )}
@@ -806,7 +729,9 @@ function QuoteForm({
                   setLine(i, {
                     product_id: e.target.value,
                     // tự điền giá lần trước nếu chưa nhập giá (sửa lại được)
-                    ...(l.unit_price === '' && last ? { unit_price: last.unit_price } : {}),
+                    ...(l.unit_price === '' && last
+                      ? { unit_price: last.unit_price }
+                      : {}),
                   })
                 }}
                 className={`${cls} col-span-5`}
@@ -855,8 +780,9 @@ function QuoteForm({
                 />
                 {l.product_id && lastPrices.get(l.product_id) && (
                   <span className="mt-0.5 text-[10px] text-zinc-400">
-                    Lần trước: {lastPrices.get(l.product_id)!.unit_price.toLocaleString('en-US')}{' '}
-                    ({lastPrices.get(l.product_id)!.quote_code})
+                    Lần trước:{' '}
+                    {lastPrices.get(l.product_id)!.unit_price.toLocaleString('en-US')} (
+                    {lastPrices.get(l.product_id)!.quote_code})
                   </span>
                 )}
               </div>

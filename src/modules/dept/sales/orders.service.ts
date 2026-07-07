@@ -6,6 +6,7 @@ import {
 } from './orders.repo'
 import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
+import { customersRepo } from './sales.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
@@ -50,13 +51,21 @@ export const ordersService = {
   },
 
   /**
-   * Tạo đơn từ báo giá ĐÃ DUYỆT (FR-SAL-04, BR-04).
-   * Snapshot dòng SP từ báo giá — sau đó đơn sống độc lập với báo giá.
+   * Tạo đơn (FR-SAL-04). Sale tự tạo — đơn là bản ghi và là mốc phát Lệnh sản
+   * xuất (LSX). Hai cách:
+   *   - TỪ BÁO GIÁ đã chốt (`quote_id`): snapshot dòng SP + điều khoản từ báo giá.
+   *   - TRỰC TIẾP (`customer_id` + `lines`, không cần báo giá).
+   * Tạo xong đơn sống độc lập.
    */
   async create(
     user: User,
     input: {
-      quote_id: string
+      quote_id?: string | null
+      customer_id?: string | null
+      currency?: string
+      price_term?: string | null
+      payment_terms?: string | null
+      lines?: OrderLineInput[]
       customer_po_no?: string | null
       due_date?: string | null
       deposit_percent?: number | null
@@ -66,32 +75,68 @@ export const ordersService = {
   ): Promise<Order> {
     if (!(await isSalesStaff(user))) throw Forbidden('Chỉ Kinh doanh tạo được đơn hàng')
 
-    const quote = await quotesService.assertApproved(input.quote_id) // ⭐ BR-04
-    const quoteLines = await quotesRepo.listLines(input.quote_id)
-    if (quoteLines.length === 0) throw BadRequest('Báo giá không có dòng sản phẩm')
+    // Nguồn: từ báo giá đã chốt, hoặc nhập trực tiếp.
+    let source: {
+      quote_id: string | null
+      customer_id: string
+      currency: string
+      price_term: string | null
+      payment_terms: string | null
+      lines: OrderLineInput[]
+    }
+
+    if (input.quote_id) {
+      const quote = await quotesService.assertSent(input.quote_id) // báo giá đã chốt
+      const quoteLines = await quotesRepo.listLines(input.quote_id)
+      if (quoteLines.length === 0) throw BadRequest('Báo giá không có dòng sản phẩm')
+      source = {
+        quote_id: quote.id,
+        customer_id: quote.customer_id, // denorm từ quote — nguồn sự thật
+        currency: quote.currency,
+        price_term: quote.price_term,
+        payment_terms: quote.payment_terms,
+        lines: quoteLines.map((l) => ({
+          product_id: l.product_id,
+          qty: l.qty,
+          unit_price: l.unit_price,
+          note: l.note,
+        })),
+      }
+    } else {
+      // Tạo trực tiếp — không cần báo giá.
+      if (!input.customer_id) throw BadRequest('Chọn khách hàng để tạo đơn trực tiếp')
+      const customer = await customersRepo.findById(input.customer_id)
+      if (!customer) throw NotFound('Khách hàng không tồn tại')
+      if (!customer.is_active) throw BadRequest('Khách hàng đã ngừng giao dịch')
+      const lines = input.lines ?? []
+      if (lines.length === 0) throw BadRequest('Đơn phải có ít nhất 1 dòng sản phẩm')
+      source = {
+        quote_id: null,
+        customer_id: input.customer_id,
+        currency: input.currency ?? 'USD',
+        price_term: input.price_term ?? null,
+        payment_terms: input.payment_terms ?? null,
+        lines,
+      }
+    }
 
     const code = await ordersRepo.nextCode()
     return ordersRepo.insert(
       {
         code,
-        quote_id: quote.id,
-        customer_id: quote.customer_id, // denorm từ quote — nguồn sự thật duy nhất
+        quote_id: source.quote_id,
+        customer_id: source.customer_id,
         customer_po_no: input.customer_po_no ?? null,
-        currency: quote.currency,
+        currency: source.currency,
         due_date: input.due_date ?? null,
         deposit_percent: input.deposit_percent ?? null,
-        price_term: quote.price_term,
-        payment_terms: quote.payment_terms,
+        price_term: source.price_term,
+        payment_terms: source.payment_terms,
         container_summary: input.container_summary ?? null,
         note: input.note ?? null,
         created_by: user.id,
       },
-      quoteLines.map((l) => ({
-        product_id: l.product_id,
-        qty: l.qty,
-        unit_price: l.unit_price,
-        note: l.note,
-      })),
+      source.lines,
     )
   },
 

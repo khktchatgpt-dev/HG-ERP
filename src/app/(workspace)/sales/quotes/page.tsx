@@ -11,7 +11,6 @@ export default async function SalesQuotesPage() {
     ? await departmentsRepo.findById(user.department_id)
     : null
   const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  const canApprove = user.role === 'admin' || user.role === 'manager'
 
   const [{ rows: quotes }, { rows: customers }, { rows: products }] = await Promise.all([
     quotesService.list(user, { page: 1, page_size: 500 }),
@@ -33,7 +32,6 @@ export default async function SalesQuotesPage() {
         price_term: q.price_term,
         payment_terms: q.payment_terms,
         note: q.note,
-        rejected_reason: q.rejected_reason,
         created_at: q.created_at,
       }))}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}
@@ -47,7 +45,6 @@ export default async function SalesQuotesPage() {
         bom_status: p.bom_status,
       }))}
       canEdit={!!canEdit}
-      canApprove={canApprove}
     />
   )
 }

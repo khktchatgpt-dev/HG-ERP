@@ -1,5 +1,4 @@
 import { registerTaskNotificationHandlers } from './handlers/task.notifications'
-import { registerQuoteNotificationHandlers } from './handlers/quote.notifications'
 import { registerWarehouseNotificationHandlers } from './handlers/warehouse.notifications'
 import { registerPoNotificationHandlers } from './handlers/po.notifications'
 
@@ -13,7 +12,6 @@ export function registerEventHandlers(): void {
   if (registered) return
   registered = true
   registerTaskNotificationHandlers()
-  registerQuoteNotificationHandlers()
   registerWarehouseNotificationHandlers()
   registerPoNotificationHandlers()
 }

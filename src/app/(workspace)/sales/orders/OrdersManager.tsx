@@ -108,14 +108,14 @@ const FIELD_LABEL: Record<string, string> = {
 
 export function OrdersManager({
   orders,
-  approvedQuotes,
+  sentQuotes,
   customers,
   products,
   canEdit,
   canIssue,
 }: {
   orders: Order[]
-  approvedQuotes: QuoteOption[]
+  sentQuotes: QuoteOption[]
   customers: CustomerOption[]
   products: ProductOption[]
   canEdit: boolean
@@ -342,11 +342,11 @@ export function OrdersManager({
       <PageHeader
         breadcrumbs={[{ label: 'Kinh doanh', href: '/sales' }, { label: 'Đơn hàng' }]}
         title="Đơn hàng bán"
-        description={`${filtered.length} / ${orders.length} đơn. Tạo từ báo giá đã duyệt — mỗi đơn phát đúng 1 LSX.`}
+        description={`${filtered.length} / ${orders.length} đơn. Sale tự tạo — từ báo giá đã chốt hoặc trực tiếp không cần báo giá; mỗi đơn phát đúng 1 LSX.`}
         actions={
           canEdit && (
             <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
-              + Tạo đơn từ báo giá
+              + Tạo đơn hàng
             </button>
           )
         }
@@ -414,13 +414,13 @@ export function OrdersManager({
               title={orders.length === 0 ? 'Chưa có đơn hàng nào' : 'Không khớp bộ lọc'}
               description={
                 orders.length === 0
-                  ? 'Đơn hàng được tạo từ báo giá đã được Giám đốc duyệt (BR-04).'
+                  ? 'Đơn hàng do Sales tự tạo — từ báo giá đã chốt hoặc trực tiếp không cần báo giá.'
                   : 'Thử điều chỉnh bộ lọc.'
               }
               action={
-                canEdit && orders.length === 0 && approvedQuotes.length > 0 ? (
+                canEdit && orders.length === 0 ? (
                   <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
-                    + Tạo đơn từ báo giá
+                    + Tạo đơn hàng
                   </button>
                 ) : undefined
               }
@@ -429,14 +429,17 @@ export function OrdersManager({
         />
       </div>
 
-      {/* Create from approved quote */}
+      {/* Create — từ báo giá đã chốt HOẶC trực tiếp (không báo giá) */}
       <Modal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
-        title="Tạo đơn hàng từ báo giá đã duyệt"
+        title="Tạo đơn hàng"
+        maxWidth="sm:max-w-3xl"
       >
         <CreateOrderForm
-          approvedQuotes={approvedQuotes}
+          sentQuotes={sentQuotes}
+          customers={customers}
+          products={products}
           onSubmit={async (body) => {
             const ok = await send('/api/dept/sales/orders', 'POST', body)
             if (ok) {
@@ -523,21 +526,59 @@ export function OrdersManager({
 // ── Create form ──────────────────────────────────────────────────────────
 
 function CreateOrderForm({
-  approvedQuotes,
+  sentQuotes,
+  customers,
+  products,
   onSubmit,
 }: {
-  approvedQuotes: QuoteOption[]
+  sentQuotes: QuoteOption[]
+  customers: CustomerOption[]
+  products: ProductOption[]
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
 }) {
   const [busy, setBusy] = useState(false)
+  // Không còn báo giá đã chốt thì mặc định vào thẳng chế độ trực tiếp.
+  const [mode, setMode] = useState<'quote' | 'direct'>(
+    sentQuotes.length > 0 ? 'quote' : 'direct',
+  )
+  const [quoteId, setQuoteId] = useState('')
+  const [customerId, setCustomerId] = useState('')
+  const [lines, setLines] = useState<LineRow[]>([])
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+
+  const productChoices = useMemo(() => {
+    const own = products.filter((p) => p.customer_id === customerId)
+    const common = products.filter((p) => !p.customer_id)
+    const others = products.filter((p) => p.customer_id && p.customer_id !== customerId)
+    return { own, common, others }
+  }, [products, customerId])
+
+  const usedIds = new Set(lines.map((l) => l.product_id))
+  const linesInvalid =
+    lines.length === 0 ||
+    lines.length !== usedIds.size ||
+    lines.some(
+      (l) => !l.product_id || l.qty === '' || Number(l.qty) <= 0 || l.unit_price === '',
+    )
+  const invalid = mode === 'quote' ? !quoteId : !customerId || linesInvalid
+
+  function setLine(i: number, patch: Partial<LineRow>) {
+    setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+
+  function renderOption(p: ProductOption) {
+    return (
+      <option key={p.id} value={p.id} disabled={usedIds.has(p.id)}>
+        {p.code} — {p.name}
+      </option>
+    )
+  }
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
-    const body: Record<string, unknown> = {
-      quote_id: String(fd.get('quote_id') ?? ''),
+    const header = {
       customer_po_no: String(fd.get('customer_po_no') ?? '').trim() || null,
       due_date: String(fd.get('due_date') ?? '') || null,
       deposit_percent: String(fd.get('deposit_percent') ?? '').trim()
@@ -546,77 +587,261 @@ function CreateOrderForm({
       container_summary: String(fd.get('container_summary') ?? '').trim() || null,
       note: String(fd.get('note') ?? '').trim() || null,
     }
+    const body: Record<string, unknown> =
+      mode === 'quote'
+        ? { quote_id: quoteId, ...header }
+        : {
+            customer_id: customerId,
+            currency: String(fd.get('currency') ?? 'USD'),
+            price_term: String(fd.get('price_term') ?? '').trim() || null,
+            payment_terms: String(fd.get('payment_terms') ?? '').trim() || null,
+            lines: lines.map((l) => ({
+              product_id: l.product_id,
+              qty: Number(l.qty),
+              unit_price: Number(l.unit_price),
+              note: l.note.trim() || null,
+            })),
+            ...header,
+          }
     setBusy(true)
     await onSubmit(body)
     setBusy(false)
   }
 
-  if (approvedQuotes.length === 0) {
-    return (
-      <p className="py-4 text-center text-sm text-zinc-500">
-        Chưa có báo giá nào được duyệt. Gửi báo giá lên Giám đốc duyệt trước (BR-04).
-      </p>
-    )
-  }
+  const tab = (m: 'quote' | 'direct', label: string) => (
+    <button
+      type="button"
+      onClick={() => setMode(m)}
+      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+        mode === m
+          ? 'bg-sky-600 text-white'
+          : 'border border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900'
+      }`}
+    >
+      {label}
+    </button>
+  )
 
   return (
-    <form onSubmit={handle} className="grid gap-3 sm:grid-cols-2">
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Báo giá đã duyệt <span className="text-red-500">*</span>
-        <select name="quote_id" required className={cls}>
-          <option value="">— chọn báo giá —</option>
-          {approvedQuotes.map((qt) => (
-            <option key={qt.id} value={qt.id}>
-              {qt.code} — {qt.customer_name} ({qt.currency})
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Số PO của khách
-        <input
-          name="customer_po_no"
-          maxLength={100}
-          placeholder="31032191120"
-          className={`${cls} font-mono`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Hạn giao
-        <input name="due_date" type="date" className={cls} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        % Cọc (deposit)
-        <input
-          name="deposit_percent"
-          type="number"
-          min="0"
-          max="100"
-          step="0.01"
-          placeholder="20"
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Container
-        <input
-          name="container_summary"
-          maxLength={100}
-          placeholder="1 x 40'HC"
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Ghi chú
-        <textarea name="note" rows={2} maxLength={2000} className={cls} />
-      </label>
-      <p className="text-xs text-zinc-500 sm:col-span-2">
-        Dòng sản phẩm + đơn giá được copy nguyên từ báo giá; điều kiện giá & thanh toán
-        giữ theo báo giá. Sau khi tạo, mọi thay đổi đều được ghi lịch sử.
+    <form onSubmit={handle} className="flex flex-col gap-3">
+      <div className="flex gap-2">
+        {tab('quote', 'Từ báo giá đã chốt')}
+        {tab('direct', 'Trực tiếp (không báo giá)')}
+      </div>
+
+      {mode === 'quote' ? (
+        sentQuotes.length === 0 ? (
+          <p className="py-3 text-center text-sm text-zinc-500">
+            Chưa có báo giá nào đã chốt. Chuyển sang “Trực tiếp” hoặc chốt báo giá trước.
+          </p>
+        ) : (
+          <label className="flex flex-col gap-1 text-sm">
+            Báo giá đã chốt <span className="text-red-500">*</span>
+            <select
+              value={quoteId}
+              onChange={(e) => setQuoteId(e.target.value)}
+              required
+              className={cls}
+            >
+              <option value="">— chọn báo giá —</option>
+              {sentQuotes.map((qt) => (
+                <option key={qt.id} value={qt.id}>
+                  {qt.code} — {qt.customer_name} ({qt.currency})
+                </option>
+              ))}
+            </select>
+          </label>
+        )
+      ) : (
+        <div className="flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              Khách hàng <span className="text-red-500">*</span>
+              <select
+                value={customerId}
+                onChange={(e) => setCustomerId(e.target.value)}
+                required
+                className={cls}
+              >
+                <option value="">— chọn khách —</option>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Tiền tệ
+              <select name="currency" defaultValue="USD" className={cls}>
+                <option value="USD">USD</option>
+                <option value="VND">VND</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              Điều kiện giá
+              <input
+                name="price_term"
+                maxLength={100}
+                placeholder="FOB Quy Nhon"
+                className={cls}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              Điều khoản thanh toán
+              <input
+                name="payment_terms"
+                maxLength={500}
+                placeholder="L/C at sight · 20% deposit…"
+                className={cls}
+              />
+            </label>
+          </div>
+
+          <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
+              Dòng sản phẩm ({lines.length})
+            </div>
+            {lines.length === 0 && (
+              <p className="py-2 text-center text-xs text-zinc-400">
+                Chưa có dòng nào — chọn sản phẩm từ thư viện Kỹ thuật.
+              </p>
+            )}
+            <div className="flex flex-col gap-2">
+              {lines.map((l, i) => (
+                <div key={i} className="grid grid-cols-12 items-center gap-2">
+                  <select
+                    value={l.product_id}
+                    onChange={(e) => setLine(i, { product_id: e.target.value })}
+                    className={`${cls} col-span-5`}
+                  >
+                    <option value="">— chọn SP —</option>
+                    {productChoices.own.length > 0 && (
+                      <optgroup label="SP của khách này">
+                        {productChoices.own.map(renderOption)}
+                      </optgroup>
+                    )}
+                    {productChoices.common.length > 0 && (
+                      <optgroup label="Mẫu chung">
+                        {productChoices.common.map(renderOption)}
+                      </optgroup>
+                    )}
+                    {productChoices.others.length > 0 && (
+                      <optgroup label="SP khách khác">
+                        {productChoices.others.map(renderOption)}
+                      </optgroup>
+                    )}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="SL"
+                    value={l.qty}
+                    onChange={(e) =>
+                      setLine(i, {
+                        qty: e.target.value === '' ? '' : Number(e.target.value),
+                      })
+                    }
+                    className={`${cls} col-span-2`}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Đơn giá"
+                    value={l.unit_price}
+                    onChange={(e) =>
+                      setLine(i, {
+                        unit_price: e.target.value === '' ? '' : Number(e.target.value),
+                      })
+                    }
+                    className={`${cls} col-span-2`}
+                  />
+                  <input
+                    placeholder="Ghi chú"
+                    value={l.note}
+                    maxLength={500}
+                    onChange={(e) => setLine(i, { note: e.target.value })}
+                    className={`${cls} col-span-2`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
+                    className="col-span-1 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    aria-label="Xoá dòng"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setLines((ls) => [
+                  ...ls,
+                  { product_id: '', qty: '', unit_price: '', note: '' },
+                ])
+              }
+              className="mt-2 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
+            >
+              + Thêm dòng
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm">
+          Số PO của khách
+          <input
+            name="customer_po_no"
+            maxLength={100}
+            placeholder="31032191120"
+            className={`${cls} font-mono`}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Hạn giao
+          <input name="due_date" type="date" className={cls} />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          % Cọc (deposit)
+          <input
+            name="deposit_percent"
+            type="number"
+            min="0"
+            max="100"
+            step="0.01"
+            placeholder="20"
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Container
+          <input
+            name="container_summary"
+            maxLength={100}
+            placeholder="1 x 40'HC"
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+          Ghi chú
+          <textarea name="note" rows={2} maxLength={2000} className={cls} />
+        </label>
+      </div>
+
+      <p className="text-xs text-zinc-500">
+        {mode === 'quote'
+          ? 'Dòng SP + đơn giá + điều khoản copy nguyên từ báo giá. Sau khi tạo, mọi thay đổi đều được ghi lịch sử.'
+          : 'Đơn tạo trực tiếp không gắn báo giá. Sau khi tạo, mọi thay đổi đều được ghi lịch sử.'}
       </p>
-      <div className="flex justify-end sm:col-span-2">
+      <div className="flex justify-end">
         <button
-          disabled={busy}
+          disabled={busy || invalid}
           className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
         >
           {busy && <Spinner size={14} />}
@@ -1065,12 +1290,17 @@ function IssueLsxForm({
   return (
     <form onSubmit={handle} className="flex flex-col gap-3">
       <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-        Một đơn chỉ phát đúng 1 LSX (BR-01). Không bắt buộc đủ BOM/vật tư (BR-07) —
-        kiểm tra cảnh báo BOM trong chi tiết đơn trước khi xác nhận.
+        Một đơn chỉ phát đúng 1 LSX (BR-01). Không bắt buộc đủ BOM/vật tư (BR-07) — kiểm
+        tra cảnh báo BOM trong chi tiết đơn trước khi xác nhận.
       </p>
       <label className="flex flex-col gap-1 text-sm">
         Thời gian xuất hàng dự kiến
-        <input name="ship_date" type="date" defaultValue={order.due_date ?? ''} className={cls} />
+        <input
+          name="ship_date"
+          type="date"
+          defaultValue={order.due_date ?? ''}
+          className={cls}
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Container

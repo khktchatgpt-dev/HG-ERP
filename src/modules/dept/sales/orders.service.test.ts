@@ -15,14 +15,16 @@ vi.mock('./orders.repo', () => ({
 }))
 vi.mock('./quotes.repo', () => ({ quotesRepo: { listLines: vi.fn() } }))
 vi.mock('./quotes.service', () => ({
-  quotesService: { assertApproved: vi.fn() },
+  quotesService: { assertSent: vi.fn() },
   isSalesStaff: vi.fn(),
 }))
+vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn() } }))
 
 import { ordersService } from './orders.service'
 import { ordersRepo } from './orders.repo'
 import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
+import { customersRepo } from './sales.repo'
 import { BadRequest } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
@@ -53,10 +55,10 @@ beforeEach(() => {
   vi.mocked(isSalesStaff).mockResolvedValue(true)
 })
 
-describe('ordersService.create — BR-04: chỉ từ báo giá đã duyệt', () => {
-  it('báo giá chưa duyệt → assertApproved chặn, không insert', async () => {
-    vi.mocked(quotesService.assertApproved).mockRejectedValue(
-      BadRequest('BR-04: chỉ báo giá đã được Giám đốc duyệt mới tạo được đơn hàng'),
+describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () => {
+  it('báo giá chưa chốt → assertSent chặn, không insert', async () => {
+    vi.mocked(quotesService.assertSent).mockRejectedValue(
+      BadRequest('Chỉ tạo được đơn hàng từ báo giá đã chốt (gửi khách)'),
     )
     await expect(ordersService.create(sales, { quote_id: 'q1' })).rejects.toMatchObject({
       status: 400,
@@ -64,8 +66,8 @@ describe('ordersService.create — BR-04: chỉ từ báo giá đã duyệt', ()
     expect(ordersRepo.insert).not.toHaveBeenCalled()
   })
 
-  it('báo giá approved → snapshot dòng + copy điều khoản từ quote', async () => {
-    vi.mocked(quotesService.assertApproved).mockResolvedValue({
+  it('báo giá đã chốt → snapshot dòng + copy điều khoản từ quote', async () => {
+    vi.mocked(quotesService.assertSent).mockResolvedValue({
       id: 'q1',
       customer_id: 'c1',
       currency: 'USD',
@@ -89,12 +91,70 @@ describe('ordersService.create — BR-04: chỉ từ báo giá đã duyệt', ()
     ])
   })
 
-  it('báo giá approved nhưng 0 dòng → chặn', async () => {
-    vi.mocked(quotesService.assertApproved).mockResolvedValue({ id: 'q1' } as never)
+  it('báo giá đã chốt nhưng 0 dòng → chặn', async () => {
+    vi.mocked(quotesService.assertSent).mockResolvedValue({ id: 'q1' } as never)
     vi.mocked(quotesRepo.listLines).mockResolvedValue([])
     await expect(ordersService.create(sales, { quote_id: 'q1' })).rejects.toMatchObject({
       status: 400,
     })
+  })
+})
+
+describe('ordersService.create — trực tiếp, KHÔNG cần báo giá', () => {
+  it('có khách + dòng SP → insert với quote_id null, không đụng tới báo giá', async () => {
+    vi.mocked(customersRepo.findById).mockResolvedValue({
+      id: 'c9',
+      is_active: true,
+    } as never)
+    vi.mocked(ordersRepo.nextCode).mockResolvedValue('DH-2026-0002')
+    vi.mocked(ordersRepo.insert).mockResolvedValue(ORDER as never)
+
+    await ordersService.create(sales, {
+      customer_id: 'c9',
+      currency: 'VND',
+      price_term: 'EXW',
+      lines: [{ product_id: 'p2', qty: 10, unit_price: 250 }],
+    })
+
+    expect(quotesService.assertSent).not.toHaveBeenCalled()
+    const [row, lines] = vi.mocked(ordersRepo.insert).mock.calls[0]
+    expect(row.quote_id).toBeNull()
+    expect(row.customer_id).toBe('c9')
+    expect(row.currency).toBe('VND')
+    expect(row.price_term).toBe('EXW')
+    expect(lines).toEqual([{ product_id: 'p2', qty: 10, unit_price: 250 }])
+  })
+
+  it('không chọn khách → chặn', async () => {
+    await expect(
+      ordersService.create(sales, {
+        lines: [{ product_id: 'p2', qty: 1, unit_price: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(ordersRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('khách ngừng giao dịch → chặn', async () => {
+    vi.mocked(customersRepo.findById).mockResolvedValue({
+      id: 'c9',
+      is_active: false,
+    } as never)
+    await expect(
+      ordersService.create(sales, {
+        customer_id: 'c9',
+        lines: [{ product_id: 'p2', qty: 1, unit_price: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('không có dòng SP → chặn', async () => {
+    vi.mocked(customersRepo.findById).mockResolvedValue({
+      id: 'c9',
+      is_active: true,
+    } as never)
+    await expect(
+      ordersService.create(sales, { customer_id: 'c9', lines: [] }),
+    ).rejects.toMatchObject({ status: 400 })
   })
 })
 
