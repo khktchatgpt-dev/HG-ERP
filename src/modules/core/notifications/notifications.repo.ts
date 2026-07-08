@@ -11,6 +11,14 @@ export type NotificationType =
   | 'commented'
   | 'due_soon'
   | 'overdue'
+  | 'quote_submitted'
+  | 'quote_approved'
+  | 'quote_rejected'
+  | 'wh_receipt'
+  | 'wh_stock_low'
+  | 'po_submitted'
+  | 'po_approved'
+  | 'po_rejected'
 
 export type Notification = {
   id: string

@@ -823,7 +823,7 @@ export type Database = {
           note: string | null
           payment_terms: string | null
           price_term: string | null
-          quote_id: string
+          quote_id: string | null
           status: string
           updated_at: string
         }
@@ -841,7 +841,7 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
-          quote_id: string
+          quote_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -859,7 +859,7 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           price_term?: string | null
-          quote_id?: string
+          quote_id?: string | null
           status?: string
           updated_at?: string
         }
@@ -1464,6 +1464,7 @@ export type Database = {
           description_en: string | null
           drawing_url: string | null
           id: string
+          image_file_id: string | null
           is_active: boolean
           name: string
           notes: string | null
@@ -1482,6 +1483,7 @@ export type Database = {
           description_en?: string | null
           drawing_url?: string | null
           id?: string
+          image_file_id?: string | null
           is_active?: boolean
           name: string
           notes?: string | null
@@ -1500,6 +1502,7 @@ export type Database = {
           description_en?: string | null
           drawing_url?: string | null
           id?: string
+          image_file_id?: string | null
           is_active?: boolean
           name?: string
           notes?: string | null
@@ -1513,6 +1516,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_products_image_file_id_fkey"
+            columns: ["image_file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
             referencedColumns: ["id"]
           },
         ]
@@ -1627,6 +1637,53 @@ export type Database = {
           },
         ]
       }
+      warehouse_docs: {
+        Row: {
+          code: string
+          counterparty: string | null
+          created_at: string
+          created_by: string | null
+          doc_date: string
+          id: string
+          kind: string
+          note: string | null
+          reason: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          counterparty?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_date?: string
+          id?: string
+          kind: string
+          note?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          counterparty?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_date?: string
+          id?: string
+          kind?: string
+          note?: string | null
+          reason?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_docs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_materials: {
         Row: {
           code: string
@@ -1674,6 +1731,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           direction: string
+          doc_id: string | null
           id: string
           material_id: string
           note: string | null
@@ -1693,6 +1751,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           direction: string
+          doc_id?: string | null
           id?: string
           material_id: string
           note?: string | null
@@ -1712,6 +1771,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           direction?: string
+          doc_id?: string | null
           id?: string
           material_id?: string
           note?: string | null
@@ -1733,6 +1793,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
             referencedColumns: ["id"]
           },
           {
@@ -1857,6 +1924,19 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      v_lsx_material_status: {
+        Row: {
+          material_code: string | null
+          material_id: string | null
+          material_name: string | null
+          production_order_id: string | null
+          qty_issued: number | null
+          qty_needed: number | null
+          qty_remaining: number | null
+          unit: string | null
+        }
+        Relationships: []
       }
       v_order_tracking: {
         Row: {

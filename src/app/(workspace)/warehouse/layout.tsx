@@ -15,7 +15,10 @@ export default async function WarehouseLayout({
 }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
-  if (!(await isWarehouseUser(user))) redirect('/')
+  // FR-ADM-02: manager xem chéo read-only; ghi vẫn bị service chặn theo phòng Kho.
+  const allowed =
+    user.role === 'admin' || user.role === 'manager' || (await isWarehouseUser(user))
+  if (!allowed) redirect('/')
 
   return <WorkspaceShell workspace={WORKSPACES.warehouse}>{children}</WorkspaceShell>
 }

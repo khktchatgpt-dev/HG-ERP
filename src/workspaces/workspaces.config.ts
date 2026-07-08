@@ -98,6 +98,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/sales', label: 'Trang chủ', icon: '◧' },
           { href: '/sales/customers', label: 'Khách hàng', icon: '◍' },
+          { href: '/sales/quotes', label: 'Báo giá', icon: '▤' },
+          { href: '/sales/orders', label: 'Đơn hàng', icon: '◫' },
+          { href: '/sales/tracking', label: 'Theo dõi đơn', icon: '◎' },
         ],
       },
       {
@@ -162,6 +165,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kho',
         items: [
           { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
+          { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: '▥' },
           { href: '/warehouse/stock', label: 'Tồn kho', icon: '▦' },
           { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
         ],
@@ -196,11 +200,22 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/planning',
     accent: 'violet',
     logoText: 'KH',
-    ready: false,
+    ready: true,
     sections: [
       {
-        heading: 'Kế hoạch',
-        items: [{ href: '/planning', label: 'Trang chủ', icon: '◧' }],
+        heading: 'Cung ứng',
+        items: [
+          { href: '/planning', label: 'Trang chủ', icon: '◧' },
+          { href: '/planning/pos', label: 'Đơn đặt vật tư', icon: '▩' },
+          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◒' },
+        ],
+      },
+      {
+        heading: 'Theo dõi',
+        items: [
+          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+          { href: '/warehouse/docs', label: 'Phiếu kho', icon: '▥' },
+        ],
       },
     ],
   },
@@ -264,11 +279,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/exec',
     accent: 'zinc',
     logoText: 'GĐ',
-    ready: false,
+    ready: true,
     sections: [
       {
         heading: 'Điều hành',
-        items: [{ href: '/exec', label: 'Trang chủ', icon: '◧' }],
+        items: [
+          { href: '/exec', label: 'Phê duyệt', icon: '✓' },
+          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+        ],
       },
     ],
   },
@@ -289,6 +307,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/admin', label: 'Tổng quan', icon: '◧', roles: ['admin'] },
           { href: '/admin/users', label: 'Người dùng', icon: '◍', roles: ['admin'] },
           { href: '/admin/departments', label: 'Phòng ban', icon: '◑', roles: ['admin'] },
+          {
+            href: '/admin/catalogs',
+            label: 'Danh mục dùng chung',
+            icon: '▤',
+            roles: ['admin'],
+          },
           {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',

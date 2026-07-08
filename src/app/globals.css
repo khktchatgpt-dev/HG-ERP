@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 :root {
   --background: #ffffff;
@@ -19,13 +19,26 @@
   }
 }
 
-html, body {
+html,
+body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-feature-settings: "cv11", "ss01";
+  font-family:
+    var(--font-sans),
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  /* Be Vietnam Pro render đúng nhất với feature mặc định. KHÔNG bật cv11/ss01
+     (feature riêng của Inter/Geist) — áp nhầm sẽ làm lệch glyph tiếng Việt. */
+  font-feature-settings: normal;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-code, kbd, pre, .font-mono {
-  font-family: var(--font-mono), ui-monospace, "Cascadia Code", monospace;
+code,
+kbd,
+pre,
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, 'Cascadia Code', monospace;
 }

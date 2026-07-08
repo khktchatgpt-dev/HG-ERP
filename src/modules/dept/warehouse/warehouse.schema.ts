@@ -46,6 +46,54 @@ export const issueSchema = z.object({
   note: z.string().trim().max(2000).optional().nullable(),
 })
 
+// ── Phiếu kho nhiều dòng (0017 warehouse_docs) ─────────────────────────────
+
+/** Dòng phiếu nhập: theo dòng PO (po_line_id) hoặc mua ngoài (không có). */
+export const receiptDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  qty: z.coerce.number().positive(), // số ĐẠT vào tồn
+  qty_rejected: z.coerce.number().min(0).default(0), // QC loại — KHÔNG vào tồn (BR-10)
+  qc_status: z.enum(['pass', 'partial', 'fail']).optional(),
+  po_line_id: z.string().uuid().optional().nullable(),
+  shelf_location: z.string().trim().max(60).optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
+export const receiptDocSchema = z.object({
+  po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
+  counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z.array(receiptDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+})
+
+export const issueDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  qty: z.coerce.number().positive(),
+  shelf_location: z.string().trim().max(60).optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu xuất kho (PXK — FR-WMS-05/06). BR-09: xuất theo LSX phải gắn LSX. */
+export const issueDocSchema = z
+  .object({
+    kind: z.enum(['lsx', 'daily']),
+    production_order_id: z.string().uuid().optional().nullable(),
+    counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
+    reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
+    note: z.string().trim().max(2000).optional().nullable(),
+    lines: z.array(issueDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+  })
+  .refine((d) => d.kind !== 'lsx' || !!d.production_order_id, {
+    message: 'BR-09: xuất theo LSX phải chọn LSX',
+  })
+
+export const docListQuerySchema = z.object({
+  kind: z.enum(['receipt', 'issue', 'transfer', 'stocktake']).optional(),
+  page: z.coerce.number().int().positive().default(1),
+  page_size: z.coerce.number().int().min(1).max(200).default(50),
+})
+
 export const stockListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   group_name: z.string().trim().max(100).optional(),
