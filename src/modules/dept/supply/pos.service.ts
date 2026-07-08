@@ -53,6 +53,9 @@ export const posService = {
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
     const lsx = await productionRepo.findById(input.production_order_id)
     if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+      throw BadRequest('LSX chưa được Giám đốc duyệt — chưa đặt vật tư được')
+    }
 
     const code = await posRepo.nextCode()
     const po = await posRepo.insert(

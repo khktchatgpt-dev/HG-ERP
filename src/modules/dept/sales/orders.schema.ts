@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 export const ORDER_STATUSES = [
   'confirmed',
+  'lsx_pending',
   'lsx_issued',
   'in_production',
   'completed',
@@ -25,6 +26,7 @@ export const orderLineInputSchema = z.object({
  */
 export const orderCreateSchema = z
   .object({
+    code: z.string().trim().min(1, 'Nhập mã đơn hàng').max(50), // sale tự đặt mã
     quote_id: z.string().uuid().optional().nullable(),
     // Chỉ dùng khi KHÔNG có quote_id:
     customer_id: z.string().uuid().optional().nullable(),
@@ -45,6 +47,14 @@ export const orderCreateSchema = z
     deposit_percent: z.coerce.number().min(0).max(100).optional().nullable(),
     container_summary: z.string().trim().max(100).optional().nullable(), // "1 x 40'HC"
     note: z.string().trim().max(2000).optional().nullable(),
+    // Điều khoản xuất khẩu (Sales Contract Art 3/5):
+    qty_tolerance_pct: z.coerce.number().min(0).max(100).optional().nullable(),
+    partial_shipment: z.boolean().optional().nullable(),
+    transhipment: z.boolean().optional().nullable(),
+    port_of_loading: z.string().trim().max(200).optional().nullable(),
+    port_of_discharge: z.string().trim().max(200).optional().nullable(),
+    payment_method: z.string().trim().max(200).optional().nullable(),
+    required_docs: z.string().trim().max(2000).optional().nullable(),
   })
   .refine((o) => !!o.quote_id || !!o.customer_id, {
     message: 'Chọn báo giá, hoặc chọn khách hàng để tạo đơn trực tiếp',
@@ -64,6 +74,13 @@ export const orderUpdateSchema = z.object({
   payment_terms: z.string().trim().max(500).optional().nullable(),
   container_summary: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
+  qty_tolerance_pct: z.coerce.number().min(0).max(100).optional().nullable(),
+  partial_shipment: z.boolean().optional().nullable(),
+  transhipment: z.boolean().optional().nullable(),
+  port_of_loading: z.string().trim().max(200).optional().nullable(),
+  port_of_discharge: z.string().trim().max(200).optional().nullable(),
+  payment_method: z.string().trim().max(200).optional().nullable(),
+  required_docs: z.string().trim().max(2000).optional().nullable(),
   change_note: z.string().trim().max(1000).optional().nullable(), // lý do khách đổi
   lines: z
     .array(orderLineInputSchema)

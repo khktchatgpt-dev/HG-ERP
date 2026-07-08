@@ -1,12 +1,45 @@
 import { z } from 'zod'
 
-export const LSX_STATUSES = ['issued', 'in_progress', 'completed'] as const
+// Vòng đời có bước duyệt: Sales phát → GĐ duyệt → SX → hoàn thành.
+export const LSX_STATUSES = [
+  'pending_approval',
+  'approved',
+  'in_progress',
+  'completed',
+  'rejected',
+] as const
 export type LsxStatus = (typeof LSX_STATUSES)[number]
+
+/** GĐ từ chối LSX — bắt buộc lý do. */
+export const lsxRejectSchema = z.object({
+  reason: z.string().trim().min(1, 'Nhập lý do từ chối').max(1000),
+})
+
+/** Spec sản xuất per dòng LSX (OI-11: Sales nhập khi phát, override tech_spec SP). */
+export const lsxLineSpecSchema = z.object({
+  order_line_id: z.string().uuid(),
+  specs: z
+    .object({
+      machine: z.string().trim().max(200),
+      cushion: z.string().trim().max(200),
+      paint: z.string().trim().max(200),
+      glass: z.string().trim().max(200),
+      wood: z.string().trim().max(200),
+    })
+    .partial(),
+  note: z.string().trim().max(1000).optional().nullable(),
+  important_note: z.string().trim().max(1000).optional().nullable(),
+})
+export const lsxSpecsSaveSchema = z.object({
+  lines: z.array(lsxLineSpecSchema).max(500),
+})
 
 /** Giai đoạn SX = code catalog_items type 'production_stage' (phoi/han/son/mai/hoan_thien). */
 export const issueLsxSchema = z.object({
+  code: z.string().trim().min(1, 'Nhập số LSX').max(50), // người dùng tự đặt số LSX
   order_id: z.string().uuid(),
   ship_date: z.string().date().optional().nullable(),
+  received_date: z.string().date().optional().nullable(), // Ngày nhận (in trên LSX)
   container_summary: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
 })

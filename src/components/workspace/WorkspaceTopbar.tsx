@@ -3,6 +3,7 @@ import { notificationsService } from '@/modules/core/notifications/notifications
 import { UserMenu } from '@/components/UserMenu'
 import { NotificationsDropdown } from '@/components/NotificationsDropdown'
 import { ACCENT_CLASSES, type WorkspaceConfig } from '@/workspaces/workspaces.config'
+import { MobileNav } from './MobileNav'
 
 export async function WorkspaceTopbar({
   workspace,
@@ -25,17 +26,18 @@ export async function WorkspaceTopbar({
       {/* Accent bar mỏng để phân biệt workspace nhanh bằng mắt */}
       <div className={`h-0.5 ${accent.bg}`} />
       <div className="flex h-14 items-center justify-between gap-3 px-4 sm:px-6">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className={`hidden rounded px-2 py-0.5 text-[10px] font-semibold uppercase text-white sm:inline ${accent.bg}`}>
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <MobileNav workspace={workspace} />
+          <span
+            className={`hidden rounded px-2 py-0.5 text-[10px] font-semibold text-white uppercase sm:inline ${accent.bg}`}
+          >
             {workspace.short}
           </span>
           <div className="min-w-0">
             {title && (
               <h1 className="truncate text-sm font-semibold sm:text-base">{title}</h1>
             )}
-            {subtitle && (
-              <p className="truncate text-xs text-zinc-500">{subtitle}</p>
-            )}
+            {subtitle && <p className="truncate text-xs text-zinc-500">{subtitle}</p>}
           </div>
         </div>
         <div className="flex items-center gap-2">

@@ -9,6 +9,16 @@ export type Customer = {
   address: string | null
   notes: string | null
   owner_id: string | null
+  tax_code: string | null
+  country: string | null
+  contact_person: string | null
+  default_currency: string | null
+  default_price_term: string | null
+  default_payment_terms: string | null
+  port_of_discharge: string | null
+  fax: string | null
+  representative_title: string | null
+  fsc_cert: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -19,7 +29,8 @@ export type CustomerWithOwner = Customer & {
   owner_email: string | null
 }
 
-const COLS = 'id, code, name, email, phone, address, notes, owner_id, is_active, created_at, updated_at'
+const COLS =
+  'id, code, name, email, phone, address, notes, owner_id, tax_code, country, contact_person, default_currency, default_price_term, default_payment_terms, port_of_discharge, fax, representative_title, fsc_cert, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -30,7 +41,8 @@ export type ListFilter = {
 }
 
 type RawJoin = Customer & {
-  owner: { name: string | null; email: string }
+  owner:
+    | { name: string | null; email: string }
     | { name: string | null; email: string }[]
     | null
 }
@@ -57,7 +69,10 @@ export const customersRepo = {
 
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.owner_id) q = q.eq('owner_id', filter.owner_id)
-    if (filter.q) q = q.ilike('name', `%${filter.q}%`)
+    if (filter.q) {
+      const like = `%${filter.q}%`
+      q = q.or(`name.ilike.${like},code.ilike.${like},email.ilike.${like}`)
+    }
 
     const from = (filter.page - 1) * filter.page_size
     const to = from + filter.page_size - 1
@@ -67,16 +82,21 @@ export const customersRepo = {
     return { rows: unwrapOwner(data as unknown as RawJoin[] | null), total: count ?? 0 }
   },
 
-  async findById(id: string): Promise<Customer | null> {
+  async findById(id: string): Promise<CustomerWithOwner | null> {
     const { data } = await db()
       .from('sales_customers')
-      .select(COLS)
+      .select(`${COLS}, owner:users!sales_customers_owner_id_fkey(name, email)`)
       .eq('id', id)
       .maybeSingle()
-    return (data as Customer | null) ?? null
+    if (!data) return null
+    return unwrapOwner([data as unknown as RawJoin])[0]
   },
 
-  async insert(row: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'is_active'> & { is_active?: boolean }): Promise<Customer> {
+  async insert(
+    row: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'is_active'> & {
+      is_active?: boolean
+    },
+  ): Promise<Customer> {
     const { data, error } = await db()
       .from('sales_customers')
       .insert(row)

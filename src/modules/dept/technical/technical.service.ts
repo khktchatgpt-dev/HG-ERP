@@ -3,10 +3,12 @@ import {
   productsRepo,
   type Product,
   type ProductPacking,
+  type ProductTechSpec,
 } from './technical.repo'
 import type { BomStatus } from './technical.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { isSalesUser } from '@/modules/dept/sales/sales.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 const TECH_DEPT_NAME = 'Kỹ Thuật'
@@ -44,6 +46,12 @@ type CreateInput = {
   drawing_url?: string | null
   bom_url?: string | null
   notes?: string | null
+  name_de?: string | null
+  shipping_mark?: string | null
+  barcode?: string | null
+  showroom_sample?: boolean
+  reference_price?: number | null
+  tech_spec?: ProductTechSpec
 }
 
 export const productsService = {
@@ -91,7 +99,65 @@ export const productsService = {
       drawing_url: input.drawing_url || null,
       bom_url: input.bom_url || null,
       notes: input.notes ?? null,
+      name_de: input.name_de ?? null,
+      shipping_mark: input.shipping_mark ?? null,
+      barcode: input.barcode ?? null,
+      showroom_sample: input.showroom_sample ?? false,
+      reference_price: input.reference_price ?? null,
+      tech_spec: input.tech_spec ?? {},
     })
+  },
+
+  /**
+   * Tạo nhanh SP từ màn Kinh doanh: Kinh doanh (mọi NV Bán hàng) HOẶC Kỹ thuật
+   * tạo được. SP mới bom_status='none' — Kỹ thuật bổ sung BOM/thông số sau.
+   */
+  async quickCreate(
+    user: User,
+    input: {
+      code: string
+      name: string
+      unit?: string
+      customer_id?: string | null
+      customer_item_code?: string | null
+      description_en?: string | null
+      notes?: string | null
+      reference_price?: number | null
+    },
+  ): Promise<Product> {
+    const allowed =
+      (await isSalesUser(user)) || ((await isTechnicalStaff(user)) && canEdit(user))
+    if (!allowed) throw Forbidden('Chỉ Kinh doanh / Kỹ thuật tạo được sản phẩm')
+    if (await productsRepo.existsByCode(input.code)) {
+      throw Conflict(`Mã "${input.code}" đã tồn tại`, 'CODE_TAKEN')
+    }
+    return productsRepo.insert({
+      code: input.code,
+      name: input.name,
+      unit: input.unit ?? 'cai',
+      customer_id: input.customer_id ?? null,
+      customer_item_code: input.customer_item_code ?? null,
+      description_en: input.description_en ?? null,
+      notes: input.notes ?? null,
+      reference_price: input.reference_price ?? null,
+      bom_status: 'none',
+      packing: {},
+      tech_spec: {},
+      showroom_sample: false,
+    })
+  },
+
+  /**
+   * Đặt ảnh đại diện SP — dùng sau khi Kinh doanh upload ảnh lúc tạo nhanh SP
+   * trong đơn/báo giá. Cho Kinh doanh + Kỹ thuật; ảnh lưu vào hồ sơ SP (in BG/LSX).
+   */
+  async setMainImage(user: User, productId: string, fileId: string): Promise<Product> {
+    const allowed =
+      (await isSalesUser(user)) || ((await isTechnicalStaff(user)) && canEdit(user))
+    if (!allowed) throw Forbidden('Chỉ Kinh doanh / Kỹ thuật cập nhật ảnh sản phẩm')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    return productsRepo.patch(productId, { image_file_id: fileId })
   },
 
   async update(user: User, id: string, patch: Partial<Product>): Promise<Product> {
@@ -137,6 +203,13 @@ export const productsService = {
       drawing_url: src.drawing_url,
       bom_url: src.bom_url,
       notes: src.notes,
+      // Copy thông số kỹ thuật; barcode KHÔNG copy (mỗi SP một barcode riêng).
+      name_de: src.name_de,
+      shipping_mark: src.shipping_mark,
+      barcode: null,
+      showroom_sample: src.showroom_sample,
+      reference_price: src.reference_price,
+      tech_spec: src.tech_spec,
     })
     const copied = await bomLinesRepo.copyAll(src.id, created.id)
     if (copied > 0 && src.bom_status !== 'none') {

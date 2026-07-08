@@ -33,6 +33,12 @@ export default async function TechnicalProductsPage() {
         bom_url: p.bom_url,
         image_file_id: p.image_file_id,
         notes: p.notes,
+        name_de: p.name_de,
+        shipping_mark: p.shipping_mark,
+        barcode: p.barcode,
+        showroom_sample: p.showroom_sample,
+        reference_price: p.reference_price,
+        tech_spec: p.tech_spec ?? {},
         is_active: p.is_active,
       }))}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}

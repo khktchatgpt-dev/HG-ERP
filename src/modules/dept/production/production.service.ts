@@ -1,16 +1,46 @@
-import { productionRepo, type ProductionOrder } from './production.repo'
+import {
+  productionRepo,
+  saveLsxLineSpecs,
+  type LsxLineSpecRow,
+  type ProductionOrder,
+} from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import type { User } from '@/modules/core/users/users.repo'
+import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
-/** Phát LSX cần Giám đốc/Ban QL xác nhận (FR-SAL-06). */
-function canIssue(user: User): boolean {
+const SUPPLY_DEPT = 'Kế Hoạch Sản Xuất-cung ứng'
+const TECH_DEPT = 'Kỹ Thuật'
+
+/** Phát LSX: Sales (FR-SAL-06 — Sales lập, GĐ duyệt). Admin luôn được. */
+async function canIssue(user: User): Promise<boolean> {
+  return user.role === 'admin' || (await isSalesStaff(user))
+}
+
+/** Duyệt LSX + cập nhật tiến độ: Giám đốc/Ban quản lý. */
+function canApprove(user: User): boolean {
   return user.role === 'admin' || user.role === 'manager'
 }
 
-/** GĐ1: cập nhật tiến độ do quản lý thao tác (xưởng chi tiết là GĐ3). */
-function canUpdateStage(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
+/** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
+async function approverIds(excludeId: string): Promise<string[]> {
+  const users = await usersRepo.list()
+  return users
+    .filter((u) => (u.role === 'admin' || u.role === 'manager') && u.id !== excludeId)
+    .map((u) => u.id)
+}
+
+/** ID nhân sự Cung ứng + Kỹ thuật để báo khi LSX được duyệt. */
+async function supplyTechIds(): Promise<string[]> {
+  const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
+  const target = new Set(
+    depts.filter((d) => d.name === SUPPLY_DEPT || d.name === TECH_DEPT).map((d) => d.id),
+  )
+  return users
+    .filter((u) => u.department_id && target.has(u.department_id))
+    .map((u) => u.id)
 }
 
 export const productionService = {
@@ -31,32 +61,37 @@ export const productionService = {
   },
 
   /**
-   * Phát LSX từ đơn (FR-SAL-06, BR-01/02/07):
-   * - BR-01: DB unique chặn LSX thứ 2 → Conflict.
-   * - BR-02: LSX dùng chung dòng SP của đơn (không nhân bản).
-   * - BR-07: KHÔNG chặn khi thiếu BOM — UI đã cảnh báo, GĐ quyết.
+   * Sales PHÁT LSX từ đơn (FR-SAL-06, BR-01/02/07): tạo ở trạng thái chờ GĐ duyệt.
+   * - BR-01: DB unique chặn LSX thứ 2.
+   * - BR-02: LSX dùng chung dòng SP của đơn.
+   * - BR-07: KHÔNG chặn khi thiếu BOM — chỉ cảnh báo.
    */
   async issue(
     user: User,
     input: {
+      code: string
       order_id: string
       ship_date?: string | null
+      received_date?: string | null
       container_summary?: string | null
       note?: string | null
     },
   ): Promise<ProductionOrder> {
-    if (!canIssue(user)) throw Forbidden('Phát LSX cần Giám đốc/Ban quản lý xác nhận')
+    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh phát được LSX')
     const order = await ordersRepo.findById(input.order_id)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
-    if (order.status === 'cancelled' || order.status === 'delivered') {
-      throw BadRequest('Đơn đã giao/huỷ — không phát LSX được')
+    if (order.status !== 'confirmed') {
+      throw BadRequest('Chỉ phát LSX cho đơn đã xác nhận (chưa phát LSX)')
+    }
+    if (await productionRepo.existsByCode(input.code)) {
+      throw Conflict(`Số LSX "${input.code}" đã tồn tại`, 'CODE_TAKEN')
     }
 
-    const code = await productionRepo.nextCode()
     const { order: lsx, duplicate } = await productionRepo.insert({
-      code,
+      code: input.code,
       sales_order_id: input.order_id,
       ship_date: input.ship_date ?? null,
+      received_date: input.received_date ?? null,
       container_summary: input.container_summary ?? null,
       issued_by: user.id,
       issued_at: new Date().toISOString(),
@@ -66,32 +101,120 @@ export const productionService = {
       throw Conflict('Đơn này đã có LSX (BR-01: 1 đơn = 1 LSX)', 'LSX_EXISTS')
     }
 
-    await ordersRepo.patch(input.order_id, { status: 'lsx_issued' })
+    // Đơn sang trạng thái "đã phát LSX, chờ duyệt".
+    await ordersRepo.patch(input.order_id, { status: 'lsx_pending' })
     await ordersRepo.insertChange({
       order_id: input.order_id,
       changed_by: user.id,
       change: {
-        type: 'lsx_issued',
-        fields: { status: { from: order.status, to: 'lsx_issued' } },
-        lsx_code: code,
+        type: 'lsx_submitted',
+        fields: { status: { from: order.status, to: 'lsx_pending' } },
+        lsx_code: input.code,
       },
       note: null,
+    })
+
+    const lines = await ordersRepo.listLines(input.order_id)
+    await emit({
+      name: 'lsx.submitted',
+      production_order_id: lsx.id,
+      code: lsx.code,
+      order_code: order.code,
+      customer_name: order.customer_name,
+      lines_bom_pending: lines.filter((l) => l.bom_status !== 'done').length,
+      submitted_by: user.id,
+      approver_ids: await approverIds(user.id),
     })
     return lsx
   },
 
+  /** GĐ DUYỆT LSX: pending_approval → approved; đơn → lsx_issued; báo Cung ứng + Kỹ thuật. */
+  async approve(user: User, id: string): Promise<ProductionOrder> {
+    if (!canApprove(user)) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status !== 'pending_approval')
+      throw BadRequest('LSX không ở trạng thái chờ duyệt')
+
+    const updated = await productionRepo.patch(id, {
+      status: 'approved',
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+    })
+    await ordersRepo.patch(lsx.sales_order_id, { status: 'lsx_issued' })
+    await ordersRepo.insertChange({
+      order_id: lsx.sales_order_id,
+      changed_by: user.id,
+      change: { type: 'lsx_approved', lsx_code: lsx.code },
+      note: null,
+    })
+    await emit({
+      name: 'lsx.decided',
+      production_order_id: id,
+      code: lsx.code,
+      decision: 'approved',
+      decided_by: user.id,
+      issued_by: lsx.issued_by,
+      notify_ids: await supplyTechIds(),
+    })
+    return updated
+  },
+
+  /** GĐ TỪ CHỐI LSX: pending_approval → rejected; đơn về confirmed; báo người phát. */
+  async reject(user: User, id: string, reason: string): Promise<ProductionOrder> {
+    if (!canApprove(user)) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status !== 'pending_approval')
+      throw BadRequest('LSX không ở trạng thái chờ duyệt')
+
+    const updated = await productionRepo.patch(id, {
+      status: 'rejected',
+      rejected_reason: reason,
+    })
+    await ordersRepo.patch(lsx.sales_order_id, { status: 'confirmed' })
+    await ordersRepo.insertChange({
+      order_id: lsx.sales_order_id,
+      changed_by: user.id,
+      change: { type: 'lsx_rejected', lsx_code: lsx.code },
+      note: reason,
+    })
+    await emit({
+      name: 'lsx.decided',
+      production_order_id: id,
+      code: lsx.code,
+      decision: 'rejected',
+      decided_by: user.id,
+      issued_by: lsx.issued_by,
+      reason,
+      notify_ids: lsx.issued_by ? [lsx.issued_by] : [],
+    })
+    return updated
+  },
+
+  /** Sales nhập/tinh chỉnh spec sản xuất per dòng (OI-11) — override tech_spec SP. */
+  async saveSpecs(user: User, id: string, lines: LsxLineSpecRow[]): Promise<void> {
+    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh nhập spec LSX')
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    await saveLsxLineSpecs(id, lines)
+  },
+
   /**
-   * Cập nhật giai đoạn (FR-PROD-01, FR-SUP-08): ghi log + set current_stage.
-   * Lần đầu chuyển giai đoạn → LSX in_progress + đơn in_production.
+   * Cập nhật giai đoạn (FR-PROD-01): chỉ khi LSX đã duyệt. Lần đầu → in_progress +
+   * đơn in_production.
    */
   async updateStage(
     user: User,
     id: string,
     input: { stage: string; action: 'start' | 'done'; note?: string | null },
   ): Promise<ProductionOrder> {
-    if (!canUpdateStage(user)) throw Forbidden()
+    if (!canApprove(user)) throw Forbidden()
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+      throw BadRequest('LSX chưa được duyệt')
+    }
     if (lsx.status === 'completed') throw BadRequest('LSX đã hoàn thành')
 
     await productionRepo.insertProgress({
@@ -103,7 +226,7 @@ export const productionService = {
     })
 
     const patch: Partial<ProductionOrder> = { current_stage: input.stage }
-    if (lsx.status === 'issued') {
+    if (lsx.status === 'approved') {
       patch.status = 'in_progress'
       await ordersRepo.patch(lsx.sales_order_id, { status: 'in_production' })
     }
@@ -112,10 +235,13 @@ export const productionService = {
 
   /** Báo hoàn thành để chuyển giao hàng (FR-PROD-03). */
   async complete(user: User, id: string, note?: string | null): Promise<ProductionOrder> {
-    if (!canUpdateStage(user)) throw Forbidden()
+    if (!canApprove(user)) throw Forbidden()
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'completed') return lsx as ProductionOrder
+    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+      throw BadRequest('LSX chưa được duyệt')
+    }
 
     await productionRepo.insertProgress({
       production_order_id: id,
@@ -124,7 +250,10 @@ export const productionService = {
       note: note ?? 'Báo hoàn thành LSX',
       updated_by: user.id,
     })
-    const updated = await productionRepo.patch(id, { status: 'completed' })
+    const updated = await productionRepo.patch(id, {
+      status: 'completed',
+      completed_at: new Date().toISOString(),
+    })
     await ordersRepo.patch(lsx.sales_order_id, { status: 'completed' })
     return updated
   },

@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('./orders.repo', () => ({
   ordersRepo: {
     nextCode: vi.fn(),
+    existsByCode: vi.fn(),
     list: vi.fn(),
     findById: vi.fn(),
     listLines: vi.fn(),
@@ -53,6 +54,7 @@ const ORDER = {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isSalesStaff).mockResolvedValue(true)
+  vi.mocked(ordersRepo.existsByCode).mockResolvedValue(false)
 })
 
 describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () => {
@@ -60,7 +62,9 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
     vi.mocked(quotesService.assertSent).mockRejectedValue(
       BadRequest('Chỉ tạo được đơn hàng từ báo giá đã chốt (gửi khách)'),
     )
-    await expect(ordersService.create(sales, { quote_id: 'q1' })).rejects.toMatchObject({
+    await expect(
+      ordersService.create(sales, { code: 'DH-T', quote_id: 'q1' }),
+    ).rejects.toMatchObject({
       status: 400,
     })
     expect(ordersRepo.insert).not.toHaveBeenCalled()
@@ -80,7 +84,11 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
     vi.mocked(ordersRepo.nextCode).mockResolvedValue('DH-2026-0001')
     vi.mocked(ordersRepo.insert).mockResolvedValue(ORDER as never)
 
-    await ordersService.create(sales, { quote_id: 'q1', customer_po_no: '31032191120' })
+    await ordersService.create(sales, {
+      code: 'DH-T2',
+      quote_id: 'q1',
+      customer_po_no: '31032191120',
+    })
 
     const [row, lines] = vi.mocked(ordersRepo.insert).mock.calls[0]
     expect(row.customer_id).toBe('c1') // denorm đúng từ quote, không nhận từ input
@@ -94,7 +102,9 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
   it('báo giá đã chốt nhưng 0 dòng → chặn', async () => {
     vi.mocked(quotesService.assertSent).mockResolvedValue({ id: 'q1' } as never)
     vi.mocked(quotesRepo.listLines).mockResolvedValue([])
-    await expect(ordersService.create(sales, { quote_id: 'q1' })).rejects.toMatchObject({
+    await expect(
+      ordersService.create(sales, { code: 'DH-T', quote_id: 'q1' }),
+    ).rejects.toMatchObject({
       status: 400,
     })
   })
@@ -110,6 +120,7 @@ describe('ordersService.create — trực tiếp, KHÔNG cần báo giá', () =>
     vi.mocked(ordersRepo.insert).mockResolvedValue(ORDER as never)
 
     await ordersService.create(sales, {
+      code: 'DH-T3',
       customer_id: 'c9',
       currency: 'VND',
       price_term: 'EXW',
@@ -128,6 +139,7 @@ describe('ordersService.create — trực tiếp, KHÔNG cần báo giá', () =>
   it('không chọn khách → chặn', async () => {
     await expect(
       ordersService.create(sales, {
+        code: 'DH-T4',
         lines: [{ product_id: 'p2', qty: 1, unit_price: 1 }],
       }),
     ).rejects.toMatchObject({ status: 400 })
@@ -141,6 +153,7 @@ describe('ordersService.create — trực tiếp, KHÔNG cần báo giá', () =>
     } as never)
     await expect(
       ordersService.create(sales, {
+        code: 'DH-T5',
         customer_id: 'c9',
         lines: [{ product_id: 'p2', qty: 1, unit_price: 1 }],
       }),
@@ -153,7 +166,7 @@ describe('ordersService.create — trực tiếp, KHÔNG cần báo giá', () =>
       is_active: true,
     } as never)
     await expect(
-      ordersService.create(sales, { customer_id: 'c9', lines: [] }),
+      ordersService.create(sales, { code: 'DH-T6', customer_id: 'c9', lines: [] }),
     ).rejects.toMatchObject({ status: 400 })
   })
 })

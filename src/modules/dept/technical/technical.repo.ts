@@ -10,6 +10,16 @@ export type ProductPacking = {
   carton_h_cm?: number
   qty_per_carton?: number
   loading_40hc?: number
+  pack_unit_label?: string
+}
+
+/** Thông số sản xuất (jsonb `tech_spec`) — in trên LSX. */
+export type ProductTechSpec = {
+  machine?: string
+  cushion?: string
+  paint?: string
+  glass?: string
+  wood?: string
 }
 
 export type Product = {
@@ -27,6 +37,13 @@ export type Product = {
   bom_url: string | null
   image_file_id: string | null
   notes: string | null
+  // Thông số kỹ thuật (0026) — phục vụ LSX / hợp đồng.
+  name_de: string | null
+  shipping_mark: string | null
+  barcode: string | null
+  showroom_sample: boolean
+  reference_price: number | null
+  tech_spec: ProductTechSpec
   is_active: boolean
   created_at: string
   updated_at: string
@@ -49,7 +66,7 @@ export type BomLineWithMaterial = BomLine & {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, name_de, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, is_active, created_at, updated_at'
 
 export const productsRepo = {
   async list(filter: {

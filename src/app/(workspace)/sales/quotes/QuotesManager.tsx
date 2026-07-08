@@ -14,6 +14,8 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { DocumentFiles } from '@/components/DocumentFiles'
+import { QuickAddProduct, type QuickProduct } from '@/components/sales/QuickAddProduct'
 
 type QuoteStatus = 'draft' | 'sent'
 
@@ -443,9 +445,14 @@ function QuoteDetail({
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
+        <span className="font-mono text-xs text-zinc-400">{quote.code}</span>
         <Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge>
+        <Badge>{quote.currency}</Badge>
         {quote.price_term && <Badge>{quote.price_term}</Badge>}
         {quote.payment_terms && <Badge>{quote.payment_terms}</Badge>}
+        <span className="text-xs text-zinc-500">
+          Lập: {new Date(quote.created_at).toLocaleDateString('vi-VN')}
+        </span>
         {(quote.valid_from || quote.valid_to) && (
           <span className="text-xs text-zinc-500">
             Hiệu lực:{' '}
@@ -510,6 +517,13 @@ function QuoteDetail({
 
       {quote.note && <p className="text-zinc-500">{quote.note}</p>}
 
+      <DocumentFiles
+        kind="quote"
+        id={quote.id}
+        canEdit={canEdit}
+        title="File báo giá gốc"
+      />
+
       <div className="mt-1 flex justify-end gap-2">
         <a
           href={`/print/quotes/${quote.id}`}
@@ -560,6 +574,7 @@ function QuoteForm({
   const [busy, setBusy] = useState(false)
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
   const [lines, setLines] = useState<LineRow[]>(initialLines ?? [])
+  const [productList, setProductList] = useState<ProductOption[]>(products)
   // Giá gần nhất theo khách: product_id → {price, code} (gợi ý + tự điền)
   const [lastPrices, setLastPrices] = useState<
     Map<string, { unit_price: number; quote_code: string }>
@@ -584,11 +599,32 @@ function QuoteForm({
 
   // Ưu tiên SP của đúng khách đang chọn (thư viện theo khách), rồi tới mẫu chung.
   const productChoices = useMemo(() => {
-    const own = products.filter((p) => p.customer_id === customerId)
-    const common = products.filter((p) => !p.customer_id)
-    const others = products.filter((p) => p.customer_id && p.customer_id !== customerId)
+    const own = productList.filter((p) => p.customer_id === customerId)
+    const common = productList.filter((p) => !p.customer_id)
+    const others = productList.filter(
+      (p) => p.customer_id && p.customer_id !== customerId,
+    )
     return { own, common, others }
-  }, [products, customerId])
+  }, [productList, customerId])
+
+  function addQuickProduct(p: QuickProduct, unitPrice: number | null) {
+    setProductList((prev) => [
+      {
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        unit: p.unit,
+        customer_id: p.customer_id,
+        customer_item_code: p.customer_item_code,
+        bom_status: p.bom_status,
+      },
+      ...prev,
+    ])
+    setLines((ls) => [
+      ...ls,
+      { product_id: p.id, qty: '', unit_price: unitPrice ?? '', note: '' },
+    ])
+  }
 
   const usedIds = new Set(lines.map((l) => l.product_id))
   const invalid =
@@ -804,18 +840,21 @@ function QuoteForm({
             </div>
           ))}
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            setLines((ls) => [
-              ...ls,
-              { product_id: '', qty: '', unit_price: '', note: '' },
-            ])
-          }
-          className="mt-2 rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
-        >
-          + Thêm dòng
-        </button>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setLines((ls) => [
+                ...ls,
+                { product_id: '', qty: '', unit_price: '', note: '' },
+              ])
+            }
+            className="rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
+          >
+            + Thêm dòng (SP có sẵn)
+          </button>
+          <QuickAddProduct customerId={customerId || null} onCreated={addQuickProduct} />
+        </div>
       </div>
 
       <label className="flex flex-col gap-1 text-sm">

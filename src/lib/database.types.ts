@@ -230,6 +230,7 @@ export type Database = {
           owner_id: string | null
           path: string
           product_id: string | null
+          production_order_id: string | null
           purchase_order_id: string | null
           quote_id: string | null
           sales_order_id: string | null
@@ -251,6 +252,7 @@ export type Database = {
           owner_id?: string | null
           path: string
           product_id?: string | null
+          production_order_id?: string | null
           purchase_order_id?: string | null
           quote_id?: string | null
           sales_order_id?: string | null
@@ -272,6 +274,7 @@ export type Database = {
           owner_id?: string | null
           path?: string
           product_id?: string | null
+          production_order_id?: string | null
           purchase_order_id?: string | null
           quote_id?: string | null
           sales_order_id?: string | null
@@ -313,6 +316,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "technical_products"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
           },
           {
             foreignKeyName: "files_purchase_order_id_fkey"
@@ -540,7 +557,10 @@ export type Database = {
       }
       production_orders: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           code: string
+          completed_at: string | null
           container_summary: string | null
           created_at: string
           current_stage: string | null
@@ -548,13 +568,18 @@ export type Database = {
           issued_at: string | null
           issued_by: string | null
           note: string | null
+          received_date: string | null
+          rejected_reason: string | null
           sales_order_id: string
           ship_date: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           code: string
+          completed_at?: string | null
           container_summary?: string | null
           created_at?: string
           current_stage?: string | null
@@ -562,13 +587,18 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           note?: string | null
+          received_date?: string | null
+          rejected_reason?: string | null
           sales_order_id: string
           ship_date?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           code?: string
+          completed_at?: string | null
           container_summary?: string | null
           created_at?: string
           current_stage?: string | null
@@ -576,12 +606,21 @@ export type Database = {
           issued_at?: string | null
           issued_by?: string | null
           note?: string | null
+          received_date?: string | null
+          rejected_reason?: string | null
           sales_order_id?: string
           ship_date?: string | null
           status?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "production_orders_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "production_orders_issued_by_fkey"
             columns: ["issued_by"]
@@ -661,40 +700,70 @@ export type Database = {
         Row: {
           address: string | null
           code: string | null
+          contact_person: string | null
+          country: string | null
           created_at: string
+          default_currency: string | null
+          default_payment_terms: string | null
+          default_price_term: string | null
           email: string | null
+          fax: string | null
+          fsc_cert: string | null
           id: string
           is_active: boolean
           name: string
           notes: string | null
           owner_id: string | null
           phone: string | null
+          port_of_discharge: string | null
+          representative_title: string | null
+          tax_code: string | null
           updated_at: string
         }
         Insert: {
           address?: string | null
           code?: string | null
+          contact_person?: string | null
+          country?: string | null
           created_at?: string
+          default_currency?: string | null
+          default_payment_terms?: string | null
+          default_price_term?: string | null
           email?: string | null
+          fax?: string | null
+          fsc_cert?: string | null
           id?: string
           is_active?: boolean
           name: string
           notes?: string | null
           owner_id?: string | null
           phone?: string | null
+          port_of_discharge?: string | null
+          representative_title?: string | null
+          tax_code?: string | null
           updated_at?: string
         }
         Update: {
           address?: string | null
           code?: string | null
+          contact_person?: string | null
+          country?: string | null
           created_at?: string
+          default_currency?: string | null
+          default_payment_terms?: string | null
+          default_price_term?: string | null
           email?: string | null
+          fax?: string | null
+          fsc_cert?: string | null
           id?: string
           is_active?: boolean
           name?: string
           notes?: string | null
           owner_id?: string | null
           phone?: string | null
+          port_of_discharge?: string | null
+          representative_title?: string | null
+          tax_code?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -821,10 +890,17 @@ export type Database = {
           due_date: string | null
           id: string
           note: string | null
+          partial_shipment: boolean | null
+          payment_method: string | null
           payment_terms: string | null
+          port_of_discharge: string | null
+          port_of_loading: string | null
           price_term: string | null
+          qty_tolerance_pct: number | null
           quote_id: string | null
+          required_docs: string | null
           status: string
+          transhipment: boolean | null
           updated_at: string
         }
         Insert: {
@@ -839,10 +915,17 @@ export type Database = {
           due_date?: string | null
           id?: string
           note?: string | null
+          partial_shipment?: boolean | null
+          payment_method?: string | null
           payment_terms?: string | null
+          port_of_discharge?: string | null
+          port_of_loading?: string | null
           price_term?: string | null
+          qty_tolerance_pct?: number | null
           quote_id?: string | null
+          required_docs?: string | null
           status?: string
+          transhipment?: boolean | null
           updated_at?: string
         }
         Update: {
@@ -857,10 +940,17 @@ export type Database = {
           due_date?: string | null
           id?: string
           note?: string | null
+          partial_shipment?: boolean | null
+          payment_method?: string | null
           payment_terms?: string | null
+          port_of_discharge?: string | null
+          port_of_loading?: string | null
           price_term?: string | null
+          qty_tolerance_pct?: number | null
           quote_id?: string | null
+          required_docs?: string | null
           status?: string
+          transhipment?: boolean | null
           updated_at?: string
         }
         Relationships: [
@@ -1454,6 +1544,7 @@ export type Database = {
       }
       technical_products: {
         Row: {
+          barcode: string | null
           bom_status: string
           bom_url: string | null
           category: string | null
@@ -1467,12 +1558,18 @@ export type Database = {
           image_file_id: string | null
           is_active: boolean
           name: string
+          name_de: string | null
           notes: string | null
           packing: Json
+          reference_price: number | null
+          shipping_mark: string | null
+          showroom_sample: boolean
+          tech_spec: Json
           unit: string
           updated_at: string
         }
         Insert: {
+          barcode?: string | null
           bom_status?: string
           bom_url?: string | null
           category?: string | null
@@ -1486,12 +1583,18 @@ export type Database = {
           image_file_id?: string | null
           is_active?: boolean
           name: string
+          name_de?: string | null
           notes?: string | null
           packing?: Json
+          reference_price?: number | null
+          shipping_mark?: string | null
+          showroom_sample?: boolean
+          tech_spec?: Json
           unit?: string
           updated_at?: string
         }
         Update: {
+          barcode?: string | null
           bom_status?: string
           bom_url?: string | null
           category?: string | null
@@ -1505,8 +1608,13 @@ export type Database = {
           image_file_id?: string | null
           is_active?: boolean
           name?: string
+          name_de?: string | null
           notes?: string | null
           packing?: Json
+          reference_price?: number | null
+          shipping_mark?: string | null
+          showroom_sample?: boolean
+          tech_spec?: Json
           unit?: string
           updated_at?: string
         }

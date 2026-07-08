@@ -37,6 +37,7 @@ type Stage = { code: string; label: string }
 
 const STATUS_LABEL: Record<string, string> = {
   confirmed: 'Đã xác nhận',
+  lsx_pending: 'Chờ duyệt LSX',
   lsx_issued: 'Đã phát LSX',
   in_production: 'Đang sản xuất',
   completed: 'Hoàn thành',
@@ -45,6 +46,7 @@ const STATUS_LABEL: Record<string, string> = {
 }
 const STATUS_TONE: Record<string, 'gray' | 'blue' | 'amber' | 'green' | 'red'> = {
   confirmed: 'blue',
+  lsx_pending: 'amber',
   lsx_issued: 'amber',
   in_production: 'amber',
   completed: 'green',
@@ -189,7 +191,13 @@ export function TrackingManager({
         const done = r.lsx_status === 'completed'
         return (
           <div className="flex flex-col gap-1">
-            <span className="font-mono text-xs text-zinc-500">{r.lsx_code}</span>
+            <a
+              href={`/sales/lsx/${r.production_order_id}`}
+              className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+              title="Chi tiết lệnh sản xuất"
+            >
+              {r.lsx_code} →
+            </a>
             {canManage && !done ? (
               <select
                 value={r.current_stage ?? ''}

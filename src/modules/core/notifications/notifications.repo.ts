@@ -19,6 +19,9 @@ export type NotificationType =
   | 'po_submitted'
   | 'po_approved'
   | 'po_rejected'
+  | 'lsx_submitted'
+  | 'lsx_approved'
+  | 'lsx_rejected'
 
 export type Notification = {
   id: string

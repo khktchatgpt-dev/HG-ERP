@@ -7,6 +7,23 @@ export type Settings = {
   company_tax_code: string
   company_address: string
   company_phone: string
+  // Bên bán trên hợp đồng (Sales Contract).
+  company_email: string
+  company_fax: string
+  company_bank_account: string
+  company_swift: string
+  company_representative: string
+  company_representative_title: string
+  company_fsc_cert: string
+  // Điều khoản gỗ/FSC (Article 4) — gần như cố định theo DN.
+  fsc_scientific_name: string
+  fsc_country_origin: string
+  fsc_area_origin: string
+  fsc_forest_owner: string
+  fsc_exporter: string
+  fsc_importer: string
+  fsc_seller: string
+  fsc_coordinates: string
 }
 
 const DEFAULTS: Settings = {
@@ -14,6 +31,21 @@ const DEFAULTS: Settings = {
   company_tax_code: '',
   company_address: '',
   company_phone: '',
+  company_email: '',
+  company_fax: '',
+  company_bank_account: '',
+  company_swift: '',
+  company_representative: '',
+  company_representative_title: '',
+  company_fsc_cert: '',
+  fsc_scientific_name: '',
+  fsc_country_origin: '',
+  fsc_area_origin: '',
+  fsc_forest_owner: '',
+  fsc_exporter: '',
+  fsc_importer: '',
+  fsc_seller: '',
+  fsc_coordinates: '',
 }
 
 export const settingsService = {

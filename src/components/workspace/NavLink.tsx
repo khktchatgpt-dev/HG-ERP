@@ -14,12 +14,15 @@ export function NavLink({
   label,
   icon,
   accentShadow,
+  collapsed = false,
 }: {
   href: string
   label: string
   icon: string
   /** class shadow-<color> cho thanh accent bên trái khi active. */
   accentShadow: string
+  /** Chế độ sidebar thu gọn: chỉ icon, label thành tooltip. */
+  collapsed?: boolean
 }) {
   const pathname = usePathname()
   const active = pathname === href || (href !== '/' && pathname.startsWith(href))
@@ -27,7 +30,10 @@ export function NavLink({
   return (
     <Link
       href={href}
-      className={`flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition ${
+      title={collapsed ? label : undefined}
+      className={`flex items-center gap-2.5 rounded-md py-1.5 text-sm transition ${
+        collapsed ? 'justify-center px-0' : 'px-3'
+      } ${
         active
           ? `bg-slate-800 text-white shadow-[inset_3px_0_0] ${accentShadow}`
           : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
@@ -36,7 +42,7 @@ export function NavLink({
       <span className="flex w-4 items-center justify-center text-center text-slate-400">
         <LinkPending size={12} fallback={icon} />
       </span>
-      <span className="flex-1">{label}</span>
+      {!collapsed && <span className="flex-1">{label}</span>}
     </Link>
   )
 }

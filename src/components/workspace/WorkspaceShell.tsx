@@ -33,7 +33,7 @@ export async function WorkspaceShell({
           subtitle={subtitle}
           actions={actions}
         />
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
+        <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:px-6 sm:py-6">
           {children}
         </main>
       </div>

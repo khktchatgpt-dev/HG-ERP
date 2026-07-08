@@ -9,6 +9,9 @@ export const PARENT_KINDS = [
   'customer',
   'invoice',
   'product',
+  'quote',
+  'sales_order',
+  'production_order',
   'none',
 ] as const
 export type FileParentKind = (typeof PARENT_KINDS)[number]
@@ -49,12 +52,18 @@ export const initUploadSchema = z.object({
     z.object({ kind: z.literal('customer'), id: z.uuid() }),
     z.object({ kind: z.literal('invoice'), id: z.uuid() }),
     z.object({ kind: z.literal('product'), id: z.uuid() }),
+    z.object({ kind: z.literal('quote'), id: z.uuid() }),
+    z.object({ kind: z.literal('sales_order'), id: z.uuid() }),
+    z.object({ kind: z.literal('production_order'), id: z.uuid() }),
     z.object({ kind: z.literal('none') }),
   ]),
 })
 export type InitUploadInput = z.infer<typeof initUploadSchema>
 
 export const finalizeUploadSchema = z.object({
-  checksum: z.string().regex(/^[a-f0-9]{64}$/, 'sha256 hex').optional(),
+  checksum: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, 'sha256 hex')
+    .optional(),
 })
 export type FinalizeUploadInput = z.infer<typeof finalizeUploadSchema>

@@ -11,6 +11,11 @@ export type ProductionOrder = {
   container_summary: string | null
   issued_by: string | null
   issued_at: string | null
+  received_date: string | null
+  completed_at: string | null
+  approved_by: string | null
+  approved_at: string | null
+  rejected_reason: string | null
   note: string | null
   created_at: string
   updated_at: string
@@ -55,7 +60,7 @@ export type OrderTracking = {
 }
 
 const COLS =
-  'id, code, sales_order_id, status, current_stage, ship_date, container_summary, issued_by, issued_at, note, created_at, updated_at'
+  'id, code, sales_order_id, status, current_stage, ship_date, container_summary, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, note, created_at, updated_at'
 
 type Raw = ProductionOrder & {
   order:
@@ -77,6 +82,15 @@ export const productionRepo = {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'LSX' })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
     return data as string
+  },
+
+  async existsByCode(code: string): Promise<boolean> {
+    const { data } = await db()
+      .from('production_orders')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle()
+    return !!data
   },
 
   async list(filter: {
@@ -109,6 +123,17 @@ export const productionRepo = {
     return unwrap([data as Raw])[0]
   },
 
+  /** LSX của 1 đơn (BR-01: tối đa 1) — để trang chi tiết đơn link sang LSX. */
+  async findByOrder(salesOrderId: string): Promise<ProductionOrderWithOrder | null> {
+    const { data } = await db()
+      .from('production_orders')
+      .select(`${COLS}, order:sales_orders(code, customer:sales_customers(name))`)
+      .eq('sales_order_id', salesOrderId)
+      .maybeSingle()
+    if (!data) return null
+    return unwrap([data as Raw])[0]
+  },
+
   /**
    * Phát LSX (BR-01): unique constraint DB chặn LSX thứ 2 cùng đơn — bắt lỗi
    * duplicate ở đây để service trả Conflict thay vì 500.
@@ -120,6 +145,7 @@ export const productionRepo = {
     container_summary?: string | null
     issued_by: string
     issued_at: string
+    received_date?: string | null
     note?: string | null
   }): Promise<{ order: ProductionOrder | null; duplicate: boolean }> {
     const { data, error } = await db()
@@ -193,4 +219,136 @@ export const productionRepo = {
       .limit(500)
     return (data ?? []) as OrderTracking[]
   },
+}
+
+/** Dòng SP + đủ thông số kỹ thuật để in phiếu LSX (mẫu Hoàng Gia). */
+export type LsxPrintLine = {
+  order_line_id: string
+  product_code: string
+  name_vi: string
+  name_de: string | null
+  barcode: string | null
+  shipping_mark: string | null
+  showroom_sample: boolean
+  unit: string
+  qty: number
+  customer_item_code: string | null
+  image_file_id: string | null
+  tech_spec: {
+    machine?: string
+    cushion?: string
+    paint?: string
+    glass?: string
+    wood?: string
+  }
+  qty_per_carton: number | null
+  pack_unit_label: string | null
+}
+
+/**
+ * Dòng in LSX = sales_order_lines của đơn (BR-02: dùng chung) + thông số mặc định
+ * từ technical_products.tech_spec, ghi đè bằng production_order_line_specs nếu có.
+ */
+export async function listLsxPrintLines(
+  productionOrderId: string,
+  salesOrderId: string,
+): Promise<LsxPrintLine[]> {
+  const { data } = await db()
+    .from('sales_order_lines')
+    .select(
+      'id, qty, sort_order, product:technical_products(code, name, name_de, unit, barcode, shipping_mark, showroom_sample, customer_item_code, image_file_id, tech_spec, packing)',
+    )
+    .eq('order_id', salesOrderId)
+    .order('sort_order')
+
+  type Spec = LsxPrintLine['tech_spec']
+  type P = {
+    code: string
+    name: string
+    name_de: string | null
+    unit: string
+    barcode: string | null
+    shipping_mark: string | null
+    showroom_sample: boolean
+    customer_item_code: string | null
+    image_file_id: string | null
+    tech_spec: Spec | null
+    packing: { qty_per_carton?: number; pack_unit_label?: string } | null
+  }
+  type Raw = { id: string; qty: number; product: P | P[] | null }
+
+  // Override thông số per dòng (nếu người dùng nhập ở bước SX).
+  const { data: specRows } = await db()
+    .from('production_order_line_specs')
+    .select('order_line_id, specs')
+    .eq('production_order_id', productionOrderId)
+  const override = new Map<string, Spec>()
+  for (const s of (specRows ?? []) as { order_line_id: string; specs: Spec | null }[]) {
+    if (s.specs) override.set(s.order_line_id, s.specs)
+  }
+
+  return ((data ?? []) as Raw[]).map((r) => {
+    const p = Array.isArray(r.product) ? r.product[0] : r.product
+    const base: Spec = p?.tech_spec ?? {}
+    const ov = override.get(r.id) ?? {}
+    return {
+      order_line_id: r.id,
+      product_code: p?.code ?? '?',
+      name_vi: p?.name ?? '?',
+      name_de: p?.name_de ?? null,
+      barcode: p?.barcode ?? null,
+      shipping_mark: p?.shipping_mark ?? null,
+      showroom_sample: p?.showroom_sample ?? false,
+      unit: p?.unit ?? '',
+      qty: r.qty,
+      customer_item_code: p?.customer_item_code ?? null,
+      image_file_id: p?.image_file_id ?? null,
+      tech_spec: { ...base, ...ov }, // override thắng
+      qty_per_carton: p?.packing?.qty_per_carton ?? null,
+      pack_unit_label: p?.packing?.pack_unit_label ?? null,
+    }
+  })
+}
+
+/** Spec override per dòng LSX (OI-11) — bảng production_order_line_specs. */
+export type LsxLineSpecRow = {
+  order_line_id: string
+  specs: {
+    machine?: string
+    cushion?: string
+    paint?: string
+    glass?: string
+    wood?: string
+  }
+  note: string | null
+  important_note: string | null
+}
+
+export async function listLsxLineSpecs(
+  productionOrderId: string,
+): Promise<LsxLineSpecRow[]> {
+  const { data } = await db()
+    .from('production_order_line_specs')
+    .select('order_line_id, specs, note, important_note')
+    .eq('production_order_id', productionOrderId)
+  return (data ?? []) as LsxLineSpecRow[]
+}
+
+/** Ghi đè spec per dòng (upsert theo production_order_id + order_line_id). */
+export async function saveLsxLineSpecs(
+  productionOrderId: string,
+  lines: LsxLineSpecRow[],
+): Promise<void> {
+  if (lines.length === 0) return
+  const rows = lines.map((l) => ({
+    production_order_id: productionOrderId,
+    order_line_id: l.order_line_id,
+    specs: l.specs,
+    note: l.note ?? null,
+    important_note: l.important_note ?? null,
+  }))
+  const { error } = await db()
+    .from('production_order_line_specs')
+    .upsert(rows, { onConflict: 'production_order_id,order_line_id' })
+  if (error) throw new Error(error.message)
 }

@@ -15,6 +15,9 @@ export type FileRow = {
   customer_id: string | null
   invoice_id: string | null
   product_id: string | null
+  quote_id: string | null
+  sales_order_id: string | null
+  production_order_id: string | null
   created_at: string
   finalized_at: string | null
   deleted_at: string | null
@@ -26,7 +29,14 @@ export type FileParentColumns = {
   customer_id?: string | null
   invoice_id?: string | null
   product_id?: string | null
+  quote_id?: string | null
+  sales_order_id?: string | null
+  production_order_id?: string | null
 }
+
+/** Cột parent cho phép list file gốc chứng từ (0016/0030). */
+export type FileParentColumn =
+  'product_id' | 'quote_id' | 'sales_order_id' | 'production_order_id'
 
 export const filesRepo = {
   async insert(row: {
@@ -67,10 +77,15 @@ export const filesRepo = {
 
   /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */
   async listByProduct(productId: string): Promise<FileRow[]> {
+    return this.listByParent('product_id', productId)
+  },
+
+  /** File gốc đã finalize theo 1 parent chứng từ (product/quote/order/LSX). */
+  async listByParent(column: FileParentColumn, id: string): Promise<FileRow[]> {
     const { data } = await db()
       .from('files')
       .select('*')
-      .eq('product_id', productId)
+      .eq(column, id)
       .is('deleted_at', null)
       .not('finalized_at', 'is', null)
       .order('created_at', { ascending: false })

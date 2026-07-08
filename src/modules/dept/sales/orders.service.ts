@@ -8,7 +8,7 @@ import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
 const EDITABLE_FIELDS = [
@@ -19,10 +19,19 @@ const EDITABLE_FIELDS = [
   'payment_terms',
   'container_summary',
   'note',
+  'qty_tolerance_pct',
+  'partial_shipment',
+  'transhipment',
+  'port_of_loading',
+  'port_of_discharge',
+  'payment_method',
+  'required_docs',
 ] as const
 type EditableField = (typeof EDITABLE_FIELDS)[number]
 
-type OrderUpdateInput = Partial<Record<EditableField, string | number | null>> & {
+type OrderUpdateInput = Partial<
+  Record<EditableField, string | number | boolean | null>
+> & {
   change_note?: string | null
   lines?: OrderLineInput[]
 }
@@ -60,6 +69,7 @@ export const ordersService = {
   async create(
     user: User,
     input: {
+      code: string
       quote_id?: string | null
       customer_id?: string | null
       currency?: string
@@ -71,9 +81,19 @@ export const ordersService = {
       deposit_percent?: number | null
       container_summary?: string | null
       note?: string | null
+      qty_tolerance_pct?: number | null
+      partial_shipment?: boolean | null
+      transhipment?: boolean | null
+      port_of_loading?: string | null
+      port_of_discharge?: string | null
+      payment_method?: string | null
+      required_docs?: string | null
     },
   ): Promise<Order> {
     if (!(await isSalesStaff(user))) throw Forbidden('Chỉ Kinh doanh tạo được đơn hàng')
+    if (await ordersRepo.existsByCode(input.code)) {
+      throw Conflict(`Mã đơn "${input.code}" đã tồn tại`, 'CODE_TAKEN')
+    }
 
     // Nguồn: từ báo giá đã chốt, hoặc nhập trực tiếp.
     let source: {
@@ -120,10 +140,9 @@ export const ordersService = {
       }
     }
 
-    const code = await ordersRepo.nextCode()
     return ordersRepo.insert(
       {
-        code,
+        code: input.code,
         quote_id: source.quote_id,
         customer_id: source.customer_id,
         customer_po_no: input.customer_po_no ?? null,
@@ -134,6 +153,13 @@ export const ordersService = {
         payment_terms: source.payment_terms,
         container_summary: input.container_summary ?? null,
         note: input.note ?? null,
+        qty_tolerance_pct: input.qty_tolerance_pct ?? null,
+        partial_shipment: input.partial_shipment ?? null,
+        transhipment: input.transhipment ?? null,
+        port_of_loading: input.port_of_loading ?? null,
+        port_of_discharge: input.port_of_discharge ?? null,
+        payment_method: input.payment_method ?? null,
+        required_docs: input.required_docs ?? null,
         created_by: user.id,
       },
       source.lines,

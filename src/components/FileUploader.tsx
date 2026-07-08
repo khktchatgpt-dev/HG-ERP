@@ -10,6 +10,9 @@ type Parent =
   | { kind: 'customer'; id: string }
   | { kind: 'invoice'; id: string }
   | { kind: 'product'; id: string }
+  | { kind: 'quote'; id: string }
+  | { kind: 'sales_order'; id: string }
+  | { kind: 'production_order'; id: string }
   | { kind: 'none' }
 
 type Bucket = 'private' | 'attachments' | 'public'
@@ -90,7 +93,11 @@ export function FileUploader({
       onUploaded?.(init.fileId)
     } catch (e) {
       const msg =
-        e instanceof ApiError ? e.message : e instanceof Error ? e.message : 'Lỗi không xác định'
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : 'Lỗi không xác định'
       toast.error('Tải lên thất bại', msg)
     } finally {
       setBusy(false)
@@ -119,7 +126,7 @@ export function FileUploader({
           busy ? 'pointer-events-none opacity-50' : ''
         }`}
       >
-        {busy ? progress ?? 'Đang xử lý…' : label}
+        {busy ? (progress ?? 'Đang xử lý…') : label}
       </label>
     </div>
   )

@@ -4,7 +4,12 @@ import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { db } from '@/server/db'
-import { filesRepo, type FileParentColumns, type FileRow } from './files.repo'
+import {
+  filesRepo,
+  type FileParentColumn,
+  type FileParentColumns,
+  type FileRow,
+} from './files.repo'
 import {
   ALLOWED_MIME,
   MAX_UPLOAD_BYTES,
@@ -39,6 +44,12 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { invoice_id: input.parent.id }
     case 'product':
       return { product_id: input.parent.id }
+    case 'quote':
+      return { quote_id: input.parent.id }
+    case 'sales_order':
+      return { sales_order_id: input.parent.id }
+    case 'production_order':
+      return { production_order_id: input.parent.id }
     case 'none':
       return {}
   }
@@ -138,6 +149,18 @@ export const filesService = {
    */
   async listForProduct(_user: User, productId: string): Promise<FileRow[]> {
     return filesRepo.listByProduct(productId)
+  },
+
+  /**
+   * File gốc chứng từ (báo giá / đơn hàng / LSX). Chứng từ Sales là tài sản
+   * chung — mọi NV đã đăng nhập đọc được (giống thư viện SP).
+   */
+  async listForDocument(
+    _user: User,
+    column: FileParentColumn,
+    id: string,
+  ): Promise<FileRow[]> {
+    return filesRepo.listByParent(column, id)
   },
 
   async getDownloadUrl(user: User, fileId: string): Promise<string> {

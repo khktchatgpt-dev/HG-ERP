@@ -58,6 +58,7 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
     vi.mocked(productionRepo.findById).mockResolvedValue({
       id: 'lsx1',
       code: 'LSX-2026-0001',
+      status: 'approved',
     } as never)
     vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0001')
     vi.mocked(posRepo.insert).mockResolvedValue(PO as never)
@@ -85,6 +86,26 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       is_active: false,
+    } as never)
+    await expect(
+      posService.create(staff, {
+        production_order_id: 'lsx1',
+        supplier_id: 's1',
+        currency: 'VND',
+        price_includes_vat: true,
+        lines: [{ material_id: 'm1', qty_ordered: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('LSX chưa được GĐ duyệt → chặn đặt vật tư', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      is_active: true,
+    } as never)
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      status: 'pending_approval',
     } as never)
     await expect(
       posService.create(staff, {

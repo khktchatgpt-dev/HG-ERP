@@ -5,13 +5,35 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { initUploadSchema } from '@/modules/core/files/files.schema'
 
-const listQuerySchema = z.object({ product_id: z.string().uuid() })
+const listQuerySchema = z
+  .object({
+    product_id: z.string().uuid().optional(),
+    quote_id: z.string().uuid().optional(),
+    sales_order_id: z.string().uuid().optional(),
+    production_order_id: z.string().uuid().optional(),
+  })
+  .refine(
+    (q) =>
+      [q.product_id, q.quote_id, q.sales_order_id, q.production_order_id].filter(Boolean)
+        .length === 1,
+    'Cần đúng 1 tham số parent (product_id/quote_id/sales_order_id/production_order_id)',
+  )
 
-/** List file theo parent — hiện hỗ trợ product (FR-ENG-03). */
+/** List file gốc theo parent: product / báo giá / đơn hàng / LSX. */
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const { product_id } = parseQuery(new URL(req.url), listQuerySchema)
-  const files = await filesService.listForProduct(user, product_id)
+  const q = parseQuery(new URL(req.url), listQuerySchema)
+  const files = q.product_id
+    ? await filesService.listForDocument(user, 'product_id', q.product_id)
+    : q.quote_id
+      ? await filesService.listForDocument(user, 'quote_id', q.quote_id)
+      : q.sales_order_id
+        ? await filesService.listForDocument(user, 'sales_order_id', q.sales_order_id)
+        : await filesService.listForDocument(
+            user,
+            'production_order_id',
+            q.production_order_id!,
+          )
   return NextResponse.json({
     files: files.map((f) => ({
       id: f.id,

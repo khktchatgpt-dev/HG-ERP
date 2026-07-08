@@ -26,6 +26,16 @@ type Packing = {
   carton_h_cm?: number
   qty_per_carton?: number
   loading_40hc?: number
+  pack_unit_label?: string
+}
+
+/** Thông số sản xuất (jsonb tech_spec) — in trên LSX. */
+type TechSpec = {
+  machine?: string
+  cushion?: string
+  paint?: string
+  glass?: string
+  wood?: string
 }
 
 type BomStatus = 'none' | 'drawing' | 'done'
@@ -45,6 +55,12 @@ type Product = {
   bom_url: string | null
   image_file_id: string | null
   notes: string | null
+  name_de: string | null
+  shipping_mark: string | null
+  barcode: string | null
+  showroom_sample: boolean
+  reference_price: number | null
+  tech_spec: TechSpec
   is_active: boolean
 }
 
@@ -671,6 +687,7 @@ function ProductDetail({
   onEdit: () => void
 }) {
   const pk = product.packing ?? {}
+  const ts = product.tech_spec ?? {}
   const dims = [pk.l_cm, pk.w_cm, pk.h_cm].every((v) => v != null)
     ? `${pk.l_cm} × ${pk.w_cm} × ${pk.h_cm} cm`
     : null
@@ -720,6 +737,39 @@ function ProductDetail({
             )}
           </div>
         </div>
+      )}
+      {product.name_de && <Row label="Tên (DE)" value={product.name_de} />}
+      {product.barcode && (
+        <Row
+          label="Barcode"
+          value={<span className="font-mono">{product.barcode}</span>}
+        />
+      )}
+      {product.reference_price != null && (
+        <Row
+          label="Giá tham khảo"
+          value={product.reference_price.toLocaleString('en-US')}
+        />
+      )}
+      {(ts.machine || ts.cushion || ts.paint || ts.glass || ts.wood) && (
+        <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-900">
+          <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
+            Thông số sản xuất (LSX)
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {ts.machine && <Row label="Máy" value={ts.machine} />}
+            {ts.cushion && <Row label="Nệm" value={ts.cushion} />}
+            {ts.paint && <Row label="Sơn" value={ts.paint} />}
+            {ts.glass && <Row label="Kính" value={ts.glass} />}
+            {ts.wood && <Row label="Gỗ" value={ts.wood} />}
+          </div>
+        </div>
+      )}
+      {product.shipping_mark && (
+        <Row label="Shipping mark" value={product.shipping_mark} />
+      )}
+      {product.showroom_sample && (
+        <Row label="Showroom" value={<Badge tone="green">Có mẫu</Badge>} />
       )}
       <Row
         label="Bản vẽ"
@@ -824,6 +874,7 @@ function ProductForm({
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
+    const strOrUndef = (k: string) => String(fd.get(k) ?? '').trim() || undefined
     const packing: Packing = {
       l_cm: numOrUndef(fd.get('l_cm')),
       w_cm: numOrUndef(fd.get('w_cm')),
@@ -833,6 +884,14 @@ function ProductForm({
       carton_h_cm: numOrUndef(fd.get('carton_h_cm')),
       qty_per_carton: numOrUndef(fd.get('qty_per_carton')),
       loading_40hc: numOrUndef(fd.get('loading_40hc')),
+      pack_unit_label: strOrUndef('pack_unit_label'),
+    }
+    const tech_spec: TechSpec = {
+      machine: strOrUndef('machine'),
+      cushion: strOrUndef('cushion'),
+      paint: strOrUndef('paint'),
+      glass: strOrUndef('glass'),
+      wood: strOrUndef('wood'),
     }
     const body: Record<string, unknown> = {
       code: String(fd.get('code') ?? '').trim(),
@@ -846,6 +905,13 @@ function ProductForm({
       drawing_url: String(fd.get('drawing_url') ?? '').trim() || null,
       bom_url: String(fd.get('bom_url') ?? '').trim() || null,
       notes: String(fd.get('notes') ?? '').trim() || null,
+      // Thông số kỹ thuật (LSX / hợp đồng)
+      name_de: String(fd.get('name_de') ?? '').trim() || null,
+      shipping_mark: String(fd.get('shipping_mark') ?? '').trim() || null,
+      barcode: String(fd.get('barcode') ?? '').trim() || null,
+      showroom_sample: fd.get('showroom_sample') === 'on',
+      reference_price: numOrUndef(fd.get('reference_price')) ?? null,
+      tech_spec,
     }
     if (initial) {
       body.bom_status = String(fd.get('bom_status') ?? initial.bom_status)
@@ -856,6 +922,7 @@ function ProductForm({
   }
 
   const pk = initial?.packing ?? {}
+  const ts = initial?.tech_spec ?? {}
 
   return (
     <form onSubmit={handle} className="grid gap-3 sm:grid-cols-2">
@@ -885,6 +952,37 @@ function ProductForm({
           required
           maxLength={200}
           defaultValue={initial?.name ?? ''}
+          className={cls}
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+        Tên tiếng Đức (in trên LSX)
+        <input
+          name="name_de"
+          maxLength={300}
+          defaultValue={initial?.name_de ?? ''}
+          className={cls}
+          placeholder="Klappsessel Tilos, 5-fach verstellbar, Aluminium…"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Barcode
+        <input
+          name="barcode"
+          maxLength={50}
+          defaultValue={initial?.barcode ?? ''}
+          className={`${cls} font-mono`}
+          placeholder="4033662987552"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Giá tham khảo (nội bộ)
+        <input
+          name="reference_price"
+          type="number"
+          step="0.01"
+          min="0"
+          defaultValue={initial?.reference_price ?? ''}
           className={cls}
         />
       </label>
@@ -1032,6 +1130,87 @@ function ProductForm({
             step="1"
             min="0"
             defaultValue={pk.loading_40hc ?? ''}
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Đơn vị đóng gói
+          <input
+            name="pack_unit_label"
+            maxLength={30}
+            defaultValue={pk.pack_unit_label ?? ''}
+            className={cls}
+            placeholder="ctn / pallet"
+          />
+        </label>
+      </fieldset>
+
+      <fieldset className="grid gap-3 rounded-md border border-zinc-200 p-3 sm:col-span-2 sm:grid-cols-3 dark:border-zinc-800">
+        <legend className="px-1 text-xs font-semibold text-zinc-500 uppercase">
+          Thông số sản xuất (in trên LSX)
+        </legend>
+        <label className="flex flex-col gap-1 text-xs">
+          Máy
+          <input
+            name="machine"
+            maxLength={200}
+            defaultValue={ts.machine ?? ''}
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Nệm
+          <input
+            name="cushion"
+            maxLength={200}
+            defaultValue={ts.cushion ?? ''}
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Sơn (mã màu)
+          <input
+            name="paint"
+            maxLength={200}
+            defaultValue={ts.paint ?? ''}
+            className={cls}
+            placeholder="Màu Graphit H-SM-96 08"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Kính
+          <input
+            name="glass"
+            maxLength={200}
+            defaultValue={ts.glass ?? ''}
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Gỗ
+          <input
+            name="wood"
+            maxLength={200}
+            defaultValue={ts.wood ?? ''}
+            className={cls}
+            placeholder="Acacia FSC 100% Màu 142"
+          />
+        </label>
+        <label className="flex items-center gap-2 text-xs sm:self-end">
+          <input
+            type="checkbox"
+            name="showroom_sample"
+            defaultChecked={initial?.showroom_sample ?? false}
+          />
+          Có mẫu tại showroom
+        </label>
+        <label className="flex flex-col gap-1 text-xs sm:col-span-3">
+          Nội dung shipping mark
+          <textarea
+            name="shipping_mark"
+            rows={2}
+            maxLength={2000}
+            defaultValue={initial?.shipping_mark ?? ''}
             className={cls}
           />
         </label>

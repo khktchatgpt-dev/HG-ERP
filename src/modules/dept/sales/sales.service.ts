@@ -18,8 +18,8 @@ async function isSalesUser(user: User): Promise<boolean> {
 
 function canEdit(user: User, customer: Customer): boolean {
   if (user.role === 'admin') return true
-  if (user.role === 'manager') return true     // manager Sales edits all
-  return customer.owner_id === user.id         // sale chỉ sửa KH của mình
+  if (user.role === 'manager') return true // manager Sales edits all
+  return customer.owner_id === user.id // sale chỉ sửa KH của mình
 }
 
 type CreateInput = {
@@ -30,12 +30,31 @@ type CreateInput = {
   address?: string | null
   notes?: string | null
   owner_id?: string | null
+  tax_code?: string | null
+  country?: string | null
+  contact_person?: string | null
+  default_currency?: string | null
+  default_price_term?: string | null
+  default_payment_terms?: string | null
+  port_of_discharge?: string | null
+  fax?: string | null
+  representative_title?: string | null
+  fsc_cert?: string | null
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
 
 export const salesService = {
-  async list(user: User, opts: { q?: string; owner_id?: string; active_only?: boolean; page: number; page_size: number }) {
+  async list(
+    user: User,
+    opts: {
+      q?: string
+      owner_id?: string
+      active_only?: boolean
+      page: number
+      page_size: number
+    },
+  ) {
     if (!(await isSalesUser(user))) throw Forbidden('Chỉ phòng Bán hàng truy cập được')
     return customersRepo.list({
       q: opts.q,
@@ -50,7 +69,7 @@ export const salesService = {
     if (!(await isSalesUser(user))) throw Forbidden()
     const c = await customersRepo.findById(id)
     if (!c) throw NotFound('Khách hàng không tồn tại')
-    return { ...c, owner_name: null, owner_email: null }
+    return c
   },
 
   async create(user: User, input: CreateInput): Promise<Customer> {
@@ -66,6 +85,16 @@ export const salesService = {
       address: input.address ?? null,
       notes: input.notes ?? null,
       owner_id,
+      tax_code: input.tax_code ?? null,
+      country: input.country ?? null,
+      contact_person: input.contact_person ?? null,
+      default_currency: input.default_currency ?? null,
+      default_price_term: input.default_price_term ?? null,
+      default_payment_terms: input.default_payment_terms ?? null,
+      port_of_discharge: input.port_of_discharge ?? null,
+      fax: input.fax ?? null,
+      representative_title: input.representative_title ?? null,
+      fsc_cert: input.fsc_cert ?? null,
     })
   },
 

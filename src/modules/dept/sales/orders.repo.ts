@@ -16,6 +16,13 @@ export type Order = {
   payment_terms: string | null
   container_summary: string | null
   note: string | null
+  qty_tolerance_pct: number | null
+  partial_shipment: boolean | null
+  transhipment: boolean | null
+  port_of_loading: string | null
+  port_of_discharge: string | null
+  payment_method: string | null
+  required_docs: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -39,6 +46,7 @@ export type OrderLine = {
   product_unit: string
   customer_item_code: string | null
   bom_status: 'none' | 'drawing' | 'done'
+  image_file_id: string | null
 }
 
 export type OrderLineInput = {
@@ -59,7 +67,7 @@ export type OrderChange = {
 }
 
 const COLS =
-  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, created_by, created_at, updated_at'
+  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, created_by, created_at, updated_at'
 
 type RawOrder = Order & {
   customer: { name: string } | { name: string }[] | null
@@ -79,6 +87,15 @@ export const ordersRepo = {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'DH' })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
     return data as string
+  },
+
+  async existsByCode(code: string): Promise<boolean> {
+    const { data } = await db()
+      .from('sales_orders')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle()
+    return !!data
   },
 
   async list(filter: {
@@ -117,7 +134,7 @@ export const ordersRepo = {
     const { data } = await db()
       .from('sales_order_lines')
       .select(
-        'id, order_id, product_id, qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, bom_status)',
+        'id, order_id, product_id, qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, bom_status, image_file_id)',
       )
       .eq('order_id', orderId)
       .order('sort_order')
@@ -127,6 +144,7 @@ export const ordersRepo = {
       unit: string
       customer_item_code: string | null
       bom_status: 'none' | 'drawing' | 'done'
+      image_file_id: string | null
     }
     type RawLine = Omit<
       OrderLine,
@@ -135,6 +153,7 @@ export const ordersRepo = {
       | 'product_unit'
       | 'customer_item_code'
       | 'bom_status'
+      | 'image_file_id'
     > & { product: P | P[] | null }
     return ((data ?? []) as RawLine[]).map((r) => {
       const p = Array.isArray(r.product) ? r.product[0] : r.product
@@ -151,6 +170,7 @@ export const ordersRepo = {
         product_unit: p?.unit ?? '',
         customer_item_code: p?.customer_item_code ?? null,
         bom_status: p?.bom_status ?? 'none',
+        image_file_id: p?.image_file_id ?? null,
       }
     })
   },
@@ -168,6 +188,13 @@ export const ordersRepo = {
       payment_terms?: string | null
       container_summary?: string | null
       note?: string | null
+      qty_tolerance_pct?: number | null
+      partial_shipment?: boolean | null
+      transhipment?: boolean | null
+      port_of_loading?: string | null
+      port_of_discharge?: string | null
+      payment_method?: string | null
+      required_docs?: string | null
       created_by: string
     },
     lines: OrderLineInput[],

@@ -20,12 +20,53 @@ type PendingPo = {
   expected_at: string | null
   created_at: string
 }
+type PendingLsx = {
+  id: string
+  code: string
+  order_code: string
+  customer_name: string
+  created_at: string
+}
 
-export function ApprovalsManager({ pos }: { pos: PendingPo[] }) {
+export function ApprovalsManager({
+  pos,
+  lsxs,
+}: {
+  pos: PendingPo[]
+  lsxs: PendingLsx[]
+}) {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
+
+  async function decideLsx(l: PendingLsx, decision: 'approve' | 'reject') {
+    let reason: string | undefined
+    if (decision === 'reject') {
+      reason = window.prompt(`Lý do từ chối LSX ${l.code}:`)?.trim() || undefined
+      if (!reason) return
+    } else {
+      const ok = await confirm({
+        title: `Duyệt LSX ${l.code}?`,
+        description: `${l.customer_name} · đơn ${l.order_code}. Duyệt xong Cung ứng mới đặt được vật tư.`,
+        confirmLabel: 'Duyệt',
+      })
+      if (!ok) return
+    }
+    setBusy(true)
+    try {
+      await api(
+        `/api/dept/production/lsx/${l.id}/${decision === 'approve' ? 'approve' : 'reject'}`,
+        { method: 'POST', body: decision === 'reject' ? { reason } : {} },
+      )
+      toast.success(decision === 'approve' ? 'Đã duyệt LSX' : 'Đã từ chối LSX', l.code)
+      router.refresh()
+    } catch (e) {
+      toast.error('Thao tác thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function decidePo(p: PendingPo, decision: 'approve' | 'reject') {
     let reason: string | undefined
@@ -128,17 +169,72 @@ export function ApprovalsManager({ pos }: { pos: PendingPo[] }) {
     },
   ]
 
+  const lsxColumns: Column<PendingLsx>[] = [
+    {
+      key: 'code',
+      header: 'LSX / Khách hàng',
+      sortValue: (l) => l.code,
+      cell: (l) => (
+        <a href={`/sales/lsx/${l.id}`} className="flex min-w-0 flex-col">
+          <span className="font-mono text-xs text-blue-600 dark:text-blue-400">
+            {l.code}
+          </span>
+          <span className="truncate font-medium">{l.customer_name}</span>
+        </a>
+      ),
+    },
+    {
+      key: 'order',
+      header: 'Đơn hàng',
+      width: '140px',
+      cell: (l) => <span className="font-mono text-xs">{l.order_code}</span>,
+    },
+    {
+      key: 'created',
+      header: 'Phát ngày',
+      width: '110px',
+      cell: (l) => new Date(l.created_at).toLocaleDateString('vi-VN'),
+    },
+    {
+      key: 'actions',
+      header: 'Quyết định',
+      width: '190px',
+      align: 'right',
+      cell: (l) => (
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={() => void decideLsx(l, 'reject')}
+            className="rounded-md border border-red-300 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+          >
+            Từ chối
+          </button>
+          <button
+            onClick={() => void decideLsx(l, 'approve')}
+            className="rounded-md bg-green-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-green-700"
+          >
+            ✓ Duyệt
+          </button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[{ label: 'Ban Giám đốc' }]}
         title="Phê duyệt tập trung"
-        description="Duyệt đơn đặt vật tư trước khi Cung ứng gửi NCC (BR-05, FR-ADM-03). Báo giá bán là hồ sơ riêng của Sales — không duyệt ở đây."
+        description="Duyệt Lệnh sản xuất (FR-SAL-06) + đơn đặt vật tư trước khi gửi NCC (BR-05). Báo giá bán là hồ sơ riêng của Sales — không duyệt ở đây."
       />
 
       <StatsBar
         stats={[
+          {
+            label: 'LSX chờ duyệt',
+            value: lsxs.length,
+            tone: lsxs.length ? 'amber' : 'green',
+          },
           {
             label: 'Đơn đặt vật tư chờ duyệt',
             value: pos.length,
@@ -146,6 +242,24 @@ export function ApprovalsManager({ pos }: { pos: PendingPo[] }) {
           },
         ]}
       />
+
+      <section>
+        <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">
+          Lệnh sản xuất chờ duyệt ({lsxs.length})
+        </h2>
+        <DataTable<PendingLsx>
+          rows={lsxs}
+          columns={lsxColumns}
+          storageKey="exec-pending-lsx"
+          emptyState={
+            <EmptyState
+              icon="✓"
+              title="Không có LSX nào chờ duyệt"
+              description="Sales phát LSX sẽ hiện ở đây kèm thông báo (FR-SAL-06)."
+            />
+          }
+        />
+      </section>
 
       <section>
         <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">

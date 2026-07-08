@@ -103,6 +103,29 @@ export type DomainEvent =
       reason?: string
     }
 
+  // ── Lệnh sản xuất (FR-SAL-06 — Sales phát, GĐ duyệt) ─────────────────
+  | {
+      name: 'lsx.submitted'
+      production_order_id: string
+      code: string
+      order_code: string
+      customer_name: string
+      lines_bom_pending: number
+      submitted_by: string
+      approver_ids: string[]
+    }
+  | {
+      name: 'lsx.decided'
+      production_order_id: string
+      code: string
+      decision: 'approved' | 'rejected'
+      decided_by: string
+      issued_by: string | null
+      reason?: string
+      // approved → báo Cung ứng + Kỹ thuật; rejected → báo người phát.
+      notify_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

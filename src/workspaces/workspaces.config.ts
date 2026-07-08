@@ -334,6 +334,30 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
 
 export const WORKSPACE_IDS = Object.keys(WORKSPACES) as readonly WorkspaceId[]
 
+// ── Nav resolution (dùng chung sidebar desktop + drawer mobile) ────────────
+function itemVisible(item: NavItem, ctx: { role: string; isHead: boolean }): boolean {
+  if (item.roles && !item.roles.includes(ctx.role as Role)) return false
+  if (item.requireHead && !ctx.isHead) return false
+  return true
+}
+
+/**
+ * Danh sách section điều hướng đã lọc theo quyền (role + head). Kết quả
+ * serializable — dùng được cho cả server sidebar và client drawer mobile.
+ */
+export function resolveNavSections(
+  workspace: WorkspaceConfig,
+  ctx: { role: string; isHead: boolean },
+): NavSection[] {
+  return [
+    ...(workspace.hidePersonalSection ? [] : [PERSONAL_SECTION]),
+    ...workspace.sections.map((s) => ({
+      heading: s.heading,
+      items: s.items.filter((i) => itemVisible(i, ctx)),
+    })),
+  ].filter((s) => s.items.length > 0)
+}
+
 /** Tailwind class map cho accent — dùng ở Topbar, Sidebar highlight, badge. */
 export const ACCENT_CLASSES: Record<
   WorkspaceConfig['accent'],

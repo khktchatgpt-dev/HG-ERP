@@ -65,11 +65,12 @@ export const quotesService = {
       {
         code,
         customer_id: input.customer_id,
+        // Auto-fill điều khoản mặc định của KH khi báo giá không nêu rõ (FR-SAL-02).
         currency: input.currency,
         valid_from: input.valid_from ?? null,
         valid_to: input.valid_to ?? null,
-        price_term: input.price_term ?? null,
-        payment_terms: input.payment_terms ?? null,
+        price_term: input.price_term ?? customer.default_price_term ?? null,
+        payment_terms: input.payment_terms ?? customer.default_payment_terms ?? null,
         note: input.note ?? null,
         created_by: user.id,
       },

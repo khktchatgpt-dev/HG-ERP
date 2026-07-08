@@ -10,6 +10,16 @@ export const packingSchema = z.object({
   carton_h_cm: z.coerce.number().positive().optional(),
   qty_per_carton: z.coerce.number().int().positive().optional(),
   loading_40hc: z.coerce.number().int().positive().optional(),
+  pack_unit_label: z.string().trim().max(30).optional(), // 'ctn' | 'pallet' — mẫu ghi "20 pcs/pallet"
+})
+
+/** Thông số sản xuất (in trên LSX — jsonb `tech_spec`). Mặc định của SP. */
+export const techSpecSchema = z.object({
+  machine: z.string().trim().max(200).optional(), // Máy
+  cushion: z.string().trim().max(200).optional(), // Nệm
+  paint: z.string().trim().max(200).optional(), // Sơn (mã màu)
+  glass: z.string().trim().max(200).optional(), // Kính
+  wood: z.string().trim().max(200).optional(), // Gỗ (loại + FSC + mã màu)
 })
 
 export const BOM_STATUSES = ['none', 'drawing', 'done'] as const
@@ -27,6 +37,13 @@ export const productCreateSchema = z.object({
   drawing_url: z.string().trim().url().optional().or(z.literal('')),
   bom_url: z.string().trim().url().optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().nullable(),
+  // Thông số kỹ thuật phục vụ LSX / hợp đồng (0026).
+  name_de: z.string().trim().max(300).optional().nullable(), // tên tiếng Đức
+  shipping_mark: z.string().trim().max(2000).optional().nullable(), // nội dung shipping mark
+  barcode: z.string().trim().max(50).optional().nullable(),
+  showroom_sample: z.boolean().optional(), // mẫu tại showroom
+  reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
+  tech_spec: techSpecSchema.optional(),
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
@@ -43,6 +60,26 @@ export const productListQuerySchema = z.object({
   active_only: z.coerce.boolean().default(true),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(20),
+})
+
+/**
+ * Tạo nhanh sản phẩm từ màn Kinh doanh (báo giá/đơn) — SP mới sale tự điền để
+ * quản lý; BOM/thông số để Kỹ thuật bổ sung sau (bom_status mặc định 'none').
+ */
+export const quickProductCreateSchema = z.object({
+  code: z.string().trim().min(1).max(100),
+  name: z.string().trim().min(1).max(200),
+  unit: z.string().trim().min(1).max(30).default('cai'),
+  customer_id: z.string().uuid().optional().nullable(),
+  customer_item_code: z.string().trim().max(100).optional().nullable(),
+  description_en: z.string().trim().max(2000).optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
+  reference_price: z.coerce.number().min(0).optional().nullable(),
+})
+
+/** Đặt ảnh đại diện SP (file đã upload vào parent product) — Kinh doanh/Kỹ thuật. */
+export const productSetImageSchema = z.object({
+  file_id: z.string().uuid(),
 })
 
 /** BOM per-SP (FR-ENG-04): PUT ghi đè trọn bộ dòng định mức. */
