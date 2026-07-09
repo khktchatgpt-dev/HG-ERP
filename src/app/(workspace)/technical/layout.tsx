@@ -17,7 +17,11 @@ export default async function TechnicalLayout({
 }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
-  if (!(await isTechnicalStaff(user))) redirect('/')
+  // FR-ADM-02: admin/manager xem chéo read-only (GĐ theo dõi Kỹ thuật); ghi vẫn
+  // bị service chặn theo phòng Kỹ thuật. Ngoài ra chỉ nhân sự phòng Kỹ thuật.
+  const allowed =
+    user.role === 'admin' || user.role === 'manager' || (await isTechnicalStaff(user))
+  if (!allowed) redirect('/')
 
   return <WorkspaceShell workspace={WORKSPACES.technical}>{children}</WorkspaceShell>
 }
