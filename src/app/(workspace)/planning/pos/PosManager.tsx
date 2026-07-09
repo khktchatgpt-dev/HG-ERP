@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
+import { DocumentFiles } from '@/components/DocumentFiles'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
@@ -25,7 +26,7 @@ type PoStatus =
   | 'received'
   | 'cancelled'
 
-type Po = {
+export type Po = {
   id: string
   code: string
   production_order_id: string
@@ -43,7 +44,7 @@ type Po = {
   order_code: string | null
 }
 
-type PoLine = {
+export type PoLine = {
   id: string
   material_id: string
   qty_ordered: number
@@ -57,7 +58,7 @@ type PoLine = {
   material_unit: string
 }
 
-type StatusLine = {
+export type StatusLine = {
   id: string
   material_id: string
   qty_ordered: number
@@ -91,6 +92,27 @@ type Row = {
   qty2: number | ''
   unit2: string
   note: string
+}
+
+// So giá khi tạo PO (FR-SUP-06): giá chào hiện hành các NCC + giá mua gần nhất.
+type PriceOffer = {
+  supplier_id: string
+  supplier_name: string
+  price: number
+  currency: string
+  valid_from: string
+  note: string | null
+}
+type PriceCompareEntry = {
+  material_id: string
+  offers: PriceOffer[]
+  last_purchase: {
+    unit_price: number
+    currency: string
+    po_code: string
+    supplier_name: string
+    at: string
+  } | null
 }
 
 const STATUS_LABEL: Record<PoStatus, string> = {
@@ -141,6 +163,12 @@ export function PosManager({
     po: Po
     lines: PoLine[]
     statusLines: StatusLine[]
+  } | null>(null)
+  // Sửa PO chờ duyệt (PATCH) hoặc tạo lại từ PO đã huỷ (POST bản mới).
+  const [editing, setEditing] = useState<{
+    po: Po
+    lines: PoLine[]
+    mode: 'edit' | 'duplicate'
   } | null>(null)
 
   const [q, setQ] = useState('')
@@ -194,6 +222,19 @@ export function PosManager({
         `/api/dept/supply/pos/${po.id}`,
       )
       setViewing({ po, lines: data.lines, statusLines: data.status_lines })
+    } catch (e) {
+      toast.error('Không tải được đơn đặt', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function openEdit(po: Po, mode: 'edit' | 'duplicate') {
+    setBusy(true)
+    try {
+      const data = await api<{ lines: PoLine[] }>(`/api/dept/supply/pos/${po.id}`)
+      setViewing(null)
+      setEditing({ po, lines: data.lines, mode })
     } catch (e) {
       toast.error('Không tải được đơn đặt', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -313,6 +354,15 @@ export function PosManager({
         const items: { label: string; onClick: () => void; danger?: boolean }[] = [
           { label: 'Xem chi tiết', onClick: () => void openView(p) },
         ]
+        if (canEdit && p.status === 'pending_approval') {
+          items.push({ label: 'Sửa', onClick: () => void openEdit(p, 'edit') })
+        }
+        if (canEdit && p.status === 'cancelled') {
+          items.push({
+            label: 'Tạo lại từ đơn này',
+            onClick: () => void openEdit(p, 'duplicate'),
+          })
+        }
         if (canApprove && p.status === 'pending_approval') {
           items.push(
             { label: 'Duyệt', onClick: () => void decide(p, 'approve') },
@@ -475,6 +525,39 @@ export function PosManager({
             onDecide={(d) => void decide(viewing.po, d)}
             onAdvance={(to) => void advance(viewing.po, to)}
             onCancel={() => void cancelPo(viewing.po)}
+            onEdit={() => void openEdit(viewing.po, 'edit')}
+          />
+        )}
+      </Modal>
+
+      {/* Sửa PO chờ duyệt / Tạo lại từ PO đã huỷ */}
+      <Modal
+        open={!!editing}
+        onClose={() => setEditing(null)}
+        title={
+          editing
+            ? editing.mode === 'edit'
+              ? `Sửa ${editing.po.code}`
+              : `Tạo lại từ ${editing.po.code}`
+            : ''
+        }
+        maxWidth="sm:max-w-4xl"
+      >
+        {editing && (
+          <PoForm
+            suppliers={suppliers}
+            lsxs={lsxs}
+            materials={materials}
+            initial={editing}
+            onDone={(code) => {
+              const wasEdit = editing.mode === 'edit'
+              setEditing(null)
+              toast.success(
+                wasEdit ? `Đã lưu ${code}` : `Đã tạo ${code}`,
+                'Đơn đang chờ Giám đốc duyệt',
+              )
+              router.refresh()
+            }}
           />
         )}
       </Modal>
@@ -482,24 +565,42 @@ export function PosManager({
   )
 }
 
-// ── Form tạo PO ─────────────────────────────────────────────────────────────
+// ── Form tạo / sửa / nhân bản PO ───────────────────────────────────────────
 
 function PoForm({
   suppliers,
   lsxs,
   materials,
+  initial,
   onDone,
 }: {
   suppliers: SupplierOption[]
   lsxs: LsxOption[]
   materials: MaterialOption[]
+  /** Sửa PO chờ duyệt (mode edit → PATCH) hoặc tạo lại từ PO huỷ (duplicate → POST). LSX giữ nguyên (BR-06). */
+  initial?: { po: Po; lines: PoLine[]; mode: 'edit' | 'duplicate' }
   onDone: (code: string) => void
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-  const [lsxId, setLsxId] = useState('')
+  const [lsxId, setLsxId] = useState(initial?.po.production_order_id ?? '')
+  const [supplierId, setSupplierId] = useState(initial?.po.supplier_id ?? '')
   const [needs, setNeeds] = useState<Need[]>([])
-  const [rows, setRows] = useState<Row[]>([])
+  const [rows, setRows] = useState<Row[]>(
+    initial
+      ? initial.lines.map((l) => ({
+          material_id: l.material_id,
+          qty_ordered: l.qty_ordered,
+          unit_price: l.unit_price ?? '',
+          spec: l.spec ?? '',
+          qty2: l.qty2 ?? '',
+          unit2: l.unit2 ?? '',
+          note: l.note ?? '',
+        }))
+      : [],
+  )
+  const [priceMap, setPriceMap] = useState<Record<string, PriceCompareEntry>>({})
+  const isEdit = initial?.mode === 'edit'
 
   async function selectLsx(id: string) {
     setLsxId(id)
@@ -511,25 +612,62 @@ function PoForm({
         `/api/dept/supply/needs?production_order_id=${id}`,
       )
       setNeeds(data.needs)
+      void loadPrices(data.needs.map((n) => n.material_id))
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     }
   }
 
+  /** Nạp so giá cho các vật tư chưa có trong cache — lỗi thì im lặng (chỉ là gợi ý). */
+  async function loadPrices(materialIds: string[]) {
+    const missing = [...new Set(materialIds)].filter((id) => id && !priceMap[id])
+    if (missing.length === 0) return
+    try {
+      const data = await api<{ entries: PriceCompareEntry[] }>(
+        `/api/dept/supply/price-compare?material_ids=${missing.join(',')}`,
+      )
+      setPriceMap((m) => {
+        const next = { ...m }
+        for (const e of data.entries) next[e.material_id] = e
+        return next
+      })
+    } catch {
+      /* người mua vẫn nhập giá tay được */
+    }
+  }
+
+  const offerFor = (materialId: string, forSupplier: string) =>
+    priceMap[materialId]?.offers.find((o) => o.supplier_id === forSupplier)
+
+  /** Đổi NCC → autofill giá chào hiện hành vào các dòng đang trống đơn giá. */
+  function selectSupplier(id: string) {
+    setSupplierId(id)
+    if (!id) return
+    setRows((rs) =>
+      rs.map((r) => {
+        if (r.unit_price !== '' || !r.material_id) return r
+        const offer = offerFor(r.material_id, id)
+        return offer ? { ...r, unit_price: offer.price } : r
+      }),
+    )
+  }
+
   function addFromNeed(n: Need) {
     if (rows.some((r) => r.material_id === n.material_id)) return
+    const offer = supplierId ? offerFor(n.material_id, supplierId) : undefined
     setRows((rs) => [
       ...rs,
       {
         material_id: n.material_id,
         qty_ordered: Math.max(n.qty_remaining - n.on_hand, 0) || n.qty_remaining,
-        unit_price: '',
+        unit_price: offer ? offer.price : '',
         spec: '',
         qty2: '',
         unit2: '',
         note: '',
       },
     ])
+    void loadPrices([n.material_id])
   }
 
   function addRow() {
@@ -563,33 +701,39 @@ function PoForm({
     const fd = new FormData(e.currentTarget)
     setBusy(true)
     try {
-      const { po } = await api<{ po: { code: string } }>('/api/dept/supply/pos', {
-        method: 'POST',
-        body: {
-          production_order_id: lsxId,
-          supplier_id: String(fd.get('supplier_id') ?? ''),
-          currency: String(fd.get('currency') ?? 'VND'),
-          vat_rate: String(fd.get('vat_rate') ?? '').trim()
-            ? Number(fd.get('vat_rate'))
-            : null,
-          price_includes_vat: String(fd.get('price_includes_vat')) === 'true',
-          expected_at: String(fd.get('expected_at') ?? '') || null,
-          terms: String(fd.get('terms') ?? '').trim() || null,
-          note: String(fd.get('note') ?? '').trim() || null,
-          lines: rows.map((r) => ({
-            material_id: r.material_id,
-            qty_ordered: Number(r.qty_ordered),
-            unit_price: r.unit_price === '' ? null : Number(r.unit_price),
-            spec: r.spec.trim() || null,
-            qty2: r.qty2 === '' ? null : Number(r.qty2),
-            unit2: r.unit2.trim() || null,
-            note: r.note.trim() || null,
-          })),
+      const { po } = await api<{ po: { code: string } }>(
+        isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos',
+        {
+          method: isEdit ? 'PATCH' : 'POST',
+          body: {
+            production_order_id: lsxId,
+            supplier_id: String(fd.get('supplier_id') ?? ''),
+            currency: String(fd.get('currency') ?? 'VND'),
+            vat_rate: String(fd.get('vat_rate') ?? '').trim()
+              ? Number(fd.get('vat_rate'))
+              : null,
+            price_includes_vat: String(fd.get('price_includes_vat')) === 'true',
+            expected_at: String(fd.get('expected_at') ?? '') || null,
+            terms: String(fd.get('terms') ?? '').trim() || null,
+            note: String(fd.get('note') ?? '').trim() || null,
+            lines: rows.map((r) => ({
+              material_id: r.material_id,
+              qty_ordered: Number(r.qty_ordered),
+              unit_price: r.unit_price === '' ? null : Number(r.unit_price),
+              spec: r.spec.trim() || null,
+              qty2: r.qty2 === '' ? null : Number(r.qty2),
+              unit2: r.unit2.trim() || null,
+              note: r.note.trim() || null,
+            })),
+          },
         },
-      })
+      )
       onDone(po.code)
     } catch (err) {
-      toast.error('Tạo đơn thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
+      toast.error(
+        isEdit ? 'Lưu thất bại' : 'Tạo đơn thất bại',
+        err instanceof ApiError ? err.message : 'Có lỗi',
+      )
     } finally {
       setBusy(false)
     }
@@ -600,23 +744,36 @@ function PoForm({
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">
           LSX <span className="text-red-500">*</span>
-          <select
-            value={lsxId}
-            onChange={(e) => void selectLsx(e.target.value)}
-            required
-            className={inputCls}
-          >
-            <option value="">— chọn LSX —</option>
-            {lsxs.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.code} — {l.customer_name}
-              </option>
-            ))}
-          </select>
+          {initial ? (
+            // Sửa/nhân bản: LSX giữ nguyên (BR-06 — mỗi PO gắn đúng 1 LSX).
+            <div className={`${inputCls} bg-zinc-100 font-mono dark:bg-zinc-800`}>
+              {initial.po.lsx_code}
+            </div>
+          ) : (
+            <select
+              value={lsxId}
+              onChange={(e) => void selectLsx(e.target.value)}
+              required
+              className={inputCls}
+            >
+              <option value="">— chọn LSX —</option>
+              {lsxs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.code} — {l.customer_name}
+                </option>
+              ))}
+            </select>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Nhà cung cấp <span className="text-red-500">*</span>
-          <select name="supplier_id" required className={inputCls}>
+          <select
+            name="supplier_id"
+            value={supplierId}
+            onChange={(e) => selectSupplier(e.target.value)}
+            required
+            className={inputCls}
+          >
             <option value="">— chọn NCC —</option>
             {suppliers.map((s) => (
               <option key={s.id} value={s.id}>
@@ -627,12 +784,17 @@ function PoForm({
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Hẹn giao hàng
-          <input name="expected_at" type="date" className={inputCls} />
+          <input
+            name="expected_at"
+            type="date"
+            defaultValue={initial?.po.expected_at ?? ''}
+            className={inputCls}
+          />
         </label>
       </div>
 
-      {/* Gợi ý nhu cầu theo BOM (FR-SUP-01) */}
-      {lsxId && (
+      {/* Gợi ý nhu cầu theo BOM (FR-SUP-01) — chỉ khi tạo mới (sửa đã có dòng sẵn) */}
+      {!initial && lsxId && (
         <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
           <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
             Nhu cầu theo BOM (cần − đã xuất) — bấm để thêm vào đơn; tồn kho chỉ để tham
@@ -691,7 +853,10 @@ function PoForm({
                 <td className="py-1.5 pr-2">
                   <select
                     value={r.material_id}
-                    onChange={(e) => setRow(i, { material_id: e.target.value })}
+                    onChange={(e) => {
+                      setRow(i, { material_id: e.target.value })
+                      void loadPrices([e.target.value])
+                    }}
                     className={inputCls}
                   >
                     <option value="">— chọn vật tư —</option>
@@ -732,6 +897,11 @@ function PoForm({
                       })
                     }
                     className={inputCls}
+                  />
+                  <PriceHint
+                    entry={priceMap[r.material_id]}
+                    supplierId={supplierId}
+                    onApply={(p) => setRow(i, { unit_price: p })}
                   />
                 </td>
                 <td className="py-1.5 pr-2">
@@ -802,7 +972,11 @@ function PoForm({
       <div className="grid gap-3 sm:grid-cols-4">
         <label className="flex flex-col gap-1 text-sm">
           Tiền tệ
-          <select name="currency" defaultValue="VND" className={inputCls}>
+          <select
+            name="currency"
+            defaultValue={initial?.po.currency ?? 'VND'}
+            className={inputCls}
+          >
             <option value="VND">VND</option>
             <option value="USD">USD</option>
           </select>
@@ -816,12 +990,17 @@ function PoForm({
             max="100"
             step="0.1"
             placeholder="10"
+            defaultValue={initial?.po.vat_rate ?? ''}
             className={inputCls}
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Đơn giá
-          <select name="price_includes_vat" defaultValue="true" className={inputCls}>
+          <select
+            name="price_includes_vat"
+            defaultValue={String(initial?.po.price_includes_vat ?? true)}
+            className={inputCls}
+          >
             <option value="true">Đã gồm VAT</option>
             <option value="false">Chưa gồm VAT</option>
           </select>
@@ -832,6 +1011,7 @@ function PoForm({
             name="terms"
             maxLength={1000}
             placeholder="Bảo hành 24 tháng…"
+            defaultValue={initial?.po.terms ?? ''}
             className={inputCls}
           />
         </label>
@@ -839,7 +1019,13 @@ function PoForm({
 
       <label className="flex flex-col gap-1 text-sm">
         Ghi chú
-        <textarea name="note" rows={2} maxLength={2000} className={inputCls} />
+        <textarea
+          name="note"
+          rows={2}
+          maxLength={2000}
+          defaultValue={initial?.po.note ?? ''}
+          className={inputCls}
+        />
       </label>
 
       <div className="flex justify-end">
@@ -848,16 +1034,68 @@ function PoForm({
           className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
         >
           {busy && <Spinner size={14} />}
-          {busy ? 'Đang tạo…' : 'Tạo đơn → gửi GĐ duyệt'}
+          {busy ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Tạo đơn → gửi GĐ duyệt'}
         </button>
       </div>
     </form>
   )
 }
 
+/**
+ * Gợi ý giá dưới ô Đơn giá (FR-SUP-06): giá chào NCC đang chọn (bấm để điền),
+ * rẻ nhất từ NCC khác, giá mua gần nhất. KHÔNG quy đổi khác tiền tệ.
+ */
+function PriceHint({
+  entry,
+  supplierId,
+  onApply,
+}: {
+  entry?: PriceCompareEntry
+  supplierId: string
+  onApply: (price: number) => void
+}) {
+  if (!entry || (entry.offers.length === 0 && !entry.last_purchase)) return null
+  const fmt = (p: number, c: string) => `${p.toLocaleString('vi-VN')} ${c}`
+  const offer = supplierId
+    ? entry.offers.find((o) => o.supplier_id === supplierId)
+    : undefined
+  const cheapest = entry.offers[0]
+  const allOffers = entry.offers
+    .map((o) => `${o.supplier_name}: ${fmt(o.price, o.currency)}`)
+    .join('\n')
+  return (
+    <div className="mt-0.5 flex flex-col text-[10px] leading-tight text-zinc-400">
+      {offer && (
+        <button
+          type="button"
+          onClick={() => onApply(offer.price)}
+          className="self-start text-sky-600 hover:underline dark:text-sky-400"
+          title={`Giá chào NCC đang chọn (hiệu lực ${new Date(offer.valid_from).toLocaleDateString('vi-VN')}) — bấm để điền.\n${allOffers}`}
+        >
+          BG: {fmt(offer.price, offer.currency)}
+        </button>
+      )}
+      {!offer && cheapest && (
+        <span title={allOffers}>
+          Chào rẻ nhất: {fmt(cheapest.price, cheapest.currency)} ({cheapest.supplier_name}
+          )
+        </span>
+      )}
+      {entry.last_purchase && (
+        <span
+          title={`PO ${entry.last_purchase.po_code} — ${entry.last_purchase.supplier_name}`}
+        >
+          Mua gần nhất:{' '}
+          {fmt(entry.last_purchase.unit_price, entry.last_purchase.currency)}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // ── Chi tiết PO ─────────────────────────────────────────────────────────────
 
-function PoDetail({
+export function PoDetail({
   po,
   lines,
   statusLines,
@@ -866,6 +1104,7 @@ function PoDetail({
   onDecide,
   onAdvance,
   onCancel,
+  onEdit,
 }: {
   po: Po
   lines: PoLine[]
@@ -875,6 +1114,8 @@ function PoDetail({
   onDecide: (d: 'approve' | 'reject') => void
   onAdvance: (to: 'ordered' | 'confirmed' | 'in_transit') => void
   onCancel: () => void
+  /** Mở form sửa (chỉ khi pending_approval) — không truyền = ẩn nút (màn GĐ read-only). */
+  onEdit?: () => void
 }) {
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   const total = lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0)
@@ -988,6 +1229,16 @@ function PoDetail({
       {po.terms && <p className="text-xs text-zinc-500">Điều kiện: {po.terms}</p>}
       {po.note && <p className="text-xs text-zinc-500">{po.note}</p>}
 
+      {/* Hồ sơ mua hàng (FR-SUP-07): báo giá NCC, hợp đồng, chứng từ giao nhận */}
+      <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+        <DocumentFiles
+          kind="purchase_order"
+          id={po.id}
+          canEdit={canEdit || canApprove}
+          title="Hồ sơ mua hàng (báo giá NCC, hợp đồng, chứng từ)"
+        />
+      </div>
+
       <div className="flex justify-end gap-2">
         <a
           href={`/print/supply/${po.id}`}
@@ -997,6 +1248,14 @@ function PoDetail({
         >
           🖨 In đơn đặt hàng
         </a>
+        {canEdit && onEdit && po.status === 'pending_approval' && (
+          <button
+            onClick={onEdit}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Sửa đơn
+          </button>
+        )}
         {canApprove && po.status === 'pending_approval' && (
           <>
             <button
@@ -1027,6 +1286,14 @@ function PoDetail({
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             NCC xác nhận
+          </button>
+        )}
+        {canEdit && ['ordered', 'confirmed'].includes(po.status) && (
+          <button
+            onClick={() => onAdvance('in_transit')}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Đang giao
           </button>
         )}
         {canEdit && !['received', 'cancelled'].includes(po.status) && (

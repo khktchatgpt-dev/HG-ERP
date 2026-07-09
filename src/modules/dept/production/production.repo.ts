@@ -30,7 +30,7 @@ export type ProgressEntry = {
   id: string
   production_order_id: string
   stage: string
-  action: 'start' | 'done'
+  action: 'start' | 'done' | 'received' // received = xưởng xác nhận nhận VT (G-3)
   note: string | null
   updated_by: string | null
   updated_by_name: string | null
@@ -174,7 +174,7 @@ export const productionRepo = {
   async insertProgress(row: {
     production_order_id: string
     stage: string
-    action: 'start' | 'done'
+    action: 'start' | 'done' | 'received'
     note?: string | null
     updated_by: string
   }): Promise<void> {

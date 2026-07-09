@@ -6,6 +6,7 @@ import {
 } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
@@ -19,9 +20,14 @@ async function canIssue(user: User): Promise<boolean> {
   return user.role === 'admin' || (await isSalesStaff(user))
 }
 
-/** Duyệt LSX + cập nhật tiến độ: Giám đốc/Ban quản lý. */
+/** Duyệt LSX: Giám đốc/Ban quản lý. */
 function canApprove(user: User): boolean {
   return user.role === 'admin' || user.role === 'manager'
+}
+
+/** Cập nhật tiến độ + báo hoàn thành: GĐ/BQL hoặc phòng KH-Cung ứng (FR-SUP-08). */
+async function canTrackProgress(user: User): Promise<boolean> {
+  return canApprove(user) || (await isSupplyStaff(user))
 }
 
 /** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
@@ -201,15 +207,17 @@ export const productionService = {
   },
 
   /**
-   * Cập nhật giai đoạn (FR-PROD-01): chỉ khi LSX đã duyệt. Lần đầu → in_progress +
-   * đơn in_production.
+   * Cập nhật giai đoạn (FR-PROD-01, FR-SUP-08): chỉ khi LSX đã duyệt. Lần đầu →
+   * in_progress + đơn in_production.
    */
   async updateStage(
     user: User,
     id: string,
     input: { stage: string; action: 'start' | 'done'; note?: string | null },
   ): Promise<ProductionOrder> {
-    if (!canApprove(user)) throw Forbidden()
+    if (!(await canTrackProgress(user))) {
+      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng cập nhật tiến độ')
+    }
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
@@ -233,9 +241,37 @@ export const productionService = {
     return productionRepo.patch(id, patch)
   },
 
+  /**
+   * Xác nhận đã nhận vật tư xuất kho theo LSX (FR-PROD-02, gap G-3) — CHỈ ghi
+   * log tiến độ (action 'received'), không đổi giai đoạn/trạng thái.
+   */
+  async confirmMaterialsReceived(
+    user: User,
+    id: string,
+    note?: string | null,
+  ): Promise<void> {
+    if (!(await canTrackProgress(user))) {
+      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng xác nhận nhận vật tư')
+    }
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+      throw BadRequest('LSX chưa được duyệt')
+    }
+    await productionRepo.insertProgress({
+      production_order_id: id,
+      stage: lsx.current_stage ?? 'vat_tu',
+      action: 'received',
+      note: note ?? null,
+      updated_by: user.id,
+    })
+  },
+
   /** Báo hoàn thành để chuyển giao hàng (FR-PROD-03). */
   async complete(user: User, id: string, note?: string | null): Promise<ProductionOrder> {
-    if (!canApprove(user)) throw Forbidden()
+    if (!(await canTrackProgress(user))) {
+      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng báo hoàn thành')
+    }
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'completed') return lsx as ProductionOrder

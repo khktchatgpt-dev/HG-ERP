@@ -12,6 +12,7 @@ export const PARENT_KINDS = [
   'quote',
   'sales_order',
   'production_order',
+  'purchase_order', // hồ sơ mua hàng gắn PO (FR-SUP-07)
   'none',
 ] as const
 export type FileParentKind = (typeof PARENT_KINDS)[number]
@@ -55,6 +56,7 @@ export const initUploadSchema = z.object({
     z.object({ kind: z.literal('quote'), id: z.uuid() }),
     z.object({ kind: z.literal('sales_order'), id: z.uuid() }),
     z.object({ kind: z.literal('production_order'), id: z.uuid() }),
+    z.object({ kind: z.literal('purchase_order'), id: z.uuid() }),
     z.object({ kind: z.literal('none') }),
   ]),
 })

@@ -7,6 +7,7 @@ import {
   listLsxPrintLines,
 } from '@/modules/dept/production/production.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { HttpError } from '@/server/http'
 import { LsxDetailView } from '@/components/production/LsxDetailView'
 
@@ -51,6 +52,8 @@ export default async function LsxDetailPage({
     ? await departmentsRepo.findById(user.department_id)
     : null
   const canApprove = user.role === 'admin' || user.role === 'manager'
+  // Tiến độ + hoàn thành: GĐ/QL hoặc phòng Kế hoạch - Cung ứng (FR-SUP-08).
+  const canManage = canApprove || (await isSupplyStaff(user))
   const canEditSpec = user.role === 'admin' || dept?.name === 'Bán Hàng'
 
   return (
@@ -97,6 +100,7 @@ export default async function LsxDetailPage({
       }))}
       stages={stages}
       canApprove={canApprove}
+      canManage={canManage}
       canEditSpec={canEditSpec}
     />
   )

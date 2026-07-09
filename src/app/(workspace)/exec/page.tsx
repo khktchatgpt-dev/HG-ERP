@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionService } from '@/modules/dept/production/production.service'
 import { ApprovalsManager } from './ApprovalsManager'
 
@@ -19,6 +20,19 @@ export default async function ExecApprovalsPage() {
     }),
   ])
 
+  // GĐ cần thấy giá trị cam kết trước khi duyệt — tính tổng tiền từng PO từ lines.
+  const totals = await Promise.all(
+    pendingPos.map(async (p) => {
+      const lines = await posRepo.listLines(p.id)
+      return {
+        id: p.id,
+        total: lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0),
+        lines_count: lines.length,
+      }
+    }),
+  )
+  const totalById = new Map(totals.map((t) => [t.id, t]))
+
   return (
     <ApprovalsManager
       pos={pendingPos.map((p) => ({
@@ -29,6 +43,9 @@ export default async function ExecApprovalsPage() {
         order_code: p.order_code,
         expected_at: p.expected_at,
         created_at: p.created_at,
+        currency: p.currency,
+        total: totalById.get(p.id)?.total ?? 0,
+        lines_count: totalById.get(p.id)?.lines_count ?? 0,
       }))}
       lsxs={pendingLsx.map((l) => ({
         id: l.id,

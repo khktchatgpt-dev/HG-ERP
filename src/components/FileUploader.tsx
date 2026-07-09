@@ -13,6 +13,7 @@ type Parent =
   | { kind: 'quote'; id: string }
   | { kind: 'sales_order'; id: string }
   | { kind: 'production_order'; id: string }
+  | { kind: 'purchase_order'; id: string } // hồ sơ mua hàng (FR-SUP-07)
   | { kind: 'none' }
 
 type Bucket = 'private' | 'attachments' | 'public'

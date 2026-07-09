@@ -34,10 +34,13 @@ export function AuditHistoryPanel({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // loading khởi tạo true; panel remount theo từng user (modal) nên không cần
+  // set lại trong effect — tránh setState đồng bộ trong effect.
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    api<{ entries: AuditEntry[] }>(`/api/users/audit?target_user_id=${targetUserId}&limit=100`)
+    api<{ entries: AuditEntry[] }>(
+      `/api/users/audit?target_user_id=${targetUserId}&limit=100`,
+    )
       .then((res) => {
         if (alive) setEntries(res.entries)
       })
@@ -76,7 +79,7 @@ export function AuditHistoryPanel({
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {entries.map((e) => (
                 <tr key={e.id}>
-                  <td className="whitespace-nowrap px-2 py-1 text-zinc-500">
+                  <td className="px-2 py-1 whitespace-nowrap text-zinc-500">
                     {new Date(e.created_at).toLocaleString('vi-VN')}
                   </td>
                   <td className="px-2 py-1 font-medium">

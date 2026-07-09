@@ -145,6 +145,28 @@ export function OrderDetailView({
     }
   }
 
+  async function deliverOrder() {
+    const ok = await confirm({
+      title: `Xác nhận đã giao đơn ${order.code}?`,
+      description: 'Đơn chuyển sang "Đã giao" và không sửa được nữa.',
+      confirmLabel: 'Đã giao hàng',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/sales/orders/${order.id}/deliver`, {
+        method: 'POST',
+        body: {},
+      })
+      toast.success('Đơn đã giao — chuỗi hoàn tất', order.code)
+      router.refresh()
+    } catch (e) {
+      toast.error('Xác nhận giao thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function cancelOrder() {
     const reason = window.prompt(`Lý do huỷ đơn ${order.code}:`)?.trim()
     if (!reason) return
@@ -463,7 +485,15 @@ export function OrderDetailView({
       </Card>
 
       {canEdit && editable && (
-        <div className="flex justify-end pb-6">
+        <div className="flex justify-end gap-2 pb-6">
+          {order.status === 'completed' && (
+            <button
+              onClick={() => void deliverOrder()}
+              className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
+            >
+              ✓ Xác nhận đã giao
+            </button>
+          )}
           <button
             onClick={() => void cancelOrder()}
             className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"

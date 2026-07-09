@@ -22,6 +22,14 @@ describe('initUploadSchema', () => {
     expect(parsed.parent.kind).toBe('task')
   })
 
+  it('parse OK với parent kind=purchase_order (hồ sơ mua hàng — FR-SUP-07)', () => {
+    const parsed = initUploadSchema.parse({
+      ...validBase,
+      parent: { kind: 'purchase_order', id: '11111111-1111-4111-8111-111111111111' },
+    })
+    expect(parsed.parent.kind).toBe('purchase_order')
+  })
+
   it('reject file quá lớn', () => {
     expect(() =>
       initUploadSchema.parse({

@@ -248,3 +248,57 @@ describe('ordersService.cancel', () => {
     })
   })
 })
+
+describe('ordersService.deliver — khép chuỗi (completed → delivered)', () => {
+  it('đơn hoàn thành → delivered + ghi lịch sử', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      status: 'completed',
+    } as never)
+    vi.mocked(ordersRepo.patch).mockResolvedValue({
+      ...ORDER,
+      status: 'delivered',
+    } as never)
+
+    const out = await ordersService.deliver(sales, 'o1')
+
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'delivered' })
+    const change = vi.mocked(ordersRepo.insertChange).mock.calls[0][0]
+    expect(change.change).toMatchObject({ type: 'delivered' })
+    expect(out.status).toBe('delivered')
+  })
+
+  it.each(['confirmed', 'lsx_pending', 'lsx_issued', 'in_production'] as const)(
+    'đơn %s (chưa hoàn thành SX) → 400',
+    async (st) => {
+      vi.mocked(ordersRepo.findById).mockResolvedValue({ ...ORDER, status: st } as never)
+      await expect(ordersService.deliver(sales, 'o1')).rejects.toMatchObject({
+        status: 400,
+      })
+      expect(ordersRepo.patch).not.toHaveBeenCalled()
+    },
+  )
+
+  it('NV ngoài Sales (không phải GĐ/QL) → 403', async () => {
+    vi.mocked(isSalesStaff).mockResolvedValue(false)
+    const outsider = { id: 'u-x', role: 'employee' } as never
+    await expect(ordersService.deliver(outsider, 'o1')).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+
+  it('GĐ/Ban quản lý xác nhận giao được dù không thuộc Sales', async () => {
+    vi.mocked(isSalesStaff).mockResolvedValue(false)
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      status: 'completed',
+    } as never)
+    vi.mocked(ordersRepo.patch).mockResolvedValue({
+      ...ORDER,
+      status: 'delivered',
+    } as never)
+    const manager = { id: 'u-gd', role: 'manager' } as never
+    const out = await ordersService.deliver(manager, 'o1')
+    expect(out.status).toBe('delivered')
+  })
+})

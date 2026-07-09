@@ -201,9 +201,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'violet',
     logoText: 'KH',
     ready: true,
+    // 2 cụm việc của phòng (1 phòng ban, chưa tách quyền — xem docs/plan-supply.md):
+    // Thu mua (PO/NCC) và Kế hoạch SX (tiến độ LSX, theo dõi đơn, phiếu kho).
     sections: [
       {
-        heading: 'Cung ứng',
+        heading: 'Thu mua',
         items: [
           { href: '/planning', label: 'Trang chủ', icon: '◧' },
           { href: '/planning/pos', label: 'Đơn đặt vật tư', icon: '▩' },
@@ -211,8 +213,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       {
-        heading: 'Theo dõi',
+        heading: 'Kế hoạch sản xuất',
         items: [
+          { href: '/planning/production', label: 'Tiến độ sản xuất', icon: '▣' },
           { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
           { href: '/warehouse/docs', label: 'Phiếu kho', icon: '▥' },
         ],

@@ -104,3 +104,7 @@ export const orderListQuerySchema = z.object({
 export const orderCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
 })
+
+export const orderDeliverSchema = z.object({
+  note: z.string().trim().max(1000).optional().nullable(),
+})

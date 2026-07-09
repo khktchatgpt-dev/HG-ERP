@@ -5,11 +5,18 @@ import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
+import { Modal } from '@/components/Modal'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { TopProgressBar } from '@/components/erp/Spinner'
+import {
+  PoDetail,
+  type Po,
+  type PoLine,
+  type StatusLine,
+} from '@/app/(workspace)/planning/pos/PosManager'
 
 type PendingPo = {
   id: string
@@ -19,6 +26,9 @@ type PendingPo = {
   order_code: string | null
   expected_at: string | null
   created_at: string
+  currency: string
+  total: number
+  lines_count: number
 }
 type PendingLsx = {
   id: string
@@ -39,6 +49,30 @@ export function ApprovalsManager({
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
+  // Xem chi tiết PO (dòng, tổng tiền, hồ sơ file) trước khi duyệt — read-only.
+  const [viewing, setViewing] = useState<{
+    po: Po
+    lines: PoLine[]
+    statusLines: StatusLine[]
+  } | null>(null)
+
+  async function openPo(p: PendingPo) {
+    setBusy(true)
+    try {
+      const data = await api<{ po: Po; lines: PoLine[]; status_lines: StatusLine[] }>(
+        `/api/dept/supply/pos/${p.id}`,
+      )
+      setViewing({
+        po: { ...data.po, supplier_name: p.supplier_name, lsx_code: p.lsx_code },
+        lines: data.lines,
+        statusLines: data.status_lines,
+      })
+    } catch (e) {
+      toast.error('Không tải được đơn đặt', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function decideLsx(l: PendingLsx, decision: 'approve' | 'reject') {
     let reason: string | undefined
@@ -88,6 +122,7 @@ export function ApprovalsManager({
         body: { decision, reason },
       })
       toast.success(decision === 'approve' ? 'Đã duyệt' : 'Đã từ chối', p.code)
+      setViewing(null)
       router.refresh()
     } catch (e) {
       toast.error('Thao tác thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
@@ -102,10 +137,14 @@ export function ApprovalsManager({
       header: 'Đơn đặt / NCC',
       sortValue: (p) => p.code,
       cell: (p) => (
-        <div className="flex min-w-0 flex-col">
+        <button
+          onClick={() => void openPo(p)}
+          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
+          title="Xem chi tiết dòng, tổng tiền, hồ sơ trước khi duyệt"
+        >
           <span className="font-mono text-xs text-zinc-400">{p.code}</span>
           <span className="truncate font-medium">{p.supplier_name}</span>
-        </div>
+        </button>
       ),
     },
     {
@@ -116,6 +155,21 @@ export function ApprovalsManager({
         <div className="flex flex-col text-xs">
           <span className="font-mono">{p.lsx_code}</span>
           {p.order_code && <span className="text-zinc-400">{p.order_code}</span>}
+        </div>
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Giá trị',
+      width: '140px',
+      align: 'right',
+      sortValue: (p) => p.total,
+      cell: (p) => (
+        <div className="flex flex-col items-end">
+          <span className="font-semibold">
+            {p.total.toLocaleString('vi-VN')} {p.currency}
+          </span>
+          <span className="text-xs text-zinc-400">{p.lines_count} dòng</span>
         </div>
       ),
     },
@@ -278,6 +332,37 @@ export function ApprovalsManager({
           }
         />
       </section>
+
+      {/* Chi tiết PO trước khi duyệt — read-only + nút Duyệt/Từ chối */}
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `${viewing.po.code} — ${viewing.po.supplier_name}` : ''}
+        maxWidth="sm:max-w-4xl"
+      >
+        {viewing && (
+          <PoDetail
+            po={viewing.po}
+            lines={viewing.lines}
+            statusLines={viewing.statusLines}
+            canEdit={false}
+            canApprove
+            onDecide={(d) =>
+              void decidePo(
+                {
+                  id: viewing.po.id,
+                  code: viewing.po.code,
+                  supplier_name: viewing.po.supplier_name,
+                  lsx_code: viewing.po.lsx_code,
+                } as PendingPo,
+                d,
+              )
+            }
+            onAdvance={() => {}}
+            onCancel={() => {}}
+          />
+        )}
+      </Modal>
     </div>
   )
 }

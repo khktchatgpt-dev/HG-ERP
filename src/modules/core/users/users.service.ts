@@ -36,7 +36,7 @@ export type BulkImportResult = {
 function diffPatch<T extends object>(before: T, patch: Partial<T>): Partial<T> {
   const out: Partial<T> = {}
   for (const k of Object.keys(patch) as (keyof T)[]) {
-    if ((before as any)[k] !== (patch as any)[k]) (out as any)[k] = (patch as any)[k]
+    if (before[k] !== patch[k]) out[k] = patch[k]
   }
   return out
 }
@@ -76,12 +76,13 @@ export const usersService = {
     assertCan(actor, 'user.manage')
     const before = await usersRepo.findById(id)
     if (!before) throw NotFound('User not found')
-    if (before.deleted_at) throw BadRequest('Cannot update a deleted user — restore first')
+    if (before.deleted_at)
+      throw BadRequest('Cannot update a deleted user — restore first')
     // Cannot demote/lock self via API — matches UI guard.
     if (actor.id === id && (patch.role !== undefined || patch.is_active !== undefined)) {
       throw Forbidden('Cannot change your own role or active state')
     }
-    const changed = diffPatch(before as any, patch as any)
+    const changed = diffPatch<User>(before, patch)
     const user = await usersRepo.update(id, patch)
     if (Object.keys(changed).length > 0) {
       await userAuditRepo.insert({
@@ -90,7 +91,7 @@ export const usersService = {
         action: 'update',
         before: changed,
         after: Object.fromEntries(
-          Object.keys(changed).map((k) => [k, (user as any)[k]]),
+          (Object.keys(changed) as (keyof User)[]).map((k) => [k, user[k]]),
         ),
       })
     }
