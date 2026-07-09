@@ -3,6 +3,8 @@ import { ACCENT_CLASSES, WORKSPACES } from '@/workspaces/workspaces.config'
 import { salesService } from '@/modules/dept/sales/sales.service'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { assessLateRisk } from '@/lib/late-risk'
 
 const workspace = WORKSPACES.sales
 
@@ -10,18 +12,23 @@ export default async function SalesHomePage() {
   const user = (await authService.currentUser())!
   const accent = ACCENT_CLASSES[workspace.accent]
 
-  const [{ total: customerCount }, draftQuotes, openOrders] = await Promise.all([
-    salesService.list(user, { page: 1, page_size: 1, active_only: true }),
-    quotesService.list(user, { status: 'draft', page: 1, page_size: 1 }),
-    ordersService.list(user, { status: 'in_production', page: 1, page_size: 1 }),
-  ])
+  const [{ total: customerCount }, draftQuotes, openOrders, tracking] = await Promise.all(
+    [
+      salesService.list(user, { page: 1, page_size: 1, active_only: true }),
+      quotesService.list(user, { status: 'draft', page: 1, page_size: 1 }),
+      ordersService.list(user, { status: 'in_production', page: 1, page_size: 1 }),
+      productionRepo.listTracking(),
+    ],
+  )
+  const today = new Date().toISOString().slice(0, 10)
+  const lateRisk = tracking.filter((r) => assessLateRisk(r, today)).length
 
   return (
     <>
       <h1 className="mb-4 text-lg font-semibold">
         Trang chủ Sales — chào {user.name ?? user.email}
       </h1>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Widget
           label="Khách hàng đang active"
           value={customerCount.toString()}
@@ -39,6 +46,12 @@ export default async function SalesHomePage() {
           value={openOrders.total.toString()}
           hint="Xem chi tiết ở Theo dõi đơn"
           accentBg={accent.bg}
+        />
+        <Widget
+          label="Đơn nguy cơ trễ"
+          value={lateRisk.toString()}
+          hint="Sát/quá hạn giao — lọc ⚠ ở Theo dõi đơn"
+          accentBg={lateRisk > 0 ? 'bg-red-500' : accent.bg}
         />
       </div>
 

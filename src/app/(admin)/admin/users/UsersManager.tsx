@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Avatar } from '@/components/Avatar'
 import { Badge } from '@/components/Badge'
@@ -70,11 +70,14 @@ export function UsersManager({
   const [openImport, setOpenImport] = useState(false)
   const [selected, setSelected] = useState<U[]>([])
 
-  // Auto-open modal khi URL có query (từ Command palette hoặc link ngoài)
-  useEffect(() => {
+  // Auto-open modal khi URL có query (từ Command palette hoặc link ngoài) —
+  // adjust-during-render theo sp thay vì setState trong effect.
+  const [prevSp, setPrevSp] = useState<typeof sp | null>(null)
+  if (sp !== prevSp) {
+    setPrevSp(sp)
     if (sp.get('new') === '1') setOpenCreate(true)
     if (sp.get('import') === '1') setOpenImport(true)
-  }, [sp])
+  }
 
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
@@ -164,7 +167,9 @@ export function UsersManager({
   // ── Bulk actions ─────────────────────────────────────────────────────────
 
   async function bulkLock() {
-    const targets = selected.filter((u) => u.id !== currentUserId && u.is_active && !u.deleted_at)
+    const targets = selected.filter(
+      (u) => u.id !== currentUserId && u.is_active && !u.deleted_at,
+    )
     if (targets.length === 0) return toast.error('Không có tài khoản nào để khoá')
     const ok = await confirm({
       title: `Khoá ${targets.length} tài khoản?`,
@@ -203,7 +208,10 @@ export function UsersManager({
       setSelected([])
       router.refresh()
     } catch (e) {
-      toast.error('Mở khoá hàng loạt thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+      toast.error(
+        'Mở khoá hàng loạt thất bại',
+        e instanceof ApiError ? e.message : 'Có lỗi',
+      )
     } finally {
       setBusy(false)
     }
@@ -221,7 +229,9 @@ export function UsersManager({
     if (!ok) return
     setBusy(true)
     try {
-      await Promise.all(targets.map((u) => api(`/api/users/${u.id}`, { method: 'DELETE' })))
+      await Promise.all(
+        targets.map((u) => api(`/api/users/${u.id}`, { method: 'DELETE' })),
+      )
       toast.success(`Đã xoá ${targets.length} tài khoản`)
       setSelected([])
       router.refresh()
@@ -237,7 +247,11 @@ export function UsersManager({
       { key: 'email', header: 'Email' },
       { key: 'name', header: 'Họ tên' },
       { key: 'role', header: 'Vai trò', get: (u) => ROLE_LABEL[u.role] },
-      { key: 'department_id', header: 'Phòng ban', get: (u) => deptName(u.department_id) },
+      {
+        key: 'department_id',
+        header: 'Phòng ban',
+        get: (u) => deptName(u.department_id),
+      },
       { key: 'title', header: 'Chức danh' },
       {
         key: 'is_active',
@@ -263,9 +277,7 @@ export function UsersManager({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1 truncate font-medium">
                 <span className="truncate">{u.name ?? '—'}</span>
-                {self && (
-                  <span className="shrink-0 text-xs text-zinc-400">(bạn)</span>
-                )}
+                {self && <span className="shrink-0 text-xs text-zinc-400">(bạn)</span>}
               </div>
               <div className="truncate text-xs text-zinc-500">
                 {u.email}
@@ -317,9 +329,7 @@ export function UsersManager({
           <select
             value={u.department_id ?? ''}
             disabled={busy || deleted}
-            onChange={(e) =>
-              patch(u.id, { department_id: e.target.value || null })
-            }
+            onChange={(e) => patch(u.id, { department_id: e.target.value || null })}
             className="w-full truncate rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
           >
             <option value="">— Chưa gán —</option>
@@ -421,10 +431,7 @@ export function UsersManager({
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Quản trị', href: '/admin' },
-          { label: 'Người dùng' },
-        ]}
+        breadcrumbs={[{ label: 'Quản trị', href: '/admin' }, { label: 'Người dùng' }]}
         title="Người dùng"
         description={`Quản lý tài khoản, vai trò và phòng ban. ${filtered.length} / ${users.length} hiển thị.`}
         actions={
@@ -448,7 +455,11 @@ export function UsersManager({
           { label: 'Quản trị', value: stats.byRole.admin, tone: 'purple' },
           { label: 'Quản lý', value: stats.byRole.manager, tone: 'blue' },
           { label: 'Nhân viên', value: stats.byRole.employee, tone: 'gray' },
-          { label: 'Đã khoá', value: stats.inactive, tone: stats.inactive ? 'amber' : 'gray' },
+          {
+            label: 'Đã khoá',
+            value: stats.inactive,
+            tone: stats.inactive ? 'amber' : 'gray',
+          },
           { label: 'Đã xoá', value: stats.deleted, tone: stats.deleted ? 'red' : 'gray' },
         ]}
       />
@@ -479,7 +490,10 @@ export function UsersManager({
                 onChange={(v) => setStatusFilter(v)}
                 options={statusOptions}
               />
-              {(q || roleFilter !== 'all' || deptFilter !== 'all' || statusFilter !== 'all') && (
+              {(q ||
+                roleFilter !== 'all' ||
+                deptFilter !== 'all' ||
+                statusFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setQ('')
@@ -545,7 +559,11 @@ export function UsersManager({
       </div>
 
       {/* Modals */}
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tạo tài khoản mới">
+      <Modal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        title="Tạo tài khoản mới"
+      >
         <UserForm
           mode="create"
           departments={departments}
@@ -585,7 +603,11 @@ export function UsersManager({
         )}
       </Modal>
 
-      <Modal open={!!resetting} onClose={() => setResetting(null)} title="Đặt lại mật khẩu">
+      <Modal
+        open={!!resetting}
+        onClose={() => setResetting(null)}
+        title="Đặt lại mật khẩu"
+      >
         {resetting && (
           <ResetPasswordForm
             userId={resetting.id}
@@ -599,7 +621,11 @@ export function UsersManager({
         )}
       </Modal>
 
-      <Modal open={openImport} onClose={() => setOpenImport(false)} title="Import từ Excel/CSV">
+      <Modal
+        open={openImport}
+        onClose={() => setOpenImport(false)}
+        title="Import từ Excel/CSV"
+      >
         <BulkImportWizard
           departments={departments}
           onClose={() => setOpenImport(false)}

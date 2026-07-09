@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { db } from '@/server/db'
 import {
@@ -50,6 +51,8 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { sales_order_id: input.parent.id }
     case 'production_order':
       return { production_order_id: input.parent.id }
+    case 'purchase_order':
+      return { purchase_order_id: input.parent.id }
     case 'none':
       return {}
   }
@@ -71,6 +74,13 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     if (!data) throw NotFound('Comment not found')
     if (data.user_id !== user.id && user.role !== 'admin')
       throw Forbidden('Not the comment author')
+    return
+  }
+  if (input.parent.kind === 'purchase_order') {
+    // Hồ sơ mua hàng (FR-SUP-07): phòng KH-Cung ứng hoặc GĐ/Ban quản lý đính.
+    const ok =
+      user.role === 'admin' || user.role === 'manager' || (await isSupplyStaff(user))
+    if (!ok) throw Forbidden('Chỉ Kế hoạch - Cung ứng hoặc GĐ/QL đính hồ sơ mua hàng')
     return
   }
   // customer/invoice/product/none: any signed-in user can attach files for now.

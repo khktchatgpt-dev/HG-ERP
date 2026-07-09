@@ -56,12 +56,14 @@ export function DataTable<T>({
   const [pageSize, setPageSize] = useState(initialPageSize)
   const [page, setPage] = useState(0)
 
-  // Load persisted page size
+  // Load persisted page size — phải sync sau hydration: lazy init đọc
+  // localStorage lúc render sẽ lệch với HTML server (hydration mismatch).
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return
     const saved = localStorage.getItem(`dt-${storageKey}-size`)
     if (saved) {
       const n = Number(saved)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync 1 lần từ localStorage sau hydration
       if (pageSizeOptions.includes(n as never)) setPageSize(n)
     }
   }, [storageKey, pageSizeOptions])
@@ -88,10 +90,12 @@ export function DataTable<T>({
     })
   }, [rows, columns, sortKey, sortDir])
 
-  // Reset page khi rows đổi (filter apply)
-  useEffect(() => {
+  // Reset page khi rows đổi (filter apply) — adjust-during-render thay vì effect
+  const [prevRowCount, setPrevRowCount] = useState(rows.length)
+  if (rows.length !== prevRowCount) {
+    setPrevRowCount(rows.length)
     setPage(0)
-  }, [rows.length])
+  }
 
   const total = sorted.length
   const totalPages = pagination ? Math.max(1, Math.ceil(total / pageSize)) : 1
@@ -132,7 +136,7 @@ export function DataTable<T>({
               <col key={c.key} style={c.width ? { width: c.width } : undefined} />
             ))}
           </colgroup>
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase tracking-wider text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wider text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
             <tr>
               {selection && (
                 <th className={headPad}>
@@ -216,9 +220,7 @@ export function DataTable<T>({
                             const rest = selection.selected.filter(
                               (r) => (selection.keyFn?.(r) ?? keyFn(r)) !== key,
                             )
-                            selection.onChange(
-                              e.target.checked ? [...rest, row] : rest,
-                            )
+                            selection.onChange(e.target.checked ? [...rest, row] : rest)
                           }}
                           className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
                         />
@@ -238,9 +240,7 @@ export function DataTable<T>({
                         >
                           {c.cell
                             ? c.cell(row, idx)
-                            : String(
-                                (row as Record<string, unknown>)[c.key] ?? '',
-                              )}
+                            : String((row as Record<string, unknown>)[c.key] ?? '')}
                         </td>
                       )
                     })}

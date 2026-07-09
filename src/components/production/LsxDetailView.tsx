@@ -43,7 +43,7 @@ type Line = {
 type Progress = {
   id: string
   stage: string
-  action: 'start' | 'done'
+  action: 'start' | 'done' | 'received' // received = xác nhận đã nhận vật tư (G-3)
   note: string | null
   by: string | null
   at: string
@@ -58,6 +58,7 @@ export function LsxDetailView({
   progress,
   stages,
   canApprove,
+  canManage,
   canEditSpec,
 }: {
   lsx: {
@@ -81,6 +82,8 @@ export function LsxDetailView({
   progress: Progress[]
   stages: Stage[]
   canApprove: boolean
+  /** Cập nhật giai đoạn + hoàn thành: GĐ/QL hoặc Kế hoạch - Cung ứng (FR-SUP-08). */
+  canManage: boolean
   canEditSpec: boolean
 }) {
   const router = useRouter()
@@ -93,7 +96,6 @@ export function LsxDetailView({
   const st = ST[lsx.status]
   const stageLabel = (code: string | null) =>
     code ? (stages.find((s) => s.code === code)?.label ?? code) : '—'
-  const canManage = canApprove // GĐ/QL cập nhật giai đoạn + hoàn thành
   const activeStage = lsx.status === 'approved' || lsx.status === 'in_progress'
 
   async function call(url: string, body?: unknown, ok = 'Đã cập nhật') {
@@ -138,6 +140,16 @@ export function LsxDetailView({
     })
     if (ok)
       await call(`/api/dept/production/lsx/${lsx.id}/complete`, {}, 'LSX hoàn thành')
+  }
+  async function materialsReceived() {
+    // prompt Cancel → null (bỏ); OK để trống → xác nhận không ghi chú.
+    const note = window.prompt('Ghi chú nhận vật tư (tuỳ chọn — VD: đủ theo PXK-…):')
+    if (note === null) return
+    await call(
+      `/api/dept/production/lsx/${lsx.id}/materials-received`,
+      { note: note.trim() || null },
+      'Đã xác nhận nhận vật tư',
+    )
   }
 
   async function saveSpecs() {
@@ -367,6 +379,14 @@ export function LsxDetailView({
               </button>
               <button
                 disabled={busy}
+                onClick={() => void materialsReceived()}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                title="Xác nhận xưởng đã nhận vật tư xuất theo LSX (chỉ ghi log)"
+              >
+                Đã nhận vật tư
+              </button>
+              <button
+                disabled={busy}
                 onClick={() => void complete()}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
               >
@@ -386,8 +406,15 @@ export function LsxDetailView({
                   <span className="text-zinc-500">
                     {new Date(p.at).toLocaleString('vi-VN')} — {p.by ?? 'Hệ thống'}:
                   </span>{' '}
-                  <b>{stageLabel(p.stage)}</b> ({p.action === 'done' ? 'xong' : 'bắt đầu'}
-                  ){p.note && <span className="italic"> · {p.note}</span>}
+                  {p.action === 'received' ? (
+                    <b>Đã nhận vật tư</b>
+                  ) : (
+                    <>
+                      <b>{stageLabel(p.stage)}</b> (
+                      {p.action === 'done' ? 'xong' : 'bắt đầu'})
+                    </>
+                  )}
+                  {p.note && <span className="italic"> · {p.note}</span>}
                 </li>
               ))}
             </ul>

@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { FileUploader } from '@/components/FileUploader'
 
-/** File gốc đính theo chứng từ Sales/SX (báo giá / đơn hàng / LSX). */
+/** File gốc đính theo chứng từ Sales/SX/Cung ứng (báo giá / đơn hàng / LSX / PO). */
 type DocFile = {
   id: string
   filename: string
@@ -15,12 +15,13 @@ type DocFile = {
   created_at: string
 }
 
-type Kind = 'quote' | 'sales_order' | 'production_order'
+type Kind = 'quote' | 'sales_order' | 'production_order' | 'purchase_order'
 
 const QUERY_PARAM: Record<Kind, string> = {
   quote: 'quote_id',
   sales_order: 'sales_order_id',
   production_order: 'production_order_id',
+  purchase_order: 'purchase_order_id',
 }
 
 function fmtSize(bytes: number): string {

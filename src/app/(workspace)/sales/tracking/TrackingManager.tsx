@@ -6,6 +6,7 @@ import { Badge } from '@/components/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
+import { assessLateRisk } from '@/lib/late-risk'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -76,17 +77,21 @@ export function TrackingManager({
   }, [stages])
 
   const today = new Date().toISOString().slice(0, 10)
-  const isLate = (r: Row) =>
-    !!r.due_date &&
-    r.due_date < today &&
-    r.status !== 'delivered' &&
-    r.status !== 'cancelled'
+  // FR-SAL-09: nguy cơ trễ = sát/quá hạn giao + lý do (BOM, vật tư, LSX chưa chạy).
+  const riskOf = (r: Row) => assessLateRisk(r, today)
+  const isLate = (r: Row) => riskOf(r)?.level === 'overdue'
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return rows.filter((r) => {
       if (statusFilter === 'late' && !isLate(r)) return false
-      if (statusFilter !== 'all' && statusFilter !== 'late' && r.status !== statusFilter)
+      if (statusFilter === 'risk' && !riskOf(r)) return false
+      if (
+        statusFilter !== 'all' &&
+        statusFilter !== 'late' &&
+        statusFilter !== 'risk' &&
+        r.status !== statusFilter
+      )
         return false
       if (
         ql &&
@@ -104,14 +109,17 @@ export function TrackingManager({
     let bomPending = 0
     let posOpen = 0
     let late = 0
+    let risk = 0
     let inProd = 0
     for (const r of rows) {
       if (r.lines_bom_pending > 0 && r.status !== 'cancelled') bomPending++
       if (r.pos_open > 0) posOpen++
-      if (isLate(r)) late++
+      const rk = riskOf(r)
+      if (rk?.level === 'overdue') late++
+      else if (rk) risk++
       if (r.status === 'in_production') inProd++
     }
-    return { bomPending, posOpen, late, inProd }
+    return { bomPending, posOpen, late, risk, inProd }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
@@ -252,9 +260,18 @@ export function TrackingManager({
       cell: (r) => (
         <div className="flex flex-col text-xs">
           {r.due_date && (
-            <span className={isLate(r) ? 'font-medium text-red-600' : ''}>
+            <span
+              className={
+                riskOf(r)
+                  ? riskOf(r)!.level === 'overdue'
+                    ? 'font-medium text-red-600'
+                    : 'font-medium text-amber-600'
+                  : ''
+              }
+              title={riskOf(r)?.reasons.join(' · ') || undefined}
+            >
               Hạn: {new Date(r.due_date).toLocaleDateString('vi-VN')}
-              {isLate(r) && ' ⚠'}
+              {riskOf(r) && ' ⚠'}
             </span>
           )}
           {r.ship_date && (
@@ -309,6 +326,11 @@ export function TrackingManager({
             value: stats.posOpen,
             tone: stats.posOpen ? 'amber' : 'gray',
           },
+          {
+            label: 'Nguy cơ trễ',
+            value: stats.risk,
+            tone: stats.risk ? 'amber' : 'gray',
+          },
           { label: 'Trễ hạn', value: stats.late, tone: stats.late ? 'red' : 'gray' },
         ]}
       />
@@ -329,6 +351,7 @@ export function TrackingManager({
                 onChange={setStatusFilter}
                 options={[
                   { value: 'all', label: 'Tất cả' },
+                  { value: 'risk', label: '⚠ Nguy cơ trễ' },
                   { value: 'late', label: '⚠ Trễ hạn' },
                   ...Object.entries(STATUS_LABEL).map(([v, l]) => ({
                     value: v,

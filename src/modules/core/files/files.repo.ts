@@ -18,6 +18,7 @@ export type FileRow = {
   quote_id: string | null
   sales_order_id: string | null
   production_order_id: string | null
+  purchase_order_id: string | null
   created_at: string
   finalized_at: string | null
   deleted_at: string | null
@@ -32,11 +33,16 @@ export type FileParentColumns = {
   quote_id?: string | null
   sales_order_id?: string | null
   production_order_id?: string | null
+  purchase_order_id?: string | null
 }
 
 /** Cột parent cho phép list file gốc chứng từ (0016/0030). */
 export type FileParentColumn =
-  'product_id' | 'quote_id' | 'sales_order_id' | 'production_order_id'
+  | 'product_id'
+  | 'quote_id'
+  | 'sales_order_id'
+  | 'production_order_id'
+  | 'purchase_order_id'
 
 export const filesRepo = {
   async insert(row: {

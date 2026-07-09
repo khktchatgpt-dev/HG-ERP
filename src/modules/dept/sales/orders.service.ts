@@ -249,6 +249,33 @@ export const ordersService = {
     return order
   },
 
+  /**
+   * Xác nhận đã giao hàng — bước cuối khép chuỗi (completed → delivered).
+   * Sales hoặc GĐ/Ban quản lý; đơn delivered thành bất biến (assertEditable).
+   */
+  async deliver(user: User, id: string, note?: string | null): Promise<Order> {
+    const allowed =
+      user.role === 'admin' || user.role === 'manager' || (await isSalesStaff(user))
+    if (!allowed) throw Forbidden('Chỉ Kinh doanh hoặc GĐ/Ban quản lý xác nhận giao hàng')
+    const before = await ordersRepo.findById(id)
+    if (!before) throw NotFound('Đơn hàng không tồn tại')
+    if (before.status !== 'completed') {
+      throw BadRequest('Chỉ xác nhận giao cho đơn đã hoàn thành sản xuất')
+    }
+
+    const order = await ordersRepo.patch(id, { status: 'delivered' })
+    await ordersRepo.insertChange({
+      order_id: id,
+      changed_by: user.id,
+      change: {
+        type: 'delivered',
+        fields: { status: { from: 'completed', to: 'delivered' } },
+      },
+      note: note ?? null,
+    })
+    return order
+  },
+
   /** Đơn của 1 khách (tab lịch sử đơn — FR-SAL-01). */
   async listByCustomer(_user: User, customerId: string): Promise<OrderWithCustomer[]> {
     const { rows } = await ordersRepo.list({

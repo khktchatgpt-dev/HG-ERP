@@ -1,6 +1,9 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { suppliersService } from '@/modules/dept/supply/suppliers.service'
+import { productionService } from '@/modules/dept/production/production.service'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { assessLateRisk } from '@/lib/late-risk'
 import { ACCENT_CLASSES, WORKSPACES } from '@/workspaces/workspaces.config'
 
 const workspace = WORKSPACES.planning
@@ -9,18 +12,28 @@ export default async function PlanningHomePage() {
   const user = (await authService.currentUser())!
   const accent = ACCENT_CLASSES[workspace.accent]
 
-  const [pending, open, suppliers] = await Promise.all([
+  const [pending, open, suppliers, producing, tracking] = await Promise.all([
     posService.list(user, { status: 'pending_approval', page: 1, page_size: 1 }),
     posService.list(user, { status: 'ordered', page: 1, page_size: 1 }),
     suppliersService.list(user, { active_only: true, page: 1, page_size: 1 }),
+    productionService.list(user, { status: 'in_progress', page: 1, page_size: 1 }),
+    productionRepo.listTracking(),
   ])
+  const today = new Date().toISOString().slice(0, 10)
+  const lateRisk = tracking.filter((r) => assessLateRisk(r, today)).length
 
   return (
     <>
       <h1 className="mb-4 text-lg font-semibold">
         Kế hoạch - Cung ứng — chào {user.name ?? user.email}
       </h1>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <Widget
+          label="Đơn nguy cơ trễ"
+          value={lateRisk.toString()}
+          hint="Sát/quá hạn — lọc ⚠ ở Theo dõi đơn"
+          accentBg={lateRisk > 0 ? 'bg-red-500' : accent.bg}
+        />
         <Widget
           label="PO chờ GĐ duyệt"
           value={pending.total.toString()}
@@ -31,6 +44,12 @@ export default async function PlanningHomePage() {
           label="PO đã gửi NCC"
           value={open.total.toString()}
           hint="Đang chờ hàng về kho"
+          accentBg={accent.bg}
+        />
+        <Widget
+          label="LSX đang sản xuất"
+          value={producing.total.toString()}
+          hint="Cập nhật giai đoạn ở Tiến độ SX"
           accentBg={accent.bg}
         />
         <Widget
@@ -57,9 +76,14 @@ export default async function PlanningHomePage() {
             desc="Hồ sơ NCC, lịch sử mua"
           />
           <QuickLink
+            href="/planning/production"
+            title="Tiến độ sản xuất"
+            desc="Cập nhật giai đoạn từng LSX, báo hoàn thành"
+          />
+          <QuickLink
             href="/sales/tracking"
             title="Theo dõi đơn hàng"
-            desc="Tiến độ sản xuất, BOM, vật tư từng đơn"
+            desc="Trạng thái tổng hợp: BOM, vật tư, sản xuất từng đơn"
           />
           <QuickLink
             href="/warehouse/docs"
