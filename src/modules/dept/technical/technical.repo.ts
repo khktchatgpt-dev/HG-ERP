@@ -11,6 +11,8 @@ export type ProductPacking = {
   qty_per_carton?: number
   loading_40hc?: number
   pack_unit_label?: string
+  nw_kg?: number // Net weight / carton
+  gw_kg?: number // Gross weight / carton
 }
 
 /** Thông số sản xuất (jsonb `tech_spec`) — in trên LSX. */
@@ -44,6 +46,13 @@ export type Product = {
   showroom_sample: boolean
   reference_price: number | null
   tech_spec: ProductTechSpec
+  // Thông tin XK + đặc tính nội thất (0037).
+  hs_code: string | null
+  origin_country: string | null
+  material: string | null
+  max_load_kg: number | null
+  assembly: 'assembled' | 'kd' | null
+  set_contents: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -66,7 +75,7 @@ export type BomLineWithMaterial = BomLine & {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, name_de, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, name_de, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, is_active, created_at, updated_at'
 
 export const productsRepo = {
   async list(filter: {

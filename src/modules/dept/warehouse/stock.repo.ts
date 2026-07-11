@@ -355,15 +355,30 @@ export async function onHandMany(materialIds: string[]): Promise<Map<string, num
 /** Tồn + min_stock (check cảnh báo sau xuất — FR-WMS-08). */
 export async function stockInfoMany(
   materialIds: string[],
-): Promise<{ material_id: string; code: string; name: string; on_hand: number; min_stock: number }[]> {
+): Promise<
+  {
+    material_id: string
+    code: string
+    name: string
+    on_hand: number
+    min_stock: number
+  }[]
+> {
   if (materialIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_stock')
     .select('material_id, code, name, on_hand, min_stock')
     .in('material_id', materialIds)
   return (
-    (data as { material_id: string; code: string; name: string; on_hand: unknown; min_stock: unknown }[] | null) ??
-    []
+    (data as
+      | {
+          material_id: string
+          code: string
+          name: string
+          on_hand: unknown
+          min_stock: unknown
+        }[]
+      | null) ?? []
   ).map((r) => ({
     material_id: r.material_id,
     code: r.code,
@@ -383,6 +398,28 @@ export type LsxNeed = {
   qty_needed: number
   qty_issued: number
   qty_remaining: number
+  // Nhánh bảng chi tiết (plan-lsx-components P3) — hiển thị tham khảo cho người mua.
+  kg_needed?: number | null
+  bars_needed?: number | null
+  incomplete?: boolean
+  source?: 'components' | 'bom'
+}
+
+/** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */
+export async function issuedByLsx(
+  productionOrderId: string,
+): Promise<Map<string, number>> {
+  const { data } = await db()
+    .from('warehouse_movements')
+    .select('material_id, qty')
+    .eq('production_order_id', productionOrderId)
+    .eq('direction', 'out')
+    .limit(5000)
+  const map = new Map<string, number>()
+  for (const r of (data ?? []) as { material_id: string; qty: number }[]) {
+    map.set(r.material_id, (map.get(r.material_id) ?? 0) + Number(r.qty))
+  }
+  return map
 }
 
 export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
@@ -390,7 +427,7 @@ export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
     .from('v_lsx_material_status')
     .select('*')
     .eq('production_order_id', productionOrderId)
-  return (((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+  return ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
     production_order_id: r.production_order_id as string,
     material_id: r.material_id as string,
     material_code: r.material_code as string,
@@ -399,5 +436,5 @@ export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
     qty_needed: num(r.qty_needed),
     qty_issued: num(r.qty_issued),
     qty_remaining: num(r.qty_remaining),
-  })))
+  }))
 }

@@ -6,12 +6,16 @@ import {
   insertMovements,
   onHandMany,
   stockInfoMany,
+  issuedByLsx,
   lsxNeeds as lsxNeedsRepo,
+  type LsxNeed,
   type DocKind,
 } from './stock.repo'
+import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser, canViewWarehouse } from './warehouse.service'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -39,6 +43,38 @@ type IssueInput = {
   ref_no?: string | null
   shelf_location?: string | null
   note?: string | null
+}
+
+/**
+ * Nhu cầu vật tư LSX — ƯU TIÊN bảng chi tiết nhập tay (plan-lsx-components P3):
+ * gộp theo vật tư kèm kg + số cây; qty theo số cây khi có hệ số, không thì kg,
+ * không nữa thì số chi tiết — hiển thị tham khảo, người mua tự quyết (không tự
+ * trừ). Chưa nhập bảng → fallback BOM×SL (view) như cũ.
+ * KHÔNG guard user — dùng ở route needs (mọi NV đọc) lẫn stockService (có guard).
+ */
+export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
+  const comp = await componentMaterialNeeds(productionOrderId)
+  if (!comp) return lsxNeedsRepo(productionOrderId)
+
+  const issued = await issuedByLsx(productionOrderId)
+  return comp.map((c) => {
+    const qtyNeeded = c.bars_needed ?? c.kg_needed ?? c.total_components
+    const qtyIssued = issued.get(c.material_id) ?? 0
+    return {
+      production_order_id: productionOrderId,
+      material_id: c.material_id,
+      material_code: c.material_code,
+      material_name: c.material_name,
+      unit: c.unit,
+      qty_needed: qtyNeeded,
+      qty_issued: qtyIssued,
+      qty_remaining: Math.max(qtyNeeded - qtyIssued, 0),
+      kg_needed: c.kg_needed,
+      bars_needed: c.bars_needed,
+      incomplete: c.incomplete,
+      source: 'components' as const,
+    }
+  })
 }
 
 export const stockService = {
@@ -138,9 +174,9 @@ export const stockService = {
   },
 
   /** Nhu cầu vật tư còn phải xuất cho 1 LSX (FR-WMS-05 — cần vs đã xuất). */
-  async lsxNeeds(user: User, productionOrderId: string) {
+  async lsxNeeds(user: User, productionOrderId: string): Promise<LsxNeed[]> {
     if (!(await canViewWarehouse(user))) throw Forbidden()
-    return lsxNeedsRepo(productionOrderId)
+    return smartLsxNeeds(productionOrderId)
   },
 
   /** Dữ liệu cho form nhập theo đơn: PO đang mở + dòng còn thiếu (FR-WMS-02). */
@@ -187,6 +223,17 @@ export const stockService = {
     }
     if (input.po_id && input.lines.some((l) => !l.po_line_id)) {
       throw BadRequest('Nhập theo đơn đặt: mỗi dòng phải gắn dòng PO tương ứng')
+    }
+    // Guard trạng thái PO (vòng đời theo thực tế): UI chỉ liệt kê PO mở, nhưng
+    // API phải tự chặn — PO chưa duyệt / đã huỷ / đã về đủ không nhận hàng được.
+    if (input.po_id) {
+      const po = await supplyRepo.poStatus(input.po_id)
+      if (!po) throw NotFound('Đơn đặt (PO) không tồn tại')
+      if (!(RECEIVABLE as readonly string[]).includes(po.status)) {
+        throw BadRequest(
+          `PO ${po.code} không ở trạng thái nhận hàng được (chưa duyệt, đã huỷ hoặc đã về đủ)`,
+        )
+      }
     }
 
     const [code, warehouseId] = await Promise.all([
@@ -261,8 +308,19 @@ export const stockService = {
     if (!(await isWarehouseUser(user)) || !canEdit(user)) {
       throw Forbidden('Chỉ quản lý Kho / admin xuất kho được')
     }
-    if (input.kind === 'lsx' && !input.production_order_id) {
-      throw BadRequest('BR-09: xuất theo LSX phải gắn LSX')
+    if (input.kind === 'lsx') {
+      if (!input.production_order_id) {
+        throw BadRequest('BR-09: xuất theo LSX phải gắn LSX')
+      }
+      // Guard trạng thái LSX (vòng đời theo thực tế): chỉ xuất vật tư cho LSX
+      // đã duyệt / đang sản xuất — chặn chưa duyệt, bị từ chối, hoàn thành, đã huỷ.
+      const lsx = await productionRepo.findById(input.production_order_id)
+      if (!lsx) throw NotFound('LSX không tồn tại')
+      if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
+        throw BadRequest(
+          `LSX ${lsx.code} không ở trạng thái xuất vật tư được — chỉ xuất cho LSX đã duyệt hoặc đang sản xuất`,
+        )
+      }
     }
 
     const need = new Map<string, number>()

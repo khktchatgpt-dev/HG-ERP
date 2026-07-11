@@ -1,18 +1,31 @@
 import { z } from 'zod'
 
 // Vòng đời có bước duyệt: Sales phát → GĐ duyệt → SX → hoàn thành.
+// 'cancelled' = đơn hàng huỷ giữa chừng kéo LSX dừng theo (0036, plan P3).
 export const LSX_STATUSES = [
   'pending_approval',
   'approved',
   'in_progress',
   'completed',
   'rejected',
+  'cancelled',
 ] as const
 export type LsxStatus = (typeof LSX_STATUSES)[number]
 
 /** GĐ từ chối LSX — bắt buộc lý do. */
 export const lsxRejectSchema = z.object({
   reason: z.string().trim().min(1, 'Nhập lý do từ chối').max(1000),
+})
+
+/**
+ * Sales gửi duyệt lại LSX bị từ chối — cho sửa kèm header (lý do từ chối
+ * thường nằm ở chính các trường này). Field không gửi = giữ nguyên.
+ */
+export const lsxResubmitSchema = z.object({
+  ship_date: z.string().date().optional().nullable(),
+  received_date: z.string().date().optional().nullable(),
+  container_summary: z.string().trim().max(100).optional().nullable(),
+  note: z.string().trim().max(2000).optional().nullable(),
 })
 
 /** Spec sản xuất per dòng LSX (OI-11: Sales nhập khi phát, override tech_spec SP). */

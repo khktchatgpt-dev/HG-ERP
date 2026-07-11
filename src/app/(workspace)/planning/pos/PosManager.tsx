@@ -8,6 +8,7 @@ import { DocumentFiles } from '@/components/DocumentFiles'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
+import { assessPoLate } from '@/lib/late-risk'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -82,6 +83,11 @@ type Need = {
   qty_issued: number
   qty_remaining: number
   on_hand: number
+  // Nhánh bảng chi tiết (plan-lsx-components P3) — tham khảo cho người mua.
+  kg_needed?: number | null
+  bars_needed?: number | null
+  incomplete?: boolean
+  source?: 'components' | 'bom'
 }
 
 type Row = {
@@ -172,24 +178,31 @@ export function PosManager({
   } | null>(null)
 
   const [q, setQ] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | PoStatus>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'late' | PoStatus>('all')
   const [supplierFilter, setSupplierFilter] = useState('all')
+
+  // PO quá hẹn giao NCC — chỉ hiển thị (notification đẩy để GĐ2, xem late-risk.ts).
+  const today = new Date().toISOString().slice(0, 10)
+  const lateOf = (p: Po) => assessPoLate(p, today)
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return pos.filter((p) => {
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false
+      if (statusFilter === 'late') {
+        if (assessPoLate(p, today) !== 'overdue') return false
+      } else if (statusFilter !== 'all' && p.status !== statusFilter) return false
       if (supplierFilter !== 'all' && p.supplier_id !== supplierFilter) return false
       if (ql && !`${p.code} ${p.supplier_name} ${p.lsx_code}`.toLowerCase().includes(ql))
         return false
       return true
     })
-  }, [pos, q, statusFilter, supplierFilter])
+  }, [pos, q, statusFilter, supplierFilter, today])
 
   const stats = useMemo(() => {
     let pending = 0
     let open = 0
     let done = 0
+    let late = 0
     for (const p of pos) {
       if (p.status === 'pending_approval') pending++
       if (
@@ -197,9 +210,10 @@ export function PosManager({
       )
         open++
       if (p.status === 'received') done++
+      if (assessPoLate(p, today) === 'overdue') late++
     }
-    return { pending, open, done }
-  }, [pos])
+    return { pending, open, done, late }
+  }, [pos, today])
 
   async function send(url: string, method: 'POST' | 'PATCH', body?: unknown) {
     setBusy(true)
@@ -330,13 +344,28 @@ export function PosManager({
       key: 'expected',
       header: 'Hẹn giao',
       sortValue: (p) => p.expected_at ?? '9999',
-      width: '110px',
-      cell: (p) =>
-        p.expected_at ? (
-          new Date(p.expected_at).toLocaleDateString('vi-VN')
-        ) : (
-          <span className="text-zinc-400">—</span>
-        ),
+      width: '130px',
+      cell: (p) => {
+        if (!p.expected_at) return <span className="text-zinc-400">—</span>
+        const late = lateOf(p)
+        return (
+          <div className="flex items-center gap-1.5">
+            <span className={late === 'overdue' ? 'text-red-600 dark:text-red-400' : ''}>
+              {new Date(p.expected_at).toLocaleDateString('vi-VN')}
+            </span>
+            {late === 'overdue' && (
+              <span title="Quá hẹn giao — hàng chưa về đủ">
+                <Badge tone="red">⚠ Trễ</Badge>
+              </span>
+            )}
+            {late === 'due_soon' && (
+              <span title="Sát hẹn giao (≤ 7 ngày)">
+                <Badge tone="amber">Sát hẹn</Badge>
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'created',
@@ -420,6 +449,11 @@ export function PosManager({
             tone: stats.pending ? 'amber' : 'gray',
           },
           { label: 'Đang mở', value: stats.open, tone: 'blue' },
+          {
+            label: 'Quá hẹn giao',
+            value: stats.late,
+            tone: stats.late ? 'red' : 'gray',
+          },
           { label: 'Về đủ', value: stats.done, tone: 'green' },
         ]}
       />
@@ -440,6 +474,7 @@ export function PosManager({
                 onChange={(v) => setStatusFilter(v)}
                 options={[
                   { value: 'all' as const, label: 'Mọi trạng thái' },
+                  { value: 'late' as const, label: '⚠ Quá hẹn giao' },
                   ...(Object.keys(STATUS_LABEL) as PoStatus[]).map((s) => ({
                     value: s,
                     label: STATUS_LABEL[s],
@@ -793,17 +828,20 @@ function PoForm({
         </label>
       </div>
 
-      {/* Gợi ý nhu cầu theo BOM (FR-SUP-01) — chỉ khi tạo mới (sửa đã có dòng sẵn) */}
+      {/* Gợi ý nhu cầu (FR-SUP-01): ưu tiên BẢNG CHI TIẾT của LSX, fallback BOM */}
       {!initial && lsxId && (
         <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
           <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
-            Nhu cầu theo BOM (cần − đã xuất) — bấm để thêm vào đơn; tồn kho chỉ để tham
-            khảo
+            Nhu cầu (cần − đã xuất
+            {needs[0]?.source === 'components'
+              ? ' · theo bảng chi tiết của LSX'
+              : ' · theo BOM'}
+            ) — bấm để thêm vào đơn; tồn kho chỉ để tham khảo
           </div>
           {needs.length === 0 ? (
             <p className="text-xs text-zinc-400">
-              LSX chưa có BOM — thêm dòng thủ công bên dưới (BR-07: không bắt buộc đủ
-              BOM).
+              LSX chưa có bảng chi tiết / BOM — thêm dòng thủ công bên dưới (BR-07: không
+              bắt buộc đủ BOM).
             </p>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -814,10 +852,17 @@ function PoForm({
                   disabled={usedIds.has(n.material_id)}
                   onClick={() => addFromNeed(n)}
                   className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-sky-400 hover:text-sky-600 disabled:opacity-40 dark:border-zinc-700"
-                  title={`Cần ${n.qty_remaining} · Tồn ${n.on_hand}`}
+                  title={`Cần ${n.qty_remaining} · Tồn ${n.on_hand}${n.incomplete ? ' · có dòng thiếu ĐM/hệ số — số chưa trọn' : ''}`}
                 >
                   <span className="font-mono">{n.material_code}</span> {n.material_name} —
                   cần <b>{n.qty_remaining}</b> {n.unit} (tồn {n.on_hand})
+                  {(n.kg_needed != null || n.bars_needed != null) && (
+                    <span className="ml-1 text-zinc-400">
+                      ≈{n.kg_needed != null ? ` ${n.kg_needed} kg` : ''}
+                      {n.bars_needed != null ? ` · ${n.bars_needed} cây` : ''}
+                    </span>
+                  )}
+                  {n.incomplete && <span className="ml-1 text-amber-500">⚠</span>}
                 </button>
               ))}
             </div>

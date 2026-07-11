@@ -7,7 +7,12 @@ import {
 import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
 import { customersRepo } from './sales.repo'
-import type { User } from '@/modules/core/users/users.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { SUPPLY_DEPT_NAME } from '@/modules/dept/supply/suppliers.service'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
@@ -41,6 +46,30 @@ function assertEditable(order: Order): void {
   if (order.status === 'delivered' || order.status === 'cancelled') {
     throw BadRequest('Đơn đã giao / đã huỷ — không sửa được nữa')
   }
+}
+
+/** Đơn đã phát LSX — sửa/huỷ lúc này phải báo Cung ứng (plan-order-lsx-lifecycle). */
+const AFTER_LSX_STATUSES: Order['status'][] = [
+  'lsx_pending',
+  'lsx_issued',
+  'in_production',
+]
+
+/** GĐ/QL + nhân sự phòng KH-CƯ (trừ người thao tác) — người cần biết khi đơn đổi/huỷ. */
+async function supplyAndManagerIds(excludeId: string): Promise<string[]> {
+  const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
+  const supplyDeptIds = new Set(
+    depts.filter((d) => d.name === SUPPLY_DEPT_NAME).map((d) => d.id),
+  )
+  return users
+    .filter(
+      (u) =>
+        u.role === 'admin' ||
+        u.role === 'manager' ||
+        (u.department_id != null && supplyDeptIds.has(u.department_id)),
+    )
+    .filter((u) => u.id !== excludeId)
+    .map((u) => u.id)
 }
 
 export const ordersService = {
@@ -226,10 +255,36 @@ export const ordersService = {
       },
       note: input.change_note ?? null,
     })
+
+    // Đơn đã phát LSX mà đổi dòng SP / hạn giao → vật tư có thể đã đặt theo số
+    // cũ: báo Cung ứng + GĐ (P2). Đơn 'confirmed' sửa thoải mái, không báo.
+    if (
+      AFTER_LSX_STATUSES.includes(before.status) &&
+      (linesChange || 'due_date' in fieldChanges)
+    ) {
+      const lsx = await productionRepo.findByOrder(id)
+      if (lsx) {
+        await emit({
+          name: 'order.changed_after_lsx',
+          order_id: id,
+          order_code: before.code,
+          lsx_code: lsx.code,
+          changed_fields: Object.keys(fieldChanges),
+          lines_changed: !!linesChange,
+          changed_by: user.id,
+          notify_ids: await supplyAndManagerIds(user.id),
+        })
+      }
+    }
     return order
   },
 
-  /** Huỷ đơn (chưa giao) — bắt buộc lý do, ghi lịch sử. */
+  /**
+   * Huỷ đơn (chưa giao) — bắt buộc lý do, ghi lịch sử. Khép chuỗi (P3):
+   * LSX chưa hoàn thành → 'cancelled'; PO chưa gửi NCC → tự huỷ; PO đã gửi
+   * NCC → KHÔNG đụng (đã cam kết) — notify Cung ứng xử lý tay. Best-effort:
+   * bước phụ lỗi thì log + vẫn huỷ đơn (nguồn sự thật huỷ trước).
+   */
   async cancel(user: User, id: string, reason: string): Promise<Order> {
     if (!(await isSalesStaff(user))) throw Forbidden()
     const before = await ordersRepo.findById(id)
@@ -245,6 +300,70 @@ export const ordersService = {
         fields: { status: { from: before.status, to: 'cancelled' } },
       },
       note: reason,
+    })
+
+    let lsxCode: string | null = null
+    let lsxCancelled = false
+    const posCancelled: string[] = []
+    const posManual: string[] = []
+    try {
+      const lsx = await productionRepo.findByOrder(id)
+      if (lsx) {
+        lsxCode = lsx.code
+        if (
+          lsx.status === 'pending_approval' ||
+          lsx.status === 'approved' ||
+          lsx.status === 'in_progress'
+        ) {
+          await productionRepo.patch(lsx.id, { status: 'cancelled' })
+          await productionRepo.insertProgress({
+            production_order_id: lsx.id,
+            stage: lsx.current_stage ?? 'vat_tu',
+            action: 'cancelled',
+            note: `Đơn hàng huỷ: ${reason}`,
+            updated_by: user.id,
+          })
+          lsxCancelled = true
+        }
+        const { rows: pos } = await posRepo.list({
+          production_order_id: lsx.id,
+          page: 1,
+          page_size: 200,
+        })
+        for (const po of pos) {
+          if (po.status === 'pending_approval' || po.status === 'approved') {
+            await posRepo.patch(po.id, {
+              status: 'cancelled',
+              note: [`[Huỷ theo đơn ${before.code}] ${reason}`, po.note]
+                .filter(Boolean)
+                .join(' · '),
+            })
+            posCancelled.push(po.code)
+          } else if (
+            po.status === 'ordered' ||
+            po.status === 'confirmed' ||
+            po.status === 'in_transit' ||
+            po.status === 'partial'
+          ) {
+            posManual.push(po.code)
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[orders.cancel] khép chuỗi LSX/PO lỗi (đơn vẫn huỷ):', err)
+    }
+
+    await emit({
+      name: 'order.cancelled',
+      order_id: id,
+      order_code: before.code,
+      reason,
+      lsx_code: lsxCode,
+      lsx_cancelled: lsxCancelled,
+      pos_cancelled: posCancelled,
+      pos_manual: posManual,
+      cancelled_by: user.id,
+      notify_ids: await supplyAndManagerIds(user.id),
     })
     return order
   },

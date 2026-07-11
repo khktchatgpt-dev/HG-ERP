@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assessLateRisk } from './late-risk'
+import { assessLateRisk, assessPoLate } from './late-risk'
 
 const base = {
   status: 'in_production',
@@ -64,5 +64,47 @@ describe('assessLateRisk (FR-SAL-09)', () => {
       'at_risk',
     )
     expect(assessLateRisk({ ...base, due_date: '2026-07-17' }, TODAY)).toBeNull()
+  })
+})
+
+describe('assessPoLate — PO quá hẹn giao NCC (thu mua)', () => {
+  it('quá hẹn → overdue; trong horizon → due_soon; còn xa → null', () => {
+    expect(assessPoLate({ status: 'ordered', expected_at: '2026-07-08' }, TODAY)).toBe(
+      'overdue',
+    )
+    expect(assessPoLate({ status: 'in_transit', expected_at: '2026-07-12' }, TODAY)).toBe(
+      'due_soon',
+    )
+    expect(
+      assessPoLate({ status: 'ordered', expected_at: '2026-08-01' }, TODAY),
+    ).toBeNull()
+  })
+
+  it('PO đã về đủ / đã huỷ / không hẹn giao → null dù quá ngày', () => {
+    expect(
+      assessPoLate({ status: 'received', expected_at: '2026-07-01' }, TODAY),
+    ).toBeNull()
+    expect(
+      assessPoLate({ status: 'cancelled', expected_at: '2026-07-01' }, TODAY),
+    ).toBeNull()
+    expect(assessPoLate({ status: 'ordered', expected_at: null }, TODAY)).toBeNull()
+  })
+
+  it('về một phần (partial) quá hẹn vẫn cảnh báo — phần thiếu là nghẽn SX', () => {
+    expect(assessPoLate({ status: 'partial', expected_at: '2026-07-01' }, TODAY)).toBe(
+      'overdue',
+    )
+  })
+
+  it('đúng biên: hẹn = hôm nay → due_soon (chưa quá); hôm nay + 7 → due_soon; +8 → null', () => {
+    expect(assessPoLate({ status: 'ordered', expected_at: '2026-07-09' }, TODAY)).toBe(
+      'due_soon',
+    )
+    expect(assessPoLate({ status: 'ordered', expected_at: '2026-07-16' }, TODAY)).toBe(
+      'due_soon',
+    )
+    expect(
+      assessPoLate({ status: 'ordered', expected_at: '2026-07-17' }, TODAY),
+    ).toBeNull()
   })
 })

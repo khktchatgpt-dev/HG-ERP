@@ -11,7 +11,12 @@ export const packingSchema = z.object({
   qty_per_carton: z.coerce.number().int().positive().optional(),
   loading_40hc: z.coerce.number().int().positive().optional(),
   pack_unit_label: z.string().trim().max(30).optional(), // 'ctn' | 'pallet' — mẫu ghi "20 pcs/pallet"
+  nw_kg: z.coerce.number().positive().optional(), // Net weight / carton
+  gw_kg: z.coerce.number().positive().optional(), // Gross weight / carton
 })
+
+/** Kiểu lắp ráp — hàng nội thất XK: nguyên chiếc hoặc tháo rời (knock-down). */
+export const ASSEMBLY_TYPES = ['assembled', 'kd'] as const
 
 /** Thông số sản xuất (in trên LSX — jsonb `tech_spec`). Mặc định của SP. */
 export const techSpecSchema = z.object({
@@ -44,6 +49,13 @@ export const productCreateSchema = z.object({
   showroom_sample: z.boolean().optional(), // mẫu tại showroom
   reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
   tech_spec: techSpecSchema.optional(),
+  // Thông tin XK + đặc tính nội thất (0037).
+  hs_code: z.string().trim().max(20).optional().nullable(), // mã HS khai hải quan
+  origin_country: z.string().trim().max(100).optional().nullable(), // xuất xứ
+  material: z.string().trim().max(300).optional().nullable(), // chất liệu chính
+  max_load_kg: z.coerce.number().min(0).optional().nullable(), // tải trọng tối đa
+  assembly: z.enum(ASSEMBLY_TYPES).optional().nullable(), // nguyên chiếc / KD
+  set_contents: z.string().trim().max(500).optional().nullable(), // bộ gồm: "1 bàn + 6 ghế"
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({

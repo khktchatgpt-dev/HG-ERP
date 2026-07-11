@@ -52,6 +52,12 @@ type CreateInput = {
   showroom_sample?: boolean
   reference_price?: number | null
   tech_spec?: ProductTechSpec
+  hs_code?: string | null
+  origin_country?: string | null
+  material?: string | null
+  max_load_kg?: number | null
+  assembly?: 'assembled' | 'kd' | null
+  set_contents?: string | null
 }
 
 export const productsService = {
@@ -105,6 +111,12 @@ export const productsService = {
       showroom_sample: input.showroom_sample ?? false,
       reference_price: input.reference_price ?? null,
       tech_spec: input.tech_spec ?? {},
+      hs_code: input.hs_code ?? null,
+      origin_country: input.origin_country ?? null,
+      material: input.material ?? null,
+      max_load_kg: input.max_load_kg ?? null,
+      assembly: input.assembly ?? null,
+      set_contents: input.set_contents ?? null,
     })
   },
 
@@ -210,6 +222,13 @@ export const productsService = {
       showroom_sample: src.showroom_sample,
       reference_price: src.reference_price,
       tech_spec: src.tech_spec,
+      // Đặc tính XK theo mẫu gốc — cùng thiết kế thì cùng chất liệu/tải trọng.
+      hs_code: src.hs_code,
+      origin_country: src.origin_country,
+      material: src.material,
+      max_load_kg: src.max_load_kg,
+      assembly: src.assembly,
+      set_contents: src.set_contents,
     })
     const copied = await bomLinesRepo.copyAll(src.id, created.id)
     if (copied > 0 && src.bom_status !== 'none') {

@@ -1,9 +1,9 @@
 import { db } from '@/server/db'
 
 /**
- * Repo Cung ứng — GĐ1 mới có phần Kho cần: đọc PO đang mở để nhập theo đơn
- * (FR-WMS-02) + cập nhật trạng thái partial/received từ sổ kho (BR-08).
- * Sprint Cung ứng sẽ mở rộng thêm CRUD PO/NCC tại đây.
+ * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
+ * + cập nhật trạng thái partial/received từ sổ kho (BR-08).
+ * CRUD PO/NCC nằm ở pos.repo.ts / suppliers (supply.repo cùng module).
  */
 
 export type OpenPo = {
@@ -27,7 +27,13 @@ export type PoLineStatus = {
 }
 
 /** PO nhận hàng được: đã đặt trở đi, chưa về đủ / chưa huỷ. */
-const RECEIVABLE = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'] as const
+export const RECEIVABLE = [
+  'approved',
+  'ordered',
+  'confirmed',
+  'in_transit',
+  'partial',
+] as const
 
 export const supplyRepo = {
   async listOpenPos(): Promise<OpenPo[]> {
@@ -114,6 +120,16 @@ export const supplyRepo = {
       .eq('id', poId)
       .maybeSingle()
     return (data as { code: string } | null)?.code ?? null
+  },
+
+  /** code + status của PO — guard nhập kho theo đơn (chỉ RECEIVABLE). */
+  async poStatus(poId: string): Promise<{ code: string; status: string } | null> {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('code, status')
+      .eq('id', poId)
+      .maybeSingle()
+    return (data as { code: string; status: string } | null) ?? null
   },
 }
 

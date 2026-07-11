@@ -5,15 +5,19 @@ export type Department = {
   name: string
   description: string | null
   head_user_id: string | null
+  /** Workspace của phòng (workspaces.config) — nguồn sự thật cho guard theo phòng. */
+  workspace_id: string | null
   created_at: string
   updated_at: string
 }
+
+const COLS = 'id, name, description, head_user_id, workspace_id, created_at, updated_at'
 
 export const departmentsRepo = {
   async list(): Promise<Department[]> {
     const { data } = await db()
       .from('departments')
-      .select('id, name, description, head_user_id, created_at, updated_at')
+      .select(COLS)
       .order('name')
     return (data ?? []) as Department[]
   },
@@ -21,7 +25,7 @@ export const departmentsRepo = {
   async findById(id: string): Promise<Department | null> {
     const { data } = await db()
       .from('departments')
-      .select('id, name, description, head_user_id, created_at, updated_at')
+      .select(COLS)
       .eq('id', id)
       .maybeSingle()
     return (data as Department | null) ?? null
@@ -31,7 +35,7 @@ export const departmentsRepo = {
     const { data, error } = await db()
       .from('departments')
       .insert(row)
-      .select('id, name, description, head_user_id, created_at, updated_at')
+      .select(COLS)
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert failed')
     return data as Department
@@ -45,7 +49,7 @@ export const departmentsRepo = {
       .from('departments')
       .update(patch)
       .eq('id', id)
-      .select('id, name, description, head_user_id, created_at, updated_at')
+      .select(COLS)
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Update failed')
     return data as Department
@@ -82,7 +86,7 @@ export const departmentsRepo = {
   async findHeadedBy(userId: string): Promise<Department | null> {
     const { data } = await db()
       .from('departments')
-      .select('id, name, description, head_user_id, created_at, updated_at')
+      .select(COLS)
       .eq('head_user_id', userId)
       .maybeSingle()
     return (data as Department | null) ?? null

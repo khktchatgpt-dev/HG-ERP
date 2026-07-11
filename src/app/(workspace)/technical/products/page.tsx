@@ -39,6 +39,12 @@ export default async function TechnicalProductsPage() {
         showroom_sample: p.showroom_sample,
         reference_price: p.reference_price,
         tech_spec: p.tech_spec ?? {},
+        hs_code: p.hs_code,
+        origin_country: p.origin_country,
+        material: p.material,
+        max_load_kg: p.max_load_kg,
+        assembly: p.assembly,
+        set_contents: p.set_contents,
         is_active: p.is_active,
       }))}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}

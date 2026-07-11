@@ -2,6 +2,7 @@ import { registerTaskNotificationHandlers } from './handlers/task.notifications'
 import { registerWarehouseNotificationHandlers } from './handlers/warehouse.notifications'
 import { registerPoNotificationHandlers } from './handlers/po.notifications'
 import { registerLsxNotificationHandlers } from './handlers/lsx.notifications'
+import { registerOrderNotificationHandlers } from './handlers/order.notifications'
 
 let registered = false
 
@@ -16,6 +17,7 @@ export function registerEventHandlers(): void {
   registerWarehouseNotificationHandlers()
   registerPoNotificationHandlers()
   registerLsxNotificationHandlers()
+  registerOrderNotificationHandlers()
 }
 
 // Auto-register khi module import lần đầu — Next.js server sẽ chạy dòng này

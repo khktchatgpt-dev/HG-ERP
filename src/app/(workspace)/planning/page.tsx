@@ -3,7 +3,7 @@ import { posService } from '@/modules/dept/supply/pos.service'
 import { suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { productionService } from '@/modules/dept/production/production.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
-import { assessLateRisk } from '@/lib/late-risk'
+import { assessLateRisk, assessPoLate } from '@/lib/late-risk'
 import { ACCENT_CLASSES, WORKSPACES } from '@/workspaces/workspaces.config'
 
 const workspace = WORKSPACES.planning
@@ -12,27 +12,35 @@ export default async function PlanningHomePage() {
   const user = (await authService.currentUser())!
   const accent = ACCENT_CLASSES[workspace.accent]
 
-  const [pending, open, suppliers, producing, tracking] = await Promise.all([
+  const [pending, open, suppliers, producing, tracking, allPos] = await Promise.all([
     posService.list(user, { status: 'pending_approval', page: 1, page_size: 1 }),
     posService.list(user, { status: 'ordered', page: 1, page_size: 1 }),
     suppliersService.list(user, { active_only: true, page: 1, page_size: 1 }),
     productionService.list(user, { status: 'in_progress', page: 1, page_size: 1 }),
     productionRepo.listTracking(),
+    posService.list(user, { page: 1, page_size: 500 }),
   ])
   const today = new Date().toISOString().slice(0, 10)
   const lateRisk = tracking.filter((r) => assessLateRisk(r, today)).length
+  const poLate = allPos.rows.filter((p) => assessPoLate(p, today) === 'overdue').length
 
   return (
     <>
       <h1 className="mb-4 text-lg font-semibold">
         Kế hoạch - Cung ứng — chào {user.name ?? user.email}
       </h1>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Widget
           label="Đơn nguy cơ trễ"
           value={lateRisk.toString()}
           hint="Sát/quá hạn — lọc ⚠ ở Theo dõi đơn"
           accentBg={lateRisk > 0 ? 'bg-red-500' : accent.bg}
+        />
+        <Widget
+          label="PO quá hẹn giao"
+          value={poLate.toString()}
+          hint="NCC trễ hẹn — lọc ⚠ ở Đơn đặt vật tư"
+          accentBg={poLate > 0 ? 'bg-red-500' : accent.bg}
         />
         <Widget
           label="PO chờ GĐ duyệt"

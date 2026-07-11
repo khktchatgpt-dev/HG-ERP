@@ -113,6 +113,8 @@ export type DomainEvent =
       lines_bom_pending: number
       submitted_by: string
       approver_ids: string[]
+      // true = gửi duyệt lại sau khi bị GĐ từ chối (plan-order-lsx-lifecycle P1).
+      resubmitted?: boolean
     }
   | {
       name: 'lsx.decided'
@@ -123,6 +125,31 @@ export type DomainEvent =
       issued_by: string | null
       reason?: string
       // approved → báo Cung ứng + Kỹ thuật; rejected → báo người phát.
+      notify_ids: string[]
+    }
+
+  // ── Đơn hàng bán — đổi/huỷ sau khi phát LSX (plan-order-lsx-lifecycle) ─
+  | {
+      name: 'order.changed_after_lsx'
+      order_id: string
+      order_code: string
+      lsx_code: string
+      changed_fields: string[]
+      lines_changed: boolean
+      changed_by: string
+      // Cung ứng + GĐ/QL — vật tư có thể đã đặt theo số cũ.
+      notify_ids: string[]
+    }
+  | {
+      name: 'order.cancelled'
+      order_id: string
+      order_code: string
+      reason: string
+      lsx_code: string | null
+      lsx_cancelled: boolean
+      pos_cancelled: string[] // mã PO chưa gửi NCC — đã tự huỷ theo
+      pos_manual: string[] // mã PO đã gửi NCC — Cung ứng phải xử lý tay
+      cancelled_by: string
       notify_ids: string[]
     }
 

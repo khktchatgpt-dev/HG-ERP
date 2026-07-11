@@ -31,7 +31,8 @@ export default async function WarehouseDocsPage() {
       }))}
       pos={pos}
       lsxs={lsxAll
-        .filter((l) => l.status !== 'completed')
+        // Chỉ LSX xuất vật tư được: đã duyệt / đang SX (service cũng guard).
+        .filter((l) => l.status === 'approved' || l.status === 'in_progress')
         .map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name }))}
       canEdit={canEdit}
     />

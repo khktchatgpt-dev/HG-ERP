@@ -39,6 +39,40 @@ describe('packingSchema', () => {
   it('từ chối loading_40hc lẻ (phải nguyên)', () => {
     expect(() => packingSchema.parse({ loading_40hc: 1.5 })).toThrow()
   })
+
+  it('NW/GW per thùng (0037): ép kiểu số, từ chối âm', () => {
+    const p = packingSchema.parse({ nw_kg: '12.5', gw_kg: 14 })
+    expect(p.nw_kg).toBe(12.5)
+    expect(p.gw_kg).toBe(14)
+    expect(() => packingSchema.parse({ gw_kg: -1 })).toThrow()
+  })
+})
+
+describe('productCreateSchema — thông tin XK & đặc tính nội thất (0037)', () => {
+  const base = { code: 'SP-1', name: 'Bộ bàn ghế sân vườn' }
+
+  it('parse OK đủ trường: HS code, xuất xứ, chất liệu, tải trọng, lắp ráp, bộ gồm', () => {
+    const p = productCreateSchema.parse({
+      ...base,
+      hs_code: '9401.69.90',
+      origin_country: 'Việt Nam',
+      material: 'Khung nhôm sơn tĩnh điện + mây nhựa HDPE',
+      max_load_kg: '120',
+      assembly: 'kd',
+      set_contents: '1 bàn + 6 ghế',
+    })
+    expect(p.max_load_kg).toBe(120) // form gửi string — coerce
+    expect(p.assembly).toBe('kd')
+  })
+
+  it('assembly ngoài enum → từ chối; tải trọng âm → từ chối', () => {
+    expect(() => productCreateSchema.parse({ ...base, assembly: 'flatpack' })).toThrow()
+    expect(() => productCreateSchema.parse({ ...base, max_load_kg: -5 })).toThrow()
+  })
+
+  it('các trường XK đều optional — SP tối giản vẫn hợp lệ', () => {
+    expect(() => productCreateSchema.parse(base)).not.toThrow()
+  })
 })
 
 describe('productCreateSchema', () => {

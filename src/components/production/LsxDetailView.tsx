@@ -9,9 +9,12 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { DocumentFiles } from '@/components/DocumentFiles'
+import { LsxComponentsPanel } from '@/components/production/LsxComponentsPanel'
+import { LsxOutputPanel } from '@/components/production/LsxOutputPanel'
+import { LsxOutsourcePanel } from '@/components/production/LsxOutsourcePanel'
 
 type LsxStatus =
-  'pending_approval' | 'approved' | 'in_progress' | 'completed' | 'rejected'
+  'pending_approval' | 'approved' | 'in_progress' | 'completed' | 'rejected' | 'cancelled'
 
 const ST: Record<
   LsxStatus,
@@ -22,6 +25,7 @@ const ST: Record<
   in_progress: { label: 'Đang sản xuất', tone: 'amber' },
   completed: { label: 'Hoàn thành', tone: 'green' },
   rejected: { label: 'Bị từ chối', tone: 'red' },
+  cancelled: { label: 'Đã huỷ theo đơn', tone: 'gray' },
 }
 
 type Spec = {
@@ -43,7 +47,8 @@ type Line = {
 type Progress = {
   id: string
   stage: string
-  action: 'start' | 'done' | 'received' // received = xác nhận đã nhận vật tư (G-3)
+  // received = xác nhận đã nhận vật tư (G-3); cancelled = đơn huỷ kéo LSX dừng.
+  action: 'start' | 'done' | 'received' | 'cancelled'
   note: string | null
   by: string | null
   at: string
@@ -60,6 +65,9 @@ export function LsxDetailView({
   canApprove,
   canManage,
   canEditSpec,
+  breadcrumbs,
+  materials,
+  canEditComponents,
 }: {
   lsx: {
     id: string
@@ -82,9 +90,15 @@ export function LsxDetailView({
   progress: Progress[]
   stages: Stage[]
   canApprove: boolean
-  /** Cập nhật giai đoạn + hoàn thành: GĐ/QL hoặc Kế hoạch - Cung ứng (FR-SUP-08). */
+  /** Cập nhật giai đoạn + hoàn thành: GĐ/QL, Kế hoạch - Cung ứng hoặc Xưởng. */
   canManage: boolean
   canEditSpec: boolean
+  /** Override khi render từ workspace khác (vd /production) — mặc định Sales. */
+  breadcrumbs?: { label: string; href?: string }[]
+  /** Bảng chi tiết & định mức (plan-lsx-components): danh mục vật tư cho grid. */
+  materials?: { id: string; code: string; name: string; unit: string }[]
+  /** Sửa bảng chi tiết: Kế hoạch (KH-CƯ) + GĐ/QL — xưởng chỉ xem. */
+  canEditComponents?: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -92,6 +106,13 @@ export function LsxDetailView({
   const [busy, setBusy] = useState(false)
   const [specs, setSpecs] = useState<Line[]>(lines)
   const [stage, setStage] = useState(lsx.current_stage ?? '')
+  // Gửi duyệt lại LSX bị từ chối — cho sửa nhanh header trước khi gửi (P1).
+  const [resub, setResub] = useState({
+    ship_date: lsx.ship_date ?? '',
+    received_date: lsx.received_date ?? '',
+    container_summary: lsx.container_summary ?? '',
+    note: lsx.note ?? '',
+  })
 
   const st = ST[lsx.status]
   const stageLabel = (code: string | null) =>
@@ -141,6 +162,25 @@ export function LsxDetailView({
     if (ok)
       await call(`/api/dept/production/lsx/${lsx.id}/complete`, {}, 'LSX hoàn thành')
   }
+  async function resubmit() {
+    const ok = await confirm({
+      title: `Gửi duyệt lại LSX ${lsx.code}?`,
+      description: 'LSX quay về "Chờ GĐ duyệt"; Giám đốc sẽ nhận thông báo.',
+      confirmLabel: 'Gửi duyệt lại',
+    })
+    if (!ok) return
+    await call(
+      `/api/dept/production/lsx/${lsx.id}/resubmit`,
+      {
+        ship_date: resub.ship_date || null,
+        received_date: resub.received_date || null,
+        container_summary: resub.container_summary.trim() || null,
+        note: resub.note.trim() || null,
+      },
+      'Đã gửi duyệt lại',
+    )
+  }
+
   async function materialsReceived() {
     // prompt Cancel → null (bỏ); OK để trống → xác nhận không ghi chú.
     const note = window.prompt('Ghi chú nhận vật tư (tuỳ chọn — VD: đủ theo PXK-…):')
@@ -192,11 +232,13 @@ export function LsxDetailView({
     <div className="flex flex-col gap-5">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Kinh doanh', href: '/sales' },
-          { label: 'Đơn hàng', href: '/sales/orders' },
-          { label: `LSX ${lsx.code}` },
-        ]}
+        breadcrumbs={
+          breadcrumbs ?? [
+            { label: 'Kinh doanh', href: '/sales' },
+            { label: 'Đơn hàng', href: '/sales/orders' },
+            { label: `LSX ${lsx.code}` },
+          ]
+        }
         title={`Lệnh sản xuất ${lsx.code}`}
         description={`${lsx.customer_name} · đơn ${lsx.order_code}`}
         meta={
@@ -219,9 +261,71 @@ export function LsxDetailView({
         }
       />
 
-      {lsx.status === 'rejected' && lsx.rejected_reason && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          GĐ từ chối: {lsx.rejected_reason}
+      {lsx.status === 'rejected' && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 dark:border-red-900 dark:bg-red-950">
+          <p className="text-sm text-red-700 dark:text-red-300">
+            GĐ từ chối{lsx.rejected_reason ? `: ${lsx.rejected_reason}` : ''}
+          </p>
+          {canEditSpec && (
+            <div className="mt-3 flex flex-col gap-2">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <label className="flex flex-col gap-1 text-sm">
+                  Thời gian xuất
+                  <input
+                    type="date"
+                    value={resub.ship_date}
+                    onChange={(e) => setResub({ ...resub, ship_date: e.target.value })}
+                    className={inp}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  Ngày nhận
+                  <input
+                    type="date"
+                    value={resub.received_date}
+                    onChange={(e) =>
+                      setResub({ ...resub, received_date: e.target.value })
+                    }
+                    className={inp}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  Container
+                  <input
+                    value={resub.container_summary}
+                    maxLength={100}
+                    placeholder="3 x 40'HC"
+                    onChange={(e) =>
+                      setResub({ ...resub, container_summary: e.target.value })
+                    }
+                    className={inp}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  Ghi chú
+                  <input
+                    value={resub.note}
+                    maxLength={2000}
+                    onChange={(e) => setResub({ ...resub, note: e.target.value })}
+                    className={inp}
+                  />
+                </label>
+              </div>
+              <div className="flex justify-end">
+                <button
+                  disabled={busy}
+                  onClick={() => void resubmit()}
+                  className="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                >
+                  Gửi duyệt lại
+                </button>
+              </div>
+              <p className="text-xs text-red-600/80 dark:text-red-400/80">
+                Sửa spec sản phẩm ở khối bên dưới nếu cần, rồi bấm Gửi duyệt lại — LSX
+                quay về hàng chờ của Giám đốc.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -340,6 +444,30 @@ export function LsxDetailView({
         )}
       </Card>
 
+      {/* Bảng chi tiết & định mức (plan-lsx-components) — nhập tay, BOM tham khảo */}
+      <LsxComponentsPanel
+        lsxId={lsx.id}
+        orderLines={lines.map((l) => ({
+          id: l.order_line_id,
+          product_code: l.product_code,
+          product_name: l.name_vi,
+          qty: l.qty,
+        }))}
+        materials={materials ?? []}
+        stages={stages}
+        canEdit={canEditComponents ?? false}
+        locked={lsx.status === 'completed' || lsx.status === 'cancelled'}
+      />
+
+      {/* Sản lượng theo công đoạn/tổ (SX-P3) — sau khi GĐ duyệt lệnh */}
+      {lsx.status !== 'pending_approval' && lsx.status !== 'rejected' && (
+        <>
+          <LsxOutputPanel lsxId={lsx.id} canRecord={canManage} active={activeStage} />
+          {/* Gia công ngoài TTP/Vinh (SX-P4) */}
+          <LsxOutsourcePanel lsxId={lsx.id} canRecord={canManage} active={activeStage} />
+        </>
+      )}
+
       {/* File LSX */}
       <Card title="File đính kèm LSX">
         <DocumentFiles
@@ -350,8 +478,8 @@ export function LsxDetailView({
         />
       </Card>
 
-      {/* Tiến độ sản xuất */}
-      {(activeStage || lsx.status === 'completed') && (
+      {/* Tiến độ sản xuất — LSX huỷ vẫn hiện timeline (có dòng log huỷ) */}
+      {(activeStage || lsx.status === 'completed' || lsx.status === 'cancelled') && (
         <Card title="Tiến độ sản xuất">
           {activeStage && canManage && (
             <div className="mb-3 flex flex-wrap items-end gap-2">
@@ -408,6 +536,10 @@ export function LsxDetailView({
                   </span>{' '}
                   {p.action === 'received' ? (
                     <b>Đã nhận vật tư</b>
+                  ) : p.action === 'cancelled' ? (
+                    <b className="text-red-600 dark:text-red-400">
+                      Đơn hàng huỷ — LSX dừng
+                    </b>
                   ) : (
                     <>
                       <b>{stageLabel(p.stage)}</b> (
