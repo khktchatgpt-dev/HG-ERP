@@ -111,6 +111,94 @@ Xuất-cung ứng / Kho) · 1 manager (đóng vai GĐ). Mã FR/BR để đối c
 - [ ] Phiếu kho 01-VT / 02-VT
 - [ ] Mọi trang in: nút In/Đóng biến mất trên bản in (print CSS)
 
+## 8b. Vòng đời theo thực tế (plan-order-lsx-lifecycle — 07/2026)
+
+- [ ] GĐ từ chối LSX (kèm lý do) → Sales mở chi tiết LSX thấy khối đỏ có form sửa
+      (ngày xuất/ngày nhận/container/ghi chú) + nút **"Gửi duyệt lại"** → LSX quay
+      về Chờ duyệt, GĐ nhận notification "gửi duyệt lại"; duyệt lần 2 chạy tiếp bình thường
+- [ ] Đơn đang sản xuất: Sales sửa số lượng dòng SP (hoặc hạn giao) → NV Cung ứng
+      + GĐ nhận notification "sửa đơn hàng sau khi phát LSX"; sửa ghi chú → KHÔNG có notification
+- [ ] Huỷ đơn đang sản xuất: dialog xác nhận liệt kê đúng hệ quả (LSX dừng, PO chưa
+      gửi NCC tự huỷ kèm mã, PO đã gửi NCC báo xử lý tay) → sau huỷ: LSX badge
+      "Đã huỷ theo đơn", timeline có dòng "Đơn hàng huỷ: <lý do>", PO chưa gửi thành
+      Đã huỷ, PO đã gửi giữ nguyên, Cung ứng nhận notification
+- [ ] LSX đã huỷ: không cập nhật được giai đoạn / hoàn thành / nhận vật tư (400)
+- [ ] PO gửi NCC có hẹn giao đã qua mà chưa về đủ → badge "⚠ Trễ" đỏ ở cột Hẹn
+      giao, stat "Quá hẹn giao" đỏ, lọc "⚠ Quá hẹn giao" ra đúng danh sách;
+      widget "PO quá hẹn giao" trang chủ /planning khớp số; PO về đủ/huỷ → hết ⚠
+- [ ] Ngừng giao dịch NCC còn PO đang mở → dialog đỏ nêu rõ số PO dở dang;
+      NCC không còn PO mở → confirm thường
+- [ ] Phiếu xuất kho: dropdown LSX chỉ liệt kê LSX đã duyệt / đang SX (không thấy
+      LSX chờ duyệt / bị từ chối / đã huỷ); gọi API xuất cho LSX đã huỷ → 400
+- [ ] Phiếu nhập theo PO đã huỷ (vd huỷ theo đơn hàng) → API chặn 400; PO không
+      còn trong dropdown "Nhập theo đơn"
+
+## 8c. Workspace Sản xuất — xưởng tự cập nhật tiến độ (plan-production-workspace)
+
+- [ ] `totruong.test@hg.com` (NV Xưởng Sản Xuất) login → tự vào `/production`,
+      thấy card các LSX đã duyệt/đang SX kèm giai đoạn + hạn xuất + badge ⚠ trễ
+- [ ] Bấm card → chi tiết LSX: cập nhật giai đoạn / Đã nhận vật tư / Hoàn thành
+      đều chạy; KHÔNG thấy nút Duyệt/Từ chối, không sửa được spec
+- [ ] Tổ trưởng gọi thẳng API duyệt LSX / tạo PO / lập phiếu kho → 403
+- [ ] NV phòng khác (vd kinhdoanh.test) vào `/production` → bị đẩy về trang chủ
+- [ ] GĐ duyệt LSX mới → tổ trưởng nhận notification; LSX hiện thêm ở card
+- [ ] Cung ứng (`cungung.test`) vẫn cập nhật tiến độ được như cũ (bấm thay khi
+      xưởng nghỉ — quyền không thu hẹp)
+- [ ] Bảng điều phối `/planning/production`: cột "Vật tư / BOM" đúng thực tế
+      (n dòng chưa BOM đỏ / n PO chưa về vàng / Sẵn sàng xanh); badge ⚠ cạnh
+      ngày xuất khớp lọc "⚠ Nguy cơ trễ" + stat; đổi giai đoạn bằng select ngay
+      trên bảng + nút "✓ Hoàn thành" chạy; LSX hoàn thành/huỷ không hiện select
+- [ ] Thư viện SP (`kythuat.test`): form có khối "Xuất khẩu & đặc tính" — nhập
+      HS code, xuất xứ, chất liệu, tải trọng, lắp ráp KD, bộ gồm + NW/GW per
+      thùng; lưu xong chi tiết SP hiện đủ, CBM/thùng tự tính từ carton;
+      "Nhân bản mẫu" copy các trường này (trừ barcode)
+
+## 8d. Bảng chi tiết & định mức theo LSX (plan-lsx-components)
+
+- [ ] Chi tiết LSX (`cungung.test`): khối "Bảng chi tiết & định mức" — thêm dòng
+      thủ công (cụm/chi tiết/vật tư/quy cách/CT-SP/ĐM kg/CT-cây), cột Tổng
+      cần/Kg/Cây tự tính khi gõ; thiếu ĐM/hệ số → "—" kèm tooltip, KHÔNG lỗi
+      chia 0; Lưu → tải lại còn nguyên
+- [ ] "Gợi ý từ BOM" đổ khung từ BOM kỹ thuật (SP chưa BOM → báo không có dữ
+      liệu); "Chép từ lệnh trước" đổ đúng bảng của LSX gần nhất cùng SP —
+      cả hai chỉ điền sẵn, sửa được từng dòng trước khi Lưu
+- [ ] Dòng chưa gắn vật tư → cảnh báo vàng, KHÔNG xuất hiện trong nhu cầu mua
+- [ ] Form tạo PO của LSX đã nhập bảng chi tiết: khối nhu cầu ghi "theo bảng
+      chi tiết của LSX" + mỗi vật tư hiện "≈ X kg · Y cây"; LSX chưa nhập →
+      vẫn ra nhu cầu theo BOM như cũ
+- [ ] Bảng điều phối: LSX đã duyệt chưa nhập bảng → badge vàng "Chưa nhập chi
+      tiết"; nhập xong badge biến mất
+- [ ] Xưởng (`totruong.test`) mở LSX → thấy bảng chi tiết read-only, không có
+      nút Lưu/gợi ý; Sales (`kinhdoanh.test`) cũng chỉ xem
+- [ ] LSX hoàn thành/huỷ → bảng chi tiết khoá (chỉ tra cứu)
+
+## 8e. Sản lượng theo công đoạn/tổ (SX-P3 — thay sheet PHÔI/HÀN/NGUỘI/SƠN)
+
+- [ ] Tổ trưởng (`totruong.test`) mở LSX đang SX: chọn công đoạn + ngày, điền SL
+      (+phế/kg/máy-màu) cho vài chi tiết → Ghi → bảng tổng hợp cập nhật đúng
+      (đã làm, thiếu/dư, %HT per công đoạn); tổ tự ghi theo phòng người nhập
+- [ ] Nhập vượt tổng cần → VẪN ghi được nhưng hiện cảnh báo "VƯỢT n" (FR-PR-07)
+- [ ] %HT tổng chỉ tăng khi công đoạn CUỐI có sản lượng; đủ ở công đoạn cuối →
+      badge chi tiết "Hoàn thành"
+- [ ] Badge "đồng bộ X/Y bộ" đúng chi tiết chậm nhất (ví dụ 2 TAY sơn 96 +
+      4 CHÂN sơn 100 → 25 bộ)
+- [ ] Ghi nhầm → xoá bản ghi trong "Sổ ghi sản lượng" (chỉ người nhập/QL) rồi
+      nhập lại; LSX hoàn thành → sổ khoá
+- [ ] Đã có sản lượng → Lưu bảng chi tiết bị chặn 400 (không cho ghi đè mất sổ)
+- [ ] Sales xem LSX thấy tổng hợp sản lượng nhưng không có lưới nhập
+
+## 8f. Gia công ngoài + Bảng tổng (SX-P4/P5)
+
+- [ ] Ghi 2 đợt Giao đi cho 1 chi tiết → đơn vị TTP, rồi Nhận về một phần →
+      bảng đối chiếu đúng giao/nhận/thiếu/%HT; nhận vượt giao → cảnh báo vẫn ghi
+- [ ] Nhận về có hàng hỏng → cột Hỏng đỏ; đơn vị GC ngừng giao dịch → 400
+- [ ] `/production/board`: đủ mọi chi tiết × công đoạn của các lệnh đang chạy,
+      khớp số với từng LSX; lọc theo lệnh/trạng thái; badge đồng bộ đúng
+- [ ] "Xuất Excel (CSV)" mở bằng Excel: tiếng Việt không vỡ, đủ cột đã làm +
+      thiếu/(dư) per công đoạn
+- [ ] KH-CƯ (`cungung.test`) vào được `/production/board` (giám sát); Sales bị
+      đẩy về trang chủ khi vào /production
+
 ## 9. Truy vết end-to-end (BR-11 — tiêu chí nghiệm thu SRS §7)
 
 - [ ] Từ 1 đơn hàng lần ra được: báo giá gốc → LSX → PO của LSX → phiếu nhập của PO → phiếu xuất theo LSX → tiến độ — không đứt mắt xích nào

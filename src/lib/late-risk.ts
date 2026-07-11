@@ -51,6 +51,30 @@ export function assessLateRisk(
   return { level: overdue ? 'overdue' : 'at_risk', reasons }
 }
 
+// ── PO quá hẹn giao (thu mua) ──────────────────────────────────────────
+// Cùng triết lý: chỉ hiển thị; notification đẩy theo lịch để GĐ2 (cron).
+
+/** PO còn mở = chưa về đủ / chưa huỷ — quá hẹn giao là nghẽn sản xuất. */
+const PO_FINAL_STATUSES = new Set(['received', 'cancelled'])
+
+export type PoLateInput = {
+  status: string
+  expected_at: string | null
+}
+
+/** overdue = quá hẹn giao; due_soon = còn ≤ horizon ngày. */
+export function assessPoLate(
+  po: PoLateInput,
+  todayIso: string,
+  horizonDays = LATE_RISK_HORIZON_DAYS,
+): 'overdue' | 'due_soon' | null {
+  if (PO_FINAL_STATUSES.has(po.status)) return null
+  if (!po.expected_at) return null // không hẹn giao — không có cơ sở cảnh báo
+  if (po.expected_at < todayIso) return 'overdue'
+  if (po.expected_at <= addDays(todayIso, horizonDays)) return 'due_soon'
+  return null
+}
+
 /** Cộng ngày trên chuỗi yyyy-mm-dd (UTC — tránh lệch múi giờ). */
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)

@@ -196,7 +196,8 @@ export function TrackingManager({
       cell: (r) => {
         if (!r.lsx_code)
           return <span className="text-xs text-zinc-400">Chưa phát LSX</span>
-        const done = r.lsx_status === 'completed'
+        // LSX huỷ theo đơn: chỉ hiện link, không cho đổi giai đoạn.
+        const done = r.lsx_status === 'completed' || r.lsx_status === 'cancelled'
         return (
           <div className="flex flex-col gap-1">
             <a
@@ -289,7 +290,10 @@ export function TrackingManager({
       width: '110px',
       align: 'right',
       cell: (r) =>
-        canManage && r.production_order_id && r.lsx_status !== 'completed' ? (
+        canManage &&
+        r.production_order_id &&
+        r.lsx_status !== 'completed' &&
+        r.lsx_status !== 'cancelled' ? (
           <button
             onClick={() => void completeLsx(r)}
             className="rounded-md border border-green-300 px-2 py-1 text-xs text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"

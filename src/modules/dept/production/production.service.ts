@@ -25,9 +25,25 @@ function canApprove(user: User): boolean {
   return user.role === 'admin' || user.role === 'manager'
 }
 
-/** Cập nhật tiến độ + báo hoàn thành: GĐ/BQL hoặc phòng KH-Cung ứng (FR-SUP-08). */
+/**
+ * Nhân sự Xưởng: phòng gán workspace 'production' (/admin/departments).
+ * Check bằng cột workspace_id — KHÔNG so tên chuỗi phòng (bug so tên đã vá 2 lần).
+ */
+export async function isProductionStaff(user: User): Promise<boolean> {
+  if (user.role === 'admin') return true
+  if (!user.department_id) return false
+  const dept = await departmentsRepo.findById(user.department_id)
+  return dept?.workspace_id === 'production'
+}
+
+/**
+ * Cập nhật tiến độ + báo hoàn thành: GĐ/BQL, phòng KH-Cung ứng (FR-SUP-08 —
+ * bấm thay khi xưởng nghỉ) hoặc Xưởng (workspace production — FR-PROD-01/02/03).
+ */
 async function canTrackProgress(user: User): Promise<boolean> {
-  return canApprove(user) || (await isSupplyStaff(user))
+  return (
+    canApprove(user) || (await isSupplyStaff(user)) || (await isProductionStaff(user))
+  )
 }
 
 /** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
@@ -38,11 +54,18 @@ async function approverIds(excludeId: string): Promise<string[]> {
     .map((u) => u.id)
 }
 
-/** ID nhân sự Cung ứng + Kỹ thuật để báo khi LSX được duyệt. */
-async function supplyTechIds(): Promise<string[]> {
+/** ID nhân sự Cung ứng + Kỹ thuật + Xưởng — nhận báo khi LSX được duyệt. */
+async function lsxApprovedNotifyIds(): Promise<string[]> {
   const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
   const target = new Set(
-    depts.filter((d) => d.name === SUPPLY_DEPT || d.name === TECH_DEPT).map((d) => d.id),
+    depts
+      .filter(
+        (d) =>
+          d.name === SUPPLY_DEPT ||
+          d.name === TECH_DEPT ||
+          d.workspace_id === 'production',
+      )
+      .map((d) => d.id),
   )
   return users
     .filter((u) => u.department_id && target.has(u.department_id))
@@ -161,7 +184,7 @@ export const productionService = {
       decision: 'approved',
       decided_by: user.id,
       issued_by: lsx.issued_by,
-      notify_ids: await supplyTechIds(),
+      notify_ids: await lsxApprovedNotifyIds(),
     })
     return updated
   },
@@ -198,6 +221,69 @@ export const productionService = {
     return updated
   },
 
+  /**
+   * Sales GỬI DUYỆT LẠI LSX bị từ chối (plan-order-lsx-lifecycle P1): không
+   * tạo bản mới (BR-01 giữ 1 đơn = 1 LSX) — sửa kèm header rồi quay về
+   * pending_approval, đơn → lsx_pending, GĐ nhận thông báo duyệt lại.
+   */
+  async resubmit(
+    user: User,
+    id: string,
+    input: {
+      ship_date?: string | null
+      received_date?: string | null
+      container_summary?: string | null
+      note?: string | null
+    },
+  ): Promise<ProductionOrder> {
+    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh gửi duyệt lại LSX')
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX không tồn tại')
+    if (lsx.status !== 'rejected') {
+      throw BadRequest('Chỉ gửi duyệt lại được LSX bị từ chối')
+    }
+    const order = await ordersRepo.findById(lsx.sales_order_id)
+    if (!order) throw NotFound('Đơn hàng không tồn tại')
+    if (order.status !== 'confirmed') {
+      throw BadRequest('Đơn không còn ở trạng thái Xác nhận — không gửi duyệt lại được')
+    }
+
+    const patch: Partial<ProductionOrder> = {
+      status: 'pending_approval',
+      rejected_reason: null,
+      issued_by: user.id,
+      issued_at: new Date().toISOString(),
+    }
+    if (input.ship_date !== undefined) patch.ship_date = input.ship_date
+    if (input.received_date !== undefined) patch.received_date = input.received_date
+    if (input.container_summary !== undefined)
+      patch.container_summary = input.container_summary
+    if (input.note !== undefined) patch.note = input.note
+    const updated = await productionRepo.patch(id, patch)
+
+    await ordersRepo.patch(lsx.sales_order_id, { status: 'lsx_pending' })
+    await ordersRepo.insertChange({
+      order_id: lsx.sales_order_id,
+      changed_by: user.id,
+      change: { type: 'lsx_resubmitted', lsx_code: lsx.code },
+      note: null,
+    })
+
+    const lines = await ordersRepo.listLines(lsx.sales_order_id)
+    await emit({
+      name: 'lsx.submitted',
+      production_order_id: id,
+      code: lsx.code,
+      order_code: order.code,
+      customer_name: order.customer_name,
+      lines_bom_pending: lines.filter((l) => l.bom_status !== 'done').length,
+      submitted_by: user.id,
+      approver_ids: await approverIds(user.id),
+      resubmitted: true,
+    })
+    return updated
+  },
+
   /** Sales nhập/tinh chỉnh spec sản xuất per dòng (OI-11) — override tech_spec SP. */
   async saveSpecs(user: User, id: string, lines: LsxLineSpecRow[]): Promise<void> {
     if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh nhập spec LSX')
@@ -224,6 +310,7 @@ export const productionService = {
       throw BadRequest('LSX chưa được duyệt')
     }
     if (lsx.status === 'completed') throw BadRequest('LSX đã hoàn thành')
+    if (lsx.status === 'cancelled') throw BadRequest('LSX đã huỷ theo đơn hàng')
 
     await productionRepo.insertProgress({
       production_order_id: id,
@@ -258,6 +345,7 @@ export const productionService = {
     if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
       throw BadRequest('LSX chưa được duyệt')
     }
+    if (lsx.status === 'cancelled') throw BadRequest('LSX đã huỷ theo đơn hàng')
     await productionRepo.insertProgress({
       production_order_id: id,
       stage: lsx.current_stage ?? 'vat_tu',
@@ -278,6 +366,7 @@ export const productionService = {
     if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
       throw BadRequest('LSX chưa được duyệt')
     }
+    if (lsx.status === 'cancelled') throw BadRequest('LSX đã huỷ theo đơn hàng')
 
     await productionRepo.insertProgress({
       production_order_id: id,

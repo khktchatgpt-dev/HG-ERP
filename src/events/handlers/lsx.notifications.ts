@@ -10,6 +10,7 @@ import { notificationsService } from '@/modules/core/notifications/notifications
 export function registerLsxNotificationHandlers(): void {
   on('lsx.submitted', async (e) => {
     const bom = e.lines_bom_pending > 0 ? ` · thiếu BOM ${e.lines_bom_pending} SP` : ''
+    const resub = e.resubmitted ? ' · gửi duyệt lại' : ''
     await Promise.all(
       e.approver_ids.map((rid) =>
         notificationsService.notify({
@@ -17,7 +18,7 @@ export function registerLsxNotificationHandlers(): void {
           actorId: e.submitted_by,
           type: 'lsx_submitted',
           payload: {
-            title: `${e.code} — ${e.customer_name} (đơn ${e.order_code})${bom}`,
+            title: `${e.code} — ${e.customer_name} (đơn ${e.order_code})${bom}${resub}`,
           },
         }),
       ),

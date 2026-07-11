@@ -8,6 +8,7 @@ import {
 } from '@/modules/dept/production/production.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { HttpError } from '@/server/http'
 import { LsxDetailView } from '@/components/production/LsxDetailView'
 
@@ -29,9 +30,12 @@ export default async function LsxDetailPage({
   }
   const { lsx, progress } = data
 
-  const [lines, stages] = await Promise.all([
+  // Vật tư nạp trực tiếp từ repo (read-only) cho grid bảng chi tiết — API kho
+  // guard theo phòng Kho nên không gọi qua service kho từ đây.
+  const [lines, stages, { rows: materials }] = await Promise.all([
     listLsxPrintLines(id, lsx.sales_order_id),
     productionRepo.listStages(),
+    materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
   ])
 
   const imageUrls = new Map<string, string>()
@@ -102,6 +106,14 @@ export default async function LsxDetailPage({
       canApprove={canApprove}
       canManage={canManage}
       canEditSpec={canEditSpec}
+      materials={materials.map((m) => ({
+        id: m.id,
+        code: m.code,
+        name: m.name,
+        unit: m.unit,
+      }))}
+      // Bảng chi tiết: Kế hoạch (KH-CƯ) nhập; GĐ/QL sửa được khi cần.
+      canEditComponents={canManage}
     />
   )
 }

@@ -14,14 +14,25 @@ export default async function PlanningSuppliersPage() {
     materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
   ])
 
-  // Lịch sử mua gọn: đếm PO + PO gần nhất theo NCC (FR-SUP-06)
-  const poStats = new Map<string, { count: number; last_code: string; last_at: string }>()
+  // Lịch sử mua gọn: đếm PO + PO gần nhất theo NCC (FR-SUP-06).
+  // open = chưa về đủ/chưa huỷ — cảnh báo khi Ngừng giao dịch NCC còn PO dở dang.
+  const poStats = new Map<
+    string,
+    { count: number; open: number; last_code: string; last_at: string }
+  >()
   for (const p of pos) {
+    const open = p.status !== 'received' && p.status !== 'cancelled' ? 1 : 0
     const cur = poStats.get(p.supplier_id)
     if (!cur) {
-      poStats.set(p.supplier_id, { count: 1, last_code: p.code, last_at: p.created_at })
+      poStats.set(p.supplier_id, {
+        count: 1,
+        open,
+        last_code: p.code,
+        last_at: p.created_at,
+      })
     } else {
       cur.count++
+      cur.open += open
     }
   }
 
@@ -30,6 +41,7 @@ export default async function PlanningSuppliersPage() {
       suppliers={suppliers.map((s) => ({
         ...s,
         po_count: poStats.get(s.id)?.count ?? 0,
+        open_po_count: poStats.get(s.id)?.open ?? 0,
         last_po: poStats.get(s.id)?.last_code ?? null,
       }))}
       materials={materials.map((m) => ({

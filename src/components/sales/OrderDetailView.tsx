@@ -94,6 +94,13 @@ const FIELD_LABEL: Record<string, string> = {
 
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
 
+/** Hệ quả khi huỷ đơn — server tính sẵn để confirm dialog nói thật (P3). */
+export type CancelImpact = {
+  lsx_active: boolean
+  pos_auto: string[] // PO chưa gửi NCC — sẽ tự huỷ
+  pos_manual: string[] // PO đã gửi NCC — Cung ứng xử lý tay
+}
+
 export function OrderDetailView({
   order,
   lines,
@@ -101,6 +108,7 @@ export function OrderDetailView({
   canEdit,
   canIssue,
   lsx,
+  cancelImpact,
 }: {
   order: OrderView
   lines: LineView[]
@@ -108,6 +116,7 @@ export function OrderDetailView({
   canEdit: boolean
   canIssue: boolean
   lsx: { id: string; code: string; status: string } | null
+  cancelImpact: CancelImpact | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -170,9 +179,28 @@ export function OrderDetailView({
   async function cancelOrder() {
     const reason = window.prompt(`Lý do huỷ đơn ${order.code}:`)?.trim()
     if (!reason) return
+    const impact: string[] = ['Đơn đã huỷ không khôi phục được.']
+    if (cancelImpact?.lsx_active && lsx) {
+      impact.push(`LSX ${lsx.code} sẽ dừng (Đã huỷ).`)
+    }
+    if (cancelImpact?.pos_auto.length) {
+      impact.push(
+        `Tự huỷ ${cancelImpact.pos_auto.length} PO chưa gửi NCC: ${cancelImpact.pos_auto.join(', ')}.`,
+      )
+    }
+    if (cancelImpact?.pos_manual.length) {
+      impact.push(
+        `${cancelImpact.pos_manual.length} PO ĐÃ GỬI NCC không tự huỷ — Cung ứng xử lý tay: ${cancelImpact.pos_manual.join(', ')}.`,
+      )
+    }
+    if (cancelImpact?.lsx_active) {
+      impact.push(
+        'Vật tư đã xuất không tự hoàn kho — Kho lập phiếu nhập lại nếu thu hồi.',
+      )
+    }
     const ok = await confirm({
       title: `Huỷ đơn ${order.code}?`,
-      description: 'Đơn đã huỷ không khôi phục được.',
+      description: impact.join(' '),
       tone: 'danger',
       confirmLabel: 'Huỷ đơn',
     })
@@ -358,7 +386,9 @@ export function OrderDetailView({
                     ? 'red'
                     : lsx.status === 'completed'
                       ? 'green'
-                      : 'blue'
+                      : lsx.status === 'cancelled'
+                        ? 'gray'
+                        : 'blue'
               }
             >
               {lsx.status === 'pending_approval'
@@ -369,7 +399,9 @@ export function OrderDetailView({
                     ? 'Đang sản xuất'
                     : lsx.status === 'completed'
                       ? 'Hoàn thành'
-                      : 'Bị từ chối'}
+                      : lsx.status === 'cancelled'
+                        ? 'Đã huỷ theo đơn'
+                        : 'Bị từ chối'}
             </Badge>
             <Link
               href={`/sales/lsx/${lsx.id}`}

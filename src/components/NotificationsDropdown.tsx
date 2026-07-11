@@ -24,6 +24,11 @@ const TYPE_LABEL: Record<string, string> = {
   commented: 'đã bình luận',
   due_soon: 'sắp đến hạn',
   overdue: 'đã quá hạn',
+  lsx_submitted: 'gửi LSX chờ duyệt',
+  lsx_approved: 'đã duyệt LSX',
+  lsx_rejected: 'đã từ chối LSX',
+  order_changed: 'đã sửa đơn sau khi phát LSX',
+  order_cancelled: 'đã huỷ đơn hàng',
 }
 
 function timeAgo(iso: string): string {
@@ -77,7 +82,9 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
   async function markAllRead() {
     await fetch('/api/notifications', { method: 'POST' })
     setUnread(0)
-    setItems((arr) => arr.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })))
+    setItems((arr) =>
+      arr.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })),
+    )
     router.refresh()
   }
 
@@ -91,14 +98,14 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
       >
         <span className="text-lg leading-none">🔔</span>
         {unread > 0 && (
-          <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-slate-900">
+          <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-slate-900">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-1 w-80 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="absolute top-full right-0 z-50 mt-1 w-80 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
           <header className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-900">
             <h3 className="text-sm font-semibold">Thông báo</h3>
             {unread > 0 && (
@@ -126,7 +133,9 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                 return (
                   <li
                     key={n.id}
-                    className={n.read_at ? 'opacity-60' : 'bg-amber-50/40 dark:bg-amber-950/10'}
+                    className={
+                      n.read_at ? 'opacity-60' : 'bg-amber-50/40 dark:bg-amber-950/10'
+                    }
                   >
                     <Link
                       href={n.task_id ? `/tasks/${n.task_id}` : '/notifications'}
@@ -134,12 +143,14 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
                       className="block px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
                     >
                       <div className="text-sm">
-                        <span className="font-medium">{TYPE_LABEL[n.type] ?? n.type}</span>
-                        {title && (
-                          <span className="text-zinc-500"> — {title}</span>
-                        )}
+                        <span className="font-medium">
+                          {TYPE_LABEL[n.type] ?? n.type}
+                        </span>
+                        {title && <span className="text-zinc-500"> — {title}</span>}
                       </div>
-                      <time className="text-xs text-zinc-500">{timeAgo(n.created_at)}</time>
+                      <time className="text-xs text-zinc-500">
+                        {timeAgo(n.created_at)}
+                      </time>
                     </Link>
                   </li>
                 )
@@ -151,7 +162,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="block px-3 py-2 text-center text-xs underline text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="block px-3 py-2 text-center text-xs text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
             >
               Xem tất cả
             </Link>

@@ -60,4 +60,4 @@ export const suppliersService = {
   },
 }
 
-export { isSupplyStaff }
+export { isSupplyStaff, SUPPLY_DEPT_NAME }

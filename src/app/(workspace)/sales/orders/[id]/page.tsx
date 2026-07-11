@@ -3,9 +3,14 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
-import { OrderDetailView, type ChangeView } from '@/components/sales/OrderDetailView'
+import {
+  OrderDetailView,
+  type CancelImpact,
+  type ChangeView,
+} from '@/components/sales/OrderDetailView'
 
 /** Trang chi tiết đơn hàng: thông tin đầy đủ + ảnh SP + file + phát LSX / sửa / huỷ. */
 export default async function OrderDetailPage({
@@ -31,6 +36,27 @@ export default async function OrderDetailPage({
   const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
   const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
   const lsx = await productionRepo.findByOrder(order.id)
+
+  // Hệ quả nếu huỷ đơn — confirm dialog nói thật thay vì câu chung chung (P3).
+  let cancelImpact: CancelImpact | null = null
+  if (lsx && order.status !== 'delivered' && order.status !== 'cancelled') {
+    const { rows: pos } = await posRepo.list({
+      production_order_id: lsx.id,
+      page: 1,
+      page_size: 200,
+    })
+    cancelImpact = {
+      lsx_active: ['pending_approval', 'approved', 'in_progress'].includes(lsx.status),
+      pos_auto: pos
+        .filter((p) => p.status === 'pending_approval' || p.status === 'approved')
+        .map((p) => p.code),
+      pos_manual: pos
+        .filter((p) =>
+          ['ordered', 'confirmed', 'in_transit', 'partial'].includes(p.status),
+        )
+        .map((p) => p.code),
+    }
+  }
 
   // Ảnh SP (signed URL ngắn hạn) — lỗi thì bỏ ảnh, không chặn xem đơn.
   const imageUrls = new Map<string, string>()
@@ -83,6 +109,7 @@ export default async function OrderDetailPage({
       canEdit={canEdit}
       canIssue={canIssue}
       lsx={lsx ? { id: lsx.id, code: lsx.code, status: lsx.status } : null}
+      cancelImpact={cancelImpact}
     />
   )
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
@@ -25,6 +26,7 @@ type Supplier = {
   note: string | null
   is_active: boolean
   po_count: number
+  open_po_count: number // PO chưa về đủ/chưa huỷ — cảnh báo khi ngừng giao dịch
   last_po: string | null
 }
 
@@ -53,6 +55,7 @@ export function SuppliersManager({
 }) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
   const [editing, setEditing] = useState<Supplier | null>(null)
@@ -71,6 +74,29 @@ export function SuppliersManager({
       return true
     })
   }, [suppliers, q, statusFilter])
+
+  // Ngừng giao dịch khi còn PO mở là tình huống thật (NCC ngưng cung cấp) —
+  // không chặn, nhưng confirm phải nói rõ để Cung ứng xử lý các PO dở dang.
+  async function toggleActive(s: Supplier) {
+    if (s.is_active) {
+      const warn =
+        s.open_po_count > 0
+          ? ` CHÚ Ý: còn ${s.open_po_count} PO đang mở với NCC này — hàng chưa về đủ, cần xử lý (huỷ hoặc chờ về) trước khi ngừng hẳn.`
+          : ''
+      const ok = await confirm({
+        title: `Ngừng giao dịch với ${s.name}?`,
+        description: `NCC ngừng sẽ không chọn được khi tạo PO / so giá.${warn}`,
+        tone: s.open_po_count > 0 ? 'danger' : undefined,
+        confirmLabel: 'Ngừng giao dịch',
+      })
+      if (!ok) return
+    }
+    const ok2 = await send(`/api/dept/supply/suppliers/${s.id}`, 'PATCH', {
+      is_active: !s.is_active,
+    })
+    if (ok2)
+      toast.success(s.is_active ? 'Đã ngừng giao dịch' : 'Đã kích hoạt lại', s.name)
+  }
 
   async function send(url: string, method: 'POST' | 'PATCH', body?: unknown) {
     setBusy(true)
@@ -156,10 +182,7 @@ export function SuppliersManager({
                   { label: 'Sửa', onClick: () => setEditing(s) },
                   {
                     label: s.is_active ? 'Ngừng giao dịch' : 'Kích hoạt lại',
-                    onClick: () =>
-                      void send(`/api/dept/supply/suppliers/${s.id}`, 'PATCH', {
-                        is_active: !s.is_active,
-                      }),
+                    onClick: () => void toggleActive(s),
                   },
                 ]
               : []),

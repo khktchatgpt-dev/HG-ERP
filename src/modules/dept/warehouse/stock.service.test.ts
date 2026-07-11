@@ -14,32 +14,45 @@ vi.mock('./stock.repo', () => ({
   insertMovements: vi.fn(),
   onHandMany: vi.fn(),
   stockInfoMany: vi.fn(),
+  issuedByLsx: vi.fn(),
   lsxNeeds: vi.fn(),
+}))
+vi.mock('@/modules/dept/production/components.service', () => ({
+  componentMaterialNeeds: vi.fn(),
 }))
 vi.mock('./warehouse.repo', () => ({ materialsRepo: { findById: vi.fn() } }))
 vi.mock('./warehouse.service', () => ({ isWarehouseUser: vi.fn() }))
 vi.mock('@/modules/dept/supply/supply.repo', () => ({
+  RECEIVABLE: ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'],
   supplyRepo: {
     listOpenPos: vi.fn(),
     lineStatus: vi.fn(),
     refreshStatusFromReceipts: vi.fn(),
     findPoCode: vi.fn(),
+    poStatus: vi.fn(),
   },
+}))
+vi.mock('@/modules/dept/production/production.repo', () => ({
+  productionRepo: { findById: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
-import { stockService } from './stock.service'
+import { stockService, smartLsxNeeds } from './stock.service'
 import {
   docsRepo,
   insertMovements,
+  issuedByLsx,
+  lsxNeeds as lsxNeedsRepo,
   onHandMany,
   stockInfoMany,
   warehousesRepo,
 } from './stock.repo'
+import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
@@ -55,6 +68,16 @@ beforeEach(() => {
   vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc1', code: 'PNK-2026-0001' })
   vi.mocked(usersRepo.list).mockResolvedValue([])
   vi.mocked(stockInfoMany).mockResolvedValue([])
+  // Mặc định: PO đang mở + LSX đang SX — case hợp lệ; test guard override riêng.
+  vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+    code: 'PO-2026-0001',
+    status: 'ordered',
+  })
+  vi.mocked(productionRepo.findById).mockResolvedValue({
+    id: 'lsx1',
+    code: 'LSX-2026-01',
+    status: 'in_progress',
+  } as never)
 })
 
 describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
@@ -119,6 +142,30 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       stockService.createReceiptDoc(admin, { lines: [{ material_id: 'm1', qty: 1 }] }),
     ).rejects.toMatchObject({ status: 400 })
   })
+
+  it.each(['pending_approval', 'cancelled', 'received'])(
+    'PO ở trạng thái %s → chặn nhập (vòng đời theo thực tế)',
+    async (status) => {
+      vi.mocked(supplyRepo.poStatus).mockResolvedValue({ code: 'PO-X', status })
+      await expect(
+        stockService.createReceiptDoc(admin, {
+          po_id: 'po1',
+          lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(insertMovements).not.toHaveBeenCalled()
+    },
+  )
+
+  it('PO không tồn tại → 404', async () => {
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue(null)
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po-x',
+        lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toMatchObject({ status: 404 })
+  })
 })
 
 describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
@@ -134,6 +181,52 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
         lines: [{ material_id: 'm1', qty: 1 }],
       }),
     ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it.each(['pending_approval', 'rejected', 'completed', 'cancelled'])(
+    'LSX ở trạng thái %s → chặn xuất (chỉ đã duyệt / đang SX)',
+    async (status) => {
+      vi.mocked(productionRepo.findById).mockResolvedValue({
+        id: 'lsx1',
+        code: 'LSX-2026-01',
+        status,
+      } as never)
+      await expect(
+        stockService.createIssueDoc(admin, {
+          kind: 'lsx',
+          production_order_id: 'lsx1',
+          lines: [{ material_id: 'm1', qty: 1 }],
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+      expect(insertMovements).not.toHaveBeenCalled()
+    },
+  )
+
+  it('LSX approved (chưa vào SX) vẫn xuất được — xưởng nhận VT trước khi bắt đầu', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      code: 'LSX-2026-01',
+      status: 'approved',
+    } as never)
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'lsx',
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 5 }],
+      }),
+    ).resolves.toMatchObject({ code: 'PXK-2026-0001' })
+  })
+
+  it('xuất tự do (daily) không đụng guard LSX', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue(null)
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'daily',
+        lines: [{ material_id: 'm1', qty: 5 }],
+      }),
+    ).resolves.toMatchObject({ code: 'PXK-2026-0001' })
   })
 
   it('guard tồn: cộng dồn nhiều dòng cùng vật tư, vượt tồn → chặn', async () => {
@@ -189,5 +282,88 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
     expect(evt).toBeTruthy()
     expect(evt.on_hand).toBe(3)
     expect(evt.notify_ids).toEqual(['boss'])
+  })
+})
+
+describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-components P3)', () => {
+  it('có bảng chi tiết → source=components, qty theo số cây, trừ đã xuất', async () => {
+    vi.mocked(componentMaterialNeeds).mockResolvedValue([
+      {
+        material_id: 'm1',
+        material_code: 'VT-01',
+        material_name: 'Ống sắt tròn 25',
+        unit: 'cây',
+        total_components: 144,
+        kg_needed: 94,
+        bars_needed: 21,
+        incomplete: false,
+      },
+    ])
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map([['m1', 5]]))
+
+    const out = await smartLsxNeeds('lsx1')
+
+    expect(out[0]).toMatchObject({
+      material_id: 'm1',
+      qty_needed: 21, // ưu tiên số cây
+      qty_issued: 5,
+      qty_remaining: 16,
+      kg_needed: 94,
+      bars_needed: 21,
+      source: 'components',
+    })
+    expect(lsxNeedsRepo).not.toHaveBeenCalled()
+  })
+
+  it('thiếu hệ số cây → qty rơi về kg; thiếu cả hai → số chi tiết', async () => {
+    vi.mocked(componentMaterialNeeds).mockResolvedValue([
+      {
+        material_id: 'm1',
+        material_code: 'VT-01',
+        material_name: 'x',
+        unit: 'kg',
+        total_components: 100,
+        kg_needed: 40,
+        bars_needed: null,
+        incomplete: true,
+      },
+      {
+        material_id: 'm2',
+        material_code: 'VT-02',
+        material_name: 'y',
+        unit: 'cai',
+        total_components: 10,
+        kg_needed: null,
+        bars_needed: null,
+        incomplete: true,
+      },
+    ])
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map())
+
+    const out = await smartLsxNeeds('lsx1')
+    expect(out[0].qty_needed).toBe(40) // kg
+    expect(out[1].qty_needed).toBe(10) // số chi tiết
+    expect(out[0].incomplete).toBe(true)
+  })
+
+  it('chưa nhập bảng chi tiết → fallback BOM×SL (view) như cũ', async () => {
+    vi.mocked(componentMaterialNeeds).mockResolvedValue(null)
+    vi.mocked(lsxNeedsRepo).mockResolvedValue([
+      {
+        production_order_id: 'lsx1',
+        material_id: 'm1',
+        material_code: 'VT-01',
+        material_name: 'x',
+        unit: 'kg',
+        qty_needed: 12,
+        qty_issued: 0,
+        qty_remaining: 12,
+      },
+    ])
+
+    const out = await smartLsxNeeds('lsx1')
+    expect(out[0].qty_needed).toBe(12)
+    expect(out[0].source).toBeUndefined() // nhánh BOM giữ nguyên shape cũ
+    expect(issuedByLsx).not.toHaveBeenCalled()
   })
 })

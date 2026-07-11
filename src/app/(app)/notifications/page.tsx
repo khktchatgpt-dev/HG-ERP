@@ -18,6 +18,11 @@ const TYPE_LABEL: Record<string, string> = {
   po_submitted: 'gửi đơn đặt vật tư chờ bạn duyệt',
   po_approved: 'đã duyệt đơn đặt vật tư',
   po_rejected: 'đã từ chối đơn đặt vật tư',
+  lsx_submitted: 'gửi LSX chờ bạn duyệt',
+  lsx_approved: 'đã duyệt LSX',
+  lsx_rejected: 'đã từ chối LSX',
+  order_changed: 'đã sửa đơn hàng sau khi phát LSX',
+  order_cancelled: 'đã huỷ đơn hàng',
   approved: 'đã duyệt công việc của bạn',
   rejected: 'đã trả lại công việc',
   commented: 'đã bình luận',
@@ -51,16 +56,11 @@ export default async function NotificationsPage() {
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <div>
-                      <span className="font-medium">
-                        {TYPE_LABEL[n.type] ?? n.type}
-                      </span>
+                      <span className="font-medium">{TYPE_LABEL[n.type] ?? n.type}</span>
                       {title && <span className="text-zinc-500"> — {title}</span>}
                     </div>
                     {n.task_id && (
-                      <Link
-                        href={`/tasks/${n.task_id}`}
-                        className="text-xs underline"
-                      >
+                      <Link href={`/tasks/${n.task_id}`} className="text-xs underline">
                         Mở
                       </Link>
                     )}

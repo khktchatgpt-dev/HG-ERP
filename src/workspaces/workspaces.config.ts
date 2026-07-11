@@ -216,6 +216,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế hoạch sản xuất',
         items: [
           { href: '/planning/production', label: 'Tiến độ sản xuất', icon: '▣' },
+          { href: '/production/board', label: 'Bảng tổng tiến độ', icon: '▦' },
           { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
           { href: '/warehouse/docs', label: 'Phiếu kho', icon: '▥' },
         ],
@@ -246,11 +247,16 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/production',
     accent: 'red',
     logoText: 'SX',
-    ready: false,
+    ready: true,
     sections: [
       {
+        // Phạm vi xưởng gọn trong /production (gate /sales không mở cho xưởng —
+        // commit "xem chéo đúng phạm vi"). Cần nhìn toàn cảnh đơn → nới sau.
         heading: 'Sản xuất',
-        items: [{ href: '/production', label: 'Trang chủ', icon: '◧' }],
+        items: [
+          { href: '/production', label: 'Lệnh đang chạy', icon: '◧' },
+          { href: '/production/board', label: 'Bảng tổng tiến độ', icon: '▦' },
+        ],
       },
     ],
   },

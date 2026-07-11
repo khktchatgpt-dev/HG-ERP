@@ -27,6 +27,8 @@ type Packing = {
   qty_per_carton?: number
   loading_40hc?: number
   pack_unit_label?: string
+  nw_kg?: number
+  gw_kg?: number
 }
 
 /** Thông số sản xuất (jsonb tech_spec) — in trên LSX. */
@@ -61,6 +63,13 @@ type Product = {
   showroom_sample: boolean
   reference_price: number | null
   tech_spec: TechSpec
+  // Thông tin XK + đặc tính nội thất (0037).
+  hs_code: string | null
+  origin_country: string | null
+  material: string | null
+  max_load_kg: number | null
+  assembly: 'assembled' | 'kd' | null
+  set_contents: string | null
   is_active: boolean
 }
 
@@ -694,6 +703,18 @@ function ProductDetail({
   const carton = [pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm].every((v) => v != null)
     ? `${pk.carton_l_cm} × ${pk.carton_w_cm} × ${pk.carton_h_cm} cm`
     : null
+  // CBM / thùng suy từ kích thước carton (m³) — không nhập tay.
+  const cbm =
+    pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
+      ? (pk.carton_l_cm * pk.carton_w_cm * pk.carton_h_cm) / 1_000_000
+      : null
+  const hasExport =
+    product.hs_code ||
+    product.origin_country ||
+    product.material ||
+    product.max_load_kg != null ||
+    product.assembly ||
+    product.set_contents
   return (
     <div className="flex flex-col gap-3 text-sm">
       <Row label="Mã nội bộ" value={<span className="font-mono">{product.code}</span>} />
@@ -735,6 +756,38 @@ function ProductDetail({
             {pk.loading_40hc != null && (
               <Row label="Loading 40'HC" value={String(pk.loading_40hc)} />
             )}
+            {pk.nw_kg != null && <Row label="NW / thùng" value={`${pk.nw_kg} kg`} />}
+            {pk.gw_kg != null && <Row label="GW / thùng" value={`${pk.gw_kg} kg`} />}
+            {cbm != null && <Row label="CBM / thùng" value={`${cbm.toFixed(3)} m³`} />}
+          </div>
+        </div>
+      )}
+      {hasExport && (
+        <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-900">
+          <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
+            Xuất khẩu & đặc tính
+          </div>
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            {product.hs_code && (
+              <Row
+                label="Mã HS"
+                value={<span className="font-mono">{product.hs_code}</span>}
+              />
+            )}
+            {product.origin_country && (
+              <Row label="Xuất xứ" value={product.origin_country} />
+            )}
+            {product.material && <Row label="Chất liệu" value={product.material} />}
+            {product.max_load_kg != null && (
+              <Row label="Tải trọng tối đa" value={`${product.max_load_kg} kg`} />
+            )}
+            {product.assembly && (
+              <Row
+                label="Lắp ráp"
+                value={product.assembly === 'kd' ? 'Tháo rời (KD)' : 'Nguyên chiếc'}
+              />
+            )}
+            {product.set_contents && <Row label="Bộ gồm" value={product.set_contents} />}
           </div>
         </div>
       )}
@@ -885,6 +938,8 @@ function ProductForm({
       qty_per_carton: numOrUndef(fd.get('qty_per_carton')),
       loading_40hc: numOrUndef(fd.get('loading_40hc')),
       pack_unit_label: strOrUndef('pack_unit_label'),
+      nw_kg: numOrUndef(fd.get('nw_kg')),
+      gw_kg: numOrUndef(fd.get('gw_kg')),
     }
     const tech_spec: TechSpec = {
       machine: strOrUndef('machine'),
@@ -912,6 +967,13 @@ function ProductForm({
       showroom_sample: fd.get('showroom_sample') === 'on',
       reference_price: numOrUndef(fd.get('reference_price')) ?? null,
       tech_spec,
+      // Xuất khẩu & đặc tính nội thất (0037)
+      hs_code: String(fd.get('hs_code') ?? '').trim() || null,
+      origin_country: String(fd.get('origin_country') ?? '').trim() || null,
+      material: String(fd.get('material') ?? '').trim() || null,
+      max_load_kg: numOrUndef(fd.get('max_load_kg')) ?? null,
+      assembly: String(fd.get('assembly') ?? '') || null,
+      set_contents: String(fd.get('set_contents') ?? '').trim() || null,
     }
     if (initial) {
       body.bom_status = String(fd.get('bom_status') ?? initial.bom_status)
@@ -1141,6 +1203,94 @@ function ProductForm({
             defaultValue={pk.pack_unit_label ?? ''}
             className={cls}
             placeholder="ctn / pallet"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          NW / thùng (kg)
+          <input
+            name="nw_kg"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={pk.nw_kg ?? ''}
+            className={cls}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          GW / thùng (kg)
+          <input
+            name="gw_kg"
+            type="number"
+            step="0.01"
+            min="0"
+            defaultValue={pk.gw_kg ?? ''}
+            className={cls}
+          />
+        </label>
+      </fieldset>
+
+      <fieldset className="grid gap-3 rounded-md border border-zinc-200 p-3 sm:col-span-2 sm:grid-cols-3 dark:border-zinc-800">
+        <legend className="px-1 text-xs font-semibold text-zinc-500 uppercase">
+          Xuất khẩu & đặc tính (khai hải quan / catalogue)
+        </legend>
+        <label className="flex flex-col gap-1 text-xs">
+          Mã HS (hải quan)
+          <input
+            name="hs_code"
+            maxLength={20}
+            defaultValue={initial?.hs_code ?? ''}
+            className={`${cls} font-mono`}
+            placeholder="9401.69.90"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Xuất xứ
+          <input
+            name="origin_country"
+            maxLength={100}
+            defaultValue={initial?.origin_country ?? ''}
+            className={cls}
+            placeholder="Việt Nam"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Tải trọng tối đa (kg)
+          <input
+            name="max_load_kg"
+            type="number"
+            step="0.1"
+            min="0"
+            defaultValue={initial?.max_load_kg ?? ''}
+            className={cls}
+            placeholder="120"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Chất liệu chính
+          <input
+            name="material"
+            maxLength={300}
+            defaultValue={initial?.material ?? ''}
+            className={cls}
+            placeholder="Khung nhôm sơn tĩnh điện + mây nhựa HDPE"
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Lắp ráp
+          <select name="assembly" defaultValue={initial?.assembly ?? ''} className={cls}>
+            <option value="">—</option>
+            <option value="assembled">Nguyên chiếc</option>
+            <option value="kd">Tháo rời (KD)</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Bộ gồm (nếu là bộ)
+          <input
+            name="set_contents"
+            maxLength={500}
+            defaultValue={initial?.set_contents ?? ''}
+            className={cls}
+            placeholder="1 bàn + 6 ghế"
           />
         </label>
       </fieldset>
