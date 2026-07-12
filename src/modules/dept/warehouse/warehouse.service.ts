@@ -1,6 +1,7 @@
 import { materialsRepo, type Material } from './warehouse.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 /** Tên phòng Kho trong `public.departments` (không hard-code UUID). */
@@ -13,10 +14,14 @@ async function isWarehouseUser(user: User): Promise<boolean> {
   return dept?.name === WAREHOUSE_DEPT_NAME
 }
 
-/** Xem chéo read-only (FR-ADM-02): manager/admin xem được Kho; ghi vẫn cần phòng Kho. */
+/**
+ * Xem chéo read-only (FR-ADM-02): manager/admin xem được Kho; ghi vẫn cần phòng Kho.
+ * Cung ứng cũng xem được (phiếu kho / tồn) để theo dõi hàng về theo PO — mục
+ * "Phiếu kho" trong menu Cung ứng (/planning/docs). Ghi vẫn bị chặn theo phòng.
+ */
 async function canViewWarehouse(user: User): Promise<boolean> {
   if (user.role === 'admin' || user.role === 'manager') return true
-  return isWarehouseUser(user)
+  return (await isWarehouseUser(user)) || (await isSupplyStaff(user))
 }
 
 /** Chỉ Kho + admin được sửa danh mục vật tư. */

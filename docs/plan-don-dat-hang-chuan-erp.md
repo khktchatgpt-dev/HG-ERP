@@ -53,15 +53,27 @@
 
 ---
 
-## P1 — PO đối chiếu tồn kho + đề xuất mua · ~1.5 ngày ⭐ (yêu cầu chính)
+## P1 — PO đối chiếu tồn kho · ~1.5 ngày ⭐ (yêu cầu chính)
 
-> **✅ HOÀN THÀNH 13/07/2026.** Làm TRƯỚC P0 vì P1 chỉ đọc schema có sẵn (needs,
-> warehouse_stock, supply_po_line_status, trạng thái LSX/PO) — không cần migration.
-> Đã có: `suggestForMaterial`/`suggestPurchase` (`src/lib/po-suggestion.ts`, 8 test);
-> `productionRepo.listCommittedIds`; `reservedByOtherLsx` (stock.service);
-> `supplyRepo.orderedPendingByLsx`; endpoint `needs` gộp + tính suggest; bảng đề xuất
-> trong `PosManager` (Tồn khả dụng | Cần | Đã đặt | Đề xuất + "Điền theo đề xuất" +
-> cảnh báo chờ duyệt). typecheck/lint sạch, 286 test xanh.
+> **🔄 PIVOT THIẾT KẾ 13/07/2026 (user chốt).** Bản đề xuất tự động (kéo "cần" từ
+> bảng chi tiết/BOM của phòng Kế hoạch) bị đánh giá **quá phức tạp & rối** — số
+> "cần" đến từ dữ liệu phòng khác như hộp đen. **Thực tế:** Cung ứng tự đọc file
+> BOM, tự tìm vật tư cần mua; hệ thống chỉ cần **hiện tồn kho** và cho **gõ số
+> lượng**. Vẫn giữ BR-06 (1 đơn = 1 NCC + 1 LSX).
+>
+> **Thiết kế mới (đang chạy):**
+> - **Trang tạo riêng** `/planning/pos/new` (không dùng modal chật).
+> - **Tìm vật tư** (search theo mã/tên) → chọn → tự điền **tồn kho + ĐVT**; người
+>   mua chỉ gõ **số lượng đặt** + đơn giá. Cột: Vật tư | Tồn kho | ĐVT | SL đặt | Đơn giá.
+> - **Bỏ** panel đề xuất tự động khỏi luồng tạo; modal Sửa/Nhân bản giữ nguyên tạm.
+> - Files: `new/PoCreateForm.tsx` + `new/page.tsx` (nạp vật tư kèm on_hand từ
+>   `stockRepo.list`); nút "+ Tạo đơn đặt" ở `PosManager` → link sang trang mới.
+> - typecheck/lint sạch, 286 test xanh.
+>
+> **Giữ lại từ bản trước (không dùng ở luồng tạo, có thể tái dùng sau):**
+> `suggestForMaterial`/`suggestPurchase` (`src/lib/po-suggestion.ts`, 8 test),
+> `uom.ts`, `reservedByOtherLsx`, `supplyRepo.orderedPendingByLsx`, enrich endpoint
+> `needs`. Không xoá vội — có thể thành tính năng gợi ý *tuỳ chọn* về sau.
 
 Mục tiêu: khi thêm dòng vật tư trong màn tạo/sửa PO, hiển thị bảng đối chiếu và **đề xuất SL mua**.
 

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { DocumentFiles } from '@/components/DocumentFiles'
@@ -172,7 +173,6 @@ export function PosManager({
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
-  const [openCreate, setOpenCreate] = useState(false)
   const [viewing, setViewing] = useState<{
     po: Po
     lines: PoLine[]
@@ -441,9 +441,9 @@ export function PosManager({
         description="Mỗi đơn = 1 NCC + 1 LSX (BR-06). GĐ duyệt xong mới gửi NCC (BR-05); về hàng do Kho ghi nhận."
         actions={
           canEdit && (
-            <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
+            <Link href="/planning/pos/new" className={btnPrimary}>
               + Tạo đơn đặt
-            </button>
+            </Link>
           )
         }
       />
@@ -517,39 +517,18 @@ export function PosManager({
             <EmptyState
               icon="▩"
               title={pos.length === 0 ? 'Chưa có đơn đặt nào' : 'Không khớp bộ lọc'}
-              description="Tạo đơn đặt từ LSX — hệ thống gợi ý nhu cầu vật tư theo BOM."
+              description="Chọn LSX + NCC, tìm vật tư cần mua — hệ thống tự hiện tồn kho, bạn chỉ điền số lượng."
               action={
                 canEdit && pos.length === 0 ? (
-                  <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
+                  <Link href="/planning/pos/new" className={btnPrimary}>
                     + Tạo đơn đặt
-                  </button>
+                  </Link>
                 ) : undefined
               }
             />
           }
         />
       </div>
-
-      {/* Tạo PO */}
-      <Modal
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        title="Tạo đơn đặt vật tư"
-        maxWidth="sm:max-w-4xl"
-      >
-        {openCreate && (
-          <PoForm
-            suppliers={suppliers}
-            lsxs={lsxs}
-            materials={materials}
-            onDone={(code) => {
-              setOpenCreate(false)
-              toast.success(`Đã tạo ${code}`, 'Đơn đang chờ Giám đốc duyệt')
-              router.refresh()
-            }}
-          />
-        )}
-      </Modal>
 
       {/* Chi tiết */}
       <Modal
