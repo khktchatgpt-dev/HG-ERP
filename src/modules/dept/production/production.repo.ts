@@ -114,6 +114,20 @@ export const productionRepo = {
     return { rows: unwrap(data as Raw[] | null), total: count ?? 0 }
   },
 
+  /**
+   * Id các LSX đã CAM KẾT (đã qua duyệt GĐ): approved | in_progress — dùng để
+   * tính "giữ chỗ tồn" khi đề xuất mua (plan-don-dat-hang-chuan-erp §P1, Cách 2).
+   * LSX pending_approval/rejected/completed/cancelled KHÔNG giữ chỗ.
+   */
+  async listCommittedIds(): Promise<string[]> {
+    const { data } = await db()
+      .from('production_orders')
+      .select('id')
+      .in('status', ['approved', 'in_progress'])
+      .limit(1000)
+    return ((data as { id: string }[] | null) ?? []).map((r) => r.id)
+  },
+
   async findById(id: string): Promise<ProductionOrderWithOrder | null> {
     const { data } = await db()
       .from('production_orders')
