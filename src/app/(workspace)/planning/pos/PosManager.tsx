@@ -83,6 +83,14 @@ type Need = {
   qty_issued: number
   qty_remaining: number
   on_hand: number
+  // Đề xuất mua theo tồn (plan-don-dat-hang §P1, Cách 2) — API tính sẵn.
+  reserved_others: number // nhu cầu LSX khác đã cam kết giữ chỗ
+  available: number // max(on_hand − reserved_others, 0)
+  ordered: number // đã đặt (PO đã duyệt), còn phải về
+  pending: number // chờ GĐ duyệt (chỉ cảnh báo)
+  suggest: number // max(cần − available − ordered, 0)
+  enough: boolean
+  has_pending: boolean
   // Nhánh bảng chi tiết (plan-lsx-components P3) — tham khảo cho người mua.
   kg_needed?: number | null
   bars_needed?: number | null
@@ -687,22 +695,34 @@ function PoForm({
     )
   }
 
+  function rowFromNeed(n: Need): Row {
+    const offer = supplierId ? offerFor(n.material_id, supplierId) : undefined
+    // Mặc định = đề xuất mua (Cách 2); đủ tồn (suggest 0) thì để trống cho người
+    // mua tự điền nếu muốn mua dự phòng.
+    return {
+      material_id: n.material_id,
+      qty_ordered: n.suggest > 0 ? n.suggest : '',
+      unit_price: offer ? offer.price : '',
+      spec: '',
+      qty2: '',
+      unit2: '',
+      note: '',
+    }
+  }
+
   function addFromNeed(n: Need) {
     if (rows.some((r) => r.material_id === n.material_id)) return
-    const offer = supplierId ? offerFor(n.material_id, supplierId) : undefined
-    setRows((rs) => [
-      ...rs,
-      {
-        material_id: n.material_id,
-        qty_ordered: Math.max(n.qty_remaining - n.on_hand, 0) || n.qty_remaining,
-        unit_price: offer ? offer.price : '',
-        spec: '',
-        qty2: '',
-        unit2: '',
-        note: '',
-      },
-    ])
+    setRows((rs) => [...rs, rowFromNeed(n)])
     void loadPrices([n.material_id])
+  }
+
+  /** Điền tất cả vật tư có đề xuất mua > 0 (bỏ qua dòng đã có). */
+  function addAllSuggested() {
+    const have = new Set(rows.map((r) => r.material_id))
+    const toAdd = needs.filter((n) => n.suggest > 0 && !have.has(n.material_id))
+    if (toAdd.length === 0) return
+    setRows((rs) => [...rs, ...toAdd.map(rowFromNeed)])
+    void loadPrices(toAdd.map((n) => n.material_id))
   }
 
   function addRow() {
@@ -828,43 +848,119 @@ function PoForm({
         </label>
       </div>
 
-      {/* Gợi ý nhu cầu (FR-SUP-01): ưu tiên BẢNG CHI TIẾT của LSX, fallback BOM */}
+      {/* Đề xuất mua theo tồn (FR-SUP-01 + §P1 Cách 2): cần − tồn khả dụng − đã đặt */}
       {!initial && lsxId && (
-        <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-          <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
-            Nhu cầu (cần − đã xuất
-            {needs[0]?.source === 'components'
-              ? ' · theo bảng chi tiết của LSX'
-              : ' · theo BOM'}
-            ) — bấm để thêm vào đơn; tồn kho chỉ để tham khảo
+        <div className="rounded-md border border-zinc-200 dark:border-zinc-800">
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 dark:border-zinc-900">
+            <div className="text-xs font-semibold text-zinc-500 uppercase">
+              Đề xuất mua
+              {needs[0]?.source === 'components'
+                ? ' · nhu cầu theo bảng chi tiết'
+                : ' · nhu cầu theo BOM'}
+              <span className="ml-1 font-normal text-zinc-400 normal-case">
+                — tồn khả dụng đã trừ phần LSX khác giữ chỗ
+              </span>
+            </div>
+            {needs.some((n) => n.suggest > 0 && !usedIds.has(n.material_id)) && (
+              <button
+                type="button"
+                onClick={addAllSuggested}
+                className="shrink-0 rounded-md bg-sky-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-sky-700"
+              >
+                ✓ Điền theo đề xuất
+              </button>
+            )}
           </div>
           {needs.length === 0 ? (
-            <p className="text-xs text-zinc-400">
+            <p className="px-3 py-3 text-xs text-zinc-400">
               LSX chưa có bảng chi tiết / BOM — thêm dòng thủ công bên dưới (BR-07: không
               bắt buộc đủ BOM).
             </p>
           ) : (
-            <div className="flex flex-wrap gap-2">
-              {needs.map((n) => (
-                <button
-                  key={n.material_id}
-                  type="button"
-                  disabled={usedIds.has(n.material_id)}
-                  onClick={() => addFromNeed(n)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs hover:border-sky-400 hover:text-sky-600 disabled:opacity-40 dark:border-zinc-700"
-                  title={`Cần ${n.qty_remaining} · Tồn ${n.on_hand}${n.incomplete ? ' · có dòng thiếu ĐM/hệ số — số chưa trọn' : ''}`}
-                >
-                  <span className="font-mono">{n.material_code}</span> {n.material_name} —
-                  cần <b>{n.qty_remaining}</b> {n.unit} (tồn {n.on_hand})
-                  {(n.kg_needed != null || n.bars_needed != null) && (
-                    <span className="ml-1 text-zinc-400">
-                      ≈{n.kg_needed != null ? ` ${n.kg_needed} kg` : ''}
-                      {n.bars_needed != null ? ` · ${n.bars_needed} cây` : ''}
-                    </span>
-                  )}
-                  {n.incomplete && <span className="ml-1 text-amber-500">⚠</span>}
-                </button>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs tabular-nums">
+                <thead>
+                  <tr className="text-right text-[10px] text-zinc-400 uppercase">
+                    <th className="py-1.5 pr-2 pl-3 text-left font-medium">Vật tư</th>
+                    <th className="py-1.5 pr-2 font-medium">Tồn khả dụng</th>
+                    <th className="py-1.5 pr-2 font-medium">Cần</th>
+                    <th className="py-1.5 pr-2 font-medium">Đã đặt</th>
+                    <th className="py-1.5 pr-2 font-medium">Đề xuất</th>
+                    <th className="py-1.5 pr-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {needs.map((n) => {
+                    const added = usedIds.has(n.material_id)
+                    return (
+                      <tr
+                        key={n.material_id}
+                        className="border-t border-zinc-100 text-right dark:border-zinc-900"
+                      >
+                        <td className="py-1.5 pr-2 pl-3 text-left">
+                          <span className="font-mono text-zinc-400">
+                            {n.material_code}
+                          </span>{' '}
+                          {n.material_name}
+                          {n.has_pending && (
+                            <span
+                              className="ml-1 text-amber-600 dark:text-amber-500"
+                              title={`Đã có PO ${n.pending} ${n.unit} chờ Giám đốc duyệt — tránh đặt trùng`}
+                            >
+                              ⚠ {n.pending} chờ duyệt
+                            </span>
+                          )}
+                          {n.incomplete && (
+                            <span
+                              className="ml-1 text-amber-500"
+                              title="Có dòng thiếu ĐM/hệ số — số chưa trọn"
+                            >
+                              ⚠
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <span title={`Tồn ${n.on_hand} − giữ chỗ ${n.reserved_others}`}>
+                            {n.available.toLocaleString('vi-VN')}
+                          </span>
+                          {n.reserved_others > 0 && (
+                            <span className="ml-1 text-[10px] text-zinc-400">
+                              (tồn {n.on_hand})
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          {n.qty_remaining.toLocaleString('vi-VN')} {n.unit}
+                        </td>
+                        <td className="py-1.5 pr-2 text-zinc-500">
+                          {n.ordered > 0 ? n.ordered.toLocaleString('vi-VN') : '—'}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          {n.suggest > 0 ? (
+                            <b className="text-amber-600 dark:text-amber-500">
+                              {n.suggest.toLocaleString('vi-VN')}
+                            </b>
+                          ) : (
+                            <span className="text-green-600 dark:text-green-500">
+                              đủ tồn
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-3">
+                          <button
+                            type="button"
+                            disabled={added}
+                            onClick={() => addFromNeed(n)}
+                            className="rounded border border-zinc-300 px-2 py-0.5 text-[11px] hover:border-sky-400 hover:text-sky-600 disabled:opacity-40 dark:border-zinc-700"
+                          >
+                            {added ? 'Đã thêm' : '+ Thêm'}
+                          </button>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

@@ -113,6 +113,58 @@ export const supplyRepo = {
     return status
   },
 
+  /**
+   * Đã đặt / chờ duyệt của 1 LSX gộp theo vật tư (đề xuất mua §P1, Cách 2):
+   *  - ordered = Σ còn phải về (qty_missing) của PO ĐÃ DUYỆT (RECEIVABLE). Dùng
+   *    qty_missing (không phải qty_ordered) để không đếm trùng phần đã về — hàng
+   *    đã về nằm trong tồn (on_hand) rồi.
+   *  - pending = Σ qty_ordered của PO còn chờ GĐ duyệt (chỉ cảnh báo, không trừ).
+   * `excludePoId` = PO đang sửa (không tự đếm chính nó).
+   */
+  async orderedPendingByLsx(
+    productionOrderId: string,
+    excludePoId?: string | null,
+  ): Promise<Map<string, { ordered: number; pending: number }>> {
+    const out = new Map<string, { ordered: number; pending: number }>()
+    const { data: pos } = await db()
+      .from('supply_purchase_orders')
+      .select('id, status')
+      .eq('production_order_id', productionOrderId)
+    const committed: string[] = []
+    const pending: string[] = []
+    for (const p of (pos as { id: string; status: string }[] | null) ?? []) {
+      if (excludePoId && p.id === excludePoId) continue
+      if ((RECEIVABLE as readonly string[]).includes(p.status)) committed.push(p.id)
+      else if (p.status === 'pending_approval') pending.push(p.id)
+    }
+    const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
+      const e = out.get(mid) ?? { ordered: 0, pending: 0 }
+      e[k] += v
+      out.set(mid, e)
+    }
+    if (committed.length > 0) {
+      const { data } = await db()
+        .from('supply_po_line_status')
+        .select('material_id, qty_missing')
+        .in('po_id', committed)
+      for (const r of (data as { material_id: string; qty_missing: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'ordered', Math.max(Number(r.qty_missing) || 0, 0))
+      }
+    }
+    if (pending.length > 0) {
+      const { data } = await db()
+        .from('supply_purchase_order_lines')
+        .select('material_id, qty_ordered')
+        .in('po_id', pending)
+      for (const r of (data as { material_id: string; qty_ordered: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'pending', Number(r.qty_ordered) || 0)
+      }
+    }
+    return out
+  },
+
   async findPoCode(poId: string): Promise<string | null> {
     const { data } = await db()
       .from('supply_purchase_orders')

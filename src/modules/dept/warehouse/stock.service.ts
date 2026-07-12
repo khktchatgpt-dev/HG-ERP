@@ -77,6 +77,33 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
   })
 }
 
+/**
+ * Nhu cầu còn lại của các LSX KHÁC đã cam kết (approved|in_progress) — gộp theo
+ * vật tư, để trừ khỏi tồn khả dụng khi đề xuất mua (Cách 2, plan-don-dat-hang §P1).
+ * Chỉ giữ các vật tư quan tâm (materialIds của LSX đang lập đơn) để nhẹ.
+ * Lặp smartLsxNeeds theo từng LSX — nhất quán với "cần" của LSX đang xét; quy mô
+ * GĐ1 nhỏ nên chấp nhận N truy vấn (không phải hot path — chỉ chạy khi mở form PO).
+ */
+export async function reservedByOtherLsx(
+  excludeLsxId: string,
+  materialIds: string[],
+): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (materialIds.length === 0) return out
+  const want = new Set(materialIds)
+  const ids = (await productionRepo.listCommittedIds()).filter(
+    (id) => id !== excludeLsxId,
+  )
+  for (const id of ids) {
+    const needs = await smartLsxNeeds(id)
+    for (const n of needs) {
+      if (!want.has(n.material_id) || n.qty_remaining <= 0) continue
+      out.set(n.material_id, (out.get(n.material_id) ?? 0) + n.qty_remaining)
+    }
+  }
+  return out
+}
+
 export const stockService = {
   async listStock(
     user: User,
