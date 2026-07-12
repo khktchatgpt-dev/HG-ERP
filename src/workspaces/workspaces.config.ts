@@ -216,9 +216,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế hoạch sản xuất',
         items: [
           { href: '/planning/production', label: 'Tiến độ sản xuất', icon: '▣' },
-          { href: '/production/board', label: 'Bảng tổng tiến độ', icon: '▦' },
-          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
-          { href: '/warehouse/docs', label: 'Phiếu kho', icon: '▥' },
+          // Route /planning/* re-export view dùng chung → giữ menu Cung ứng, không
+          // nhảy sang shell Sản xuất/Sales/Kho.
+          { href: '/planning/board', label: 'Bảng tổng tiến độ', icon: '▦' },
+          { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+          { href: '/planning/docs', label: 'Phiếu kho', icon: '▥' },
         ],
       },
     ],
@@ -294,7 +296,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Điều hành',
         items: [
           { href: '/exec', label: 'Phê duyệt', icon: '✓' },
-          { href: '/sales/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
+          // Route /exec/* riêng → giữ menu Ban GĐ, không nhảy sang shell Sales.
+          { href: '/exec/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
         ],
       },
     ],
