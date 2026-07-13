@@ -31,7 +31,11 @@ type Supplier = {
   po_count: number
   open_po_count: number // PO chưa về đủ/chưa huỷ — cảnh báo khi ngừng giao dịch
   last_po: string | null
+  last_po_at: string | null
+  total_spend: number
 }
+
+const money = (n: number) => n.toLocaleString('vi-VN')
 
 export function SuppliersManager({
   suppliers,
@@ -137,15 +141,34 @@ export function SuppliersManager({
       key: 'history',
       header: 'Lịch sử mua',
       sortValue: (s) => s.po_count,
-      width: '140px',
+      width: '130px',
       cell: (s) =>
         s.po_count > 0 ? (
           <div className="flex flex-col text-xs">
             <span>{s.po_count} đơn đặt</span>
-            {s.last_po && <span className="font-mono text-zinc-400">{s.last_po}</span>}
+            {s.last_po_at && (
+              <span className="text-zinc-400">
+                gần nhất {new Date(s.last_po_at).toLocaleDateString('vi-VN')}
+              </span>
+            )}
           </div>
         ) : (
           <span className="text-xs text-zinc-400">Chưa mua</span>
+        ),
+    },
+    {
+      key: 'spend',
+      header: 'Tổng chi',
+      align: 'right',
+      width: '140px',
+      sortValue: (s) => s.total_spend,
+      cell: (s) =>
+        s.total_spend > 0 ? (
+          <span className="font-medium tabular-nums">
+            {money(s.total_spend)} <span className="text-xs text-zinc-400">₫</span>
+          </span>
+        ) : (
+          <span className="text-xs text-zinc-400">—</span>
         ),
     },
     {

@@ -41,6 +41,18 @@ type PoRow = {
   total: number
 }
 
+type PurchasedMaterial = {
+  material_id: string
+  material_code: string
+  material_name: string
+  material_unit: string
+  total_qty: number
+  order_lines: number
+  last_price: number | null
+  last_currency: string
+  last_at: string
+}
+
 const PO_STATUS: Record<
   string,
   { label: string; tone: 'gray' | 'amber' | 'blue' | 'green' | 'red' }
@@ -65,16 +77,18 @@ const OPEN = [
 const money = (n: number) => n.toLocaleString('vi-VN')
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
 
-type Tab = 'overview' | 'prices' | 'history'
+type Tab = 'overview' | 'purchased' | 'prices' | 'history'
 
 export function SupplierDetail({
   supplier,
   pos,
+  purchased,
   materials,
   canEdit,
 }: {
   supplier: Supplier
   pos: PoRow[]
+  purchased: PurchasedMaterial[]
   materials: MaterialOption[]
   canEdit: boolean
 }) {
@@ -196,6 +210,7 @@ export function SupplierDetail({
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Tổng quan' },
+    { id: 'purchased', label: `Vật tư đã mua (${purchased.length})` },
     { id: 'prices', label: 'Bảng giá' },
     { id: 'history', label: `Lịch sử mua (${pos.length})` },
   ]
@@ -246,12 +261,7 @@ export function SupplierDetail({
           { label: 'PO đang mở', value: stats.open, tone: stats.open ? 'amber' : 'gray' },
           { label: 'Tổng chi (VND)', value: money(stats.spend), tone: 'purple' },
           { label: 'Mua gần nhất', value: date(stats.last), tone: 'default' },
-          {
-            label: 'Số vật tư báo giá',
-            value: '—',
-            tone: 'gray',
-            hint: 'xem tab Bảng giá',
-          },
+          { label: 'Vật tư đã mua', value: purchased.length, tone: 'blue' },
         ]}
       />
 
@@ -283,6 +293,65 @@ export function SupplierDetail({
           <Field label="Ghi chú" value={supplier.note} className="sm:col-span-2" />
         </div>
       )}
+
+      {tab === 'purchased' &&
+        (purchased.length === 0 ? (
+          <EmptyState
+            icon="▤"
+            title="Chưa mua vật tư nào"
+            description="NCC này chưa có dòng vật tư nào trong các đơn đặt."
+          />
+        ) : (
+          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <table className="w-full text-sm">
+              <thead className="bg-zinc-50 dark:bg-zinc-900/50">
+                <tr className="text-left text-[11px] tracking-wide text-zinc-500 uppercase">
+                  <th className="px-3 py-2">Vật tư</th>
+                  <th className="px-3 py-2 text-right">Tổng SL đặt</th>
+                  <th className="px-3 py-2 text-right">Giá gần nhất</th>
+                  <th className="px-3 py-2 text-right">Mua gần nhất</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+                {purchased.map((m) => (
+                  <tr
+                    key={m.material_id}
+                    className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                  >
+                    <td className="px-3 py-2">
+                      <span className="font-mono text-xs text-zinc-400">
+                        {m.material_code}
+                      </span>{' '}
+                      {m.material_name}
+                      <span className="ml-1.5 text-xs text-zinc-400">
+                        · {m.order_lines} lần
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {money(m.total_qty)}{' '}
+                      <span className="text-xs text-zinc-400">{m.material_unit}</span>
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium whitespace-nowrap tabular-nums">
+                      {m.last_price != null ? (
+                        <>
+                          {money(m.last_price)}{' '}
+                          <span className="text-xs text-zinc-400">
+                            {m.last_currency}/{m.material_unit}
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs text-zinc-500">
+                      {date(m.last_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
 
       {tab === 'prices' && (
         <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">

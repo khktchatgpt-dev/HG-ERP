@@ -18,15 +18,17 @@ export default async function SupplierDetailPage({
   const supplier = await suppliersRepo.findById(id)
   if (!supplier) notFound()
 
-  const [{ rows: pos }, { rows: materials }] = await Promise.all([
+  const [{ rows: pos }, { rows: materials }, purchased] = await Promise.all([
     posRepo.list({ supplier_id: id, page: 1, page_size: 200 }),
     materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
+    posRepo.materialsPurchasedBySupplier(id),
   ])
   const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
 
   return (
     <SupplierDetail
       supplier={supplier}
+      purchased={purchased}
       pos={pos.map((p) => ({
         id: p.id,
         code: p.code,

@@ -80,6 +80,19 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
 
 const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders(code, order:sales_orders(code))`
 
+/** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
+export type PurchasedMaterial = {
+  material_id: string
+  material_code: string
+  material_name: string
+  material_unit: string
+  total_qty: number
+  order_lines: number
+  last_price: number | null
+  last_currency: string
+  last_at: string
+}
+
 export const posRepo = {
   async nextCode(): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'PO' })
@@ -129,6 +142,55 @@ export const posRepo = {
       totals[r.po_id] = (totals[r.po_id] ?? 0) + r.qty_ordered * (r.unit_price ?? 0)
     }
     return totals
+  },
+
+  /**
+   * Vật tư đã mua từ 1 NCC — gộp theo vật tư: tổng SL đã đặt + GIÁ MUA GẦN NHẤT.
+   * Loại đơn đã huỷ. Dùng cho tab "Vật tư đã mua" ở chi tiết NCC (phân tích mua).
+   */
+  async materialsPurchasedBySupplier(supplierId: string): Promise<PurchasedMaterial[]> {
+    const { data } = await db()
+      .from('supply_purchase_order_lines')
+      .select(
+        'material_id, qty_ordered, unit_price, po:supply_purchase_orders!inner(supplier_id, currency, created_at, status), material:warehouse_materials(code, name, unit)',
+      )
+      .eq('po.supplier_id', supplierId)
+      .order('created_at', { referencedTable: 'po', ascending: false })
+      .limit(2000)
+    type P = { supplier_id: string; currency: string; created_at: string; status: string }
+    type M = { code: string; name: string; unit: string }
+    type Raw = {
+      material_id: string
+      qty_ordered: number
+      unit_price: number | null
+      po: P | P[] | null
+      material: M | M[] | null
+    }
+    const agg = new Map<string, PurchasedMaterial>()
+    for (const r of (data ?? []) as Raw[]) {
+      const po = Array.isArray(r.po) ? r.po[0] : r.po
+      const m = Array.isArray(r.material) ? r.material[0] : r.material
+      if (!po || po.status === 'cancelled') continue
+      const cur = agg.get(r.material_id)
+      if (!cur) {
+        // Lần đầu gặp = dòng của PO mới nhất (đã order desc theo po.created_at).
+        agg.set(r.material_id, {
+          material_id: r.material_id,
+          material_code: m?.code ?? '?',
+          material_name: m?.name ?? '?',
+          material_unit: m?.unit ?? '',
+          total_qty: Number(r.qty_ordered) || 0,
+          order_lines: 1,
+          last_price: r.unit_price,
+          last_currency: po.currency,
+          last_at: po.created_at,
+        })
+      } else {
+        cur.total_qty += Number(r.qty_ordered) || 0
+        cur.order_lines += 1
+      }
+    }
+    return [...agg.values()]
   },
 
   async findById(id: string): Promise<PoWithRefs | null> {
