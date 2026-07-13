@@ -51,7 +51,6 @@ export function SuppliersManager({
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
-  const [editing, setEditing] = useState<Supplier | null>(null)
   const [pricing, setPricing] = useState<Supplier | null>(null)
 
   const [q, setQ] = useState('')
@@ -198,7 +197,10 @@ export function SuppliersManager({
             { label: 'Bảng giá', onClick: () => setPricing(s) },
             ...(canEdit
               ? [
-                  { label: 'Sửa', onClick: () => setEditing(s) },
+                  {
+                    label: 'Sửa hồ sơ',
+                    onClick: () => router.push(`/planning/suppliers/${s.id}`),
+                  },
                   {
                     label: s.is_active ? 'Ngừng giao dịch' : 'Kích hoạt lại',
                     onClick: () => void toggleActive(s),
@@ -306,6 +308,7 @@ export function SuppliersManager({
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         title="Thêm nhà cung cấp"
+        maxWidth="sm:max-w-3xl"
       >
         <SupplierForm
           submitLabel="Thêm NCC"
@@ -317,30 +320,6 @@ export function SuppliersManager({
             }
           }}
         />
-      </Modal>
-
-      <Modal
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        title={editing ? `Sửa — ${editing.name}` : ''}
-      >
-        {editing && (
-          <SupplierForm
-            initial={editing}
-            submitLabel="Lưu thay đổi"
-            onSubmit={async (body) => {
-              const ok = await send(
-                `/api/dept/supply/suppliers/${editing.id}`,
-                'PATCH',
-                body,
-              )
-              if (ok) {
-                setEditing(null)
-                toast.success('Đã cập nhật', String(body.name))
-              }
-            }}
-          />
-        )}
       </Modal>
 
       <Modal

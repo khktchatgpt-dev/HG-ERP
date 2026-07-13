@@ -15,20 +15,7 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { RefChain } from '@/components/erp/RefChain'
 import { PricesPanel, type MaterialOption } from '../PricesPanel'
 import { SupplierForm } from '../SupplierForm'
-
-type Supplier = {
-  id: string
-  code: string | null
-  name: string
-  email: string | null
-  phone: string | null
-  address: string | null
-  tax_no: string | null
-  note: string | null
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
+import type { Supplier } from '@/modules/dept/supply/supply.repo'
 
 type PoRow = {
   id: string
@@ -76,6 +63,14 @@ const OPEN = [
 ]
 const money = (n: number) => n.toLocaleString('vi-VN')
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Hoạt động',
+  suspended: 'Tạm ngưng',
+  terminated: 'Ngừng hợp tác',
+}
+const IMPEX_LABEL: Record<string, string> = { domestic: 'Nội địa', import: 'Nhập khẩu' }
+const PRIORITY_LABEL: Record<string, string> = { primary: 'Chính', backup: 'Dự phòng' }
 
 type Tab = 'overview' | 'purchased' | 'prices' | 'history'
 
@@ -284,13 +279,105 @@ export function SupplierDetail({
       </div>
 
       {tab === 'overview' && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Mã NCC" value={supplier.code} mono />
-          <Field label="Mã số thuế" value={supplier.tax_no} mono />
-          <Field label="Điện thoại" value={supplier.phone} />
-          <Field label="Email" value={supplier.email} />
-          <Field label="Địa chỉ" value={supplier.address} className="sm:col-span-2" />
-          <Field label="Ghi chú" value={supplier.note} className="sm:col-span-2" />
+        <div className="flex flex-col gap-5">
+          <Group title="Cơ bản">
+            <Field label="Mã NCC" value={supplier.code} mono />
+            <Field label="Tên viết tắt" value={supplier.short_name} />
+            <Field label="Loại NCC" value={supplier.type} />
+            <Field
+              label="Trạng thái"
+              value={STATUS_LABEL[supplier.status] ?? supplier.status}
+            />
+            <Field
+              label="Cho phép đặt hàng"
+              value={supplier.can_order ? 'Có' : 'Không'}
+            />
+            {supplier.lock_reason && (
+              <Field
+                label="Lý do khoá"
+                value={supplier.lock_reason}
+                className="sm:col-span-3"
+              />
+            )}
+          </Group>
+
+          <Group title="Pháp lý">
+            <Field label="Tên công ty" value={supplier.company_name} />
+            <Field label="Mã số thuế" value={supplier.tax_no} mono />
+            <Field label="Giấy phép KD" value={supplier.business_license} />
+            <Field
+              label="Ngày thành lập"
+              value={supplier.founded_on ? date(supplier.founded_on) : null}
+            />
+            <Field label="Người đại diện PL" value={supplier.legal_rep} />
+            <Field label="Quốc gia" value={supplier.country} />
+            <Field
+              label="Địa chỉ đăng ký"
+              value={supplier.registered_address}
+              className="sm:col-span-3"
+            />
+          </Group>
+
+          <Group title="Liên hệ">
+            <Field label="Điện thoại" value={supplier.phone} />
+            <Field label="Email" value={supplier.email} />
+            <Field label="Website" value={supplier.website} />
+            <Field
+              label="Địa chỉ giao dịch"
+              value={supplier.address}
+              className="sm:col-span-3"
+            />
+            <Field
+              label="Địa chỉ kho giao hàng"
+              value={supplier.warehouse_address}
+              className="sm:col-span-3"
+            />
+          </Group>
+
+          <Group title="Thanh toán">
+            <Field label="Điều khoản TT" value={supplier.payment_terms} />
+            <Field label="Tiền tệ" value={supplier.currency} />
+            <Field label="ĐK xuất hoá đơn" value={supplier.invoice_terms} />
+            <Field label="Ngân hàng" value={supplier.bank_name} />
+            <Field label="Số tài khoản" value={supplier.bank_account} mono />
+            <Field label="SWIFT" value={supplier.swift_code} mono />
+          </Group>
+
+          <Group title="Mua hàng">
+            <Field label="MOQ" value={supplier.moq} />
+            <Field
+              label="Lead time"
+              value={
+                supplier.lead_time_days != null ? `${supplier.lead_time_days} ngày` : null
+              }
+            />
+            <Field label="Incoterms" value={supplier.incoterms} />
+            <Field label="Phương thức giao" value={supplier.delivery_method} />
+            <Field
+              label="Chính sách đổi trả"
+              value={supplier.return_policy}
+              className="sm:col-span-3"
+            />
+            <Field
+              label="Chính sách bảo hành"
+              value={supplier.warranty_policy}
+              className="sm:col-span-3"
+            />
+          </Group>
+
+          <Group title="Phân loại">
+            <Field label="Khu vực" value={supplier.region} />
+            <Field
+              label="Hình thức"
+              value={IMPEX_LABEL[supplier.import_export ?? ''] ?? supplier.import_export}
+            />
+            <Field
+              label="Mức ưu tiên"
+              value={PRIORITY_LABEL[supplier.priority ?? ''] ?? supplier.priority}
+            />
+            <Field label="Xếp hạng" value={supplier.rating} />
+            <Field label="Ghi chú" value={supplier.note} className="sm:col-span-3" />
+          </Group>
         </div>
       )}
 
@@ -378,6 +465,7 @@ export function SupplierDetail({
         open={editing}
         onClose={() => setEditing(false)}
         title={`Sửa — ${supplier.name}`}
+        maxWidth="sm:max-w-3xl"
       >
         <SupplierForm
           initial={supplier}
@@ -392,6 +480,17 @@ export function SupplierDetail({
         />
       </Modal>
     </div>
+  )
+}
+
+function Group({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+        {title}
+      </h3>
+      <div className="grid gap-3 sm:grid-cols-3">{children}</div>
+    </section>
   )
 }
 

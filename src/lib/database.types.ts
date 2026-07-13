@@ -1611,44 +1611,165 @@ export type Database = {
       supply_suppliers: {
         Row: {
           address: string | null
+          bank_account: string | null
+          bank_name: string | null
+          business_license: string | null
+          buyer_id: string | null
+          can_order: boolean
           code: string | null
+          company_name: string | null
+          country: string | null
           created_at: string
+          created_by: string | null
+          currency: string | null
+          delivery_method: string | null
           email: string | null
+          founded_on: string | null
           id: string
+          import_export: string | null
+          incoterms: string | null
+          invoice_terms: string | null
           is_active: boolean
+          lead_time_days: number | null
+          legal_rep: string | null
+          lock_reason: string | null
+          moq: string | null
           name: string
           note: string | null
+          payment_terms: string | null
           phone: string | null
+          priority: string | null
+          rating: string | null
+          region: string | null
+          registered_address: string | null
+          return_policy: string | null
+          short_name: string | null
+          status: string
+          swift_code: string | null
           tax_no: string | null
+          trading_address: string | null
+          type: string | null
           updated_at: string
+          updated_by: string | null
+          warehouse_address: string | null
+          warranty_policy: string | null
+          website: string | null
         }
         Insert: {
           address?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
+          business_license?: string | null
+          buyer_id?: string | null
+          can_order?: boolean
           code?: string | null
+          company_name?: string | null
+          country?: string | null
           created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          delivery_method?: string | null
           email?: string | null
+          founded_on?: string | null
           id?: string
+          import_export?: string | null
+          incoterms?: string | null
+          invoice_terms?: string | null
           is_active?: boolean
+          lead_time_days?: number | null
+          legal_rep?: string | null
+          lock_reason?: string | null
+          moq?: string | null
           name: string
           note?: string | null
+          payment_terms?: string | null
           phone?: string | null
+          priority?: string | null
+          rating?: string | null
+          region?: string | null
+          registered_address?: string | null
+          return_policy?: string | null
+          short_name?: string | null
+          status?: string
+          swift_code?: string | null
           tax_no?: string | null
+          trading_address?: string | null
+          type?: string | null
           updated_at?: string
+          updated_by?: string | null
+          warehouse_address?: string | null
+          warranty_policy?: string | null
+          website?: string | null
         }
         Update: {
           address?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
+          business_license?: string | null
+          buyer_id?: string | null
+          can_order?: boolean
           code?: string | null
+          company_name?: string | null
+          country?: string | null
           created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          delivery_method?: string | null
           email?: string | null
+          founded_on?: string | null
           id?: string
+          import_export?: string | null
+          incoterms?: string | null
+          invoice_terms?: string | null
           is_active?: boolean
+          lead_time_days?: number | null
+          legal_rep?: string | null
+          lock_reason?: string | null
+          moq?: string | null
           name?: string
           note?: string | null
+          payment_terms?: string | null
           phone?: string | null
+          priority?: string | null
+          rating?: string | null
+          region?: string | null
+          registered_address?: string | null
+          return_policy?: string | null
+          short_name?: string | null
+          status?: string
+          swift_code?: string | null
           tax_no?: string | null
+          trading_address?: string | null
+          type?: string | null
           updated_at?: string
+          updated_by?: string | null
+          warehouse_address?: string | null
+          warranty_policy?: string | null
+          website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "supply_suppliers_buyer_id_fkey"
+            columns: ["buyer_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_suppliers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_suppliers_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       task_comments: {
         Row: {

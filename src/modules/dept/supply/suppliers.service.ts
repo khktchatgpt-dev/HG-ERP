@@ -1,6 +1,8 @@
 import { suppliersRepo, type Supplier } from './supply.repo'
+import type { supplierCreateSchema } from './suppliers.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import type { z } from 'zod'
 import { Forbidden, NotFound } from '@/server/http'
 
 /** Tên phòng đúng như public.departments (đừng lặp lại bug 'Kinh Doanh'). */
@@ -13,14 +15,11 @@ async function isSupplyStaff(user: User): Promise<boolean> {
   return dept?.name === SUPPLY_DEPT_NAME
 }
 
-type SupplierInput = {
-  code?: string | null
-  name: string
-  email?: string | null
-  phone?: string | null
-  address?: string | null
-  tax_no?: string | null
-  note?: string | null
+type SupplierInput = z.infer<typeof supplierCreateSchema>
+
+/** '' → null cho các trường text (form gửi chuỗi rỗng). */
+function nn<T>(v: T | '' | undefined | null): T | null {
+  return v === '' || v === undefined ? null : (v as T | null)
 }
 
 export const suppliersService = {
@@ -41,23 +40,53 @@ export const suppliersService = {
     if (!(await isSupplyStaff(user))) {
       throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý NCC')
     }
+    const status = input.status ?? 'active'
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { is_active: _ignore, ...rest } = input as SupplierInput & {
+      is_active?: boolean
+    }
     return suppliersRepo.insert({
-      code: input.code || null,
+      ...toRow(rest),
       name: input.name,
-      email: input.email || null,
-      phone: input.phone ?? null,
-      address: input.address ?? null,
-      tax_no: input.tax_no ?? null,
-      note: input.note ?? null,
+      status,
+      is_active: status === 'active', // đồng bộ cổng chọn NCC khi tạo PO
+      can_order: input.can_order ?? true,
+      created_by: user.id,
+      updated_by: user.id,
     })
   },
 
-  async update(user: User, id: string, patch: Partial<Supplier>): Promise<Supplier> {
+  async update(
+    user: User,
+    id: string,
+    patch: Partial<SupplierInput> & { is_active?: boolean },
+  ): Promise<Supplier> {
     if (!(await isSupplyStaff(user))) throw Forbidden()
     const before = await suppliersRepo.findById(id)
     if (!before) throw NotFound('NCC không tồn tại')
-    return suppliersRepo.patch(id, patch)
+
+    const row: Partial<Supplier> = { ...toRow(patch), updated_by: user.id }
+    // Đồng bộ status ↔ is_active 2 chiều.
+    if (patch.status !== undefined) row.is_active = patch.status === 'active'
+    else if (patch.is_active !== undefined) {
+      row.is_active = patch.is_active
+      row.status = patch.is_active ? 'active' : 'suspended'
+    }
+    return suppliersRepo.patch(id, row)
   },
+}
+
+/** Chuẩn hoá payload text → null; loại field không thuộc bảng. */
+function toRow(
+  input: Partial<SupplierInput> & { is_active?: boolean },
+): Partial<Supplier> {
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(input)) {
+    if (k === 'is_active' || k === 'lead_time_days' || k === 'can_order') continue
+    out[k] = nn(v as string)
+  }
+  if (input.lead_time_days !== undefined) out.lead_time_days = input.lead_time_days
+  return out as Partial<Supplier>
 }
 
 export { isSupplyStaff, SUPPLY_DEPT_NAME }

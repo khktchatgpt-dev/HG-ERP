@@ -191,18 +191,57 @@ export type Supplier = {
   id: string
   code: string | null
   name: string
+  short_name: string | null
+  type: string | null
+  status: string
+  // Pháp lý
+  company_name: string | null
+  tax_no: string | null
+  business_license: string | null
+  founded_on: string | null
+  legal_rep: string | null
+  country: string | null
+  registered_address: string | null
+  // Liên hệ
   email: string | null
   phone: string | null
   address: string | null
-  tax_no: string | null
-  note: string | null
+  trading_address: string | null
+  warehouse_address: string | null
+  website: string | null
+  // Thanh toán
+  payment_terms: string | null
+  currency: string | null
+  bank_name: string | null
+  bank_account: string | null
+  swift_code: string | null
+  invoice_terms: string | null
+  // Mua hàng
+  moq: string | null
+  lead_time_days: number | null
+  incoterms: string | null
+  delivery_method: string | null
+  return_policy: string | null
+  warranty_policy: string | null
+  // Phân loại
+  region: string | null
+  import_export: string | null
+  priority: string | null
+  rating: string | null
+  // Admin
+  buyer_id: string | null
+  can_order: boolean
+  lock_reason: string | null
   is_active: boolean
+  note: string | null
+  created_by: string | null
+  updated_by: string | null
   created_at: string
   updated_at: string
 }
 
 const SUPPLIER_COLS =
-  'id, code, name, email, phone, address, tax_no, note, is_active, created_at, updated_at'
+  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
   async list(filter: {
