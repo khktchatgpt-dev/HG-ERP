@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -14,6 +15,8 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { PricesPanel, type MaterialOption } from './PricesPanel'
+import { SupplierForm } from './SupplierForm'
 
 type Supplier = {
   id: string
@@ -28,20 +31,6 @@ type Supplier = {
   po_count: number
   open_po_count: number // PO chưa về đủ/chưa huỷ — cảnh báo khi ngừng giao dịch
   last_po: string | null
-}
-
-type MaterialOption = { id: string; code: string; name: string; unit: string }
-
-type PriceRow = {
-  id: string
-  material_id: string
-  material_code: string
-  material_name: string
-  material_unit: string
-  price: number
-  currency: string
-  valid_from: string
-  note: string | null
 }
 
 export function SuppliersManager({
@@ -118,10 +107,13 @@ export function SuppliersManager({
       header: 'NCC',
       sortValue: (s) => s.name,
       cell: (s) => (
-        <div className="flex min-w-0 flex-col">
+        <Link
+          href={`/planning/suppliers/${s.id}`}
+          className="flex min-w-0 flex-col hover:text-sky-600 dark:hover:text-sky-400"
+        >
           {s.code && <span className="font-mono text-xs text-zinc-400">{s.code}</span>}
           <span className="truncate font-medium">{s.name}</span>
-        </div>
+        </Link>
       ),
     },
     {
@@ -175,6 +167,10 @@ export function SuppliersManager({
       cell: (s) => (
         <RowMenu
           items={[
+            {
+              label: 'Xem chi tiết',
+              onClick: () => router.push(`/planning/suppliers/${s.id}`),
+            },
             // Xem bảng giá: mọi NV; sửa trong panel theo canEdit (FR-SUP-06).
             { label: 'Bảng giá', onClick: () => setPricing(s) },
             ...(canEdit
@@ -334,358 +330,5 @@ export function SuppliersManager({
         )}
       </Modal>
     </div>
-  )
-}
-
-// ── Bảng giá NCC (FR-SUP-06, G-1) ───────────────────────────────────────────
-// Đổi giá = THÊM bản ghi mới (valid_from) — giữ lịch sử; bản ghi hiện hành có badge.
-
-function PricesPanel({
-  supplier,
-  materials,
-  canEdit,
-}: {
-  supplier: { id: string; name: string }
-  materials: MaterialOption[]
-  canEdit: boolean
-}) {
-  const toast = useToast()
-  const [rows, setRows] = useState<PriceRow[] | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [materialId, setMaterialId] = useState('')
-  const [price, setPrice] = useState('')
-  const [currency, setCurrency] = useState('VND')
-  const [validFrom, setValidFrom] = useState('')
-  const [note, setNote] = useState('')
-
-  async function reload() {
-    const data = await api<{ prices: PriceRow[] }>(
-      `/api/dept/supply/prices?supplier_id=${supplier.id}`,
-    )
-    setRows(data.prices)
-  }
-
-  useEffect(() => {
-    let alive = true
-    api<{ prices: PriceRow[] }>(`/api/dept/supply/prices?supplier_id=${supplier.id}`)
-      .then((d) => {
-        if (alive) setRows(d.prices)
-      })
-      .catch((e) => {
-        if (alive) {
-          setRows([])
-          toast.error(
-            'Không tải được bảng giá',
-            e instanceof ApiError ? e.message : 'Có lỗi',
-          )
-        }
-      })
-    return () => {
-      alive = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supplier.id])
-
-  // Bản ghi hiện hành per vật tư: valid_from lớn nhất ≤ hôm nay.
-  const today = new Date().toISOString().slice(0, 10)
-  const currentIds = new Set<string>()
-  if (rows) {
-    const best = new Map<string, PriceRow>()
-    for (const r of rows) {
-      if (r.valid_from > today) continue
-      const cur = best.get(r.material_id)
-      if (!cur || r.valid_from > cur.valid_from) best.set(r.material_id, r)
-    }
-    for (const r of best.values()) currentIds.add(r.id)
-  }
-
-  async function add(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setBusy(true)
-    try {
-      await api('/api/dept/supply/prices', {
-        method: 'POST',
-        body: {
-          supplier_id: supplier.id,
-          material_id: materialId,
-          price: Number(price),
-          currency,
-          valid_from: validFrom || undefined,
-          note: note.trim() || null,
-        },
-      })
-      toast.success('Đã thêm giá chào', supplier.name)
-      setPrice('')
-      setNote('')
-      await reload()
-    } catch (err) {
-      toast.error('Thêm giá thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function remove(row: PriceRow) {
-    if (!window.confirm(`Xoá giá ${row.material_code} (${fmtMoney(row)})?`)) return
-    setBusy(true)
-    try {
-      await api(`/api/dept/supply/prices/${row.id}`, { method: 'DELETE' })
-      await reload()
-    } catch (err) {
-      toast.error('Xoá thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  return (
-    <div className="flex flex-col gap-3">
-      {canEdit && (
-        <form onSubmit={add} className="grid gap-2 sm:grid-cols-6">
-          <label className="flex flex-col gap-1 text-xs sm:col-span-2">
-            Vật tư <span className="text-red-500">*</span>
-            <select
-              value={materialId}
-              onChange={(e) => setMaterialId(e.target.value)}
-              required
-              className={inp}
-            >
-              <option value="">— chọn vật tư —</option>
-              {materials.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.code} — {m.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            Giá <span className="text-red-500">*</span>
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              required
-              className={inp}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            Tiền tệ
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={inp}
-            >
-              <option value="VND">VND</option>
-              <option value="USD">USD</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 text-xs">
-            Hiệu lực từ
-            <input
-              type="date"
-              value={validFrom}
-              onChange={(e) => setValidFrom(e.target.value)}
-              className={inp}
-            />
-          </label>
-          <div className="flex items-end">
-            <button
-              disabled={busy || !materialId || price === ''}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-            >
-              {busy && <Spinner size={12} />}+ Thêm giá
-            </button>
-          </div>
-          <label className="flex flex-col gap-1 text-xs sm:col-span-6">
-            Ghi chú (quy cách, MOQ…)
-            <input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={500}
-              className={inp}
-            />
-          </label>
-        </form>
-      )}
-
-      {rows === null ? (
-        <p className="py-4 text-center text-xs text-zinc-400">Đang tải…</p>
-      ) : rows.length === 0 ? (
-        <p className="py-4 text-center text-xs text-zinc-400">
-          Chưa có giá chào nào — thêm ở trên (giá giữ nguyên tệ, không quy đổi).
-        </p>
-      ) : (
-        <div className="max-h-80 overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white dark:bg-zinc-950">
-              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
-                <th className="py-1.5 pr-2">Vật tư</th>
-                <th className="py-1.5 pr-2 text-right">Giá</th>
-                <th className="py-1.5 pr-2">Hiệu lực từ</th>
-                <th className="py-1.5 pr-2">Ghi chú</th>
-                <th className="w-8 py-1.5" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-1.5 pr-2">
-                    <span className="font-mono text-xs text-zinc-400">
-                      {r.material_code}
-                    </span>{' '}
-                    {r.material_name}
-                    {currentIds.has(r.id) && (
-                      <span className="ml-1.5">
-                        <Badge tone="green">Hiện hành</Badge>
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-2 text-right font-medium whitespace-nowrap">
-                    {fmtMoney(r)}
-                    <span className="text-xs text-zinc-400">/{r.material_unit}</span>
-                  </td>
-                  <td className="py-1.5 pr-2 text-xs">
-                    {new Date(r.valid_from).toLocaleDateString('vi-VN')}
-                  </td>
-                  <td className="max-w-40 truncate py-1.5 pr-2 text-xs text-zinc-500">
-                    {r.note ?? '—'}
-                  </td>
-                  <td className="py-1.5 text-right">
-                    {canEdit && (
-                      <button
-                        onClick={() => void remove(r)}
-                        className="text-xs text-red-500 hover:underline"
-                        title="Xoá bản ghi giá"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function fmtMoney(r: { price: number; currency: string }) {
-  return `${r.price.toLocaleString('vi-VN')} ${r.currency}`
-}
-
-function SupplierForm({
-  initial,
-  submitLabel,
-  onSubmit,
-}: {
-  initial?: Supplier
-  submitLabel: string
-  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
-}) {
-  const [busy, setBusy] = useState(false)
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  async function handle(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const body: Record<string, unknown> = {
-      code: String(fd.get('code') ?? '').trim() || null,
-      name: String(fd.get('name') ?? '').trim(),
-      email: String(fd.get('email') ?? '').trim(),
-      phone: String(fd.get('phone') ?? '').trim() || null,
-      address: String(fd.get('address') ?? '').trim() || null,
-      tax_no: String(fd.get('tax_no') ?? '').trim() || null,
-      note: String(fd.get('note') ?? '').trim() || null,
-    }
-    setBusy(true)
-    await onSubmit(body)
-    setBusy(false)
-  }
-
-  return (
-    <form onSubmit={handle} className="grid gap-3 sm:grid-cols-2">
-      <label className="flex flex-col gap-1 text-sm">
-        Mã NCC
-        <input
-          name="code"
-          maxLength={50}
-          defaultValue={initial?.code ?? ''}
-          className={`${cls} font-mono`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        MST
-        <input
-          name="tax_no"
-          maxLength={30}
-          defaultValue={initial?.tax_no ?? ''}
-          className={`${cls} font-mono`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Tên NCC <span className="text-red-500">*</span>
-        <input
-          name="name"
-          required
-          maxLength={200}
-          defaultValue={initial?.name ?? ''}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Điện thoại
-        <input
-          name="phone"
-          maxLength={30}
-          defaultValue={initial?.phone ?? ''}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Email
-        <input
-          name="email"
-          type="email"
-          defaultValue={initial?.email ?? ''}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Địa chỉ
-        <input
-          name="address"
-          maxLength={500}
-          defaultValue={initial?.address ?? ''}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Ghi chú
-        <textarea
-          name="note"
-          rows={2}
-          maxLength={2000}
-          defaultValue={initial?.note ?? ''}
-          className={cls}
-        />
-      </label>
-      <div className="flex justify-end sm:col-span-2">
-        <button
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        >
-          {busy && <Spinner size={14} />}
-          {busy ? 'Đang lưu…' : submitLabel}
-        </button>
-      </div>
-    </form>
   )
 }
