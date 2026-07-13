@@ -1383,6 +1383,54 @@ export type Database = {
         }
         Relationships: []
       }
+      supplier_certs: {
+        Row: {
+          cert_no: string | null
+          cert_type: string
+          created_at: string
+          created_by: string | null
+          id: string
+          issued_on: string | null
+          note: string | null
+          supplier_id: string
+        }
+        Insert: {
+          cert_no?: string | null
+          cert_type: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issued_on?: string | null
+          note?: string | null
+          supplier_id: string
+        }
+        Update: {
+          cert_no?: string | null
+          cert_type?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          issued_on?: string | null
+          note?: string | null
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_certs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_certs_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_purchase_order_lines: {
         Row: {
           id: string

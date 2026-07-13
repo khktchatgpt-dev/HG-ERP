@@ -292,3 +292,45 @@ export const suppliersRepo = {
     return data as Supplier
   },
 }
+
+// ── Chứng chỉ NCC (M3, supplier_certs — 0047, không theo dõi hạn) ────────────
+
+export type SupplierCert = {
+  id: string
+  supplier_id: string
+  cert_type: string
+  cert_no: string | null
+  issued_on: string | null
+  note: string | null
+  created_by: string | null
+  created_at: string
+}
+
+const CERT_COLS =
+  'id, supplier_id, cert_type, cert_no, issued_on, note, created_by, created_at'
+
+export const certsRepo = {
+  async list(supplierId: string): Promise<SupplierCert[]> {
+    const { data } = await db()
+      .from('supplier_certs')
+      .select(CERT_COLS)
+      .eq('supplier_id', supplierId)
+      .order('created_at', { ascending: false })
+    return (data ?? []) as SupplierCert[]
+  },
+
+  async insert(row: Omit<SupplierCert, 'id' | 'created_at'>): Promise<SupplierCert> {
+    const { data, error } = await db()
+      .from('supplier_certs')
+      .insert(row)
+      .select(CERT_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Insert cert failed')
+    return data as SupplierCert
+  },
+
+  async remove(id: string): Promise<void> {
+    const { error } = await db().from('supplier_certs').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+}

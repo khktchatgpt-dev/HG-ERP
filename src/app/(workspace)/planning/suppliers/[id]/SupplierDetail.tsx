@@ -14,6 +14,7 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { RefChain } from '@/components/erp/RefChain'
 import { PricesPanel, type MaterialOption } from '../PricesPanel'
+import { CertsPanel } from '../CertsPanel'
 import { SupplierForm } from '../SupplierForm'
 import type { Supplier } from '@/modules/dept/supply/supply.repo'
 
@@ -72,7 +73,7 @@ const STATUS_LABEL: Record<string, string> = {
 const IMPEX_LABEL: Record<string, string> = { domestic: 'Nội địa', import: 'Nhập khẩu' }
 const PRIORITY_LABEL: Record<string, string> = { primary: 'Chính', backup: 'Dự phòng' }
 
-type Tab = 'overview' | 'purchased' | 'prices' | 'history'
+type Tab = 'overview' | 'purchased' | 'prices' | 'certs' | 'history'
 
 export function SupplierDetail({
   supplier,
@@ -207,6 +208,7 @@ export function SupplierDetail({
     { id: 'overview', label: 'Tổng quan' },
     { id: 'purchased', label: `Vật tư đã mua (${purchased.length})` },
     { id: 'prices', label: 'Bảng giá' },
+    { id: 'certs', label: 'Chứng chỉ' },
     { id: 'history', label: `Lịch sử mua (${pos.length})` },
   ]
 
@@ -443,6 +445,12 @@ export function SupplierDetail({
       {tab === 'prices' && (
         <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
           <PricesPanel supplier={supplier} materials={materials} canEdit={canEdit} />
+        </div>
+      )}
+
+      {tab === 'certs' && (
+        <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <CertsPanel supplierId={supplier.id} canEdit={canEdit} />
         </div>
       )}
 
