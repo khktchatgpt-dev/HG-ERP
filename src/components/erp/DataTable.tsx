@@ -236,7 +236,7 @@ export function DataTable<T>({
                       return (
                         <td
                           key={c.key}
-                          className={`${cellPad} ${align} ${c.className ?? ''} align-middle`}
+                          className={`${cellPad} ${align} ${c.className ?? ''} align-top`}
                         >
                           {c.cell
                             ? c.cell(row, idx)

@@ -25,18 +25,23 @@ export function RefChain({
   size?: 'sm' | 'md'
 }) {
   const sm = size === 'sm'
+  // sm (trong bảng): xếp DỌC, không mũi tên — tránh xuống hàng lộn xộn ở cột hẹp.
+  if (sm) {
+    return (
+      <div className="flex flex-col gap-0.5 leading-tight">
+        {nodes.map((n, i) => (
+          <Chip key={i} node={n} sm />
+        ))}
+      </div>
+    )
+  }
+  // md (đầu màn chi tiết): xếp ngang có mũi tên.
   return (
-    <div className={`flex flex-wrap items-center ${sm ? 'gap-1.5' : 'gap-2.5'}`}>
+    <div className="flex flex-wrap items-center gap-2.5">
       {nodes.map((n, i) => (
         <div key={i} className="flex items-center gap-2.5">
-          {i > 0 && (
-            <span
-              className={`text-zinc-300 dark:text-zinc-600 ${sm ? 'text-xs' : 'text-base'}`}
-            >
-              →
-            </span>
-          )}
-          <Chip node={n} sm={sm} />
+          {i > 0 && <span className="text-base text-zinc-300 dark:text-zinc-600">→</span>}
+          <Chip node={n} sm={false} />
         </div>
       ))}
     </div>
