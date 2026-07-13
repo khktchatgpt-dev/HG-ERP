@@ -167,6 +167,9 @@ const NEXT_HINT: Partial<Record<PoStatus, string>> = {
   partial: 'nhận tiếp',
 }
 const fmtMoney = (n: number) => n.toLocaleString('vi-VN')
+/** Số ngày giữa 2 chuỗi yyyy-mm-dd (b − a). */
+const daysBetween = (aIso: string, bIso: string) =>
+  Math.round((Date.parse(bIso) - Date.parse(aIso)) / 86_400_000)
 
 const inputCls =
   'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -393,25 +396,34 @@ export function PosManager({
       key: 'expected',
       header: 'Hẹn giao',
       sortValue: (p) => p.expected_at ?? '9999',
-      width: '130px',
+      width: '150px',
       cell: (p) => {
         if (!p.expected_at) return <span className="text-zinc-400">—</span>
         const late = lateOf(p)
+        const exp = p.expected_at.slice(0, 10)
         return (
-          <div className="flex items-center gap-1.5">
-            <span className={late === 'overdue' ? 'text-red-600 dark:text-red-400' : ''}>
+          <div className="flex flex-col gap-0.5">
+            <span
+              className={
+                late === 'overdue' ? 'font-medium text-red-600 dark:text-red-400' : ''
+              }
+            >
               {new Date(p.expected_at).toLocaleDateString('vi-VN')}
             </span>
             {late === 'overdue' && (
-              <span title="Quá hẹn giao — hàng chưa về đủ">
-                <Badge tone="red">⚠ Trễ</Badge>
+              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                ⚠ Quá hẹn {daysBetween(exp, today)} ngày
               </span>
             )}
-            {late === 'due_soon' && (
-              <span title="Sát hẹn giao (≤ 7 ngày)">
-                <Badge tone="amber">Sát hẹn</Badge>
-              </span>
-            )}
+            {late === 'due_soon' &&
+              (() => {
+                const n = daysBetween(today, exp)
+                return (
+                  <span className="text-[11px] text-amber-600 dark:text-amber-500">
+                    {n === 0 ? 'Đến hẹn hôm nay' : `Sát hẹn · còn ${n} ngày`}
+                  </span>
+                )
+              })()}
           </div>
         )
       },
