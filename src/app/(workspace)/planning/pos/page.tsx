@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
@@ -18,9 +19,12 @@ export default async function PlanningPosPage() {
       materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     ])
 
+  // Tổng tiền từng PO (1 truy vấn gộp) — cho cột Giá trị.
+  const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
+
   return (
     <PosManager
-      pos={pos}
+      pos={pos.map((p) => ({ ...p, total: totals[p.id] ?? 0 }))}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
       lsxs={lsxAll
         .filter((l) => l.status !== 'completed')

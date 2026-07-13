@@ -110,6 +110,27 @@ export const posRepo = {
     return { rows: unwrap(data as Raw[] | null), total: count ?? 0 }
   },
 
+  /**
+   * Tổng tiền (Σ qty_ordered × unit_price) theo từng PO cho danh sách — 1 truy vấn
+   * gộp cho cả trang thay vì N+1. Trả map po_id → tổng.
+   */
+  async totalsByPoIds(ids: string[]): Promise<Record<string, number>> {
+    if (ids.length === 0) return {}
+    const { data } = await db()
+      .from('supply_purchase_order_lines')
+      .select('po_id, qty_ordered, unit_price')
+      .in('po_id', ids)
+    const totals: Record<string, number> = {}
+    for (const r of (data ?? []) as {
+      po_id: string
+      qty_ordered: number
+      unit_price: number | null
+    }[]) {
+      totals[r.po_id] = (totals[r.po_id] ?? 0) + r.qty_ordered * (r.unit_price ?? 0)
+    }
+    return totals
+  },
+
   async findById(id: string): Promise<PoWithRefs | null> {
     const { data } = await db()
       .from('supply_purchase_orders')

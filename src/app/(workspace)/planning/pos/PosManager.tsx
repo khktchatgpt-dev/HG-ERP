@@ -49,6 +49,8 @@ export type Po = {
   supplier_name: string
   lsx_code: string
   order_code: string | null
+  // Tổng tiền (Σ dòng) — bơm từ page cho cột Giá trị ở danh sách.
+  total?: number
 }
 
 export type PoLine = {
@@ -155,6 +157,16 @@ const STATUS_TONE: Record<PoStatus, 'gray' | 'amber' | 'blue' | 'green' | 'red'>
   received: 'green',
   cancelled: 'red',
 }
+/** Gợi ý việc kế tiếp theo trạng thái — hiện dưới pill để người mua biết bước sau. */
+const NEXT_HINT: Partial<Record<PoStatus, string>> = {
+  pending_approval: 'chờ GĐ duyệt',
+  approved: 'gửi NCC',
+  ordered: 'chờ NCC xác nhận',
+  confirmed: 'chờ giao',
+  in_transit: 'chờ nhận hàng',
+  partial: 'nhận tiếp',
+}
+const fmtMoney = (n: number) => n.toLocaleString('vi-VN')
 
 const inputCls =
   'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -337,21 +349,44 @@ export function PosManager({
     },
     {
       key: 'lsx',
-      header: 'LSX / Đơn hàng',
-      width: '170px',
+      header: 'Chuỗi liên kết',
+      width: '190px',
       cell: (p) => (
-        <div className="flex flex-col text-xs">
-          <span className="font-mono">{p.lsx_code}</span>
-          {p.order_code && <span className="text-zinc-400">{p.order_code}</span>}
-        </div>
+        <RefChain
+          size="sm"
+          nodes={[
+            ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
+            { label: 'LSX', value: p.lsx_code },
+          ]}
+        />
+      ),
+    },
+    {
+      key: 'total',
+      header: 'Giá trị',
+      align: 'right',
+      width: '140px',
+      sortValue: (p) => p.total ?? 0,
+      cell: (p) => (
+        <span className="font-medium tabular-nums">
+          {fmtMoney(p.total ?? 0)}{' '}
+          <span className="text-xs text-zinc-400">{p.currency}</span>
+        </span>
       ),
     },
     {
       key: 'status',
       header: 'Trạng thái',
       sortValue: (p) => p.status,
-      width: '130px',
-      cell: (p) => <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>,
+      width: '140px',
+      cell: (p) => (
+        <div className="flex flex-col gap-0.5">
+          <Badge tone={STATUS_TONE[p.status]}>{STATUS_LABEL[p.status]}</Badge>
+          {NEXT_HINT[p.status] && (
+            <span className="text-[11px] text-zinc-400">→ {NEXT_HINT[p.status]}</span>
+          )}
+        </div>
+      ),
     },
     {
       key: 'expected',
