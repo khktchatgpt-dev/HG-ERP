@@ -26,13 +26,18 @@ type MaterialOption = {
   on_hand: number
 }
 
-/** Dòng đặt — người mua tự tìm vật tư (đọc file BOM), hệ thống tự hiện tồn/ĐVT. */
+/**
+ * Dòng đặt — người mua gõ SL CẦN (đọc từ file BOM), hệ thống so với tồn kho
+ * để tự tính SL ĐẶT = cần − tồn (sửa tay được). `need` chỉ dùng phía client
+ * làm máy tính hỗ trợ; API vẫn chỉ nhận qty_ordered.
+ */
 type Line = {
   material_id: string
   code: string
   name: string
   unit: string
   on_hand: number
+  need: number | ''
   qty: number | ''
   price: number | ''
   note: string
@@ -113,6 +118,7 @@ export function PoCreateForm({
         name: m.name,
         unit: m.unit,
         on_hand: m.on_hand,
+        need: '',
         qty: '',
         price: '',
         note: '',
@@ -123,6 +129,18 @@ export function PoCreateForm({
 
   function setLine(i: number, patch: Partial<Line>) {
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+  }
+
+  // Gõ SL cần → tự tính SL đặt = cần − tồn (không âm). Sửa tay SL đặt vẫn được.
+  function setNeed(i: number, raw: string) {
+    const need = raw === '' ? '' : Number(raw)
+    setLines((ls) =>
+      ls.map((l, idx) =>
+        idx === i
+          ? { ...l, need, qty: need === '' ? '' : Math.max(0, need - l.on_hand) }
+          : l,
+      ),
+    )
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i))
@@ -309,8 +327,9 @@ export function PoCreateForm({
                 <thead className="bg-zinc-50 dark:bg-zinc-900/50">
                   <tr className="text-left text-[11px] text-zinc-500 uppercase">
                     <th className="py-2 pr-2 pl-3">Vật tư</th>
+                    <th className="w-24 py-2 pr-2 text-right">SL cần *</th>
                     <th className="w-24 py-2 pr-2 text-right">Tồn kho</th>
-                    <th className="w-24 py-2 pr-2 text-right">SL đặt *</th>
+                    <th className="w-24 py-2 pr-2 text-right">SL đặt</th>
                     <th className="w-32 py-2 pr-2 text-right">Đơn giá</th>
                     <th className="w-32 py-2 pr-2 text-right">Thành tiền</th>
                     <th className="py-2 pr-2">Ghi chú</th>
@@ -320,13 +339,15 @@ export function PoCreateForm({
                 <tbody>
                   {lines.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="py-6 text-center text-zinc-400">
+                      <td colSpan={8} className="py-6 text-center text-zinc-400">
                         Dùng ô tìm phía trên để thêm vật tư cần đặt.
                       </td>
                     </tr>
                   )}
                   {lines.map((l, i) => {
-                    const stockEnough = l.qty !== '' && Number(l.qty) <= l.on_hand
+                    const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
+                    const shortage =
+                      l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
                     const lineTotal = (Number(l.qty) || 0) * (Number(l.price) || 0)
                     return (
                       <tr
@@ -338,11 +359,29 @@ export function PoCreateForm({
                             {l.code}
                           </span>{' '}
                           {l.name}
-                          {stockEnough && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-500">
-                              ⚠ kho còn đủ (tồn {num(l.on_hand)} {l.unit})
+                          {stockCovers && (
+                            <div className="text-[10px] text-green-600 dark:text-green-400">
+                              ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn đặt
+                              thêm
                             </div>
                           )}
+                          {shortage !== null && shortage > 0 && (
+                            <div className="text-[10px] text-amber-600 dark:text-amber-500">
+                              ⚠ thiếu {num(shortage)} {l.unit} so với tồn
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={l.need}
+                            onChange={(e) => setNeed(i, e.target.value)}
+                            className={`${inputCls} text-right`}
+                            aria-label={`Số lượng cần ${l.name}`}
+                            placeholder="theo BOM"
+                          />
                         </td>
                         <td className="py-1.5 pr-2 text-right text-zinc-600 dark:text-zinc-300">
                           {num(l.on_hand)}{' '}
@@ -359,8 +398,9 @@ export function PoCreateForm({
                                 qty: e.target.value === '' ? '' : Number(e.target.value),
                               })
                             }
-                            className={`${inputCls} text-right`}
+                            className={`${inputCls} text-right font-medium`}
                             aria-label={`Số lượng đặt ${l.name}`}
+                            title="Tự tính = SL cần − tồn kho; sửa tay được"
                           />
                         </td>
                         <td className="py-1.5 pr-2">
@@ -539,8 +579,8 @@ export function PoCreateForm({
                 lines.length === 0
                   ? 'Thêm ít nhất 1 vật tư'
                   : linesOk
-                    ? `${lines.length} dòng vật tư có số lượng`
-                    : 'Điền số lượng cho mọi dòng'
+                    ? `${lines.length} dòng vật tư có SL đặt`
+                    : 'Mọi dòng cần SL đặt > 0 — dòng tồn đủ hãy xoá'
               }
             />
             <button
