@@ -130,6 +130,24 @@ export const ordersRepo = {
     return unwrap([data as RawOrder])[0]
   },
 
+  /** Tổng giá trị (Σ qty×unit_price) theo lô đơn — cho KPI dashboard/khách. */
+  async totalsByOrderIds(ids: string[]): Promise<Record<string, number>> {
+    if (ids.length === 0) return {}
+    const { data } = await db()
+      .from('sales_order_lines')
+      .select('order_id, qty, unit_price')
+      .in('order_id', ids)
+    const totals: Record<string, number> = {}
+    for (const r of (data ?? []) as {
+      order_id: string
+      qty: number
+      unit_price: number
+    }[]) {
+      totals[r.order_id] = (totals[r.order_id] ?? 0) + r.qty * r.unit_price
+    }
+    return totals
+  },
+
   async listLines(orderId: string): Promise<OrderLine[]> {
     const { data } = await db()
       .from('sales_order_lines')
