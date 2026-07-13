@@ -30,7 +30,10 @@ export default async function QuotePrintPage({
   await Promise.all(
     [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
       try {
-        imageUrls.set(fid as string, await filesService.getDownloadUrl(user, fid as string))
+        imageUrls.set(
+          fid as string,
+          await filesService.getDownloadUrl(user, fid as string),
+        )
       } catch {
         /* thiếu ảnh không chặn in */
       }
@@ -43,7 +46,10 @@ export default async function QuotePrintPage({
   const carton = (l: (typeof lines)[number]) =>
     [l.packing.carton_l_cm, l.packing.carton_w_cm, l.packing.carton_h_cm] as const
   const cmToInch = (v?: number) => (v != null ? (v / 2.54).toFixed(1) : '')
-  const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
+  // Giá in = giá SAU chiết khấu dòng (giá chào thực gửi khách).
+  const effPrice = (l: (typeof lines)[number]) =>
+    l.unit_price * (1 - (l.discount_pct ?? 0) / 100)
+  const total = lines.reduce((s, l) => s + l.qty * effPrice(l), 0)
 
   return (
     <div className="mx-auto max-w-5xl bg-white p-6 text-[13px] text-black print:p-0">
@@ -171,7 +177,7 @@ export default async function QuotePrintPage({
                   {l.qty.toLocaleString('en-US')}
                 </td>
                 <td className="border border-black px-1 font-bold text-red-700">
-                  ${l.unit_price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${effPrice(l).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </td>
               </tr>
             )

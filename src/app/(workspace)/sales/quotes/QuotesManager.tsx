@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
@@ -38,6 +38,7 @@ type QuoteLine = {
   product_id: string
   qty: number
   unit_price: number
+  discount_pct: number | null
   note: string | null
   product_code?: string
   product_name?: string
@@ -61,7 +62,13 @@ type LineRow = {
   product_id: string
   qty: number | ''
   unit_price: number | ''
+  discount_pct: number | ''
   note: string
+}
+
+/** Thành tiền dòng = SL × đơn giá × (1 − CK%/100). */
+function lineAmount(qty: number, price: number, discount: number | null): number {
+  return qty * price * (1 - (discount ?? 0) / 100)
 }
 
 const STATUS_LABEL: Record<QuoteStatus, string> = {
@@ -154,6 +161,7 @@ export function QuotesManager({
           product_id: l.product_id,
           qty: l.qty,
           unit_price: l.unit_price,
+          discount_pct: l.discount_pct ?? '',
           note: l.note ?? '',
         })),
       })
@@ -441,7 +449,11 @@ function QuoteDetail({
   onSend: () => void
   onEdit: () => void
 }) {
-  const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
+  const total = lines.reduce(
+    (s, l) => s + lineAmount(l.qty, l.unit_price, l.discount_pct),
+    0,
+  )
+  const hasDiscount = lines.some((l) => l.discount_pct != null && l.discount_pct > 0)
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -473,6 +485,7 @@ function QuoteDetail({
               <th className="w-20 py-2 pr-2 text-right">SL</th>
               <th className="w-16 py-2 pr-2">ĐVT</th>
               <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
+              {hasDiscount && <th className="w-16 py-2 pr-2 text-right">CK %</th>}
               <th className="w-32 py-2 text-right">Thành tiền</th>
             </tr>
           </thead>
@@ -496,15 +509,27 @@ function QuoteDetail({
                 <td className="py-1.5 pr-2 text-right">
                   {l.unit_price.toLocaleString('en-US')}
                 </td>
+                {hasDiscount && (
+                  <td className="py-1.5 pr-2 text-right text-zinc-500">
+                    {l.discount_pct != null && l.discount_pct > 0
+                      ? `−${l.discount_pct}%`
+                      : '—'}
+                  </td>
+                )}
                 <td className="py-1.5 text-right font-medium">
-                  {(l.qty * l.unit_price).toLocaleString('en-US')}
+                  {lineAmount(l.qty, l.unit_price, l.discount_pct).toLocaleString(
+                    'en-US',
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={4} className="py-2 pr-2 text-right font-semibold">
+              <td
+                colSpan={hasDiscount ? 5 : 4}
+                className="py-2 pr-2 text-right font-semibold"
+              >
                 Tổng cộng
               </td>
               <td className="py-2 text-right font-bold">
@@ -579,6 +604,34 @@ function QuoteForm({
   const [lastPrices, setLastPrices] = useState<
     Map<string, { unit_price: number; quote_code: string }>
   >(new Map())
+  // Giá chào gần nhất trên MỌI khách (bàn chào giá): biết thị trường đang ở đâu.
+  const [marketPrices, setMarketPrices] = useState<
+    Map<
+      string,
+      {
+        unit_price: number
+        qty: number
+        currency: string
+        customer_name: string
+        quoted_at: string
+      }
+    >
+  >(new Map())
+
+  useEffect(() => {
+    api<{
+      prices: {
+        product_id: string
+        unit_price: number
+        qty: number
+        currency: string
+        customer_name: string
+        quoted_at: string
+      }[]
+    }>('/api/dept/sales/quotes/last-prices')
+      .then((d) => setMarketPrices(new Map(d.prices.map((x) => [x.product_id, x]))))
+      .catch(() => setMarketPrices(new Map()))
+  }, [])
 
   async function loadLastPrices(cid: string) {
     if (!cid) {
@@ -593,6 +646,12 @@ function QuoteForm({
     } catch {
       setLastPrices(new Map())
     }
+  }
+
+  /** "30 ngày trước" từ ISO date. */
+  function daysAgo(iso: string): string {
+    const d = Math.round((Date.now() - Date.parse(iso)) / 86_400_000)
+    return d <= 0 ? 'hôm nay' : `${d} ngày trước`
   }
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -622,7 +681,13 @@ function QuoteForm({
     ])
     setLines((ls) => [
       ...ls,
-      { product_id: p.id, qty: '', unit_price: unitPrice ?? '', note: '' },
+      {
+        product_id: p.id,
+        qty: '',
+        unit_price: unitPrice ?? '',
+        discount_pct: '',
+        note: '',
+      },
     ])
   }
 
@@ -653,6 +718,7 @@ function QuoteForm({
         product_id: l.product_id,
         qty: Number(l.qty),
         unit_price: Number(l.unit_price),
+        discount_pct: l.discount_pct === '' ? null : Number(l.discount_pct),
         note: l.note.trim() || null,
       })),
     }
@@ -755,90 +821,135 @@ function QuoteForm({
             Chưa có dòng nào — chọn sản phẩm từ thư viện Kỹ thuật.
           </p>
         )}
-        <div className="flex flex-col gap-2">
-          {lines.map((l, i) => (
-            <div key={i} className="grid grid-cols-12 items-center gap-2">
-              <select
-                value={l.product_id}
-                onChange={(e) => {
-                  const last = lastPrices.get(e.target.value)
-                  setLine(i, {
-                    product_id: e.target.value,
-                    // tự điền giá lần trước nếu chưa nhập giá (sửa lại được)
-                    ...(l.unit_price === '' && last
-                      ? { unit_price: last.unit_price }
-                      : {}),
-                  })
-                }}
-                className={`${cls} col-span-5`}
-              >
-                <option value="">— chọn SP —</option>
-                {productChoices.own.length > 0 && (
-                  <optgroup label="SP của khách này">
-                    {productChoices.own.map(renderOption)}
-                  </optgroup>
-                )}
-                {productChoices.common.length > 0 && (
-                  <optgroup label="Mẫu chung">
-                    {productChoices.common.map(renderOption)}
-                  </optgroup>
-                )}
-                {productChoices.others.length > 0 && (
-                  <optgroup label="SP khách khác">
-                    {productChoices.others.map(renderOption)}
-                  </optgroup>
-                )}
-              </select>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="SL"
-                value={l.qty}
-                onChange={(e) =>
-                  setLine(i, { qty: e.target.value === '' ? '' : Number(e.target.value) })
-                }
-                className={`${cls} col-span-2`}
-              />
-              <div className="col-span-2 flex flex-col">
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Đơn giá"
-                  value={l.unit_price}
-                  onChange={(e) =>
-                    setLine(i, {
-                      unit_price: e.target.value === '' ? '' : Number(e.target.value),
-                    })
-                  }
-                  className={cls}
-                />
-                {l.product_id && lastPrices.get(l.product_id) && (
-                  <span className="mt-0.5 text-[10px] text-zinc-400">
-                    Lần trước:{' '}
-                    {lastPrices.get(l.product_id)!.unit_price.toLocaleString('en-US')} (
-                    {lastPrices.get(l.product_id)!.quote_code})
-                  </span>
+        <div className="flex flex-col gap-2.5">
+          {lines.map((l, i) => {
+            const mine = l.product_id ? lastPrices.get(l.product_id) : undefined
+            const market = l.product_id ? marketPrices.get(l.product_id) : undefined
+            const amount =
+              l.qty !== '' && l.unit_price !== ''
+                ? lineAmount(
+                    Number(l.qty),
+                    Number(l.unit_price),
+                    l.discount_pct === '' ? null : Number(l.discount_pct),
+                  )
+                : null
+            return (
+              <div key={i} className="flex flex-col gap-1">
+                <div className="grid grid-cols-12 items-center gap-2">
+                  <select
+                    value={l.product_id}
+                    onChange={(e) => {
+                      const last = lastPrices.get(e.target.value)
+                      setLine(i, {
+                        product_id: e.target.value,
+                        // tự điền giá lần trước nếu chưa nhập giá (sửa lại được)
+                        ...(l.unit_price === '' && last
+                          ? { unit_price: last.unit_price }
+                          : {}),
+                      })
+                    }}
+                    className={`${cls} col-span-4`}
+                  >
+                    <option value="">— chọn SP —</option>
+                    {productChoices.own.length > 0 && (
+                      <optgroup label="SP của khách này">
+                        {productChoices.own.map(renderOption)}
+                      </optgroup>
+                    )}
+                    {productChoices.common.length > 0 && (
+                      <optgroup label="Mẫu chung">
+                        {productChoices.common.map(renderOption)}
+                      </optgroup>
+                    )}
+                    {productChoices.others.length > 0 && (
+                      <optgroup label="SP khách khác">
+                        {productChoices.others.map(renderOption)}
+                      </optgroup>
+                    )}
+                  </select>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="SL"
+                    value={l.qty}
+                    onChange={(e) =>
+                      setLine(i, {
+                        qty: e.target.value === '' ? '' : Number(e.target.value),
+                      })
+                    }
+                    className={`${cls} col-span-2`}
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Đơn giá"
+                    value={l.unit_price}
+                    onChange={(e) =>
+                      setLine(i, {
+                        unit_price: e.target.value === '' ? '' : Number(e.target.value),
+                      })
+                    }
+                    className={`${cls} col-span-2`}
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="CK%"
+                    title="Chiết khấu % theo dòng"
+                    value={l.discount_pct}
+                    onChange={(e) =>
+                      setLine(i, {
+                        discount_pct: e.target.value === '' ? '' : Number(e.target.value),
+                      })
+                    }
+                    className={`${cls} col-span-1`}
+                  />
+                  <input
+                    placeholder="Ghi chú"
+                    value={l.note}
+                    maxLength={500}
+                    onChange={(e) => setLine(i, { note: e.target.value })}
+                    className={`${cls} col-span-2`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
+                    className="col-span-1 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    aria-label="Xoá dòng"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {/* Hỗ trợ bán hàng: giá đã chào gần nhất + thành tiền — quyết nhanh */}
+                {(mine || market || amount != null) && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-1 text-[11px] text-zinc-400">
+                    {mine && (
+                      <span>
+                        Khách này: <b>{mine.unit_price.toLocaleString('en-US')}</b> (
+                        {mine.quote_code})
+                      </span>
+                    )}
+                    {market && (
+                      <span>
+                        Gần nhất: <b>{market.unit_price.toLocaleString('en-US')}</b>{' '}
+                        {market.currency} · {market.customer_name} · SL{' '}
+                        {market.qty.toLocaleString('vi-VN')} · {daysAgo(market.quoted_at)}
+                      </span>
+                    )}
+                    {amount != null && (
+                      <span className="ml-auto font-medium text-zinc-500">
+                        = {amount.toLocaleString('en-US')}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-              <input
-                placeholder="Ghi chú"
-                value={l.note}
-                maxLength={500}
-                onChange={(e) => setLine(i, { note: e.target.value })}
-                className={`${cls} col-span-2`}
-              />
-              <button
-                type="button"
-                onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
-                className="col-span-1 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                aria-label="Xoá dòng"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
+            )
+          })}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button
@@ -846,7 +957,13 @@ function QuoteForm({
             onClick={() =>
               setLines((ls) => [
                 ...ls,
-                { product_id: '', qty: '', unit_price: '', note: '' },
+                {
+                  product_id: '',
+                  qty: '',
+                  unit_price: '',
+                  discount_pct: '',
+                  note: '',
+                },
               ])
             }
             className="rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"

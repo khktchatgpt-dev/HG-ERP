@@ -9,6 +9,7 @@ export const quoteLineInputSchema = z.object({
   product_id: z.string().uuid(),
   qty: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
+  discount_pct: z.coerce.number().min(0).max(100).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
 })
 

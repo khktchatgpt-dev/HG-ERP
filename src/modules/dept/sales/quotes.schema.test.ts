@@ -29,6 +29,32 @@ describe('quoteCreateSchema', () => {
     expect(p.lines).toEqual([])
   })
 
+  it('chiết khấu %: nhận 0–100 (coerce), từ chối ngoài khoảng', () => {
+    const p = quoteCreateSchema.parse({
+      customer_id: UUID,
+      lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: '12.5' }],
+    })
+    expect(p.lines[0].discount_pct).toBe(12.5)
+    // không gửi → undefined (không chiết khấu)
+    const p2 = quoteCreateSchema.parse({
+      customer_id: UUID,
+      lines: [{ product_id: UUID, qty: 1, unit_price: 10 }],
+    })
+    expect(p2.lines[0].discount_pct).toBeUndefined()
+    expect(() =>
+      quoteCreateSchema.parse({
+        customer_id: UUID,
+        lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: 101 }],
+      }),
+    ).toThrow()
+    expect(() =>
+      quoteCreateSchema.parse({
+        customer_id: UUID,
+        lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: -5 }],
+      }),
+    ).toThrow()
+  })
+
   it('từ chối SL ≤ 0 và đơn giá âm', () => {
     expect(() =>
       quoteCreateSchema.parse({

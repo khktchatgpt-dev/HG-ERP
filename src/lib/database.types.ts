@@ -968,6 +968,7 @@ export type Database = {
           country: string | null
           created_at: string
           default_currency: string | null
+          default_incoterm: string | null
           default_payment_terms: string | null
           default_price_term: string | null
           email: string | null
@@ -991,6 +992,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           default_currency?: string | null
+          default_incoterm?: string | null
           default_payment_terms?: string | null
           default_price_term?: string | null
           email?: string | null
@@ -1014,6 +1016,7 @@ export type Database = {
           country?: string | null
           created_at?: string
           default_currency?: string | null
+          default_incoterm?: string | null
           default_payment_terms?: string | null
           default_price_term?: string | null
           email?: string | null
@@ -1243,6 +1246,7 @@ export type Database = {
       }
       sales_quote_lines: {
         Row: {
+          discount_pct: number | null
           id: string
           note: string | null
           product_id: string
@@ -1252,6 +1256,7 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          discount_pct?: number | null
           id?: string
           note?: string | null
           product_id: string
@@ -1261,6 +1266,7 @@ export type Database = {
           unit_price?: number
         }
         Update: {
+          discount_pct?: number | null
           id?: string
           note?: string | null
           product_id?: string
