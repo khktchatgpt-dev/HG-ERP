@@ -218,6 +218,21 @@ export function SupplierDetail({
     { id: 'history', label: `Lịch sử mua (${pos.length})` },
   ]
 
+  const groupLabels = groupIds
+    .map((id) => allGroups.find((g) => g.id === id)?.label)
+    .filter(Boolean) as string[]
+  const scores = [
+    supplier.quality_score,
+    supplier.service_score,
+    supplier.price_score,
+  ].filter((n): n is number => n != null)
+  const avgScore = scores.length
+    ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
+    : null
+  const stTone = { active: 'green', suspended: 'amber', terminated: 'gray' }[
+    supplier.status
+  ] as 'green' | 'amber' | 'gray' | undefined
+
   return (
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
@@ -253,18 +268,48 @@ export function SupplierDetail({
         }
       />
 
+      {/* Thẻ nhận diện — tín hiệu quan trọng lên đầu */}
+      <div className="flex flex-wrap items-center gap-2">
+        {supplier.type && <Badge tone="blue">{supplier.type}</Badge>}
+        <Badge tone={stTone ?? 'gray'}>
+          {STATUS_LABEL[supplier.status] ?? supplier.status}
+        </Badge>
+        {supplier.rating && (
+          <Badge tone={RATING_TONE[supplier.rating] ?? 'gray'}>
+            Hạng {supplier.rating}
+          </Badge>
+        )}
+        {supplier.can_order ? (
+          <Badge tone="green">✓ Cho đặt hàng</Badge>
+        ) : (
+          <Badge tone="red">⚠ Khoá đặt hàng</Badge>
+        )}
+        {groupLabels.length > 0 && (
+          <span className="text-zinc-300 dark:text-zinc-600">·</span>
+        )}
+        {groupLabels.map((g) => (
+          <Badge key={g} tone="purple">
+            {g}
+          </Badge>
+        ))}
+      </div>
+
       <StatsBar
         stats={[
           {
-            label: 'Trạng thái',
-            value: supplier.is_active ? 'Đang giao dịch' : 'Ngừng',
-            tone: supplier.is_active ? 'green' : 'gray',
+            label: 'Xếp hạng',
+            value: supplier.rating ? `Hạng ${supplier.rating}` : '—',
+            tone: supplier.rating ? (RATING_TONE[supplier.rating] ?? 'gray') : 'gray',
           },
+          {
+            label: 'Điểm TB',
+            value: avgScore != null ? `${avgScore}/5` : '—',
+            tone: 'amber',
+          },
+          { label: 'Tổng chi (VND)', value: money(stats.spend), tone: 'purple' },
           { label: 'Tổng PO', value: stats.total, tone: 'blue' },
           { label: 'PO đang mở', value: stats.open, tone: stats.open ? 'amber' : 'gray' },
-          { label: 'Tổng chi (VND)', value: money(stats.spend), tone: 'purple' },
           { label: 'Mua gần nhất', value: date(stats.last), tone: 'default' },
-          { label: 'Vật tư đã mua', value: purchased.length, tone: 'blue' },
         ]}
       />
 
@@ -294,6 +339,47 @@ export function SupplierDetail({
             initialGroupIds={groupIds}
             canEdit={canEdit}
           />
+
+          {/* Khối nổi bật: thứ người mua cần nhất */}
+          {(supplier.phone ||
+            supplier.email ||
+            supplier.payment_terms ||
+            supplier.lead_time_days != null ||
+            supplier.incoterms) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(supplier.phone || supplier.email) && (
+                <div className="rounded-lg border border-violet-200 bg-violet-50 p-3 dark:border-violet-900/50 dark:bg-violet-950/30">
+                  <div className="text-[10px] font-semibold tracking-wide text-violet-600 uppercase dark:text-violet-400">
+                    Liên hệ mua hàng
+                  </div>
+                  <div className="mt-1 text-sm font-medium">
+                    {[supplier.phone, supplier.email].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+              )}
+              {(supplier.payment_terms ||
+                supplier.lead_time_days != null ||
+                supplier.incoterms) && (
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 dark:border-blue-900/50 dark:bg-blue-950/30">
+                  <div className="text-[10px] font-semibold tracking-wide text-blue-600 uppercase dark:text-blue-400">
+                    Điều khoản mua
+                  </div>
+                  <div className="mt-1 text-sm font-medium">
+                    {[
+                      supplier.payment_terms,
+                      supplier.lead_time_days != null
+                        ? `Lead time ${supplier.lead_time_days} ngày`
+                        : null,
+                      supplier.incoterms ? `Incoterms ${supplier.incoterms}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <Group title="Cơ bản">
             <Field label="Mã NCC" value={supplier.code} mono />
             <Field label="Tên viết tắt" value={supplier.short_name} />
@@ -745,6 +831,8 @@ function Field({
   mono?: boolean
   className?: string
 }) {
+  // Ẩn trường rỗng — hết "bức tường dấu —".
+  if (!value) return null
   return (
     <div
       className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${className ?? ''}`}
@@ -752,11 +840,7 @@ function Field({
       <div className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
         {label}
       </div>
-      <div
-        className={`mt-1 text-sm ${mono ? 'font-mono' : ''} ${value ? '' : 'text-zinc-400'}`}
-      >
-        {value || '—'}
-      </div>
+      <div className={`mt-1 text-sm ${mono ? 'font-mono' : ''}`}>{value}</div>
     </div>
   )
 }

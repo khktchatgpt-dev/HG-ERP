@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { materialGroupsRepo } from '@/modules/dept/supply/supply.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SuppliersManager } from './SuppliersManager'
@@ -14,8 +15,11 @@ export default async function PlanningSuppliersPage() {
     materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
   ])
 
-  // Tổng chi theo NCC — cộng gộp giá trị PO (1 truy vấn), trừ đơn đã huỷ.
-  const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
+  // Tổng chi theo NCC + nhãn nhóm hàng theo lô (cho chips ở danh sách).
+  const [totals, groupsBySupplier] = await Promise.all([
+    posRepo.totalsByPoIds(pos.map((p) => p.id)),
+    materialGroupsRepo.labelsBySuppliers(suppliers.map((s) => s.id)),
+  ])
 
   // Lịch sử mua gọn: đếm PO + PO gần nhất + tổng chi theo NCC (FR-SUP-06).
   // open = chưa về đủ/chưa huỷ — cảnh báo khi Ngừng giao dịch NCC còn PO dở dang.
@@ -51,6 +55,7 @@ export default async function PlanningSuppliersPage() {
         last_po: poStats.get(s.id)?.last_code ?? null,
         last_po_at: poStats.get(s.id)?.last_at ?? null,
         total_spend: poStats.get(s.id)?.spend ?? 0,
+        groups: groupsBySupplier.get(s.id) ?? [],
       }))}
       materials={materials.map((m) => ({
         id: m.id,

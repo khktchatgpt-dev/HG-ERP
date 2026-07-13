@@ -367,6 +367,31 @@ export const materialGroupsRepo = {
     return ((data ?? []) as { group_id: string }[]).map((r) => r.group_id)
   },
 
+  /** Nhãn nhóm hàng theo lô cho nhiều NCC — cho chips ở danh sách. */
+  async labelsBySuppliers(supplierIds: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    if (supplierIds.length === 0) return out
+    const { data } = await db()
+      .from('supplier_material_groups')
+      .select('supplier_id, group:catalog_items(label, sort_order)')
+      .in('supplier_id', supplierIds)
+    type Raw = {
+      supplier_id: string
+      group:
+        | { label: string; sort_order: number }
+        | { label: string; sort_order: number }[]
+        | null
+    }
+    for (const r of (data ?? []) as Raw[]) {
+      const g = Array.isArray(r.group) ? r.group[0] : r.group
+      if (!g) continue
+      const arr = out.get(r.supplier_id) ?? []
+      arr.push(g.label)
+      out.set(r.supplier_id, arr)
+    }
+    return out
+  },
+
   /** Đặt lại toàn bộ nhóm của NCC = danh sách mới (xoá hết + chèn). */
   async setForSupplier(supplierId: string, groupIds: string[]): Promise<void> {
     const del = await db()

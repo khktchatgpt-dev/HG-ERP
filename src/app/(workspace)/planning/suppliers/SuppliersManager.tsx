@@ -22,20 +22,50 @@ type Supplier = {
   id: string
   code: string | null
   name: string
-  email: string | null
-  phone: string | null
-  address: string | null
   tax_no: string | null
-  note: string | null
+  type: string | null
+  status: string
+  rating: string | null
+  region: string | null
+  can_order: boolean
   is_active: boolean
   po_count: number
-  open_po_count: number // PO chưa về đủ/chưa huỷ — cảnh báo khi ngừng giao dịch
+  open_po_count: number
   last_po: string | null
   last_po_at: string | null
   total_spend: number
+  groups: string[]
 }
 
 const money = (n: number) => n.toLocaleString('vi-VN')
+
+const STATUS: Record<string, { label: string; tone: 'green' | 'amber' | 'gray' }> = {
+  active: { label: 'Hoạt động', tone: 'green' },
+  suspended: { label: 'Tạm ngưng', tone: 'amber' },
+  terminated: { label: 'Ngừng hợp tác', tone: 'gray' },
+}
+const GRADE_BG: Record<string, string> = {
+  A: 'bg-green-600',
+  B: 'bg-blue-600',
+  C: 'bg-amber-500',
+  D: 'bg-red-600',
+}
+
+function Grade({ r }: { r: string | null }) {
+  if (!r)
+    return (
+      <span className="grid h-6 w-6 place-items-center rounded-md bg-zinc-200 text-xs font-bold text-zinc-400 dark:bg-zinc-800">
+        —
+      </span>
+    )
+  return (
+    <span
+      className={`grid h-6 w-6 place-items-center rounded-md text-xs font-bold text-white ${GRADE_BG[r] ?? 'bg-zinc-500'}`}
+    >
+      {r}
+    </span>
+  )
+}
 
 export function SuppliersManager({
   suppliers,
@@ -54,18 +84,33 @@ export function SuppliersManager({
   const [pricing, setPricing] = useState<Supplier | null>(null)
 
   const [q, setQ] = useState('')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [ratingFilter, setRatingFilter] = useState('all')
+  const [groupFilter, setGroupFilter] = useState('all')
+
+  // Options lọc lấy từ dữ liệu thật.
+  const typeOptions = useMemo(
+    () => [...new Set(suppliers.map((s) => s.type).filter(Boolean))] as string[],
+    [suppliers],
+  )
+  const groupOptions = useMemo(
+    () => [...new Set(suppliers.flatMap((s) => s.groups))].sort(),
+    [suppliers],
+  )
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return suppliers.filter((s) => {
-      if (statusFilter === 'active' && !s.is_active) return false
-      if (statusFilter === 'inactive' && s.is_active) return false
+      if (statusFilter !== 'all' && s.status !== statusFilter) return false
+      if (typeFilter !== 'all' && s.type !== typeFilter) return false
+      if (ratingFilter !== 'all' && s.rating !== ratingFilter) return false
+      if (groupFilter !== 'all' && !s.groups.includes(groupFilter)) return false
       if (ql && !`${s.code ?? ''} ${s.name} ${s.tax_no ?? ''}`.toLowerCase().includes(ql))
         return false
       return true
     })
-  }, [suppliers, q, statusFilter])
+  }, [suppliers, q, statusFilter, typeFilter, ratingFilter, groupFilter])
 
   // Ngừng giao dịch khi còn PO mở là tình huống thật (NCC ngưng cung cấp) —
   // không chặn, nhưng confirm phải nói rõ để Cung ứng xử lý các PO dở dang.
@@ -120,40 +165,45 @@ export function SuppliersManager({
       ),
     },
     {
-      key: 'contact',
-      header: 'Liên hệ',
-      cell: (s) => (
-        <div className="flex flex-col text-xs text-zinc-500">
-          {s.phone && <span>{s.phone}</span>}
-          {s.email && <span className="truncate">{s.email}</span>}
-          {!s.phone && !s.email && '—'}
-        </div>
-      ),
-    },
-    {
-      key: 'tax',
-      header: 'MST',
-      width: '120px',
-      cell: (s) => <span className="font-mono text-xs">{s.tax_no ?? '—'}</span>,
-    },
-    {
-      key: 'history',
-      header: 'Lịch sử mua',
-      sortValue: (s) => s.po_count,
-      width: '130px',
+      key: 'type',
+      header: 'Loại',
+      width: '150px',
+      sortValue: (s) => s.type ?? '',
       cell: (s) =>
-        s.po_count > 0 ? (
-          <div className="flex flex-col text-xs">
-            <span>{s.po_count} đơn đặt</span>
-            {s.last_po_at && (
-              <span className="text-zinc-400">
-                gần nhất {new Date(s.last_po_at).toLocaleDateString('vi-VN')}
-              </span>
-            )}
+        s.type ? (
+          <Badge tone="blue">{s.type}</Badge>
+        ) : (
+          <span className="text-xs text-zinc-400">—</span>
+        ),
+    },
+    {
+      key: 'groups',
+      header: 'Nhóm hàng',
+      width: '210px',
+      cell: (s) =>
+        s.groups.length ? (
+          <div className="flex flex-wrap gap-1">
+            {s.groups.map((g) => (
+              <Badge key={g} tone="purple">
+                {g}
+              </Badge>
+            ))}
           </div>
         ) : (
-          <span className="text-xs text-zinc-400">Chưa mua</span>
+          <span className="text-xs text-zinc-400">—</span>
         ),
+    },
+    {
+      key: 'rating',
+      header: 'Hạng',
+      width: '70px',
+      align: 'center',
+      sortValue: (s) => s.rating ?? 'Z',
+      cell: (s) => (
+        <div className="flex justify-center">
+          <Grade r={s.rating} />
+        </div>
+      ),
     },
     {
       key: 'spend',
@@ -173,13 +223,21 @@ export function SuppliersManager({
     {
       key: 'status',
       header: 'Trạng thái',
-      width: '110px',
-      cell: (s) =>
-        s.is_active ? (
-          <Badge tone="green">Đang giao dịch</Badge>
-        ) : (
-          <Badge tone="gray">Ngừng</Badge>
-        ),
+      width: '140px',
+      sortValue: (s) => s.status,
+      cell: (s) => {
+        const st = STATUS[s.status] ?? { label: s.status, tone: 'gray' as const }
+        return (
+          <div className="flex flex-col gap-0.5">
+            <Badge tone={st.tone}>{st.label}</Badge>
+            {!s.can_order && (
+              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                ⚠ khoá đặt hàng
+              </span>
+            )}
+          </div>
+        )
+      },
     },
     {
       key: 'actions',
@@ -260,15 +318,43 @@ export function SuppliersManager({
                 onChange={setQ}
                 placeholder="Tìm tên, mã, MST…"
                 icon="⌕"
-                className="w-64"
+                className="w-56"
+              />
+              <ToolbarSelect
+                value={typeFilter}
+                onChange={setTypeFilter}
+                options={[
+                  { value: 'all', label: 'Mọi loại' },
+                  ...typeOptions.map((t) => ({ value: t, label: t })),
+                ]}
+              />
+              <ToolbarSelect
+                value={groupFilter}
+                onChange={setGroupFilter}
+                options={[
+                  { value: 'all', label: 'Mọi nhóm hàng' },
+                  ...groupOptions.map((g) => ({ value: g, label: g })),
+                ]}
+              />
+              <ToolbarSelect
+                value={ratingFilter}
+                onChange={setRatingFilter}
+                options={[
+                  { value: 'all', label: 'Mọi hạng' },
+                  { value: 'A', label: 'Hạng A' },
+                  { value: 'B', label: 'Hạng B' },
+                  { value: 'C', label: 'Hạng C' },
+                  { value: 'D', label: 'Hạng D' },
+                ]}
               />
               <ToolbarSelect
                 value={statusFilter}
-                onChange={(v) => setStatusFilter(v)}
+                onChange={setStatusFilter}
                 options={[
-                  { value: 'all' as const, label: 'Mọi trạng thái' },
-                  { value: 'active' as const, label: 'Đang giao dịch' },
-                  { value: 'inactive' as const, label: 'Ngừng' },
+                  { value: 'all', label: 'Mọi trạng thái' },
+                  { value: 'active', label: 'Hoạt động' },
+                  { value: 'suspended', label: 'Tạm ngưng' },
+                  { value: 'terminated', label: 'Ngừng hợp tác' },
                 ]}
               />
             </>
