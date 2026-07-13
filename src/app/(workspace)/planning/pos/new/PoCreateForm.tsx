@@ -322,136 +322,146 @@ export function PoCreateForm({
               )}
             </div>
 
-            <div className="mt-3 overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full min-w-[780px] text-sm tabular-nums">
-                <thead className="bg-zinc-50 dark:bg-zinc-900/50">
-                  <tr className="text-left text-[11px] text-zinc-500 uppercase">
-                    <th className="min-w-[200px] py-2 pr-2 pl-3">Vật tư</th>
-                    <th className="w-24 py-2 pr-2 text-right">SL cần *</th>
-                    <th className="w-20 py-2 pr-2 text-right">Tồn kho</th>
-                    <th className="w-24 py-2 pr-2 text-right">SL đặt</th>
-                    <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
-                    <th className="w-28 py-2 pr-3 text-right">Thành tiền</th>
-                    <th className="min-w-[130px] py-2 pr-2">Ghi chú</th>
-                    <th className="w-8 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="py-6 text-center text-zinc-400">
-                        Dùng ô tìm phía trên để thêm vật tư cần đặt.
-                      </td>
-                    </tr>
-                  )}
-                  {lines.map((l, i) => {
-                    const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
-                    const shortage =
-                      l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
-                    const lineTotal = (Number(l.qty) || 0) * (Number(l.price) || 0)
-                    // Mọi ô căn TOP; ô chữ tĩnh đệm pt-[15px] cho ngang mép chữ
-                    // trong input (8px pad ô + 1px viền + 6px pad input).
-                    return (
-                      <tr
-                        key={l.material_id}
-                        className="border-t border-zinc-100 align-top dark:border-zinc-900"
-                      >
-                        <td className="py-2 pt-[15px] pr-2 pl-3">
-                          <span className="font-mono text-xs text-zinc-400">
-                            {l.code}
-                          </span>{' '}
-                          {l.name}
-                          {stockCovers && (
-                            <div className="mt-0.5 text-[10px] text-green-600 dark:text-green-400">
-                              ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn đặt
-                              thêm
-                            </div>
-                          )}
-                          {shortage !== null && shortage > 0 && (
-                            <div className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-500">
-                              ⚠ thiếu {num(shortage)} {l.unit} so với tồn
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={l.need}
-                            onChange={(e) => setNeed(i, e.target.value)}
-                            className={`${inputCls} text-right`}
-                            aria-label={`Số lượng cần ${l.name}`}
-                            placeholder="theo BOM"
-                          />
-                        </td>
-                        <td className="py-2 pt-[15px] pr-2 text-right whitespace-nowrap text-zinc-600 dark:text-zinc-300">
-                          {num(l.on_hand)}{' '}
-                          <span className="text-xs text-zinc-400">{l.unit}</span>
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={l.qty}
-                            onChange={(e) =>
-                              setLine(i, {
-                                qty: e.target.value === '' ? '' : Number(e.target.value),
-                              })
-                            }
-                            className={`${inputCls} text-right font-medium`}
-                            aria-label={`Số lượng đặt ${l.name}`}
-                            title="Tự tính = SL cần − tồn kho; sửa tay được"
-                          />
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={l.price}
-                            onChange={(e) =>
-                              setLine(i, {
-                                price:
-                                  e.target.value === '' ? '' : Number(e.target.value),
-                              })
-                            }
-                            className={`${inputCls} text-right`}
-                            aria-label={`Đơn giá ${l.name}`}
-                          />
-                        </td>
-                        <td className="py-2 pt-[15px] pr-3 text-right font-medium whitespace-nowrap">
+            {/* Thẻ dòng thay bảng: hàng đầu là tên + thành tiền; bên dưới là lưới
+                ô nhập có nhãn riêng — không còn phải căn dọc giữa các cột. */}
+            <div className="mt-3 flex flex-col gap-2.5">
+              {lines.length === 0 && (
+                <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400 dark:border-zinc-700">
+                  Dùng ô tìm phía trên để thêm vật tư cần đặt.
+                </p>
+              )}
+              {lines.map((l, i) => {
+                const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
+                const shortage =
+                  l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
+                const lineTotal = (Number(l.qty) || 0) * (Number(l.price) || 0)
+                return (
+                  <div
+                    key={l.material_id}
+                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+                  >
+                    <div className="mb-2.5 flex items-start justify-between gap-3">
+                      <div className="min-w-0 text-sm font-medium">
+                        <span className="font-mono text-xs font-normal text-zinc-400">
+                          {l.code}
+                        </span>{' '}
+                        {l.name}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-sm font-semibold tabular-nums">
                           {lineTotal > 0 ? (
-                            num(lineTotal)
+                            <>
+                              {num(lineTotal)}{' '}
+                              <span className="text-xs font-normal text-zinc-400">
+                                {currency}
+                              </span>
+                            </>
                           ) : (
-                            <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                            <span className="font-normal text-zinc-300 dark:text-zinc-600">
+                              —
+                            </span>
                           )}
-                        </td>
-                        <td className="py-2 pr-2">
-                          <input
-                            value={l.note}
-                            maxLength={500}
-                            placeholder="quy cách / bộ phận…"
-                            onChange={(e) => setLine(i, { note: e.target.value })}
-                            className={inputCls}
-                          />
-                        </td>
-                        <td className="py-2 pt-[11px] text-right">
-                          <button
-                            type="button"
-                            onClick={() => removeLine(i)}
-                            className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                            aria-label="Xoá dòng"
-                          >
-                            ✕
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeLine(i)}
+                          className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                          aria-label="Xoá dòng"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[96px_96px_96px_120px_1fr]">
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                          SL cần *
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={l.need}
+                          onChange={(e) => setNeed(i, e.target.value)}
+                          className={`${inputCls} text-right`}
+                          aria-label={`Số lượng cần ${l.name}`}
+                          placeholder="BOM"
+                        />
+                      </label>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                          Tồn kho
+                        </span>
+                        <div className="flex h-[34px] items-center justify-end rounded-md bg-zinc-50 px-2 text-sm whitespace-nowrap text-zinc-600 tabular-nums dark:bg-zinc-800/60 dark:text-zinc-300">
+                          {num(l.on_hand)}&nbsp;
+                          <span className="text-xs text-zinc-400">{l.unit}</span>
+                        </div>
+                      </div>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                          SL đặt
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={l.qty}
+                          onChange={(e) =>
+                            setLine(i, {
+                              qty: e.target.value === '' ? '' : Number(e.target.value),
+                            })
+                          }
+                          className={`${inputCls} text-right font-medium`}
+                          aria-label={`Số lượng đặt ${l.name}`}
+                          title="Tự tính = SL cần − tồn kho; sửa tay được"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                          Đơn giá
+                        </span>
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={l.price}
+                          onChange={(e) =>
+                            setLine(i, {
+                              price: e.target.value === '' ? '' : Number(e.target.value),
+                            })
+                          }
+                          className={`${inputCls} text-right`}
+                          aria-label={`Đơn giá ${l.name}`}
+                        />
+                      </label>
+                      <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
+                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                          Ghi chú
+                        </span>
+                        <input
+                          value={l.note}
+                          maxLength={500}
+                          placeholder="quy cách / bộ phận…"
+                          onChange={(e) => setLine(i, { note: e.target.value })}
+                          className={inputCls}
+                        />
+                      </label>
+                    </div>
+
+                    {stockCovers && (
+                      <p className="mt-2 text-[11px] text-green-600 dark:text-green-400">
+                        ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn đặt thêm
+                      </p>
+                    )}
+                    {shortage !== null && shortage > 0 && (
+                      <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-500">
+                        ⚠ thiếu {num(shortage)} {l.unit} so với tồn — đã gợi ý SL đặt
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </Step>
 
