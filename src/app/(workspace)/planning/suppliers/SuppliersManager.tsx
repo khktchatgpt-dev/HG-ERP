@@ -16,7 +16,7 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { PricesPanel, type MaterialOption } from './PricesPanel'
-import { SupplierForm } from './SupplierForm'
+import { SupplierQuickForm } from './SupplierQuickForm'
 
 type Supplier = {
   id: string
@@ -394,15 +394,22 @@ export function SuppliersManager({
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         title="Thêm nhà cung cấp"
-        maxWidth="sm:max-w-3xl"
       >
-        <SupplierForm
-          submitLabel="Thêm NCC"
+        <SupplierQuickForm
           onSubmit={async (body) => {
-            const ok = await send('/api/dept/supply/suppliers', 'POST', body)
-            if (ok) {
+            setBusy(true)
+            try {
+              const { supplier } = await api<{ supplier: { id: string; name: string } }>(
+                '/api/dept/supply/suppliers',
+                { method: 'POST', body },
+              )
               setOpenCreate(false)
-              toast.success('Đã thêm NCC', String(body.name))
+              toast.success('Đã thêm NCC', supplier.name)
+              router.push(`/planning/suppliers/${supplier.id}`)
+            } catch (e) {
+              toast.error('Thêm thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+            } finally {
+              setBusy(false)
             }
           }}
         />
