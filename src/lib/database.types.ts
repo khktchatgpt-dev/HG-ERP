@@ -1666,12 +1666,15 @@ export type Database = {
           can_order: boolean
           code: string | null
           company_name: string | null
+          complaint_count: number
           country: string | null
           created_at: string
           created_by: string | null
           currency: string | null
           delivery_method: string | null
           email: string | null
+          evaluated_at: string | null
+          evaluated_by: string | null
           founded_on: string | null
           id: string
           import_export: string | null
@@ -1686,11 +1689,14 @@ export type Database = {
           note: string | null
           payment_terms: string | null
           phone: string | null
+          price_score: number | null
           priority: string | null
+          quality_score: number | null
           rating: string | null
           region: string | null
           registered_address: string | null
           return_policy: string | null
+          service_score: number | null
           short_name: string | null
           status: string
           swift_code: string | null
@@ -1712,12 +1718,15 @@ export type Database = {
           can_order?: boolean
           code?: string | null
           company_name?: string | null
+          complaint_count?: number
           country?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string | null
           delivery_method?: string | null
           email?: string | null
+          evaluated_at?: string | null
+          evaluated_by?: string | null
           founded_on?: string | null
           id?: string
           import_export?: string | null
@@ -1732,11 +1741,14 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           phone?: string | null
+          price_score?: number | null
           priority?: string | null
+          quality_score?: number | null
           rating?: string | null
           region?: string | null
           registered_address?: string | null
           return_policy?: string | null
+          service_score?: number | null
           short_name?: string | null
           status?: string
           swift_code?: string | null
@@ -1758,12 +1770,15 @@ export type Database = {
           can_order?: boolean
           code?: string | null
           company_name?: string | null
+          complaint_count?: number
           country?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string | null
           delivery_method?: string | null
           email?: string | null
+          evaluated_at?: string | null
+          evaluated_by?: string | null
           founded_on?: string | null
           id?: string
           import_export?: string | null
@@ -1778,11 +1793,14 @@ export type Database = {
           note?: string | null
           payment_terms?: string | null
           phone?: string | null
+          price_score?: number | null
           priority?: string | null
+          quality_score?: number | null
           rating?: string | null
           region?: string | null
           registered_address?: string | null
           return_policy?: string | null
+          service_score?: number | null
           short_name?: string | null
           status?: string
           swift_code?: string | null
@@ -1806,6 +1824,13 @@ export type Database = {
           {
             foreignKeyName: "supply_suppliers_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_suppliers_evaluated_by_fkey"
+            columns: ["evaluated_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

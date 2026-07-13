@@ -72,6 +72,17 @@ export const suppliersService = {
       row.is_active = patch.is_active
       row.status = patch.is_active ? 'active' : 'suspended'
     }
+    // Có chấm điểm/hạng → ghi mốc đánh giá (M5).
+    const scored =
+      patch.quality_score !== undefined ||
+      patch.service_score !== undefined ||
+      patch.price_score !== undefined ||
+      patch.complaint_count !== undefined ||
+      patch.rating !== undefined
+    if (scored) {
+      row.evaluated_at = new Date().toISOString()
+      row.evaluated_by = user.id
+    }
     return suppliersRepo.patch(id, row)
   },
 }

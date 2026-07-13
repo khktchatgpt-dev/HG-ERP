@@ -228,6 +228,13 @@ export type Supplier = {
   import_export: string | null
   priority: string | null
   rating: string | null
+  // Đánh giá (M5 — chấm tay; KPI giao hàng tính live từ PO)
+  quality_score: number | null
+  service_score: number | null
+  price_score: number | null
+  complaint_count: number
+  evaluated_at: string | null
+  evaluated_by: string | null
   // Admin
   buyer_id: string | null
   can_order: boolean
@@ -241,7 +248,7 @@ export type Supplier = {
 }
 
 const SUPPLIER_COLS =
-  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
+  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
   async list(filter: {

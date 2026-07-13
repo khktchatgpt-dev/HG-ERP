@@ -73,7 +73,7 @@ const STATUS_LABEL: Record<string, string> = {
 const IMPEX_LABEL: Record<string, string> = { domestic: 'Nội địa', import: 'Nhập khẩu' }
 const PRIORITY_LABEL: Record<string, string> = { primary: 'Chính', backup: 'Dự phòng' }
 
-type Tab = 'overview' | 'purchased' | 'prices' | 'certs' | 'history'
+type Tab = 'overview' | 'eval' | 'purchased' | 'prices' | 'certs' | 'history'
 
 export function SupplierDetail({
   supplier,
@@ -206,6 +206,7 @@ export function SupplierDetail({
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Tổng quan' },
+    { id: 'eval', label: 'Đánh giá' },
     { id: 'purchased', label: `Vật tư đã mua (${purchased.length})` },
     { id: 'prices', label: 'Bảng giá' },
     { id: 'certs', label: 'Chứng chỉ' },
@@ -383,6 +384,8 @@ export function SupplierDetail({
         </div>
       )}
 
+      {tab === 'eval' && <EvalTab supplier={supplier} pos={pos} canEdit={canEdit} />}
+
       {tab === 'purchased' &&
         (purchased.length === 0 ? (
           <EmptyState
@@ -487,6 +490,224 @@ export function SupplierDetail({
           }}
         />
       </Modal>
+    </div>
+  )
+}
+
+function Stars({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number
+  onChange: (n: number) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="flex gap-0.5 text-lg leading-none">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(n === value ? 0 : n)}
+          className={
+            (n <= value ? 'text-amber-500' : 'text-zinc-300 dark:text-zinc-600') +
+            (disabled ? '' : ' hover:text-amber-400')
+          }
+          aria-label={`${n} sao`}
+        >
+          ★
+        </button>
+      ))}
+      <span className="ml-1 text-xs text-zinc-400">
+        {value ? `${value}/5` : 'chưa chấm'}
+      </span>
+    </div>
+  )
+}
+
+const RATING_TONE: Record<string, 'green' | 'blue' | 'amber' | 'red'> = {
+  A: 'green',
+  B: 'blue',
+  C: 'amber',
+  D: 'red',
+}
+
+function EvalTab({
+  supplier,
+  pos,
+  canEdit,
+}: {
+  supplier: Supplier
+  pos: PoRow[]
+  canEdit: boolean
+}) {
+  const router = useRouter()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [q, setQ] = useState(supplier.quality_score ?? 0)
+  const [s, setS] = useState(supplier.service_score ?? 0)
+  const [p, setP] = useState(supplier.price_score ?? 0)
+  const [complaint, setComplaint] = useState(String(supplier.complaint_count ?? 0))
+  const [rating, setRating] = useState(supplier.rating ?? '')
+
+  const kpi = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const active = pos.filter((x) => x.status !== 'cancelled')
+    const received = active.filter((x) => x.status === 'received').length
+    const late = pos.filter(
+      (x) =>
+        x.expected_at &&
+        x.expected_at.slice(0, 10) < today &&
+        !['received', 'cancelled'].includes(x.status),
+    ).length
+    const rate = active.length ? Math.round((received / active.length) * 100) : 0
+    return { total: active.length, received, late, rate }
+  }, [pos])
+
+  async function save() {
+    setBusy(true)
+    try {
+      await api(`/api/dept/supply/suppliers/${supplier.id}`, {
+        method: 'PATCH',
+        body: {
+          quality_score: q || null,
+          service_score: s || null,
+          price_score: p || null,
+          complaint_count: Number(complaint) || 0,
+          rating: rating || null,
+        },
+      })
+      toast.success('Đã lưu đánh giá', supplier.name)
+      router.refresh()
+    } catch (e) {
+      toast.error('Lưu thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const inp =
+    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+
+  return (
+    <div className="flex flex-col gap-5">
+      <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          Giao hàng · tự tính từ PO
+        </h3>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi label="Tổng PO" value={kpi.total} />
+          <Kpi label="Đã hoàn tất" value={kpi.received} tone="green" />
+          <Kpi label="Đang trễ hẹn" value={kpi.late} tone={kpi.late ? 'red' : 'gray'} />
+          <Kpi label="Tỷ lệ hoàn tất" value={`${kpi.rate}%`} tone="blue" />
+        </div>
+        <p className="mt-2 text-xs text-zinc-400">
+          “Đang trễ hẹn” = PO quá hẹn giao mà chưa về đủ. Tỷ lệ giao-đúng-hẹn chuẩn cần
+          mốc ngày nhận (bổ sung sau).
+        </p>
+      </section>
+
+      <section>
+        <h3 className="mb-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
+          Chấm điểm · người mua đánh giá
+        </h3>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ScoreRow label="Chất lượng">
+            <Stars value={q} onChange={setQ} disabled={!canEdit} />
+          </ScoreRow>
+          <ScoreRow label="Dịch vụ">
+            <Stars value={s} onChange={setS} disabled={!canEdit} />
+          </ScoreRow>
+          <ScoreRow label="Giá">
+            <Stars value={p} onChange={setP} disabled={!canEdit} />
+          </ScoreRow>
+          <ScoreRow label="Số lần khiếu nại">
+            <input
+              type="number"
+              min={0}
+              value={complaint}
+              onChange={(e) => setComplaint(e.target.value)}
+              disabled={!canEdit}
+              className={`${inp} w-24`}
+            />
+          </ScoreRow>
+          <ScoreRow label="Xếp hạng">
+            {canEdit ? (
+              <select
+                value={rating}
+                onChange={(e) => setRating(e.target.value)}
+                className={`${inp} w-24`}
+              >
+                <option value="">—</option>
+                {['A', 'B', 'C', 'D'].map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+            ) : rating ? (
+              <Badge tone={RATING_TONE[rating] ?? 'gray'}>Hạng {rating}</Badge>
+            ) : (
+              <span className="text-sm text-zinc-400">Chưa xếp hạng</span>
+            )}
+          </ScoreRow>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between">
+          <span className="text-xs text-zinc-400">
+            {supplier.evaluated_at
+              ? `Đánh giá gần nhất: ${date(supplier.evaluated_at)}`
+              : 'Chưa có đánh giá.'}
+          </span>
+          {canEdit && (
+            <button
+              onClick={() => void save()}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            >
+              {busy ? 'Đang lưu…' : 'Lưu đánh giá'}
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function Kpi({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string
+  value: number | string
+  tone?: 'default' | 'green' | 'red' | 'blue' | 'gray'
+}) {
+  const color =
+    tone === 'green'
+      ? 'text-green-600 dark:text-green-400'
+      : tone === 'red'
+        ? 'text-red-600 dark:text-red-400'
+        : tone === 'blue'
+          ? 'text-blue-600 dark:text-blue-400'
+          : ''
+  return (
+    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+      <div className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+        {label}
+      </div>
+      <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
+    </div>
+  )
+}
+
+function ScoreRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
+      <span className="text-sm text-zinc-600 dark:text-zinc-300">{label}</span>
+      {children}
     </div>
   )
 }

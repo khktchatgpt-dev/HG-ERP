@@ -47,6 +47,11 @@ export const supplierCreateSchema = z.object({
   import_export: z.enum(['domestic', 'import']).optional().nullable(),
   priority: optText(30), // primary / backup…
   rating: z.enum(['A', 'B', 'C', 'D']).optional().nullable(),
+  // Đánh giá (M5 — chấm tay)
+  quality_score: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  service_score: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  price_score: z.coerce.number().int().min(1).max(5).optional().nullable(),
+  complaint_count: z.coerce.number().int().min(0).max(100000).optional().nullable(),
   // Admin
   buyer_id: z.string().uuid().optional().nullable(),
   can_order: z.boolean().optional(),
