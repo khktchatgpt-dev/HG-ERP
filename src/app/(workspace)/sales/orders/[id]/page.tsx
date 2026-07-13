@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -36,6 +37,13 @@ export default async function OrderDetailPage({
   const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
   const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
   const lsx = await productionRepo.findByOrder(order.id)
+
+  // Timeline: owner + tiến độ LSX + nhãn giai đoạn (lỗi phụ không chặn xem đơn).
+  const [owner, progress, stages] = await Promise.all([
+    order.created_by ? usersRepo.findById(order.created_by) : null,
+    lsx ? productionRepo.listProgress(lsx.id) : Promise.resolve([]),
+    productionRepo.listStages(),
+  ])
 
   // Hệ quả nếu huỷ đơn — confirm dialog nói thật thay vì câu chung chung (P3).
   let cancelImpact: CancelImpact | null = null
@@ -84,8 +92,19 @@ export default async function OrderDetailPage({
         status: order.status,
         currency: order.currency,
         due_date: order.due_date,
+        deposit_percent: order.deposit_percent,
+        price_term: order.price_term,
+        payment_terms: order.payment_terms,
+        payment_method: order.payment_method,
+        qty_tolerance_pct: order.qty_tolerance_pct,
+        partial_shipment: order.partial_shipment,
+        transhipment: order.transhipment,
+        port_of_loading: order.port_of_loading,
+        port_of_discharge: order.port_of_discharge,
+        required_docs: order.required_docs,
         container_summary: order.container_summary,
         note: order.note,
+        owner_name: owner?.name ?? null,
         created_at: order.created_at,
       }}
       lines={lines.map((l) => ({
@@ -108,7 +127,28 @@ export default async function OrderDetailPage({
       }))}
       canEdit={canEdit}
       canIssue={canIssue}
-      lsx={lsx ? { id: lsx.id, code: lsx.code, status: lsx.status } : null}
+      lsx={
+        lsx
+          ? {
+              id: lsx.id,
+              code: lsx.code,
+              status: lsx.status,
+              issued_at: lsx.issued_at,
+              approved_at: lsx.approved_at,
+              completed_at: lsx.completed_at,
+              rejected_reason: lsx.rejected_reason,
+              updated_at: lsx.updated_at,
+            }
+          : null
+      }
+      progress={progress.map((p) => ({
+        stage: p.stage,
+        action: p.action,
+        note: p.note,
+        updated_by_name: p.updated_by_name,
+        created_at: p.created_at,
+      }))}
+      stageLabels={Object.fromEntries(stages.map((s) => [s.code, s.label]))}
       cancelImpact={cancelImpact}
     />
   )
