@@ -323,16 +323,16 @@ export function PoCreateForm({
             </div>
 
             <div className="mt-3 overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full text-sm tabular-nums">
+              <table className="w-full min-w-[780px] text-sm tabular-nums">
                 <thead className="bg-zinc-50 dark:bg-zinc-900/50">
                   <tr className="text-left text-[11px] text-zinc-500 uppercase">
-                    <th className="py-2 pr-2 pl-3">Vật tư</th>
+                    <th className="min-w-[200px] py-2 pr-2 pl-3">Vật tư</th>
                     <th className="w-24 py-2 pr-2 text-right">SL cần *</th>
-                    <th className="w-24 py-2 pr-2 text-right">Tồn kho</th>
+                    <th className="w-20 py-2 pr-2 text-right">Tồn kho</th>
                     <th className="w-24 py-2 pr-2 text-right">SL đặt</th>
-                    <th className="w-32 py-2 pr-2 text-right">Đơn giá</th>
-                    <th className="w-32 py-2 pr-2 text-right">Thành tiền</th>
-                    <th className="py-2 pr-2">Ghi chú</th>
+                    <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
+                    <th className="w-28 py-2 pr-3 text-right">Thành tiền</th>
+                    <th className="min-w-[130px] py-2 pr-2">Ghi chú</th>
                     <th className="w-8 py-2" />
                   </tr>
                 </thead>
@@ -349,29 +349,31 @@ export function PoCreateForm({
                     const shortage =
                       l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
                     const lineTotal = (Number(l.qty) || 0) * (Number(l.price) || 0)
+                    // Mọi ô căn TOP; ô chữ tĩnh đệm pt-[15px] cho ngang mép chữ
+                    // trong input (8px pad ô + 1px viền + 6px pad input).
                     return (
                       <tr
                         key={l.material_id}
-                        className="border-t border-zinc-100 dark:border-zinc-900"
+                        className="border-t border-zinc-100 align-top dark:border-zinc-900"
                       >
-                        <td className="py-1.5 pr-2 pl-3">
+                        <td className="py-2 pt-[15px] pr-2 pl-3">
                           <span className="font-mono text-xs text-zinc-400">
                             {l.code}
                           </span>{' '}
                           {l.name}
                           {stockCovers && (
-                            <div className="text-[10px] text-green-600 dark:text-green-400">
+                            <div className="mt-0.5 text-[10px] text-green-600 dark:text-green-400">
                               ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn đặt
                               thêm
                             </div>
                           )}
                           {shortage !== null && shortage > 0 && (
-                            <div className="text-[10px] text-amber-600 dark:text-amber-500">
+                            <div className="mt-0.5 text-[10px] text-amber-600 dark:text-amber-500">
                               ⚠ thiếu {num(shortage)} {l.unit} so với tồn
                             </div>
                           )}
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-2 pr-2">
                           <input
                             type="number"
                             step="0.01"
@@ -383,11 +385,11 @@ export function PoCreateForm({
                             placeholder="theo BOM"
                           />
                         </td>
-                        <td className="py-1.5 pr-2 text-right text-zinc-600 dark:text-zinc-300">
+                        <td className="py-2 pt-[15px] pr-2 text-right whitespace-nowrap text-zinc-600 dark:text-zinc-300">
                           {num(l.on_hand)}{' '}
                           <span className="text-xs text-zinc-400">{l.unit}</span>
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-2 pr-2">
                           <input
                             type="number"
                             step="0.01"
@@ -403,7 +405,7 @@ export function PoCreateForm({
                             title="Tự tính = SL cần − tồn kho; sửa tay được"
                           />
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-2 pr-2">
                           <input
                             type="number"
                             step="1"
@@ -419,14 +421,14 @@ export function PoCreateForm({
                             aria-label={`Đơn giá ${l.name}`}
                           />
                         </td>
-                        <td className="py-1.5 pr-2 text-right font-medium">
+                        <td className="py-2 pt-[15px] pr-3 text-right font-medium whitespace-nowrap">
                           {lineTotal > 0 ? (
                             num(lineTotal)
                           ) : (
                             <span className="text-zinc-300 dark:text-zinc-600">—</span>
                           )}
                         </td>
-                        <td className="py-1.5 pr-2">
+                        <td className="py-2 pr-2">
                           <input
                             value={l.note}
                             maxLength={500}
@@ -435,7 +437,7 @@ export function PoCreateForm({
                             className={inputCls}
                           />
                         </td>
-                        <td className="py-1.5 text-right">
+                        <td className="py-2 pt-[11px] text-right">
                           <button
                             type="button"
                             onClick={() => removeLine(i)}
