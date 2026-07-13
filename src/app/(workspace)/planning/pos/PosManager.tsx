@@ -336,6 +336,7 @@ export function PosManager({
     {
       key: 'code',
       header: 'Số PO / NCC',
+      width: '230px',
       sortValue: (p) => p.code,
       cell: (p) => (
         <button
@@ -422,6 +423,9 @@ export function PosManager({
       width: '110px',
       cell: (p) => new Date(p.created_at).toLocaleDateString('vi-VN'),
     },
+    // Cột đệm co giãn: hút hết khoảng trống thừa về đây (giữa Ngày tạo và ⋯)
+    // nên các cột nội dung bám trái gọn, nút ⋯ bám phải — không phình cột mã.
+    { key: '_spacer', header: '', cell: () => null },
     {
       key: 'actions',
       header: '',
