@@ -25,11 +25,9 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(null)
 
   // Tính vị trí sau khi panel vào DOM (đo được chiều cao thật) — lật lên nếu tràn đáy.
+  // Reset coords khi đóng/mở nằm ở handler nút (tránh setState thẳng trong effect).
   useLayoutEffect(() => {
-    if (!open) {
-      setCoords(null)
-      return
-    }
+    if (!open) return
     const btn = btnRef.current
     const menu = menuRef.current
     if (!btn || !menu) return
@@ -77,7 +75,10 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
     <>
       <button
         ref={btnRef}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setCoords(null) // ẩn cho tới khi layout-effect đo lại vị trí mới
+          setOpen((v) => !v)
+        }}
         aria-label="Actions"
         aria-haspopup="menu"
         aria-expanded={open}
