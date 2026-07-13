@@ -1,4 +1,4 @@
-import { suppliersRepo, type Supplier } from './supply.repo'
+import { suppliersRepo, materialGroupsRepo, type Supplier } from './supply.repo'
 import type { supplierCreateSchema } from './suppliers.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
@@ -84,6 +84,16 @@ export const suppliersService = {
       row.evaluated_by = user.id
     }
     return suppliersRepo.patch(id, row)
+  },
+
+  /** Nhóm hàng NCC cung cấp (M4). */
+  async listGroups(_user: User, supplierId: string): Promise<string[]> {
+    return materialGroupsRepo.forSupplier(supplierId)
+  },
+
+  async setGroups(user: User, supplierId: string, groupIds: string[]): Promise<void> {
+    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await materialGroupsRepo.setForSupplier(supplierId, groupIds)
   },
 }
 

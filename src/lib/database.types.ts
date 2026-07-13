@@ -1431,6 +1431,39 @@ export type Database = {
           },
         ]
       }
+      supplier_material_groups: {
+        Row: {
+          created_at: string
+          group_id: string
+          supplier_id: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          supplier_id: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          supplier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supplier_material_groups_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "catalog_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supplier_material_groups_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_purchase_order_lines: {
         Row: {
           id: string

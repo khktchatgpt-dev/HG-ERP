@@ -15,6 +15,7 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { RefChain } from '@/components/erp/RefChain'
 import { PricesPanel, type MaterialOption } from '../PricesPanel'
 import { CertsPanel } from '../CertsPanel'
+import { MaterialGroupsPanel, type MaterialGroup } from '../MaterialGroupsPanel'
 import { SupplierForm } from '../SupplierForm'
 import type { Supplier } from '@/modules/dept/supply/supply.repo'
 
@@ -80,12 +81,16 @@ export function SupplierDetail({
   pos,
   purchased,
   materials,
+  allGroups,
+  groupIds,
   canEdit,
 }: {
   supplier: Supplier
   pos: PoRow[]
   purchased: PurchasedMaterial[]
   materials: MaterialOption[]
+  allGroups: MaterialGroup[]
+  groupIds: string[]
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -283,6 +288,12 @@ export function SupplierDetail({
 
       {tab === 'overview' && (
         <div className="flex flex-col gap-5">
+          <MaterialGroupsPanel
+            supplierId={supplier.id}
+            allGroups={allGroups}
+            initialGroupIds={groupIds}
+            canEdit={canEdit}
+          />
           <Group title="Cơ bản">
             <Field label="Mã NCC" value={supplier.code} mono />
             <Field label="Tên viết tắt" value={supplier.short_name} />

@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
+import { suppliersRepo, materialGroupsRepo } from '@/modules/dept/supply/supply.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SupplierDetail } from './SupplierDetail'
@@ -18,17 +18,22 @@ export default async function SupplierDetailPage({
   const supplier = await suppliersRepo.findById(id)
   if (!supplier) notFound()
 
-  const [{ rows: pos }, { rows: materials }, purchased] = await Promise.all([
-    posRepo.list({ supplier_id: id, page: 1, page_size: 200 }),
-    materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
-    posRepo.materialsPurchasedBySupplier(id),
-  ])
+  const [{ rows: pos }, { rows: materials }, purchased, allGroups, groupIds] =
+    await Promise.all([
+      posRepo.list({ supplier_id: id, page: 1, page_size: 200 }),
+      materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
+      posRepo.materialsPurchasedBySupplier(id),
+      materialGroupsRepo.options(),
+      materialGroupsRepo.forSupplier(id),
+    ])
   const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
 
   return (
     <SupplierDetail
       supplier={supplier}
       purchased={purchased}
+      allGroups={allGroups}
+      groupIds={groupIds}
       pos={pos.map((p) => ({
         id: p.id,
         code: p.code,

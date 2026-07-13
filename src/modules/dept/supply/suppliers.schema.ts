@@ -64,6 +64,11 @@ export const supplierUpdateSchema = supplierCreateSchema.partial().extend({
   is_active: z.boolean().optional(),
 })
 
+/** Đặt lại nhóm hàng NCC cung cấp (M4). */
+export const supplierGroupsSchema = z.object({
+  group_ids: z.array(z.string().uuid()).max(50),
+})
+
 export const supplierListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   active_only: z.coerce.boolean().default(false),

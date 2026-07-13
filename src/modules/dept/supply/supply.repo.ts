@@ -341,3 +341,43 @@ export const certsRepo = {
     if (error) throw new Error(error.message)
   },
 }
+
+// ── Nhóm hàng NCC cung cấp (M4, n–n với catalog_items type='material_group') ──
+
+export type MaterialGroup = { id: string; code: string; label: string }
+
+export const materialGroupsRepo = {
+  /** Danh mục nhóm vật tư (master dùng chung). */
+  async options(): Promise<MaterialGroup[]> {
+    const { data } = await db()
+      .from('catalog_items')
+      .select('id, code, label')
+      .eq('type', 'material_group')
+      .eq('is_active', true)
+      .order('sort_order')
+    return (data ?? []) as MaterialGroup[]
+  },
+
+  /** Id các nhóm mà 1 NCC cung cấp. */
+  async forSupplier(supplierId: string): Promise<string[]> {
+    const { data } = await db()
+      .from('supplier_material_groups')
+      .select('group_id')
+      .eq('supplier_id', supplierId)
+    return ((data ?? []) as { group_id: string }[]).map((r) => r.group_id)
+  },
+
+  /** Đặt lại toàn bộ nhóm của NCC = danh sách mới (xoá hết + chèn). */
+  async setForSupplier(supplierId: string, groupIds: string[]): Promise<void> {
+    const del = await db()
+      .from('supplier_material_groups')
+      .delete()
+      .eq('supplier_id', supplierId)
+    if (del.error) throw new Error(del.error.message)
+    if (groupIds.length === 0) return
+    const { error } = await db()
+      .from('supplier_material_groups')
+      .insert(groupIds.map((group_id) => ({ supplier_id: supplierId, group_id })))
+    if (error) throw new Error(error.message)
+  },
+}
