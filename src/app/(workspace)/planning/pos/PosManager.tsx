@@ -17,6 +17,8 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { RefChain, type ChainNode } from '@/components/erp/RefChain'
+import { PoStatusStepper } from './PoStatusStepper'
 
 type PoStatus =
   | 'pending_approval'
@@ -41,6 +43,9 @@ export type Po = {
   terms: string | null
   note: string | null
   created_at: string
+  // Mốc chuyển trạng thái (có ở detail API) — cho stepper. Optional để list row bỏ qua được.
+  approved_at?: string | null
+  ordered_at?: string | null
   supplier_name: string
   lsx_code: string
   order_code: string | null
@@ -1241,19 +1246,40 @@ export function PoDetail({
   const total = lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0)
   const showReceived = !['pending_approval', 'approved', 'cancelled'].includes(po.status)
 
+  // Chuỗi liên kết: Đơn hàng → LSX → PO này (bỏ Đơn hàng nếu PO không gắn đơn).
+  const chainNodes: ChainNode[] = [
+    ...(po.order_code ? [{ label: 'Đơn hàng', value: po.order_code }] : []),
+    { label: 'Lệnh SX', value: po.lsx_code },
+    { label: 'Đơn đặt vật tư', value: po.code, current: true },
+  ]
+
   return (
     <div className="flex flex-col gap-3 text-sm">
+      <RefChain nodes={chainNodes} />
+
+      <PoStatusStepper
+        status={po.status}
+        dates={{
+          pending_approval: po.created_at,
+          approved: po.approved_at,
+          ordered: po.ordered_at,
+        }}
+      />
+
       <div className="flex flex-wrap items-center gap-2 text-xs">
-        <Badge tone={STATUS_TONE[po.status]}>{STATUS_LABEL[po.status]}</Badge>
-        <Badge>LSX {po.lsx_code}</Badge>
-        {po.order_code && <Badge>{po.order_code}</Badge>}
         {po.vat_rate != null && (
           <Badge>
             VAT {po.vat_rate}% ({po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})
           </Badge>
         )}
         {po.expected_at && (
-          <span className="text-zinc-500">
+          <span
+            className={
+              assessPoLate(po, new Date().toISOString().slice(0, 10)) === 'overdue'
+                ? 'font-medium text-red-600 dark:text-red-400'
+                : 'text-zinc-500'
+            }
+          >
             Hẹn giao: {new Date(po.expected_at).toLocaleDateString('vi-VN')}
           </span>
         )}
