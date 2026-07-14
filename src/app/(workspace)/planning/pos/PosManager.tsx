@@ -10,6 +10,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
 import { assessPoLate } from '@/lib/late-risk'
+import { poLineAmount } from '@/lib/po-line'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -58,6 +59,7 @@ export type PoLine = {
   material_id: string
   qty_ordered: number
   unit_price: number | null
+  price_basis: 'unit' | 'unit2'
   spec: string | null
   qty2: number | null
   unit2: string | null
@@ -80,7 +82,15 @@ export type StatusLine = {
 
 type SupplierOption = { id: string; name: string }
 type LsxOption = { id: string; code: string; customer_name: string }
-type MaterialOption = { id: string; code: string; name: string; unit: string }
+type MaterialOption = {
+  id: string
+  code: string
+  name: string
+  unit: string
+  /** Giá đv kép (0053): 'kg'/'m²' = giá theo đv này; factor = gợi ý quy đổi. */
+  price_unit: string | null
+  unit2_factor: number | null
+}
 
 type Need = {
   material_id: string
@@ -110,6 +120,7 @@ type Row = {
   material_id: string
   qty_ordered: number | ''
   unit_price: number | ''
+  price_basis: 'unit' | 'unit2'
   spec: string
   qty2: number | ''
   unit2: string
@@ -670,6 +681,7 @@ function PoForm({
           material_id: l.material_id,
           qty_ordered: l.qty_ordered,
           unit_price: l.unit_price ?? '',
+          price_basis: l.price_basis ?? 'unit',
           spec: l.spec ?? '',
           qty2: l.qty2 ?? '',
           unit2: l.unit2 ?? '',
@@ -679,6 +691,8 @@ function PoForm({
   )
   const [priceMap, setPriceMap] = useState<Record<string, PriceCompareEntry>>({})
   const isEdit = initial?.mode === 'edit'
+  // Giá đv kép: tra nhanh price_unit/hệ số theo vật tư khi chọn/điền dòng.
+  const matById = useMemo(() => new Map(materials.map((m) => [m.id, m])), [materials])
 
   async function selectLsx(id: string) {
     setLsxId(id)
@@ -732,15 +746,28 @@ function PoForm({
 
   function rowFromNeed(n: Need): Row {
     const offer = supplierId ? offerFor(n.material_id, supplierId) : undefined
+    const mat = matById.get(n.material_id)
+    const dual = !!mat?.price_unit
+    const qty = n.suggest > 0 ? n.suggest : ''
+    // Tổng đv2 gợi ý: ưu tiên kg từ bảng chi tiết (kg_needed); không có thì
+    // SL × hệ số danh mục; còn lại để trống cho người mua nhập theo cân NCC.
+    const qty2 = !dual
+      ? ''
+      : mat!.price_unit === 'kg' && n.kg_needed
+        ? Math.round(n.kg_needed * 100) / 100
+        : qty !== '' && mat!.unit2_factor
+          ? Math.round(qty * mat!.unit2_factor * 100) / 100
+          : ''
     // Mặc định = đề xuất mua (Cách 2); đủ tồn (suggest 0) thì để trống cho người
     // mua tự điền nếu muốn mua dự phòng.
     return {
       material_id: n.material_id,
-      qty_ordered: n.suggest > 0 ? n.suggest : '',
+      qty_ordered: qty,
       unit_price: offer ? offer.price : '',
+      price_basis: dual ? 'unit2' : 'unit',
       spec: '',
-      qty2: '',
-      unit2: '',
+      qty2,
+      unit2: dual ? (mat!.price_unit ?? '') : '',
       note: '',
     }
   }
@@ -767,6 +794,7 @@ function PoForm({
         material_id: '',
         qty_ordered: '',
         unit_price: '',
+        price_basis: 'unit',
         spec: '',
         qty2: '',
         unit2: '',
@@ -784,7 +812,14 @@ function PoForm({
     !lsxId ||
     rows.length === 0 ||
     rows.length !== usedIds.size ||
-    rows.some((r) => !r.material_id || r.qty_ordered === '' || Number(r.qty_ordered) <= 0)
+    rows.some(
+      (r) =>
+        !r.material_id ||
+        r.qty_ordered === '' ||
+        Number(r.qty_ordered) <= 0 ||
+        // Giá đv kép: thiếu tổng kg/m² thì tiền = 0 sai hoá đơn — chặn từ form.
+        (r.price_basis === 'unit2' && (r.qty2 === '' || Number(r.qty2) <= 0)),
+    )
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -810,6 +845,7 @@ function PoForm({
               material_id: r.material_id,
               qty_ordered: Number(r.qty_ordered),
               unit_price: r.unit_price === '' ? null : Number(r.unit_price),
+              price_basis: r.price_basis,
               spec: r.spec.trim() || null,
               qty2: r.qty2 === '' ? null : Number(r.qty2),
               unit2: r.unit2.trim() || null,
@@ -1030,7 +1066,23 @@ function PoForm({
                   <select
                     value={r.material_id}
                     onChange={(e) => {
-                      setRow(i, { material_id: e.target.value })
+                      const mat = matById.get(e.target.value)
+                      const dual = !!mat?.price_unit
+                      setRow(i, {
+                        material_id: e.target.value,
+                        // Giá đv kép: vật tư tự mang cách tính giá của nó (0053).
+                        price_basis: dual ? 'unit2' : 'unit',
+                        unit2: dual ? (mat!.price_unit ?? '') : r.unit2,
+                        qty2:
+                          dual &&
+                          r.qty2 === '' &&
+                          r.qty_ordered !== '' &&
+                          mat!.unit2_factor
+                            ? Math.round(
+                                Number(r.qty_ordered) * mat!.unit2_factor * 100,
+                              ) / 100
+                            : r.qty2,
+                      })
                       void loadPrices([e.target.value])
                     }}
                     className={inputCls}
@@ -1053,11 +1105,19 @@ function PoForm({
                     step="0.01"
                     min="0"
                     value={r.qty_ordered}
-                    onChange={(e) =>
-                      setRow(i, {
-                        qty_ordered: e.target.value === '' ? '' : Number(e.target.value),
-                      })
-                    }
+                    onChange={(e) => {
+                      const qty = e.target.value === '' ? '' : Number(e.target.value)
+                      const mat = matById.get(r.material_id)
+                      // Giá đv kép: gợi ý tổng kg khi qty2 còn trống (sửa được).
+                      const qty2 =
+                        r.price_basis === 'unit2' &&
+                        r.qty2 === '' &&
+                        qty !== '' &&
+                        mat?.unit2_factor
+                          ? Math.round(qty * mat.unit2_factor * 100) / 100
+                          : r.qty2
+                      setRow(i, { qty_ordered: qty, qty2 })
+                    }}
                     className={inputCls}
                   />
                 </td>
@@ -1073,7 +1133,17 @@ function PoForm({
                       })
                     }
                     className={inputCls}
+                    title={
+                      r.price_basis === 'unit2' && r.unit2
+                        ? `Đơn giá theo ${r.unit2} — thành tiền = SL phụ × giá`
+                        : undefined
+                    }
                   />
+                  {r.price_basis === 'unit2' && r.unit2 && (
+                    <span className="mt-0.5 block text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                      giá theo {r.unit2}
+                    </span>
+                  )}
                   <PriceHint
                     entry={priceMap[r.material_id]}
                     supplierId={supplierId}
@@ -1100,7 +1170,16 @@ function PoForm({
                         qty2: e.target.value === '' ? '' : Number(e.target.value),
                       })
                     }
-                    className={inputCls}
+                    className={
+                      r.price_basis === 'unit2'
+                        ? `${inputCls} border-violet-300 font-medium dark:border-violet-800`
+                        : inputCls
+                    }
+                    title={
+                      r.price_basis === 'unit2'
+                        ? 'Bắt buộc — thành tiền = số này × đơn giá'
+                        : undefined
+                    }
                   />
                 </td>
                 <td className="py-1.5 pr-2">
@@ -1294,7 +1373,8 @@ export function PoDetail({
   onEdit?: () => void
 }) {
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
-  const total = lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0)
+  // Giá đv kép (0053): dòng unit2 tính qty2 × giá — cùng công thức server.
+  const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
   const showReceived = !['pending_approval', 'approved', 'cancelled'].includes(po.status)
 
   // Chuỗi liên kết: Đơn hàng → LSX → PO này (bỏ Đơn hàng nếu PO không gắn đơn).
@@ -1395,13 +1475,22 @@ export function PoDetail({
                       </td>
                     </>
                   )}
-                  <td className="py-1.5 pr-2 text-right">
-                    {l.unit_price != null ? l.unit_price.toLocaleString('vi-VN') : '—'}
+                  <td className="py-1.5 pr-2 text-right whitespace-nowrap">
+                    {l.unit_price != null ? (
+                      <>
+                        {l.unit_price.toLocaleString('vi-VN')}
+                        {l.price_basis === 'unit2' && l.unit2 && (
+                          <span className="text-xs text-violet-600 dark:text-violet-400">
+                            /{l.unit2}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      '—'
+                    )}
                   </td>
                   <td className="py-1.5 text-right font-medium">
-                    {l.unit_price != null
-                      ? (l.qty_ordered * l.unit_price).toLocaleString('vi-VN')
-                      : '—'}
+                    {l.unit_price != null ? poLineAmount(l).toLocaleString('vi-VN') : '—'}
                   </td>
                 </tr>
               )

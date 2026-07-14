@@ -4,6 +4,7 @@ import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
+import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { PoCreateForm } from './PoCreateForm'
 
 const PO_OPEN = [
@@ -25,14 +26,20 @@ export default async function NewPoPage({
   if (!canEdit) redirect('/planning/pos')
   const { supplier: defaultSupplierId } = await searchParams
 
-  const [{ rows: suppliers }, { rows: lsxAll }, stock, { rows: allPos }] =
+  const [{ rows: suppliers }, { rows: lsxAll }, stock, { rows: allPos }, { rows: mats }] =
     await Promise.all([
       suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
       productionRepo.list({ page: 1, page_size: 200 }),
       // Vật tư kèm tồn kho realtime (warehouse_stock) — tự hiện khi chọn vật tư.
       stockRepo.list({ low_only: false }),
       posRepo.list({ page: 1, page_size: 500 }),
+      // View stock không có price_unit/unit2_factor (giá đv kép 0053) — nạp
+      // trực tiếp từ repo (read-only, service kho guard theo phòng Kho).
+      materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     ])
+
+  // Giá đv kép: material_id → {price_unit, unit2_factor} để form tự quy đổi.
+  const dualPricing = new Map(mats.map((m) => [m.id, m]))
 
   // PO đang mở theo NCC — hiện ở thẻ tóm tắt để người mua cân nhắc dồn đơn.
   const openBySupplier = new Map<string, number>()
@@ -68,6 +75,8 @@ export default async function NewPoPage({
         name: s.name,
         unit: s.unit,
         on_hand: s.on_hand,
+        price_unit: dualPricing.get(s.material_id)?.price_unit ?? null,
+        unit2_factor: dualPricing.get(s.material_id)?.unit2_factor ?? null,
       }))}
     />
   )

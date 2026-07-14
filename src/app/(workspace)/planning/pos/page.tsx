@@ -34,6 +34,8 @@ export default async function PlanningPosPage() {
         code: m.code,
         name: m.name,
         unit: m.unit,
+        price_unit: m.price_unit,
+        unit2_factor: m.unit2_factor,
       }))}
       canEdit={!!canEdit}
       canApprove={canApprove}

@@ -24,12 +24,18 @@ type MaterialOption = {
   name: string
   unit: string
   on_hand: number
+  /** Giá đv kép (0053): 'kg'/'m²' = giá tính theo đv này thay vì ĐVT mua. */
+  price_unit: string | null
+  unit2_factor: number | null
 }
 
 /**
  * Dòng đặt — người mua gõ SL CẦN (đọc từ file BOM), hệ thống so với tồn kho
  * để tự tính SL ĐẶT = cần − tồn (sửa tay được). `need` chỉ dùng phía client
  * làm máy tính hỗ trợ; API vẫn chỉ nhận qty_ordered.
+ *
+ * Vật tư giá đv kép (price_unit ≠ null): thêm qty2 (tổng kg — gợi ý = SL đặt ×
+ * factor, sửa theo cân thực) và thành tiền = qty2 × đơn giá/kg.
  */
 type Line = {
   material_id: string
@@ -37,8 +43,13 @@ type Line = {
   name: string
   unit: string
   on_hand: number
+  price_unit: string | null
+  unit2_factor: number | null
   need: number | ''
   qty: number | ''
+  spec: string
+  qty2: number | ''
+  qty2Touched: boolean
   price: number | ''
   note: string
 }
@@ -118,8 +129,13 @@ export function PoCreateForm({
         name: m.name,
         unit: m.unit,
         on_hand: m.on_hand,
+        price_unit: m.price_unit,
+        unit2_factor: m.unit2_factor,
         need: '',
         qty: '',
+        spec: '',
+        qty2: '',
+        qty2Touched: false,
         price: '',
         note: '',
       },
@@ -131,26 +147,45 @@ export function PoCreateForm({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   }
 
+  /** Gợi ý tổng đv2 = SL đặt × hệ số — chỉ khi người mua chưa sửa tay qty2. */
+  function suggestQty2(l: Line, qty: number | ''): number | '' {
+    if (!l.price_unit || l.qty2Touched) return l.qty2
+    if (qty === '' || !l.unit2_factor) return l.qty2
+    return Math.round(qty * l.unit2_factor * 100) / 100
+  }
+
+  /** Đổi SL đặt → cập nhật kèm gợi ý tổng đv2. */
+  function setQty(i: number, raw: string) {
+    const qty = raw === '' ? '' : Number(raw)
+    setLines((ls) =>
+      ls.map((l, idx) => (idx === i ? { ...l, qty, qty2: suggestQty2(l, qty) } : l)),
+    )
+  }
+
   // Gõ SL cần → tự tính SL đặt = cần − tồn (không âm). Sửa tay SL đặt vẫn được.
   function setNeed(i: number, raw: string) {
     const need = raw === '' ? '' : Number(raw)
     setLines((ls) =>
-      ls.map((l, idx) =>
-        idx === i
-          ? { ...l, need, qty: need === '' ? '' : Math.max(0, need - l.on_hand) }
-          : l,
-      ),
+      ls.map((l, idx) => {
+        if (idx !== i) return l
+        const qty = need === '' ? '' : Math.max(0, need - l.on_hand)
+        return { ...l, need, qty, qty2: suggestQty2(l, qty) }
+      }),
     )
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i))
   }
 
+  /** Thành tiền dòng — giá đv kép: qty2 × giá; thường: SL đặt × giá. */
+  function lineAmount(l: Line): number {
+    const price = Number(l.price) || 0
+    if (l.price_unit) return (Number(l.qty2) || 0) * price
+    return (Number(l.qty) || 0) * price
+  }
+
   // Tổng: tạm tính từ dòng; VAT tách riêng theo "đơn giá đã/chưa gồm VAT".
-  const subtotal = lines.reduce(
-    (s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0),
-    0,
-  )
+  const subtotal = lines.reduce((s, l) => s + lineAmount(l), 0)
   const vatRate = vat.trim() === '' ? 0 : Number(vat) || 0
   const priceIncludesVat = inclVat === 'true'
   const vatAmount = priceIncludesVat
@@ -159,7 +194,14 @@ export function PoCreateForm({
   const grandTotal = priceIncludesVat ? subtotal : subtotal + vatAmount
 
   const linesOk =
-    lines.length > 0 && lines.every((l) => l.qty !== '' && Number(l.qty) > 0)
+    lines.length > 0 &&
+    lines.every(
+      (l) =>
+        l.qty !== '' &&
+        Number(l.qty) > 0 &&
+        // Giá đv kép: cần tổng kg/m² để ra tiền đúng hoá đơn NCC.
+        (!l.price_unit || (l.qty2 !== '' && Number(l.qty2) > 0)),
+    )
   const invalid = !lsxId || !supplierId || !linesOk
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -182,6 +224,10 @@ export function PoCreateForm({
             material_id: l.material_id,
             qty_ordered: Number(l.qty),
             unit_price: l.price === '' ? null : Number(l.price),
+            price_basis: l.price_unit ? 'unit2' : 'unit',
+            spec: l.spec.trim() || null,
+            qty2: l.qty2 === '' ? null : Number(l.qty2),
+            unit2: l.price_unit ?? null,
             note: l.note.trim() || null,
           })),
         },
@@ -334,7 +380,7 @@ export function PoCreateForm({
                 const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
                 const shortage =
                   l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
-                const lineTotal = (Number(l.qty) || 0) * (Number(l.price) || 0)
+                const lineTotal = lineAmount(l)
                 return (
                   <div
                     key={l.material_id}
@@ -346,6 +392,11 @@ export function PoCreateForm({
                           {l.code}
                         </span>{' '}
                         {l.name}
+                        {l.price_unit && (
+                          <span className="ml-2 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
+                            giá theo {l.price_unit}
+                          </span>
+                        )}
                       </div>
                       <div className="flex shrink-0 items-center gap-2">
                         <span className="text-sm font-semibold tabular-nums">
@@ -407,11 +458,7 @@ export function PoCreateForm({
                           step="0.01"
                           min="0"
                           value={l.qty}
-                          onChange={(e) =>
-                            setLine(i, {
-                              qty: e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
+                          onChange={(e) => setQty(i, e.target.value)}
                           className={`${inputCls} text-right font-medium`}
                           aria-label={`Số lượng đặt ${l.name}`}
                           title="Tự tính = SL cần − tồn kho; sửa tay được"
@@ -419,7 +466,7 @@ export function PoCreateForm({
                       </label>
                       <label className="flex flex-col gap-1">
                         <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          Đơn giá
+                          {l.price_unit ? `Đơn giá/${l.price_unit}` : 'Đơn giá'}
                         </span>
                         <input
                           type="number"
@@ -442,12 +489,54 @@ export function PoCreateForm({
                         <input
                           value={l.note}
                           maxLength={500}
-                          placeholder="quy cách / bộ phận…"
+                          placeholder="bộ phận SP…"
                           onChange={(e) => setLine(i, { note: e.target.value })}
                           className={inputCls}
                         />
                       </label>
                     </div>
+
+                    {/* Giá đv kép: quy cách + tổng kg/m² — thành tiền = tổng × đơn giá */}
+                    {l.price_unit && (
+                      <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_140px_1fr]">
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                            Quy cách
+                          </span>
+                          <input
+                            value={l.spec}
+                            maxLength={100}
+                            placeholder="25×25×1.2mm, cây 6m…"
+                            onChange={(e) => setLine(i, { spec: e.target.value })}
+                            className={inputCls}
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                          <span className="text-[10px] font-semibold tracking-wide text-violet-500 uppercase">
+                            Tổng {l.price_unit} *
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={l.qty2}
+                            onChange={(e) =>
+                              setLine(i, {
+                                qty2: e.target.value === '' ? '' : Number(e.target.value),
+                                qty2Touched: true,
+                              })
+                            }
+                            className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
+                            aria-label={`Tổng ${l.price_unit} ${l.name}`}
+                          />
+                        </label>
+                        <p className="col-span-2 self-end pb-2 text-[11px] text-zinc-400 sm:col-span-1">
+                          {l.unit2_factor
+                            ? `Gợi ý = SL đặt × ${l.unit2_factor} ${l.price_unit}/${l.unit} — sửa theo cân thực tế của NCC.`
+                            : `Nhập tổng ${l.price_unit} theo báo giá/cân của NCC.`}
+                        </p>
+                      </div>
+                    )}
 
                     {stockCovers && (
                       <p className="mt-2 text-[11px] text-green-600 dark:text-green-400">
@@ -591,8 +680,12 @@ export function PoCreateForm({
                 lines.length === 0
                   ? 'Thêm ít nhất 1 vật tư'
                   : linesOk
-                    ? `${lines.length} dòng vật tư có SL đặt`
-                    : 'Mọi dòng cần SL đặt > 0 — dòng tồn đủ hãy xoá'
+                    ? `${lines.length} dòng vật tư đủ số lượng`
+                    : lines.some(
+                          (l) => l.price_unit && (l.qty2 === '' || Number(l.qty2) <= 0),
+                        )
+                      ? 'Dòng giá theo kg/m² cần nhập tổng số lượng tính giá'
+                      : 'Mọi dòng cần SL đặt > 0 — dòng tồn đủ hãy xoá'
               }
             />
             <button

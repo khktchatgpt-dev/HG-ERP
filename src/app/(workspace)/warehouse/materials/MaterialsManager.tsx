@@ -21,6 +21,8 @@ type Material = {
   code: string
   name: string
   unit: string
+  price_unit: string | null
+  unit2_factor: number | null
   group_name: string | null
   min_stock: number
   shelf_location: string | null
@@ -141,9 +143,25 @@ export function MaterialsManager({
     {
       key: 'unit',
       header: 'ĐVT',
-      width: '90px',
+      width: '110px',
       sortValue: (m) => m.unit,
-      cell: (m) => <span className="text-zinc-600 dark:text-zinc-300">{m.unit}</span>,
+      cell: (m) => (
+        <span className="text-zinc-600 dark:text-zinc-300">
+          {m.unit}
+          {m.price_unit && (
+            <span
+              className="block text-[10px] text-violet-600 dark:text-violet-400"
+              title={
+                m.unit2_factor
+                  ? `Giá theo ${m.price_unit} — gợi ý ${m.unit2_factor} ${m.price_unit}/${m.unit}`
+                  : `Giá theo ${m.price_unit}`
+              }
+            >
+              giá/{m.price_unit}
+            </span>
+          )}
+        </span>
+      ),
     },
     {
       key: 'group_name',
@@ -402,6 +420,10 @@ function MaterialForm({
       unit: String(fd.get('unit') ?? '').trim() || 'cái',
       group_name: String(fd.get('group_name') ?? '').trim() || null,
       min_stock: Number(fd.get('min_stock') ?? 0) || 0,
+      price_unit: String(fd.get('price_unit') ?? '').trim() || null,
+      unit2_factor: fd.get('unit2_factor')
+        ? Number(fd.get('unit2_factor')) || null
+        : null,
       shelf_location: String(fd.get('shelf_location') ?? '').trim() || null,
       note: String(fd.get('note') ?? '').trim() || null,
     }
@@ -471,6 +493,35 @@ function MaterialForm({
           defaultValue={initial?.shelf_location ?? ''}
           className={cls}
         />
+      </label>
+      {/* Giá đv kép: sắt mua theo cây nhưng giá theo kg — khai ở đây, form PO tự quy đổi. */}
+      <label className="flex flex-col gap-1 text-sm">
+        Đơn vị tính giá
+        <input
+          name="price_unit"
+          maxLength={30}
+          placeholder="Bỏ trống = giá theo ĐVT · vd: kg, m²"
+          defaultValue={initial?.price_unit ?? ''}
+          className={cls}
+        />
+        <span className="text-xs text-zinc-400">
+          Với sắt/nhôm/kính: giá NCC tính theo kg/m², không theo cây/tấm.
+        </span>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Hệ số quy đổi gợi ý
+        <input
+          name="unit2_factor"
+          type="number"
+          min={0}
+          step="0.0001"
+          placeholder="VD: 5.4 (kg mỗi cây)"
+          defaultValue={initial?.unit2_factor ?? ''}
+          className={`${cls} tabular-nums`}
+        />
+        <span className="text-xs text-zinc-400">
+          Máy gợi ý tổng kg = SL × hệ số khi lên đơn; sửa được theo cân thực tế.
+        </span>
       </label>
       <label className="flex flex-col gap-1 text-sm sm:col-span-2">
         Ghi chú
