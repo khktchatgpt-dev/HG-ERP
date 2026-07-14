@@ -65,8 +65,11 @@ export const materialsService = {
   },
 
   async create(user: User, input: CreateInput): Promise<Material> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
-      throw Forbidden('Chỉ quản lý Kho / admin tạo được vật tư')
+    // Cung ứng cũng được TẠO vật tư — hàng mới phát sinh ngay lúc lên đơn đặt
+    // (thêm nhanh từ form PO). Sửa/xoá danh mục vẫn là quyền Kho/admin.
+    const whManager = (await isWarehouseUser(user)) && canEdit(user)
+    if (!whManager && !(await isSupplyStaff(user))) {
+      throw Forbidden('Chỉ quản lý Kho / admin / Cung ứng tạo được vật tư')
     }
     const dup = await materialsRepo.findByCode(input.code)
     if (dup) throw Conflict(`Mã vật tư "${input.code}" đã tồn tại`)

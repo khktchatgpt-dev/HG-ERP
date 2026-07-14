@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { QuickAddMaterial } from './QuickAddMaterial'
 
 type SupplierOption = {
   id: string
@@ -336,221 +337,282 @@ export function PoCreateForm({
           </Step>
 
           <Step n={2} title="Vật tư cần đặt" sub="đối chiếu file BOM">
-            <div className="relative">
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="🔍 Tìm vật tư theo mã hoặc tên…"
-                className={inputCls}
-              />
-              {matches.length > 0 && (
-                <ul className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-                  {matches.map((m) => (
-                    <li key={m.id}>
-                      <button
-                        type="button"
-                        onClick={() => addMaterial(m)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-sky-50 dark:hover:bg-sky-950/40"
-                      >
-                        <span className="min-w-0 truncate">
-                          <span className="font-mono text-xs text-zinc-400">
-                            {m.code}
-                          </span>{' '}
-                          {m.name}
-                        </span>
-                        <span className="shrink-0 text-xs text-zinc-500">
-                          tồn {num(m.on_hand)} {m.unit}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {/* Thẻ dòng thay bảng: hàng đầu là tên + thành tiền; bên dưới là lưới
-                ô nhập có nhãn riêng — không còn phải căn dọc giữa các cột. */}
-            <div className="mt-3 flex flex-col gap-2.5">
-              {lines.length === 0 && (
-                <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400 dark:border-zinc-700">
-                  Dùng ô tìm phía trên để thêm vật tư cần đặt.
-                </p>
-              )}
-              {lines.map((l, i) => {
-                const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
-                const shortage =
-                  l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
-                const lineTotal = lineAmount(l)
-                return (
-                  <div
-                    key={l.material_id}
-                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-                  >
-                    <div className="mb-2.5 flex items-start justify-between gap-3">
-                      <div className="min-w-0 text-sm font-medium">
-                        <span className="font-mono text-xs font-normal text-zinc-400">
-                          {l.code}
-                        </span>{' '}
-                        {l.name}
-                        {l.price_unit && (
-                          <span className="ml-2 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
-                            giá theo {l.price_unit}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <span className="text-sm font-semibold tabular-nums">
-                          {lineTotal > 0 ? (
-                            <>
-                              {num(lineTotal)}{' '}
-                              <span className="text-xs font-normal text-zinc-400">
-                                {currency}
-                              </span>
-                            </>
-                          ) : (
-                            <span className="font-normal text-zinc-300 dark:text-zinc-600">
-                              —
-                            </span>
-                          )}
-                        </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative min-w-[260px] flex-1">
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="🔍 Tìm vật tư theo mã hoặc tên…"
+                  className={inputCls}
+                />
+                {matches.length > 0 && (
+                  <ul className="absolute z-10 mt-1 max-h-72 w-full overflow-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+                    {matches.map((m) => (
+                      <li key={m.id}>
                         <button
                           type="button"
-                          onClick={() => removeLine(i)}
-                          className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                          aria-label="Xoá dòng"
+                          onClick={() => addMaterial(m)}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-sky-50 dark:hover:bg-sky-950/40"
                         >
-                          ✕
+                          <span className="min-w-0 truncate">
+                            <span className="font-mono text-xs text-zinc-400">
+                              {m.code}
+                            </span>{' '}
+                            {m.name}
+                          </span>
+                          <span className="shrink-0 text-xs text-zinc-500">
+                            tồn {num(m.on_hand)} {m.unit}
+                          </span>
                         </button>
-                      </div>
-                    </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              {/* Vật tư mới phát sinh khi mua — khai nhanh, khỏi chạy sang Kho */}
+              <QuickAddMaterial
+                onCreated={(m) =>
+                  addMaterial({
+                    id: m.id,
+                    code: m.code,
+                    name: m.name,
+                    unit: m.unit,
+                    on_hand: 0,
+                    price_unit: m.price_unit,
+                    unit2_factor: m.unit2_factor,
+                  })
+                }
+              />
+            </div>
 
-                    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-[96px_96px_96px_120px_1fr]">
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          SL cần *
-                        </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={l.need}
-                          onChange={(e) => setNeed(i, e.target.value)}
-                          className={`${inputCls} text-right`}
-                          aria-label={`Số lượng cần ${l.name}`}
-                          placeholder="BOM"
-                        />
-                      </label>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          Tồn kho
-                        </span>
-                        <div className="flex h-[34px] items-center justify-end rounded-md bg-zinc-50 px-2 text-sm whitespace-nowrap text-zinc-600 tabular-nums dark:bg-zinc-800/60 dark:text-zinc-300">
-                          {num(l.on_hand)}&nbsp;
-                          <span className="text-xs text-zinc-400">{l.unit}</span>
-                        </div>
-                      </div>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          SL đặt
-                        </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={l.qty}
-                          onChange={(e) => setQty(i, e.target.value)}
-                          className={`${inputCls} text-right font-medium`}
-                          aria-label={`Số lượng đặt ${l.name}`}
-                          title="Tự tính = SL cần − tồn kho; sửa tay được"
-                        />
-                      </label>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          {l.price_unit ? `Đơn giá/${l.price_unit}` : 'Đơn giá'}
-                        </span>
-                        <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={l.price}
-                          onChange={(e) =>
-                            setLine(i, {
-                              price: e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
-                          className={`${inputCls} text-right`}
-                          aria-label={`Đơn giá ${l.name}`}
-                        />
-                      </label>
-                      <label className="col-span-2 flex flex-col gap-1 sm:col-span-1">
-                        <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                          Ghi chú
-                        </span>
-                        <input
-                          value={l.note}
-                          maxLength={500}
-                          placeholder="bộ phận SP…"
-                          onChange={(e) => setLine(i, { note: e.target.value })}
-                          className={inputCls}
-                        />
-                      </label>
-                    </div>
-
-                    {/* Giá đv kép: quy cách + tổng kg/m² — thành tiền = tổng × đơn giá */}
-                    {l.price_unit && (
-                      <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-[1fr_140px_1fr]">
-                        <label className="flex flex-col gap-1">
-                          <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-                            Quy cách
-                          </span>
-                          <input
-                            value={l.spec}
-                            maxLength={100}
-                            placeholder="25×25×1.2mm, cây 6m…"
-                            onChange={(e) => setLine(i, { spec: e.target.value })}
-                            className={inputCls}
-                          />
-                        </label>
-                        <label className="flex flex-col gap-1">
-                          <span className="text-[10px] font-semibold tracking-wide text-violet-500 uppercase">
-                            Tổng {l.price_unit} *
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={l.qty2}
-                            onChange={(e) =>
-                              setLine(i, {
-                                qty2: e.target.value === '' ? '' : Number(e.target.value),
-                                qty2Touched: true,
-                              })
-                            }
-                            className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
-                            aria-label={`Tổng ${l.price_unit} ${l.name}`}
-                          />
-                        </label>
-                        <p className="col-span-2 self-end pb-2 text-[11px] text-zinc-400 sm:col-span-1">
-                          {l.unit2_factor
-                            ? `Gợi ý = SL đặt × ${l.unit2_factor} ${l.price_unit}/${l.unit} — sửa theo cân thực tế của NCC.`
-                            : `Nhập tổng ${l.price_unit} theo báo giá/cân của NCC.`}
-                        </p>
-                      </div>
-                    )}
-
-                    {stockCovers && (
-                      <p className="mt-2 text-[11px] text-green-600 dark:text-green-400">
-                        ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn đặt thêm
-                      </p>
-                    )}
-                    {shortage !== null && shortage > 0 && (
-                      <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-500">
-                        ⚠ thiếu {num(shortage)} {l.unit} so với tồn — đã gợi ý SL đặt
-                      </p>
-                    )}
-                  </div>
-                )
-              })}
+            {/* Bảng danh sách đặt mua thật — mỗi ô cao 34px đồng nhất nên các
+                cột luôn thẳng hàng; hẹp quá thì cuộn ngang trong khung. */}
+            <div className="mt-3 overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+              <table className="w-full min-w-[1060px] text-sm tabular-nums">
+                <thead className="bg-zinc-50 dark:bg-zinc-900/50">
+                  <tr className="text-left text-[11px] text-zinc-500 uppercase">
+                    <th className="w-8 py-2 pl-3 text-center">#</th>
+                    <th className="min-w-[190px] py-2 pr-2">Vật tư</th>
+                    <th className="w-32 py-2 pr-2">Quy cách</th>
+                    <th className="w-20 py-2 pr-2 text-right">SL cần *</th>
+                    <th className="w-24 py-2 pr-2 text-right">Tồn kho</th>
+                    <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
+                    <th className="w-28 py-2 pr-2 text-right">SL tính giá</th>
+                    <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
+                    <th className="w-28 py-2 pr-3 text-right">Thành tiền</th>
+                    <th className="min-w-[110px] py-2 pr-2">Ghi chú</th>
+                    <th className="w-8 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="py-6 text-center text-zinc-400">
+                        Tìm vật tư phía trên, hoặc “+ Vật tư mới” nếu chưa có trong danh
+                        mục.
+                      </td>
+                    </tr>
+                  )}
+                  {lines.map((l, i) => {
+                    const stockCovers = l.need !== '' && Number(l.need) <= l.on_hand // tồn đủ, khỏi đặt
+                    const shortage =
+                      l.need !== '' ? Math.max(0, Number(l.need) - l.on_hand) : null
+                    const lineTotal = lineAmount(l)
+                    const hasWarning = stockCovers || (shortage !== null && shortage > 0)
+                    return (
+                      <Fragment key={l.material_id}>
+                        <tr className="border-t border-zinc-100 align-middle dark:border-zinc-900">
+                          <td className="py-1.5 pl-3 text-center text-xs text-zinc-400">
+                            {i + 1}
+                          </td>
+                          <td className="max-w-[260px] py-1.5 pr-2">
+                            <div
+                              className="flex h-[34px] min-w-0 items-center gap-1.5"
+                              title={`${l.code} — ${l.name}`}
+                            >
+                              <span className="shrink-0 font-mono text-xs text-zinc-400">
+                                {l.code}
+                              </span>
+                              <span className="truncate">{l.name}</span>
+                              {l.price_unit && (
+                                <span className="shrink-0 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
+                                  giá/{l.price_unit}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              value={l.spec}
+                              maxLength={100}
+                              placeholder="25×25×1.2mm…"
+                              onChange={(e) => setLine(i, { spec: e.target.value })}
+                              className={inputCls}
+                              aria-label={`Quy cách ${l.name}`}
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={l.need}
+                              onChange={(e) => setNeed(i, e.target.value)}
+                              className={`${inputCls} text-right`}
+                              aria-label={`Số lượng cần ${l.name}`}
+                              placeholder="BOM"
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <div className="flex h-[34px] items-center justify-end whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                              {num(l.on_hand)}&nbsp;
+                              <span className="text-xs text-zinc-400">{l.unit}</span>
+                            </div>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={l.qty}
+                              onChange={(e) => setQty(i, e.target.value)}
+                              className={`${inputCls} text-right font-medium`}
+                              aria-label={`Số lượng đặt ${l.name}`}
+                              title="Tự tính = SL cần − tồn kho; sửa tay được"
+                            />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            {l.price_unit ? (
+                              <div className="flex h-[34px] items-center gap-1">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={l.qty2}
+                                  onChange={(e) =>
+                                    setLine(i, {
+                                      qty2:
+                                        e.target.value === ''
+                                          ? ''
+                                          : Number(e.target.value),
+                                      qty2Touched: true,
+                                    })
+                                  }
+                                  className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
+                                  aria-label={`Tổng ${l.price_unit} ${l.name}`}
+                                  title={
+                                    l.unit2_factor
+                                      ? `Gợi ý = SL đặt × ${l.unit2_factor} ${l.price_unit}/${l.unit} — sửa theo cân thực tế`
+                                      : `Tổng ${l.price_unit} theo báo giá/cân của NCC`
+                                  }
+                                />
+                                <span className="shrink-0 text-xs text-violet-500">
+                                  {l.price_unit}
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="flex h-[34px] items-center justify-end text-zinc-300 dark:text-zinc-600">
+                                —
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <div className="flex h-[34px] items-center gap-1">
+                              <input
+                                type="number"
+                                step="1"
+                                min="0"
+                                value={l.price}
+                                onChange={(e) =>
+                                  setLine(i, {
+                                    price:
+                                      e.target.value === '' ? '' : Number(e.target.value),
+                                  })
+                                }
+                                className={`${inputCls} text-right`}
+                                aria-label={`Đơn giá ${l.name}`}
+                              />
+                              {l.price_unit && (
+                                <span className="shrink-0 text-xs text-violet-500">
+                                  /{l.price_unit}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1.5 pr-3 text-right">
+                            <div className="flex h-[34px] items-center justify-end font-medium whitespace-nowrap">
+                              {lineTotal > 0 ? (
+                                num(lineTotal)
+                              ) : (
+                                <span className="font-normal text-zinc-300 dark:text-zinc-600">
+                                  —
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <input
+                              value={l.note}
+                              maxLength={500}
+                              placeholder="bộ phận SP…"
+                              onChange={(e) => setLine(i, { note: e.target.value })}
+                              className={inputCls}
+                              aria-label={`Ghi chú ${l.name}`}
+                            />
+                          </td>
+                          <td className="py-1.5 pr-1 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeLine(i)}
+                              className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                              aria-label="Xoá dòng"
+                            >
+                              ✕
+                            </button>
+                          </td>
+                        </tr>
+                        {hasWarning && (
+                          <tr>
+                            <td />
+                            <td colSpan={10} className="pb-1.5 text-[11px]">
+                              {stockCovers && (
+                                <span className="text-green-600 dark:text-green-400">
+                                  ✓ tồn đủ ({num(l.on_hand)} {l.unit}) — xoá dòng hoặc vẫn
+                                  đặt thêm
+                                </span>
+                              )}
+                              {shortage !== null && shortage > 0 && (
+                                <span className="text-amber-600 dark:text-amber-500">
+                                  ⚠ thiếu {num(shortage)} {l.unit} so với tồn — đã gợi ý
+                                  SL đặt
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    )
+                  })}
+                </tbody>
+                {lines.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
+                      <td
+                        colSpan={8}
+                        className="py-2 pr-2 text-right text-xs font-semibold text-zinc-500 uppercase"
+                      >
+                        Tổng cộng ({lines.length} dòng)
+                      </td>
+                      <td className="py-2 pr-3 text-right font-bold whitespace-nowrap">
+                        {num(subtotal)}
+                      </td>
+                      <td colSpan={2} className="py-2 text-xs text-zinc-400">
+                        {currency}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
           </Step>
 
