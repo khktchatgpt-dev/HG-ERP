@@ -12,16 +12,26 @@ export const PO_STATUSES = [
 ] as const
 export type PoStatus = (typeof PO_STATUSES)[number]
 
-/** Dòng PO: ĐVT kép qua spec/qty2/unit2 (mẫu in nhôm cây↔kg, kính tấm↔m² — OI-10). */
-export const poLineInputSchema = z.object({
-  material_id: z.string().uuid(),
-  qty_ordered: z.coerce.number().positive(),
-  unit_price: z.coerce.number().min(0).optional().nullable(),
-  spec: z.string().trim().max(100).optional().nullable(), // quy cách: 25x50x1li…
-  qty2: z.coerce.number().positive().optional().nullable(), // tổng kg / tổng m²
-  unit2: z.string().trim().max(30).optional().nullable(),
-  note: z.string().trim().max(500).optional().nullable(), // gắn bộ phận SP
-})
+/**
+ * Dòng PO: ĐVT kép qua spec/qty2/unit2 (mẫu in nhôm cây↔kg, kính tấm↔m² — OI-10).
+ * price_basis (0053): 'unit' = SL đặt × giá (mặc định); 'unit2' = qty2 × giá
+ * (sắt mua theo cây nhưng giá theo kg) — khi đó qty2 + unit2 bắt buộc.
+ */
+export const poLineInputSchema = z
+  .object({
+    material_id: z.string().uuid(),
+    qty_ordered: z.coerce.number().positive(),
+    unit_price: z.coerce.number().min(0).optional().nullable(),
+    price_basis: z.enum(['unit', 'unit2']).default('unit'),
+    spec: z.string().trim().max(100).optional().nullable(), // quy cách: 25x50x1li…
+    qty2: z.coerce.number().positive().optional().nullable(), // tổng kg / tổng m²
+    unit2: z.string().trim().max(30).optional().nullable(),
+    note: z.string().trim().max(500).optional().nullable(), // gắn bộ phận SP
+  })
+  .refine((l) => l.price_basis !== 'unit2' || (l.qty2 != null && !!l.unit2), {
+    message: 'Giá tính theo đơn vị 2: cần nhập tổng số lượng và đơn vị (vd 54 kg)',
+    path: ['qty2'],
+  })
 
 export const poCreateSchema = z.object({
   production_order_id: z.string().uuid(), // BR-06: đúng 1 LSX

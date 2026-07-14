@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
 import type { PoStatus } from './pos.schema'
 
 export type Po = {
@@ -33,6 +34,7 @@ export type PoLine = {
   material_id: string
   qty_ordered: number
   unit_price: number | null
+  price_basis: 'unit' | 'unit2'
   spec: string | null
   qty2: number | null
   unit2: string | null
@@ -47,6 +49,7 @@ export type PoLineInput = {
   material_id: string
   qty_ordered: number
   unit_price?: number | null
+  price_basis?: 'unit' | 'unit2'
   spec?: string | null
   qty2?: number | null
   unit2?: string | null
@@ -89,6 +92,8 @@ export type PurchasedMaterial = {
   total_qty: number
   order_lines: number
   last_price: number | null
+  /** Đơn vị của last_price: null = theo ĐVT mua; 'kg'/'m²' = giá theo đv2 (0053). */
+  last_price_unit: string | null
   last_currency: string
   last_at: string
 }
@@ -124,22 +129,18 @@ export const posRepo = {
   },
 
   /**
-   * Tổng tiền (Σ qty_ordered × unit_price) theo từng PO cho danh sách — 1 truy vấn
-   * gộp cho cả trang thay vì N+1. Trả map po_id → tổng.
+   * Tổng tiền theo từng PO cho danh sách — 1 truy vấn gộp cho cả trang thay vì
+   * N+1. Trả map po_id → tổng. Tiền dòng theo poLineAmount (giá đv kép 0053).
    */
   async totalsByPoIds(ids: string[]): Promise<Record<string, number>> {
     if (ids.length === 0) return {}
     const { data } = await db()
       .from('supply_purchase_order_lines')
-      .select('po_id, qty_ordered, unit_price')
+      .select('po_id, qty_ordered, unit_price, price_basis, qty2')
       .in('po_id', ids)
     const totals: Record<string, number> = {}
-    for (const r of (data ?? []) as {
-      po_id: string
-      qty_ordered: number
-      unit_price: number | null
-    }[]) {
-      totals[r.po_id] = (totals[r.po_id] ?? 0) + r.qty_ordered * (r.unit_price ?? 0)
+    for (const r of (data ?? []) as ({ po_id: string } & PoLineAmountInput)[]) {
+      totals[r.po_id] = (totals[r.po_id] ?? 0) + poLineAmount(r)
     }
     return totals
   },
@@ -152,7 +153,7 @@ export const posRepo = {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(
-        'material_id, qty_ordered, unit_price, po:supply_purchase_orders!inner(supplier_id, currency, created_at, status), material:warehouse_materials(code, name, unit)',
+        'material_id, qty_ordered, unit_price, price_basis, unit2, po:supply_purchase_orders!inner(supplier_id, currency, created_at, status), material:warehouse_materials(code, name, unit)',
       )
       .eq('po.supplier_id', supplierId)
       .order('created_at', { referencedTable: 'po', ascending: false })
@@ -163,6 +164,8 @@ export const posRepo = {
       material_id: string
       qty_ordered: number
       unit_price: number | null
+      price_basis: 'unit' | 'unit2' | null
+      unit2: string | null
       po: P | P[] | null
       material: M | M[] | null
     }
@@ -182,6 +185,9 @@ export const posRepo = {
           total_qty: Number(r.qty_ordered) || 0,
           order_lines: 1,
           last_price: r.unit_price,
+          // Giá theo đv2 (đ/kg) và giá theo ĐVT mua không so trực tiếp được —
+          // lưu kèm đơn vị để UI hiển thị "18.500/kg" thay vì con số trần.
+          last_price_unit: r.price_basis === 'unit2' ? r.unit2 : null,
           last_currency: po.currency,
           last_at: po.created_at,
         })
@@ -207,7 +213,7 @@ export const posRepo = {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(
-        'id, po_id, material_id, qty_ordered, unit_price, spec, qty2, unit2, note, sort_order, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -268,6 +274,7 @@ export const posRepo = {
           material_id: l.material_id,
           qty_ordered: l.qty_ordered,
           unit_price: l.unit_price ?? null,
+          price_basis: l.price_basis ?? 'unit',
           spec: l.spec ?? null,
           qty2: l.qty2 ?? null,
           unit2: l.unit2 ?? null,

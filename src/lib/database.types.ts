@@ -968,7 +968,6 @@ export type Database = {
           country: string | null
           created_at: string
           default_currency: string | null
-          default_incoterm: string | null
           default_payment_terms: string | null
           default_price_term: string | null
           email: string | null
@@ -992,7 +991,6 @@ export type Database = {
           country?: string | null
           created_at?: string
           default_currency?: string | null
-          default_incoterm?: string | null
           default_payment_terms?: string | null
           default_price_term?: string | null
           email?: string | null
@@ -1016,7 +1014,6 @@ export type Database = {
           country?: string | null
           created_at?: string
           default_currency?: string | null
-          default_incoterm?: string | null
           default_payment_terms?: string | null
           default_price_term?: string | null
           email?: string | null
@@ -1476,6 +1473,7 @@ export type Database = {
           material_id: string
           note: string | null
           po_id: string
+          price_basis: string
           qty_ordered: number
           qty2: number | null
           sort_order: number
@@ -1488,6 +1486,7 @@ export type Database = {
           material_id: string
           note?: string | null
           po_id: string
+          price_basis?: string
           qty_ordered: number
           qty2?: number | null
           sort_order?: number
@@ -1500,6 +1499,7 @@ export type Database = {
           material_id?: string
           note?: string | null
           po_id?: string
+          price_basis?: string
           qty_ordered?: number
           qty2?: number | null
           sort_order?: number
@@ -2385,8 +2385,10 @@ export type Database = {
           min_stock: number
           name: string
           note: string | null
+          price_unit: string | null
           shelf_location: string | null
           unit: string
+          unit2_factor: number | null
           updated_at: string
         }
         Insert: {
@@ -2398,8 +2400,10 @@ export type Database = {
           min_stock?: number
           name: string
           note?: string | null
+          price_unit?: string | null
           shelf_location?: string | null
           unit?: string
+          unit2_factor?: number | null
           updated_at?: string
         }
         Update: {
@@ -2411,8 +2415,10 @@ export type Database = {
           min_stock?: number
           name?: string
           note?: string | null
+          price_unit?: string | null
           shelf_location?: string | null
           unit?: string
+          unit2_factor?: number | null
           updated_at?: string
         }
         Relationships: []

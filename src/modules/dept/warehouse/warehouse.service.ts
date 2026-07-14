@@ -33,6 +33,8 @@ type CreateInput = {
   code: string
   name: string
   unit: string
+  price_unit?: string | null
+  unit2_factor?: number | null
   group_name?: string | null
   min_stock: number
   shelf_location?: string | null
@@ -73,6 +75,8 @@ export const materialsService = {
       code: input.code,
       name: input.name,
       unit: input.unit,
+      price_unit: input.price_unit ?? null,
+      unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,
       min_stock: input.min_stock,
       shelf_location: input.shelf_location ?? null,

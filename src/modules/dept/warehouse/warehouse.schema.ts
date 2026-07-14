@@ -4,6 +4,9 @@ export const materialCreateSchema = z.object({
   code: z.string().trim().min(1).max(60),
   name: z.string().trim().min(1).max(200),
   unit: z.string().trim().min(1).max(30).default('cái'),
+  // Giá đv kép (0053): giá theo 'kg'/'m²'… thay vì ĐVT mua; factor là gợi ý quy đổi.
+  price_unit: z.string().trim().max(30).optional().nullable(),
+  unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),
   min_stock: z.coerce.number().min(0).default(0),
   shelf_location: z.string().trim().max(60).optional().nullable(),

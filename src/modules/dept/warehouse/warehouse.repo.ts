@@ -5,6 +5,10 @@ export type Material = {
   code: string
   name: string
   unit: string
+  /** Đơn vị TÍNH GIÁ ('kg', 'm²'…) — NULL = giá theo ĐVT mua (0053, giá đv kép). */
+  price_unit: string | null
+  /** Hệ số quy đổi gợi ý (vd 5.4 kg/cây) — dòng PO sửa được theo cân thực. */
+  unit2_factor: number | null
   group_name: string | null
   min_stock: number
   shelf_location: string | null
@@ -15,7 +19,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, group_name, min_stock, shelf_location, note, is_active, created_at, updated_at'
+  'id, code, name, unit, price_unit, unit2_factor, group_name, min_stock, shelf_location, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -28,7 +32,11 @@ export type ListFilter = {
 // Postgres `numeric` về qua PostgREST là CHUỖI (vd "20.00") → ép về number để
 // đúng type + sắp xếp/so sánh số chuẩn.
 function toMaterial(row: Record<string, unknown>): Material {
-  return { ...(row as Material), min_stock: Number(row.min_stock ?? 0) }
+  return {
+    ...(row as Material),
+    min_stock: Number(row.min_stock ?? 0),
+    unit2_factor: row.unit2_factor == null ? null : Number(row.unit2_factor),
+  }
 }
 
 export const materialsRepo = {
