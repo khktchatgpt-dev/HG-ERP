@@ -45,15 +45,6 @@ const STATUS_LABEL: Record<string, string> = {
   delivered: 'Đã giao',
   cancelled: 'Đã huỷ',
 }
-const STATUS_TONE: Record<string, 'gray' | 'blue' | 'amber' | 'green' | 'red'> = {
-  confirmed: 'blue',
-  lsx_pending: 'amber',
-  lsx_issued: 'amber',
-  in_production: 'amber',
-  completed: 'green',
-  delivered: 'green',
-  cancelled: 'red',
-}
 
 export function TrackingManager({
   rows,
@@ -80,6 +71,44 @@ export function TrackingManager({
   // FR-SAL-09: nguy cơ trễ = sát/quá hạn giao + lý do (BOM, vật tư, LSX chưa chạy).
   const riskOf = (r: Row) => assessLateRisk(r, today)
   const isLate = (r: Row) => riskOf(r)?.level === 'overdue'
+
+  /**
+   * Tiến độ GIẢN LƯỢC cho Sales (P5) — không cần biết từng công đoạn CNC:
+   * Chờ duyệt → Chuẩn bị SX → Đang SX / Đang QC / Đang đóng gói → Đã xuất
+   * xưởng → Đã giao, kèm % ước theo vị trí giai đoạn và màu theo rủi ro trễ.
+   */
+  function simpleProgress(r: Row): { label: string; pct: number; tone: string } {
+    const risk = riskOf(r)
+    const tone =
+      risk?.level === 'overdue' ? 'bg-red-500' : risk ? 'bg-amber-500' : 'bg-green-500'
+    if (r.status === 'cancelled') return { label: 'Đã huỷ', pct: 0, tone: 'bg-zinc-300' }
+    if (r.status === 'delivered')
+      return { label: 'Đã giao', pct: 100, tone: 'bg-green-500' }
+    if (r.status === 'completed') return { label: 'Đã xuất xưởng', pct: 95, tone }
+    if (!r.production_order_id) return { label: 'Chưa phát LSX', pct: 5, tone }
+    if (r.lsx_status === 'rejected')
+      return { label: 'LSX bị từ chối', pct: 8, tone: 'bg-red-500' }
+    if (r.lsx_status === 'pending_approval')
+      return { label: 'Chờ GĐ duyệt LSX', pct: 10, tone }
+    if (r.lsx_status === 'approved' && !r.current_stage)
+      return { label: 'Chuẩn bị sản xuất', pct: 15, tone }
+    // Đang chạy công đoạn: nhãn thân thiện + % theo vị trí trong danh mục.
+    const idx = stages.findIndex((s) => s.code === r.current_stage)
+    const pct =
+      stages.length > 0 && idx >= 0
+        ? Math.round(15 + (75 * (idx + 1)) / stages.length)
+        : 40
+    const lbl = (stageLabel(r.current_stage) ?? '').toLowerCase()
+    const label =
+      lbl.includes('qc') || lbl.includes('kiểm')
+        ? 'Đang QC'
+        : lbl.includes('gói') || lbl.includes('pack')
+          ? 'Đang đóng gói'
+          : lbl.includes('xuất')
+            ? 'Chuẩn bị xuất kho'
+            : 'Đang sản xuất'
+    return { label, pct, tone }
+  }
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -180,14 +209,34 @@ export function TrackingManager({
     },
     {
       key: 'status',
-      header: 'Trạng thái đơn',
-      sortValue: (r) => r.status,
-      width: '130px',
-      cell: (r) => (
-        <Badge tone={STATUS_TONE[r.status] ?? 'gray'}>
-          {STATUS_LABEL[r.status] ?? r.status}
-        </Badge>
-      ),
+      header: 'Tiến độ',
+      sortValue: (r) => simpleProgress(r).pct,
+      width: '170px',
+      cell: (r) => {
+        const p = simpleProgress(r)
+        return (
+          <div
+            className="flex flex-col gap-1"
+            title={`${STATUS_LABEL[r.status] ?? r.status}${riskOf(r)?.reasons.length ? ` — ${riskOf(r)!.reasons.join(' · ')}` : ''}`}
+          >
+            <span className="flex items-center gap-1.5 text-xs font-medium">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${p.tone}`} />
+              {p.label}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                <span
+                  className={`block h-full rounded-full ${p.tone}`}
+                  style={{ width: `${p.pct}%` }}
+                />
+              </span>
+              <span className="w-8 shrink-0 text-right text-[10px] text-zinc-400 tabular-nums">
+                {p.pct}%
+              </span>
+            </span>
+          </div>
+        )
+      },
     },
     {
       key: 'lsx',
