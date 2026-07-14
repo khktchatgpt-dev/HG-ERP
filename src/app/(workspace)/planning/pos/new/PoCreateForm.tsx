@@ -8,6 +8,13 @@ import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
+import {
+  type ConversionProfile,
+  PROFILE_SHORT,
+  hasQty2,
+  suggestQty2,
+  profileLineMapping,
+} from '@/lib/material-profile'
 import { QuickAddMaterial } from './QuickAddMaterial'
 
 type SupplierOption = {
@@ -26,9 +33,19 @@ type MaterialOption = {
   name: string
   unit: string
   on_hand: number
+  min_stock: number
+  /** Quy cách (0056) — tự điền vào dòng đơn khi chọn. */
+  spec?: string | null
+  /** Loại quy đổi A/B/C (0055) — lái ô nhập của dòng. */
+  conversion_profile: ConversionProfile
   /** Giá đv kép (0053): 'kg'/'m²' = giá tính theo đv này thay vì ĐVT mua. */
   price_unit: string | null
+  /** B: hệ số cứng; C: định mức kg/đơn-vị-đặt. */
   unit2_factor: number | null
+  /** Tự-điền lên đơn (0055). */
+  vat_rate?: number | null
+  default_supplier_id?: string | null
+  last_purchase_price?: number | null
 }
 
 /** Nhu cầu vật tư của LSX từ BOM/bảng chi tiết — API /dept/supply/needs. */
@@ -81,6 +98,9 @@ type Line = {
   code: string
   name: string
   unit: string
+  on_hand: number
+  min_stock: number
+  profile: ConversionProfile
   price_unit: string | null
   unit2_factor: number | null
   spec: string
@@ -89,6 +109,10 @@ type Line = {
   qty2Touched: boolean
   price: number | ''
   note: string
+  /** Thông tin quyết định SL đặt (chỉ hiển thị, không auto-điền). */
+  suggest: number | null
+  qty_needed: number | null
+  available: number | null
 }
 
 const inputCls =
@@ -189,22 +213,21 @@ export function PoCreateForm({
   const offerFor = (materialId: string, sid = supplierId) =>
     priceMap[materialId]?.offers.find((o) => o.supplier_id === sid)
 
-  /** Gợi ý SL tính giá (kg/m²): ưu tiên kg từ BOM, rồi SL × hệ số danh mục. */
-  function suggestQty2(
-    mat: { price_unit: string | null; unit2_factor: number | null },
-    qty: number | '',
-    kgNeeded?: number | null,
-  ): number | '' {
-    if (!mat.price_unit) return ''
-    if (mat.price_unit === 'kg' && kgNeeded) return Math.round(kgNeeded * 100) / 100
-    if (qty !== '' && mat.unit2_factor)
-      return Math.round(qty * mat.unit2_factor * 100) / 100
-    return ''
-  }
-
-  function pushLine(m: MaterialOption, qty: number | '', kgNeeded?: number | null) {
+  /**
+   * Thêm 1 dòng. CHỌN VẬT TƯ CHỈ TỰ ĐIỀN QUY CÁCH — nhân viên tự nhập SL đặt &
+   * đơn giá; SL tính giá (kg) + thành tiền hệ thống tự tính. Không auto-điền
+   * giá/VAT/NCC. `need` (nếu có từ BOM) chỉ để HIỂN THỊ gợi ý, không ghi vào ô.
+   */
+  function pushLine(
+    m: MaterialOption,
+    need?: {
+      suggest?: number
+      qty_needed?: number
+      available?: number
+      kg_needed?: number | null
+    },
+  ) {
     if (usedIds.has(m.id)) return
-    const offer = supplierId ? offerFor(m.id) : undefined
     setLines((ls) => [
       ...ls,
       {
@@ -212,17 +235,23 @@ export function PoCreateForm({
         code: m.code,
         name: m.name,
         unit: m.unit,
+        on_hand: m.on_hand,
+        min_stock: m.min_stock,
+        profile: m.conversion_profile,
         price_unit: m.price_unit,
         unit2_factor: m.unit2_factor,
-        spec: '',
-        qty,
-        qty2: suggestQty2(m, qty, kgNeeded),
+        spec: m.spec ?? '', // ⭐ tự điền quy cách
+        qty: '', // nhân viên nhập
+        qty2: '', // nhân viên tự tính & nhập (vật tư cần quy đổi)
         qty2Touched: false,
-        price: offer ? offer.price : '',
+        price: '', // nhân viên nhập
         note: '',
+        suggest: need?.suggest ?? null,
+        qty_needed: need?.qty_needed ?? null,
+        available: need?.available ?? null,
       },
     ])
-    void loadPrices([m.id])
+    void loadPrices([m.id]) // nạp gợi ý giá để HIỆN chip (không tự điền)
   }
 
   function addFromNeed(n: Need) {
@@ -234,11 +263,17 @@ export function PoCreateForm({
         name: n.material_name,
         unit: n.unit,
         on_hand: n.on_hand,
+        min_stock: 0,
+        conversion_profile: 'A',
         price_unit: null,
         unit2_factor: null,
       },
-      n.suggest > 0 ? n.suggest : '',
-      n.kg_needed,
+      {
+        suggest: n.suggest,
+        qty_needed: n.qty_needed,
+        available: n.available,
+        kg_needed: n.kg_needed,
+      },
     )
   }
 
@@ -252,17 +287,9 @@ export function PoCreateForm({
     setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
   }
   function setQty(i: number, raw: string) {
+    // Chỉ set SL đặt. Cột SL tính giá (kg/m²) do nhân viên tự tính & nhập.
     const qty = raw === '' ? '' : Number(raw)
-    setLines((ls) =>
-      ls.map((l, idx) => {
-        if (idx !== i) return l
-        const qty2 =
-          l.price_unit && !l.qty2Touched && qty !== '' && l.unit2_factor
-            ? Math.round(qty * l.unit2_factor * 100) / 100
-            : l.qty2
-        return { ...l, qty, qty2 }
-      }),
-    )
+    setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, qty } : l)))
   }
   function removeLine(i: number) {
     setLines((ls) => ls.filter((_, idx) => idx !== i))
@@ -281,10 +308,10 @@ export function PoCreateForm({
     )
   }
 
-  /** Thành tiền dòng — giá đv kép: SL tính giá × giá; thường: SL đặt × giá. */
+  /** Thành tiền dòng — B/C: SL tính giá × giá; A: SL đặt × giá. */
   function lineAmount(l: Line): number {
     const price = Number(l.price) || 0
-    if (l.price_unit) return (Number(l.qty2) || 0) * price
+    if (hasQty2(l.profile)) return (Number(l.qty2) || 0) * price
     return (Number(l.qty) || 0) * price
   }
 
@@ -302,7 +329,7 @@ export function PoCreateForm({
       (l) =>
         l.qty !== '' &&
         Number(l.qty) > 0 &&
-        (!l.price_unit || (l.qty2 !== '' && Number(l.qty2) > 0)),
+        (!hasQty2(l.profile) || (l.qty2 !== '' && Number(l.qty2) > 0)),
     )
   const invalid = !lsxId || !supplierId || !linesOk
 
@@ -349,16 +376,19 @@ export function PoCreateForm({
           expected_at: expectedAt || null,
           terms: terms.trim() || null,
           note: note.trim() || null,
-          lines: lines.map((l) => ({
-            material_id: l.material_id,
-            qty_ordered: Number(l.qty),
-            unit_price: l.price === '' ? null : Number(l.price),
-            price_basis: l.price_unit ? 'unit2' : 'unit',
-            spec: l.spec.trim() || null,
-            qty2: l.qty2 === '' ? null : Number(l.qty2),
-            unit2: l.price_unit ?? null,
-            note: l.note.trim() || null,
-          })),
+          lines: lines.map((l) => {
+            const { price_basis, unit2 } = profileLineMapping(l.profile, l.price_unit)
+            return {
+              material_id: l.material_id,
+              qty_ordered: Number(l.qty),
+              unit_price: l.price === '' ? null : Number(l.price),
+              price_basis,
+              spec: l.spec.trim() || null,
+              qty2: hasQty2(l.profile) && l.qty2 !== '' ? Number(l.qty2) : null,
+              unit2,
+              note: l.note.trim() || null,
+            }
+          }),
         },
       })
       toast.success(`Đã tạo ${po.code}`, 'Đơn đang chờ Giám đốc duyệt')
@@ -380,7 +410,7 @@ export function PoCreateForm({
           { label: 'Tạo đơn đặt' },
         ]}
         title="Tạo đơn đặt vật tư"
-        description="Chọn LSX → nhu cầu từ BOM hiện bên trái, bấm + để đưa vào chứng từ. Mỗi đơn = 1 NCC + 1 LSX (BR-06)."
+        description="Chọn LSX + NCC → thêm vật tư (bấm + ở nhu cầu BOM hoặc tìm kho). Chọn vật tư tự điền cấu hình theo Loại quy đổi A/B/C — chỉ nhập SL, kg cân thực, đơn giá. Mỗi đơn = 1 NCC + 1 LSX (BR-06)."
         actions={
           <Link
             href="/planning/pos"
@@ -466,8 +496,8 @@ export function PoCreateForm({
         </div>
       </section>
 
-      {/* Bàn soạn 3 vùng */}
-      <div className="grid items-start gap-3.5 xl:grid-cols-[290px_minmax(0,1fr)_270px]">
+      {/* Xếp dọc full-width: A (nhu cầu) → B (chứng từ) → tóm tắt. Bảng không trượt ngang. */}
+      <div className="flex flex-col gap-3.5">
         {/* ── A: NGUỒN NHU CẦU ── */}
         <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800">
@@ -487,109 +517,112 @@ export function PoCreateForm({
               className={inputCls}
             />
           </div>
-          <div className="mt-2 max-h-[420px] overflow-y-auto">
+          <div className="mt-2 max-h-[300px] overflow-y-auto p-3 pt-0">
             {!lsxId && (
-              <p className="px-3.5 py-6 text-center text-xs text-zinc-400">
-                Chọn LSX để xem nhu cầu vật tư từ BOM.
+              <p className="py-5 text-center text-xs text-zinc-400">
+                Chưa chọn LSX — gõ tên/mã ở ô trên để tìm vật tư từ kho, hoặc chọn LSX để
+                xem nhu cầu BOM.
               </p>
             )}
             {loadingNeeds && (
-              <p className="px-3.5 py-6 text-center text-xs text-zinc-400">
-                Đang tải nhu cầu…
-              </p>
+              <p className="py-5 text-center text-xs text-zinc-400">Đang tải nhu cầu…</p>
             )}
             {lsxId && !loadingNeeds && needs.length === 0 && (
-              <p className="px-3.5 py-6 text-center text-xs text-zinc-400">
+              <p className="py-5 text-center text-xs text-zinc-400">
                 LSX chưa có bảng chi tiết/BOM — tìm vật tư từ kho ở ô trên.
               </p>
             )}
-            {filteredNeeds.map((n) => {
-              const added = usedIds.has(n.material_id)
-              return (
-                <div
-                  key={n.material_id}
-                  className={
-                    'flex items-center gap-2 border-t border-zinc-100 px-3.5 py-2 dark:border-zinc-800 ' +
-                    (added ? 'bg-green-50/60 dark:bg-green-950/20' : '')
-                  }
-                >
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="truncate text-xs font-semibold"
-                      title={n.material_name}
-                    >
-                      {n.material_name}
-                    </div>
-                    <div className="font-mono text-[10px] text-zinc-400">
-                      {n.material_code} · cần {num(n.qty_needed)} · khả dụng{' '}
-                      {num(n.available)}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    {n.suggest > 0 ? (
-                      <div className="text-[10px] text-zinc-400">
-                        đề xuất
-                        <div className="text-xs font-bold text-zinc-700 tabular-nums dark:text-zinc-200">
-                          {num(n.suggest)} {n.unit}
-                        </div>
-                      </div>
-                    ) : n.ordered > 0 ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/50 dark:text-amber-500">
-                        PO đang về
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-600 dark:bg-green-950/50 dark:text-green-400">
-                        tồn đủ
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={added}
-                    onClick={() => addFromNeed(n)}
-                    className={
-                      'grid h-6 w-6 shrink-0 place-items-center rounded-md border text-sm font-bold ' +
-                      (added
-                        ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-900 dark:bg-green-950/50'
-                        : 'border-zinc-300 text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700 dark:hover:bg-sky-950/40')
-                    }
-                    aria-label={added ? 'Đã thêm' : `Thêm ${n.material_name}`}
-                  >
-                    {added ? '✓' : '+'}
-                  </button>
-                </div>
-              )
-            })}
-            {stockMatches.length > 0 && (
-              <>
-                <div className="border-t border-zinc-100 px-3.5 pt-2 pb-1 text-[10px] font-semibold tracking-wide text-zinc-400 uppercase dark:border-zinc-800">
-                  Từ kho (ngoài BOM)
-                </div>
-                {stockMatches.map((m) => (
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredNeeds.map((n) => {
+                const added = usedIds.has(n.material_id)
+                return (
                   <div
-                    key={m.id}
-                    className="flex items-center gap-2 border-t border-zinc-100 px-3.5 py-2 dark:border-zinc-800"
+                    key={n.material_id}
+                    className={
+                      'flex items-center gap-2 rounded-lg border px-2.5 py-2 ' +
+                      (added
+                        ? 'border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/20'
+                        : 'border-zinc-200 dark:border-zinc-800')
+                    }
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-semibold" title={m.name}>
-                        {m.name}
+                      <div
+                        className="truncate text-xs font-semibold"
+                        title={n.material_name}
+                      >
+                        {n.material_name}
                       </div>
                       <div className="font-mono text-[10px] text-zinc-400">
-                        {m.code} · tồn {num(m.on_hand)} {m.unit}
+                        {n.material_code} · cần {num(n.qty_needed)} · khả dụng{' '}
+                        {num(n.available)}
                       </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {n.suggest > 0 ? (
+                        <div className="text-[10px] text-zinc-400">
+                          đề xuất
+                          <div className="text-xs font-bold text-zinc-700 tabular-nums dark:text-zinc-200">
+                            {num(n.suggest)} {n.unit}
+                          </div>
+                        </div>
+                      ) : n.ordered > 0 ? (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:bg-amber-950/50 dark:text-amber-500">
+                          PO đang về
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-green-50 px-2 py-0.5 text-[10px] font-semibold text-green-600 dark:bg-green-950/50 dark:text-green-400">
+                          tồn đủ
+                        </span>
+                      )}
                     </div>
                     <button
                       type="button"
-                      onClick={() => pushLine(m, '')}
-                      className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-zinc-300 text-sm font-bold text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700 dark:hover:bg-sky-950/40"
-                      aria-label={`Thêm ${m.name}`}
+                      disabled={added}
+                      onClick={() => addFromNeed(n)}
+                      className={
+                        'grid h-6 w-6 shrink-0 place-items-center rounded-md border text-sm font-bold ' +
+                        (added
+                          ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-900 dark:bg-green-950/50'
+                          : 'border-zinc-300 text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700 dark:hover:bg-sky-950/40')
+                      }
+                      aria-label={added ? 'Đã thêm' : `Thêm ${n.material_name}`}
                     >
-                      +
+                      {added ? '✓' : '+'}
                     </button>
                   </div>
-                ))}
-              </>
-            )}
+                )
+              })}
+              {stockMatches.length > 0 && (
+                <>
+                  <div className="col-span-full pt-1 text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
+                    Từ kho (ngoài BOM)
+                  </div>
+                  {stockMatches.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-2 dark:border-zinc-800"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-semibold" title={m.name}>
+                          {m.name}
+                        </div>
+                        <div className="font-mono text-[10px] text-zinc-400">
+                          {m.code} · tồn {num(m.on_hand)} {m.unit}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => pushLine(m)}
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-zinc-300 text-sm font-bold text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700 dark:hover:bg-sky-950/40"
+                        aria-label={`Thêm ${m.name}`}
+                      >
+                        +
+                      </button>
+                    </div>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
           <div className="flex flex-col gap-2 border-t border-zinc-100 p-3 dark:border-zinc-800">
             {needSuggestCount > 0 && (
@@ -603,18 +636,18 @@ export function PoCreateForm({
             )}
             <QuickAddMaterial
               onCreated={(m) =>
-                pushLine(
-                  {
-                    id: m.id,
-                    code: m.code,
-                    name: m.name,
-                    unit: m.unit,
-                    on_hand: 0,
-                    price_unit: m.price_unit,
-                    unit2_factor: m.unit2_factor,
-                  },
-                  '',
-                )
+                pushLine({
+                  id: m.id,
+                  code: m.code,
+                  name: m.name,
+                  unit: m.unit,
+                  on_hand: 0,
+                  min_stock: 0,
+                  spec: m.spec,
+                  conversion_profile: m.conversion_profile,
+                  price_unit: m.price_unit,
+                  unit2_factor: m.unit2_factor,
+                })
               }
             />
           </div>
@@ -628,24 +661,25 @@ export function PoCreateForm({
             <span className="ml-auto text-[11px] text-zinc-400">{lines.length} dòng</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-[13px] tabular-nums">
+            <table className="w-full min-w-[940px] text-[13px] tabular-nums">
               <thead className="bg-zinc-50 dark:bg-zinc-900/50">
                 <tr className="text-left text-[10px] text-zinc-500 uppercase">
                   <th className="w-7 py-2 pl-3 text-center">#</th>
-                  <th className="min-w-[170px] py-2 pr-2">Vật tư</th>
-                  <th className="w-28 py-2 pr-2">Quy cách</th>
-                  <th className="w-[72px] py-2 pr-2 text-right">SL đặt</th>
-                  <th className="w-[92px] py-2 pr-2 text-right">SL tính giá</th>
+                  <th className="min-w-[200px] py-2 pr-2">Vật tư</th>
+                  <th className="w-[110px] py-2 pr-2">Quy cách</th>
+                  <th className="w-[104px] py-2 pr-2 text-right">Tồn kho</th>
+                  <th className="w-[84px] py-2 pr-2 text-right">SL đặt</th>
+                  <th className="w-[118px] py-2 pr-2 text-right">SL tính giá</th>
                   <th className="w-[118px] py-2 pr-2 text-right">Đơn giá</th>
-                  <th className="w-[92px] py-2 pr-2 text-right">Thành tiền</th>
-                  <th className="w-24 py-2 pr-2">Ghi chú</th>
+                  <th className="w-[100px] py-2 pr-2 text-right">Thành tiền</th>
+                  <th className="w-[92px] py-2 pr-2">Ghi chú</th>
                   <th className="w-7 py-2" />
                 </tr>
               </thead>
               <tbody>
                 {lines.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-xs text-zinc-400">
+                    <td colSpan={10} className="py-8 text-center text-xs text-zinc-400">
                       Bấm “+” ở vùng nhu cầu bên trái để đưa vật tư vào đơn.
                     </td>
                   </tr>
@@ -667,17 +701,32 @@ export function PoCreateForm({
                           {i + 1}
                         </div>
                       </td>
-                      <td className="max-w-[240px] py-2 pr-2">
-                        <div className="truncate text-xs font-semibold" title={l.name}>
+                      <td className="py-2 pr-2">
+                        <div className="text-xs font-semibold" title={l.name}>
                           {l.name}
-                          {l.price_unit && (
-                            <span className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-bold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
-                              giá/{l.price_unit}
+                        </div>
+                        <div className="mt-0.5 font-mono text-[10px] text-zinc-400">
+                          {l.code} · ĐVT: {l.unit} · tồn {num(l.on_hand)}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <span
+                            className={
+                              'rounded px-1.5 py-0.5 text-[9px] font-bold ' +
+                              (l.profile === 'A'
+                                ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
+                                : l.profile === 'B'
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300'
+                                  : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400')
+                            }
+                            title={`Loại quy đổi ${l.profile} — ${PROFILE_SHORT[l.profile]}`}
+                          >
+                            {l.profile} · {PROFILE_SHORT[l.profile]}
+                          </span>
+                          {hasQty2(l.profile) && l.price_unit && (
+                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
+                              giá/{l.price_unit} · nhập {l.price_unit}
                             </span>
                           )}
-                        </div>
-                        <div className="font-mono text-[10px] text-zinc-400">
-                          {l.code} · ĐVT: {l.unit}
                         </div>
                       </td>
                       <td className="py-2 pr-2">
@@ -690,6 +739,35 @@ export function PoCreateForm({
                           aria-label={`Quy cách ${l.name}`}
                         />
                       </td>
+                      {/* Tồn kho — để quyết định SL đặt chính xác */}
+                      <td className="py-2 pr-2 text-right">
+                        <div className="flex flex-col items-end leading-tight">
+                          <span
+                            className={
+                              'text-[13px] font-semibold ' +
+                              (l.min_stock > 0 && l.on_hand < l.min_stock
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-zinc-700 dark:text-zinc-200')
+                            }
+                          >
+                            {num(l.on_hand)}{' '}
+                            <span className="text-[10px] font-normal text-zinc-400">
+                              {l.unit}
+                            </span>
+                          </span>
+                          {l.min_stock > 0 && (
+                            <span className="text-[10px] text-zinc-400">
+                              tối thiểu {num(l.min_stock)}
+                            </span>
+                          )}
+                          {l.qty_needed != null && l.qty_needed > 0 && (
+                            <span className="text-[10px] whitespace-nowrap text-amber-600 dark:text-amber-500">
+                              cần {num(l.qty_needed)}
+                              {l.available != null ? ` · KD ${num(l.available)}` : ''}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-2 pr-2">
                         <input
                           type="number"
@@ -700,34 +778,70 @@ export function PoCreateForm({
                           className={`${inputCls} text-right font-medium`}
                           aria-label={`Số lượng đặt ${l.name}`}
                         />
+                        {l.suggest != null && l.suggest > 0 && l.qty === '' && (
+                          <button
+                            type="button"
+                            onClick={() => setQty(i, String(l.suggest))}
+                            className="mt-0.5 block w-full text-right text-[10px] text-sky-600 hover:underline dark:text-sky-400"
+                            title="Đề xuất từ BOM — bấm để dùng"
+                          >
+                            đề xuất {num(l.suggest)} ↩
+                          </button>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
-                        {l.price_unit ? (
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              value={l.qty2}
-                              onChange={(e) =>
-                                setLine(i, {
-                                  qty2:
-                                    e.target.value === '' ? '' : Number(e.target.value),
-                                  qty2Touched: true,
-                                })
-                              }
-                              className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
-                              aria-label={`Tổng ${l.price_unit} ${l.name}`}
-                              title={
-                                l.unit2_factor
-                                  ? `Gợi ý = SL × ${l.unit2_factor} ${l.price_unit}/${l.unit} — sửa theo cân thực`
-                                  : `Tổng ${l.price_unit} theo báo giá/cân NCC`
-                              }
-                            />
-                            <span className="shrink-0 text-[10px] text-violet-500">
-                              {l.price_unit}
-                            </span>
-                          </div>
+                        {hasQty2(l.profile) ? (
+                          (() => {
+                            // Vật tư cần quy đổi: nhân viên TỰ TÍNH & nhập kg/m².
+                            const hint = suggestQty2(
+                              l.profile,
+                              l.unit2_factor,
+                              l.qty === '' ? null : Number(l.qty),
+                            )
+                            return (
+                              <>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    value={l.qty2}
+                                    onChange={(e) =>
+                                      setLine(i, {
+                                        qty2:
+                                          e.target.value === ''
+                                            ? ''
+                                            : Number(e.target.value),
+                                        qty2Touched: true,
+                                      })
+                                    }
+                                    className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
+                                    aria-label={`Tổng ${l.price_unit ?? ''} ${l.name}`}
+                                    title={
+                                      l.unit2_factor
+                                        ? `Nhân viên tự tính — tham khảo SL × ${l.unit2_factor} ${l.price_unit}/${l.unit}`
+                                        : `Nhập tổng ${l.price_unit} theo báo giá/cân NCC`
+                                    }
+                                  />
+                                  <span className="shrink-0 text-[10px] text-violet-500">
+                                    {l.price_unit}
+                                  </span>
+                                </div>
+                                {hint != null && l.qty2 === '' && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setLine(i, { qty2: hint, qty2Touched: true })
+                                    }
+                                    className="mt-0.5 block w-full text-right text-[10px] text-violet-500 hover:underline"
+                                    title={`SL × ${l.unit2_factor} — bấm để dùng, sửa được`}
+                                  >
+                                    ≈ {num(hint)} ↩
+                                  </button>
+                                )}
+                              </>
+                            )
+                          })()
                         ) : (
                           <div className="flex h-[30px] items-center justify-end text-zinc-300 dark:text-zinc-600">
                             —
@@ -833,7 +947,7 @@ export function PoCreateForm({
                 <tfoot>
                   <tr className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-2 pr-2 text-right text-[10px] font-semibold text-zinc-500 uppercase"
                     >
                       Tổng cộng ({lines.length} dòng)
@@ -908,102 +1022,102 @@ export function PoCreateForm({
             </label>
           </div>
         </section>
+      </div>
 
-        {/* ── C: TÓM TẮT ── */}
-        <aside className="flex flex-col gap-3 xl:sticky xl:top-4">
-          <SideCard title="NCC đã chọn">
-            {supplier ? (
-              <>
-                <div className="mb-1.5 flex items-center gap-2">
-                  <b className="text-[13px]">{supplier.name}</b>
-                  {supplier.rating && (
-                    <span
-                      className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold text-white ${GRADE_BG[supplier.rating] ?? 'bg-zinc-500'}`}
-                    >
-                      {supplier.rating}
-                    </span>
-                  )}
-                </div>
-                <SideRow
-                  k="Lead time"
-                  v={
-                    supplier.lead_time_days != null
-                      ? `${supplier.lead_time_days} ngày`
-                      : '—'
-                  }
-                />
-                <SideRow k="Thanh toán" v={supplier.payment_terms ?? '—'} />
-                <SideRow k="PO đang mở" v={String(supplier.open_po_count)} />
-              </>
-            ) : (
-              <p className="text-xs text-zinc-400">Chưa chọn NCC.</p>
-            )}
-          </SideCard>
+      {/* ── TÓM TẮT: thanh full-width dưới bảng (không ép hẹp chứng từ) ── */}
+      <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_280px_300px]">
+        <SideCard title="NCC đã chọn">
+          {supplier ? (
+            <>
+              <div className="mb-1.5 flex items-center gap-2">
+                <b className="text-[13px]">{supplier.name}</b>
+                {supplier.rating && (
+                  <span
+                    className={`grid h-5 w-5 place-items-center rounded text-[11px] font-bold text-white ${GRADE_BG[supplier.rating] ?? 'bg-zinc-500'}`}
+                  >
+                    {supplier.rating}
+                  </span>
+                )}
+              </div>
+              <SideRow
+                k="Lead time"
+                v={
+                  supplier.lead_time_days != null
+                    ? `${supplier.lead_time_days} ngày`
+                    : '—'
+                }
+              />
+              <SideRow k="Thanh toán" v={supplier.payment_terms ?? '—'} />
+              <SideRow k="PO đang mở" v={String(supplier.open_po_count)} />
+            </>
+          ) : (
+            <p className="text-xs text-zinc-400">Chưa chọn NCC.</p>
+          )}
+        </SideCard>
 
-          <SideCard title="Tổng đơn">
-            <SideRow k="Tạm tính" v={num(subtotal)} />
-            <SideRow
-              k={
-                vatRate
-                  ? priceIncludesVat
-                    ? `VAT ${vatRate}% (đã gồm)`
-                    : `VAT ${vatRate}%`
-                  : 'VAT'
-              }
-              v={vatRate ? num(vatAmount) : '—'}
-            />
-            <div className="mt-1.5 flex items-baseline justify-between border-t border-zinc-200 pt-2 dark:border-zinc-800">
-              <span className="text-sm font-semibold">Sau VAT</span>
-              <span className="text-base font-bold tabular-nums">
-                {num(grandTotal)} <span className="text-xs font-medium">{currency}</span>
-              </span>
-            </div>
-          </SideCard>
+        <SideCard title="Tổng đơn">
+          <SideRow k="Tạm tính" v={num(subtotal)} />
+          <SideRow
+            k={
+              vatRate
+                ? priceIncludesVat
+                  ? `VAT ${vatRate}% (đã gồm)`
+                  : `VAT ${vatRate}%`
+                : 'VAT'
+            }
+            v={vatRate ? num(vatAmount) : '—'}
+          />
+          <div className="mt-1.5 flex items-baseline justify-between border-t border-zinc-200 pt-2 dark:border-zinc-800">
+            <span className="text-sm font-semibold">Sau VAT</span>
+            <span className="text-base font-bold tabular-nums">
+              {num(grandTotal)} <span className="text-xs font-medium">{currency}</span>
+            </span>
+          </div>
+        </SideCard>
 
-          <SideCard>
-            <Check ok={!!lsxId && !!supplierId} label="LSX + NCC đã chọn" />
-            <Check
-              ok={linesOk}
-              label={
-                lines.length === 0
-                  ? 'Thêm ít nhất 1 dòng vật tư'
-                  : linesOk
-                    ? `${lines.length} dòng đủ SL & SL tính giá`
-                    : 'Có dòng thiếu SL đặt / SL tính giá'
-              }
-            />
-            <Check
-              ok={offMatch === 0}
-              label={
-                offMatch === 0
-                  ? 'Giá khớp giá chào NCC'
-                  : `${offMatch} dòng lệch giá chào (vẫn gửi được)`
-              }
-            />
-            <div className="mt-3 flex flex-col gap-2">
-              <button
-                type="button"
-                disabled={lines.length === 0}
-                onClick={() => setPreview(true)}
-                className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-              >
-                🖨 Xem trước phiếu in
-              </button>
-              <button
-                type="button"
-                disabled={busy || invalid}
-                onClick={() => void submit()}
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-              >
-                {busy && <Spinner size={14} />}
-                {busy ? 'Đang lưu…' : 'Tạo đơn → gửi GĐ duyệt'}
-              </button>
-            </div>
-            <p className="mt-2 text-center text-[11px] text-zinc-400">
-              BR-06: mỗi đơn = 1 NCC + 1 LSX
-            </p>
-          </SideCard>
-        </aside>
+        <SideCard>
+          <Check ok={!!lsxId && !!supplierId} label="LSX + NCC đã chọn" />
+          <Check
+            ok={linesOk}
+            label={
+              lines.length === 0
+                ? 'Thêm ít nhất 1 dòng vật tư'
+                : linesOk
+                  ? `${lines.length} dòng đủ SL & SL tính giá`
+                  : 'Có dòng thiếu SL đặt / SL tính giá'
+            }
+          />
+          <Check
+            ok={offMatch === 0}
+            label={
+              offMatch === 0
+                ? 'Giá khớp giá chào NCC'
+                : `${offMatch} dòng lệch giá chào (vẫn gửi được)`
+            }
+          />
+          <div className="mt-3 flex flex-col gap-2">
+            <button
+              type="button"
+              disabled={lines.length === 0}
+              onClick={() => setPreview(true)}
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            >
+              🖨 Xem trước phiếu in
+            </button>
+            <button
+              type="button"
+              disabled={busy || invalid}
+              onClick={() => void submit()}
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}
+              {busy ? 'Đang lưu…' : 'Tạo đơn → gửi GĐ duyệt'}
+            </button>
+          </div>
+          <p className="mt-2 text-center text-[11px] text-zinc-400">
+            BR-06: mỗi đơn = 1 NCC + 1 LSX
+          </p>
+        </SideCard>
       </div>
 
       {/* Xem trước phiếu in — đúng cột phiếu thật, chưa cần tạo đơn */}
@@ -1052,8 +1166,8 @@ export function PoCreateForm({
                       {l.qty === '' ? '' : num(Number(l.qty))}
                     </td>
                     <td className="border border-zinc-400 px-1">
-                      {l.price_unit && l.qty2 !== ''
-                        ? `${num(Number(l.qty2))} ${l.price_unit}`
+                      {hasQty2(l.profile) && l.qty2 !== ''
+                        ? `${num(Number(l.qty2))} ${l.price_unit ?? ''}`
                         : ''}
                     </td>
                     <td className="border border-zinc-400 px-1">

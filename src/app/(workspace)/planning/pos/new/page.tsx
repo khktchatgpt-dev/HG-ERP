@@ -38,8 +38,8 @@ export default async function NewPoPage({
       materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     ])
 
-  // Giá đv kép: material_id → {price_unit, unit2_factor} để form tự quy đổi.
-  const dualPricing = new Map(mats.map((m) => [m.id, m]))
+  // Cấu hình vật tư (profile + giá đv kép + tự-điền) → form đọc khi chọn vật tư.
+  const matCfg = new Map(mats.map((m) => [m.id, m]))
 
   // PO đang mở theo NCC — hiện ở thẻ tóm tắt để người mua cân nhắc dồn đơn.
   const openBySupplier = new Map<string, number>()
@@ -69,15 +69,24 @@ export default async function NewPoPage({
           order_code: l.order_code,
           customer_name: l.customer_name,
         }))}
-      materials={stock.map((s) => ({
-        id: s.material_id,
-        code: s.code,
-        name: s.name,
-        unit: s.unit,
-        on_hand: s.on_hand,
-        price_unit: dualPricing.get(s.material_id)?.price_unit ?? null,
-        unit2_factor: dualPricing.get(s.material_id)?.unit2_factor ?? null,
-      }))}
+      materials={stock.map((s) => {
+        const cfg = matCfg.get(s.material_id)
+        return {
+          id: s.material_id,
+          code: s.code,
+          name: s.name,
+          unit: s.unit,
+          on_hand: s.on_hand,
+          min_stock: cfg?.min_stock ?? 0,
+          spec: cfg?.spec ?? null,
+          conversion_profile: cfg?.conversion_profile ?? 'A',
+          price_unit: cfg?.price_unit ?? null,
+          unit2_factor: cfg?.unit2_factor ?? null,
+          vat_rate: cfg?.vat_rate ?? null,
+          default_supplier_id: cfg?.default_supplier_id ?? null,
+          last_purchase_price: cfg?.last_purchase_price ?? null,
+        }
+      })}
     />
   )
 }

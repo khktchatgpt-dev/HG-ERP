@@ -5,13 +5,21 @@ export type Material = {
   code: string
   name: string
   unit: string
+  /** Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư. */
+  spec: string | null
+  /** Loại quy đổi A/B/C (0055) — lái form đặt: A đơn vị đơn, B hệ số cứng, C cân thực. */
+  conversion_profile: 'A' | 'B' | 'C'
   /** Đơn vị TÍNH GIÁ ('kg', 'm²'…) — NULL = giá theo ĐVT mua (0053, giá đv kép). */
   price_unit: string | null
-  /** Hệ số quy đổi gợi ý (vd 5.4 kg/cây) — dòng PO sửa được theo cân thực. */
+  /** B: hệ số cứng (SL×hệ số); C: định mức kg/đơn-vị-đặt (vd 10.1 kg/cây) — sửa theo cân thực. */
   unit2_factor: number | null
   group_name: string | null
   min_stock: number
   shelf_location: string | null
+  /** Tự-điền lên đơn (0055). */
+  vat_rate: number | null
+  default_supplier_id: string | null
+  last_purchase_price: number | null
   note: string | null
   is_active: boolean
   created_at: string
@@ -19,7 +27,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, price_unit, unit2_factor, group_name, min_stock, shelf_location, note, is_active, created_at, updated_at'
+  'id, code, name, unit, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -36,6 +44,9 @@ function toMaterial(row: Record<string, unknown>): Material {
     ...(row as Material),
     min_stock: Number(row.min_stock ?? 0),
     unit2_factor: row.unit2_factor == null ? null : Number(row.unit2_factor),
+    vat_rate: row.vat_rate == null ? null : Number(row.vat_rate),
+    last_purchase_price:
+      row.last_purchase_price == null ? null : Number(row.last_purchase_price),
   }
 }
 

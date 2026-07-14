@@ -1469,7 +1469,10 @@ export type Database = {
       }
       supply_purchase_order_lines: {
         Row: {
+          bar_length_m: number | null
+          cuts_per_bar: number | null
           id: string
+          kg_per_m: number | null
           material_id: string
           note: string | null
           po_id: string
@@ -1482,7 +1485,10 @@ export type Database = {
           unit2: string | null
         }
         Insert: {
+          bar_length_m?: number | null
+          cuts_per_bar?: number | null
           id?: string
+          kg_per_m?: number | null
           material_id: string
           note?: string | null
           po_id: string
@@ -1495,7 +1501,10 @@ export type Database = {
           unit2?: string | null
         }
         Update: {
+          bar_length_m?: number | null
+          cuts_per_bar?: number | null
           id?: string
+          kg_per_m?: number | null
           material_id?: string
           note?: string | null
           po_id?: string
@@ -2378,50 +2387,73 @@ export type Database = {
       warehouse_materials: {
         Row: {
           code: string
+          conversion_profile: string
           created_at: string
+          default_supplier_id: string | null
           group_name: string | null
           id: string
           is_active: boolean
+          last_purchase_price: number | null
           min_stock: number
           name: string
           note: string | null
           price_unit: string | null
           shelf_location: string | null
+          spec: string | null
           unit: string
           unit2_factor: number | null
           updated_at: string
+          vat_rate: number | null
         }
         Insert: {
           code: string
+          conversion_profile?: string
           created_at?: string
+          default_supplier_id?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
+          last_purchase_price?: number | null
           min_stock?: number
           name: string
           note?: string | null
           price_unit?: string | null
           shelf_location?: string | null
+          spec?: string | null
           unit?: string
           unit2_factor?: number | null
           updated_at?: string
+          vat_rate?: number | null
         }
         Update: {
           code?: string
+          conversion_profile?: string
           created_at?: string
+          default_supplier_id?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
+          last_purchase_price?: number | null
           min_stock?: number
           name?: string
           note?: string | null
           price_unit?: string | null
           shelf_location?: string | null
+          spec?: string | null
           unit?: string
           unit2_factor?: number | null
           updated_at?: string
+          vat_rate?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_materials_default_supplier_id_fkey"
+            columns: ["default_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       warehouse_movements: {
         Row: {
