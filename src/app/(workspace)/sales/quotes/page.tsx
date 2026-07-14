@@ -34,7 +34,13 @@ export default async function SalesQuotesPage() {
         note: q.note,
         created_at: q.created_at,
       }))}
-      customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+      customers={customers.map((c) => ({
+        id: c.id,
+        name: c.name,
+        default_currency: c.default_currency,
+        default_price_term: c.default_price_term,
+        default_payment_terms: c.default_payment_terms,
+      }))}
       products={products.map((p) => ({
         id: p.id,
         code: p.code,

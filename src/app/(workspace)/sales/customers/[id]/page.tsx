@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
+import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { HttpError } from '@/server/http'
 import { CustomerDetail } from './CustomerDetail'
 
@@ -29,10 +30,13 @@ export default async function CustomerDetailPage({
     throw e
   }
 
-  const [{ rows: quotes }, orders] = await Promise.all([
+  const [{ rows: quotes }, orders, changes] = await Promise.all([
     quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
     ordersService.listByCustomer(user, id),
+    ordersRepo.listChangesByCustomer(id),
   ])
+  // Giá trị từng đơn — thống kê tiền (doanh số năm, TB đơn) tính phía client.
+  const totals = await ordersRepo.totalsByOrderIds(orders.map((o) => o.id))
 
   return (
     <CustomerDetail
@@ -55,6 +59,17 @@ export default async function CustomerDetailPage({
         currency: o.currency,
         due_date: o.due_date,
         created_at: o.created_at,
+        updated_at: o.updated_at,
+        total: totals[o.id] ?? 0,
+      }))}
+      changes={changes.map((c) => ({
+        id: c.id,
+        order_id: c.order_id,
+        order_code: c.order_code,
+        changed_by_name: c.changed_by_name,
+        type: (c.change as { type?: string }).type ?? 'update',
+        note: c.note,
+        created_at: c.created_at,
       }))}
     />
   )

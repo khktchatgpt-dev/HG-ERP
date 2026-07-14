@@ -296,4 +296,37 @@ export const ordersRepo = {
       }
     })
   },
+
+  /** Thay đổi đơn của 1 KHÁCH (mọi đơn) — tab Hoạt động ở hồ sơ khách (P4). */
+  async listChangesByCustomer(
+    customerId: string,
+    limit = 100,
+  ): Promise<(OrderChange & { order_code: string })[]> {
+    const { data } = await db()
+      .from('sales_order_changes')
+      .select(
+        'id, order_id, changed_by, change, note, created_at, actor:users(name), order:sales_orders!inner(code, customer_id)',
+      )
+      .eq('order.customer_id', customerId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    type Raw = Omit<OrderChange, 'changed_by_name'> & {
+      actor: { name: string | null } | { name: string | null }[] | null
+      order: { code: string } | { code: string }[] | null
+    }
+    return ((data ?? []) as Raw[]).map((r) => {
+      const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
+      const o = Array.isArray(r.order) ? r.order[0] : r.order
+      return {
+        id: r.id,
+        order_id: r.order_id,
+        changed_by: r.changed_by,
+        changed_by_name: a?.name ?? null,
+        change: r.change,
+        note: r.note,
+        created_at: r.created_at,
+        order_code: o?.code ?? '?',
+      }
+    })
+  },
 }

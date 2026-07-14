@@ -51,6 +51,18 @@ type OrderRow = {
   currency: string
   due_date: string | null
   created_at: string
+  updated_at: string
+  total: number
+}
+
+type ChangeRow = {
+  id: string
+  order_id: string
+  order_code: string
+  changed_by_name: string | null
+  type: string
+  note: string | null
+  created_at: string
 }
 
 const QUOTE_STATUS: Record<string, { label: string; tone: 'gray' | 'green' }> = {
@@ -76,15 +88,19 @@ export function CustomerDetail({
   customer: c,
   quotes,
   orders,
+  changes,
 }: {
   customer: Customer
   quotes: QuoteRow[]
   orders: OrderRow[]
+  changes: ChangeRow[]
 }) {
-  const [tab, setTab] = useState<'quotes' | 'orders'>('quotes')
+  const [tab, setTab] = useState<'quotes' | 'orders' | 'activity'>('quotes')
 
   const today = new Date().toISOString().slice(0, 10)
+  const thisYear = today.slice(0, 4)
   const stats = useMemo(() => {
+    const active = orders.filter((o) => o.status !== 'cancelled')
     const openOrders = orders.filter(
       (o) => o.status !== 'delivered' && o.status !== 'cancelled',
     ).length
@@ -96,8 +112,100 @@ export function CustomerDetail({
         o.status !== 'cancelled',
     ).length
     const sentQuotes = quotes.filter((q) => q.status === 'sent').length
-    return { openOrders, late, sentQuotes }
-  }, [orders, quotes, today])
+
+    // Thống kê tiền theo từng loại tiền (khách XK có thể lẫn USD/VND).
+    const yearByCur = new Map<string, number>()
+    const allByCur = new Map<string, { sum: number; n: number }>()
+    for (const o of active) {
+      if (o.created_at.slice(0, 4) === thisYear) {
+        yearByCur.set(o.currency, (yearByCur.get(o.currency) ?? 0) + o.total)
+      }
+      const cur = allByCur.get(o.currency) ?? { sum: 0, n: 0 }
+      cur.sum += o.total
+      cur.n++
+      allByCur.set(o.currency, cur)
+    }
+    const fmt = (m: Map<string, number>) =>
+      m.size === 0
+        ? '0'
+        : [...m.entries()]
+            .map(([cur, v]) => `${v.toLocaleString('vi-VN')} ${cur}`)
+            .join(' · ')
+    const yearRevenue = fmt(yearByCur)
+    const avgOrder =
+      allByCur.size === 0
+        ? '—'
+        : [...allByCur.entries()]
+            .map(
+              ([cur, { sum, n }]) =>
+                `${Math.round(sum / n).toLocaleString('vi-VN')} ${cur}`,
+            )
+            .join(' · ')
+
+    const lastOrder = active.reduce<string | null>(
+      (acc, o) => (!acc || o.created_at > acc ? o.created_at : acc),
+      null,
+    )
+    const lastDelivered = orders
+      .filter((o) => o.status === 'delivered')
+      .reduce<string | null>(
+        (acc, o) => (!acc || o.updated_at > acc ? o.updated_at : acc),
+        null,
+      )
+    return {
+      openOrders,
+      late,
+      sentQuotes,
+      yearRevenue,
+      avgOrder,
+      lastOrder,
+      lastDelivered,
+    }
+  }, [orders, quotes, today, thisYear])
+
+  // Hoạt động gộp: báo giá lập → đơn tạo → sửa PO / huỷ / giao (mới nhất trước).
+  const activity = useMemo(() => {
+    type Ev = {
+      at: string
+      icon: string
+      text: string
+      who: string | null
+      href: string | null
+      tone: 'blue' | 'green' | 'red' | 'amber' | 'gray'
+    }
+    const evs: Ev[] = [
+      ...quotes.map<Ev>((q) => ({
+        at: q.created_at,
+        icon: '▤',
+        text: `Lập báo giá ${q.code}${q.status === 'sent' ? ' (đã gửi khách)' : ''}`,
+        who: null,
+        href: null,
+        tone: 'gray',
+      })),
+      ...orders.map<Ev>((o) => ({
+        at: o.created_at,
+        icon: '◫',
+        text: `Tạo đơn ${o.code}${o.customer_po_no ? ` — PO ${o.customer_po_no}` : ''}`,
+        who: null,
+        href: `/sales/orders/${o.id}`,
+        tone: 'blue',
+      })),
+      ...changes.map<Ev>((ch) => ({
+        at: ch.created_at,
+        icon: ch.type === 'cancel' ? '✕' : ch.type === 'delivered' ? '✓' : '✎',
+        text:
+          ch.type === 'cancel'
+            ? `Huỷ đơn ${ch.order_code}${ch.note ? ` — ${ch.note}` : ''}`
+            : ch.type === 'delivered'
+              ? `Giao xong đơn ${ch.order_code}`
+              : `Sửa đơn ${ch.order_code} (khách thay đổi)${ch.note ? ` — ${ch.note}` : ''}`,
+        who: ch.changed_by_name,
+        href: `/sales/orders/${ch.order_id}`,
+        tone: ch.type === 'cancel' ? 'red' : ch.type === 'delivered' ? 'green' : 'amber',
+      })),
+    ]
+    return evs.sort((a, b) => b.at.localeCompare(a.at))
+  }, [quotes, orders, changes])
 
   const quoteCols: Column<QuoteRow>[] = [
     {
@@ -235,8 +343,9 @@ export function CustomerDetail({
 
       <StatsBar
         stats={[
+          { label: `Doanh số ${thisYear}`, value: stats.yearRevenue, tone: 'purple' },
+          { label: 'Giá trị TB / đơn', value: stats.avgOrder, tone: 'default' },
           { label: 'Báo giá', value: quotes.length, tone: 'default' },
-          { label: 'Đã chốt', value: stats.sentQuotes, tone: 'green' },
           { label: 'Đơn hàng', value: orders.length, tone: 'default' },
           {
             label: 'Đơn đang mở',
@@ -247,6 +356,12 @@ export function CustomerDetail({
             label: 'Trễ hạn',
             value: stats.late,
             tone: stats.late ? 'red' : 'gray',
+          },
+          { label: 'Đơn gần nhất', value: fmtDate(stats.lastOrder), tone: 'default' },
+          {
+            label: 'Giao gần nhất',
+            value: fmtDate(stats.lastDelivered),
+            tone: 'default',
           },
         ]}
       />
@@ -282,9 +397,12 @@ export function CustomerDetail({
           <TabBtn active={tab === 'orders'} onClick={() => setTab('orders')}>
             Đơn hàng ({orders.length})
           </TabBtn>
+          <TabBtn active={tab === 'activity'} onClick={() => setTab('activity')}>
+            Hoạt động ({activity.length})
+          </TabBtn>
         </div>
 
-        {tab === 'quotes' ? (
+        {tab === 'quotes' && (
           <DataTable<QuoteRow>
             rows={quotes}
             columns={quoteCols}
@@ -297,7 +415,8 @@ export function CustomerDetail({
               />
             }
           />
-        ) : (
+        )}
+        {tab === 'orders' && (
           <DataTable<OrderRow>
             rows={orders}
             columns={orderCols}
@@ -311,6 +430,60 @@ export function CustomerDetail({
             }
           />
         )}
+        {tab === 'activity' &&
+          (activity.length === 0 ? (
+            <EmptyState
+              icon="◷"
+              title="Chưa có hoạt động"
+              description="Chưa có báo giá / đơn hàng nào với khách này."
+            />
+          ) : (
+            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+              {activity.map((ev, i) => {
+                const inner = (
+                  <span className="flex items-start gap-2.5">
+                    <span
+                      className={
+                        'mt-0.5 text-sm ' +
+                        (ev.tone === 'red'
+                          ? 'text-red-500'
+                          : ev.tone === 'green'
+                            ? 'text-green-600'
+                            : ev.tone === 'amber'
+                              ? 'text-amber-500'
+                              : ev.tone === 'blue'
+                                ? 'text-sky-500'
+                                : 'text-zinc-400')
+                      }
+                    >
+                      {ev.icon}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm">{ev.text}</span>
+                      <span className="mt-0.5 block text-xs text-zinc-400 tabular-nums">
+                        {new Date(ev.at).toLocaleString('vi-VN')}
+                        {ev.who && ` · ${ev.who}`}
+                      </span>
+                    </span>
+                  </span>
+                )
+                return (
+                  <li key={i}>
+                    {ev.href ? (
+                      <a
+                        href={ev.href}
+                        className="block px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                      >
+                        {inner}
+                      </a>
+                    ) : (
+                      <span className="block px-4 py-2.5">{inner}</span>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          ))}
       </div>
     </div>
   )

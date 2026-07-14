@@ -46,7 +46,14 @@ type QuoteLine = {
   customer_item_code?: string | null
 }
 
-type CustomerOption = { id: string; name: string }
+type CustomerOption = {
+  id: string
+  name: string
+  /** Điều khoản mặc định theo khách — auto-fill khi lập báo giá (P4). */
+  default_currency: string | null
+  default_price_term: string | null
+  default_payment_terms: string | null
+}
 type ProductOption = {
   id: string
   code: string
@@ -600,6 +607,20 @@ function QuoteForm({
   const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
   const [lines, setLines] = useState<LineRow[]>(initialLines ?? [])
   const [productList, setProductList] = useState<ProductOption[]>(products)
+  // Điều khoản — controlled để auto-fill từ mặc định của khách khi tạo mới (P4).
+  const [currency, setCurrency] = useState(initial?.currency ?? 'USD')
+  const [priceTerm, setPriceTerm] = useState(initial?.price_term ?? '')
+  const [payTerms, setPayTerms] = useState(initial?.payment_terms ?? '')
+
+  /** Chọn khách khi TẠO MỚI → đổ điều khoản mặc định vào ô còn trống. */
+  function applyCustomerDefaults(cid: string) {
+    if (initial) return // sửa nháp: giữ nguyên điều khoản đã lập
+    const c = customers.find((x) => x.id === cid)
+    if (!c) return
+    if (c.default_currency) setCurrency(c.default_currency)
+    if (c.default_price_term) setPriceTerm((v) => v || c.default_price_term!)
+    if (c.default_payment_terms) setPayTerms((v) => v || c.default_payment_terms!)
+  }
   // Giá gần nhất theo khách: product_id → {price, code} (gợi ý + tự điền)
   const [lastPrices, setLastPrices] = useState<
     Map<string, { unit_price: number; quote_code: string }>
@@ -746,6 +767,7 @@ function QuoteForm({
             value={customerId}
             onChange={(e) => {
               setCustomerId(e.target.value)
+              applyCustomerDefaults(e.target.value)
               void loadLastPrices(e.target.value)
             }}
             required
@@ -763,7 +785,8 @@ function QuoteForm({
           Tiền tệ
           <select
             name="currency"
-            defaultValue={initial?.currency ?? 'USD'}
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
             className={cls}
           >
             <option value="USD">USD</option>
@@ -795,7 +818,8 @@ function QuoteForm({
             name="price_term"
             maxLength={100}
             placeholder="FOB Quy Nhon"
-            defaultValue={initial?.price_term ?? ''}
+            value={priceTerm}
+            onChange={(e) => setPriceTerm(e.target.value)}
             className={cls}
           />
         </label>
@@ -805,7 +829,8 @@ function QuoteForm({
             name="payment_terms"
             maxLength={500}
             placeholder="L/C at sight · 20% deposit, 80% balance…"
-            defaultValue={initial?.payment_terms ?? ''}
+            value={payTerms}
+            onChange={(e) => setPayTerms(e.target.value)}
             className={cls}
           />
         </label>
