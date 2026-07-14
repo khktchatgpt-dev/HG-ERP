@@ -35,6 +35,8 @@ type PurchasedMaterial = {
   total_qty: number
   order_lines: number
   last_price: number | null
+  /** null = giá theo ĐVT mua; 'kg'/'m²' = giá theo đv2 (giá đv kép 0053). */
+  last_price_unit: string | null
   last_currency: string
   last_at: string
 }
@@ -562,7 +564,7 @@ export function SupplierDetail({
                             <>
                               {money(m.last_price)}{' '}
                               <span className="text-xs text-zinc-400">
-                                {m.last_currency}/{m.material_unit}
+                                {m.last_currency}/{m.last_price_unit ?? m.material_unit}
                               </span>
                             </>
                           ) : (

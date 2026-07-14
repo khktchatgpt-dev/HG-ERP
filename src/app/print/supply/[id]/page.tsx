@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { poLineAmount } from '@/lib/po-line'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { PrintToolbar } from '../../PrintToolbar'
 
@@ -29,7 +30,8 @@ export default async function PoPrintPage({
 
   const d = new Date(po.created_at)
   const fmt = (n: number) => n.toLocaleString('vi-VN')
-  const total = lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0)
+  // Giá đv kép (0053): dòng unit2 → thành tiền = SL quy đổi (kg/m²) × đơn giá.
+  const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
   const hasQty2 = lines.some((l) => l.qty2 != null)
 
   return (
@@ -115,11 +117,20 @@ export default async function PoPrintPage({
                   {l.qty2 != null ? `${fmt(l.qty2)} ${l.unit2 ?? ''}` : ''}
                 </td>
               )}
-              <td className="border border-black px-1">
-                {l.unit_price != null ? fmt(l.unit_price) : ''}
+              <td className="border border-black px-1 whitespace-nowrap">
+                {l.unit_price != null ? (
+                  <>
+                    {fmt(l.unit_price)}
+                    {l.price_basis === 'unit2' && l.unit2 && (
+                      <span className="text-[10px]">/{l.unit2}</span>
+                    )}
+                  </>
+                ) : (
+                  ''
+                )}
               </td>
               <td className="border border-black px-1">
-                {l.unit_price != null ? fmt(l.qty_ordered * l.unit_price) : ''}
+                {l.unit_price != null ? fmt(poLineAmount(l)) : ''}
               </td>
               <td className="border border-black px-2 text-left text-[11px]">
                 {l.note ?? ''}
