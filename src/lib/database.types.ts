@@ -222,6 +222,7 @@ export type Database = {
           created_at: string
           customer_id: string | null
           deleted_at: string | null
+          doc_type: string | null
           filename: string
           finalized_at: string | null
           id: string
@@ -234,6 +235,7 @@ export type Database = {
           purchase_order_id: string | null
           quote_id: string | null
           sales_order_id: string | null
+          sample_id: string | null
           size_bytes: number
           task_id: string | null
         }
@@ -244,6 +246,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          doc_type?: string | null
           filename: string
           finalized_at?: string | null
           id?: string
@@ -256,6 +259,7 @@ export type Database = {
           purchase_order_id?: string | null
           quote_id?: string | null
           sales_order_id?: string | null
+          sample_id?: string | null
           size_bytes: number
           task_id?: string | null
         }
@@ -266,6 +270,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          doc_type?: string | null
           filename?: string
           finalized_at?: string | null
           id?: string
@@ -278,6 +283,7 @@ export type Database = {
           purchase_order_id?: string | null
           quote_id?: string | null
           sales_order_id?: string | null
+          sample_id?: string | null
           size_bytes?: number
           task_id?: string | null
         }
@@ -357,6 +363,13 @@ export type Database = {
             columns: ["sales_order_id"]
             isOneToOne: false
             referencedRelation: "v_order_tracking"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_sample_id_fkey"
+            columns: ["sample_id"]
+            isOneToOne: false
+            referencedRelation: "technical_samples"
             referencedColumns: ["id"]
           },
           {
@@ -1247,7 +1260,7 @@ export type Database = {
           id: string
           note: string | null
           product_id: string
-          qty: number
+          qty: number | null
           quote_id: string
           sort_order: number
           unit_price: number
@@ -1257,7 +1270,7 @@ export type Database = {
           id?: string
           note?: string | null
           product_id: string
-          qty: number
+          qty?: number | null
           quote_id: string
           sort_order?: number
           unit_price?: number
@@ -1267,7 +1280,7 @@ export type Database = {
           id?: string
           note?: string | null
           product_id?: string
-          qty?: number
+          qty?: number | null
           quote_id?: string
           sort_order?: number
           unit_price?: number
@@ -2136,7 +2149,7 @@ export type Database = {
           material: string | null
           max_load_kg: number | null
           name: string
-          name_de: string | null
+          name_foreign: string | null
           notes: string | null
           origin_country: string | null
           packing: Json
@@ -2167,7 +2180,7 @@ export type Database = {
           material?: string | null
           max_load_kg?: number | null
           name: string
-          name_de?: string | null
+          name_foreign?: string | null
           notes?: string | null
           origin_country?: string | null
           packing?: Json
@@ -2198,7 +2211,7 @@ export type Database = {
           material?: string | null
           max_load_kg?: number | null
           name?: string
-          name_de?: string | null
+          name_foreign?: string | null
           notes?: string | null
           origin_country?: string | null
           packing?: Json
@@ -2223,6 +2236,210 @@ export type Database = {
             columns: ["image_file_id"]
             isOneToOne: false
             referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_sample_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after: Json
+          before: Json
+          created_at: string
+          id: string
+          note: string | null
+          sample_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after?: Json
+          before?: Json
+          created_at?: string
+          id?: string
+          note?: string | null
+          sample_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after?: Json
+          before?: Json
+          created_at?: string
+          id?: string
+          note?: string | null
+          sample_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_sample_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_sample_events_sample_id_fkey"
+            columns: ["sample_id"]
+            isOneToOne: false
+            referencedRelation: "technical_samples"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_sample_loans: {
+        Row: {
+          borrowed_at: string
+          borrower_contact: string | null
+          borrower_customer_id: string | null
+          borrower_kind: string
+          borrower_name: string
+          borrower_user_id: string | null
+          code: string
+          created_at: string
+          due_at: string | null
+          id: string
+          issued_by: string | null
+          note: string | null
+          purpose: string | null
+          received_by: string | null
+          returned_at: string | null
+          returned_condition: string | null
+          sample_id: string
+          updated_at: string
+        }
+        Insert: {
+          borrowed_at?: string
+          borrower_contact?: string | null
+          borrower_customer_id?: string | null
+          borrower_kind: string
+          borrower_name: string
+          borrower_user_id?: string | null
+          code: string
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          issued_by?: string | null
+          note?: string | null
+          purpose?: string | null
+          received_by?: string | null
+          returned_at?: string | null
+          returned_condition?: string | null
+          sample_id: string
+          updated_at?: string
+        }
+        Update: {
+          borrowed_at?: string
+          borrower_contact?: string | null
+          borrower_customer_id?: string | null
+          borrower_kind?: string
+          borrower_name?: string
+          borrower_user_id?: string | null
+          code?: string
+          created_at?: string
+          due_at?: string | null
+          id?: string
+          issued_by?: string | null
+          note?: string | null
+          purpose?: string | null
+          received_by?: string | null
+          returned_at?: string | null
+          returned_condition?: string | null
+          sample_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_sample_loans_borrower_customer_id_fkey"
+            columns: ["borrower_customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_sample_loans_borrower_user_id_fkey"
+            columns: ["borrower_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_sample_loans_issued_by_fkey"
+            columns: ["issued_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_sample_loans_received_by_fkey"
+            columns: ["received_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_sample_loans_sample_id_fkey"
+            columns: ["sample_id"]
+            isOneToOne: false
+            referencedRelation: "technical_samples"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_samples: {
+        Row: {
+          acquired_at: string | null
+          code: string
+          condition: string
+          created_at: string
+          created_by: string | null
+          id: string
+          location: string | null
+          note: string | null
+          product_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          acquired_at?: string | null
+          code: string
+          condition?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          note?: string | null
+          product_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          acquired_at?: string | null
+          code?: string
+          condition?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          location?: string | null
+          note?: string | null
+          product_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_samples_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_samples_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "technical_products"
             referencedColumns: ["id"]
           },
         ]
