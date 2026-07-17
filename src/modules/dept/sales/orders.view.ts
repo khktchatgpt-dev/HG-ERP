@@ -1,4 +1,4 @@
-import type { Product } from '@/modules/dept/technical/technical.repo'
+import type { Product, ProductPacking } from '@/modules/dept/technical/technical.repo'
 
 /** Dữ liệu SP rút gọn cho picker báo giá/đơn (kèm thông số tóm tắt để hiển thị). */
 export type ProductPickData = {
@@ -12,6 +12,9 @@ export type ProductPickData = {
   dims: string | null
   spec: string | null
   has_image: boolean
+  // Quy cách đầy đủ + mô tả EN — báo giá hiện đủ như tờ Quotation thật.
+  description_en: string | null
+  packing: ProductPacking
 }
 
 export function toProductPick(p: Product): ProductPickData {
@@ -37,5 +40,7 @@ export function toProductPick(p: Product): ProductPickData {
     dims,
     spec: specParts.length ? specParts.join(' · ') : null,
     has_image: !!p.image_file_id,
+    description_en: p.description_en,
+    packing: pk,
   }
 }

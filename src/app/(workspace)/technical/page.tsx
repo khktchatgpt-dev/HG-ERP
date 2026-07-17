@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
+import { filesService } from '@/modules/core/files/files.service'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 
@@ -8,17 +9,21 @@ export default async function TechnicalHome() {
   const user = (await authService.currentUser())!
   const canEdit = user.role === 'admin' || user.role === 'manager'
 
-  const { rows, total } = await productsService.list(user, {
-    page: 1,
-    page_size: 1000,
-    active_only: false,
-  })
+  // Đếm bằng HEAD count + chỉ nạp 6 SP gần đây (không kéo cả thư viện về nữa).
+  // Cờ "thiếu bản vẽ / BOM" suy từ FILE đã upload (doc_type), không phải link cũ.
+  const [stats, { rows: recent }, docFlags] = await Promise.all([
+    productsService.stats(),
+    productsService.listLite(user, { page: 1, page_size: 6 }),
+    filesService.productDocFlags(),
+  ])
 
-  const active = rows.filter((p) => p.is_active).length
-  const categories = new Set(rows.filter((p) => p.category).map((p) => p.category)).size
-  const noDrawing = rows.filter((p) => !p.drawing_url).length
-  const noBom = rows.filter((p) => !p.bom_url).length
-  const recent = rows.slice(0, 6)
+  const total = stats.total
+  const active = stats.active
+  const withDrawing = Object.values(docFlags).filter((f) => f.drawing).length
+  const withBom = Object.values(docFlags).filter((f) => f.bom).length
+  const noDrawing = Math.max(0, total - withDrawing)
+  const noBom = Math.max(0, total - withBom)
+  const hasDoc = (id: string) => docFlags[id] ?? { drawing: false, bom: false }
 
   return (
     <div className="flex flex-col gap-4">
@@ -37,7 +42,7 @@ export default async function TechnicalHome() {
         stats={[
           { label: 'Sản phẩm', value: total, tone: 'default' },
           { label: 'Đang dùng', value: active, tone: 'green' },
-          { label: 'Danh mục', value: categories, tone: 'blue' },
+          { label: 'BOM đã vẽ', value: stats.bom_done, tone: 'blue' },
           { label: 'Thiếu bản vẽ', value: noDrawing, tone: noDrawing ? 'amber' : 'gray' },
           { label: 'Thiếu BOM', value: noBom, tone: noBom ? 'amber' : 'gray' },
         ]}
@@ -80,12 +85,12 @@ export default async function TechnicalHome() {
                       </td>
                       <td className="px-3 py-2 text-zinc-500">{p.category ?? '—'}</td>
                       <td className="px-3 py-2 text-xs">
-                        {p.drawing_url ? (
+                        {hasDoc(p.id).drawing ? (
                           <span className="mr-2 text-sky-600">Bản vẽ ✓</span>
                         ) : (
                           <span className="mr-2 text-amber-600">Thiếu BV</span>
                         )}
-                        {p.bom_url ? (
+                        {hasDoc(p.id).bom ? (
                           <span className="text-sky-600">BOM ✓</span>
                         ) : (
                           <span className="text-amber-600">Thiếu BOM</span>

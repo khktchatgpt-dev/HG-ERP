@@ -14,7 +14,6 @@ vi.mock('./orders.repo', () => ({
     listChanges: vi.fn(),
   },
 }))
-vi.mock('./quotes.repo', () => ({ quotesRepo: { listLines: vi.fn() } }))
 vi.mock('./quotes.service', () => ({
   quotesService: { assertSent: vi.fn() },
   isSalesStaff: vi.fn(),
@@ -37,7 +36,6 @@ vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
 import { ordersService } from './orders.service'
 import { ordersRepo } from './orders.repo'
-import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -93,7 +91,7 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
     expect(ordersRepo.insert).not.toHaveBeenCalled()
   })
 
-  it('báo giá đã chốt → snapshot dòng + copy điều khoản từ quote', async () => {
+  it('báo giá đã chốt → khách+tiền tệ+điều khoản từ quote, dòng+SL từ client', async () => {
     vi.mocked(quotesService.assertSent).mockResolvedValue({
       id: 'q1',
       customer_id: 'c1',
@@ -101,32 +99,35 @@ describe('ordersService.create — chỉ từ báo giá đã chốt (sent)', () 
       price_term: 'FOB Quy Nhon',
       payment_terms: 'L/C at sight',
     } as never)
-    vi.mocked(quotesRepo.listLines).mockResolvedValue([
-      { product_id: 'p1', qty: 48, unit_price: 301.72, note: '1 set/ctn' },
-    ] as never)
     vi.mocked(ordersRepo.nextCode).mockResolvedValue('DH-2026-0001')
     vi.mocked(ordersRepo.insert).mockResolvedValue(ORDER as never)
 
+    // Báo giá không có SL — client nhập SL ở bước tạo đơn.
     await ordersService.create(sales, {
       code: 'DH-T2',
       quote_id: 'q1',
       customer_po_no: '31032191120',
+      lines: [{ product_id: 'p1', qty: 48, unit_price: 301.72, note: '1 set/ctn' }],
     })
 
     const [row, lines] = vi.mocked(ordersRepo.insert).mock.calls[0]
     expect(row.customer_id).toBe('c1') // denorm đúng từ quote, không nhận từ input
     expect(row.price_term).toBe('FOB Quy Nhon')
+    expect(row.currency).toBe('USD')
     expect(row.customer_po_no).toBe('31032191120')
     expect(lines).toEqual([
       { product_id: 'p1', qty: 48, unit_price: 301.72, note: '1 set/ctn' },
     ])
   })
 
-  it('báo giá đã chốt nhưng 0 dòng → chặn', async () => {
-    vi.mocked(quotesService.assertSent).mockResolvedValue({ id: 'q1' } as never)
-    vi.mocked(quotesRepo.listLines).mockResolvedValue([])
+  it('báo giá đã chốt nhưng client không gửi dòng → chặn', async () => {
+    vi.mocked(quotesService.assertSent).mockResolvedValue({
+      id: 'q1',
+      customer_id: 'c1',
+      currency: 'USD',
+    } as never)
     await expect(
-      ordersService.create(sales, { code: 'DH-T', quote_id: 'q1' }),
+      ordersService.create(sales, { code: 'DH-T', quote_id: 'q1', lines: [] }),
     ).rejects.toMatchObject({
       status: 400,
     })

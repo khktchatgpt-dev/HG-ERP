@@ -56,6 +56,16 @@ export default async function EditOrderPage({
         due_date: order.due_date,
         container_summary: order.container_summary,
         note: order.note,
+        price_term: order.price_term,
+        payment_terms: order.payment_terms,
+        deposit_percent: order.deposit_percent,
+        qty_tolerance_pct: order.qty_tolerance_pct,
+        port_of_loading: order.port_of_loading,
+        port_of_discharge: order.port_of_discharge,
+        payment_method: order.payment_method,
+        required_docs: order.required_docs,
+        partial_shipment: order.partial_shipment,
+        transhipment: order.transhipment,
       }}
       initialLines={lines.map((l) => ({
         product_id: l.product_id,

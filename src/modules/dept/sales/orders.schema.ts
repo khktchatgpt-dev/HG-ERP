@@ -60,8 +60,9 @@ export const orderCreateSchema = z
     message: 'Chọn báo giá, hoặc chọn khách hàng để tạo đơn trực tiếp',
     path: ['customer_id'],
   })
-  .refine((o) => !!o.quote_id || (o.lines?.length ?? 0) >= 1, {
-    message: 'Đơn không từ báo giá phải có ít nhất 1 dòng sản phẩm',
+  .refine((o) => (o.lines?.length ?? 0) >= 1, {
+    // Cả đơn từ báo giá lẫn đơn trực tiếp đều cần dòng SP + SL (báo giá không có SL).
+    message: 'Đơn phải có ít nhất 1 dòng sản phẩm',
     path: ['lines'],
   })
 

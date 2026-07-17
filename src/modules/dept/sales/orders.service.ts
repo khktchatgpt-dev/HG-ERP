@@ -4,7 +4,6 @@ import {
   type OrderLineInput,
   type OrderWithCustomer,
 } from './orders.repo'
-import { quotesRepo } from './quotes.repo'
 import { quotesService, isSalesStaff } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -135,21 +134,19 @@ export const ordersService = {
     }
 
     if (input.quote_id) {
-      const quote = await quotesService.assertSent(input.quote_id) // báo giá đã chốt
-      const quoteLines = await quotesRepo.listLines(input.quote_id)
-      if (quoteLines.length === 0) throw BadRequest('Báo giá không có dòng sản phẩm')
+      // Báo giá đã chốt cung cấp KHÁCH + tiền tệ + điều khoản; còn dòng SP + SL +
+      // đơn giá do client gửi (form đơn nạp sẵn SP/giá từ báo giá, Sale nhập SL).
+      // Báo giá không có SL nên không snapshot dòng từ báo giá nữa.
+      const quote = await quotesService.assertSent(input.quote_id)
+      const lines = input.lines ?? []
+      if (lines.length === 0) throw BadRequest('Đơn phải có ít nhất 1 dòng sản phẩm')
       source = {
         quote_id: quote.id,
         customer_id: quote.customer_id, // denorm từ quote — nguồn sự thật
         currency: quote.currency,
         price_term: quote.price_term,
         payment_terms: quote.payment_terms,
-        lines: quoteLines.map((l) => ({
-          product_id: l.product_id,
-          qty: l.qty,
-          unit_price: l.unit_price,
-          note: l.note,
-        })),
+        lines,
       }
     } else {
       // Tạo trực tiếp — không cần báo giá.

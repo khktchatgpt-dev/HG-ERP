@@ -20,6 +20,27 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Thông báo lỗi thân thiện cho toast: ưu tiên các lỗi validation cụ thể (zod
+ * `issues`) để user biết CHÍNH XÁC field nào sai, thay vì câu chung "Validation
+ * failed". Không phải ApiError → trả `fallback`.
+ */
+export function apiErrorText(e: unknown, fallback = 'Có lỗi, thử lại'): string {
+  if (e instanceof ApiError) {
+    const issues = Array.isArray(e.issues) ? e.issues : []
+    const msgs = issues
+      .map((i) =>
+        i && typeof i === 'object' && 'message' in i
+          ? String((i as { message: unknown }).message)
+          : '',
+      )
+      .filter(Boolean)
+    if (msgs.length) return [...new Set(msgs)].join(' · ')
+    return e.message || fallback
+  }
+  return fallback
+}
+
 type ApiInit = Omit<RequestInit, 'body'> & {
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   body?: unknown

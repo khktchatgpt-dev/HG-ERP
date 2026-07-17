@@ -5,7 +5,7 @@ const UUID = '11111111-1111-4111-8111-111111111111'
 const UUID2 = '22222222-2222-4222-8222-222222222222'
 
 describe('quoteCreateSchema', () => {
-  it('parse OK: báo giá XK đủ trường mẫu in (valid date, FOB, L/C)', () => {
+  it('parse OK: báo giá XK đủ trường mẫu in (valid date, FOB, L/C) — không có SL', () => {
     const p = quoteCreateSchema.parse({
       customer_id: UUID,
       currency: 'usd',
@@ -14,13 +14,14 @@ describe('quoteCreateSchema', () => {
       price_term: 'FOB Quy Nhon',
       payment_terms: 'L/C at sight',
       lines: [
-        { product_id: UUID, qty: '48', unit_price: '301.72', note: '1 set/ctn' },
-        { product_id: UUID2, qty: 11, unit_price: 60 },
+        { product_id: UUID, unit_price: '301.72', note: '1 set/ctn' },
+        { product_id: UUID2, unit_price: 60 },
       ],
     })
     expect(p.currency).toBe('USD') // tự uppercase
-    expect(p.lines[0].qty).toBe(48)
     expect(p.lines[0].unit_price).toBe(301.72)
+    // Báo giá không còn khái niệm số lượng.
+    expect('qty' in p.lines[0]).toBe(false)
   })
 
   it('currency mặc định USD (bán B2B xuất khẩu); lines mặc định rỗng', () => {
@@ -32,40 +33,34 @@ describe('quoteCreateSchema', () => {
   it('chiết khấu %: nhận 0–100 (coerce), từ chối ngoài khoảng', () => {
     const p = quoteCreateSchema.parse({
       customer_id: UUID,
-      lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: '12.5' }],
+      lines: [{ product_id: UUID, unit_price: 10, discount_pct: '12.5' }],
     })
     expect(p.lines[0].discount_pct).toBe(12.5)
     // không gửi → undefined (không chiết khấu)
     const p2 = quoteCreateSchema.parse({
       customer_id: UUID,
-      lines: [{ product_id: UUID, qty: 1, unit_price: 10 }],
+      lines: [{ product_id: UUID, unit_price: 10 }],
     })
     expect(p2.lines[0].discount_pct).toBeUndefined()
     expect(() =>
       quoteCreateSchema.parse({
         customer_id: UUID,
-        lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: 101 }],
+        lines: [{ product_id: UUID, unit_price: 10, discount_pct: 101 }],
       }),
     ).toThrow()
     expect(() =>
       quoteCreateSchema.parse({
         customer_id: UUID,
-        lines: [{ product_id: UUID, qty: 1, unit_price: 10, discount_pct: -5 }],
+        lines: [{ product_id: UUID, unit_price: 10, discount_pct: -5 }],
       }),
     ).toThrow()
   })
 
-  it('từ chối SL ≤ 0 và đơn giá âm', () => {
+  it('từ chối đơn giá âm', () => {
     expect(() =>
       quoteCreateSchema.parse({
         customer_id: UUID,
-        lines: [{ product_id: UUID, qty: 0, unit_price: 10 }],
-      }),
-    ).toThrow()
-    expect(() =>
-      quoteCreateSchema.parse({
-        customer_id: UUID,
-        lines: [{ product_id: UUID, qty: 1, unit_price: -1 }],
+        lines: [{ product_id: UUID, unit_price: -1 }],
       }),
     ).toThrow()
   })
@@ -75,8 +70,8 @@ describe('quoteCreateSchema', () => {
       quoteCreateSchema.parse({
         customer_id: UUID,
         lines: [
-          { product_id: UUID, qty: 1, unit_price: 1 },
-          { product_id: UUID, qty: 2, unit_price: 2 },
+          { product_id: UUID, unit_price: 1 },
+          { product_id: UUID, unit_price: 2 },
         ],
       }),
     ).toThrow()

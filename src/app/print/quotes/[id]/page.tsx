@@ -47,9 +47,22 @@ export default async function QuotePrintPage({
     [l.packing.carton_l_cm, l.packing.carton_w_cm, l.packing.carton_h_cm] as const
   const cmToInch = (v?: number) => (v != null ? (v / 2.54).toFixed(1) : '')
   // Giá in = giá SAU chiết khấu dòng (giá chào thực gửi khách).
+  // Báo giá không có số lượng → không tính thành tiền/tổng, chỉ chào đơn giá.
   const effPrice = (l: (typeof lines)[number]) =>
     l.unit_price * (1 - (l.discount_pct ?? 0) / 100)
-  const total = lines.reduce((s, l) => s + l.qty * effPrice(l), 0)
+
+  // Tiền in theo đúng loại tiền của báo giá (USD/EUR/VND…). ISO hợp lệ thì ra
+  // ký hiệu chuẩn ($/€/₫); mã lạ thì rơi về "1.234,00 <mã>".
+  const fmtMoney = (v: number) => {
+    try {
+      return v.toLocaleString('en-US', {
+        style: 'currency',
+        currency: quote.currency,
+      })
+    } catch {
+      return `${v.toLocaleString('en-US', { minimumFractionDigits: 2 })} ${quote.currency}`
+    }
+  }
 
   return (
     <div className="mx-auto max-w-5xl bg-white p-6 text-[13px] text-black print:p-0">
@@ -116,9 +129,6 @@ export default async function QuotePrintPage({
               <br />
               40HC
             </td>
-            <td rowSpan={2} className="border border-black px-1">
-              Q&apos;ty
-            </td>
             <td rowSpan={2} className="border border-black px-1 font-bold text-red-700">
               {quote.price_term ?? 'Price'} ({quote.currency})
             </td>
@@ -173,26 +183,12 @@ export default async function QuotePrintPage({
                 <td className="border border-black px-1">
                   {l.packing.loading_40hc ?? ''}
                 </td>
-                <td className="border border-black px-1">
-                  {l.qty.toLocaleString('en-US')}
-                </td>
                 <td className="border border-black px-1 font-bold text-red-700">
-                  ${effPrice(l).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  {fmtMoney(effPrice(l))}
                 </td>
               </tr>
             )
           })}
-          <tr className="font-bold">
-            <td colSpan={14} className="border border-black px-2 text-right">
-              TOTAL
-            </td>
-            <td className="border border-black px-1">
-              {lines.reduce((s, l) => s + l.qty, 0).toLocaleString('en-US')}
-            </td>
-            <td className="border border-black px-1 text-red-700">
-              ${total.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </td>
-          </tr>
         </tbody>
       </table>
 

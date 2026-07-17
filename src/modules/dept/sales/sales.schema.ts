@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const customerCreateSchema = z.object({
   name: z.string().trim().min(1).max(200),
   code: z.string().trim().max(50).optional().nullable(),
-  email: z.string().trim().email().optional().or(z.literal('')),
+  email: z.string().trim().email().optional().nullable().or(z.literal('')),
   phone: z.string().trim().max(30).optional().nullable(),
   address: z.string().trim().max(500).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),

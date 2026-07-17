@@ -49,3 +49,6 @@ next-env.d.ts
 #   npx skills add supabase/agent-skills
 .claude/skills/supabase
 .claude/skills/supabase-postgres-best-practices
+
+# Supabase CLI temp (sinh ra khi chạy `supabase gen types` / `link`)
+supabase/.temp/

@@ -43,10 +43,8 @@ type CreateInput = {
   description_en?: string | null
   unit?: string
   packing?: ProductPacking
-  drawing_url?: string | null
-  bom_url?: string | null
   notes?: string | null
-  name_de?: string | null
+  name_foreign?: string | null
   shipping_mark?: string | null
   barcode?: string | null
   showroom_sample?: boolean
@@ -86,6 +84,34 @@ export const productsService = {
     })
   },
 
+  /** Danh sách nhẹ (thư viện) — lọc/tìm/phân trang phía server, cột tối thiểu. */
+  async listLite(
+    _user: User,
+    opts: {
+      q?: string
+      customer_id?: string
+      bom_status?: BomStatus
+      is_active?: boolean
+      page: number
+      page_size: number
+    },
+  ) {
+    return productsRepo.listLite(opts)
+  },
+
+  /** Đếm cho StatsBar (HEAD count) — không kéo toàn bộ dòng. Thư viện SP là tài
+   *  sản chung, mọi NV đọc được nên không cần lọc theo user. */
+  async stats() {
+    return productsRepo.counts()
+  },
+
+  /** 1 SP đầy đủ trường (mở form sửa / deep-link từ trang chi tiết). */
+  async get(_user: User, id: string): Promise<Product> {
+    const product = await productsRepo.findById(id)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    return product
+  },
+
   async create(user: User, input: CreateInput): Promise<Product> {
     if (!(await isTechnicalStaff(user)) || !canEdit(user)) {
       throw Forbidden('Chỉ Kỹ thuật / Admin tạo được sản phẩm')
@@ -102,10 +128,8 @@ export const productsService = {
       description_en: input.description_en ?? null,
       unit: input.unit ?? 'cai',
       packing: input.packing ?? {},
-      drawing_url: input.drawing_url || null,
-      bom_url: input.bom_url || null,
       notes: input.notes ?? null,
-      name_de: input.name_de ?? null,
+      name_foreign: input.name_foreign ?? null,
       shipping_mark: input.shipping_mark ?? null,
       barcode: input.barcode ?? null,
       showroom_sample: input.showroom_sample ?? false,
@@ -135,6 +159,12 @@ export const productsService = {
       description_en?: string | null
       notes?: string | null
       reference_price?: number | null
+      packing?: ProductPacking
+      material?: string | null
+      hs_code?: string | null
+      origin_country?: string | null
+      name_foreign?: string | null
+      shipping_mark?: string | null
     },
   ): Promise<Product> {
     const allowed =
@@ -152,8 +182,13 @@ export const productsService = {
       description_en: input.description_en ?? null,
       notes: input.notes ?? null,
       reference_price: input.reference_price ?? null,
+      material: input.material ?? null,
+      hs_code: input.hs_code ?? null,
+      origin_country: input.origin_country ?? null,
+      name_foreign: input.name_foreign ?? null,
+      shipping_mark: input.shipping_mark ?? null,
       bom_status: 'none',
-      packing: {},
+      packing: input.packing ?? {},
       tech_spec: {},
       showroom_sample: false,
     })
@@ -212,11 +247,9 @@ export const productsService = {
       description_en: src.description_en,
       unit: src.unit,
       packing: src.packing,
-      drawing_url: src.drawing_url,
-      bom_url: src.bom_url,
       notes: src.notes,
       // Copy thông số kỹ thuật; barcode KHÔNG copy (mỗi SP một barcode riêng).
-      name_de: src.name_de,
+      name_foreign: src.name_foreign,
       shipping_mark: src.shipping_mark,
       barcode: null,
       showroom_sample: src.showroom_sample,

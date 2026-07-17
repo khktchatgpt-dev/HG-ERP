@@ -35,12 +35,12 @@ export type Product = {
   unit: string
   bom_status: BomStatus
   packing: ProductPacking
-  drawing_url: string | null
-  bom_url: string | null
   image_file_id: string | null
   notes: string | null
   // Thông số kỹ thuật (0026) — phục vụ LSX / hợp đồng.
-  name_de: string | null
+  /** Tên hàng theo cách gọi của khách — mọi ngôn ngữ (0058, trước là name_de). */
+  name_foreign: string | null
+  /** Ký mã hiệu in trên thùng — KHÁC tên hàng. */
   shipping_mark: string | null
   barcode: string | null
   showroom_sample: boolean
@@ -75,7 +75,36 @@ export type BomLineWithMaterial = BomLine & {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, drawing_url, bom_url, image_file_id, notes, name_de, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, is_active, created_at, updated_at'
+
+/** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
+ *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
+const LITE_COLS =
+  'id, code, name, category, customer_id, customer_item_code, unit, bom_status, packing, image_file_id, is_active, created_at'
+
+export type ProductLite = Pick<
+  Product,
+  | 'id'
+  | 'code'
+  | 'name'
+  | 'category'
+  | 'customer_id'
+  | 'customer_item_code'
+  | 'unit'
+  | 'bom_status'
+  | 'packing'
+  | 'image_file_id'
+  | 'is_active'
+  | 'created_at'
+>
+
+export type ProductCounts = {
+  total: number
+  active: number
+  bom_none: number
+  bom_drawing: number
+  bom_done: number
+}
 
 export const productsRepo = {
   async list(filter: {
@@ -105,6 +134,54 @@ export const productsRepo = {
     q = q.range(from, to)
     const { data, count } = await q
     return { rows: (data ?? []) as Product[], total: count ?? 0 }
+  },
+
+  /** Danh sách nhẹ + lọc/tìm/phân trang phía server (thư viện). */
+  async listLite(filter: {
+    q?: string
+    customer_id?: string
+    bom_status?: BomStatus
+    is_active?: boolean
+    page: number
+    page_size: number
+  }): Promise<{ rows: ProductLite[]; total: number }> {
+    let q = db()
+      .from('technical_products')
+      .select(LITE_COLS, { count: 'exact' })
+      .order('created_at', { ascending: false })
+    if (filter.is_active != null) q = q.eq('is_active', filter.is_active)
+    if (filter.customer_id === 'common') q = q.is('customer_id', null)
+    else if (filter.customer_id) q = q.eq('customer_id', filter.customer_id)
+    if (filter.bom_status) q = q.eq('bom_status', filter.bom_status)
+    if (filter.q) {
+      q = q.or(
+        `name.ilike.%${filter.q}%,code.ilike.%${filter.q}%,customer_item_code.ilike.%${filter.q}%`,
+      )
+    }
+    const from = (filter.page - 1) * filter.page_size
+    q = q.range(from, from + filter.page_size - 1)
+    const { data, count } = await q
+    return { rows: (data ?? []) as ProductLite[], total: count ?? 0 }
+  },
+
+  /** Đếm cho StatsBar bằng HEAD count (không kéo dòng về) — rẻ hơn nhiều. */
+  async counts(): Promise<ProductCounts> {
+    const tbl = () =>
+      db().from('technical_products').select('id', { count: 'exact', head: true })
+    const [total, active, none, drawing, done] = await Promise.all([
+      tbl(),
+      tbl().eq('is_active', true),
+      tbl().eq('bom_status', 'none'),
+      tbl().eq('bom_status', 'drawing'),
+      tbl().eq('bom_status', 'done'),
+    ])
+    return {
+      total: total.count ?? 0,
+      active: active.count ?? 0,
+      bom_none: none.count ?? 0,
+      bom_drawing: drawing.count ?? 0,
+      bom_done: done.count ?? 0,
+    }
   },
 
   async findById(id: string): Promise<Product | null> {

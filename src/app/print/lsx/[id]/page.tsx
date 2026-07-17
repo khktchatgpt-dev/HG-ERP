@@ -101,8 +101,9 @@ export default async function LsxPrintPage({
             <td className={th}>STT</td>
             <td className={th}>Hình ảnh</td>
             <td className={th}>Mã SP</td>
-            <td className={th}>Tên tiếng Đức / Shipping mark</td>
+            <td className={th}>Tên theo khách</td>
             <td className={th}>Tên tiếng Việt</td>
+            <td className={th}>Shipping mark</td>
             <td className={th}>Barcode</td>
             <td className={th}>ĐVT</td>
             <td className={th}>SL</td>
@@ -136,13 +137,13 @@ export default async function LsxPrintPage({
                   <div className="text-[9px] text-zinc-500">{l.customer_item_code}</div>
                 )}
               </td>
+              <td className={`${th} text-left`}>{l.name_foreign ?? ''}</td>
+              <td className={`${th} text-left`}>{l.name_vi}</td>
               <td className={`${th} text-left`}>
-                <div>{l.name_de ?? ''}</div>
                 {l.shipping_mark && (
-                  <div className="text-[9px] text-zinc-600 italic">{l.shipping_mark}</div>
+                  <div className="whitespace-pre-wrap">{l.shipping_mark}</div>
                 )}
               </td>
-              <td className={`${th} text-left`}>{l.name_vi}</td>
               <td className={`${th} font-mono`}>{l.barcode ?? ''}</td>
               <td className={th}>{l.unit}</td>
               <td className={`${th} font-semibold`}>{l.qty.toLocaleString('en-US')}</td>

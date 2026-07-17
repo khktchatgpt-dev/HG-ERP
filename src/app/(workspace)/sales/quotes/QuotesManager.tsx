@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Badge } from '@/components/Badge'
-import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
@@ -14,8 +14,6 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
-import { DocumentFiles } from '@/components/DocumentFiles'
-import { QuickAddProduct, type QuickProduct } from '@/components/sales/QuickAddProduct'
 
 type QuoteStatus = 'draft' | 'sent'
 
@@ -34,83 +32,27 @@ type Quote = {
   created_at: string
 }
 
-type QuoteLine = {
-  product_id: string
-  qty: number
-  unit_price: number
-  discount_pct: number | null
-  note: string | null
-  product_code?: string
-  product_name?: string
-  product_unit?: string
-  customer_item_code?: string | null
-}
+type CustomerOption = { id: string; name: string }
 
-type CustomerOption = {
-  id: string
-  name: string
-  /** Điều khoản mặc định theo khách — auto-fill khi lập báo giá (P4). */
-  default_currency: string | null
-  default_price_term: string | null
-  default_payment_terms: string | null
-}
-type ProductOption = {
-  id: string
-  code: string
-  name: string
-  unit: string
-  customer_id: string | null
-  customer_item_code: string | null
-  bom_status: 'none' | 'drawing' | 'done'
-}
-
-/** Dòng đang biên tập trong form. */
-type LineRow = {
-  product_id: string
-  qty: number | ''
-  unit_price: number | ''
-  discount_pct: number | ''
-  note: string
-}
-
-/** Thành tiền dòng = SL × đơn giá × (1 − CK%/100). */
-function lineAmount(qty: number, price: number, discount: number | null): number {
-  return qty * price * (1 - (discount ?? 0) / 100)
-}
-
-const STATUS_LABEL: Record<QuoteStatus, string> = {
-  draft: 'Nháp',
-  sent: 'Đã gửi khách',
-}
+const STATUS_LABEL: Record<QuoteStatus, string> = { draft: 'Nháp', sent: 'Đã gửi khách' }
 const STATUS_TONE: Record<QuoteStatus, 'gray' | 'green'> = {
   draft: 'gray',
   sent: 'green',
 }
 
-function fmtMoney(n: number, currency: string): string {
-  return `${n.toLocaleString(currency === 'VND' ? 'vi-VN' : 'en-US')} ${currency}`
-}
-
 export function QuotesManager({
   quotes,
   customers,
-  products,
   canEdit,
 }: {
   quotes: Quote[]
   customers: CustomerOption[]
-  products: ProductOption[]
   canEdit: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
-  const [openCreate, setOpenCreate] = useState(false)
-  const [editing, setEditing] = useState<{ quote: Quote; lines: LineRow[] } | null>(null)
-  const [viewing, setViewing] = useState<{ quote: Quote; lines: QuoteLine[] } | null>(
-    null,
-  )
 
   const [q, setQ] = useState('')
   const [customerFilter, setCustomerFilter] = useState('all')
@@ -132,10 +74,10 @@ export function QuotesManager({
     return by
   }, [quotes])
 
-  async function send(url: string, method: 'POST' | 'PATCH' | 'DELETE', body?: unknown) {
+  async function run(url: string, method: 'POST' | 'DELETE') {
     setBusy(true)
     try {
-      await api(url, { method, body })
+      await api(url, { method })
       router.refresh()
       return true
     } catch (e) {
@@ -146,63 +88,26 @@ export function QuotesManager({
     }
   }
 
-  async function openView(quote: Quote) {
-    setBusy(true)
-    try {
-      const data = await api<{ lines: QuoteLine[] }>(`/api/dept/sales/quotes/${quote.id}`)
-      setViewing({ quote, lines: data.lines })
-    } catch (e) {
-      toast.error('Không tải được báo giá', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function openEdit(quote: Quote) {
-    setBusy(true)
-    try {
-      const data = await api<{ lines: QuoteLine[] }>(`/api/dept/sales/quotes/${quote.id}`)
-      setEditing({
-        quote,
-        lines: data.lines.map((l) => ({
-          product_id: l.product_id,
-          qty: l.qty,
-          unit_price: l.unit_price,
-          discount_pct: l.discount_pct ?? '',
-          note: l.note ?? '',
-        })),
-      })
-    } catch (e) {
-      toast.error('Không tải được báo giá', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function sendQuote(quote: Quote) {
+  async function sendQuote(it: Quote) {
     const ok = await confirm({
-      title: `Chốt & gửi khách ${quote.code}?`,
-      description:
-        'Sau khi chốt sẽ không sửa được nữa và có thể tạo đơn hàng từ báo giá này.',
+      title: `Chốt & gửi khách ${it.code}?`,
+      description: 'Sau khi chốt sẽ không sửa được nữa và có thể tạo đơn hàng.',
       confirmLabel: 'Chốt & gửi khách',
     })
     if (!ok) return
-    const ok2 = await send(`/api/dept/sales/quotes/${quote.id}/send`, 'POST')
-    if (ok2) {
-      toast.success('Đã chốt báo giá', quote.code)
-      setViewing(null)
-    }
+    if (await run(`/api/dept/sales/quotes/${it.id}/send`, 'POST'))
+      toast.success('Đã chốt báo giá', it.code)
   }
 
-  async function deleteQuote(quote: Quote) {
+  async function deleteQuote(it: Quote) {
     const ok = await confirm({
-      title: `Xoá báo giá nháp ${quote.code}?`,
+      title: `Xoá báo giá nháp ${it.code}?`,
       tone: 'danger',
       confirmLabel: 'Xoá',
     })
     if (!ok) return
-    const ok2 = await send(`/api/dept/sales/quotes/${quote.id}`, 'DELETE')
-    if (ok2) toast.success('Đã xoá', quote.code)
+    if (await run(`/api/dept/sales/quotes/${it.id}`, 'DELETE'))
+      toast.success('Đã xoá', it.code)
   }
 
   const columns: Column<Quote>[] = [
@@ -211,13 +116,13 @@ export function QuotesManager({
       header: 'Số BG / Khách hàng',
       sortValue: (it) => it.code,
       cell: (it) => (
-        <button
-          onClick={() => void openView(it)}
+        <Link
+          href={`/sales/quotes/${it.id}`}
           className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
         >
           <span className="font-mono text-xs text-zinc-400">{it.code}</span>
           <span className="truncate font-medium">{it.customer_name}</span>
-        </button>
+        </Link>
       ),
     },
     {
@@ -261,11 +166,14 @@ export function QuotesManager({
       align: 'right',
       cell: (it) => {
         const items: { label: string; onClick: () => void; danger?: boolean }[] = [
-          { label: 'Xem chi tiết', onClick: () => void openView(it) },
+          { label: 'Xem chi tiết', onClick: () => router.push(`/sales/quotes/${it.id}`) },
         ]
         if (canEdit && it.status === 'draft') {
           items.push(
-            { label: 'Sửa', onClick: () => void openEdit(it) },
+            {
+              label: 'Sửa',
+              onClick: () => router.push(`/sales/quotes/${it.id}/edit`),
+            },
             { label: 'Chốt & gửi khách', onClick: () => void sendQuote(it) },
             { label: 'Xoá', onClick: () => void deleteQuote(it), danger: true },
           )
@@ -287,9 +195,9 @@ export function QuotesManager({
         description={`${filtered.length} / ${quotes.length} báo giá. Nháp → chốt & gửi khách → tạo đơn hàng. Hồ sơ riêng của Sales, không cần duyệt.`}
         actions={
           canEdit && (
-            <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
+            <Link href="/sales/quotes/new" className={btnPrimary}>
               + Lập báo giá
-            </button>
+            </Link>
           )
         }
       />
@@ -356,669 +264,15 @@ export function QuotesManager({
               }
               action={
                 canEdit && quotes.length === 0 ? (
-                  <button onClick={() => setOpenCreate(true)} className={btnPrimary}>
+                  <Link href="/sales/quotes/new" className={btnPrimary}>
                     + Lập báo giá
-                  </button>
+                  </Link>
                 ) : undefined
               }
             />
           }
         />
       </div>
-
-      {/* Create */}
-      <Modal
-        open={openCreate}
-        onClose={() => setOpenCreate(false)}
-        title="Lập báo giá"
-        maxWidth="sm:max-w-3xl"
-      >
-        <QuoteForm
-          customers={customers}
-          products={products}
-          submitLabel="Lưu nháp"
-          onSubmit={async (body) => {
-            const ok = await send('/api/dept/sales/quotes', 'POST', body)
-            if (ok) {
-              setOpenCreate(false)
-              toast.success('Đã tạo báo giá nháp')
-            }
-          }}
-        />
-      </Modal>
-
-      {/* Edit (draft only) */}
-      <Modal
-        open={!!editing}
-        onClose={() => setEditing(null)}
-        title={editing ? `Sửa — ${editing.quote.code}` : ''}
-        maxWidth="sm:max-w-3xl"
-      >
-        {editing && (
-          <QuoteForm
-            initial={editing.quote}
-            initialLines={editing.lines}
-            customers={customers}
-            products={products}
-            submitLabel="Lưu thay đổi"
-            onSubmit={async (body) => {
-              const ok = await send(
-                `/api/dept/sales/quotes/${editing.quote.id}`,
-                'PATCH',
-                body,
-              )
-              if (ok) {
-                setEditing(null)
-                toast.success('Đã cập nhật', editing.quote.code)
-              }
-            }}
-          />
-        )}
-      </Modal>
-
-      {/* View detail */}
-      <Modal
-        open={!!viewing}
-        onClose={() => setViewing(null)}
-        title={viewing ? `${viewing.quote.code} — ${viewing.quote.customer_name}` : ''}
-        maxWidth="sm:max-w-3xl"
-      >
-        {viewing && (
-          <QuoteDetail
-            quote={viewing.quote}
-            lines={viewing.lines}
-            canEdit={canEdit}
-            onSend={() => void sendQuote(viewing.quote)}
-            onEdit={() => {
-              const v = viewing
-              setViewing(null)
-              void openEdit(v.quote)
-            }}
-          />
-        )}
-      </Modal>
     </div>
-  )
-}
-
-// ── Detail ───────────────────────────────────────────────────────────────
-
-function QuoteDetail({
-  quote,
-  lines,
-  canEdit,
-  onSend,
-  onEdit,
-}: {
-  quote: Quote
-  lines: QuoteLine[]
-  canEdit: boolean
-  onSend: () => void
-  onEdit: () => void
-}) {
-  const total = lines.reduce(
-    (s, l) => s + lineAmount(l.qty, l.unit_price, l.discount_pct),
-    0,
-  )
-  const hasDiscount = lines.some((l) => l.discount_pct != null && l.discount_pct > 0)
-  return (
-    <div className="flex flex-col gap-3 text-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-xs text-zinc-400">{quote.code}</span>
-        <Badge tone={STATUS_TONE[quote.status]}>{STATUS_LABEL[quote.status]}</Badge>
-        <Badge>{quote.currency}</Badge>
-        {quote.price_term && <Badge>{quote.price_term}</Badge>}
-        {quote.payment_terms && <Badge>{quote.payment_terms}</Badge>}
-        <span className="text-xs text-zinc-500">
-          Lập: {new Date(quote.created_at).toLocaleDateString('vi-VN')}
-        </span>
-        {(quote.valid_from || quote.valid_to) && (
-          <span className="text-xs text-zinc-500">
-            Hiệu lực:{' '}
-            {quote.valid_from
-              ? new Date(quote.valid_from).toLocaleDateString('vi-VN')
-              : '…'}{' '}
-            →{' '}
-            {quote.valid_to ? new Date(quote.valid_to).toLocaleDateString('vi-VN') : '…'}
-          </span>
-        )}
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
-              <th className="py-2 pr-2">Sản phẩm</th>
-              <th className="w-20 py-2 pr-2 text-right">SL</th>
-              <th className="w-16 py-2 pr-2">ĐVT</th>
-              <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
-              {hasDiscount && <th className="w-16 py-2 pr-2 text-right">CK %</th>}
-              <th className="w-32 py-2 text-right">Thành tiền</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l, i) => (
-              <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
-                <td className="py-1.5 pr-2">
-                  <div className="flex flex-col">
-                    <span className="font-mono text-xs text-zinc-400">
-                      {l.product_code}
-                      {l.customer_item_code && ` · KH: ${l.customer_item_code}`}
-                    </span>
-                    <span>{l.product_name}</span>
-                    {l.note && <span className="text-xs text-zinc-500">{l.note}</span>}
-                  </div>
-                </td>
-                <td className="py-1.5 pr-2 text-right">
-                  {l.qty.toLocaleString('vi-VN')}
-                </td>
-                <td className="py-1.5 pr-2 text-zinc-500">{l.product_unit}</td>
-                <td className="py-1.5 pr-2 text-right">
-                  {l.unit_price.toLocaleString('en-US')}
-                </td>
-                {hasDiscount && (
-                  <td className="py-1.5 pr-2 text-right text-zinc-500">
-                    {l.discount_pct != null && l.discount_pct > 0
-                      ? `−${l.discount_pct}%`
-                      : '—'}
-                  </td>
-                )}
-                <td className="py-1.5 text-right font-medium">
-                  {lineAmount(l.qty, l.unit_price, l.discount_pct).toLocaleString(
-                    'en-US',
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td
-                colSpan={hasDiscount ? 5 : 4}
-                className="py-2 pr-2 text-right font-semibold"
-              >
-                Tổng cộng
-              </td>
-              <td className="py-2 text-right font-bold">
-                {fmtMoney(total, quote.currency)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      {quote.note && <p className="text-zinc-500">{quote.note}</p>}
-
-      <DocumentFiles
-        kind="quote"
-        id={quote.id}
-        canEdit={canEdit}
-        title="File báo giá gốc"
-      />
-
-      <div className="mt-1 flex justify-end gap-2">
-        <a
-          href={`/print/quotes/${quote.id}`}
-          target="_blank"
-          rel="noopener"
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-        >
-          🖨 In báo giá
-        </a>
-        {canEdit && quote.status === 'draft' && (
-          <>
-            <button
-              onClick={onEdit}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Sửa
-            </button>
-            <button
-              onClick={onSend}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
-            >
-              Chốt & gửi khách
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ── Form (create / edit draft) ───────────────────────────────────────────
-
-function QuoteForm({
-  initial,
-  initialLines,
-  customers,
-  products,
-  submitLabel,
-  onSubmit,
-}: {
-  initial?: Quote
-  initialLines?: LineRow[]
-  customers: CustomerOption[]
-  products: ProductOption[]
-  submitLabel: string
-  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
-}) {
-  const [busy, setBusy] = useState(false)
-  const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
-  const [lines, setLines] = useState<LineRow[]>(initialLines ?? [])
-  const [productList, setProductList] = useState<ProductOption[]>(products)
-  // Điều khoản — controlled để auto-fill từ mặc định của khách khi tạo mới (P4).
-  const [currency, setCurrency] = useState(initial?.currency ?? 'USD')
-  const [priceTerm, setPriceTerm] = useState(initial?.price_term ?? '')
-  const [payTerms, setPayTerms] = useState(initial?.payment_terms ?? '')
-
-  /** Chọn khách khi TẠO MỚI → đổ điều khoản mặc định vào ô còn trống. */
-  function applyCustomerDefaults(cid: string) {
-    if (initial) return // sửa nháp: giữ nguyên điều khoản đã lập
-    const c = customers.find((x) => x.id === cid)
-    if (!c) return
-    if (c.default_currency) setCurrency(c.default_currency)
-    if (c.default_price_term) setPriceTerm((v) => v || c.default_price_term!)
-    if (c.default_payment_terms) setPayTerms((v) => v || c.default_payment_terms!)
-  }
-  // Giá gần nhất theo khách: product_id → {price, code} (gợi ý + tự điền)
-  const [lastPrices, setLastPrices] = useState<
-    Map<string, { unit_price: number; quote_code: string }>
-  >(new Map())
-  // Giá chào gần nhất trên MỌI khách (bàn chào giá): biết thị trường đang ở đâu.
-  const [marketPrices, setMarketPrices] = useState<
-    Map<
-      string,
-      {
-        unit_price: number
-        qty: number
-        currency: string
-        customer_name: string
-        quoted_at: string
-      }
-    >
-  >(new Map())
-
-  useEffect(() => {
-    api<{
-      prices: {
-        product_id: string
-        unit_price: number
-        qty: number
-        currency: string
-        customer_name: string
-        quoted_at: string
-      }[]
-    }>('/api/dept/sales/quotes/last-prices')
-      .then((d) => setMarketPrices(new Map(d.prices.map((x) => [x.product_id, x]))))
-      .catch(() => setMarketPrices(new Map()))
-  }, [])
-
-  async function loadLastPrices(cid: string) {
-    if (!cid) {
-      setLastPrices(new Map())
-      return
-    }
-    try {
-      const data = await api<{
-        prices: { product_id: string; unit_price: number; quote_code: string }[]
-      }>(`/api/dept/sales/quotes/last-prices?customer_id=${cid}`)
-      setLastPrices(new Map(data.prices.map((x) => [x.product_id, x])))
-    } catch {
-      setLastPrices(new Map())
-    }
-  }
-
-  /** "30 ngày trước" từ ISO date. */
-  function daysAgo(iso: string): string {
-    const d = Math.round((Date.now() - Date.parse(iso)) / 86_400_000)
-    return d <= 0 ? 'hôm nay' : `${d} ngày trước`
-  }
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  // Ưu tiên SP của đúng khách đang chọn (thư viện theo khách), rồi tới mẫu chung.
-  const productChoices = useMemo(() => {
-    const own = productList.filter((p) => p.customer_id === customerId)
-    const common = productList.filter((p) => !p.customer_id)
-    const others = productList.filter(
-      (p) => p.customer_id && p.customer_id !== customerId,
-    )
-    return { own, common, others }
-  }, [productList, customerId])
-
-  function addQuickProduct(p: QuickProduct, unitPrice: number | null) {
-    setProductList((prev) => [
-      {
-        id: p.id,
-        code: p.code,
-        name: p.name,
-        unit: p.unit,
-        customer_id: p.customer_id,
-        customer_item_code: p.customer_item_code,
-        bom_status: p.bom_status,
-      },
-      ...prev,
-    ])
-    setLines((ls) => [
-      ...ls,
-      {
-        product_id: p.id,
-        qty: '',
-        unit_price: unitPrice ?? '',
-        discount_pct: '',
-        note: '',
-      },
-    ])
-  }
-
-  const usedIds = new Set(lines.map((l) => l.product_id))
-  const invalid =
-    !customerId ||
-    lines.length !== usedIds.size ||
-    lines.some(
-      (l) => !l.product_id || l.qty === '' || Number(l.qty) <= 0 || l.unit_price === '',
-    )
-
-  function setLine(i: number, patch: Partial<LineRow>) {
-    setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
-  }
-
-  async function handle(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const body: Record<string, unknown> = {
-      customer_id: customerId,
-      currency: String(fd.get('currency') ?? 'USD'),
-      valid_from: String(fd.get('valid_from') ?? '') || null,
-      valid_to: String(fd.get('valid_to') ?? '') || null,
-      price_term: String(fd.get('price_term') ?? '').trim() || null,
-      payment_terms: String(fd.get('payment_terms') ?? '').trim() || null,
-      note: String(fd.get('note') ?? '').trim() || null,
-      lines: lines.map((l) => ({
-        product_id: l.product_id,
-        qty: Number(l.qty),
-        unit_price: Number(l.unit_price),
-        discount_pct: l.discount_pct === '' ? null : Number(l.discount_pct),
-        note: l.note.trim() || null,
-      })),
-    }
-    setBusy(true)
-    await onSubmit(body)
-    setBusy(false)
-  }
-
-  function renderOption(p: ProductOption) {
-    const bomMark =
-      p.bom_status === 'done' ? '✓BOM' : p.bom_status === 'drawing' ? '…BOM' : ''
-    return (
-      <option key={p.id} value={p.id} disabled={usedIds.has(p.id)}>
-        {p.code} — {p.name} {bomMark}
-      </option>
-    )
-  }
-
-  return (
-    <form onSubmit={handle} className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-          Khách hàng <span className="text-red-500">*</span>
-          <select
-            value={customerId}
-            onChange={(e) => {
-              setCustomerId(e.target.value)
-              applyCustomerDefaults(e.target.value)
-              void loadLastPrices(e.target.value)
-            }}
-            required
-            className={cls}
-          >
-            <option value="">— chọn khách —</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Tiền tệ
-          <select
-            name="currency"
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className={cls}
-          >
-            <option value="USD">USD</option>
-            <option value="VND">VND</option>
-            <option value="EUR">EUR</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Hiệu lực từ
-          <input
-            name="valid_from"
-            type="date"
-            defaultValue={initial?.valid_from ?? ''}
-            className={cls}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Đến ngày
-          <input
-            name="valid_to"
-            type="date"
-            defaultValue={initial?.valid_to ?? ''}
-            className={cls}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          Điều kiện giá
-          <input
-            name="price_term"
-            maxLength={100}
-            placeholder="FOB Quy Nhon"
-            value={priceTerm}
-            onChange={(e) => setPriceTerm(e.target.value)}
-            className={cls}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm sm:col-span-3">
-          Điều khoản thanh toán
-          <input
-            name="payment_terms"
-            maxLength={500}
-            placeholder="L/C at sight · 20% deposit, 80% balance…"
-            value={payTerms}
-            onChange={(e) => setPayTerms(e.target.value)}
-            className={cls}
-          />
-        </label>
-      </div>
-
-      {/* Lines */}
-      <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-        <div className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
-          Dòng sản phẩm ({lines.length})
-        </div>
-        {lines.length === 0 && (
-          <p className="py-2 text-center text-xs text-zinc-400">
-            Chưa có dòng nào — chọn sản phẩm từ thư viện Kỹ thuật.
-          </p>
-        )}
-        <div className="flex flex-col gap-2.5">
-          {lines.map((l, i) => {
-            const mine = l.product_id ? lastPrices.get(l.product_id) : undefined
-            const market = l.product_id ? marketPrices.get(l.product_id) : undefined
-            const amount =
-              l.qty !== '' && l.unit_price !== ''
-                ? lineAmount(
-                    Number(l.qty),
-                    Number(l.unit_price),
-                    l.discount_pct === '' ? null : Number(l.discount_pct),
-                  )
-                : null
-            return (
-              <div key={i} className="flex flex-col gap-1">
-                <div className="grid grid-cols-12 items-center gap-2">
-                  <select
-                    value={l.product_id}
-                    onChange={(e) => {
-                      const last = lastPrices.get(e.target.value)
-                      setLine(i, {
-                        product_id: e.target.value,
-                        // tự điền giá lần trước nếu chưa nhập giá (sửa lại được)
-                        ...(l.unit_price === '' && last
-                          ? { unit_price: last.unit_price }
-                          : {}),
-                      })
-                    }}
-                    className={`${cls} col-span-4`}
-                  >
-                    <option value="">— chọn SP —</option>
-                    {productChoices.own.length > 0 && (
-                      <optgroup label="SP của khách này">
-                        {productChoices.own.map(renderOption)}
-                      </optgroup>
-                    )}
-                    {productChoices.common.length > 0 && (
-                      <optgroup label="Mẫu chung">
-                        {productChoices.common.map(renderOption)}
-                      </optgroup>
-                    )}
-                    {productChoices.others.length > 0 && (
-                      <optgroup label="SP khách khác">
-                        {productChoices.others.map(renderOption)}
-                      </optgroup>
-                    )}
-                  </select>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="SL"
-                    value={l.qty}
-                    onChange={(e) =>
-                      setLine(i, {
-                        qty: e.target.value === '' ? '' : Number(e.target.value),
-                      })
-                    }
-                    className={`${cls} col-span-2`}
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="Đơn giá"
-                    value={l.unit_price}
-                    onChange={(e) =>
-                      setLine(i, {
-                        unit_price: e.target.value === '' ? '' : Number(e.target.value),
-                      })
-                    }
-                    className={`${cls} col-span-2`}
-                  />
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    placeholder="CK%"
-                    title="Chiết khấu % theo dòng"
-                    value={l.discount_pct}
-                    onChange={(e) =>
-                      setLine(i, {
-                        discount_pct: e.target.value === '' ? '' : Number(e.target.value),
-                      })
-                    }
-                    className={`${cls} col-span-1`}
-                  />
-                  <input
-                    placeholder="Ghi chú"
-                    value={l.note}
-                    maxLength={500}
-                    onChange={(e) => setLine(i, { note: e.target.value })}
-                    className={`${cls} col-span-2`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}
-                    className="col-span-1 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                    aria-label="Xoá dòng"
-                  >
-                    ✕
-                  </button>
-                </div>
-                {/* Hỗ trợ bán hàng: giá đã chào gần nhất + thành tiền — quyết nhanh */}
-                {(mine || market || amount != null) && (
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-1 text-[11px] text-zinc-400">
-                    {mine && (
-                      <span>
-                        Khách này: <b>{mine.unit_price.toLocaleString('en-US')}</b> (
-                        {mine.quote_code})
-                      </span>
-                    )}
-                    {market && (
-                      <span>
-                        Gần nhất: <b>{market.unit_price.toLocaleString('en-US')}</b>{' '}
-                        {market.currency} · {market.customer_name} · SL{' '}
-                        {market.qty.toLocaleString('vi-VN')} · {daysAgo(market.quoted_at)}
-                      </span>
-                    )}
-                    {amount != null && (
-                      <span className="ml-auto font-medium text-zinc-500">
-                        = {amount.toLocaleString('en-US')}
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              setLines((ls) => [
-                ...ls,
-                {
-                  product_id: '',
-                  qty: '',
-                  unit_price: '',
-                  discount_pct: '',
-                  note: '',
-                },
-              ])
-            }
-            className="rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
-          >
-            + Thêm dòng (SP có sẵn)
-          </button>
-          <QuickAddProduct customerId={customerId || null} onCreated={addQuickProduct} />
-        </div>
-      </div>
-
-      <label className="flex flex-col gap-1 text-sm">
-        Ghi chú
-        <textarea
-          name="note"
-          rows={2}
-          maxLength={2000}
-          defaultValue={initial?.note ?? ''}
-          className={cls}
-        />
-      </label>
-
-      <div className="flex justify-end">
-        <button
-          disabled={busy || invalid}
-          className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        >
-          {busy && <Spinner size={14} />}
-          {busy ? 'Đang lưu…' : submitLabel}
-        </button>
-      </div>
-    </form>
   )
 }

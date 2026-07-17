@@ -2,19 +2,61 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
+import { filesService } from '@/modules/core/files/files.service'
+import type { BomStatus } from '@/modules/dept/technical/technical.schema'
+// (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
 import { ProductsManager } from './ProductsManager'
 
-export default async function TechnicalProductsPage() {
+const PAGE_SIZE = 24
+
+export default async function TechnicalProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const user = (await authService.currentUser())!
   const canEdit = user.role === 'admin' || user.role === 'manager'
 
-  // Vật tư nạp trực tiếp từ repo (read-only) cho BOM editor — API kho guard
-  // theo phòng Kho nên không gọi qua service kho được từ đây.
-  const [{ rows }, { rows: customers }, { rows: materials }] = await Promise.all([
-    productsService.list(user, { page: 1, page_size: 1000, active_only: false }),
+  const spRaw = await searchParams
+  const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? ''
+  const q = str(spRaw.q).trim() || undefined
+  const customer = str(spRaw.customer) || 'all'
+  const bom = str(spRaw.bom) || 'all'
+  const status = str(spRaw.status) || 'all'
+  const page = Math.max(1, Number(str(spRaw.page)) || 1)
+
+  // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
+  const { rows, total } = await productsService.listLite(user, {
+    q,
+    customer_id: customer === 'all' ? undefined : customer,
+    bom_status: bom === 'all' ? undefined : (bom as BomStatus),
+    is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
+    page,
+    page_size: PAGE_SIZE,
+  })
+
+  // Vật tư cho BOM editor + khách cho bộ lọc/nhãn nhóm + đếm cho StatsBar +
+  // cờ "đã có bản vẽ / BOM" suy từ FILE đã upload (chỉ cho SP của trang này).
+  const [stats, { rows: customers }, { rows: materials }, docFlags] = await Promise.all([
+    productsService.stats(),
     customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    filesService.productDocFlags(rows.map((p) => p.id)),
   ])
+
+  // Ảnh chỉ resolve cho SP của TRANG hiện tại (không phải toàn bộ thư viện).
+  const imageUrls: Record<string, string> = {}
+  await Promise.all(
+    rows
+      .filter((p) => p.image_file_id)
+      .map(async (p) => {
+        try {
+          imageUrls[p.id] = await filesService.getDownloadUrl(user, p.image_file_id!)
+        } catch {
+          /* bỏ ảnh */
+        }
+      }),
+  )
 
   return (
     <ProductsManager
@@ -25,28 +67,19 @@ export default async function TechnicalProductsPage() {
         category: p.category,
         customer_id: p.customer_id,
         customer_item_code: p.customer_item_code,
-        description_en: p.description_en,
         unit: p.unit,
         bom_status: p.bom_status,
         packing: p.packing ?? {},
-        drawing_url: p.drawing_url,
-        bom_url: p.bom_url,
         image_file_id: p.image_file_id,
-        notes: p.notes,
-        name_de: p.name_de,
-        shipping_mark: p.shipping_mark,
-        barcode: p.barcode,
-        showroom_sample: p.showroom_sample,
-        reference_price: p.reference_price,
-        tech_spec: p.tech_spec ?? {},
-        hs_code: p.hs_code,
-        origin_country: p.origin_country,
-        material: p.material,
-        max_load_kg: p.max_load_kg,
-        assembly: p.assembly,
-        set_contents: p.set_contents,
         is_active: p.is_active,
+        has_drawing: docFlags[p.id]?.drawing ?? false,
+        has_bom: docFlags[p.id]?.bom ?? false,
       }))}
+      total={total}
+      page={page}
+      pageSize={PAGE_SIZE}
+      counts={stats}
+      filters={{ q: q ?? '', customer, bom, status }}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}
       materials={materials.map((m) => ({
         id: m.id,
@@ -54,6 +87,7 @@ export default async function TechnicalProductsPage() {
         name: m.name,
         unit: m.unit,
       }))}
+      imageUrls={imageUrls}
       canEdit={canEdit}
     />
   )

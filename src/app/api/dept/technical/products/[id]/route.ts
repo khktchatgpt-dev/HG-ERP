@@ -6,6 +6,13 @@ import { productUpdateSchema } from '@/modules/dept/technical/technical.schema'
 
 type Params = { params: Promise<{ id: string }> }
 
+export const GET = handle(async (_req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  const product = await productsService.get(user, id)
+  return NextResponse.json({ product })
+})
+
 export const PATCH = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params

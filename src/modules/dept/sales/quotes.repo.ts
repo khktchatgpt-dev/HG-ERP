@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import type { QuoteStatus } from './quotes.schema'
+import type { ProductPacking } from '@/modules/dept/technical/technical.repo'
 
 export type Quote = {
   id: string
@@ -26,7 +27,6 @@ export type QuoteLine = {
   id: string
   quote_id: string
   product_id: string
-  qty: number
   unit_price: number
   discount_pct: number | null
   note: string | null
@@ -35,11 +35,14 @@ export type QuoteLine = {
   product_name: string
   product_unit: string
   customer_item_code: string | null
+  // Quy cách SP (từ Kỹ thuật) để hiện đầy đủ như tờ báo giá thật — thiếu = null.
+  description_en: string | null
+  image_file_id: string | null
+  packing: ProductPacking
 }
 
 export type QuoteLineInput = {
   product_id: string
-  qty: number
   unit_price: number
   discount_pct?: number | null
   note?: string | null
@@ -98,23 +101,28 @@ export const quotesRepo = {
     const { data } = await db()
       .from('sales_quote_lines')
       .select(
-        'id, quote_id, product_id, qty, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code)',
+        'id, quote_id, product_id, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing)',
       )
       .eq('quote_id', quoteId)
       .order('sort_order')
-    type RawLine = Omit<
-      QuoteLine,
-      'product_code' | 'product_name' | 'product_unit' | 'customer_item_code'
-    > & {
-      product:
-        | { code: string; name: string; unit: string; customer_item_code: string | null }
-        | {
-            code: string
-            name: string
-            unit: string
-            customer_item_code: string | null
-          }[]
-        | null
+    type RawProduct = {
+      code: string
+      name: string
+      unit: string
+      customer_item_code: string | null
+      description_en: string | null
+      image_file_id: string | null
+      packing: ProductPacking | null
+    }
+    type RawLine = {
+      id: string
+      quote_id: string
+      product_id: string
+      unit_price: number
+      discount_pct: number | null
+      note: string | null
+      sort_order: number
+      product: RawProduct | RawProduct[] | null
     }
     return ((data ?? []) as RawLine[]).map((r) => {
       const p = Array.isArray(r.product) ? r.product[0] : r.product
@@ -122,7 +130,6 @@ export const quotesRepo = {
         id: r.id,
         quote_id: r.quote_id,
         product_id: r.product_id,
-        qty: r.qty,
         unit_price: r.unit_price,
         discount_pct: r.discount_pct,
         note: r.note,
@@ -131,6 +138,9 @@ export const quotesRepo = {
         product_name: p?.name ?? '?',
         product_unit: p?.unit ?? '',
         customer_item_code: p?.customer_item_code ?? null,
+        description_en: p?.description_en ?? null,
+        image_file_id: p?.image_file_id ?? null,
+        packing: p?.packing ?? {},
       }
     })
   },
@@ -173,7 +183,6 @@ export const quotesRepo = {
         lines.map((l, i) => ({
           quote_id: quoteId,
           product_id: l.product_id,
-          qty: l.qty,
           unit_price: l.unit_price,
           discount_pct: l.discount_pct ?? null,
           note: l.note ?? null,
@@ -210,7 +219,6 @@ export const quotesRepo = {
 
 /** Dòng báo giá + đủ thuộc tính SP để in mẫu Quotation (packing, mô tả EN). */
 export type QuotePrintLine = {
-  qty: number
   unit_price: number
   discount_pct: number | null
   note: string | null
@@ -236,7 +244,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   const { data } = await db()
     .from('sales_quote_lines')
     .select(
-      'qty, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id)',
+      'unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id)',
     )
     .eq('quote_id', quoteId)
     .order('sort_order')
@@ -250,7 +258,6 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
     image_file_id: string | null
   }
   type Raw = {
-    qty: number
     unit_price: number
     discount_pct: number | null
     note: string | null
@@ -259,7 +266,6 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   return ((data ?? []) as Raw[]).map((r) => {
     const p = Array.isArray(r.product) ? r.product[0] : r.product
     return {
-      qty: r.qty,
       unit_price: r.unit_price,
       discount_pct: r.discount_pct,
       note: r.note,
@@ -323,7 +329,6 @@ export async function lastPricesForCustomer(customerId: string): Promise<LastPri
 export type LastPriceGlobal = {
   product_id: string
   unit_price: number
-  qty: number
   currency: string
   customer_name: string
   quote_code: string
@@ -334,7 +339,7 @@ export async function lastPricesGlobal(): Promise<LastPriceGlobal[]> {
   const { data } = await db()
     .from('sales_quote_lines')
     .select(
-      'product_id, unit_price, qty, quote:sales_quotes!inner(code, status, currency, created_at, customer:sales_customers(name))',
+      'product_id, unit_price, quote:sales_quotes!inner(code, status, currency, created_at, customer:sales_customers(name))',
     )
     .eq('quote.status', 'sent')
     .order('created_at', { ascending: false, referencedTable: 'quote' })
@@ -349,7 +354,6 @@ export async function lastPricesGlobal(): Promise<LastPriceGlobal[]> {
   type Raw = {
     product_id: string
     unit_price: number
-    qty: number
     quote: RawQ | RawQ[]
   }
   const seen = new Map<string, LastPriceGlobal>()
@@ -362,7 +366,6 @@ export async function lastPricesGlobal(): Promise<LastPriceGlobal[]> {
       seen.set(r.product_id, {
         product_id: r.product_id,
         unit_price: r.unit_price,
-        qty: r.qty,
         currency: q.currency,
         customer_name: c?.name ?? '?',
         quote_code: q.code,

@@ -23,6 +23,8 @@ export const POST = handle(async (req: Request) => {
         customer_item_code: product.customer_item_code,
         bom_status: product.bom_status,
         image_file_id: product.image_file_id,
+        description_en: product.description_en,
+        packing: product.packing,
       },
     },
     { status: 201 },

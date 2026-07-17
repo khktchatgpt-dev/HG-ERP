@@ -39,12 +39,10 @@ export const productCreateSchema = z.object({
   description_en: z.string().trim().max(2000).optional().nullable(),
   unit: z.string().trim().min(1).max(30).default('cai'),
   packing: packingSchema.optional(),
-  drawing_url: z.string().trim().url().optional().or(z.literal('')),
-  bom_url: z.string().trim().url().optional().or(z.literal('')),
   notes: z.string().trim().max(2000).optional().nullable(),
   // Thông số kỹ thuật phục vụ LSX / hợp đồng (0026).
-  name_de: z.string().trim().max(300).optional().nullable(), // tên tiếng Đức
-  shipping_mark: z.string().trim().max(2000).optional().nullable(), // nội dung shipping mark
+  name_foreign: z.string().trim().max(300).optional().nullable(), // tên theo khách (mọi ngôn ngữ)
+  shipping_mark: z.string().trim().max(2000).optional().nullable(), // ký mã hiệu in trên thùng
   barcode: z.string().trim().max(50).optional().nullable(),
   showroom_sample: z.boolean().optional(), // mẫu tại showroom
   reference_price: z.coerce.number().min(0).optional().nullable(), // giá tham khảo nội bộ
@@ -87,6 +85,13 @@ export const quickProductCreateSchema = z.object({
   description_en: z.string().trim().max(2000).optional().nullable(),
   notes: z.string().trim().max(2000).optional().nullable(),
   reference_price: z.coerce.number().min(0).optional().nullable(),
+  // Quy cách + thông tin XK để in đủ trên báo giá ngay (Kỹ thuật vẫn sửa được sau).
+  packing: packingSchema.optional(),
+  material: z.string().trim().max(300).optional().nullable(),
+  hs_code: z.string().trim().max(20).optional().nullable(),
+  origin_country: z.string().trim().max(100).optional().nullable(),
+  name_foreign: z.string().trim().max(300).optional().nullable(), // tên theo khách
+  shipping_mark: z.string().trim().max(2000).optional().nullable(), // ký mã hiệu (LSX)
 })
 
 /** Đặt ảnh đại diện SP (file đã upload vào parent product) — Kinh doanh/Kỹ thuật. */

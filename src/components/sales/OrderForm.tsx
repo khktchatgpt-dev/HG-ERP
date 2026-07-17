@@ -41,6 +41,17 @@ export type OrderInitial = {
   due_date: string | null
   container_summary: string | null
   note: string | null
+  // Điều khoản thương mại (Sales Contract) — sửa được khi khách đổi.
+  price_term: string | null
+  payment_terms: string | null
+  deposit_percent: number | null
+  qty_tolerance_pct: number | null
+  port_of_loading: string | null
+  port_of_discharge: string | null
+  payment_method: string | null
+  required_docs: string | null
+  partial_shipment: boolean | null
+  transhipment: boolean | null
 }
 
 /** SP mới sale tự điền — chỉ tạo vào thư viện Kỹ thuật KHI submit đơn (không mồ côi). */
@@ -86,6 +97,9 @@ export function OrderForm(props: {
   )
   const [code, setCode] = useState('')
   const [quoteId, setQuoteId] = useState('')
+  // Khách của báo giá đã chọn (đơn từ báo giá) — để nhóm SP theo đúng khách.
+  const [quoteCustomerId, setQuoteCustomerId] = useState('')
+  const [loadingQuote, setLoadingQuote] = useState(false)
   const [customerId, setCustomerId] = useState(order?.customer_id ?? '')
   const [lines, setLines] = useState<LineRow[]>(() =>
     (props.initialLines ?? []).map((l, i) => ({
@@ -123,13 +137,43 @@ export function OrderForm(props: {
   })
   const set = (k: keyof typeof h, v: string) => setH((p) => ({ ...p, [k]: v }))
 
+  // Điều khoản thương mại — mọi field lưu dạng chuỗi trong form; boolean dùng
+  // tri-state '' | 'true' | 'false' để giữ được null (không ghi đè đơn từ báo giá).
+  const triBool = (v: boolean | null | undefined) =>
+    v == null ? '' : v ? 'true' : 'false'
+  const [terms, setTerms] = useState({
+    price_term: order?.price_term ?? '',
+    payment_terms: order?.payment_terms ?? '',
+    deposit_percent: order?.deposit_percent != null ? String(order.deposit_percent) : '',
+    qty_tolerance_pct:
+      order?.qty_tolerance_pct != null ? String(order.qty_tolerance_pct) : '',
+    port_of_loading: order?.port_of_loading ?? '',
+    port_of_discharge: order?.port_of_discharge ?? '',
+    payment_method: order?.payment_method ?? '',
+    required_docs: order?.required_docs ?? '',
+    partial_shipment: triBool(order?.partial_shipment),
+    transhipment: triBool(order?.transhipment),
+  })
+  const setTerm = (k: keyof typeof terms, v: string) =>
+    setTerms((p) => ({ ...p, [k]: v }))
+  // Điều khoản chỉnh được khi sửa đơn, hoặc khi tạo đơn TRỰC TIẾP. Đơn từ báo giá
+  // snapshot điều khoản từ báo giá — sửa sau ở màn Sửa đơn.
+  const showTerms = mode === 'edit' || source === 'direct'
+  const hasTerms = Object.values(terms).some((v) => v !== '')
+  const [termsOpen, setTermsOpen] = useState(mode === 'edit' && hasTerms)
+
   const productById = useMemo(() => {
     const m = new Map<string, ProductPick>()
     for (const p of productList) m.set(p.id, p)
     return m
   }, [productList])
 
-  const activeCustomerId = mode === 'edit' ? order!.customer_id : customerId
+  const activeCustomerId =
+    mode === 'edit'
+      ? order!.customer_id
+      : source === 'quote'
+        ? quoteCustomerId
+        : customerId
 
   const productChoices = useMemo(() => {
     const cid = activeCustomerId
@@ -140,8 +184,45 @@ export function OrderForm(props: {
     }
   }, [productList, activeCustomerId])
 
+  /**
+   * Chọn báo giá đã chốt → nạp SP + đơn giá + tiền tệ từ báo giá vào dòng để Sale
+   * nhập SỐ LƯỢNG (báo giá không có SL). Điều khoản vẫn do server lấy từ báo giá.
+   */
+  async function selectQuote(qid: string) {
+    setQuoteId(qid)
+    if (!qid) {
+      setQuoteCustomerId('')
+      setLines([])
+      return
+    }
+    setLoadingQuote(true)
+    try {
+      const data = await api<{
+        quote: { customer_id: string; currency: string }
+        lines: { product_id: string; unit_price: number; note: string | null }[]
+      }>(`/api/dept/sales/quotes/${qid}`)
+      setQuoteCustomerId(data.quote.customer_id)
+      setH((p) => ({ ...p, currency: data.quote.currency }))
+      setLines(
+        data.lines.map((l) => ({
+          key: keyRef.current++,
+          productId: l.product_id,
+          draft: null,
+          qty: '' as const,
+          unitPrice: l.unit_price,
+          note: l.note ?? '',
+        })),
+      )
+    } catch (e) {
+      toast.error('Không tải được báo giá', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setLoadingQuote(false)
+    }
+  }
+
   const usedIds = new Set(lines.filter((l) => l.productId).map((l) => l.productId))
-  const linesEditable = mode === 'edit' || source === 'direct'
+  const linesEditable =
+    mode === 'edit' || source === 'direct' || (source === 'quote' && !!quoteId)
   const currency = mode === 'edit' ? order!.currency : h.currency
   const total = lines.reduce(
     (s, l) => s + (Number(l.qty) || 0) * (Number(l.unitPrice) || 0),
@@ -151,10 +232,12 @@ export function OrderForm(props: {
   // ── Danh sách điều kiện còn thiếu ─────────────────────────────────────────
   const missing: string[] = []
   if (mode === 'create' && !code.trim()) missing.push('nhập mã đơn hàng')
-  if (mode === 'create' && source === 'quote') {
-    if (!quoteId) missing.push('chọn báo giá đã chốt')
-  } else {
-    if (mode === 'create' && !customerId) missing.push('chọn khách hàng')
+  if (mode === 'create' && source === 'quote' && !quoteId)
+    missing.push('chọn báo giá đã chốt')
+  if (mode === 'create' && source === 'direct' && !customerId)
+    missing.push('chọn khách hàng')
+  // Dòng SP + SL: cần khi tạo trực tiếp, sửa đơn, hoặc tạo từ báo giá đã chọn.
+  if (linesEditable) {
     if (lines.length === 0) missing.push('thêm ít nhất 1 dòng sản phẩm')
     else if (lines.some((l) => !l.productId && !l.draft))
       missing.push('chọn SP cho mọi dòng')
@@ -243,6 +326,24 @@ export function OrderForm(props: {
     }
   }
 
+  function termsBody() {
+    const txt = (v: string) => v.trim() || null
+    const num = (v: string) => (v.trim() === '' ? null : Number(v))
+    const bool = (v: string) => (v === '' ? null : v === 'true')
+    return {
+      price_term: txt(terms.price_term),
+      payment_terms: txt(terms.payment_terms),
+      deposit_percent: num(terms.deposit_percent),
+      qty_tolerance_pct: num(terms.qty_tolerance_pct),
+      port_of_loading: txt(terms.port_of_loading),
+      port_of_discharge: txt(terms.port_of_discharge),
+      payment_method: txt(terms.payment_method),
+      required_docs: txt(terms.required_docs),
+      partial_shipment: bool(terms.partial_shipment),
+      transhipment: bool(terms.transhipment),
+    }
+  }
+
   /**
    * Chuẩn hoá dòng SP: với dòng SP mới (draft) → tạo SP vào thư viện + upload ảnh,
    * đồng thời đổi dòng đó thành SP-đã-lưu (resubmit an toàn nếu bước sau lỗi).
@@ -310,13 +411,21 @@ export function OrderForm(props: {
       if (mode === 'create') {
         const body: Record<string, unknown> =
           source === 'quote'
-            ? { code: code.trim(), quote_id: quoteId, ...headerBody() }
+            ? {
+                // Đơn từ báo giá: SP + đơn giá nạp từ báo giá, SL do Sale nhập.
+                // Khách + tiền tệ + điều khoản do server lấy từ báo giá.
+                code: code.trim(),
+                quote_id: quoteId,
+                lines: orderLines,
+                ...headerBody(),
+              }
             : {
                 code: code.trim(),
                 customer_id: customerId,
                 currency: h.currency,
                 lines: orderLines,
                 ...headerBody(),
+                ...termsBody(),
               }
         const { order: created } = await api<{ order: { id: string } }>(
           '/api/dept/sales/orders',
@@ -346,6 +455,7 @@ export function OrderForm(props: {
           method: 'PATCH',
           body: {
             ...headerBody(),
+            ...termsBody(),
             change_note: h.change_note.trim() || null,
             lines: orderLines,
           },
@@ -418,7 +528,8 @@ export function OrderForm(props: {
                   Báo giá đã chốt <span className="text-red-500">*</span>
                   <select
                     value={quoteId}
-                    onChange={(e) => setQuoteId(e.target.value)}
+                    onChange={(e) => void selectQuote(e.target.value)}
+                    disabled={loadingQuote}
                     className={cls}
                   >
                     <option value="">— chọn báo giá —</option>
@@ -429,7 +540,9 @@ export function OrderForm(props: {
                     ))}
                   </select>
                   <span className="text-xs text-zinc-500">
-                    Dòng SP + đơn giá + điều khoản copy nguyên từ báo giá.
+                    {loadingQuote
+                      ? 'Đang nạp dòng SP từ báo giá…'
+                      : 'SP + đơn giá + điều khoản lấy từ báo giá — bạn chỉ cần nhập số lượng bên dưới.'}
                   </span>
                 </label>
               )
@@ -792,10 +905,144 @@ export function OrderForm(props: {
           )}
         </div>
         <p className="mt-3 rounded-md bg-sky-50 p-2 text-xs text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
-          ℹ Các điều khoản (giá, thanh toán, cảng, dung sai, chứng từ…) nằm trong{' '}
-          <b>file hợp đồng</b> — đính kèm ngay bên dưới.
+          {showTerms ? (
+            <>
+              ℹ Điều khoản thương mại (giá, thanh toán, cảng, dung sai, chứng từ…) nhập ở{' '}
+              <b>mục dưới</b> — hoặc để trong <b>file hợp đồng</b> đính kèm.
+            </>
+          ) : (
+            <>
+              ℹ Đơn từ báo giá đã snapshot điều khoản từ báo giá — sửa sau ở màn{' '}
+              <b>Sửa đơn</b> nếu khách đổi.
+            </>
+          )}
         </p>
       </Card>
+
+      {/* 3b. Điều khoản thương mại (tuỳ chọn, gập được) */}
+      {showTerms && (
+        <Card
+          title="Điều khoản thương mại (tuỳ chọn)"
+          right={
+            <button
+              type="button"
+              onClick={() => setTermsOpen((v) => !v)}
+              className="text-xs font-medium text-sky-600 hover:underline dark:text-sky-400"
+            >
+              {termsOpen ? 'Thu gọn ▲' : 'Mở rộng ▼'}
+            </button>
+          }
+        >
+          {!termsOpen ? (
+            <p className="text-sm text-zinc-500">
+              {hasTerms
+                ? 'Đã có điều khoản — bấm “Mở rộng” để xem/sửa.'
+                : 'Giá (FOB/CIF…), thanh toán, cảng bốc/dỡ, dung sai SL, chứng từ. Bấm “Mở rộng” để nhập.'}
+            </p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <L label="Điều kiện giá (Incoterm)">
+                <input
+                  value={terms.price_term}
+                  onChange={(e) => setTerm('price_term', e.target.value)}
+                  maxLength={100}
+                  placeholder="FOB Hai Phong"
+                  className={cls}
+                />
+              </L>
+              <L label="Điều khoản thanh toán">
+                <input
+                  value={terms.payment_terms}
+                  onChange={(e) => setTerm('payment_terms', e.target.value)}
+                  maxLength={500}
+                  placeholder="30% deposit, 70% T/T"
+                  className={cls}
+                />
+              </L>
+              <L label="Đặt cọc (%)">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={terms.deposit_percent}
+                  onChange={(e) => setTerm('deposit_percent', e.target.value)}
+                  className={cls}
+                />
+              </L>
+              <L label="Dung sai SL (%)">
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={terms.qty_tolerance_pct}
+                  onChange={(e) => setTerm('qty_tolerance_pct', e.target.value)}
+                  className={cls}
+                />
+              </L>
+              <L label="Cảng bốc (POL)">
+                <input
+                  value={terms.port_of_loading}
+                  onChange={(e) => setTerm('port_of_loading', e.target.value)}
+                  maxLength={200}
+                  placeholder="Hai Phong, Vietnam"
+                  className={cls}
+                />
+              </L>
+              <L label="Cảng dỡ (POD)">
+                <input
+                  value={terms.port_of_discharge}
+                  onChange={(e) => setTerm('port_of_discharge', e.target.value)}
+                  maxLength={200}
+                  className={cls}
+                />
+              </L>
+              <L label="Phương thức thanh toán">
+                <input
+                  value={terms.payment_method}
+                  onChange={(e) => setTerm('payment_method', e.target.value)}
+                  maxLength={200}
+                  placeholder="T/T, L/C at sight…"
+                  className={cls}
+                />
+              </L>
+              <L label="Giao hàng từng phần">
+                <select
+                  value={terms.partial_shipment}
+                  onChange={(e) => setTerm('partial_shipment', e.target.value)}
+                  className={cls}
+                >
+                  <option value="">— không đặt —</option>
+                  <option value="true">Cho phép</option>
+                  <option value="false">Không cho phép</option>
+                </select>
+              </L>
+              <L label="Chuyển tải (transhipment)">
+                <select
+                  value={terms.transhipment}
+                  onChange={(e) => setTerm('transhipment', e.target.value)}
+                  className={cls}
+                >
+                  <option value="">— không đặt —</option>
+                  <option value="true">Cho phép</option>
+                  <option value="false">Không cho phép</option>
+                </select>
+              </L>
+              <L label="Chứng từ yêu cầu" span2>
+                <textarea
+                  value={terms.required_docs}
+                  onChange={(e) => setTerm('required_docs', e.target.value)}
+                  rows={2}
+                  maxLength={2000}
+                  placeholder="B/L, C/O form B, Invoice, Packing list, Phytosanitary…"
+                  className={cls}
+                />
+              </L>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* 4. File liên quan (chỉ create) */}
       {mode === 'create' && (

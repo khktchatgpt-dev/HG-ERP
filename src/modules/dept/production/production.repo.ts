@@ -241,7 +241,7 @@ export type LsxPrintLine = {
   order_line_id: string
   product_code: string
   name_vi: string
-  name_de: string | null
+  name_foreign: string | null
   barcode: string | null
   shipping_mark: string | null
   showroom_sample: boolean
@@ -271,7 +271,7 @@ export async function listLsxPrintLines(
   const { data } = await db()
     .from('sales_order_lines')
     .select(
-      'id, qty, sort_order, product:technical_products(code, name, name_de, unit, barcode, shipping_mark, showroom_sample, customer_item_code, image_file_id, tech_spec, packing)',
+      'id, qty, sort_order, product:technical_products(code, name, name_foreign, unit, barcode, shipping_mark, showroom_sample, customer_item_code, image_file_id, tech_spec, packing)',
     )
     .eq('order_id', salesOrderId)
     .order('sort_order')
@@ -280,7 +280,7 @@ export async function listLsxPrintLines(
   type P = {
     code: string
     name: string
-    name_de: string | null
+    name_foreign: string | null
     unit: string
     barcode: string | null
     shipping_mark: string | null
@@ -310,7 +310,7 @@ export async function listLsxPrintLines(
       order_line_id: r.id,
       product_code: p?.code ?? '?',
       name_vi: p?.name ?? '?',
-      name_de: p?.name_de ?? null,
+      name_foreign: p?.name_foreign ?? null,
       barcode: p?.barcode ?? null,
       shipping_mark: p?.shipping_mark ?? null,
       showroom_sample: p?.showroom_sample ?? false,
