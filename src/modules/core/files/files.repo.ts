@@ -19,7 +19,9 @@ export type FileRow = {
   sales_order_id: string | null
   production_order_id: string | null
   purchase_order_id: string | null
+  sample_id: string | null
   created_at: string
+  doc_type: string | null
   finalized_at: string | null
   deleted_at: string | null
 }
@@ -34,15 +36,17 @@ export type FileParentColumns = {
   sales_order_id?: string | null
   production_order_id?: string | null
   purchase_order_id?: string | null
+  sample_id?: string | null
 }
 
-/** Cột parent cho phép list file gốc chứng từ (0016/0030). */
+/** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061). */
 export type FileParentColumn =
   | 'product_id'
   | 'quote_id'
   | 'sales_order_id'
   | 'production_order_id'
   | 'purchase_order_id'
+  | 'sample_id'
 
 export const filesRepo = {
   async insert(row: {
@@ -52,6 +56,7 @@ export const filesRepo = {
     mime_type: string
     size_bytes: number
     owner_id: string
+    doc_type?: string | null
     parent: FileParentColumns
   }): Promise<FileRow> {
     const { data, error } = await db()
@@ -63,6 +68,7 @@ export const filesRepo = {
         mime_type: row.mime_type,
         size_bytes: row.size_bytes,
         owner_id: row.owner_id,
+        doc_type: row.doc_type ?? null,
         ...row.parent,
       })
       .select('*')
@@ -86,6 +92,26 @@ export const filesRepo = {
     return this.listByParent('product_id', productId)
   },
 
+  /**
+   * Cờ "SP đã có bản vẽ / BOM" suy từ FILE ĐÃ UPLOAD (0059) — thay cho 2 cột link
+   * `drawing_url`/`bom_url` cũ. Chỉ lấy (product_id, doc_type) nên payload rất nhẹ.
+   * `productIds` rỗng = lấy toàn bộ (dùng cho StatsBar trang chủ; tập drawing/bom nhỏ).
+   */
+  async productDocFlags(
+    productIds?: string[],
+  ): Promise<{ product_id: string; doc_type: string }[]> {
+    if (productIds && productIds.length === 0) return []
+    let q = db()
+      .from('files')
+      .select('product_id, doc_type')
+      .in('doc_type', ['drawing', 'bom'])
+      .is('deleted_at', null)
+      .not('product_id', 'is', null)
+    if (productIds) q = q.in('product_id', productIds)
+    const { data } = await q.limit(5000)
+    return (data ?? []) as { product_id: string; doc_type: string }[]
+  },
+
   /** File gốc đã finalize theo 1 parent chứng từ (product/quote/order/LSX). */
   async listByParent(column: FileParentColumn, id: string): Promise<FileRow[]> {
     const { data } = await db()
@@ -98,10 +124,19 @@ export const filesRepo = {
     return (data ?? []) as FileRow[]
   },
 
-  async markFinalized(id: string, checksum: string | null): Promise<void> {
+  /** `sizeBytes` = số đo thật từ Storage, ghi đè số client khai lúc initUpload. */
+  async markFinalized(
+    id: string,
+    checksum: string | null,
+    sizeBytes?: number,
+  ): Promise<void> {
     const { error } = await db()
       .from('files')
-      .update({ finalized_at: new Date().toISOString(), checksum })
+      .update({
+        finalized_at: new Date().toISOString(),
+        checksum,
+        ...(sizeBytes === undefined ? {} : { size_bytes: sizeBytes }),
+      })
       .eq('id', id)
     if (error) throw new Error(error.message)
   },

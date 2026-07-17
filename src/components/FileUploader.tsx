@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
+import { formatBytes, maxBytesFor, type DocType } from '@/lib/file-limits'
 
 type Parent =
   | { kind: 'task'; id: string }
@@ -25,8 +26,6 @@ type InitResponse = {
   path: string
 }
 
-const MAX_BYTES = 10 * 1024 * 1024
-
 async function sha256Hex(file: File): Promise<string> {
   const buf = await file.arrayBuffer()
   const hash = await crypto.subtle.digest('SHA-256', buf)
@@ -39,6 +38,7 @@ export function FileUploader({
   parent,
   bucket = 'attachments',
   accept,
+  docType,
   onUploaded,
   label = 'Tải tệp lên',
   computeChecksum = false,
@@ -46,6 +46,8 @@ export function FileUploader({
   parent: Parent
   bucket?: Bucket
   accept?: string
+  /** Loại tài liệu (0059) — nút upload gắn sẵn loại, không bắt user chọn thêm. */
+  docType?: DocType
   onUploaded?: (fileId: string) => void
   label?: string
   /** Compute sha256 client-side and post to finalize. Slows large files. Default off. */
@@ -57,8 +59,12 @@ export function FileUploader({
   const [progress, setProgress] = useState<string | null>(null)
 
   async function handleFile(file: File) {
-    if (file.size > MAX_BYTES) {
-      toast.error('Tệp quá lớn', `Tối đa ${MAX_BYTES / 1024 / 1024} MB`)
+    const maxBytes = maxBytesFor(docType)
+    if (file.size > maxBytes) {
+      toast.error(
+        'Tệp quá lớn',
+        `${formatBytes(file.size)} — tối đa ${formatBytes(maxBytes)} cho loại tài liệu này`,
+      )
       return
     }
     setBusy(true)
@@ -71,6 +77,7 @@ export function FileUploader({
           mime_type: file.type,
           size_bytes: file.size,
           bucket,
+          doc_type: docType ?? null,
           parent,
         },
       })
