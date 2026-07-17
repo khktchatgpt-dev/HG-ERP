@@ -15,13 +15,6 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
-import {
-  type ConversionProfile,
-  CONVERSION_PROFILES,
-  PROFILE_LABELS,
-  PROFILE_SHORT,
-  hasQty2,
-} from '@/lib/material-profile'
 
 type Material = {
   id: string
@@ -29,7 +22,6 @@ type Material = {
   name: string
   unit: string
   spec: string | null
-  conversion_profile: ConversionProfile
   price_unit: string | null
   unit2_factor: number | null
   group_name: string | null
@@ -45,12 +37,6 @@ type Material = {
 type SupplierOption = { id: string; name: string }
 
 type StatusFilter = 'all' | 'active' | 'inactive'
-
-const PROFILE_TONE: Record<ConversionProfile, 'gray' | 'blue' | 'amber'> = {
-  A: 'gray',
-  B: 'blue',
-  C: 'amber',
-}
 
 export function MaterialsManager({
   materials,
@@ -139,9 +125,9 @@ export function MaterialsManager({
       { key: 'spec', header: 'Quy cách', get: (m) => m.spec ?? '' },
       { key: 'unit', header: 'ĐVT' },
       {
-        key: 'conversion_profile',
-        header: 'Loại quy đổi',
-        get: (m) => `${m.conversion_profile} — ${PROFILE_SHORT[m.conversion_profile]}`,
+        key: 'price_unit',
+        header: 'Đơn vị tính giá',
+        get: (m) => m.price_unit ?? '',
       },
       { key: 'group_name', header: 'Nhóm', get: (m) => m.group_name ?? '' },
       { key: 'min_stock', header: 'Tồn tối thiểu', get: (m) => String(m.min_stock) },
@@ -169,30 +155,26 @@ export function MaterialsManager({
       ),
     },
     {
-      key: 'profile',
-      header: 'Loại quy đổi',
+      key: 'price_unit',
+      header: 'Đơn vị tính giá',
       width: '150px',
-      sortValue: (m) => m.conversion_profile,
-      cell: (m) => (
-        <div className="flex flex-col gap-0.5">
-          <Badge tone={PROFILE_TONE[m.conversion_profile]}>
-            {m.conversion_profile} · {PROFILE_SHORT[m.conversion_profile]}
-          </Badge>
-          {hasQty2(m.conversion_profile) && m.price_unit && (
-            <span
-              className="text-[10px] text-zinc-400"
-              title={
-                m.unit2_factor
-                  ? `Giá theo ${m.price_unit} — ${m.conversion_profile === 'C' ? 'định mức' : 'hệ số'} ${m.unit2_factor} ${m.price_unit}/${m.unit}`
-                  : `Giá theo ${m.price_unit}`
-              }
-            >
-              giá/{m.price_unit}
-              {m.unit2_factor ? ` · ${m.unit2_factor} ${m.price_unit}/${m.unit}` : ''}
-            </span>
-          )}
-        </div>
-      ),
+      sortValue: (m) => m.price_unit ?? 'zzz',
+      cell: (m) =>
+        m.price_unit ? (
+          <div className="flex flex-col gap-0.5">
+            <Badge>giá/{m.price_unit}</Badge>
+            {m.unit2_factor != null && (
+              <span
+                className="text-[10px] text-zinc-400"
+                title={`Hệ số tham khảo ${m.unit2_factor} ${m.price_unit}/${m.unit}`}
+              >
+                {m.unit2_factor} {m.price_unit}/{m.unit}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
     },
     {
       key: 'unit',
@@ -450,37 +432,31 @@ function MaterialForm({
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
 }) {
   const [busy, setBusy] = useState(false)
-  // Profile + unit + price_unit controlled: lái ô ẩn/hiện và nhãn động.
-  const [profile, setProfile] = useState<ConversionProfile>(
-    initial?.conversion_profile ?? 'A',
-  )
+  // unit + price_unit controlled: price_unit != '' → vật tư có đơn vị tính giá riêng
+  // (dòng đặt sẽ có ô SL-tính-giá nhập tay). Không còn nhãn quy đổi A/B/C.
   const [unit, setUnit] = useState(initial?.unit ?? 'cái')
   const [priceUnit, setPriceUnit] = useState(initial?.price_unit ?? '')
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
-  const dual = hasQty2(profile) // B & C có đơn vị giá + hệ số/định mức
-  const factorLabel =
-    profile === 'C'
-      ? `Định mức kg / ${unit || 'đơn vị'}`
-      : `Hệ số cứng (1 ${unit || 'đơn vị'} = ? ${priceUnit || 'đv giá'})`
+  const dual = priceUnit.trim() !== '' // có đơn vị tính giá → dùng hệ số tham khảo
+  const factorLabel = `Hệ số tham khảo (1 ${unit || 'đơn vị'} ≈ ? ${priceUnit || 'đv giá'})`
   const factorHint =
-    profile === 'C'
-      ? 'Máy gợi ý tổng kg = SL × định mức; NV sửa theo cân thực khi hàng về.'
-      : 'Quy đổi cố định: tổng = SL × hệ số, ô này KHOÁ trên form đặt.'
+    'Chỉ để gợi ý tổng SL-tính-giá = SL × hệ số trên form đặt; nhân viên sửa được theo cân/báo giá thực.'
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
-    const priceUnitVal = dual ? String(fd.get('price_unit') ?? '').trim() || null : null
+    const priceUnitVal = priceUnit.trim() || null
     const factorVal =
-      dual && fd.get('unit2_factor') ? Number(fd.get('unit2_factor')) || null : null
+      priceUnitVal && fd.get('unit2_factor')
+        ? Number(fd.get('unit2_factor')) || null
+        : null
     const body: Record<string, unknown> = {
       code: String(fd.get('code') ?? '').trim(),
       name: String(fd.get('name') ?? '').trim(),
       unit: String(fd.get('unit') ?? '').trim() || 'cái',
       spec: String(fd.get('spec') ?? '').trim() || null,
-      conversion_profile: profile,
       group_name: String(fd.get('group_name') ?? '').trim() || null,
       min_stock: Number(fd.get('min_stock') ?? 0) || 0,
       price_unit: priceUnitVal,
@@ -546,69 +522,36 @@ function MaterialForm({
         </span>
       </label>
 
-      {/* Loại quy đổi — linh hồn form đặt (ItemMaster §2) */}
-      <fieldset className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-        <span>
-          Loại quy đổi <span className="text-red-500">*</span>
-        </span>
-        <div className="grid grid-cols-3 gap-2">
-          {CONVERSION_PROFILES.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => setProfile(p)}
-              className={
-                'rounded-md border px-2 py-1.5 text-xs font-medium transition ' +
-                (profile === p
-                  ? 'border-amber-500 bg-amber-50 text-amber-700 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300'
-                  : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900')
-              }
-            >
-              {PROFILE_LABELS[p]}
-            </button>
-          ))}
-        </div>
+      {/* Đơn vị tính giá (tùy chọn) — có giá trị thì dòng đặt có ô SL-tính-giá nhập tay */}
+      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+        Đơn vị tính giá
+        <input
+          name="price_unit"
+          maxLength={30}
+          placeholder="kg / m² / lít… (bỏ trống nếu giá theo ĐVT đặt)"
+          value={priceUnit}
+          onChange={(e) => setPriceUnit(e.target.value)}
+          className={cls}
+        />
         <span className="text-xs text-zinc-400">
-          {profile === 'A' &&
-            'Đặt = giá = tồn, 1 đơn vị. Thành tiền = SL × đơn giá (ốc vít, bản lề, keo…).'}
-          {profile === 'B' &&
-            'Đặt 1 đơn vị, giá đơn vị khác, hệ số cứng. Thành tiền = SL × hệ số × đơn giá (sơn thùng→lít, ván tấm→m²).'}
-          {profile === 'C' &&
-            'SL & kg lưu riêng, giá theo kg cân thực. Thành tiền = kg thực × đơn giá (sắt hộp, ống thép, tôn).'}
+          Điền khi NCC báo giá theo đơn vị khác ĐVT đặt (vd đặt cây, giá theo kg). Bỏ
+          trống = giá theo chính ĐVT đặt.
         </span>
-      </fieldset>
-
-      {/* B & C: đơn vị tính giá + hệ số / định mức */}
-      {dual && (
-        <>
-          <label className="flex flex-col gap-1 text-sm">
-            Đơn vị tính giá <span className="text-red-500">*</span>
-            <input
-              name="price_unit"
-              required
-              maxLength={30}
-              placeholder={profile === 'C' ? 'kg' : 'lít / m²…'}
-              value={priceUnit}
-              onChange={(e) => setPriceUnit(e.target.value)}
-              className={cls}
-            />
-            <span className="text-xs text-zinc-400">Đơn vị NCC báo giá.</span>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            {factorLabel} <span className="text-red-500">*</span>
-            <input
-              name="unit2_factor"
-              type="number"
-              min={0}
-              step="0.0001"
-              placeholder={profile === 'C' ? 'VD: 10.1' : 'VD: 18'}
-              defaultValue={initial?.unit2_factor ?? ''}
-              className={`${cls} tabular-nums`}
-            />
-            <span className="text-xs text-zinc-400">{factorHint}</span>
-          </label>
-        </>
-      )}
+      </label>
+      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+        {factorLabel}
+        <input
+          name="unit2_factor"
+          type="number"
+          min={0}
+          step="0.0001"
+          placeholder="VD: 10.1"
+          defaultValue={initial?.unit2_factor ?? ''}
+          disabled={!dual}
+          className={`${cls} tabular-nums disabled:opacity-50`}
+        />
+        <span className="text-xs text-zinc-400">{factorHint}</span>
+      </label>
 
       <label className="flex flex-col gap-1 text-sm">
         Nhóm

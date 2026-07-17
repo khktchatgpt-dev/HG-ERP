@@ -79,7 +79,6 @@ export default async function NewPoPage({
           on_hand: s.on_hand,
           min_stock: cfg?.min_stock ?? 0,
           spec: cfg?.spec ?? null,
-          conversion_profile: cfg?.conversion_profile ?? 'A',
           price_unit: cfg?.price_unit ?? null,
           unit2_factor: cfg?.unit2_factor ?? null,
           vat_rate: cfg?.vat_rate ?? null,

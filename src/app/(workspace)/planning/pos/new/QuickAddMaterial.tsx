@@ -5,12 +5,6 @@ import { Modal } from '@/components/Modal'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
-import {
-  type ConversionProfile,
-  CONVERSION_PROFILES,
-  PROFILE_LABELS,
-  hasQty2,
-} from '@/lib/material-profile'
 
 export type CreatedMaterial = {
   id: string
@@ -18,7 +12,6 @@ export type CreatedMaterial = {
   name: string
   unit: string
   spec: string | null
-  conversion_profile: ConversionProfile
   price_unit: string | null
   unit2_factor: number | null
 }
@@ -53,14 +46,14 @@ export function QuickAddMaterial({
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [f, setF] = useState(EMPTY)
-  const [profile, setProfile] = useState<ConversionProfile>('A')
-  const dual = hasQty2(profile)
+  // Vật tư có "đơn vị tính giá" (kg/m²…) → dòng đặt sẽ có ô SL-tính-giá nhập tay.
+  // Suy TRỰC TIẾP từ price_unit, không còn nhãn quy đổi A/B/C.
+  const dual = f.price_unit.trim() !== ''
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }))
 
-  const invalid =
-    !f.code.trim() || !f.name.trim() || !f.unit.trim() || (dual && !f.price_unit.trim())
+  const invalid = !f.code.trim() || !f.name.trim() || !f.unit.trim()
 
   async function handle() {
     if (invalid || busy) return
@@ -75,9 +68,8 @@ export function QuickAddMaterial({
             name: f.name.trim(),
             unit: f.unit.trim(),
             spec: f.spec.trim() || null,
-            conversion_profile: profile,
             group_name: f.group_name.trim() || null,
-            price_unit: dual ? f.price_unit.trim() || null : null,
+            price_unit: f.price_unit.trim() || null,
             unit2_factor:
               dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
             min_stock: 0,
@@ -87,7 +79,6 @@ export function QuickAddMaterial({
       toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
       onCreated(material)
       setF(EMPTY)
-      setProfile('A')
       setOpen(false)
     } catch (err) {
       toast.error(
@@ -158,27 +149,6 @@ export function QuickAddMaterial({
               />
             </label>
 
-            {/* Loại quy đổi lái ô đơn vị giá + hệ số/định mức */}
-            <div className="flex flex-col gap-1.5 text-sm">
-              Loại quy đổi <span className="text-red-500">*</span>
-              <div className="grid grid-cols-3 gap-2">
-                {CONVERSION_PROFILES.map((p) => (
-                  <button
-                    key={p}
-                    type="button"
-                    onClick={() => setProfile(p)}
-                    className={
-                      'rounded-md border px-2 py-1.5 text-xs font-medium ' +
-                      (profile === p
-                        ? 'border-sky-500 bg-sky-50 text-sky-700 dark:border-sky-500 dark:bg-sky-950/40 dark:text-sky-300'
-                        : 'border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900')
-                    }
-                  >
-                    {PROFILE_LABELS[p]}
-                  </button>
-                ))}
-              </div>
-            </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-1 text-sm">
                 Nhóm
@@ -190,36 +160,34 @@ export function QuickAddMaterial({
                   className={cls}
                 />
               </label>
-              {dual && (
-                <>
-                  <label className="flex flex-col gap-1 text-sm">
-                    Đơn vị tính giá <span className="text-red-500">*</span>
-                    <input
-                      value={f.price_unit}
-                      onChange={set('price_unit')}
-                      maxLength={30}
-                      placeholder={profile === 'C' ? 'kg' : 'lít / m²…'}
-                      className={cls}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-sm">
-                    {profile === 'C' ? 'Định mức kg/đơn-vị' : 'Hệ số cứng'}
-                    <input
-                      value={f.unit2_factor}
-                      onChange={set('unit2_factor')}
-                      type="number"
-                      min={0}
-                      step="0.0001"
-                      placeholder={profile === 'C' ? '10.1 (kg/cây)' : '18 (lít/thùng)'}
-                      className={`${cls} tabular-nums`}
-                    />
-                  </label>
-                </>
-              )}
+              <label className="flex flex-col gap-1 text-sm">
+                Đơn vị tính giá
+                <input
+                  value={f.price_unit}
+                  onChange={set('price_unit')}
+                  maxLength={30}
+                  placeholder="kg / m² / lít… (bỏ trống nếu giá theo ĐVT)"
+                  className={cls}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Hệ số tham khảo
+                <input
+                  value={f.unit2_factor}
+                  onChange={set('unit2_factor')}
+                  type="number"
+                  min={0}
+                  step="0.0001"
+                  placeholder="vd 10.1 (kg/cây)"
+                  disabled={!dual}
+                  className={`${cls} tabular-nums disabled:opacity-50`}
+                />
+              </label>
             </div>
             <p className="text-xs text-zinc-500">
-              Chỉ trường thiết yếu để đặt mua ngay — tồn tối thiểu, vị trí kệ… Kho bổ sung
-              sau ở danh mục vật tư.
+              Nhập &quot;đơn vị tính giá&quot; khi NCC báo giá theo đơn vị khác ĐVT đặt
+              (vd đặt cây, giá theo kg) — dòng đặt sẽ có ô SL-tính-giá nhập tay. Hệ số chỉ
+              để gợi ý, sửa được. Tồn tối thiểu, vị trí kệ… Kho bổ sung sau ở danh mục.
             </p>
             <div className="flex justify-end gap-2">
               <button

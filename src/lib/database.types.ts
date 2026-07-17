@@ -2862,7 +2862,6 @@ export type Database = {
       warehouse_materials: {
         Row: {
           code: string
-          conversion_profile: string
           created_at: string
           default_supplier_id: string | null
           group_name: string | null
@@ -2882,7 +2881,6 @@ export type Database = {
         }
         Insert: {
           code: string
-          conversion_profile?: string
           created_at?: string
           default_supplier_id?: string | null
           group_name?: string | null
@@ -2902,7 +2900,6 @@ export type Database = {
         }
         Update: {
           code?: string
-          conversion_profile?: string
           created_at?: string
           default_supplier_id?: string | null
           group_name?: string | null

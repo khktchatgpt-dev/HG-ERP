@@ -6,9 +6,7 @@ export const materialCreateSchema = z.object({
   unit: z.string().trim().min(1).max(30).default('cái'),
   // Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư.
   spec: z.string().trim().max(200).optional().nullable(),
-  // Loại quy đổi A/B/C (0055) — trường lái form đặt hàng (ItemMaster §2).
-  conversion_profile: z.enum(['A', 'B', 'C']).default('A'),
-  // Giá đv kép (0053): giá theo 'kg'/'m²'… thay vì ĐVT mua; factor là hệ số (B) / định mức kg (C).
+  // Giá đv kép (0053): giá theo 'kg'/'m²'… thay vì ĐVT mua; unit2_factor là hệ số quy đổi tham khảo.
   price_unit: z.string().trim().max(30).optional().nullable(),
   unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),

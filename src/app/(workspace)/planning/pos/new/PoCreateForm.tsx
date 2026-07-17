@@ -8,13 +8,6 @@ import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
-import {
-  type ConversionProfile,
-  PROFILE_SHORT,
-  hasQty2,
-  suggestQty2,
-  profileLineMapping,
-} from '@/lib/material-profile'
 import { QuickAddMaterial } from './QuickAddMaterial'
 
 type SupplierOption = {
@@ -36,8 +29,6 @@ type MaterialOption = {
   min_stock: number
   /** Quy cách (0056) — tự điền vào dòng đơn khi chọn. */
   spec?: string | null
-  /** Loại quy đổi A/B/C (0055) — lái ô nhập của dòng. */
-  conversion_profile: ConversionProfile
   /** Giá đv kép (0053): 'kg'/'m²' = giá tính theo đv này thay vì ĐVT mua. */
   price_unit: string | null
   /** B: hệ số cứng; C: định mức kg/đơn-vị-đặt. */
@@ -100,13 +91,11 @@ type Line = {
   unit: string
   on_hand: number
   min_stock: number
-  profile: ConversionProfile
   price_unit: string | null
   unit2_factor: number | null
   spec: string
   qty: number | ''
   qty2: number | ''
-  qty2Touched: boolean
   price: number | ''
   note: string
   /** Thông tin quyết định SL đặt (chỉ hiển thị, không auto-điền). */
@@ -118,6 +107,17 @@ type Line = {
 const inputCls =
   'h-[30px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 const num = (n: number) => n.toLocaleString('vi-VN')
+
+/**
+ * Vật tư có đơn vị TÍNH GIÁ riêng (kg/m²…) → dòng cần ô "SL tính giá" nhập tay.
+ * Suy TRỰC TIẾP từ dữ liệu giá thật (`price_unit`), KHÔNG theo nhãn A/B/C — nhãn
+ * quy đổi có thể gán sai (nhiều vật tư sắt đang là B trong khi phải cân C), còn
+ * `price_unit` luôn phản ánh đúng "đơn vị đặt ≠ đơn vị giá". Nhập tay nên B/C
+ * hành xử y hệt nhau: cả hai đều 2 ô, nhân viên tự tính & nhập.
+ */
+function needsPriceUnit(l: { price_unit: string | null }): boolean {
+  return l.price_unit != null && l.price_unit !== ''
+}
 const GRADE_BG: Record<string, string> = {
   A: 'bg-green-600',
   B: 'bg-blue-600',
@@ -237,13 +237,11 @@ export function PoCreateForm({
         unit: m.unit,
         on_hand: m.on_hand,
         min_stock: m.min_stock,
-        profile: m.conversion_profile,
         price_unit: m.price_unit,
         unit2_factor: m.unit2_factor,
         spec: m.spec ?? '', // ⭐ tự điền quy cách
         qty: '', // nhân viên nhập
         qty2: '', // nhân viên tự tính & nhập (vật tư cần quy đổi)
-        qty2Touched: false,
         price: '', // nhân viên nhập
         note: '',
         suggest: need?.suggest ?? null,
@@ -264,7 +262,6 @@ export function PoCreateForm({
         unit: n.unit,
         on_hand: n.on_hand,
         min_stock: 0,
-        conversion_profile: 'A',
         price_unit: null,
         unit2_factor: null,
       },
@@ -308,10 +305,10 @@ export function PoCreateForm({
     )
   }
 
-  /** Thành tiền dòng — B/C: SL tính giá × giá; A: SL đặt × giá. */
+  /** Thành tiền dòng — có đv giá riêng: SL tính giá × giá; không: SL đặt × giá. */
   function lineAmount(l: Line): number {
     const price = Number(l.price) || 0
-    if (hasQty2(l.profile)) return (Number(l.qty2) || 0) * price
+    if (needsPriceUnit(l)) return (Number(l.qty2) || 0) * price
     return (Number(l.qty) || 0) * price
   }
 
@@ -329,7 +326,7 @@ export function PoCreateForm({
       (l) =>
         l.qty !== '' &&
         Number(l.qty) > 0 &&
-        (!hasQty2(l.profile) || (l.qty2 !== '' && Number(l.qty2) > 0)),
+        (!needsPriceUnit(l) || (l.qty2 !== '' && Number(l.qty2) > 0)),
     )
   const invalid = !lsxId || !supplierId || !linesOk
 
@@ -377,15 +374,15 @@ export function PoCreateForm({
           terms: terms.trim() || null,
           note: note.trim() || null,
           lines: lines.map((l) => {
-            const { price_basis, unit2 } = profileLineMapping(l.profile, l.price_unit)
+            const twoUnit = needsPriceUnit(l)
             return {
               material_id: l.material_id,
-              qty_ordered: Number(l.qty),
+              qty_ordered: Number(l.qty), // luôn theo ĐVT đặt/tồn (cây) — trục tồn kho
               unit_price: l.price === '' ? null : Number(l.price),
-              price_basis,
+              price_basis: twoUnit ? 'unit2' : 'unit',
               spec: l.spec.trim() || null,
-              qty2: hasQty2(l.profile) && l.qty2 !== '' ? Number(l.qty2) : null,
-              unit2,
+              qty2: twoUnit && l.qty2 !== '' ? Number(l.qty2) : null, // kg — chỉ trục tiền
+              unit2: twoUnit ? l.price_unit : null,
               note: l.note.trim() || null,
             }
           }),
@@ -644,7 +641,6 @@ export function PoCreateForm({
                   on_hand: 0,
                   min_stock: 0,
                   spec: m.spec,
-                  conversion_profile: m.conversion_profile,
                   price_unit: m.price_unit,
                   unit2_factor: m.unit2_factor,
                 })
@@ -708,26 +704,16 @@ export function PoCreateForm({
                         <div className="mt-0.5 font-mono text-[10px] text-zinc-400">
                           {l.code} · ĐVT: {l.unit} · tồn {num(l.on_hand)}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-1">
-                          <span
-                            className={
-                              'rounded px-1.5 py-0.5 text-[9px] font-bold ' +
-                              (l.profile === 'A'
-                                ? 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'
-                                : l.profile === 'B'
-                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300'
-                                  : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400')
-                            }
-                            title={`Loại quy đổi ${l.profile} — ${PROFILE_SHORT[l.profile]}`}
-                          >
-                            {l.profile} · {PROFILE_SHORT[l.profile]}
-                          </span>
-                          {hasQty2(l.profile) && l.price_unit && (
-                            <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
-                              giá/{l.price_unit} · nhập {l.price_unit}
+                        {needsPriceUnit(l) && (
+                          <div className="mt-1 flex flex-wrap items-center gap-1">
+                            <span
+                              className="rounded bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400"
+                              title={`Đặt theo ${l.unit}, giá theo ${l.price_unit} — nhập cả 2 số`}
+                            >
+                              giá theo {l.price_unit}
                             </span>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </td>
                       <td className="py-2 pr-2">
                         <input
@@ -790,58 +776,44 @@ export function PoCreateForm({
                         )}
                       </td>
                       <td className="py-2 pr-2">
-                        {hasQty2(l.profile) ? (
-                          (() => {
-                            // Vật tư cần quy đổi: nhân viên TỰ TÍNH & nhập kg/m².
-                            const hint = suggestQty2(
-                              l.profile,
-                              l.unit2_factor,
-                              l.qty === '' ? null : Number(l.qty),
-                            )
-                            return (
-                              <>
-                                <div className="flex items-center gap-1">
-                                  <input
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={l.qty2}
-                                    onChange={(e) =>
-                                      setLine(i, {
-                                        qty2:
-                                          e.target.value === ''
-                                            ? ''
-                                            : Number(e.target.value),
-                                        qty2Touched: true,
-                                      })
-                                    }
-                                    className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
-                                    aria-label={`Tổng ${l.price_unit ?? ''} ${l.name}`}
-                                    title={
-                                      l.unit2_factor
-                                        ? `Nhân viên tự tính — tham khảo SL × ${l.unit2_factor} ${l.price_unit}/${l.unit}`
-                                        : `Nhập tổng ${l.price_unit} theo báo giá/cân NCC`
-                                    }
-                                  />
-                                  <span className="shrink-0 text-[10px] text-violet-500">
-                                    {l.price_unit}
-                                  </span>
+                        {needsPriceUnit(l) ? (
+                          <>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={l.qty2}
+                                onChange={(e) =>
+                                  setLine(i, {
+                                    qty2:
+                                      e.target.value === '' ? '' : Number(e.target.value),
+                                  })
+                                }
+                                className={`${inputCls} border-violet-300 text-right font-medium dark:border-violet-800`}
+                                aria-label={`Tổng ${l.price_unit ?? ''} ${l.name}`}
+                                title={`Nhân viên tự tính & nhập tổng ${l.price_unit} theo báo giá / cân của NCC`}
+                              />
+                              <span className="shrink-0 text-[10px] text-violet-500">
+                                {l.price_unit}
+                              </span>
+                            </div>
+                            {l.unit2_factor != null &&
+                              l.qty !== '' &&
+                              Number(l.qty) > 0 && (
+                                <div
+                                  className="mt-0.5 text-right text-[10px] whitespace-nowrap text-zinc-400"
+                                  title={`Định mức ${l.unit2_factor} ${l.price_unit}/${l.unit} — chỉ để đối chiếu, KHÔNG tự điền`}
+                                >
+                                  ≈{' '}
+                                  {num(
+                                    Math.round(Number(l.qty) * l.unit2_factor * 100) /
+                                      100,
+                                  )}{' '}
+                                  {l.price_unit} (định mức)
                                 </div>
-                                {hint != null && l.qty2 === '' && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setLine(i, { qty2: hint, qty2Touched: true })
-                                    }
-                                    className="mt-0.5 block w-full text-right text-[10px] text-violet-500 hover:underline"
-                                    title={`SL × ${l.unit2_factor} — bấm để dùng, sửa được`}
-                                  >
-                                    ≈ {num(hint)} ↩
-                                  </button>
-                                )}
-                              </>
-                            )
-                          })()
+                              )}
+                          </>
                         ) : (
                           <div className="flex h-[30px] items-center justify-end text-zinc-300 dark:text-zinc-600">
                             —
@@ -1166,7 +1138,7 @@ export function PoCreateForm({
                       {l.qty === '' ? '' : num(Number(l.qty))}
                     </td>
                     <td className="border border-zinc-400 px-1">
-                      {hasQty2(l.profile) && l.qty2 !== ''
+                      {needsPriceUnit(l) && l.qty2 !== ''
                         ? `${num(Number(l.qty2))} ${l.price_unit ?? ''}`
                         : ''}
                     </td>
