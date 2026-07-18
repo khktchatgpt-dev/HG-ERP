@@ -41,23 +41,62 @@ export const BORROWER_KIND_LABEL: Record<BorrowerKind, string> = {
   other: 'Đối tác ngoài',
 }
 
+/**
+ * Loại hiện vật (0062). Showroom không chỉ trưng SP của mình — còn có mẫu vật
+ * liệu, mẫu đối thủ, prototype chưa có mã. Chỉ `product` gắn SP trong thư viện,
+ * các loại còn lại tự khai tên riêng để khỏi làm bẩn danh mục SP thật.
+ */
+export const SAMPLE_KINDS = ['product', 'material', 'reference', 'prototype'] as const
+export type SampleKind = (typeof SAMPLE_KINDS)[number]
+
+export const SAMPLE_KIND_LABEL: Record<SampleKind, string> = {
+  product: 'Sản phẩm của mình',
+  material: 'Mẫu vật liệu',
+  reference: 'Mẫu đối thủ / tham khảo',
+  prototype: 'Mẫu thử (prototype)',
+}
+
 /** Số ảnh tối đa mỗi mẫu ("4 góc"). Ép ở service, không ở DB — đổi số khỏi migration. */
 export const MAX_SAMPLE_PHOTOS = 4
 
 const nullableText = z.string().trim().max(500).optional().nullable()
+const nameText = z.string().trim().min(1).max(200)
 
-export const sampleCreateSchema = z.object({
-  product_id: z.uuid(),
-  condition: z.enum(SAMPLE_CONDITIONS).default('good'),
-  location: nullableText,
-  acquired_at: z.iso.date().optional().nullable(),
-  note: nullableText,
-  /** Tạo nhiều hiện vật cùng lúc cho 1 SP (3 ghế giống nhau = 3 mẫu, 3 mã). */
-  quantity: z.number().int().min(1).max(20).default(1),
-})
+export const sampleCreateSchema = z
+  .object({
+    kind: z.enum(SAMPLE_KINDS).default('product'),
+    /** Bắt buộc khi kind='product'; bỏ trống với loại độc lập. */
+    product_id: z.uuid().optional().nullable(),
+    /** Tên riêng của mẫu — bắt buộc khi KHÔNG gắn SP; SP thì lấy từ thư viện. */
+    name: nameText.optional().nullable(),
+    category: z.string().trim().max(120).optional().nullable(),
+    /** Hãng/nguồn: mẫu đối thủ của hãng nào, mua ở đâu. */
+    source: z.string().trim().max(200).optional().nullable(),
+    condition: z.enum(SAMPLE_CONDITIONS).default('good'),
+    location: nullableText,
+    acquired_at: z.iso.date().optional().nullable(),
+    note: nullableText,
+    /** Tạo nhiều hiện vật cùng lúc (3 ghế giống nhau = 3 mẫu, 3 mã). */
+    quantity: z.number().int().min(1).max(20).default(1),
+  })
+  .superRefine((v, ctx) => {
+    // Khớp check `sample_parent_shape` ở DB (0062) để báo lỗi tiếng Việt tử tế
+    // thay vì để Postgres ném constraint violation.
+    if (v.kind === 'product') {
+      if (!v.product_id) {
+        ctx.addIssue({ code: 'custom', path: ['product_id'], message: 'Chọn sản phẩm' })
+      }
+    } else if (!v.name) {
+      ctx.addIssue({ code: 'custom', path: ['name'], message: 'Nhập tên hiện vật' })
+    }
+  })
 export type SampleCreateInput = z.infer<typeof sampleCreateSchema>
 
 export const sampleUpdateSchema = z.object({
+  /** Chỉ sửa được tên/nhóm/nguồn của mẫu độc lập — mẫu gắn SP lấy từ thư viện. */
+  name: nameText.optional().nullable(),
+  category: z.string().trim().max(120).optional().nullable(),
+  source: z.string().trim().max(200).optional().nullable(),
   location: nullableText,
   acquired_at: z.iso.date().optional().nullable(),
   note: nullableText,
@@ -77,6 +116,7 @@ export const sampleStatusSchema = z.object({
 export const sampleListQuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(SAMPLE_STATUSES).optional(),
+  kind: z.enum(SAMPLE_KINDS).optional(),
   product_id: z.uuid().optional(),
   /** Chỉ mẫu quá hạn trả — lọc hay dùng nhất khi đi đòi mẫu về. */
   overdue: z.coerce.boolean().optional(),

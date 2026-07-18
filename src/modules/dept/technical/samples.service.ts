@@ -84,23 +84,35 @@ export const samplesService = {
     return { ...byStatus, total, overdue }
   },
 
-  /** Tạo `quantity` hiện vật cho 1 SP — 3 ghế giống nhau = 3 mẫu, 3 mã riêng. */
+  /**
+   * Tạo `quantity` hiện vật — 3 ghế giống nhau = 3 mẫu, 3 mã riêng.
+   * `kind='product'` gắn SP trong thư viện; loại khác đứng độc lập với tên riêng.
+   */
   async create(user: User, input: SampleCreateInput): Promise<{ codes: string[] }> {
     await assertTechnical(user)
 
-    const { data: product } = await db()
-      .from('technical_products')
-      .select('id')
-      .eq('id', input.product_id)
-      .maybeSingle()
-    if (!product) throw NotFound('Không tìm thấy sản phẩm')
+    // Chỉ mẫu gắn SP mới cần product_id; loại độc lập bỏ trống (khớp 0062).
+    const productId = input.kind === 'product' ? (input.product_id ?? null) : null
+    if (input.kind === 'product') {
+      const { data: product } = await db()
+        .from('technical_products')
+        .select('id')
+        .eq('id', productId!)
+        .maybeSingle()
+      if (!product) throw NotFound('Không tìm thấy sản phẩm')
+    }
 
     const codes: string[] = []
     for (let i = 0; i < input.quantity; i++) {
       const code = await samplesRepo.nextCode()
       const row = await samplesRepo.insert({
         code,
-        product_id: input.product_id,
+        kind: input.kind,
+        product_id: productId,
+        // Mẫu gắn SP lấy tên từ thư viện → để null; mẫu độc lập giữ tên riêng.
+        name: input.kind === 'product' ? null : (input.name ?? null),
+        category: input.kind === 'product' ? null : (input.category ?? null),
+        source: input.kind === 'product' ? null : (input.source ?? null),
         condition: input.condition,
         location: input.location ?? null,
         acquired_at: input.acquired_at ?? null,
@@ -115,7 +127,7 @@ export const samplesService = {
       })
       codes.push(code)
     }
-    await syncProductFlag(input.product_id)
+    if (productId) await syncProductFlag(productId)
     return { codes }
   },
 
@@ -124,7 +136,17 @@ export const samplesService = {
     const before = await samplesRepo.findById(id)
     if (!before) throw NotFound('Không tìm thấy mẫu')
 
+    // Tên/nhóm/nguồn chỉ sửa cho mẫu độc lập — mẫu gắn SP lấy từ thư viện, để nguyên.
+    const ownFields =
+      before.kind === 'product'
+        ? {}
+        : {
+            name: input.name ?? before.name,
+            category: input.category ?? null,
+            source: input.source ?? null,
+          }
     await samplesRepo.patch(id, {
+      ...ownFields,
       location: input.location ?? null,
       acquired_at: input.acquired_at ?? null,
       note: input.note ?? null,
@@ -201,7 +223,7 @@ export const samplesService = {
       after: { status: to },
       note,
     })
-    if (to === 'disposed') await syncProductFlag(before.product_id)
+    if (to === 'disposed' && before.product_id) await syncProductFlag(before.product_id)
   },
 
   async events(_user: User, id: string) {

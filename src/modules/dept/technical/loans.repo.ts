@@ -34,19 +34,24 @@ export type LoanWithRefs = Loan & {
 const COLS = 'id, code, sample_id, borrower_kind, borrower_user_id, borrower_customer_id, borrower_name, borrower_contact, purpose, borrowed_at, due_at, returned_at, returned_condition, issued_by, received_by, note, created_at, updated_at'
 
 type RawProduct = { name: string }
-type RawSample = { code: string; product: RawProduct | RawProduct[] | null }
+type RawSample = {
+  code: string
+  name: string | null
+  product: RawProduct | RawProduct[] | null
+}
 type Raw = Loan & { sample: RawSample | RawSample[] | null }
 
 function unwrap(rows: Raw[] | null): LoanWithRefs[] {
   return (rows ?? []).map((r) => {
     const s = Array.isArray(r.sample) ? r.sample[0] : r.sample
     const p = s ? (Array.isArray(s.product) ? s.product[0] : s.product) : null
-    return { ...r, sample_code: s?.code ?? '?', product_name: p?.name ?? '?' }
+    // Mẫu độc lập có tên riêng; mẫu gắn SP lấy tên SP từ thư viện.
+    return { ...r, sample_code: s?.code ?? '?', product_name: s?.name ?? p?.name ?? '?' }
   })
 }
 
 // prettier-ignore
-const SELECT = `${COLS}, sample:technical_samples(code, product:technical_products(name))` as const
+const SELECT = `${COLS}, sample:technical_samples(code, name, product:technical_products(name))` as const
 
 export const loansRepo = {
   async nextCode(): Promise<string> {

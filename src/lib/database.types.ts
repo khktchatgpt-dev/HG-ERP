@@ -667,6 +667,55 @@ export type Database = {
           },
         ]
       }
+      production_order_routes: {
+        Row: {
+          created_at: string
+          id: string
+          order_line_id: string
+          production_order_id: string
+          stages: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          order_line_id: string
+          production_order_id: string
+          stages?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          order_line_id?: string
+          production_order_id?: string
+          stages?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_routes_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_routes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_routes_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+        ]
+      }
       production_orders: {
         Row: {
           approved_at: string | null
@@ -2157,6 +2206,7 @@ export type Database = {
           set_contents: string | null
           shipping_mark: string | null
           showroom_sample: boolean
+          stage_route: Json | null
           tech_spec: Json
           unit: string
           updated_at: string
@@ -2188,6 +2238,7 @@ export type Database = {
           set_contents?: string | null
           shipping_mark?: string | null
           showroom_sample?: boolean
+          stage_route?: Json | null
           tech_spec?: Json
           unit?: string
           updated_at?: string
@@ -2219,6 +2270,7 @@ export type Database = {
           set_contents?: string | null
           shipping_mark?: string | null
           showroom_sample?: boolean
+          stage_route?: Json | null
           tech_spec?: Json
           unit?: string
           updated_at?: string
@@ -2390,40 +2442,52 @@ export type Database = {
       technical_samples: {
         Row: {
           acquired_at: string | null
+          category: string | null
           code: string
           condition: string
           created_at: string
           created_by: string | null
           id: string
+          kind: string
           location: string | null
+          name: string | null
           note: string | null
-          product_id: string
+          product_id: string | null
+          source: string | null
           status: string
           updated_at: string
         }
         Insert: {
           acquired_at?: string | null
+          category?: string | null
           code: string
           condition?: string
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string
           location?: string | null
+          name?: string | null
           note?: string | null
-          product_id: string
+          product_id?: string | null
+          source?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
           acquired_at?: string | null
+          category?: string | null
           code?: string
           condition?: string
           created_at?: string
           created_by?: string | null
           id?: string
+          kind?: string
           location?: string | null
+          name?: string | null
           note?: string | null
-          product_id?: string
+          product_id?: string | null
+          source?: string | null
           status?: string
           updated_at?: string
         }

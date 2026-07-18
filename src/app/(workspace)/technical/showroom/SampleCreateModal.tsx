@@ -9,12 +9,18 @@ import { Spinner } from '@/components/erp/Spinner'
 import {
   SAMPLE_CONDITION_LABEL,
   SAMPLE_CONDITIONS,
+  SAMPLE_KIND_LABEL,
+  SAMPLE_KINDS,
   type SampleCondition,
+  type SampleKind,
 } from '@/modules/dept/technical/samples.schema'
 
 /**
  * Thêm hiện vật vào showroom. `quantity` > 1 sinh nhiều mẫu, MỖI CÁI MỘT MÃ —
  * 3 ghế giống nhau là 3 hiện vật khác nhau, mượn/hỏng độc lập.
+ *
+ * `kind='product'` gắn SP trong thư viện; loại khác (vật liệu/đối thủ/prototype)
+ * đứng độc lập với tên tự khai, khỏi làm bẩn danh mục SP thật.
  */
 export function SampleCreateModal({
   products,
@@ -26,21 +32,32 @@ export function SampleCreateModal({
   const router = useRouter()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const [kind, setKind] = useState<SampleKind>('product')
   const [productId, setProductId] = useState('')
+  const [name, setName] = useState('')
+  const [category, setCategory] = useState('')
+  const [source, setSource] = useState('')
   const [condition, setCondition] = useState<SampleCondition>('good')
   const [quantity, setQuantity] = useState(1)
   const [location, setLocation] = useState('')
   const [note, setNote] = useState('')
 
+  const isProduct = kind === 'product'
+  const ready = isProduct ? !!productId : !!name.trim()
+
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    if (!productId) return
+    if (!ready) return
     setBusy(true)
     try {
       const { codes } = await api<{ codes: string[] }>('/api/dept/technical/samples', {
         method: 'POST',
         body: {
-          product_id: productId,
+          kind,
+          product_id: isProduct ? productId : null,
+          name: isProduct ? null : name.trim(),
+          category: isProduct ? null : category || null,
+          source: isProduct ? null : source || null,
           condition,
           quantity,
           location: location || null,
@@ -63,21 +80,67 @@ export function SampleCreateModal({
   return (
     <Modal open onClose={onClose} title="Thêm mẫu showroom">
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <Field label="Sản phẩm *">
+        <Field label="Loại hiện vật *">
           <select
-            required
-            value={productId}
-            onChange={(e) => setProductId(e.currentTarget.value)}
+            value={kind}
+            onChange={(e) => setKind(e.currentTarget.value as SampleKind)}
             className={INPUT}
           >
-            <option value="">— Chọn sản phẩm —</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.code} — {p.name}
+            {SAMPLE_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {SAMPLE_KIND_LABEL[k]}
               </option>
             ))}
           </select>
         </Field>
+
+        {isProduct ? (
+          <Field label="Sản phẩm *">
+            <select
+              required
+              value={productId}
+              onChange={(e) => setProductId(e.currentTarget.value)}
+              className={INPUT}
+            >
+              <option value="">— Chọn sản phẩm —</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.code} — {p.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : (
+          <>
+            <Field label="Tên hiện vật *">
+              <input
+                required
+                value={name}
+                onChange={(e) => setName(e.currentTarget.value)}
+                placeholder="Mẫu veneer óc chó, ghế đối thủ X…"
+                className={INPUT}
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Nhóm / phân loại">
+                <input
+                  value={category}
+                  onChange={(e) => setCategory(e.currentTarget.value)}
+                  placeholder="Veneer, sơn, phụ kiện…"
+                  className={INPUT}
+                />
+              </Field>
+              <Field label="Hãng / nguồn">
+                <input
+                  value={source}
+                  onChange={(e) => setSource(e.currentTarget.value)}
+                  placeholder="Hãng, nơi mua…"
+                  className={INPUT}
+                />
+              </Field>
+            </div>
+          </>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Số lượng hiện vật">
@@ -132,7 +195,7 @@ export function SampleCreateModal({
           <button type="button" onClick={onClose} className={BTN_GHOST}>
             Huỷ
           </button>
-          <button type="submit" disabled={busy || !productId} className={BTN_PRIMARY}>
+          <button type="submit" disabled={busy || !ready} className={BTN_PRIMARY}>
             {busy && <Spinner size={12} />}
             {busy ? 'Đang thêm…' : 'Thêm mẫu'}
           </button>
