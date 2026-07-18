@@ -26,7 +26,7 @@ vi.mock('@/modules/dept/supply/pos.repo', () => ({
   posRepo: { list: vi.fn(), patch: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({
-  SUPPLY_DEPT_NAME: 'Kế Hoạch Sản Xuất-cung ứng',
+  SUPPLY_DEPT_NAMES: new Set(['Kế Hoạch Sản Xuất-cung ứng']),
 }))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { list: vi.fn() },

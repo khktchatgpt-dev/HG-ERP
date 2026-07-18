@@ -125,9 +125,9 @@ export default async function PlanningHomePage() {
             desc="Hồ sơ NCC, lịch sử mua"
           />
           <QuickLink
-            href="/planning/production"
+            href="/production/progress"
             title="Tiến độ sản xuất"
-            desc="Cập nhật giai đoạn từng LSX"
+            desc="Cập nhật giai đoạn từng LSX (ở workspace Sản xuất)"
           />
           <QuickLink
             href="/planning/tracking"

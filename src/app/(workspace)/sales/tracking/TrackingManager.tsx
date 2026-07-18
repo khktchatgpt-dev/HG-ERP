@@ -50,10 +50,13 @@ export function TrackingManager({
   rows,
   stages,
   canManage,
+  lsxBase = '/sales/lsx',
 }: {
   rows: Row[]
   stages: Stage[]
   canManage: boolean
+  /** Gốc link chi tiết LSX theo shell đang đứng — không nhảy giao diện phòng khác. */
+  lsxBase?: string
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -250,7 +253,7 @@ export function TrackingManager({
         return (
           <div className="flex flex-col gap-1">
             <a
-              href={`/sales/lsx/${r.production_order_id}`}
+              href={`${lsxBase}/${r.production_order_id}`}
               className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
               title="Chi tiết lệnh sản xuất"
             >

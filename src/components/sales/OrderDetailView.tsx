@@ -625,9 +625,17 @@ export function OrderDetailView({
                             ? 'Đã huỷ theo đơn'
                             : 'Bị từ chối'}
                 </Badge>
+                <a
+                  href={`/print/lsx/${lsx.id}`}
+                  target="_blank"
+                  rel="noopener"
+                  className="ml-auto rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                >
+                  🖨 In LSX
+                </a>
                 <Link
                   href={`/sales/lsx/${lsx.id}`}
-                  className="ml-auto rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+                  className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
                 >
                   Xem / thao tác LSX →
                 </Link>
@@ -673,21 +681,35 @@ export function OrderDetailView({
                       />
                     </label>
                   </div>
-                  <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => setIssuing(false)}
+                  <div className="flex items-center justify-between gap-2">
+                    {/* Xem trước phiếu in (mẫu Hoàng Gia) với số/ngày đang gõ —
+                        dò thông số trước khi phát, bản thử có watermark đỏ. */}
+                    <a
+                      href={`/print/lsx/preview/${order.id}?code=${encodeURIComponent(
+                        lsxCode.trim(),
+                      )}&ship_date=${encodeURIComponent(shipDate)}`}
+                      target="_blank"
+                      rel="noopener"
                       className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
                     >
-                      Huỷ
-                    </button>
-                    <button
-                      disabled={busy || !lsxCode.trim()}
-                      onClick={() => void issueLsx()}
-                      className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {busy && <Spinner size={14} />}
-                      Xác nhận phát LSX
-                    </button>
+                      🖨 Xem trước bản in
+                    </a>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setIssuing(false)}
+                        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                      >
+                        Huỷ
+                      </button>
+                      <button
+                        disabled={busy || !lsxCode.trim()}
+                        onClick={() => void issueLsx()}
+                        className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                      >
+                        {busy && <Spinner size={14} />}
+                        Xác nhận phát LSX
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (

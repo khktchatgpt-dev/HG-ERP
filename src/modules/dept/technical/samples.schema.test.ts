@@ -67,10 +67,30 @@ describe('sampleStatusSchema', () => {
 })
 
 describe('sampleCreateSchema', () => {
-  it('mặc định 1 hiện vật, tình trạng tốt', () => {
+  it('mặc định 1 hiện vật, tình trạng tốt, loại là sản phẩm', () => {
     const r = sampleCreateSchema.parse({ product_id: uuid })
     expect(r.quantity).toBe(1)
     expect(r.condition).toBe('good')
+    expect(r.kind).toBe('product')
+  })
+
+  it('mẫu gắn SP bắt buộc product_id — không có thì trượt vào đúng ô đó', () => {
+    const bad = sampleCreateSchema.safeParse({ kind: 'product' })
+    expect(bad.success).toBe(false)
+    expect(bad.error?.issues[0]?.path).toEqual(['product_id'])
+  })
+
+  it('mẫu độc lập (vật liệu/đối thủ/prototype) bắt buộc tên, không cần product_id', () => {
+    // Không tên → trượt vào ô name.
+    const noName = sampleCreateSchema.safeParse({ kind: 'material' })
+    expect(noName.success).toBe(false)
+    expect(noName.error?.issues[0]?.path).toEqual(['name'])
+
+    // Có tên → hợp lệ dù không gắn SP.
+    for (const kind of ['material', 'reference', 'prototype'] as const) {
+      const ok = sampleCreateSchema.safeParse({ kind, name: 'Mẫu veneer óc chó' })
+      expect(ok.success, kind).toBe(true)
+    }
   })
 
   it('tạo hàng loạt bị chặn trên 20 — tránh lỡ tay sinh 1000 mã', () => {

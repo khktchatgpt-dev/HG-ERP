@@ -17,8 +17,10 @@ import { RowMenu } from '@/components/erp/RowMenu'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import {
   SAMPLE_CONDITION_LABEL,
+  SAMPLE_KIND_LABEL,
   SAMPLE_STATUS_LABEL,
   type SampleCondition,
+  type SampleKind,
   type SampleStatus,
 } from '@/modules/dept/technical/samples.schema'
 import { SampleCreateModal } from './SampleCreateModal'
@@ -28,9 +30,11 @@ import { ReturnModal } from './ReturnModal'
 export type SampleRow = {
   id: string
   code: string
-  product_id: string
-  product_code: string
-  product_name: string
+  kind: SampleKind
+  product_id: string | null
+  product_code: string | null
+  display_name: string
+  display_category: string | null
   status: SampleStatus
   condition: SampleCondition
   location: string | null
@@ -41,6 +45,13 @@ export type SampleRow = {
     due_at: string | null
     borrowed_at: string
   } | null
+}
+
+const KIND_TONE: Record<SampleKind, 'green' | 'blue' | 'amber' | 'gray'> = {
+  product: 'green',
+  material: 'blue',
+  reference: 'amber',
+  prototype: 'gray',
 }
 
 const STATUS_TONE: Record<SampleStatus, 'green' | 'blue' | 'amber' | 'red' | 'gray'> = {
@@ -83,7 +94,7 @@ export function SamplesManager({
   page: number
   pageSize: number
   stats: Record<string, number>
-  filters: { q: string; status: string; overdue: boolean }
+  filters: { q: string; status: string; kind: string; overdue: boolean }
   imageUrls: Record<string, string>
   products: { id: string; code: string; name: string }[]
   canEdit: boolean
@@ -154,13 +165,13 @@ export function SamplesManager({
     },
     {
       key: 'product',
-      header: 'Sản phẩm',
+      header: 'Hiện vật',
       cell: (s) => (
         <div className="flex min-w-0 items-center gap-2">
           {imageUrls[s.id] ? (
             <Image
               src={imageUrls[s.id]}
-              alt={s.product_name}
+              alt={s.display_name}
               width={40}
               height={32}
               unoptimized={isSvgUrl(imageUrls[s.id])}
@@ -170,9 +181,14 @@ export function SamplesManager({
             <span className="h-8 w-10 shrink-0 rounded border border-dashed border-zinc-300 dark:border-zinc-700" />
           )}
           <div className="min-w-0">
-            <div className="truncate">{s.product_name}</div>
+            <div className="flex items-center gap-1.5">
+              <span className="truncate">{s.display_name}</span>
+              {s.kind !== 'product' && (
+                <Badge tone={KIND_TONE[s.kind]}>{SAMPLE_KIND_LABEL[s.kind]}</Badge>
+              )}
+            </div>
             <div className="truncate font-mono text-[11px] text-zinc-400">
-              {s.product_code}
+              {s.product_code ?? s.display_category ?? '—'}
             </div>
           </div>
         </div>
@@ -306,7 +322,18 @@ export function SamplesManager({
             <ToolbarInput
               value={filters.q}
               onChange={(v) => setParam({ q: v || null })}
-              placeholder="Tìm mã mẫu…"
+              placeholder="Tìm mã mẫu hoặc tên…"
+            />
+            <ToolbarSelect
+              value={filters.kind}
+              onChange={(v) => setParam({ kind: v === 'all' ? null : v })}
+              options={[
+                { value: 'all', label: 'Mọi loại' },
+                ...Object.entries(SAMPLE_KIND_LABEL).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
+              ]}
             />
             <ToolbarSelect
               value={filters.status}

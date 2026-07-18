@@ -20,6 +20,7 @@ export default async function ShowroomPage({
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? ''
   const q = str(spRaw.q).trim() || undefined
   const status = str(spRaw.status) || 'all'
+  const kind = str(spRaw.kind) || 'all'
   const overdue = str(spRaw.overdue) === '1'
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
 
@@ -27,6 +28,7 @@ export default async function ShowroomPage({
     samplesService.list(user, {
       q,
       status: status === 'all' ? undefined : (status as never),
+      kind: kind === 'all' ? undefined : (kind as never),
       overdue,
       page,
       page_size: PAGE_SIZE,
@@ -65,7 +67,7 @@ export default async function ShowroomPage({
       page={page}
       pageSize={PAGE_SIZE}
       stats={stats}
-      filters={{ q: q ?? '', status, overdue }}
+      filters={{ q: q ?? '', status, kind, overdue }}
       imageUrls={imageUrls}
       products={products.map((p) => ({ id: p.id, code: p.code, name: p.name }))}
       canEdit={canEdit}

@@ -16,6 +16,15 @@ vi.mock('./production.repo', () => ({
   productionRepo: { findById: vi.fn(), listStages: vi.fn() },
 }))
 vi.mock('./production.service', () => ({ isProductionStaff: vi.fn() }))
+vi.mock('./routes.repo', () => ({
+  routesRepo: {
+    listByLsx: vi.fn(),
+    replaceAll: vi.fn(),
+    productDefaults: vi.fn(),
+    countsByLsx: vi.fn(),
+    saveProductDefault: vi.fn(),
+  },
+}))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
@@ -23,6 +32,7 @@ vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn
 
 import { outputsService } from './outputs.service'
 import { outputsRepo } from './outputs.repo'
+import { routesRepo } from './routes.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
@@ -77,6 +87,8 @@ beforeEach(() => {
   vi.mocked(componentsRepo.listByLsx).mockResolvedValue([COMPONENT] as never)
   vi.mocked(ordersRepo.listLines).mockResolvedValue(ORDER_LINES as never)
   vi.mocked(outputsRepo.listByLsx).mockResolvedValue([] as never)
+  // Mặc định: lệnh CHƯA định hình lộ trình → nhập tự do (tương thích lệnh cũ).
+  vi.mocked(routesRepo.listByLsx).mockResolvedValue([])
 })
 
 describe('outputsService.record — nhập sản lượng theo lô (FR-PR-02/03/07)', () => {
@@ -93,6 +105,19 @@ describe('outputsService.record — nhập sản lượng theo lô (FR-PR-02/03/
       defect_qty: 1,
       created_by: worker.id,
     })
+  })
+
+  it('lộ trình đã định hình (0063): chặn nhập giai đoạn NGOÀI lộ trình của SP', async () => {
+    // SP chỉ đi Phôi→Hàn — nhập Sơn phải bị chặn với lỗi chỉ đường sửa.
+    vi.mocked(routesRepo.listByLsx).mockResolvedValue([
+      { order_line_id: 'ol1', stages: ['phoi', 'han'] },
+    ])
+    await expect(
+      outputsService.record(worker, 'lsx1', { ...RECORD, stage: 'son' }),
+    ).rejects.toThrow(/lộ trình/)
+    // Giai đoạn thuộc lộ trình thì vẫn nhập bình thường.
+    const { warnings } = await outputsService.record(worker, 'lsx1', RECORD)
+    expect(warnings).toEqual([])
   })
 
   it('FR-PR-07: nhập vượt tổng cần → KHÔNG chặn, trả warning nêu số vượt', async () => {

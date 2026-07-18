@@ -7,6 +7,14 @@
 
 export type Role = 'admin' | 'manager' | 'employee'
 
+/**
+ * Năng lực nghiệp vụ theo PHÒNG (không suy được từ role) — dùng để lọc menu.
+ * Server tính qua `resolveNavCapabilities` (workspaces/access.ts) rồi truyền
+ * vào resolveNavSections. Ví dụ: 'production.shape' = được định hình sản xuất
+ * (Kế hoạch/BQL) — thống kê xưởng cùng role employee nhưng không có.
+ */
+export type NavCapability = 'production.shape' | 'production.record'
+
 export type NavItem = {
   href: string
   label: string
@@ -15,6 +23,8 @@ export type NavItem = {
   roles?: readonly Role[]
   /** Ngoài role, còn cần là head của dept? Chỉ có ý nghĩa nếu roles không loại. */
   requireHead?: boolean
+  /** Chỉ hiện khi user có năng lực này (lọc theo phòng, xem NavCapability). */
+  capability?: NavCapability
 }
 
 export type NavSection = {
@@ -66,6 +76,13 @@ export type WorkspaceConfig = {
    * Dùng cho System workspace — IT admin không cần các mục cá nhân trong sidebar quản trị.
    */
   hidePersonalSection?: boolean
+  /**
+   * Mọi NV đã đăng nhập được VÀO XEM workspace này (xem chéo phòng ban).
+   * Chỉ là quyền ĐỌC ở tầng layout — mọi mutation vẫn bị service chặn theo
+   * phòng chủ quản (is*Staff), nên bật cờ này không mở thêm quyền ghi nào.
+   * Không bật cho dữ liệu nhạy cảm (hr, finance) và khu điều hành (exec, system).
+   */
+  openView?: boolean
 }
 
 // ── Nav "Cá nhân" chung, tự thêm ở đầu mỗi workspace ──────────────────────
@@ -92,6 +109,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'SL',
     // Đã migrate sang (workspace)/sales — bật để login đưa NV Sales vào workspace.
     ready: true,
+    openView: true,
     sections: [
       {
         heading: 'Sales',
@@ -160,6 +178,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'amber',
     logoText: 'KH',
     ready: true,
+    openView: true,
     sections: [
       {
         heading: 'Kho',
@@ -181,6 +200,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'sky',
     logoText: 'KT',
     ready: true,
+    openView: true,
     sections: [
       {
         heading: 'Kỹ thuật',
@@ -202,6 +222,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'violet',
     logoText: 'KH',
     ready: true,
+    openView: true,
     // 2 cụm việc của phòng (1 phòng ban, chưa tách quyền — xem docs/plan-supply.md):
     // Thu mua (PO/NCC) và Kế hoạch SX (tiến độ LSX, theo dõi đơn, phiếu kho).
     sections: [
@@ -214,11 +235,15 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       {
+        // "Tiến độ sản xuất" đã dời sang workspace Sản xuất (/production/progress)
+        // — điều phối LSX là việc theo dõi ở xưởng. Cung ứng giữ các view cần cho
+        // lập kế hoạch mua/đặt. Route /planning/* re-export view dùng chung → giữ
+        // menu Cung ứng, không nhảy sang shell Sản xuất/Sales/Kho.
         heading: 'Kế hoạch sản xuất',
+        // Định hình SX KHÔNG nằm ở đây — nó thuộc workspace Sản xuất
+        // (/production/shaping, user chốt): Cung ứng chỉ giữ view phục vụ
+        // mua/đặt vật tư. Planner cần định hình thì chuyển sang ws Sản xuất.
         items: [
-          { href: '/planning/production', label: 'Tiến độ sản xuất', icon: '▣' },
-          // Route /planning/* re-export view dùng chung → giữ menu Cung ứng, không
-          // nhảy sang shell Sản xuất/Sales/Kho.
           { href: '/planning/board', label: 'Bảng tổng tiến độ', icon: '▦' },
           { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
           { href: '/planning/docs', label: 'Phiếu kho', icon: '▥' },
@@ -251,13 +276,40 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'red',
     logoText: 'SX',
     ready: true,
+    openView: true,
     sections: [
       {
         // Phạm vi xưởng gọn trong /production (gate /sales không mở cho xưởng —
         // commit "xem chéo đúng phạm vi"). Cần nhìn toàn cảnh đơn → nới sau.
         heading: 'Sản xuất',
+        // Menu xếp theo VIỆC (kế hoạch thiết kế lại 07/2026): thống kê/tổ đi
+        // thẳng "Nhập sản lượng"/"Gia công ngoài" (một chạm vào đúng tab),
+        // khỏi lướt trang chi tiết dài.
         items: [
           { href: '/production', label: 'Lệnh đang chạy', icon: '◧' },
+          // Nhập liệu là việc của bộ phận sản xuất — người khác không thấy mục
+          // (vào bằng URL vẫn chỉ xem, server chặn ghi).
+          {
+            href: '/production/entry',
+            label: 'Nhập sản lượng',
+            icon: '✎',
+            capability: 'production.record',
+          },
+          {
+            href: '/production/outsource',
+            label: 'Gia công ngoài',
+            icon: '⇄',
+            capability: 'production.record',
+          },
+          // Định hình là việc của Kế hoạch/BQL — xưởng không thấy mục này (họ
+          // vẫn xem được lộ trình/bảng chi tiết trong tab "Chi tiết & lộ trình").
+          {
+            href: '/production/shaping',
+            label: 'Định hình sản xuất',
+            icon: '◈',
+            capability: 'production.shape',
+          },
+          { href: '/production/progress', label: 'Tiến độ sản xuất', icon: '▣' },
           { href: '/production/board', label: 'Bảng tổng tiến độ', icon: '▦' },
         ],
       },
@@ -348,19 +400,23 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
 export const WORKSPACE_IDS = Object.keys(WORKSPACES) as readonly WorkspaceId[]
 
 // ── Nav resolution (dùng chung sidebar desktop + drawer mobile) ────────────
-function itemVisible(item: NavItem, ctx: { role: string; isHead: boolean }): boolean {
+function itemVisible(
+  item: NavItem,
+  ctx: { role: string; isHead: boolean; capabilities?: ReadonlySet<string> },
+): boolean {
   if (item.roles && !item.roles.includes(ctx.role as Role)) return false
   if (item.requireHead && !ctx.isHead) return false
+  if (item.capability && !ctx.capabilities?.has(item.capability)) return false
   return true
 }
 
 /**
- * Danh sách section điều hướng đã lọc theo quyền (role + head). Kết quả
- * serializable — dùng được cho cả server sidebar và client drawer mobile.
+ * Danh sách section điều hướng đã lọc theo quyền (role + head + capability).
+ * Kết quả serializable — dùng được cho cả server sidebar và client drawer mobile.
  */
 export function resolveNavSections(
   workspace: WorkspaceConfig,
-  ctx: { role: string; isHead: boolean },
+  ctx: { role: string; isHead: boolean; capabilities?: ReadonlySet<string> },
 ): NavSection[] {
   return [
     ...(workspace.hidePersonalSection ? [] : [PERSONAL_SECTION]),

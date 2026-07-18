@@ -45,8 +45,10 @@ type CreateInput = {
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
 
 export const salesService = {
+  // Xem mở cho mọi NV đã đăng nhập — workspace Sales có openView (xem chéo
+  // phòng ban, workspaces/access.ts); ghi vẫn khoá phòng Bán hàng bên dưới.
   async list(
-    user: User,
+    _user: User,
     opts: {
       q?: string
       owner_id?: string
@@ -55,7 +57,6 @@ export const salesService = {
       page_size: number
     },
   ) {
-    if (!(await isSalesUser(user))) throw Forbidden('Chỉ phòng Bán hàng truy cập được')
     return customersRepo.list({
       q: opts.q,
       owner_id: opts.owner_id,
@@ -65,8 +66,7 @@ export const salesService = {
     })
   },
 
-  async get(user: User, id: string): Promise<CustomerWithOwner> {
-    if (!(await isSalesUser(user))) throw Forbidden()
+  async get(_user: User, id: string): Promise<CustomerWithOwner> {
     const c = await customersRepo.findById(id)
     if (!c) throw NotFound('Khách hàng không tồn tại')
     return c

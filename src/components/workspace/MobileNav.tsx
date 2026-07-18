@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { resolveNavCapabilities } from '@/workspaces/access'
 import {
   ACCENT_CLASSES,
   resolveNavSections,
@@ -12,7 +13,12 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
   const user = await authService.currentUser()
   if (!user) return null
   const head = user.department_id ? await departmentsRepo.findHeadedBy(user.id) : null
-  const sections = resolveNavSections(workspace, { role: user.role, isHead: !!head })
+  const capabilities = await resolveNavCapabilities(user)
+  const sections = resolveNavSections(workspace, {
+    role: user.role,
+    isHead: !!head,
+    capabilities,
+  })
   const accent = ACCENT_CLASSES[workspace.accent]
 
   return (

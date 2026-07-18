@@ -43,6 +43,7 @@ export default async function ProductionBoardPage() {
           missing: st.missing,
           defect: st.defect,
         })),
+        allowed_stages: c.allowed_stages,
         pct_total: c.summary.pct_total,
         status: c.summary.status,
       })

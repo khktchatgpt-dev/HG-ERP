@@ -10,6 +10,15 @@ vi.mock('./components.repo', () => ({
 }))
 vi.mock('./production.repo', () => ({ productionRepo: { findById: vi.fn() } }))
 vi.mock('./outputs.repo', () => ({ outputsRepo: { existsForLsx: vi.fn() } }))
+vi.mock('./routes.repo', () => ({
+  routesRepo: {
+    listByLsx: vi.fn(),
+    replaceAll: vi.fn(),
+    productDefaults: vi.fn(),
+    countsByLsx: vi.fn(),
+    saveProductDefault: vi.fn(),
+  },
+}))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
@@ -17,13 +26,18 @@ vi.mock('@/modules/dept/technical/technical.repo', () => ({
   bomLinesRepo: { listWithMaterials: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({
+  departmentsRepo: { findById: vi.fn() },
+}))
 
 import { componentsService } from './components.service'
 import { componentsRepo } from './components.repo'
 import { outputsRepo } from './outputs.repo'
+import { routesRepo } from './routes.repo'
 import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const supply = {
@@ -46,15 +60,35 @@ const LINE = { order_line_id: 'ol1', name: 'TAY+TỰA', qty_per_unit: 2 }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isSupplyStaff).mockResolvedValue(true)
+  // canEditComponents (perms.ts) giờ tra TÊN PHÒNG: d-supply = vai Kế hoạch.
+  vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
+    id === 'd-supply'
+      ? ({ id, name: 'Kế Hoạch Sản Xuất-cung ứng', workspace_id: 'planning' } as never)
+      : null,
+  )
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(ordersRepo.listLines).mockResolvedValue(ORDER_LINES as never)
   vi.mocked(outputsRepo.existsForLsx).mockResolvedValue(false)
+  // Mặc định: lệnh chưa chốt lộ trình → final_stage tự do (lệnh cũ).
+  vi.mocked(routesRepo.listByLsx).mockResolvedValue([])
 })
 
 describe('componentsService.save — Kế hoạch nhập tay, ghi đè trọn bộ', () => {
   it('KH-CƯ lưu được — replaceAll đúng LSX', async () => {
     await componentsService.save(supply, 'lsx1', [LINE])
     expect(componentsRepo.replaceAll).toHaveBeenCalledWith('lsx1', [LINE])
+  })
+
+  it('chặn công đoạn cuối NGOÀI lộ trình đã chốt (0063 × 0041)', async () => {
+    vi.mocked(routesRepo.listByLsx).mockResolvedValue([
+      { order_line_id: 'ol1', stages: ['phoi', 'han'] },
+    ])
+    await expect(
+      componentsService.save(supply, 'lsx1', [{ ...LINE, final_stage: 'son' }]),
+    ).rejects.toThrow(/công đoạn cuối/)
+    // Thuộc lộ trình thì lưu bình thường.
+    await componentsService.save(supply, 'lsx1', [{ ...LINE, final_stage: 'han' }])
+    expect(componentsRepo.replaceAll).toHaveBeenCalled()
   })
 
   it('NV phòng khác → 403, không ghi', async () => {

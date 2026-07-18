@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 import { UserMenu } from '@/components/UserMenu'
 import { NotificationsDropdown } from '@/components/NotificationsDropdown'
+import { hasCrossRole, userHomeWorkspaceId } from '@/workspaces/access'
 import { ACCENT_CLASSES, type WorkspaceConfig } from '@/workspaces/workspaces.config'
 import { MobileNav } from './MobileNav'
 
@@ -20,6 +21,15 @@ export async function WorkspaceTopbar({
   if (!user) return null
   const unread = await notificationsService.unreadCount(user)
   const accent = ACCENT_CLASSES[workspace.accent]
+  // Đang xem chéo workspace phòng khác → nhắc "chỉ xem" để khỏi bất ngờ khi
+  // không thấy nút sửa (quyền ghi thật vẫn do service quyết theo phòng chủ quản).
+  // Chỉ áp cho NV thường: admin/manager có quyền thao tác rộng (duyệt, sửa) ở
+  // hầu hết workspace, và phòng có vai trò tác nghiệp chéo (hasCrossRole — vd
+  // Cung ứng định hình trong Sản xuất) cũng không phải "chỉ xem".
+  const crossViewing =
+    user.role === 'employee' &&
+    (await userHomeWorkspaceId(user)) !== workspace.id &&
+    !(await hasCrossRole(user, workspace.id))
 
   return (
     <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
@@ -33,6 +43,11 @@ export async function WorkspaceTopbar({
           >
             {workspace.short}
           </span>
+          {crossViewing && (
+            <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              Chỉ xem
+            </span>
+          )}
           <div className="min-w-0">
             {title && (
               <h1 className="truncate text-sm font-semibold sm:text-base">{title}</h1>

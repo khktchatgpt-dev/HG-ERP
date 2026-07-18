@@ -1,11 +1,16 @@
 import { db } from '@/server/db'
 import type { Json } from '@/lib/database.types'
-import type { SampleCondition, SampleStatus } from './samples.schema'
+import type { SampleCondition, SampleKind, SampleStatus } from './samples.schema'
 
 export type Sample = {
   id: string
   code: string
-  product_id: string
+  kind: SampleKind
+  /** null với mẫu độc lập (vật liệu/đối thủ/prototype). */
+  product_id: string | null
+  name: string | null
+  category: string | null
+  source: string | null
   status: SampleStatus
   condition: SampleCondition
   location: string | null
@@ -16,10 +21,13 @@ export type Sample = {
   updated_at: string
 }
 
-/** Mẫu + tên SP + lượt mượn đang mở (nếu có) — đủ cho 1 dòng trong bảng. */
+/** Mẫu + tên hiển thị + lượt mượn đang mở (nếu có) — đủ cho 1 dòng trong bảng. */
 export type SampleWithRefs = Sample & {
-  product_code: string
-  product_name: string
+  /** Tên/nhóm để hiển thị: mẫu gắn SP lấy từ thư viện, mẫu độc lập lấy của chính nó. */
+  display_name: string
+  display_category: string | null
+  /** null với mẫu độc lập. */
+  product_code: string | null
   product_image_file_id: string | null
   /** null = không ai đang mượn. */
   open_loan: {
@@ -32,9 +40,14 @@ export type SampleWithRefs = Sample & {
 }
 
 const COLS =
-  'id, code, product_id, status, condition, location, acquired_at, note, created_by, created_at, updated_at'
+  'id, code, kind, product_id, name, category, source, status, condition, location, acquired_at, note, created_by, created_at, updated_at'
 
-type RawProduct = { code: string; name: string; image_file_id: string | null }
+type RawProduct = {
+  code: string
+  name: string
+  category: string | null
+  image_file_id: string | null
+}
 type RawLoan = {
   id: string
   code: string
@@ -59,8 +72,10 @@ function unwrap(rows: Raw[] | null): SampleWithRefs[] {
     const open = (r.loans ?? []).find((l) => l.returned_at === null) ?? null
     return {
       ...r,
-      product_code: p?.code ?? '?',
-      product_name: p?.name ?? '?',
+      // Mẫu gắn SP → tên/nhóm lấy từ thư viện; mẫu độc lập → của chính nó.
+      display_name: r.name ?? p?.name ?? '?',
+      display_category: r.category ?? p?.category ?? null,
+      product_code: p?.code ?? null,
       product_image_file_id: p?.image_file_id ?? null,
       open_loan: open
         ? {
@@ -76,7 +91,7 @@ function unwrap(rows: Raw[] | null): SampleWithRefs[] {
 }
 
 const SELECT =
-  `${COLS}, product:technical_products(code, name, image_file_id),` +
+  `${COLS}, product:technical_products(code, name, category, image_file_id),` +
   ` loans:technical_sample_loans(id, code, borrower_name, due_at, borrowed_at, returned_at)`
 
 export const samplesRepo = {
@@ -89,6 +104,7 @@ export const samplesRepo = {
   async list(filter: {
     q?: string
     status?: SampleStatus
+    kind?: SampleKind
     product_id?: string
     page: number
     page_size: number
@@ -99,8 +115,10 @@ export const samplesRepo = {
       .order('created_at', { ascending: false })
 
     if (filter.status) query = query.eq('status', filter.status)
+    if (filter.kind) query = query.eq('kind', filter.kind)
     if (filter.product_id) query = query.eq('product_id', filter.product_id)
-    if (filter.q) query = query.ilike('code', `%${filter.q}%`)
+    // Tìm theo mã mẫu HOẶC tên riêng (mẫu độc lập tra bằng tên là chính).
+    if (filter.q) query = query.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
 
     const from = (filter.page - 1) * filter.page_size
     query = query.range(from, from + filter.page_size - 1)
@@ -122,7 +140,11 @@ export const samplesRepo = {
 
   async insert(row: {
     code: string
-    product_id: string
+    kind: SampleKind
+    product_id: string | null
+    name: string | null
+    category: string | null
+    source: string | null
     condition: SampleCondition
     location: string | null
     acquired_at: string | null

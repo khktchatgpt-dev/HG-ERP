@@ -3,7 +3,8 @@ import { outputsRepo } from './outputs.repo'
 import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { bomLinesRepo } from '@/modules/dept/technical/technical.repo'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { canEditComponents } from './perms'
+import { routesService } from './routes.service'
 import {
   aggregateMaterialNeeds,
   calcComponent,
@@ -18,10 +19,9 @@ import { BadRequest, Forbidden, NotFound } from '@/server/http'
  * sẵn; snapshot per lệnh, không tham chiếu sống vào BOM.
  */
 
-/** Sửa bảng chi tiết: phòng KH-CƯ (U2 Kế hoạch) + admin/manager. */
-async function canEditComponents(user: User): Promise<boolean> {
-  return user.role === 'admin' || user.role === 'manager' || (await isSupplyStaff(user))
-}
+// Guard định hình nằm ở perms.ts (tránh vòng import với routes.service);
+// re-export để caller cũ (access.ts, shaping pages) không phải đổi.
+export { canEditComponents }
 
 export type ComponentOrderLine = {
   id: string
@@ -49,8 +49,18 @@ export const componentsService = {
   /** Đọc: mọi NV đã đăng nhập (xưởng xem chi tiết phải làm, kho/GĐ tra cứu). */
   async list(_user: User, lsxId: string) {
     const { lsx, orderLines } = await lsxWithLines(lsxId)
-    const lines = await componentsRepo.listByLsx(lsxId)
-    return { lsx_status: lsx.status, order_lines: orderLines, lines }
+    const [lines, lockedByOutputs] = await Promise.all([
+      componentsRepo.listByLsx(lsxId),
+      // Báo TRƯỚC cho UI khoá bảng (banner) thay vì để người nhập bấm Lưu rồi
+      // mới ăn 400 — save vẫn chặn ở dưới làm lớp cuối.
+      outputsRepo.existsForLsx(lsxId),
+    ])
+    return {
+      lsx_status: lsx.status,
+      locked_by_outputs: lockedByOutputs,
+      order_lines: orderLines,
+      lines,
+    }
   },
 
   /** Ghi đè trọn bộ bảng chi tiết (pattern BOM editor). */
@@ -73,6 +83,17 @@ export const componentsService = {
     for (const l of input) {
       if (!validLineIds.has(l.order_line_id)) {
         throw BadRequest('Có dòng chi tiết gắn vào dòng SP không thuộc lệnh này')
+      }
+    }
+    // Công đoạn cuối per chi tiết (0041) phải thuộc lộ trình đã chốt (0063) —
+    // nếu lọt, %HT của chi tiết không bao giờ đạt vì sổ chặn nhập giai đoạn đó.
+    const allowedByLine = await routesService.allowedStagesByLine(lsxId)
+    for (const l of input) {
+      const allowed = allowedByLine.get(l.order_line_id)
+      if (allowed && l.final_stage && !allowed.has(l.final_stage)) {
+        throw BadRequest(
+          `Chi tiết "${l.name}": công đoạn cuối không thuộc lộ trình đã chốt của SP — đổi công đoạn cuối hoặc sửa lộ trình trước`,
+        )
       }
     }
     await componentsRepo.replaceAll(lsxId, input)

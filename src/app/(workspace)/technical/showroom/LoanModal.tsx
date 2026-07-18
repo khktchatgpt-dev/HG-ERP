@@ -97,7 +97,8 @@ export function LoanModal({
     <Modal open onClose={onClose} title={`Ghi mượn — ${sample.code}`}>
       <form onSubmit={submit} className="flex flex-col gap-3">
         <p className="rounded-md bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-500 dark:bg-zinc-900">
-          {sample.product_code} — {sample.product_name}
+          {sample.product_code ? `${sample.product_code} — ` : ''}
+          {sample.display_name}
         </p>
 
         <Field label="Người mượn là *">

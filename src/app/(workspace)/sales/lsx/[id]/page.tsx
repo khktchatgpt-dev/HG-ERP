@@ -6,8 +6,8 @@ import {
   productionRepo,
   listLsxPrintLines,
 } from '@/modules/dept/production/production.repo'
+import { routesService } from '@/modules/dept/production/routes.service'
 import { filesService } from '@/modules/core/files/files.service'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { HttpError } from '@/server/http'
 import { LsxDetailView } from '@/components/production/LsxDetailView'
@@ -32,11 +32,18 @@ export default async function LsxDetailPage({
 
   // Vật tư nạp trực tiếp từ repo (read-only) cho grid bảng chi tiết — API kho
   // guard theo phòng Kho nên không gọi qua service kho từ đây.
-  const [lines, stages, { rows: materials }] = await Promise.all([
+  const [lines, stages, { rows: materials }, allowedByLine] = await Promise.all([
     listLsxPrintLines(id, lsx.sales_order_id),
     productionRepo.listStages(),
     materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    routesService.allowedStagesByLine(id),
   ])
+  // Lọc select giai đoạn khi TẤT CẢ SP đã chốt lộ trình (0063).
+  const lineIds = [...new Set(lines.map((l) => l.order_line_id))]
+  const routeStages =
+    lineIds.length > 0 && lineIds.every((lid) => allowedByLine.has(lid))
+      ? [...new Set([...allowedByLine.values()].flatMap((s) => [...s]))]
+      : null
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
@@ -56,8 +63,10 @@ export default async function LsxDetailPage({
     ? await departmentsRepo.findById(user.department_id)
     : null
   const canApprove = user.role === 'admin' || user.role === 'manager'
-  // Tiến độ + hoàn thành: GĐ/QL hoặc phòng Kế hoạch - Cung ứng (FR-SUP-08).
-  const canManage = canApprove || (await isSupplyStaff(user))
+  // Tiến độ + hoàn thành: GĐ/QL (Cung ứng hết quyền thao tác — siết 07/2026).
+  const canManage = canApprove
+  // Nhập sổ ở trang này: chỉ admin (xưởng dùng /production/lsx).
+  const canRecord = user.role === 'admin'
   const canEditSpec = user.role === 'admin' || dept?.name === 'Bán Hàng'
 
   return (
@@ -105,6 +114,7 @@ export default async function LsxDetailPage({
       stages={stages}
       canApprove={canApprove}
       canManage={canManage}
+      canRecord={canRecord}
       canEditSpec={canEditSpec}
       materials={materials.map((m) => ({
         id: m.id,
@@ -114,6 +124,7 @@ export default async function LsxDetailPage({
       }))}
       // Bảng chi tiết: Kế hoạch (KH-CƯ) nhập; GĐ/QL sửa được khi cần.
       canEditComponents={canManage}
+      routeStages={routeStages}
     />
   )
 }
