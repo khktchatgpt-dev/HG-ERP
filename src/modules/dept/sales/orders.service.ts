@@ -8,7 +8,7 @@ import { quotesService, isSalesStaff } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { SUPPLY_DEPT_NAME } from '@/modules/dept/supply/suppliers.service'
+import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
@@ -58,7 +58,7 @@ const AFTER_LSX_STATUSES: Order['status'][] = [
 async function supplyAndManagerIds(excludeId: string): Promise<string[]> {
   const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
   const supplyDeptIds = new Set(
-    depts.filter((d) => d.name === SUPPLY_DEPT_NAME).map((d) => d.id),
+    depts.filter((d) => SUPPLY_DEPT_NAMES.has(d.name)).map((d) => d.id),
   )
   return users
     .filter(

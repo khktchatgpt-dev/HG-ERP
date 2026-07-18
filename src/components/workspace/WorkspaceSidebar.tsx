@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { listAccessibleWorkspaces, resolveNavCapabilities } from '@/workspaces/access'
 import {
   ACCENT_CLASSES,
   resolveNavSections,
@@ -17,7 +18,17 @@ export async function WorkspaceSidebar({ workspace }: { workspace: WorkspaceConf
 
   const head = user.department_id ? await departmentsRepo.findHeadedBy(user.id) : null
   const accent = ACCENT_CLASSES[workspace.accent]
-  const sections = resolveNavSections(workspace, { role: user.role, isHead: !!head })
+  const capabilities = await resolveNavCapabilities(user)
+  const sections = resolveNavSections(workspace, {
+    role: user.role,
+    isHead: !!head,
+    capabilities,
+  })
+  // Danh sách workspace user được vào (xem chéo) — cho dropdown chuyển đổi.
+  const switchable = (await listAccessibleWorkspaces(user)).map((a) => ({
+    id: a.workspace.id,
+    readonly: a.readonly,
+  }))
 
   return (
     <DesktopSidebar
@@ -28,7 +39,7 @@ export async function WorkspaceSidebar({ workspace }: { workspace: WorkspaceConf
       accentBg={accent.bg}
       accentShadow={accent.bg.replace('bg-', 'shadow-')}
       sections={sections}
-      userRole={user.role}
+      switchable={switchable}
     />
   )
 }

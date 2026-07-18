@@ -1,30 +1,42 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import {
+  productionService,
+  isProductionStaff,
+} from '@/modules/dept/production/production.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { routesRepo } from '@/modules/dept/production/routes.repo'
 import { ProductionProgressManager } from './ProductionProgressManager'
 
 /**
- * Tiến độ sản xuất theo LSX (FR-SUP-08) — bảng ĐIỀU PHỐI của phòng KH-Cung ứng:
- * tiến độ + nguy cơ trễ + tình trạng vật tư/BOM từng lệnh, thao tác nhanh tại chỗ.
+ * Tiến độ sản xuất theo LSX — bảng ĐIỀU PHỐI: tiến độ + nguy cơ trễ + tình
+ * trạng vật tư/BOM từng lệnh, thao tác nhanh tại chỗ (GĐ/BQL + Xưởng).
  */
-export default async function PlanningProductionPage() {
+export default async function ProductionProgressPage() {
   const user = (await authService.currentUser())!
 
-  const [{ rows }, stages, tracking, componentCounts] = await Promise.all([
-    productionService.list(user, { page: 1, page_size: 500 }),
-    productionRepo.listStages(),
-    productionService.tracking(),
-    componentsRepo.countsByLsx(),
-  ])
+  const [{ rows }, stages, tracking, componentCounts, routeUnions, routeCounts] =
+    await Promise.all([
+      productionService.list(user, { page: 1, page_size: 500 }),
+      productionRepo.listStages(),
+      productionService.tracking(),
+      componentsRepo.countsByLsx(),
+      routesRepo.stageUnionsByLsx(),
+      routesRepo.countsByLsx(),
+    ])
+  const lineCounts = await productionRepo.linesCountByOrder(
+    rows.map((r) => r.sales_order_id),
+  )
   // Ghép thông tin đơn (hạn giao, BOM pending, PO mở) theo LSX — nguồn v_order_tracking.
   const byLsx = new Map(
     tracking.filter((t) => t.production_order_id).map((t) => [t.production_order_id, t]),
   )
-  // Layout /planning đã gate admin/manager/KH-CƯ; thao tác tiến độ khớp canTrackProgress.
+  // Nút thao tác khớp canTrackProgress (service): GĐ/BQL hoặc nhân sự Xưởng.
+  // Cung ứng hết quyền thao tác tiến độ (user siết 07/2026) — chỉ xem.
   const canManage =
-    user.role === 'admin' || user.role === 'manager' || (await isSupplyStaff(user))
+    user.role === 'admin' ||
+    user.role === 'manager' ||
+    (await isProductionStaff(user))
 
   return (
     <ProductionProgressManager
@@ -44,6 +56,14 @@ export default async function PlanningProductionPage() {
           lines_bom_pending: t?.lines_bom_pending ?? 0,
           pos_open: t?.pos_open ?? 0,
           has_components: (componentCounts.get(r.id) ?? 0) > 0,
+          // Chỉ lọc select giai đoạn khi TẤT CẢ SP của lệnh đã chốt lộ trình —
+          // định hình dở dang thì SP chưa chốt vẫn có thể cần giai đoạn khác.
+          route_stages:
+            (lineCounts.get(r.sales_order_id) ?? 0) > 0 &&
+            (routeCounts.get(r.id) ?? 0) >= (lineCounts.get(r.sales_order_id) ?? 0) &&
+            routeUnions.has(r.id)
+              ? [...routeUnions.get(r.id)!]
+              : null,
         }
       })}
       stages={stages}

@@ -50,6 +50,19 @@ const outsider = {
   role: 'employee',
   department_id: 'd-other',
 } as unknown as User
+const worker = {
+  id: 'u-to',
+  role: 'employee',
+  department_id: 'd-to-han',
+} as unknown as User
+/** Cho `worker` thành nhân sự Xưởng: phòng gán workspace 'production'. */
+function mockWorkerDept() {
+  vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
+    id === 'd-to-han'
+      ? ({ id, name: 'Tổ Hàn', workspace_id: 'production' } as never)
+      : null,
+  )
+}
 
 const LSX = {
   id: 'lsx1',
@@ -68,18 +81,26 @@ beforeEach(() => {
   )
 })
 
-describe('updateStage — GĐ/QL hoặc Kế hoạch - Cung ứng (FR-SUP-08)', () => {
-  it('NV Cung ứng cập nhật được giai đoạn: LSX approved → in_progress, đơn → in_production', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
-    const out = await productionService.updateStage(supply, 'lsx1', {
+describe('updateStage — GĐ/QL hoặc Xưởng (Cung ứng hết quyền — siết 07/2026)', () => {
+  it('NV Xưởng cập nhật được giai đoạn: LSX approved → in_progress, đơn → in_production', async () => {
+    mockWorkerDept()
+    const out = await productionService.updateStage(worker, 'lsx1', {
       stage: 'han',
       action: 'done',
     })
     expect(productionRepo.insertProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ stage: 'han', updated_by: supply.id }),
+      expect.objectContaining({ stage: 'han', updated_by: worker.id }),
     )
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'in_production' })
     expect(out.status).toBe('in_progress')
+  })
+
+  it('NV Cung ứng → 403 (planner chỉ định hình, không thao tác tiến độ)', async () => {
+    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    await expect(
+      productionService.updateStage(supply, 'lsx1', { stage: 'han', action: 'done' }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(productionRepo.insertProgress).not.toHaveBeenCalled()
   })
 
   it('NV phòng khác → 403, không ghi tiến độ', async () => {
@@ -101,12 +122,19 @@ describe('updateStage — GĐ/QL hoặc Kế hoạch - Cung ứng (FR-SUP-08)', 
   })
 })
 
-describe('complete — GĐ/QL hoặc Kế hoạch - Cung ứng', () => {
-  it('NV Cung ứng báo hoàn thành được: LSX + đơn → completed', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
-    const out = await productionService.complete(supply, 'lsx1')
+describe('complete — GĐ/QL hoặc Xưởng', () => {
+  it('NV Xưởng báo hoàn thành được: LSX + đơn → completed', async () => {
+    mockWorkerDept()
+    const out = await productionService.complete(worker, 'lsx1')
     expect(out.status).toBe('completed')
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'completed' })
+  })
+
+  it('NV Cung ứng → 403 (siết 07/2026)', async () => {
+    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    await expect(productionService.complete(supply, 'lsx1')).rejects.toMatchObject({
+      status: 403,
+    })
   })
 
   it('NV phòng khác → 403', async () => {
@@ -118,9 +146,9 @@ describe('complete — GĐ/QL hoặc Kế hoạch - Cung ứng', () => {
 })
 
 describe('confirmMaterialsReceived — xác nhận nhận vật tư (G-3, FR-PROD-02)', () => {
-  it('NV Cung ứng xác nhận được: log action received, KHÔNG đổi trạng thái/giai đoạn', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
-    await productionService.confirmMaterialsReceived(supply, 'lsx1', 'Đủ theo PXK-0001')
+  it('NV Xưởng xác nhận được: log action received, KHÔNG đổi trạng thái/giai đoạn', async () => {
+    mockWorkerDept()
+    await productionService.confirmMaterialsReceived(worker, 'lsx1', 'Đủ theo PXK-0001')
     expect(productionRepo.insertProgress).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'received', note: 'Đủ theo PXK-0001' }),
     )

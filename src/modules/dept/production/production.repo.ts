@@ -225,6 +225,21 @@ export const productionRepo = {
     return (data ?? []) as { code: string; label: string }[]
   },
 
+  /** Số dòng SP per đơn — cho màn định hình ("x/y SP đã chốt lộ trình"). */
+  async linesCountByOrder(orderIds: string[]): Promise<Map<string, number>> {
+    if (!orderIds.length) return new Map()
+    const { data } = await db()
+      .from('sales_order_lines')
+      .select('order_id')
+      .in('order_id', orderIds)
+      .limit(20000)
+    const map = new Map<string, number>()
+    for (const r of (data ?? []) as { order_id: string }[]) {
+      map.set(r.order_id, (map.get(r.order_id) ?? 0) + 1)
+    }
+    return map
+  },
+
   /** Bảng trạng thái tổng hợp (FR-SAL-07) — đọc từ view v_order_tracking. */
   async listTracking(): Promise<OrderTracking[]> {
     const { data } = await db()
@@ -263,9 +278,10 @@ export type LsxPrintLine = {
 /**
  * Dòng in LSX = sales_order_lines của đơn (BR-02: dùng chung) + thông số mặc định
  * từ technical_products.tech_spec, ghi đè bằng production_order_line_specs nếu có.
+ * `productionOrderId = null` → bản XEM TRƯỚC khi chưa phát lệnh (không có override).
  */
 export async function listLsxPrintLines(
-  productionOrderId: string,
+  productionOrderId: string | null,
   salesOrderId: string,
 ): Promise<LsxPrintLine[]> {
   const { data } = await db()
@@ -292,14 +308,20 @@ export async function listLsxPrintLines(
   }
   type Raw = { id: string; qty: number; product: P | P[] | null }
 
-  // Override thông số per dòng (nếu người dùng nhập ở bước SX).
-  const { data: specRows } = await db()
-    .from('production_order_line_specs')
-    .select('order_line_id, specs')
-    .eq('production_order_id', productionOrderId)
+  // Override thông số per dòng (nếu người dùng nhập ở bước SX). Bản xem trước
+  // (chưa phát lệnh) không có override — dùng thông số mặc định của SP.
   const override = new Map<string, Spec>()
-  for (const s of (specRows ?? []) as { order_line_id: string; specs: Spec | null }[]) {
-    if (s.specs) override.set(s.order_line_id, s.specs)
+  if (productionOrderId) {
+    const { data: specRows } = await db()
+      .from('production_order_line_specs')
+      .select('order_line_id, specs')
+      .eq('production_order_id', productionOrderId)
+    for (const s of (specRows ?? []) as {
+      order_line_id: string
+      specs: Spec | null
+    }[]) {
+      if (s.specs) override.set(s.order_line_id, s.specs)
+    }
   }
 
   return ((data ?? []) as Raw[]).map((r) => {

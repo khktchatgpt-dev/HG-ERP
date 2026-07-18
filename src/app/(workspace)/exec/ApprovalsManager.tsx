@@ -229,7 +229,7 @@ export function ApprovalsManager({
       header: 'LSX / Khách hàng',
       sortValue: (l) => l.code,
       cell: (l) => (
-        <a href={`/sales/lsx/${l.id}`} className="flex min-w-0 flex-col">
+        <a href={`/exec/lsx/${l.id}`} className="flex min-w-0 flex-col">
           <span className="font-mono text-xs text-blue-600 dark:text-blue-400">
             {l.code}
           </span>

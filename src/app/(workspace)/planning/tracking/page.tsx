@@ -1,3 +1,9 @@
-// Theo dõi đơn hàng trong menu Cung ứng — tái dùng nguyên trang Sales nhưng render
-// trong shell Kế hoạch - Cung ứng (tím), không nhảy sang giao diện Sales.
-export { default } from '../../sales/tracking/page'
+import { TrackingScreen } from '../../sales/tracking/TrackingScreen'
+
+/**
+ * Theo dõi đơn trong shell Kế hoạch - Cung ứng — chi tiết LSX mở bản
+ * /planning/lsx (không nhảy shell Sales; mỗi bộ phận một màn riêng).
+ */
+export default function PlanningTrackingPage() {
+  return <TrackingScreen lsxBase="/planning/lsx" />
+}

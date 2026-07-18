@@ -6,13 +6,18 @@ import {
 } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
-const SUPPLY_DEPT = 'Kế Hoạch Sản Xuất-cung ứng'
+// Tách vai 07/2026: phòng gộp cũ + 2 phòng tách đều nhận báo LSX duyệt
+// (Kế hoạch cần định hình, Cung ứng cần đặt vật tư).
+const SUPPLY_DEPTS = new Set([
+  'Kế Hoạch Sản Xuất-cung ứng',
+  'Kế Hoạch Sản Xuất',
+  'Cung Ứng - Mua Hàng',
+])
 const TECH_DEPT = 'Kỹ Thuật'
 
 /** Phát LSX: Sales (FR-SAL-06 — Sales lập, GĐ duyệt). Admin luôn được. */
@@ -37,13 +42,12 @@ export async function isProductionStaff(user: User): Promise<boolean> {
 }
 
 /**
- * Cập nhật tiến độ + báo hoàn thành: GĐ/BQL, phòng KH-Cung ứng (FR-SUP-08 —
- * bấm thay khi xưởng nghỉ) hoặc Xưởng (workspace production — FR-PROD-01/02/03).
+ * Cập nhật tiến độ + báo hoàn thành: GĐ/BQL hoặc Xưởng (workspace production —
+ * FR-PROD-01/02/03). Cung ứng KHÔNG còn quyền này (user siết 07/2026: planner
+ * chỉ định hình, dữ liệu thực thi là của bộ phận sản xuất — bỏ FR-SUP-08 cũ).
  */
 async function canTrackProgress(user: User): Promise<boolean> {
-  return (
-    canApprove(user) || (await isSupplyStaff(user)) || (await isProductionStaff(user))
-  )
+  return canApprove(user) || (await isProductionStaff(user))
 }
 
 /** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
@@ -61,7 +65,7 @@ async function lsxApprovedNotifyIds(): Promise<string[]> {
     depts
       .filter(
         (d) =>
-          d.name === SUPPLY_DEPT ||
+          SUPPLY_DEPTS.has(d.name) ||
           d.name === TECH_DEPT ||
           d.workspace_id === 'production',
       )
@@ -302,7 +306,7 @@ export const productionService = {
     input: { stage: string; action: 'start' | 'done'; note?: string | null },
   ): Promise<ProductionOrder> {
     if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng cập nhật tiến độ')
+      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý cập nhật tiến độ')
     }
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
@@ -338,7 +342,7 @@ export const productionService = {
     note?: string | null,
   ): Promise<void> {
     if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng xác nhận nhận vật tư')
+      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý xác nhận nhận vật tư')
     }
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
@@ -358,7 +362,7 @@ export const productionService = {
   /** Báo hoàn thành để chuyển giao hàng (FR-PROD-03). */
   async complete(user: User, id: string, note?: string | null): Promise<ProductionOrder> {
     if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ GĐ/Ban quản lý hoặc Kế hoạch - Cung ứng báo hoàn thành')
+      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý báo hoàn thành')
     }
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')

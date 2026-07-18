@@ -4,7 +4,6 @@ import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { summarizeOutsource, type OutsourceSummary } from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -26,13 +25,9 @@ export const outsourceRecordSchema = z.object({
 })
 export type OutsourceRecordInput = z.infer<typeof outsourceRecordSchema>
 
+// CHỈ bộ phận sản xuất ghi giao/nhận gia công (user siết 07/2026) + admin.
 async function canRecord(user: User): Promise<boolean> {
-  return (
-    user.role === 'admin' ||
-    user.role === 'manager' ||
-    (await isSupplyStaff(user)) ||
-    (await isProductionStaff(user))
-  )
+  return user.role === 'admin' || (await isProductionStaff(user))
 }
 
 export type OutsourcePairSummary = OutsourceSummary & {
@@ -50,7 +45,7 @@ export const outsourceService = {
     input: OutsourceRecordInput,
   ): Promise<{ warnings: string[] }> {
     if (!(await canRecord(user))) {
-      throw Forbidden('Chỉ Xưởng / Kế hoạch - Cung ứng / Ban quản lý ghi gia công ngoài')
+      throw Forbidden('Chỉ bộ phận Sản xuất ghi gia công ngoài')
     }
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')

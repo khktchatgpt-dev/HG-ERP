@@ -34,6 +34,8 @@ type Row = {
   pos_open: number
   /** Đã nhập bảng chi tiết & định mức chưa (plan-lsx-components P3). */
   has_components: boolean
+  /** Hợp lộ trình các SP (0063) — null = chưa định hình, hiện đủ danh mục. */
+  route_stages: string[] | null
 }
 
 const ST: Record<
@@ -153,7 +155,9 @@ export function ProductionProgressManager({
       sortValue: (r) => r.code,
       cell: (r) => (
         <Link
-          href={`/sales/lsx/${r.id}`}
+          // Ở workspace Sản xuất thì mở bản LSX của Sản xuất — không nhảy shell
+          // Sales (mỗi bộ phận một màn riêng, user chốt 07/2026).
+          href={`/production/lsx/${r.id}`}
           className="font-mono text-sm font-medium text-sky-600 hover:underline dark:text-sky-400"
         >
           {r.code}
@@ -218,11 +222,14 @@ export function ProductionProgressManager({
               className="w-full rounded border border-zinc-300 px-1 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
             >
               <option value="">— giai đoạn —</option>
-              {stages.map((s) => (
-                <option key={s.code} value={s.code}>
-                  {s.label}
-                </option>
-              ))}
+              {/* Chỉ giai đoạn có SP đi qua (lộ trình 0063); chưa định hình → đủ. */}
+              {stages
+                .filter((s) => !r.route_stages || r.route_stages.includes(s.code))
+                .map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.label}
+                  </option>
+                ))}
             </select>
           )
         }
@@ -281,7 +288,7 @@ export function ProductionProgressManager({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+          { label: 'Sản xuất', href: '/production' },
           { label: 'Tiến độ sản xuất' },
         ]}
         title="Tiến độ sản xuất"

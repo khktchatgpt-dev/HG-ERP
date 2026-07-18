@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
+import { OutputLogBook } from './OutputLogBook'
 
 /**
  * Sản lượng theo công đoạn/tổ của LSX (SX-P3 — FR-PR): bảng tổng hợp
@@ -26,12 +27,19 @@ type ComponentView = {
   cluster: string | null
   name: string
   total_needed: number
+  /** Lộ trình giai đoạn của SP (0063); null = chưa định hình → nhập tự do. */
+  allowed_stages: string[] | null
   summary: {
     stages: StageSummary[]
     done_final: number
     pct_total: number
     status: 'not_started' | 'in_progress' | 'done'
   }
+}
+
+/** Chi tiết có đi qua công đoạn này không (chưa định hình = có). */
+function inRoute(c: ComponentView, stageCode: string): boolean {
+  return !c.allowed_stages || c.allowed_stages.includes(stageCode)
 }
 type SyncedLine = {
   order_line_id: string
@@ -73,21 +81,25 @@ export function LsxOutputPanel({
   lsxId,
   canRecord,
   active,
+  initialStage,
 }: {
   lsxId: string
   /** Xưởng / KH-CƯ / GĐ-QL (khớp canTrackProgress ở service). */
   canRecord: boolean
   /** LSX đã duyệt / đang SX — mới nhập được. */
   active: boolean
+  /** Công đoạn mặc định (suy từ TỔ của người nhập — Tổ Hàn mở ra đứng ở Hàn). */
+  initialStage?: string | null
 }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const [data, setData] = useState<OutputData | null>(null)
-  const [stage, setStage] = useState('')
+  const [stage, setStage] = useState(initialStage ?? '')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [cells, setCells] = useState<Record<string, InputCell>>({})
-  const [showEntries, setShowEntries] = useState(false)
+  // Sổ là hồ sơ gốc quá trình SX — mặc định MỞ, chỉ thu gọn khi cần.
+  const [showEntries, setShowEntries] = useState(true)
 
   const load = useCallback(async () => {
     try {
@@ -253,7 +265,9 @@ export function LsxOutputPanel({
                       </td>
                       {data.stages.map((col) => {
                         const s = c.summary.stages.find((x) => x.stage === col.code)
-                        if (!s)
+                        // Ngoài lộ trình đã định hình → mờ như "không qua công
+                        // đoạn" (trừ khi có sản lượng lịch sử thì vẫn hiện số).
+                        if (!s || (!inRoute(c, col.code) && s.done === 0))
                           return (
                             <td
                               key={col.code}
@@ -265,24 +279,24 @@ export function LsxOutputPanel({
                           )
                         return (
                           <td key={s.stage} className="py-1.5 pr-2 text-right">
-                          <span
-                            className={
-                              s.done === 0
-                                ? 'text-zinc-300 dark:text-zinc-600'
-                                : s.missing <= 0
-                                  ? 'font-medium text-green-600 dark:text-green-400'
-                                  : 'text-amber-600 dark:text-amber-400'
-                            }
-                            title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
-                          >
-                            {s.done.toLocaleString('vi-VN')}
-                          </span>
-                          {s.defect > 0 && (
-                            <span className="ml-0.5 text-[10px] text-red-500">
-                              (-{s.defect})
+                            <span
+                              className={
+                                s.done === 0
+                                  ? 'text-zinc-300 dark:text-zinc-600'
+                                  : s.missing <= 0
+                                    ? 'font-medium text-green-600 dark:text-green-400'
+                                    : 'text-amber-600 dark:text-amber-400'
+                              }
+                              title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
+                            >
+                              {s.done.toLocaleString('vi-VN')}
                             </span>
-                          )}
-                        </td>
+                            {s.defect > 0 && (
+                              <span className="ml-0.5 text-[10px] text-red-500">
+                                (-{s.defect})
+                              </span>
+                            )}
+                          </td>
                         )
                       })}
                       <td className="py-1.5 pr-2 text-right font-medium">
@@ -362,112 +376,101 @@ export function LsxOutputPanel({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.components.map((c) => {
-                        const cell = cells[c.id] ?? emptyCell()
-                        return (
-                          <tr
-                            key={c.id}
-                            className="border-t border-zinc-100 dark:border-zinc-900"
-                          >
-                            <td className="py-1 pr-2">{c.name}</td>
-                            <td className="py-1 pr-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={cell.qty}
-                                onChange={(e) => setCell(c.id, { qty: e.target.value })}
-                                className={inp}
-                              />
-                            </td>
-                            <td className="py-1 pr-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="1"
-                                value={cell.defect}
-                                onChange={(e) =>
-                                  setCell(c.id, { defect: e.target.value })
-                                }
-                                className={inp}
-                              />
-                            </td>
-                            <td className="py-1 pr-2">
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={cell.kg}
-                                onChange={(e) => setCell(c.id, { kg: e.target.value })}
-                                className={inp}
-                              />
-                            </td>
-                            <td className="py-1 pr-2">
-                              <input
-                                value={cell.machine}
-                                onChange={(e) =>
-                                  setCell(c.id, { machine: e.target.value })
-                                }
-                                className={inp}
-                                placeholder="máy cắt 2 / màu H-SM-96…"
-                              />
-                            </td>
-                          </tr>
-                        )
-                      })}
+                      {/* Chỉ hiện chi tiết ĐI QUA công đoạn đã chọn (theo lộ
+                          trình 0063) — đỡ nhập nhầm dòng bị server chặn. */}
+                      {data.components
+                        .filter((c) => inRoute(c, stage))
+                        .map((c) => {
+                          const cell = cells[c.id] ?? emptyCell()
+                          const sum = c.summary.stages.find((x) => x.stage === stage)
+                          const remaining = sum ? Math.max(0, sum.missing) : null
+                          return (
+                            <tr
+                              key={c.id}
+                              className="border-t border-zinc-100 dark:border-zinc-900"
+                            >
+                              <td className="py-1 pr-2">{c.name}</td>
+                              <td className="py-1 pr-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={cell.qty}
+                                  onChange={(e) => setCell(c.id, { qty: e.target.value })}
+                                  className={inp}
+                                  placeholder={
+                                    remaining != null && remaining > 0
+                                      ? `còn ${remaining}`
+                                      : undefined
+                                  }
+                                />
+                              </td>
+                              <td className="py-1 pr-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="1"
+                                  value={cell.defect}
+                                  onChange={(e) =>
+                                    setCell(c.id, { defect: e.target.value })
+                                  }
+                                  className={inp}
+                                />
+                              </td>
+                              <td className="py-1 pr-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={cell.kg}
+                                  onChange={(e) => setCell(c.id, { kg: e.target.value })}
+                                  className={inp}
+                                />
+                              </td>
+                              <td className="py-1 pr-2">
+                                <input
+                                  value={cell.machine}
+                                  onChange={(e) =>
+                                    setCell(c.id, { machine: e.target.value })
+                                  }
+                                  className={inp}
+                                  placeholder="máy cắt 2 / màu H-SM-96…"
+                                />
+                              </td>
+                            </tr>
+                          )
+                        })}
                     </tbody>
                   </table>
                 </div>
+                {(() => {
+                  const hidden = data.components.filter((c) => !inRoute(c, stage)).length
+                  return hidden > 0 ? (
+                    <p className="mt-1.5 text-[10px] text-zinc-400">
+                      Đã ẩn {hidden} chi tiết không đi qua công đoạn {stageLabel(stage)}{' '}
+                      (theo lộ trình đã định hình).
+                    </p>
+                  ) : null
+                })()}
               </div>
             )}
 
-            {/* Sổ nhập gần nhất */}
-            <div>
+            {/* Sổ ghi sản lượng — hồ sơ gốc quá trình SX (OutputLogBook) */}
+            <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
               <button
                 onClick={() => setShowEntries((v) => !v)}
-                className="text-xs text-sky-600 hover:underline dark:text-sky-400"
+                className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase hover:text-zinc-700 dark:hover:text-zinc-300"
               >
                 {showEntries ? '▾' : '▸'} Sổ ghi sản lượng ({data.entries.length})
               </button>
               {showEntries && (
-                <ul className="mt-2 flex flex-col gap-1 text-xs">
-                  {data.entries.slice(0, 50).map((en) => (
-                    <li
-                      key={en.id}
-                      className="flex flex-wrap items-center gap-2 border-l-2 border-zinc-300 pl-2 dark:border-zinc-700"
-                    >
-                      <span className="text-zinc-500">
-                        {new Date(en.entry_date).toLocaleDateString('vi-VN')}
-                      </span>
-                      <Badge>{stageLabel(en.stage)}</Badge>
-                      <span className="font-medium">
-                        {componentName(en.component_id)}
-                      </span>
-                      <span>
-                        SL <b>{en.qty}</b>
-                        {en.defect_qty > 0 && (
-                          <span className="text-red-500"> · phế {en.defect_qty}</span>
-                        )}
-                        {en.kg != null && <span> · {en.kg} kg</span>}
-                      </span>
-                      {en.machine_note && (
-                        <span className="text-zinc-400">{en.machine_note}</span>
-                      )}
-                      <span className="text-zinc-400">
-                        {en.team_name ?? '—'} · {en.created_by_name ?? '—'}
-                      </span>
-                      {canRecord && active && (
-                        <button
-                          onClick={() => void removeEntry(en)}
-                          className="text-red-500 hover:text-red-700"
-                          title="Xoá bản ghi (nhập nhầm) — chỉ người nhập / QL"
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <OutputLogBook
+                  entries={data.entries}
+                  stageLabel={stageLabel}
+                  componentName={componentName}
+                  canDelete={canRecord && active}
+                  onDelete={(en) => void removeEntry(en)}
+                />
               )}
             </div>
           </>

@@ -5,14 +5,21 @@ import type { User } from '@/modules/core/users/users.repo'
 import type { z } from 'zod'
 import { Forbidden, NotFound } from '@/server/http'
 
-/** Tên phòng đúng như public.departments (đừng lặp lại bug 'Kinh Doanh'). */
-const SUPPLY_DEPT_NAME = 'Kế Hoạch Sản Xuất-cung ứng'
+/**
+ * Vai CUNG ỨNG (mua hàng: PO/NCC/theo dõi hàng về). Tách vai 07/2026:
+ * - 'Cung Ứng - Mua Hàng'          — phòng mới, CHỈ vai mua hàng.
+ * - 'Kế Hoạch Sản Xuất-cung ứng'   — phòng gộp cũ, giữ CẢ HAI vai (người kiêm
+ *   nhiệm ở lại đây); có nhân sự mới thì IT đổi phòng ở /admin/users, không
+ *   cần sửa code. Vai KẾ HOẠCH (định hình) xem production/perms.ts.
+ * Tên phòng đúng như public.departments (đừng lặp lại bug 'Kinh Doanh').
+ */
+const SUPPLY_DEPT_NAMES = new Set(['Kế Hoạch Sản Xuất-cung ứng', 'Cung Ứng - Mua Hàng'])
 
 async function isSupplyStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
   if (!user.department_id) return false
   const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === SUPPLY_DEPT_NAME
+  return !!dept && SUPPLY_DEPT_NAMES.has(dept.name)
 }
 
 type SupplierInput = z.infer<typeof supplierCreateSchema>
@@ -110,4 +117,4 @@ function toRow(
   return out as Partial<Supplier>
 }
 
-export { isSupplyStaff, SUPPLY_DEPT_NAME }
+export { isSupplyStaff, SUPPLY_DEPT_NAMES }

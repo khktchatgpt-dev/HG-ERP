@@ -20,7 +20,7 @@ export function DesktopSidebar({
   accentBg,
   accentShadow,
   sections,
-  userRole,
+  switchable,
 }: {
   workspaceId: WorkspaceId
   route: string
@@ -29,7 +29,7 @@ export function DesktopSidebar({
   accentBg: string
   accentShadow: string
   sections: NavSection[]
-  userRole: string
+  switchable: { id: WorkspaceId; readonly: boolean }[]
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -74,7 +74,7 @@ export function DesktopSidebar({
         )}
       </Link>
 
-      {!collapsed && <WorkspaceSwitcher current={workspaceId} userRole={userRole} />}
+      {!collapsed && <WorkspaceSwitcher current={workspaceId} switchable={switchable} />}
 
       <nav className="mt-3 flex flex-1 flex-col gap-1 overflow-y-auto">
         {sections.map((sec) => (

@@ -2,8 +2,8 @@ import { outputsRepo, type OutputEntry } from './outputs.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
+import { routesService } from './routes.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { calcComponent } from '@/lib/component-needs'
 import {
   overrunWarning,
@@ -15,16 +15,12 @@ import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 /**
- * Sản lượng hằng ngày theo công đoạn/tổ (SX-P3 — FR-PR). Ai nhập: xưởng
- * (thống kê tổ), KH-CƯ (bấm thay), GĐ/QL — khớp canTrackProgress.
+ * Sản lượng hằng ngày theo công đoạn/tổ (SX-P3 — FR-PR). Ai nhập: CHỈ bộ phận
+ * sản xuất (thống kê/tổ trưởng — workspace production) + admin. Cung ứng và
+ * GĐ không đi ghi sổ hộ (user siết 07/2026 — planner chỉ định hình).
  */
 async function canRecordOutput(user: User): Promise<boolean> {
-  return (
-    user.role === 'admin' ||
-    user.role === 'manager' ||
-    (await isSupplyStaff(user)) ||
-    (await isProductionStaff(user))
-  )
+  return user.role === 'admin' || (await isProductionStaff(user))
 }
 
 type RecordInput = {
@@ -47,6 +43,8 @@ export type ComponentOutputView = {
   cluster: string | null
   name: string
   total_needed: number
+  /** Lộ trình giai đoạn của SP (0063); null = chưa định hình. */
+  allowed_stages: string[] | null
   summary: ComponentSummary
 }
 
@@ -81,7 +79,7 @@ export const outputsService = {
     input: RecordInput,
   ): Promise<{ warnings: string[] }> {
     if (!(await canRecordOutput(user))) {
-      throw Forbidden('Chỉ Xưởng / Kế hoạch - Cung ứng / Ban quản lý nhập sản lượng')
+      throw Forbidden('Chỉ bộ phận Sản xuất nhập sản lượng')
     }
     const { lsx, components, totalByComponent } = await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
@@ -91,6 +89,19 @@ export const outputsService = {
     for (const e of input.entries) {
       if (!byId.has(e.component_id)) {
         throw BadRequest('Có dòng sản lượng gắn chi tiết không thuộc lệnh này')
+      }
+    }
+
+    // Lộ trình đã định hình (0063): giai đoạn nhập phải thuộc lộ trình của
+    // dòng SP chứa chi tiết đó. Dòng CHƯA định hình thì nhập tự do (lệnh cũ).
+    const allowedByLine = await routesService.allowedStagesByLine(lsxId)
+    for (const e of input.entries) {
+      const comp = byId.get(e.component_id)!
+      const allowed = allowedByLine.get(comp.order_line_id)
+      if (allowed && !allowed.has(input.stage)) {
+        throw BadRequest(
+          `Chi tiết "${comp.name}" không đi qua giai đoạn này theo lộ trình đã định hình — kiểm tra lại hoặc sửa lộ trình ở màn Định hình SX`,
+        )
       }
     }
 
@@ -139,9 +150,10 @@ export const outputsService = {
    */
   async summary(_user: User, lsxId: string) {
     const { components, orderLines, totalByComponent } = await loadLsxContext(lsxId)
-    const [entries, stages] = await Promise.all([
+    const [entries, stages, allowedByLine] = await Promise.all([
       outputsRepo.listByLsx(lsxId),
       productionRepo.listStages(),
+      routesService.allowedStagesByLine(lsxId),
     ])
     const stageOrder = stages.map((s) => s.code)
 
@@ -163,12 +175,16 @@ export const outputsService = {
         done: v.done,
         defect: v.defect,
       }))
+      const allowed = allowedByLine.get(c.order_line_id)
       return {
         id: c.id,
         order_line_id: c.order_line_id,
         cluster: c.cluster,
         name: c.name,
         total_needed: totalByComponent.get(c.id) ?? 0,
+        // Lộ trình của SP chứa chi tiết (0063) — UI ẩn/mờ giai đoạn ngoài lộ
+        // trình. null = dòng chưa định hình (lệnh cũ nhập tự do).
+        allowed_stages: allowed ? [...allowed] : null,
         summary: summarizeComponent(
           totalByComponent.get(c.id) ?? 0,
           stageOrder,

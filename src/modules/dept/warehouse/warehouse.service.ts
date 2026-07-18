@@ -15,13 +15,14 @@ async function isWarehouseUser(user: User): Promise<boolean> {
 }
 
 /**
- * Xem chéo read-only (FR-ADM-02): manager/admin xem được Kho; ghi vẫn cần phòng Kho.
- * Cung ứng cũng xem được (phiếu kho / tồn) để theo dõi hàng về theo PO — mục
- * "Phiếu kho" trong menu Cung ứng (/planning/docs). Ghi vẫn bị chặn theo phòng.
+ * Xem chéo phòng ban: workspace Kho có openView (workspaces/access.ts) — mọi NV
+ * đã đăng nhập xem được vật tư/tồn/phiếu (Sales tra tồn khi báo giá, Cung ứng
+ * theo dõi hàng về theo PO). Ghi vẫn khoá phòng Kho ở các mutation bên dưới.
+ * Giữ hàm này làm một điểm siết duy nhất nếu sau này cần thu hẹp lại.
  */
 async function canViewWarehouse(user: User): Promise<boolean> {
-  if (user.role === 'admin' || user.role === 'manager') return true
-  return (await isWarehouseUser(user)) || (await isSupplyStaff(user))
+  void user // giữ nguyên chữ ký để sau này siết lại theo user không phải sửa caller
+  return true
 }
 
 /** Chỉ Kho + admin được sửa danh mục vật tư. */

@@ -19,6 +19,8 @@ export type BoardRow = {
   name: string
   total_needed: number
   stages: { stage: string; done: number; missing: number; defect: number }[]
+  /** Lộ trình giai đoạn của SP (0063); null = chưa định hình. */
+  allowed_stages: string[] | null
   pct_total: number
   status: 'not_started' | 'in_progress' | 'done'
 }
@@ -101,8 +103,12 @@ export function ProductionBoard({
         r.total_needed,
         ...stages.flatMap((s): (string | number)[] => {
           const st = r.stages.find((x) => x.stage === s.code)
-          // Không qua công đoạn này (final_stage) → để trống, đừng ghi 0 gây hiểu nhầm.
-          return st ? [st.done, st.missing] : ['', '']
+          // Không qua công đoạn này (final_stage 0041 / lộ trình 0063) → để
+          // trống, đừng ghi 0 gây hiểu nhầm. Có sản lượng lịch sử thì vẫn ghi.
+          const outsideRoute =
+            r.allowed_stages !== null && !r.allowed_stages.includes(s.code)
+          if (!st || (outsideRoute && st.done === 0)) return ['', '']
+          return [st.done, st.missing]
         }),
         `${Math.round(r.pct_total * 100)}%`,
         ST_LABEL[r.status],
@@ -244,7 +250,11 @@ export function ProductionBoard({
                     </td>
                     {stages.map((s) => {
                       const st = r.stages.find((x) => x.stage === s.code)
-                      if (!st)
+                      // Ngoài lộ trình đã định hình (0063) → mờ như "không qua
+                      // công đoạn"; có sản lượng lịch sử thì vẫn hiện số.
+                      const outsideRoute =
+                        r.allowed_stages !== null && !r.allowed_stages.includes(s.code)
+                      if (!st || (outsideRoute && st.done === 0))
                         return (
                           <td
                             key={s.code}

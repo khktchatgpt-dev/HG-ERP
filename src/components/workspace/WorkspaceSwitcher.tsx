@@ -10,24 +10,27 @@ import {
 
 /**
  * Dropdown chuyển workspace nhanh — hiện trong sidebar dưới logo.
- * Chỉ admin thấy đầy đủ 10 workspace; user khác chỉ thấy workspace của mình + shared.
+ *
+ * Danh sách `switchable` do server tính từ `listAccessibleWorkspaces` (một nguồn
+ * sự thật với layout guard). Workspace không phải phòng mình mang nhãn "chỉ xem"
+ * — vào được nhưng mọi nút sửa sẽ bị service từ chối theo phòng chủ quản.
  */
 export function WorkspaceSwitcher({
   current,
-  userRole,
+  switchable,
 }: {
   current: WorkspaceId
-  userRole: string
+  switchable: { id: WorkspaceId; readonly: boolean }[]
 }) {
   const [open, setOpen] = useState(false)
   const currentWs = WORKSPACES[current]
   const accent = ACCENT_CLASSES[currentWs.accent]
 
-  // Admin thấy các workspace đã ready + workspace hiện tại (kể cả chưa ready)
-  const list =
-    userRole === 'admin'
-      ? Object.values(WORKSPACES).filter((w) => w.ready || w.id === current)
-      : [currentWs]
+  // Workspace hiện tại luôn có trong list (kể cả khi không switchable — vd admin
+  // đứng trong ws chưa ready) để dropdown hiển thị đúng chỗ đang đứng.
+  const list = switchable.some((s) => s.id === current)
+    ? switchable
+    : [{ id: current, readonly: false }, ...switchable]
 
   if (list.length === 1) {
     // Chỉ 1 workspace → hiện label không có switcher.
@@ -52,8 +55,9 @@ export function WorkspaceSwitcher({
         <span className="text-slate-400">▾</span>
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-80 overflow-auto rounded-md border border-slate-700 bg-slate-900 py-1 shadow-lg">
-          {list.map((ws) => {
+        <div className="absolute top-full right-0 left-0 z-20 mt-1 max-h-80 overflow-auto rounded-md border border-slate-700 bg-slate-900 py-1 shadow-lg">
+          {list.map(({ id, readonly }) => {
+            const ws = WORKSPACES[id]
             const a = ACCENT_CLASSES[ws.accent]
             const active = ws.id === current
             return (
@@ -67,6 +71,11 @@ export function WorkspaceSwitcher({
               >
                 <span className={`h-2 w-2 rounded-full ${a.bg}`} />
                 <span className="flex-1 truncate">{ws.label}</span>
+                {readonly && (
+                  <span className="rounded bg-slate-700/80 px-1 py-px text-[9px] tracking-wide text-slate-400 uppercase">
+                    chỉ xem
+                  </span>
+                )}
                 {active && <span className="text-slate-500">•</span>}
               </Link>
             )
