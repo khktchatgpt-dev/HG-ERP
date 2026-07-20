@@ -381,7 +381,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Điều hành',
         items: [
-          { href: '/exec', label: 'Phê duyệt', icon: '✓' },
+          // Trang đích của GĐ = dashboard bao quát (user chốt 07/2026);
+          // phê duyệt dời về /exec/approvals.
+          { href: '/exec', label: 'Toàn cảnh điều hành', icon: '◧' },
+          { href: '/exec/approvals', label: 'Phê duyệt', icon: '✓' },
           // Route /exec/* riêng → giữ menu Ban GĐ, không nhảy sang shell Sales.
           { href: '/exec/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
         ],
