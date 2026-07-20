@@ -516,6 +516,78 @@ export type Database = {
           },
         ]
       }
+      production_day_locks: {
+        Row: {
+          entry_date: string
+          id: string
+          locked_at: string
+          locked_by: string | null
+          team_department_id: string
+        }
+        Insert: {
+          entry_date: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          team_department_id: string
+        }
+        Update: {
+          entry_date?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          team_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_day_locks_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_day_locks_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_defect_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          stage_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       production_incidents: {
         Row: {
           created_at: string
@@ -889,6 +961,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           defect_qty: number
+          defect_reason: string | null
           entry_date: string
           id: string
           kg: number | null
@@ -904,6 +977,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           defect_qty?: number
+          defect_reason?: string | null
           entry_date: string
           id?: string
           kg?: number | null
@@ -919,6 +993,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           defect_qty?: number
+          defect_reason?: string | null
           entry_date?: string
           id?: string
           kg?: number | null
