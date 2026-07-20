@@ -12,3 +12,19 @@ export function stageForDept(
   const byLen = [...stages].sort((a, b) => b.label.length - a.label.length)
   return byLen.find((s) => name.includes(s.label.toLowerCase()))?.code ?? null
 }
+
+/**
+ * Công đoạn CHÍNH THỨC của tổ (0064, đóng OI-14): ưu tiên departments.stage_code
+ * do admin gán; tổ chưa gán (giai đoạn chuyển tiếp) fallback đoán theo tên như
+ * cũ. stage_code lạ (đã xoá khỏi danh mục) coi như chưa gán.
+ */
+export function resolveTeamStage(
+  dept: { stage_code: string | null; name: string } | null,
+  stages: { code: string; label: string }[],
+): string | null {
+  if (!dept) return null
+  if (dept.stage_code && stages.some((s) => s.code === dept.stage_code)) {
+    return dept.stage_code
+  }
+  return stageForDept(dept.name, stages)
+}

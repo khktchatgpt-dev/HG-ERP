@@ -214,6 +214,30 @@ export const productionRepo = {
     })
   },
 
+  /**
+   * Progress của NHIỀU LSX một lượt (chỉ field cần suy trạng thái thẻ) — cho
+   * bảng Kanban tổ + dải tải việc theo tổ, tránh N query per lệnh.
+   */
+  async listProgressBulk(
+    ids: string[],
+  ): Promise<
+    { production_order_id: string; stage: string; action: string; created_at: string }[]
+  > {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('production_progress')
+      .select('production_order_id, stage, action, created_at')
+      .in('production_order_id', ids)
+      .order('created_at', { ascending: true })
+      .limit(20000)
+    return (data ?? []) as {
+      production_order_id: string
+      stage: string
+      action: string
+      created_at: string
+    }[]
+  },
+
   /** Danh mục giai đoạn SX (catalog_items type 'production_stage'). */
   async listStages(): Promise<{ code: string; label: string }[]> {
     const { data } = await db()

@@ -24,6 +24,9 @@ export type NotificationType =
   | 'lsx_rejected'
   | 'order_changed'
   | 'order_cancelled'
+  | 'stage_handoff'
+  | 'incident_reported'
+  | 'incident_resolved'
 
 export type Notification = {
   id: string

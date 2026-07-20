@@ -165,6 +165,7 @@ export type Database = {
           head_user_id: string | null
           id: string
           name: string
+          stage_code: string | null
           updated_at: string
           workspace_id: string | null
         }
@@ -174,6 +175,7 @@ export type Database = {
           head_user_id?: string | null
           id?: string
           name: string
+          stage_code?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -183,6 +185,7 @@ export type Database = {
           head_user_id?: string | null
           id?: string
           name?: string
+          stage_code?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -507,6 +510,81 @@ export type Database = {
           {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_incidents: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          id: string
+          message: string
+          production_order_id: string | null
+          reported_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          stage: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message: string
+          production_order_id?: string | null
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stage?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message?: string
+          production_order_id?: string | null
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stage?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_incidents_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_incidents_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_resolved_by_fkey"
+            columns: ["resolved_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

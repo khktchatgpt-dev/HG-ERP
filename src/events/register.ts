@@ -3,6 +3,7 @@ import { registerWarehouseNotificationHandlers } from './handlers/warehouse.noti
 import { registerPoNotificationHandlers } from './handlers/po.notifications'
 import { registerLsxNotificationHandlers } from './handlers/lsx.notifications'
 import { registerOrderNotificationHandlers } from './handlers/order.notifications'
+import { registerProductionNotificationHandlers } from './handlers/production.notifications'
 
 let registered = false
 
@@ -18,6 +19,7 @@ export function registerEventHandlers(): void {
   registerPoNotificationHandlers()
   registerLsxNotificationHandlers()
   registerOrderNotificationHandlers()
+  registerProductionNotificationHandlers()
 }
 
 // Auto-register khi module import lần đầu — Next.js server sẽ chạy dòng này

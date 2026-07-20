@@ -38,6 +38,21 @@ export function normalizeRoute(stages: string[], catalogOrder: string[]): string
   return catalogOrder.filter((c) => wanted.has(c))
 }
 
+/**
+ * Các công đoạn KẾ TIẾP ngay sau `stage` trên lộ trình các dòng SP của lệnh —
+ * để bàn giao "tổ Hàn xong → báo tổ Sơn". Union khử trùng vì mỗi dòng SP có
+ * thể rẽ khác nhau; rỗng = `stage` là công đoạn cuối ở mọi dòng (hoặc không
+ * dòng nào đi qua). Pure — có test riêng.
+ */
+export function nextStagesAfter(stage: string, lineRoutes: string[][]): string[] {
+  const next = new Set<string>()
+  for (const route of lineRoutes) {
+    const i = route.indexOf(stage)
+    if (i >= 0 && i + 1 < route.length) next.add(route[i + 1])
+  }
+  return [...next]
+}
+
 export type LineRoute = {
   order_line_id: string
   product_id: string

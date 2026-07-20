@@ -10,9 +10,11 @@ vi.mock('./production.repo', () => ({
     list: vi.fn(),
     listProgress: vi.fn(),
     listTracking: vi.fn(),
+    listStages: vi.fn(),
   },
   saveLsxLineSpecs: vi.fn(),
 }))
+vi.mock('./routes.repo', () => ({ routesRepo: { listByLsx: vi.fn() } }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: {
     findById: vi.fn(),
@@ -27,10 +29,12 @@ vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { list: vi.fn(), findById: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
-vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+// on: register.ts (import side-effect của service) đăng ký handler lúc import.
+vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
 
 import { productionService } from './production.service'
 import { productionRepo } from './production.repo'
+import { routesRepo } from './routes.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
@@ -79,6 +83,15 @@ beforeEach(() => {
   vi.mocked(productionRepo.patch).mockImplementation(
     async (_id, p) => ({ ...LSX, ...p }) as never,
   )
+  // Nhánh emit bàn giao của updateStage(done) cần catalog + route + dân số.
+  vi.mocked(productionRepo.listStages).mockResolvedValue([
+    { code: 'phoi', label: 'Phôi' },
+    { code: 'han', label: 'Hàn' },
+    { code: 'son', label: 'Sơn' },
+  ])
+  vi.mocked(routesRepo.listByLsx).mockResolvedValue([])
+  vi.mocked(departmentsRepo.list).mockResolvedValue([] as never)
+  vi.mocked(usersRepo.list).mockResolvedValue([] as never)
 })
 
 describe('updateStage — GĐ/QL hoặc Xưởng (Cung ứng hết quyền — siết 07/2026)', () => {
@@ -119,6 +132,72 @@ describe('updateStage — GĐ/QL hoặc Xưởng (Cung ứng hết quyền — s
     await expect(
       productionService.updateStage(manager, 'lsx1', { stage: 'han', action: 'done' }),
     ).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+describe('updateStage — emit bàn giao công đoạn (tách vai 07/2026)', () => {
+  beforeEach(() => {
+    mockWorkerDept()
+    // 2 dòng SP: 1 dòng Hàn→Sơn, 1 dòng Hàn là cuối → next = ['son'].
+    vi.mocked(routesRepo.listByLsx).mockResolvedValue([
+      { order_line_id: 'l1', stages: ['phoi', 'han', 'son'] },
+      { order_line_id: 'l2', stages: ['phoi', 'han'] },
+    ])
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-to-han', name: 'Tổ Hàn', workspace_id: 'production', stage_code: 'han' },
+      { id: 'd-to-son', name: 'Tổ Sơn', workspace_id: 'production', stage_code: 'son' },
+      { id: 'd-sales', name: 'Sales', workspace_id: 'sales', stage_code: null },
+    ] as never)
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-to', role: 'employee', department_id: 'd-to-han' },
+      { id: 'u-son1', role: 'employee', department_id: 'd-to-son' },
+      { id: 'u-son2', role: 'employee', department_id: 'd-to-son' },
+      { id: 'u-gd', role: 'manager', department_id: null },
+    ] as never)
+  })
+
+  it("action 'done' → emit production.stage.done: next đúng, báo tổ Sơn + quản đốc", async () => {
+    await productionService.updateStage(worker, 'lsx1', { stage: 'han', action: 'done' })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'production.stage.done',
+        code: LSX.code,
+        stage: 'han',
+        stage_label: 'Hàn',
+        next_stages: ['son'],
+        next_stage_labels: ['Sơn'],
+        done_by: worker.id,
+        notify_next_ids: ['u-son1', 'u-son2'],
+        coordinator_ids: ['u-gd'],
+      }),
+    )
+  })
+
+  it("action 'start' → KHÔNG emit bàn giao", async () => {
+    await productionService.updateStage(worker, 'lsx1', { stage: 'han', action: 'start' })
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('công đoạn cuối (không dòng nào còn kế tiếp) → next rỗng, chỉ báo quản đốc', async () => {
+    await productionService.updateStage(worker, 'lsx1', { stage: 'son', action: 'done' })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'production.stage.done',
+        next_stages: [],
+        notify_next_ids: [],
+        coordinator_ids: ['u-gd'],
+      }),
+    )
+  })
+
+  it('tổ chưa gán stage_code vẫn khớp qua fallback tên ("Tổ Sơn" → son)', async () => {
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-to-son', name: 'Tổ Sơn', workspace_id: 'production', stage_code: null },
+    ] as never)
+    await productionService.updateStage(worker, 'lsx1', { stage: 'han', action: 'done' })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ notify_next_ids: ['u-son1', 'u-son2'] }),
+    )
   })
 })
 
