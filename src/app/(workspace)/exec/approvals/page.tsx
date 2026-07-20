@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionService } from '@/modules/dept/production/production.service'
+import { poLineAmount } from '@/lib/po-line'
 import { ApprovalsManager } from '../ApprovalsManager'
 
 /**
@@ -21,13 +22,14 @@ export default async function ExecApprovalsPage() {
     }),
   ])
 
-  // GĐ cần thấy giá trị cam kết trước khi duyệt — tính tổng tiền từng PO từ lines.
+  // GĐ cần thấy giá trị cam kết trước khi duyệt — tổng tiền qua poLineAmount
+  // (nguồn chuẩn, tính đúng cả dòng báo giá theo đơn vị 2 / price_basis).
   const totals = await Promise.all(
     pendingPos.map(async (p) => {
       const lines = await posRepo.listLines(p.id)
       return {
         id: p.id,
-        total: lines.reduce((s, l) => s + l.qty_ordered * (l.unit_price ?? 0), 0),
+        total: lines.reduce((s, l) => s + poLineAmount(l), 0),
         lines_count: lines.length,
       }
     }),
