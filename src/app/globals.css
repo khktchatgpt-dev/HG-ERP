@@ -1,13 +1,63 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
+/*
+ * Design tokens. Base app dùng --background/--foreground; khối token shadcn
+ * (--card, --primary, --border, …) map theo palette zinc/slate của ERP kit để
+ * 2 hệ (ERP kit + shadcn) nhìn liền mạch. KHÔNG dùng `.dark` class — dark mode
+ * bám theo @media (prefers-color-scheme) giống toàn app (xem globals bên dưới).
+ */
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* shadcn tokens (light) — zinc/slate hệ Tailwind */
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+  --primary: #0f172a; /* slate-900 — trùng Button primary bespoke */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5; /* zinc-100 */
+  --secondary-foreground: #18181b; /* zinc-900 */
+  --muted: #f4f4f5;
+  --muted-foreground: #71717a; /* zinc-500 */
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #dc2626; /* red-600 */
+  --destructive-foreground: #ffffff;
+  --border: #e4e4e7; /* zinc-200 */
+  --input: #e4e4e7;
+  --ring: #f59e0b; /* amber-500 — trùng focus ring bespoke */
+  --radius: 0.5rem;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 }
@@ -16,6 +66,34 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+
+    /* shadcn tokens (dark) */
+    --card: #18181b; /* zinc-900 — trùng thẻ ERP dark */
+    --card-foreground: #ededed;
+    --popover: #09090b; /* zinc-950 */
+    --popover-foreground: #ededed;
+    --primary: #ffffff; /* trùng Button primary dark bespoke */
+    --primary-foreground: #0f172a;
+    --secondary: #27272a; /* zinc-800 */
+    --secondary-foreground: #fafafa;
+    --muted: #27272a;
+    --muted-foreground: #a1a1aa; /* zinc-400 */
+    --accent: #27272a;
+    --accent-foreground: #fafafa;
+    --destructive: #ef4444; /* red-500 */
+    --destructive-foreground: #ffffff;
+    --border: #27272a; /* zinc-800 */
+    --input: #3f3f46; /* zinc-700 */
+    --ring: #f59e0b;
+  }
+}
+
+/* shadcn cần default border-color = --border (Tailwind v4 mặc định currentColor). */
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--border);
   }
 }
 

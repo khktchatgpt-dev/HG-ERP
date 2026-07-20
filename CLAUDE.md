@@ -116,13 +116,16 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 ## Skills (`.claude/skills/`)
 
 Skill nội bộ (commit trong repo) — gọi khi hợp:
+
 - `sync-types` — regen `database.types.ts` sau migration.
 - `add-module` — scaffold domain module 3 lớp + route.
 - `add-migration` — file SQL đúng chuẩn RLS + đánh số.
 - `add-erp-page` — trang workspace dùng ERP kit.
 - `check-rls` — rà RLS + Supabase security advisor.
+- `frontend-design` — hướng dẫn thiết kế UI có chủ đích (palette/typography/layout, copy), tránh mẫu rập khuôn. Nguồn: plugin `frontend-design` của claude-code (vendored).
 
 Skill ngoài (official Supabase, nguồn `.agents/skills/`, symlink vào `.claude/skills` theo máy — chạy `npx skills add supabase/agent-skills` sau khi clone):
+
 - `supabase` — mọi task Supabase (auth/RLS/migration/storage), luôn verify theo changelog.
 - `supabase-postgres-best-practices` — chuẩn Postgres.
 
