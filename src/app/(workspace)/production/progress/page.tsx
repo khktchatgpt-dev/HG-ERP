@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import {
   productionService,
@@ -12,10 +13,14 @@ import { ProductionProgressManager } from './ProductionProgressManager'
 
 /**
  * Tiến độ sản xuất theo LSX — bảng ĐIỀU PHỐI: tiến độ + nguy cơ trễ + tình
- * trạng vật tư/BOM từng lệnh, thao tác nhanh tại chỗ (GĐ/BQL + Xưởng).
+ * trạng vật tư/BOM từng lệnh + sự cố + tải việc theo tổ. PHẦN RIÊNG CỦA
+ * GIÁM ĐỐC/Ban quản lý (user chốt 07/2026: giao diện GĐ duy nhất) — NV
+ * (kể cả xưởng/kế hoạch) bị đẩy về trang chủ xưởng; xưởng thao tác qua
+ * Kanban "Việc của tổ", kế hoạch dùng /planning/board.
  */
 export default async function ProductionProgressPage() {
   const user = (await authService.currentUser())!
+  if (user.role !== 'admin' && user.role !== 'manager') redirect('/production')
 
   const [
     { rows },

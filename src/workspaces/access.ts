@@ -68,11 +68,15 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
     // Kanban "Việc của tổ" (tách vai 07/2026) — thành viên tổ + admin.
     caps.add('production.team')
   }
-  // Điều phối toàn xưởng (Tiến độ + Bảng tổng): mọi người TRỪ công nhân tổ —
-  // menu tổ/thống kê tối giản; manager/planner/xem chéo giữ nguyên tầm nhìn.
   // Manager cũng thấy "Việc của tổ" để soi từng tổ (board có picker).
   if (user.role === 'manager') caps.add('production.team')
-  if (!(user.role === 'employee' && prodStaff)) caps.add('production.coordinate')
+  // Màn điều hành (Tiến độ + Bảng tổng) = PHẦN RIÊNG CỦA GIÁM ĐỐC (user chốt
+  // 07/2026: giao diện GĐ duy nhất) — chỉ admin/manager; page cũng redirect
+  // nên NV vào thẳng URL cũng bị đẩy về. Kế hoạch xem Bảng tổng qua
+  // /planning/board (guard riêng theo isPlannerStaff/isSupplyStaff).
+  if (user.role === 'admin' || user.role === 'manager') {
+    caps.add('production.coordinate')
+  }
   return caps
 }
 
