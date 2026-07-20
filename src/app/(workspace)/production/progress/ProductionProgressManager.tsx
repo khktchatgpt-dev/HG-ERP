@@ -54,15 +54,43 @@ const ACTIVE: LsxStatus[] = ['approved', 'in_progress']
 
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
 
+/** Tải việc 1 tổ (teamService.workloadByTeam) — thẻ Kanban theo trạng thái. */
+type WorkloadRow = {
+  department_id: string
+  department_name: string
+  stage: string
+  stage_label: string
+  todo: number
+  doing: number
+  done: number
+}
+
+/** Sự cố đang mở (subset Incident) — panel quản đốc. */
+type OpenIncident = {
+  id: string
+  lsx_code: string | null
+  stage: string | null
+  department_name: string | null
+  reported_by_name: string | null
+  message: string
+  created_at: string
+}
+
 export function ProductionProgressManager({
   rows,
   stages,
   canManage,
+  workload,
+  incidents,
 }: {
   rows: Row[]
   stages: { code: string; label: string }[]
   /** GĐ/QL hoặc KH-CƯ — cập nhật giai đoạn / báo hoàn thành tại chỗ. */
   canManage: boolean
+  /** Tải việc theo tổ (tách vai 07/2026) — mỗi tổ đã gán công đoạn 1 dòng. */
+  workload: WorkloadRow[]
+  /** Sự cố tổ báo, đang mở — quản đốc đóng khi xử lý xong. */
+  incidents: OpenIncident[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -121,6 +149,28 @@ export function ProductionProgressManager({
       router.refresh()
     } catch (e) {
       toast.error('Cập nhật thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function resolveIncident(inc: OpenIncident) {
+    const ok = await confirm({
+      title: 'Đánh dấu sự cố đã xử lý?',
+      description: inc.message,
+      confirmLabel: 'Đã xử lý',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/production/incidents/${inc.id}/resolve`, {
+        method: 'POST',
+        body: {},
+      })
+      toast.success('Đã đóng sự cố', 'Người báo sẽ nhận được thông báo')
+      router.refresh()
+    } catch (e) {
+      toast.error('Thao tác thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
       setBusy(false)
     }
@@ -306,8 +356,95 @@ export function ProductionProgressManager({
           { label: 'Chờ sản xuất', value: count('approved'), tone: 'blue' },
           { label: 'Đang sản xuất', value: count('in_progress'), tone: 'amber' },
           { label: 'Hoàn thành', value: count('completed'), tone: 'green' },
+          {
+            label: 'Sự cố đang mở',
+            value: incidents.length,
+            tone: incidents.length ? 'red' : 'gray',
+          },
         ]}
       />
+
+      {/* Sự cố tổ báo — xử lý xong thì đóng, người báo nhận thông báo. */}
+      {incidents.length > 0 && (
+        <section className="rounded-lg border border-red-200 bg-red-50/40 dark:border-red-900/50 dark:bg-red-950/20">
+          <div className="border-b border-red-200 px-4 py-2 dark:border-red-900/50">
+            <h2 className="text-xs font-semibold tracking-wider text-red-700 uppercase dark:text-red-400">
+              ⚠ Sự cố đang mở ({incidents.length})
+            </h2>
+          </div>
+          <ul className="divide-y divide-red-100 dark:divide-red-950">
+            {incidents.map((inc) => (
+              <li
+                key={inc.id}
+                className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="font-medium">{inc.message}</span>
+                  <div className="text-xs text-zinc-500">
+                    {[
+                      inc.lsx_code,
+                      inc.stage
+                        ? (stages.find((s) => s.code === inc.stage)?.label ?? inc.stage)
+                        : null,
+                      inc.department_name,
+                      inc.reported_by_name,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}{' '}
+                    · {fmtD(inc.created_at)}
+                  </div>
+                </div>
+                {canManage && (
+                  <button
+                    disabled={busy}
+                    onClick={() => void resolveIncident(inc)}
+                    className="rounded-md border border-red-300 px-2.5 py-1 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
+                  >
+                    ✓ Đã xử lý
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* Tải việc theo tổ — mỗi tổ đã gán công đoạn: thẻ chưa/đang/xong. */}
+      {workload.length > 0 && (
+        <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="border-b border-zinc-200 px-4 py-2 dark:border-zinc-800">
+            <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+              Tải việc theo tổ (lệnh đang chạy)
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 divide-x divide-y divide-zinc-100 sm:grid-cols-3 lg:grid-cols-7 dark:divide-zinc-900">
+            {workload.map((w) => (
+              <Link
+                key={w.department_id}
+                href={`/production/team?stage=${w.stage}`}
+                className="flex flex-col gap-0.5 px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                title={`Mở bảng việc công đoạn ${w.stage_label}`}
+              >
+                <span className="truncate text-xs font-medium">{w.department_name}</span>
+                <span className="text-[10px] text-zinc-400">{w.stage_label}</span>
+                <span className="text-xs tabular-nums">
+                  <span className="text-zinc-400">{w.todo} chờ</span>
+                  {' · '}
+                  <span
+                    className={w.doing ? 'font-medium text-amber-600' : 'text-zinc-400'}
+                  >
+                    {w.doing} đang
+                  </span>
+                  {' · '}
+                  <span className={w.done ? 'text-green-600' : 'text-zinc-400'}>
+                    {w.done} xong
+                  </span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       <div>
         <Toolbar

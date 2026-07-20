@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { stageForDept } from '@/lib/stage-for-dept'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { EntryWorkbench } from './EntryWorkbench'
 import { canRecordHere, loadRunningLsx } from './shared'
 
@@ -22,7 +22,7 @@ export default async function OutputEntryPage() {
       description="Chọn lệnh → ghi sản lượng ngày của tổ mình. Công đoạn tự chọn sẵn theo tổ; nhiều lệnh chạy song song thì đổi lệnh ngay tại đây."
       lsxList={lsxList}
       canRecord={canRecord}
-      initialStage={stageForDept(dept?.name ?? null, stages)}
+      initialStage={resolveTeamStage(dept, stages)}
     />
   )
 }

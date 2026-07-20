@@ -231,16 +231,22 @@ export function LsxOutputPanel({
           <>
             {/* Tổng hợp thiếu/dư/%HT per chi tiết × công đoạn (FR-PR-04/05) */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
+              <table className="w-full min-w-[860px] text-xs">
                 <thead>
                   <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
                     <th className="py-1.5 pr-2">Chi tiết</th>
-                    <th className="w-16 py-1.5 pr-2 text-right">Tổng cần</th>
+                    {/* KH = định mức từ bảng chi tiết (SL/SP × SL đơn) — thống kê
+                        đối chiếu Kế hoạch vs Thực tế ngay trên 1 bảng. */}
+                    <th className="w-20 py-1.5 pr-2 text-right">Định mức (KH)</th>
                     {data.stages.map((s) => (
                       <th key={s.code} className="w-24 py-1.5 pr-2 text-right">
-                        {s.label}
+                        {s.label}{' '}
+                        <span className="font-normal text-zinc-400 normal-case">
+                          TT/KH
+                        </span>
                       </th>
                     ))}
+                    <th className="w-24 py-1.5 pr-2 text-right">Thực tế (CĐ cuối)</th>
                     <th className="w-20 py-1.5 pr-2 text-right">%HT</th>
                     <th className="w-24 py-1.5" />
                   </tr>
@@ -290,6 +296,9 @@ export function LsxOutputPanel({
                               title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
                             >
                               {s.done.toLocaleString('vi-VN')}
+                              <span className="text-[10px] text-zinc-400">
+                                /{c.total_needed.toLocaleString('vi-VN')}
+                              </span>
                             </span>
                             {s.defect > 0 && (
                               <span className="ml-0.5 text-[10px] text-red-500">
@@ -299,6 +308,18 @@ export function LsxOutputPanel({
                           </td>
                         )
                       })}
+                      <td
+                        className={`py-1.5 pr-2 text-right font-medium ${
+                          c.summary.done_final >= c.total_needed
+                            ? 'text-green-600 dark:text-green-400'
+                            : c.summary.done_final > 0
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-zinc-300 dark:text-zinc-600'
+                        }`}
+                        title="Đã xong ở công đoạn cuối của chi tiết"
+                      >
+                        {c.summary.done_final.toLocaleString('vi-VN')}
+                      </td>
                       <td className="py-1.5 pr-2 text-right font-medium">
                         {Math.round(c.summary.pct_total * 100)}%
                       </td>
