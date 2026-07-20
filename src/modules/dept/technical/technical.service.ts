@@ -306,7 +306,30 @@ export const productsService = {
     if (!(await isTechnicalStaff(user)) || !canEdit(user)) throw Forbidden()
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound()
-    await productsRepo.delete(id)
+
+    // FK restrict (báo giá/đơn hàng 0013, mẫu 0061) chặn xoá ở DB — báo rõ
+    // thay vì văng 500, và chỉ đường "Ngừng dùng" (ẩn khỏi danh mục, giữ
+    // nguyên chứng từ cũ). Ảnh/hồ sơ (set null) và BOM (cascade) không chặn.
+    const refs = await productsRepo.referenceCounts(id)
+    const parts = [
+      refs.quotes > 0 ? `${refs.quotes} dòng báo giá` : null,
+      refs.orders > 0 ? `${refs.orders} dòng đơn hàng` : null,
+      refs.samples > 0 ? `${refs.samples} mẫu showroom` : null,
+    ].filter(Boolean)
+    if (parts.length > 0) {
+      throw Conflict(
+        `Không xoá được "${before.code}" — SP đang nằm trong ${parts.join(', ')}. ` +
+          'Hãy dùng "Ngừng dùng" để ẩn khỏi danh mục (chứng từ cũ giữ nguyên).',
+      )
+    }
+
+    const { blocked } = await productsRepo.delete(id)
+    if (blocked) {
+      // Lưới an toàn: tham chiếu mới chen vào giữa lúc kiểm tra và xoá.
+      throw Conflict(
+        `Không xoá được "${before.code}" — SP vừa được chứng từ khác tham chiếu. Dùng "Ngừng dùng" để ẩn.`,
+      )
+    }
   },
 }
 

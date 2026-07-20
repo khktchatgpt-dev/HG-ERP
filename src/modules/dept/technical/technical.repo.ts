@@ -223,9 +223,40 @@ export const productsRepo = {
     return data as Product
   },
 
-  async delete(id: string): Promise<void> {
+  /** blocked = FK restrict chặn (23503 — SP đang được chứng từ tham chiếu). */
+  async delete(id: string): Promise<{ blocked: boolean }> {
     const { error } = await db().from('technical_products').delete().eq('id', id)
-    if (error) throw new Error(error.message)
+    if (error) {
+      if (error.code === '23503') return { blocked: true }
+      throw new Error(error.message)
+    }
+    return { blocked: false }
+  },
+
+  /**
+   * Đếm tham chiếu CHẶN xoá SP (FK restrict: báo giá 0013, đơn hàng 0013,
+   * mẫu 0061) — query thẳng bảng ngoài domain để tránh import chéo module
+   * (cùng lý do departmentsRepo.stageCodeExists). files/BOM không chặn
+   * (set null / cascade).
+   */
+  async referenceCounts(
+    id: string,
+  ): Promise<{ quotes: number; orders: number; samples: number }> {
+    const cnt = async (
+      table: 'sales_quote_lines' | 'sales_order_lines' | 'technical_samples',
+    ) => {
+      const { count } = await db()
+        .from(table)
+        .select('id', { count: 'exact', head: true })
+        .eq('product_id', id)
+      return count ?? 0
+    }
+    const [quotes, orders, samples] = await Promise.all([
+      cnt('sales_quote_lines'),
+      cnt('sales_order_lines'),
+      cnt('technical_samples'),
+    ])
+    return { quotes, orders, samples }
   },
 }
 
