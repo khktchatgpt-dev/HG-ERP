@@ -1,7 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
 // (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
@@ -35,28 +34,25 @@ export default async function TechnicalProductsPage({
     page_size: PAGE_SIZE,
   })
 
-  // Vật tư cho BOM editor + khách cho bộ lọc/nhãn nhóm + đếm cho StatsBar +
-  // cờ "đã có bản vẽ / BOM" suy từ FILE đã upload (chỉ cho SP của trang này).
-  const [stats, { rows: customers }, { rows: materials }, docFlags] = await Promise.all([
+  // Khách cho bộ lọc/nhãn nhóm + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
+  // suy từ FILE đã upload (chỉ cho SP của trang này). Vật tư cho BOM editor
+  // KHÔNG nạp ở đây nữa — lazy-load khi mở editor (đỡ egress mỗi lần tải).
+  const [stats, { rows: customers }, docFlags] = await Promise.all([
     productsService.stats(),
     customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
-    materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     filesService.productDocFlags(rows.map((p) => p.id)),
   ])
 
-  // Ảnh chỉ resolve cho SP của TRANG hiện tại (không phải toàn bộ thư viện).
-  const imageUrls: Record<string, string> = {}
-  await Promise.all(
-    rows
-      .filter((p) => p.image_file_id)
-      .map(async (p) => {
-        try {
-          imageUrls[p.id] = await filesService.getDownloadUrl(user, p.image_file_id!)
-        } catch {
-          /* bỏ ảnh */
-        }
-      }),
+  // Ảnh SP của TRANG hiện tại — batch 1 query files + 1 lần ký/bucket (thay N lần).
+  const urlByFileId = await filesService.getDownloadUrls(
+    user,
+    rows.filter((p) => p.image_file_id).map((p) => p.image_file_id!),
   )
+  const imageUrls: Record<string, string> = {}
+  for (const p of rows) {
+    const url = p.image_file_id ? urlByFileId[p.image_file_id] : undefined
+    if (url) imageUrls[p.id] = url
+  }
 
   return (
     <ProductsManager
@@ -81,12 +77,6 @@ export default async function TechnicalProductsPage({
       counts={stats}
       filters={{ q: q ?? '', customer, bom, status }}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}
-      materials={materials.map((m) => ({
-        id: m.id,
-        code: m.code,
-        name: m.name,
-        unit: m.unit,
-      }))}
       imageUrls={imageUrls}
       canEdit={canEdit}
     />

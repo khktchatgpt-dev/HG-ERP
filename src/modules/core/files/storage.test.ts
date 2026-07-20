@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const createSignedUrl = vi.fn()
-const from = vi.fn(() => ({ createSignedUrl }))
+const createSignedUrls = vi.fn()
+const from = vi.fn(() => ({ createSignedUrl, createSignedUrls }))
 vi.mock('@/server/db', () => ({ db: () => ({ storage: { from } }) }))
 
 import { storage } from './storage'
@@ -12,11 +13,20 @@ beforeEach(() => {
   vi.useRealTimers()
   token = 0
   createSignedUrl.mockReset()
+  createSignedUrls.mockReset()
   from.mockClear()
   // Supabase phát token MỚI mỗi lần ký — đây chính là thứ khiến cache trình duyệt
   // trượt nếu ta ký lại ở mỗi lần render.
   createSignedUrl.mockImplementation(async (path: string) => ({
     data: { signedUrl: `https://sb/${path}?token=${++token}` },
+    error: null,
+  }))
+  createSignedUrls.mockImplementation(async (paths: string[]) => ({
+    data: paths.map((p) => ({
+      path: p,
+      signedUrl: `https://sb/${p}?token=${++token}`,
+      error: null,
+    })),
     error: null,
   }))
 })
@@ -83,5 +93,48 @@ describe('storage.createSignedDownloadUrl', () => {
     // Lần sau vẫn phải thử ký lại chứ không kẹt ở trạng thái hỏng.
     const ok = await storage.createSignedDownloadUrl('attachments', 'err.png')
     expect(ok.url).toContain('token=')
+  })
+})
+
+describe('storage.createSignedDownloadUrls (batch)', () => {
+  it('ký NHIỀU path trong 1 lần gọi', async () => {
+    const m = await storage.createSignedDownloadUrls('attachments', [
+      'b1.png',
+      'b2.png',
+      'b3.png',
+    ])
+    expect(m.size).toBe(3)
+    expect(createSignedUrls).toHaveBeenCalledTimes(1)
+    expect(createSignedUrls).toHaveBeenCalledWith(['b1.png', 'b2.png', 'b3.png'], 3600)
+    expect(createSignedUrl).not.toHaveBeenCalled()
+  })
+
+  it('path đã cache không ký lại — chỉ ký path mới', async () => {
+    await storage.createSignedDownloadUrl('attachments', 'mix-cached.png')
+    const m = await storage.createSignedDownloadUrls('attachments', [
+      'mix-cached.png',
+      'mix-new.png',
+    ])
+    expect(m.get('mix-cached.png')).toBeDefined()
+    expect(m.get('mix-new.png')).toBeDefined()
+    // Chỉ path chưa cache mới được gửi lên batch.
+    expect(createSignedUrls).toHaveBeenCalledWith(['mix-new.png'], 3600)
+  })
+
+  it('trùng path trong input chỉ ký 1 lần', async () => {
+    const m = await storage.createSignedDownloadUrls('attachments', [
+      'dup.png',
+      'dup.png',
+    ])
+    expect(m.size).toBe(1)
+    expect(createSignedUrls).toHaveBeenCalledWith(['dup.png'], 3600)
+  })
+
+  it('không có miss (đã cache hết) thì KHÔNG gọi API', async () => {
+    await storage.createSignedDownloadUrls('attachments', ['nomiss.png'])
+    createSignedUrls.mockClear()
+    const m = await storage.createSignedDownloadUrls('attachments', ['nomiss.png'])
+    expect(m.get('nomiss.png')).toBeDefined()
+    expect(createSignedUrls).not.toHaveBeenCalled()
   })
 })

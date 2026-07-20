@@ -87,6 +87,17 @@ export const filesRepo = {
     return (data as FileRow | null) ?? null
   },
 
+  /** Nhiều file 1 query — cho batch signed URL (thư viện SP nạp N ảnh/lần tải). */
+  async getByIds(ids: string[]): Promise<FileRow[]> {
+    if (ids.length === 0) return []
+    const { data } = await db()
+      .from('files')
+      .select('*')
+      .in('id', ids)
+      .is('deleted_at', null)
+    return (data ?? []) as FileRow[]
+  },
+
   /** File đã finalize của 1 SP, mới nhất trước — nhiều file cùng parent = lịch sử phiên bản (NFR-03 GĐ1). */
   async listByProduct(productId: string): Promise<FileRow[]> {
     return this.listByParent('product_id', productId)

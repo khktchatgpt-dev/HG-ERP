@@ -258,6 +258,48 @@ export const filesService = {
   },
 
   /**
+   * URL tải cho NHIỀU file 1 lượt (map fileId → url). Gom về 1 query files +
+   * 1 lần ký/bucket, thay cho N × (getById + createSignedUrl). Dùng cho thư
+   * viện SP (24 ảnh/trang → 2 round-trip thay vì ~48). File không đọc được /
+   * không ký được bị bỏ khỏi map (ảnh đó không hiện, không throw cả trang).
+   */
+  async getDownloadUrls(user: User, fileIds: string[]): Promise<Record<string, string>> {
+    const ids = [...new Set(fileIds.filter(Boolean))]
+    if (ids.length === 0) return {}
+    const files = await filesRepo.getByIds(ids)
+
+    const readable: FileRow[] = []
+    for (const f of files) {
+      try {
+        await assertCanReadFile(user, f)
+        readable.push(f)
+      } catch {
+        /* bỏ file không có quyền đọc */
+      }
+    }
+
+    const byBucket = new Map<FileBucket, FileRow[]>()
+    for (const f of readable) {
+      const arr = byBucket.get(f.bucket) ?? []
+      arr.push(f)
+      byBucket.set(f.bucket, arr)
+    }
+
+    const out: Record<string, string> = {}
+    for (const [bucket, group] of byBucket) {
+      const urls = await storage.createSignedDownloadUrls(
+        bucket,
+        group.map((f) => f.path),
+      )
+      for (const f of group) {
+        const hit = urls.get(f.path)
+        if (hit) out[f.id] = hit.url
+      }
+    }
+    return out
+  },
+
+  /**
    * Như `getDownloadUrl` nhưng kèm số giây còn lại của URL, để route HTTP đặt
    * `Cache-Control` khớp đúng hạn token (không cache quá hạn → ảnh vỡ).
    */

@@ -48,6 +48,45 @@ export const storage = {
     return { url: data.signedUrl, expiresAt }
   },
 
+  /**
+   * Ký NHIỀU path trong 1 lần gọi (`createSignedUrls`) — dùng cho thư viện SP
+   * nạp N ảnh/lần tải: trước đây N lần `createSignedUrl` → giờ 1 round-trip cho
+   * các path chưa cache. Tôn trọng cache theo (bucket, path) như bản đơn.
+   */
+  async createSignedDownloadUrls(
+    bucket: FileBucket,
+    paths: string[],
+    ttlSeconds = SIGNED_GET_TTL_SECONDS,
+  ): Promise<Map<string, { url: string; expiresAt: number }>> {
+    const now = Date.now()
+    const out = new Map<string, { url: string; expiresAt: number }>()
+    const misses: string[] = []
+    for (const path of paths) {
+      if (out.has(path) || misses.includes(path)) continue
+      const hit = urlCache.get(SignedUrlCache.key(bucket, path), now)
+      if (hit) out.set(path, { url: hit.url, expiresAt: hit.expiresAt })
+      else misses.push(path)
+    }
+    if (misses.length > 0) {
+      const { data, error } = await db()
+        .storage.from(bucket)
+        .createSignedUrls(misses, ttlSeconds)
+      if (error) throw new Error(error.message)
+      const expiresAt = now + ttlSeconds * 1000
+      for (const item of data ?? []) {
+        if (item.error || !item.signedUrl || !item.path) continue
+        urlCache.set(
+          SignedUrlCache.key(bucket, item.path),
+          item.signedUrl,
+          expiresAt,
+          now,
+        )
+        out.set(item.path, { url: item.signedUrl, expiresAt })
+      }
+    }
+    return out
+  },
+
   /** Bỏ URL đã cache — gọi khi object bị xoá/ghi đè để không trả URL chết. */
   invalidateSignedUrl(bucket: FileBucket, path: string): void {
     urlCache.delete(SignedUrlCache.key(bucket, path))

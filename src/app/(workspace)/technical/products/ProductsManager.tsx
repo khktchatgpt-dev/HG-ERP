@@ -129,7 +129,6 @@ export function ProductsManager({
   counts,
   filters,
   customers,
-  materials,
   imageUrls,
   canEdit,
 }: {
@@ -140,7 +139,6 @@ export function ProductsManager({
   counts: ProductCounts
   filters: Filters
   customers: CustomerOption[]
-  materials: MaterialOption[]
   imageUrls: Record<string, string>
   canEdit: boolean
 }) {
@@ -154,6 +152,9 @@ export function ProductsManager({
   const [bomFor, setBomFor] = useState<{ product: BomTarget; rows: BomRow[] } | null>(
     null,
   )
+  // Vật tư cho BOM editor — lazy-load (chỉ khi mở editor), cache sau lần đầu.
+  const [materials, setMaterials] = useState<MaterialOption[]>([])
+  const [materialsLoaded, setMaterialsLoaded] = useState(false)
 
   // Ô tìm (debounce) — đẩy xuống URL để SERVER lọc, không lọc toàn bộ ở client.
   const [q, setQ] = useState(filters.q)
@@ -241,16 +242,31 @@ export function ProductsManager({
     if (p) setCloning(p)
   }
 
+  /** Vật tư (cho BOM editor) — nạp 1 lần khi cần, cache lại cho các lần mở sau. */
+  async function ensureMaterials() {
+    if (materialsLoaded) return
+    const { rows } = await api<{
+      rows: { id: string; code: string; name: string; unit: string }[]
+    }>('/api/dept/warehouse/materials?active_only=true&page_size=1000')
+    setMaterials(
+      rows.map((m) => ({ id: m.id, code: m.code, name: m.name, unit: m.unit })),
+    )
+    setMaterialsLoaded(true)
+  }
+
   /**
-   * Mở BOM editor: nạp dòng hiện có rồi mới mở modal (tránh setState trong effect).
-   * Chỉ cần id/code/name/bom_status → nhận được cả dòng nhẹ lẫn SP đầy đủ.
+   * Mở BOM editor: nạp dòng hiện có + vật tư (lazy) rồi mới mở modal (tránh
+   * setState trong effect). Chỉ cần id/code/name/bom_status.
    */
   async function openBom(p: BomTarget) {
     setBusy(true)
     try {
-      const data = await api<{
-        lines: { material_id: string; qty_per_unit: number; note: string | null }[]
-      }>(`/api/dept/technical/products/${p.id}/bom`)
+      const [data] = await Promise.all([
+        api<{
+          lines: { material_id: string; qty_per_unit: number; note: string | null }[]
+        }>(`/api/dept/technical/products/${p.id}/bom`),
+        ensureMaterials(),
+      ])
       setBomFor({
         product: p,
         rows: data.lines.map((l) => ({
