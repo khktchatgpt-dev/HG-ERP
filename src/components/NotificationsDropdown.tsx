@@ -29,6 +29,9 @@ const TYPE_LABEL: Record<string, string> = {
   lsx_rejected: 'đã từ chối LSX',
   order_changed: 'đã sửa đơn sau khi phát LSX',
   order_cancelled: 'đã huỷ đơn hàng',
+  stage_handoff: 'bàn giao công đoạn',
+  incident_reported: 'báo sự cố xưởng',
+  incident_resolved: 'đã xử lý sự cố',
 }
 
 function timeAgo(iso: string): string {

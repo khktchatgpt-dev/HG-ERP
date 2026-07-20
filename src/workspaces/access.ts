@@ -62,8 +62,17 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   const caps = new Set<string>()
   if (await canEditComponents(user)) caps.add('production.shape')
   // Nhập sổ sản lượng/gia công — khớp canRecordOutput (chỉ bộ phận sản xuất).
-  if (user.role === 'admin' || (await isProductionStaff(user)))
+  const prodStaff = user.role === 'admin' || (await isProductionStaff(user))
+  if (prodStaff) {
     caps.add('production.record')
+    // Kanban "Việc của tổ" (tách vai 07/2026) — thành viên tổ + admin.
+    caps.add('production.team')
+  }
+  // Điều phối toàn xưởng (Tiến độ + Bảng tổng): mọi người TRỪ công nhân tổ —
+  // menu tổ/thống kê tối giản; manager/planner/xem chéo giữ nguyên tầm nhìn.
+  // Manager cũng thấy "Việc của tổ" để soi từng tổ (board có picker).
+  if (user.role === 'manager') caps.add('production.team')
+  if (!(user.role === 'employee' && prodStaff)) caps.add('production.coordinate')
   return caps
 }
 
