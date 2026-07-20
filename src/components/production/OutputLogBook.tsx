@@ -17,6 +17,7 @@ export type LogEntry = {
   qty: number
   kg: number | null
   defect_qty: number
+  defect_reason: string | null
   machine_note: string | null
   note: string | null
   team_name: string | null

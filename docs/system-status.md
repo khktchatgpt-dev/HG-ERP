@@ -87,6 +87,13 @@ thêm cặp cột KH/TT + Thực tế CĐ cuối). Ràng tổ↔công đoạn `d
 (0064 — **đóng OI-14**; admin gán ở /admin/departments, chưa gán fallback đoán
 tên tổ). Sổ sự cố `production_incidents` (0065) + 3 loại notification mới (0066 —
 tiện thể vá thiếu `order_changed`/`order_cancelled` trong check constraint).
+**Bước 5 (sổ sản lượng dạng lưới) ✅ XONG 07/2026**: màn `/production/logbook`
+toàn xưởng theo ngày (lọc Ngày/Tổ/Công đoạn/LSX + lưới nhập nhanh điều hướng
+bàn phím + footer chốt); **chốt sổ mềm theo tổ+ngày** `production_day_locks`
+(0068 — sau chốt cấm ghi/xoá kể cả admin, quản lý mở khoá có vết); **danh mục
+nguyên nhân lỗi** `production_defect_codes` (0067, lọc theo công đoạn, admin
+CRUD `/admin/defect-codes`, code bất biến) — phế > 0 bắt buộc chọn lý do
+(zod + service, áp cả màn nhập per-LSX cũ vì dùng chung endpoint).
 **Còn lại của SRS**: import Excel (chờ DN gửi file gốc), báo cáo kỳ theo
 tổ/tuần/tháng (FR-RP-02/03), chốt kỳ tháng (FR-SY-05), đối chiếu công nợ GCN
 (FR-OS-03 — GĐ2 kế toán). QR/barcode + backflushing trừ kho: DN chốt KHÔNG làm.

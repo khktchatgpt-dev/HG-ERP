@@ -309,6 +309,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: '✎',
             capability: 'production.record',
           },
+          // Sổ toàn xưởng theo ngày (chốt số cuối ngày của thống kê) — 07/2026.
+          {
+            href: '/production/logbook',
+            label: 'Sổ sản lượng',
+            icon: '☷',
+            capability: 'production.record',
+          },
           {
             href: '/production/outsource',
             label: 'Gia công ngoài',
@@ -402,6 +409,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             href: '/admin/catalogs',
             label: 'Danh mục dùng chung',
             icon: '▤',
+            roles: ['admin'],
+          },
+          {
+            href: '/admin/defect-codes',
+            label: 'Nguyên nhân lỗi SX',
+            icon: '⚑',
             roles: ['admin'],
           },
           {
