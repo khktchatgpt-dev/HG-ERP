@@ -64,6 +64,18 @@ export const stageUpdateSchema = z.object({
   note: z.string().trim().max(1000).optional().nullable(),
 })
 
+/** Kanban tổ (tách vai 07/2026): tổ đánh dấu thẻ LSX × công đoạn. */
+export const teamStageSchema = z.object({
+  lsx_id: z.string().uuid(),
+  stage: z.string().trim().min(1).max(50),
+  action: z.enum(['start', 'done']),
+  note: z.string().trim().max(1000).optional().nullable(),
+})
+
+export const teamBoardQuerySchema = z.object({
+  stage: z.string().trim().min(1).max(50).optional(),
+})
+
 export const lsxListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   status: z.enum(LSX_STATUSES).optional(),

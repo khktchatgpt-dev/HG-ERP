@@ -13,7 +13,13 @@ export type Role = 'admin' | 'manager' | 'employee'
  * vào resolveNavSections. Ví dụ: 'production.shape' = được định hình sản xuất
  * (Kế hoạch/BQL) — thống kê xưởng cùng role employee nhưng không có.
  */
-export type NavCapability = 'production.shape' | 'production.record'
+export type NavCapability =
+  | 'production.shape'
+  | 'production.record'
+  /** Thành viên tổ xưởng — thấy màn Kanban "Việc của tổ". */
+  | 'production.team'
+  /** Điều phối/quan sát toàn xưởng (quản đốc, planner, xem chéo) — thấy Tiến độ + Bảng tổng. */
+  | 'production.coordinate'
 
 export type NavItem = {
   href: string
@@ -287,12 +293,27 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         // khỏi lướt trang chi tiết dài.
         items: [
           { href: '/production', label: 'Lệnh đang chạy', icon: '◧' },
+          // Kanban việc của TỔ MÌNH (tách vai 07/2026) — tổ trưởng/thống kê
+          // một chạm vào đúng bảng; quản đốc vào chọn tổ để soi.
+          {
+            href: '/production/team',
+            label: 'Việc của tổ',
+            icon: '▤',
+            capability: 'production.team',
+          },
           // Nhập liệu là việc của bộ phận sản xuất — người khác không thấy mục
           // (vào bằng URL vẫn chỉ xem, server chặn ghi).
           {
             href: '/production/entry',
             label: 'Nhập sản lượng',
             icon: '✎',
+            capability: 'production.record',
+          },
+          // Sổ toàn xưởng theo ngày (chốt số cuối ngày của thống kê) — 07/2026.
+          {
+            href: '/production/logbook',
+            label: 'Sổ sản lượng',
+            icon: '☷',
             capability: 'production.record',
           },
           {
@@ -309,8 +330,20 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: '◈',
             capability: 'production.shape',
           },
-          { href: '/production/progress', label: 'Tiến độ sản xuất', icon: '▣' },
-          { href: '/production/board', label: 'Bảng tổng tiến độ', icon: '▦' },
+          // Màn điều phối toàn xưởng — ẩn với công nhân tổ (menu tổ tối giản,
+          // vào bằng URL vẫn xem được — server chặn ghi như mọi khi).
+          {
+            href: '/production/progress',
+            label: 'Tiến độ sản xuất',
+            icon: '▣',
+            capability: 'production.coordinate',
+          },
+          {
+            href: '/production/board',
+            label: 'Bảng tổng tiến độ',
+            icon: '▦',
+            capability: 'production.coordinate',
+          },
         ],
       },
     ],
@@ -348,7 +381,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Điều hành',
         items: [
-          { href: '/exec', label: 'Phê duyệt', icon: '✓' },
+          // Trang đích của GĐ = dashboard bao quát (user chốt 07/2026);
+          // phê duyệt dời về /exec/approvals.
+          { href: '/exec', label: 'Toàn cảnh điều hành', icon: '◧' },
+          { href: '/exec/approvals', label: 'Phê duyệt', icon: '✓' },
           // Route /exec/* riêng → giữ menu Ban GĐ, không nhảy sang shell Sales.
           { href: '/exec/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
         ],
@@ -376,6 +412,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             href: '/admin/catalogs',
             label: 'Danh mục dùng chung',
             icon: '▤',
+            roles: ['admin'],
+          },
+          {
+            href: '/admin/defect-codes',
+            label: 'Nguyên nhân lỗi SX',
+            icon: '⚑',
             roles: ['admin'],
           },
           {

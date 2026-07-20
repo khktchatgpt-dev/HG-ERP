@@ -10,6 +10,8 @@ export type OutputEntry = {
   qty: number
   kg: number | null
   defect_qty: number
+  /** Code danh mục production_defect_codes (0067) — bản ghi cũ null. */
+  defect_reason: string | null
   machine_note: string | null
   note: string | null
   created_by: string | null
@@ -18,8 +20,14 @@ export type OutputEntry = {
   created_by_name: string | null
 }
 
+/** Dòng sổ toàn xưởng — kèm tên chi tiết + mã LSX để hiện không cần context lệnh. */
+export type LogbookEntry = OutputEntry & {
+  component_name: string | null
+  lsx_code: string | null
+}
+
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, entry_date, qty, kg, defect_qty, machine_note, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, note, created_by, created_at'
 
 type Raw = Omit<OutputEntry, 'team_name' | 'created_by_name'> & {
   team: { name: string } | { name: string }[] | null
@@ -62,6 +70,7 @@ export const outputsRepo = {
       qty: number
       kg: number | null
       defect_qty: number
+      defect_reason: string | null
       machine_note: string | null
       note: string | null
       created_by: string
@@ -69,6 +78,34 @@ export const outputsRepo = {
   ): Promise<void> {
     const { error } = await db().from('production_output_entries').insert(rows)
     if (error) throw new Error(error.message)
+  },
+
+  /** Sổ toàn xưởng: mọi bản ghi của 1 NGÀY (mọi LSX), kèm tên chi tiết + mã LSX. */
+  async listByDate(date: string): Promise<LogbookEntry[]> {
+    const { data } = await db()
+      .from('production_output_entries')
+      .select(
+        `${COLS}, team:departments(name), actor:users(name), component:production_order_components(name), lsx:production_orders(code)`,
+      )
+      .eq('entry_date', date)
+      .order('created_at', { ascending: false })
+      .limit(2000)
+    type RawDay = Raw & {
+      component: { name: string } | { name: string }[] | null
+      lsx: { code: string } | { code: string }[] | null
+    }
+    return ((data ?? []) as unknown as RawDay[]).map((r) => {
+      const base = unwrap([r])[0]
+      const c = Array.isArray(r.component) ? r.component[0] : r.component
+      const l = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
+      return {
+        ...base,
+        component: undefined,
+        lsx: undefined,
+        component_name: c?.name ?? null,
+        lsx_code: l?.code ?? null,
+      } as unknown as LogbookEntry
+    })
   },
 
   async findById(id: string): Promise<OutputEntry | null> {

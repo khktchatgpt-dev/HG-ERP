@@ -3,6 +3,8 @@ import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
 import { routesService } from './routes.service'
+import { dayLocksRepo } from './day-locks.repo'
+import { defectCodesRepo } from './defect-codes.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { calcComponent } from '@/lib/component-needs'
 import {
@@ -32,6 +34,7 @@ type RecordInput = {
     qty: number
     kg?: number | null
     defect_qty?: number
+    defect_reason?: string | null
     machine_note?: string | null
     note?: string | null
   }[]
@@ -92,6 +95,41 @@ export const outputsService = {
       }
     }
 
+    // Chốt sổ (0068): tổ đã chốt ngày này → cấm ghi thêm, quản lý mở khoá trước.
+    const team = input.team_department_id ?? user.department_id ?? null
+    if (team) {
+      const lock = await dayLocksRepo.find(team, input.entry_date)
+      if (lock) {
+        throw BadRequest(
+          `Sổ ngày ${input.entry_date} của tổ đã chốt — nhờ quản lý mở khoá trước khi ghi thêm`,
+        )
+      }
+    }
+
+    // Nguyên nhân lỗi (0067): phế > 0 phải có code hợp lệ theo công đoạn
+    // (zod đã chặn thiếu — đây là source of truth cho mọi caller).
+    const needReason = input.entries.some((e) => (e.defect_qty ?? 0) > 0)
+    if (needReason) {
+      const codes = await defectCodesRepo.listActive()
+      const validForStage = new Set(
+        codes
+          .filter((c) => c.stage_code === null || c.stage_code === input.stage)
+          .map((c) => c.code),
+      )
+      for (const e of input.entries) {
+        if ((e.defect_qty ?? 0) <= 0) continue
+        const comp = byId.get(e.component_id)!
+        if (!e.defect_reason) {
+          throw BadRequest(`Chi tiết "${comp.name}": phế > 0 phải chọn nguyên nhân lỗi`)
+        }
+        if (!validForStage.has(e.defect_reason)) {
+          throw BadRequest(
+            `Chi tiết "${comp.name}": nguyên nhân lỗi không hợp lệ cho công đoạn này`,
+          )
+        }
+      }
+    }
+
     // Lộ trình đã định hình (0063): giai đoạn nhập phải thuộc lộ trình của
     // dòng SP chứa chi tiết đó. Dòng CHƯA định hình thì nhập tự do (lệnh cũ).
     const allowedByLine = await routesService.allowedStagesByLine(lsxId)
@@ -131,11 +169,12 @@ export const outputsService = {
         production_order_id: lsxId,
         component_id: e.component_id,
         stage: input.stage,
-        team_department_id: input.team_department_id ?? user.department_id ?? null,
+        team_department_id: team,
         entry_date: input.entry_date,
         qty: e.qty,
         kg: e.kg ?? null,
         defect_qty: e.defect_qty ?? 0,
+        defect_reason: (e.defect_qty ?? 0) > 0 ? (e.defect_reason ?? null) : null,
         machine_note: e.machine_note ?? null,
         note: e.note ?? null,
         created_by: user.id,
@@ -150,10 +189,11 @@ export const outputsService = {
    */
   async summary(_user: User, lsxId: string) {
     const { components, orderLines, totalByComponent } = await loadLsxContext(lsxId)
-    const [entries, stages, allowedByLine] = await Promise.all([
+    const [entries, stages, allowedByLine, defectCodes] = await Promise.all([
       outputsRepo.listByLsx(lsxId),
       productionRepo.listStages(),
       routesService.allowedStagesByLine(lsxId),
+      defectCodesRepo.listActive(),
     ])
     const stageOrder = stages.map((s) => s.code)
 
@@ -212,7 +252,22 @@ export const outputsService = {
       }
     })
 
-    return { stages, components: views, synced_by_line: synced, entries }
+    return {
+      stages,
+      components: views,
+      synced_by_line: synced,
+      entries,
+      defect_codes: defectCodes,
+    }
+  },
+
+  /** Sổ toàn xưởng 1 ngày + trạng thái chốt — đọc: mọi NV đã đăng nhập. */
+  async listDay(_user: User, date: string) {
+    const [entries, locks] = await Promise.all([
+      outputsRepo.listByDate(date),
+      dayLocksRepo.listByDate(date),
+    ])
+    return { entries, locks }
   },
 
   /** Xoá bản ghi nhập nhầm: người tạo hoặc GĐ/QL; lệnh đã kết thúc thì khoá. */
@@ -222,6 +277,14 @@ export const outputsService = {
     const allowed =
       user.role === 'admin' || user.role === 'manager' || entry.created_by === user.id
     if (!allowed) throw Forbidden('Chỉ người nhập hoặc Ban quản lý xoá được bản ghi')
+    // Chốt sổ (0068): ngày đã chốt thì cấm xoá KỂ CẢ admin — mở khoá trước
+    // (đúng ngữ nghĩa chốt sổ, giữ vết ai mở).
+    if (entry.team_department_id) {
+      const lock = await dayLocksRepo.find(entry.team_department_id, entry.entry_date)
+      if (lock) {
+        throw BadRequest('Sổ ngày của tổ đã chốt — mở khoá trước khi xoá bản ghi')
+      }
+    }
     const lsx = await productionRepo.findById(entry.production_order_id)
     if (lsx && (lsx.status === 'completed' || lsx.status === 'cancelled')) {
       throw BadRequest('LSX đã kết thúc — sổ sản lượng khoá')

@@ -30,6 +30,12 @@ function supabaseImagePatterns(): NonNullable<NextConfig['images']>['remotePatte
 }
 
 const nextConfig: NextConfig = {
+  // Ghim root = thư mục project (nơi chạy `next dev`). Không ghim thì khi chạy
+  // trong git worktree (.claude/worktrees/*) Next thấy 2 package-lock.json và
+  // đoán nhầm root là repo cha → mọi route 404. Repo chính không ảnh hưởng.
+  // Dùng process.cwd() thay __dirname: config TS được transpile ra file tạm,
+  // __dirname trỏ sai chỗ.
+  turbopack: { root: process.cwd() },
   images: {
     remotePatterns: supabaseImagePatterns(),
     // Ảnh SP hầu như không đổi (đổi ảnh = file mới, path mới), nên cache bản đã

@@ -19,6 +19,7 @@ export const departmentsService = {
       name?: string
       description?: string | null
       head_user_id?: string | null
+      stage_code?: string | null
     },
   ) {
     if (user.role !== 'admin') throw Forbidden('Only admin can edit departments')
@@ -31,6 +32,11 @@ export const departmentsService = {
       if (head.department_id !== id) {
         throw BadRequest('Trưởng BP phải thuộc về phòng ban này')
       }
+    }
+
+    // Tổ ↔ công đoạn (0064): code phải có trong danh mục production_stage.
+    if (patch.stage_code && !(await departmentsRepo.stageCodeExists(patch.stage_code))) {
+      throw BadRequest('Công đoạn không có trong danh mục production_stage')
     }
 
     return departmentsRepo.update(id, patch)

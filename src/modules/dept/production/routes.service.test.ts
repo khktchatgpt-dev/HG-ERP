@@ -19,7 +19,12 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
 
-import { normalizeRoute, routeSaveSchema, routesService } from './routes.service'
+import {
+  nextStagesAfter,
+  normalizeRoute,
+  routeSaveSchema,
+  routesService,
+} from './routes.service'
 import { routesRepo } from './routes.repo'
 import { productionRepo } from './production.repo'
 import { componentsRepo } from './components.repo'
@@ -49,6 +54,39 @@ describe('normalizeRoute', () => {
 
   it('rỗng vào → rỗng ra (service sẽ chặn ở tầng trên)', () => {
     expect(normalizeRoute([], CATALOG)).toEqual([])
+  })
+})
+
+describe('nextStagesAfter — công đoạn kế tiếp cho bàn giao tổ (tách vai 07/2026)', () => {
+  it('giữa lộ trình → công đoạn ngay sau', () => {
+    expect(nextStagesAfter('han', [['phoi', 'han', 'son']])).toEqual(['son'])
+  })
+
+  it('công đoạn cuối mọi dòng → rỗng', () => {
+    expect(nextStagesAfter('son', [['phoi', 'son'], ['son']])).toEqual([])
+  })
+
+  it('dòng không đi qua công đoạn → bỏ qua dòng đó', () => {
+    expect(
+      nextStagesAfter('han', [
+        ['phoi', 'dan'],
+        ['phoi', 'han', 'son'],
+      ]),
+    ).toEqual(['son'])
+  })
+
+  it('2 dòng rẽ khác nhau → union khử trùng', () => {
+    expect(
+      nextStagesAfter('han', [
+        ['han', 'son'],
+        ['han', 'mai'],
+        ['phoi', 'han', 'son'],
+      ]),
+    ).toEqual(['son', 'mai'])
+  })
+
+  it('không lộ trình nào → rỗng', () => {
+    expect(nextStagesAfter('han', [])).toEqual([])
   })
 })
 

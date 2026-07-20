@@ -165,6 +165,7 @@ export type Database = {
           head_user_id: string | null
           id: string
           name: string
+          stage_code: string | null
           updated_at: string
           workspace_id: string | null
         }
@@ -174,6 +175,7 @@ export type Database = {
           head_user_id?: string | null
           id?: string
           name: string
+          stage_code?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -183,6 +185,7 @@ export type Database = {
           head_user_id?: string | null
           id?: string
           name?: string
+          stage_code?: string | null
           updated_at?: string
           workspace_id?: string | null
         }
@@ -513,6 +516,153 @@ export type Database = {
           },
         ]
       }
+      production_day_locks: {
+        Row: {
+          entry_date: string
+          id: string
+          locked_at: string
+          locked_by: string | null
+          team_department_id: string
+        }
+        Insert: {
+          entry_date: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          team_department_id: string
+        }
+        Update: {
+          entry_date?: string
+          id?: string
+          locked_at?: string
+          locked_by?: string | null
+          team_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_day_locks_locked_by_fkey"
+            columns: ["locked_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_day_locks_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_defect_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          stage_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      production_incidents: {
+        Row: {
+          created_at: string
+          department_id: string | null
+          id: string
+          message: string
+          production_order_id: string | null
+          reported_by: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          stage: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message: string
+          production_order_id?: string | null
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stage?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          department_id?: string | null
+          id?: string
+          message?: string
+          production_order_id?: string | null
+          reported_by?: string | null
+          resolved_at?: string | null
+          resolved_by?: string | null
+          stage?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_incidents_department_id_fkey"
+            columns: ["department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_incidents_reported_by_fkey"
+            columns: ["reported_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_incidents_resolved_by_fkey"
+            columns: ["resolved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_order_components: {
         Row: {
           cluster: string | null
@@ -811,6 +961,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           defect_qty: number
+          defect_reason: string | null
           entry_date: string
           id: string
           kg: number | null
@@ -826,6 +977,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           defect_qty?: number
+          defect_reason?: string | null
           entry_date: string
           id?: string
           kg?: number | null
@@ -841,6 +993,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           defect_qty?: number
+          defect_reason?: string | null
           entry_date?: string
           id?: string
           kg?: number | null

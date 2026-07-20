@@ -7,18 +7,18 @@ export type Department = {
   head_user_id: string | null
   /** Workspace của phòng (workspaces.config) — nguồn sự thật cho guard theo phòng. */
   workspace_id: string | null
+  /** Công đoạn SX tổ phụ trách (catalog production_stage, 0064) — chỉ tổ xưởng. */
+  stage_code: string | null
   created_at: string
   updated_at: string
 }
 
-const COLS = 'id, name, description, head_user_id, workspace_id, created_at, updated_at'
+const COLS =
+  'id, name, description, head_user_id, workspace_id, stage_code, created_at, updated_at'
 
 export const departmentsRepo = {
   async list(): Promise<Department[]> {
-    const { data } = await db()
-      .from('departments')
-      .select(COLS)
-      .order('name')
+    const { data } = await db().from('departments').select(COLS).order('name')
     return (data ?? []) as Department[]
   },
 
@@ -43,7 +43,12 @@ export const departmentsRepo = {
 
   async update(
     id: string,
-    patch: { name?: string; description?: string | null; head_user_id?: string | null },
+    patch: {
+      name?: string
+      description?: string | null
+      head_user_id?: string | null
+      stage_code?: string | null
+    },
   ): Promise<Department> {
     const { data, error } = await db()
       .from('departments')
@@ -80,6 +85,18 @@ export const departmentsRepo = {
       counts[row.department_id] = (counts[row.department_id] ?? 0) + 1
     }
     return counts
+  },
+
+  /** Code stage_code hợp lệ? — validate khi admin gán công đoạn cho tổ (0064). */
+  async stageCodeExists(code: string): Promise<boolean> {
+    const { data } = await db()
+      .from('catalog_items')
+      .select('code')
+      .eq('type', 'production_stage')
+      .eq('code', code)
+      .eq('is_active', true)
+      .maybeSingle()
+    return !!data
   },
 
   /** Department this user heads (if any). */

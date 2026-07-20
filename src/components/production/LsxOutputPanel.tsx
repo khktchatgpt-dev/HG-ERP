@@ -57,25 +57,40 @@ type Entry = {
   qty: number
   kg: number | null
   defect_qty: number
+  defect_reason: string | null
   machine_note: string | null
   note: string | null
   team_name: string | null
   created_by_name: string | null
 }
+type DefectCode = { code: string; label: string; stage_code: string | null }
 type OutputData = {
   stages: Stage[]
   components: ComponentView[]
   synced_by_line: SyncedLine[]
   entries: Entry[]
+  defect_codes: DefectCode[]
 }
 
 /** Ô nhập theo chi tiết trong lưới ngày. */
-type InputCell = { qty: string; defect: string; kg: string; machine: string }
+type InputCell = {
+  qty: string
+  defect: string
+  reason: string
+  kg: string
+  machine: string
+}
 
 const inp =
   'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
-const emptyCell = (): InputCell => ({ qty: '', defect: '', kg: '', machine: '' })
+const emptyCell = (): InputCell => ({
+  qty: '',
+  defect: '',
+  reason: '',
+  kg: '',
+  machine: '',
+})
 
 export function LsxOutputPanel({
   lsxId,
@@ -130,15 +145,28 @@ export function LsxOutputPanel({
 
   async function save() {
     if (!data) return
-    const entries = Object.entries(cells)
-      .filter(([, c]) => c.qty !== '' && Number(c.qty) > 0)
-      .map(([component_id, c]) => ({
-        component_id,
-        qty: Number(c.qty),
-        defect_qty: c.defect === '' ? 0 : Number(c.defect),
-        kg: c.kg === '' ? null : Number(c.kg),
-        machine_note: c.machine.trim() || null,
-      }))
+    const filled = Object.entries(cells).filter(
+      ([, c]) => c.qty !== '' && Number(c.qty) > 0,
+    )
+    // Phế > 0 bắt buộc nguyên nhân (0067) — chặn sớm cho khỏi văng lỗi server.
+    const missingReason = filled.filter(
+      ([, c]) => c.defect !== '' && Number(c.defect) > 0 && !c.reason,
+    )
+    if (missingReason.length > 0) {
+      toast.error(
+        'Thiếu nguyên nhân lỗi',
+        `${missingReason.length} dòng có phế chưa chọn lý do`,
+      )
+      return
+    }
+    const entries = filled.map(([component_id, c]) => ({
+      component_id,
+      qty: Number(c.qty),
+      defect_qty: c.defect === '' ? 0 : Number(c.defect),
+      defect_reason: c.reason || null,
+      kg: c.kg === '' ? null : Number(c.kg),
+      machine_note: c.machine.trim() || null,
+    }))
     if (entries.length === 0) {
       toast.error('Chưa nhập sản lượng', 'Điền SL cho ít nhất 1 chi tiết')
       return
@@ -231,16 +259,22 @@ export function LsxOutputPanel({
           <>
             {/* Tổng hợp thiếu/dư/%HT per chi tiết × công đoạn (FR-PR-04/05) */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-xs">
+              <table className="w-full min-w-[860px] text-xs">
                 <thead>
                   <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
                     <th className="py-1.5 pr-2">Chi tiết</th>
-                    <th className="w-16 py-1.5 pr-2 text-right">Tổng cần</th>
+                    {/* KH = định mức từ bảng chi tiết (SL/SP × SL đơn) — thống kê
+                        đối chiếu Kế hoạch vs Thực tế ngay trên 1 bảng. */}
+                    <th className="w-20 py-1.5 pr-2 text-right">Định mức (KH)</th>
                     {data.stages.map((s) => (
                       <th key={s.code} className="w-24 py-1.5 pr-2 text-right">
-                        {s.label}
+                        {s.label}{' '}
+                        <span className="font-normal text-zinc-400 normal-case">
+                          TT/KH
+                        </span>
                       </th>
                     ))}
+                    <th className="w-24 py-1.5 pr-2 text-right">Thực tế (CĐ cuối)</th>
                     <th className="w-20 py-1.5 pr-2 text-right">%HT</th>
                     <th className="w-24 py-1.5" />
                   </tr>
@@ -290,6 +324,9 @@ export function LsxOutputPanel({
                               title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
                             >
                               {s.done.toLocaleString('vi-VN')}
+                              <span className="text-[10px] text-zinc-400">
+                                /{c.total_needed.toLocaleString('vi-VN')}
+                              </span>
                             </span>
                             {s.defect > 0 && (
                               <span className="ml-0.5 text-[10px] text-red-500">
@@ -299,6 +336,18 @@ export function LsxOutputPanel({
                           </td>
                         )
                       })}
+                      <td
+                        className={`py-1.5 pr-2 text-right font-medium ${
+                          c.summary.done_final >= c.total_needed
+                            ? 'text-green-600 dark:text-green-400'
+                            : c.summary.done_final > 0
+                              ? 'text-amber-600 dark:text-amber-400'
+                              : 'text-zinc-300 dark:text-zinc-600'
+                        }`}
+                        title="Đã xong ở công đoạn cuối của chi tiết"
+                      >
+                        {c.summary.done_final.toLocaleString('vi-VN')}
+                      </td>
                       <td className="py-1.5 pr-2 text-right font-medium">
                         {Math.round(c.summary.pct_total * 100)}%
                       </td>
@@ -365,12 +414,13 @@ export function LsxOutputPanel({
                   </button>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[680px] text-xs">
+                  <table className="w-full min-w-[820px] text-xs">
                     <thead>
                       <tr className="text-left text-[10px] text-zinc-500 uppercase">
                         <th className="py-1 pr-2">Chi tiết</th>
                         <th className="w-20 py-1 pr-2">SL làm</th>
                         <th className="w-16 py-1 pr-2">Phế</th>
+                        <th className="w-40 py-1 pr-2">Nguyên nhân lỗi</th>
                         <th className="w-20 py-1 pr-2">Kg</th>
                         <th className="py-1 pr-2">Máy / màu</th>
                       </tr>
@@ -416,6 +466,48 @@ export function LsxOutputPanel({
                                   }
                                   className={inp}
                                 />
+                              </td>
+                              <td className="py-1 pr-2">
+                                {(() => {
+                                  const needReason =
+                                    cell.defect !== '' &&
+                                    Number(cell.defect) > 0 &&
+                                    !cell.reason
+                                  return (
+                                    <select
+                                      value={cell.reason}
+                                      onChange={(e) =>
+                                        setCell(c.id, { reason: e.target.value })
+                                      }
+                                      disabled={
+                                        cell.defect === '' || Number(cell.defect) <= 0
+                                      }
+                                      className={`${inp} disabled:opacity-40 ${
+                                        needReason
+                                          ? '!border-red-500 ring-1 ring-red-300'
+                                          : ''
+                                      }`}
+                                      title={
+                                        needReason
+                                          ? 'Phế > 0 phải chọn nguyên nhân'
+                                          : undefined
+                                      }
+                                    >
+                                      <option value="">— chọn lý do —</option>
+                                      {data.defect_codes
+                                        .filter(
+                                          (o) =>
+                                            o.stage_code === null ||
+                                            o.stage_code === stage,
+                                        )
+                                        .map((o) => (
+                                          <option key={o.code} value={o.code}>
+                                            {o.label}
+                                          </option>
+                                        ))}
+                                    </select>
+                                  )
+                                })()}
                               </td>
                               <td className="py-1 pr-2">
                                 <input

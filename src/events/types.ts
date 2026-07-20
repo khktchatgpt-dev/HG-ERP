@@ -153,6 +153,42 @@ export type DomainEvent =
       notify_ids: string[]
     }
 
+  // ── Sản xuất — bàn giao công đoạn + sự cố xưởng (tách vai 07/2026) ────
+  | {
+      name: 'production.stage.done'
+      production_order_id: string
+      code: string
+      stage: string
+      stage_label: string
+      /** Công đoạn kế tiếp trên lộ trình (union các dòng SP); [] = cuối chuỗi. */
+      next_stages: string[]
+      next_stage_labels: string[]
+      done_by: string
+      /** Thành viên các tổ phụ trách công đoạn kế tiếp. */
+      notify_next_ids: string[]
+      /** GĐ/Ban quản lý (quản đốc) — trừ người thao tác. */
+      coordinator_ids: string[]
+    }
+  | {
+      name: 'production.incident.reported'
+      incident_id: string
+      production_order_id: string | null
+      lsx_code: string | null
+      stage: string | null
+      department_name: string | null
+      message: string
+      reported_by: string
+      notify_ids: string[]
+    }
+  | {
+      name: 'production.incident.resolved'
+      incident_id: string
+      lsx_code: string | null
+      message: string
+      resolved_by: string
+      notify_ids: string[]
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */

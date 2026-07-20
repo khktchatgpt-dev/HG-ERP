@@ -29,8 +29,16 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
+vi.mock('./day-locks.repo', () => ({
+  dayLocksRepo: { find: vi.fn(), listByDate: vi.fn() },
+}))
+vi.mock('./defect-codes.repo', () => ({
+  defectCodesRepo: { listActive: vi.fn() },
+}))
 
 import { outputsService } from './outputs.service'
+import { dayLocksRepo } from './day-locks.repo'
+import { defectCodesRepo } from './defect-codes.repo'
 import { outputsRepo } from './outputs.repo'
 import { routesRepo } from './routes.repo'
 import { componentsRepo } from './components.repo'
@@ -75,8 +83,14 @@ const STAGES = [
 const RECORD = {
   stage: 'phoi',
   entry_date: '2026-07-11',
-  entries: [{ component_id: 'c1', qty: 40, defect_qty: 1 }],
+  entries: [{ component_id: 'c1', qty: 40, defect_qty: 1, defect_reason: 'khac' }],
 }
+
+const DEFECT_CODES = [
+  { code: 'khac', label: 'Nguyên nhân khác', stage_code: null },
+  { code: 'phoi_cat_sai', label: 'Cắt sai kích thước', stage_code: 'phoi' },
+  { code: 'son_xuoc', label: 'Xước sơn', stage_code: 'son' },
+]
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -89,6 +103,10 @@ beforeEach(() => {
   vi.mocked(outputsRepo.listByLsx).mockResolvedValue([] as never)
   // Mặc định: lệnh CHƯA định hình lộ trình → nhập tự do (tương thích lệnh cũ).
   vi.mocked(routesRepo.listByLsx).mockResolvedValue([])
+  // Chốt sổ (0068): mặc định chưa chốt; danh mục lỗi (0067) có sẵn.
+  vi.mocked(dayLocksRepo.find).mockResolvedValue(null)
+  vi.mocked(dayLocksRepo.listByDate).mockResolvedValue([])
+  vi.mocked(defectCodesRepo.listActive).mockResolvedValue(DEFECT_CODES as never)
 })
 
 describe('outputsService.record — nhập sản lượng theo lô (FR-PR-02/03/07)', () => {
@@ -164,6 +182,66 @@ describe('outputsService.record — nhập sản lượng theo lô (FR-PR-02/03/
   })
 })
 
+describe('outputsService.record — chốt sổ theo tổ+ngày (0068)', () => {
+  it('tổ đã chốt ngày → 400, không ghi', async () => {
+    vi.mocked(dayLocksRepo.find).mockResolvedValue({ id: 'lock1' } as never)
+    await expect(outputsService.record(worker, 'lsx1', RECORD)).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(dayLocksRepo.find).toHaveBeenCalledWith('d-to-phoi', RECORD.entry_date)
+    expect(outputsRepo.insertMany).not.toHaveBeenCalled()
+  })
+
+  it('ngày khác / tổ khác chưa chốt → ghi bình thường', async () => {
+    vi.mocked(dayLocksRepo.find).mockResolvedValue(null)
+    await outputsService.record(worker, 'lsx1', RECORD)
+    expect(outputsRepo.insertMany).toHaveBeenCalled()
+  })
+})
+
+describe('outputsService.record — nguyên nhân lỗi bắt buộc (0067)', () => {
+  it('phế > 0 thiếu lý do → 400 kèm tên chi tiết', async () => {
+    await expect(
+      outputsService.record(worker, 'lsx1', {
+        ...RECORD,
+        entries: [{ component_id: 'c1', qty: 10, defect_qty: 2 }],
+      }),
+    ).rejects.toThrow(/TAY\+TỰA.*nguyên nhân/)
+    expect(outputsRepo.insertMany).not.toHaveBeenCalled()
+  })
+
+  it('lý do không hợp công đoạn (son_xuoc cho công đoạn phôi) → 400', async () => {
+    await expect(
+      outputsService.record(worker, 'lsx1', {
+        ...RECORD,
+        entries: [
+          { component_id: 'c1', qty: 10, defect_qty: 2, defect_reason: 'son_xuoc' },
+        ],
+      }),
+    ).rejects.toThrow(/không hợp lệ/)
+  })
+
+  it('lý do chung (stage_code null) hoặc đúng công đoạn → OK, lưu code', async () => {
+    await outputsService.record(worker, 'lsx1', {
+      ...RECORD,
+      entries: [
+        { component_id: 'c1', qty: 10, defect_qty: 2, defect_reason: 'phoi_cat_sai' },
+      ],
+    })
+    const rows = vi.mocked(outputsRepo.insertMany).mock.calls[0][0]
+    expect(rows[0].defect_reason).toBe('phoi_cat_sai')
+  })
+
+  it('phế = 0 → không cần lý do; lý do gửi kèm bị bỏ (null)', async () => {
+    await outputsService.record(worker, 'lsx1', {
+      ...RECORD,
+      entries: [{ component_id: 'c1', qty: 10, defect_qty: 0, defect_reason: 'khac' }],
+    })
+    const rows = vi.mocked(outputsRepo.insertMany).mock.calls[0][0]
+    expect(rows[0].defect_reason).toBe(null)
+  })
+})
+
 describe('outputsService.summary — thiếu/dư, %HT, đồng bộ (FR-PR-04/05/06)', () => {
   it('gộp sổ theo chi tiết×công đoạn; đồng bộ theo chi tiết chậm nhất', async () => {
     vi.mocked(outputsRepo.listByLsx).mockResolvedValue([
@@ -205,5 +283,19 @@ describe('outputsService.deleteEntry — xoá nhập nhầm (append-only)', () =
     await expect(outputsService.deleteEntry(worker, 'e1')).rejects.toMatchObject({
       status: 400,
     })
+  })
+
+  it('ngày đã chốt → 400 KỂ CẢ admin (phải mở khoá trước)', async () => {
+    const admin = { id: 'u-admin', role: 'admin' } as unknown as User
+    vi.mocked(outputsRepo.findById).mockResolvedValue({
+      ...ENTRY,
+      team_department_id: 'd-to-phoi',
+      entry_date: '2026-07-11',
+    } as never)
+    vi.mocked(dayLocksRepo.find).mockResolvedValue({ id: 'lock1' } as never)
+    await expect(outputsService.deleteEntry(admin, 'e1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(outputsRepo.delete).not.toHaveBeenCalled()
   })
 })

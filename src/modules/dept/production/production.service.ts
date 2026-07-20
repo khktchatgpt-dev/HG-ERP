@@ -4,11 +4,15 @@ import {
   type LsxLineSpecRow,
   type ProductionOrder,
 } from './production.repo'
+import '@/events/register' // Đăng ký handler event ở lần import đầu tiên (như tasks.service).
+import { routesRepo } from './routes.repo'
+import { nextStagesAfter } from './routes.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Tách vai 07/2026: phòng gộp cũ + 2 phòng tách đều nhận báo LSX duyệt
@@ -329,7 +333,48 @@ export const productionService = {
       patch.status = 'in_progress'
       await ordersRepo.patch(lsx.sales_order_id, { status: 'in_production' })
     }
-    return productionRepo.patch(id, patch)
+    const updated = await productionRepo.patch(id, patch)
+
+    // Bàn giao công đoạn (tách vai 07/2026): xong 1 công đoạn → báo tổ phụ
+    // trách công đoạn KẾ TIẾP trên lộ trình + quản đốc. Emit ở đây (một điểm
+    // ghi duy nhất) nên cả màn quản đốc lẫn Kanban tổ đều kích chuỗi bàn giao.
+    if (input.action === 'done') {
+      const [stages, lineRoutes, depts, users] = await Promise.all([
+        productionRepo.listStages(),
+        routesRepo.listByLsx(id),
+        departmentsRepo.list(),
+        usersRepo.list(),
+      ])
+      const labelOf = (code: string) => stages.find((s) => s.code === code)?.label ?? code
+      const next = nextStagesAfter(
+        input.stage,
+        lineRoutes.map((r) => r.stages),
+      )
+      const nextDeptIds = new Set(
+        depts
+          .filter(
+            (d) =>
+              d.workspace_id === 'production' &&
+              next.includes(resolveTeamStage(d, stages) ?? ''),
+          )
+          .map((d) => d.id),
+      )
+      await emit({
+        name: 'production.stage.done',
+        production_order_id: id,
+        code: lsx.code,
+        stage: input.stage,
+        stage_label: labelOf(input.stage),
+        next_stages: next,
+        next_stage_labels: next.map(labelOf),
+        done_by: user.id,
+        notify_next_ids: users
+          .filter((u) => u.department_id && nextDeptIds.has(u.department_id))
+          .map((u) => u.id),
+        coordinator_ids: await approverIds(user.id),
+      })
+    }
+    return updated
   },
 
   /**

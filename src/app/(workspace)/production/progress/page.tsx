@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import {
   productionService,
@@ -6,24 +7,40 @@ import {
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { routesRepo } from '@/modules/dept/production/routes.repo'
+import { teamService } from '@/modules/dept/production/team.service'
+import { incidentsService } from '@/modules/dept/production/incidents.service'
 import { ProductionProgressManager } from './ProductionProgressManager'
 
 /**
  * Tiến độ sản xuất theo LSX — bảng ĐIỀU PHỐI: tiến độ + nguy cơ trễ + tình
- * trạng vật tư/BOM từng lệnh, thao tác nhanh tại chỗ (GĐ/BQL + Xưởng).
+ * trạng vật tư/BOM từng lệnh + sự cố + tải việc theo tổ. PHẦN RIÊNG CỦA
+ * GIÁM ĐỐC/Ban quản lý (user chốt 07/2026: giao diện GĐ duy nhất) — NV
+ * (kể cả xưởng/kế hoạch) bị đẩy về trang chủ xưởng; xưởng thao tác qua
+ * Kanban "Việc của tổ", kế hoạch dùng /planning/board.
  */
 export default async function ProductionProgressPage() {
   const user = (await authService.currentUser())!
+  if (user.role !== 'admin' && user.role !== 'manager') redirect('/production')
 
-  const [{ rows }, stages, tracking, componentCounts, routeUnions, routeCounts] =
-    await Promise.all([
-      productionService.list(user, { page: 1, page_size: 500 }),
-      productionRepo.listStages(),
-      productionService.tracking(),
-      componentsRepo.countsByLsx(),
-      routesRepo.stageUnionsByLsx(),
-      routesRepo.countsByLsx(),
-    ])
+  const [
+    { rows },
+    stages,
+    tracking,
+    componentCounts,
+    routeUnions,
+    routeCounts,
+    workload,
+    openIncidents,
+  ] = await Promise.all([
+    productionService.list(user, { page: 1, page_size: 500 }),
+    productionRepo.listStages(),
+    productionService.tracking(),
+    componentsRepo.countsByLsx(),
+    routesRepo.stageUnionsByLsx(),
+    routesRepo.countsByLsx(),
+    teamService.workloadByTeam(),
+    incidentsService.list(user, { status: 'open' }),
+  ])
   const lineCounts = await productionRepo.linesCountByOrder(
     rows.map((r) => r.sales_order_id),
   )
@@ -34,9 +51,7 @@ export default async function ProductionProgressPage() {
   // Nút thao tác khớp canTrackProgress (service): GĐ/BQL hoặc nhân sự Xưởng.
   // Cung ứng hết quyền thao tác tiến độ (user siết 07/2026) — chỉ xem.
   const canManage =
-    user.role === 'admin' ||
-    user.role === 'manager' ||
-    (await isProductionStaff(user))
+    user.role === 'admin' || user.role === 'manager' || (await isProductionStaff(user))
 
   return (
     <ProductionProgressManager
@@ -68,6 +83,16 @@ export default async function ProductionProgressPage() {
       })}
       stages={stages}
       canManage={canManage}
+      workload={workload}
+      incidents={openIncidents.map((i) => ({
+        id: i.id,
+        lsx_code: i.lsx_code,
+        stage: i.stage,
+        department_name: i.department_name,
+        reported_by_name: i.reported_by_name,
+        message: i.message,
+        created_at: i.created_at,
+      }))}
     />
   )
 }

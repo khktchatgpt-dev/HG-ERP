@@ -33,8 +33,8 @@ Luồng vận hành SX ↔ KH-CƯ mô tả đầy đủ: `docs/luong-van-hanh-sx
 | **Kỹ thuật** (`/technical`) | ✅ GĐ1 đủ | Thư viện SP theo khách, BOM per SP, file kỹ thuật, ảnh đại diện, giá tham chiếu, tính load cont, **thông tin XK & đặc tính nội thất (0037)**: HS code, xuất xứ, chất liệu, tải trọng, lắp ráp KD, bộ gồm, NW/GW/CBM per thùng | Version chain file tường minh (G-4, GĐ2); quan hệ set-item tường minh nếu DN cần BOM tổng tự tính từ bộ |
 | **Kế hoạch - Cung ứng** (`/planning`) | ✅ GĐ1 đủ + mở rộng | NCC, **bảng giá NCC + so giá/autofill trong PO**, PO đủ vòng đời (tạo/sửa/duyệt/gửi/về hàng/huỷ/tạo lại), **hồ sơ mua hàng upload vào PO**, gợi ý nhu cầu BOM×SL−đã xuất, **bảng điều phối tiến độ SX** (nguy cơ trễ ⚠ + tình trạng vật tư/BOM từng LSX + đổi giai đoạn/hoàn thành tại chỗ — 07/2026), in đơn đặt, **cảnh báo PO quá hẹn giao ⚠** (badge/lọc/widget), cảnh báo ngừng NCC còn PO mở | SUP-09 chi tiết người thợ (GĐ3). ~~Email đơn đặt cho NCC~~ — DN chốt 07/2026: NV tự gửi email riêng bằng bản in, KHÔNG làm |
 | **Kho** (`/warehouse`) | ✅ GĐ1 (trừ Phase 4) | Danh mục VT, phiếu PNK/PXK nhiều dòng gắn PO/LSX (guard trạng thái PO/LSX — chỉ nhập PO đang mở, chỉ xuất LSX đã duyệt/đang SX), QC nhập, tồn realtime + cảnh báo min, scan, in 01-VT/02-VT | Kiểm kê (OI-08) + phiếu điều chuyển (OI-09) — DB sẵn, chờ DN chốt. Phiếu ghi nhầm: chưa có huỷ/điều chỉnh phiếu — xử lý bằng phiếu ngược, chờ OI-08 |
-| **BGĐ** (`/exec`) | ✅ | Duyệt tập trung LSX + PO: thấy **tổng tiền**, mở chi tiết + hồ sơ trước khi duyệt | — |
-| **Sản xuất/Xưởng** (`/production`) | ✅ GĐ1 đủ | **Workspace riêng cho xưởng (07/2026)**: card LSX đang chạy (máy ít chuột), cập nhật giai đoạn/nhận VT/hoàn thành (tái dùng LsxDetailView); quyền `isProductionStaff` theo `departments.workspace_id`; KH-CƯ vẫn bấm thay được | PROD-04 người thợ (GĐ3); bản compact tablet (P3 — chờ xưởng dùng thử) |
+| **BGĐ** (`/exec`) | ✅ | **Toàn cảnh điều hành (07/2026)**: `/exec` = dashboard bao quát (chờ duyệt LSX/PO + tổng tiền, nguy cơ trễ + lý do, tải việc theo tổ, sự cố mở, PO quá hẹn, tồn dưới min, truy cập nhanh); phê duyệt dời về `/exec/approvals`. **Giao diện GĐ duy nhất (user chốt)**: `/production/progress` + `/production/board` chỉ admin/manager (menu + redirect URL); Kế hoạch/Cung ứng giữ Bảng tổng qua `/planning/board` (guard riêng) | — |
+| **Sản xuất/Xưởng** (`/production`) | ✅ GĐ1 đủ | **Workspace riêng cho xưởng (07/2026)**: card LSX đang chạy (máy ít chuột), cập nhật giai đoạn/nhận VT/hoàn thành (tái dùng LsxDetailView); quyền `isProductionStaff` theo `departments.workspace_id`; KH-CƯ vẫn bấm thay được. **UI theo vai (07/2026, đợt 2)**: Kanban "Việc của tổ" `/production/team` (thẻ LSX×công đoạn tổ mình, Bắt đầu/Xong, tự báo tổ kế tiếp + quản đốc qua `production.stage.done`), báo sự cố `production_incidents` (0065) + panel quản đốc ở Tiến độ, dải tải việc theo tổ, cột Định mức (KH)/Thực tế ở màn nhập; ràng tổ↔công đoạn `departments.stage_code` (0064 — đóng OI-14, fallback đoán tên); menu lọc theo capability `production.team`/`production.coordinate` | PROD-04 người thợ (GĐ3); bản compact tablet (P3 — chờ xưởng dùng thử); QR/barcode + backflushing: DN chốt KHÔNG làm đợt này |
 | **HR** (`/hr`) | ⚠ tối thiểu | Nghỉ phép (nộp/duyệt) | Chấm công, hồ sơ NS, lương — GĐ2 |
 | **Kế toán** (`/finance`) | ⚠ khung | Hoá đơn cơ bản | Công nợ, phiếu thu, giá thành — GĐ2 (OI-01/03/05) |
 | **QC** | ❌ | QC nhập kho nằm trong phiếu PNK | Workspace QC — GĐ sau |
@@ -79,9 +79,24 @@ vượt giao; panel trong LSX); **Bảng tổng `/production/board`** thay sheet
 `quan li` (mọi chi tiết × công đoạn các lệnh đang chạy, lọc + **Xuất Excel
 CSV** UTF-8 BOM; nav ở cả production lẫn planning — gate /production nới cho
 KH-CƯ giám sát).
+**Bước 4 (tách vai trong xưởng) ✅ XONG 07/2026**: 3 màn theo vai — quản đốc
+(Tiến độ + tải việc theo tổ + sự cố đang mở), tổ trưởng (Kanban `/production/team`
+thẻ LSX×công đoạn tổ mình, trạng thái suy từ `production_progress`, xong công
+đoạn tự notify tổ kế tiếp theo lộ trình 0063 + quản đốc), thống kê (màn nhập
+thêm cặp cột KH/TT + Thực tế CĐ cuối). Ràng tổ↔công đoạn `departments.stage_code`
+(0064 — **đóng OI-14**; admin gán ở /admin/departments, chưa gán fallback đoán
+tên tổ). Sổ sự cố `production_incidents` (0065) + 3 loại notification mới (0066 —
+tiện thể vá thiếu `order_changed`/`order_cancelled` trong check constraint).
+**Bước 5 (sổ sản lượng dạng lưới) ✅ XONG 07/2026**: màn `/production/logbook`
+toàn xưởng theo ngày (lọc Ngày/Tổ/Công đoạn/LSX + lưới nhập nhanh điều hướng
+bàn phím + footer chốt); **chốt sổ mềm theo tổ+ngày** `production_day_locks`
+(0068 — sau chốt cấm ghi/xoá kể cả admin, quản lý mở khoá có vết); **danh mục
+nguyên nhân lỗi** `production_defect_codes` (0067, lọc theo công đoạn, admin
+CRUD `/admin/defect-codes`, code bất biến) — phế > 0 bắt buộc chọn lý do
+(zod + service, áp cả màn nhập per-LSX cũ vì dùng chung endpoint).
 **Còn lại của SRS**: import Excel (chờ DN gửi file gốc), báo cáo kỳ theo
-tổ/tuần/tháng (FR-RP-02/03), chốt kỳ tháng (FR-SY-05), ràng tổ↔công đoạn
-(OI-14 nếu DN cần), đối chiếu công nợ GCN (FR-OS-03 — GĐ2 kế toán).
+tổ/tuần/tháng (FR-RP-02/03), chốt kỳ tháng (FR-SY-05), đối chiếu công nợ GCN
+(FR-OS-03 — GĐ2 kế toán). QR/barcode + backflushing trừ kho: DN chốt KHÔNG làm.
 
 ### 3.2 Ngắn hạn (sau khi có câu trả lời, ~1 tuần)
 3. ~~Vá vòng đời theo thực tế~~ ✅ **XONG 07/2026**

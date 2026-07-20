@@ -33,6 +33,9 @@ type Dept = {
   name: string
   description: string | null
   head_user_id: string | null
+  workspace_id: string | null
+  /** Công đoạn SX tổ phụ trách (0064) — chỉ có nghĩa với tổ xưởng. */
+  stage_code: string | null
   member_count: number
 }
 
@@ -50,9 +53,12 @@ const ROLE_TONE: Record<Role, 'purple' | 'blue' | 'green'> = {
 export function DepartmentsManager({
   departments,
   users,
+  stages,
 }: {
   departments: Dept[]
   users: U[]
+  /** Danh mục công đoạn SX — cho select "Công đoạn phụ trách" của tổ xưởng. */
+  stages: { code: string; label: string }[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -64,8 +70,8 @@ export function DepartmentsManager({
   const [detailId, setDetailId] = useState<string | null>(null)
 
   // Derive from props: auto-sync khi departments đổi sau router.refresh()
-  const editing = editingId ? departments.find((d) => d.id === editingId) ?? null : null
-  const detail = detailId ? departments.find((d) => d.id === detailId) ?? null : null
+  const editing = editingId ? (departments.find((d) => d.id === editingId) ?? null) : null
+  const detail = detailId ? (departments.find((d) => d.id === detailId) ?? null) : null
 
   const userById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users])
   const membersByDept = useMemo(() => {
@@ -202,8 +208,7 @@ export function DepartmentsManager({
             <span className="text-zinc-400">0</span>
           ) : (
             <>
-              <b>{d.member_count}</b>{' '}
-              <span className="text-xs text-zinc-500">người</span>
+              <b>{d.member_count}</b> <span className="text-xs text-zinc-500">người</span>
             </>
           )}
         </button>
@@ -233,10 +238,7 @@ export function DepartmentsManager({
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Quản trị', href: '/admin' },
-          { label: 'Phòng ban' },
-        ]}
+        breadcrumbs={[{ label: 'Quản trị', href: '/admin' }, { label: 'Phòng ban' }]}
         title="Phòng ban"
         description={`${filtered.length} / ${departments.length} hiển thị. ${totalMembers} thành viên hoạt động.`}
         actions={
@@ -282,7 +284,9 @@ export function DepartmentsManager({
           emptyState={
             <EmptyState
               icon="◑"
-              title={departments.length === 0 ? 'Chưa có phòng ban nào' : 'Không khớp tìm kiếm'}
+              title={
+                departments.length === 0 ? 'Chưa có phòng ban nào' : 'Không khớp tìm kiếm'
+              }
               description={
                 departments.length === 0
                   ? 'Tạo phòng ban đầu tiên để bắt đầu.'
@@ -345,12 +349,19 @@ export function DepartmentsManager({
           <DeptDetailPanel
             dept={detail}
             members={membersByDept.get(detail.id) ?? []}
+            stages={stages}
             busy={busy}
             onChangeHead={async (headId) => {
               const ok = await send(`/api/departments/${detail.id}`, 'PATCH', {
                 head_user_id: headId,
               })
               if (ok) toast.success('Đã cập nhật trưởng phòng')
+            }}
+            onChangeStage={async (stageCode) => {
+              const ok = await send(`/api/departments/${detail.id}`, 'PATCH', {
+                stage_code: stageCode,
+              })
+              if (ok) toast.success('Đã cập nhật công đoạn phụ trách')
             }}
           />
         )}
@@ -364,13 +375,17 @@ export function DepartmentsManager({
 function DeptDetailPanel({
   dept,
   members,
+  stages,
   busy,
   onChangeHead,
+  onChangeStage,
 }: {
   dept: Dept
   members: U[]
+  stages: { code: string; label: string }[]
   busy: boolean
   onChangeHead: (headId: string | null) => Promise<void>
+  onChangeStage: (stageCode: string | null) => Promise<void>
 }) {
   const head = dept.head_user_id ? members.find((m) => m.id === dept.head_user_id) : null
 
@@ -386,14 +401,15 @@ function DeptDetailPanel({
       {/* Head assignment */}
       <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
         <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
             Trưởng phòng
           </h3>
         </div>
         <div className="p-3">
           {members.length === 0 ? (
             <p className="text-sm text-zinc-500">
-              Chưa có thành viên trong phòng. Cần gán nhân viên vào phòng trước khi chọn trưởng phòng.
+              Chưa có thành viên trong phòng. Cần gán nhân viên vào phòng trước khi chọn
+              trưởng phòng.
             </p>
           ) : (
             <div className="flex flex-col gap-2">
@@ -413,7 +429,7 @@ function DeptDetailPanel({
                   ))}
                 </select>
                 {busy && (
-                  <span className="absolute right-8 top-1/2 -translate-y-1/2 text-zinc-500">
+                  <span className="absolute top-1/2 right-8 -translate-y-1/2 text-zinc-500">
                     <Spinner size={14} />
                   </span>
                 )}
@@ -425,13 +441,18 @@ function DeptDetailPanel({
                     <div className="font-medium text-zinc-900 dark:text-zinc-100">
                       {head.name ?? head.email}
                     </div>
-                    <div>{head.title ?? ROLE_LABEL[head.role]} · {head.email}</div>
+                    <div>
+                      {head.title ?? ROLE_LABEL[head.role]} · {head.email}
+                    </div>
                   </div>
                 </div>
               )}
               <p className="text-xs text-zinc-500">
                 Trưởng phòng phải thuộc phòng ban này. Đổi vai trò của người dùng tại{' '}
-                <Link href="/admin/users" className="underline hover:text-zinc-700 dark:hover:text-zinc-300">
+                <Link
+                  href="/admin/users"
+                  className="underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                >
                   Người dùng
                 </Link>
                 .
@@ -441,14 +462,47 @@ function DeptDetailPanel({
         </div>
       </section>
 
+      {/* Tổ xưởng: gán công đoạn phụ trách (0064, OI-14) — nguồn cho Kanban
+          "Việc của tổ" + bàn giao công đoạn. Phòng ngoài SX không thấy mục này. */}
+      {dept.workspace_id === 'production' && (
+        <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+            <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+              Công đoạn phụ trách (tổ sản xuất)
+            </h3>
+          </div>
+          <div className="flex flex-col gap-2 p-3">
+            <select
+              value={dept.stage_code ?? ''}
+              onChange={(e) => onChangeStage(e.target.value || null)}
+              disabled={busy}
+              className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm disabled:opacity-70 dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              <option value="">— Chưa gán (đoán theo tên tổ) —</option>
+              {stages.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-zinc-500">
+              Quyết định tổ thấy thẻ việc công đoạn nào ở &quot;Việc của tổ&quot; và tổ
+              nào được báo khi công đoạn trước hoàn thành. Chưa gán thì hệ thống đoán theo
+              tên tổ (VD &quot;Tổ Hàn&quot; → Hàn).
+            </p>
+          </div>
+        </section>
+      )}
+
       {/* Members list */}
       <section className="rounded-lg border border-zinc-200 dark:border-zinc-800">
         <div className="flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+          <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
             Thành viên
           </h3>
           <span className="text-xs text-zinc-500">
-            {members.length} người · {members.filter((m) => m.role === 'manager').length} quản lý
+            {members.length} người · {members.filter((m) => m.role === 'manager').length}{' '}
+            quản lý
           </span>
         </div>
         {members.length === 0 ? (
