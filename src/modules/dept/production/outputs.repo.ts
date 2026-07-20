@@ -80,6 +80,46 @@ export const outputsRepo = {
     if (error) throw new Error(error.message)
   },
 
+  /**
+   * Sản lượng GỌN theo khoảng ngày — chart tuần CEO, KPI phế, SL hôm nay per
+   * tổ (Tháp điều hành). Rows gọn + aggregate ở lib/service (exec-ops.ts) —
+   * data dev nhỏ; nếu phình thì đổi ruột sang RPC, giữ nguyên chữ ký.
+   */
+  async listRange(
+    fromDate: string,
+    toDate: string,
+  ): Promise<
+    {
+      production_order_id: string
+      component_id: string
+      stage: string
+      team_department_id: string | null
+      entry_date: string
+      qty: number
+      defect_qty: number
+      defect_reason: string | null
+    }[]
+  > {
+    const { data } = await db()
+      .from('production_output_entries')
+      .select(
+        'production_order_id, component_id, stage, team_department_id, entry_date, qty, defect_qty, defect_reason',
+      )
+      .gte('entry_date', fromDate)
+      .lte('entry_date', toDate)
+      .limit(20000)
+    return (data ?? []) as {
+      production_order_id: string
+      component_id: string
+      stage: string
+      team_department_id: string | null
+      entry_date: string
+      qty: number
+      defect_qty: number
+      defect_reason: string | null
+    }[]
+  },
+
   /** Sổ toàn xưởng: mọi bản ghi của 1 NGÀY (mọi LSX), kèm tên chi tiết + mã LSX. */
   async listByDate(date: string): Promise<LogbookEntry[]> {
     const { data } = await db()
