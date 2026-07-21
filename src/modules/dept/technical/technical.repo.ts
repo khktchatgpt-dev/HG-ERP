@@ -164,23 +164,20 @@ export const productsRepo = {
     return { rows: (data ?? []) as ProductLite[], total: count ?? 0 }
   },
 
-  /** Đếm cho StatsBar bằng HEAD count (không kéo dòng về) — rẻ hơn nhiều. */
+  /**
+   * Đếm cho StatsBar — GỘP 5 head-count thành 1 query 1 scan qua function
+   * `technical_product_counts()` (0069). bigint về dạng string nên Number().
+   */
   async counts(): Promise<ProductCounts> {
-    const tbl = () =>
-      db().from('technical_products').select('id', { count: 'exact', head: true })
-    const [total, active, none, drawing, done] = await Promise.all([
-      tbl(),
-      tbl().eq('is_active', true),
-      tbl().eq('bom_status', 'none'),
-      tbl().eq('bom_status', 'drawing'),
-      tbl().eq('bom_status', 'done'),
-    ])
+    const { data, error } = await db().rpc('technical_product_counts')
+    if (error) throw new Error(error.message)
+    const r = data?.[0]
     return {
-      total: total.count ?? 0,
-      active: active.count ?? 0,
-      bom_none: none.count ?? 0,
-      bom_drawing: drawing.count ?? 0,
-      bom_done: done.count ?? 0,
+      total: Number(r?.total ?? 0),
+      active: Number(r?.active ?? 0),
+      bom_none: Number(r?.bom_none ?? 0),
+      bom_drawing: Number(r?.bom_drawing ?? 0),
+      bom_done: Number(r?.bom_done ?? 0),
     }
   },
 

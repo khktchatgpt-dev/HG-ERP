@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionService } from '@/modules/dept/production/production.service'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { poLineAmount } from '@/lib/po-line'
 import { ApprovalsManager } from '../ApprovalsManager'
 
@@ -24,16 +25,25 @@ export default async function ExecApprovalsPage() {
 
   // GĐ cần thấy giá trị cam kết trước khi duyệt — tổng tiền qua poLineAmount
   // (nguồn chuẩn, tính đúng cả dòng báo giá theo đơn vị 2 / price_basis).
-  const totals = await Promise.all(
-    pendingPos.map(async (p) => {
-      const lines = await posRepo.listLines(p.id)
-      return {
-        id: p.id,
-        total: lines.reduce((s, l) => s + poLineAmount(l), 0),
-        lines_count: lines.length,
-      }
-    }),
-  )
+  // + tên người lập (PO.created_by / LSX.issued_by) để GĐ biết ai gửi phiếu.
+  const [totals, creatorNames] = await Promise.all([
+    Promise.all(
+      pendingPos.map(async (p) => {
+        const lines = await posRepo.listLines(p.id)
+        return {
+          id: p.id,
+          total: lines.reduce((s, l) => s + poLineAmount(l), 0),
+          lines_count: lines.length,
+        }
+      }),
+    ),
+    usersRepo.displayNamesByIds(
+      [
+        ...pendingPos.map((p) => p.created_by),
+        ...pendingLsx.map((l) => l.issued_by),
+      ].filter((x): x is string => !!x),
+    ),
+  ])
   const totalById = new Map(totals.map((t) => [t.id, t]))
 
   return (
@@ -49,6 +59,8 @@ export default async function ExecApprovalsPage() {
         currency: p.currency,
         total: totalById.get(p.id)?.total ?? 0,
         lines_count: totalById.get(p.id)?.lines_count ?? 0,
+        created_by_name: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
+        note: p.note,
       }))}
       lsxs={pendingLsx.map((l) => ({
         id: l.id,
@@ -56,6 +68,7 @@ export default async function ExecApprovalsPage() {
         order_code: l.order_code,
         customer_name: l.customer_name,
         created_at: l.created_at,
+        issued_by_name: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
       }))}
     />
   )

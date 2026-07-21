@@ -78,6 +78,10 @@ export type PendingPo = {
   currency: string
   total: number
   lines_count: number
+  /** Tên người lập đơn (PO.created_by) — chỉ có ở màn duyệt đầy đủ. */
+  created_by_name?: string | null
+  /** Ghi chú của đơn đặt (PO.note) — chỉ có ở màn duyệt đầy đủ. */
+  note?: string | null
 }
 export type PendingLsx = {
   id: string
@@ -85,6 +89,8 @@ export type PendingLsx = {
   order_code: string
   customer_name: string
   created_at: string
+  /** Tên người phát lệnh (LSX.issued_by) — chỉ có ở màn duyệt đầy đủ. */
+  issued_by_name?: string | null
 }
 
 type Row =

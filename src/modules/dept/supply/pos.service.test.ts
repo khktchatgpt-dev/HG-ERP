@@ -18,7 +18,8 @@ vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findById: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
-vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+// on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
+vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'

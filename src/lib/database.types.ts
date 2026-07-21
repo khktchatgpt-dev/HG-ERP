@@ -125,6 +125,47 @@ export type Database = {
           },
         ]
       }
+      approval_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          entity_code: string
+          entity_id: string
+          entity_type: string
+          id: string
+          reason: string | null
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          entity_code: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          reason?: string | null
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          entity_code?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_events_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       catalog_items: {
         Row: {
           code: string
@@ -3220,6 +3261,18 @@ export type Database = {
     }
     Functions: {
       next_doc_code: { Args: { p_kind: string }; Returns: string }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
+      technical_product_counts: {
+        Args: never
+        Returns: {
+          active: number
+          bom_done: number
+          bom_drawing: number
+          bom_none: number
+          total: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

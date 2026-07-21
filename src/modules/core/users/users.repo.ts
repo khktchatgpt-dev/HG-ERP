@@ -148,6 +148,17 @@ export const usersRepo = {
     return (data ?? []) as User[]
   },
 
+  /** Map id → tên hiển thị (name || email) cho 1 nhóm id — nhãn "người lập/duyệt". */
+  async displayNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    const uniq = [...new Set(ids.filter(Boolean))]
+    if (uniq.length === 0) return new Map()
+    const { data } = await db().from('users').select('id, name, email').in('id', uniq)
+    const m = new Map<string, string>()
+    for (const u of (data ?? []) as { id: string; name: string | null; email: string }[])
+      m.set(u.id, u.name || u.email)
+    return m
+  },
+
   async count(activeOnly = true): Promise<number> {
     let q = db()
       .from('users')
@@ -159,19 +170,17 @@ export const usersRepo = {
   },
 
   async touchLastLogin(id: string): Promise<void> {
-    await db().from('users').update({ last_login_at: new Date().toISOString() }).eq('id', id)
+    await db()
+      .from('users')
+      .update({ last_login_at: new Date().toISOString() })
+      .eq('id', id)
   },
 }
 
 // -- User audit log ---------------------------------------------------------
 
 export type UserAuditAction =
-  | 'create'
-  | 'update'
-  | 'password_reset'
-  | 'soft_delete'
-  | 'restore'
-  | 'bulk_import'
+  'create' | 'update' | 'password_reset' | 'soft_delete' | 'restore' | 'bulk_import'
 
 export type UserAuditEntry = {
   id: string
@@ -193,14 +202,16 @@ export const userAuditRepo = {
     after?: unknown
     reason?: string
   }): Promise<void> {
-    const { error } = await db().from('user_audit_log').insert({
-      target_user_id: row.target_user_id,
-      actor_id: row.actor_id,
-      action: row.action,
-      before: (row.before ?? null) as Json | null,
-      after: (row.after ?? null) as Json | null,
-      reason: row.reason ?? null,
-    })
+    const { error } = await db()
+      .from('user_audit_log')
+      .insert({
+        target_user_id: row.target_user_id,
+        actor_id: row.actor_id,
+        action: row.action,
+        before: (row.before ?? null) as Json | null,
+        after: (row.after ?? null) as Json | null,
+        reason: row.reason ?? null,
+      })
     if (error) console.error('user_audit_log insert failed:', error.message)
   },
 
@@ -211,7 +222,7 @@ export const userAuditRepo = {
       .eq('target_user_id', targetUserId)
       .order('created_at', { ascending: false })
       .limit(limit)
-    return ((data ?? []) as unknown) as UserAuditEntry[]
+    return (data ?? []) as unknown as UserAuditEntry[]
   },
 
   async listRecent(limit = 50): Promise<UserAuditEntry[]> {
@@ -220,6 +231,6 @@ export const userAuditRepo = {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(limit)
-    return ((data ?? []) as unknown) as UserAuditEntry[]
+    return (data ?? []) as unknown as UserAuditEntry[]
   },
 }

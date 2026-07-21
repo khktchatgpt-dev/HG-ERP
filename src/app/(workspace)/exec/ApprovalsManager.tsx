@@ -1,9 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar, type Stat } from '@/components/erp/StatsBar'
-import { ApprovalCardList, type PendingLsx, type PendingPo } from './ApprovalCardList'
+import { type PendingLsx, type PendingPo } from './ApprovalCardList'
+import { ApprovalCockpit } from './ApprovalCockpit'
 import { isBigApproval } from '@/lib/exec-ops'
 import { waitingDays } from './approval-helpers'
 
@@ -61,11 +63,19 @@ export function ApprovalsManager({
         breadcrumbs={[{ label: 'Ban Giám đốc' }]}
         title="Phê duyệt tập trung"
         description="Duyệt Lệnh sản xuất (FR-SAL-06) + đơn đặt vật tư trước khi gửi NCC (BR-05). Báo giá bán là hồ sơ riêng của Sales — không duyệt ở đây."
+        actions={
+          <Link
+            href="/exec/approvals/history"
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+          >
+            Lịch sử phê duyệt →
+          </Link>
+        }
       />
 
       <StatsBar stats={stats} />
 
-      <ApprovalCardList pos={pos} lsxs={lsxs} nowIso={nowIso} />
+      <ApprovalCockpit pos={pos} lsxs={lsxs} nowIso={nowIso} />
     </div>
   )
 }

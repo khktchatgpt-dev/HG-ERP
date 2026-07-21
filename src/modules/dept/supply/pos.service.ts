@@ -4,6 +4,7 @@ import { isSupplyStaff } from './suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 /** Duyệt mua vật tư: Giám đốc/Ban QL (đặc tả mục 6 — khâu duyệt quan trọng nhất). */
