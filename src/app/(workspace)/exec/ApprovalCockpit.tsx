@@ -12,6 +12,7 @@ import {
   Loader2,
   Lock,
   Printer,
+  Search,
   StickyNote,
   Truck,
   TriangleAlert,
@@ -92,6 +93,21 @@ const FILTERS: { key: ApprovalFilter; label: string }[] = [
   { key: 'po', label: 'Đơn vật tư' },
 ]
 
+/** Render tăng dần — chặn DOM phình khi nhiều phiếu chờ duyệt. */
+const PAGE = 60
+
+const SORTS = [
+  { key: 'waiting', label: 'Ưu tiên (chờ lâu / lớn)' },
+  { key: 'value', label: 'Giá trị cao' },
+  { key: 'recent', label: 'Mới nhất' },
+] as const
+type SortKey = (typeof SORTS)[number]['key']
+
+/** Giá trị tiền của 1 dòng để sắp xếp (PO = tổng cam kết, LSX = giá trị đơn). */
+function rowAmount(r: Row): number {
+  return r.kind === 'po' ? r.po.total : (r.lsx.order_value ?? 0)
+}
+
 function targetLsx(l: PendingLsx): DecideTarget {
   return {
     kind: 'lsx',
@@ -124,6 +140,9 @@ export function ApprovalCockpit({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [filter, setFilter] = useState<ApprovalFilter>('all')
+  const [q, setQ] = useState('')
+  const [sort, setSort] = useState<SortKey>('waiting')
+  const [limit, setLimit] = useState(PAGE)
   const [sel, setSel] = useState<Sel | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -152,7 +171,30 @@ export function ApprovalCockpit({
     return all
   }, [lsxs, pos])
 
-  const visible = rows.filter((r) => matchesFilter(r, filter))
+  // Lọc theo loại + tìm kiếm + sắp xếp. `visible` là tập đầy đủ (dùng cho đếm
+  // + chọn-tất-cả); `shownRows` là phần render tăng dần. Reset trang trong
+  // handler (không dùng effect).
+  const resetPage = () => setLimit(PAGE)
+  const visible = useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    const cmp: Record<SortKey, (a: Row, b: Row) => number> = {
+      waiting: comparePending,
+      value: (a, b) => rowAmount(b) - rowAmount(a),
+      recent: (a, b) => b.created_at.localeCompare(a.created_at),
+    }
+    return rows
+      .filter((r) => matchesFilter(r, filter))
+      .filter((r) => {
+        if (!ql) return true
+        const hay =
+          r.kind === 'lsx'
+            ? `${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_code}`
+            : `${r.po.code} ${r.po.supplier_name} ${r.po.lsx_code ?? ''} ${r.po.order_code ?? ''}`
+        return hay.toLowerCase().includes(ql)
+      })
+      .sort(cmp[sort])
+  }, [rows, filter, q, sort])
+  const shownRows = visible.slice(0, limit)
   const selRow = sel
     ? rows.find((r) => r.kind === sel.kind && keyId(r) === sel.id)
     : undefined
@@ -274,6 +316,42 @@ export function ApprovalCockpit({
     <div className="flex flex-col gap-3">
       <TopProgressBar active={busy} />
 
+      {/* Tìm kiếm + sắp xếp */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative">
+          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+          <input
+            value={q}
+            onChange={(e) => {
+              setQ(e.target.value)
+              resetPage()
+            }}
+            placeholder="Tìm mã phiếu, khách, NCC, LSX…"
+            className="bg-card focus-visible:ring-ring/40 h-9 w-64 rounded-lg border border-zinc-200/70 py-1 pr-3 pl-8 text-sm shadow-sm outline-none focus-visible:border-zinc-300 focus-visible:ring-[3px] dark:border-zinc-800"
+          />
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {visible.length} phiếu
+          </span>
+          <select
+            value={sort}
+            onChange={(e) => {
+              setSort(e.target.value as SortKey)
+              resetPage()
+            }}
+            className="bg-card h-9 rounded-lg border border-zinc-200/70 px-2 text-sm shadow-sm outline-none dark:border-zinc-800"
+            aria-label="Sắp xếp"
+          >
+            {SORTS.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* Bộ lọc */}
       <div className="flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
@@ -283,26 +361,20 @@ export function ApprovalCockpit({
               : rows.filter((r) => matchesFilter(r, f.key)).length
           const active = filter === f.key
           return (
-            <button
+            <Button
               key={f.key}
-              onClick={() => setFilter(f.key)}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition',
-                active
-                  ? 'bg-foreground text-background'
-                  : 'text-muted-foreground hover:bg-muted',
-              )}
+              size="sm"
+              variant={active ? 'default' : 'outline'}
+              onClick={() => {
+                setFilter(f.key)
+                resetPage()
+              }}
             >
               {f.label}
-              <span
-                className={cn(
-                  'tabular-nums',
-                  active ? 'opacity-70' : 'text-muted-foreground/70',
-                )}
-              >
+              <span className={cn('tabular-nums', active ? 'opacity-70' : 'opacity-60')}>
                 {c}
               </span>
-            </button>
+            </Button>
           )
         })}
         {eligibleVisible.length > 0 && (
@@ -317,14 +389,14 @@ export function ApprovalCockpit({
       <div className="grid gap-4 lg:grid-cols-[minmax(300px,340px)_minmax(0,1fr)]">
         {/* Trái: danh sách */}
         <aside className={cn('lg:block', sel && 'hidden')}>
-          <div className="bg-card divide-border/60 divide-y overflow-hidden rounded-xl border">
+          <div className="flex flex-col gap-1.5">
             {visible.length === 0 ? (
-              <div className="text-muted-foreground flex h-40 flex-col items-center justify-center gap-2 text-sm">
+              <div className="text-muted-foreground bg-card flex h-40 flex-col items-center justify-center gap-2 rounded-xl border border-zinc-200/70 text-sm dark:border-zinc-800">
                 <Inbox className="size-6 opacity-50" />
                 Không có phiếu chờ duyệt.
               </div>
             ) : (
-              visible.map((r) => {
+              shownRows.map((r) => {
                 const isSel = sel?.kind === r.kind && sel.id === keyId(r)
                 const days = waitingDays(r.created_at, nowIso)
                 const bulkable = isBulkApprovable(
@@ -335,10 +407,11 @@ export function ApprovalCockpit({
                     key={r.key}
                     onClick={() => setSel({ kind: r.kind, id: keyId(r) })}
                     className={cn(
-                      'flex cursor-pointer items-start gap-3 px-3.5 py-3 transition',
+                      'bg-card relative flex cursor-pointer items-start gap-2.5 overflow-hidden rounded-lg border py-2.5 pr-2.5 pl-3.5 shadow-sm transition-all',
+                      "before:absolute before:inset-y-1.5 before:left-0 before:w-1 before:rounded-full before:transition-colors before:content-['']",
                       isSel
-                        ? 'bg-muted shadow-[inset_2px_0_0_var(--primary)]'
-                        : 'hover:bg-muted/50',
+                        ? 'border-zinc-300 bg-zinc-50/80 shadow before:bg-zinc-900 dark:border-zinc-700 dark:bg-zinc-800/40 dark:before:bg-zinc-100'
+                        : 'border-zinc-200/70 before:bg-transparent hover:border-zinc-300 hover:shadow-md hover:before:bg-zinc-200 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:before:bg-zinc-700',
                     )}
                   >
                     <span
@@ -432,6 +505,16 @@ export function ApprovalCockpit({
               })
             )}
           </div>
+          {visible.length > shownRows.length && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2 w-full"
+              onClick={() => setLimit((n) => n + PAGE)}
+            >
+              Tải thêm (còn {visible.length - shownRows.length})
+            </Button>
+          )}
         </aside>
 
         {/* Phải: chi tiết */}

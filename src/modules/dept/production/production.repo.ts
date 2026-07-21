@@ -56,6 +56,12 @@ export type OrderTracking = {
   ship_date: string | null
   lines_bom_pending: number
   pos_open: number
+  // Lớp thương mại (v_order_tracking mở rộng, migration 0071) — GĐ nhìn theo tiền.
+  deposit_percent: number | null
+  payment_method: string | null
+  /** Σ(qty × đơn giá bán) của các dòng đơn, theo `currency`. */
+  order_value: number
+  line_count: number
   created_at: string
   updated_at: string
 }
@@ -271,7 +277,14 @@ export const productionRepo = {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(500)
-    return (data ?? []) as OrderTracking[]
+    // Coalesce cột thương mại — an toàn cả khi migration 0071 chưa apply.
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      ...(r as OrderTracking),
+      order_value: Number(r.order_value ?? 0),
+      line_count: Number(r.line_count ?? 0),
+      deposit_percent: r.deposit_percent == null ? null : Number(r.deposit_percent),
+      payment_method: (r.payment_method as string | null) ?? null,
+    }))
   },
 }
 

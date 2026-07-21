@@ -185,43 +185,70 @@ export function LsxRoutePanel({
                 <span className="text-sm font-medium">{l.product_name}</span>
                 {l.stages === null && s.fromDefault && s.selected.size > 0 && (
                   <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
-                    đang theo mặc định SP — bấm Lưu để chốt cho lệnh
+                    {editable
+                      ? 'đang theo mặc định SP — bấm Lưu để chốt cho lệnh'
+                      : 'theo mặc định SP'}
                   </span>
                 )}
-                {l.stages === null && s.selected.size === 0 && (
+                {l.stages === null && s.selected.size === 0 && editable && (
                   <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                     chưa định hình
                   </span>
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
-                {stages.map((st) => {
-                  const on = s.selected.has(st.code)
-                  // Số thứ tự trong lộ trình = vị trí trong tập chọn, xếp theo
-                  // thứ tự danh mục (lộ trình là tập con của chuỗi chuẩn).
-                  const order = on
-                    ? stages
-                        .filter((x) => s.selected.has(x.code))
-                        .findIndex((x) => x.code === st.code) + 1
-                    : 0
-                  return (
-                    <button
-                      key={st.code}
-                      type="button"
-                      disabled={!editable}
-                      onClick={() => toggle(l.order_line_id, st.code)}
-                      className={`rounded-full border px-2.5 py-1 text-xs transition-colors disabled:cursor-default ${
-                        on
-                          ? 'border-sky-600 bg-sky-600 text-white'
-                          : 'border-zinc-300 text-zinc-500 hover:border-zinc-400 disabled:opacity-50 dark:border-zinc-700'
-                      }`}
-                    >
-                      {on ? `${order}. ${st.label}` : st.label}
-                    </button>
-                  )
-                })}
-              </div>
+              {editable ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {stages.map((st) => {
+                    const on = s.selected.has(st.code)
+                    // Số thứ tự trong lộ trình = vị trí trong tập chọn, xếp theo
+                    // thứ tự danh mục (lộ trình là tập con của chuỗi chuẩn).
+                    const order = on
+                      ? stages
+                          .filter((x) => s.selected.has(x.code))
+                          .findIndex((x) => x.code === st.code) + 1
+                      : 0
+                    return (
+                      <button
+                        key={st.code}
+                        type="button"
+                        onClick={() => toggle(l.order_line_id, st.code)}
+                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                          on
+                            ? 'border-sky-600 bg-sky-600 text-white'
+                            : 'border-zinc-300 text-zinc-500 hover:border-zinc-400 dark:border-zinc-700'
+                        }`}
+                      >
+                        {on ? `${order}. ${st.label}` : st.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : s.selected.size > 0 ? (
+                // Chỉ-đọc: chỉ hiện các giai đoạn THUỘC lộ trình, dạng stepper có
+                // thứ tự — không bày cả danh mục làm mờ (gọn cho người xem/GĐ).
+                <ol className="flex flex-wrap items-center gap-y-1.5">
+                  {stages
+                    .filter((x) => s.selected.has(x.code))
+                    .map((st, idx) => (
+                      <li key={st.code} className="flex items-center">
+                        {idx > 0 && (
+                          <span className="mx-1 text-zinc-300 dark:text-zinc-600">→</span>
+                        )}
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 py-1 pr-2.5 pl-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                          <span className="flex size-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-semibold text-white">
+                            {idx + 1}
+                          </span>
+                          {st.label}
+                        </span>
+                      </li>
+                    ))}
+                </ol>
+              ) : (
+                <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                  Chưa định hình lộ trình
+                </span>
+              )}
 
               {editable && (
                 <div className="mt-2 flex flex-wrap items-center gap-3">

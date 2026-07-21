@@ -3151,11 +3151,15 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_po_no: string | null
+          deposit_percent: number | null
           due_date: string | null
           id: string | null
+          line_count: number | null
           lines_bom_pending: number | null
           lsx_code: string | null
           lsx_status: string | null
+          order_value: number | null
+          payment_method: string | null
           pos_open: number | null
           production_order_id: string | null
           quote_code: string | null

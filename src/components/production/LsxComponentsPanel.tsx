@@ -521,12 +521,18 @@ export function LsxComponentsPanel({
           </p>
         )}
         <p className="mb-3 text-xs text-zinc-500">
-          Kế hoạch nhập tay theo file BOM (BOM chỉ để đối chiếu — có thể chưa có hoặc
-          sai). Số liệu là bản riêng của lệnh này; sửa BOM sau không ảnh hưởng.
-          {noMaterialCount > 0 && (
-            <span className="ml-1 text-amber-600 dark:text-amber-400">
-              ⚠ {noMaterialCount} dòng chưa gắn vật tư — sẽ không vào nhu cầu mua.
-            </span>
+          {editable ? (
+            <>
+              Kế hoạch nhập tay theo file BOM (BOM chỉ để đối chiếu — có thể chưa có hoặc
+              sai). Số liệu là bản riêng của lệnh này; sửa BOM sau không ảnh hưởng.
+              {noMaterialCount > 0 && (
+                <span className="ml-1 text-amber-600 dark:text-amber-400">
+                  ⚠ {noMaterialCount} dòng chưa gắn vật tư — sẽ không vào nhu cầu mua.
+                </span>
+              )}
+            </>
+          ) : (
+            'Bảng chi tiết & định mức do Kế hoạch lập cho lệnh này (chỉ xem).'
           )}
         </p>
 
