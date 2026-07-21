@@ -105,7 +105,9 @@ export async function LsxDetailScreen({
       canApprove: isMgr,
       canManage: isMgr,
       canRecord: user.role === 'admin',
-      canEditComponents: isMgr,
+      // GĐ chỉ THẨM ĐỊNH + DUYỆT — không sửa chi tiết & lộ trình (việc của Kế
+      // hoạch ở màn Định hình). Tab "Chi tiết & lộ trình" hiển thị read-only.
+      canEditComponents: false,
       defaultStage: null,
       breadcrumbs: [
         { label: 'Ban Giám đốc', href: '/exec' },

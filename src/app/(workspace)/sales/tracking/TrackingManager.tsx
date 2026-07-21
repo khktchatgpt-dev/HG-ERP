@@ -7,6 +7,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
 import { assessLateRisk } from '@/lib/late-risk'
+import { orderProgress, STATUS_LABEL } from '@/lib/order-progress'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -35,16 +36,6 @@ type Row = {
 }
 
 type Stage = { code: string; label: string }
-
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: 'Đã xác nhận',
-  lsx_pending: 'Chờ duyệt LSX',
-  lsx_issued: 'Đã phát LSX',
-  in_production: 'Đang sản xuất',
-  completed: 'Hoàn thành',
-  delivered: 'Đã giao',
-  cancelled: 'Đã huỷ',
-}
 
 export function TrackingManager({
   rows,
@@ -75,43 +66,8 @@ export function TrackingManager({
   const riskOf = (r: Row) => assessLateRisk(r, today)
   const isLate = (r: Row) => riskOf(r)?.level === 'overdue'
 
-  /**
-   * Tiến độ GIẢN LƯỢC cho Sales (P5) — không cần biết từng công đoạn CNC:
-   * Chờ duyệt → Chuẩn bị SX → Đang SX / Đang QC / Đang đóng gói → Đã xuất
-   * xưởng → Đã giao, kèm % ước theo vị trí giai đoạn và màu theo rủi ro trễ.
-   */
-  function simpleProgress(r: Row): { label: string; pct: number; tone: string } {
-    const risk = riskOf(r)
-    const tone =
-      risk?.level === 'overdue' ? 'bg-red-500' : risk ? 'bg-amber-500' : 'bg-green-500'
-    if (r.status === 'cancelled') return { label: 'Đã huỷ', pct: 0, tone: 'bg-zinc-300' }
-    if (r.status === 'delivered')
-      return { label: 'Đã giao', pct: 100, tone: 'bg-green-500' }
-    if (r.status === 'completed') return { label: 'Đã xuất xưởng', pct: 95, tone }
-    if (!r.production_order_id) return { label: 'Chưa phát LSX', pct: 5, tone }
-    if (r.lsx_status === 'rejected')
-      return { label: 'LSX bị từ chối', pct: 8, tone: 'bg-red-500' }
-    if (r.lsx_status === 'pending_approval')
-      return { label: 'Chờ GĐ duyệt LSX', pct: 10, tone }
-    if (r.lsx_status === 'approved' && !r.current_stage)
-      return { label: 'Chuẩn bị sản xuất', pct: 15, tone }
-    // Đang chạy công đoạn: nhãn thân thiện + % theo vị trí trong danh mục.
-    const idx = stages.findIndex((s) => s.code === r.current_stage)
-    const pct =
-      stages.length > 0 && idx >= 0
-        ? Math.round(15 + (75 * (idx + 1)) / stages.length)
-        : 40
-    const lbl = (stageLabel(r.current_stage) ?? '').toLowerCase()
-    const label =
-      lbl.includes('qc') || lbl.includes('kiểm')
-        ? 'Đang QC'
-        : lbl.includes('gói') || lbl.includes('pack')
-          ? 'Đang đóng gói'
-          : lbl.includes('xuất')
-            ? 'Chuẩn bị xuất kho'
-            : 'Đang sản xuất'
-    return { label, pct, tone }
-  }
+  // Tiến độ giản lược (P5) — dùng helper chung với màn Quản lý đơn hàng (GĐ).
+  const simpleProgress = (r: Row) => orderProgress(r, stages, today)
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()

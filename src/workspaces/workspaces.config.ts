@@ -384,9 +384,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // Gỡ "Báo cáo CEO" (07/2026, GĐ chốt) — trang đích /exec redirect sang
           // Tháp điều hành (COO real-time). Route workspace vẫn /exec.
           { href: '/exec/ops', label: 'Tháp điều hành', icon: '▣' },
+          // Tiến độ sản xuất của GĐ (07/2026): kanban toàn bộ LSX theo công đoạn
+          // dây chuyền — nút thắt/hạn giao/năng suất/chất lượng. Chỉ xem.
+          { href: '/exec/production', label: 'Tiến độ sản xuất', icon: '▦' },
+          // Quản lý đơn hàng của GĐ (07/2026): sổ đơn theo giá trị/hạn giao +
+          // tiến độ SX từng đơn, duyệt LSX tại chỗ. Thay màn "Theo dõi đơn hàng"
+          // cũ (chỉ mượn TrackingScreen của Sales) — bản mới bao trùm cả 2 lớp.
+          { href: '/exec/orders', label: 'Quản lý đơn hàng', icon: '◫' },
           { href: '/exec/approvals', label: 'Phê duyệt', icon: '✓' },
-          // Route /exec/* riêng → giữ menu Ban GĐ, không nhảy sang shell Sales.
-          { href: '/exec/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
         ],
       },
     ],
