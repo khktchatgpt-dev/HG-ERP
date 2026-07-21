@@ -381,9 +381,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Điều hành',
         items: [
-          // Tách 2 góc nhìn (user chốt 07/2026): CEO = vĩ mô + ngoại lệ;
-          // COO = tháp điều hành real-time. Mọi manager/admin thấy cả hai.
-          { href: '/exec', label: 'Báo cáo CEO', icon: '◧' },
+          // Gỡ "Báo cáo CEO" (07/2026, GĐ chốt) — trang đích /exec redirect sang
+          // Tháp điều hành (COO real-time). Route workspace vẫn /exec.
           { href: '/exec/ops', label: 'Tháp điều hành', icon: '▣' },
           { href: '/exec/approvals', label: 'Phê duyệt', icon: '✓' },
           // Route /exec/* riêng → giữ menu Ban GĐ, không nhảy sang shell Sales.

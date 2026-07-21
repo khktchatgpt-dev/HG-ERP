@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar, type Stat } from '@/components/erp/StatsBar'
-import { type PendingLsx, type PendingPo } from './ApprovalCardList'
+import { type PendingLsx, type PendingPo } from './approval-types'
 import { ApprovalCockpit } from './ApprovalCockpit'
 import { isBigApproval } from '@/lib/exec-ops'
 import { waitingDays } from './approval-helpers'
@@ -13,7 +13,7 @@ import { waitingDays } from './approval-helpers'
  * Trung tâm phê duyệt — dạng THẺ mobile-first (07/2026): CEO/COO duyệt one-tap
  * hoặc "duyệt nhanh" nhiều phiếu từ điện thoại; PO ≥ ngưỡng chặn khỏi duyệt
  * nhanh (mở chi tiết duyệt riêng). StatsBar tóm tắt tải + cam kết + phiếu chờ
- * lâu nhất. Logic duyệt + dialog nằm trong ApprovalCardList.
+ * lâu nhất. Buồng lái master-detail + logic duyệt nằm trong ApprovalCockpit.
  */
 export function ApprovalsManager({
   pos,
