@@ -184,7 +184,7 @@ curl -X POST http://localhost:3000/api/logout -b cookies.txt
 
 ## Security caveats (custom auth)
 
-- No rate limiting on `/api/login` — add one (Upstash / Vercel KV) before production.
+- `/api/login` has in-memory rate limiting (`src/server/rate-limit.ts`, 5 fails / 15 min per IP+email). Single-instance only — switch to Upstash/Redis if deploying multi-instance/serverless.
 - No email verification, password reset, account lockout, or audit log.
 - No CSRF token — relying on `sameSite=lax` cookie + JSON-only API. If you ever accept form posts cross-origin, add CSRF.
 - Consider switching to Supabase Auth or Auth.js if any of the above matter.

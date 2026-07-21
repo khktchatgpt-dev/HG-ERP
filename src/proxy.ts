@@ -18,6 +18,12 @@ export async function proxy(request: NextRequest) {
     }
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    url.search = ''
+    // Nhớ trang đang định vào để sau login quay lại đúng chỗ ("/" thì thôi —
+    // login sẽ tự đưa vào workspace mặc định).
+    if (pathname !== '/') {
+      url.searchParams.set('next', pathname + request.nextUrl.search)
+    }
     return NextResponse.redirect(url)
   }
 

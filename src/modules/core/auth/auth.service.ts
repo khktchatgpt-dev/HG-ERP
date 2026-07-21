@@ -5,8 +5,7 @@ import { Unauthorized } from '@/server/http'
 
 // Pre-computed bcrypt hash used to keep timing roughly constant when the user
 // doesn't exist — avoids an email-enumeration side channel on /login.
-const DUMMY_HASH =
-  '$2a$12$CwTycUXWue0Thq9StjUM0uJ8L0v.5h6h7n5xq4Hkz8t9V1iX3W3i.'
+const DUMMY_HASH = '$2a$12$CwTycUXWue0Thq9StjUM0uJ8L0v.5h6h7n5xq4Hkz8t9V1iX3W3i.'
 
 // NOTE: there is no self-registration. Accounts are provisioned by an admin via
 // POST /api/users (see modules/users). The first admin is seeded out-of-band
@@ -15,8 +14,10 @@ export const authService = {
   async login(input: { email: string; password: string }): Promise<User> {
     const row = await usersRepo.findByEmail(input.email)
     const ok = await verifyPassword(input.password, row?.password_hash ?? DUMMY_HASH)
+    // Cùng 1 thông báo cho sai email / sai mật khẩu / tài khoản khoá — tránh
+    // lộ tài khoản nào tồn tại (email enumeration).
     if (!row || !ok || !row.is_active) {
-      throw Unauthorized('Invalid credentials')
+      throw Unauthorized('Email hoặc mật khẩu không đúng')
     }
     await createSession({ sub: row.id, email: row.email })
     void usersRepo.touchLastLogin(row.id)
