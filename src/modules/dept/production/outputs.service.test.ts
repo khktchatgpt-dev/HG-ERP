@@ -259,6 +259,22 @@ describe('outputsService.summary — thiếu/dư, %HT, đồng bộ (FR-PR-04/05
     // Đồng bộ: floor(50 sơn / 2 CT-per-SP) = 25 bộ trên 48 cần.
     expect(out.synced_by_line[0]).toMatchObject({ product_code: 'SP1', synced_sets: 25 })
   })
+
+  it('theo LỘ TRÌNH RIÊNG của SP: công đoạn cuối = cuối luồng, không theo danh mục', async () => {
+    // Luồng SP này: Phôi → Sơn → Nguội (nguội SAU sơn — ngược thứ tự danh mục
+    // phoi→han→nguoi→son). %HT tổng phải tính ở Nguội (cuối luồng), không phải Sơn.
+    vi.mocked(routesRepo.listByLsx).mockResolvedValue([
+      { order_line_id: 'ol1', stages: ['phoi', 'son', 'nguoi'] },
+    ] as never)
+    vi.mocked(outputsRepo.listByLsx).mockResolvedValue([
+      { component_id: 'c1', stage: 'son', qty: 80, defect_qty: 0 },
+      { component_id: 'c1', stage: 'nguoi', qty: 30, defect_qty: 0 },
+    ] as never)
+
+    const c1 = (await outputsService.summary(worker, 'lsx1')).components[0]
+    expect(c1.summary.stages.at(-1)?.stage).toBe('nguoi') // cuối luồng riêng
+    expect(c1.summary.done_final).toBe(30) // Nguội, KHÔNG phải Sơn (80)
+  })
 })
 
 describe('outputsService.deleteEntry — xoá nhập nhầm (append-only)', () => {
