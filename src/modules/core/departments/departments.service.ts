@@ -1,5 +1,6 @@
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { safeSyncUserRoles } from '@/modules/core/rbac/rbac.sync'
 import { BadRequest, Forbidden } from '@/server/http'
 
 export const departmentsService = {
@@ -39,7 +40,22 @@ export const departmentsService = {
       throw BadRequest('Công đoạn không có trong danh mục production_stage')
     }
 
-    return departmentsRepo.update(id, patch)
+    const before = await departmentsRepo.findById(id)
+    const updated = await departmentsRepo.update(id, patch)
+
+    // Đồng bộ role RBAC dẫn-xuất khi đổi trưởng phòng (role 'head') hoặc đổi
+    // TÊN phòng (ảnh hưởng planner/supply trong workspace 'planning').
+    const affected = new Set<string>()
+    if (patch.head_user_id !== undefined && patch.head_user_id !== before?.head_user_id) {
+      if (before?.head_user_id) affected.add(before.head_user_id)
+      if (patch.head_user_id) affected.add(patch.head_user_id)
+    }
+    if (patch.name !== undefined && before && patch.name !== before.name) {
+      for (const u of await usersRepo.list({ department_id: id })) affected.add(u.id)
+    }
+    for (const uid of affected) await safeSyncUserRoles(uid)
+
+    return updated
   },
 
   async remove(user: User, id: string) {

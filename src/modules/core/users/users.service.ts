@@ -7,6 +7,7 @@ import {
   type UserRole,
 } from '@/modules/core/users/users.repo'
 import { assertCan } from '@/server/permissions'
+import { safeSyncUserRoles } from '@/modules/core/rbac/rbac.sync'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 type CreateInput = {
@@ -68,6 +69,7 @@ export const usersService = {
         title: user.title,
       },
     })
+    await safeSyncUserRoles(user.id)
     return user
   },
 
@@ -84,6 +86,10 @@ export const usersService = {
     }
     const changed = diffPatch<User>(before, patch)
     const user = await usersRepo.update(id, patch)
+    // Đổi vai/phòng → đồng bộ lại role RBAC dẫn-xuất.
+    if (patch.role !== undefined || patch.department_id !== undefined) {
+      await safeSyncUserRoles(id)
+    }
     if (Object.keys(changed).length > 0) {
       await userAuditRepo.insert({
         target_user_id: id,
@@ -200,6 +206,7 @@ export const usersService = {
         }),
       ),
     )
+    await Promise.all(created.map((u) => safeSyncUserRoles(u.id)))
     return { created, skipped }
   },
 

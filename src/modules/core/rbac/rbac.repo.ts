@@ -90,4 +90,51 @@ export const rbacRepo = {
     }
     return [...keys]
   },
+
+  // ── Sync (Phase 1.5): reconcile role DẪN-XUẤT theo vai + phòng ────────────
+
+  /** Map key→id cho một danh sách role key (bỏ key không tồn tại). */
+  async roleIdsByKeys(keys: string[]): Promise<Map<string, string>> {
+    if (keys.length === 0) return new Map()
+    const { data } = await db().from('roles').select('id, key').in('key', keys)
+    return new Map(
+      ((data ?? []) as { id: string; key: string }[]).map((r) => [r.key, r.id]),
+    )
+  },
+
+  /** role_id các vai DẪN-XUẤT (source='derived') hiện gán cho user. */
+  async listDerivedRoleIds(userId: string): Promise<string[]> {
+    const { data } = await db()
+      .from('user_roles')
+      .select('role_id')
+      .eq('user_id', userId)
+      .eq('source', 'derived')
+    return ((data ?? []) as { role_id: string }[]).map((r) => r.role_id)
+  },
+
+  async addDerivedRoles(userId: string, roleIds: string[]): Promise<void> {
+    if (roleIds.length === 0) return
+    const rows = roleIds.map((role_id) => ({
+      user_id: userId,
+      role_id,
+      source: 'derived',
+    }))
+    const { error } = await db().from('user_roles').upsert(rows, {
+      onConflict: 'user_id,role_id',
+      ignoreDuplicates: true,
+    })
+    if (error) throw new Error(error.message)
+  },
+
+  /** Chỉ gỡ role DẪN-XUẤT — không đụng role IT gán tay (source='manual'). */
+  async removeDerivedRoles(userId: string, roleIds: string[]): Promise<void> {
+    if (roleIds.length === 0) return
+    const { error } = await db()
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('source', 'derived')
+      .in('role_id', roleIds)
+    if (error) throw new Error(error.message)
+  },
 }
