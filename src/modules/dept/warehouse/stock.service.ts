@@ -15,7 +15,9 @@ import { componentMaterialNeeds } from '@/modules/dept/production/components.ser
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser, canViewWarehouse } from './warehouse.service'
 import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
+import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -396,9 +398,21 @@ export const stockService = {
     const after = await stockInfoMany([...need.keys()])
     const lows = after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0)
     if (lows.length > 0) {
-      const managers = (await usersRepo.list()).filter(
-        (u) => u.role === 'admin' || u.role === 'manager',
+      // FR-WMS-08: cảnh báo + đề xuất mua gửi Cung ứng. Người nhận = admin/manager
+      // + nhân viên phòng Cung ứng (nhận diện theo department, không có role riêng).
+      // KHÔNG loại người vừa xuất — cứ báo cho tất cả.
+      const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
+      const supplyDeptIds = new Set(
+        depts.filter((d) => SUPPLY_DEPT_NAMES.has(d.name)).map((d) => d.id),
       )
+      const recipientIds = users
+        .filter(
+          (u) =>
+            u.role === 'admin' ||
+            u.role === 'manager' ||
+            (u.department_id != null && supplyDeptIds.has(u.department_id)),
+        )
+        .map((u) => u.id)
       for (const low of lows) {
         await emit({
           name: 'warehouse.stock.low',
@@ -408,7 +422,7 @@ export const stockService = {
           on_hand: low.on_hand,
           min_stock: low.min_stock,
           caused_by: user.id,
-          notify_ids: managers.map((m) => m.id),
+          notify_ids: recipientIds,
         })
       }
     }
