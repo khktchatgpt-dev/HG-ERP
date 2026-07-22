@@ -6,39 +6,26 @@ import {
   type ProductTechSpec,
 } from './technical.repo'
 import type { BomStatus } from './technical.schema'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import { isSalesUser } from '@/modules/dept/sales/sales.service'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
-const TECH_DEPT_NAME = 'Kỹ Thuật'
-const SALES_DEPT_NAME = 'Bán Hàng'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng). Tổ hợp
+// `isTechnicalStaff && canEdit` giữ nguyên → AND của (thuộc KT) và (manager-tier)
+// tái tạo đúng "chỉ KT-manager/admin sửa; NV KT xem read-only".
 async function isTechnicalStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === TECH_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với technical.member, vẫn trả legacy.
-  return shadowGuard(user, 'isTechnicalStaff', legacy, 'technical.member')
+  return hasPermission(user, 'technical.member')
 }
 
 /** Kỹ thuật + Sales cùng bóc tách/cập nhật BOM (FR-ENG-04). */
 async function isTechnicalOrSales(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === TECH_DEPT_NAME || dept?.name === SALES_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với technical.bom.edit, vẫn trả legacy.
-  return shadowGuard(user, 'isTechnicalOrSales', legacy, 'technical.bom.edit')
+  return hasPermission(user, 'technical.bom.edit')
 }
 
-function canEdit(user: User): boolean {
-  // Sửa thư viện SP: KT manager hoặc admin (NV xem read-only)
-  return user.role === 'admin' || user.role === 'manager'
+/** Quyền sửa (manager-tier). Kết hợp với isTechnicalStaff để khoá theo phòng. */
+async function canEdit(user: User): Promise<boolean> {
+  return hasPermission(user, 'technical.edit')
 }
 
 type CreateInput = {
@@ -120,7 +107,7 @@ export const productsService = {
   },
 
   async create(user: User, input: CreateInput): Promise<Product> {
-    if (!(await isTechnicalStaff(user)) || !canEdit(user)) {
+    if (!(await isTechnicalStaff(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ Kỹ thuật / Admin tạo được sản phẩm')
     }
     if (await productsRepo.existsByCode(input.code)) {
@@ -175,7 +162,8 @@ export const productsService = {
     },
   ): Promise<Product> {
     const allowed =
-      (await isSalesUser(user)) || ((await isTechnicalStaff(user)) && canEdit(user))
+      (await isSalesUser(user)) ||
+      ((await isTechnicalStaff(user)) && (await canEdit(user)))
     if (!allowed) throw Forbidden('Chỉ Kinh doanh / Kỹ thuật tạo được sản phẩm')
     if (await productsRepo.existsByCode(input.code)) {
       throw Conflict(`Mã "${input.code}" đã tồn tại`, 'CODE_TAKEN')
@@ -207,7 +195,8 @@ export const productsService = {
    */
   async setMainImage(user: User, productId: string, fileId: string): Promise<Product> {
     const allowed =
-      (await isSalesUser(user)) || ((await isTechnicalStaff(user)) && canEdit(user))
+      (await isSalesUser(user)) ||
+      ((await isTechnicalStaff(user)) && (await canEdit(user)))
     if (!allowed) throw Forbidden('Chỉ Kinh doanh / Kỹ thuật cập nhật ảnh sản phẩm')
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
@@ -215,7 +204,7 @@ export const productsService = {
   },
 
   async update(user: User, id: string, patch: Partial<Product>): Promise<Product> {
-    if (!(await isTechnicalStaff(user)) || !canEdit(user)) throw Forbidden()
+    if (!(await isTechnicalStaff(user)) || !(await canEdit(user))) throw Forbidden()
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Sản phẩm không tồn tại')
     return productsRepo.patch(id, patch)
@@ -236,7 +225,7 @@ export const productsService = {
       customer_item_code?: string | null
     },
   ): Promise<Product> {
-    if (!(await isTechnicalStaff(user)) || !canEdit(user)) {
+    if (!(await isTechnicalStaff(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ Kỹ thuật / Admin nhân bản được sản phẩm')
     }
     const src = await productsRepo.findById(sourceId)
@@ -295,7 +284,7 @@ export const productsService = {
     productId: string,
     lines: { material_id: string; qty_per_unit: number; note?: string | null }[],
   ) {
-    if (!(await isTechnicalOrSales(user)) || !canEdit(user)) {
+    if (!(await isTechnicalOrSales(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ Kỹ thuật / Kinh doanh (quản lý) cập nhật được BOM')
     }
     const product = await productsRepo.findById(productId)
@@ -310,7 +299,7 @@ export const productsService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isTechnicalStaff(user)) || !canEdit(user)) throw Forbidden()
+    if (!(await isTechnicalStaff(user)) || !(await canEdit(user))) throw Forbidden()
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound()
 
