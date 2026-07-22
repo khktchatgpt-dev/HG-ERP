@@ -106,6 +106,22 @@ export const pricesRepo = {
     return { price: data as SupplierPrice, duplicate: false }
   },
 
+  /**
+   * Nhập báo giá hàng loạt: upsert theo unique (supplier_id, material_id,
+   * valid_from) — trùng ngày thì cập nhật đè giá. Trả số dòng ghi được.
+   */
+  async bulkUpsert(
+    rows: Omit<SupplierPrice, 'id' | 'created_at' | 'updated_at'>[],
+  ): Promise<number> {
+    if (rows.length === 0) return 0
+    const { data, error } = await db()
+      .from('supply_supplier_prices')
+      .upsert(rows, { onConflict: 'supplier_id,material_id,valid_from' })
+      .select('id')
+    if (error) throw new Error(error.message)
+    return (data ?? []).length
+  },
+
   async patch(
     id: string,
     patch: Partial<Pick<SupplierPrice, 'price' | 'currency' | 'valid_from' | 'note'>>,

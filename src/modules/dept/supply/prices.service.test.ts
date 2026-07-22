@@ -5,6 +5,7 @@ vi.mock('./prices.repo', () => ({
     list: vi.fn(),
     findById: vi.fn(),
     insert: vi.fn(),
+    bulkUpsert: vi.fn(),
     patch: vi.fn(),
     remove: vi.fn(),
     listEffective: vi.fn(),
@@ -128,5 +129,61 @@ describe('pricesService — quyền + ràng buộc', () => {
     const [entry] = await pricesService.compare(supply, ['m1'])
     expect(entry.offers.map((o) => o.price)).toEqual([90, 120])
     expect(entry.last_purchase?.po_code).toBe('PO-2026-0001')
+  })
+})
+
+describe('pricesService.bulkCreate — nhập báo giá hàng loạt', () => {
+  it('chặn người không thuộc Cung ứng', async () => {
+    vi.mocked(isSupplyStaff).mockResolvedValue(false)
+    await expect(
+      pricesService.bulkCreate(outsider, {
+        supplier_id: 's1',
+        currency: 'VND',
+        lines: [{ material_id: 'm1', price: 100 }],
+      }),
+    ).rejects.toThrow()
+    expect(pricesRepo.bulkUpsert).not.toHaveBeenCalled()
+  })
+
+  it('chặn khi NCC đã ngừng giao dịch', async () => {
+    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: false } as never)
+    await expect(
+      pricesService.bulkCreate(supply, {
+        supplier_id: 's1',
+        currency: 'VND',
+        lines: [{ material_id: 'm1', price: 100 }],
+      }),
+    ).rejects.toThrow()
+    expect(pricesRepo.bulkUpsert).not.toHaveBeenCalled()
+  })
+
+  it('upsert các dòng với ngày hiệu lực + tệ chung, trả count', async () => {
+    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: true } as never)
+    vi.mocked(pricesRepo.bulkUpsert).mockResolvedValue(2)
+
+    const res = await pricesService.bulkCreate(supply, {
+      supplier_id: 's1',
+      currency: 'USD',
+      valid_from: '2026-07-01',
+      lines: [
+        { material_id: 'm1', price: 100 },
+        { material_id: 'm2', price: 200, note: 'MOQ 50' },
+      ],
+    })
+
+    expect(res.count).toBe(2)
+    const rows = vi.mocked(pricesRepo.bulkUpsert).mock.calls[0][0]
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      supplier_id: 's1',
+      material_id: 'm1',
+      price: 100,
+      currency: 'USD',
+      valid_from: '2026-07-01',
+      created_by: 'u-cu',
+    })
+    expect(rows[1]).toMatchObject({ material_id: 'm2', note: 'MOQ 50' })
   })
 })

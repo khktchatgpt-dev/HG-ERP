@@ -83,6 +83,41 @@ export const pricesService = {
     return price
   },
 
+  /**
+   * Nhập BÁO GIÁ hàng loạt: 1 NCC + 1 ngày hiệu lực + nhiều dòng giá → upsert
+   * vào bảng giá (trùng ngày = cập nhật đè). Trả số dòng đã ghi.
+   */
+  async bulkCreate(
+    user: User,
+    input: {
+      supplier_id: string
+      currency: string
+      valid_from?: string
+      lines: Array<{ material_id: string; price: number; note?: string | null }>
+    },
+  ): Promise<{ count: number }> {
+    if (!(await isSupplyStaff(user))) {
+      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý bảng giá NCC')
+    }
+    const supplier = await suppliersRepo.findById(input.supplier_id)
+    if (!supplier) throw NotFound('NCC không tồn tại')
+    if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
+
+    const valid_from = input.valid_from ?? new Date().toISOString().slice(0, 10)
+    const count = await pricesRepo.bulkUpsert(
+      input.lines.map((l) => ({
+        supplier_id: input.supplier_id,
+        material_id: l.material_id,
+        price: l.price,
+        currency: input.currency,
+        valid_from,
+        note: l.note ?? null,
+        created_by: user.id,
+      })),
+    )
+    return { count }
+  },
+
   async update(
     user: User,
     id: string,
