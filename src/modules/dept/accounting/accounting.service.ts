@@ -1,15 +1,24 @@
-import { invoicesRepo, type Invoice, type InvoiceDirection, type InvoiceStatus } from './accounting.repo'
+import {
+  invoicesRepo,
+  type Invoice,
+  type InvoiceDirection,
+  type InvoiceStatus,
+} from './accounting.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 const ACCT_DEPT_NAME = 'Tài Chính Kế Toán'
 
 async function isAccountingStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === ACCT_DEPT_NAME
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.name === ACCT_DEPT_NAME
+  // Phase 1 RBAC: shadow-so với accounting.member, vẫn trả legacy.
+  return shadowGuard(user, 'isAccountingStaff', legacy, 'accounting.member')
 }
 
 type CreateInput = {
@@ -24,7 +33,16 @@ type CreateInput = {
 }
 
 export const invoicesService = {
-  async list(user: User, opts: { q?: string; direction?: InvoiceDirection; status?: InvoiceStatus; page: number; page_size: number }) {
+  async list(
+    user: User,
+    opts: {
+      q?: string
+      direction?: InvoiceDirection
+      status?: InvoiceStatus
+      page: number
+      page_size: number
+    },
+  ) {
     if (!(await isAccountingStaff(user))) throw Forbidden('Chỉ Kế toán xem được')
     return invoicesRepo.list(opts)
   },

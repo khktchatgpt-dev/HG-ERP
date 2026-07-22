@@ -9,6 +9,7 @@ import type { BomStatus } from './technical.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import { isSalesUser } from '@/modules/dept/sales/sales.service'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 const TECH_DEPT_NAME = 'Kỹ Thuật'
@@ -16,17 +17,23 @@ const SALES_DEPT_NAME = 'Bán Hàng'
 
 async function isTechnicalStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === TECH_DEPT_NAME
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.name === TECH_DEPT_NAME
+  // Phase 1 RBAC: shadow-so với technical.member, vẫn trả legacy.
+  return shadowGuard(user, 'isTechnicalStaff', legacy, 'technical.member')
 }
 
 /** Kỹ thuật + Sales cùng bóc tách/cập nhật BOM (FR-ENG-04). */
 async function isTechnicalOrSales(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === TECH_DEPT_NAME || dept?.name === SALES_DEPT_NAME
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.name === TECH_DEPT_NAME || dept?.name === SALES_DEPT_NAME
+  // Phase 1 RBAC: shadow-so với technical.bom.edit, vẫn trả legacy.
+  return shadowGuard(user, 'isTechnicalOrSales', legacy, 'technical.bom.edit')
 }
 
 function canEdit(user: User): boolean {
