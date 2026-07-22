@@ -3,6 +3,7 @@ import type { supplierCreateSchema } from './suppliers.schema'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import type { z } from 'zod'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { Forbidden, NotFound } from '@/server/http'
 
 /**
@@ -17,9 +18,12 @@ const SUPPLY_DEPT_NAMES = new Set(['Kế Hoạch Sản Xuất-cung ứng', 'Cung
 
 async function isSupplyStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return !!dept && SUPPLY_DEPT_NAMES.has(dept.name)
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = !!dept && SUPPLY_DEPT_NAMES.has(dept.name)
+  // Phase 1 RBAC: shadow-so với supply.member, vẫn trả legacy.
+  return shadowGuard(user, 'isSupplyStaff', legacy, 'supply.member')
 }
 
 type SupplierInput = z.infer<typeof supplierCreateSchema>

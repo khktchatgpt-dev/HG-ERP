@@ -2,6 +2,7 @@ import { materialsRepo, type Material } from './warehouse.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 /** Tên phòng Kho trong `public.departments` (không hard-code UUID). */
@@ -9,9 +10,12 @@ const WAREHOUSE_DEPT_NAME = 'Kho'
 
 async function isWarehouseUser(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === WAREHOUSE_DEPT_NAME
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.name === WAREHOUSE_DEPT_NAME
+  // Phase 1 RBAC: shadow-so với warehouse.member, vẫn trả legacy.
+  return shadowGuard(user, 'isWarehouseUser', legacy, 'warehouse.member')
 }
 
 /**

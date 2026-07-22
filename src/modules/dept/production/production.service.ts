@@ -13,6 +13,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Tách vai 07/2026: phòng gộp cũ + 2 phòng tách đều nhận báo LSX duyệt
@@ -40,9 +41,12 @@ function canApprove(user: User): boolean {
  */
 export async function isProductionStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.workspace_id === 'production'
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.workspace_id === 'production'
+  // Phase 1 RBAC: shadow-so với production.member, vẫn trả legacy.
+  return shadowGuard(user, 'isProductionStaff', legacy, 'production.member')
 }
 
 /**

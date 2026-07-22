@@ -1,15 +1,19 @@
 import { leaveRepo, type LeaveRequest, type LeaveStatus, type LeaveType } from './hr.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 const HR_DEPT_NAME = 'Hành Chính Nhân Sự'
 
 async function isHRStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return dept?.name === HR_DEPT_NAME
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = dept?.name === HR_DEPT_NAME
+  // Phase 1 RBAC: shadow-so với hr.member, vẫn trả legacy.
+  return shadowGuard(user, 'isHRStaff', legacy, 'hr.member')
 }
 
 function canDecide(user: User): boolean {
@@ -19,13 +23,16 @@ function canDecide(user: User): boolean {
 
 export const leaveService = {
   /** NV bất kỳ tạo đơn cho chính mình. */
-  async create(user: User, input: {
-    leave_type: LeaveType
-    from_date: string
-    to_date: string
-    days_count: number
-    reason?: string
-  }): Promise<LeaveRequest> {
+  async create(
+    user: User,
+    input: {
+      leave_type: LeaveType
+      from_date: string
+      to_date: string
+      days_count: number
+      reason?: string
+    },
+  ): Promise<LeaveRequest> {
     if (new Date(input.to_date) < new Date(input.from_date)) {
       throw BadRequest('Ngày kết thúc phải sau hoặc bằng ngày bắt đầu')
     }
@@ -39,22 +46,38 @@ export const leaveService = {
     })
   },
 
-  async list(user: User, opts: {
-    scope: 'mine' | 'pending' | 'all'
-    status?: LeaveStatus
-    page: number
-    page_size: number
-  }) {
+  async list(
+    user: User,
+    opts: {
+      scope: 'mine' | 'pending' | 'all'
+      status?: LeaveStatus
+      page: number
+      page_size: number
+    },
+  ) {
     if (opts.scope === 'mine') {
-      return leaveRepo.list({ user_id: user.id, status: opts.status, page: opts.page, page_size: opts.page_size })
+      return leaveRepo.list({
+        user_id: user.id,
+        status: opts.status,
+        page: opts.page,
+        page_size: opts.page_size,
+      })
     }
     if (opts.scope === 'pending') {
       if (!canDecide(user) && !(await isHRStaff(user))) throw Forbidden()
-      return leaveRepo.list({ status: 'pending', page: opts.page, page_size: opts.page_size })
+      return leaveRepo.list({
+        status: 'pending',
+        page: opts.page,
+        page_size: opts.page_size,
+      })
     }
     // 'all'
     if (!(await isHRStaff(user))) throw Forbidden('Chỉ HR/Admin xem được tất cả đơn')
-    return leaveRepo.list({ status: opts.status, page: opts.page, page_size: opts.page_size })
+    return leaveRepo.list({
+      status: opts.status,
+      page: opts.page,
+      page_size: opts.page_size,
+    })
   },
 
   async decide(

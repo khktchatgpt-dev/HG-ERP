@@ -1,5 +1,6 @@
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { shadowGuard } from '@/modules/core/rbac/shadow'
 
 /**
  * Vai KẾ HOẠCH SẢN XUẤT (định hình: bảng chi tiết + lộ trình). Tách vai 07/2026:
@@ -12,9 +13,12 @@ const PLANNER_DEPT_NAMES = new Set(['Kế Hoạch Sản Xuất-cung ứng', 'K�
 
 export async function isPlannerStaff(user: User): Promise<boolean> {
   if (user.role === 'admin') return true
-  if (!user.department_id) return false
-  const dept = await departmentsRepo.findById(user.department_id)
-  return !!dept && PLANNER_DEPT_NAMES.has(dept.name)
+  const dept = user.department_id
+    ? await departmentsRepo.findById(user.department_id)
+    : null
+  const legacy = !!dept && PLANNER_DEPT_NAMES.has(dept.name)
+  // Phase 1 RBAC: shadow-so với planner.member, vẫn trả legacy.
+  return shadowGuard(user, 'isPlannerStaff', legacy, 'planner.member')
 }
 
 /**
