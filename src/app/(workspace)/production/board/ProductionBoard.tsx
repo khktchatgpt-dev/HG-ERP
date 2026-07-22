@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/Badge'
+import { cn } from '@/lib/utils'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -79,6 +80,18 @@ export function ProductionBoard({
     [rows],
   )
 
+  // Chỉ hiện công đoạn ĐANG DÙNG (có trong lộ trình 1 SP nào đó / có sản lượng)
+  // — bỏ cột trống, vì có 11 công đoạn nhưng mỗi loại SP chỉ đi vài cái.
+  const usedStages = useMemo(() => {
+    const used = new Set<string>()
+    for (const r of rows) {
+      if (r.allowed_stages) for (const c of r.allowed_stages) used.add(c)
+      for (const s of r.stages) if (s.done > 0) used.add(s.stage)
+    }
+    const cols = stages.filter((s) => used.has(s.code))
+    return cols.length > 0 ? cols : stages
+  }, [rows, stages])
+
   /** Xuất CSV — UTF-8 BOM để Excel mở đúng tiếng Việt (FR-RP-05). */
   function exportCsv() {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -89,7 +102,7 @@ export function ProductionBoard({
       'Cụm',
       'Chi tiết',
       'Tổng cần',
-      ...stages.flatMap((s) => [`${s.label} - đã làm`, `${s.label} - thiếu/(dư)`]),
+      ...usedStages.flatMap((s) => [`${s.label} - đã làm`, `${s.label} - thiếu/(dư)`]),
       '%HT',
       'Trạng thái',
     ]
@@ -101,7 +114,7 @@ export function ProductionBoard({
         r.cluster ?? '',
         r.name,
         r.total_needed,
-        ...stages.flatMap((s): (string | number)[] => {
+        ...usedStages.flatMap((s): (string | number)[] => {
           const st = r.stages.find((x) => x.stage === s.code)
           // Không qua công đoạn này (final_stage 0041 / lộ trình 0063) → để
           // trống, đừng ghi 0 gây hiểu nhầm. Có sản lượng lịch sử thì vẫn ghi.
@@ -131,7 +144,7 @@ export function ProductionBoard({
       <PageHeader
         breadcrumbs={[{ label: 'Sản xuất', href: '/production' }, { label: 'Bảng tổng' }]}
         title="Bảng tổng tiến độ sản xuất"
-        description="Mọi chi tiết của các lệnh đang chạy × 4 công đoạn — thay sheet TỔNG (quan li). Số liệu từ sổ sản lượng các tổ báo hằng ngày."
+        description="Toàn cảnh mọi chi tiết × công đoạn của các lệnh đang chạy — giám sát tiến độ, nghẽn, %HT toàn xưởng. Chỉ hiện công đoạn đang dùng. Số liệu từ sổ sản lượng các tổ báo hằng ngày."
         actions={
           <button
             onClick={exportCsv}
@@ -212,7 +225,7 @@ export function ProductionBoard({
                   <th className="px-3 py-2">Lệnh / Khách</th>
                   <th className="px-2 py-2">Cụm · Chi tiết</th>
                   <th className="w-16 px-2 py-2 text-right">Tổng cần</th>
-                  {stages.map((s) => (
+                  {usedStages.map((s) => (
                     <th key={s.code} className="w-24 px-2 py-2 text-right">
                       {s.label}
                     </th>
@@ -248,7 +261,7 @@ export function ProductionBoard({
                     <td className="px-2 py-1.5 text-right font-medium">
                       {r.total_needed.toLocaleString('vi-VN')}
                     </td>
-                    {stages.map((s) => {
+                    {usedStages.map((s) => {
                       const st = r.stages.find((x) => x.stage === s.code)
                       // Ngoài lộ trình đã định hình (0063) → mờ như "không qua
                       // công đoạn"; có sản lượng lịch sử thì vẫn hiện số.
@@ -283,8 +296,25 @@ export function ProductionBoard({
                         </td>
                       )
                     })}
-                    <td className="px-2 py-1.5 text-right font-medium">
-                      {Math.round(r.pct_total * 100)}%
+                    <td className="px-2 py-1.5">
+                      <div className="flex items-center justify-end gap-2">
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                          <div
+                            className={cn(
+                              'h-full rounded-full',
+                              r.pct_total >= 1
+                                ? 'bg-emerald-500'
+                                : r.pct_total > 0
+                                  ? 'bg-amber-500'
+                                  : 'bg-zinc-300 dark:bg-zinc-700',
+                            )}
+                            style={{ width: `${Math.round(r.pct_total * 100)}%` }}
+                          />
+                        </div>
+                        <span className="w-9 text-right font-medium tabular-nums">
+                          {Math.round(r.pct_total * 100)}%
+                        </span>
+                      </div>
                     </td>
                     <td className="px-2 py-1.5 text-right">
                       <Badge tone={ST_TONE[r.status]}>{ST_LABEL[r.status]}</Badge>

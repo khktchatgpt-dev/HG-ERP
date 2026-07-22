@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/Badge'
+import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -210,10 +211,6 @@ export function LsxOutputPanel({
 
   const stageLabel = (code: string) =>
     data?.stages.find((s) => s.code === code)?.label ?? code
-  // 1 lệnh nhiều SP — hiện chi tiết thuộc SP nào (map qua dòng đơn).
-  const productByLine = new Map(
-    (data?.synced_by_line ?? []).map((l) => [l.order_line_id, l.product_code]),
-  )
   const componentName = (id: string) =>
     data?.components.find((c) => c.id === id)?.name ?? '?'
 
@@ -226,6 +223,36 @@ export function LsxOutputPanel({
   }
 
   const hasComponents = data.components.length > 0
+
+  // Gom chi tiết theo SP (dòng đơn) — mỗi SP một bảng riêng.
+  const byLine = new Map<string, ComponentView[]>()
+  for (const c of data.components) {
+    const arr = byLine.get(c.order_line_id) ?? []
+    arr.push(c)
+    byLine.set(c.order_line_id, arr)
+  }
+  const lineInfo = new Map(data.synced_by_line.map((l) => [l.order_line_id, l]))
+  const allStages = data.stages
+  const stageByCode = new Map(allStages.map((s) => [s.code, s]))
+
+  /**
+   * Cột công đoạn của 1 SP = lộ trình RIÊNG (đúng thứ tự luồng), bỏ công đoạn
+   * không dùng. Chưa định hình → suy từ công đoạn đã có sản lượng; không có gì
+   * thì mới hiện cả danh mục.
+   */
+  function routeCols(comps: ComponentView[]): Stage[] {
+    const withRoute = comps.find((c) => c.allowed_stages && c.allowed_stages.length)
+    let codes: string[]
+    if (withRoute?.allowed_stages) codes = withRoute.allowed_stages
+    else {
+      const used = new Set<string>()
+      for (const c of comps)
+        for (const s of c.summary.stages) if (s.done > 0) used.add(s.stage)
+      codes = allStages.filter((s) => used.has(s.code)).map((s) => s.code)
+      if (codes.length === 0) codes = allStages.map((s) => s.code)
+    }
+    return codes.map((code) => stageByCode.get(code) ?? { code, label: code })
+  }
 
   return (
     <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -257,122 +284,152 @@ export function LsxOutputPanel({
           </p>
         ) : (
           <>
-            {/* Tổng hợp thiếu/dư/%HT per chi tiết × công đoạn (FR-PR-04/05) */}
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[860px] text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
-                    <th className="py-1.5 pr-2">Chi tiết</th>
-                    {/* KH = định mức từ bảng chi tiết (SL/SP × SL đơn) — thống kê
-                        đối chiếu Kế hoạch vs Thực tế ngay trên 1 bảng. */}
-                    <th className="w-20 py-1.5 pr-2 text-right">Định mức (KH)</th>
-                    {data.stages.map((s) => (
-                      <th key={s.code} className="w-24 py-1.5 pr-2 text-right">
-                        {s.label}{' '}
-                        <span className="font-normal text-zinc-400 normal-case">
-                          TT/KH
-                        </span>
-                      </th>
-                    ))}
-                    <th className="w-24 py-1.5 pr-2 text-right">Thực tế (CĐ cuối)</th>
-                    <th className="w-20 py-1.5 pr-2 text-right">%HT</th>
-                    <th className="w-24 py-1.5" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.components.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-zinc-100 dark:border-zinc-900"
-                    >
-                      <td className="py-1.5 pr-2">
-                        <div className="flex min-w-0 flex-col">
-                          <span className="text-[10px] text-zinc-400">
-                            {productByLine.get(c.order_line_id) ?? ''}
-                            {c.cluster ? ` · ${c.cluster}` : ''}
-                          </span>
-                          <span className="font-medium">{c.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-1.5 pr-2 text-right font-medium">
-                        {c.total_needed.toLocaleString('vi-VN')}
-                      </td>
-                      {data.stages.map((col) => {
-                        const s = c.summary.stages.find((x) => x.stage === col.code)
-                        // Ngoài lộ trình đã định hình → mờ như "không qua công
-                        // đoạn" (trừ khi có sản lượng lịch sử thì vẫn hiện số).
-                        if (!s || (!inRoute(c, col.code) && s.done === 0))
-                          return (
-                            <td
-                              key={col.code}
-                              className="py-1.5 pr-2 text-right text-zinc-300 dark:text-zinc-600"
-                              title="Chi tiết không qua công đoạn này"
-                            >
-                              —
-                            </td>
-                          )
+            {/* Tổng hợp %HT theo chi tiết × công đoạn — MỖI SP một bảng, cột =
+                lộ trình RIÊNG của SP theo thứ tự luồng (FR-PR-04/05). */}
+            {[...byLine.entries()].map(([lineId, comps]) => {
+              const line = lineInfo.get(lineId)
+              const cols = routeCols(comps)
+              const nCols = 2 + cols.length + 1
+              const rows: React.ReactNode[] = []
+              let lastCluster: string | null | undefined = undefined
+              for (const c of comps) {
+                if (c.cluster !== lastCluster) {
+                  lastCluster = c.cluster
+                  if (c.cluster)
+                    rows.push(
+                      <tr
+                        key={`cl-${c.id}`}
+                        className="bg-zinc-50/70 dark:bg-zinc-900/40"
+                      >
+                        <td
+                          colSpan={nCols}
+                          className="px-3 py-1 text-[10px] font-medium tracking-wide text-zinc-400 uppercase"
+                        >
+                          {c.cluster}
+                        </td>
+                      </tr>,
+                    )
+                }
+                const pct = c.summary.pct_total
+                rows.push(
+                  <tr
+                    key={c.id}
+                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                  >
+                    <td className="py-1.5 pr-2 pl-4 font-medium">{c.name}</td>
+                    <td className="py-1.5 pr-2 text-right text-zinc-500 tabular-nums">
+                      {c.total_needed.toLocaleString('vi-VN')}
+                    </td>
+                    {cols.map((col) => {
+                      const s = c.summary.stages.find((x) => x.stage === col.code)
+                      if (!s || (!inRoute(c, col.code) && s.done === 0))
                         return (
-                          <td key={s.stage} className="py-1.5 pr-2 text-right">
-                            <span
-                              className={
-                                s.done === 0
-                                  ? 'text-zinc-300 dark:text-zinc-600'
-                                  : s.missing <= 0
-                                    ? 'font-medium text-green-600 dark:text-green-400'
-                                    : 'text-amber-600 dark:text-amber-400'
-                              }
-                              title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
-                            >
-                              {s.done.toLocaleString('vi-VN')}
-                              <span className="text-[10px] text-zinc-400">
-                                /{c.total_needed.toLocaleString('vi-VN')}
-                              </span>
-                            </span>
-                            {s.defect > 0 && (
-                              <span className="ml-0.5 text-[10px] text-red-500">
-                                (-{s.defect})
-                              </span>
-                            )}
+                          <td
+                            key={col.code}
+                            className="py-1.5 pr-2 text-right text-zinc-300 dark:text-zinc-600"
+                            title="Chi tiết không qua công đoạn này"
+                          >
+                            —
                           </td>
                         )
-                      })}
-                      <td
-                        className={`py-1.5 pr-2 text-right font-medium ${
-                          c.summary.done_final >= c.total_needed
-                            ? 'text-green-600 dark:text-green-400'
-                            : c.summary.done_final > 0
-                              ? 'text-amber-600 dark:text-amber-400'
-                              : 'text-zinc-300 dark:text-zinc-600'
-                        }`}
-                        title="Đã xong ở công đoạn cuối của chi tiết"
+                      return (
+                        <td key={col.code} className="py-1.5 pr-2 text-right">
+                          <span
+                            className={cn(
+                              'tabular-nums',
+                              s.done === 0
+                                ? 'text-zinc-300 dark:text-zinc-600'
+                                : s.missing <= 0
+                                  ? 'font-medium text-emerald-600 dark:text-emerald-400'
+                                  : 'text-amber-600 dark:text-amber-400',
+                            )}
+                            title={`Thiếu/(Dư): ${s.missing} · Phế: ${s.defect}`}
+                          >
+                            {s.done.toLocaleString('vi-VN')}
+                            <span className="text-[10px] text-zinc-400">
+                              /{c.total_needed.toLocaleString('vi-VN')}
+                            </span>
+                          </span>
+                          {s.defect > 0 && (
+                            <span className="ml-0.5 text-[10px] text-red-500">
+                              (-{s.defect})
+                            </span>
+                          )}
+                        </td>
+                      )
+                    })}
+                    <td className="py-1.5 pr-3">
+                      <div
+                        className="flex items-center justify-end gap-2"
+                        title={`Thực tế công đoạn cuối: ${c.summary.done_final.toLocaleString('vi-VN')}/${c.total_needed.toLocaleString('vi-VN')}`}
                       >
-                        {c.summary.done_final.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-1.5 pr-2 text-right font-medium">
-                        {Math.round(c.summary.pct_total * 100)}%
-                      </td>
-                      <td className="py-1.5 text-right">
-                        <Badge
-                          tone={
-                            c.summary.status === 'done'
-                              ? 'green'
-                              : c.summary.status === 'in_progress'
-                                ? 'amber'
-                                : 'gray'
-                          }
-                        >
-                          {c.summary.status === 'done'
-                            ? 'Hoàn thành'
-                            : c.summary.status === 'in_progress'
-                              ? 'Đang làm'
-                              : 'Chưa làm'}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        <div className="h-1.5 w-12 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                          <div
+                            className={cn(
+                              'h-full rounded-full',
+                              pct >= 1
+                                ? 'bg-emerald-500'
+                                : pct > 0
+                                  ? 'bg-amber-500'
+                                  : 'bg-zinc-300 dark:bg-zinc-700',
+                            )}
+                            style={{ width: `${Math.round(pct * 100)}%` }}
+                          />
+                        </div>
+                        <span className="w-9 text-right font-medium tabular-nums">
+                          {Math.round(pct * 100)}%
+                        </span>
+                      </div>
+                    </td>
+                  </tr>,
+                )
+              }
+              return (
+                <div
+                  key={lineId}
+                  className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 bg-zinc-50 px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <div className="flex min-w-0 items-baseline gap-2">
+                      <span className="font-mono text-xs text-zinc-400">
+                        {line?.product_code}
+                      </span>
+                      <span className="truncate text-sm font-medium">
+                        {line?.product_name}
+                      </span>
+                    </div>
+                    {line?.has_components && (
+                      <Badge tone={line.synced_sets >= line.qty ? 'green' : 'blue'}>
+                        đồng bộ {line.synced_sets}/{line.qty} bộ
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
+                          <th className="py-1.5 pr-2 pl-3">Chi tiết</th>
+                          <th className="w-16 py-1.5 pr-2 text-right">ĐM</th>
+                          {cols.map((s, i) => (
+                            <th key={s.code} className="w-24 py-1.5 pr-2 text-right">
+                              <span className="text-zinc-300 dark:text-zinc-600">
+                                {i + 1}.
+                              </span>{' '}
+                              {s.label}{' '}
+                              <span className="font-normal text-zinc-400 normal-case">
+                                TT/KH
+                              </span>
+                            </th>
+                          ))}
+                          <th className="w-28 py-1.5 pr-3 text-right">Hoàn thành</th>
+                        </tr>
+                      </thead>
+                      <tbody>{rows}</tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })}
 
             {/* Lưới nhập theo ngày (FR-PR-02/03/09) */}
             {canRecord && active && (
