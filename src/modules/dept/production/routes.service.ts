@@ -14,8 +14,10 @@ import { BadRequest, Forbidden, NotFound } from '@/server/http'
  * trên SP (technical_products.stage_route), mỗi lệnh giữ SNAPSHOT riêng per
  * dòng SP — sửa mặc định sau không đổi lệnh đang chạy (cùng triết lý 0038).
  *
- * Thứ tự giai đoạn = thứ tự danh mục production_stage (Phôi→Hàn→Sơn→…) —
- * lộ trình là TẬP CON của chuỗi chuẩn, không cần kéo thả sắp xếp.
+ * Thứ tự giai đoạn là RIÊNG cho từng SP (07/2026): mỗi loại SP có luồng khác
+ * nhau (mây nhựa đan sau sơn, có nệm may sau lắp ráp…) nên lộ trình lưu ĐÚNG
+ * thứ tự Kế hoạch chọn, KHÔNG ép về thứ tự danh mục. `nextStagesAfter` dựa vào
+ * thứ tự mảng này để bàn giao tổ kế tiếp.
  */
 
 export const routeSaveSchema = z.object({
@@ -32,10 +34,20 @@ export const routeSaveSchema = z.object({
 })
 export type RouteSaveInput = z.infer<typeof routeSaveSchema>
 
-/** Giữ đúng thứ tự danh mục + loại code lạ/trùng. Pure — có test riêng. */
-export function normalizeRoute(stages: string[], catalogOrder: string[]): string[] {
-  const wanted = new Set(stages)
-  return catalogOrder.filter((c) => wanted.has(c))
+/**
+ * Giữ ĐÚNG thứ tự Kế hoạch chọn (mỗi loại SP một luồng riêng), chỉ khử code
+ * trùng + code không có trong danh mục. Pure — có test riêng.
+ */
+export function normalizeRoute(stages: string[], catalog: string[]): string[] {
+  const valid = new Set(catalog)
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const s of stages) {
+    if (!valid.has(s) || seen.has(s)) continue
+    seen.add(s)
+    out.push(s)
+  }
+  return out
 }
 
 /**
@@ -184,6 +196,19 @@ export const routesService = {
       saved
         .filter((r) => r.stages.length > 0)
         .map((r) => [r.order_line_id, new Set(r.stages)]),
+    )
+  },
+
+  /**
+   * Lộ trình CÓ THỨ TỰ per dòng SP — cho tổng hợp %HT / "công đoạn cuối" theo
+   * đúng luồng riêng của SP (production-summary). Khác `allowedStagesByLine`
+   * (Set, chỉ kiểm tra hợp lệ) ở chỗ GIỮ thứ tự mảng. null-line = chưa định
+   * hình → caller fallback về thứ tự danh mục.
+   */
+  async orderedStagesByLine(lsxId: string): Promise<Map<string, string[]>> {
+    const saved = await routesRepo.listByLsx(lsxId)
+    return new Map(
+      saved.filter((r) => r.stages.length > 0).map((r) => [r.order_line_id, r.stages]),
     )
   },
 }

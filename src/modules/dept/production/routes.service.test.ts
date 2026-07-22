@@ -36,19 +36,19 @@ import type { User } from '@/modules/core/users/users.repo'
 const CATALOG = ['phoi', 'han', 'nguoi', 'son', 'dan', 'dong_goi']
 
 describe('normalizeRoute', () => {
-  it('giữ đúng thứ tự danh mục dù người dùng gửi lộn xộn', () => {
-    // Lộ trình là TẬP CON của chuỗi chuẩn — client gửi thứ tự nào cũng về đúng.
+  it('giữ ĐÚNG thứ tự người dùng chọn (mỗi loại SP một luồng riêng)', () => {
+    // 07/2026: KHÔNG ép về thứ tự danh mục — SP mây nhựa có thể đan sau sơn…
     expect(normalizeRoute(['son', 'phoi', 'han'], CATALOG)).toEqual([
+      'son',
       'phoi',
       'han',
-      'son',
     ])
   })
 
-  it('loại code không có trong danh mục và code trùng', () => {
-    expect(normalizeRoute(['phoi', 'phoi', 'la_gi_day', 'son'], CATALOG)).toEqual([
-      'phoi',
+  it('loại code không có trong danh mục và code trùng (giữ thứ tự lần đầu)', () => {
+    expect(normalizeRoute(['son', 'son', 'la_gi_day', 'phoi'], CATALOG)).toEqual([
       'son',
+      'phoi',
     ])
   })
 
@@ -139,12 +139,12 @@ describe('routesService.save — validate chéo với dữ liệu đã có (0041
     ).rejects.toThrow(/Đã có sản lượng/)
   })
 
-  it('hợp lệ → ghi lộ trình đã chuẩn hoá thứ tự danh mục', async () => {
+  it('hợp lệ → ghi lộ trình GIỮ ĐÚNG thứ tự Kế hoạch chọn', async () => {
     await routesService.save(planner, 'lsx1', {
       routes: [{ order_line_id: uuid, stages: ['son', 'phoi'] }],
     })
     expect(vi.mocked(routesRepo.replaceAll)).toHaveBeenCalledWith('lsx1', [
-      { order_line_id: uuid, stages: ['phoi', 'son'] },
+      { order_line_id: uuid, stages: ['son', 'phoi'] },
     ])
   })
 })

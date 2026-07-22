@@ -189,12 +189,13 @@ export const outputsService = {
    */
   async summary(_user: User, lsxId: string) {
     const { components, orderLines, totalByComponent } = await loadLsxContext(lsxId)
-    const [entries, stages, allowedByLine, defectCodes] = await Promise.all([
+    const [entries, stages, orderedByLine, defectCodes] = await Promise.all([
       outputsRepo.listByLsx(lsxId),
       productionRepo.listStages(),
-      routesService.allowedStagesByLine(lsxId),
+      routesService.orderedStagesByLine(lsxId),
       defectCodesRepo.listActive(),
     ])
+    // Fallback khi dòng chưa định hình lộ trình (lệnh cũ nhập tự do).
     const stageOrder = stages.map((s) => s.code)
 
     // Gộp sản lượng theo (chi tiết, công đoạn).
@@ -215,19 +216,20 @@ export const outputsService = {
         done: v.done,
         defect: v.defect,
       }))
-      const allowed = allowedByLine.get(c.order_line_id)
+      // Lộ trình CÓ THỨ TỰ của SP chứa chi tiết (0063) — dùng cho cả UI ẩn/mờ
+      // giai đoạn ngoài lộ trình LẪN thứ tự tính %HT/"công đoạn cuối". null =
+      // dòng chưa định hình (lệnh cũ nhập tự do) → fallback thứ tự danh mục.
+      const route = orderedByLine.get(c.order_line_id) ?? null
       return {
         id: c.id,
         order_line_id: c.order_line_id,
         cluster: c.cluster,
         name: c.name,
         total_needed: totalByComponent.get(c.id) ?? 0,
-        // Lộ trình của SP chứa chi tiết (0063) — UI ẩn/mờ giai đoạn ngoài lộ
-        // trình. null = dòng chưa định hình (lệnh cũ nhập tự do).
-        allowed_stages: allowed ? [...allowed] : null,
+        allowed_stages: route,
         summary: summarizeComponent(
           totalByComponent.get(c.id) ?? 0,
-          stageOrder,
+          route ?? stageOrder,
           outputs,
           c.final_stage,
         ),

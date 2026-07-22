@@ -15,16 +15,17 @@ type LineRoute = {
 }
 
 type LineState = {
-  selected: Set<string>
+  /** Lộ trình đã chọn — MẢNG CÓ THỨ TỰ (mỗi loại SP một luồng riêng). */
+  selected: string[]
   saveAsDefault: boolean
   /** Dòng chưa chốt và đang hiện theo mặc định SP (chỉ để hiện nhãn). */
   fromDefault: boolean
 }
 
 /**
- * Lộ trình giai đoạn per dòng SP (0063) — phần "định hình quá trình sản xuất"
- * của QL Kế hoạch. Lộ trình là TẬP CON của chuỗi giai đoạn chuẩn (thứ tự theo
- * danh mục), nên UI chỉ cần bật/tắt chip — không kéo thả.
+ * Lộ trình giai đoạn per dòng SP (0063). Từ 07/2026 mỗi loại SP đi một luồng
+ * RIÊNG (thứ tự khác nhau) — nên UI cho chọn + SẮP THỨ TỰ (đánh số theo thứ tự
+ * chọn, nút ←/→ đổi chỗ), không còn bật/tắt theo thứ tự danh mục.
  */
 export function LsxRoutePanel({
   lsxId,
@@ -37,7 +38,6 @@ export function LsxRoutePanel({
   stages: { code: string; label: string }[]
   canEdit: boolean
   locked: boolean
-  /** Tiêu đề khối — màn định hình đặt "Bước 1 — …". */
   title?: string
 }) {
   const toast = useToast()
@@ -48,6 +48,7 @@ export function LsxRoutePanel({
   const [dirty, setDirty] = useState(false)
 
   const editable = canEdit && !locked
+  const labelOf = (code: string) => stages.find((s) => s.code === code)?.label ?? code
 
   const load = useCallback(async () => {
     try {
@@ -60,7 +61,7 @@ export function LsxRoutePanel({
           data.lines.map((l) => [
             l.order_line_id,
             {
-              selected: new Set(l.stages ?? l.default_stages),
+              selected: [...(l.stages ?? l.default_stages)],
               saveAsDefault: false,
               fromDefault: l.stages === null,
             },
@@ -77,8 +78,6 @@ export function LsxRoutePanel({
   }, [lsxId])
 
   useEffect(() => {
-    // load() là async — setState chạy trong callback đã resolve (pattern
-    // LsxComponentsPanel).
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
@@ -93,27 +92,46 @@ export function LsxRoutePanel({
     setDirty(true)
   }
 
-  /** Đồ nội thất hay chung quy trình — áp lộ trình 1 SP cho cả lệnh 1 chạm. */
+  /** Thêm công đoạn vào CUỐI lộ trình (giữ thứ tự chọn). */
+  function addStage(lineId: string, code: string) {
+    const cur = state.get(lineId)
+    if (!cur || cur.selected.includes(code)) return
+    patchLine(lineId, { selected: [...cur.selected, code], fromDefault: false })
+  }
+
+  function removeStage(lineId: string, code: string) {
+    const cur = state.get(lineId)
+    if (!cur) return
+    patchLine(lineId, {
+      selected: cur.selected.filter((c) => c !== code),
+      fromDefault: false,
+    })
+  }
+
+  /** Dời công đoạn sớm hơn (-1) hoặc muộn hơn (+1) trong luồng. */
+  function moveStage(lineId: string, code: string, dir: -1 | 1) {
+    const cur = state.get(lineId)
+    if (!cur) return
+    const i = cur.selected.indexOf(code)
+    const j = i + dir
+    if (i < 0 || j < 0 || j >= cur.selected.length) return
+    const next = [...cur.selected]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    patchLine(lineId, { selected: next, fromDefault: false })
+  }
+
+  /** Đồ nội thất hay chung quy trình — áp luồng 1 SP cho cả lệnh 1 chạm. */
   function applyToAll(fromLineId: string) {
     const src = state.get(fromLineId)
     if (!src) return
     setState((m) => {
       const next = new Map(m)
       for (const [id, cur] of next) {
-        next.set(id, { ...cur, selected: new Set(src.selected), fromDefault: false })
+        next.set(id, { ...cur, selected: [...src.selected], fromDefault: false })
       }
       return next
     })
     setDirty(true)
-  }
-
-  function toggle(lineId: string, code: string) {
-    const cur = state.get(lineId)
-    if (!cur) return
-    const selected = new Set(cur.selected)
-    if (selected.has(code)) selected.delete(code)
-    else selected.add(code)
-    patchLine(lineId, { selected, fromDefault: false })
   }
 
   async function save() {
@@ -125,10 +143,10 @@ export function LsxRoutePanel({
           routes: lines
             .map((l) => {
               const s = state.get(l.order_line_id)
-              if (!s || s.selected.size === 0) return null
+              if (!s || s.selected.length === 0) return null
               return {
                 order_line_id: l.order_line_id,
-                stages: [...s.selected],
+                stages: s.selected, // GIỮ thứ tự — server không ép lại
                 save_as_default: s.saveAsDefault || undefined,
               }
             })
@@ -158,8 +176,8 @@ export function LsxRoutePanel({
         <div>
           <h2 className="text-sm font-semibold">{title}</h2>
           <p className="text-xs text-zinc-500">
-            Mỗi loại SP đi qua các giai đoạn khác nhau — sổ sản lượng chỉ cho nhập giai
-            đoạn thuộc lộ trình đã chốt.
+            Mỗi loại SP một luồng riêng — chọn công đoạn rồi sắp thứ tự. Sổ sản lượng chỉ
+            cho nhập giai đoạn thuộc lộ trình đã chốt.
           </p>
         </div>
         {editable && (
@@ -178,19 +196,20 @@ export function LsxRoutePanel({
         {lines.map((l) => {
           const s = state.get(l.order_line_id)
           if (!s) return null
+          const available = stages.filter((st) => !s.selected.includes(st.code))
           return (
             <div key={l.order_line_id} className="px-4 py-3">
               <div className="mb-2 flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs text-zinc-400">{l.product_code}</span>
                 <span className="text-sm font-medium">{l.product_name}</span>
-                {l.stages === null && s.fromDefault && s.selected.size > 0 && (
+                {l.stages === null && s.fromDefault && s.selected.length > 0 && (
                   <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
                     {editable
                       ? 'đang theo mặc định SP — bấm Lưu để chốt cho lệnh'
                       : 'theo mặc định SP'}
                   </span>
                 )}
-                {l.stages === null && s.selected.size === 0 && editable && (
+                {l.stages === null && s.selected.length === 0 && editable && (
                   <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
                     chưa định hình
                   </span>
@@ -198,51 +217,90 @@ export function LsxRoutePanel({
               </div>
 
               {editable ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {stages.map((st) => {
-                    const on = s.selected.has(st.code)
-                    // Số thứ tự trong lộ trình = vị trí trong tập chọn, xếp theo
-                    // thứ tự danh mục (lộ trình là tập con của chuỗi chuẩn).
-                    const order = on
-                      ? stages
-                          .filter((x) => s.selected.has(x.code))
-                          .findIndex((x) => x.code === st.code) + 1
-                      : 0
-                    return (
-                      <button
-                        key={st.code}
-                        type="button"
-                        onClick={() => toggle(l.order_line_id, st.code)}
-                        className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                          on
-                            ? 'border-sky-600 bg-sky-600 text-white'
-                            : 'border-zinc-300 text-zinc-500 hover:border-zinc-400 dark:border-zinc-700'
-                        }`}
-                      >
-                        {on ? `${order}. ${st.label}` : st.label}
-                      </button>
-                    )
-                  })}
-                </div>
-              ) : s.selected.size > 0 ? (
-                // Chỉ-đọc: chỉ hiện các giai đoạn THUỘC lộ trình, dạng stepper có
-                // thứ tự — không bày cả danh mục làm mờ (gọn cho người xem/GĐ).
-                <ol className="flex flex-wrap items-center gap-y-1.5">
-                  {stages
-                    .filter((x) => s.selected.has(x.code))
-                    .map((st, idx) => (
-                      <li key={st.code} className="flex items-center">
-                        {idx > 0 && (
-                          <span className="mx-1 text-zinc-300 dark:text-zinc-600">→</span>
-                        )}
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 py-1 pr-2.5 pl-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
-                          <span className="flex size-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-semibold text-white">
-                            {idx + 1}
+                <div className="flex flex-col gap-2">
+                  {/* Lộ trình đã chọn — theo thứ tự, có nút dời chỗ + bỏ */}
+                  {s.selected.length > 0 ? (
+                    <ol className="flex flex-wrap items-center gap-1.5">
+                      {s.selected.map((code, idx) => (
+                        <li
+                          key={code}
+                          className="inline-flex items-center gap-1 rounded-full border border-sky-600 bg-sky-600 py-0.5 pr-1 pl-2 text-xs text-white"
+                        >
+                          <span className="font-semibold">{idx + 1}.</span>
+                          <span>{labelOf(code)}</span>
+                          <span className="ml-0.5 flex items-center">
+                            <button
+                              type="button"
+                              onClick={() => moveStage(l.order_line_id, code, -1)}
+                              disabled={idx === 0}
+                              className="px-1 leading-none opacity-80 hover:opacity-100 disabled:opacity-30"
+                              aria-label="Dời sớm hơn"
+                              title="Dời sớm hơn"
+                            >
+                              ‹
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveStage(l.order_line_id, code, 1)}
+                              disabled={idx === s.selected.length - 1}
+                              className="px-1 leading-none opacity-80 hover:opacity-100 disabled:opacity-30"
+                              aria-label="Dời muộn hơn"
+                              title="Dời muộn hơn"
+                            >
+                              ›
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeStage(l.order_line_id, code)}
+                              className="px-1 leading-none opacity-80 hover:opacity-100"
+                              aria-label="Bỏ công đoạn"
+                              title="Bỏ khỏi lộ trình"
+                            >
+                              ✕
+                            </button>
                           </span>
-                          {st.label}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-xs text-zinc-400">
+                      Chưa chọn công đoạn — bấm thêm bên dưới.
+                    </p>
+                  )}
+
+                  {/* Công đoạn còn lại — bấm để thêm vào cuối luồng */}
+                  {available.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-400 uppercase">Thêm:</span>
+                      {available.map((st) => (
+                        <button
+                          key={st.code}
+                          type="button"
+                          onClick={() => addStage(l.order_line_id, st.code)}
+                          className="rounded-full border border-dashed border-zinc-300 px-2.5 py-1 text-xs text-zinc-500 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700"
+                        >
+                          + {st.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : s.selected.length > 0 ? (
+                // Chỉ-đọc: stepper theo ĐÚNG thứ tự luồng đã chốt.
+                <ol className="flex flex-wrap items-center gap-y-1.5">
+                  {s.selected.map((code, idx) => (
+                    <li key={code} className="flex items-center">
+                      {idx > 0 && (
+                        <span className="mx-1 text-zinc-300 dark:text-zinc-600">→</span>
+                      )}
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 py-1 pr-2.5 pl-1 text-xs font-medium text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300">
+                        <span className="flex size-4 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-semibold text-white">
+                          {idx + 1}
                         </span>
-                      </li>
-                    ))}
+                        {labelOf(code)}
+                      </span>
+                    </li>
+                  ))}
                 </ol>
               ) : (
                 <span className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
@@ -264,12 +322,12 @@ export function LsxRoutePanel({
                     />
                     Lưu làm lộ trình mặc định cho SP này (lệnh sau tự kế thừa)
                   </label>
-                  {lines.length > 1 && s.selected.size > 0 && (
+                  {lines.length > 1 && s.selected.length > 0 && (
                     <button
                       type="button"
                       onClick={() => applyToAll(l.order_line_id)}
                       className="text-xs text-sky-600 hover:underline dark:text-sky-400"
-                      title="Chép lộ trình này sang mọi SP của lệnh (nhớ bấm Lưu)"
+                      title="Chép luồng này sang mọi SP của lệnh (nhớ bấm Lưu)"
                     >
                       ⧉ Áp cho tất cả SP
                     </button>
