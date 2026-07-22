@@ -70,12 +70,21 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   }
   // Manager cũng thấy "Việc của tổ" để soi từng tổ (board có picker).
   if (user.role === 'manager') caps.add('production.team')
-  // Màn điều hành (Tiến độ + Bảng tổng) = PHẦN RIÊNG CỦA GIÁM ĐỐC (user chốt
-  // 07/2026: giao diện GĐ duy nhất) — chỉ admin/manager; page cũng redirect
-  // nên NV vào thẳng URL cũng bị đẩy về. Kế hoạch xem Bảng tổng qua
-  // /planning/board (guard riêng theo isPlannerStaff/isSupplyStaff).
+  // Tiến độ ĐIỀU PHỐI (/production/progress — thao tác: resolve sự cố…) = phần
+  // riêng của Giám đốc/QL.
   if (user.role === 'admin' || user.role === 'manager') {
     caps.add('production.coordinate')
+  }
+  // BẢNG TỔNG tiến độ (/production/board — chỉ xem) nằm BÊN SẢN XUẤT; Kế hoạch
+  // + Cung ứng cũng cần xem nên vào workspace Sản xuất xem tại đây (giống Định
+  // hình planner cũng vào /production). Không còn bản mượn ở /planning/board.
+  if (
+    user.role === 'admin' ||
+    user.role === 'manager' ||
+    (await isPlannerStaff(user)) ||
+    (await isSupplyStaff(user))
+  ) {
+    caps.add('production.board')
   }
   return caps
 }

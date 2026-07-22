@@ -18,8 +18,10 @@ export type NavCapability =
   | 'production.record'
   /** Thành viên tổ xưởng — thấy màn Kanban "Việc của tổ". */
   | 'production.team'
-  /** Điều phối/quan sát toàn xưởng (quản đốc, planner, xem chéo) — thấy Tiến độ + Bảng tổng. */
+  /** Điều phối toàn xưởng (Giám đốc/QL) — thấy màn Tiến độ (thao tác sự cố…). */
   | 'production.coordinate'
+  /** Xem BẢNG TỔNG tiến độ (chỉ xem) bên Sản xuất — GĐ/QL + Kế hoạch + Cung ứng. */
+  | 'production.board'
 
 export type NavItem = {
   href: string
@@ -246,11 +248,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         // lập kế hoạch mua/đặt. Route /planning/* re-export view dùng chung → giữ
         // menu Cung ứng, không nhảy sang shell Sản xuất/Sales/Kho.
         heading: 'Kế hoạch sản xuất',
-        // Định hình SX KHÔNG nằm ở đây — nó thuộc workspace Sản xuất
-        // (/production/shaping, user chốt): Cung ứng chỉ giữ view phục vụ
-        // mua/đặt vật tư. Planner cần định hình thì chuyển sang ws Sản xuất.
+        // Định hình SX + Bảng tổng tiến độ KHÔNG nằm ở đây — thuộc workspace Sản
+        // xuất (/production/shaping, /production/board, user chốt): Kế hoạch/Cung
+        // ứng chuyển sang ws Sản xuất để định hình + xem tiến độ. Ở đây chỉ giữ
+        // view phục vụ mua/đặt vật tư.
         items: [
-          { href: '/planning/board', label: 'Bảng tổng tiến độ', icon: '▦' },
           { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
           { href: '/planning/docs', label: 'Phiếu kho', icon: '▥' },
         ],
@@ -338,11 +340,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: '▣',
             capability: 'production.coordinate',
           },
+          // Bảng tổng (chỉ xem) mở cho GĐ/QL + Kế hoạch + Cung ứng — họ vào
+          // workspace Sản xuất xem tại đây (không còn bản mượn /planning/board).
           {
             href: '/production/board',
             label: 'Bảng tổng tiến độ',
             icon: '▦',
-            capability: 'production.coordinate',
+            capability: 'production.board',
           },
         ],
       },
