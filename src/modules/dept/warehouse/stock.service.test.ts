@@ -36,6 +36,12 @@ vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findById: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({
+  departmentsRepo: { list: vi.fn() },
+}))
+vi.mock('@/modules/dept/supply/suppliers.service', () => ({
+  SUPPLY_DEPT_NAMES: new Set(['Kế Hoạch Sản Xuất-cung ứng', 'Cung Ứng - Mua Hàng']),
+}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
 import { stockService, smartLsxNeeds } from './stock.service'
@@ -54,6 +60,7 @@ import { isWarehouseUser } from './warehouse.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
 
@@ -67,6 +74,7 @@ beforeEach(() => {
   vi.mocked(warehousesRepo.mainId).mockResolvedValue('wh-main')
   vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc1', code: 'PNK-2026-0001' })
   vi.mocked(usersRepo.list).mockResolvedValue([])
+  vi.mocked(departmentsRepo.list).mockResolvedValue([])
   vi.mocked(stockInfoMany).mockResolvedValue([])
   // Mặc định: PO đang mở + LSX đang SX — case hợp lệ; test guard override riêng.
   vi.mocked(supplyRepo.poStatus).mockResolvedValue({
@@ -258,13 +266,19 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
     })
   })
 
-  it('FR-WMS-08: tồn rơi dưới min sau xuất → emit warehouse.stock.low', async () => {
+  it('FR-WMS-08: tồn rơi dưới min sau xuất → emit warehouse.stock.low cho admin/manager + phòng Cung ứng', async () => {
     vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
     vi.mocked(stockInfoMany).mockResolvedValue([
       { material_id: 'm1', code: 'VT-01', name: 'Nhôm', on_hand: 3, min_stock: 20 },
     ])
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd-sup', name: 'Cung Ứng - Mua Hàng' },
+      { id: 'd-kho', name: 'Kho' },
+    ] as never)
     vi.mocked(usersRepo.list).mockResolvedValue([
-      { id: 'boss', role: 'manager' },
+      { id: 'boss', role: 'manager', department_id: null },
+      { id: 'sup1', role: 'employee', department_id: 'd-sup' }, // NV Cung ứng
+      { id: 'kho1', role: 'employee', department_id: 'd-kho' }, // NV Kho — không nhận
     ] as never)
 
     await stockService.createIssueDoc(admin, {
@@ -281,7 +295,8 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
     }
     expect(evt).toBeTruthy()
     expect(evt.on_hand).toBe(3)
-    expect(evt.notify_ids).toEqual(['boss'])
+    // manager + nhân viên phòng Cung ứng; NV phòng khác bị loại. Không dùng excludeId.
+    expect(evt.notify_ids).toEqual(['boss', 'sup1'])
   })
 })
 
