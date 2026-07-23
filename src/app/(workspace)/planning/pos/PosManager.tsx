@@ -34,7 +34,8 @@ type PoStatus =
 export type Po = {
   id: string
   code: string
-  production_order_id: string
+  /** null = PO ngoài LSX (0076). */
+  production_order_id: string | null
   supplier_id: string
   status: PoStatus
   currency: string
@@ -48,7 +49,8 @@ export type Po = {
   approved_at?: string | null
   ordered_at?: string | null
   supplier_name: string
-  lsx_code: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
   order_code: string | null
   // Tổng tiền (Σ dòng) — bơm từ page cho cột Giá trị ở danh sách.
   total?: number
@@ -219,6 +221,8 @@ export function PosManager({
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'late' | PoStatus>('all')
   const [supplierFilter, setSupplierFilter] = useState('all')
+  // Loại đơn: theo lệnh SX / ngoài LSX (0076).
+  const [typeFilter, setTypeFilter] = useState<'all' | 'lsx' | 'standalone'>('all')
 
   // PO quá hẹn giao NCC — chỉ hiển thị (notification đẩy để GĐ2, xem late-risk.ts).
   const today = new Date().toISOString().slice(0, 10)
@@ -231,11 +235,16 @@ export function PosManager({
         if (assessPoLate(p, today) !== 'overdue') return false
       } else if (statusFilter !== 'all' && p.status !== statusFilter) return false
       if (supplierFilter !== 'all' && p.supplier_id !== supplierFilter) return false
-      if (ql && !`${p.code} ${p.supplier_name} ${p.lsx_code}`.toLowerCase().includes(ql))
+      if (typeFilter === 'lsx' && !p.lsx_code) return false
+      if (typeFilter === 'standalone' && p.lsx_code) return false
+      if (
+        ql &&
+        !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''}`.toLowerCase().includes(ql)
+      )
         return false
       return true
     })
-  }, [pos, q, statusFilter, supplierFilter, today])
+  }, [pos, q, statusFilter, supplierFilter, typeFilter, today])
 
   const stats = useMemo(() => {
     let pending = 0
@@ -303,7 +312,7 @@ export function PosManager({
     } else {
       const ok = await confirm({
         title: `Duyệt đơn đặt ${po.code}?`,
-        description: `NCC: ${po.supplier_name} · LSX ${po.lsx_code}. Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).`,
+        description: `NCC: ${po.supplier_name} · ${po.lsx_code ? `LSX ${po.lsx_code}` : 'đơn ngoài LSX'}. Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).`,
         confirmLabel: 'Duyệt',
       })
       if (!ok) return
@@ -366,15 +375,20 @@ export function PosManager({
       key: 'lsx',
       header: 'Chuỗi liên kết',
       width: '190px',
-      cell: (p) => (
-        <RefChain
-          size="sm"
-          nodes={[
-            ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
-            { label: 'LSX', value: p.lsx_code },
-          ]}
-        />
-      ),
+      cell: (p) =>
+        p.lsx_code ? (
+          <RefChain
+            size="sm"
+            nodes={[
+              ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
+              { label: 'LSX', value: p.lsx_code },
+            ]}
+          />
+        ) : (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            Ngoài LSX
+          </span>
+        ),
     },
     {
       key: 'total',
@@ -505,7 +519,7 @@ export function PosManager({
           { label: 'Đơn đặt vật tư' },
         ]}
         title="Đơn đặt vật tư (PO)"
-        description="Mỗi đơn = 1 NCC + 1 LSX (BR-06). GĐ duyệt xong mới gửi NCC (BR-05); về hàng do Kho ghi nhận."
+        description="Mỗi đơn = 1 NCC · gắn 1 LSX hoặc ngoài LSX (tiêu hao/dùng chung). GĐ duyệt xong mới gửi NCC (BR-05); về hàng do Kho ghi nhận."
         actions={
           canEdit && (
             <Link href="/planning/pos/new" className={btnPrimary}>
@@ -562,6 +576,15 @@ export function PosManager({
                 options={[
                   { value: 'all', label: 'Mọi NCC' },
                   ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+                ]}
+              />
+              <ToolbarSelect
+                value={typeFilter}
+                onChange={(v) => setTypeFilter(v)}
+                options={[
+                  { value: 'all' as const, label: 'Mọi loại đơn' },
+                  { value: 'lsx' as const, label: 'Theo lệnh SX' },
+                  { value: 'standalone' as const, label: 'Ngoài LSX' },
                 ]}
               />
             </>
@@ -673,6 +696,8 @@ function PoForm({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [lsxId, setLsxId] = useState(initial?.po.production_order_id ?? '')
+  // PO ngoài LSX (0076): sửa/nhân bản giữ nguyên loại — không bắt chọn LSX.
+  const standalone = initial != null && initial.po.production_order_id == null
   const [supplierId, setSupplierId] = useState(initial?.po.supplier_id ?? '')
   const [needs, setNeeds] = useState<Need[]>([])
   const [rows, setRows] = useState<Row[]>(
@@ -809,7 +834,7 @@ function PoForm({
 
   const usedIds = new Set(rows.map((r) => r.material_id))
   const invalid =
-    !lsxId ||
+    (!standalone && !lsxId) ||
     rows.length === 0 ||
     rows.length !== usedIds.size ||
     rows.some(
@@ -831,7 +856,7 @@ function PoForm({
         {
           method: isEdit ? 'PATCH' : 'POST',
           body: {
-            production_order_id: lsxId,
+            production_order_id: standalone ? null : lsxId,
             supplier_id: String(fd.get('supplier_id') ?? ''),
             currency: String(fd.get('currency') ?? 'VND'),
             vat_rate: String(fd.get('vat_rate') ?? '').trim()
@@ -869,11 +894,11 @@ function PoForm({
     <form onSubmit={handle} className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">
-          LSX <span className="text-red-500">*</span>
+          LSX {!standalone && <span className="text-red-500">*</span>}
           {initial ? (
-            // Sửa/nhân bản: LSX giữ nguyên (BR-06 — mỗi PO gắn đúng 1 LSX).
+            // Sửa/nhân bản: giữ nguyên LSX (hoặc loại "ngoài LSX" — 0076).
             <div className={`${inputCls} bg-zinc-100 font-mono dark:bg-zinc-800`}>
-              {initial.po.lsx_code}
+              {initial.po.lsx_code ?? 'Ngoài LSX'}
             </div>
           ) : (
             <select
@@ -1377,10 +1402,10 @@ export function PoDetail({
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
   const showReceived = !['pending_approval', 'approved', 'cancelled'].includes(po.status)
 
-  // Chuỗi liên kết: Đơn hàng → LSX → PO này (bỏ Đơn hàng nếu PO không gắn đơn).
+  // Chuỗi liên kết: Đơn hàng → LSX → PO này (bỏ node không có; PO ngoài LSX chỉ còn chính nó).
   const chainNodes: ChainNode[] = [
     ...(po.order_code ? [{ label: 'Đơn hàng', value: po.order_code }] : []),
-    { label: 'Lệnh SX', value: po.lsx_code },
+    ...(po.lsx_code ? [{ label: 'Lệnh SX', value: po.lsx_code }] : []),
     { label: 'Đơn đặt vật tư', value: po.code, current: true },
   ]
 

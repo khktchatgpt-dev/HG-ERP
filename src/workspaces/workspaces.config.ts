@@ -197,6 +197,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
           { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: '▥' },
           { href: '/warehouse/stock', label: 'Tồn kho', icon: '▦' },
+          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: '▧' },
           { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
         ],
       },
@@ -242,6 +243,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/planning', label: 'Trang chủ', icon: '◧' },
           { href: '/planning/pos', label: 'Đơn đặt vật tư', icon: '▩' },
+          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: '▤' },
           { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◒' },
         ],
       },

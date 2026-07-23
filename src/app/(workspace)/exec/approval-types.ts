@@ -10,7 +10,8 @@ export type PendingPo = {
   id: string
   code: string
   supplier_name: string
-  lsx_code: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
   order_code: string | null
   expected_at: string | null
   created_at: string

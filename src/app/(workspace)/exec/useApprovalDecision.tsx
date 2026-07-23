@@ -50,7 +50,7 @@ export function targetPo(
     kind: 'po',
     id: p.id,
     code: p.code,
-    label: `${p.supplier_name} · LSX ${p.lsx_code}`,
+    label: `${p.supplier_name} · ${p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX'}`,
   }
 }
 

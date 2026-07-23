@@ -11,7 +11,8 @@ export type OpenPo = {
   code: string
   status: string
   supplier_name: string
-  lsx_code: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
 }
 
 export type PoLineStatus = {
@@ -53,7 +54,7 @@ export const supplyRepo = {
         code: r.code as string,
         status: r.status as string,
         supplier_name: (sp as { name?: string } | null)?.name ?? '?',
-        lsx_code: (lx as { code?: string } | null)?.code ?? '?',
+        lsx_code: (lx as { code?: string } | null)?.code ?? null,
       }
     })
   },
@@ -96,8 +97,10 @@ export const supplyRepo = {
   },
 
   /**
-   * Tính lại trạng thái PO sau khi nhập kho: mọi dòng missing ≤ 0 → received,
-   * ngược lại partial (view là nguồn đối chiếu — thiết kế §7).
+   * Tính lại trạng thái PO sau khi nhập kho / TRẢ HÀNG NCC (0080): mọi dòng
+   * missing ≤ 0 → received, ngược lại partial (view là nguồn đối chiếu — §7).
+   * 'received' nằm trong danh sách cập nhật để phiếu trả kéo PO quay lại
+   * partial (NCC giao bù); vẫn không đè cancelled/pending_approval.
    */
   async refreshStatusFromReceipts(poId: string): Promise<'partial' | 'received' | null> {
     const lines = await this.lineStatus(poId)
@@ -108,9 +111,33 @@ export const supplyRepo = {
       .from('supply_purchase_orders')
       .update({ status })
       .eq('id', poId)
-      .in('status', [...RECEIVABLE]) // không đè lên cancelled/pending_approval
+      .in('status', [...RECEIVABLE, 'received'])
     if (error) throw new Error(error.message)
     return status
+  },
+
+  /**
+   * PO trả hàng NCC được (⑤): đã có hàng về — partial hoặc received.
+   * Kèm tên NCC để phiếu xuất trả ghi đúng người nhận (mẫu 02-VT).
+   */
+  async listReturnablePos(): Promise<
+    { id: string; code: string; status: string; supplier_name: string }[]
+  > {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('id, code, status, supplier:supply_suppliers(name)')
+      .in('status', ['partial', 'received'])
+      .order('created_at', { ascending: false })
+      .limit(200)
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const sp = Array.isArray(r.supplier) ? r.supplier[0] : r.supplier
+      return {
+        id: r.id as string,
+        code: r.code as string,
+        status: r.status as string,
+        supplier_name: (sp as { name?: string } | null)?.name ?? '?',
+      }
+    })
   },
 
   /**
@@ -136,6 +163,52 @@ export const supplyRepo = {
       if (excludePoId && p.id === excludePoId) continue
       if ((RECEIVABLE as readonly string[]).includes(p.status)) committed.push(p.id)
       else if (p.status === 'pending_approval') pending.push(p.id)
+    }
+    const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
+      const e = out.get(mid) ?? { ordered: 0, pending: 0 }
+      e[k] += v
+      out.set(mid, e)
+    }
+    if (committed.length > 0) {
+      const { data } = await db()
+        .from('supply_po_line_status')
+        .select('material_id, qty_missing')
+        .in('po_id', committed)
+      for (const r of (data as { material_id: string; qty_missing: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'ordered', Math.max(Number(r.qty_missing) || 0, 0))
+      }
+    }
+    if (pending.length > 0) {
+      const { data } = await db()
+        .from('supply_purchase_order_lines')
+        .select('material_id, qty_ordered')
+        .in('po_id', pending)
+      for (const r of (data as { material_id: string; qty_ordered: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'pending', Number(r.qty_ordered) || 0)
+      }
+    }
+    return out
+  },
+
+  /**
+   * Đã đặt / chờ duyệt trên MỌI PO đang mở (cả theo LSX lẫn ngoài LSX) — gộp
+   * theo vật tư. Nguồn "vị thế tồn" cho mua bù tồn (nghiệp vụ ①): ordered =
+   * Σ qty_missing của PO đã duyệt; pending = Σ qty_ordered PO chờ duyệt (cảnh báo).
+   */
+  async orderedPendingAll(): Promise<Map<string, { ordered: number; pending: number }>> {
+    const out = new Map<string, { ordered: number; pending: number }>()
+    const { data: pos } = await db()
+      .from('supply_purchase_orders')
+      .select('id, status')
+      .in('status', [...RECEIVABLE, 'pending_approval'])
+      .limit(2000)
+    const committed: string[] = []
+    const pending: string[] = []
+    for (const p of (pos as { id: string; status: string }[] | null) ?? []) {
+      if (p.status === 'pending_approval') pending.push(p.id)
+      else committed.push(p.id)
     }
     const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
       const e = out.get(mid) ?? { ordered: 0, pending: 0 }

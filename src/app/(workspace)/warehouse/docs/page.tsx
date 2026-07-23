@@ -27,6 +27,7 @@ export default async function WarehouseDocsPage() {
         code: m.code,
         name: m.name,
         unit: m.unit,
+        barcode: m.barcode,
         shelf_location: m.shelf_location,
       }))}
       pos={pos}

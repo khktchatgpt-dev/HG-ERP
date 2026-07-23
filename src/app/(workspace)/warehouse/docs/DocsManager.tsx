@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
@@ -47,9 +47,18 @@ type MaterialOption = {
   code: string
   name: string
   unit: string
+  /** Mã vạch NCC (0078) — ScanInput khớp cả code lẫn barcode. */
+  barcode: string | null
   shelf_location: string | null
 }
-type PoOption = { id: string; code: string; status: string; supplier_name: string; lsx_code: string }
+type PoOption = {
+  id: string
+  code: string
+  status: string
+  supplier_name: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
+}
 type LsxOption = { id: string; code: string; customer_name: string }
 
 type PoLine = {
@@ -81,6 +90,19 @@ type Row = {
   qty_ordered: number | null
   shelf_location: string
   note: string
+}
+
+/** Dòng biên bản kiểm kê (0077) — API docDetail trả kèm khi kind='stocktake'. */
+type StocktakeLine = {
+  id: string
+  material_id: string
+  system_qty: number
+  counted_qty: number
+  diff: number
+  note: string | null
+  material_code: string | null
+  material_name: string | null
+  material_unit: string | null
 }
 
 const KIND_LABEL: Record<DocKind, string> = {
@@ -117,7 +139,12 @@ export function DocsManager({
   const [busy, setBusy] = useState(false)
   const [openReceipt, setOpenReceipt] = useState(false)
   const [openIssue, setOpenIssue] = useState(false)
-  const [viewing, setViewing] = useState<{ doc: Doc; lines: DocLine[] } | null>(null)
+  const [openReturn, setOpenReturn] = useState(false)
+  const [viewing, setViewing] = useState<{
+    doc: Doc
+    lines: DocLine[]
+    stocktakeLines: StocktakeLine[]
+  } | null>(null)
 
   const [q, setQ] = useState('')
   const [kindFilter, setKindFilter] = useState<'all' | DocKind>('all')
@@ -140,8 +167,10 @@ export function DocsManager({
   async function openView(doc: Doc) {
     setBusy(true)
     try {
-      const data = await api<{ lines: DocLine[] }>(`/api/dept/warehouse/docs/${doc.id}`)
-      setViewing({ doc, lines: data.lines })
+      const data = await api<{ lines: DocLine[]; stocktake_lines?: StocktakeLine[] }>(
+        `/api/dept/warehouse/docs/${doc.id}`,
+      )
+      setViewing({ doc, lines: data.lines, stocktakeLines: data.stocktake_lines ?? [] })
     } catch (e) {
       toast.error('Không tải được phiếu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -222,6 +251,12 @@ export function DocsManager({
         actions={
           canEdit && (
             <>
+              <a href="/warehouse/stocktake" className={btnSecondary}>
+                ▧ Kiểm kê
+              </a>
+              <button onClick={() => setOpenReturn(true)} className={btnSecondary}>
+                ↩ Trả NCC
+              </button>
               <button onClick={() => setOpenIssue(true)} className={btnSecondary}>
                 − Phiếu xuất
               </button>
@@ -334,6 +369,29 @@ export function DocsManager({
         )}
       </Modal>
 
+      {/* Trả hàng NCC (⑤, 0080) */}
+      <Modal
+        open={openReturn}
+        onClose={() => setOpenReturn(false)}
+        title="Trả hàng NCC (phiếu xuất trả)"
+        maxWidth="sm:max-w-4xl"
+      >
+        {openReturn && (
+          <ReturnForm
+            onDone={(code, poStatus) => {
+              setOpenReturn(false)
+              toast.success(
+                `Đã lập ${code}`,
+                poStatus === 'partial'
+                  ? 'PO quay lại "Về một phần" — chờ NCC giao bù'
+                  : undefined,
+              )
+              router.refresh()
+            }}
+          />
+        )}
+      </Modal>
+
       {/* Chi tiết phiếu */}
       <Modal
         open={!!viewing}
@@ -341,7 +399,13 @@ export function DocsManager({
         title={viewing ? `${viewing.doc.code} — ${KIND_LABEL[viewing.doc.kind]}` : ''}
         maxWidth="sm:max-w-3xl"
       >
-        {viewing && <DocDetail doc={viewing.doc} lines={viewing.lines} />}
+        {viewing && (
+          <DocDetail
+            doc={viewing.doc}
+            lines={viewing.lines}
+            stocktakeLines={viewing.stocktakeLines}
+          />
+        )}
       </Modal>
     </div>
   )
@@ -361,14 +425,17 @@ function ScanInput({
   return (
     <input
       ref={ref}
-      placeholder="⌨ Quét / gõ mã vật tư rồi Enter…"
+      placeholder="⌨ Quét mã vạch / gõ mã vật tư rồi Enter…"
       className={`${inputCls} max-w-xs font-mono`}
       onKeyDown={(e) => {
         if (e.key !== 'Enter') return
         e.preventDefault()
         const code = e.currentTarget.value.trim().toLowerCase()
         if (!code) return
-        const m = materials.find((x) => x.code.toLowerCase() === code)
+        // Khớp mã nội bộ TRƯỚC, rồi tới barcode NCC (0078) — máy scan = bàn phím.
+        const m =
+          materials.find((x) => x.code.toLowerCase() === code) ??
+          materials.find((x) => x.barcode?.toLowerCase() === code)
         if (m) {
           onHit(m)
           e.currentTarget.value = ''
@@ -487,7 +554,7 @@ function ReceiptForm({
             <option value="">Mua ngoài (không theo đơn đặt)</option>
             {pos.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.code} — {p.supplier_name} (LSX {p.lsx_code})
+                {p.code} — {p.supplier_name} ({p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX'})
               </option>
             ))}
           </select>
@@ -982,9 +1049,284 @@ function IssueForm({
   )
 }
 
+// ── Form trả hàng NCC (⑤, 0080) ─────────────────────────────────────────────
+
+type ReturnablePo = { id: string; code: string; status: string; supplier_name: string }
+
+/**
+ * Phiếu XUẤT TRẢ NCC: chọn PO đã có hàng về (partial/received) → liệt kê dòng
+ * đã về → nhập SL trả (≤ đã về) + lý do. Server ghi movement out gắn po_line_id
+ * → view đối chiếu trừ "đã về" → PO có thể quay lại partial (NCC giao bù).
+ */
+function ReturnForm({
+  onDone,
+}: {
+  onDone: (code: string, poStatus: string | null) => void
+}) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [pos, setPos] = useState<ReturnablePo[] | null>(null)
+  const [poId, setPoId] = useState('')
+  const [lines, setLines] = useState<PoLine[]>([])
+  const [qtys, setQtys] = useState<Record<string, number | ''>>({}) // key = po_line_id
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [reason, setReason] = useState('')
+
+  useEffect(() => {
+    let alive = true
+    api<{ pos: ReturnablePo[] }>('/api/dept/warehouse/po-open?returnable=1')
+      .then((r) => alive && setPos(r.pos))
+      .catch(() => alive && setPos([]))
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  async function selectPo(id: string) {
+    setPoId(id)
+    setLines([])
+    setQtys({})
+    if (!id) return
+    setBusy(true)
+    try {
+      const { lines } = await api<{ lines: PoLine[] }>(
+        `/api/dept/warehouse/po-open?po_id=${id}`,
+      )
+      setLines(lines.filter((l) => l.qty_received > 0))
+    } catch (e) {
+      toast.error('Không tải được dòng PO', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const payload = lines
+    .filter((l) => Number(qtys[l.id]) > 0)
+    .map((l) => ({
+      material_id: l.material_id,
+      po_line_id: l.id,
+      qty: Number(qtys[l.id]),
+      note: (notes[l.id] ?? '').trim() || null,
+    }))
+  const overLine = lines.find((l) => Number(qtys[l.id] ?? 0) > l.qty_received)
+  const invalid = !poId || !reason.trim() || payload.length === 0 || !!overLine
+
+  async function submit() {
+    if (invalid || busy) return
+    setBusy(true)
+    try {
+      const r = await api<{ code: string; po_status: string | null }>(
+        '/api/dept/warehouse/docs/return',
+        {
+          method: 'POST',
+          body: { po_id: poId, reason: reason.trim(), lines: payload },
+        },
+      )
+      onDone(r.code, r.po_status)
+    } catch (e) {
+      toast.error('Lập phiếu trả thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="flex flex-col gap-1 text-sm">
+          Đơn đặt (PO) đã có hàng về <span className="text-red-500">*</span>
+          <select
+            value={poId}
+            onChange={(e) => void selectPo(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">
+              {pos === null ? 'Đang tải…' : '— chọn PO cần trả hàng —'}
+            </option>
+            {(pos ?? []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.code} — {p.supplier_name} (
+                {p.status === 'received' ? 'về đủ' : 'về một phần'})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Lý do trả <span className="text-red-500">*</span>
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            placeholder="Hàng lỗi sơn, sai quy cách…"
+            className={inputCls}
+          />
+        </label>
+      </div>
+
+      {poId && lines.length === 0 && !busy && (
+        <p className="py-4 text-center text-xs text-zinc-400">
+          PO này chưa có dòng nào đã về (hoặc đã trả hết).
+        </p>
+      )}
+      {lines.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+                <th className="py-2 pr-2">Vật tư</th>
+                <th className="w-24 py-2 pr-2 text-right">Đã về</th>
+                <th className="w-28 py-2 pr-2">SL trả</th>
+                <th className="py-2 pr-2">Ghi chú dòng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => {
+                const over = Number(qtys[l.id] ?? 0) > l.qty_received
+                return (
+                  <tr key={l.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                    <td className="py-1.5 pr-2">
+                      <span className="font-mono text-xs text-zinc-400">
+                        {l.material_code}
+                      </span>{' '}
+                      {l.material_name}
+                    </td>
+                    <td className="py-1.5 pr-2 text-right tabular-nums">
+                      {l.qty_received} {l.material_unit}
+                    </td>
+                    <td className="py-1.5 pr-2">
+                      <input
+                        type="number"
+                        min={0}
+                        max={l.qty_received}
+                        step="0.01"
+                        value={qtys[l.id] ?? ''}
+                        onChange={(e) =>
+                          setQtys((m) => ({
+                            ...m,
+                            [l.id]: e.target.value === '' ? '' : Number(e.target.value),
+                          }))
+                        }
+                        className={`${inputCls} tabular-nums ${over ? 'border-red-500' : ''}`}
+                        aria-label={`SL trả ${l.material_name}`}
+                      />
+                      {over && (
+                        <span className="text-[10px] text-red-600">vượt số đã về</span>
+                      )}
+                    </td>
+                    <td className="py-1.5 pr-2">
+                      <input
+                        value={notes[l.id] ?? ''}
+                        maxLength={500}
+                        onChange={(e) =>
+                          setNotes((m) => ({ ...m, [l.id]: e.target.value }))
+                        }
+                        className={inputCls}
+                        aria-label={`Ghi chú ${l.material_name}`}
+                      />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="text-xs text-zinc-400">
+        Phiếu trả = phiếu xuất 02-VT, trừ tồn ngay; số &quot;đã về&quot; của dòng PO giảm
+        tương ứng — PO về đủ sẽ quay lại &quot;Về một phần&quot; chờ NCC giao bù.
+      </p>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={busy || invalid}
+          onClick={() => void submit()}
+          className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+        >
+          {busy && <Spinner size={14} />}↩ Lập phiếu trả NCC
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ── Chi tiết phiếu ──────────────────────────────────────────────────────────
 
-function DocDetail({ doc, lines }: { doc: Doc; lines: DocLine[] }) {
+function DocDetail({
+  doc,
+  lines,
+  stocktakeLines = [],
+}: {
+  doc: Doc
+  lines: DocLine[]
+  stocktakeLines?: StocktakeLine[]
+}) {
+  // Phiếu KK: hiển thị BIÊN BẢN đầy đủ (mọi dòng đếm) thay vì movements (chỉ dòng lệch).
+  if (doc.kind === 'stocktake') {
+    return (
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+          <Badge tone={KIND_TONE[doc.kind]}>{KIND_LABEL[doc.kind]}</Badge>
+          <span>Ngày: {new Date(doc.created_at).toLocaleString('vi-VN')}</span>
+          {doc.created_by_name && <span>· Người lập: {doc.created_by_name}</span>}
+          {doc.reason && <span>· Lý do: {doc.reason}</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+                <th className="py-2 pr-2">Vật tư</th>
+                <th className="w-24 py-2 pr-2 text-right">Tồn sổ</th>
+                <th className="w-24 py-2 pr-2 text-right">Đếm thực tế</th>
+                <th className="w-24 py-2 pr-2 text-right">Chênh lệch</th>
+                <th className="py-2">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocktakeLines.map((l) => (
+                <tr key={l.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                  <td className="py-1.5 pr-2">
+                    <span className="font-mono text-xs text-zinc-400">
+                      {l.material_code}
+                    </span>{' '}
+                    {l.material_name}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right text-zinc-500">
+                    {l.system_qty.toLocaleString('vi-VN')}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right font-medium">
+                    {l.counted_qty.toLocaleString('vi-VN')} {l.material_unit}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {l.diff === 0 ? (
+                      <span className="text-green-600 dark:text-green-400">khớp ✓</span>
+                    ) : (
+                      <span
+                        className={
+                          'font-semibold ' +
+                          (l.diff > 0
+                            ? 'text-amber-600 dark:text-amber-500'
+                            : 'text-red-600 dark:text-red-400')
+                        }
+                      >
+                        {l.diff > 0 ? '+' : ''}
+                        {l.diff.toLocaleString('vi-VN')}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-zinc-500">{l.note ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-zinc-400">
+          {stocktakeLines.filter((l) => l.diff !== 0).length} dòng lệch sổ đã sinh điều
+          chỉnh tồn (ref &quot;adjust&quot;) — tồn sau kiểm = số đếm thực tế.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">

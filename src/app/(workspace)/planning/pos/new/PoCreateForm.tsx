@@ -71,6 +71,22 @@ type Need = {
   source?: 'components' | 'bom'
 }
 
+/** Gợi ý mua bù tồn cho PO ngoài LSX (nghiệp vụ ①) — API /dept/supply/reorder. */
+type ReorderItem = {
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  available: number
+  ordered: number
+  pending: number
+  threshold: number
+  position: number
+  suggest: number
+  has_pending: boolean
+  default_supplier_id: string | null
+}
+
 /** So giá khi soạn đơn (FR-SUP-06) — API /dept/supply/price-compare. */
 type PriceOffer = {
   supplier_id: string
@@ -148,6 +164,8 @@ export function PoCreateForm({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
 
+  /** 'lsx' = PO theo lệnh SX; 'standalone' = PO ngoài LSX (tiêu hao/dùng chung — 0076). */
+  const [poType, setPoType] = useState<'lsx' | 'standalone'>('lsx')
   const [lsxId, setLsxId] = useState('')
   const [supplierId, setSupplierId] = useState(
     defaultSupplierId && suppliers.some((s) => s.id === defaultSupplierId)
@@ -163,6 +181,9 @@ export function PoCreateForm({
 
   const [needs, setNeeds] = useState<Need[]>([])
   const [loadingNeeds, setLoadingNeeds] = useState(false)
+  // Ngoài LSX: gợi ý mua bù tồn (nạp 1 lần khi chuyển chế độ).
+  const [reorder, setReorder] = useState<ReorderItem[] | null>(null)
+  const [loadingReorder, setLoadingReorder] = useState(false)
   const [priceMap, setPriceMap] = useState<Record<string, PriceCompareEntry>>({})
   const [lines, setLines] = useState<Line[]>([])
   const [filter, setFilter] = useState('')
@@ -331,7 +352,43 @@ export function PoCreateForm({
         Number(l.qty) > 0 &&
         (!hasQty2(l.profile) || (l.qty2 !== '' && Number(l.qty2) > 0)),
     )
-  const invalid = !lsxId || !supplierId || !linesOk
+  const invalid = (poType === 'lsx' && !lsxId) || !supplierId || !linesOk
+
+  /** Đổi loại đơn: sang "ngoài LSX" thì bỏ LSX + nhu cầu BOM, nạp gợi ý bù tồn. */
+  function selectPoType(t: 'lsx' | 'standalone') {
+    setPoType(t)
+    if (t === 'standalone') {
+      setLsxId('')
+      setNeeds([])
+      if (reorder === null) void loadReorder()
+    }
+  }
+
+  /** Vật tư dưới ngưỡng đặt lại (①) — lỗi thì im lặng, vẫn tìm kho tay được. */
+  async function loadReorder() {
+    setLoadingReorder(true)
+    try {
+      const data = await api<{ items: ReorderItem[] }>('/api/dept/supply/reorder')
+      setReorder(data.items)
+      void loadPrices(data.items.map((i) => i.material_id))
+    } catch {
+      setReorder([])
+    } finally {
+      setLoadingReorder(false)
+    }
+  }
+
+  function addFromReorder(it: ReorderItem) {
+    const m = matById.get(it.material_id)
+    if (!m) return
+    pushLine(m, { suggest: it.suggest, available: it.available })
+  }
+
+  function addAllReorder() {
+    for (const it of reorder ?? []) {
+      if (it.suggest > 0 && !usedIds.has(it.material_id)) addFromReorder(it)
+    }
+  }
 
   // Giá khớp chào NCC — informational, không chặn gửi.
   const offMatch = lines.filter((l) => {
@@ -344,7 +401,15 @@ export function PoCreateForm({
 
   // Lọc vùng A: nhu cầu khớp filter + vật tư kho ngoài BOM (tối đa 6 gợi ý).
   const q = filter.trim().toLowerCase()
-  const needIds = new Set(needs.map((n) => n.material_id))
+  const reorderItems = poType === 'standalone' ? (reorder ?? []) : []
+  const filteredReorder = q
+    ? reorderItems.filter((i) => `${i.code} ${i.name}`.toLowerCase().includes(q))
+    : reorderItems
+  const needIds = new Set(
+    poType === 'lsx'
+      ? needs.map((n) => n.material_id)
+      : reorderItems.map((i) => i.material_id),
+  )
   const filteredNeeds = q
     ? needs.filter((n) =>
         `${n.material_code} ${n.material_name}`.toLowerCase().includes(q),
@@ -368,7 +433,7 @@ export function PoCreateForm({
       const { po } = await api<{ po: { code: string } }>('/api/dept/supply/pos', {
         method: 'POST',
         body: {
-          production_order_id: lsxId,
+          production_order_id: poType === 'lsx' ? lsxId : null,
           supplier_id: supplierId,
           currency,
           vat_rate: vat.trim() ? Number(vat) : null,
@@ -410,7 +475,7 @@ export function PoCreateForm({
           { label: 'Tạo đơn đặt' },
         ]}
         title="Tạo đơn đặt vật tư"
-        description="Chọn LSX + NCC → thêm vật tư (bấm + ở nhu cầu BOM hoặc tìm kho). Chọn vật tư tự điền cấu hình theo Loại quy đổi A/B/C — chỉ nhập SL, kg cân thực, đơn giá. Mỗi đơn = 1 NCC + 1 LSX (BR-06)."
+        description="Theo LSX: chọn lệnh → thêm từ nhu cầu BOM. Ngoài LSX: mua tiêu hao/dùng chung, tìm thẳng từ kho. Chọn vật tư tự điền cấu hình theo Loại quy đổi A/B/C — chỉ nhập SL, kg cân thực, đơn giá. Mỗi đơn = 1 NCC."
         actions={
           <Link
             href="/planning/pos"
@@ -421,33 +486,68 @@ export function PoCreateForm({
         }
       />
 
-      {/* Bối cảnh: LSX + NCC + hẹn giao */}
+      {/* Bối cảnh: loại đơn + LSX + NCC + hẹn giao */}
       <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_150px]">
-          <label className="flex flex-col gap-1 text-sm">
-            <span>
-              LSX <span className="text-red-500">*</span>
-            </span>
-            <select
-              value={lsxId}
-              onChange={(e) => void selectLsx(e.target.value)}
-              className={inputCls}
+        {/* Loại đơn: theo lệnh SX / ngoài LSX (0076) */}
+        <div className="mb-3 inline-flex rounded-lg border border-zinc-200 p-0.5 text-[13px] dark:border-zinc-700">
+          {(
+            [
+              ['lsx', 'Theo lệnh sản xuất'],
+              ['standalone', 'Ngoài LSX (tiêu hao / dùng chung)'],
+            ] as const
+          ).map(([t, label]) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => selectPoType(t)}
+              className={
+                'rounded-md px-3 py-1 font-medium transition-colors ' +
+                (poType === t
+                  ? 'bg-sky-600 text-white'
+                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
+              }
             >
-              <option value="">— chọn LSX đã duyệt —</option>
-              {lsxs.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.code} — {l.customer_name}
-                </option>
-              ))}
-            </select>
-            {lsx && (
-              <span className="text-xs text-zinc-400">
-                Đơn hàng <b className="font-mono text-zinc-500">{lsx.order_code}</b>
-                {needs.length > 0 &&
-                  ` · ${needs.length} vật tư trong BOM · ${needSuggestCount} cần mua`}
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-[1fr_1fr_150px]">
+          {poType === 'lsx' ? (
+            <label className="flex flex-col gap-1 text-sm">
+              <span>
+                LSX <span className="text-red-500">*</span>
               </span>
-            )}
-          </label>
+              <select
+                value={lsxId}
+                onChange={(e) => void selectLsx(e.target.value)}
+                className={inputCls}
+              >
+                <option value="">— chọn LSX đã duyệt —</option>
+                {lsxs.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.code} — {l.customer_name}
+                  </option>
+                ))}
+              </select>
+              {lsx && (
+                <span className="text-xs text-zinc-400">
+                  Đơn hàng <b className="font-mono text-zinc-500">{lsx.order_code}</b>
+                  {needs.length > 0 &&
+                    ` · ${needs.length} vật tư trong BOM · ${needSuggestCount} cần mua`}
+                </span>
+              )}
+            </label>
+          ) : (
+            <div className="flex flex-col gap-1 text-sm">
+              <span className="text-zinc-500">Loại đơn</span>
+              <div className="flex h-[30px] items-center rounded-md border border-dashed border-zinc-300 px-2 text-[13px] text-zinc-500 dark:border-zinc-700">
+                Ngoài LSX — không gắn lệnh sản xuất
+              </div>
+              <span className="text-xs text-zinc-400">
+                Mua vật tư tiêu hao/dùng chung, bù tồn kho. Tìm vật tư ở vùng A.
+              </span>
+            </div>
+          )}
           <label className="flex flex-col gap-1 text-sm">
             <span>
               Nhà cung cấp <span className="text-red-500">*</span>
@@ -502,10 +602,17 @@ export function PoCreateForm({
         <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
           <div className="flex items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800">
             <ZoneBadge>A</ZoneBadge>
-            <b className="text-[13px]">Nhu cầu từ LSX</b>
-            {needs.length > 0 && (
+            <b className="text-[13px]">
+              {poType === 'lsx' ? 'Nhu cầu từ LSX' : 'Cần mua bù tồn'}
+            </b>
+            {poType === 'lsx' && needs.length > 0 && (
               <span className="ml-auto text-[11px] text-zinc-400">
                 {needSuggestCount} cần mua / {needs.length}
+              </span>
+            )}
+            {poType === 'standalone' && reorderItems.length > 0 && (
+              <span className="ml-auto text-[11px] text-zinc-400">
+                {reorderItems.length} vật tư dưới ngưỡng đặt lại
               </span>
             )}
           </div>
@@ -518,21 +625,83 @@ export function PoCreateForm({
             />
           </div>
           <div className="mt-2 max-h-[300px] overflow-y-auto p-3 pt-0">
-            {!lsxId && (
+            {poType === 'lsx' && !lsxId && (
               <p className="py-5 text-center text-xs text-zinc-400">
                 Chưa chọn LSX — gõ tên/mã ở ô trên để tìm vật tư từ kho, hoặc chọn LSX để
                 xem nhu cầu BOM.
               </p>
             )}
-            {loadingNeeds && (
+            {(loadingNeeds || loadingReorder) && (
               <p className="py-5 text-center text-xs text-zinc-400">Đang tải nhu cầu…</p>
             )}
-            {lsxId && !loadingNeeds && needs.length === 0 && (
+            {poType === 'lsx' && lsxId && !loadingNeeds && needs.length === 0 && (
               <p className="py-5 text-center text-xs text-zinc-400">
                 LSX chưa có bảng chi tiết/BOM — tìm vật tư từ kho ở ô trên.
               </p>
             )}
+            {poType === 'standalone' && !loadingReorder && reorderItems.length === 0 && (
+              <p className="py-5 text-center text-xs text-zinc-400">
+                Không có vật tư nào dưới ngưỡng đặt lại 👍 — cần gì thì gõ tên/mã ở ô trên
+                để tìm từ kho.
+              </p>
+            )}
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredReorder.map((it) => {
+                const added = usedIds.has(it.material_id)
+                return (
+                  <div
+                    key={it.material_id}
+                    className={
+                      'flex items-center gap-2 rounded-lg border px-2.5 py-2 ' +
+                      (added
+                        ? 'border-green-200 bg-green-50/60 dark:border-green-900 dark:bg-green-950/20'
+                        : 'border-zinc-200 dark:border-zinc-800')
+                    }
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-xs font-semibold" title={it.name}>
+                        {it.name}
+                      </div>
+                      <div className="font-mono text-[10px] text-zinc-400">
+                        {it.code} · KD {num(it.available)} / ngưỡng {num(it.threshold)}
+                        {it.ordered > 0 && ` · đang về ${num(it.ordered)}`}
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        {it.has_pending && (
+                          <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold text-amber-600 dark:bg-amber-950/50 dark:text-amber-500">
+                            có PO chờ duyệt
+                          </span>
+                        )}
+                        {supplierId && it.default_supplier_id === supplierId && (
+                          <span className="rounded-full bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:bg-violet-950/50 dark:text-violet-400">
+                            NCC đang chọn
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right text-[10px] text-zinc-400">
+                      đề xuất
+                      <div className="text-xs font-bold text-zinc-700 tabular-nums dark:text-zinc-200">
+                        {num(it.suggest)} {it.unit}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={added}
+                      onClick={() => addFromReorder(it)}
+                      className={
+                        'grid h-6 w-6 shrink-0 place-items-center rounded-md border text-sm font-bold ' +
+                        (added
+                          ? 'border-green-200 bg-green-50 text-green-600 dark:border-green-900 dark:bg-green-950/50'
+                          : 'border-zinc-300 text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700 dark:hover:bg-sky-950/40')
+                      }
+                      aria-label={added ? 'Đã thêm' : `Thêm ${it.name}`}
+                    >
+                      {added ? '✓' : '+'}
+                    </button>
+                  </div>
+                )
+              })}
               {filteredNeeds.map((n) => {
                 const added = usedIds.has(n.material_id)
                 return (
@@ -625,7 +794,7 @@ export function PoCreateForm({
             </div>
           </div>
           <div className="flex flex-col gap-2 border-t border-zinc-100 p-3 dark:border-zinc-800">
-            {needSuggestCount > 0 && (
+            {poType === 'lsx' && needSuggestCount > 0 && (
               <button
                 type="button"
                 onClick={addAllSuggested}
@@ -634,7 +803,17 @@ export function PoCreateForm({
                 ＋ Thêm tất cả đề xuất ({needSuggestCount})
               </button>
             )}
+            {poType === 'standalone' && reorderItems.length > 0 && (
+              <button
+                type="button"
+                onClick={addAllReorder}
+                className="rounded-md border border-dashed border-zinc-300 py-1.5 text-xs text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
+              >
+                ＋ Thêm tất cả cần bù tồn ({reorderItems.length})
+              </button>
+            )}
             <QuickAddMaterial
+              existing={materials}
               onCreated={(m) =>
                 pushLine({
                   id: m.id,
@@ -1076,7 +1255,10 @@ export function PoCreateForm({
         </SideCard>
 
         <SideCard>
-          <Check ok={!!lsxId && !!supplierId} label="LSX + NCC đã chọn" />
+          <Check
+            ok={(poType === 'standalone' || !!lsxId) && !!supplierId}
+            label={poType === 'lsx' ? 'LSX + NCC đã chọn' : 'NCC đã chọn (đơn ngoài LSX)'}
+          />
           <Check
             ok={linesOk}
             label={
@@ -1115,7 +1297,7 @@ export function PoCreateForm({
             </button>
           </div>
           <p className="mt-2 text-center text-[11px] text-zinc-400">
-            BR-06: mỗi đơn = 1 NCC + 1 LSX
+            Mỗi đơn = 1 NCC · gắn 1 LSX hoặc ngoài LSX
           </p>
         </SideCard>
       </div>
@@ -1136,7 +1318,13 @@ export function PoCreateForm({
               </b>
             </span>
             <span>
-              LSX: <b className="font-mono">{lsx?.code ?? '—'}</b>
+              {poType === 'lsx' ? (
+                <>
+                  LSX: <b className="font-mono">{lsx?.code ?? '—'}</b>
+                </>
+              ) : (
+                'Đơn ngoài LSX'
+              )}
               {expectedAt &&
                 ` · Hẹn giao: ${new Date(expectedAt).toLocaleDateString('vi-VN')}`}
             </span>

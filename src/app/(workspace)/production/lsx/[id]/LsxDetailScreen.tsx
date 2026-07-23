@@ -11,12 +11,17 @@ import {
 import { routesService } from '@/modules/dept/production/routes.service'
 import { outputsService } from '@/modules/dept/production/outputs.service'
 import { canEditComponents } from '@/modules/dept/production/perms'
+import { posService } from '@/modules/dept/supply/pos.service'
+import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { stageForDept } from '@/lib/stage-for-dept'
 import { HttpError } from '@/server/http'
-import { LsxDetailView } from '@/components/production/LsxDetailView'
+import {
+  LsxDetailView,
+  type SupplyPanelData,
+} from '@/components/production/LsxDetailView'
 
 /**
  * Màn chi tiết LSX dùng chung cho 3 shell — "mỗi bộ phận một màn riêng" (user
@@ -70,6 +75,30 @@ export async function LsxDetailScreen({
     lineIds.length > 0 && lineIds.every((lid) => allowedByLine.has(lid))
       ? [...new Set([...allowedByLine.values()].flatMap((s) => [...s]))]
       : null
+
+  // Cung ứng / vật tư cho panel ở Tổng quan — CHỈ shell GĐ + Kế hoạch (PO có tiền
+  // = cam kết chi; xưởng/Sales không xem). Đọc PO mở cho mọi NV nên không guard.
+  let supply: SupplyPanelData | null = null
+  if (variant === 'exec' || variant === 'planning') {
+    const { rows: poRows } = await posService.list(user, {
+      production_order_id: id,
+      page: 1,
+      page_size: 100,
+    })
+    const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
+    supply = {
+      hasBom: withComps.length > 0,
+      pos: poRows.map((p) => ({
+        id: p.id,
+        code: p.code,
+        supplier_name: p.supplier_name,
+        status: p.status,
+        expected_at: p.expected_at,
+        total: totals[p.id] ?? 0,
+        currency: p.currency,
+      })),
+    }
+  }
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
@@ -185,6 +214,7 @@ export async function LsxDetailScreen({
       defaultStage={flags.defaultStage}
       routeStages={routeStages}
       syncProgress={syncProgress}
+      supply={supply}
       breadcrumbs={flags.breadcrumbs}
     />
   )

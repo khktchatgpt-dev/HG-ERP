@@ -8,7 +8,8 @@ import '@/events/register' // Đăng ký handler event ở lần import đầu (
 import { BadRequest, NotFound } from '@/server/http'
 
 type PoInput = {
-  production_order_id: string
+  /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
+  production_order_id?: string | null
   supplier_id: string
   currency: string
   vat_rate?: number | null
@@ -36,8 +37,9 @@ export const posService = {
   },
 
   /**
-   * Tạo PO (FR-SUP-02, BR-06): đúng 1 LSX + 1 NCC — DB ép NOT NULL FK,
-   * service kiểm tồn tại. Sinh mã PO-YYYY-NNNN, vào thẳng 'pending_approval'
+   * Tạo PO (FR-SUP-02, BR-06): đúng 1 NCC; LSX gắn hoặc không (0076) —
+   * gắn LSX = PO theo lệnh SX (LSX phải đã được GĐ duyệt), null = PO ngoài LSX
+   * (tiêu hao/dùng chung). Sinh mã PO-YYYY-NNNN, vào thẳng 'pending_approval'
    * và notify GĐ (không có bước nháp — đặc tả 4.3).
    */
   async create(user: User, input: PoInput): Promise<Po> {
@@ -45,17 +47,21 @@ export const posService = {
     const supplier = await suppliersRepo.findById(input.supplier_id)
     if (!supplier) throw NotFound('NCC không tồn tại')
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
-    const lsx = await productionRepo.findById(input.production_order_id)
-    if (!lsx) throw NotFound('LSX không tồn tại')
-    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
-      throw BadRequest('LSX chưa được Giám đốc duyệt — chưa đặt vật tư được')
+    const lsxId = input.production_order_id ?? null
+    let lsx: Awaited<ReturnType<typeof productionRepo.findById>> = null
+    if (lsxId) {
+      lsx = await productionRepo.findById(lsxId)
+      if (!lsx) throw NotFound('LSX không tồn tại')
+      if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+        throw BadRequest('LSX chưa được Giám đốc duyệt — chưa đặt vật tư được')
+      }
     }
 
     const code = await posRepo.nextCode()
     const po = await posRepo.insert(
       {
         code,
-        production_order_id: input.production_order_id,
+        production_order_id: lsxId,
         supplier_id: input.supplier_id,
         currency: input.currency,
         vat_rate: input.vat_rate ?? null,
@@ -76,7 +82,7 @@ export const posService = {
       po_id: po.id,
       code: po.code,
       supplier_name: supplier.name,
-      lsx_code: lsx.code,
+      lsx_code: lsx?.code ?? null,
       submitted_by: user.id,
       approver_ids: approvers.map((a) => a.id),
     })

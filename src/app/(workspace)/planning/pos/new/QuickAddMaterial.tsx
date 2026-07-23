@@ -44,10 +44,24 @@ const EMPTY = {
  * KHÔNG dùng <form> — component này nằm TRONG form tạo PO, form lồng form bị
  * HTML cấm (browser sẽ submit form ngoài → mất sạch dòng đang nhập).
  */
+/** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export function QuickAddMaterial({
   onCreated,
+  existing = [],
 }: {
   onCreated: (m: CreatedMaterial) => void
+  /** Danh mục hiện có — cảnh báo trùng tên gần giống (chống 1 món 2 mã). */
+  existing?: { code: string; name: string }[]
 }) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
@@ -55,6 +69,17 @@ export function QuickAddMaterial({
   const [f, setF] = useState(EMPTY)
   const [profile, setProfile] = useState<ConversionProfile>('A')
   const dual = hasQty2(profile)
+
+  const nName = normalizeName(f.name)
+  const similar =
+    nName.length < 4
+      ? []
+      : existing
+          .filter((m) => {
+            const other = normalizeName(m.name)
+            return other.includes(nName) || nName.includes(other)
+          })
+          .slice(0, 3)
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }))
@@ -147,6 +172,13 @@ export function QuickAddMaterial({
                 />
               </label>
             </div>
+            {similar.length > 0 && (
+              <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                ⚠ Tên gần giống vật tư đã có:{' '}
+                {similar.map((s) => `${s.code} — ${s.name}`).join(' · ')}. Nếu là cùng một
+                món, tìm lại ở ô lọc thay vì tạo mã mới.
+              </p>
+            )}
             <label className="flex flex-col gap-1 text-sm">
               Quy cách
               <input

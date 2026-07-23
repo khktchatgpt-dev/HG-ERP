@@ -1,6 +1,6 @@
 import { materialsRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -23,12 +23,16 @@ type CreateInput = {
   code: string
   name: string
   unit: string
+  barcode?: string | null
   spec?: string | null
   conversion_profile?: 'A' | 'B' | 'C'
   price_unit?: string | null
   unit2_factor?: number | null
   group_name?: string | null
   min_stock: number
+  max_stock?: number | null
+  reorder_point?: number | null
+  reorder_qty?: number | null
   shelf_location?: string | null
   vat_rate?: number | null
   default_supplier_id?: string | null
@@ -37,6 +41,28 @@ type CreateInput = {
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
+
+/**
+ * Chia chủ quyền danh mục (1 danh mục chung — mô hình "view" của Material Master):
+ * Cung ứng (không thuộc Kho) chỉ sửa được trường NỀN + MUA HÀNG; trường TỒN TRỮ
+ * (min_stock, kệ, barcode, ngừng dùng) do Kho quản. Kho sửa được tất cả như cũ.
+ */
+const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
+  // nền
+  'code',
+  'name',
+  'unit',
+  'spec',
+  'group_name',
+  'note',
+  // mua hàng
+  'conversion_profile',
+  'price_unit',
+  'unit2_factor',
+  'vat_rate',
+  'default_supplier_id',
+  'last_purchase_price',
+])
 
 export const materialsService = {
   async list(
@@ -70,12 +96,17 @@ export const materialsService = {
       code: input.code,
       name: input.name,
       unit: input.unit,
+      // '' → null để unique partial index (0078) không bắt trùng chuỗi rỗng.
+      barcode: input.barcode?.trim() || null,
       spec: input.spec ?? null,
       conversion_profile: input.conversion_profile ?? 'A',
       price_unit: input.price_unit ?? null,
       unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,
       min_stock: input.min_stock,
+      max_stock: input.max_stock ?? null,
+      reorder_point: input.reorder_point ?? null,
+      reorder_qty: input.reorder_qty ?? null,
       shelf_location: input.shelf_location ?? null,
       vat_rate: input.vat_rate ?? null,
       default_supplier_id: input.default_supplier_id ?? null,
@@ -85,13 +116,24 @@ export const materialsService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
-    await assertAction(user, 'warehouse.material.update')
+    // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng — enforce bên dưới).
+    const full = await canAction(user, 'warehouse.material.update')
+    if (!full) {
+      await assertAction(user, 'warehouse.material.update_purchasing')
+      const blocked = Object.keys(patch).filter((k) => !PURCHASING_EDITABLE_FIELDS.has(k))
+      if (blocked.length > 0) {
+        throw Forbidden(
+          `Trường thuộc quản lý của Kho, Cung ứng không sửa được: ${blocked.join(', ')}`,
+        )
+      }
+    }
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     if (patch.code && patch.code !== before.code) {
       const dup = await materialsRepo.findByCode(patch.code)
       if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
     }
+    if ('barcode' in patch) patch.barcode = patch.barcode?.trim() || null
     return materialsRepo.patch(id, patch)
   },
 

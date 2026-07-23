@@ -4,6 +4,8 @@ export const materialCreateSchema = z.object({
   code: z.string().trim().min(1).max(60),
   name: z.string().trim().min(1).max(200),
   unit: z.string().trim().min(1).max(30).default('cái'),
+  // Mã vạch sẵn có của NCC (0078) — quét khớp cả code lẫn barcode, không in tem.
+  barcode: z.string().trim().max(64).optional().nullable(),
   // Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư.
   spec: z.string().trim().max(200).optional().nullable(),
   // Loại quy đổi A/B/C (0055) — trường lái form đặt hàng (ItemMaster §2).
@@ -13,6 +15,10 @@ export const materialCreateSchema = z.object({
   unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),
   min_stock: z.coerce.number().min(0).default(0),
+  // Bù tồn (0043, nghiệp vụ ①): trần tồn + ngưỡng/lô đặt lại — Kho quản.
+  max_stock: z.coerce.number().min(0).optional().nullable(),
+  reorder_point: z.coerce.number().min(0).optional().nullable(),
+  reorder_qty: z.coerce.number().min(0).optional().nullable(),
   shelf_location: z.string().trim().max(60).optional().nullable(),
   // Tự-điền lên đơn (0055): VAT mặc định, NCC ưu tiên, giá mua gần nhất (gợi ý).
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
@@ -98,6 +104,43 @@ export const issueDocSchema = z
   .refine((d) => d.kind !== 'lsx' || !!d.production_order_id, {
     message: 'BR-09: xuất theo LSX phải chọn LSX',
   })
+
+/** Dòng phiếu TRẢ HÀNG NCC (0080): gắn dòng PO đã về, trả ≤ số đã về. */
+export const returnDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  po_line_id: z.string().uuid(),
+  qty: z.coerce.number().positive(),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu trả hàng NCC (⑤): phiếu xuất 02-VT, movement out gắn po_line_id. */
+export const returnDocSchema = z.object({
+  po_id: z.string().uuid(),
+  reason: z.string().trim().min(1, 'Trả hàng phải kèm lý do').max(500),
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z.array(returnDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+})
+
+/** Dòng kiểm kê: số ĐẾM THỰC TẾ — tồn sổ server tự đọc lại lúc ghi (0077). */
+export const stocktakeDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  counted_qty: z.coerce.number().min(0),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu kiểm kê (KK — 0077): biên bản mọi dòng đã đếm; dòng lệch sinh movement adjust. */
+export const stocktakeDocSchema = z.object({
+  reason: z.string().trim().max(500).optional().nullable(), // định kỳ / đột xuất…
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z
+    .array(stocktakeDocLineSchema)
+    .min(1, 'Phiếu kiểm kê phải có ít nhất 1 dòng')
+    .max(1000)
+    .refine(
+      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
+      'Vật tư bị trùng dòng',
+    ),
+})
 
 export const docListQuerySchema = z.object({
   kind: z.enum(['receipt', 'issue', 'transfer', 'stocktake']).optional(),

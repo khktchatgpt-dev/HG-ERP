@@ -132,6 +132,50 @@ export const componentsRepo = {
     })
   },
 
+  /**
+   * Dòng chi tiết của NHIỀU LSX kèm SL sản phẩm của dòng đơn — nguồn tính tồn
+   * đặt trước (bước 2 Kho, lib reserved-stock). 1 truy vấn cho cả danh sách
+   * LSX cam kết thay vì lặp listByLsx.
+   */
+  async listForReserve(productionOrderIds: string[]): Promise<
+    {
+      production_order_id: string
+      material_id: string | null
+      qty_per_unit: number
+      dm_kg: number | null
+      pcs_per_bar: number | null
+      order_qty: number
+    }[]
+  > {
+    if (productionOrderIds.length === 0) return []
+    const { data } = await db()
+      .from('production_order_components')
+      .select(
+        'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:sales_order_lines(qty)',
+      )
+      .in('production_order_id', productionOrderIds)
+      .limit(20000)
+    type Row = {
+      production_order_id: string
+      material_id: string | null
+      qty_per_unit: number
+      dm_kg: number | null
+      pcs_per_bar: number | null
+      line: { qty: number } | { qty: number }[] | null
+    }
+    return ((data as Row[] | null) ?? []).map((r) => {
+      const line = Array.isArray(r.line) ? r.line[0] : r.line
+      return {
+        production_order_id: r.production_order_id,
+        material_id: r.material_id,
+        qty_per_unit: Number(r.qty_per_unit) || 0,
+        dm_kg: r.dm_kg == null ? null : Number(r.dm_kg),
+        pcs_per_bar: r.pcs_per_bar == null ? null : Number(r.pcs_per_bar),
+        order_qty: Number(line?.qty) || 0,
+      }
+    })
+  },
+
   /** Số dòng chi tiết theo LSX — cờ "Chưa nhập bảng chi tiết" ở bảng điều phối. */
   async countsByLsx(): Promise<Map<string, number>> {
     const { data } = await db()

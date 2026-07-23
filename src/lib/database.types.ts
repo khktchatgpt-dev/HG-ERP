@@ -17,145 +17,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      permissions: {
-        Row: {
-          created_at: string
-          domain: string
-          key: string
-          label: string
-          sort_order: number
-        }
-        Insert: {
-          created_at?: string
-          domain: string
-          key: string
-          label: string
-          sort_order?: number
-        }
-        Update: {
-          created_at?: string
-          domain?: string
-          key?: string
-          label?: string
-          sort_order?: number
-        }
-        Relationships: []
-      }
-      roles: {
-        Row: {
-          created_at: string
-          description: string | null
-          id: string
-          is_active: boolean
-          is_system: boolean
-          key: string
-          label: string
-          sort_order: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          is_system?: boolean
-          key: string
-          label: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          description?: string | null
-          id?: string
-          is_active?: boolean
-          is_system?: boolean
-          key?: string
-          label?: string
-          sort_order?: number
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      role_permissions: {
-        Row: {
-          created_at: string
-          permission_key: string
-          role_id: string
-        }
-        Insert: {
-          created_at?: string
-          permission_key: string
-          role_id: string
-        }
-        Update: {
-          created_at?: string
-          permission_key?: string
-          role_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "role_permissions_permission_key_fkey"
-            columns: ["permission_key"]
-            isOneToOne: false
-            referencedRelation: "permissions"
-            referencedColumns: ["key"]
-          },
-          {
-            foreignKeyName: "role_permissions_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_roles: {
-        Row: {
-          assigned_at: string
-          assigned_by: string | null
-          role_id: string
-          source: string
-          user_id: string
-        }
-        Insert: {
-          assigned_at?: string
-          assigned_by?: string | null
-          role_id: string
-          source?: string
-          user_id: string
-        }
-        Update: {
-          assigned_at?: string
-          assigned_by?: string | null
-          role_id?: string
-          source?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_roles_assigned_by_fkey"
-            columns: ["assigned_by"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_role_id_fkey"
-            columns: ["role_id"]
-            isOneToOne: false
-            referencedRelation: "roles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_roles_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       accounting_invoices: {
         Row: {
           amount: number
@@ -695,6 +556,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      permissions: {
+        Row: {
+          created_at: string
+          domain: string
+          key: string
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          key: string
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          key?: string
+          label?: string
+          sort_order?: number
+        }
+        Relationships: []
       }
       production_day_locks: {
         Row: {
@@ -1355,6 +1240,122 @@ export type Database = {
           },
         ]
       }
+      rbac_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          id: string
+          reason: string | null
+          target_id: string
+          target_label: string | null
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id: string
+          target_label?: string | null
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string
+          target_label?: string | null
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rbac_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      role_permissions: {
+        Row: {
+          created_at: string
+          permission_key: string
+          role_id: string
+        }
+        Insert: {
+          created_at?: string
+          permission_key: string
+          role_id: string
+        }
+        Update: {
+          created_at?: string
+          permission_key?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "role_permissions_permission_key_fkey"
+            columns: ["permission_key"]
+            isOneToOne: false
+            referencedRelation: "permissions"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "role_permissions_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roles: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          is_system: boolean
+          key: string
+          label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key: string
+          label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          is_system?: boolean
+          key?: string
+          label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sales_customers: {
         Row: {
           address: string | null
@@ -1948,7 +1949,7 @@ export type Database = {
           note: string | null
           ordered_at: string | null
           price_includes_vat: boolean
-          production_order_id: string
+          production_order_id: string | null
           status: string
           supplier_id: string
           terms: string | null
@@ -1967,7 +1968,7 @@ export type Database = {
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
-          production_order_id: string
+          production_order_id?: string | null
           status?: string
           supplier_id: string
           terms?: string | null
@@ -1986,7 +1987,7 @@ export type Database = {
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
-          production_order_id?: string
+          production_order_id?: string | null
           status?: string
           supplier_id?: string
           terms?: string | null
@@ -2841,53 +2842,6 @@ export type Database = {
           },
         ]
       }
-      rbac_audit_log: {
-        Row: {
-          action: string
-          actor_id: string | null
-          after: Json | null
-          before: Json | null
-          created_at: string
-          id: string
-          reason: string | null
-          target_id: string
-          target_label: string | null
-          target_type: string
-        }
-        Insert: {
-          action: string
-          actor_id?: string | null
-          after?: Json | null
-          before?: Json | null
-          created_at?: string
-          id?: string
-          reason?: string | null
-          target_id: string
-          target_label?: string | null
-          target_type: string
-        }
-        Update: {
-          action?: string
-          actor_id?: string | null
-          after?: Json | null
-          before?: Json | null
-          created_at?: string
-          id?: string
-          reason?: string | null
-          target_id?: string
-          target_label?: string | null
-          target_type?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "rbac_audit_log_actor_id_fkey"
-            columns: ["actor_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_audit_log: {
         Row: {
           action: string
@@ -2930,6 +2884,52 @@ export type Database = {
           {
             foreignKeyName: "user_audit_log_target_user_id_fkey"
             columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          role_id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          role_id: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          role_id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
@@ -3047,6 +3047,7 @@ export type Database = {
       }
       warehouse_materials: {
         Row: {
+          barcode: string | null
           code: string
           conversion_profile: string
           created_at: string
@@ -3055,10 +3056,13 @@ export type Database = {
           id: string
           is_active: boolean
           last_purchase_price: number | null
+          max_stock: number | null
           min_stock: number
           name: string
           note: string | null
           price_unit: string | null
+          reorder_point: number | null
+          reorder_qty: number | null
           shelf_location: string | null
           spec: string | null
           unit: string
@@ -3067,6 +3071,7 @@ export type Database = {
           vat_rate: number | null
         }
         Insert: {
+          barcode?: string | null
           code: string
           conversion_profile?: string
           created_at?: string
@@ -3075,10 +3080,13 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_purchase_price?: number | null
+          max_stock?: number | null
           min_stock?: number
           name: string
           note?: string | null
           price_unit?: string | null
+          reorder_point?: number | null
+          reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
           unit?: string
@@ -3087,6 +3095,7 @@ export type Database = {
           vat_rate?: number | null
         }
         Update: {
+          barcode?: string | null
           code?: string
           conversion_profile?: string
           created_at?: string
@@ -3095,10 +3104,13 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_purchase_price?: number | null
+          max_stock?: number | null
           min_stock?: number
           name?: string
           note?: string | null
           price_unit?: string | null
+          reorder_point?: number | null
+          reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
           unit?: string
@@ -3243,6 +3255,61 @@ export type Database = {
           },
         ]
       }
+      warehouse_stocktake_lines: {
+        Row: {
+          counted_qty: number
+          created_at: string
+          diff: number
+          doc_id: string
+          id: string
+          material_id: string
+          note: string | null
+          system_qty: number
+        }
+        Insert: {
+          counted_qty: number
+          created_at?: string
+          diff: number
+          doc_id: string
+          id?: string
+          material_id: string
+          note?: string | null
+          system_qty: number
+        }
+        Update: {
+          counted_qty?: number
+          created_at?: string
+          diff?: number
+          doc_id?: string
+          id?: string
+          material_id?: string
+          note?: string | null
+          system_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktake_lines_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouses: {
         Row: {
           address: string | null
@@ -3337,15 +3404,11 @@ export type Database = {
           customer_id: string | null
           customer_name: string | null
           customer_po_no: string | null
-          deposit_percent: number | null
           due_date: string | null
           id: string | null
-          line_count: number | null
           lines_bom_pending: number | null
           lsx_code: string | null
           lsx_status: string | null
-          order_value: number | null
-          payment_method: string | null
           pos_open: number | null
           production_order_id: string | null
           quote_code: string | null

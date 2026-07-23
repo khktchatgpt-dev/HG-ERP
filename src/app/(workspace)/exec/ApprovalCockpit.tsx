@@ -123,7 +123,7 @@ function targetPo(
     kind: 'po',
     id: p.id,
     code: p.code,
-    label: `${p.supplier_name} · LSX ${p.lsx_code}`,
+    label: `${p.supplier_name} · ${p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX'}`,
   }
 }
 
@@ -933,7 +933,7 @@ export function PoDetail({
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
           <Fact label="Cho LSX">
-            {p.lsx_code}
+            {p.lsx_code ?? 'Ngoài LSX'}
             {p.order_code ? ` · ${p.order_code}` : ''}
           </Fact>
           <Fact label="Hàng hẹn về" tone={due.tone}>
