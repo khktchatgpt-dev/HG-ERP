@@ -47,6 +47,8 @@ type MaterialOption = {
   code: string
   name: string
   unit: string
+  /** Mã vạch NCC (0078) — ScanInput khớp cả code lẫn barcode. */
+  barcode: string | null
   shelf_location: string | null
 }
 type PoOption = {
@@ -396,14 +398,17 @@ function ScanInput({
   return (
     <input
       ref={ref}
-      placeholder="⌨ Quét / gõ mã vật tư rồi Enter…"
+      placeholder="⌨ Quét mã vạch / gõ mã vật tư rồi Enter…"
       className={`${inputCls} max-w-xs font-mono`}
       onKeyDown={(e) => {
         if (e.key !== 'Enter') return
         e.preventDefault()
         const code = e.currentTarget.value.trim().toLowerCase()
         if (!code) return
-        const m = materials.find((x) => x.code.toLowerCase() === code)
+        // Khớp mã nội bộ TRƯỚC, rồi tới barcode NCC (0078) — máy scan = bàn phím.
+        const m =
+          materials.find((x) => x.code.toLowerCase() === code) ??
+          materials.find((x) => x.barcode?.toLowerCase() === code)
         if (m) {
           onHit(m)
           e.currentTarget.value = ''

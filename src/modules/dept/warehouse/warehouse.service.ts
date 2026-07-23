@@ -23,6 +23,7 @@ type CreateInput = {
   code: string
   name: string
   unit: string
+  barcode?: string | null
   spec?: string | null
   conversion_profile?: 'A' | 'B' | 'C'
   price_unit?: string | null
@@ -70,6 +71,8 @@ export const materialsService = {
       code: input.code,
       name: input.name,
       unit: input.unit,
+      // '' → null để unique partial index (0078) không bắt trùng chuỗi rỗng.
+      barcode: input.barcode?.trim() || null,
       spec: input.spec ?? null,
       conversion_profile: input.conversion_profile ?? 'A',
       price_unit: input.price_unit ?? null,
@@ -92,6 +95,7 @@ export const materialsService = {
       const dup = await materialsRepo.findByCode(patch.code)
       if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
     }
+    if ('barcode' in patch) patch.barcode = patch.barcode?.trim() || null
     return materialsRepo.patch(id, patch)
   },
 

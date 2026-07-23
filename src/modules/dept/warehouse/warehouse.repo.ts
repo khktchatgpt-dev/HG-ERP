@@ -5,6 +5,8 @@ export type Material = {
   code: string
   name: string
   unit: string
+  /** Mã vạch sẵn có của NCC (EAN…) — ScanInput khớp cả code lẫn barcode (0078). */
+  barcode: string | null
   /** Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư. */
   spec: string | null
   /** Loại quy đổi A/B/C (0055) — lái form đặt: A đơn vị đơn, B hệ số cứng, C cân thực. */
@@ -27,7 +29,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -59,7 +61,10 @@ export const materialsRepo = {
 
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
-    if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+    if (filter.q)
+      q = q.or(
+        `code.ilike.%${filter.q}%,name.ilike.%${filter.q}%,barcode.ilike.%${filter.q}%`,
+      )
 
     const from = (filter.page - 1) * filter.page_size
     const to = from + filter.page_size - 1

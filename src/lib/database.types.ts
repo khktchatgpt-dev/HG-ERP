@@ -3047,6 +3047,7 @@ export type Database = {
       }
       warehouse_materials: {
         Row: {
+          barcode: string | null
           code: string
           conversion_profile: string
           created_at: string
@@ -3067,6 +3068,7 @@ export type Database = {
           vat_rate: number | null
         }
         Insert: {
+          barcode?: string | null
           code: string
           conversion_profile?: string
           created_at?: string
@@ -3087,6 +3089,7 @@ export type Database = {
           vat_rate?: number | null
         }
         Update: {
+          barcode?: string | null
           code?: string
           conversion_profile?: string
           created_at?: string

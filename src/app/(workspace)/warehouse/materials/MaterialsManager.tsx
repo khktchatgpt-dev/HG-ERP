@@ -28,6 +28,8 @@ type Material = {
   code: string
   name: string
   unit: string
+  /** Mã vạch NCC (0078) — quét khớp cả code lẫn barcode. */
+  barcode: string | null
   spec: string | null
   conversion_profile: ConversionProfile
   price_unit: string | null
@@ -137,6 +139,7 @@ export function MaterialsManager({
       { key: 'code', header: 'Mã' },
       { key: 'name', header: 'Tên' },
       { key: 'spec', header: 'Quy cách', get: (m) => m.spec ?? '' },
+      { key: 'barcode', header: 'Mã vạch', get: (m) => m.barcode ?? '' },
       { key: 'unit', header: 'ĐVT' },
       {
         key: 'conversion_profile',
@@ -479,6 +482,7 @@ function MaterialForm({
       code: String(fd.get('code') ?? '').trim(),
       name: String(fd.get('name') ?? '').trim(),
       unit: String(fd.get('unit') ?? '').trim() || 'cái',
+      barcode: String(fd.get('barcode') ?? '').trim() || null,
       spec: String(fd.get('spec') ?? '').trim() || null,
       conversion_profile: profile,
       group_name: String(fd.get('group_name') ?? '').trim() || null,
@@ -543,6 +547,19 @@ function MaterialForm({
         />
         <span className="text-xs text-zinc-400">
           Kích thước/thông số — tự điền vào dòng đơn khi chọn vật tư.
+        </span>
+      </label>
+      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+        Mã vạch (barcode NCC)
+        <input
+          name="barcode"
+          maxLength={64}
+          placeholder="Quét mã có sẵn trên bao bì NCC vào đây (nếu có)…"
+          defaultValue={initial?.barcode ?? ''}
+          className={`${cls} font-mono`}
+        />
+        <span className="text-xs text-zinc-400">
+          Ô quét ở phiếu nhập/xuất khớp cả mã vật tư lẫn mã vạch này. Không in tem.
         </span>
       </label>
 

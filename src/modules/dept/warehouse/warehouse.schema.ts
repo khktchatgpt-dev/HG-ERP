@@ -4,6 +4,8 @@ export const materialCreateSchema = z.object({
   code: z.string().trim().min(1).max(60),
   name: z.string().trim().min(1).max(200),
   unit: z.string().trim().min(1).max(30).default('cái'),
+  // Mã vạch sẵn có của NCC (0078) — quét khớp cả code lẫn barcode, không in tem.
+  barcode: z.string().trim().max(64).optional().nullable(),
   // Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư.
   spec: z.string().trim().max(200).optional().nullable(),
   // Loại quy đổi A/B/C (0055) — trường lái form đặt hàng (ItemMaster §2).
