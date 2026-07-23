@@ -17,6 +17,10 @@ export type Material = {
   unit2_factor: number | null
   group_name: string | null
   min_stock: number
+  /** Bù tồn (0043, nghiệp vụ ① Cung ứng): trần tồn + ngưỡng/lô đặt lại. */
+  max_stock: number | null
+  reorder_point: number | null
+  reorder_qty: number | null
   shelf_location: string | null
   /** Tự-điền lên đơn (0055). */
   vat_rate: number | null
@@ -29,7 +33,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -45,6 +49,9 @@ function toMaterial(row: Record<string, unknown>): Material {
   return {
     ...(row as Material),
     min_stock: Number(row.min_stock ?? 0),
+    max_stock: row.max_stock == null ? null : Number(row.max_stock),
+    reorder_point: row.reorder_point == null ? null : Number(row.reorder_point),
+    reorder_qty: row.reorder_qty == null ? null : Number(row.reorder_qty),
     unit2_factor: row.unit2_factor == null ? null : Number(row.unit2_factor),
     vat_rate: row.vat_rate == null ? null : Number(row.vat_rate),
     last_purchase_price:

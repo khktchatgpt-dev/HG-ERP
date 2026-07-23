@@ -30,6 +30,9 @@ type CreateInput = {
   unit2_factor?: number | null
   group_name?: string | null
   min_stock: number
+  max_stock?: number | null
+  reorder_point?: number | null
+  reorder_qty?: number | null
   shelf_location?: string | null
   vat_rate?: number | null
   default_supplier_id?: string | null
@@ -101,6 +104,9 @@ export const materialsService = {
       unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,
       min_stock: input.min_stock,
+      max_stock: input.max_stock ?? null,
+      reorder_point: input.reorder_point ?? null,
+      reorder_qty: input.reorder_qty ?? null,
       shelf_location: input.shelf_location ?? null,
       vat_rate: input.vat_rate ?? null,
       default_supplier_id: input.default_supplier_id ?? null,

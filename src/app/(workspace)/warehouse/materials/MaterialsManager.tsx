@@ -36,6 +36,10 @@ type Material = {
   unit2_factor: number | null
   group_name: string | null
   min_stock: number
+  /** Bù tồn (0079): trần tồn + ngưỡng/lô đặt lại — Kho quản. */
+  max_stock: number | null
+  reorder_point: number | null
+  reorder_qty: number | null
   shelf_location: string | null
   vat_rate: number | null
   default_supplier_id: string | null
@@ -532,6 +536,11 @@ function MaterialForm({
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
+    // Ô số để trống (hoặc bị disable — không vào FormData) → null, không phải 0.
+    const numOrNull = (k: string) => {
+      const v = fd.get(k)
+      return v != null && String(v).trim() !== '' ? Number(v) : null
+    }
     const priceUnitVal = dual ? String(fd.get('price_unit') ?? '').trim() || null : null
     const factorVal =
       dual && fd.get('unit2_factor') ? Number(fd.get('unit2_factor')) || null : null
@@ -544,6 +553,9 @@ function MaterialForm({
       conversion_profile: profile,
       group_name: String(fd.get('group_name') ?? '').trim() || null,
       min_stock: Number(fd.get('min_stock') ?? 0) || 0,
+      max_stock: numOrNull('max_stock'),
+      reorder_point: numOrNull('reorder_point'),
+      reorder_qty: numOrNull('reorder_qty'),
       price_unit: priceUnitVal,
       unit2_factor: factorVal,
       shelf_location: String(fd.get('shelf_location') ?? '').trim() || null,
@@ -558,6 +570,9 @@ function MaterialForm({
     // Cung ứng: trường tồn trữ của Kho không gửi lên (server cũng chặn).
     if (purchasing) {
       delete body.min_stock
+      delete body.max_stock
+      delete body.reorder_point
+      delete body.reorder_qty
       delete body.shelf_location
       delete body.barcode
     }
@@ -734,6 +749,53 @@ function MaterialForm({
           title={purchasing ? 'Kho quản vị trí kệ' : undefined}
           className={`${cls} disabled:opacity-50`}
         />
+      </label>
+
+      {/* Bù tồn (nghiệp vụ ①): ngưỡng/lô đặt lại + trần tồn — Kho quản, nuôi gợi ý PO ngoài LSX */}
+      <label className="flex flex-col gap-1 text-sm">
+        Ngưỡng đặt lại
+        <input
+          name="reorder_point"
+          type="number"
+          min={0}
+          step="0.01"
+          placeholder="bỏ trống = dùng tồn tối thiểu"
+          defaultValue={initial?.reorder_point ?? ''}
+          disabled={purchasing}
+          title={purchasing ? 'Kho quản chính sách bù tồn' : undefined}
+          className={`${cls} tabular-nums disabled:opacity-50`}
+        />
+        <span className="text-xs text-zinc-400">
+          Khả dụng + đang về tụt dưới mức này → gợi ý mua bù (PO ngoài LSX).
+        </span>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Lô đặt lại / Tồn tối đa
+        <span className="flex gap-2">
+          <input
+            name="reorder_qty"
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="SL mỗi lần mua"
+            defaultValue={initial?.reorder_qty ?? ''}
+            disabled={purchasing}
+            className={`${cls} tabular-nums disabled:opacity-50`}
+          />
+          <input
+            name="max_stock"
+            type="number"
+            min={0}
+            step="0.01"
+            placeholder="trần tồn"
+            defaultValue={initial?.max_stock ?? ''}
+            disabled={purchasing}
+            className={`${cls} tabular-nums disabled:opacity-50`}
+          />
+        </span>
+        <span className="text-xs text-zinc-400">
+          Có lô → mỗi lần gợi ý đúng lô; không thì bù tới trần tồn / về ngưỡng.
+        </span>
       </label>
 
       {/* Tự-điền lên đơn: NCC mặc định / VAT / giá tham chiếu */}

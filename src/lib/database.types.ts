@@ -3056,10 +3056,13 @@ export type Database = {
           id: string
           is_active: boolean
           last_purchase_price: number | null
+          max_stock: number | null
           min_stock: number
           name: string
           note: string | null
           price_unit: string | null
+          reorder_point: number | null
+          reorder_qty: number | null
           shelf_location: string | null
           spec: string | null
           unit: string
@@ -3077,10 +3080,13 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_purchase_price?: number | null
+          max_stock?: number | null
           min_stock?: number
           name: string
           note?: string | null
           price_unit?: string | null
+          reorder_point?: number | null
+          reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
           unit?: string
@@ -3098,10 +3104,13 @@ export type Database = {
           id?: string
           is_active?: boolean
           last_purchase_price?: number | null
+          max_stock?: number | null
           min_stock?: number
           name?: string
           note?: string | null
           price_unit?: string | null
+          reorder_point?: number | null
+          reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
           unit?: string

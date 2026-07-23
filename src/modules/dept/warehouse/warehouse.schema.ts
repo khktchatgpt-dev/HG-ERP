@@ -15,6 +15,10 @@ export const materialCreateSchema = z.object({
   unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),
   min_stock: z.coerce.number().min(0).default(0),
+  // Bù tồn (0043, nghiệp vụ ①): trần tồn + ngưỡng/lô đặt lại — Kho quản.
+  max_stock: z.coerce.number().min(0).optional().nullable(),
+  reorder_point: z.coerce.number().min(0).optional().nullable(),
+  reorder_qty: z.coerce.number().min(0).optional().nullable(),
   shelf_location: z.string().trim().max(60).optional().nullable(),
   // Tự-điền lên đơn (0055): VAT mặc định, NCC ưu tiên, giá mua gần nhất (gợi ý).
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),

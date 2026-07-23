@@ -166,6 +166,52 @@ export const supplyRepo = {
     return out
   },
 
+  /**
+   * Đã đặt / chờ duyệt trên MỌI PO đang mở (cả theo LSX lẫn ngoài LSX) — gộp
+   * theo vật tư. Nguồn "vị thế tồn" cho mua bù tồn (nghiệp vụ ①): ordered =
+   * Σ qty_missing của PO đã duyệt; pending = Σ qty_ordered PO chờ duyệt (cảnh báo).
+   */
+  async orderedPendingAll(): Promise<Map<string, { ordered: number; pending: number }>> {
+    const out = new Map<string, { ordered: number; pending: number }>()
+    const { data: pos } = await db()
+      .from('supply_purchase_orders')
+      .select('id, status')
+      .in('status', [...RECEIVABLE, 'pending_approval'])
+      .limit(2000)
+    const committed: string[] = []
+    const pending: string[] = []
+    for (const p of (pos as { id: string; status: string }[] | null) ?? []) {
+      if (p.status === 'pending_approval') pending.push(p.id)
+      else committed.push(p.id)
+    }
+    const bump = (mid: string, k: 'ordered' | 'pending', v: number) => {
+      const e = out.get(mid) ?? { ordered: 0, pending: 0 }
+      e[k] += v
+      out.set(mid, e)
+    }
+    if (committed.length > 0) {
+      const { data } = await db()
+        .from('supply_po_line_status')
+        .select('material_id, qty_missing')
+        .in('po_id', committed)
+      for (const r of (data as { material_id: string; qty_missing: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'ordered', Math.max(Number(r.qty_missing) || 0, 0))
+      }
+    }
+    if (pending.length > 0) {
+      const { data } = await db()
+        .from('supply_purchase_order_lines')
+        .select('material_id, qty_ordered')
+        .in('po_id', pending)
+      for (const r of (data as { material_id: string; qty_ordered: number }[] | null) ??
+        []) {
+        bump(r.material_id, 'pending', Number(r.qty_ordered) || 0)
+      }
+    }
+    return out
+  },
+
   async findPoCode(poId: string): Promise<string | null> {
     const { data } = await db()
       .from('supply_purchase_orders')
