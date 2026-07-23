@@ -1,7 +1,6 @@
 import { outputsRepo, type OutputEntry } from './outputs.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
-import { isProductionStaff } from './production.service'
 import { routesService } from './routes.service'
 import { dayLocksRepo } from './day-locks.repo'
 import { defectCodesRepo } from './defect-codes.repo'
@@ -14,15 +13,16 @@ import {
   type ComponentSummary,
 } from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 /**
- * Sản lượng hằng ngày theo công đoạn/tổ (SX-P3 — FR-PR). Ai nhập: CHỈ bộ phận
- * sản xuất (thống kê/tổ trưởng — workspace production) + admin. Cung ứng và
- * GĐ không đi ghi sổ hộ (user siết 07/2026 — planner chỉ định hình).
+ * Sản lượng hằng ngày theo công đoạn/tổ (SX-P3 — FR-PR). Ai nhập: production.
+ * output.record (seed gán production_staff; admin bypass). Cung ứng/GĐ không ghi
+ * sổ hộ (user siết 07/2026 — planner chỉ định hình).
  */
 async function canRecordOutput(user: User): Promise<boolean> {
-  return user.role === 'admin' || (await isProductionStaff(user))
+  return hasPermission(user, 'production.output.record')
 }
 
 type RecordInput = {

@@ -4,7 +4,7 @@ Tái thiết kế phân quyền: đưa **vai + quyền thành dữ liệu trong 
 diễn từ `role` cứng + tên phòng hardcode. Triển khai **strangler, từng bước không
 gãy**. Plan gốc: `~/.claude/plans/noble-prancing-candy.md`.
 
-## Trạng thái tổng: ĐÃ XONG Phase 0 → 2 (technical). Còn Phase 2 (các module) + 3 + 4.
+## Trạng thái tổng: ĐÃ XONG Phase 0 → 2 (TẤT CẢ module) + dọn dẹp. Còn Phase 3 + 4.
 
 ### DB thật (Supabase `pcbfvrapknzykhtntuwg`) — đã apply
 - `0073_rbac.sql` — 4 bảng `permissions/roles/role_permissions/user_roles` + seed
@@ -39,41 +39,46 @@ gãy**. Plan gốc: `~/.claude/plans/noble-prancing-candy.md`.
 - **Phase 2 — technical** (commit `9f7c174`): flip RBAC-only, bỏ hardcode tên
   phòng. `isTechnicalStaff→technical.member`, `isTechnicalOrSales→technical.bom.edit`,
   `canEdit→async technical.edit`.
+- **Phase 2 — các module còn lại + dọn dẹp** (nhánh `rbac-finish`): flip nốt mọi
+  guard sang `hasPermission`, xoá hardcode tên phòng cho authz.
+  - **accounting** `isAccountingStaff→accounting.member`.
+  - **hr** `isHRStaff→hr.member`; `canDecide→hr.leave.decide` (async).
+  - **sales** `isSalesUser/isSalesStaff→sales.member`; `canEdit` KH giữ role-tier +
+    row-level owner (seed không có `sales.edit` — không dựng key thừa).
+  - **supply** `isSupplyStaff→supply.member`; `canApprove(PO)→supply.po.approve`.
+    `SUPPLY_DEPT_NAMES` GIỮ LẠI (orders/stock dùng tính người-nhận notify, không authz).
+  - **warehouse** `isWarehouseUser→warehouse.member`; `canEdit→warehouse.edit`
+    (cả stock.service); tạo vật tư→`warehouse.material.create`.
+  - **production** `isProductionStaff→production.member`, `isPlannerStaff→planner.member`,
+    `canIssue→lsx.issue`, `canApprove→lsx.approve`, `canTrackProgress→progress.track`,
+    `canEditComponents→components.edit`, `canRecordOutput→output.record`,
+    outsource→`outsource.record`, incident report/close, daylock lock/unlock,
+    team board→`team.manage`, `assertExec→exec.tower.view` (async).
+  - **Dọn dẹp**: gỡ `rbac/shadow.ts` (hết caller); gộp `Role` = `UserRole`
+    (`workspaces.config` re-export từ `users.repo`).
+  - **Test**: helper `src/test-utils/rbac.ts` (`makeFakeHasPermission` = ma trận seed
+    + `computeDerivedRoleKeys` thật) mock hasPermission cho 9 file service test.
+    `npm run check` xanh, 497 test.
+  - **Verify DB thật (74 user)**: 19/21 guard **0 lệch**. 2 guard warehouse lệch
+    do seed cố ý gán rộng hơn legacy — **user chốt CHẤP NHẬN** (chính sách data-driven):
+    `warehouse.edit` +1 NV Kho (ghi nhập/xuất tồn + sửa DM); `warehouse.material.create`
+    +8 (mọi manager + NV Kho). Không quay lại legacy.
 
 ---
 
 ## CHƯA LÀM
 
-### Phase 2 — flip nốt các module (mỗi module 1 PR, thứ tự rủi ro tăng dần)
-Mẫu tham chiếu: commit technical `9f7c174`. Mỗi module: flip guard `is*Staff`→
-`hasPermission`, chuyển guard sync (`canApprove/canEdit/canDecide/assertExec`)
-sang `async hasPermission` + thêm `await` ở call-site, **xoá hardcode tên phòng**.
+### UI mirror (chưa bắt buộc — authz đã ở server; đây là tối ưu/trình bày)
+- [ ] `src/workspaces/access.ts` — đang gọi loạt `is*Staff` (đã RBAC, ĐÚNG hành vi);
+      có thể refactor đọc thẳng `permissionsOf` để bớt round-trip.
+- [ ] `src/components/Sidebar.tsx` — `DEPT_NAV` key theo tên phòng (thuần render menu,
+      không phải ổ khoá — server vẫn chặn qua permission).
+- [ ] `src/app/(workspace)/production/entry/shared.ts` — `canRecordHere` (admin ||
+      isProductionStaff; tương đương `production.output.record`, để mirror chính xác).
 
-- [ ] **accounting** — `isAccountingStaff`→`accounting.member`.
-- [ ] **hr** — `isHRStaff`→`hr.member`; `canDecide`→`hr.leave.decide`.
-- [ ] **sales** — `isSalesStaff`/`isSalesUser`→`sales.member`; `canEdit` khách hàng
-      (admin/manager/owner — nhánh owner giữ row-level ở service).
-- [ ] **supply** — `isSupplyStaff`→`supply.member`; `canApprove(PO)`→`supply.po.approve`.
-- [ ] **warehouse** — `isWarehouseUser`→`warehouse.member`; `canEdit`→`warehouse.edit`;
-      tạo vật tư (Kho/Cung ứng)→`warehouse.material.create`.
-- [ ] **production** (lớn nhất) — `isProductionStaff`→`production.member`,
-      `isPlannerStaff`→`planner.member`, `canIssue`→`production.lsx.issue`,
-      `canApprove`→`production.lsx.approve`, `canTrackProgress`→`production.progress.track`,
-      `canEditComponents`→`production.components.edit`, `canRecordOutput`→
-      `production.output.record`, incidents/day-locks/outsource/team, `assertExec`
-      (ops)→`exec.tower.view`.
-
-### UI mirror (đồng bộ khi flip module tương ứng)
-- [ ] `src/workspaces/access.ts` — `resolveNavCapabilities` đọc từ `permissionsOf`
-      thay vì gọi loạt `is*Staff`; `hasCrossRole`.
-- [ ] `src/components/Sidebar.tsx` — `DEPT_NAV` đang key theo tên phòng.
-- [ ] `src/app/(workspace)/production/entry/shared.ts` — `canRecordHere`.
-
-### Dọn sau khi mọi module đã flip
-- [ ] Gỡ `src/modules/core/rbac/shadow.ts` khi không còn caller.
+### Dọn còn lại
 - [ ] Bỏ `department.manage` DEAD trong `src/server/permissions.ts`; cân nhắc gộp
       task ACL vào cùng cơ chế `hasPermission` hoặc giữ riêng (task là quan hệ).
-- [ ] Gộp `Role` type trùng: `users.repo.ts` vs `workspaces.config.ts`.
 
 ### Phase 3 — IT tự phục vụ (bật GHI ở /admin/permissions)
 - [ ] Route `src/app/api/admin/rbac/**` (thin `handle`, guard admin): tạo/sửa role,

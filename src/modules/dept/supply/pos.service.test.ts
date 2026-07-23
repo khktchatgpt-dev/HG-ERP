@@ -20,6 +20,7 @@ vi.mock('@/modules/dept/production/production.repo', () => ({
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 // on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
@@ -28,10 +29,16 @@ import { isSupplyStaff } from './suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const staff = { id: 'u-sup', role: 'employee', department_id: 'd-sup' } as unknown as User
 const boss = { id: 'u-boss', role: 'manager', department_id: null } as unknown as User
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-sup': { name: 'Cung Ứng - Mua Hàng', workspace_id: 'planning' },
+}
 
 const PO = {
   id: 'po1',
@@ -47,6 +54,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isSupplyStaff).mockResolvedValue(true)
   vi.mocked(usersRepo.list).mockResolvedValue([])
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
 })
 
 describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {

@@ -1,9 +1,9 @@
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên (như tasks.service).
 import { incidentsRepo, type Incident } from './incidents.repo'
-import { isProductionStaff } from './production.service'
 import { productionRepo } from './production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import type { IncidentCreateInput } from './incidents.schema'
@@ -32,7 +32,7 @@ export const incidentsService = {
 
   /** Tổ báo sự cố — quyền mềm: mọi nhân sự xưởng (admin luôn được). */
   async report(user: User, input: IncidentCreateInput): Promise<Incident> {
-    if (!(await isProductionStaff(user))) {
+    if (!(await hasPermission(user, 'production.incident.report'))) {
       throw Forbidden('Chỉ bộ phận sản xuất báo sự cố')
     }
     if (input.production_order_id) {
@@ -65,7 +65,7 @@ export const incidentsService = {
 
   /** Quản đốc đóng sự cố: chỉ GĐ/Ban quản lý (admin/manager). */
   async resolve(user: User, id: string): Promise<Incident> {
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (!(await hasPermission(user, 'production.incident.close'))) {
       throw Forbidden('Chỉ Giám đốc/Ban quản lý đóng sự cố')
     }
     const found = await incidentsRepo.findById(id)

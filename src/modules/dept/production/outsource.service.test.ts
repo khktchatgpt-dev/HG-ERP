@@ -15,6 +15,7 @@ vi.mock('@/modules/dept/supply/supply.repo', () => ({
   suppliersRepo: { findById: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { outsourceService } from './outsource.service'
 import { outsourceRepo } from './outsource.repo'
@@ -23,6 +24,8 @@ import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const worker = {
@@ -30,6 +33,10 @@ const worker = {
   role: 'employee',
   department_id: 'd-to',
 } as unknown as User
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-to': { name: 'Tổ Phôi', workspace_id: 'production' },
+}
 
 const LSX = { id: 'lsx1', code: 'LSX-01', status: 'in_progress' }
 const COMPONENT = { id: 'c1', name: 'TAY+TỰA' }
@@ -48,6 +55,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isProductionStaff).mockResolvedValue(true)
   vi.mocked(isSupplyStaff).mockResolvedValue(false)
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(componentsRepo.listByLsx).mockResolvedValue([COMPONENT] as never)
   vi.mocked(suppliersRepo.findById).mockResolvedValue(TTP as never)
@@ -115,7 +125,7 @@ describe('outsourceService.record — giao/nhận gia công (FR-OS-01/02)', () =
   })
 
   it('NV ngoài xưởng/KH-CƯ/QL → 403', async () => {
-    vi.mocked(isProductionStaff).mockResolvedValue(false)
+    vi.mocked(hasPermission).mockResolvedValue(false)
     await expect(outsourceService.record(worker, 'lsx1', SEND)).rejects.toMatchObject({
       status: 403,
     })

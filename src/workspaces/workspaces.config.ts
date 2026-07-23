@@ -5,7 +5,10 @@
  * và permissions đều đọc từ đây.
  */
 
-export type Role = 'admin' | 'manager' | 'employee'
+// Nguồn DUY NHẤT của union role: users.repo (UserRole). `import type` bị xoá lúc
+// biên dịch nên client import workspaces.config không kéo theo runtime users.repo.
+import type { UserRole } from '@/modules/core/users/users.repo'
+export type Role = UserRole
 
 /**
  * Năng lực nghiệp vụ theo PHÒNG (không suy được từ role) — dùng để lọc menu.

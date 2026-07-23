@@ -6,21 +6,13 @@ import {
 } from './quotes.repo'
 import { customersRepo } from './sales.repo'
 import type { QuoteStatus } from './quotes.schema'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
-const SALES_DEPT_NAME = 'Bán Hàng'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isSalesStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === SALES_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với sales.member, vẫn trả legacy.
-  return shadowGuard(user, 'isSalesStaff', legacy, 'sales.member')
+  return hasPermission(user, 'sales.member')
 }
 
 type QuoteInput = {

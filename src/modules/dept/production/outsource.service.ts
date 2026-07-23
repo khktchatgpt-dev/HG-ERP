@@ -2,10 +2,10 @@ import { z } from 'zod'
 import { outsourceRepo, type OutsourceEntry } from './outsource.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
-import { isProductionStaff } from './production.service'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { summarizeOutsource, type OutsourceSummary } from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 /**
@@ -25,9 +25,10 @@ export const outsourceRecordSchema = z.object({
 })
 export type OutsourceRecordInput = z.infer<typeof outsourceRecordSchema>
 
-// CHỈ bộ phận sản xuất ghi giao/nhận gia công (user siết 07/2026) + admin.
+// Ghi giao/nhận gia công: production.outsource.record (seed gán production_staff;
+// admin bypass). CHỈ bộ phận sản xuất (user siết 07/2026).
 async function canRecord(user: User): Promise<boolean> {
-  return user.role === 'admin' || (await isProductionStaff(user))
+  return hasPermission(user, 'production.outsource.record')
 }
 
 export type OutsourcePairSummary = OutsourceSummary & {

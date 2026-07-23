@@ -1,15 +1,16 @@
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { isSupplyStaff } from './suppliers.service'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
-/** Duyệt mua vật tư: Giám đốc/Ban QL (đặc tả mục 6 — khâu duyệt quan trọng nhất). */
-function canApprove(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
+/** Duyệt mua vật tư: permission supply.po.approve (seed gán Giám đốc/Ban QL). */
+async function canApprove(user: User): Promise<boolean> {
+  return hasPermission(user, 'supply.po.approve')
 }
 
 type PoInput = {
@@ -118,7 +119,8 @@ export const posService = {
     decision: 'approve' | 'reject',
     reason?: string,
   ): Promise<Po> {
-    if (!canApprove(user)) throw Forbidden('Chỉ Ban quản lý/Giám đốc duyệt mua vật tư')
+    if (!(await canApprove(user)))
+      throw Forbidden('Chỉ Ban quản lý/Giám đốc duyệt mua vật tư')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     if (before.status !== 'pending_approval') {

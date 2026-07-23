@@ -14,6 +14,7 @@ import {
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser, canViewWarehouse } from './warehouse.service'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -22,9 +23,9 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
-/** Chỉ Kho + admin/manager được ghi phiếu nhập/xuất. */
-function canEdit(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
+/** Ghi phiếu nhập/xuất tồn: permission warehouse.edit. */
+async function canEdit(user: User): Promise<boolean> {
+  return hasPermission(user, 'warehouse.edit')
 }
 
 type ReceiveInput = {
@@ -121,7 +122,7 @@ export const stockService = {
 
   /** Nhập kho (FR-WMS-02/04). qty = số ĐẠT; qty_rejected (QC không đạt) không vào tồn (BR-10). */
   async receive(user: User, input: ReceiveInput): Promise<{ id: string }> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ quản lý Kho / admin nhập kho được')
     }
     const mat = await materialsRepo.findById(input.material_id)
@@ -144,7 +145,7 @@ export const stockService = {
 
   /** Xuất kho (FR-WMS-05/06). Không cho xuất quá tồn hiện có. */
   async issue(user: User, input: IssueInput): Promise<{ id: string }> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ quản lý Kho / admin xuất kho được')
     }
     const mat = await materialsRepo.findById(input.material_id)
@@ -241,7 +242,7 @@ export const stockService = {
       }[]
     },
   ): Promise<{ id: string; code: string; po_status: string | null }> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ quản lý Kho / admin nhập kho được')
     }
     const matIds = [...new Set(input.lines.map((l) => l.material_id))]
@@ -334,7 +335,7 @@ export const stockService = {
       }[]
     },
   ): Promise<{ id: string; code: string }> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) {
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
       throw Forbidden('Chỉ quản lý Kho / admin xuất kho được')
     }
     if (input.kind === 'lsx') {

@@ -8,21 +8,27 @@ vi.mock('./day-locks.repo', () => ({
     deleteByTeamDate: vi.fn(),
   },
 }))
-vi.mock('./production.service', () => ({ isProductionStaff: vi.fn() }))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn() },
 }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { dayLocksService } from './day-locks.service'
 import { dayLocksRepo } from './day-locks.repo'
-import { isProductionStaff } from './production.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const toHan = { id: 'u-th', role: 'employee', department_id: 'd-han' } as unknown as User
 const manager = { id: 'u-gd', role: 'manager', department_id: null } as unknown as User
 const outsider = { id: 'u-x', role: 'employee', department_id: 'd-x' } as unknown as User
 const unbound = { id: 'u-ub', role: 'employee', department_id: null } as unknown as User
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-han': { name: 'Tổ Hàn', workspace_id: 'production' },
+  'd-x': { name: 'Sales', workspace_id: 'sales' },
+}
 
 const LOCK = {
   id: 'lock1',
@@ -36,8 +42,8 @@ const LOCK = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(isProductionStaff).mockImplementation(
-    async (u: User) => u.department_id === 'd-han',
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
   )
   vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
     id === 'd-han'
@@ -75,7 +81,8 @@ describe('dayLocksService.lock — chốt sổ tổ + ngày', () => {
     await expect(
       dayLocksService.lock(outsider, { entry_date: '2026-07-20' }),
     ).rejects.toMatchObject({ status: 403 })
-    vi.mocked(isProductionStaff).mockResolvedValue(true)
+    // NV xưởng chưa gán tổ: có quyền chốt nhưng thiếu team → 400.
+    vi.mocked(hasPermission).mockResolvedValue(true)
     await expect(
       dayLocksService.lock(unbound, { entry_date: '2026-07-20' }),
     ).rejects.toMatchObject({ status: 400 })

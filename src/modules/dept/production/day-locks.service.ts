@@ -1,7 +1,7 @@
 import { dayLocksRepo, type DayLock } from './day-locks.repo'
-import { isProductionStaff } from './production.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 /**
@@ -19,10 +19,11 @@ export const dayLocksService = {
     user: User,
     input: { entry_date: string; team_department_id?: string | null },
   ): Promise<DayLock> {
-    const isMgr = user.role === 'admin' || user.role === 'manager'
-    if (!isMgr && !(await isProductionStaff(user))) {
+    if (!(await hasPermission(user, 'production.daylock.lock'))) {
       throw Forbidden('Chỉ bộ phận Sản xuất hoặc Ban quản lý chốt sổ')
     }
+    // isMgr: đặc quyền chốt hộ TỔ KHÁC (role-tier, không phải dept-hardcode).
+    const isMgr = user.role === 'admin' || user.role === 'manager'
     const teamId = isMgr
       ? (input.team_department_id ?? user.department_id)
       : user.department_id
@@ -48,7 +49,7 @@ export const dayLocksService = {
 
   /** Mở khoá: CHỈ admin/manager — có vết (badge sổ hiện ai chốt, mở là xoá dòng). */
   async unlock(user: User, teamId: string, date: string): Promise<void> {
-    if (user.role !== 'admin' && user.role !== 'manager') {
+    if (!(await hasPermission(user, 'production.daylock.unlock'))) {
       throw Forbidden('Chỉ Giám đốc/Ban quản lý mở khoá sổ đã chốt')
     }
     const existing = await dayLocksRepo.find(teamId, date)

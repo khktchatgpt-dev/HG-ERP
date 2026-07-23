@@ -1,29 +1,22 @@
 import { suppliersRepo, materialGroupsRepo, type Supplier } from './supply.repo'
 import type { supplierCreateSchema } from './suppliers.schema'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import type { z } from 'zod'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { Forbidden, NotFound } from '@/server/http'
 
 /**
- * Vai CUNG ỨNG (mua hàng: PO/NCC/theo dõi hàng về). Tách vai 07/2026:
+ * Tên phòng CUNG ỨNG như trong public.departments. KHÔNG dùng cho authz nữa
+ * (đã chuyển sang permission supply.member) — chỉ còn để tính NGƯỜI-NHẬN thông
+ * báo "ai thuộc phòng Cung ứng" ở orders.service / stock.service (đề xuất mua).
  * - 'Cung Ứng - Mua Hàng'          — phòng mới, CHỈ vai mua hàng.
- * - 'Kế Hoạch Sản Xuất-cung ứng'   — phòng gộp cũ, giữ CẢ HAI vai (người kiêm
- *   nhiệm ở lại đây); có nhân sự mới thì IT đổi phòng ở /admin/users, không
- *   cần sửa code. Vai KẾ HOẠCH (định hình) xem production/perms.ts.
- * Tên phòng đúng như public.departments (đừng lặp lại bug 'Kinh Doanh').
+ * - 'Kế Hoạch Sản Xuất-cung ứng'   — phòng gộp cũ, giữ CẢ HAI vai.
  */
 const SUPPLY_DEPT_NAMES = new Set(['Kế Hoạch Sản Xuất-cung ứng', 'Cung Ứng - Mua Hàng'])
 
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng cho authz).
 async function isSupplyStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = !!dept && SUPPLY_DEPT_NAMES.has(dept.name)
-  // Phase 1 RBAC: shadow-so với supply.member, vẫn trả legacy.
-  return shadowGuard(user, 'isSupplyStaff', legacy, 'supply.member')
+  return hasPermission(user, 'supply.member')
 }
 
 type SupplierInput = z.infer<typeof supplierCreateSchema>

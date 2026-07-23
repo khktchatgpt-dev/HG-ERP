@@ -17,11 +17,19 @@ vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn(), list: vi.fn
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn() },
 }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { quotesService } from './quotes.service'
 import { quotesRepo } from './quotes.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-sales': { name: 'Bán Hàng', workspace_id: 'sales' },
+  'd-tech': { name: 'Kỹ Thuật', workspace_id: 'technical' },
+}
 
 const admin = { id: 'u-admin', role: 'admin', department_id: null } as unknown as User
 const salesNv = {
@@ -55,6 +63,9 @@ function mockDept(name: string | null) {
 beforeEach(() => {
   vi.clearAllMocks()
   mockDept(null)
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
 })
 
 describe('quotesService.send — sale tự chốt & gửi khách (FR-SAL-03)', () => {

@@ -1,21 +1,11 @@
 import { materialsRepo, type Material } from './warehouse.repo'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
-/** Tên phòng Kho trong `public.departments` (không hard-code UUID). */
-const WAREHOUSE_DEPT_NAME = 'Kho'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === WAREHOUSE_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với warehouse.member, vẫn trả legacy.
-  return shadowGuard(user, 'isWarehouseUser', legacy, 'warehouse.member')
+  return hasPermission(user, 'warehouse.member')
 }
 
 /**
@@ -29,9 +19,9 @@ async function canViewWarehouse(user: User): Promise<boolean> {
   return true
 }
 
-/** Chỉ Kho + admin được sửa danh mục vật tư. */
-function canEdit(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
+/** Sửa danh mục vật tư / nhập-xuất tồn: permission warehouse.edit. */
+async function canEdit(user: User): Promise<boolean> {
+  return hasPermission(user, 'warehouse.edit')
 }
 
 type CreateInput = {
@@ -75,11 +65,10 @@ export const materialsService = {
   },
 
   async create(user: User, input: CreateInput): Promise<Material> {
-    // Cung ứng cũng được TẠO vật tư — hàng mới phát sinh ngay lúc lên đơn đặt
-    // (thêm nhanh từ form PO). Sửa/xoá danh mục vẫn là quyền Kho/admin.
-    const whManager = (await isWarehouseUser(user)) && canEdit(user)
-    if (!whManager && !(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ quản lý Kho / admin / Cung ứng tạo được vật tư')
+    // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
+    // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).
+    if (!(await hasPermission(user, 'warehouse.material.create'))) {
+      throw Forbidden('Chỉ Kho / admin / Cung ứng tạo được vật tư')
     }
     const dup = await materialsRepo.findByCode(input.code)
     if (dup) throw Conflict(`Mã vật tư "${input.code}" đã tồn tại`)
@@ -103,7 +92,7 @@ export const materialsService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) throw Forbidden()
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) throw Forbidden()
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     if (patch.code && patch.code !== before.code) {
@@ -114,7 +103,7 @@ export const materialsService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isWarehouseUser(user)) || !canEdit(user)) throw Forbidden()
+    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) throw Forbidden()
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     await materialsRepo.delete(id)

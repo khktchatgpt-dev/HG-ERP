@@ -8,12 +8,11 @@ import '@/events/register' // Đăng ký handler event ở lần import đầu t
 import { routesRepo } from './routes.repo'
 import { nextStagesAfter } from './routes.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { isSalesStaff } from '@/modules/dept/sales/quotes.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Tách vai 07/2026: phòng gộp cũ + 2 phòng tách đều nhận báo LSX duyệt
@@ -25,37 +24,28 @@ const SUPPLY_DEPTS = new Set([
 ])
 const TECH_DEPT = 'Kỹ Thuật'
 
-/** Phát LSX: Sales (FR-SAL-06 — Sales lập, GĐ duyệt). Admin luôn được. */
+// Phase 2 RBAC: các guard đọc thẳng permission (seed đã ánh xạ khớp legacy).
+/** Phát LSX: production.lsx.issue (seed gán sales_staff; admin bypass). */
 async function canIssue(user: User): Promise<boolean> {
-  return user.role === 'admin' || (await isSalesStaff(user))
+  return hasPermission(user, 'production.lsx.issue')
 }
 
-/** Duyệt LSX: Giám đốc/Ban quản lý. */
-function canApprove(user: User): boolean {
-  return user.role === 'admin' || user.role === 'manager'
+/** Duyệt LSX: production.lsx.approve (seed gán director/manager; admin bypass). */
+async function canApprove(user: User): Promise<boolean> {
+  return hasPermission(user, 'production.lsx.approve')
 }
 
-/**
- * Nhân sự Xưởng: phòng gán workspace 'production' (/admin/departments).
- * Check bằng cột workspace_id — KHÔNG so tên chuỗi phòng (bug so tên đã vá 2 lần).
- */
+/** Nhân sự Xưởng: production.member (seed gán production_staff; admin bypass). */
 export async function isProductionStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.workspace_id === 'production'
-  // Phase 1 RBAC: shadow-so với production.member, vẫn trả legacy.
-  return shadowGuard(user, 'isProductionStaff', legacy, 'production.member')
+  return hasPermission(user, 'production.member')
 }
 
 /**
- * Cập nhật tiến độ + báo hoàn thành: GĐ/BQL hoặc Xưởng (workspace production —
- * FR-PROD-01/02/03). Cung ứng KHÔNG còn quyền này (user siết 07/2026: planner
- * chỉ định hình, dữ liệu thực thi là của bộ phận sản xuất — bỏ FR-SUP-08 cũ).
+ * Cập nhật tiến độ + báo hoàn thành: production.progress.track (seed gán
+ * director + production_staff; admin bypass). Cung ứng KHÔNG có quyền này.
  */
 async function canTrackProgress(user: User): Promise<boolean> {
-  return canApprove(user) || (await isProductionStaff(user))
+  return hasPermission(user, 'production.progress.track')
 }
 
 /** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
@@ -171,7 +161,7 @@ export const productionService = {
 
   /** GĐ DUYỆT LSX: pending_approval → approved; đơn → lsx_issued; báo Cung ứng + Kỹ thuật. */
   async approve(user: User, id: string): Promise<ProductionOrder> {
-    if (!canApprove(user)) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    if (!(await canApprove(user))) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'pending_approval')
@@ -203,7 +193,7 @@ export const productionService = {
 
   /** GĐ TỪ CHỐI LSX: pending_approval → rejected; đơn về confirmed; báo người phát. */
   async reject(user: User, id: string, reason: string): Promise<ProductionOrder> {
-    if (!canApprove(user)) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    if (!(await canApprove(user))) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'pending_approval')

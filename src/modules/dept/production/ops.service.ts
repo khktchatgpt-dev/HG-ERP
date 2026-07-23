@@ -22,6 +22,7 @@ import {
   type SlimOutputEntry,
 } from '@/lib/exec-ops'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { Forbidden } from '@/server/http'
 
 /**
@@ -29,8 +30,8 @@ import { Forbidden } from '@/server/http'
  * Service chỉ FETCH + LẮP RÁP — toàn bộ toán nằm ở lib/exec-ops.ts (có test).
  * Layout exec đã gate manager/admin; guard đây là source of truth cho API sau.
  */
-function assertExec(user: User): void {
-  if (user.role !== 'admin' && user.role !== 'manager') {
+async function assertExec(user: User): Promise<void> {
+  if (!(await hasPermission(user, 'exec.tower.view'))) {
     throw Forbidden('Chỉ Ban Giám đốc')
   }
 }
@@ -173,7 +174,7 @@ export type OpsTower = {
 export const opsService = {
   /** Data màn Báo cáo CEO (/exec) — vĩ mô hoạt động, management-by-exception. */
   async ceoOverview(user: User): Promise<CeoOverview> {
-    assertExec(user)
+    await assertExec(user)
     const today = new Date().toISOString().slice(0, 10)
 
     const [
@@ -314,7 +315,7 @@ export const opsService = {
 
   /** Data màn Tháp điều hành COO (/exec/ops) — real-time vận hành. */
   async opsTower(user: User): Promise<OpsTower> {
-    assertExec(user)
+    await assertExec(user)
     const today = new Date().toISOString().slice(0, 10)
 
     const [

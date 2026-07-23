@@ -29,6 +29,7 @@ vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn() },
 }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { componentsService } from './components.service'
 import { componentsRepo } from './components.repo'
@@ -38,6 +39,8 @@ import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const supply = {
@@ -51,6 +54,10 @@ const outsider = {
   department_id: 'd-other',
 } as unknown as User
 
+const DEPTS: Record<string, DeptInfo> = {
+  'd-supply': { name: 'Kế Hoạch Sản Xuất-cung ứng', workspace_id: 'planning' },
+}
+
 const LSX = { id: 'lsx1', code: 'LSX-01', sales_order_id: 'o1', status: 'approved' }
 const ORDER_LINES = [
   { id: 'ol1', product_id: 'p1', product_code: 'SP1', product_name: 'Ghế Hali', qty: 48 },
@@ -60,7 +67,11 @@ const LINE = { order_line_id: 'ol1', name: 'TAY+TỰA', qty_per_unit: 2 }
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isSupplyStaff).mockResolvedValue(true)
-  // canEditComponents (perms.ts) giờ tra TÊN PHÒNG: d-supply = vai Kế hoạch.
+  // canEditComponents (perms.ts) giờ đọc permission production.components.edit;
+  // d-supply = vai Kế hoạch (planner) → có quyền định hình.
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
   vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
     id === 'd-supply'
       ? ({ id, name: 'Kế Hoạch Sản Xuất-cung ứng', workspace_id: 'planning' } as never)

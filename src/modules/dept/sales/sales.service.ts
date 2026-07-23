@@ -1,25 +1,16 @@
 import { customersRepo, type Customer, type CustomerWithOwner } from './sales.repo'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { Forbidden, NotFound } from '@/server/http'
 
-/**
- * The "Bán Hàng" department's name as stored in `public.departments`.
- * Used to check whether a user belongs to Sales without hard-coding a UUID.
- */
-const SALES_DEPT_NAME = 'Bán Hàng'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isSalesUser(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === SALES_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với sales.member, vẫn trả legacy.
-  return shadowGuard(user, 'isSalesUser', legacy, 'sales.member')
+  return hasPermission(user, 'sales.member')
 }
 
+// canEdit: manager-tier sửa mọi KH; sale chỉ sửa KH của mình (row-level, giữ ở
+// service). Không hardcode tên phòng nên không cần permission riêng (seed cũng
+// chưa có sales.edit) — giữ role-tier + ownership.
 function canEdit(user: User, customer: Customer): boolean {
   if (user.role === 'admin') return true
   if (user.role === 'manager') return true // manager Sales edits all

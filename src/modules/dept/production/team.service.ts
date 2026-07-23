@@ -1,11 +1,12 @@
 import { productionRepo, type ProductionOrder } from './production.repo'
 import { routesRepo } from './routes.repo'
-import { isProductionStaff, productionService } from './production.service'
+import { productionService } from './production.service'
 import {
   departmentsRepo,
   type Department,
 } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { assessLateRisk } from '@/lib/late-risk'
 import { BadRequest, Forbidden } from '@/server/http'
@@ -150,7 +151,7 @@ export const teamService = {
     team: { id: string; name: string } | null
     cards: TeamCard[]
   }> {
-    if (user.role !== 'manager' && !(await isProductionStaff(user))) {
+    if (!(await hasPermission(user, 'production.team.manage'))) {
       throw Forbidden('Chỉ bộ phận sản xuất hoặc Ban quản lý xem bảng việc của tổ')
     }
     const stages = await productionRepo.listStages()

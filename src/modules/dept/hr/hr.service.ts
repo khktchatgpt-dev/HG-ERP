@@ -1,24 +1,16 @@
 import { leaveRepo, type LeaveRequest, type LeaveStatus, type LeaveType } from './hr.repo'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
-const HR_DEPT_NAME = 'Hành Chính Nhân Sự'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isHRStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === HR_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với hr.member, vẫn trả legacy.
-  return shadowGuard(user, 'isHRStaff', legacy, 'hr.member')
+  return hasPermission(user, 'hr.member')
 }
 
-function canDecide(user: User): boolean {
-  // Approver = manager (bất kỳ phòng nào) hoặc admin.
-  return user.role === 'manager' || user.role === 'admin'
+// Approver = manager-tier. Permission hr.leave.decide (seed gán manager/admin).
+async function canDecide(user: User): Promise<boolean> {
+  return hasPermission(user, 'hr.leave.decide')
 }
 
 export const leaveService = {
@@ -64,7 +56,7 @@ export const leaveService = {
       })
     }
     if (opts.scope === 'pending') {
-      if (!canDecide(user) && !(await isHRStaff(user))) throw Forbidden()
+      if (!(await canDecide(user)) && !(await isHRStaff(user))) throw Forbidden()
       return leaveRepo.list({
         status: 'pending',
         page: opts.page,
@@ -86,7 +78,7 @@ export const leaveService = {
     action: 'approve' | 'reject',
     note?: string,
   ): Promise<LeaveRequest> {
-    if (!canDecide(user)) throw Forbidden('Chỉ quản lý mới duyệt được đơn')
+    if (!(await canDecide(user))) throw Forbidden('Chỉ quản lý mới duyệt được đơn')
     const before = await leaveRepo.findById(id)
     if (!before) throw NotFound('Đơn không tồn tại')
     if (before.status !== 'pending') {

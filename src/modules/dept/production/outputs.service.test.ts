@@ -29,6 +29,7 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 vi.mock('./day-locks.repo', () => ({
   dayLocksRepo: { find: vi.fn(), listByDate: vi.fn() },
 }))
@@ -46,6 +47,8 @@ import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const worker = {
@@ -58,6 +61,11 @@ const outsider = {
   role: 'employee',
   department_id: 'd-sales',
 } as unknown as User
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-to-phoi': { name: 'Tổ Phôi', workspace_id: 'production' },
+  'd-sales': { name: 'Sales', workspace_id: 'sales' },
+}
 
 const LSX = { id: 'lsx1', code: 'LSX-01', sales_order_id: 'o1', status: 'in_progress' }
 // Ghế 48 chiếc: TAY+TỰA 2 CT/SP → tổng cần 96.
@@ -96,6 +104,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(isProductionStaff).mockResolvedValue(true)
   vi.mocked(isSupplyStaff).mockResolvedValue(false)
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(productionRepo.listStages).mockResolvedValue(STAGES as never)
   vi.mocked(componentsRepo.listByLsx).mockResolvedValue([COMPONENT] as never)
@@ -152,7 +163,7 @@ describe('outputsService.record — nhập sản lượng theo lô (FR-PR-02/03/
   })
 
   it('NV ngoài xưởng/KH-CƯ/QL → 403', async () => {
-    vi.mocked(isProductionStaff).mockResolvedValue(false)
+    vi.mocked(hasPermission).mockResolvedValue(false)
     await expect(outputsService.record(outsider, 'lsx1', RECORD)).rejects.toMatchObject({
       status: 403,
     })

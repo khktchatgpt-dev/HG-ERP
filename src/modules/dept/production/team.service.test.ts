@@ -15,13 +15,21 @@ vi.mock('./production.service', () => ({
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn(), list: vi.fn() },
 }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
 
 import { deriveCardStatus, teamService } from './team.service'
 import { productionRepo } from './production.repo'
 import { routesRepo } from './routes.repo'
-import { isProductionStaff, productionService } from './production.service'
+import { productionService } from './production.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-han': { name: 'Tổ Hàn', workspace_id: 'production' },
+  'd-sales': { name: 'Sales', workspace_id: 'sales' },
+}
 
 describe('deriveCardStatus — suy trạng thái thẻ từ sổ production_progress', () => {
   const at = (i: number) => `2026-07-0${i}T00:00:00Z`
@@ -159,8 +167,8 @@ function mockBoardData() {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(productionRepo.listStages).mockResolvedValue(STAGES)
-  vi.mocked(isProductionStaff).mockImplementation(
-    async (u: User) => u.department_id === 'd-han',
+  vi.mocked(hasPermission).mockImplementation(
+    makeFakeHasPermission((id) => DEPTS[id] ?? null),
   )
   mockDepts()
   mockBoardData()

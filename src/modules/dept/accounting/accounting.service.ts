@@ -4,21 +4,13 @@ import {
   type InvoiceDirection,
   type InvoiceStatus,
 } from './accounting.repo'
-import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { shadowGuard } from '@/modules/core/rbac/shadow'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
-const ACCT_DEPT_NAME = 'Tài Chính Kế Toán'
-
+// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isAccountingStaff(user: User): Promise<boolean> {
-  if (user.role === 'admin') return true
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const legacy = dept?.name === ACCT_DEPT_NAME
-  // Phase 1 RBAC: shadow-so với accounting.member, vẫn trả legacy.
-  return shadowGuard(user, 'isAccountingStaff', legacy, 'accounting.member')
+  return hasPermission(user, 'accounting.member')
 }
 
 type CreateInput = {
