@@ -97,6 +97,20 @@ gãy**. Plan gốc: `~/.claude/plans/noble-prancing-candy.md`.
 - Test: `rbac.service.test` +7 (authz + self-lock + emit delta). `npm run check`
   xanh, 504 test.
 
+### Sổ tay Thao tác — minh bạch enforcement (Phase A + C — ✅ XONG)
+Vấn đề: ma trận vai×quyền không cho thấy "permission khoá thao tác gì" (đọc-mở,
+tổ hợp AND/OR, guard theo vai toàn cục nằm trong code). Ví dụ: "Sales xem KT được,
+sửa không" đúng ở code nhưng vô hình trên UI.
+- [x] `src/modules/core/rbac/actions.ts` — registry `ACTIONS` (~60 thao tác) + luật
+      boolean (`public`/`perm`/`role`/`allOf`/`anyOf`) + `evalRule`/`canDo`.
+      `actions.test.ts`: mọi permission key ∈ seed, bảng chân trị, ca Sales↔KT.
+- [x] `/admin/permissions` tab **"Thao tác"**: mỗi thao tác + luật đọc được ("Sửa SP
+      = KT-member VÀ KT-edit"; "Xem = Mọi nhân viên") + ghi chú row-level.
+- [x] Tab **Nhân viên** thêm mục **"Thao tác làm được"**: ✓/✗ từng thao tác theo
+      permission thật của user (verify: NV Bán hàng → Xem KT ✓, Sửa SP ✗).
+- [ ] **Phase B (chưa làm)**: guard đọc thẳng registry (`assertAction`) → hết drift,
+      cuốn chiếu từng module, verify 0-lệch như Phase 2.
+
 ### Phase 4 — tuỳ chọn (CHƯA làm)
 - [ ] Chuyển `canEnterWorkspace`/`openView` sang permission `workspace.<id>.view`
       (hoặc giữ tầng đọc — vốn không phải ổ khoá).

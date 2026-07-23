@@ -16,8 +16,9 @@ import type {
   UserRoleRow,
 } from '@/modules/core/rbac/rbac.repo'
 import type { RbacMatrixUser } from '@/modules/core/rbac/rbac.service'
+import { ACTIONS, canDo, type Action, type Rule } from '@/modules/core/rbac/actions'
 
-type View = 'people' | 'roles' | 'matrix' | 'audit'
+type View = 'people' | 'roles' | 'actions' | 'matrix' | 'audit'
 
 const DOMAIN_LABEL: Record<string, string> = {
   production: 'Sản xuất',
@@ -30,6 +31,7 @@ const DOMAIN_LABEL: Record<string, string> = {
   exec: 'Điều hành',
   team: 'Đội nhóm',
   system: 'Hệ thống',
+  task: 'Công việc',
 }
 const GLOBAL_ROLE: Record<string, { label: string; cls: string }> = {
   admin: {
@@ -63,6 +65,7 @@ export function PermissionsManager(props: {
   const tabs: { id: View; label: string }[] = [
     { id: 'people', label: 'Nhân viên' },
     { id: 'roles', label: 'Vai trò' },
+    { id: 'actions', label: 'Thao tác' },
     { id: 'matrix', label: 'Ma trận' },
     { id: 'audit', label: 'Nhật ký' },
   ]
@@ -111,6 +114,7 @@ export function PermissionsManager(props: {
 
       {view === 'people' && <PeopleView {...props} />}
       {view === 'roles' && <RolesView {...props} />}
+      {view === 'actions' && <ActionsView permissions={permissions} />}
       {view === 'matrix' && <MatrixView {...props} />}
       {view === 'audit' && <AuditView />}
     </div>
@@ -327,6 +331,22 @@ function UserDetail({
   const derived = roleRows.filter((r) => r.source === 'derived')
   const manual = roleRows.filter((r) => r.source === 'manual')
 
+  // Thao tác LÀM ĐƯỢC — chạy luật registry với tập quyền của user (Phase C).
+  const permLabel = (k: string) => permByKey.get(k)?.label ?? k
+  const actionGroups = useMemo(() => {
+    const permSet = new Set<string>()
+    for (const rr of roleRows)
+      for (const pk of permKeysByRole.get(rr.role_id) ?? []) permSet.add(pk)
+    const ctx = { role: user.role, has: (k: string) => permSet.has(k) }
+    const gmap = new Map<string, { action: Action; ok: boolean }[]>()
+    for (const a of ACTIONS) {
+      const arr = gmap.get(a.domain) ?? []
+      arr.push({ action: a, ok: canDo(a, ctx) })
+      gmap.set(a.domain, arr)
+    }
+    return [...gmap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [roleRows, permKeysByRole, user.role])
+
   return (
     <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
       {/* Identity */}
@@ -446,6 +466,62 @@ function UserDetail({
                           </span>
                         ))}
                       </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Thao tác làm được — luật thật, kể cả đọc-mở + tổ hợp (Phase C) */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+          Thao tác làm được
+        </h3>
+        {isAdmin ? (
+          <p className="text-sm text-zinc-500">Làm được mọi thao tác (admin bypass).</p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {actionGroups.map(([domain, items]) => (
+              <div key={domain}>
+                <div className="mb-1 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+                  {DOMAIN_LABEL[domain] ?? domain}
+                </div>
+                <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+                  {items.map(({ action, ok }, i) => (
+                    <div
+                      key={action.key}
+                      className={`flex items-center justify-between gap-3 px-3 py-1.5 ${
+                        i > 0 ? 'border-t border-zinc-100 dark:border-zinc-900' : ''
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5 text-sm">
+                        <span className={ok ? 'text-emerald-500' : 'text-rose-400'}>
+                          {ok ? '✓' : '✗'}
+                        </span>
+                        <span
+                          className={
+                            ok
+                              ? 'text-zinc-800 dark:text-zinc-100'
+                              : 'text-zinc-400 line-through'
+                          }
+                        >
+                          {action.label}
+                        </span>
+                        {ok && action.rowLevel && (
+                          <span
+                            className="text-[11px] text-amber-500"
+                            title={action.rowLevel}
+                          >
+                            ⚑
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-right text-[11px] text-zinc-400">
+                        {ruleText(action.rule, permLabel)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -759,6 +835,110 @@ function RolesView({
           }}
         />
       )}
+    </div>
+  )
+}
+
+/* ─────────────────────────── THAO TÁC (sổ tay luật) ─────────────────────── */
+
+const GLOBAL_ROLE_SHORT: Record<string, string> = {
+  admin: 'Admin',
+  manager: 'Quản lý',
+  employee: 'Nhân viên',
+}
+
+/** Luật → chuỗi tiếng Việt đọc được (permLabel tra nhãn permission). */
+function ruleText(rule: Rule, permLabel: (k: string) => string, top = true): string {
+  switch (rule.kind) {
+    case 'public':
+      return 'Mọi nhân viên'
+    case 'perm':
+      return permLabel(rule.key)
+    case 'role':
+      return rule.of.map((r) => GLOBAL_ROLE_SHORT[r] ?? r).join(' hoặc ')
+    case 'allOf': {
+      const s = rule.of.map((r) => ruleText(r, permLabel, false)).join(' VÀ ')
+      return top ? s : `(${s})`
+    }
+    case 'anyOf': {
+      const s = rule.of.map((r) => ruleText(r, permLabel, false)).join(' HOẶC ')
+      return top ? s : `(${s})`
+    }
+  }
+}
+
+function ActionsView({ permissions }: { permissions: Permission[] }) {
+  const [q, setQ] = useState('')
+  const permLabel = useMemo(() => {
+    const m = new Map(permissions.map((p) => [p.key, p.label]))
+    return (k: string) => m.get(k) ?? k
+  }, [permissions])
+
+  const groups = useMemo(() => {
+    const ql = q.trim().toLowerCase()
+    const items = ql
+      ? ACTIONS.filter((a) =>
+          `${a.label} ${a.key} ${DOMAIN_LABEL[a.domain] ?? a.domain}`
+            .toLowerCase()
+            .includes(ql),
+        )
+      : ACTIONS
+    const m = new Map<string, Action[]>()
+    for (const a of items) {
+      const arr = m.get(a.domain) ?? []
+      arr.push(a)
+      m.set(a.domain, arr)
+    }
+    return [...m.entries()]
+  }, [q])
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Tìm thao tác…"
+          className="w-72 rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-sky-400 dark:border-zinc-700"
+        />
+        <p className="text-xs text-zinc-400">
+          {
+            '«VÀ» = cần đủ mọi quyền · «HOẶC» = chỉ cần một · «Mọi nhân viên» = xem mở. Admin bỏ qua tất cả.'
+          }
+        </p>
+      </div>
+      {groups.map(([domain, items]) => (
+        <div key={domain}>
+          <div className="mb-1 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+            {DOMAIN_LABEL[domain] ?? domain}
+          </div>
+          <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+            {items.map((a, i) => (
+              <div
+                key={a.key}
+                className={`px-3 py-2 ${i > 0 ? 'border-t border-zinc-100 dark:border-zinc-900' : ''}`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                  <span className="font-medium text-zinc-800 dark:text-zinc-100">
+                    {a.label}
+                  </span>
+                  <span className="text-sm text-zinc-500">
+                    Cần:{' '}
+                    <span className="font-medium text-zinc-700 dark:text-zinc-200">
+                      {ruleText(a.rule, permLabel)}
+                    </span>
+                  </span>
+                </div>
+                {a.rowLevel && (
+                  <p className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
+                    ⚑ {a.rowLevel}
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   )
 }
