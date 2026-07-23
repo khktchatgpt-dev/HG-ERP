@@ -13,7 +13,9 @@ export function registerPoNotificationHandlers(): void {
           recipientId: rid,
           actorId: e.submitted_by,
           type: 'po_submitted',
-          payload: { title: `${e.code} — ${e.supplier_name} (LSX ${e.lsx_code})` },
+          payload: {
+            title: `${e.code} — ${e.supplier_name} ${e.lsx_code ? `(LSX ${e.lsx_code})` : '(ngoài LSX)'}`,
+          },
         }),
       ),
     )

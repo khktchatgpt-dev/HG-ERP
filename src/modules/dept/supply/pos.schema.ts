@@ -34,7 +34,9 @@ export const poLineInputSchema = z
   })
 
 export const poCreateSchema = z.object({
-  production_order_id: z.string().uuid(), // BR-06: đúng 1 LSX
+  // Gắn LSX = PO theo lệnh sản xuất; null/bỏ trống = PO ngoài LSX (tiêu hao/dùng
+  // chung — 0076 nới BR-06 phần LSX, phần 1-NCC giữ nguyên).
+  production_order_id: z.string().uuid().nullable().optional(),
   supplier_id: z.string().uuid(), // BR-06: đúng 1 NCC
   currency: z.string().trim().toUpperCase().length(3).default('VND'),
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
@@ -60,6 +62,8 @@ export const poListQuerySchema = z.object({
   status: z.enum(PO_STATUSES).optional(),
   supplier_id: z.string().uuid().optional(),
   production_order_id: z.string().uuid().optional(),
+  /** Lọc loại đơn: 'lsx' = theo lệnh SX, 'standalone' = ngoài LSX (0076). */
+  scope: z.enum(['lsx', 'standalone']).optional(),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(100),
 })

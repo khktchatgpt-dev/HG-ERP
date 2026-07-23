@@ -88,7 +88,7 @@ export type CeoOverview = {
       id: string
       code: string
       supplier_name: string
-      lsx_code: string
+      lsx_code: string | null // null = PO ngoài LSX (0076)
       order_code: string | null
       expected_at: string | null
       created_at: string

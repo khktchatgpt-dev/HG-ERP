@@ -72,9 +72,11 @@ export default async function PoPrintPage({
         </table>
         <div className="border border-black px-3 py-1 text-center text-[12px]">
           <div className="font-bold">{po.code}</div>
-          <div>
-            LSX: <b>{po.lsx_code}</b>
-          </div>
+          {po.lsx_code && (
+            <div>
+              LSX: <b>{po.lsx_code}</b>
+            </div>
+          )}
           {po.order_code && <div>Đơn hàng: {po.order_code}</div>}
         </div>
       </div>

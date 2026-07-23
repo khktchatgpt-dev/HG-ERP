@@ -5,7 +5,8 @@ import type { PoStatus } from './pos.schema'
 export type Po = {
   id: string
   code: string
-  production_order_id: string
+  /** LSX của đơn; null = PO ngoài LSX (tiêu hao/dùng chung — 0076). */
+  production_order_id: string | null
   supplier_id: string
   status: PoStatus
   currency: string
@@ -24,7 +25,8 @@ export type Po = {
 
 export type PoWithRefs = Po & {
   supplier_name: string
-  lsx_code: string
+  /** null = PO ngoài LSX. */
+  lsx_code: string | null
   order_code: string | null
 }
 
@@ -75,7 +77,8 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
     return {
       ...r,
       supplier_name: sp?.name ?? '?',
-      lsx_code: lx?.code ?? '?',
+      // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
+      lsx_code: lx?.code ?? null,
       order_code: ord?.code ?? null,
     }
   })
@@ -110,6 +113,7 @@ export const posRepo = {
     status?: PoStatus
     supplier_id?: string
     production_order_id?: string
+    scope?: 'lsx' | 'standalone'
     page: number
     page_size: number
   }): Promise<{ rows: PoWithRefs[]; total: number }> {
@@ -121,6 +125,8 @@ export const posRepo = {
     if (filter.supplier_id) q = q.eq('supplier_id', filter.supplier_id)
     if (filter.production_order_id)
       q = q.eq('production_order_id', filter.production_order_id)
+    if (filter.scope === 'lsx') q = q.not('production_order_id', 'is', null)
+    if (filter.scope === 'standalone') q = q.is('production_order_id', null)
     if (filter.q) q = q.ilike('code', `%${filter.q}%`)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -236,7 +242,7 @@ export const posRepo = {
   async insert(
     row: {
       code: string
-      production_order_id: string
+      production_order_id: string | null
       supplier_id: string
       currency: string
       vat_rate?: number | null

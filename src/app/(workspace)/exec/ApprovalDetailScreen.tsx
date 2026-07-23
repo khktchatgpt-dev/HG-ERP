@@ -397,7 +397,7 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
           <Chain
             nodes={[
               ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
-              { label: 'LSX', value: p.lsx_code },
+              ...(p.lsx_code ? [{ label: 'LSX', value: p.lsx_code }] : []),
               { label: 'Đơn vật tư', value: p.code },
             ]}
           />
@@ -462,7 +462,7 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
             value: days >= 1 ? `${days} ngày` : 'mới',
             tone: waitTone,
           },
-          { label: 'Cho LSX', value: p.lsx_code },
+          { label: 'Cho LSX', value: p.lsx_code ?? 'Ngoài LSX' },
           { label: 'Số dòng', value: `${lines.length}` },
         ]}
         busy={dec.busy}

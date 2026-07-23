@@ -49,7 +49,14 @@ type MaterialOption = {
   unit: string
   shelf_location: string | null
 }
-type PoOption = { id: string; code: string; status: string; supplier_name: string; lsx_code: string }
+type PoOption = {
+  id: string
+  code: string
+  status: string
+  supplier_name: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
+}
 type LsxOption = { id: string; code: string; customer_name: string }
 
 type PoLine = {
@@ -487,7 +494,7 @@ function ReceiptForm({
             <option value="">Mua ngoài (không theo đơn đặt)</option>
             {pos.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.code} — {p.supplier_name} (LSX {p.lsx_code})
+                {p.code} — {p.supplier_name} ({p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX'})
               </option>
             ))}
           </select>

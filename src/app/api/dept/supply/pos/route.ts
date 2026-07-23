@@ -11,7 +11,7 @@ export const GET = handle(async (req: Request) => {
   return NextResponse.json(result)
 })
 
-/** Tạo đơn đặt vật tư (BR-06: 1 LSX + 1 NCC) → vào thẳng chờ GĐ duyệt. */
+/** Tạo đơn đặt vật tư (1 NCC; gắn LSX hoặc ngoài LSX — 0076) → vào thẳng chờ GĐ duyệt. */
 export const POST = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const input = await parseJson(req, poCreateSchema)

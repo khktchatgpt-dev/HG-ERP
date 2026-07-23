@@ -89,7 +89,7 @@ export type DomainEvent =
       po_id: string
       code: string
       supplier_name: string
-      lsx_code: string
+      lsx_code: string | null // null = PO ngoài LSX (0076)
       submitted_by: string
       approver_ids: string[]
     }

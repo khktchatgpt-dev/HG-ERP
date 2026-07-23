@@ -127,6 +127,35 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
     ).rejects.toMatchObject({ status: 400 })
   })
 
+  it('PO ngoài LSX (0076): không gắn LSX — bỏ qua tra LSX, lưu null, event lsx_code null', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      name: 'Nhôm Tiến Đạt',
+      is_active: true,
+    } as never)
+    vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0002')
+    vi.mocked(posRepo.insert).mockResolvedValue({
+      ...PO,
+      production_order_id: null,
+    } as never)
+
+    await posService.create(staff, {
+      production_order_id: null,
+      supplier_id: 's1',
+      currency: 'VND',
+      price_includes_vat: true,
+      lines: [{ material_id: 'm1', qty_ordered: 5 }],
+    })
+
+    expect(productionRepo.findById).not.toHaveBeenCalled()
+    const row = vi.mocked(posRepo.insert).mock.calls[0][0] as {
+      production_order_id: string | null
+    }
+    expect(row.production_order_id).toBeNull()
+    const evt = vi.mocked(emit).mock.calls[0][0] as { lsx_code: string | null }
+    expect(evt.lsx_code).toBeNull()
+  })
+
   it('ngoài phòng Cung ứng không tạo được', async () => {
     vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
     await expect(

@@ -20,7 +20,8 @@ type PoRow = {
   id: string
   code: string
   status: string
-  lsx_code: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
   order_code: string | null
   expected_at: string | null
   created_at: string
@@ -179,15 +180,20 @@ export function SupplierDetail({
       key: 'chain',
       header: 'LSX / Đơn hàng',
       width: '160px',
-      cell: (p) => (
-        <RefChain
-          size="sm"
-          nodes={[
-            ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
-            { label: 'LSX', value: p.lsx_code },
-          ]}
-        />
-      ),
+      cell: (p) =>
+        p.lsx_code ? (
+          <RefChain
+            size="sm"
+            nodes={[
+              ...(p.order_code ? [{ label: 'Đơn hàng', value: p.order_code }] : []),
+              { label: 'LSX', value: p.lsx_code },
+            ]}
+          />
+        ) : (
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+            Ngoài LSX
+          </span>
+        ),
     },
     {
       key: 'total',

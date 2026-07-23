@@ -11,7 +11,8 @@ export type OpenPo = {
   code: string
   status: string
   supplier_name: string
-  lsx_code: string
+  /** null = PO ngoài LSX (0076). */
+  lsx_code: string | null
 }
 
 export type PoLineStatus = {
@@ -53,7 +54,7 @@ export const supplyRepo = {
         code: r.code as string,
         status: r.status as string,
         supplier_name: (sp as { name?: string } | null)?.name ?? '?',
-        lsx_code: (lx as { code?: string } | null)?.code ?? '?',
+        lsx_code: (lx as { code?: string } | null)?.code ?? null,
       }
     })
   },
