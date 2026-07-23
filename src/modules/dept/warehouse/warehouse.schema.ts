@@ -99,10 +99,18 @@ export const issueDocSchema = z
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
     reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
     note: z.string().trim().max(2000).optional().nullable(),
+    // Lấn phần tồn đang GIỮ cho LSX khác: mặc định chặn (409 RESERVED_CONFLICT).
+    // Người dùng xác nhận vẫn xuất → gửi lại kèm cờ + lý do (ghi vào ghi chú phiếu).
+    override_reserved: z.coerce.boolean().default(false),
+    override_reason: z.string().trim().max(500).optional().nullable(),
     lines: z.array(issueDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
   })
   .refine((d) => d.kind !== 'lsx' || !!d.production_order_id, {
     message: 'BR-09: xuất theo LSX phải chọn LSX',
+  })
+  .refine((d) => !d.override_reserved || !!d.override_reason?.trim(), {
+    message: 'Xuất vượt khả dụng phải kèm lý do',
+    path: ['override_reason'],
   })
 
 /** Dòng phiếu TRẢ HÀNG NCC (0080): gắn dòng PO đã về, trả ≤ số đã về. */

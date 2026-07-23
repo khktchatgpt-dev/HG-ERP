@@ -48,6 +48,7 @@ vi.mock('@/modules/core/departments/departments.repo', () => ({
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({
   SUPPLY_DEPT_NAMES: new Set(['Kế Hoạch Sản Xuất-cung ứng', 'Cung Ứng - Mua Hàng']),
 }))
+vi.mock('@/lib/reserved-stock', () => ({ computeReservedByMaterial: vi.fn() }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
 import { stockService, smartLsxNeeds } from './stock.service'
@@ -55,12 +56,16 @@ import {
   docsRepo,
   insertMovements,
   issuedByLsx,
+  issuedByLsxIds,
+  lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
   onHandMany,
   stockInfoMany,
   stocktakeRepo,
   warehousesRepo,
 } from './stock.repo'
+import { componentsRepo } from '@/modules/dept/production/components.repo'
+import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
@@ -83,6 +88,9 @@ beforeEach(() => {
   vi.mocked(usersRepo.list).mockResolvedValue([])
   vi.mocked(departmentsRepo.list).mockResolvedValue([])
   vi.mocked(stockInfoMany).mockResolvedValue([])
+  // Mặc định KHÔNG có LSX nào đang giữ chỗ → guard khả dụng không chặn.
+  vi.mocked(productionRepo.listCommittedIds).mockResolvedValue([])
+  vi.mocked(computeReservedByMaterial).mockReturnValue(new Map())
   // Mặc định: PO đang mở + LSX đang SX — case hợp lệ; test guard override riêng.
   vi.mocked(supplyRepo.poStatus).mockResolvedValue({
     code: 'PO-2026-0001',
@@ -454,5 +462,77 @@ describe('createStocktakeDoc — phiếu kiểm kê (0077)', () => {
     expect(r.diff_count).toBe(1)
     const rows = vi.mocked(insertMovements).mock.calls[0][0]
     expect(rows[0]).toMatchObject({ direction: 'in', qty: 4 })
+  })
+})
+
+describe('createIssueDoc — guard TỒN KHẢ DỤNG (đã giữ cho LSX khác)', () => {
+  /** on_hand 5, LSX khác đang giữ 5 → khả dụng 0. */
+  function reservedByOther(qtyReserved: number) {
+    vi.mocked(productionRepo.listCommittedIds).mockResolvedValue(['lsx-other'])
+    vi.mocked(componentsRepo.listForReserve).mockResolvedValue([] as never)
+    vi.mocked(issuedByLsxIds).mockResolvedValue([] as never)
+    vi.mocked(lsxRemainingByIds).mockResolvedValue([] as never)
+    vi.mocked(computeReservedByMaterial).mockReturnValue(new Map([['m1', qtyReserved]]))
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 5]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0001')
+  }
+
+  it('lấn phần đang giữ → 409 RESERVED_CONFLICT, KHÔNG ghi phiếu', async () => {
+    reservedByOther(5)
+
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'daily',
+        lines: [{ material_id: 'm1', qty: 3 }],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'RESERVED_CONFLICT' })
+
+    expect(insertMovements).not.toHaveBeenCalled()
+    expect(docsRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('vẫn chặn CỨNG khi vượt tồn thực tế (không phải chỉ khả dụng)', async () => {
+    reservedByOther(0)
+
+    await expect(
+      stockService.createIssueDoc(admin, {
+        kind: 'daily',
+        lines: [{ material_id: 'm1', qty: 99 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('override kèm lý do → xuất được, ghi vết "[Vượt khả dụng]" vào ghi chú', async () => {
+    reservedByOther(5)
+
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      note: 'Xuất gấp',
+      override_reserved: true,
+      override_reason: 'Sếp duyệt ưu tiên đơn A',
+      lines: [{ material_id: 'm1', qty: 3 }],
+    })
+
+    expect(insertMovements).toHaveBeenCalled()
+    const doc = vi.mocked(docsRepo.insert).mock.calls[0][0]
+    expect(doc.note).toContain('[Vượt khả dụng]')
+    expect(doc.note).toContain('Sếp duyệt ưu tiên đơn A')
+    expect(doc.note).toContain('Xuất gấp')
+  })
+
+  it('xuất cho CHÍNH LSX đang giữ → không bị chặn (loại chính nó khỏi phần giữ)', async () => {
+    // Chỉ có lsx1 đang cam kết; xuất cho lsx1 → exclude → giữ = 0, khả dụng = 5.
+    vi.mocked(productionRepo.listCommittedIds).mockResolvedValue(['lsx1'])
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 5]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0002')
+
+    await stockService.createIssueDoc(admin, {
+      kind: 'lsx',
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+
+    expect(insertMovements).toHaveBeenCalled()
   })
 })

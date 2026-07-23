@@ -27,7 +27,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
 type ReceiveInput = {
   material_id: string
@@ -360,6 +360,9 @@ export const stockService = {
       counterparty?: string | null
       reason?: string | null
       note?: string | null
+      /** Xác nhận vẫn xuất dù lấn phần đang giữ cho LSX khác (kèm lý do). */
+      override_reserved?: boolean
+      override_reason?: string | null
       lines: {
         material_id: string
         qty: number
@@ -399,16 +402,50 @@ export const stockService = {
       }
     }
 
+    // ── Guard KHẢ DỤNG (bước 2 Kho) ─────────────────────────────────────────
+    // Tồn thực tế có thể đang GIỮ cho LSX khác đã cam kết — lấn vào đó là lấy
+    // vật tư của xưởng khác. Mặc định chặn 409 RESERVED_CONFLICT; người dùng
+    // xác nhận thì gửi lại kèm lý do (ghi vào ghi chú phiếu để hậu kiểm).
+    // Xuất cho LSX X: phần giữ của CHÍNH X không tính là bị chiếm.
+    if (!input.override_reserved) {
+      const reserved = await reservedByCommittedLsx(
+        input.kind === 'lsx' ? (input.production_order_id ?? undefined) : undefined,
+      )
+      const clashes: { matId: string; qty: number; avail: number; res: number }[] = []
+      for (const [matId, qty] of need) {
+        const have = onHand.get(matId) ?? 0
+        const res = reserved.get(matId) ?? 0
+        const avail = have - res
+        if (qty > avail) clashes.push({ matId, qty, avail, res })
+      }
+      if (clashes.length > 0) {
+        const named = await Promise.all(
+          clashes.map(async (c) => {
+            const mat = await materialsRepo.findById(c.matId)
+            return `"${mat?.name ?? c.matId}": cần ${c.qty}, khả dụng ${c.avail} (đang giữ ${c.res})`
+          }),
+        )
+        throw Conflict(
+          `Vượt tồn khả dụng — phần này đang giữ cho LSX khác: ${named.join('; ')}`,
+          'RESERVED_CONFLICT',
+        )
+      }
+    }
+
     const [code, warehouseId] = await Promise.all([
       docsRepo.nextCode('PXK'),
       warehousesRepo.mainId(),
     ])
+    // Ghi vết khi cố ý xuất lấn phần đang giữ — để hậu kiểm ai lấy của ai.
+    const note = input.override_reserved
+      ? `${input.note ? `${input.note} · ` : ''}[Vượt khả dụng] ${input.override_reason ?? ''}`.trim()
+      : (input.note ?? null)
     const doc = await docsRepo.insert({
       code,
       kind: 'issue',
       counterparty: input.counterparty ?? null,
       reason: input.reason ?? null,
-      note: input.note ?? null,
+      note,
       created_by: user.id,
     })
     await insertMovements(
