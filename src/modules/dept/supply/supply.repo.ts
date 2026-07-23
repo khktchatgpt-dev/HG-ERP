@@ -97,8 +97,10 @@ export const supplyRepo = {
   },
 
   /**
-   * Tính lại trạng thái PO sau khi nhập kho: mọi dòng missing ≤ 0 → received,
-   * ngược lại partial (view là nguồn đối chiếu — thiết kế §7).
+   * Tính lại trạng thái PO sau khi nhập kho / TRẢ HÀNG NCC (0080): mọi dòng
+   * missing ≤ 0 → received, ngược lại partial (view là nguồn đối chiếu — §7).
+   * 'received' nằm trong danh sách cập nhật để phiếu trả kéo PO quay lại
+   * partial (NCC giao bù); vẫn không đè cancelled/pending_approval.
    */
   async refreshStatusFromReceipts(poId: string): Promise<'partial' | 'received' | null> {
     const lines = await this.lineStatus(poId)
@@ -109,9 +111,33 @@ export const supplyRepo = {
       .from('supply_purchase_orders')
       .update({ status })
       .eq('id', poId)
-      .in('status', [...RECEIVABLE]) // không đè lên cancelled/pending_approval
+      .in('status', [...RECEIVABLE, 'received'])
     if (error) throw new Error(error.message)
     return status
+  },
+
+  /**
+   * PO trả hàng NCC được (⑤): đã có hàng về — partial hoặc received.
+   * Kèm tên NCC để phiếu xuất trả ghi đúng người nhận (mẫu 02-VT).
+   */
+  async listReturnablePos(): Promise<
+    { id: string; code: string; status: string; supplier_name: string }[]
+  > {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('id, code, status, supplier:supply_suppliers(name)')
+      .in('status', ['partial', 'received'])
+      .order('created_at', { ascending: false })
+      .limit(200)
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const sp = Array.isArray(r.supplier) ? r.supplier[0] : r.supplier
+      return {
+        id: r.id as string,
+        code: r.code as string,
+        status: r.status as string,
+        supplier_name: (sp as { name?: string } | null)?.name ?? '?',
+      }
+    })
   },
 
   /**

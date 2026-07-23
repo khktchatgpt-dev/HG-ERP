@@ -105,6 +105,22 @@ export const issueDocSchema = z
     message: 'BR-09: xuất theo LSX phải chọn LSX',
   })
 
+/** Dòng phiếu TRẢ HÀNG NCC (0080): gắn dòng PO đã về, trả ≤ số đã về. */
+export const returnDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  po_line_id: z.string().uuid(),
+  qty: z.coerce.number().positive(),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu trả hàng NCC (⑤): phiếu xuất 02-VT, movement out gắn po_line_id. */
+export const returnDocSchema = z.object({
+  po_id: z.string().uuid(),
+  reason: z.string().trim().min(1, 'Trả hàng phải kèm lý do').max(500),
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z.array(returnDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+})
+
 /** Dòng kiểm kê: số ĐẾM THỰC TẾ — tồn sổ server tự đọc lại lúc ghi (0077). */
 export const stocktakeDocLineSchema = z.object({
   material_id: z.string().uuid(),

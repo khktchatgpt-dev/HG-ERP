@@ -15,6 +15,7 @@ const TYPE_LABEL: Record<string, string> = {
   quote_rejected: 'đã từ chối báo giá',
   wh_receipt: 'đã lập phiếu nhập kho',
   wh_stock_low: 'cảnh báo tồn dưới mức tối thiểu',
+  wh_return: 'đã lập phiếu trả hàng NCC',
   po_submitted: 'gửi đơn đặt vật tư chờ bạn duyệt',
   po_approved: 'đã duyệt đơn đặt vật tư',
   po_rejected: 'đã từ chối đơn đặt vật tư',

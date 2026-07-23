@@ -249,6 +249,12 @@ export const stockService = {
     return supplyRepo.lineStatus(poId)
   },
 
+  /** PO trả hàng NCC được (⑤): đã có hàng về (partial/received) — form phiếu trả. */
+  async poReturnOptions(user: User) {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    return supplyRepo.listReturnablePos()
+  },
+
   /**
    * Lập PHIẾU NHẬP nhiều dòng (PNK — FR-WMS-02/03/04, BR-08/10).
    * Theo PO: gắn po_line_id từng dòng, sau ghi tính lại trạng thái PO
@@ -498,6 +504,107 @@ export const stockService = {
       )
     }
     return { id: doc.id, code: doc.code, diff_count: diffs.length }
+  },
+
+  /**
+   * PHIẾU TRẢ HÀNG NCC (⑤, 0080): hàng đã nhập kho rồi mới phát hiện lỗi →
+   * xuất trả. Là phiếu xuất 02-VT bình thường, mỗi dòng gắn po_line_id với
+   * direction='out' — view đối chiếu TRỪ vào "đã về" → PO received quay lại
+   * partial (NCC giao bù). Guard: PO phải đã có hàng về; trả ≤ số đã về;
+   * trả ≤ tồn hiện có.
+   */
+  async createReturnDoc(
+    user: User,
+    input: {
+      po_id: string
+      reason: string
+      note?: string | null
+      lines: {
+        material_id: string
+        po_line_id: string
+        qty: number
+        note?: string | null
+      }[]
+    },
+  ): Promise<{ id: string; code: string; po_status: string | null }> {
+    await assertAction(user, 'warehouse.stock.write')
+    const po = await supplyRepo.poStatus(input.po_id)
+    if (!po) throw NotFound('Đơn đặt (PO) không tồn tại')
+    if (po.status !== 'partial' && po.status !== 'received') {
+      throw BadRequest(`PO ${po.code} chưa có hàng về — không có gì để trả NCC`)
+    }
+
+    // Trả ≤ số đã về của từng dòng (view 0080 đã trừ các lần trả trước).
+    const status = await supplyRepo.lineStatus(input.po_id)
+    const receivedByLine = new Map(status.map((l) => [l.id, l]))
+    for (const l of input.lines) {
+      const line = receivedByLine.get(l.po_line_id)
+      if (!line) throw BadRequest('Có dòng không thuộc PO này')
+      if (line.material_id !== l.material_id) {
+        throw BadRequest('Dòng trả không khớp vật tư của dòng PO')
+      }
+      if (l.qty > line.qty_received) {
+        throw BadRequest(
+          `"${line.material_name}": trả ${l.qty} vượt số đã về (${line.qty_received})`,
+        )
+      }
+    }
+    // Và ≤ tồn hiện có (hàng có thể đã xuất cho sản xuất).
+    const need = new Map<string, number>()
+    for (const l of input.lines) {
+      need.set(l.material_id, (need.get(l.material_id) ?? 0) + l.qty)
+    }
+    const onHand = await onHandMany([...need.keys()])
+    for (const [matId, qty] of need) {
+      const have = onHand.get(matId) ?? 0
+      if (qty > have) {
+        const mat = await materialsRepo.findById(matId)
+        throw BadRequest(
+          `Không đủ tồn để trả "${mat?.name ?? matId}": cần ${qty}, còn ${have}`,
+        )
+      }
+    }
+
+    const [code, warehouseId] = await Promise.all([
+      docsRepo.nextCode('PXK'),
+      warehousesRepo.mainId(),
+    ])
+    const doc = await docsRepo.insert({
+      code,
+      kind: 'issue',
+      counterparty: null,
+      reason: `Trả hàng NCC — ${po.code}: ${input.reason}`,
+      note: input.note ?? null,
+      created_by: user.id,
+    })
+    await insertMovements(
+      input.lines.map((l) => ({
+        material_id: l.material_id,
+        direction: 'out' as const,
+        qty: l.qty,
+        ref_type: 'po', // out + po_line_id = trả NCC (nhập theo PO luôn là in)
+        note: l.note ?? null,
+        created_by: user.id,
+        doc_id: doc.id,
+        warehouse_id: warehouseId,
+        po_line_id: l.po_line_id,
+      })),
+    )
+    const poStatus = await supplyRepo.refreshStatusFromReceipts(input.po_id)
+
+    const managers = (await usersRepo.list()).filter(
+      (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
+    )
+    await emit({
+      name: 'warehouse.return.created',
+      doc_id: doc.id,
+      code: doc.code,
+      po_code: po.code,
+      reason: input.reason,
+      created_by: user.id,
+      notify_ids: managers.map((m) => m.id),
+    })
+    return { id: doc.id, code: doc.code, po_status: poStatus }
   },
 }
 

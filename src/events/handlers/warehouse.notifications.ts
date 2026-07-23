@@ -19,6 +19,20 @@ export function registerWarehouseNotificationHandlers(): void {
     )
   })
 
+  // Trả hàng NCC (⑤, 0080) — báo GĐ/QL: PO có thể quay lại partial chờ giao bù.
+  on('warehouse.return.created', async (e) => {
+    await Promise.all(
+      e.notify_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.created_by,
+          type: 'wh_return',
+          payload: { title: `${e.code} — trả hàng NCC theo ${e.po_code}: ${e.reason}` },
+        }),
+      ),
+    )
+  })
+
   on('warehouse.stock.low', async (e) => {
     await Promise.all(
       e.notify_ids.map((rid) =>

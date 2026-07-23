@@ -16,6 +16,7 @@ export type NotificationType =
   | 'quote_rejected'
   | 'wh_receipt'
   | 'wh_stock_low'
+  | 'wh_return'
   | 'po_submitted'
   | 'po_approved'
   | 'po_rejected'

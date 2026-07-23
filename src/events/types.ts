@@ -73,6 +73,16 @@ export type DomainEvent =
       notify_ids: string[]
     }
   | {
+      // Trả hàng NCC (⑤, 0080) — PO received có thể quay lại partial chờ giao bù.
+      name: 'warehouse.return.created'
+      doc_id: string
+      code: string
+      po_code: string
+      reason: string
+      created_by: string
+      notify_ids: string[]
+    }
+  | {
       name: 'warehouse.stock.low'
       material_id: string
       material_code: string
