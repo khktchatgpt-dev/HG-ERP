@@ -92,6 +92,58 @@ export type RbacMatrix = {
   users: RbacMatrixUser[]
 }
 
+// ── View-model cho các trang con /admin/permissions/* ────────────────────────
+export type GlobalRole = 'admin' | 'manager' | 'employee'
+export type RbacCounts = {
+  users: number
+  roles: number
+  permissions: number
+  actions: number
+  manual: number
+}
+export type PersonListItem = {
+  id: string
+  name: string | null
+  email: string
+  role: GlobalRole
+  department: string | null
+  roleCount: number
+}
+export type PermGroupItem = { key: string; label: string; sources: string[] }
+export type PermGroup = { domain: string; items: PermGroupItem[] }
+export type PersonRoleChip = {
+  role_id: string
+  label: string
+  key: string
+  source: 'derived' | 'manual'
+}
+export type PersonDetail = {
+  user: {
+    id: string
+    name: string | null
+    email: string
+    role: GlobalRole
+    department: string | null
+  }
+  roleChips: PersonRoleChip[]
+  permGroups: PermGroup[]
+  /** Tập permission key hiệu lực (để tính "thao tác làm được" phía passport). */
+  permKeys: string[]
+  /** key → nhãn permission (cho ruleText). */
+  permLabels: Record<string, string>
+}
+export type RolesData = {
+  roles: Role[]
+  permissions: Permission[]
+  rolePermissions: RolePermission[]
+  userRoles: UserRoleRow[]
+}
+export type MatrixData = {
+  roles: Role[]
+  permissions: Permission[]
+  rolePermissions: RolePermission[]
+}
+
 export const rbacService = {
   permissionsOf,
   hasPermission,
@@ -124,6 +176,154 @@ export const rbacService = {
   async audit(user: User): Promise<RbacAuditEntry[]> {
     assertAdmin(user)
     return rbacAuditRepo.listRecent(100)
+  },
+
+  // ── Loader gọn cho từng trang con /admin/permissions/* (admin-only) ────────
+
+  /** Số đếm cho StatsBar chung (layout). */
+  async overviewCounts(user: User): Promise<RbacCounts> {
+    assertAdmin(user)
+    const [roles, permissions, userRoles, users] = await Promise.all([
+      rbacRepo.listRoles(true),
+      rbacRepo.listPermissions(),
+      rbacRepo.listUserRoles(),
+      usersRepo.list({ active_only: true }),
+    ])
+    return {
+      users: users.length,
+      roles: roles.filter((r) => r.is_active).length,
+      permissions: permissions.length,
+      actions: ACTIONS.length,
+      manual: userRoles.filter((u) => u.source === 'manual').length,
+    }
+  },
+
+  /** Danh sách nhân viên + số vai (trang /people). */
+  async peopleList(user: User): Promise<PersonListItem[]> {
+    assertAdmin(user)
+    const [users, userRoles, depts] = await Promise.all([
+      usersRepo.list({ active_only: true }),
+      rbacRepo.listUserRoles(),
+      departmentsRepo.list(),
+    ])
+    const deptName = new Map(depts.map((d) => [d.id, d.name]))
+    const countByUser = new Map<string, number>()
+    for (const ur of userRoles)
+      countByUser.set(ur.user_id, (countByUser.get(ur.user_id) ?? 0) + 1)
+    return users.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      department: u.department_id ? (deptName.get(u.department_id) ?? null) : null,
+      roleCount: countByUser.get(u.id) ?? 0,
+    }))
+  },
+
+  /** Hộ chiếu quyền 1 người: vai + quyền hiệu lực kèm nguồn (trang /people?u=). */
+  async person(user: User, targetId: string): Promise<PersonDetail | null> {
+    assertAdmin(user)
+    const target = await usersRepo.findById(targetId)
+    if (!target || !target.is_active || target.deleted_at) return null
+    const [roles, permissions, rolePermissions, userRoles, depts] = await Promise.all([
+      rbacRepo.listRoles(true),
+      rbacRepo.listPermissions(),
+      rbacRepo.listRolePermissions(),
+      rbacRepo.listUserRoles(),
+      departmentsRepo.list(),
+    ])
+    const roleById = new Map(roles.map((r) => [r.id, r]))
+    const permByKey = new Map(permissions.map((p) => [p.key, p]))
+    const permKeysByRole = new Map<string, string[]>()
+    for (const rp of rolePermissions) {
+      const arr = permKeysByRole.get(rp.role_id) ?? []
+      arr.push(rp.permission_key)
+      permKeysByRole.set(rp.role_id, arr)
+    }
+    const myRoles = userRoles.filter((ur) => ur.user_id === targetId)
+    const isAdmin = target.role === 'admin'
+
+    // Quyền hiệu lực + nguồn (vai nào cấp). admin → toàn bộ (bypass).
+    const byPerm = new Map<string, string[]>()
+    const permKeys = new Set<string>()
+    if (isAdmin) {
+      for (const p of permissions) byPerm.set(p.key, ['admin (bypass)'])
+    } else {
+      for (const ur of myRoles) {
+        const role = roleById.get(ur.role_id)
+        if (!role) continue
+        for (const pk of permKeysByRole.get(ur.role_id) ?? []) {
+          permKeys.add(pk)
+          const arr = byPerm.get(pk) ?? []
+          if (!arr.includes(role.label)) arr.push(role.label)
+          byPerm.set(pk, arr)
+        }
+      }
+    }
+    const gmap = new Map<string, PermGroupItem[]>()
+    for (const [pk, sources] of byPerm) {
+      const p = permByKey.get(pk)
+      if (!p) continue
+      const arr = gmap.get(p.domain) ?? []
+      arr.push({ key: pk, label: p.label, sources })
+      gmap.set(p.domain, arr)
+    }
+    const permGroups = [...gmap.entries()]
+      .map(([domain, items]) => ({
+        domain,
+        items: items.sort((a, b) => a.key.localeCompare(b.key)),
+      }))
+      .sort((a, b) => a.domain.localeCompare(b.domain))
+
+    return {
+      user: {
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        role: target.role,
+        department: target.department_id
+          ? (depts.find((d) => d.id === target.department_id)?.name ?? null)
+          : null,
+      },
+      roleChips: myRoles.map((ur) => ({
+        role_id: ur.role_id,
+        label: roleById.get(ur.role_id)?.label ?? ur.role_id,
+        key: roleById.get(ur.role_id)?.key ?? '',
+        source: ur.source,
+      })),
+      permGroups,
+      permKeys: [...permKeys],
+      permLabels: Object.fromEntries(permissions.map((p) => [p.key, p.label])),
+    }
+  },
+
+  /** Dữ liệu cho trang /roles (list + editor + members). */
+  async rolesData(user: User): Promise<RolesData> {
+    assertAdmin(user)
+    const [roles, permissions, rolePermissions, userRoles] = await Promise.all([
+      rbacRepo.listRoles(true),
+      rbacRepo.listPermissions(),
+      rbacRepo.listRolePermissions(),
+      rbacRepo.listUserRoles(),
+    ])
+    return { roles, permissions, rolePermissions, userRoles }
+  },
+
+  /** Danh sách permission (nhãn) cho trang /actions. */
+  async catalog(user: User): Promise<Permission[]> {
+    assertAdmin(user)
+    return rbacRepo.listPermissions()
+  },
+
+  /** Ma trận Vai×Quyền (trang /matrix, đọc). */
+  async matrixData(user: User): Promise<MatrixData> {
+    assertAdmin(user)
+    const [roles, permissions, rolePermissions] = await Promise.all([
+      rbacRepo.listRoles(true),
+      rbacRepo.listPermissions(),
+      rbacRepo.listRolePermissions(),
+    ])
+    return { roles, permissions, rolePermissions }
   },
 
   // ── Ghi (Phase 3): admin-only, có audit + chặn tự-khoá ────────────────────
