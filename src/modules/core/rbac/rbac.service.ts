@@ -1,5 +1,6 @@
 import { cache } from 'react'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 import { emit } from '@/events/bus'
 import {
@@ -50,7 +51,14 @@ function assertAdmin(user: User): void {
   if (user.role !== 'admin') throw Forbidden('Chỉ admin xem/quản trị phân quyền')
 }
 
-export type RbacMatrixUser = { id: string; name: string | null; email: string }
+export type RbacMatrixUser = {
+  id: string
+  name: string | null
+  email: string
+  /** Vai toàn cục (cột users.role) — 'admin' = bypass toàn quyền. */
+  role: 'admin' | 'manager' | 'employee'
+  department: string | null
+}
 
 export type RbacMatrix = {
   roles: Role[]
@@ -69,14 +77,23 @@ export const rbacService = {
   /** Toàn bộ dữ liệu cho ma trận /admin/permissions (admin-only). */
   async matrix(user: User): Promise<RbacMatrix> {
     assertAdmin(user)
-    const [roles, permissions, rolePermissions, userRoles, allUsers] = await Promise.all([
-      rbacRepo.listRoles(true),
-      rbacRepo.listPermissions(),
-      rbacRepo.listRolePermissions(),
-      rbacRepo.listUserRoles(),
-      usersRepo.list({ active_only: true }),
-    ])
-    const users = allUsers.map((u) => ({ id: u.id, name: u.name, email: u.email }))
+    const [roles, permissions, rolePermissions, userRoles, allUsers, depts] =
+      await Promise.all([
+        rbacRepo.listRoles(true),
+        rbacRepo.listPermissions(),
+        rbacRepo.listRolePermissions(),
+        rbacRepo.listUserRoles(),
+        usersRepo.list({ active_only: true }),
+        departmentsRepo.list(),
+      ])
+    const deptName = new Map(depts.map((d) => [d.id, d.name]))
+    const users = allUsers.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+      department: u.department_id ? (deptName.get(u.department_id) ?? null) : null,
+    }))
     return { roles, permissions, rolePermissions, userRoles, users }
   },
 

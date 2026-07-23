@@ -2,13 +2,11 @@
 
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
-import { Toolbar, ToolbarInput } from '@/components/erp/Toolbar'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import type {
@@ -19,7 +17,7 @@ import type {
 } from '@/modules/core/rbac/rbac.repo'
 import type { RbacMatrixUser } from '@/modules/core/rbac/rbac.service'
 
-type View = 'perms' | 'users' | 'audit'
+type View = 'people' | 'roles' | 'matrix' | 'audit'
 
 const DOMAIN_LABEL: Record<string, string> = {
   production: 'Sản xuất',
@@ -33,10 +31,95 @@ const DOMAIN_LABEL: Record<string, string> = {
   team: 'Đội nhóm',
   system: 'Hệ thống',
 }
+const GLOBAL_ROLE: Record<string, { label: string; cls: string }> = {
+  admin: {
+    label: 'Admin',
+    cls: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+  },
+  manager: {
+    label: 'Quản lý',
+    cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+  },
+  employee: {
+    label: 'Nhân viên',
+    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+  },
+}
 
 const gkey = (roleId: string, permKey: string) => `${roleId} ${permKey}`
+const initials = (name: string | null, email: string) =>
+  (name ?? email).trim().slice(0, 1).toUpperCase()
 
-export function PermissionsManager({
+export function PermissionsManager(props: {
+  roles: Role[]
+  permissions: Permission[]
+  rolePermissions: RolePermission[]
+  userRoles: UserRoleRow[]
+  users: RbacMatrixUser[]
+}) {
+  const { roles, permissions, users } = props
+  const [view, setView] = useState<View>('people')
+
+  const tabs: { id: View; label: string }[] = [
+    { id: 'people', label: 'Nhân viên' },
+    { id: 'roles', label: 'Vai trò' },
+    { id: 'matrix', label: 'Ma trận' },
+    { id: 'audit', label: 'Nhật ký' },
+  ]
+
+  return (
+    <div className="flex flex-col gap-4">
+      <PageHeader
+        breadcrumbs={[{ label: 'Quản trị', href: '/admin' }, { label: 'Phân quyền' }]}
+        title="Phân quyền"
+        description="Chọn một nhân viên để xem đầy đủ vai trò và quyền họ đang có — kèm nguồn cấp từng quyền."
+        actions={
+          <div className="flex gap-0.5 rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-800">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setView(t.id)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                  view === t.id
+                    ? 'bg-sky-600 text-white'
+                    : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+
+      <StatsBar
+        stats={[
+          { label: 'Nhân viên', value: users.length, tone: 'blue' },
+          {
+            label: 'Vai trò',
+            value: roles.filter((r) => r.is_active).length,
+            tone: 'purple',
+          },
+          { label: 'Quyền', value: permissions.length, tone: 'default' },
+          {
+            label: 'Gán tay',
+            value: props.userRoles.filter((u) => u.source === 'manual').length,
+            tone: 'green',
+          },
+        ]}
+      />
+
+      {view === 'people' && <PeopleView {...props} />}
+      {view === 'roles' && <RolesView {...props} />}
+      {view === 'matrix' && <MatrixView {...props} />}
+      {view === 'audit' && <AuditView />}
+    </div>
+  )
+}
+
+/* ─────────────────────────── NHÂN VIÊN (employee-first) ─────────────────── */
+
+function PeopleView({
   roles,
   permissions,
   rolePermissions,
@@ -50,23 +133,24 @@ export function PermissionsManager({
   users: RbacMatrixUser[]
 }) {
   const router = useRouter()
-  const toast = useToast()
-  const [view, setView] = useState<View>('perms')
   const [q, setQ] = useState('')
-  const [edit, setEdit] = useState(false)
-  const [busy, setBusy] = useState(false)
-
-  // Modals
-  const [openCreate, setOpenCreate] = useState(false)
-  const [editingRole, setEditingRole] = useState<Role | null>(null)
+  const [selId, setSelId] = useState<string | null>(users[0]?.id ?? null)
   const [assigning, setAssigning] = useState<RbacMatrixUser | null>(null)
 
-  // Grants: local optimistic, là NGUỒN sự thật của ma trận sau khi mount (chỉ
-  // trang này sửa role_permissions). Không resync-effect để tránh cascading render.
-  const [grants, setGrants] = useState<Set<string>>(
-    () => new Set(rolePermissions.map((rp) => gkey(rp.role_id, rp.permission_key))),
+  const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles])
+  const permByKey = useMemo(
+    () => new Map(permissions.map((p) => [p.key, p])),
+    [permissions],
   )
-
+  const permKeysByRole = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const rp of rolePermissions) {
+      const arr = m.get(rp.role_id) ?? []
+      arr.push(rp.permission_key)
+      m.set(rp.role_id, arr)
+    }
+    return m
+  }, [rolePermissions])
   const rolesByUser = useMemo(() => {
     const m = new Map<string, UserRoleRow[]>()
     for (const ur of userRoles) {
@@ -77,42 +161,385 @@ export function PermissionsManager({
     return m
   }, [userRoles])
 
-  const filteredPerms = useMemo(() => {
+  const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    if (!ql) return permissions
-    return permissions.filter((p) =>
-      `${p.key} ${p.label} ${DOMAIN_LABEL[p.domain] ?? p.domain}`
-        .toLowerCase()
-        .includes(ql),
+    if (!ql) return users
+    return users.filter((u) =>
+      `${u.name ?? ''} ${u.email} ${u.department ?? ''}`.toLowerCase().includes(ql),
     )
-  }, [permissions, q])
+  }, [users, q])
 
-  const permGroups = useMemo(() => {
-    const groups: { domain: string; items: Permission[] }[] = []
-    for (const p of filteredPerms) {
-      let g = groups.find((x) => x.domain === p.domain)
-      if (!g) {
-        g = { domain: p.domain, items: [] }
-        groups.push(g)
+  const selected = users.find((u) => u.id === selId) ?? null
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      {/* Master: danh sách người */}
+      <div
+        className={`flex flex-col rounded-lg border border-zinc-200 dark:border-zinc-800 ${
+          selected ? 'hidden lg:flex' : 'flex'
+        }`}
+      >
+        <div className="border-b border-zinc-200 p-2 dark:border-zinc-800">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm tên, email, phòng…"
+            className="w-full rounded-md border border-zinc-200 bg-transparent px-3 py-1.5 text-sm outline-none focus:border-sky-400 dark:border-zinc-700"
+          />
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto">
+          {filtered.length === 0 && (
+            <p className="px-3 py-6 text-center text-sm text-zinc-400">Không tìm thấy.</p>
+          )}
+          {filtered.map((u) => {
+            const rs = rolesByUser.get(u.id) ?? []
+            const on = u.id === selId
+            return (
+              <button
+                key={u.id}
+                onClick={() => setSelId(u.id)}
+                className={`flex w-full items-center gap-3 border-b border-zinc-100 px-3 py-2 text-left last:border-0 dark:border-zinc-900 ${
+                  on
+                    ? 'bg-sky-50 dark:bg-sky-950/40'
+                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                }`}
+              >
+                <span
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold ${
+                    on
+                      ? 'bg-sky-600 text-white'
+                      : 'bg-zinc-200 text-zinc-600 dark:bg-zinc-700 dark:text-zinc-200'
+                  }`}
+                >
+                  {initials(u.name, u.email)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    {u.name ?? u.email}
+                  </span>
+                  <span className="block truncate text-xs text-zinc-400">
+                    {u.department ?? 'Chưa gán phòng'}
+                  </span>
+                </span>
+                {u.role === 'admin' ? (
+                  <span className="shrink-0 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 dark:bg-violet-950 dark:text-violet-300">
+                    ADMIN
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-xs text-zinc-400">{rs.length} vai</span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Detail: hộ chiếu quyền của người được chọn */}
+      {selected ? (
+        <UserDetail
+          user={selected}
+          roleRows={rolesByUser.get(selected.id) ?? []}
+          roleById={roleById}
+          permKeysByRole={permKeysByRole}
+          permByKey={permByKey}
+          onBack={() => setSelId(null)}
+          onAssign={() => setAssigning(selected)}
+        />
+      ) : (
+        <div className="hidden lg:block">
+          <EmptyState
+            icon="◐"
+            title="Chọn một nhân viên"
+            description="Danh sách bên trái."
+          />
+        </div>
+      )}
+
+      {assigning && (
+        <AssignRolesModal
+          key={assigning.id}
+          user={assigning}
+          roles={roles}
+          current={rolesByUser.get(assigning.id) ?? []}
+          onClose={() => setAssigning(null)}
+          onDone={() => {
+            setAssigning(null)
+            router.refresh()
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function UserDetail({
+  user,
+  roleRows,
+  roleById,
+  permKeysByRole,
+  permByKey,
+  onBack,
+  onAssign,
+}: {
+  user: RbacMatrixUser
+  roleRows: UserRoleRow[]
+  roleById: Map<string, Role>
+  permKeysByRole: Map<string, string[]>
+  permByKey: Map<string, Permission>
+  onBack: () => void
+  onAssign: () => void
+}) {
+  const isAdmin = user.role === 'admin'
+
+  // Quyền hiệu lực + NGUỒN (vai nào cấp) — điểm cốt lõi của thiết kế này.
+  const { groups, total } = useMemo(() => {
+    const byPerm = new Map<string, string[]>() // permKey → [role label]
+    if (isAdmin) {
+      for (const p of permByKey.values()) byPerm.set(p.key, ['admin (bypass)'])
+    } else {
+      for (const rr of roleRows) {
+        const role = roleById.get(rr.role_id)
+        if (!role) continue
+        for (const pk of permKeysByRole.get(rr.role_id) ?? []) {
+          const arr = byPerm.get(pk) ?? []
+          if (!arr.includes(role.label)) arr.push(role.label)
+          byPerm.set(pk, arr)
+        }
       }
-      g.items.push(p)
     }
-    return groups
-  }, [filteredPerms])
+    const gmap = new Map<string, { key: string; label: string; sources: string[] }[]>()
+    for (const [pk, sources] of byPerm) {
+      const p = permByKey.get(pk)
+      if (!p) continue
+      const arr = gmap.get(p.domain) ?? []
+      arr.push({ key: pk, label: p.label, sources })
+      gmap.set(p.domain, arr)
+    }
+    const groups = [...gmap.entries()]
+      .map(([domain, items]) => ({
+        domain,
+        items: items.sort((a, b) => a.key.localeCompare(b.key)),
+      }))
+      .sort((a, b) => a.domain.localeCompare(b.domain))
+    return { groups, total: byPerm.size }
+  }, [isAdmin, roleRows, roleById, permKeysByRole, permByKey])
 
-  // Đổi 1 ô ma trận → gửi TOÀN BỘ quyền mới của vai (setRolePermissions).
-  async function toggleGrant(role: Role, permKey: string) {
-    if (busy) return
-    if (role.key === 'admin') {
-      toast.info('Vai admin', 'Admin bypass toàn quyền — không cần gán từng quyền.')
+  const derived = roleRows.filter((r) => r.source === 'derived')
+  const manual = roleRows.filter((r) => r.source === 'manual')
+
+  return (
+    <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+      {/* Identity */}
+      <div className="flex items-start gap-3">
+        <button
+          onClick={onBack}
+          className="rounded-md px-2 py-1 text-sm text-zinc-500 hover:bg-zinc-100 lg:hidden dark:hover:bg-zinc-800"
+        >
+          ←
+        </button>
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-sky-600 text-lg font-semibold text-white">
+          {initials(user.name, user.email)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {user.name ?? user.email}
+            </h2>
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${GLOBAL_ROLE[user.role].cls}`}
+            >
+              {GLOBAL_ROLE[user.role].label}
+            </span>
+          </div>
+          <p className="truncate text-sm text-zinc-500">{user.email}</p>
+          <p className="text-xs text-zinc-400">{user.department ?? 'Chưa gán phòng'}</p>
+        </div>
+        <button
+          onClick={onAssign}
+          className="shrink-0 rounded-md border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950"
+        >
+          Sửa vai
+        </button>
+      </div>
+
+      {isAdmin && (
+        <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200">
+          <b>Toàn quyền hệ thống.</b> Admin bỏ qua mọi kiểm tra quyền (bypass) — không phụ
+          thuộc vai được gán.
+        </div>
+      )}
+
+      {/* Vai trò */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+          Vai trò ({roleRows.length})
+        </h3>
+        {roleRows.length === 0 ? (
+          <p className="text-sm text-zinc-400">Chưa gán vai nào.</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {derived.length > 0 && (
+              <RoleChipRow
+                label="Tự đồng bộ theo phòng/chức danh"
+                rows={derived}
+                roleById={roleById}
+                tone="derived"
+              />
+            )}
+            {manual.length > 0 && (
+              <RoleChipRow
+                label="IT gán tay"
+                rows={manual}
+                roleById={roleById}
+                tone="manual"
+              />
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Quyền hiệu lực + nguồn */}
+      <section>
+        <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+          Quyền hiệu lực ({total})
+        </h3>
+        {total === 0 ? (
+          <EmptyState
+            icon="○"
+            title="Không có quyền nào"
+            description="Nhân viên này chưa có vai nào cấp quyền."
+          />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {groups.map((g) => (
+              <div key={g.domain}>
+                <div className="mb-1 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+                  {DOMAIN_LABEL[g.domain] ?? g.domain}
+                </div>
+                <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
+                  {g.items.map((it, i) => (
+                    <div
+                      key={it.key}
+                      className={`flex items-center justify-between gap-3 px-3 py-1.5 ${
+                        i > 0 ? 'border-t border-zinc-100 dark:border-zinc-900' : ''
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-emerald-500">✓</span>
+                          <span className="truncate text-sm text-zinc-800 dark:text-zinc-100">
+                            {it.label}
+                          </span>
+                        </div>
+                        <span className="ml-5 font-mono text-[11px] text-zinc-400">
+                          {it.key}
+                        </span>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                        {it.sources.map((s) => (
+                          <span
+                            key={s}
+                            className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                            title={`Cấp bởi vai: ${s}`}
+                          >
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  )
+}
+
+function RoleChipRow({
+  label,
+  rows,
+  roleById,
+  tone,
+}: {
+  label: string
+  rows: UserRoleRow[]
+  roleById: Map<string, Role>
+  tone: 'derived' | 'manual'
+}) {
+  return (
+    <div>
+      <div className="mb-1 text-[11px] text-zinc-400">{label}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {rows.map((r) => (
+          <span
+            key={r.role_id}
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs ${
+              tone === 'derived'
+                ? 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+                : 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300'
+            }`}
+          >
+            {tone === 'derived' && <span title="Khoá — tự đồng bộ">⛓</span>}
+            {roleById.get(r.role_id)?.label ?? r.role_id}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─────────────────────────── VAI TRÒ (role-centric edit) ────────────────── */
+
+function RolesView({
+  roles,
+  permissions,
+  rolePermissions,
+  userRoles,
+}: {
+  roles: Role[]
+  permissions: Permission[]
+  rolePermissions: RolePermission[]
+  userRoles: UserRoleRow[]
+}) {
+  const router = useRouter()
+  const toast = useToast()
+  const [selId, setSelId] = useState<string | null>(roles[0]?.id ?? null)
+  const [openCreate, setOpenCreate] = useState(false)
+  const [editingRole, setEditingRole] = useState<Role | null>(null)
+  const [edit, setEdit] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const [grants, setGrants] = useState<Set<string>>(
+    () => new Set(rolePermissions.map((rp) => gkey(rp.role_id, rp.permission_key))),
+  )
+
+  const membersByRole = useMemo(() => {
+    const m = new Map<string, UserRoleRow[]>()
+    for (const ur of userRoles) {
+      const arr = m.get(ur.role_id) ?? []
+      arr.push(ur)
+      m.set(ur.role_id, arr)
+    }
+    return m
+  }, [userRoles])
+
+  const selected = roles.find((r) => r.id === selId) ?? null
+
+  async function toggle(role: Role, permKey: string) {
+    if (busy || role.key === 'admin') {
+      if (role.key === 'admin')
+        toast.info('Vai admin', 'Admin bypass — không gán từng quyền.')
       return
     }
     const k = gkey(role.id, permKey)
-    const nextOn = !grants.has(k)
+    const on = !grants.has(k)
     const next = new Set(grants)
-    if (nextOn) next.add(k)
+    if (on) next.add(k)
     else next.delete(k)
-    setGrants(next) // optimistic
+    setGrants(next)
     const keys = permissions.map((p) => p.key).filter((pk) => next.has(gkey(role.id, pk)))
     setBusy(true)
     try {
@@ -120,133 +547,195 @@ export function PermissionsManager({
         method: 'PUT',
         body: { permission_keys: keys },
       })
-      toast.success('Đã lưu', `${role.label}: ${nextOn ? 'thêm' : 'gỡ'} ${permKey}`)
+      toast.success('Đã lưu', `${role.label}: ${on ? 'thêm' : 'gỡ'} ${permKey}`)
     } catch (e) {
-      setGrants(grants) // revert
+      setGrants(grants)
       toast.error('Lưu thất bại', apiErrorText(e))
     } finally {
       setBusy(false)
     }
   }
 
-  const filteredUsers = useMemo(() => {
-    const ql = q.trim().toLowerCase()
-    if (!ql) return users
-    return users.filter((u) => `${u.name ?? ''} ${u.email}`.toLowerCase().includes(ql))
-  }, [users, q])
-
-  const segBtn = (active: boolean) =>
-    `rounded-md px-3 py-1.5 text-sm font-medium ${
-      active
-        ? 'bg-sky-600 text-white'
-        : 'text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800'
-    }`
+  const permGroups = useMemo(() => {
+    const m = new Map<string, Permission[]>()
+    for (const p of permissions) {
+      const arr = m.get(p.domain) ?? []
+      arr.push(p)
+      m.set(p.domain, arr)
+    }
+    return [...m.entries()]
+  }, [permissions])
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[{ label: 'Quản trị', href: '/admin' }, { label: 'Phân quyền' }]}
-        title="Phân quyền (RBAC)"
-        description="Nguồn dữ liệu thật cho phân quyền toàn hệ thống. IT tự tạo vai, gán quyền, gán vai cho người dùng."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex gap-1 rounded-lg border border-zinc-200 p-0.5 dark:border-zinc-800">
+      <div
+        className={`flex flex-col rounded-lg border border-zinc-200 dark:border-zinc-800 ${
+          selected ? 'hidden lg:flex' : 'flex'
+        }`}
+      >
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-200 p-2 dark:border-zinc-800">
+          <span className="text-sm font-medium text-zinc-500">{roles.length} vai</span>
+          <button
+            onClick={() => setOpenCreate(true)}
+            className="rounded-md bg-sky-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-sky-700"
+          >
+            ＋ Tạo vai
+          </button>
+        </div>
+        <div className="max-h-[70vh] overflow-y-auto">
+          {roles.map((r) => {
+            const on = r.id === selId
+            const n = membersByRole.get(r.id)?.length ?? 0
+            return (
               <button
-                className={segBtn(view === 'perms')}
-                onClick={() => setView('perms')}
+                key={r.id}
+                onClick={() => setSelId(r.id)}
+                className={`flex w-full items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-left last:border-0 dark:border-zinc-900 ${
+                  on
+                    ? 'bg-sky-50 dark:bg-sky-950/40'
+                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                }`}
               >
-                Vai × Quyền
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    {r.label}
+                    {!r.is_active && <span className="ml-1 text-amber-500">✕</span>}
+                  </span>
+                  <span className="block truncate font-mono text-[11px] text-zinc-400">
+                    {r.key}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-zinc-400">{n}</span>
               </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {selected ? (
+        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <button
-                className={segBtn(view === 'users')}
-                onClick={() => setView('users')}
+                onClick={() => setSelId(null)}
+                className="mb-1 text-sm text-zinc-500 lg:hidden"
               >
-                Vai × Người
+                ← Danh sách
               </button>
-              <button
-                className={segBtn(view === 'audit')}
-                onClick={() => setView('audit')}
-              >
-                Nhật ký
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold">{selected.label}</h2>
+                {selected.is_system && (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800">
+                    hệ thống
+                  </span>
+                )}
+                {!selected.is_active && (
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                    đã tắt
+                  </span>
+                )}
+              </div>
+              <p className="font-mono text-xs text-zinc-400">{selected.key}</p>
+              {selected.description && (
+                <p className="mt-1 text-sm text-zinc-500">{selected.description}</p>
+              )}
             </div>
-            <button
-              onClick={() => setOpenCreate(true)}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
-            >
-              ＋ Tạo vai
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => setEditingRole(selected)}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+              >
+                Sửa
+              </button>
+              {selected.key !== 'admin' && (
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={edit}
+                    onChange={(e) => setEdit(e.target.checked)}
+                    className="h-3.5 w-3.5"
+                  />
+                  Sửa quyền
+                </label>
+              )}
+            </div>
           </div>
-        }
-      />
 
-      <StatsBar
-        stats={[
-          { label: 'Vai', value: roles.length, tone: 'blue' },
-          { label: 'Quyền', value: permissions.length, tone: 'purple' },
-          { label: 'Gán quyền', value: grants.size, tone: 'default' },
-          { label: 'Gán người', value: userRoles.length, tone: 'green' },
-        ]}
-      />
+          {selected.key === 'admin' ? (
+            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200">
+              Vai admin bỏ qua mọi kiểm tra quyền — không cần gán từng quyền.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {permGroups.map(([domain, items]) => (
+                <div key={domain}>
+                  <div className="mb-1 text-[11px] font-semibold tracking-wider text-zinc-400 uppercase">
+                    {DOMAIN_LABEL[domain] ?? domain}
+                  </div>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    {items.map((p) => {
+                      const on = grants.has(gkey(selected.id, p.key))
+                      return (
+                        <button
+                          key={p.key}
+                          disabled={!edit || busy}
+                          onClick={() => toggle(selected, p.key)}
+                          className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm ${
+                            on
+                              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40'
+                              : 'border-zinc-200 dark:border-zinc-800'
+                          } ${edit && !busy ? 'cursor-pointer hover:border-sky-300' : 'cursor-default'}`}
+                        >
+                          <span
+                            className={
+                              on ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700'
+                            }
+                          >
+                            {on ? '✓' : '○'}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-zinc-800 dark:text-zinc-100">
+                              {p.label}
+                            </span>
+                            <span className="block truncate font-mono text-[10px] text-zinc-400">
+                              {p.key}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
-      <Toolbar
-        left={
-          <ToolbarInput
-            value={q}
-            onChange={setQ}
-            placeholder={
-              view === 'perms'
-                ? 'Tìm quyền, nhóm…'
-                : view === 'users'
-                  ? 'Tìm người…'
-                  : 'Tìm…'
-            }
-            icon="⌕"
-            className="w-72"
-          />
-        }
-        right={
-          view === 'perms' ? (
-            <label className="flex items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={edit}
-                onChange={(e) => setEdit(e.target.checked)}
-                className="h-4 w-4"
-              />
-              Chế độ sửa
-            </label>
-          ) : undefined
-        }
-      />
-
-      {view === 'perms' && (
-        <RolePermissionMatrix
-          roles={roles}
-          groups={permGroups}
-          grants={grants}
-          edit={edit}
-          busy={busy}
-          onToggle={toggleGrant}
-          onEditRole={setEditingRole}
-        />
-      )}
-      {view === 'users' && (
-        <UsersView
-          users={filteredUsers}
-          roles={roles}
-          rolesByUser={rolesByUser}
-          onAssign={setAssigning}
-        />
-      )}
-      {view === 'audit' && <AuditView />}
-
-      {view === 'perms' && (
-        <p className="text-xs text-zinc-400">
-          Vai <b>admin</b> giữ toàn quyền (bypass). Vai <i>hệ thống</i> không vô hiệu hoá
-          được. Bật <b>Chế độ sửa</b> rồi bấm ô để gán/gỡ quyền.
-        </p>
+          <section>
+            <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+              Thành viên ({membersByRole.get(selected.id)?.length ?? 0})
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {(membersByRole.get(selected.id) ?? []).map((u) => (
+                <span
+                  key={u.user_id}
+                  className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  title={`${u.user_email} · ${u.source === 'derived' ? 'tự đồng bộ' : 'gán tay'}`}
+                >
+                  {u.user_name ?? u.user_email}
+                  {u.source === 'derived' && ' ⛓'}
+                </span>
+              ))}
+              {(membersByRole.get(selected.id)?.length ?? 0) === 0 && (
+                <span className="text-sm text-zinc-400">Chưa ai.</span>
+              )}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <div className="hidden lg:block">
+          <EmptyState icon="◑" title="Chọn một vai" description="Danh sách bên trái." />
+        </div>
       )}
 
       {openCreate && (
@@ -270,45 +759,36 @@ export function PermissionsManager({
           }}
         />
       )}
-      {assigning && (
-        <AssignRolesModal
-          key={assigning.id}
-          user={assigning}
-          roles={roles}
-          current={rolesByUser.get(assigning.id) ?? []}
-          onClose={() => setAssigning(null)}
-          onDone={() => {
-            setAssigning(null)
-            router.refresh()
-          }}
-        />
-      )}
     </div>
   )
 }
 
-function RolePermissionMatrix({
+/* ─────────────────────────── MA TRẬN (overview) ─────────────────────────── */
+
+function MatrixView({
   roles,
-  groups,
-  grants,
-  edit,
-  busy,
-  onToggle,
-  onEditRole,
+  permissions,
+  rolePermissions,
 }: {
   roles: Role[]
-  groups: { domain: string; items: Permission[] }[]
-  grants: Set<string>
-  edit: boolean
-  busy: boolean
-  onToggle: (role: Role, permKey: string) => void
-  onEditRole: (role: Role) => void
+  permissions: Permission[]
+  rolePermissions: RolePermission[]
 }) {
-  if (!groups.some((g) => g.items.length > 0)) {
-    return (
-      <EmptyState icon="▤" title="Không có quyền nào" description="Thử đổi từ khoá." />
-    )
-  }
+  const grants = useMemo(
+    () => new Set(rolePermissions.map((rp) => gkey(rp.role_id, rp.permission_key))),
+    [rolePermissions],
+  )
+  const groups = useMemo(() => {
+    const m = new Map<string, Permission[]>()
+    for (const p of permissions) {
+      const arr = m.get(p.domain) ?? []
+      arr.push(p)
+      m.set(p.domain, arr)
+    }
+    return [...m.entries()]
+  }, [permissions])
+  const active = roles.filter((r) => r.is_active)
+
   return (
     <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
       <table className="w-full border-collapse text-sm">
@@ -317,35 +797,29 @@ function RolePermissionMatrix({
             <th className="sticky left-0 z-10 bg-zinc-50 px-3 py-2 text-left text-xs font-semibold tracking-wider text-zinc-500 uppercase dark:bg-zinc-900/50">
               Quyền
             </th>
-            {roles.map((r) => (
+            {active.map((r) => (
               <th
                 key={r.id}
-                className="px-2 py-2 text-center text-xs font-medium text-zinc-600 dark:text-zinc-300"
-                title={r.description ?? r.key}
+                className="px-2 py-2 text-center text-xs font-medium whitespace-nowrap text-zinc-600 dark:text-zinc-300"
+                title={r.key}
               >
-                <button
-                  onClick={() => onEditRole(r)}
-                  className="whitespace-nowrap hover:text-sky-600 hover:underline"
-                >
-                  {r.label}
-                  {!r.is_active && <span className="ml-1 text-amber-500">✕</span>}
-                </button>
+                {r.label}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {groups.map((g) => (
-            <Fragment key={g.domain}>
+          {groups.map(([domain, items]) => (
+            <Fragment key={domain}>
               <tr className="bg-zinc-100/60 dark:bg-zinc-800/40">
                 <td
-                  colSpan={roles.length + 1}
+                  colSpan={active.length + 1}
                   className="sticky left-0 px-3 py-1 text-xs font-semibold tracking-wider text-zinc-500 uppercase"
                 >
-                  {DOMAIN_LABEL[g.domain] ?? g.domain}
+                  {DOMAIN_LABEL[domain] ?? domain}
                 </td>
               </tr>
-              {g.items.map((p) => (
+              {items.map((p) => (
                 <tr
                   key={p.key}
                   className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
@@ -356,34 +830,15 @@ function RolePermissionMatrix({
                     </div>
                     <div className="font-mono text-[11px] text-zinc-400">{p.key}</div>
                   </td>
-                  {roles.map((r) => {
-                    const on = grants.has(gkey(r.id, p.key)) || r.key === 'admin'
-                    const editable = edit && r.key !== 'admin'
-                    return (
-                      <td key={r.id} className="px-2 py-1.5 text-center">
-                        {editable ? (
-                          <button
-                            disabled={busy}
-                            onClick={() => onToggle(r, p.key)}
-                            className={`inline-flex h-6 w-6 items-center justify-center rounded border text-xs disabled:opacity-40 ${
-                              on
-                                ? 'border-emerald-300 bg-emerald-50 text-emerald-600 dark:border-emerald-800 dark:bg-emerald-950'
-                                : 'border-zinc-200 text-zinc-300 hover:border-sky-300 hover:text-sky-400 dark:border-zinc-700'
-                            }`}
-                            aria-label={`${on ? 'Gỡ' : 'Gán'} ${p.key} cho ${r.label}`}
-                          >
-                            {on ? '✓' : '＋'}
-                          </button>
-                        ) : on ? (
-                          <span className="text-emerald-600 dark:text-emerald-400">
-                            ✓
-                          </span>
-                        ) : (
-                          <span className="text-zinc-300 dark:text-zinc-700">·</span>
-                        )}
-                      </td>
-                    )
-                  })}
+                  {active.map((r) => (
+                    <td key={r.id} className="px-2 py-1.5 text-center">
+                      {grants.has(gkey(r.id, p.key)) || r.key === 'admin' ? (
+                        <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                      ) : (
+                        <span className="text-zinc-300 dark:text-zinc-700">·</span>
+                      )}
+                    </td>
+                  ))}
                 </tr>
               ))}
             </Fragment>
@@ -394,68 +849,7 @@ function RolePermissionMatrix({
   )
 }
 
-function UsersView({
-  users,
-  roles,
-  rolesByUser,
-  onAssign,
-}: {
-  users: RbacMatrixUser[]
-  roles: Role[]
-  rolesByUser: Map<string, UserRoleRow[]>
-  onAssign: (u: RbacMatrixUser) => void
-}) {
-  const roleLabel = useMemo(() => new Map(roles.map((r) => [r.id, r.label])), [roles])
-  if (users.length === 0) {
-    return (
-      <EmptyState icon="◑" title="Không có người dùng" description="Thử đổi từ khoá." />
-    )
-  }
-  return (
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-      {users.map((u) => {
-        const rs = rolesByUser.get(u.id) ?? []
-        return (
-          <button
-            key={u.id}
-            onClick={() => onAssign(u)}
-            className="rounded-lg border border-zinc-200 bg-white p-3 text-left hover:border-sky-300 dark:border-zinc-800 dark:bg-zinc-950"
-          >
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium text-zinc-800 dark:text-zinc-100">
-                  {u.name ?? u.email}
-                </div>
-                <div className="truncate text-[11px] text-zinc-400">{u.email}</div>
-              </div>
-              <Badge tone={rs.length ? 'blue' : 'gray'}>{rs.length}</Badge>
-            </div>
-            {rs.length === 0 ? (
-              <p className="text-xs text-zinc-400">Chưa có vai.</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {rs.map((r) => (
-                  <span
-                    key={r.role_id}
-                    className={`rounded border px-1.5 py-0.5 text-xs ${
-                      r.source === 'derived'
-                        ? 'border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900'
-                        : 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950 dark:text-sky-300'
-                    }`}
-                    title={r.source === 'derived' ? 'Dẫn-xuất (tự đồng bộ)' : 'Gán tay'}
-                  >
-                    {roleLabel.get(r.role_id) ?? r.role_id}
-                    {r.source === 'derived' && ' ⛓'}
-                  </span>
-                ))}
-              </div>
-            )}
-          </button>
-        )
-      })}
-    </div>
-  )
-}
+/* ─────────────────────────── MODALS ─────────────────────────────────────── */
 
 function CreateRoleModal({
   onClose,
@@ -508,7 +902,7 @@ function CreateRoleModal({
           />
           {keyErr && <span className="text-xs text-rose-500">{keyErr}</span>}
         </Field>
-        <Field label="Nhãn hiển thị">
+        <Field label="Tên hiển thị">
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -523,22 +917,13 @@ function CreateRoleModal({
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           />
         </Field>
-        <div className="mt-2 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-md px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300"
-          >
-            Huỷ
-          </button>
-          <button
-            onClick={submit}
-            disabled={busy || !!keyErr || !key || !label}
-            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {busy && <Spinner />}
-            Tạo vai
-          </button>
-        </div>
+        <ModalActions
+          busy={busy}
+          disabled={!!keyErr || !key || !label}
+          onCancel={onClose}
+          onSubmit={submit}
+          submitLabel="Tạo vai"
+        />
       </div>
     </Modal>
   )
@@ -579,7 +964,7 @@ function EditRoleModal({
   return (
     <Modal open onClose={onClose} title={`Sửa vai · ${role.key}`}>
       <div className="flex flex-col gap-3">
-        <Field label="Nhãn hiển thị">
+        <Field label="Tên hiển thị">
           <input
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -606,22 +991,13 @@ function EditRoleModal({
             <span className="text-xs text-zinc-400">(vai hệ thống — không tắt được)</span>
           )}
         </label>
-        <div className="mt-2 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-md px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300"
-          >
-            Huỷ
-          </button>
-          <button
-            onClick={submit}
-            disabled={busy || !label}
-            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {busy && <Spinner />}
-            Lưu
-          </button>
-        </div>
+        <ModalActions
+          busy={busy}
+          disabled={!label}
+          onCancel={onClose}
+          onSubmit={submit}
+          submitLabel="Lưu"
+        />
       </div>
     </Modal>
   )
@@ -650,6 +1026,7 @@ function AssignRolesModal({
     () => new Set(current.filter((r) => r.source === 'derived').map((r) => r.role_id)),
     [current],
   )
+  const assignable = roles.filter((r) => r.is_active && !derivedIds.has(r.id))
 
   async function submit() {
     if (busy) return
@@ -668,8 +1045,6 @@ function AssignRolesModal({
     }
   }
 
-  const assignable = roles.filter((r) => r.is_active && !derivedIds.has(r.id))
-
   return (
     <Modal
       open
@@ -680,11 +1055,11 @@ function AssignRolesModal({
       <div className="flex flex-col gap-3">
         {derivedIds.size > 0 && (
           <div className="rounded-md bg-zinc-50 p-2 text-xs text-zinc-500 dark:bg-zinc-900">
-            Vai dẫn-xuất (tự đồng bộ theo phòng/vai) không sửa ở đây:{' '}
+            ⛓ Vai tự đồng bộ (theo phòng/chức danh) không sửa ở đây:{' '}
             {roles
               .filter((r) => derivedIds.has(r.id))
               .map((r) => r.label)
-              .join(', ') || '—'}
+              .join(', ')}
           </div>
         )}
         <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
@@ -714,26 +1089,18 @@ function AssignRolesModal({
             </p>
           )}
         </div>
-        <div className="mt-1 flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="rounded-md px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300"
-          >
-            Huỷ
-          </button>
-          <button
-            onClick={submit}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {busy && <Spinner />}
-            Lưu vai gán tay
-          </button>
-        </div>
+        <ModalActions
+          busy={busy}
+          onCancel={onClose}
+          onSubmit={submit}
+          submitLabel="Lưu vai gán tay"
+        />
       </div>
     </Modal>
   )
 }
+
+/* ─────────────────────────── NHẬT KÝ ────────────────────────────────────── */
 
 type AuditEntry = {
   id: string
@@ -750,8 +1117,8 @@ const ACTION_LABEL: Record<string, string> = {
   'role.created': 'Tạo vai',
   'role.updated': 'Sửa vai',
   'role.permissions_changed': 'Đổi quyền của vai',
-  'role.assigned': 'Gán vai cho người',
-  'role.revoked': 'Thu vai của người',
+  'role.assigned': 'Gán vai',
+  'role.revoked': 'Thu vai',
 }
 
 function AuditView() {
@@ -806,9 +1173,15 @@ function AuditView() {
                 {new Date(e.created_at).toLocaleString('vi-VN')}
               </td>
               <td className="px-3 py-2">
-                <Badge tone={e.action === 'role.revoked' ? 'red' : 'blue'}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    e.action === 'role.revoked'
+                      ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
+                      : 'bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300'
+                  }`}
+                >
                   {ACTION_LABEL[e.action] ?? e.action}
-                </Badge>
+                </span>
               </td>
               <td className="px-3 py-2 font-medium">{e.target_label ?? '—'}</td>
               <td className="px-3 py-2 text-xs text-zinc-500">{auditDetail(e)}</td>
@@ -832,11 +1205,13 @@ function auditDetail(e: AuditEntry): string {
     if (removed.length) parts.push(`－${removed.join(', ')}`)
     return parts.join('  ') || '—'
   }
-  if (e.action === 'role.assigned') return `+ ${String(a.role_label ?? '')}`
-  if (e.action === 'role.revoked') return `− ${String(b.role_label ?? '')}`
+  if (e.action === 'role.assigned') return `＋ ${String(a.role_label ?? '')}`
+  if (e.action === 'role.revoked') return `－ ${String(b.role_label ?? '')}`
   if (e.action === 'role.created') return String(a.key ?? '')
   return '—'
 }
+
+/* ─────────────────────────── shared bits ────────────────────────────────── */
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -846,5 +1221,38 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       </span>
       {children}
     </label>
+  )
+}
+
+function ModalActions({
+  busy,
+  disabled,
+  onCancel,
+  onSubmit,
+  submitLabel,
+}: {
+  busy: boolean
+  disabled?: boolean
+  onCancel: () => void
+  onSubmit: () => void
+  submitLabel: string
+}) {
+  return (
+    <div className="mt-2 flex justify-end gap-2">
+      <button
+        onClick={onCancel}
+        className="rounded-md px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300"
+      >
+        Huỷ
+      </button>
+      <button
+        onClick={onSubmit}
+        disabled={busy || disabled}
+        className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+      >
+        {busy && <Spinner />}
+        {submitLabel}
+      </button>
+    </div>
   )
 }

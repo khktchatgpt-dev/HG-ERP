@@ -23,10 +23,14 @@ vi.mock('./rbac.repo', () => ({
 vi.mock('@/modules/core/users/users.repo', () => ({
   usersRepo: { list: vi.fn(), findById: vi.fn() },
 }))
+vi.mock('@/modules/core/departments/departments.repo', () => ({
+  departmentsRepo: { list: vi.fn() },
+}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
 import { rbacRepo } from './rbac.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { emit } from '@/events/bus'
 import { hasPermission, assertPermission, rbacService } from './rbac.service'
 
@@ -97,7 +101,16 @@ describe('rbacService.matrix', () => {
     vi.mocked(rbacRepo.listRolePermissions).mockResolvedValue([])
     vi.mocked(rbacRepo.listUserRoles).mockResolvedValue([])
     vi.mocked(usersRepo.list).mockResolvedValue([
-      { id: 'u1', name: 'Nam', email: 'nam@hg.com' },
+      {
+        id: 'u1',
+        name: 'Nam',
+        email: 'nam@hg.com',
+        role: 'employee',
+        department_id: 'd1',
+      },
+    ] as never)
+    vi.mocked(departmentsRepo.list).mockResolvedValue([
+      { id: 'd1', name: 'Kho' },
     ] as never)
     const m = await rbacService.matrix(admin)
     expect(m).toEqual({
@@ -105,7 +118,15 @@ describe('rbacService.matrix', () => {
       permissions: [],
       rolePermissions: [],
       userRoles: [],
-      users: [{ id: 'u1', name: 'Nam', email: 'nam@hg.com' }],
+      users: [
+        {
+          id: 'u1',
+          name: 'Nam',
+          email: 'nam@hg.com',
+          role: 'employee',
+          department: 'Kho',
+        },
+      ],
     })
   })
 })
