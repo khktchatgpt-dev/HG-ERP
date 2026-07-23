@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
+import { LSX_STATUS as ST } from '@/lib/lsx-status'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -38,18 +39,6 @@ export type SupplyPanelData = {
 
 type LsxStatus =
   'pending_approval' | 'approved' | 'in_progress' | 'completed' | 'rejected' | 'cancelled'
-
-const ST: Record<
-  LsxStatus,
-  { label: string; tone: 'gray' | 'blue' | 'amber' | 'green' | 'red' }
-> = {
-  pending_approval: { label: 'Chờ GĐ duyệt', tone: 'amber' },
-  approved: { label: 'Đã duyệt', tone: 'blue' },
-  in_progress: { label: 'Đang sản xuất', tone: 'amber' },
-  completed: { label: 'Hoàn thành', tone: 'green' },
-  rejected: { label: 'Bị từ chối', tone: 'red' },
-  cancelled: { label: 'Đã huỷ theo đơn', tone: 'gray' },
-}
 
 type Spec = {
   machine: string

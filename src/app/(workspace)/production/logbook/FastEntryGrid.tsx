@@ -47,6 +47,7 @@ export function FastEntryGrid({
   locked,
   onSaved,
   onPendingChange,
+  onSavingChange,
   registerSave,
 }: {
   lsxList: RunningLsx[]
@@ -58,6 +59,8 @@ export function FastEntryGrid({
   locked: boolean
   onSaved: () => void
   onPendingChange: (count: number) => void
+  /** Báo trạng thái đang ghi lên footer để nút "Ghi sổ" hiện spinner + disable. */
+  onSavingChange?: (saving: boolean) => void
   registerSave: (fn: () => void) => void
 }) {
   const toast = useToast()
@@ -127,6 +130,7 @@ export function FastEntryGrid({
       groups.set(gk, g)
     }
     savingRef.current = true
+    onSavingChange?.(true)
     try {
       for (const g of groups.values()) {
         const entries = g.keys.map((k) => {
@@ -170,8 +174,9 @@ export function FastEntryGrid({
       onSaved()
     } finally {
       savingRef.current = false
+      onSavingChange?.(false)
     }
-  }, [pending, date, lsxList, onSaved, toast])
+  }, [pending, date, lsxList, onSaved, onSavingChange, toast])
 
   useEffect(() => {
     registerSave(() => void save())
@@ -284,6 +289,7 @@ export function FastEntryGrid({
             <thead>
               <tr className="text-left text-[10px] text-zinc-500 uppercase">
                 <th className="py-1 pr-2">Chi tiết</th>
+                <th className="w-16 py-1 pr-2 text-right">Còn</th>
                 <th className="w-24 py-1 pr-2">SL đạt</th>
                 <th className="w-16 py-1 pr-2">Phế</th>
                 <th className="w-44 py-1 pr-2">Nguyên nhân lỗi</th>
@@ -308,6 +314,18 @@ export function FastEntryGrid({
                       )}
                       {c.name}
                     </td>
+                    <td
+                      className="py-1 pr-2 text-right tabular-nums"
+                      title={`Cần tổng ${c.total_needed.toLocaleString('vi-VN')}`}
+                    >
+                      {remaining > 0 ? (
+                        <span className="text-amber-600 dark:text-amber-400">
+                          {remaining.toLocaleString('vi-VN')}
+                        </span>
+                      ) : (
+                        <span className="text-emerald-600 dark:text-emerald-400">✓</span>
+                      )}
+                    </td>
                     <td className="py-1 pr-2">
                       <input
                         ref={setRef(row, 0)}
@@ -318,7 +336,6 @@ export function FastEntryGrid({
                         onChange={(e) => setCell(c.id, { qty: e.target.value })}
                         onKeyDown={(e) => onGridKeyDown(e, row, 0)}
                         className={inp}
-                        placeholder={remaining > 0 ? `còn ${remaining}` : undefined}
                       />
                     </td>
                     <td className="py-1 pr-2">

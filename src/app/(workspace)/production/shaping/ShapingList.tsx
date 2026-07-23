@@ -8,15 +8,7 @@ import { canEditComponents } from '@/modules/dept/production/components.service'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
-
-const LSX_BADGE: Record<
-  string,
-  { label: string; tone: 'gray' | 'blue' | 'amber' | 'green' }
-> = {
-  pending_approval: { label: 'Chờ duyệt', tone: 'amber' },
-  approved: { label: 'Đã duyệt', tone: 'blue' },
-  in_progress: { label: 'Đang sản xuất', tone: 'green' },
-}
+import { LSX_STATUS } from '@/lib/lsx-status'
 
 /**
  * Định hình sản xuất (SRS): QL Kế hoạch lên bảng chi tiết cụm/chi tiết + chốt
@@ -84,7 +76,7 @@ export async function ShapingList({
               {active.map((r) => {
                 const comps = componentCounts.get(r.id) ?? 0
                 const routes = routeCounts.get(r.id) ?? 0
-                const badge = LSX_BADGE[r.status] ?? {
+                const badge = LSX_STATUS[r.status as keyof typeof LSX_STATUS] ?? {
                   label: r.status,
                   tone: 'gray' as const,
                 }

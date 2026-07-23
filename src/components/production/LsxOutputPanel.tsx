@@ -475,6 +475,7 @@ export function LsxOutputPanel({
                     <thead>
                       <tr className="text-left text-[10px] text-zinc-500 uppercase">
                         <th className="py-1 pr-2">Chi tiết</th>
+                        <th className="w-16 py-1 pr-2 text-right">Còn</th>
                         <th className="w-20 py-1 pr-2">SL làm</th>
                         <th className="w-16 py-1 pr-2">Phế</th>
                         <th className="w-40 py-1 pr-2">Nguyên nhân lỗi</th>
@@ -490,13 +491,29 @@ export function LsxOutputPanel({
                         .map((c) => {
                           const cell = cells[c.id] ?? emptyCell()
                           const sum = c.summary.stages.find((x) => x.stage === stage)
-                          const remaining = sum ? Math.max(0, sum.missing) : null
+                          const remaining = sum
+                            ? Math.max(0, sum.missing)
+                            : c.total_needed
                           return (
                             <tr
                               key={c.id}
                               className="border-t border-zinc-100 dark:border-zinc-900"
                             >
                               <td className="py-1 pr-2">{c.name}</td>
+                              <td
+                                className="py-1 pr-2 text-right tabular-nums"
+                                title={`Cần tổng ${c.total_needed.toLocaleString('vi-VN')}`}
+                              >
+                                {remaining > 0 ? (
+                                  <span className="text-amber-600 dark:text-amber-400">
+                                    {remaining.toLocaleString('vi-VN')}
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                    ✓
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-1 pr-2">
                                 <input
                                   type="number"
@@ -505,11 +522,6 @@ export function LsxOutputPanel({
                                   value={cell.qty}
                                   onChange={(e) => setCell(c.id, { qty: e.target.value })}
                                   className={inp}
-                                  placeholder={
-                                    remaining != null && remaining > 0
-                                      ? `còn ${remaining}`
-                                      : undefined
-                                  }
                                 />
                               </td>
                               <td className="py-1 pr-2">

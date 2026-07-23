@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
+import { LSX_STATUS as ST } from '@/lib/lsx-status'
 import { api, ApiError } from '@/lib/api'
 import { assessLateRisk } from '@/lib/late-risk'
 import { useToast } from '@/components/ui/Toast'
@@ -36,18 +37,6 @@ type Row = {
   has_components: boolean
   /** Hợp lộ trình các SP (0063) — null = chưa định hình, hiện đủ danh mục. */
   route_stages: string[] | null
-}
-
-const ST: Record<
-  LsxStatus,
-  { label: string; tone: 'gray' | 'blue' | 'amber' | 'green' | 'red' }
-> = {
-  pending_approval: { label: 'Chờ GĐ duyệt', tone: 'amber' },
-  approved: { label: 'Đã duyệt — chờ SX', tone: 'blue' },
-  in_progress: { label: 'Đang sản xuất', tone: 'amber' },
-  completed: { label: 'Hoàn thành', tone: 'green' },
-  rejected: { label: 'Bị từ chối', tone: 'red' },
-  cancelled: { label: 'Đã huỷ theo đơn', tone: 'gray' },
 }
 
 const ACTIVE: LsxStatus[] = ['approved', 'in_progress']
