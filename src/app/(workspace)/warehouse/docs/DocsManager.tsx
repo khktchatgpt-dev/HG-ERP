@@ -839,37 +839,100 @@ function IssueForm({
     rows.some((r) => !r.material_id || r.qty === '' || Number(r.qty) <= 0) ||
     (kind === 'lsx' && !lsxId)
 
-  async function handle(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
+  // Xuất lấn phần đang GIỮ cho LSX khác → server trả 409 RESERVED_CONFLICT.
+  // Không chặn cứng: hiện cảnh báo + bắt nhập lý do rồi gửi lại kèm cờ override.
+  const [conflict, setConflict] = useState<{
+    message: string
+    body: Record<string, unknown>
+  } | null>(null)
+  const [overrideReason, setOverrideReason] = useState('')
+
+  async function post(body: Record<string, unknown>) {
     setBusy(true)
     try {
       const result = await api<{ code: string }>('/api/dept/warehouse/docs/issue', {
         method: 'POST',
-        body: {
-          kind,
-          production_order_id: kind === 'lsx' ? lsxId : null,
-          counterparty: String(fd.get('counterparty') ?? '').trim() || null,
-          reason: String(fd.get('reason') ?? '').trim() || null,
-          note: String(fd.get('note') ?? '').trim() || null,
-          lines: rows.map((r) => ({
-            material_id: r.material_id,
-            qty: Number(r.qty),
-            shelf_location: r.shelf_location.trim() || null,
-            note: r.note.trim() || null,
-          })),
-        },
+        body,
       })
+      setConflict(null)
       onDone(result.code)
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'RESERVED_CONFLICT') {
+        setConflict({ message: err.message, body })
+        return
+      }
       toast.error('Lập phiếu thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
     } finally {
       setBusy(false)
     }
   }
 
+  async function handle(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    await post({
+      kind,
+      production_order_id: kind === 'lsx' ? lsxId : null,
+      counterparty: String(fd.get('counterparty') ?? '').trim() || null,
+      reason: String(fd.get('reason') ?? '').trim() || null,
+      note: String(fd.get('note') ?? '').trim() || null,
+      lines: rows.map((r) => ({
+        material_id: r.material_id,
+        qty: Number(r.qty),
+        shelf_location: r.shelf_location.trim() || null,
+        note: r.note.trim() || null,
+      })),
+    })
+  }
+
   return (
     <form onSubmit={handle} className="flex flex-col gap-3">
+      {conflict && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+          <div className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            ⚠ Vượt tồn khả dụng — phần này đang giữ cho LSX khác
+          </div>
+          <div className="mt-1 text-xs text-amber-700 dark:text-amber-300/90">
+            {conflict.message}
+          </div>
+          <label className="mt-2 flex flex-col gap-1 text-xs">
+            Lý do vẫn xuất <span className="text-red-500">*</span>
+            <input
+              value={overrideReason}
+              onChange={(e) => setOverrideReason(e.target.value)}
+              maxLength={500}
+              placeholder="VD: Giám đốc duyệt ưu tiên đơn A"
+              className={inputCls}
+            />
+          </label>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConflict(null)
+                setOverrideReason('')
+              }}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-white dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              Sửa lại số lượng
+            </button>
+            <button
+              type="button"
+              disabled={busy || !overrideReason.trim()}
+              onClick={() =>
+                void post({
+                  ...conflict.body,
+                  override_reserved: true,
+                  override_reason: overrideReason.trim(),
+                })
+              }
+              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}Vẫn xuất
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="flex flex-col gap-1 text-sm">
           Loại xuất
