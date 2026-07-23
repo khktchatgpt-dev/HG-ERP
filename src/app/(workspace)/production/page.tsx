@@ -1,13 +1,12 @@
-import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { outputsService } from '@/modules/dept/production/outputs.service'
 import { assessLateRisk } from '@/lib/late-risk'
-import { Badge } from '@/components/Badge'
+import { ProductionHome, type ProdCard } from './ProductionHome'
 
 /**
  * Trang chủ workspace Sản xuất (plan-production-workspace P2): các LSX đang
- * chạy dạng CARD LỚN — cả card là nút bấm, hợp máy xưởng màn nhỏ / ít chuột.
+ * chạy dạng CARD LỚN + tìm/lọc/sort (trễ hạn lên đầu). Cả card là nút bấm.
  */
 export default async function ProductionHomePage() {
   const user = (await authService.currentUser())!
@@ -45,103 +44,27 @@ export default async function ProductionHomePage() {
     }),
   )
 
-  return (
-    <>
-      <h1 className="mb-1 text-lg font-semibold">
-        Xưởng sản xuất — chào {user.name ?? user.email}
-      </h1>
-      <p className="mb-5 text-sm text-zinc-500">
-        {running.length} lệnh đang chạy. Bấm vào lệnh để cập nhật giai đoạn, xác nhận nhận
-        vật tư, báo hoàn thành.
-      </p>
+  const cards: ProdCard[] = running.map((r) => {
+    const risk = assessLateRisk(r, today)
+    const prog = progressByLsx.get(r.production_order_id!)
+    const pct = prog && prog.qty > 0 ? Math.round((prog.sets / prog.qty) * 100) : null
+    return {
+      id: r.production_order_id!,
+      code: r.lsx_code ?? '?',
+      customer_name: r.customer_name,
+      order_code: r.code,
+      status: r.lsx_status as 'approved' | 'in_progress',
+      stage_label:
+        r.lsx_status === 'in_progress'
+          ? (stageLabel(r.current_stage) ?? 'Đang sản xuất')
+          : null,
+      ship_date: r.ship_date,
+      risk_level: risk?.level ?? null,
+      pct,
+      sets: prog?.sets ?? null,
+      qty: prog?.qty ?? null,
+    }
+  })
 
-      {running.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
-          Không có lệnh sản xuất nào đang chạy. LSX được Giám đốc duyệt sẽ hiện ở đây.
-        </div>
-      ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {running.map((r) => {
-            const risk = assessLateRisk(r, today)
-            const prog = progressByLsx.get(r.production_order_id!)
-            const pct =
-              prog && prog.qty > 0 ? Math.round((prog.sets / prog.qty) * 100) : null
-            return (
-              <Link
-                key={r.production_order_id}
-                href={`/production/lsx/${r.production_order_id}`}
-                className="block rounded-xl border border-zinc-200 bg-white p-5 shadow-sm transition hover:border-red-400 hover:shadow-md active:scale-[0.99] dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-red-600"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-mono text-lg font-semibold">{r.lsx_code}</span>
-                  {risk && (
-                    <Badge tone={risk.level === 'overdue' ? 'red' : 'amber'}>
-                      {risk.level === 'overdue' ? '⚠ Trễ hạn' : '⚠ Sát hạn'}
-                    </Badge>
-                  )}
-                </div>
-                <div className="mt-1 truncate text-sm font-medium">{r.customer_name}</div>
-                <div className="text-xs text-zinc-500">Đơn {r.code}</div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                  {r.lsx_status === 'in_progress' ? (
-                    <Badge tone="amber">
-                      {stageLabel(r.current_stage) ?? 'Đang sản xuất'}
-                    </Badge>
-                  ) : (
-                    <Badge tone="blue">Chờ bắt đầu</Badge>
-                  )}
-                  <span className="ml-auto text-xs text-zinc-500">
-                    Xuất:{' '}
-                    <b>
-                      {r.ship_date
-                        ? new Date(r.ship_date).toLocaleDateString('vi-VN')
-                        : '—'}
-                    </b>
-                  </span>
-                </div>
-
-                {/* Bộ đồng bộ = hàng hoàn chỉnh qua công đoạn cuối — liếc là
-                    biết lệnh ra được bao nhiêu hàng, không cần mở bảng tổng. */}
-                {pct != null && prog && (
-                  <div className="mt-3">
-                    <div className="mb-1 flex items-center justify-between text-xs">
-                      <span className="text-zinc-500">
-                        Đồng bộ{' '}
-                        <b className="text-zinc-700 dark:text-zinc-200">
-                          {prog.sets.toLocaleString('vi-VN')}/
-                          {prog.qty.toLocaleString('vi-VN')}
-                        </b>{' '}
-                        bộ
-                      </span>
-                      <span
-                        className={
-                          pct >= 100
-                            ? 'font-semibold text-green-600 dark:text-green-400'
-                            : 'font-semibold text-zinc-600 dark:text-zinc-300'
-                        }
-                      >
-                        {pct}%
-                      </span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                      <div
-                        className={`h-full rounded-full ${
-                          pct >= 100
-                            ? 'bg-green-500'
-                            : risk?.level === 'overdue'
-                              ? 'bg-red-500'
-                              : 'bg-sky-500'
-                        }`}
-                        style={{ width: `${Math.min(100, pct)}%` }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      )}
-    </>
-  )
+  return <ProductionHome greeting={`Chào ${user.name ?? user.email}`} cards={cards} />
 }
