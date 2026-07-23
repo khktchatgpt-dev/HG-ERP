@@ -51,6 +51,8 @@ const REF_LABEL: Record<string, string> = {
   external: 'Mua ngoài',
   lsx: 'Theo LSX',
   daily: 'Thường ngày',
+  adjust: 'Điều chỉnh kiểm kê',
+  transfer: 'Điều chuyển',
 }
 
 export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: boolean }) {

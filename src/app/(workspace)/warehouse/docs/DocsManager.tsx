@@ -90,6 +90,19 @@ type Row = {
   note: string
 }
 
+/** Dòng biên bản kiểm kê (0077) — API docDetail trả kèm khi kind='stocktake'. */
+type StocktakeLine = {
+  id: string
+  material_id: string
+  system_qty: number
+  counted_qty: number
+  diff: number
+  note: string | null
+  material_code: string | null
+  material_name: string | null
+  material_unit: string | null
+}
+
 const KIND_LABEL: Record<DocKind, string> = {
   receipt: 'Phiếu nhập',
   issue: 'Phiếu xuất',
@@ -124,7 +137,11 @@ export function DocsManager({
   const [busy, setBusy] = useState(false)
   const [openReceipt, setOpenReceipt] = useState(false)
   const [openIssue, setOpenIssue] = useState(false)
-  const [viewing, setViewing] = useState<{ doc: Doc; lines: DocLine[] } | null>(null)
+  const [viewing, setViewing] = useState<{
+    doc: Doc
+    lines: DocLine[]
+    stocktakeLines: StocktakeLine[]
+  } | null>(null)
 
   const [q, setQ] = useState('')
   const [kindFilter, setKindFilter] = useState<'all' | DocKind>('all')
@@ -147,8 +164,10 @@ export function DocsManager({
   async function openView(doc: Doc) {
     setBusy(true)
     try {
-      const data = await api<{ lines: DocLine[] }>(`/api/dept/warehouse/docs/${doc.id}`)
-      setViewing({ doc, lines: data.lines })
+      const data = await api<{ lines: DocLine[]; stocktake_lines?: StocktakeLine[] }>(
+        `/api/dept/warehouse/docs/${doc.id}`,
+      )
+      setViewing({ doc, lines: data.lines, stocktakeLines: data.stocktake_lines ?? [] })
     } catch (e) {
       toast.error('Không tải được phiếu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -229,6 +248,9 @@ export function DocsManager({
         actions={
           canEdit && (
             <>
+              <a href="/warehouse/stocktake" className={btnSecondary}>
+                ▧ Kiểm kê
+              </a>
               <button onClick={() => setOpenIssue(true)} className={btnSecondary}>
                 − Phiếu xuất
               </button>
@@ -348,7 +370,13 @@ export function DocsManager({
         title={viewing ? `${viewing.doc.code} — ${KIND_LABEL[viewing.doc.kind]}` : ''}
         maxWidth="sm:max-w-3xl"
       >
-        {viewing && <DocDetail doc={viewing.doc} lines={viewing.lines} />}
+        {viewing && (
+          <DocDetail
+            doc={viewing.doc}
+            lines={viewing.lines}
+            stocktakeLines={viewing.stocktakeLines}
+          />
+        )}
       </Modal>
     </div>
   )
@@ -991,7 +1019,82 @@ function IssueForm({
 
 // ── Chi tiết phiếu ──────────────────────────────────────────────────────────
 
-function DocDetail({ doc, lines }: { doc: Doc; lines: DocLine[] }) {
+function DocDetail({
+  doc,
+  lines,
+  stocktakeLines = [],
+}: {
+  doc: Doc
+  lines: DocLine[]
+  stocktakeLines?: StocktakeLine[]
+}) {
+  // Phiếu KK: hiển thị BIÊN BẢN đầy đủ (mọi dòng đếm) thay vì movements (chỉ dòng lệch).
+  if (doc.kind === 'stocktake') {
+    return (
+      <div className="flex flex-col gap-3 text-sm">
+        <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+          <Badge tone={KIND_TONE[doc.kind]}>{KIND_LABEL[doc.kind]}</Badge>
+          <span>Ngày: {new Date(doc.created_at).toLocaleString('vi-VN')}</span>
+          {doc.created_by_name && <span>· Người lập: {doc.created_by_name}</span>}
+          {doc.reason && <span>· Lý do: {doc.reason}</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+                <th className="py-2 pr-2">Vật tư</th>
+                <th className="w-24 py-2 pr-2 text-right">Tồn sổ</th>
+                <th className="w-24 py-2 pr-2 text-right">Đếm thực tế</th>
+                <th className="w-24 py-2 pr-2 text-right">Chênh lệch</th>
+                <th className="py-2">Ghi chú</th>
+              </tr>
+            </thead>
+            <tbody>
+              {stocktakeLines.map((l) => (
+                <tr key={l.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                  <td className="py-1.5 pr-2">
+                    <span className="font-mono text-xs text-zinc-400">
+                      {l.material_code}
+                    </span>{' '}
+                    {l.material_name}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right text-zinc-500">
+                    {l.system_qty.toLocaleString('vi-VN')}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right font-medium">
+                    {l.counted_qty.toLocaleString('vi-VN')} {l.material_unit}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {l.diff === 0 ? (
+                      <span className="text-green-600 dark:text-green-400">khớp ✓</span>
+                    ) : (
+                      <span
+                        className={
+                          'font-semibold ' +
+                          (l.diff > 0
+                            ? 'text-amber-600 dark:text-amber-500'
+                            : 'text-red-600 dark:text-red-400')
+                        }
+                      >
+                        {l.diff > 0 ? '+' : ''}
+                        {l.diff.toLocaleString('vi-VN')}
+                      </span>
+                    )}
+                  </td>
+                  <td className="py-1.5 text-zinc-500">{l.note ?? ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-zinc-400">
+          {stocktakeLines.filter((l) => l.diff !== 0).length} dòng lệch sổ đã sinh điều
+          chỉnh tồn (ref &quot;adjust&quot;) — tồn sau kiểm = số đếm thực tế.
+        </p>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-3 text-sm">
       <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">

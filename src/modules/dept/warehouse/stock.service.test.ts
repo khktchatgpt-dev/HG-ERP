@@ -11,14 +11,20 @@ vi.mock('./stock.repo', () => ({
     listLines: vi.fn(),
   },
   warehousesRepo: { mainId: vi.fn() },
+  stocktakeRepo: { insertLines: vi.fn(), listByDoc: vi.fn() },
   insertMovements: vi.fn(),
   onHandMany: vi.fn(),
   stockInfoMany: vi.fn(),
   issuedByLsx: vi.fn(),
+  issuedByLsxIds: vi.fn(),
+  lsxRemainingByIds: vi.fn(),
   lsxNeeds: vi.fn(),
 }))
 vi.mock('@/modules/dept/production/components.service', () => ({
   componentMaterialNeeds: vi.fn(),
+}))
+vi.mock('@/modules/dept/production/components.repo', () => ({
+  componentsRepo: { listForReserve: vi.fn() },
 }))
 vi.mock('./warehouse.repo', () => ({ materialsRepo: { findById: vi.fn() } }))
 vi.mock('./warehouse.service', () => ({ isWarehouseUser: vi.fn() }))
@@ -33,7 +39,7 @@ vi.mock('@/modules/dept/supply/supply.repo', () => ({
   },
 }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
-  productionRepo: { findById: vi.fn() },
+  productionRepo: { findById: vi.fn(), listCommittedIds: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
@@ -52,6 +58,7 @@ import {
   lsxNeeds as lsxNeedsRepo,
   onHandMany,
   stockInfoMany,
+  stocktakeRepo,
   warehousesRepo,
 } from './stock.repo'
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
@@ -380,5 +387,72 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
     expect(out[0].qty_needed).toBe(12)
     expect(out[0].source).toBeUndefined() // nhánh BOM giữ nguyên shape cũ
     expect(issuedByLsx).not.toHaveBeenCalled()
+  })
+})
+
+describe('createStocktakeDoc — phiếu kiểm kê (0077)', () => {
+  beforeEach(() => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('KK-2026-0001')
+    vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc-kk', code: 'KK-2026-0001' })
+  })
+
+  it('tồn sổ đọc server-side; biên bản đủ mọi dòng; movement adjust CHỈ dòng lệch', async () => {
+    // m1: sổ 10 đếm 7 (thiếu 3 → out); m2: sổ 5 đếm 8 (thừa 3 → in); m3: khớp 20.
+    vi.mocked(onHandMany).mockResolvedValue(
+      new Map([
+        ['m1', 10],
+        ['m2', 5],
+        ['m3', 20],
+      ]),
+    )
+
+    const r = await stockService.createStocktakeDoc(admin, {
+      reason: 'Kiểm kê định kỳ',
+      lines: [
+        { material_id: 'm1', counted_qty: 7 },
+        { material_id: 'm2', counted_qty: 8 },
+        { material_id: 'm3', counted_qty: 20 },
+      ],
+    })
+
+    expect(r).toMatchObject({ code: 'KK-2026-0001', diff_count: 2 })
+
+    // Biên bản: đủ 3 dòng, kể cả dòng khớp — diff lưu thẳng.
+    const bienBan = vi.mocked(stocktakeRepo.insertLines).mock.calls[0][0]
+    expect(bienBan).toHaveLength(3)
+    expect(bienBan[0]).toMatchObject({ system_qty: 10, counted_qty: 7, diff: -3 })
+    expect(bienBan[2]).toMatchObject({ system_qty: 20, counted_qty: 20, diff: 0 })
+
+    // Sổ cái: chỉ 2 movement điều chỉnh — out cho thiếu, in cho thừa.
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({
+      material_id: 'm1',
+      direction: 'out',
+      qty: 3,
+      ref_type: 'adjust',
+      doc_id: 'doc-kk',
+    })
+    expect(rows[1]).toMatchObject({ material_id: 'm2', direction: 'in', qty: 3 })
+  })
+
+  it('tất cả khớp sổ → không sinh movement, diff_count = 0', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 10]]))
+    const r = await stockService.createStocktakeDoc(admin, {
+      lines: [{ material_id: 'm1', counted_qty: 10 }],
+    })
+    expect(r.diff_count).toBe(0)
+    expect(insertMovements).not.toHaveBeenCalled()
+    expect(stocktakeRepo.insertLines).toHaveBeenCalled() // biên bản vẫn ghi
+  })
+
+  it('vật tư chưa từng có movement → tồn sổ coi là 0 (đếm = thừa toàn bộ)', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map())
+    const r = await stockService.createStocktakeDoc(admin, {
+      lines: [{ material_id: 'm1', counted_qty: 4 }],
+    })
+    expect(r.diff_count).toBe(1)
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({ direction: 'in', qty: 4 })
   })
 })

@@ -99,6 +99,27 @@ export const issueDocSchema = z
     message: 'BR-09: xuất theo LSX phải chọn LSX',
   })
 
+/** Dòng kiểm kê: số ĐẾM THỰC TẾ — tồn sổ server tự đọc lại lúc ghi (0077). */
+export const stocktakeDocLineSchema = z.object({
+  material_id: z.string().uuid(),
+  counted_qty: z.coerce.number().min(0),
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Phiếu kiểm kê (KK — 0077): biên bản mọi dòng đã đếm; dòng lệch sinh movement adjust. */
+export const stocktakeDocSchema = z.object({
+  reason: z.string().trim().max(500).optional().nullable(), // định kỳ / đột xuất…
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z
+    .array(stocktakeDocLineSchema)
+    .min(1, 'Phiếu kiểm kê phải có ít nhất 1 dòng')
+    .max(1000)
+    .refine(
+      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
+      'Vật tư bị trùng dòng',
+    ),
+})
+
 export const docListQuerySchema = z.object({
   kind: z.enum(['receipt', 'issue', 'transfer', 'stocktake']).optional(),
   page: z.coerce.number().int().positive().default(1),

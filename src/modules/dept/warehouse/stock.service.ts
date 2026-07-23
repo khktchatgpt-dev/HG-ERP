@@ -10,6 +10,7 @@ import {
   issuedByLsxIds,
   lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
+  stocktakeRepo,
   type LsxNeed,
   type StockRow,
   type DocKind,
@@ -223,8 +224,12 @@ export const stockService = {
     if (!(await canViewWarehouse(user))) throw Forbidden()
     const doc = await docsRepo.findById(id)
     if (!doc) throw NotFound('Phiếu không tồn tại')
-    const lines = await docsRepo.listLines(id)
-    return { doc, lines }
+    const [lines, stocktake_lines] = await Promise.all([
+      docsRepo.listLines(id),
+      // Phiếu KK: biên bản đầy đủ (mọi dòng đã đếm) — movements chỉ chứa dòng lệch.
+      doc.kind === 'stocktake' ? stocktakeRepo.listByDoc(id) : Promise.resolve([]),
+    ])
+    return { doc, lines, stocktake_lines }
   },
 
   /** Nhu cầu vật tư còn phải xuất cho 1 LSX (FR-WMS-05 — cần vs đã xuất). */
@@ -418,35 +423,123 @@ export const stockService = {
 
     const after = await stockInfoMany([...need.keys()])
     const lows = after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0)
-    if (lows.length > 0) {
-      // FR-WMS-08: cảnh báo + đề xuất mua gửi Cung ứng. Người nhận = admin/manager
-      // + nhân viên phòng Cung ứng (nhận diện theo department, không có role riêng).
-      // KHÔNG loại người vừa xuất — cứ báo cho tất cả.
-      const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
-      const supplyDeptIds = new Set(
-        depts.filter((d) => SUPPLY_DEPT_NAMES.has(d.name)).map((d) => d.id),
-      )
-      const recipientIds = users
-        .filter(
-          (u) =>
-            u.role === 'admin' ||
-            u.role === 'manager' ||
-            (u.department_id != null && supplyDeptIds.has(u.department_id)),
-        )
-        .map((u) => u.id)
-      for (const low of lows) {
-        await emit({
-          name: 'warehouse.stock.low',
-          material_id: low.material_id,
-          material_code: low.code,
-          material_name: low.name,
-          on_hand: low.on_hand,
-          min_stock: low.min_stock,
-          caused_by: user.id,
-          notify_ids: recipientIds,
-        })
-      }
-    }
+    await notifyLowStock(user, lows)
     return { id: doc.id, code: doc.code }
   },
+
+  /**
+   * Lập PHIẾU KIỂM KÊ (KK — 0077): server đọc lại tồn sổ từng vật tư (không tin
+   * client), lưu biên bản đầy đủ; dòng LỆCH sinh movement 'adjust' (in = thừa,
+   * out = thiếu) → tồn sau kiểm = số đếm thực tế. Trả về tổng kết chênh lệch.
+   */
+  async createStocktakeDoc(
+    user: User,
+    input: {
+      reason?: string | null
+      note?: string | null
+      lines: { material_id: string; counted_qty: number; note?: string | null }[]
+    },
+  ): Promise<{ id: string; code: string; diff_count: number }> {
+    await assertAction(user, 'warehouse.stock.write')
+    const matIds = input.lines.map((l) => l.material_id)
+    for (const id of matIds) {
+      const mat = await materialsRepo.findById(id)
+      if (!mat) throw NotFound('Vật tư không tồn tại')
+    }
+    // Tồn sổ tại thời điểm ghi — vật tư chưa từng có movement thì coi là 0.
+    const systemQty = await onHandMany(matIds)
+
+    const [code, warehouseId] = await Promise.all([
+      docsRepo.nextCode('KK'),
+      warehousesRepo.mainId(),
+    ])
+    const doc = await docsRepo.insert({
+      code,
+      kind: 'stocktake',
+      reason: input.reason ?? null,
+      note: input.note ?? null,
+      created_by: user.id,
+    })
+
+    const lines = input.lines.map((l) => {
+      const system = systemQty.get(l.material_id) ?? 0
+      return { ...l, system_qty: system, diff: l.counted_qty - system }
+    })
+    await stocktakeRepo.insertLines(
+      lines.map((l) => ({
+        doc_id: doc.id,
+        material_id: l.material_id,
+        system_qty: l.system_qty,
+        counted_qty: l.counted_qty,
+        diff: l.diff,
+        note: l.note ?? null,
+      })),
+    )
+
+    const diffs = lines.filter((l) => l.diff !== 0)
+    if (diffs.length > 0) {
+      await insertMovements(
+        diffs.map((l) => ({
+          material_id: l.material_id,
+          direction: l.diff > 0 ? ('in' as const) : ('out' as const),
+          qty: Math.abs(l.diff),
+          ref_type: 'adjust',
+          note: `Kiểm kê ${doc.code}: sổ ${l.system_qty}, đếm ${l.counted_qty}`,
+          created_by: user.id,
+          doc_id: doc.id,
+          warehouse_id: warehouseId,
+        })),
+      )
+      // Điều chỉnh GIẢM có thể kéo tồn xuống dưới mức tối thiểu → cảnh báo như xuất kho.
+      const after = await stockInfoMany(diffs.map((l) => l.material_id))
+      await notifyLowStock(
+        user,
+        after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0),
+      )
+    }
+    return { id: doc.id, code: doc.code, diff_count: diffs.length }
+  },
+}
+
+/**
+ * FR-WMS-08: cảnh báo tồn dưới mức tối thiểu + đề xuất mua gửi Cung ứng.
+ * Người nhận = admin/manager + nhân viên phòng Cung ứng (nhận diện theo
+ * department, không có role riêng). KHÔNG loại người gây ra — cứ báo cho tất cả.
+ * Dùng chung cho xuất kho và điều chỉnh giảm sau kiểm kê.
+ */
+async function notifyLowStock(
+  user: User,
+  lows: {
+    material_id: string
+    code: string
+    name: string
+    on_hand: number
+    min_stock: number
+  }[],
+): Promise<void> {
+  if (lows.length === 0) return
+  const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
+  const supplyDeptIds = new Set(
+    depts.filter((d) => SUPPLY_DEPT_NAMES.has(d.name)).map((d) => d.id),
+  )
+  const recipientIds = users
+    .filter(
+      (u) =>
+        u.role === 'admin' ||
+        u.role === 'manager' ||
+        (u.department_id != null && supplyDeptIds.has(u.department_id)),
+    )
+    .map((u) => u.id)
+  for (const low of lows) {
+    await emit({
+      name: 'warehouse.stock.low',
+      material_id: low.material_id,
+      material_code: low.code,
+      material_name: low.name,
+      on_hand: low.on_hand,
+      min_stock: low.min_stock,
+      caused_by: user.id,
+      notify_ids: recipientIds,
+    })
+  }
 }

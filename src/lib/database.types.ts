@@ -3243,6 +3243,61 @@ export type Database = {
           },
         ]
       }
+      warehouse_stocktake_lines: {
+        Row: {
+          counted_qty: number
+          created_at: string
+          diff: number
+          doc_id: string
+          id: string
+          material_id: string
+          note: string | null
+          system_qty: number
+        }
+        Insert: {
+          counted_qty: number
+          created_at?: string
+          diff: number
+          doc_id: string
+          id?: string
+          material_id: string
+          note?: string | null
+          system_qty: number
+        }
+        Update: {
+          counted_qty?: number
+          created_at?: string
+          diff?: number
+          doc_id?: string
+          id?: string
+          material_id?: string
+          note?: string | null
+          system_qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktake_lines_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouses: {
         Row: {
           address: string | null

@@ -302,6 +302,66 @@ export const docsRepo = {
   },
 }
 
+// ── Kiểm kê (warehouse_stocktake_lines — 0077) ─────────────────────────────
+
+/** 1 dòng biên bản kiểm kê (kèm thông tin vật tư để hiển thị/in). */
+export type StocktakeLine = {
+  id: string
+  doc_id: string
+  material_id: string
+  system_qty: number
+  counted_qty: number
+  diff: number
+  note: string | null
+  material_code: string | null
+  material_name: string | null
+  material_unit: string | null
+}
+
+export const stocktakeRepo = {
+  async insertLines(
+    rows: {
+      doc_id: string
+      material_id: string
+      system_qty: number
+      counted_qty: number
+      diff: number
+      note?: string | null
+    }[],
+  ): Promise<void> {
+    if (rows.length === 0) return
+    const { error } = await db().from('warehouse_stocktake_lines').insert(rows)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Biên bản đầy đủ của 1 phiếu KK — mọi dòng đã đếm, kể cả khớp sổ. */
+  async listByDoc(docId: string): Promise<StocktakeLine[]> {
+    const { data } = await db()
+      .from('warehouse_stocktake_lines')
+      .select(
+        'id, doc_id, material_id, system_qty, counted_qty, diff, note, material:warehouse_materials(code, name, unit)',
+      )
+      .eq('doc_id', docId)
+      .order('created_at')
+    return ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      const m = Array.isArray(r.material) ? r.material[0] : r.material
+      const mat = (m ?? {}) as { code?: string; name?: string; unit?: string }
+      return {
+        id: r.id as string,
+        doc_id: r.doc_id as string,
+        material_id: r.material_id as string,
+        system_qty: num(r.system_qty),
+        counted_qty: num(r.counted_qty),
+        diff: num(r.diff),
+        note: (r.note as string | null) ?? null,
+        material_code: mat.code ?? null,
+        material_name: mat.name ?? null,
+        material_unit: mat.unit ?? null,
+      } satisfies StocktakeLine
+    })
+  },
+}
+
 export const warehousesRepo = {
   /** Kho chính (GĐ1 chỉ 1 kho — FR-WMS-10 seed 'MAIN' từ 0011). */
   async mainId(): Promise<string> {
