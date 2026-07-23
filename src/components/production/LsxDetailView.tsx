@@ -82,6 +82,7 @@ export function LsxDetailView({
   materials,
   canEditComponents,
   defaultStage,
+  defaultTeamId,
   routeStages,
   syncProgress,
   supply,
@@ -120,6 +121,8 @@ export function LsxDetailView({
   canEditComponents?: boolean
   /** Công đoạn mặc định cho form sản lượng (suy từ tổ của người xem). */
   defaultStage?: string | null
+  /** Tổ (phòng) của người xem — để LsxOutputPanel biết sổ đã chốt chưa. */
+  defaultTeamId?: string | null
   /**
    * Hợp lộ trình các SP (0063) khi TẤT CẢ SP của lệnh đã chốt — select "Cập
    * nhật giai đoạn" chỉ hiện giai đoạn có SP đi qua. null = không lọc.
@@ -574,6 +577,7 @@ export function LsxDetailView({
           canRecord={canRecord ?? canManage}
           active={activeStage}
           initialStage={defaultStage}
+          teamId={defaultTeamId}
         />
       )}
 

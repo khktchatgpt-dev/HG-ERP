@@ -98,6 +98,7 @@ export function LsxOutputPanel({
   canRecord,
   active,
   initialStage,
+  teamId,
 }: {
   lsxId: string
   /** Xưởng / KH-CƯ / GĐ-QL (khớp canTrackProgress ở service). */
@@ -106,6 +107,8 @@ export function LsxOutputPanel({
   active: boolean
   /** Công đoạn mặc định (suy từ TỔ của người nhập — Tổ Hàn mở ra đứng ở Hàn). */
   initialStage?: string | null
+  /** Tổ (phòng) của người nhập — để biết sổ ngày đã chốt chưa (khoá lưới). */
+  teamId?: string | null
 }) {
   const toast = useToast()
   const confirm = useConfirm()
@@ -114,6 +117,9 @@ export function LsxOutputPanel({
   const [stage, setStage] = useState(initialStage ?? '')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [cells, setCells] = useState<Record<string, InputCell>>({})
+  // Sổ tổ mình ngày đang chọn đã chốt? — server vẫn chặn cuối, đây là để BÁO
+  // TRƯỚC (badge 🔒 + khoá lưới) khỏi gõ cả bảng rồi ăn lỗi.
+  const [locked, setLocked] = useState(false)
   // Sổ là hồ sơ gốc quá trình SX — mặc định MỞ, chỉ thu gọn khi cần.
   const [showEntries, setShowEntries] = useState(true)
 
@@ -136,6 +142,24 @@ export function LsxOutputPanel({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
+
+  // Sổ tổ mình ngày đang chọn đã chốt chưa (reuse endpoint sổ ngày).
+  useEffect(() => {
+    if (!teamId) return
+    let alive = true
+    api<{ locks: { team_department_id: string }[] }>(
+      `/api/dept/production/logbook?date=${entryDate}`,
+    )
+      .then((d) => {
+        if (alive) setLocked(d.locks.some((l) => l.team_department_id === teamId))
+      })
+      .catch(() => {
+        if (alive) setLocked(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [teamId, entryDate])
 
   function setCell(componentId: string, patch: Partial<InputCell>) {
     setCells((c) => ({
@@ -458,19 +482,27 @@ export function LsxOutputPanel({
                       className={inp}
                     />
                   </label>
-                  <span className="pb-1 text-[10px] text-zinc-400">
-                    Tổ ghi theo phòng của người nhập · điền SL chi tiết nào thì ghi chi
-                    tiết đó
-                  </span>
+                  {locked ? (
+                    <Badge tone="red">🔒 Sổ tổ bạn ngày {entryDate} đã chốt</Badge>
+                  ) : (
+                    <span className="pb-1 text-[10px] text-zinc-400">
+                      Tổ ghi theo phòng của người nhập · điền SL chi tiết nào thì ghi chi
+                      tiết đó
+                    </span>
+                  )}
                   <button
-                    disabled={busy || !stage}
+                    disabled={busy || !stage || locked}
                     onClick={() => void save()}
                     className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {busy && <Spinner size={12} />}✓ Ghi sản lượng ngày
+                    {busy && <Spinner size={12} />}
+                    {locked ? 'Sổ đã chốt' : '✓ Ghi sản lượng ngày'}
                   </button>
                 </div>
-                <div className="overflow-x-auto">
+                <fieldset
+                  disabled={locked}
+                  className="overflow-x-auto disabled:opacity-60"
+                >
                   <table className="w-full min-w-[820px] text-xs">
                     <thead>
                       <tr className="text-left text-[10px] text-zinc-500 uppercase">
@@ -603,7 +635,7 @@ export function LsxOutputPanel({
                         })}
                     </tbody>
                   </table>
-                </div>
+                </fieldset>
                 {(() => {
                   const hidden = data.components.filter((c) => !inRoute(c, stage)).length
                   return hidden > 0 ? (
