@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { outputsService } from '@/modules/dept/production/outputs.service'
+import { assessLateRisk } from '@/lib/late-risk'
 import { ProductionBoard, type BoardRow } from './ProductionBoard'
 
 /**
@@ -16,13 +17,23 @@ import { ProductionBoard, type BoardRow } from './ProductionBoard'
 export async function BoardScreen() {
   const user = (await authService.currentUser())!
 
-  const [{ rows: running }, stages] = await Promise.all([
+  const [{ rows: running }, stages, tracking] = await Promise.all([
     productionRepo.list({ page: 1, page_size: 50 }),
     productionRepo.listStages(),
+    productionRepo.listTracking(),
   ])
   const active = running.filter(
     (l) => l.status === 'approved' || l.status === 'in_progress',
   )
+
+  // Nguy cơ trễ per-LSX (tính từ tracking như trang chủ — có due_date/BOM/PO).
+  const today = new Date().toISOString().slice(0, 10)
+  const riskByLsx: Record<string, 'overdue' | 'at_risk'> = {}
+  for (const t of tracking) {
+    if (!t.production_order_id) continue
+    const risk = assessLateRisk(t, today)
+    if (risk) riskByLsx[t.production_order_id] = risk.level
+  }
 
   const rows: BoardRow[] = []
   const synced: { lsx_code: string; product_code: string; qty: number; sets: number }[] =
@@ -70,6 +81,7 @@ export async function BoardScreen() {
       stages={stages}
       synced={synced}
       lsxCount={active.length}
+      riskByLsx={riskByLsx}
     />
   )
 }

@@ -212,6 +212,7 @@ export async function LsxDetailScreen({
       }))}
       canEditComponents={flags.canEditComponents}
       defaultStage={flags.defaultStage}
+      defaultTeamId={user.department_id}
       routeStages={routeStages}
       syncProgress={syncProgress}
       supply={supply}

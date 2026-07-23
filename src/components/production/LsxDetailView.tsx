@@ -3,9 +3,10 @@
 import { useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
+import { LSX_STATUS as ST } from '@/lib/lsx-status'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { useConfirm, usePrompt } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Tabs } from '@/components/ui/Tabs'
@@ -38,18 +39,6 @@ export type SupplyPanelData = {
 
 type LsxStatus =
   'pending_approval' | 'approved' | 'in_progress' | 'completed' | 'rejected' | 'cancelled'
-
-const ST: Record<
-  LsxStatus,
-  { label: string; tone: 'gray' | 'blue' | 'amber' | 'green' | 'red' }
-> = {
-  pending_approval: { label: 'Chờ GĐ duyệt', tone: 'amber' },
-  approved: { label: 'Đã duyệt', tone: 'blue' },
-  in_progress: { label: 'Đang sản xuất', tone: 'amber' },
-  completed: { label: 'Hoàn thành', tone: 'green' },
-  rejected: { label: 'Bị từ chối', tone: 'red' },
-  cancelled: { label: 'Đã huỷ theo đơn', tone: 'gray' },
-}
 
 type Spec = {
   machine: string
@@ -93,6 +82,7 @@ export function LsxDetailView({
   materials,
   canEditComponents,
   defaultStage,
+  defaultTeamId,
   routeStages,
   syncProgress,
   supply,
@@ -131,6 +121,8 @@ export function LsxDetailView({
   canEditComponents?: boolean
   /** Công đoạn mặc định cho form sản lượng (suy từ tổ của người xem). */
   defaultStage?: string | null
+  /** Tổ (phòng) của người xem — để LsxOutputPanel biết sổ đã chốt chưa. */
+  defaultTeamId?: string | null
   /**
    * Hợp lộ trình các SP (0063) khi TẤT CẢ SP của lệnh đã chốt — select "Cập
    * nhật giai đoạn" chỉ hiện giai đoạn có SP đi qua. null = không lọc.
@@ -144,6 +136,7 @@ export function LsxDetailView({
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
+  const promptInput = usePrompt()
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [busy, setBusy] = useState(false)
@@ -202,9 +195,20 @@ export function LsxDetailView({
     if (ok) await call(`/api/dept/production/lsx/${lsx.id}/approve`, {}, 'Đã duyệt LSX')
   }
   async function reject() {
-    const reason = window.prompt(`Lý do từ chối LSX ${lsx.code}:`)?.trim()
-    if (!reason) return
-    await call(`/api/dept/production/lsx/${lsx.id}/reject`, { reason }, 'Đã từ chối LSX')
+    const reason = await promptInput({
+      title: `Từ chối LSX ${lsx.code}`,
+      inputLabel: 'Lý do từ chối',
+      placeholder: 'VD: sai thông số, cần khách xác nhận lại…',
+      required: true,
+      confirmLabel: 'Từ chối',
+      tone: 'danger',
+    })
+    if (!reason?.trim()) return
+    await call(
+      `/api/dept/production/lsx/${lsx.id}/reject`,
+      { reason: reason.trim() },
+      'Đã từ chối LSX',
+    )
   }
   async function updateStage() {
     if (!stage) return
@@ -243,8 +247,13 @@ export function LsxDetailView({
   }
 
   async function materialsReceived() {
-    // prompt Cancel → null (bỏ); OK để trống → xác nhận không ghi chú.
-    const note = window.prompt('Ghi chú nhận vật tư (tuỳ chọn — VD: đủ theo PXK-…):')
+    // Cancel → null (bỏ); OK để trống → xác nhận không ghi chú.
+    const note = await promptInput({
+      title: 'Xác nhận đã nhận vật tư',
+      inputLabel: 'Ghi chú (tuỳ chọn)',
+      placeholder: 'VD: đủ theo PXK-…',
+      confirmLabel: 'Xác nhận',
+    })
     if (note === null) return
     await call(
       `/api/dept/production/lsx/${lsx.id}/materials-received`,
@@ -585,6 +594,7 @@ export function LsxDetailView({
           canRecord={canRecord ?? canManage}
           active={activeStage}
           initialStage={defaultStage}
+          teamId={defaultTeamId}
         />
       )}
 

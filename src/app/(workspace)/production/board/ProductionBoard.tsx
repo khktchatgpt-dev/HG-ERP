@@ -40,11 +40,14 @@ export function ProductionBoard({
   stages,
   synced,
   lsxCount,
+  riskByLsx = {},
 }: {
   rows: BoardRow[]
   stages: Stage[]
   synced: { lsx_code: string; product_code: string; qty: number; sets: number }[]
   lsxCount: number
+  /** Nguy cơ trễ per-LSX (tính server-side) — badge ở dòng đầu mỗi lệnh. */
+  riskByLsx?: Record<string, 'overdue' | 'at_risk'>
 }) {
   const [q, setQ] = useState('')
   const [lsxFilter, setLsxFilter] = useState('all')
@@ -245,7 +248,19 @@ export function ProductionBoard({
                         href={`/production/lsx/${r.lsx_id}`}
                         className="flex min-w-0 flex-col hover:text-sky-600 dark:hover:text-sky-400"
                       >
-                        <span className="font-mono">{r.lsx_code}</span>
+                        <span className="flex items-center gap-1.5 font-mono">
+                          {r.lsx_code}
+                          {(() => {
+                            const firstOfLsx =
+                              i === 0 || filtered[i - 1].lsx_id !== r.lsx_id
+                            const risk = firstOfLsx ? riskByLsx[r.lsx_id] : undefined
+                            return risk ? (
+                              <Badge tone={risk === 'overdue' ? 'red' : 'amber'}>
+                                {risk === 'overdue' ? '⚠ Trễ' : '⚠ Sát hạn'}
+                              </Badge>
+                            ) : null
+                          })()}
+                        </span>
                         <span className="truncate text-zinc-400">{r.customer_name}</span>
                       </Link>
                     </td>

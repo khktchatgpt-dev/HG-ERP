@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/erp/PageHeader'
+import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarSelect } from '@/components/erp/Toolbar'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
@@ -88,7 +89,10 @@ export function LogbookScreen({
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
+  // Đang GHI SỔ (do FastEntryGrid báo lên) — tách khỏi busy (chốt/mở khoá).
+  const [saving, setSaving] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const today = new Date().toISOString().slice(0, 10)
   const [fTeam, setFTeam] = useState(ownTeam?.id ?? '')
   const [fStage, setFStage] = useState('')
   const [fLsx, setFLsx] = useState('')
@@ -216,7 +220,7 @@ export function LogbookScreen({
 
   return (
     <div className="flex flex-col gap-4 pb-16">
-      <TopProgressBar active={busy} />
+      <TopProgressBar active={busy || saving} />
       <PageHeader
         breadcrumbs={[
           { label: 'Sản xuất', href: '/production' },
@@ -224,6 +228,23 @@ export function LogbookScreen({
         ]}
         title="Sổ ghi sản lượng"
         description="Sổ toàn xưởng theo ngày: nhập nhanh kiểu bảng tính (mũi tên/Enter di chuyển, Ctrl+Enter ghi sổ), phế bắt buộc chọn nguyên nhân, cuối ngày Chốt sổ để khoá số liệu."
+      />
+
+      <StatsBar
+        stats={[
+          { label: 'Lần ghi (đã lọc)', value: entries.length, tone: 'blue' },
+          { label: 'Σ SL đạt', value: totQty.toLocaleString('vi-VN'), tone: 'green' },
+          {
+            label: 'Phế',
+            value: totDefect.toLocaleString('vi-VN'),
+            tone: totDefect > 0 ? 'red' : 'gray',
+          },
+          {
+            label: 'Tổ đã chốt',
+            value: (data?.locks ?? []).length,
+            tone: (data?.locks ?? []).length > 0 ? 'amber' : 'gray',
+          },
+        ]}
       />
 
       {/* Vùng 1 — bộ lọc */}
@@ -251,7 +272,18 @@ export function LogbookScreen({
               >
                 ▶
               </button>
+              <button
+                onClick={() => setDate(today)}
+                disabled={date === today}
+                className="rounded-md border border-zinc-300 px-2 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                title="Về hôm nay"
+              >
+                Hôm nay
+              </button>
             </span>
+            {date !== today && (
+              <Badge tone="amber">⚠ Đang xem ngày {date} (không phải hôm nay)</Badge>
+            )}
             <ToolbarSelect
               value={fTeam}
               onChange={setFTeam}
@@ -277,17 +309,6 @@ export function LogbookScreen({
               ]}
             />
           </>
-        }
-        right={
-          <span className="text-xs text-zinc-500">
-            {entries.length} lần ghi · Σ SL <b>{totQty.toLocaleString('vi-VN')}</b>
-            {totDefect > 0 && (
-              <span className="text-red-500">
-                {' '}
-                · phế {totDefect.toLocaleString('vi-VN')}
-              </span>
-            )}
-          </span>
         }
       />
 
@@ -416,6 +437,7 @@ export function LogbookScreen({
           locked={!!focusLock && !!ownTeam}
           onSaved={load}
           onPendingChange={setPendingCount}
+          onSavingChange={setSaving}
           registerSave={registerSave}
         />
       )}
@@ -445,11 +467,12 @@ export function LogbookScreen({
           <span className="ml-auto flex items-center gap-2">
             {canRecord && (
               <button
-                disabled={busy || pendingCount === 0}
+                disabled={busy || saving || pendingCount === 0}
                 onClick={() => saveRef.current?.()}
                 className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                {busy && <Spinner size={12} />}✓ Ghi sổ ({pendingCount} dòng)
+                {(busy || saving) && <Spinner size={12} />}
+                {saving ? 'Đang ghi…' : `✓ Ghi sổ (${pendingCount} dòng)`}
               </button>
             )}
             {canRecord && focusTeam && !focusLock && (

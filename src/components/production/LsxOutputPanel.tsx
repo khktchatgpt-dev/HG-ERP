@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Badge } from '@/components/Badge'
 import { cn } from '@/lib/utils'
 import { api, ApiError } from '@/lib/api'
@@ -85,6 +85,9 @@ type InputCell = {
 const inp =
   'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
+/** Cột nhập theo thứ tự bàn phím: SL → Phế → Lý do → Kg → Máy/màu. */
+const COL_COUNT = 5
+
 const emptyCell = (): InputCell => ({
   qty: '',
   defect: '',
@@ -98,6 +101,7 @@ export function LsxOutputPanel({
   canRecord,
   active,
   initialStage,
+  teamId,
 }: {
   lsxId: string
   /** Xưởng / KH-CƯ / GĐ-QL (khớp canTrackProgress ở service). */
@@ -106,6 +110,8 @@ export function LsxOutputPanel({
   active: boolean
   /** Công đoạn mặc định (suy từ TỔ của người nhập — Tổ Hàn mở ra đứng ở Hàn). */
   initialStage?: string | null
+  /** Tổ (phòng) của người nhập — để biết sổ ngày đã chốt chưa (khoá lưới). */
+  teamId?: string | null
 }) {
   const toast = useToast()
   const confirm = useConfirm()
@@ -113,7 +119,13 @@ export function LsxOutputPanel({
   const [data, setData] = useState<OutputData | null>(null)
   const [stage, setStage] = useState(initialStage ?? '')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const today = new Date().toISOString().slice(0, 10)
   const [cells, setCells] = useState<Record<string, InputCell>>({})
+  // Sổ tổ mình ngày đang chọn đã chốt? — server vẫn chặn cuối, đây là để BÁO
+  // TRƯỚC (badge 🔒 + khoá lưới) khỏi gõ cả bảng rồi ăn lỗi.
+  const [locked, setLocked] = useState(false)
+  // Ma trận ref [hàng][cột] cho điều hướng bàn phím kiểu bảng tính.
+  const cellRefs = useRef<(HTMLElement | null)[][]>([])
   // Sổ là hồ sơ gốc quá trình SX — mặc định MỞ, chỉ thu gọn khi cần.
   const [showEntries, setShowEntries] = useState(true)
 
@@ -137,11 +149,71 @@ export function LsxOutputPanel({
     void load()
   }, [load])
 
+  // Sổ tổ mình ngày đang chọn đã chốt chưa (reuse endpoint sổ ngày).
+  useEffect(() => {
+    if (!teamId) return
+    let alive = true
+    api<{ locks: { team_department_id: string }[] }>(
+      `/api/dept/production/logbook?date=${entryDate}`,
+    )
+      .then((d) => {
+        if (alive) setLocked(d.locks.some((l) => l.team_department_id === teamId))
+      })
+      .catch(() => {
+        if (alive) setLocked(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [teamId, entryDate])
+
   function setCell(componentId: string, patch: Partial<InputCell>) {
     setCells((c) => ({
       ...c,
       [componentId]: { ...(c[componentId] ?? emptyCell()), ...patch },
     }))
+  }
+
+  const setRef = (row: number, col: number) => (el: HTMLElement | null) => {
+    ;(cellRefs.current[row] ??= [])[col] = el
+  }
+
+  /** Điều hướng bàn phím kiểu bảng tính (↑↓←→ / Enter / Ctrl+Enter = Ghi). */
+  function onGridKeyDown(e: React.KeyboardEvent, row: number, col: number) {
+    const focus = (r: number, c: number) => {
+      const el = cellRefs.current[r]?.[c]
+      if (el) {
+        e.preventDefault()
+        el.focus()
+        if (el instanceof HTMLInputElement) el.select()
+      }
+    }
+    const rowCount = data ? data.components.filter((c) => inRoute(c, stage)).length : 0
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault()
+      void save()
+      return
+    }
+    if (e.key === 'Enter') {
+      if (row + 1 < rowCount) focus(row + 1, col)
+      else {
+        e.preventDefault()
+        void save() // Enter ở hàng cuối = ghi (thói quen chốt dòng Excel)
+      }
+      return
+    }
+    if (e.key === 'ArrowDown') return focus(row + 1, col)
+    if (e.key === 'ArrowUp') return focus(row - 1, col)
+    const t = e.target as HTMLInputElement
+    const atStart = t.selectionStart === 0 && t.selectionEnd === 0
+    const atEnd =
+      t.selectionStart === t.value?.length && t.selectionEnd === t.value?.length
+    if (e.key === 'ArrowLeft' && (t.tagName !== 'INPUT' || atStart)) {
+      return focus(row, Math.max(0, col - 1))
+    }
+    if (e.key === 'ArrowRight' && (t.tagName !== 'INPUT' || atEnd)) {
+      return focus(row, Math.min(COL_COUNT - 1, col + 1))
+    }
   }
 
   async function save() {
@@ -450,31 +522,51 @@ export function LsxOutputPanel({
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-xs">
-                    Ngày
+                    <span className="flex items-center gap-1.5">
+                      Ngày
+                      {entryDate !== today && (
+                        <button
+                          type="button"
+                          onClick={() => setEntryDate(today)}
+                          className="text-[10px] text-sky-600 hover:underline dark:text-sky-400"
+                        >
+                          → Hôm nay
+                        </button>
+                      )}
+                    </span>
                     <input
                       type="date"
                       value={entryDate}
                       onChange={(e) => setEntryDate(e.target.value)}
-                      className={inp}
+                      className={`${inp} ${entryDate !== today ? 'border-amber-400' : ''}`}
                     />
                   </label>
-                  <span className="pb-1 text-[10px] text-zinc-400">
-                    Tổ ghi theo phòng của người nhập · điền SL chi tiết nào thì ghi chi
-                    tiết đó
-                  </span>
+                  {locked ? (
+                    <Badge tone="red">🔒 Sổ tổ bạn ngày {entryDate} đã chốt</Badge>
+                  ) : (
+                    <span className="pb-1 text-[10px] text-zinc-400">
+                      Mũi tên / Enter di chuyển ô, Ctrl+Enter ghi · tổ ghi theo phòng
+                      người nhập
+                    </span>
+                  )}
                   <button
-                    disabled={busy || !stage}
+                    disabled={busy || !stage || locked}
                     onClick={() => void save()}
                     className="ml-auto inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                   >
-                    {busy && <Spinner size={12} />}✓ Ghi sản lượng ngày
+                    {busy && <Spinner size={12} />}
+                    {locked ? 'Sổ đã chốt' : '✓ Ghi sản lượng ngày'}
                   </button>
                 </div>
-                <div className="overflow-x-auto">
+                <fieldset
+                  disabled={locked}
+                  className="overflow-x-auto disabled:opacity-60"
+                >
                   <table className="w-full min-w-[820px] text-xs">
                     <thead>
                       <tr className="text-left text-[10px] text-zinc-500 uppercase">
                         <th className="py-1 pr-2">Chi tiết</th>
+                        <th className="w-16 py-1 pr-2 text-right">Còn</th>
                         <th className="w-20 py-1 pr-2">SL làm</th>
                         <th className="w-16 py-1 pr-2">Phế</th>
                         <th className="w-40 py-1 pr-2">Nguyên nhân lỗi</th>
@@ -487,33 +579,47 @@ export function LsxOutputPanel({
                           trình 0063) — đỡ nhập nhầm dòng bị server chặn. */}
                       {data.components
                         .filter((c) => inRoute(c, stage))
-                        .map((c) => {
+                        .map((c, rowIndex) => {
                           const cell = cells[c.id] ?? emptyCell()
                           const sum = c.summary.stages.find((x) => x.stage === stage)
-                          const remaining = sum ? Math.max(0, sum.missing) : null
+                          const remaining = sum
+                            ? Math.max(0, sum.missing)
+                            : c.total_needed
                           return (
                             <tr
                               key={c.id}
                               className="border-t border-zinc-100 dark:border-zinc-900"
                             >
                               <td className="py-1 pr-2">{c.name}</td>
+                              <td
+                                className="py-1 pr-2 text-right tabular-nums"
+                                title={`Cần tổng ${c.total_needed.toLocaleString('vi-VN')}`}
+                              >
+                                {remaining > 0 ? (
+                                  <span className="text-amber-600 dark:text-amber-400">
+                                    {remaining.toLocaleString('vi-VN')}
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-600 dark:text-emerald-400">
+                                    ✓
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-1 pr-2">
                                 <input
+                                  ref={setRef(rowIndex, 0)}
                                   type="number"
                                   min="0"
                                   step="1"
                                   value={cell.qty}
                                   onChange={(e) => setCell(c.id, { qty: e.target.value })}
+                                  onKeyDown={(e) => onGridKeyDown(e, rowIndex, 0)}
                                   className={inp}
-                                  placeholder={
-                                    remaining != null && remaining > 0
-                                      ? `còn ${remaining}`
-                                      : undefined
-                                  }
                                 />
                               </td>
                               <td className="py-1 pr-2">
                                 <input
+                                  ref={setRef(rowIndex, 1)}
                                   type="number"
                                   min="0"
                                   step="1"
@@ -521,6 +627,7 @@ export function LsxOutputPanel({
                                   onChange={(e) =>
                                     setCell(c.id, { defect: e.target.value })
                                   }
+                                  onKeyDown={(e) => onGridKeyDown(e, rowIndex, 1)}
                                   className={inp}
                                 />
                               </td>
@@ -532,10 +639,12 @@ export function LsxOutputPanel({
                                     !cell.reason
                                   return (
                                     <select
+                                      ref={setRef(rowIndex, 2)}
                                       value={cell.reason}
                                       onChange={(e) =>
                                         setCell(c.id, { reason: e.target.value })
                                       }
+                                      onKeyDown={(e) => onGridKeyDown(e, rowIndex, 2)}
                                       disabled={
                                         cell.defect === '' || Number(cell.defect) <= 0
                                       }
@@ -568,20 +677,24 @@ export function LsxOutputPanel({
                               </td>
                               <td className="py-1 pr-2">
                                 <input
+                                  ref={setRef(rowIndex, 3)}
                                   type="number"
                                   min="0"
                                   step="0.01"
                                   value={cell.kg}
                                   onChange={(e) => setCell(c.id, { kg: e.target.value })}
+                                  onKeyDown={(e) => onGridKeyDown(e, rowIndex, 3)}
                                   className={inp}
                                 />
                               </td>
                               <td className="py-1 pr-2">
                                 <input
+                                  ref={setRef(rowIndex, 4)}
                                   value={cell.machine}
                                   onChange={(e) =>
                                     setCell(c.id, { machine: e.target.value })
                                   }
+                                  onKeyDown={(e) => onGridKeyDown(e, rowIndex, 4)}
                                   className={inp}
                                   placeholder="máy cắt 2 / màu H-SM-96…"
                                 />
@@ -591,7 +704,7 @@ export function LsxOutputPanel({
                         })}
                     </tbody>
                   </table>
-                </div>
+                </fieldset>
                 {(() => {
                   const hidden = data.components.filter((c) => !inRoute(c, stage)).length
                   return hidden > 0 ? (
