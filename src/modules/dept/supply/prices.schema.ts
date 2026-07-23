@@ -15,6 +15,31 @@ export const priceCreateSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 })
 
+/**
+ * Nhập BÁO GIÁ hàng loạt: 1 NCC + 1 ngày hiệu lực + nhiều dòng (vật tư, giá).
+ * Trùng (NCC, vật tư, ngày) → cập nhật đè (upsert) thay vì lỗi — nhập lại báo
+ * giá cùng ngày là sửa giá.
+ */
+export const priceBulkCreateSchema = z.object({
+  supplier_id: z.string().uuid(),
+  currency: z.string().trim().length(3).toUpperCase().default('VND'),
+  valid_from: z.string().date().optional(), // bỏ trống = hôm nay
+  lines: z
+    .array(
+      z.object({
+        material_id: z.string().uuid(),
+        price: z.coerce.number().min(0, 'Giá không âm'),
+        note: z.string().trim().max(500).optional().nullable(),
+      }),
+    )
+    .min(1, 'Báo giá phải có ít nhất 1 dòng')
+    .max(500)
+    .refine(
+      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
+      'Vật tư bị trùng dòng',
+    ),
+})
+
 export const pricePatchSchema = z.object({
   price: z.coerce.number().min(0).optional(),
   currency: z.string().trim().length(3).toUpperCase().optional(),
