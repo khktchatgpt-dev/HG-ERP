@@ -108,8 +108,16 @@ sửa không" đúng ở code nhưng vô hình trên UI.
       = KT-member VÀ KT-edit"; "Xem = Mọi nhân viên") + ghi chú row-level.
 - [x] Tab **Nhân viên** thêm mục **"Thao tác làm được"**: ✓/✗ từng thao tác theo
       permission thật của user (verify: NV Bán hàng → Xem KT ✓, Sửa SP ✗).
-- [ ] **Phase B (chưa làm)**: guard đọc thẳng registry (`assertAction`) → hết drift,
-      cuốn chiếu từng module, verify 0-lệch như Phase 2.
+- **Phase B — guard đọc thẳng registry** (`assertAction`, nguồn sự thật):
+  - [x] `rbac.service`: `canAction`/`assertAction` (eval luật registry; admin bypass).
+        Test helper `makeFakeCanAction`/`makeFakeAssertAction` (registry thật + fake perms).
+  - [x] **technical** (7 method) + **supply** (pos/suppliers/prices/certs) flip
+        `hasPermission`/`is*Staff` tổ hợp → `assertAction('<key>')`. Điều kiện row-level
+        giữ ở service. `isTechnicalStaff`/`isSupplyStaff` giữ (module khác còn dùng).
+        Verify DB thật: sanity đếm user/thao tác khớp công thức cũ (0 lệch — công thức
+        registry ≡ guard cũ). `npm run check` xanh, 514 test.
+  - [ ] Còn lại: warehouse, production (nhiều guard + row-level), sales, hr, accounting,
+        exec, core/admin. Cuốn chiếu tiếp theo cùng khuôn.
 
 ### Phase 4 — tuỳ chọn (CHƯA làm)
 - [ ] Chuyển `canEnterWorkspace`/`openView` sang permission `workspace.<id>.view`

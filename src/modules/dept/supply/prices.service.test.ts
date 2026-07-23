@@ -13,12 +13,13 @@ vi.mock('./prices.repo', () => ({
   },
 }))
 vi.mock('./supply.repo', () => ({ suppliersRepo: { findById: vi.fn() } }))
-vi.mock('./suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
 
 import { pricesService, pickCurrentPrices } from './prices.service'
 import { pricesRepo } from './prices.repo'
 import { suppliersRepo } from './supply.repo'
-import { isSupplyStaff } from './suppliers.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 const supply = { id: 'u-cu', role: 'employee' } as unknown as User
@@ -69,7 +70,7 @@ describe('pricesService — quyền + ràng buộc', () => {
   })
 
   it('NV ngoài phòng KH-CƯ không thêm được giá → 403', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(false)
+    vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
     await expect(
       pricesService.create(outsider, {
         supplier_id: 's1',
@@ -82,7 +83,7 @@ describe('pricesService — quyền + ràng buộc', () => {
   })
 
   it('NCC ngừng giao dịch → 400', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(assertAction).mockResolvedValue(undefined)
     vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: false } as never)
     await expect(
       pricesService.create(supply, {
@@ -95,7 +96,7 @@ describe('pricesService — quyền + ràng buộc', () => {
   })
 
   it('trùng (NCC, vật tư, ngày) → 409 PRICE_EXISTS', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(assertAction).mockResolvedValue(undefined)
     vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: true } as never)
     vi.mocked(pricesRepo.insert).mockResolvedValue({ price: null, duplicate: true })
     await expect(
@@ -134,7 +135,7 @@ describe('pricesService — quyền + ràng buộc', () => {
 
 describe('pricesService.bulkCreate — nhập báo giá hàng loạt', () => {
   it('chặn người không thuộc Cung ứng', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(false)
+    vi.mocked(assertAction).mockRejectedValue(Forbidden('x'))
     await expect(
       pricesService.bulkCreate(outsider, {
         supplier_id: 's1',
@@ -146,7 +147,7 @@ describe('pricesService.bulkCreate — nhập báo giá hàng loạt', () => {
   })
 
   it('chặn khi NCC đã ngừng giao dịch', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(assertAction).mockResolvedValue(undefined)
     vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: false } as never)
     await expect(
       pricesService.bulkCreate(supply, {
@@ -159,7 +160,7 @@ describe('pricesService.bulkCreate — nhập báo giá hàng loạt', () => {
   })
 
   it('upsert các dòng với ngày hiệu lực + tệ chung, trả count', async () => {
-    vi.mocked(isSupplyStaff).mockResolvedValue(true)
+    vi.mocked(assertAction).mockResolvedValue(undefined)
     vi.mocked(suppliersRepo.findById).mockResolvedValue({ is_active: true } as never)
     vi.mocked(pricesRepo.bulkUpsert).mockResolvedValue(2)
 

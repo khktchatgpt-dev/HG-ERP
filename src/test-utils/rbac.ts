@@ -1,4 +1,6 @@
 import { computeDerivedRoleKeys } from '@/modules/core/rbac/rbac.derive'
+import { ACTIONS, evalRule } from '@/modules/core/rbac/actions'
+import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -56,20 +58,50 @@ export type DeptInfo = {
  *
  * @param deptById tra phòng theo id (thường tái dùng fixture của test).
  */
-export function makeFakeHasPermission(
-  deptById: (
-    id: string,
-  ) => DeptInfo | null | undefined | Promise<DeptInfo | null | undefined>,
-) {
+type DeptResolver = (
+  id: string,
+) => DeptInfo | null | undefined | Promise<DeptInfo | null | undefined>
+
+/** Tập permission key dẫn-xuất của user (ma trận seed) — nền cho các fake dưới. */
+async function permSetOf(user: User, deptById: DeptResolver): Promise<Set<string>> {
+  const dept = user.department_id ? await deptById(user.department_id) : null
+  const roles = computeDerivedRoleKeys({
+    role: user.role,
+    deptName: dept?.name ?? null,
+    workspaceId: dept?.workspace_id ?? null,
+    isHead: !!dept && dept.head_user_id === user.id,
+  })
+  const keys = new Set<string>()
+  for (const r of roles) for (const k of SEED_ROLE_PERMS[r] ?? []) keys.add(k)
+  return keys
+}
+
+export function makeFakeHasPermission(deptById: DeptResolver) {
   return async (user: User, key: string): Promise<boolean> => {
     if (user.role === 'admin') return true
-    const dept = user.department_id ? await deptById(user.department_id) : null
-    const roles = computeDerivedRoleKeys({
-      role: user.role,
-      deptName: dept?.name ?? null,
-      workspaceId: dept?.workspace_id ?? null,
-      isHead: !!dept && dept.head_user_id === user.id,
-    })
-    return roles.some((r) => SEED_ROLE_PERMS[r]?.includes(key))
+    return (await permSetOf(user, deptById)).has(key)
+  }
+}
+
+/**
+ * Giả lập `canAction`/`assertAction` (Phase B) — dùng REGISTRY thật (`ACTIONS` +
+ * `evalRule`) trên tập quyền giả lập. Cho test service đã chuyển sang assertAction.
+ */
+export function makeFakeCanAction(deptById: DeptResolver) {
+  return async (user: User, actionKey: string): Promise<boolean> => {
+    if (user.role === 'admin') return true
+    const action = ACTIONS.find((a) => a.key === actionKey)
+    if (!action) throw new Error(`Unknown action: ${actionKey}`)
+    const keys = await permSetOf(user, deptById)
+    return evalRule(action.rule, { role: user.role, has: (k) => keys.has(k) })
+  }
+}
+
+export function makeFakeAssertAction(deptById: DeptResolver) {
+  const can = makeFakeCanAction(deptById)
+  return async (user: User, actionKey: string): Promise<void> => {
+    if (!(await can(user, actionKey))) {
+      throw Forbidden(`Không có quyền: ${actionKey}`)
+    }
   }
 }

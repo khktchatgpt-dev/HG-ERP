@@ -12,8 +12,11 @@ import {
   type UserRoleRow,
   type RbacAuditEntry,
 } from './rbac.repo'
+import { ACTIONS, evalRule } from './actions'
 import type { z } from 'zod'
 import type { roleCreateSchema, roleUpdateSchema } from './rbac.schema'
+
+const ACTION_BY_KEY = new Map(ACTIONS.map((a) => [a.key, a]))
 
 /**
  * Nạp tập permission của user MỘT LẦN mỗi request (React `cache()` dedup theo
@@ -44,6 +47,26 @@ export async function hasPermission(user: User, key: string): Promise<boolean> {
 export async function assertPermission(user: User, key: string): Promise<void> {
   if (!(await hasPermission(user, key))) {
     throw Forbidden(`Không có quyền: ${key}`)
+  }
+}
+
+/**
+ * Guard theo THAO TÁC (registry `actions.ts`) — nguồn sự thật cho phân quyền:
+ * đánh giá luật boolean của thao tác trên tập quyền + vai toàn cục của user.
+ * admin bypass. Điều kiện ROW-LEVEL (chủ sở hữu/tổ) service tự kiểm thêm.
+ */
+export async function canAction(user: User, actionKey: string): Promise<boolean> {
+  if (user.role === 'admin') return true
+  const action = ACTION_BY_KEY.get(actionKey)
+  if (!action) throw new Error(`Unknown action: ${actionKey}`)
+  const keys = await loadPermissionKeys(user.id)
+  return evalRule(action.rule, { role: user.role, has: (k) => keys.has(k) })
+}
+
+export async function assertAction(user: User, actionKey: string): Promise<void> {
+  if (!(await canAction(user, actionKey))) {
+    const label = ACTION_BY_KEY.get(actionKey)?.label ?? actionKey
+    throw Forbidden(`Không có quyền: ${label}`)
   }
 }
 

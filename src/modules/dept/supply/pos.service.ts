@@ -1,17 +1,11 @@
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
 import { suppliersRepo, supplyRepo } from './supply.repo'
-import { isSupplyStaff } from './suppliers.service'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
-
-/** Duyệt mua vật tư: permission supply.po.approve (seed gán Giám đốc/Ban QL). */
-async function canApprove(user: User): Promise<boolean> {
-  return hasPermission(user, 'supply.po.approve')
-}
+import { BadRequest, NotFound } from '@/server/http'
 
 type PoInput = {
   production_order_id: string
@@ -47,9 +41,7 @@ export const posService = {
    * và notify GĐ (không có bước nháp — đặc tả 4.3).
    */
   async create(user: User, input: PoInput): Promise<Po> {
-    if (!(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng tạo được đơn đặt vật tư')
-    }
+    await assertAction(user, 'supply.po.manage')
     const supplier = await suppliersRepo.findById(input.supplier_id)
     if (!supplier) throw NotFound('NCC không tồn tại')
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
@@ -93,7 +85,7 @@ export const posService = {
 
   /** Chỉ PO đang chờ duyệt được sửa (sau duyệt là cam kết với GĐ/NCC). */
   async update(user: User, id: string, input: PoInput): Promise<Po> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     if (before.status !== 'pending_approval') {
@@ -119,8 +111,7 @@ export const posService = {
     decision: 'approve' | 'reject',
     reason?: string,
   ): Promise<Po> {
-    if (!(await canApprove(user)))
-      throw Forbidden('Chỉ Ban quản lý/Giám đốc duyệt mua vật tư')
+    await assertAction(user, 'supply.po.approve')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     if (before.status !== 'pending_approval') {
@@ -158,7 +149,7 @@ export const posService = {
     id: string,
     to: 'ordered' | 'confirmed' | 'in_transit',
   ): Promise<Po> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
 
@@ -182,7 +173,7 @@ export const posService = {
 
   /** Huỷ (trước khi nhận hàng) — kèm lý do. */
   async cancel(user: User, id: string, reason: string): Promise<Po> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
     if (before.status === 'received' || before.status === 'cancelled') {

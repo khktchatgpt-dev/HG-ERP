@@ -5,9 +5,9 @@ import {
   type SupplierPriceWithRefs,
 } from './prices.repo'
 import { suppliersRepo } from './supply.repo'
-import { isSupplyStaff } from './suppliers.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { User } from '@/modules/core/users/users.repo'
-import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
 
 /**
  * Giá HIỆN HÀNH per (NCC, vật tư) = bản ghi valid_from lớn nhất ≤ onDate.
@@ -58,9 +58,7 @@ export const pricesService = {
       note?: string | null
     },
   ): Promise<SupplierPrice> {
-    if (!(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý bảng giá NCC')
-    }
+    await assertAction(user, 'supply.price.manage')
     const supplier = await suppliersRepo.findById(input.supplier_id)
     if (!supplier) throw NotFound('NCC không tồn tại')
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
@@ -96,9 +94,7 @@ export const pricesService = {
       lines: Array<{ material_id: string; price: number; note?: string | null }>
     },
   ): Promise<{ count: number }> {
-    if (!(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý bảng giá NCC')
-    }
+    await assertAction(user, 'supply.price.manage')
     const supplier = await suppliersRepo.findById(input.supplier_id)
     if (!supplier) throw NotFound('NCC không tồn tại')
     if (!supplier.is_active) throw BadRequest('NCC đã ngừng giao dịch')
@@ -128,14 +124,14 @@ export const pricesService = {
       note?: string | null
     },
   ): Promise<SupplierPrice> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.price.manage')
     const before = await pricesRepo.findById(id)
     if (!before) throw NotFound('Bản ghi giá không tồn tại')
     return pricesRepo.patch(id, patch)
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.price.manage')
     const before = await pricesRepo.findById(id)
     if (!before) throw NotFound('Bản ghi giá không tồn tại')
     await pricesRepo.remove(id)

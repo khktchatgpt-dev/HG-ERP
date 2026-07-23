@@ -2,8 +2,8 @@ import { suppliersRepo, materialGroupsRepo, type Supplier } from './supply.repo'
 import type { supplierCreateSchema } from './suppliers.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import type { z } from 'zod'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { Forbidden, NotFound } from '@/server/http'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { NotFound } from '@/server/http'
 
 /**
  * Tên phòng CUNG ỨNG như trong public.departments. KHÔNG dùng cho authz nữa
@@ -41,9 +41,7 @@ export const suppliersService = {
   },
 
   async create(user: User, input: SupplierInput): Promise<Supplier> {
-    if (!(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý NCC')
-    }
+    await assertAction(user, 'supply.supplier.manage')
     const status = input.status ?? 'active'
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { is_active: _ignore, ...rest } = input as SupplierInput & {
@@ -65,7 +63,7 @@ export const suppliersService = {
     id: string,
     patch: Partial<SupplierInput> & { is_active?: boolean },
   ): Promise<Supplier> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.supplier.manage')
     const before = await suppliersRepo.findById(id)
     if (!before) throw NotFound('NCC không tồn tại')
 
@@ -96,7 +94,7 @@ export const suppliersService = {
   },
 
   async setGroups(user: User, supplierId: string, groupIds: string[]): Promise<void> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.supplier.manage')
     await materialGroupsRepo.setForSupplier(supplierId, groupIds)
   },
 }

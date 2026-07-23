@@ -1,9 +1,8 @@
 import { certsRepo, type SupplierCert } from './supply.repo'
-import { isSupplyStaff } from './suppliers.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import type { z } from 'zod'
 import type { certCreateSchema } from './certs.schema'
 import type { User } from '@/modules/core/users/users.repo'
-import { Forbidden } from '@/server/http'
 
 type CertInput = z.infer<typeof certCreateSchema>
 
@@ -14,9 +13,7 @@ export const certsService = {
   },
 
   async create(user: User, input: CertInput): Promise<SupplierCert> {
-    if (!(await isSupplyStaff(user))) {
-      throw Forbidden('Chỉ phòng Kế hoạch - Cung ứng quản lý chứng chỉ NCC')
-    }
+    await assertAction(user, 'supply.cert.manage')
     return certsRepo.insert({
       supplier_id: input.supplier_id,
       cert_type: input.cert_type,
@@ -28,7 +25,7 @@ export const certsService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isSupplyStaff(user))) throw Forbidden()
+    await assertAction(user, 'supply.cert.manage')
     await certsRepo.remove(id)
   },
 }
