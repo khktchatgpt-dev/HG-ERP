@@ -26,6 +26,8 @@ export type UserRoleRow = {
   role_id: string
   user_name: string | null
   user_email: string
+  /** 'derived' = do sync quản lý (khoá UI); 'manual' = IT gán tay (sửa được). */
+  source: 'derived' | 'manual'
 }
 
 const PERM_COLS = 'key, label, domain, sort_order'
@@ -57,11 +59,12 @@ export const rbacRepo = {
     const { data } = await db()
       .from('user_roles')
       .select(
-        'user_id, role_id, users!user_roles_user_id_fkey!inner(name, email, deleted_at)',
+        'user_id, role_id, source, users!user_roles_user_id_fkey!inner(name, email, deleted_at)',
       )
     type Raw = {
       user_id: string
       role_id: string
+      source: 'derived' | 'manual'
       users: { name: string | null; email: string; deleted_at: string | null }
     }
     return ((data ?? []) as unknown as Raw[])
@@ -71,6 +74,7 @@ export const rbacRepo = {
         role_id: r.role_id,
         user_name: r.users.name,
         user_email: r.users.email,
+        source: r.source,
       }))
   },
 
@@ -136,5 +140,174 @@ export const rbacRepo = {
       .eq('source', 'derived')
       .in('role_id', roleIds)
     if (error) throw new Error(error.message)
+  },
+
+  // ── Ghi (Phase 3): IT tự phục vụ ở /admin/permissions ─────────────────────
+
+  async findRoleById(id: string): Promise<Role | null> {
+    const { data } = await db().from('roles').select(ROLE_COLS).eq('id', id).maybeSingle()
+    return (data as Role | null) ?? null
+  },
+
+  async findRoleByKey(key: string): Promise<Role | null> {
+    const { data } = await db()
+      .from('roles')
+      .select(ROLE_COLS)
+      .eq('key', key)
+      .maybeSingle()
+    return (data as Role | null) ?? null
+  },
+
+  async insertRole(input: {
+    key: string
+    label: string
+    description: string | null
+    sort_order: number
+  }): Promise<Role> {
+    const { data, error } = await db()
+      .from('roles')
+      .insert({ ...input, is_system: false, is_active: true })
+      .select(ROLE_COLS)
+      .single()
+    if (error) throw new Error(error.message)
+    return data as Role
+  },
+
+  async updateRole(
+    id: string,
+    patch: Partial<Pick<Role, 'label' | 'description' | 'is_active' | 'sort_order'>>,
+  ): Promise<Role> {
+    const { data, error } = await db()
+      .from('roles')
+      .update(patch)
+      .eq('id', id)
+      .select(ROLE_COLS)
+      .single()
+    if (error) throw new Error(error.message)
+    return data as Role
+  },
+
+  /** Permission KEY hiện gán cho 1 role (để tính delta audit). */
+  async permissionKeysForRole(roleId: string): Promise<string[]> {
+    const { data } = await db()
+      .from('role_permissions')
+      .select('permission_key')
+      .eq('role_id', roleId)
+    return ((data ?? []) as { permission_key: string }[]).map((r) => r.permission_key)
+  },
+
+  /** Đặt LẠI toàn bộ quyền của 1 role = danh sách keys (xoá hết rồi chèn). */
+  async setRolePermissions(roleId: string, keys: string[]): Promise<void> {
+    const del = await db().from('role_permissions').delete().eq('role_id', roleId)
+    if (del.error) throw new Error(del.error.message)
+    if (keys.length === 0) return
+    const rows = keys.map((permission_key) => ({ role_id: roleId, permission_key }))
+    const { error } = await db().from('role_permissions').insert(rows)
+    if (error) throw new Error(error.message)
+  },
+
+  /** role_id các vai GÁN-TAY (source='manual') hiện có của user. */
+  async listManualRoleIds(userId: string): Promise<string[]> {
+    const { data } = await db()
+      .from('user_roles')
+      .select('role_id')
+      .eq('user_id', userId)
+      .eq('source', 'manual')
+    return ((data ?? []) as { role_id: string }[]).map((r) => r.role_id)
+  },
+
+  async addManualRoles(
+    userId: string,
+    roleIds: string[],
+    actorId: string,
+  ): Promise<void> {
+    if (roleIds.length === 0) return
+    const rows = roleIds.map((role_id) => ({
+      user_id: userId,
+      role_id,
+      source: 'manual',
+      assigned_by: actorId,
+    }))
+    const { error } = await db()
+      .from('user_roles')
+      .upsert(rows, { onConflict: 'user_id,role_id', ignoreDuplicates: true })
+    if (error) throw new Error(error.message)
+  },
+
+  /** Chỉ gỡ role GÁN-TAY — không đụng role dẫn-xuất (source='derived'). */
+  async removeManualRoles(userId: string, roleIds: string[]): Promise<void> {
+    if (roleIds.length === 0) return
+    const { error } = await db()
+      .from('user_roles')
+      .delete()
+      .eq('user_id', userId)
+      .eq('source', 'manual')
+      .in('role_id', roleIds)
+    if (error) throw new Error(error.message)
+  },
+}
+
+// ── Audit (0075) — nhật ký thao tác phân quyền ──────────────────────────────
+
+export type RbacAuditAction =
+  | 'role.created'
+  | 'role.updated'
+  | 'role.permissions_changed'
+  | 'role.assigned'
+  | 'role.revoked'
+
+export type RbacAuditEntry = {
+  id: string
+  actor_id: string | null
+  action: RbacAuditAction
+  target_type: 'role' | 'user'
+  target_id: string
+  target_label: string | null
+  before: unknown
+  after: unknown
+  reason: string | null
+  created_at: string
+  actor_name: string | null
+}
+
+export const rbacAuditRepo = {
+  async insert(row: {
+    actor_id: string
+    action: RbacAuditAction
+    target_type: 'role' | 'user'
+    target_id: string
+    target_label?: string | null
+    before?: unknown
+    after?: unknown
+    reason?: string | null
+  }): Promise<void> {
+    const { error } = await db()
+      .from('rbac_audit_log')
+      .insert({
+        actor_id: row.actor_id,
+        action: row.action,
+        target_type: row.target_type,
+        target_id: row.target_id,
+        target_label: row.target_label ?? null,
+        before: (row.before ?? null) as never,
+        after: (row.after ?? null) as never,
+        reason: row.reason ?? null,
+      })
+    if (error) console.error('rbac_audit_log insert failed:', error.message)
+  },
+
+  async listRecent(limit = 100): Promise<RbacAuditEntry[]> {
+    const { data } = await db()
+      .from('rbac_audit_log')
+      .select('*, actor:users!rbac_audit_log_actor_id_fkey(name)')
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    type Raw = Omit<RbacAuditEntry, 'actor_name'> & {
+      actor: { name: string | null } | null
+    }
+    return ((data ?? []) as unknown as Raw[]).map((r) => ({
+      ...r,
+      actor_name: r.actor?.name ?? null,
+    }))
   },
 }

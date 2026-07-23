@@ -4,9 +4,10 @@ Tái thiết kế phân quyền: đưa **vai + quyền thành dữ liệu trong 
 diễn từ `role` cứng + tên phòng hardcode. Triển khai **strangler, từng bước không
 gãy**. Plan gốc: `~/.claude/plans/noble-prancing-candy.md`.
 
-## Trạng thái tổng: ĐÃ XONG Phase 0 → 2 (TẤT CẢ module) + dọn dẹp. Còn Phase 3 + 4.
+## Trạng thái tổng: ĐÃ XONG Phase 0 → 3 (IT tự phục vụ). Còn Phase 4 (tuỳ chọn).
 
 ### DB thật (Supabase `pcbfvrapknzykhtntuwg`) — đã apply
+- `0075_rbac_audit.sql` — bảng `rbac_audit_log` (RLS-first) cho nhật ký thao tác.
 - `0073_rbac.sql` — 4 bảng `permissions/roles/role_permissions/user_roles` + seed
   (35 permission, 12 role, 76 role_permission) + backfill 74 gán user-role.
 - `0074_user_roles_source.sql` — cột `user_roles.source` (`derived`/`manual`).
@@ -80,17 +81,23 @@ gãy**. Plan gốc: `~/.claude/plans/noble-prancing-candy.md`.
 - [ ] Bỏ `department.manage` DEAD trong `src/server/permissions.ts`; cân nhắc gộp
       task ACL vào cùng cơ chế `hasPermission` hoặc giữ riêng (task là quan hệ).
 
-### Phase 3 — IT tự phục vụ (bật GHI ở /admin/permissions)
-- [ ] Route `src/app/api/admin/rbac/**` (thin `handle`, guard admin): tạo/sửa role,
-      gán permission↔role, gán role↔user (`source='manual'`). Zod đã có sẵn ở
-      `rbac.schema.ts` (`roleCreateSchema`/`setRolePermissionsSchema`/`setUserRolesSchema`).
-- [ ] `PermissionsManager.tsx` bật chỉnh sửa (hiện read-only).
-- [ ] Audit qua event bus: thêm `role.assigned`/`role.revoked` ở `events/types.ts`,
-      handler `events/handlers/rbac.audit.ts`, đăng ký ở `events/register.ts`
-      (mẫu `approval.audit.ts`).
-- [ ] Chặn tự-khoá: không cho gỡ quyền cuối của chính mình / xoá role `admin`.
+### Phase 3 — IT tự phục vụ (bật GHI ở /admin/permissions) — ✅ XONG
+- [x] Route `src/app/api/admin/rbac/**` (thin `handle`, guard admin): `roles` POST
+      (tạo), `roles/[id]` PATCH (sửa), `roles/[id]/permissions` PUT (đặt lại quyền),
+      `users/[id]/roles` PUT (gán vai `source='manual'`), `audit` GET.
+- [x] `rbac.service` write: `createRole/updateRole/setRolePermissions/
+      setUserManualRoles` + `audit()` — admin-only, validate key, tính delta, emit.
+- [x] `PermissionsManager.tsx` editable: ma trận toggle quyền (chế độ sửa), tạo/sửa
+      vai (modal), gán vai cho người (manual, khoá vai dẫn-xuất), tab Nhật ký.
+- [x] Audit qua event bus: 5 event `rbac.role.*` (`events/types.ts`) → handler
+      `events/handlers/rbac.audit.ts` (đăng ký `register.ts`) → ghi `rbac_audit_log`.
+- [x] Chặn tự-khoá: KHÔNG vô hiệu hoá vai HỆ THỐNG (`is_system`); admin bypass qua
+      cột `users.role` nên write RBAC không thể tự khoá; `setUserManualRoles` chỉ
+      đụng role `manual`, không phá cầu đồng bộ dẫn-xuất.
+- Test: `rbac.service.test` +7 (authz + self-lock + emit delta). `npm run check`
+  xanh, 504 test.
 
-### Phase 4 — tuỳ chọn
+### Phase 4 — tuỳ chọn (CHƯA làm)
 - [ ] Chuyển `canEnterWorkspace`/`openView` sang permission `workspace.<id>.view`
       (hoặc giữ tầng đọc — vốn không phải ổ khoá).
 

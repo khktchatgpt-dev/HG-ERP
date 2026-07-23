@@ -2841,6 +2841,53 @@ export type Database = {
           },
         ]
       }
+      rbac_audit_log: {
+        Row: {
+          action: string
+          actor_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string
+          id: string
+          reason: string | null
+          target_id: string
+          target_label: string | null
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id: string
+          target_label?: string | null
+          target_type: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string
+          id?: string
+          reason?: string | null
+          target_id?: string
+          target_label?: string | null
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rbac_audit_log_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_audit_log: {
         Row: {
           action: string

@@ -189,6 +189,49 @@ export type DomainEvent =
       notify_ids: string[]
     }
 
+  // ── RBAC — IT tự phục vụ ở /admin/permissions (Phase 3, audit 0075) ──────
+  | {
+      name: 'rbac.role.created'
+      role_id: string
+      role_key: string
+      role_label: string
+      actor_id: string
+    }
+  | {
+      name: 'rbac.role.updated'
+      role_id: string
+      role_label: string
+      before: Record<string, unknown>
+      after: Record<string, unknown>
+      actor_id: string
+    }
+  | {
+      name: 'rbac.role.permissions_changed'
+      role_id: string
+      role_label: string
+      added: string[]
+      removed: string[]
+      actor_id: string
+    }
+  | {
+      name: 'rbac.role.assigned'
+      user_id: string
+      user_label: string
+      role_id: string
+      role_key: string
+      role_label: string
+      actor_id: string
+    }
+  | {
+      name: 'rbac.role.revoked'
+      user_id: string
+      user_label: string
+      role_id: string
+      role_key: string
+      role_label: string
+      actor_id: string
+    }
+
 export type EventName = DomainEvent['name']
 
 /** Trích payload cho 1 event name cụ thể. */
