@@ -218,6 +218,15 @@ export const ACTIONS: Action[] = [
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
   {
+    // Chia chủ quyền danh mục vật tư (1 danh mục chung, 2 nhóm trường):
+    // Cung ứng sửa trường MUA HÀNG (NCC mặc định, VAT, profile giá…) + trường nền;
+    // trường TỒN TRỮ (min/max, kệ, barcode, ngừng dùng) vẫn của Kho — service enforce.
+    key: 'warehouse.material.update_purchasing',
+    label: 'Sửa trường mua hàng của vật tư (Cung ứng)',
+    domain: 'warehouse',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
+  {
     key: 'warehouse.stock.write',
     label: 'Ghi phiếu nhập / xuất tồn',
     domain: 'warehouse',

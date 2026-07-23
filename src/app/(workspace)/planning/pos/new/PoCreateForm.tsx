@@ -684,6 +684,7 @@ export function PoCreateForm({
               </button>
             )}
             <QuickAddMaterial
+              existing={materials}
               onCreated={(m) =>
                 pushLine({
                   id: m.id,

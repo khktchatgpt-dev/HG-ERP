@@ -48,6 +48,17 @@ type SupplierOption = { id: string; name: string }
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
+/** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 const PROFILE_TONE: Record<ConversionProfile, 'gray' | 'blue' | 'amber'> = {
   A: 'gray',
   B: 'blue',
@@ -58,11 +69,19 @@ export function MaterialsManager({
   materials,
   suppliers,
   canEdit,
+  scope = 'warehouse',
 }: {
   materials: Material[]
   suppliers: SupplierOption[]
   canEdit: boolean
+  /**
+   * Chia chủ quyền danh mục (1 danh mục chung): 'warehouse' = Kho sửa đủ trường;
+   * 'purchasing' = view cho Cung ứng (/planning/materials) — trường tồn trữ
+   * (min/max, kệ, barcode, ngừng dùng/xoá) khoá lại, server cũng enforce.
+   */
+  scope?: 'warehouse' | 'purchasing'
 }) {
+  const purchasing = scope === 'purchasing'
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
@@ -255,6 +274,10 @@ export function MaterialsManager({
       align: 'right',
       cell: (m) => {
         if (!canEdit) return null
+        // Cung ứng: chỉ sửa trường mua hàng — ngừng dùng/xoá là việc của Kho.
+        if (purchasing) {
+          return <RowMenu items={[{ label: 'Sửa', onClick: () => setEditing(m) }]} />
+        }
         return (
           <RowMenu
             items={[
@@ -293,9 +316,20 @@ export function MaterialsManager({
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[{ label: 'Kho', href: '/warehouse' }, { label: 'Danh mục vật tư' }]}
-        title="Danh mục vật tư"
-        description={`${filtered.length} / ${materials.length} vật tư. Mã, ĐVT, nhóm, tồn tối thiểu, vị trí kệ.`}
+        breadcrumbs={
+          purchasing
+            ? [
+                { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+                { label: 'Vật tư & giá mua' },
+              ]
+            : [{ label: 'Kho', href: '/warehouse' }, { label: 'Danh mục vật tư' }]
+        }
+        title={purchasing ? 'Vật tư & giá mua' : 'Danh mục vật tư'}
+        description={
+          purchasing
+            ? `${filtered.length} / ${materials.length} vật tư (danh mục dùng chung với Kho). Cung ứng sửa trường mua hàng: NCC mặc định, VAT, loại quy đổi giá… Tồn tối thiểu/kệ/barcode do Kho quản.`
+            : `${filtered.length} / ${materials.length} vật tư. Mã, ĐVT, nhóm, tồn tối thiểu, vị trí kệ.`
+        }
         actions={
           <>
             <button onClick={exportCsv} className={btnSecondary}>
@@ -400,6 +434,8 @@ export function MaterialsManager({
       <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Thêm vật tư">
         <MaterialForm
           suppliers={suppliers}
+          scope={scope}
+          existing={materials}
           submitLabel="Thêm vật tư"
           onSubmit={async (body) => {
             const ok = await send('/api/dept/warehouse/materials', 'POST', body)
@@ -419,6 +455,8 @@ export function MaterialsManager({
         {editing && (
           <MaterialForm
             suppliers={suppliers}
+            scope={scope}
+            existing={materials}
             initial={editing}
             submitLabel="Lưu thay đổi"
             onSubmit={async (body) => {
@@ -446,13 +484,32 @@ function MaterialForm({
   suppliers,
   submitLabel,
   onSubmit,
+  scope = 'warehouse',
+  existing = [],
 }: {
   initial?: Partial<Material>
   suppliers: SupplierOption[]
   submitLabel: string
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
+  scope?: 'warehouse' | 'purchasing'
+  /** Danh mục hiện có — cảnh báo trùng tên gần giống khi tạo (chống 1 món 2 mã). */
+  existing?: Pick<Material, 'id' | 'code' | 'name'>[]
 }) {
+  const purchasing = scope === 'purchasing'
   const [busy, setBusy] = useState(false)
+  // Tên controlled để dò trùng tên gần giống ngay khi gõ.
+  const [name, setName] = useState(initial?.name ?? '')
+  const similar = useMemo(() => {
+    const n = normalizeName(name)
+    if (n.length < 4) return []
+    return existing
+      .filter((m) => m.id !== initial?.id)
+      .filter((m) => {
+        const other = normalizeName(m.name)
+        return other.includes(n) || n.includes(other)
+      })
+      .slice(0, 3)
+  }, [name, existing, initial?.id])
   // Profile + unit + price_unit controlled: lái ô ẩn/hiện và nhãn động.
   const [profile, setProfile] = useState<ConversionProfile>(
     initial?.conversion_profile ?? 'A',
@@ -480,7 +537,7 @@ function MaterialForm({
       dual && fd.get('unit2_factor') ? Number(fd.get('unit2_factor')) || null : null
     const body: Record<string, unknown> = {
       code: String(fd.get('code') ?? '').trim(),
-      name: String(fd.get('name') ?? '').trim(),
+      name: name.trim(),
       unit: String(fd.get('unit') ?? '').trim() || 'cái',
       barcode: String(fd.get('barcode') ?? '').trim() || null,
       spec: String(fd.get('spec') ?? '').trim() || null,
@@ -497,6 +554,12 @@ function MaterialForm({
           ? Number(fd.get('last_purchase_price'))
           : null,
       note: String(fd.get('note') ?? '').trim() || null,
+    }
+    // Cung ứng: trường tồn trữ của Kho không gửi lên (server cũng chặn).
+    if (purchasing) {
+      delete body.min_stock
+      delete body.shelf_location
+      delete body.barcode
     }
     setBusy(true)
     await onSubmit(body)
@@ -532,9 +595,17 @@ function MaterialForm({
           name="name"
           required
           maxLength={200}
-          defaultValue={initial?.name ?? ''}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           className={cls}
         />
+        {similar.length > 0 && (
+          <span className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            ⚠ Tên gần giống vật tư đã có:{' '}
+            {similar.map((s) => `${s.code} — ${s.name}`).join(' · ')}. Kiểm tra trước khi
+            tạo mã mới (tránh 1 món 2 mã).
+          </span>
+        )}
       </label>
       <label className="flex flex-col gap-1 text-sm sm:col-span-2">
         Quy cách
@@ -556,10 +627,13 @@ function MaterialForm({
           maxLength={64}
           placeholder="Quét mã có sẵn trên bao bì NCC vào đây (nếu có)…"
           defaultValue={initial?.barcode ?? ''}
-          className={`${cls} font-mono`}
+          disabled={purchasing}
+          className={`${cls} font-mono disabled:opacity-50`}
         />
         <span className="text-xs text-zinc-400">
-          Ô quét ở phiếu nhập/xuất khớp cả mã vật tư lẫn mã vạch này. Không in tem.
+          {purchasing
+            ? 'Kho quản mã vạch (gắn với quét nhập/xuất).'
+            : 'Ô quét ở phiếu nhập/xuất khớp cả mã vật tư lẫn mã vạch này. Không in tem.'}
         </span>
       </label>
 
@@ -644,7 +718,9 @@ function MaterialForm({
           min={0}
           step="0.01"
           defaultValue={initial?.min_stock ?? 0}
-          className={`${cls} tabular-nums`}
+          disabled={purchasing}
+          title={purchasing ? 'Kho quản tồn tối thiểu' : undefined}
+          className={`${cls} tabular-nums disabled:opacity-50`}
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
@@ -654,7 +730,9 @@ function MaterialForm({
           maxLength={60}
           placeholder="VD: A-01"
           defaultValue={initial?.shelf_location ?? ''}
-          className={cls}
+          disabled={purchasing}
+          title={purchasing ? 'Kho quản vị trí kệ' : undefined}
+          className={`${cls} disabled:opacity-50`}
         />
       </label>
 

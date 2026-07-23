@@ -1,6 +1,6 @@
 import { materialsRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -38,6 +38,28 @@ type CreateInput = {
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
+
+/**
+ * Chia chủ quyền danh mục (1 danh mục chung — mô hình "view" của Material Master):
+ * Cung ứng (không thuộc Kho) chỉ sửa được trường NỀN + MUA HÀNG; trường TỒN TRỮ
+ * (min_stock, kệ, barcode, ngừng dùng) do Kho quản. Kho sửa được tất cả như cũ.
+ */
+const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
+  // nền
+  'code',
+  'name',
+  'unit',
+  'spec',
+  'group_name',
+  'note',
+  // mua hàng
+  'conversion_profile',
+  'price_unit',
+  'unit2_factor',
+  'vat_rate',
+  'default_supplier_id',
+  'last_purchase_price',
+])
 
 export const materialsService = {
   async list(
@@ -88,7 +110,17 @@ export const materialsService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
-    await assertAction(user, 'warehouse.material.update')
+    // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng — enforce bên dưới).
+    const full = await canAction(user, 'warehouse.material.update')
+    if (!full) {
+      await assertAction(user, 'warehouse.material.update_purchasing')
+      const blocked = Object.keys(patch).filter((k) => !PURCHASING_EDITABLE_FIELDS.has(k))
+      if (blocked.length > 0) {
+        throw Forbidden(
+          `Trường thuộc quản lý của Kho, Cung ứng không sửa được: ${blocked.join(', ')}`,
+        )
+      }
+    }
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     if (patch.code && patch.code !== before.code) {

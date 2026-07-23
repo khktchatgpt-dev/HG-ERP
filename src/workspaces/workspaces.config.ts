@@ -243,6 +243,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/planning', label: 'Trang chủ', icon: '◧' },
           { href: '/planning/pos', label: 'Đơn đặt vật tư', icon: '▩' },
+          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: '▤' },
           { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◒' },
         ],
       },
