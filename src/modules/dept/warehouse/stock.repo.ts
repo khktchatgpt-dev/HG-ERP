@@ -353,9 +353,7 @@ export async function onHandMany(materialIds: string[]): Promise<Map<string, num
 }
 
 /** Tồn + min_stock (check cảnh báo sau xuất — FR-WMS-08). */
-export async function stockInfoMany(
-  materialIds: string[],
-): Promise<
+export async function stockInfoMany(materialIds: string[]): Promise<
   {
     material_id: string
     code: string
@@ -420,6 +418,50 @@ export async function issuedByLsx(
     map.set(r.material_id, (map.get(r.material_id) ?? 0) + Number(r.qty))
   }
   return map
+}
+
+/** Đã xuất theo NHIỀU LSX (gộp dòng) — nguồn tính tồn đặt trước (bước 2 Kho). */
+export async function issuedByLsxIds(
+  productionOrderIds: string[],
+): Promise<{ production_order_id: string; material_id: string; qty: number }[]> {
+  if (productionOrderIds.length === 0) return []
+  const { data } = await db()
+    .from('warehouse_movements')
+    .select('production_order_id, material_id, qty')
+    .in('production_order_id', productionOrderIds)
+    .eq('direction', 'out')
+    .limit(10000)
+  return (
+    (data as
+      { production_order_id: string; material_id: string; qty: unknown }[] | null) ?? []
+  ).map((r) => ({
+    production_order_id: r.production_order_id,
+    material_id: r.material_id,
+    qty: num(r.qty),
+  }))
+}
+
+/** Nhu cầu còn lại theo BOM của NHIỀU LSX (view) — cho LSX chưa nhập bảng chi tiết. */
+export async function lsxRemainingByIds(
+  productionOrderIds: string[],
+): Promise<
+  { production_order_id: string; material_id: string; qty_remaining: number }[]
+> {
+  if (productionOrderIds.length === 0) return []
+  const { data } = await db()
+    .from('v_lsx_material_status')
+    .select('production_order_id, material_id, qty_remaining')
+    .in('production_order_id', productionOrderIds)
+    .limit(10000)
+  return (
+    (data as
+      | { production_order_id: string; material_id: string; qty_remaining: unknown }[]
+      | null) ?? []
+  ).map((r) => ({
+    production_order_id: r.production_order_id,
+    material_id: r.material_id,
+    qty_remaining: num(r.qty_remaining),
+  }))
 }
 
 export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {

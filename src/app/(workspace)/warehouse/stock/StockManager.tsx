@@ -25,6 +25,10 @@ type Stock = {
   shelf_location: string | null
   on_hand: number
   is_low: boolean
+  /** Giữ chỗ cho các LSX đã duyệt/đang SX (bước 2 Kho). */
+  reserved: number
+  /** on_hand − reserved; âm = thiếu cho LSX. */
+  available: number
 }
 
 type Movement = {
@@ -40,7 +44,7 @@ type Movement = {
   material_code: string | null
 }
 
-type StatusFilter = 'all' | 'low' | 'out' | 'ok'
+type StatusFilter = 'all' | 'low' | 'out' | 'ok' | 'short'
 
 const REF_LABEL: Record<string, string> = {
   po: 'Theo đơn đặt',
@@ -74,6 +78,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
       if (statusFilter === 'low' && !s.is_low) return false
       if (statusFilter === 'out' && s.on_hand > 0) return false
       if (statusFilter === 'ok' && (s.is_low || s.on_hand === 0)) return false
+      if (statusFilter === 'short' && s.available >= 0) return false
       if (ql && !`${s.code} ${s.name} ${s.group_name ?? ''}`.toLowerCase().includes(ql))
         return false
       return true
@@ -84,12 +89,14 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
     let low = 0
     let out = 0
     let has = 0
+    let short = 0
     for (const s of stock) {
       if (s.on_hand === 0) out++
       else has++
       if (s.is_low) low++
+      if (s.available < 0) short++
     }
-    return { low, out, has }
+    return { low, out, has, short }
   }, [stock])
 
   async function post(url: string, body: unknown, okMsg: string): Promise<boolean> {
@@ -113,6 +120,8 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
       { key: 'name', header: 'Tên' },
       { key: 'unit', header: 'ĐVT' },
       { key: 'on_hand', header: 'Tồn hiện có', get: (s) => String(s.on_hand) },
+      { key: 'reserved', header: 'Đặt trước (LSX)', get: (s) => String(s.reserved) },
+      { key: 'available', header: 'Khả dụng', get: (s) => String(s.available) },
       { key: 'min_stock', header: 'Tồn tối thiểu', get: (s) => String(s.min_stock) },
       { key: 'shelf_location', header: 'Vị trí kệ', get: (s) => s.shelf_location ?? '' },
       {
@@ -151,6 +160,45 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
           {s.on_hand} <span className="text-xs font-normal text-zinc-400">{s.unit}</span>
         </span>
       ),
+    },
+    {
+      key: 'reserved',
+      header: 'Đặt trước',
+      width: '105px',
+      align: 'right',
+      sortValue: (s) => s.reserved,
+      cell: (s) =>
+        s.reserved > 0 ? (
+          <span
+            className="text-amber-600 tabular-nums dark:text-amber-500"
+            title="Giữ chỗ cho các LSX đã duyệt / đang sản xuất (cần − đã xuất)"
+          >
+            {s.reserved}
+          </span>
+        ) : (
+          <span className="text-zinc-300 dark:text-zinc-600">—</span>
+        ),
+    },
+    {
+      key: 'available',
+      header: 'Khả dụng',
+      width: '110px',
+      align: 'right',
+      sortValue: (s) => s.available,
+      cell: (s) =>
+        s.available < 0 ? (
+          <span
+            className="font-semibold text-red-600 tabular-nums dark:text-red-400"
+            title="Tồn không đủ cho nhu cầu còn lại của các LSX đã cam kết"
+          >
+            thiếu {Math.abs(s.available)}
+          </span>
+        ) : (
+          <span className="font-semibold tabular-nums">
+            {s.available}{' '}
+            <span className="text-xs font-normal text-zinc-400">{s.unit}</span>
+          </span>
+        ),
     },
     {
       key: 'min_stock',
@@ -212,6 +260,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
     { value: 'all' as const, label: 'Mọi trạng thái' },
     { value: 'low' as const, label: 'Tồn thấp' },
     { value: 'out' as const, label: 'Hết hàng' },
+    { value: 'short' as const, label: 'Thiếu cho LSX' },
     { value: 'ok' as const, label: 'Đủ' },
   ]
 
@@ -224,7 +273,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
       <PageHeader
         breadcrumbs={[{ label: 'Kho', href: '/warehouse' }, { label: 'Tồn kho' }]}
         title="Tồn kho"
-        description={`${filtered.length} / ${stock.length} vật tư. Tồn realtime = tổng nhập (đạt) − tổng xuất.`}
+        description={`${filtered.length} / ${stock.length} vật tư. Tồn realtime = tổng nhập (đạt) − tổng xuất. Khả dụng = tồn − đặt trước cho LSX đã duyệt.`}
         actions={
           <button onClick={exportCsv} className={btnSecondary}>
             Export CSV
@@ -238,6 +287,11 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
           { label: 'Đang có tồn', value: stats.has, tone: 'green' },
           { label: 'Tồn thấp', value: stats.low, tone: stats.low ? 'amber' : 'gray' },
           { label: 'Hết hàng', value: stats.out, tone: stats.out ? 'red' : 'gray' },
+          {
+            label: 'Thiếu cho LSX',
+            value: stats.short,
+            tone: stats.short ? 'red' : 'gray',
+          },
         ]}
       />
 
@@ -463,6 +517,18 @@ function IssueForm({
       <div className="text-xs text-zinc-500 sm:col-span-2">
         Tồn hiện có: <strong>{material.on_hand}</strong> {material.unit} — không xuất quá
         số này.
+        {material.reserved > 0 && (
+          <>
+            {' '}
+            Đang giữ chỗ cho LSX: <strong>{material.reserved}</strong> — khả dụng{' '}
+            <strong
+              className={material.available < 0 ? 'text-red-600 dark:text-red-400' : ''}
+            >
+              {material.available}
+            </strong>
+            .
+          </>
+        )}
       </div>
       <label className="flex flex-col gap-1 text-sm">
         Số lượng xuất <span className="text-red-500">*</span>

@@ -7,11 +7,16 @@ import {
   onHandMany,
   stockInfoMany,
   issuedByLsx,
+  issuedByLsxIds,
+  lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
   type LsxNeed,
+  type StockRow,
   type DocKind,
 } from './stock.repo'
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
+import { componentsRepo } from '@/modules/dept/production/components.repo'
+import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -76,11 +81,32 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
 }
 
 /**
- * Nhu cầu còn lại của các LSX KHÁC đã cam kết (approved|in_progress) — gộp theo
- * vật tư, để trừ khỏi tồn khả dụng khi đề xuất mua (Cách 2, plan-don-dat-hang §P1).
- * Chỉ giữ các vật tư quan tâm (materialIds của LSX đang lập đơn) để nhẹ.
- * Lặp smartLsxNeeds theo từng LSX — nhất quán với "cần" của LSX đang xét; quy mô
- * GĐ1 nhỏ nên chấp nhận N truy vấn (không phải hot path — chỉ chạy khi mở form PO).
+ * Tồn ĐẶT TRƯỚC theo vật tư (bước 2 Kho): Σ nhu cầu còn lại của các LSX đã
+ * cam kết (approved|in_progress), tính đúng như smartLsxNeeds nhưng gom bằng
+ * 3-4 truy vấn hàng loạt (không lặp N lần theo LSX — chạy được ở hot path
+ * màn Tồn kho). Logic gộp thuần nằm ở @/lib/reserved-stock (có test).
+ */
+export async function reservedByCommittedLsx(
+  excludeLsxId?: string,
+): Promise<Map<string, number>> {
+  const ids = (await productionRepo.listCommittedIds()).filter(
+    (id) => id !== excludeLsxId,
+  )
+  if (ids.length === 0) return new Map()
+  const compRows = await componentsRepo.listForReserve(ids)
+  const compLsxIds = [...new Set(compRows.map((r) => r.production_order_id))]
+  const bomIds = ids.filter((id) => !compLsxIds.includes(id))
+  const [issuedRows, bomRows] = await Promise.all([
+    issuedByLsxIds(compLsxIds),
+    lsxRemainingByIds(bomIds),
+  ])
+  return computeReservedByMaterial(compRows, issuedRows, bomRows)
+}
+
+/**
+ * Nhu cầu còn lại của các LSX KHÁC đã cam kết — gộp theo vật tư, để trừ khỏi
+ * tồn khả dụng khi đề xuất mua (Cách 2, plan-don-dat-hang §P1). Chỉ giữ các
+ * vật tư quan tâm (materialIds của LSX đang lập đơn).
  */
 export async function reservedByOtherLsx(
   excludeLsxId: string,
@@ -89,29 +115,36 @@ export async function reservedByOtherLsx(
   const out = new Map<string, number>()
   if (materialIds.length === 0) return out
   const want = new Set(materialIds)
-  const ids = (await productionRepo.listCommittedIds()).filter(
-    (id) => id !== excludeLsxId,
-  )
-  for (const id of ids) {
-    const needs = await smartLsxNeeds(id)
-    for (const n of needs) {
-      if (!want.has(n.material_id) || n.qty_remaining <= 0) continue
-      out.set(n.material_id, (out.get(n.material_id) ?? 0) + n.qty_remaining)
-    }
+  const all = await reservedByCommittedLsx(excludeLsxId)
+  for (const [materialId, qty] of all) {
+    if (want.has(materialId)) out.set(materialId, qty)
   }
   return out
+}
+
+/** Dòng tồn kho kèm đặt trước/khả dụng (bước 2 Kho). available âm = thiếu cho LSX. */
+export type StockRowAvail = StockRow & {
+  reserved: number
+  available: number
 }
 
 export const stockService = {
   async listStock(
     user: User,
     opts: { q?: string; group_name?: string; low_only?: boolean },
-  ) {
+  ): Promise<StockRowAvail[]> {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
-    return stockRepo.list({
-      q: opts.q,
-      group_name: opts.group_name,
-      low_only: opts.low_only ?? false,
+    const [rows, reserved] = await Promise.all([
+      stockRepo.list({
+        q: opts.q,
+        group_name: opts.group_name,
+        low_only: opts.low_only ?? false,
+      }),
+      reservedByCommittedLsx(),
+    ])
+    return rows.map((r) => {
+      const res = reserved.get(r.material_id) ?? 0
+      return { ...r, reserved: res, available: r.on_hand - res }
     })
   },
 
