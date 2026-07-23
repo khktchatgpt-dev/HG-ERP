@@ -87,6 +87,8 @@ export function ProductionProgressManager({
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'late' | LsxStatus>('all')
+  // Lọc theo công đoạn hiện tại — tìm nút thắt ("lệnh nào đang kẹt ở Sơn?").
+  const [stageFilter, setStageFilter] = useState<string>('all')
 
   const stageLabel = (code: string | null) =>
     code ? (stages.find((s) => s.code === code)?.label ?? code) : null
@@ -114,6 +116,7 @@ export function ProductionProgressManager({
       if (statusFilter === 'late') {
         if (!riskOf(r)) return false
       } else if (statusFilter !== 'all' && r.status !== statusFilter) return false
+      if (stageFilter !== 'all' && r.current_stage !== stageFilter) return false
       if (
         ql &&
         !`${r.code} ${r.order_code} ${r.customer_name}`.toLowerCase().includes(ql)
@@ -122,7 +125,7 @@ export function ProductionProgressManager({
       return true
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, statusFilter, today])
+  }, [rows, q, statusFilter, stageFilter, today])
 
   const count = (st: LsxStatus) => rows.filter((r) => r.status === st).length
   const lateCount = rows.filter((r) => riskOf(r)).length
@@ -406,7 +409,7 @@ export function ProductionProgressManager({
               Tải việc theo tổ (lệnh đang chạy)
             </h2>
           </div>
-          <div className="grid grid-cols-2 divide-x divide-y divide-zinc-100 sm:grid-cols-3 lg:grid-cols-7 dark:divide-zinc-900">
+          <div className="grid grid-cols-2 divide-x divide-y divide-zinc-100 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 dark:divide-zinc-900">
             {workload.map((w) => (
               <Link
                 key={w.department_id}
@@ -458,6 +461,14 @@ export function ProductionProgressManager({
                   { value: 'completed' as const, label: 'Hoàn thành' },
                   { value: 'rejected' as const, label: 'Bị từ chối' },
                   { value: 'cancelled' as const, label: 'Đã huỷ theo đơn' },
+                ]}
+              />
+              <ToolbarSelect
+                value={stageFilter}
+                onChange={setStageFilter}
+                options={[
+                  { value: 'all', label: 'Mọi công đoạn' },
+                  ...stages.map((s) => ({ value: s.code, label: s.label })),
                 ]}
               />
             </>
