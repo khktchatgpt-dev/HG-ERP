@@ -1,6 +1,6 @@
 import { customersRepo, type Customer, type CustomerWithOwner } from './sales.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -68,7 +68,7 @@ export const salesService = {
   },
 
   async create(user: User, input: CreateInput): Promise<Customer> {
-    if (!(await isSalesUser(user))) throw Forbidden('Chỉ phòng Bán hàng tạo được')
+    await assertAction(user, 'sales.customer.create')
     // Default owner = current user when not specified.
     const owner_id = input.owner_id ?? user.id
 
@@ -94,7 +94,7 @@ export const salesService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Customer> {
-    if (!(await isSalesUser(user))) throw Forbidden()
+    await assertAction(user, 'sales.customer.update')
     const before = await customersRepo.findById(id)
     if (!before) throw NotFound('Khách hàng không tồn tại')
     if (!canEdit(user, before)) {
@@ -104,7 +104,7 @@ export const salesService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isSalesUser(user))) throw Forbidden()
+    await assertAction(user, 'sales.customer.remove')
     const before = await customersRepo.findById(id)
     if (!before) throw NotFound('Khách hàng không tồn tại')
     if (!canEdit(user, before)) {

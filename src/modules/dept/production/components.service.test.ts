@@ -29,7 +29,7 @@ vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn() },
 }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn(), assertAction: vi.fn() }))
 
 import { componentsService } from './components.service'
 import { componentsRepo } from './components.repo'
@@ -39,8 +39,8 @@ import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const supply = {
@@ -71,6 +71,9 @@ beforeEach(() => {
   // d-supply = vai Kế hoạch (planner) → có quyền định hình.
   vi.mocked(hasPermission).mockImplementation(
     makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
   vi.mocked(departmentsRepo.findById).mockImplementation(async (id: string) =>
     id === 'd-supply'

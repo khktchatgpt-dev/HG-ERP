@@ -4,6 +4,7 @@ import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { bomLinesRepo } from '@/modules/dept/technical/technical.repo'
 import { canEditComponents } from './perms'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { routesService } from './routes.service'
 import {
   aggregateMaterialNeeds,
@@ -11,7 +12,7 @@ import {
   type MaterialNeed,
 } from '@/lib/component-needs'
 import type { User } from '@/modules/core/users/users.repo'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, NotFound } from '@/server/http'
 
 /**
  * Bảng chi tiết theo LSX (plan-lsx-components P1). Nguyên tắc: NHẬP TAY bởi
@@ -65,9 +66,7 @@ export const componentsService = {
 
   /** Ghi đè trọn bộ bảng chi tiết (pattern BOM editor). */
   async save(user: User, lsxId: string, input: ComponentInput[]): Promise<void> {
-    if (!(await canEditComponents(user))) {
-      throw Forbidden('Chỉ Kế hoạch - Cung ứng / Ban quản lý nhập bảng chi tiết')
-    }
+    await assertAction(user, 'production.components.edit')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
       throw BadRequest('LSX đã kết thúc — bảng chi tiết chỉ còn để tra cứu')
@@ -111,7 +110,7 @@ export const componentsService = {
     lsxId: string,
     source: 'bom' | 'previous',
   ): Promise<ComponentInput[]> {
-    if (!(await canEditComponents(user))) throw Forbidden()
+    await assertAction(user, 'production.components.edit')
     const { orderLines } = await lsxWithLines(lsxId)
 
     if (source === 'bom') {

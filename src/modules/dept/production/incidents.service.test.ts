@@ -10,15 +10,15 @@ vi.mock('@/modules/core/departments/departments.repo', () => ({
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 // on: register.ts (import side-effect của service) đăng ký handler lúc import.
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn(), assertAction: vi.fn() }))
 
 import { incidentsService } from './incidents.service'
 import { incidentsRepo } from './incidents.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const toHan = { id: 'u-th', role: 'employee', department_id: 'd-han' } as unknown as User
@@ -50,6 +50,9 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(hasPermission).mockImplementation(
     makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
   vi.mocked(departmentsRepo.findById).mockResolvedValue({
     id: 'd-han',

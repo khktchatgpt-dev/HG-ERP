@@ -1,6 +1,6 @@
 import { leaveRepo, type LeaveRequest, type LeaveStatus, type LeaveType } from './hr.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -64,7 +64,7 @@ export const leaveService = {
       })
     }
     // 'all'
-    if (!(await isHRStaff(user))) throw Forbidden('Chỉ HR/Admin xem được tất cả đơn')
+    await assertAction(user, 'hr.leave.list_all')
     return leaveRepo.list({
       status: opts.status,
       page: opts.page,
@@ -78,7 +78,7 @@ export const leaveService = {
     action: 'approve' | 'reject',
     note?: string,
   ): Promise<LeaveRequest> {
-    if (!(await canDecide(user))) throw Forbidden('Chỉ quản lý mới duyệt được đơn')
+    await assertAction(user, 'hr.leave.decide')
     const before = await leaveRepo.findById(id)
     if (!before) throw NotFound('Đơn không tồn tại')
     if (before.status !== 'pending') {

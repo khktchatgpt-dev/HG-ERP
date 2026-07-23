@@ -3,9 +3,9 @@ import { incidentsRepo, type Incident } from './incidents.repo'
 import { productionRepo } from './production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { emit } from '@/events/bus'
-import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, NotFound } from '@/server/http'
 import type { IncidentCreateInput } from './incidents.schema'
 
 /** ID quản đốc (GĐ/Ban QL) nhận báo sự cố — trừ chính người thao tác. */
@@ -32,9 +32,7 @@ export const incidentsService = {
 
   /** Tổ báo sự cố — quyền mềm: mọi nhân sự xưởng (admin luôn được). */
   async report(user: User, input: IncidentCreateInput): Promise<Incident> {
-    if (!(await hasPermission(user, 'production.incident.report'))) {
-      throw Forbidden('Chỉ bộ phận sản xuất báo sự cố')
-    }
+    await assertAction(user, 'production.incident.report')
     if (input.production_order_id) {
       const lsx = await productionRepo.findById(input.production_order_id)
       if (!lsx) throw BadRequest('LSX không tồn tại')
@@ -65,9 +63,7 @@ export const incidentsService = {
 
   /** Quản đốc đóng sự cố: chỉ GĐ/Ban quản lý (admin/manager). */
   async resolve(user: User, id: string): Promise<Incident> {
-    if (!(await hasPermission(user, 'production.incident.close'))) {
-      throw Forbidden('Chỉ Giám đốc/Ban quản lý đóng sự cố')
-    }
+    await assertAction(user, 'production.incident.close')
     const found = await incidentsRepo.findById(id)
     if (!found) throw NotFound('Sự cố không tồn tại')
     if (found.status === 'resolved') return found

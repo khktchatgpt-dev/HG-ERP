@@ -16,8 +16,8 @@ vi.mock('./orders.repo', () => ({
 }))
 vi.mock('./quotes.service', () => ({
   quotesService: { assertSent: vi.fn() },
-  isSalesStaff: vi.fn(),
 }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
 vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn() } }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findByOrder: vi.fn(), patch: vi.fn(), insertProgress: vi.fn() },
@@ -36,15 +36,21 @@ vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
 import { ordersService } from './orders.service'
 import { ordersRepo } from './orders.repo'
-import { quotesService, isSalesStaff } from './quotes.service'
+import { quotesService } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import { BadRequest } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
+
+const DEPTS: Record<string, DeptInfo> = {
+  'd-sales': { name: 'Bán Hàng', workspace_id: 'sales' },
+}
 
 const sales = {
   id: 'u-sales',
@@ -70,7 +76,9 @@ const ORDER = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(isSalesStaff).mockResolvedValue(true)
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
+  )
   vi.mocked(ordersRepo.existsByCode).mockResolvedValue(false)
   vi.mocked(productionRepo.findByOrder).mockResolvedValue(null)
   vi.mocked(posRepo.list).mockResolvedValue({ rows: [], total: 0 } as never)
@@ -448,7 +456,6 @@ describe('ordersService.deliver — khép chuỗi (completed → delivered)', ()
   )
 
   it('NV ngoài Sales (không phải GĐ/QL) → 403', async () => {
-    vi.mocked(isSalesStaff).mockResolvedValue(false)
     const outsider = { id: 'u-x', role: 'employee' } as never
     await expect(ordersService.deliver(outsider, 'o1')).rejects.toMatchObject({
       status: 403,
@@ -456,7 +463,6 @@ describe('ordersService.deliver — khép chuỗi (completed → delivered)', ()
   })
 
   it('GĐ/Ban quản lý xác nhận giao được dù không thuộc Sales', async () => {
-    vi.mocked(isSalesStaff).mockResolvedValue(false)
     vi.mocked(ordersRepo.findById).mockResolvedValue({
       ...ORDER,
       status: 'completed',

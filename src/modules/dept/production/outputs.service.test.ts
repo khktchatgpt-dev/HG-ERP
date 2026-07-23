@@ -29,7 +29,7 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/suppliers.service', () => ({ isSupplyStaff: vi.fn() }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn(), assertAction: vi.fn() }))
 vi.mock('./day-locks.repo', () => ({
   dayLocksRepo: { find: vi.fn(), listByDate: vi.fn() },
 }))
@@ -47,8 +47,8 @@ import { productionRepo } from './production.repo'
 import { isProductionStaff } from './production.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const worker = {
@@ -106,6 +106,9 @@ beforeEach(() => {
   vi.mocked(isSupplyStaff).mockResolvedValue(false)
   vi.mocked(hasPermission).mockImplementation(
     makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(productionRepo.listStages).mockResolvedValue(STAGES as never)

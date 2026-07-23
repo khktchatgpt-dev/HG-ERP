@@ -6,7 +6,7 @@ import {
   type Department,
 } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { assessLateRisk } from '@/lib/late-risk'
 import { BadRequest, Forbidden } from '@/server/http'
@@ -151,9 +151,7 @@ export const teamService = {
     team: { id: string; name: string } | null
     cards: TeamCard[]
   }> {
-    if (!(await hasPermission(user, 'production.team.manage'))) {
-      throw Forbidden('Chỉ bộ phận sản xuất hoặc Ban quản lý xem bảng việc của tổ')
-    }
+    await assertAction(user, 'production.team.board')
     const stages = await productionRepo.listStages()
     const dept = user.department_id
       ? await departmentsRepo.findById(user.department_id)

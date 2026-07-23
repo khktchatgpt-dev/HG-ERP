@@ -7,7 +7,7 @@ import {
 import { customersRepo } from './sales.repo'
 import type { QuoteStatus } from './quotes.schema'
 import { type User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -76,7 +76,7 @@ export const quotesService = {
 
   /** Chỉ báo giá NHÁP được sửa — đã gửi duyệt/duyệt rồi thì bất biến (làm BG mới). */
   async update(user: User, id: string, input: QuoteInput): Promise<Quote> {
-    if (!(await isSalesStaff(user))) throw Forbidden()
+    await assertAction(user, 'sales.quote.manage')
     const before = await quotesRepo.findById(id)
     if (!before) throw NotFound('Báo giá không tồn tại')
     if (before.status !== 'draft') {
@@ -96,7 +96,7 @@ export const quotesService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isSalesStaff(user))) throw Forbidden()
+    await assertAction(user, 'sales.quote.manage')
     const before = await quotesRepo.findById(id)
     if (!before) throw NotFound()
     if (before.status !== 'draft') throw BadRequest('Chỉ xoá được báo giá nháp')
@@ -108,7 +108,7 @@ export const quotesService = {
    * Sau khi chốt, báo giá bất biến và tạo được đơn hàng.
    */
   async send(user: User, id: string): Promise<Quote> {
-    if (!(await isSalesStaff(user))) throw Forbidden('Chỉ Kinh doanh chốt được báo giá')
+    await assertAction(user, 'sales.quote.manage')
     const before = await quotesRepo.findById(id)
     if (!before) throw NotFound('Báo giá không tồn tại')
     if (before.status !== 'draft') throw BadRequest('Báo giá đã chốt rồi')

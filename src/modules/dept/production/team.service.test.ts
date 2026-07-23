@@ -15,15 +15,15 @@ vi.mock('./production.service', () => ({
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn(), list: vi.fn() },
 }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn(), assertAction: vi.fn() }))
 
 import { deriveCardStatus, teamService } from './team.service'
 import { productionRepo } from './production.repo'
 import { routesRepo } from './routes.repo'
 import { productionService } from './production.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { makeFakeHasPermission, makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const DEPTS: Record<string, DeptInfo> = {
@@ -169,6 +169,9 @@ beforeEach(() => {
   vi.mocked(productionRepo.listStages).mockResolvedValue(STAGES)
   vi.mocked(hasPermission).mockImplementation(
     makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
   mockDepts()
   mockBoardData()

@@ -5,10 +5,11 @@ import {
   type InvoiceStatus,
 } from './accounting.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { NotFound } from '@/server/http'
 
-// Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
+// isAccountingStaff giữ lại: các trang finance/* dùng để gate UI. Guard method
+// đã chuyển sang assertAction (Phase B).
 async function isAccountingStaff(user: User): Promise<boolean> {
   return hasPermission(user, 'accounting.member')
 }
@@ -35,12 +36,12 @@ export const invoicesService = {
       page_size: number
     },
   ) {
-    if (!(await isAccountingStaff(user))) throw Forbidden('Chỉ Kế toán xem được')
+    await assertAction(user, 'accounting.invoice.view')
     return invoicesRepo.list(opts)
   },
 
   async create(user: User, input: CreateInput): Promise<Invoice> {
-    if (!(await isAccountingStaff(user))) throw Forbidden()
+    await assertAction(user, 'accounting.invoice.manage')
     return invoicesRepo.insert({
       invoice_no: input.invoice_no,
       party_name: input.party_name,
@@ -55,7 +56,7 @@ export const invoicesService = {
   },
 
   async update(user: User, id: string, patch: Partial<Invoice>): Promise<Invoice> {
-    if (!(await isAccountingStaff(user))) throw Forbidden()
+    await assertAction(user, 'accounting.invoice.manage')
     const before = await invoicesRepo.findById(id)
     if (!before) throw NotFound('Hoá đơn không tồn tại')
 

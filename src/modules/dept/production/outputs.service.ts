@@ -13,17 +13,8 @@ import {
   type ComponentSummary,
 } from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
-
-/**
- * Sản lượng hằng ngày theo công đoạn/tổ (SX-P3 — FR-PR). Ai nhập: production.
- * output.record (seed gán production_staff; admin bypass). Cung ứng/GĐ không ghi
- * sổ hộ (user siết 07/2026 — planner chỉ định hình).
- */
-async function canRecordOutput(user: User): Promise<boolean> {
-  return hasPermission(user, 'production.output.record')
-}
 
 type RecordInput = {
   stage: string
@@ -81,9 +72,7 @@ export const outputsService = {
     lsxId: string,
     input: RecordInput,
   ): Promise<{ warnings: string[] }> {
-    if (!(await canRecordOutput(user))) {
-      throw Forbidden('Chỉ bộ phận Sản xuất nhập sản lượng')
-    }
+    await assertAction(user, 'production.output.record')
     const { lsx, components, totalByComponent } = await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sản lượng cho LSX đã duyệt / đang sản xuất')

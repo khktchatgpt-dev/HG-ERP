@@ -4,7 +4,8 @@ import {
   type OrderLineInput,
   type OrderWithCustomer,
 } from './orders.repo'
-import { quotesService, isSalesStaff } from './quotes.service'
+import { quotesService } from './quotes.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -12,7 +13,7 @@ import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
-import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
 const EDITABLE_FIELDS = [
@@ -118,7 +119,7 @@ export const ordersService = {
       required_docs?: string | null
     },
   ): Promise<Order> {
-    if (!(await isSalesStaff(user))) throw Forbidden('Chỉ Kinh doanh tạo được đơn hàng')
+    await assertAction(user, 'sales.order.manage')
     if (await ordersRepo.existsByCode(input.code)) {
       throw Conflict(`Mã đơn "${input.code}" đã tồn tại`, 'CODE_TAKEN')
     }
@@ -197,7 +198,7 @@ export const ordersService = {
    * ghi vào sales_order_changes (append-only) — vận hành linh hoạt nhưng có vết.
    */
   async update(user: User, id: string, input: OrderUpdateInput): Promise<Order> {
-    if (!(await isSalesStaff(user))) throw Forbidden()
+    await assertAction(user, 'sales.order.manage')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
     assertEditable(before)
@@ -283,7 +284,7 @@ export const ordersService = {
    * bước phụ lỗi thì log + vẫn huỷ đơn (nguồn sự thật huỷ trước).
    */
   async cancel(user: User, id: string, reason: string): Promise<Order> {
-    if (!(await isSalesStaff(user))) throw Forbidden()
+    await assertAction(user, 'sales.order.manage')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
     assertEditable(before)
@@ -370,9 +371,7 @@ export const ordersService = {
    * Sales hoặc GĐ/Ban quản lý; đơn delivered thành bất biến (assertEditable).
    */
   async deliver(user: User, id: string, note?: string | null): Promise<Order> {
-    const allowed =
-      user.role === 'admin' || user.role === 'manager' || (await isSalesStaff(user))
-    if (!allowed) throw Forbidden('Chỉ Kinh doanh hoặc GĐ/Ban quản lý xác nhận giao hàng')
+    await assertAction(user, 'sales.order.confirm_delivery')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
     if (before.status !== 'completed') {

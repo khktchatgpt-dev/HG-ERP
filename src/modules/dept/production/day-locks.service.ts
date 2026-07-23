@@ -1,8 +1,8 @@
 import { dayLocksRepo, type DayLock } from './day-locks.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
 
 /**
  * CHỐT SỔ MỀM theo tổ + ngày (0068): thống kê chốt cuối ngày → sổ của
@@ -19,9 +19,7 @@ export const dayLocksService = {
     user: User,
     input: { entry_date: string; team_department_id?: string | null },
   ): Promise<DayLock> {
-    if (!(await hasPermission(user, 'production.daylock.lock'))) {
-      throw Forbidden('Chỉ bộ phận Sản xuất hoặc Ban quản lý chốt sổ')
-    }
+    await assertAction(user, 'production.daylock.lock')
     // isMgr: đặc quyền chốt hộ TỔ KHÁC (role-tier, không phải dept-hardcode).
     const isMgr = user.role === 'admin' || user.role === 'manager'
     const teamId = isMgr
@@ -49,9 +47,7 @@ export const dayLocksService = {
 
   /** Mở khoá: CHỈ admin/manager — có vết (badge sổ hiện ai chốt, mở là xoá dòng). */
   async unlock(user: User, teamId: string, date: string): Promise<void> {
-    if (!(await hasPermission(user, 'production.daylock.unlock'))) {
-      throw Forbidden('Chỉ Giám đốc/Ban quản lý mở khoá sổ đã chốt')
-    }
+    await assertAction(user, 'production.daylock.unlock')
     const existing = await dayLocksRepo.find(teamId, date)
     if (!existing) throw NotFound('Tổ chưa chốt sổ ngày này')
     await dayLocksRepo.deleteByTeamDate(teamId, date)

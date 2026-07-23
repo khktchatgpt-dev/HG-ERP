@@ -13,8 +13,8 @@ import {
 } from './stock.repo'
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
 import { materialsRepo } from './warehouse.repo'
-import { isWarehouseUser, canViewWarehouse } from './warehouse.service'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { canViewWarehouse } from './warehouse.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -22,11 +22,6 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
-
-/** Ghi phiếu nhập/xuất tồn: permission warehouse.edit. */
-async function canEdit(user: User): Promise<boolean> {
-  return hasPermission(user, 'warehouse.edit')
-}
 
 type ReceiveInput = {
   material_id: string
@@ -122,9 +117,7 @@ export const stockService = {
 
   /** Nhập kho (FR-WMS-02/04). qty = số ĐẠT; qty_rejected (QC không đạt) không vào tồn (BR-10). */
   async receive(user: User, input: ReceiveInput): Promise<{ id: string }> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
-      throw Forbidden('Chỉ quản lý Kho / admin nhập kho được')
-    }
+    await assertAction(user, 'warehouse.stock.write')
     const mat = await materialsRepo.findById(input.material_id)
     if (!mat) throw NotFound('Vật tư không tồn tại')
     if (!mat.is_active) throw BadRequest('Vật tư đã ngừng sử dụng, không nhập được')
@@ -145,9 +138,7 @@ export const stockService = {
 
   /** Xuất kho (FR-WMS-05/06). Không cho xuất quá tồn hiện có. */
   async issue(user: User, input: IssueInput): Promise<{ id: string }> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
-      throw Forbidden('Chỉ quản lý Kho / admin xuất kho được')
-    }
+    await assertAction(user, 'warehouse.stock.write')
     const mat = await materialsRepo.findById(input.material_id)
     if (!mat) throw NotFound('Vật tư không tồn tại')
 
@@ -242,9 +233,7 @@ export const stockService = {
       }[]
     },
   ): Promise<{ id: string; code: string; po_status: string | null }> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
-      throw Forbidden('Chỉ quản lý Kho / admin nhập kho được')
-    }
+    await assertAction(user, 'warehouse.stock.write')
     const matIds = [...new Set(input.lines.map((l) => l.material_id))]
     for (const id of matIds) {
       const mat = await materialsRepo.findById(id)
@@ -335,9 +324,7 @@ export const stockService = {
       }[]
     },
   ): Promise<{ id: string; code: string }> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) {
-      throw Forbidden('Chỉ quản lý Kho / admin xuất kho được')
-    }
+    await assertAction(user, 'warehouse.stock.write')
     if (input.kind === 'lsx') {
       if (!input.production_order_id) {
         throw BadRequest('BR-09: xuất theo LSX phải gắn LSX')

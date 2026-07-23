@@ -5,7 +5,7 @@ import { productionRepo } from './production.repo'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { summarizeOutsource, type OutsourceSummary } from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 
 /**
@@ -25,12 +25,6 @@ export const outsourceRecordSchema = z.object({
 })
 export type OutsourceRecordInput = z.infer<typeof outsourceRecordSchema>
 
-// Ghi giao/nhận gia công: production.outsource.record (seed gán production_staff;
-// admin bypass). CHỈ bộ phận sản xuất (user siết 07/2026).
-async function canRecord(user: User): Promise<boolean> {
-  return hasPermission(user, 'production.outsource.record')
-}
-
 export type OutsourcePairSummary = OutsourceSummary & {
   component_id: string
   component_name: string
@@ -45,9 +39,7 @@ export const outsourceService = {
     lsxId: string,
     input: OutsourceRecordInput,
   ): Promise<{ warnings: string[] }> {
-    if (!(await canRecord(user))) {
-      throw Forbidden('Chỉ bộ phận Sản xuất ghi gia công ngoài')
-    }
+    await assertAction(user, 'production.outsource.record')
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {

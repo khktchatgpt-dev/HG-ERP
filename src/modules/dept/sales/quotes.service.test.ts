@@ -17,13 +17,20 @@ vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn(), list: vi.fn
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { findById: vi.fn() },
 }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ hasPermission: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({
+  hasPermission: vi.fn(),
+  assertAction: vi.fn(),
+}))
 
 import { quotesService } from './quotes.service'
 import { quotesRepo } from './quotes.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { makeFakeHasPermission, type DeptInfo } from '@/test-utils/rbac'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import {
+  makeFakeHasPermission,
+  makeFakeAssertAction,
+  type DeptInfo,
+} from '@/test-utils/rbac'
 import type { User } from '@/modules/core/users/users.repo'
 
 const DEPTS: Record<string, DeptInfo> = {
@@ -65,6 +72,9 @@ beforeEach(() => {
   mockDept(null)
   vi.mocked(hasPermission).mockImplementation(
     makeFakeHasPermission((id) => DEPTS[id] ?? null),
+  )
+  vi.mocked(assertAction).mockImplementation(
+    makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
 })
 

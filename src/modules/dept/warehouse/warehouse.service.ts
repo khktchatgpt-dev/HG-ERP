@@ -1,6 +1,6 @@
 import { materialsRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
@@ -17,11 +17,6 @@ async function isWarehouseUser(user: User): Promise<boolean> {
 async function canViewWarehouse(user: User): Promise<boolean> {
   void user // giữ nguyên chữ ký để sau này siết lại theo user không phải sửa caller
   return true
-}
-
-/** Sửa danh mục vật tư / nhập-xuất tồn: permission warehouse.edit. */
-async function canEdit(user: User): Promise<boolean> {
-  return hasPermission(user, 'warehouse.edit')
 }
 
 type CreateInput = {
@@ -67,9 +62,7 @@ export const materialsService = {
   async create(user: User, input: CreateInput): Promise<Material> {
     // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
     // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).
-    if (!(await hasPermission(user, 'warehouse.material.create'))) {
-      throw Forbidden('Chỉ Kho / admin / Cung ứng tạo được vật tư')
-    }
+    await assertAction(user, 'warehouse.material.create')
     const dup = await materialsRepo.findByCode(input.code)
     if (dup) throw Conflict(`Mã vật tư "${input.code}" đã tồn tại`)
 
@@ -92,7 +85,7 @@ export const materialsService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) throw Forbidden()
+    await assertAction(user, 'warehouse.material.update')
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     if (patch.code && patch.code !== before.code) {
@@ -103,7 +96,7 @@ export const materialsService = {
   },
 
   async remove(user: User, id: string): Promise<void> {
-    if (!(await isWarehouseUser(user)) || !(await canEdit(user))) throw Forbidden()
+    await assertAction(user, 'warehouse.material.update')
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     await materialsRepo.delete(id)

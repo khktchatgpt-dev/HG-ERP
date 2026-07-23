@@ -116,8 +116,17 @@ sửa không" đúng ở code nhưng vô hình trên UI.
         giữ ở service. `isTechnicalStaff`/`isSupplyStaff` giữ (module khác còn dùng).
         Verify DB thật: sanity đếm user/thao tác khớp công thức cũ (0 lệch — công thức
         registry ≡ guard cũ). `npm run check` xanh, 514 test.
-  - [ ] Còn lại: warehouse, production (nhiều guard + row-level), sales, hr, accounting,
-        exec, core/admin. Cuốn chiếu tiếp theo cùng khuôn.
+  - [x] **accounting, hr, sales (customer/quote/order), warehouse (material/stock),
+        production (lsx/progress/components/output/outsource/daylock/incident/team/exec)**
+        → flip guard method sang `assertAction`. Guard row-level (chủ KH/sổ-của-mình/
+        tổ) giữ ở service; helper `is*Staff`/`canViewWarehouse`/`canEditComponents` giữ
+        cho page/re-export. Test 7 file production + sales/pos/prices mock `assertAction`
+        qua `makeFakeAssertAction`. Verify DB thật 0-lệch; `npm run check` xanh, 514 test.
+  - [ ] Chưa migrate (giữ nguyên, có chủ ý): guard **đọc-mở** (canViewWarehouse, list/get
+        các module) không cần assertAction; **row-level thuần** (task ACL `can()`,
+        markStage, leave create/cancel) không rút về công thức permission; **core/admin**
+        (users/departments/catalogs/settings) dùng vai `admin` trực tiếp — registry mô tả
+        (tab Thao tác) nhưng guard chưa đọc registry.
 
 ### Phase 4 — tuỳ chọn (CHƯA làm)
 - [ ] Chuyển `canEnterWorkspace`/`openView` sang permission `workspace.<id>.view`

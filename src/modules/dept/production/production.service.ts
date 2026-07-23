@@ -12,8 +12,8 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
-import { hasPermission } from '@/modules/core/rbac/rbac.service'
-import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
 
 // Tách vai 07/2026: phòng gộp cũ + 2 phòng tách đều nhận báo LSX duyệt
 // (Kế hoạch cần định hình, Cung ứng cần đặt vật tư).
@@ -24,28 +24,10 @@ const SUPPLY_DEPTS = new Set([
 ])
 const TECH_DEPT = 'Kỹ Thuật'
 
-// Phase 2 RBAC: các guard đọc thẳng permission (seed đã ánh xạ khớp legacy).
-/** Phát LSX: production.lsx.issue (seed gán sales_staff; admin bypass). */
-async function canIssue(user: User): Promise<boolean> {
-  return hasPermission(user, 'production.lsx.issue')
-}
-
-/** Duyệt LSX: production.lsx.approve (seed gán director/manager; admin bypass). */
-async function canApprove(user: User): Promise<boolean> {
-  return hasPermission(user, 'production.lsx.approve')
-}
-
-/** Nhân sự Xưởng: production.member (seed gán production_staff; admin bypass). */
+// Phase B RBAC: guard method đọc thẳng registry qua assertAction. isProductionStaff
+// giữ lại (access.ts / entry/shared.ts / board page dùng để suy "thuộc Xưởng").
 export async function isProductionStaff(user: User): Promise<boolean> {
   return hasPermission(user, 'production.member')
-}
-
-/**
- * Cập nhật tiến độ + báo hoàn thành: production.progress.track (seed gán
- * director + production_staff; admin bypass). Cung ứng KHÔNG có quyền này.
- */
-async function canTrackProgress(user: User): Promise<boolean> {
-  return hasPermission(user, 'production.progress.track')
 }
 
 /** ID Giám đốc/Ban QL để báo duyệt (trừ chính người phát). */
@@ -108,7 +90,7 @@ export const productionService = {
       note?: string | null
     },
   ): Promise<ProductionOrder> {
-    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh phát được LSX')
+    await assertAction(user, 'production.lsx.issue')
     const order = await ordersRepo.findById(input.order_id)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
     if (order.status !== 'confirmed') {
@@ -161,7 +143,7 @@ export const productionService = {
 
   /** GĐ DUYỆT LSX: pending_approval → approved; đơn → lsx_issued; báo Cung ứng + Kỹ thuật. */
   async approve(user: User, id: string): Promise<ProductionOrder> {
-    if (!(await canApprove(user))) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    await assertAction(user, 'production.lsx.approve')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'pending_approval')
@@ -193,7 +175,7 @@ export const productionService = {
 
   /** GĐ TỪ CHỐI LSX: pending_approval → rejected; đơn về confirmed; báo người phát. */
   async reject(user: User, id: string, reason: string): Promise<ProductionOrder> {
-    if (!(await canApprove(user))) throw Forbidden('Chỉ Giám đốc/Ban quản lý duyệt LSX')
+    await assertAction(user, 'production.lsx.approve')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'pending_approval')
@@ -238,7 +220,7 @@ export const productionService = {
       note?: string | null
     },
   ): Promise<ProductionOrder> {
-    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh gửi duyệt lại LSX')
+    await assertAction(user, 'production.lsx.issue')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status !== 'rejected') {
@@ -288,7 +270,7 @@ export const productionService = {
 
   /** Sales nhập/tinh chỉnh spec sản xuất per dòng (OI-11) — override tech_spec SP. */
   async saveSpecs(user: User, id: string, lines: LsxLineSpecRow[]): Promise<void> {
-    if (!(await canIssue(user))) throw Forbidden('Chỉ Kinh doanh nhập spec LSX')
+    await assertAction(user, 'production.lsx.issue')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     await saveLsxLineSpecs(id, lines)
@@ -303,9 +285,7 @@ export const productionService = {
     id: string,
     input: { stage: string; action: 'start' | 'done'; note?: string | null },
   ): Promise<ProductionOrder> {
-    if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý cập nhật tiến độ')
-    }
+    await assertAction(user, 'production.progress.track')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
@@ -380,9 +360,7 @@ export const productionService = {
     id: string,
     note?: string | null,
   ): Promise<void> {
-    if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý xác nhận nhận vật tư')
-    }
+    await assertAction(user, 'production.progress.track')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
@@ -400,9 +378,7 @@ export const productionService = {
 
   /** Báo hoàn thành để chuyển giao hàng (FR-PROD-03). */
   async complete(user: User, id: string, note?: string | null): Promise<ProductionOrder> {
-    if (!(await canTrackProgress(user))) {
-      throw Forbidden('Chỉ Xưởng hoặc GĐ/Ban quản lý báo hoàn thành')
-    }
+    await assertAction(user, 'production.progress.track')
     const lsx = await productionRepo.findById(id)
     if (!lsx) throw NotFound('LSX không tồn tại')
     if (lsx.status === 'completed') return lsx as ProductionOrder
