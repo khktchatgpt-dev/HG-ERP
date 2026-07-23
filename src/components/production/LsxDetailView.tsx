@@ -14,6 +14,27 @@ import { LsxComponentsPanel } from '@/components/production/LsxComponentsPanel'
 import { LsxOutputPanel } from '@/components/production/LsxOutputPanel'
 import { LsxOutsourcePanel } from '@/components/production/LsxOutsourcePanel'
 import { LsxRoutePanel } from '@/components/production/LsxRoutePanel'
+import {
+  assessSupplyReadiness,
+  PO_STATUS_LABEL,
+  PO_STATUS_TONE,
+  type PoStatus,
+} from '@/lib/supply-readiness'
+
+/** Dữ liệu cung ứng của LSX cho panel Tổng quan — nạp ở LsxDetailScreen. */
+export type SupplyPanelData = {
+  /** Đã khai định mức (BOM) cho lệnh? → phân biệt "chưa đặt" vs "chưa cần mua". */
+  hasBom: boolean
+  pos: {
+    id: string
+    code: string
+    supplier_name: string
+    status: PoStatus
+    expected_at: string | null
+    total: number
+    currency: string
+  }[]
+}
 
 type LsxStatus =
   'pending_approval' | 'approved' | 'in_progress' | 'completed' | 'rejected' | 'cancelled'
@@ -74,6 +95,7 @@ export function LsxDetailView({
   defaultStage,
   routeStages,
   syncProgress,
+  supply,
 }: {
   lsx: {
     id: string
@@ -116,6 +138,8 @@ export function LsxDetailView({
   routeStages?: string[] | null
   /** Tiến độ "bộ đồng bộ" (Σ bộ hoàn chỉnh / Σ SL đặt) — thanh % ở Tổng quan. */
   syncProgress?: { sets: number; qty: number } | null
+  /** Cung ứng/vật tư của lệnh (chỉ shell GĐ + Kế hoạch) — null = không hiện. */
+  supply?: SupplyPanelData | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -527,6 +551,8 @@ export function LsxDetailView({
         </Card>
       )}
 
+      {tab === 'overview' && supply && <SupplyCard supply={supply} />}
+
       {/* ── Tab Chi tiết & lộ trình: cụm/chi tiết/định mức + lộ trình giai đoạn ── */}
       {tab === 'plan' && (
         <>
@@ -709,5 +735,124 @@ function Info({ label, value }: { label: string; value: string | null }) {
       <span className="text-[10px] font-medium text-zinc-400 uppercase">{label}</span>
       <span>{value ? value : <span className="text-zinc-400">—</span>}</span>
     </div>
+  )
+}
+
+// Tiền theo tệ, không quy đổi FX (GĐ đọc nguyên tệ như màn Quản lý đơn hàng).
+const fmtMoney = (n: number, currency: string) => {
+  const s = n.toLocaleString('vi-VN', { maximumFractionDigits: 0 })
+  return currency === 'VND' ? `${s} ₫` : `${s} ${currency}`
+}
+
+const READY_DOT: Record<'green' | 'sky' | 'amber' | 'zinc', string> = {
+  green: 'bg-emerald-500',
+  sky: 'bg-sky-500',
+  amber: 'bg-amber-500',
+  zinc: 'bg-zinc-300 dark:bg-zinc-600',
+}
+const READY_TXT: Record<'green' | 'sky' | 'amber' | 'zinc', string> = {
+  green: 'text-emerald-600 dark:text-emerald-400',
+  sky: 'text-sky-600 dark:text-sky-400',
+  amber: 'text-amber-600 dark:text-amber-400',
+  zinc: 'text-zinc-500',
+}
+
+/**
+ * Panel "Cung ứng / Vật tư" ở tab Tổng quan (shell GĐ + Kế hoạch): trả lời thẳng
+ * "vật tư đã đủ để chạy sản xuất chưa" + list PO của lệnh. Chỉ-đọc; link sang
+ * Đơn đặt vật tư để thao tác.
+ */
+function SupplyCard({ supply }: { supply: SupplyPanelData }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const active = supply.pos.filter((p) => p.status !== 'cancelled')
+  const r = assessSupplyReadiness(
+    supply.pos.map((p) => ({ status: p.status, expected_at: p.expected_at })),
+    supply.hasBom,
+    today,
+  )
+  // Tổng cam kết theo tệ (gộp PO chưa huỷ) — đa tệ thì liệt kê từng loại.
+  const byCur = new Map<string, number>()
+  for (const p of active) byCur.set(p.currency, (byCur.get(p.currency) ?? 0) + p.total)
+  const commit = [...byCur.entries()].filter(([, v]) => v > 0)
+
+  return (
+    <Card
+      title="Cung ứng / Vật tư"
+      right={
+        <a
+          href="/planning/pos"
+          className="text-xs text-sky-600 hover:underline dark:text-sky-400"
+        >
+          Đơn đặt vật tư →
+        </a>
+      }
+    >
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+        <span
+          className={`flex items-center gap-1.5 text-sm font-semibold ${READY_TXT[r.tone]}`}
+        >
+          <span className={`size-2 shrink-0 rounded-full ${READY_DOT[r.tone]}`} />
+          {r.label}
+        </span>
+        {r.activeCount > 0 && (
+          <span className="text-xs text-zinc-500">
+            {r.receivedCount}/{r.activeCount} PO đã về đủ
+          </span>
+        )}
+        {r.nextExpected && (
+          <span className="text-xs text-zinc-500">
+            Hẹn về gần nhất:{' '}
+            <b className="text-zinc-700 dark:text-zinc-200">{fmtD(r.nextExpected)}</b>
+          </span>
+        )}
+        {r.overdueCount > 0 && (
+          <span className="text-xs font-medium text-red-600 dark:text-red-400">
+            ⚠ {r.overdueCount} PO quá hẹn
+          </span>
+        )}
+        {commit.length > 0 && (
+          <span className="ml-auto text-xs text-zinc-500">
+            Cam kết:{' '}
+            <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
+              {commit.map(([cur, v]) => fmtMoney(v, cur)).join(' · ')}
+            </b>
+          </span>
+        )}
+      </div>
+
+      {active.length === 0 ? (
+        <p className="mt-3 border-t border-zinc-100 pt-3 text-xs text-zinc-400 dark:border-zinc-800">
+          {supply.hasBom
+            ? 'Lệnh đã có định mức nhưng chưa có đơn đặt vật tư nào — cần Cung ứng lên PO.'
+            : 'Chưa có đơn đặt vật tư cho lệnh này.'}
+        </p>
+      ) : (
+        <ul className="mt-3 divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
+          {active.map((p) => {
+            const overdue =
+              p.status !== 'received' && p.expected_at != null && p.expected_at < today
+            return (
+              <li key={p.id} className="flex items-center gap-2 py-2 text-sm">
+                <span className="shrink-0 font-mono text-xs text-zinc-500">{p.code}</span>
+                <span className="min-w-0 flex-1 truncate">{p.supplier_name}</span>
+                <Badge tone={PO_STATUS_TONE[p.status]}>{PO_STATUS_LABEL[p.status]}</Badge>
+                <span
+                  className={`w-20 shrink-0 text-right text-xs tabular-nums ${
+                    overdue
+                      ? 'font-medium text-red-600 dark:text-red-400'
+                      : 'text-zinc-500'
+                  }`}
+                >
+                  {p.expected_at ? fmtD(p.expected_at) : '—'}
+                </span>
+                <span className="w-28 shrink-0 text-right text-xs tabular-nums">
+                  {p.total > 0 ? fmtMoney(p.total, p.currency) : '—'}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </Card>
   )
 }
