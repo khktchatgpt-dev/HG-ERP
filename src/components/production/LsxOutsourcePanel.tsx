@@ -6,6 +6,7 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
+import { StatsBar } from '@/components/erp/StatsBar'
 
 /**
  * Gia công ngoài của LSX (SX-P4 — FR-OS): sổ giao ↔ nhận per chi tiết × đơn vị
@@ -170,6 +171,27 @@ export function LsxOutsourcePanel({
         </h2>
       </div>
       <div className="flex flex-col gap-4 p-4">
+        {pairs.length > 0 &&
+          (() => {
+            const sent = pairs.reduce((a, p) => a + p.sent, 0)
+            const recv = pairs.reduce((a, p) => a + p.received, 0)
+            const defect = pairs.reduce((a, p) => a + p.defect, 0)
+            const out = Math.max(0, sent - recv)
+            return (
+              <StatsBar
+                stats={[
+                  { label: 'Đã giao', value: sent, tone: 'blue' },
+                  { label: 'Nhận về', value: recv, tone: 'green' },
+                  { label: 'Còn ở ngoài', value: out, tone: out > 0 ? 'amber' : 'gray' },
+                  {
+                    label: 'Hỏng khi nhận',
+                    value: defect,
+                    tone: defect > 0 ? 'red' : 'gray',
+                  },
+                ]}
+              />
+            )
+          })()}
         {pairs.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[640px] text-xs">

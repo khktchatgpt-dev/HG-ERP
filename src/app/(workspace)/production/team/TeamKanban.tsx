@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
@@ -57,7 +57,9 @@ export function TeamKanban({
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
-  const [busy, setBusy] = useState(false)
+  // Bận theo TỪNG THẺ (lsx_id) — bấm 1 thẻ không khoá nút mọi thẻ khác.
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [switching, startSwitch] = useTransition()
   const [detail, setDetail] = useState<TeamCard | null>(null)
 
   async function mark(card: TeamCard, action: 'start' | 'done') {
@@ -70,7 +72,7 @@ export function TeamKanban({
       })
       if (!ok) return
     }
-    setBusy(true)
+    setBusyId(card.lsx_id)
     try {
       await api('/api/dept/production/team/stage', {
         method: 'POST',
@@ -86,7 +88,7 @@ export function TeamKanban({
     } catch (e) {
       toast.error('Cập nhật thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
-      setBusy(false)
+      setBusyId(null)
     }
   }
 
@@ -99,7 +101,7 @@ export function TeamKanban({
 
   return (
     <div className="flex flex-col gap-4">
-      <TopProgressBar active={busy} />
+      <TopProgressBar active={busyId !== null || switching} />
       <PageHeader
         breadcrumbs={[
           { label: 'Sản xuất', href: '/production' },
@@ -126,14 +128,14 @@ export function TeamKanban({
           </label>
           <select
             value={board.stage ?? ''}
-            onChange={(e) =>
-              router.push(
-                e.currentTarget.value
-                  ? `/production/team?stage=${e.currentTarget.value}`
-                  : '/production/team',
+            disabled={switching}
+            onChange={(e) => {
+              const v = e.currentTarget.value
+              startSwitch(() =>
+                router.push(v ? `/production/team?stage=${v}` : '/production/team'),
               )
-            }
-            className="min-w-48 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+            }}
+            className="min-w-48 rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm focus:border-sky-500 focus:outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
           >
             <option value="">— Chọn công đoạn —</option>
             {stages.map((s) => (
@@ -224,25 +226,26 @@ export function TeamKanban({
                         <div className="flex items-center gap-1.5">
                           {card.status === 'todo' && (
                             <button
-                              disabled={busy}
+                              disabled={busyId === card.lsx_id}
                               onClick={() => void mark(card, 'start')}
                               className="inline-flex items-center gap-1.5 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
                             >
-                              {busy && <Spinner size={12} />}▶ Bắt đầu
+                              {busyId === card.lsx_id && <Spinner size={12} />}▶ Bắt đầu
                             </button>
                           )}
                           {card.status === 'doing' && (
                             <button
-                              disabled={busy}
+                              disabled={busyId === card.lsx_id}
                               onClick={() => void mark(card, 'done')}
                               className="inline-flex items-center gap-1.5 rounded-md bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 disabled:opacity-50"
                             >
-                              {busy && <Spinner size={12} />}✓ Xong công đoạn
+                              {busyId === card.lsx_id && <Spinner size={12} />}✓ Xong công
+                              đoạn
                             </button>
                           )}
                           {card.status === 'done' && (
                             <button
-                              disabled={busy}
+                              disabled={busyId === card.lsx_id}
                               onClick={() => void mark(card, 'start')}
                               className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
                               title="Mở lại nếu phải làm bổ sung / sửa hàng"

@@ -116,6 +116,7 @@ export function LsxOutputPanel({
   const [data, setData] = useState<OutputData | null>(null)
   const [stage, setStage] = useState(initialStage ?? '')
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const today = new Date().toISOString().slice(0, 10)
   const [cells, setCells] = useState<Record<string, InputCell>>({})
   // Sổ tổ mình ngày đang chọn đã chốt? — server vẫn chặn cuối, đây là để BÁO
   // TRƯỚC (badge 🔒 + khoá lưới) khỏi gõ cả bảng rồi ăn lỗi.
@@ -474,12 +475,23 @@ export function LsxOutputPanel({
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-xs">
-                    Ngày
+                    <span className="flex items-center gap-1.5">
+                      Ngày
+                      {entryDate !== today && (
+                        <button
+                          type="button"
+                          onClick={() => setEntryDate(today)}
+                          className="text-[10px] text-sky-600 hover:underline dark:text-sky-400"
+                        >
+                          → Hôm nay
+                        </button>
+                      )}
+                    </span>
                     <input
                       type="date"
                       value={entryDate}
                       onChange={(e) => setEntryDate(e.target.value)}
-                      className={inp}
+                      className={`${inp} ${entryDate !== today ? 'border-amber-400' : ''}`}
                     />
                   </label>
                   {locked ? (

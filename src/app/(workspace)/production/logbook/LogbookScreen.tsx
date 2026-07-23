@@ -92,6 +92,7 @@ export function LogbookScreen({
   // Đang GHI SỔ (do FastEntryGrid báo lên) — tách khỏi busy (chốt/mở khoá).
   const [saving, setSaving] = useState(false)
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const today = new Date().toISOString().slice(0, 10)
   const [fTeam, setFTeam] = useState(ownTeam?.id ?? '')
   const [fStage, setFStage] = useState('')
   const [fLsx, setFLsx] = useState('')
@@ -271,7 +272,18 @@ export function LogbookScreen({
               >
                 ▶
               </button>
+              <button
+                onClick={() => setDate(today)}
+                disabled={date === today}
+                className="rounded-md border border-zinc-300 px-2 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                title="Về hôm nay"
+              >
+                Hôm nay
+              </button>
             </span>
+            {date !== today && (
+              <Badge tone="amber">⚠ Đang xem ngày {date} (không phải hôm nay)</Badge>
+            )}
             <ToolbarSelect
               value={fTeam}
               onChange={setFTeam}
