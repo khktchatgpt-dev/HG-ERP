@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
+import { lsxCompleteSchema } from '@/modules/dept/production/production.schema'
 
 type Params = { params: Promise<{ id: string }> }
 
-const bodySchema = z.object({ note: z.string().trim().max(1000).optional().nullable() })
-
-/** Báo hoàn thành LSX → đơn hàng sang 'completed' (FR-PROD-03). */
+/**
+ * Hoàn thành LSX → đơn 'completed' (FR-PROD-03). GATE: mọi công việc đã
+ * xong; QL được ép qua (override) kèm lý do.
+ */
 export const POST = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const { note } = await parseJson(req, bodySchema)
-  const lsx = await productionService.complete(user, id, note)
+  const input = await parseJson(req, lsxCompleteSchema)
+  const lsx = await lsxService.complete(user, id, input)
   return NextResponse.json({ lsx })
 })

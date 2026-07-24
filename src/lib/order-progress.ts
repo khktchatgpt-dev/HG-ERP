@@ -38,9 +38,11 @@ export const LIFECYCLE_STEPS: { status: OrderStatus; label: string }[] = [
 
 export type Stage = { code: string; label: string }
 
-/** Đầu vào tối thiểu để suy tiến độ (subset của v_order_tracking). */
+/** Đầu vào tối thiểu để suy tiến độ (subset của v_order_tracking — 0084). */
 export type OrderProgressInput = LateRiskInput & {
-  current_stage: string | null
+  /** Số công đoạn (jobs) của lệnh / đã xong — 0/0 = chưa lên kế hoạch. */
+  jobs_total: number
+  jobs_done: number
 }
 
 export type OrderProgress = {
@@ -58,7 +60,7 @@ export type OrderProgress = {
  */
 export function orderProgress(
   r: OrderProgressInput,
-  stages: Stage[],
+  _stages: Stage[],
   todayIso: string,
 ): OrderProgress {
   const risk = assessLateRisk(r, todayIso)
@@ -74,21 +76,15 @@ export function orderProgress(
     return { label: 'LSX bị từ chối', pct: 8, tone: 'bg-red-500' }
   if (r.lsx_status === 'pending_approval')
     return { label: 'Chờ GĐ duyệt LSX', pct: 10, tone }
-  if (r.lsx_status === 'approved' && !r.current_stage)
+  if (r.lsx_status === 'approved' && r.jobs_done === 0)
     return { label: 'Chuẩn bị sản xuất', pct: 15, tone }
 
-  // Đang chạy công đoạn: nhãn thân thiện + % theo vị trí trong danh mục.
-  const idx = stages.findIndex((s) => s.code === r.current_stage)
+  // Đang chạy: % theo số công đoạn đã xong / tổng (0084 — jobs thay con trỏ).
   const pct =
-    stages.length > 0 && idx >= 0 ? Math.round(15 + (75 * (idx + 1)) / stages.length) : 40
-  const lbl = (stages.find((s) => s.code === r.current_stage)?.label ?? '').toLowerCase()
+    r.jobs_total > 0 ? Math.round(15 + (75 * r.jobs_done) / r.jobs_total) : 40
   const label =
-    lbl.includes('qc') || lbl.includes('kiểm')
-      ? 'Đang QC'
-      : lbl.includes('gói') || lbl.includes('pack')
-        ? 'Đang đóng gói'
-        : lbl.includes('xuất')
-          ? 'Chuẩn bị xuất kho'
-          : 'Đang sản xuất'
+    r.jobs_total > 0
+      ? `Đang sản xuất (${r.jobs_done}/${r.jobs_total} công đoạn)`
+      : 'Đang sản xuất'
   return { label, pct, tone }
 }

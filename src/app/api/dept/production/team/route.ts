@@ -1,13 +1,15 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { handle, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { teamService } from '@/modules/dept/production/team.service'
-import { teamBoardQuerySchema } from '@/modules/dept/production/production.schema'
+import { jobsService } from '@/modules/dept/production/jobs.service'
 
-/** Bảng việc của tổ (Kanban LSX × công đoạn) — ?stage= cho admin/manager. */
+const querySchema = z.object({ team: z.string().uuid().optional() })
+
+/** Việc của tổ (màn tổ trưởng) — ?team= cho admin/manager chọn tổ. */
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const { stage } = parseQuery(new URL(req.url), teamBoardQuerySchema)
-  const board = await teamService.board(user, { stage })
+  const { team } = parseQuery(new URL(req.url), querySchema)
+  const board = await jobsService.teamBoard(user, { team })
   return NextResponse.json(board)
 })

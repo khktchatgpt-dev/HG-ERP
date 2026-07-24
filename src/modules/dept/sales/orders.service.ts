@@ -313,13 +313,11 @@ export const ordersService = {
           lsx.status === 'approved' ||
           lsx.status === 'in_progress'
         ) {
-          await productionRepo.patch(lsx.id, { status: 'cancelled' })
-          await productionRepo.insertProgress({
-            production_order_id: lsx.id,
-            stage: lsx.current_stage ?? 'vat_tu',
-            action: 'cancelled',
-            note: `Đơn hàng huỷ: ${reason}`,
-            updated_by: user.id,
+          // Lý do huỷ ghi vào note LSX (production_progress đã bỏ — 0084;
+          // lịch sử chuẩn nằm ở sales_order_changes phía trên).
+          await productionRepo.patch(lsx.id, {
+            status: 'cancelled',
+            note: [`[Huỷ theo đơn] ${reason}`, lsx.note].filter(Boolean).join(' · '),
           })
           lsxCancelled = true
         }

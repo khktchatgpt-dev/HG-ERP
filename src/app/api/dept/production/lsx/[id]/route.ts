@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { handle } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import { listLsxPrintLines } from '@/modules/dept/production/production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { filesService } from '@/modules/core/files/files.service'
@@ -9,14 +9,14 @@ import { filesService } from '@/modules/core/files/files.service'
 type Params = { params: Promise<{ id: string }> }
 
 /**
- * Hồ sơ LSX (đọc) — dùng cho panel "Hồ sơ sản xuất" ở màn Quản lý đơn hàng (GĐ):
- * `{ lsx, progress, lines }`. `lines` = dòng SP + thông số SX (tech_spec) + BOM
- * + ảnh (URL ký), KHÔNG kèm đơn giá bán (endpoint mở cho mọi NV — hồ sơ SX thuần).
+ * Hồ sơ LSX (đọc) — panel "Hồ sơ sản xuất" khu GĐ + màn chi tiết lệnh:
+ * `{ lsx, jobs, lines }`. `lines` = dòng SP + thông số SX (tech_spec) + BOM
+ * + ảnh (URL ký), KHÔNG kèm đơn giá bán (endpoint mở cho mọi NV).
  */
 export const GET = handle(async (_req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const { lsx, progress } = await productionService.detail(user, id)
+  const { lsx, jobs } = await lsxService.detail(user, id)
 
   const [printLines, orderLines] = await Promise.all([
     listLsxPrintLines(id, lsx.sales_order_id),
@@ -35,6 +35,7 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
   }
 
   const lines = printLines.map((pl) => ({
+    order_line_id: pl.order_line_id,
     product_code: pl.product_code,
     product_name: pl.name_vi,
     product_unit: pl.unit,
@@ -50,5 +51,5 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
     },
   }))
 
-  return NextResponse.json({ lsx, progress, lines })
+  return NextResponse.json({ lsx, jobs, lines })
 })

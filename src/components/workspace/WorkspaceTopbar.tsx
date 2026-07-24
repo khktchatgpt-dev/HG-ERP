@@ -26,10 +26,14 @@ export async function WorkspaceTopbar({
   // Chỉ áp cho NV thường: admin/manager có quyền thao tác rộng (duyệt, sửa) ở
   // hầu hết workspace, và phòng có vai trò tác nghiệp chéo (hasCrossRole — vd
   // Cung ứng định hình trong Sản xuất) cũng không phải "chỉ xem".
+  const homeId = await userHomeWorkspaceId(user)
+  // Gia đình SX (0087): NV xưởng coi team/stat/prodplan/production đều là nhà.
+  const PRODUCTION_FAMILY = ['production', 'team', 'stat', 'prodplan']
+  const isHome =
+    homeId === workspace.id ||
+    (homeId === 'production' && PRODUCTION_FAMILY.includes(workspace.id))
   const crossViewing =
-    user.role === 'employee' &&
-    (await userHomeWorkspaceId(user)) !== workspace.id &&
-    !(await hasCrossRole(user, workspace.id))
+    user.role === 'employee' && !isHome && !(await hasCrossRole(user, workspace.id))
 
   return (
     <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/80 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">

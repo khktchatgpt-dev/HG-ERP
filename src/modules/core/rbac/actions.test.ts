@@ -10,13 +10,15 @@ import {
   type Rule,
 } from './actions'
 
-// Permission key THẬT lấy từ seed 0073 (nguồn sự thật) — chống gõ sai / drift.
-// Insert permissions: ('key.with.dot', 'label', 'domain', N). role_permissions
-// bắt đầu bằng role key (không dấu chấm) nên không lọt vào đây.
-const seedSql = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/0073_rbac.sql'),
-  'utf8',
-)
+// Permission key THẬT lấy từ seed 0073 + 0085 (nguồn sự thật) — chống gõ sai /
+// drift. Insert permissions: ('key.with.dot', 'label', 'domain', N).
+// role_permissions bắt đầu bằng role key (không dấu chấm) nên không lọt vào đây.
+const seedSql = [
+  'supabase/migrations/0073_rbac.sql',
+  'supabase/migrations/0085_production_v2_perms_receipt.sql',
+]
+  .map((p) => readFileSync(resolve(process.cwd(), p), 'utf8'))
+  .join('\n')
 const seedKeys = new Set(
   [...seedSql.matchAll(/\('([a-z_]+\.[a-z._]+)',\s*'/g)].map((m) => m[1]),
 )

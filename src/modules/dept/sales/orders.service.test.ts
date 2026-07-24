@@ -20,7 +20,7 @@ vi.mock('./quotes.service', () => ({
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
 vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn() } }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
-  productionRepo: { findByOrder: vi.fn(), patch: vi.fn(), insertProgress: vi.fn() },
+  productionRepo: { findByOrder: vi.fn(), patch: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/pos.repo', () => ({
   posRepo: { list: vi.fn(), patch: vi.fn() },
@@ -355,9 +355,13 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
 
     await ordersService.cancel(sales, 'o1', 'Khách huỷ')
 
-    expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', { status: 'cancelled' })
-    expect(productionRepo.insertProgress).toHaveBeenCalledWith(
-      expect.objectContaining({ action: 'cancelled', note: 'Đơn hàng huỷ: Khách huỷ' }),
+    // Lý do huỷ ghi vào note LSX (production_progress đã bỏ — 0084).
+    expect(productionRepo.patch).toHaveBeenCalledWith(
+      'lsx1',
+      expect.objectContaining({
+        status: 'cancelled',
+        note: expect.stringContaining('Khách huỷ'),
+      }),
     )
     expect(posRepo.patch).toHaveBeenCalledTimes(1)
     expect(posRepo.patch).toHaveBeenCalledWith(
@@ -384,7 +388,6 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
     await ordersService.cancel(sales, 'o1', 'x')
 
     expect(productionRepo.patch).not.toHaveBeenCalled()
-    expect(productionRepo.insertProgress).not.toHaveBeenCalled()
   })
 
   it('bước phụ lỗi → đơn vẫn huỷ + vẫn emit (best-effort)', async () => {

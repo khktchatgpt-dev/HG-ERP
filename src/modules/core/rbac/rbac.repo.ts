@@ -95,6 +95,18 @@ export const rbacRepo = {
     return [...keys]
   },
 
+  /** Tập ROLE KEY của user (kể cả role nhãn không quyền — 0087 tách UI vị trí). */
+  async roleKeysForUser(userId: string): Promise<string[]> {
+    const { data } = await db()
+      .from('user_roles')
+      .select('roles!inner(key, is_active)')
+      .eq('user_id', userId)
+    type Raw = { roles: { key: string; is_active: boolean } | null }
+    return ((data ?? []) as unknown as Raw[])
+      .filter((r) => r.roles?.is_active)
+      .map((r) => r.roles!.key)
+  },
+
   // ── Sync (Phase 1.5): reconcile role DẪN-XUẤT theo vai + phòng ────────────
 
   /** Map key→id cho một danh sách role key (bỏ key không tồn tại). */

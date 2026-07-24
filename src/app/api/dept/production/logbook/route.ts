@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { handle, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { outputsService } from '@/modules/dept/production/outputs.service'
-import { logbookQuerySchema } from '@/modules/dept/production/outputs.schema'
+import { entriesService } from '@/modules/dept/production/entries.service'
+import { logbookQuerySchema } from '@/modules/dept/production/entries.schema'
 
-/** Sổ sản lượng toàn xưởng 1 ngày (?date=) + trạng thái chốt sổ các tổ. */
+/** Sổ số liệu toàn xưởng 1 ngày (?date=) + trạng thái chốt sổ các tổ. */
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()
   const { date } = parseQuery(new URL(req.url), logbookQuerySchema)
-  const data = await outputsService.listDay(user, date)
+  const data = await entriesService.listDay(user, date)
   return NextResponse.json(data)
 })

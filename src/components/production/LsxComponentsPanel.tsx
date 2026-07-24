@@ -8,6 +8,8 @@ import { calcComponent } from '@/lib/component-needs'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
+import { ImportBomDialog } from './ImportBomDialog'
+import type { ImportedRow } from '@/lib/bom-import'
 
 /**
  * Bảng chi tiết & định mức của LSX (plan-lsx-components P2) — NHẬP TAY bởi Kế
@@ -111,11 +113,12 @@ export function LsxComponentsPanel({
   const [loaded, setLoaded] = useState(false)
   const [rows, setRows] = useState<EditRow[]>([])
   const [dirty, setDirty] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   // Lệnh đã có sổ sản lượng → khoá bảng NGAY từ đầu (banner) thay vì để người
   // nhập sửa chán rồi bấm Lưu mới ăn 400 (server vẫn chặn làm lớp cuối).
-  const [lockedByOutputs, setLockedByOutputs] = useState(false)
+  const [lockedByEntries, setLockedByEntries] = useState(false)
 
-  const editable = canEdit && !locked && !lockedByOutputs
+  const editable = canEdit && !locked && !lockedByEntries
   const qtyByLine = useMemo(
     () => new Map(orderLines.map((l) => [l.id, l.qty])),
     [orderLines],
@@ -123,11 +126,11 @@ export function LsxComponentsPanel({
 
   const load = useCallback(async () => {
     try {
-      const data = await api<{ lines: ApiRow[]; locked_by_outputs?: boolean }>(
+      const data = await api<{ lines: ApiRow[]; locked_by_entries?: boolean }>(
         `/api/dept/production/lsx/${lsxId}/components`,
       )
       setRows(data.lines.map(toEdit))
-      setLockedByOutputs(data.locked_by_outputs ?? false)
+      setLockedByEntries(data.locked_by_entries ?? false)
       setDirty(false)
     } catch (e) {
       toast.error(
@@ -160,6 +163,61 @@ export function LsxComponentsPanel({
   function removeRow(i: number) {
     setRows((rs) => rs.filter((_, x) => x !== i))
     setDirty(true)
+  }
+
+  /** Đổ dòng import file BOM vào lưới của SP đích (append — chưa lưu DB). */
+  function applyImport(lineId: string, imported: ImportedRow[]) {
+    setRows((rs) => [
+      ...rs,
+      ...imported.map((r) =>
+        toEdit({
+          order_line_id: lineId,
+          cluster: r.cluster || null,
+          name: r.name,
+          material_id: r.material_id || null,
+          material_type: r.material_type || null,
+          spec_thickness_mm: r.spec_thickness_mm === '' ? null : r.spec_thickness_mm,
+          spec_width_mm: r.spec_width_mm === '' ? null : r.spec_width_mm,
+          spec_length_mm: r.spec_length_mm === '' ? null : r.spec_length_mm,
+          qty_per_unit: r.qty_per_unit === '' ? 0 : r.qty_per_unit,
+          dm_kg: r.dm_kg === '' ? null : r.dm_kg,
+          pcs_per_bar: r.pcs_per_bar === '' ? null : r.pcs_per_bar,
+          note: r.note || null,
+        }),
+      ),
+    ])
+    setDirty(true)
+  }
+
+  /** Lưu bảng của 1 SP thành BOM kỹ thuật (ghi đè BOM cũ — confirm trước). */
+  async function saveAsBom(line: OrderLine) {
+    if (dirty) {
+      toast.error('Bảng chưa lưu', 'Bấm "Lưu bảng chi tiết" trước, rồi mới lưu làm BOM')
+      return
+    }
+    const ok = await confirm({
+      title: `Lưu làm BOM kỹ thuật cho ${line.product_code}?`,
+      description:
+        'BOM hiện có của SP sẽ bị GHI ĐÈ bằng định mức vật tư gộp từ bảng này (chi tiết cùng vật tư được cộng dồn). Lần sau "Gợi ý từ BOM" sẽ dùng bản mới.',
+      confirmLabel: 'Ghi đè BOM',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      const r = await api<{ bom_lines: number; skipped_no_material: number }>(
+        `/api/dept/production/lsx/${lsxId}/components/save-bom`,
+        { method: 'POST', body: { order_line_id: line.id } },
+      )
+      toast.success(
+        `Đã lưu BOM ${line.product_code}`,
+        `${r.bom_lines} dòng vật tư${r.skipped_no_material ? ` · bỏ ${r.skipped_no_material} dòng chưa gắn vật tư` : ''}`,
+      )
+    } catch (e) {
+      toast.error('Lưu BOM thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
   }
 
   async function suggest(source: 'bom' | 'previous') {
@@ -487,6 +545,14 @@ export function LsxComponentsPanel({
           <div className="flex flex-wrap gap-2">
             <button
               disabled={busy}
+              onClick={() => setImportOpen(true)}
+              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              title="Import file BOM (.xlsx/.csv) hoặc dán vùng bảng copy từ Excel"
+            >
+              ⇪ Import file BOM
+            </button>
+            <button
+              disabled={busy}
               onClick={() => void suggest('previous')}
               className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
               title="Chép bảng chi tiết từ LSX gần nhất có cùng SP"
@@ -514,10 +580,10 @@ export function LsxComponentsPanel({
       </div>
 
       <div className="p-4">
-        {canEdit && !locked && lockedByOutputs && (
+        {canEdit && !locked && lockedByEntries && (
           <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            🔒 Lệnh đã có sổ sản lượng — bảng chi tiết khoá để bảo vệ sổ (ghi đè sẽ xoá
-            sạch sổ). Thật sự cần sửa thì xoá hết bản ghi sản lượng trước.
+            🔒 Lệnh đã có sổ số liệu — bảng chi tiết khoá để bảo vệ sổ (ghi đè sẽ xoá
+            sạch sổ). Thật sự cần sửa thì xoá hết bản ghi sổ trước.
           </p>
         )}
         <p className="mb-3 text-xs text-zinc-500">
@@ -542,6 +608,12 @@ export function LsxComponentsPanel({
           <p className="text-xs text-zinc-400">Chưa nhập bảng chi tiết.</p>
         ) : (
           <div className="flex flex-col gap-4">
+            {orderLines.length === 0 && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                ⚠ Đơn hàng của lệnh này không có dòng sản phẩm nào — bảng chi tiết
+                bám theo SP nên không có chỗ nhập. Kiểm tra lại đơn hàng gốc.
+              </p>
+            )}
             {/* Mỗi SP một khối — chi tiết SP nào nằm trong khối SP đó. */}
             {orderLines.map((line) => {
               const items = indexed.filter((x) => x.r.order_line_id === line.id)
@@ -564,13 +636,29 @@ export function LsxComponentsPanel({
                       </span>
                     </div>
                     {editable && (
-                      <button
-                        disabled={busy}
-                        onClick={() => addRow(line.id)}
-                        className="rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                      >
-                        + Thêm chi tiết
-                      </button>
+                      <div className="flex gap-1.5">
+                        {items.length > 0 && (
+                          <button
+                            disabled={busy || dirty}
+                            onClick={() => void saveAsBom(line)}
+                            title={
+                              dirty
+                                ? 'Lưu bảng chi tiết trước rồi mới lưu làm BOM'
+                                : 'Ghi đè BOM kỹ thuật của SP bằng định mức vật tư từ bảng này'
+                            }
+                            className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                          >
+                            ↥ Lưu làm BOM kỹ thuật
+                          </button>
+                        )}
+                        <button
+                          disabled={busy}
+                          onClick={() => addRow(line.id)}
+                          className="rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                        >
+                          + Thêm chi tiết
+                        </button>
+                      </div>
                     )}
                   </div>
                   {items.length === 0 ? (
@@ -612,6 +700,18 @@ export function LsxComponentsPanel({
           </div>
         )}
       </div>
+
+      <ImportBomDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        orderLines={orderLines.map((l) => ({
+          id: l.id,
+          product_code: l.product_code,
+          product_name: l.product_name,
+        }))}
+        materials={materials}
+        onApply={applyImport}
+      />
     </section>
   )
 }

@@ -1,11 +1,6 @@
-import { ShapingList } from './ShapingList'
+import { redirect } from 'next/navigation'
 
-/** Định hình SX trong shell Sản xuất — bản dùng chung ở ShapingList.tsx. */
-export default function ProductionShapingPage() {
-  return (
-    <ShapingList
-      base="/production/shaping"
-      rootCrumb={{ label: 'Sản xuất', href: '/production' }}
-    />
-  )
+/** Đường cũ — Định hình đã dời sang workspace Thống kê xưởng. */
+export default function OldShapingPage() {
+  redirect('/thongke/dinh-hinh')
 }

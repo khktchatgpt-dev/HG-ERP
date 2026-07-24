@@ -1,8 +1,15 @@
 import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
+import { hasPermission } from '@/modules/core/rbac/rbac.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { canEditComponents, isPlannerStaff } from '@/modules/dept/production/perms'
-import { isProductionStaff } from '@/modules/dept/production/production.service'
+import {
+  canEditComponents,
+  canManagePlan,
+  isPlannerStaff,
+  isProductionLeader,
+  isProductionStaff,
+  isProductionStat,
+} from '@/modules/dept/production/perms'
 import {
   WORKSPACE_IDS,
   WORKSPACES,
@@ -12,30 +19,56 @@ import {
 
 /**
  * Quyền VÀO workspace (tầng đọc) — một nơi quyết định duy nhất, thay cho logic
- * rải rác ở từng layout.tsx. Quyền GHI không nằm ở đây: mọi mutation đã bị
- * service chặn theo phòng chủ quản (is*Staff), nên mở cửa xem không mở quyền sửa.
+ * rải rác ở từng layout.tsx. TỪ 0086: XEM CHÉO PHẢI CÓ QUYỀN TƯỜNG MINH (user
+ * chốt "mỗi vai một UI, có quyền mới được chuyển sang xem") — bỏ hẳn openView
+ * và bỏ đặc quyền "manager xem mọi nơi".
  *
  * Luật, theo thứ tự:
  *   1. admin        → vào mọi workspace.
  *   2. workspace nhà (dept.workspace_id của user) → vào.
- *   3. hr / finance / system → ngoài (1)(2) không ai vào — dữ liệu nhạy cảm.
- *   4. exec         → thêm manager (FR-ADM-03).
- *   5. manager      → xem chéo mọi workspace còn lại (FR-ADM-02).
- *   6. openView     → mọi NV đã đăng nhập (xem chéo phòng ban, chỉ đọc).
+ *   3. system       → chỉ admin; hr / finance → chỉ nhà + admin (nhạy cảm).
+ *   4. exec         → permission 'exec.tower.view' (vai director — manager
+ *                     thuộc phòng Ban Giám Đốc, 0086).
+ *   5. còn lại      → permission 'workspace.view.<id>' (director/planner/
+ *                     supply được seed; ai khác admin gán ở /admin/permissions).
  */
+const SENSITIVE: ReadonlySet<WorkspaceId> = new Set(['hr', 'finance', 'system'])
+
+/**
+ * GIA ĐÌNH Sản xuất (mỗi vai một workspace — user chốt 07/2026): tổ /to,
+ * thống kê /thongke, kế hoạch /kehoach-sx, điều hành /production. Nhà của
+ * NV xưởng (dept.workspace_id='production') mở cửa CẢ family — nội bộ xưởng
+ * xem lẫn nhau (đã chốt); người ngoài cần 'workspace.view.production'.
+ */
+const PRODUCTION_FAMILY: ReadonlySet<WorkspaceId> = new Set([
+  'production',
+  'team',
+  'stat',
+  'prodplan',
+])
+
+/** Phần quyết định ĐƯỢC bằng dữ liệu sync (admin / nhà / khu nhạy cảm). */
 export function canEnterWorkspaceSync(
   user: Pick<User, 'role'>,
   id: WorkspaceId,
   homeId: WorkspaceId | null,
-): boolean {
+): boolean | 'need-permission' {
   const ws = WORKSPACES[id]
   if (user.role === 'admin') return true
   if (!ws.ready) return false
   if (id === homeId) return true
-  if (id === 'hr' || id === 'finance' || id === 'system') return false
-  if (id === 'exec') return user.role === 'manager'
-  if (user.role === 'manager') return true
-  return ws.openView === true
+  // Nhà xưởng mở cửa cả gia đình SX (nội bộ xưởng xem lẫn nhau).
+  if (PRODUCTION_FAMILY.has(id) && homeId === 'production') return true
+  if (SENSITIVE.has(id)) return false
+  return 'need-permission'
+}
+
+/** Key permission gác cửa xem chéo của từng workspace. */
+export function workspaceViewPermission(id: WorkspaceId): string {
+  if (id === 'exec') return 'exec.tower.view'
+  // Cả gia đình SX dùng chung một quyền xem (không đẻ thêm vocabulary).
+  if (PRODUCTION_FAMILY.has(id)) return 'workspace.view.production'
+  return `workspace.view.${id}`
 }
 
 /** workspace_id của phòng user — cùng nguồn với resolveDefaultWorkspace. */
@@ -50,7 +83,14 @@ export async function userHomeWorkspaceId(user: User): Promise<WorkspaceId | nul
 }
 
 export async function canEnterWorkspace(user: User, id: WorkspaceId): Promise<boolean> {
-  return canEnterWorkspaceSync(user, id, await userHomeWorkspaceId(user))
+  const sync = canEnterWorkspaceSync(user, id, await userHomeWorkspaceId(user))
+  if (sync !== 'need-permission') return sync
+  // Kế hoạch SX: planner vào bằng chính quyền nghiệp vụ của vai.
+  if (id === 'prodplan') {
+    if (await isPlannerStaff(user)) return true
+    if (await canManagePlan(user)) return true
+  }
+  return hasPermission(user, workspaceViewPermission(id))
 }
 
 /**
@@ -60,31 +100,40 @@ export async function canEnterWorkspace(user: User, id: WorkspaceId): Promise<bo
  */
 export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
   const caps = new Set<string>()
-  if (await canEditComponents(user)) caps.add('production.shape')
-  // Nhập sổ sản lượng/gia công — khớp canRecordOutput (chỉ bộ phận sản xuất).
-  const prodStaff = user.role === 'admin' || (await isProductionStaff(user))
-  if (prodStaff) {
+  // TÁCH UI THEO VAI — CHỈ giao diện, KHÔNG tách quyền (user chốt): menu và
+  // lối vào lọc theo vai, quyền server giữ nguyên như 0084/0085.
+  const [shaping, plan, member, stat, leader] = await Promise.all([
+    canEditComponents(user), // thống kê/planner/QL — định hình
+    canManagePlan(user), // Trưởng phòng Kế hoạch
+    isProductionStaff(user), // thành viên xưởng (tổ + thống kê)
+    isProductionStat(user), // nhãn vị trí Thống kê (0087)
+    isProductionLeader(user), // nhãn vị trí Tổ trưởng (0087)
+  ])
+  // Nhãn vị trí xưởng (0087): tổ trưởng menu tối giản (chỉ Việc của tổ);
+  // thống kê thấy Sổ + Định hình; member CHƯA gán nhãn giữ đầy đủ như cũ
+  // (an toàn — admin gán nhãn dần).
+  const hideDataScreens = member && leader && !stat && user.role === 'employee'
+  if (shaping && !hideDataScreens) caps.add('production.shaping')
+  if (plan) caps.add('production.plan')
+  // Nhập sổ số liệu / gia công / chốt sổ — bộ phận sản xuất.
+  if ((member && !hideDataScreens) || user.role === 'admin') {
     caps.add('production.record')
-    // Kanban "Việc của tổ" (tách vai 07/2026) — thành viên tổ + admin.
+  }
+  // "Việc của tổ": thành viên xưởng + admin/manager (board có picker soi tổ).
+  if (member || user.role === 'admin' || user.role === 'manager') {
     caps.add('production.team')
   }
-  // Manager cũng thấy "Việc của tổ" để soi từng tổ (board có picker).
-  if (user.role === 'manager') caps.add('production.team')
-  // Tiến độ ĐIỀU PHỐI (/production/progress — thao tác: resolve sự cố…) = phần
-  // riêng của Giám đốc/QL.
-  if (user.role === 'admin' || user.role === 'manager') {
-    caps.add('production.coordinate')
-  }
-  // BẢNG TỔNG tiến độ (/production/board — chỉ xem) nằm BÊN SẢN XUẤT; Kế hoạch
-  // + Cung ứng cũng cần xem nên vào workspace Sản xuất xem tại đây (giống Định
-  // hình planner cũng vào /production). Không còn bản mượn ở /planning/board.
+  // Toàn cảnh xưởng — màn ĐIỀU PHỐI: quản đốc/GĐ, Kế hoạch, Cung ứng, người
+  // ngoài xưởng xem chéo. Thành viên xưởng KHÔNG thấy mục này trong menu
+  // (vào bằng URL vẫn xem được — chỉ tách giao diện, không chặn quyền).
   if (
     user.role === 'admin' ||
     user.role === 'manager' ||
-    (await isPlannerStaff(user)) ||
-    (await isSupplyStaff(user))
+    plan ||
+    (await isSupplyStaff(user)) ||
+    !member
   ) {
-    caps.add('production.board')
+    caps.add('production.overview')
   }
   return caps
 }
@@ -97,8 +146,36 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
  */
 export async function hasCrossRole(user: User, id: WorkspaceId): Promise<boolean> {
   if (id === 'production') return isPlannerStaff(user)
+  if (id === 'prodplan') return isPlannerStaff(user)
   if (id === 'warehouse') return isSupplyStaff(user)
   return false
+}
+
+/**
+ * Workspace gia đình SX nào HIỂN THỊ trên switcher cho user này — vào được
+ * (gate) là một chuyện, switcher chỉ bày đúng "nhà" của vai để đỡ loạn:
+ *   NV xưởng nhãn thống kê  → Thống kê + Tổ
+ *   NV xưởng khác (tổ)      → Tổ
+ *   planner                 → Kế hoạch SX (+ Điều hành để xem toàn cảnh)
+ *   quản đốc/GĐ (manager)   → cả 4
+ *   người ngoài có quyền xem→ Điều hành (đại diện khu SX)
+ */
+async function visibleProductionFamily(
+  user: User,
+  homeId: WorkspaceId | null,
+): Promise<ReadonlySet<WorkspaceId>> {
+  if (user.role === 'admin' || user.role === 'manager') {
+    return new Set(['production', 'team', 'stat', 'prodplan'])
+  }
+  if (homeId === 'production') {
+    return (await isProductionStat(user))
+      ? new Set(['stat', 'team'])
+      : new Set(['team'])
+  }
+  if ((await isPlannerStaff(user)) || (await canManagePlan(user))) {
+    return new Set(['prodplan', 'production'])
+  }
+  return new Set(['production'])
 }
 
 export type AccessibleWorkspace = {
@@ -115,14 +192,32 @@ export async function listAccessibleWorkspaces(
   user: User,
 ): Promise<AccessibleWorkspace[]> {
   const homeId = await userHomeWorkspaceId(user)
-  const ids = WORKSPACE_IDS.filter((id) => canEnterWorkspaceSync(user, id, homeId))
-  return Promise.all(
-    ids.map(async (id) => ({
-      workspace: WORKSPACES[id],
-      // Cùng logic với badge "Chỉ xem" ở Topbar: NV thường, khác phòng nhà,
-      // và không có vai trò tác nghiệp chéo (admin/manager thao tác rộng).
-      readonly:
-        user.role === 'employee' && id !== homeId && !(await hasCrossRole(user, id)),
-    })),
+  const familyVisible = await visibleProductionFamily(user, homeId)
+  const entries = await Promise.all(
+    WORKSPACE_IDS.map(async (id) => {
+      // Gia đình SX: chỉ bày workspace đúng vai (gate vẫn cho vào bằng URL).
+      if (PRODUCTION_FAMILY.has(id) && !familyVisible.has(id)) return null
+      const sync = canEnterWorkspaceSync(user, id, homeId)
+      let ok: boolean
+      if (sync !== 'need-permission') ok = sync
+      else if (
+        id === 'prodplan' &&
+        ((await isPlannerStaff(user)) || (await canManagePlan(user)))
+      )
+        ok = true
+      else ok = await hasPermission(user, workspaceViewPermission(id))
+      if (!ok) return null
+      // Nhà: workspace của phòng, và với NV xưởng là CẢ gia đình SX (0087).
+      const isHome =
+        id === homeId || (homeId === 'production' && PRODUCTION_FAMILY.has(id))
+      return {
+        workspace: WORKSPACES[id],
+        // Badge "Chỉ xem": không phải nhà + không có vai tác nghiệp chéo.
+        // (permission per-request đã cache — không tốn thêm query.)
+        readonly:
+          user.role === 'employee' && !isHome && !(await hasCrossRole(user, id)),
+      }
+    }),
   )
+  return entries.filter((e): e is AccessibleWorkspace => e !== null)
 }

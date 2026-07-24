@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { suppliersService } from '@/modules/dept/supply/suppliers.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { assessLateRisk, assessPoLate } from '@/lib/late-risk'
@@ -16,7 +16,7 @@ export default async function PlanningHomePage() {
       posService.list(user, { status: 'pending_approval', page: 1, page_size: 1 }),
       posService.list(user, { status: 'approved', page: 1, page_size: 1 }),
       suppliersService.list(user, { active_only: true, page: 1, page_size: 1 }),
-      productionService.list(user, { status: 'in_progress', page: 1, page_size: 1 }),
+      lsxService.list(user, { status: 'in_progress', page: 1, page_size: 1 }),
       productionRepo.listTracking(),
       posService.list(user, { page: 1, page_size: 500 }),
       stockRepo.list({ low_only: true }),
@@ -125,7 +125,7 @@ export default async function PlanningHomePage() {
             desc="Hồ sơ NCC, lịch sử mua"
           />
           <QuickLink
-            href="/production/progress"
+            href="/production"
             title="Tiến độ sản xuất"
             desc="Cập nhật giai đoạn từng LSX (ở workspace Sản xuất)"
           />

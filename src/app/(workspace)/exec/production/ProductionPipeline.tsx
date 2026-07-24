@@ -22,9 +22,11 @@ const HEALTH_FILTERS = [
 ] as const
 type HealthFilter = (typeof HEALTH_FILTERS)[number]['key']
 
-// Cột cố định 2 đầu; ở giữa là các công đoạn từ danh mục.
+// Cột cố định (0084: jobs chạy song song — không còn 1 con trỏ công đoạn).
 const PENDING = 'pending'
 const READY = 'ready'
+const INPROD = 'in_prod'
+const NEAR = 'near_done'
 const DONE = 'done'
 
 export function ProductionPipeline({
@@ -45,7 +47,6 @@ export function ProductionPipeline({
   const [health, setHealth] = useState<HealthFilter>('all')
 
   const incidentSet = useMemo(() => new Set(incidentLsxIds), [incidentLsxIds])
-  const stageCodes = useMemo(() => new Set(stages.map((s) => s.code)), [stages])
 
   const riskOf = (r: OrderRow) => assessLateRisk(r, today)
 
@@ -65,8 +66,9 @@ export function ProductionPipeline({
     if (r.status === 'completed' || r.lsx_status === 'completed') return DONE
     if (r.lsx_status === 'pending_approval') return PENDING
     if (!r.production_order_id) return null // chưa phát LSX — chưa vào SX
-    if (r.current_stage && stageCodes.has(r.current_stage)) return r.current_stage
-    return READY
+    if (r.jobs_done === 0) return READY
+    // Chia đôi theo tiến độ công đoạn: >2/3 xong = sắp ra hàng.
+    return r.jobs_total > 0 && r.jobs_done / r.jobs_total > 2 / 3 ? NEAR : INPROD
   }
 
   // ── Lọc + gom theo cột ────────────────────────────────────────────────────
@@ -115,10 +117,11 @@ export function ProductionPipeline({
     () => [
       { key: PENDING, label: 'Chờ duyệt', kind: 'pending' as const },
       { key: READY, label: 'Chuẩn bị SX', kind: 'ready' as const },
-      ...stages.map((s) => ({ key: s.code, label: s.label, kind: 'stage' as const })),
-      { key: DONE, label: 'Hoàn thành', kind: 'done' as const },
+      { key: INPROD, label: 'Đang sản xuất', kind: 'stage' as const },
+      { key: NEAR, label: 'Sắp ra hàng (>2/3)', kind: 'stage' as const },
+      { key: DONE, label: 'Hoàn thành — chờ giao', kind: 'done' as const },
     ],
-    [stages],
+    [],
   )
 
   // Nút thắt = công đoạn (kind stage) có nhiều LSX nhất.
@@ -153,7 +156,7 @@ export function ProductionPipeline({
           { label: 'Tiến độ sản xuất' },
         ]}
         title="Tiến độ sản xuất"
-        description="Toàn bộ lệnh sản xuất theo công đoạn dây chuyền — nút thắt, hạn giao, năng suất, chất lượng."
+        description="Toàn bộ lệnh sản xuất theo giai đoạn vòng đời — tiến độ công đoạn (jobs), hạn giao, năng suất, chất lượng. Bấm thẻ để xem hồ sơ lệnh."
       />
 
       {/* KPI */}

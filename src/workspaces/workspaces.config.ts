@@ -13,18 +13,20 @@ export type Role = UserRole
 /**
  * Năng lực nghiệp vụ theo PHÒNG (không suy được từ role) — dùng để lọc menu.
  * Server tính qua `resolveNavCapabilities` (workspaces/access.ts) rồi truyền
- * vào resolveNavSections. Ví dụ: 'production.shape' = được định hình sản xuất
- * (Kế hoạch/BQL) — thống kê xưởng cùng role employee nhưng không có.
+ * vào resolveNavSections. Ví dụ: 'production.shaping' = được định hình bảng
+ * chi tiết (thống kê xưởng) — tổ trưởng cùng role employee nhưng không có.
  */
 export type NavCapability =
-  | 'production.shape'
+  /** Toàn cảnh điều phối — quản đốc/GĐ/Kế hoạch/Cung ứng + người xem chéo. */
+  | 'production.overview'
+  /** Kế hoạch SX (lộ trình + giao tổ + hạn + ưu tiên) — Trưởng phòng Kế hoạch. */
+  | 'production.plan'
+  /** Định hình bảng chi tiết từ BOM Kỹ thuật — Thống kê xưởng. */
+  | 'production.shaping'
+  /** Nhập sổ số liệu / gia công / chốt sổ — bộ phận sản xuất (thống kê). */
   | 'production.record'
-  /** Thành viên tổ xưởng — thấy màn Kanban "Việc của tổ". */
+  /** Thành viên tổ xưởng — thấy màn "Việc của tổ" (tổ trưởng, mobile). */
   | 'production.team'
-  /** Điều phối toàn xưởng (Giám đốc/QL) — thấy màn Tiến độ (thao tác sự cố…). */
-  | 'production.coordinate'
-  /** Xem BẢNG TỔNG tiến độ (chỉ xem) bên Sản xuất — GĐ/QL + Kế hoạch + Cung ứng. */
-  | 'production.board'
 
 export type NavItem = {
   href: string
@@ -51,6 +53,10 @@ export type WorkspaceId =
   | 'planning'
   | 'qc'
   | 'production'
+  // Gia đình Sản xuất tách theo VAI (user chốt 07/2026): mỗi vai một workspace.
+  | 'team'
+  | 'stat'
+  | 'prodplan'
   | 'hr'
   | 'exec'
   | 'system'
@@ -87,13 +93,8 @@ export type WorkspaceConfig = {
    * Dùng cho System workspace — IT admin không cần các mục cá nhân trong sidebar quản trị.
    */
   hidePersonalSection?: boolean
-  /**
-   * Mọi NV đã đăng nhập được VÀO XEM workspace này (xem chéo phòng ban).
-   * Chỉ là quyền ĐỌC ở tầng layout — mọi mutation vẫn bị service chặn theo
-   * phòng chủ quản (is*Staff), nên bật cờ này không mở thêm quyền ghi nào.
-   * Không bật cho dữ liệu nhạy cảm (hr, finance) và khu điều hành (exec, system).
-   */
-  openView?: boolean
+  // openView đã BỎ (0086): xem chéo workspace giờ cần permission tường minh
+  // 'workspace.view.<id>' — xem workspaces/access.ts.
 }
 
 // ── Nav "Cá nhân" chung, tự thêm ở đầu mỗi workspace ──────────────────────
@@ -120,7 +121,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'SL',
     // Đã migrate sang (workspace)/sales — bật để login đưa NV Sales vào workspace.
     ready: true,
-    openView: true,
     sections: [
       {
         heading: 'Sales',
@@ -189,7 +189,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'amber',
     logoText: 'KH',
     ready: true,
-    openView: true,
     sections: [
       {
         heading: 'Kho',
@@ -212,7 +211,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'sky',
     logoText: 'KT',
     ready: true,
-    openView: true,
     sections: [
       {
         heading: 'Kỹ thuật',
@@ -234,7 +232,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'violet',
     logoText: 'KH',
     ready: true,
-    openView: true,
     // 2 cụm việc của phòng (1 phòng ban, chưa tách quyền — xem docs/plan-supply.md):
     // Thu mua (PO/NCC) và Kế hoạch SX (tiến độ LSX, theo dõi đơn, phiếu kho).
     sections: [
@@ -248,15 +245,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         ],
       },
       {
-        // "Tiến độ sản xuất" đã dời sang workspace Sản xuất (/production/progress)
-        // — điều phối LSX là việc theo dõi ở xưởng. Cung ứng giữ các view cần cho
-        // lập kế hoạch mua/đặt. Route /planning/* re-export view dùng chung → giữ
-        // menu Cung ứng, không nhảy sang shell Sản xuất/Sales/Kho.
+        // Điều phối sản xuất nằm bên workspace Sản xuất (/production — 0084).
+        // Cung ứng giữ các view cần cho lập kế hoạch mua/đặt. Route /planning/*
+        // re-export view dùng chung → giữ menu Cung ứng, không nhảy shell.
         heading: 'Kế hoạch sản xuất',
-        // Định hình SX + Bảng tổng tiến độ KHÔNG nằm ở đây — thuộc workspace Sản
-        // xuất (/production/shaping, /production/board, user chốt): Kế hoạch/Cung
-        // ứng chuyển sang ws Sản xuất để định hình + xem tiến độ. Ở đây chỉ giữ
-        // view phục vụ mua/đặt vật tư.
+        // Kế hoạch SX + Định hình thuộc workspace Sản xuất (/production/plan,
+        // /production/shaping — 0084): planner chuyển sang ws Sản xuất để lên
+        // kế hoạch. Ở đây chỉ giữ view phục vụ mua/đặt vật tư.
         items: [
           { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
           { href: '/planning/docs', label: 'Phiếu kho', icon: '▥' },
@@ -284,75 +279,80 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
   production: {
     id: 'production',
     label: 'Sản xuất',
-    short: 'Production',
+    short: 'Điều hành SX',
     route: '/production',
     accent: 'red',
     logoText: 'SX',
     ready: true,
-    openView: true,
+    // Workspace ĐIỀU HÀNH của quản đốc/GĐ — gia đình SX tách theo VAI (07/2026):
+    // tổ ở /to, thống kê ở /thongke, kế hoạch ở /kehoach-sx. Từ đây quản đốc
+    // nhảy sang 3 workspace kia qua switcher.
     sections: [
       {
-        // Phạm vi xưởng gọn trong /production (gate /sales không mở cho xưởng —
-        // commit "xem chéo đúng phạm vi"). Cần nhìn toàn cảnh đơn → nới sau.
-        heading: 'Sản xuất',
-        // Menu xếp theo VIỆC (kế hoạch thiết kế lại 07/2026): thống kê/tổ đi
-        // thẳng "Nhập sản lượng"/"Gia công ngoài" (một chạm vào đúng tab),
-        // khỏi lướt trang chi tiết dài.
+        heading: 'Điều hành xưởng',
+        items: [{ href: '/production', label: 'Toàn cảnh xưởng', icon: '◧' }],
+      },
+    ],
+  },
+
+  team: {
+    id: 'team',
+    label: 'Tổ sản xuất',
+    short: 'Tổ SX',
+    route: '/to',
+    accent: 'amber',
+    logoText: 'TỔ',
+    ready: true,
+    // Workspace của TỔ TRƯỞNG/tổ viên (nhãn 0087) — 3 trang gọn thay 1 trang dài.
+    sections: [
+      {
+        heading: 'Tổ của tôi',
         items: [
-          { href: '/production', label: 'Lệnh đang chạy', icon: '◧' },
-          // Kanban việc của TỔ MÌNH (tách vai 07/2026) — tổ trưởng/thống kê
-          // một chạm vào đúng bảng; quản đốc vào chọn tổ để soi.
-          {
-            href: '/production/team',
-            label: 'Việc của tổ',
-            icon: '▤',
-            capability: 'production.team',
-          },
-          // Nhập liệu là việc của bộ phận sản xuất — người khác không thấy mục
-          // (vào bằng URL vẫn chỉ xem, server chặn ghi).
-          {
-            href: '/production/entry',
-            label: 'Nhập sản lượng',
-            icon: '✎',
-            capability: 'production.record',
-          },
-          // Sổ toàn xưởng theo ngày (chốt số cuối ngày của thống kê) — 07/2026.
-          {
-            href: '/production/logbook',
-            label: 'Sổ sản lượng',
-            icon: '☷',
-            capability: 'production.record',
-          },
-          {
-            href: '/production/outsource',
-            label: 'Gia công ngoài',
-            icon: '⇄',
-            capability: 'production.record',
-          },
-          // Định hình là việc của Kế hoạch/BQL — xưởng không thấy mục này (họ
-          // vẫn xem được lộ trình/bảng chi tiết trong tab "Chi tiết & lộ trình").
-          {
-            href: '/production/shaping',
-            label: 'Định hình sản xuất',
-            icon: '◈',
-            capability: 'production.shape',
-          },
-          // Màn điều phối toàn xưởng — ẩn với công nhân tổ (menu tổ tối giản,
-          // vào bằng URL vẫn xem được — server chặn ghi như mọi khi).
-          {
-            href: '/production/progress',
-            label: 'Tiến độ sản xuất',
-            icon: '▣',
-            capability: 'production.coordinate',
-          },
-          // Bảng tổng (chỉ xem) mở cho GĐ/QL + Kế hoạch + Cung ứng — họ vào
-          // workspace Sản xuất xem tại đây (không còn bản mượn /planning/board).
-          {
-            href: '/production/board',
-            label: 'Bảng tổng tiến độ',
-            icon: '▦',
-            capability: 'production.board',
-          },
+          { href: '/to', label: 'Việc của tổ', icon: '▤' },
+          { href: '/to/lenh', label: 'Lệnh đang chạy', icon: '◧' },
+          { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: '☷' },
+        ],
+      },
+    ],
+  },
+
+  stat: {
+    id: 'stat',
+    label: 'Thống kê xưởng',
+    short: 'Thống kê',
+    route: '/thongke',
+    accent: 'purple',
+    logoText: 'TK',
+    ready: true,
+    // Workspace của THỐNG KÊ (nhãn 0087): sổ tập trung + định hình + gia công.
+    sections: [
+      {
+        heading: 'Thống kê',
+        items: [
+          { href: '/thongke', label: 'Sổ số liệu', icon: '☷' },
+          { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: '▥' },
+          { href: '/thongke/gia-cong', label: 'Gia công ngoài', icon: '⇄' },
+          { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: '◧' },
+        ],
+      },
+    ],
+  },
+
+  prodplan: {
+    id: 'prodplan',
+    label: 'Kế hoạch sản xuất',
+    short: 'Kế hoạch SX',
+    route: '/kehoach-sx',
+    accent: 'violet',
+    logoText: 'KS',
+    ready: true,
+    // Workspace của TRƯỞNG PHÒNG KẾ HOẠCH (planner): lộ trình + giao tổ + hạn.
+    sections: [
+      {
+        heading: 'Kế hoạch',
+        items: [
+          { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: '◈' },
+          { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: '◧' },
         ],
       },
     ],

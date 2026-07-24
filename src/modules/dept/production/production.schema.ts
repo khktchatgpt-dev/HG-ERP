@@ -47,7 +47,6 @@ export const lsxSpecsSaveSchema = z.object({
   lines: z.array(lsxLineSpecSchema).max(500),
 })
 
-/** Giai đoạn SX = code catalog_items type 'production_stage' (phoi/han/son/mai/hoan_thien). */
 export const issueLsxSchema = z.object({
   code: z.string().trim().min(1, 'Nhập số LSX').max(50), // người dùng tự đặt số LSX
   order_id: z.string().uuid(),
@@ -57,23 +56,10 @@ export const issueLsxSchema = z.object({
   note: z.string().trim().max(2000).optional().nullable(),
 })
 
-/** Cập nhật giai đoạn (FR-PROD-01) — 'done' ở giai đoạn cuối do nút Hoàn thành riêng. */
-export const stageUpdateSchema = z.object({
-  stage: z.string().trim().min(1).max(50),
-  action: z.enum(['start', 'done']).default('done'),
+/** Hoàn thành LSX — gate "mọi việc đã xong"; QL được ép qua kèm lý do. */
+export const lsxCompleteSchema = z.object({
   note: z.string().trim().max(1000).optional().nullable(),
-})
-
-/** Kanban tổ (tách vai 07/2026): tổ đánh dấu thẻ LSX × công đoạn. */
-export const teamStageSchema = z.object({
-  lsx_id: z.string().uuid(),
-  stage: z.string().trim().min(1).max(50),
-  action: z.enum(['start', 'done']),
-  note: z.string().trim().max(1000).optional().nullable(),
-})
-
-export const teamBoardQuerySchema = z.object({
-  stage: z.string().trim().min(1).max(50).optional(),
+  override: z.boolean().default(false),
 })
 
 export const lsxListQuerySchema = z.object({

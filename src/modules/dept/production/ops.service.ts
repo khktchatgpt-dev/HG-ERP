@@ -1,16 +1,15 @@
 import { productionRepo } from './production.repo'
-import { productionService } from './production.service'
-import { outputsRepo } from './outputs.repo'
-import { outputsService, type ComponentOutputView } from './outputs.service'
-import { teamService, type TeamWorkloadRow } from './team.service'
-import { incidentsService } from './incidents.service'
-import { defectCodesRepo } from './defect-codes.repo'
+import { lsxService } from './lsx.service'
+import { entriesRepo } from './entries.repo'
+import { entriesService, type ComponentOutputView } from './entries.service'
+import { jobsService, type TeamWorkloadRow } from './jobs.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { poLineAmount } from '@/lib/po-line'
 import { assessLateRisk, assessPoLate, type LateRisk } from '@/lib/late-risk'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
 import {
   bucketByWeek,
   defectByTeam,
@@ -26,6 +25,8 @@ import { assertAction } from '@/modules/core/rbac/rbac.service'
 
 /**
  * Data cho khu Ban Giám Đốc (Báo cáo CEO /exec + Tháp điều hành /exec/ops).
+ * Model 0084: tiến độ đọc từ production_jobs, số liệu từ production_entries;
+ * sự cố đã bỏ khỏi hệ (báo ngoài — user chốt 07/2026), phế phẩm lý do text.
  * Guard đọc registry: exec.tower.view (assertAction ở call-site).
  */
 async function assertExec(user: User): Promise<void> {
@@ -38,13 +39,12 @@ function addDaysIso(iso: string, days: number): string {
   return d.toISOString().slice(0, 10)
 }
 
-/** LSX đang chạy × tổng hợp sản lượng (pattern BoardScreen) — WIP + đơn trọng điểm. */
+/** LSX đang chạy × tổng hợp sản lượng — WIP + đơn trọng điểm. */
 async function loadActiveSummaries(user: User) {
-  const { rows } = await productionRepo.list({ page: 1, page_size: 50 })
-  const active = rows.filter((l) => l.status === 'approved' || l.status === 'in_progress')
+  const active = await productionRepo.listActive()
   const summaries = []
   for (const lsx of active) {
-    summaries.push({ lsx, summary: await outputsService.summary(user, lsx.id) })
+    summaries.push({ lsx, summary: await entriesService.summary(user, lsx.id) })
   }
   return summaries
 }
@@ -60,7 +60,6 @@ export type CeoOverview = {
       due_date: string | null
       reasons: string[]
     }[]
-    open_incidents: { id: string; message: string; department_name: string | null }[]
     late_pos: {
       id: string
       code: string
@@ -102,6 +101,7 @@ export type CeoOverview = {
     code: string
     customer_name: string
     due_date: string | null
+    /** Tiến độ công đoạn "x/y" từ jobs — thay con trỏ giai đoạn cũ. */
     stage_label: string | null
     pct: number
     bom_pending: number
@@ -113,8 +113,9 @@ export type CeoOverview = {
 }
 
 export type OpsTeam = TeamWorkloadRow & {
+  stage: string | null
+  stage_label: string | null
   today_qty: number
-  open_incidents: number
   wip_before: number
   color: 'red' | 'yellow' | 'green'
 }
@@ -156,15 +157,6 @@ export type OpsTower = {
       unit: string
     }[]
   }
-  incidents: {
-    id: string
-    message: string
-    lsx_code: string | null
-    stage: string | null
-    department_name: string | null
-    reported_by_name: string | null
-    created_at: string
-  }[]
 }
 
 export const opsService = {
@@ -173,31 +165,16 @@ export const opsService = {
     await assertExec(user)
     const today = new Date().toISOString().slice(0, 10)
 
-    const [
-      tracking,
-      pendingLsx,
-      pendingPos,
-      allPos,
-      openIncidents,
-      lowStock,
-      stages,
-      summaries,
-      outputs8w,
-    ] = await Promise.all([
-      productionService.tracking(),
-      productionService.list(user, {
-        status: 'pending_approval',
-        page: 1,
-        page_size: 200,
-      }),
-      posService.list(user, { status: 'pending_approval', page: 1, page_size: 200 }),
-      posService.list(user, { page: 1, page_size: 500 }),
-      incidentsService.list(user, { status: 'open' }),
-      stockRepo.list({ low_only: true }),
-      productionRepo.listStages(),
-      loadActiveSummaries(user),
-      outputsRepo.listRange(addDaysIso(today, -55), today),
-    ])
+    const [tracking, pendingLsx, pendingPos, allPos, lowStock, summaries, outputs8w] =
+      await Promise.all([
+        lsxService.tracking(),
+        lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 200 }),
+        posService.list(user, { status: 'pending_approval', page: 1, page_size: 200 }),
+        posService.list(user, { page: 1, page_size: 500 }),
+        stockRepo.list({ low_only: true }),
+        loadActiveSummaries(user),
+        entriesRepo.listRange(addDaysIso(today, -55), today),
+      ])
 
     // Tổng tiền PO chờ duyệt — chuẩn poLineAmount (price_basis unit2 đúng giá).
     const pendingPoRows = await Promise.all(
@@ -220,8 +197,6 @@ export const opsService = {
 
     const FINAL = new Set(['completed', 'delivered', 'cancelled'])
     const running = tracking.filter((r) => !FINAL.has(r.status))
-    const stageLabel = (code: string | null) =>
-      code ? (stages.find((s) => s.code === code)?.label ?? code) : null
 
     // Đơn trọng điểm = đơn có LSX đang chạy; %HT từ synced_by_line của LSX đó.
     const summaryByOrderId = new Map(
@@ -237,7 +212,8 @@ export const opsService = {
           code: r.code,
           customer_name: r.customer_name,
           due_date: r.due_date,
-          stage_label: stageLabel(r.current_stage),
+          stage_label:
+            r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null,
           pct: sum ? orderSyncPct(sum.synced_by_line) : 0,
           bom_pending: r.lines_bom_pending,
           pos_open: r.pos_open,
@@ -270,11 +246,6 @@ export const opsService = {
           customer_name: r.customer_name,
           due_date: r.due_date,
           reasons: risk!.reasons,
-        })),
-        open_incidents: openIncidents.map((i) => ({
-          id: i.id,
-          message: i.message,
-          department_name: i.department_name,
         })),
         late_pos: allPos.rows
           .filter((p) => assessPoLate(p, today) === 'overdue')
@@ -315,27 +286,23 @@ export const opsService = {
     const today = new Date().toISOString().slice(0, 10)
 
     const [
-      workload,
+      overview,
       stages,
       depts,
-      openIncidents,
       allPos,
       lowStock,
-      defectCodes,
       summaries,
       outputs14,
       outputsToday,
     ] = await Promise.all([
-      teamService.workloadByTeam(),
+      jobsService.overview(user),
       productionRepo.listStages(),
       departmentsRepo.list(),
-      incidentsService.list(user, { status: 'open' }),
       posService.list(user, { page: 1, page_size: 500 }),
       stockRepo.list({ low_only: true }),
-      defectCodesRepo.listAll(),
       loadActiveSummaries(user),
-      outputsRepo.listRange(addDaysIso(today, -13), today),
-      outputsRepo.listRange(today, today),
+      entriesRepo.listRange(addDaysIso(today, -13), today),
+      entriesRepo.listRange(today, today),
     ])
 
     const stageLabel = (code: string) =>
@@ -364,25 +331,22 @@ export const opsService = {
         (todayByTeam.get(e.team_department_id) ?? 0) + Number(e.qty),
       )
     }
-    const incidentsByDept = new Map<string | null, number>()
-    for (const i of openIncidents) {
-      incidentsByDept.set(
-        i.department_id,
-        (incidentsByDept.get(i.department_id) ?? 0) + 1,
-      )
-    }
 
-    const teams: OpsTeam[] = workload.map((w) => {
+    const stageByDept = new Map(
+      depts.map((d) => [d.id, resolveTeamStage(d, stages)] as const),
+    )
+    const teams: OpsTeam[] = overview.workload.map((w) => {
       const today_qty = todayByTeam.get(w.department_id) ?? 0
-      const open = incidentsByDept.get(w.department_id) ?? 0
-      const wip_before = wipBeforeStage.get(w.stage) ?? 0
+      const stage = stageByDept.get(w.department_id) ?? null
+      const wip_before = stage ? (wipBeforeStage.get(stage) ?? 0) : 0
       return {
         ...w,
+        stage,
+        stage_label: stage ? stageLabel(stage) : null,
         today_qty,
-        open_incidents: open,
         wip_before,
         color: teamStatusColor({
-          hasOpenIncident: open > 0,
+          hasOpenIncident: false, // sự cố đã bỏ khỏi hệ (báo ngoài)
           doing: w.doing,
           todayQty: today_qty,
           wipBefore: wip_before,
@@ -390,11 +354,12 @@ export const opsService = {
       }
     })
 
-    // Chất lượng: 14 ngày chia đôi → so tuần này với tuần trước.
+    // Chất lượng: 14 ngày chia đôi → so tuần này với tuần trước. Lý do phế
+    // là text tự do → labelByCode rỗng (label = chính chuỗi lý do).
     const split = addDaysIso(today, -6)
     const last7 = outputs14.filter((e) => e.entry_date >= split)
     const prev7 = outputs14.filter((e) => e.entry_date < split)
-    const labelByCode = new Map(defectCodes.map((c) => [c.code, c.label]))
+    const noLabels = new Map<string, string>()
     const deptName = new Map(depts.map((d) => [d.id, d.name]))
     const by_team = [...defectByTeam(last7 as SlimOutputEntry[]).entries()]
       .map(([team_id, agg]) => ({
@@ -403,7 +368,7 @@ export const opsService = {
         qty: agg.qty,
         defect: agg.defect,
         rate: agg.qty > 0 ? agg.defect / agg.qty : 0,
-        reasons: topDefectReasons(last7 as SlimOutputEntry[], team_id, labelByCode),
+        reasons: topDefectReasons(last7 as SlimOutputEntry[], team_id, noLabels),
       }))
       .sort((a, b) => b.rate - a.rate)
 
@@ -429,15 +394,6 @@ export const opsService = {
           unit: s.unit,
         })),
       },
-      incidents: openIncidents.map((i) => ({
-        id: i.id,
-        message: i.message,
-        lsx_code: i.lsx_code,
-        stage: i.stage,
-        department_name: i.department_name,
-        reported_by_name: i.reported_by_name,
-        created_at: i.created_at,
-      })),
     }
   },
 }

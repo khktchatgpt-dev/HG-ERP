@@ -28,6 +28,20 @@ const loadPermissionKeys = cache(
     new Set(await rbacRepo.permissionKeysForUser(userId)),
 )
 
+const loadRoleKeys = cache(
+  async (userId: string): Promise<ReadonlySet<string>> =>
+    new Set(await rbacRepo.roleKeysForUser(userId)),
+)
+
+/**
+ * User có ROLE KEY này không (kể cả role NHÃN không cấp quyền — 0087 dùng để
+ * tách UI theo vị trí trong xưởng). KHÔNG bypass admin: nhãn là thuộc tính
+ * vị trí, không phải quyền.
+ */
+export async function hasRoleTag(user: User, roleKey: string): Promise<boolean> {
+  return (await loadRoleKeys(user.id)).has(roleKey)
+}
+
 /**
  * Nguồn quyền TRUNG TÂM (RBAC data-hoá, 0073). Guard nghiệp vụ sẽ dần gọi
  * `hasPermission`/`assertPermission` thay cho `is*Staff`/`user.role===`.

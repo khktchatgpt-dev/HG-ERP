@@ -1,6 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import { TrackingManager } from './TrackingManager'
 
 /**
@@ -13,7 +13,7 @@ export async function TrackingScreen({ lsxBase }: { lsxBase: string }) {
   const canManage = user.role === 'admin' || user.role === 'manager'
 
   const [rows, stages] = await Promise.all([
-    productionService.tracking(),
+    lsxService.tracking(),
     productionRepo.listStages(),
   ])
 
