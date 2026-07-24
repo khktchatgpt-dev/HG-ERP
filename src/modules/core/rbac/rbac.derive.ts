@@ -30,7 +30,10 @@ export function computeDerivedRoleKeys(input: {
   const keys = new Set<string>()
 
   if (input.role === 'admin') keys.add('admin')
-  if (input.role === 'manager') keys.add('director')
+  // 0086: 'director' CHỈ cho manager THUỘC PHÒNG Ban Giám Đốc (workspace exec)
+  // — trưởng phòng khối khác (kho/kế toán/kỹ thuật/quản đốc…) không còn vào
+  // /exec hay duyệt LSX/PO qua vai này; cần thì admin gán tay.
+  if (input.role === 'manager' && input.workspaceId === 'exec') keys.add('director')
 
   if (input.workspaceId && ROLE_BY_WORKSPACE[input.workspaceId]) {
     keys.add(ROLE_BY_WORKSPACE[input.workspaceId])

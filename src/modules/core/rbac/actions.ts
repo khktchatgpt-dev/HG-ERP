@@ -233,7 +233,7 @@ export const ACTIONS: Action[] = [
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
 
-  // ── Sản xuất (LSX, tiến độ, sổ, sự cố, tổ) ───────────────────────────────
+  // ── Sản xuất (thiết kế lại theo VAI 0084: KH / thống kê / tổ trưởng / QĐ) ─
   {
     key: 'production.lsx.view',
     label: 'Xem LSX / bảng tiến độ',
@@ -253,30 +253,46 @@ export const ACTIONS: Action[] = [
     rule: perm('production.lsx.approve'),
   },
   {
-    key: 'production.progress.track',
-    label: 'Cập nhật tiến độ / báo hoàn thành / nhận VT',
+    key: 'production.plan.manage',
+    label: 'Kế hoạch SX: lộ trình + giao tổ + hạn + ưu tiên',
     domain: 'production',
-    rule: perm('production.progress.track'),
+    // manager = quản đốc điều phối tại xưởng (0086 siết director theo phòng
+    // BGĐ nên không đi qua vai director nữa).
+    rule: anyOf(role('admin', 'manager'), perm('production.plan.manage')),
   },
   {
-    key: 'production.components.edit',
-    label: 'Định hình: bảng chi tiết + lộ trình',
+    key: 'production.shaping.manage',
+    label: 'Định hình bảng chi tiết (thống kê, từ BOM Kỹ thuật)',
     domain: 'production',
     rule: perm('production.components.edit'),
   },
   {
-    key: 'production.output.record',
-    label: 'Nhập sổ sản lượng',
+    key: 'production.entries.record',
+    label: 'Nhập sổ số liệu sản xuất',
     domain: 'production',
     rule: perm('production.output.record'),
-    rowLevel: 'Sửa dòng đã ghi: người tạo hoặc GĐ/QL; sổ đã chốt ngày thì khoá.',
+    rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL; sổ đã chốt ngày thì khoá.',
+  },
+  {
+    key: 'production.jobs.confirm',
+    label: 'Tổ xác nhận Bắt đầu / Xong công đoạn',
+    domain: 'production',
+    rule: anyOf(role('admin', 'manager'), perm('production.member')),
+    rowLevel:
+      'NV xưởng chỉ thao tác việc tổ mình; CHẶN xong khi số chưa đủ — GĐ/QL ép kèm lý do.',
+  },
+  {
+    key: 'production.progress.track',
+    label: 'Báo hoàn thành LSX / xác nhận nhận vật tư',
+    domain: 'production',
+    rule: perm('production.progress.track'),
   },
   {
     key: 'production.outsource.record',
     label: 'Ghi giao / nhận gia công ngoài',
     domain: 'production',
     rule: perm('production.outsource.record'),
-    rowLevel: 'Sửa dòng đã ghi: người tạo hoặc GĐ/QL.',
+    rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL.',
   },
   {
     key: 'production.daylock.lock',
@@ -289,32 +305,14 @@ export const ACTIONS: Action[] = [
     key: 'production.daylock.unlock',
     label: 'Mở lại sổ ngày',
     domain: 'production',
-    rule: perm('production.daylock.unlock'),
-  },
-  {
-    key: 'production.incident.report',
-    label: 'Báo sự cố sản xuất',
-    domain: 'production',
-    rule: perm('production.incident.report'),
-  },
-  {
-    key: 'production.incident.close',
-    label: 'Đóng sự cố sản xuất',
-    domain: 'production',
-    rule: perm('production.incident.close'),
+    // manager = quản đốc mở khoá cho tổ sửa nhầm lẫn (cùng lý do plan.manage).
+    rule: anyOf(role('admin', 'manager'), perm('production.daylock.unlock')),
   },
   {
     key: 'production.team.board',
     label: 'Xem bảng việc của tổ',
     domain: 'production',
     rule: perm('production.team.manage'),
-  },
-  {
-    key: 'production.team.mark_stage',
-    label: 'Tổ đánh dấu Bắt đầu / Xong công đoạn',
-    domain: 'production',
-    rule: anyOf(role('admin', 'manager'), perm('production.member')),
-    rowLevel: 'NV xưởng chỉ thao tác ĐÚNG công đoạn tổ mình; GĐ/QL mọi công đoạn.',
   },
 
   // ── Nhân sự (nghỉ phép) ──────────────────────────────────────────────────

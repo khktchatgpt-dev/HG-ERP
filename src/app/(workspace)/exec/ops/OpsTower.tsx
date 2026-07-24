@@ -2,13 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { TopProgressBar } from '@/components/erp/Spinner'
-import { api, ApiError } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
-import { useConfirm } from '@/components/ui/ConfirmDialog'
 import type { OpsTower as OpsTowerData } from '@/modules/dept/production/ops.service'
 
 /**
@@ -19,8 +14,6 @@ import type { OpsTower as OpsTowerData } from '@/modules/dept/production/ops.ser
 
 const fmtN = (n: number) => n.toLocaleString('vi-VN')
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
-const fmtT = (iso: string) =>
-  new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
 const pct = (r: number) => `${(r * 100).toFixed(1)}%`
 
 const TEAM_TONE: Record<'red' | 'yellow' | 'green', string> = {
@@ -35,10 +28,6 @@ const TEAM_DOT: Record<'red' | 'yellow' | 'green', string> = {
 }
 
 export function OpsTower({ data }: { data: OpsTowerData }) {
-  const router = useRouter()
-  const toast = useToast()
-  const confirm = useConfirm()
-  const [busy, setBusy] = useState(false)
   // Drill-down chất lượng: tổ đang chọn (tầng 3 = nguyên nhân của tổ đó).
   const [teamPick, setTeamPick] = useState<string | null | undefined>(undefined)
 
@@ -51,31 +40,8 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
       ? null
       : (q.by_team.find((t) => t.team_id === teamPick) ?? null)
 
-  async function resolveIncident(inc: OpsTowerData['incidents'][number]) {
-    const ok = await confirm({
-      title: 'Đánh dấu sự cố đã xử lý?',
-      description: inc.message,
-      confirmLabel: 'Đã xử lý',
-    })
-    if (!ok) return
-    setBusy(true)
-    try {
-      await api(`/api/dept/production/incidents/${inc.id}/resolve`, {
-        method: 'POST',
-        body: {},
-      })
-      toast.success('Đã đóng sự cố', 'Người báo sẽ nhận được thông báo')
-      router.refresh()
-    } catch (e) {
-      toast.error('Thao tác thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   return (
     <div className="flex flex-col gap-5">
-      <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
           { label: 'Ban Giám đốc', href: '/exec' },
@@ -88,7 +54,7 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
       {/* ── 1. Sơ đồ xưởng ── */}
       <section>
         <h2 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          Sơ đồ xưởng — 🟢 chạy tốt · 🟡 chậm/ứ · 🔴 sự cố
+          Sơ đồ xưởng — 🟢 chạy tốt · 🟡 chậm / ứ BTP
         </h2>
         {data.teams.length === 0 ? (
           <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900">
@@ -99,7 +65,7 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
             {data.teams.map((t) => (
               <Link
                 key={t.department_id}
-                href={`/production/team?stage=${t.stage}`}
+                href={`/to?team=${t.department_id}`}
                 className={`flex flex-col gap-1 rounded-xl border-2 p-3 transition-transform hover:scale-[1.02] ${TEAM_TONE[t.color]}`}
               >
                 <div className="flex items-center gap-1.5">
@@ -122,11 +88,6 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
                     </span>
                   )}
                 </span>
-                {t.open_incidents > 0 && (
-                  <span className="text-xs font-medium text-red-600 dark:text-red-400">
-                    ⚠ {t.open_incidents} sự cố đang mở
-                  </span>
-                )}
               </Link>
             ))}
           </div>
@@ -327,42 +288,6 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
           )}
         </div>
       </section>
-
-      {/* ── 5. Sự cố đang mở — xử lý tại chỗ ── */}
-      {data.incidents.length > 0 && (
-        <section className="overflow-hidden rounded-xl border border-red-200 bg-red-50/40 dark:border-red-900/50 dark:bg-red-950/20">
-          <div className="border-b border-red-200 px-4 py-2 dark:border-red-900/50">
-            <h2 className="text-xs font-semibold tracking-wider text-red-700 uppercase dark:text-red-400">
-              ⚠ Sự cố đang mở ({data.incidents.length})
-            </h2>
-          </div>
-          <ul className="divide-y divide-red-100 dark:divide-red-950">
-            {data.incidents.map((inc) => (
-              <li
-                key={inc.id}
-                className="flex flex-wrap items-center gap-2 px-4 py-2 text-sm"
-              >
-                <div className="min-w-0 flex-1">
-                  <span className="font-medium">{inc.message}</span>
-                  <div className="text-xs text-zinc-500">
-                    {[inc.lsx_code, inc.department_name, inc.reported_by_name]
-                      .filter(Boolean)
-                      .join(' · ')}{' '}
-                    · {fmtT(inc.created_at)}
-                  </div>
-                </div>
-                <button
-                  disabled={busy}
-                  onClick={() => void resolveIncident(inc)}
-                  className="rounded-md border border-red-300 px-2.5 py-1.5 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950"
-                >
-                  ✓ Đã xử lý
-                </button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   )
 }

@@ -18,7 +18,8 @@ function row(partial: Partial<OrderProgressInput>): OrderProgressInput {
     pos_open: 0,
     production_order_id: 'po-1',
     lsx_status: 'in_progress',
-    current_stage: null,
+    jobs_total: 0,
+    jobs_done: 0,
     ...partial,
   }
 }
@@ -58,26 +59,47 @@ describe('orderProgress', () => {
     expect(p.tone).toBe('bg-red-500')
   })
 
-  it('% tăng theo vị trí công đoạn', () => {
-    const cnc = orderProgress(row({ current_stage: 'cnc' }), STAGES, TODAY)
-    const pack = orderProgress(row({ current_stage: 'pack' }), STAGES, TODAY)
-    expect(cnc.pct).toBeLessThan(pack.pct)
-    // pack là công đoạn cuối (idx 3/4): 15 + 75*4/4 = 90
-    expect(pack.pct).toBe(90)
+  it('% tăng theo số công đoạn đã xong (0084)', () => {
+    const early = orderProgress(
+      row({ lsx_status: 'in_progress', jobs_total: 4, jobs_done: 1 }),
+      STAGES,
+      TODAY,
+    )
+    const late = orderProgress(
+      row({ lsx_status: 'in_progress', jobs_total: 4, jobs_done: 4 }),
+      STAGES,
+      TODAY,
+    )
+    expect(early.pct).toBeLessThan(late.pct)
+    // xong 4/4 công đoạn: 15 + 75*4/4 = 90
+    expect(late.pct).toBe(90)
   })
 
-  it('nhãn thân thiện theo tên công đoạn (QC / đóng gói)', () => {
-    expect(orderProgress(row({ current_stage: 'qc' }), STAGES, TODAY).label).toBe(
-      'Đang QC',
-    )
-    expect(orderProgress(row({ current_stage: 'pack' }), STAGES, TODAY).label).toBe(
-      'Đang đóng gói',
-    )
+  it('nhãn kèm tiến độ công đoạn; chưa lên KH → nhãn chung', () => {
+    expect(
+      orderProgress(
+        row({ lsx_status: 'in_progress', jobs_total: 4, jobs_done: 2 }),
+        STAGES,
+        TODAY,
+      ).label,
+    ).toBe('Đang sản xuất (2/4 công đoạn)')
+    expect(
+      orderProgress(
+        row({ lsx_status: 'in_progress', jobs_total: 0, jobs_done: 0 }),
+        STAGES,
+        TODAY,
+      ).label,
+    ).toBe('Đang sản xuất')
   })
 
   it('quá hạn giao → tone đỏ (overdue)', () => {
     const p = orderProgress(
-      row({ current_stage: 'cnc', due_date: '2026-07-01' }),
+      row({
+        lsx_status: 'in_progress',
+        jobs_total: 4,
+        jobs_done: 1,
+        due_date: '2026-07-01',
+      }),
       STAGES,
       TODAY,
     )
@@ -86,7 +108,12 @@ describe('orderProgress', () => {
 
   it('sát hạn (≤7 ngày) → tone hổ phách (at_risk)', () => {
     const p = orderProgress(
-      row({ current_stage: 'cnc', due_date: '2026-07-25' }),
+      row({
+        lsx_status: 'in_progress',
+        jobs_total: 4,
+        jobs_done: 1,
+        due_date: '2026-07-25',
+      }),
       STAGES,
       TODAY,
     )

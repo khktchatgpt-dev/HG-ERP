@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import {
   productionRepo,
   listLsxLineSpecs,
@@ -25,7 +25,7 @@ export const PUT = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
   const { lines } = await parseJson(req, lsxSpecsSaveSchema)
-  await productionService.saveSpecs(
+  await lsxService.saveSpecs(
     user,
     id,
     lines.map((l) => ({

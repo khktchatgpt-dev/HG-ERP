@@ -2,11 +2,11 @@ import { on } from '../bus'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
 
 /**
- * Notify tách vai sản xuất (07/2026):
+ * Notify bàn giao công đoạn (0084 — job done per dòng SP):
  *  - production.stage.done → tổ phụ trách công đoạn KẾ TIẾP ("đến lượt tổ
  *    mình") + quản đốc (GĐ/QL). Công đoạn cuối → chỉ quản đốc.
- *  - production.incident.reported → quản đốc.
- *  - production.incident.resolved → người báo sự cố.
+ * Sự cố xưởng KHÔNG còn trong hệ (báo cáo riêng ngoài hệ thống — user chốt
+ * 07/2026).
  */
 export function registerProductionNotificationHandlers(): void {
   on('production.stage.done', async (e) => {
@@ -35,38 +35,5 @@ export function registerProductionNotificationHandlers(): void {
           }),
         ),
     ])
-  })
-
-  on('production.incident.reported', async (e) => {
-    const where = [e.lsx_code, e.department_name].filter(Boolean).join(' · ')
-    await Promise.all(
-      e.notify_ids.map((rid) =>
-        notificationsService.notify({
-          recipientId: rid,
-          actorId: e.reported_by,
-          type: 'incident_reported',
-          payload: {
-            title: where ? `${where}: ${e.message}` : e.message,
-            incident_id: e.incident_id,
-          },
-        }),
-      ),
-    )
-  })
-
-  on('production.incident.resolved', async (e) => {
-    await Promise.all(
-      e.notify_ids.map((rid) =>
-        notificationsService.notify({
-          recipientId: rid,
-          actorId: e.resolved_by,
-          type: 'incident_resolved',
-          payload: {
-            title: e.lsx_code ? `${e.lsx_code}: ${e.message}` : e.message,
-            incident_id: e.incident_id,
-          },
-        }),
-      ),
-    )
   })
 }

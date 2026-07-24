@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import { listLsxPrintLines } from '@/modules/dept/production/production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -19,7 +19,7 @@ export default async function ExecApprovalsPage() {
 
   const [{ rows: pendingPos }, { rows: pendingLsx }] = await Promise.all([
     posService.list(user, { status: 'pending_approval', page: 1, page_size: 200 }),
-    productionService.list(user, {
+    lsxService.list(user, {
       status: 'pending_approval',
       page: 1,
       page_size: 200,

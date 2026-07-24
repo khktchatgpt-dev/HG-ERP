@@ -1,17 +1,11 @@
-import { ShapingDetail } from './ShapingDetail'
+import { redirect } from 'next/navigation'
 
-/** Định hình 1 lệnh trong shell Sản xuất — bản dùng chung ở ShapingDetail.tsx. */
-export default async function ProductionShapingDetailPage({
+/** Đường cũ — Định hình đã dời sang workspace Thống kê xưởng. */
+export default async function OldShapingDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  return (
-    <ShapingDetail
-      id={id}
-      base="/production/shaping"
-      rootCrumb={{ label: 'Sản xuất', href: '/production' }}
-    />
-  )
+  redirect(`/thongke/dinh-hinh/${id}`)
 }

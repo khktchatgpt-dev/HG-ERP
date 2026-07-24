@@ -1,12 +1,18 @@
 import { db } from '@/server/db'
 import type { LsxStatus } from './production.schema'
 
+/**
+ * Repo HEADER lệnh sản xuất (production_orders) + view theo dõi đơn + dòng in
+ * LSX. Lớp thực thi (kế hoạch/chi tiết/sổ) nằm ở jobs/components/entries repo
+ * — thiết kế lại theo vai 07/2026 (0084).
+ */
+
 export type ProductionOrder = {
   id: string
   code: string
   sales_order_id: string
   status: LsxStatus
-  current_stage: string | null
+  priority: number
   ship_date: string | null
   container_summary: string | null
   issued_by: string | null
@@ -16,6 +22,8 @@ export type ProductionOrder = {
   approved_by: string | null
   approved_at: string | null
   rejected_reason: string | null
+  materials_received_at: string | null
+  materials_received_by: string | null
   note: string | null
   created_at: string
   updated_at: string
@@ -26,19 +34,7 @@ export type ProductionOrderWithOrder = ProductionOrder & {
   customer_name: string
 }
 
-export type ProgressEntry = {
-  id: string
-  production_order_id: string
-  stage: string
-  // received = xưởng xác nhận nhận VT (G-3); cancelled = đơn huỷ kéo LSX dừng (P3).
-  action: 'start' | 'done' | 'received' | 'cancelled'
-  note: string | null
-  updated_by: string | null
-  updated_by_name: string | null
-  created_at: string
-}
-
-/** 1 dòng của view v_order_tracking (FR-SAL-07). */
+/** 1 dòng của view v_order_tracking (FR-SAL-07) — tiến độ SX đếm theo jobs (0084). */
 export type OrderTracking = {
   id: string
   code: string
@@ -52,8 +48,11 @@ export type OrderTracking = {
   production_order_id: string | null
   lsx_code: string | null
   lsx_status: string | null
-  current_stage: string | null
+  lsx_priority: number | null
   ship_date: string | null
+  /** Số công đoạn (jobs) của lệnh / đã xong — 0/0 = chưa lên kế hoạch SX. */
+  jobs_total: number
+  jobs_done: number
   lines_bom_pending: number
   pos_open: number
   // Lớp thương mại (v_order_tracking mở rộng, migration 0071) — GĐ nhìn theo tiền.
@@ -67,7 +66,7 @@ export type OrderTracking = {
 }
 
 const COLS =
-  'id, code, sales_order_id, status, current_stage, ship_date, container_summary, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, note, created_at, updated_at'
+  'id, code, sales_order_id, status, priority, ship_date, container_summary, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, materials_received_at, materials_received_by, note, created_at, updated_at'
 
 type Raw = ProductionOrder & {
   order:
@@ -118,6 +117,18 @@ export const productionRepo = {
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     return { rows: unwrap(data as Raw[] | null), total: count ?? 0 }
+  },
+
+  /** LSX đang chạy (approved | in_progress) — ưu tiên trước, rồi hạn xuất. */
+  async listActive(): Promise<ProductionOrderWithOrder[]> {
+    const { data } = await db()
+      .from('production_orders')
+      .select(`${COLS}, order:sales_orders(code, customer:sales_customers(name))`)
+      .in('status', ['approved', 'in_progress'])
+      .order('priority', { ascending: false })
+      .order('ship_date', { ascending: true, nullsFirst: false })
+      .limit(500)
+    return unwrap(data as Raw[] | null)
   },
 
   /**
@@ -192,59 +203,7 @@ export const productionRepo = {
     return data as ProductionOrder
   },
 
-  async insertProgress(row: {
-    production_order_id: string
-    stage: string
-    action: 'start' | 'done' | 'received' | 'cancelled'
-    note?: string | null
-    updated_by: string
-  }): Promise<void> {
-    const { error } = await db().from('production_progress').insert(row)
-    if (error) throw new Error(error.message)
-  },
-
-  async listProgress(productionOrderId: string): Promise<ProgressEntry[]> {
-    const { data } = await db()
-      .from('production_progress')
-      .select(
-        'id, production_order_id, stage, action, note, updated_by, created_at, actor:users(name)',
-      )
-      .eq('production_order_id', productionOrderId)
-      .order('created_at', { ascending: false })
-    type RawP = Omit<ProgressEntry, 'updated_by_name'> & {
-      actor: { name: string | null } | { name: string | null }[] | null
-    }
-    return ((data ?? []) as RawP[]).map((r) => {
-      const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
-      return { ...r, actor: undefined, updated_by_name: a?.name ?? null } as ProgressEntry
-    })
-  },
-
-  /**
-   * Progress của NHIỀU LSX một lượt (chỉ field cần suy trạng thái thẻ) — cho
-   * bảng Kanban tổ + dải tải việc theo tổ, tránh N query per lệnh.
-   */
-  async listProgressBulk(
-    ids: string[],
-  ): Promise<
-    { production_order_id: string; stage: string; action: string; created_at: string }[]
-  > {
-    if (!ids.length) return []
-    const { data } = await db()
-      .from('production_progress')
-      .select('production_order_id, stage, action, created_at')
-      .in('production_order_id', ids)
-      .order('created_at', { ascending: true })
-      .limit(20000)
-    return (data ?? []) as {
-      production_order_id: string
-      stage: string
-      action: string
-      created_at: string
-    }[]
-  },
-
-  /** Danh mục giai đoạn SX (catalog_items type 'production_stage'). */
+  /** Danh mục công đoạn SX (catalog_items type 'production_stage'). */
   async listStages(): Promise<{ code: string; label: string }[]> {
     const { data } = await db()
       .from('catalog_items')
@@ -255,7 +214,7 @@ export const productionRepo = {
     return (data ?? []) as { code: string; label: string }[]
   },
 
-  /** Số dòng SP per đơn — cho màn định hình ("x/y SP đã chốt lộ trình"). */
+  /** Số dòng SP per đơn — cho màn kế hoạch/định hình ("x/y SP đã chốt"). */
   async linesCountByOrder(orderIds: string[]): Promise<Map<string, number>> {
     if (!orderIds.length) return new Map()
     const { data } = await db()
@@ -277,9 +236,11 @@ export const productionRepo = {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(500)
-    // Coalesce cột thương mại — an toàn cả khi migration 0071 chưa apply.
     return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-      ...(r as OrderTracking),
+      ...(r as unknown as OrderTracking),
+      jobs_total: Number(r.jobs_total ?? 0),
+      jobs_done: Number(r.jobs_done ?? 0),
+      lsx_priority: r.lsx_priority == null ? null : Number(r.lsx_priority),
       order_value: Number(r.order_value ?? 0),
       line_count: Number(r.line_count ?? 0),
       deposit_percent: r.deposit_percent == null ? null : Number(r.deposit_percent),
@@ -343,7 +304,7 @@ export async function listLsxPrintLines(
     tech_spec: Spec | null
     packing: { qty_per_carton?: number; pack_unit_label?: string } | null
   }
-  type Raw = { id: string; qty: number; product: P | P[] | null }
+  type RawLine = { id: string; qty: number; product: P | P[] | null }
 
   // Override thông số per dòng (nếu người dùng nhập ở bước SX). Bản xem trước
   // (chưa phát lệnh) không có override — dùng thông số mặc định của SP.
@@ -361,7 +322,7 @@ export async function listLsxPrintLines(
     }
   }
 
-  return ((data ?? []) as Raw[]).map((r) => {
+  return ((data ?? []) as RawLine[]).map((r) => {
     const p = Array.isArray(r.product) ? r.product[0] : r.product
     const base: Spec = p?.tech_spec ?? {}
     const ov = override.get(r.id) ?? {}

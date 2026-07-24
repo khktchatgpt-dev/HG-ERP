@@ -2,28 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { Badge } from '@/components/Badge'
+import { EmptyState } from '@/components/erp/EmptyState'
+import { Spinner } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { Spinner } from '@/components/erp/Spinner'
-import { StatsBar } from '@/components/erp/StatsBar'
 
 /**
- * Gia công ngoài của LSX (SX-P4 — FR-OS): sổ giao ↔ nhận per chi tiết × đơn vị
- * (TTP, Vinh… = NCC dịch vụ trong danh mục NCC), đối chiếu thiếu/dư + %HT.
+ * GIA CÔNG NGOÀI per LSX (0084) — sổ giao/nhận per (chi tiết × NCC) + đối
+ * chiếu thiếu/dư. Self-fetch theo lsxId; form ghi 1 dòng (thống kê).
  */
 
-type Pair = {
-  component_id: string
-  component_name: string
-  supplier_id: string
-  supplier_name: string
-  sent: number
-  received: number
-  defect: number
-  missing: number
-  pct: number
-}
 type Entry = {
   id: string
   component_id: string
@@ -31,117 +20,128 @@ type Entry = {
   direction: 'send' | 'receive'
   entry_date: string
   qty: number
+  kg: number | null
   defect_qty: number
   note: string | null
   supplier_name: string | null
+  component_name: string | null
   created_by_name: string | null
 }
+
+type Pair = {
+  component_id: string
+  component_name: string | null
+  supplier_id: string
+  supplier_name: string | null
+  summary: {
+    sent: number
+    received: number
+    defect: number
+    missing: number
+    pct: number
+  }
+}
+
+type Data = { entries: Entry[]; pairs: Pair[] }
+
 type ComponentOpt = { id: string; name: string }
 type SupplierOpt = { id: string; name: string }
 
+const fmtN = (n: number) => n.toLocaleString('vi-VN')
+const fmtD = (d: string) => new Date(d).toLocaleDateString('vi-VN')
 const inp =
-  'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900'
 
 export function LsxOutsourcePanel({
   lsxId,
   canRecord,
-  active,
 }: {
   lsxId: string
   canRecord: boolean
-  active: boolean
 }) {
   const toast = useToast()
   const confirm = useConfirm()
-  const [busy, setBusy] = useState(false)
-  const [pairs, setPairs] = useState<Pair[]>([])
-  const [entries, setEntries] = useState<Entry[]>([])
+  const [data, setData] = useState<Data | null>(null)
   const [components, setComponents] = useState<ComponentOpt[]>([])
   const [suppliers, setSuppliers] = useState<SupplierOpt[]>([])
-  const [showEntries, setShowEntries] = useState(false)
-
+  const [busy, setBusy] = useState(false)
   const [form, setForm] = useState({
     component_id: '',
     supplier_id: '',
     direction: 'send' as 'send' | 'receive',
     entry_date: new Date().toISOString().slice(0, 10),
-    qty: '' as number | '',
-    defect_qty: '' as number | '',
+    qty: '',
+    defect_qty: '',
     note: '',
   })
 
   const load = useCallback(async () => {
     try {
-      const [os, comps, sups] = await Promise.all([
-        api<{ pairs: Pair[]; entries: Entry[] }>(
-          `/api/dept/production/lsx/${lsxId}/outsource`,
-        ),
-        api<{ lines: { id: string; name: string }[] }>(
-          `/api/dept/production/lsx/${lsxId}/components`,
-        ),
-        api<{ rows: { id: string; name: string }[] }>(
-          `/api/dept/supply/suppliers?active_only=true&page=1&page_size=200`,
-        ),
-      ])
-      setPairs(os.pairs)
-      setEntries(os.entries)
-      setComponents(comps.lines.map((l) => ({ id: l.id, name: l.name })))
-      setSuppliers(sups.rows.map((s) => ({ id: s.id, name: s.name })))
+      const d = await api<Data>(`/api/dept/production/lsx/${lsxId}/outsource`)
+      setData(d)
     } catch (e) {
-      toast.error(
-        'Không tải được gia công ngoài',
-        e instanceof ApiError ? e.message : 'Có lỗi',
-      )
+      toast.error('Không tải được sổ gia công', e instanceof ApiError ? e.message : '')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lsxId])
 
   useEffect(() => {
-    // load() là async — setState chạy trong callback đã resolve, không đồng bộ.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void load()
   }, [load])
 
-  async function save() {
-    if (!form.component_id || !form.supplier_id || form.qty === '' || form.qty <= 0) {
-      toast.error('Thiếu dữ liệu', 'Chọn chi tiết + đơn vị + SL > 0')
+  // Danh mục chi tiết (per lệnh) + NCC — nạp 1 lần cho form.
+  useEffect(() => {
+    if (!canRecord) return
+    let alive = true
+    void api<{ lines: { id: string; name: string }[] }>(
+      `/api/dept/production/lsx/${lsxId}/components`,
+    ).then((d) => {
+      if (alive) setComponents((d.lines ?? []).map((l) => ({ id: l.id, name: l.name })))
+    })
+    void api<{ rows: { id: string; name: string }[] }>(
+      '/api/dept/supply/suppliers?page=1&page_size=500',
+    ).then((d) => {
+      if (alive) setSuppliers((d.rows ?? []).map((s) => ({ id: s.id, name: s.name })))
+    })
+    return () => {
+      alive = false
+    }
+  }, [lsxId, canRecord])
+
+  async function submit() {
+    if (!form.component_id || !form.supplier_id || !form.qty) {
+      toast.error('Chọn chi tiết + NCC + số lượng')
       return
     }
     setBusy(true)
     try {
-      const res = await api<{ warnings: string[] }>(
-        `/api/dept/production/lsx/${lsxId}/outsource`,
-        {
-          method: 'POST',
-          body: {
-            component_id: form.component_id,
-            supplier_id: form.supplier_id,
-            direction: form.direction,
-            entry_date: form.entry_date,
-            qty: Number(form.qty),
-            defect_qty: form.defect_qty === '' ? 0 : Number(form.defect_qty),
-            note: form.note.trim() || null,
-          },
-        },
-      )
-      toast.success(
-        form.direction === 'send' ? 'Đã ghi đợt giao' : 'Đã ghi nhận về',
-        form.entry_date,
-      )
-      for (const w of res.warnings) toast.error('⚠ Lệch giao/nhận', w)
+      await api(`/api/dept/production/lsx/${lsxId}/outsource`, {
+        method: 'POST',
+        body: JSON.stringify({
+          component_id: form.component_id,
+          supplier_id: form.supplier_id,
+          direction: form.direction,
+          entry_date: form.entry_date,
+          qty: Number(form.qty),
+          defect_qty: form.defect_qty ? Number(form.defect_qty) : 0,
+          note: form.note.trim() || null,
+        }),
+      })
+      toast.success(form.direction === 'send' ? 'Đã ghi GIAO gia công' : 'Đã ghi NHẬN về')
       setForm((f) => ({ ...f, qty: '', defect_qty: '', note: '' }))
       await load()
     } catch (e) {
-      toast.error('Ghi thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+      toast.error(e instanceof ApiError ? e.message : 'Ghi thất bại')
     } finally {
       setBusy(false)
     }
   }
 
-  async function removeEntry(en: Entry) {
+  async function remove(en: Entry) {
     const ok = await confirm({
       title: 'Xoá bản ghi gia công?',
-      description: `${en.entry_date} · ${en.direction === 'send' ? 'giao' : 'nhận'} ${en.qty}. Xoá rồi nhập lại nếu ghi nhầm.`,
+      description: `${en.component_name ?? ''} · ${en.direction === 'send' ? 'giao' : 'nhận'} ${fmtN(en.qty)} · ${en.supplier_name ?? ''}`,
       tone: 'danger',
       confirmLabel: 'Xoá',
     })
@@ -152,248 +152,201 @@ export function LsxOutsourcePanel({
       toast.success('Đã xoá bản ghi')
       await load()
     } catch (e) {
-      toast.error('Xoá thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+      toast.error(e instanceof ApiError ? e.message : 'Xoá thất bại')
     } finally {
       setBusy(false)
     }
   }
 
-  const componentName = (id: string) => components.find((c) => c.id === id)?.name ?? '?'
-
-  // LSX chưa dùng gia công ngoài + không nhập được → ẩn cho gọn màn.
-  if (pairs.length === 0 && !(canRecord && active)) return null
-
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          Gia công ngoài ({pairs.length} cặp chi tiết × đơn vị)
-        </h2>
-      </div>
-      <div className="flex flex-col gap-4 p-4">
-        {pairs.length > 0 &&
-          (() => {
-            const sent = pairs.reduce((a, p) => a + p.sent, 0)
-            const recv = pairs.reduce((a, p) => a + p.received, 0)
-            const defect = pairs.reduce((a, p) => a + p.defect, 0)
-            const out = Math.max(0, sent - recv)
-            return (
-              <StatsBar
-                stats={[
-                  { label: 'Đã giao', value: sent, tone: 'blue' },
-                  { label: 'Nhận về', value: recv, tone: 'green' },
-                  { label: 'Còn ở ngoài', value: out, tone: out > 0 ? 'amber' : 'gray' },
-                  {
-                    label: 'Hỏng khi nhận',
-                    value: defect,
-                    tone: defect > 0 ? 'red' : 'gray',
-                  },
-                ]}
-              />
-            )
-          })()}
-        {pairs.length > 0 && (
+    <div className="flex flex-col gap-4">
+      {/* Đối chiếu per (chi tiết, NCC) */}
+      {data && data.pairs.length > 0 && (
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <h3 className="mb-2 text-sm font-semibold">Đối chiếu giao / nhận</h3>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-xs">
+            <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
+                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
                   <th className="py-1.5 pr-2">Chi tiết</th>
-                  <th className="py-1.5 pr-2">Đơn vị GC</th>
-                  <th className="w-20 py-1.5 pr-2 text-right">Đã giao</th>
-                  <th className="w-20 py-1.5 pr-2 text-right">Nhận về</th>
-                  <th className="w-20 py-1.5 pr-2 text-right">Thiếu/(Dư)</th>
-                  <th className="w-16 py-1.5 pr-2 text-right">Hỏng</th>
-                  <th className="w-16 py-1.5 pr-2 text-right">%HT</th>
+                  <th className="py-1.5 pr-2">NCC</th>
+                  <th className="py-1.5 pr-2 text-right">Giao</th>
+                  <th className="py-1.5 pr-2 text-right">Nhận</th>
+                  <th className="py-1.5 pr-2 text-right">Phế</th>
+                  <th className="py-1.5 text-right">Thiếu/(Dư)</th>
                 </tr>
               </thead>
               <tbody>
-                {pairs.map((p) => (
+                {data.pairs.map((p) => (
                   <tr
                     key={`${p.component_id}|${p.supplier_id}`}
                     className="border-b border-zinc-100 dark:border-zinc-900"
                   >
                     <td className="py-1.5 pr-2 font-medium">{p.component_name}</td>
                     <td className="py-1.5 pr-2">{p.supplier_name}</td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {p.sent.toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {p.received.toLocaleString('vi-VN')}
+                    <td className="py-1.5 pr-2 text-right">{fmtN(p.summary.sent)}</td>
+                    <td className="py-1.5 pr-2 text-right">{fmtN(p.summary.received)}</td>
+                    <td className="py-1.5 pr-2 text-right text-red-500">
+                      {p.summary.defect > 0 ? fmtN(p.summary.defect) : '—'}
                     </td>
                     <td
-                      className={`py-1.5 pr-2 text-right ${p.missing > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
+                      className={`py-1.5 text-right font-semibold ${p.summary.missing > 0 ? 'text-amber-600' : 'text-green-600'}`}
                     >
-                      {p.missing.toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right">
-                      {p.defect > 0 ? (
-                        <span className="text-red-500">{p.defect}</span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="py-1.5 pr-2 text-right font-medium">
-                      {Math.round(p.pct * 100)}%
+                      {fmtN(p.summary.missing)}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-        )}
+        </section>
+      )}
 
-        {canRecord && active && components.length > 0 && (
-          <div className="flex flex-wrap items-end gap-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-            <label className="flex flex-col gap-1 text-xs">
-              Chi tiết
-              <select
-                value={form.component_id}
-                onChange={(e) => setForm({ ...form, component_id: e.target.value })}
-                className={`${inp} min-w-32`}
-              >
-                <option value="">— chọn —</option>
-                {components.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              Đơn vị GC
-              <select
-                value={form.supplier_id}
-                onChange={(e) => setForm({ ...form, supplier_id: e.target.value })}
-                className={`${inp} min-w-28`}
-              >
-                <option value="">— chọn —</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              Loại
-              <select
-                value={form.direction}
-                onChange={(e) =>
-                  setForm({ ...form, direction: e.target.value as 'send' | 'receive' })
-                }
-                className={inp}
-              >
-                <option value="send">Giao đi</option>
-                <option value="receive">Nhận về</option>
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              Ngày
-              <input
-                type="date"
-                value={form.entry_date}
-                onChange={(e) => setForm({ ...form, entry_date: e.target.value })}
-                className={inp}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs">
-              SL
+      {/* Form ghi */}
+      {canRecord && (
+        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <h3 className="mb-2 text-sm font-semibold">Ghi giao / nhận</h3>
+          <div className="flex flex-wrap items-end gap-2">
+            <select
+              value={form.direction}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  direction: e.target.value as 'send' | 'receive',
+                }))
+              }
+              className={inp}
+            >
+              <option value="send">GIAO đi</option>
+              <option value="receive">NHẬN về</option>
+            </select>
+            <select
+              value={form.component_id}
+              onChange={(e) => setForm((f) => ({ ...f, component_id: e.target.value }))}
+              className={`${inp} min-w-44`}
+            >
+              <option value="">— Chi tiết —</option>
+              {components.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={form.supplier_id}
+              onChange={(e) => setForm((f) => ({ ...f, supplier_id: e.target.value }))}
+              className={`${inp} min-w-44`}
+            >
+              <option value="">— Nhà gia công —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            <input
+              type="date"
+              value={form.entry_date}
+              onChange={(e) => setForm((f) => ({ ...f, entry_date: e.target.value }))}
+              className={inp}
+            />
+            <input
+              type="number"
+              min="0"
+              placeholder="SL"
+              value={form.qty}
+              onChange={(e) => setForm((f) => ({ ...f, qty: e.target.value }))}
+              className={`${inp} w-24`}
+            />
+            {form.direction === 'receive' && (
               <input
                 type="number"
                 min="0"
-                step="1"
-                value={form.qty}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    qty: e.target.value === '' ? '' : Number(e.target.value),
-                  })
-                }
+                placeholder="Phế"
+                value={form.defect_qty}
+                onChange={(e) => setForm((f) => ({ ...f, defect_qty: e.target.value }))}
                 className={`${inp} w-20`}
               />
-            </label>
-            {form.direction === 'receive' && (
-              <label className="flex flex-col gap-1 text-xs">
-                Hỏng
-                <input
-                  type="number"
-                  min="0"
-                  step="1"
-                  value={form.defect_qty}
-                  onChange={(e) =>
-                    setForm({
-                      ...form,
-                      defect_qty: e.target.value === '' ? '' : Number(e.target.value),
-                    })
-                  }
-                  className={`${inp} w-16`}
-                />
-              </label>
             )}
-            <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs">
-              Ghi chú
-              <input
-                value={form.note}
-                onChange={(e) => setForm({ ...form, note: e.target.value })}
-                className={inp}
-              />
-            </label>
+            <input
+              placeholder="Ghi chú"
+              value={form.note}
+              onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+              className={`${inp} min-w-40 flex-1`}
+            />
             <button
+              onClick={submit}
               disabled={busy}
-              onClick={() => void save()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
             >
-              {busy && <Spinner size={12} />}Ghi
+              {busy && <Spinner size={14} />} Ghi sổ
             </button>
           </div>
-        )}
+        </section>
+      )}
 
-        {entries.length > 0 && (
-          <div>
-            <button
-              onClick={() => setShowEntries((v) => !v)}
-              className="text-xs text-sky-600 hover:underline dark:text-sky-400"
-            >
-              {showEntries ? '▾' : '▸'} Sổ giao/nhận ({entries.length})
-            </button>
-            {showEntries && (
-              <ul className="mt-2 flex flex-col gap-1 text-xs">
-                {entries.slice(0, 50).map((en) => (
-                  <li
-                    key={en.id}
-                    className="flex flex-wrap items-center gap-2 border-l-2 border-zinc-300 pl-2 dark:border-zinc-700"
-                  >
-                    <span className="text-zinc-500">
-                      {new Date(en.entry_date).toLocaleDateString('vi-VN')}
-                    </span>
+      {/* Sổ */}
+      {!data ? (
+        <p className="py-6 text-center text-xs text-zinc-400">Đang tải…</p>
+      ) : data.entries.length === 0 ? (
+        <EmptyState
+          icon="⇄"
+          title="Chưa có gia công ngoài"
+          description="Ghi giao đi / nhận về khi chi tiết được đưa ra ngoài gia công."
+        />
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                <th className="px-3 py-1.5">Ngày</th>
+                <th className="py-1.5 pr-2">Chiều</th>
+                <th className="py-1.5 pr-2">Chi tiết</th>
+                <th className="py-1.5 pr-2">NCC</th>
+                <th className="py-1.5 pr-2 text-right">SL</th>
+                <th className="py-1.5 pr-2 text-right">Phế</th>
+                <th className="py-1.5 pr-2">Ghi chú</th>
+                <th className="py-1.5 pr-2">Người ghi</th>
+                <th className="w-8 py-1.5" />
+              </tr>
+            </thead>
+            <tbody>
+              {data.entries.map((en) => (
+                <tr key={en.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                  <td className="px-3 py-1.5 text-xs">{fmtD(en.entry_date)}</td>
+                  <td className="py-1.5 pr-2">
                     <Badge tone={en.direction === 'send' ? 'blue' : 'green'}>
                       {en.direction === 'send' ? 'Giao' : 'Nhận'}
                     </Badge>
-                    <span className="font-medium">{componentName(en.component_id)}</span>
-                    <span>
-                      → {en.supplier_name ?? '?'} · SL <b>{en.qty}</b>
-                      {en.defect_qty > 0 && (
-                        <span className="text-red-500"> · hỏng {en.defect_qty}</span>
-                      )}
-                    </span>
-                    {en.note && <span className="text-zinc-400">{en.note}</span>}
-                    <span className="text-zinc-400">{en.created_by_name ?? '—'}</span>
-                    {canRecord && active && (
+                  </td>
+                  <td className="py-1.5 pr-2 font-medium">{en.component_name}</td>
+                  <td className="py-1.5 pr-2">{en.supplier_name}</td>
+                  <td className="py-1.5 pr-2 text-right font-semibold">{fmtN(en.qty)}</td>
+                  <td className="py-1.5 pr-2 text-right text-red-500">
+                    {en.defect_qty > 0 ? fmtN(en.defect_qty) : '—'}
+                  </td>
+                  <td className="py-1.5 pr-2 text-xs text-zinc-500">{en.note ?? '—'}</td>
+                  <td className="py-1.5 pr-2 text-xs text-zinc-500">
+                    {en.created_by_name ?? '—'}
+                  </td>
+                  <td className="py-1.5 pr-2 text-right">
+                    {canRecord && (
                       <button
-                        onClick={() => void removeEntry(en)}
-                        className="text-red-500 hover:text-red-700"
-                        title="Xoá bản ghi (nhập nhầm)"
+                        onClick={() => void remove(en)}
+                        disabled={busy}
+                        className="text-red-500 hover:text-red-700 disabled:opacity-30"
+                        aria-label="Xoá"
                       >
                         ✕
                       </button>
                     )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
   )
 }

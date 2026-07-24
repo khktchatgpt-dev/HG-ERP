@@ -13,8 +13,13 @@ describe('computeDerivedRoleKeys — mirror backfill 0073', () => {
     expect(derive('admin', null, null)).toEqual(['admin'])
   })
 
-  it('manager không phòng → chỉ director', () => {
-    expect(derive('manager', null, null)).toEqual(['director'])
+  it('manager KHÔNG thuộc phòng BGĐ → không còn director (0086)', () => {
+    expect(derive('manager', null, null)).toEqual([])
+    expect(derive('manager', 'Kho', 'warehouse')).toEqual(['warehouse_staff'])
+  })
+
+  it('manager phòng Ban Giám Đốc (workspace exec) → director', () => {
+    expect(derive('manager', 'Ban Giám Đốc', 'exec')).toEqual(['director'])
   })
 
   it('NV Sản xuất (workspace production) → production_staff', () => {
@@ -23,9 +28,8 @@ describe('computeDerivedRoleKeys — mirror backfill 0073', () => {
     ])
   })
 
-  it('manager phòng Sản xuất → director + production_staff', () => {
+  it('quản đốc (manager phòng Xưởng) → chỉ production_staff, KHÔNG director', () => {
     expect(derive('manager', 'Xưởng Sản Xuất', 'production')).toEqual([
-      'director',
       'production_staff',
     ])
   })
@@ -62,8 +66,7 @@ describe('computeDerivedRoleKeys — mirror backfill 0073', () => {
     expect(derive('employee', 'Bán Hàng', 'sales', true)).toEqual(['head', 'sales_staff'])
   })
 
-  it('workspace không map (exec/system) → không role phòng', () => {
-    expect(derive('manager', 'Ban Giám Đốc', 'exec')).toEqual(['director'])
+  it('workspace không map (system) → không role phòng', () => {
     expect(derive('employee', null, 'system')).toEqual([])
   })
 })

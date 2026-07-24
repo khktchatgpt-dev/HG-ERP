@@ -4,6 +4,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
@@ -38,12 +39,36 @@ export default async function OrderDetailPage({
   const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
   const lsx = await productionRepo.findByOrder(order.id)
 
-  // Timeline: owner + tiến độ LSX + nhãn giai đoạn (lỗi phụ không chặn xem đơn).
-  const [owner, progress, stages] = await Promise.all([
+  // Timeline: owner + công đoạn đã xong (jobs — 0084) + nhãn giai đoạn.
+  const [owner, jobs, stages] = await Promise.all([
     order.created_by ? usersRepo.findById(order.created_by) : null,
-    lsx ? productionRepo.listProgress(lsx.id) : Promise.resolve([]),
+    lsx ? jobsRepo.listByLsx(lsx.id) : Promise.resolve([]),
     productionRepo.listStages(),
   ])
+  // Map jobs → sự kiện timeline (giữ nguyên OrderDetailView): job done = mốc
+  // "Hoàn thành công đoạn"; nhận vật tư = mốc trên header lệnh.
+  const progress = [
+    ...(lsx?.materials_received_at
+      ? [
+          {
+            stage: '',
+            action: 'received' as const,
+            note: null,
+            updated_by_name: null,
+            created_at: lsx.materials_received_at,
+          },
+        ]
+      : []),
+    ...jobs
+      .filter((j) => j.status === 'done' && j.done_at)
+      .map((j) => ({
+        stage: j.stage,
+        action: 'done' as const,
+        note: j.note,
+        updated_by_name: j.team_name,
+        created_at: j.done_at!,
+      })),
+  ]
 
   // Hệ quả nếu huỷ đơn — confirm dialog nói thật thay vì câu chung chung (P3).
   let cancelImpact: CancelImpact | null = null

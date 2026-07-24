@@ -65,23 +65,45 @@ function unwrap(rows: Raw[] | null): ComponentRow[] {
 export const componentsRepo = {
   async listByLsx(productionOrderId: string): Promise<ComponentRow[]> {
     const { data } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .select(`${COLS}, material:warehouse_materials(code, name, unit)`)
       .eq('production_order_id', productionOrderId)
       .order('sort_order')
     return unwrap(data as Raw[] | null)
   },
 
+  /**
+   * Chi tiết của NHIỀU lệnh kèm SL sản phẩm dòng đơn (join sales_order_lines)
+   * — gate xác nhận công đoạn + màn toàn cảnh tính needed/done không N query.
+   */
+  async listByLsxBulk(
+    productionOrderIds: string[],
+  ): Promise<(ComponentRow & { line_qty: number })[]> {
+    if (!productionOrderIds.length) return []
+    const { data } = await db()
+      .from('production_components')
+      .select(`${COLS}, line:sales_order_lines(qty)`)
+      .in('production_order_id', productionOrderIds)
+      .order('sort_order')
+      .limit(20000)
+    type BulkRaw = Raw & { line: { qty: number } | { qty: number }[] | null }
+    return (unwrap(data as Raw[] | null) as ComponentRow[]).map((r, i) => {
+      const raw = (data as BulkRaw[] | null)?.[i]
+      const line = raw ? (Array.isArray(raw.line) ? raw.line[0] : raw.line) : null
+      return { ...r, line_qty: Number(line?.qty) || 0 }
+    })
+  },
+
   /** Ghi đè trọn bộ bảng chi tiết của 1 LSX (pattern BOM editor). */
   async replaceAll(productionOrderId: string, lines: ComponentInput[]): Promise<void> {
     const { error: delErr } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .delete()
       .eq('production_order_id', productionOrderId)
     if (delErr) throw new Error(delErr.message)
     if (lines.length === 0) return
     const { error } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .insert(
         lines.map((l, i) => ({
           production_order_id: productionOrderId,
@@ -114,7 +136,7 @@ export const componentsRepo = {
   ): Promise<(ComponentRow & { product_id: string })[]> {
     if (productIds.length === 0) return []
     const { data } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .select(
         `${COLS}, created_at, material:warehouse_materials(code, name, unit), line:sales_order_lines!inner(product_id)`,
       )
@@ -149,7 +171,7 @@ export const componentsRepo = {
   > {
     if (productionOrderIds.length === 0) return []
     const { data } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .select(
         'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:sales_order_lines(qty)',
       )
@@ -179,7 +201,7 @@ export const componentsRepo = {
   /** Số dòng chi tiết theo LSX — cờ "Chưa nhập bảng chi tiết" ở bảng điều phối. */
   async countsByLsx(): Promise<Map<string, number>> {
     const { data } = await db()
-      .from('production_order_components')
+      .from('production_components')
       .select('production_order_id')
       .limit(20000)
     const map = new Map<string, number>()

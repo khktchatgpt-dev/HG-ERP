@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import { lsxRejectSchema } from '@/modules/dept/production/production.schema'
 
 type Params = { params: Promise<{ id: string }> }
@@ -11,6 +11,6 @@ export const POST = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
   const { reason } = await parseJson(req, lsxRejectSchema)
-  const lsx = await productionService.reject(user, id, reason)
+  const lsx = await lsxService.reject(user, id, reason)
   return NextResponse.json({ lsx })
 })

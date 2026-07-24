@@ -53,7 +53,9 @@ export type OrderRow = {
   production_order_id: string | null
   lsx_code: string | null
   lsx_status: string | null
-  current_stage: string | null
+  lsx_priority: number | null
+  jobs_total: number
+  jobs_done: number
   ship_date: string | null
   lines_bom_pending: number
   pos_open: number
@@ -436,7 +438,8 @@ function OrderDetail({
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const due = dueBadge(daysUntil(r.due_date, today))
-  const stageLabel = stages.find((s) => s.code === r.current_stage)?.label ?? null
+  const stageLabel =
+    r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null
   const pendingApproval = r.lsx_status === 'pending_approval'
   const lsxHref = r.production_order_id ? `/exec/lsx/${r.production_order_id}` : null
 

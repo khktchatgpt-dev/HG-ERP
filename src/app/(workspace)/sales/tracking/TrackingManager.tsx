@@ -28,7 +28,8 @@ type Row = {
   production_order_id: string | null
   lsx_code: string | null
   lsx_status: string | null
-  current_stage: string | null
+  jobs_total: number
+  jobs_done: number
   ship_date: string | null
   lines_bom_pending: number
   pos_open: number
@@ -55,11 +56,6 @@ export function TrackingManager({
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-
-  const stageLabel = useMemo(() => {
-    const m = new Map(stages.map((s) => [s.code, s.label]))
-    return (code: string | null) => (code ? (m.get(code) ?? code) : null)
-  }, [stages])
 
   const today = new Date().toISOString().slice(0, 10)
   // FR-SAL-09: nguy cơ trễ = sát/quá hạn giao + lý do (BOM, vật tư, LSX chưa chạy).
@@ -110,23 +106,6 @@ export function TrackingManager({
     return { bomPending, posOpen, late, risk, inProd }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
-
-  async function updateStage(r: Row, stage: string) {
-    if (!r.production_order_id) return
-    setBusy(true)
-    try {
-      await api(`/api/dept/production/lsx/${r.production_order_id}/stage`, {
-        method: 'POST',
-        body: { stage, action: 'done' },
-      })
-      toast.success('Đã cập nhật giai đoạn', `${r.lsx_code} → ${stageLabel(stage)}`)
-      router.refresh()
-    } catch (e) {
-      toast.error('Cập nhật thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   async function completeLsx(r: Row) {
     if (!r.production_order_id) return
@@ -215,24 +194,13 @@ export function TrackingManager({
             >
               {r.lsx_code} →
             </a>
-            {canManage && !done ? (
-              <select
-                value={r.current_stage ?? ''}
-                onChange={(e) => e.target.value && void updateStage(r, e.target.value)}
-                className="rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
-              >
-                <option value="">— giai đoạn —</option>
-                {stages.map((s) => (
-                  <option key={s.code} value={s.code}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <Badge tone={done ? 'green' : 'amber'}>
-                {done ? 'Hoàn thành' : (stageLabel(r.current_stage) ?? 'Chưa bắt đầu')}
-              </Badge>
-            )}
+            <Badge tone={done ? 'green' : r.jobs_done > 0 ? 'amber' : 'gray'}>
+              {done
+                ? 'Hoàn thành'
+                : r.jobs_total > 0
+                  ? `${r.jobs_done}/${r.jobs_total} công đoạn`
+                  : 'Chưa lên kế hoạch'}
+            </Badge>
           </div>
         )
       },

@@ -13,6 +13,26 @@ const SIGNED_GET_TTL_SECONDS = 60 * 60
 
 const urlCache = new SignedUrlCache()
 
+/**
+ * Hạn THẬT của URL ký — đọc claim `exp` trong token JWT thay vì tự cộng
+ * `Date.now() + ttl`. Lý do: Supabase xác thực bằng ĐỒNG HỒ CỦA NÓ; nếu máy
+ * chạy app lệch giờ / ngủ đông giữa chừng, cache tính theo giờ local sẽ giữ
+ * URL "tươi giả" trong khi Supabase đã coi hết hạn (InvalidJWT exp) — ảnh vỡ
+ * hàng loạt. Không đọc được token → fallback cách tính cũ.
+ */
+export function signedUrlExpiryMs(signedUrl: string, fallbackMs: number): number {
+  const m = signedUrl.match(/token=([^&]+)/)
+  if (!m) return fallbackMs
+  try {
+    const payload = JSON.parse(
+      Buffer.from(m[1].split('.')[1], 'base64url').toString('utf8'),
+    ) as { exp?: number }
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : fallbackMs
+  } catch {
+    return fallbackMs
+  }
+}
+
 export const storage = {
   async createSignedUploadUrl(
     bucket: FileBucket,
@@ -43,7 +63,7 @@ export const storage = {
       .createSignedUrl(path, ttlSeconds)
     if (error || !data) throw new Error(error?.message ?? 'signed url failed')
 
-    const expiresAt = now + ttlSeconds * 1000
+    const expiresAt = signedUrlExpiryMs(data.signedUrl, now + ttlSeconds * 1000)
     urlCache.set(key, data.signedUrl, expiresAt, now)
     return { url: data.signedUrl, expiresAt }
   },
@@ -72,9 +92,10 @@ export const storage = {
         .storage.from(bucket)
         .createSignedUrls(misses, ttlSeconds)
       if (error) throw new Error(error.message)
-      const expiresAt = now + ttlSeconds * 1000
+      const fallback = now + ttlSeconds * 1000
       for (const item of data ?? []) {
         if (item.error || !item.signedUrl || !item.path) continue
+        const expiresAt = signedUrlExpiryMs(item.signedUrl, fallback)
         urlCache.set(
           SignedUrlCache.key(bucket, item.path),
           item.signedUrl,

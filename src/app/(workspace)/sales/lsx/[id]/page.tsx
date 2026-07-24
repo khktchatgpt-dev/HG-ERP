@@ -1,18 +1,20 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { productionService } from '@/modules/dept/production/production.service'
+import { lsxService } from '@/modules/dept/production/lsx.service'
 import {
   productionRepo,
   listLsxPrintLines,
 } from '@/modules/dept/production/production.repo'
-import { routesService } from '@/modules/dept/production/routes.service'
+import { entriesService } from '@/modules/dept/production/entries.service'
 import { filesService } from '@/modules/core/files/files.service'
-import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { HttpError } from '@/server/http'
 import { LsxDetailView } from '@/components/production/LsxDetailView'
 
-/** Trang chi tiết Lệnh sản xuất: đủ thông tin + spec + file + duyệt/tiến độ/in. */
+/**
+ * Trang chi tiết LSX của SALES: xem hồ sơ + GỬI DUYỆT LẠI khi bị từ chối
+ * (sửa kèm header). Thao tác xưởng/kế hoạch nằm bên workspace Sản xuất.
+ */
 export default async function LsxDetailPage({
   params,
 }: {
@@ -23,27 +25,19 @@ export default async function LsxDetailPage({
 
   let data
   try {
-    data = await productionService.detail(user, id)
+    data = await lsxService.detail(user, id)
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { lsx, progress } = data
+  const { lsx, jobs } = data
 
-  // Vật tư nạp trực tiếp từ repo (read-only) cho grid bảng chi tiết — API kho
-  // guard theo phòng Kho nên không gọi qua service kho từ đây.
-  const [lines, stages, { rows: materials }, allowedByLine] = await Promise.all([
+  const [lines, stages, summary, dept] = await Promise.all([
     listLsxPrintLines(id, lsx.sales_order_id),
     productionRepo.listStages(),
-    materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
-    routesService.allowedStagesByLine(id),
+    entriesService.summary(user, id).catch(() => null),
+    user.department_id ? departmentsRepo.findById(user.department_id) : null,
   ])
-  // Lọc select giai đoạn khi TẤT CẢ SP đã chốt lộ trình (0063).
-  const lineIds = [...new Set(lines.map((l) => l.order_line_id))]
-  const routeStages =
-    lineIds.length > 0 && lineIds.every((lid) => allowedByLine.has(lid))
-      ? [...new Set([...allowedByLine.values()].flatMap((s) => [...s]))]
-      : null
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
@@ -59,15 +53,8 @@ export default async function LsxDetailPage({
     }),
   )
 
-  const dept = user.department_id
-    ? await departmentsRepo.findById(user.department_id)
-    : null
-  const canApprove = user.role === 'admin' || user.role === 'manager'
-  // Tiến độ + hoàn thành: GĐ/QL (Cung ứng hết quyền thao tác — siết 07/2026).
-  const canManage = canApprove
-  // Nhập sổ ở trang này: chỉ admin (xưởng dùng /production/lsx).
-  const canRecord = user.role === 'admin'
-  const canEditSpec = user.role === 'admin' || dept?.name === 'Bán Hàng'
+  const isMgr = user.role === 'admin' || user.role === 'manager'
+  const isSales = user.role === 'admin' || dept?.name === 'Bán Hàng'
 
   return (
     <LsxDetailView
@@ -78,12 +65,13 @@ export default async function LsxDetailPage({
         order_id: lsx.sales_order_id,
         order_code: lsx.order_code,
         customer_name: lsx.customer_name,
-        current_stage: lsx.current_stage,
+        priority: lsx.priority,
         ship_date: lsx.ship_date,
         received_date: lsx.received_date,
         completed_at: lsx.completed_at,
         approved_at: lsx.approved_at,
         rejected_reason: lsx.rejected_reason,
+        materials_received_at: lsx.materials_received_at,
         container_summary: lsx.container_summary,
         note: lsx.note,
         created_at: lsx.created_at,
@@ -103,28 +91,15 @@ export default async function LsxDetailPage({
           wood: l.tech_spec.wood ?? '',
         },
       }))}
-      progress={progress.map((p) => ({
-        id: p.id,
-        stage: p.stage,
-        action: p.action,
-        note: p.note,
-        by: p.updated_by_name,
-        at: p.created_at,
-      }))}
+      jobs={jobs}
       stages={stages}
-      canApprove={canApprove}
-      canManage={canManage}
-      canRecord={canRecord}
-      canEditSpec={canEditSpec}
-      materials={materials.map((m) => ({
-        id: m.id,
-        code: m.code,
-        name: m.name,
-        unit: m.unit,
-      }))}
-      // Bảng chi tiết: Kế hoạch (KH-CƯ) nhập; GĐ/QL sửa được khi cần.
-      canEditComponents={canManage}
-      routeStages={routeStages}
+      components={summary?.components ?? []}
+      synced={summary?.synced_by_line ?? []}
+      supply={null}
+      breadcrumbs={[{ label: 'Bán hàng', href: '/sales' }, { label: `LSX ${lsx.code}` }]}
+      canApprove={isMgr}
+      canManage={isMgr}
+      canResubmit={isSales}
     />
   )
 }

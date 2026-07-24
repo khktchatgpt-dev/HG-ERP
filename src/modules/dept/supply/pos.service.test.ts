@@ -33,9 +33,11 @@ import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 const staff = { id: 'u-sup', role: 'employee', department_id: 'd-sup' } as unknown as User
-const boss = { id: 'u-boss', role: 'manager', department_id: null } as unknown as User
+// 0086: director = manager THUỘC PHÒNG BGĐ (workspace exec).
+const boss = { id: 'u-boss', role: 'manager', department_id: 'd-bgd' } as unknown as User
 
 const DEPTS: Record<string, DeptInfo> = {
+  'd-bgd': { name: 'Ban Giám Đốc', workspace_id: 'exec' },
   'd-sup': { name: 'Cung Ứng - Mua Hàng', workspace_id: 'planning' },
 }
 

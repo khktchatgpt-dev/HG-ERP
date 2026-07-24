@@ -1,11 +1,11 @@
 import { componentsRepo, type ComponentInput, type ComponentRow } from './components.repo'
-import { outputsRepo } from './outputs.repo'
+import { entriesRepo } from './entries.repo'
+import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { bomLinesRepo } from '@/modules/dept/technical/technical.repo'
+import { bomLinesRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
-import { routesService } from './routes.service'
 import {
   aggregateMaterialNeeds,
   calcComponent,
@@ -15,13 +15,13 @@ import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
 
 /**
- * Bảng chi tiết theo LSX (plan-lsx-components P1). Nguyên tắc: NHẬP TAY bởi
- * Kế hoạch (phòng KH-CƯ) — BOM kỹ thuật/lệnh trước chỉ là nguồn GỢI Ý điền
- * sẵn; snapshot per lệnh, không tham chiếu sống vào BOM.
+ * BẢNG ĐỊNH HÌNH chi tiết theo LSX (vai THỐNG KÊ xưởng — user chốt 07/2026):
+ * nháp từ BOM Kỹ thuật trong hệ → thống kê sửa → chốt SNAPSHOT per lệnh
+ * (sửa BOM sau không đổi lệnh đang chạy). Đại lượng dẫn xuất tính ở service
+ * (src/lib/component-needs.ts).
  */
 
-// Guard định hình nằm ở perms.ts (tránh vòng import với routes.service);
-// re-export để caller cũ (access.ts, shaping pages) không phải đổi.
+// Guard nằm ở perms.ts (dùng chéo với access.ts không vòng import).
 export { canEditComponents }
 
 export type ComponentOrderLine = {
@@ -46,36 +46,48 @@ async function lsxWithLines(lsxId: string) {
   return { lsx, orderLines: lines }
 }
 
+/** Lộ trình per dòng SP từ kế hoạch (jobs theo seq) — thay bảng routes cũ. */
+async function jobStagesByLine(lsxId: string): Promise<Map<string, string[]>> {
+  const jobs = await jobsRepo.listByLsx(lsxId)
+  const map = new Map<string, string[]>()
+  for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
+    const arr = map.get(j.order_line_id) ?? []
+    arr.push(j.stage)
+    map.set(j.order_line_id, arr)
+  }
+  return map
+}
+
 export const componentsService = {
-  /** Đọc: mọi NV đã đăng nhập (xưởng xem chi tiết phải làm, kho/GĐ tra cứu). */
+  /** Đọc: mọi NV đã đăng nhập (xưởng xem việc phải làm, kho/GĐ tra cứu). */
   async list(_user: User, lsxId: string) {
     const { lsx, orderLines } = await lsxWithLines(lsxId)
-    const [lines, lockedByOutputs] = await Promise.all([
+    const [lines, lockedByEntries] = await Promise.all([
       componentsRepo.listByLsx(lsxId),
       // Báo TRƯỚC cho UI khoá bảng (banner) thay vì để người nhập bấm Lưu rồi
       // mới ăn 400 — save vẫn chặn ở dưới làm lớp cuối.
-      outputsRepo.existsForLsx(lsxId),
+      entriesRepo.existsForLsx(lsxId),
     ])
     return {
       lsx_status: lsx.status,
-      locked_by_outputs: lockedByOutputs,
+      locked_by_entries: lockedByEntries,
       order_lines: orderLines,
       lines,
     }
   },
 
-  /** Ghi đè trọn bộ bảng chi tiết (pattern BOM editor). */
+  /** Ghi đè trọn bộ bảng định hình (pattern BOM editor). */
   async save(user: User, lsxId: string, input: ComponentInput[]): Promise<void> {
-    await assertAction(user, 'production.components.edit')
+    await assertAction(user, 'production.shaping.manage')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
-      throw BadRequest('LSX đã kết thúc — bảng chi tiết chỉ còn để tra cứu')
+      throw BadRequest('LSX đã kết thúc — bảng định hình chỉ còn để tra cứu')
     }
-    // Đã có sổ sản lượng → ghi đè bảng chi tiết sẽ cascade mất sổ (0039). Chốt
-    // bảng trước khi nhập sản lượng; sai thì xoá hết bản ghi sản lượng trước.
-    if (await outputsRepo.existsForLsx(lsxId)) {
+    // Đã có sổ số liệu → ghi đè bảng sẽ cascade mất sổ. Chốt bảng trước khi
+    // nhập sổ; sai thì xoá hết bản ghi sổ trước.
+    if (await entriesRepo.existsForLsx(lsxId)) {
       throw BadRequest(
-        'LSX đã có sản lượng — không ghi đè bảng chi tiết được (xoá sổ sản lượng trước nếu thật sự cần sửa)',
+        'LSX đã có sổ số liệu — không ghi đè bảng định hình được (xoá sổ trước nếu thật sự cần sửa)',
       )
     }
     const validLineIds = new Set(orderLines.map((l) => l.id))
@@ -84,14 +96,14 @@ export const componentsService = {
         throw BadRequest('Có dòng chi tiết gắn vào dòng SP không thuộc lệnh này')
       }
     }
-    // Công đoạn cuối per chi tiết (0041) phải thuộc lộ trình đã chốt (0063) —
-    // nếu lọt, %HT của chi tiết không bao giờ đạt vì sổ chặn nhập giai đoạn đó.
-    const allowedByLine = await routesService.allowedStagesByLine(lsxId)
+    // Công đoạn cuối per chi tiết phải thuộc kế hoạch dòng SP (nếu đã lên KH)
+    // — nếu lọt, %HT của chi tiết không bao giờ đạt vì sổ chặn công đoạn đó.
+    const stagesByLine = await jobStagesByLine(lsxId)
     for (const l of input) {
-      const allowed = allowedByLine.get(l.order_line_id)
-      if (allowed && l.final_stage && !allowed.has(l.final_stage)) {
+      const allowed = stagesByLine.get(l.order_line_id)
+      if (allowed && l.final_stage && !allowed.includes(l.final_stage)) {
         throw BadRequest(
-          `Chi tiết "${l.name}": công đoạn cuối không thuộc lộ trình đã chốt của SP — đổi công đoạn cuối hoặc sửa lộ trình trước`,
+          `Chi tiết "${l.name}": công đoạn cuối không thuộc kế hoạch của SP — đổi công đoạn cuối hoặc sửa kế hoạch trước`,
         )
       }
     }
@@ -99,18 +111,71 @@ export const componentsService = {
   },
 
   /**
-   * Gợi ý điền sẵn — KHÔNG ghi DB, trả dòng cho grid để người nhập sửa:
-   *  - 'bom': từ BOM kỹ thuật của từng SP (mỗi dòng BOM → 1 dòng chi tiết thô,
-   *    tên tạm = tên vật tư — nhắc rõ đây chỉ là khung, BOM có thể sai/thiếu).
-   *  - 'previous': chép bảng chi tiết từ LSX gần nhất có cùng SP (nguồn nhập
-   *    nhanh thực tế nhất — ~17 mã SP lặp lại nhiều lệnh).
+   * LƯU NGƯỢC bảng định hình của 1 dòng SP thành BOM KỸ THUẬT của SP (user
+   * chốt 07/2026: thống kê tự tạo BOM từ định hình — lần sau "Gợi ý từ BOM"
+   * là có sẵn). Chỉ dòng có VẬT TƯ mới lên BOM (BOM = định mức vật tư/SP);
+   * nhiều chi tiết cùng vật tư được GỘP (unique product×material), ghi chú
+   * giữ tên chi tiết để truy ngược. GHI ĐÈ BOM hiện có — UI phải confirm.
+   */
+  async saveAsBom(
+    user: User,
+    lsxId: string,
+    orderLineId: string,
+  ): Promise<{ product_code: string; bom_lines: number; skipped_no_material: number }> {
+    await assertAction(user, 'production.shaping.manage')
+    const { orderLines } = await lsxWithLines(lsxId)
+    const line = orderLines.find((l) => l.id === orderLineId)
+    if (!line) throw BadRequest('Dòng SP không thuộc lệnh này')
+
+    const comps = (await componentsRepo.listByLsx(lsxId)).filter(
+      (c) => c.order_line_id === orderLineId,
+    )
+    if (comps.length === 0) {
+      throw BadRequest('SP chưa có dòng chi tiết nào — nhập bảng định hình trước')
+    }
+    const withMat = comps.filter((c) => c.material_id)
+    if (withMat.length === 0) {
+      throw BadRequest(
+        'Chưa dòng nào gắn vật tư — BOM là định mức vật tư/SP, gắn vật tư trước khi lưu làm BOM',
+      )
+    }
+
+    // Gộp theo vật tư: qty_per_unit = Σ CT/SP; note = các chi tiết dùng nó.
+    const byMat = new Map<string, { qty: number; names: string[] }>()
+    for (const c of withMat) {
+      const cur = byMat.get(c.material_id!) ?? { qty: 0, names: [] }
+      cur.qty += Number(c.qty_per_unit)
+      cur.names.push(`${c.name} ×${c.qty_per_unit}`)
+      byMat.set(c.material_id!, cur)
+    }
+    await bomLinesRepo.replaceAll(
+      line.product_id,
+      [...byMat.entries()].map(([material_id, v]) => ({
+        material_id,
+        qty_per_unit: v.qty,
+        note: `Từ định hình LSX: ${v.names.join(', ')}`,
+      })),
+    )
+    // BOM giờ đã có thật → cờ SP sang 'done' (đầu vào cảnh báo BR-07).
+    await productsRepo.patch(line.product_id, { bom_status: 'done' })
+    return {
+      product_code: line.product_code,
+      bom_lines: byMat.size,
+      skipped_no_material: comps.length - withMat.length,
+    }
+  },
+
+  /**
+   * Gợi ý điền sẵn — KHÔNG ghi DB, trả dòng cho grid để thống kê sửa:
+   *  - 'bom': từ BOM kỹ thuật trong hệ của từng SP (nguồn chính — user chốt).
+   *  - 'previous': chép bảng từ LSX gần nhất có cùng SP (SP lặp lại nhiều lệnh).
    */
   async suggest(
     user: User,
     lsxId: string,
     source: 'bom' | 'previous',
   ): Promise<ComponentInput[]> {
-    await assertAction(user, 'production.components.edit')
+    await assertAction(user, 'production.shaping.manage')
     const { orderLines } = await lsxWithLines(lsxId)
 
     if (source === 'bom') {
@@ -175,9 +240,9 @@ export type ComponentMaterialNeed = MaterialNeed & {
 }
 
 /**
- * Nhu cầu vật tư GỘP từ bảng chi tiết của LSX (plan-lsx-components P3) —
- * null nếu lệnh chưa nhập bảng (caller fallback BOM×SL). KHÔNG guard user —
- * hàm nội bộ cho stockService.lsxNeeds (đã guard ở đó).
+ * Nhu cầu vật tư GỘP từ bảng định hình của LSX — null nếu lệnh chưa nhập bảng
+ * (caller fallback BOM×SL). KHÔNG guard user — hàm nội bộ cho
+ * stockService.lsxNeeds (đã guard ở đó).
  */
 export async function componentMaterialNeeds(
   lsxId: string,
