@@ -33,6 +33,8 @@ type MaterialOption = { id: string; code: string; name: string; unit: string }
 /** Dòng đang biên tập — số để '' khi trống (input controlled). */
 type EditRow = {
   order_line_id: string
+  /** 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088). */
+  kind: 'part' | 'assembly'
   cluster: string
   name: string
   material_id: string
@@ -40,15 +42,24 @@ type EditRow = {
   spec_thickness_mm: number | ''
   spec_width_mm: number | ''
   spec_length_mm: number | ''
+  /** Độ dày thành ống (mm); '' = thanh đặc. */
+  wall_thickness_mm: number | ''
+  /** Đơn vị tính (cái/cụm/bộ/kg/m). */
+  unit: string
   qty_per_unit: number | ''
   dm_kg: number | ''
   pcs_per_bar: number | ''
+  /** Chi tiết: số chi tiết dùng cho 1 cụm cùng "Cụm". */
+  qty_per_assembly: number | ''
+  /** Công đoạn đầu chuỗi (cụm bắt đầu ở hàn); '' = từ đầu lộ trình. */
+  first_stage: string
   final_stage: string
   note: string
 }
 
 type ApiRow = {
   order_line_id: string
+  kind?: 'part' | 'assembly'
   cluster: string | null
   name: string
   material_id: string | null
@@ -56,9 +67,13 @@ type ApiRow = {
   spec_thickness_mm: number | null
   spec_width_mm: number | null
   spec_length_mm: number | null
+  wall_thickness_mm?: number | null
+  unit?: string | null
   qty_per_unit: number
   dm_kg: number | null
   pcs_per_bar: number | null
+  qty_per_assembly?: number | null
+  first_stage?: string | null
   final_stage: string | null
   note: string | null
   material_code: string | null
@@ -68,6 +83,7 @@ type ApiRow = {
 
 const toEdit = (r: Partial<ApiRow> & { order_line_id: string }): EditRow => ({
   order_line_id: r.order_line_id,
+  kind: r.kind ?? 'part',
   cluster: r.cluster ?? '',
   name: r.name ?? '',
   material_id: r.material_id ?? '',
@@ -75,9 +91,13 @@ const toEdit = (r: Partial<ApiRow> & { order_line_id: string }): EditRow => ({
   spec_thickness_mm: r.spec_thickness_mm ?? '',
   spec_width_mm: r.spec_width_mm ?? '',
   spec_length_mm: r.spec_length_mm ?? '',
+  wall_thickness_mm: r.wall_thickness_mm ?? '',
+  unit: r.unit ?? '',
   qty_per_unit: r.qty_per_unit ?? '',
   dm_kg: r.dm_kg ?? '',
   pcs_per_bar: r.pcs_per_bar ?? '',
+  qty_per_assembly: r.qty_per_assembly ?? '',
+  first_stage: r.first_stage ?? '',
   final_stage: r.final_stage ?? '',
   note: r.note ?? '',
 })
@@ -155,8 +175,8 @@ export function LsxComponentsPanel({
   }
 
   /** Thêm dòng cho ĐÚNG SP của khối đang bấm — không còn chọn SP per dòng. */
-  function addRow(lineId: string) {
-    setRows((rs) => [...rs, toEdit({ order_line_id: lineId })])
+  function addRow(lineId: string, kind: 'part' | 'assembly' = 'part') {
+    setRows((rs) => [...rs, toEdit({ order_line_id: lineId, kind })])
     setDirty(true)
   }
 
@@ -266,6 +286,7 @@ export function LsxComponentsPanel({
         body: {
           lines: rows.map((r) => ({
             order_line_id: r.order_line_id,
+            kind: r.kind,
             cluster: r.cluster.trim() || null,
             name: r.name.trim(),
             material_id: r.material_id || null,
@@ -273,9 +294,17 @@ export function LsxComponentsPanel({
             spec_thickness_mm: r.spec_thickness_mm === '' ? null : r.spec_thickness_mm,
             spec_width_mm: r.spec_width_mm === '' ? null : r.spec_width_mm,
             spec_length_mm: r.spec_length_mm === '' ? null : r.spec_length_mm,
+            wall_thickness_mm: r.wall_thickness_mm === '' ? null : r.wall_thickness_mm,
+            unit: r.unit.trim() || null,
             qty_per_unit: Number(r.qty_per_unit),
             dm_kg: r.dm_kg === '' ? null : r.dm_kg,
             pcs_per_bar: r.pcs_per_bar === '' ? null : r.pcs_per_bar,
+            // CT/cụm chỉ có nghĩa ở dòng chi tiết.
+            qty_per_assembly:
+              r.kind === 'assembly' || r.qty_per_assembly === ''
+                ? null
+                : r.qty_per_assembly,
+            first_stage: r.first_stage || null,
             final_stage: r.final_stage || null,
             note: r.note.trim() || null,
           })),
@@ -313,10 +342,23 @@ export function LsxComponentsPanel({
         : null
     if (!editable) {
       const mat = materials.find((m) => m.id === r.material_id)
+      const isAsm = r.kind === 'assembly'
+      const stageLabel = (code: string) =>
+        stages.find((s) => s.code === code)?.label ?? code
       return (
-        <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
+        <tr
+          key={i}
+          className={`border-b border-zinc-100 dark:border-zinc-900 ${isAsm ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}
+        >
           <td className="py-1.5 pr-1">{r.cluster || '—'}</td>
-          <td className="py-1.5 pr-1 font-medium">{r.name}</td>
+          <td className="py-1.5 pr-1 font-medium">
+            {isAsm && (
+              <span className="mr-1 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                CỤM
+              </span>
+            )}
+            {r.name}
+          </td>
           <td className="py-1.5 pr-1">
             {mat ? `${mat.code} ${mat.name}` : r.material_id ? '…' : '—'}
           </td>
@@ -324,13 +366,17 @@ export function LsxComponentsPanel({
           <td className="py-1.5 pr-1">{r.spec_thickness_mm || '—'}</td>
           <td className="py-1.5 pr-1">{r.spec_width_mm || '—'}</td>
           <td className="py-1.5 pr-1">{r.spec_length_mm || '—'}</td>
+          <td className="py-1.5 pr-1">{r.wall_thickness_mm || 'đặc'}</td>
+          <td className="py-1.5 pr-1">{r.unit || (isAsm ? 'cụm' : 'cái')}</td>
           <td className="py-1.5 pr-1">{r.qty_per_unit}</td>
           <td className="py-1.5 pr-1">{r.dm_kg || '—'}</td>
           <td className="py-1.5 pr-1">{r.pcs_per_bar || '—'}</td>
+          <td className="py-1.5 pr-1">{isAsm ? '—' : r.qty_per_assembly || '—'}</td>
           <td className="py-1.5 pr-1">
-            {r.final_stage
-              ? (stages.find((s) => s.code === r.final_stage)?.label ?? r.final_stage)
-              : 'Cuối DM'}
+            {r.first_stage ? stageLabel(r.first_stage) : 'Đầu DM'}
+          </td>
+          <td className="py-1.5 pr-1">
+            {r.final_stage ? stageLabel(r.final_stage) : 'Cuối DM'}
           </td>
           <td className="py-1.5 pr-1 text-right font-medium">
             {calc?.total_needed.toLocaleString('vi-VN') ?? '—'}
@@ -345,8 +391,12 @@ export function LsxComponentsPanel({
         </tr>
       )
     }
+    const isAsm = r.kind === 'assembly'
     return (
-      <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
+      <tr
+        key={i}
+        className={`border-b border-zinc-100 dark:border-zinc-900 ${isAsm ? 'bg-indigo-50/60 dark:bg-indigo-950/20' : ''}`}
+      >
         <td className="py-1 pr-1">
           <input
             value={r.cluster}
@@ -356,12 +406,22 @@ export function LsxComponentsPanel({
           />
         </td>
         <td className="py-1 pr-1">
-          <input
-            value={r.name}
-            onChange={(e) => setRow(i, { name: e.target.value })}
-            className={`${inp} min-w-28`}
-            placeholder="TAY+TỰA"
-          />
+          <div className="flex items-center gap-1">
+            {isAsm && (
+              <span
+                className="shrink-0 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300"
+                title="Cụm — đếm từ hàn trở đi"
+              >
+                CỤM
+              </span>
+            )}
+            <input
+              value={r.name}
+              onChange={(e) => setRow(i, { name: e.target.value })}
+              className={`${inp} min-w-28`}
+              placeholder={isAsm ? 'CỤM TỰA HOÀN CHỈNH' : 'TAY+TỰA'}
+            />
+          </div>
         </td>
         <td className="py-1 pr-1">
           <select
@@ -385,29 +445,24 @@ export function LsxComponentsPanel({
             placeholder="TRÒN"
           />
         </td>
-        {(['spec_thickness_mm', 'spec_width_mm', 'spec_length_mm'] as const).map((k) => (
+        {(
+          [
+            'spec_thickness_mm',
+            'spec_width_mm',
+            'spec_length_mm',
+            'wall_thickness_mm',
+          ] as const
+        ).map((k) => (
           <td key={k} className="py-1 pr-1">
             <input
               type="number"
               step="0.01"
               min="0"
               value={r[k]}
-              onChange={(e) =>
-                setRow(i, {
-                  [k]: e.target.value === '' ? '' : Number(e.target.value),
-                } as Partial<EditRow>)
+              title={
+                k === 'wall_thickness_mm' ? 'Độ dày thành ống — trống = đặc' : undefined
               }
-              className={inp}
-            />
-          </td>
-        ))}
-        {(['qty_per_unit', 'dm_kg', 'pcs_per_bar'] as const).map((k) => (
-          <td key={k} className="py-1 pr-1">
-            <input
-              type="number"
-              step="0.0001"
-              min="0"
-              value={r[k]}
+              placeholder={k === 'wall_thickness_mm' ? 'đặc' : undefined}
               onChange={(e) =>
                 setRow(i, {
                   [k]: e.target.value === '' ? '' : Number(e.target.value),
@@ -418,11 +473,59 @@ export function LsxComponentsPanel({
           </td>
         ))}
         <td className="py-1 pr-1">
+          <input
+            value={r.unit}
+            onChange={(e) => setRow(i, { unit: e.target.value })}
+            className={`${inp} min-w-12`}
+            placeholder={isAsm ? 'cụm' : 'cái'}
+            title="Đơn vị tính"
+          />
+        </td>
+        {(['qty_per_unit', 'dm_kg', 'pcs_per_bar', 'qty_per_assembly'] as const).map(
+          (k) => (
+            <td key={k} className="py-1 pr-1">
+              <input
+                type="number"
+                step="0.0001"
+                min="0"
+                value={r[k]}
+                disabled={k === 'qty_per_assembly' && isAsm}
+                title={
+                  k === 'qty_per_assembly'
+                    ? 'Số chi tiết dùng cho 1 cụm (chỉ dòng chi tiết)'
+                    : undefined
+                }
+                onChange={(e) =>
+                  setRow(i, {
+                    [k]: e.target.value === '' ? '' : Number(e.target.value),
+                  } as Partial<EditRow>)
+                }
+                className={`${inp} ${k === 'qty_per_assembly' && isAsm ? 'bg-zinc-100 dark:bg-zinc-800' : ''}`}
+              />
+            </td>
+          ),
+        )}
+        <td className="py-1 pr-1">
+          <select
+            value={r.first_stage}
+            onChange={(e) => setRow(i, { first_stage: e.target.value })}
+            className={`${inp} min-w-20`}
+            title="Công đoạn đầu của chuỗi — cụm bắt đầu ở hàn (0088)"
+          >
+            <option value="">Đầu DM</option>
+            {stages.map((st) => (
+              <option key={st.code} value={st.code}>
+                {st.label}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className="py-1 pr-1">
           <select
             value={r.final_stage}
             onChange={(e) => setRow(i, { final_stage: e.target.value })}
             className={`${inp} min-w-20`}
-            title="Công đoạn cuối của chi tiết"
+            title="Công đoạn cuối của chi tiết/cụm"
           >
             <option value="">Cuối DM</option>
             {stages.map((st) => (
@@ -472,14 +575,17 @@ export function LsxComponentsPanel({
   function renderTable(items: { r: EditRow; i: number }[]) {
     return (
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1000px] text-xs">
+        <table className="w-full min-w-[1280px] text-xs">
           <thead>
             <tr className="border-b border-zinc-200 text-left text-[10px] text-zinc-500 uppercase dark:border-zinc-800">
               <th className="py-1.5 pr-1" title="Cụm lắp ráp: CỤM TỰA, CỤM KHUNG…">
                 Cụm
               </th>
-              <th className="py-1.5 pr-1">
-                Chi tiết <span className="text-red-500">*</span>
+              <th
+                className="py-1.5 pr-1"
+                title="Tên dòng — dùng nút “+ Thêm cụm” để tạo dòng cụm (badge CỤM, đếm từ hàn)"
+              >
+                Chi tiết / Cụm <span className="text-red-500">*</span>
               </th>
               <th className="py-1.5 pr-1">Vật tư</th>
               <th className="py-1.5 pr-1">Loại</th>
@@ -492,8 +598,20 @@ export function LsxComponentsPanel({
               <th className="w-16 py-1.5 pr-1" title="Chiều dài phôi (mm)">
                 Dài
               </th>
-              <th className="w-16 py-1.5 pr-1" title="Số chi tiết cho 1 sản phẩm">
-                CT/SP <span className="text-red-500">*</span>
+              <th
+                className="w-14 py-1.5 pr-1"
+                title="Độ dày thành ống (mm) — để trống = thanh đặc"
+              >
+                Dày thành
+              </th>
+              <th className="w-12 py-1.5 pr-1" title="Đơn vị tính: cái/cụm/bộ/kg/m">
+                ĐVT
+              </th>
+              <th
+                className="w-16 py-1.5 pr-1"
+                title="Chi tiết: số chi tiết/1 SP · Cụm: số cụm/1 SP"
+              >
+                SL/SP <span className="text-red-500">*</span>
               </th>
               <th className="w-16 py-1.5 pr-1" title="Định mức kg vật tư cho 1 chi tiết">
                 ĐM kg
@@ -502,8 +620,20 @@ export function LsxComponentsPanel({
                 CT/cây
               </th>
               <th
+                className="w-16 py-1.5 pr-1"
+                title="Số chi tiết dùng cho 1 cụm (chỉ dòng chi tiết) — kiểm WIP liên cấp"
+              >
+                CT/cụm
+              </th>
+              <th
                 className="w-20 py-1.5 pr-1"
-                title="Công đoạn cuối của chi tiết — tuỳ SP (không sơn thì cuối là nguội)"
+                title="Công đoạn đầu của chuỗi — cụm bắt đầu ở hàn"
+              >
+                CĐ đầu
+              </th>
+              <th
+                className="w-20 py-1.5 pr-1"
+                title="Công đoạn cuối của chi tiết/cụm — tuỳ SP (không sơn thì cuối là nguội)"
               >
                 CĐ cuối
               </th>
@@ -582,8 +712,8 @@ export function LsxComponentsPanel({
       <div className="p-4">
         {canEdit && !locked && lockedByEntries && (
           <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            🔒 Lệnh đã có sổ số liệu — bảng chi tiết khoá để bảo vệ sổ (ghi đè sẽ xoá
-            sạch sổ). Thật sự cần sửa thì xoá hết bản ghi sổ trước.
+            🔒 Lệnh đã có sổ số liệu — bảng chi tiết khoá để bảo vệ sổ (ghi đè sẽ xoá sạch
+            sổ). Thật sự cần sửa thì xoá hết bản ghi sổ trước.
           </p>
         )}
         <p className="mb-3 text-xs text-zinc-500">
@@ -610,14 +740,30 @@ export function LsxComponentsPanel({
           <div className="flex flex-col gap-4">
             {orderLines.length === 0 && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                ⚠ Đơn hàng của lệnh này không có dòng sản phẩm nào — bảng chi tiết
-                bám theo SP nên không có chỗ nhập. Kiểm tra lại đơn hàng gốc.
+                ⚠ Đơn hàng của lệnh này không có dòng sản phẩm nào — bảng chi tiết bám
+                theo SP nên không có chỗ nhập. Kiểm tra lại đơn hàng gốc.
               </p>
             )}
             {/* Mỗi SP một khối — chi tiết SP nào nằm trong khối SP đó. */}
             {orderLines.map((line) => {
               const items = indexed.filter((x) => x.r.order_line_id === line.id)
               if (items.length === 0 && !editable) return null
+              // Tổng KG cần của SP = Σ kg_needed các dòng có ĐM (rollup — 0089).
+              let blockKg = 0
+              let kgIncomplete = false
+              for (const x of items) {
+                if (x.r.qty_per_unit === '' || Number(x.r.qty_per_unit) <= 0) continue
+                const c = calcComponent(
+                  {
+                    qty_per_unit: Number(x.r.qty_per_unit),
+                    dm_kg: x.r.dm_kg === '' ? null : Number(x.r.dm_kg),
+                    pcs_per_bar: null,
+                  },
+                  qtyByLine.get(line.id) ?? 0,
+                )
+                if (c.kg_needed == null) kgIncomplete = true
+                else blockKg += c.kg_needed
+              }
               return (
                 <div
                   key={line.id}
@@ -633,6 +779,15 @@ export function LsxComponentsPanel({
                       </span>
                       <span className="text-xs text-zinc-500">
                         · SL {line.qty.toLocaleString('vi-VN')} · {items.length} chi tiết
+                        {blockKg > 0 && (
+                          <span
+                            className="ml-1 text-emerald-600 dark:text-emerald-400"
+                            title="Tổng khối lượng vật tư cần cho SP này (Σ ĐM × tổng cần)"
+                          >
+                            · ~{blockKg.toLocaleString('vi-VN')} kg
+                            {kgIncomplete ? '+' : ''}
+                          </span>
+                        )}
                       </span>
                     </div>
                     {editable && (
@@ -653,10 +808,18 @@ export function LsxComponentsPanel({
                         )}
                         <button
                           disabled={busy}
-                          onClick={() => addRow(line.id)}
+                          onClick={() => addRow(line.id, 'part')}
                           className="rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
                         >
                           + Thêm chi tiết
+                        </button>
+                        <button
+                          disabled={busy}
+                          onClick={() => addRow(line.id, 'assembly')}
+                          title="Cụm lắp ráp — đếm từ công đoạn hàn trở đi (0088)"
+                          className="rounded-md border border-dashed border-indigo-300 px-2.5 py-1 text-xs text-indigo-600 hover:bg-white disabled:opacity-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-zinc-900"
+                        >
+                          + Thêm cụm
                         </button>
                       </div>
                     )}
@@ -687,10 +850,13 @@ export function LsxComponentsPanel({
 
         {loaded && rows.length > 0 && (
           <p className="mt-2 text-[10px] leading-relaxed text-zinc-400">
-            Chú giải: <b>CT/SP</b> số chi tiết cho 1 sản phẩm · <b>ĐM kg</b> kg vật tư cho
-            1 chi tiết · <b>CT/cây</b> số chi tiết cắt từ 1 cây · <b>CĐ cuối</b> công đoạn
-            cuối của chi tiết (tính %HT) · <b>Tổng cần / Kg / Cây</b> hệ thống tự tính. Di
-            chuột lên tiêu đề cột để xem giải thích.
+            Chú giải: dòng <b className="text-indigo-600 dark:text-indigo-400">CỤM</b>{' '}
+            (badge, nền tím — tạo bằng “+ Thêm cụm”, đếm từ hàn) vs chi tiết (đếm ở phôi)
+            · <b>SL/SP</b> số chi tiết hoặc cụm cho 1 sản phẩm · <b>CT/cụm</b> số chi tiết
+            dùng cho 1 cụm (cảnh báo khi hàn cụm vượt số chi tiết đã xong) ·{' '}
+            <b>CĐ đầu/cuối</b> khoảng công đoạn dòng đi qua · <b>ĐM kg</b> kg vật tư cho 1
+            chi tiết · <b>CT/cây</b> số chi tiết cắt từ 1 cây · <b>Tổng cần / Kg / Cây</b>{' '}
+            hệ thống tự tính. Di chuột lên tiêu đề cột để xem giải thích.
           </p>
         )}
 

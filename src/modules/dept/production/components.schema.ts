@@ -6,6 +6,8 @@ import { z } from 'zod'
  */
 export const componentLineSchema = z.object({
   order_line_id: z.string().uuid(), // chi tiết thuộc dòng SP nào trong lệnh
+  // 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088).
+  kind: z.enum(['part', 'assembly']).default('part'),
   cluster: z.string().trim().max(100).optional().nullable(), // "CỤM TỰA"
   name: z.string().trim().min(1, 'Nhập tên chi tiết').max(200), // "TAY+TỰA"
   material_id: z.string().uuid().optional().nullable(), // được để trống — chưa vào nhu cầu mua
@@ -13,10 +15,17 @@ export const componentLineSchema = z.object({
   spec_thickness_mm: z.coerce.number().positive().optional().nullable(),
   spec_width_mm: z.coerce.number().positive().optional().nullable(),
   spec_length_mm: z.coerce.number().positive().optional().nullable(),
-  qty_per_unit: z.coerce.number().positive(), // CT/SP
-  dm_kg: z.coerce.number().min(0).optional().nullable(), // kg / 1 chi tiết
+  // Độ dày thành ống (mm); để trống = thanh đặc — 0089.
+  wall_thickness_mm: z.coerce.number().positive().optional().nullable(),
+  unit: z.string().trim().max(20).optional().nullable(), // ĐVT: cái/cụm/bộ/kg/m
+  qty_per_unit: z.coerce.number().positive(), // chi tiết: CT/SP · cụm: cụm/SP
+  dm_kg: z.coerce.number().min(0).optional().nullable(), // kg / 1 chi tiết (hoặc / 1 cụm)
   pcs_per_bar: z.coerce.number().positive().optional().nullable(), // chi tiết / 1 cây
-  // Công đoạn cuối của chi tiết (tuỳ SP — không sơn thì cuối là nguội);
+  // Số chi tiết dùng cho 1 cụm cùng `cluster` (dòng chi tiết; cụm để trống).
+  qty_per_assembly: z.coerce.number().positive().optional().nullable(),
+  // Công đoạn đầu chuỗi (cụm bắt đầu ở hàn); null = từ đầu lộ trình.
+  first_stage: z.string().trim().max(50).optional().nullable(),
+  // Công đoạn cuối của chi tiết/cụm (tuỳ SP — không sơn thì cuối là nguội);
   // null = công đoạn cuối danh mục.
   final_stage: z.string().trim().max(50).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),

@@ -135,6 +135,7 @@ export function assessJobProgress(
     | 'qty_per_unit'
     | 'dm_kg'
     | 'pcs_per_bar'
+    | 'first_stage'
     | 'final_stage'
     | 'line_qty'
   >[],
@@ -142,11 +143,19 @@ export function assessJobProgress(
 ): JobProgress {
   const mine = components.filter((c) => {
     if (c.order_line_id !== job.order_line_id) return false
-    // Chi tiết dừng ở final_stage: công đoạn SAU final_stage không tính nó.
-    if (c.final_stage && lineStages.length) {
-      const cut = lineStages.indexOf(c.final_stage)
+    if (lineStages.length) {
       const idx = lineStages.indexOf(job.stage)
-      if (cut >= 0 && idx > cut) return false
+      // Chi tiết dừng ở final_stage: công đoạn SAU final_stage không tính nó.
+      if (c.final_stage) {
+        const cut = lineStages.indexOf(c.final_stage)
+        if (cut >= 0 && idx > cut) return false
+      }
+      // Cụm bắt đầu ở first_stage: công đoạn TRƯỚC first_stage không tính nó
+      // (0088 — cụm không có mặt ở phôi).
+      if (c.first_stage) {
+        const startCut = lineStages.indexOf(c.first_stage)
+        if (startCut >= 0 && idx >= 0 && idx < startCut) return false
+      }
     }
     return true
   })
@@ -295,7 +304,13 @@ export const jobsService = {
           product_name: info?.product_name ?? '?',
           line_qty: info?.qty ?? 0,
           image_file_id: info?.image_file_id ?? null,
-          spec: info?.spec ?? { machine: '', cushion: '', paint: '', glass: '', wood: '' },
+          spec: info?.spec ?? {
+            machine: '',
+            cushion: '',
+            paint: '',
+            glass: '',
+            wood: '',
+          },
           progress: assessJobProgress(j, lineStages, components, doneByCompStage),
         }
       })

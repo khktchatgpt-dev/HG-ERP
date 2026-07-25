@@ -39,20 +39,27 @@ export type ComponentSummary = {
 const r2 = (n: number) => Math.round(n * 100) / 100
 
 /**
- * @param totalNeeded tổng cần của chi tiết (CT/SP × SL đơn)
+ * @param totalNeeded tổng cần của chi tiết/cụm (đơn vị / SP × SL đơn)
  * @param stageOrder  chuỗi công đoạn theo thứ tự (vd phôi → hàn → nguội → sơn)
  * @param outputs     sản lượng đã gộp theo công đoạn
- * @param finalStage  công đoạn CUỐI của chi tiết (tuỳ SP — không qua sơn thì
- *                    cuối là nguội); null/không khớp → dùng cuối danh mục.
+ * @param finalStage  công đoạn CUỐI (tuỳ SP — không qua sơn thì cuối là nguội);
+ *                    null/không khớp → dùng cuối danh mục.
+ * @param firstStage  công đoạn ĐẦU của chuỗi (0088 — cụm bắt đầu ở hàn nên
+ *                    không tính ở phôi); null/không khớp → từ đầu danh mục.
+ *                    Component chỉ tính trong khoảng [firstStage..finalStage].
  */
 export function summarizeComponent(
   totalNeeded: number,
   stageOrder: string[],
   outputs: StageOutput[],
   finalStage?: string | null,
+  firstStage?: string | null,
 ): ComponentSummary {
-  const cut = finalStage ? stageOrder.indexOf(finalStage) : -1
-  const effectiveOrder = cut >= 0 ? stageOrder.slice(0, cut + 1) : stageOrder
+  const finalIdx = finalStage ? stageOrder.indexOf(finalStage) : -1
+  const firstIdx = firstStage ? stageOrder.indexOf(firstStage) : -1
+  const start = firstIdx >= 0 ? firstIdx : 0
+  const end = finalIdx >= 0 ? finalIdx : stageOrder.length - 1
+  const effectiveOrder = end >= start ? stageOrder.slice(start, end + 1) : stageOrder
   const byStage = new Map(outputs.map((o) => [o.stage, o]))
   const stages: ComponentStageSummary[] = effectiveOrder.map((stage) => {
     const o = byStage.get(stage)
@@ -128,6 +135,32 @@ export function summarizeOutsource(
     missing: r2(sent - received),
     pct: sent > 0 ? Math.min(received / sent, 1) : 0,
   }
+}
+
+/**
+ * Cảnh báo WIP LIÊN CẤP (0088): nhập sản lượng CỤM ở công đoạn đầu của cụm
+ * (vd hàn) mà số cụm đã làm vượt số CHI TIẾT con đã xong ở công đoạn cuối của
+ * chúng — tức "hàn nhiều cụm hơn số chi tiết có sẵn". KHÔNG chặn, chỉ cảnh báo
+ * (đồng bộ triết lý FR-PR-07). Excel gốc không kiểm được điểm này.
+ *
+ * @param assemblyName     tên cụm (vd "CỤM TỰA")
+ * @param assembliesAfter  số cụm đã làm ở first_stage SAU khi tính lần nhập này
+ * @param children         chi tiết con: cần / có; qtyPerAssembly = số chi tiết
+ *                         cho 1 cụm, partDone = đã xong ở công đoạn cuối của nó
+ */
+export function assemblyWipWarning(
+  assemblyName: string,
+  assembliesAfter: number,
+  children: { name: string; qtyPerAssembly: number; partDone: number }[],
+): string | null {
+  const short = children
+    .map((c) => ({ ...c, need: r2(assembliesAfter * c.qtyPerAssembly) }))
+    .filter((c) => c.need - c.partDone > 0.001)
+  if (short.length === 0) return null
+  const detail = short
+    .map((c) => `${c.name} cần ${c.need} nhưng mới xong ${c.partDone}`)
+    .join('; ')
+  return `${assemblyName}: hàn ${assembliesAfter} cụm VƯỢT số chi tiết đã xong — ${detail}`
 }
 
 /** Cảnh báo nhập vượt (FR-PR-07): đã làm + sắp nhập > tổng cần → chuỗi cảnh báo. */

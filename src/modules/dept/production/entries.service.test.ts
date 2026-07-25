@@ -131,9 +131,9 @@ describe('entriesService.record', () => {
 
   it('tổ đã chốt sổ ngày → 400', async () => {
     vi.mocked(dayLocksRepo.find).mockResolvedValue({ id: 'lock1' } as never)
-    await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject(
-      { status: 400 },
-    )
+    await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject({
+      status: 400,
+    })
   })
 
   it('nhập vượt tổng cần → KHÔNG chặn, trả warning', async () => {
@@ -143,6 +143,50 @@ describe('entriesService.record', () => {
     ])
     const { warnings } = await entriesService.record(thongKe, 'lsx1', record())
     expect(warnings.length).toBe(1)
+    expect(entriesRepo.insertMany).toHaveBeenCalled()
+  })
+
+  it('WIP liên cấp: hàn cụm vượt số chi tiết con đã xong → warning (0088)', async () => {
+    const part = {
+      id: 'chan',
+      production_order_id: 'lsx1',
+      order_line_id: 'line1',
+      kind: 'part',
+      cluster: 'CỤM TỰA',
+      name: 'CHÂN',
+      qty_per_unit: 2,
+      qty_per_assembly: 2,
+      first_stage: null,
+      final_stage: 'phoi',
+      dm_kg: null,
+      pcs_per_bar: null,
+    }
+    const asm = {
+      id: 'asm',
+      production_order_id: 'lsx1',
+      order_line_id: 'line1',
+      kind: 'assembly',
+      cluster: 'CỤM TỰA',
+      name: 'CỤM TỰA',
+      qty_per_unit: 3, // cần 150 (không vướng cảnh báo vượt tổng)
+      qty_per_assembly: null,
+      first_stage: 'han',
+      final_stage: 'son',
+      dm_kg: null,
+      pcs_per_bar: null,
+    }
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([part, asm] as never)
+    // Chi tiết CHÂN mới xong 150 ở phôi; cần 200 cho 100 cụm.
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      { component_id: 'chan', stage: 'phoi', qty: 150, defect_qty: 0 } as never,
+    ])
+    const { warnings } = await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ entries: [{ component_id: 'asm', qty: 100, defect_qty: 0 }] }),
+    )
+    expect(warnings.length).toBe(1)
+    expect(warnings[0]).toContain('CHÂN cần 200 nhưng mới xong 150')
     expect(entriesRepo.insertMany).toHaveBeenCalled()
   })
 
@@ -161,9 +205,9 @@ describe('entriesService.record', () => {
       ...LSX,
       status: 'pending_approval',
     } as never)
-    await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject(
-      { status: 400 },
-    )
+    await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject({
+      status: 400,
+    })
   })
 })
 
