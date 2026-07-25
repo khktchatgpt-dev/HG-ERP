@@ -587,7 +587,9 @@ export type Database = {
           created_at: string
           dm_kg: number | null
           final_stage: string | null
+          first_stage: string | null
           id: string
+          kind: string
           material_id: string | null
           material_type: string | null
           name: string
@@ -595,19 +597,24 @@ export type Database = {
           order_line_id: string
           pcs_per_bar: number | null
           production_order_id: string
+          qty_per_assembly: number | null
           qty_per_unit: number
           sort_order: number
           spec_length_mm: number | null
           spec_thickness_mm: number | null
           spec_width_mm: number | null
+          unit: string | null
           updated_at: string
+          wall_thickness_mm: number | null
         }
         Insert: {
           cluster?: string | null
           created_at?: string
           dm_kg?: number | null
           final_stage?: string | null
+          first_stage?: string | null
           id?: string
+          kind?: string
           material_id?: string | null
           material_type?: string | null
           name: string
@@ -615,19 +622,24 @@ export type Database = {
           order_line_id: string
           pcs_per_bar?: number | null
           production_order_id: string
+          qty_per_assembly?: number | null
           qty_per_unit: number
           sort_order?: number
           spec_length_mm?: number | null
           spec_thickness_mm?: number | null
           spec_width_mm?: number | null
+          unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
         }
         Update: {
           cluster?: string | null
           created_at?: string
           dm_kg?: number | null
           final_stage?: string | null
+          first_stage?: string | null
           id?: string
+          kind?: string
           material_id?: string | null
           material_type?: string | null
           name?: string
@@ -635,12 +647,15 @@ export type Database = {
           order_line_id?: string
           pcs_per_bar?: number | null
           production_order_id?: string
+          qty_per_assembly?: number | null
           qty_per_unit?: number
           sort_order?: number
           spec_length_mm?: number | null
           spec_thickness_mm?: number | null
           spec_width_mm?: number | null
+          unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
         }
         Relationships: [
           {

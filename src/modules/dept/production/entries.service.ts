@@ -6,6 +6,7 @@ import { dayLocksRepo } from './day-locks.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { calcComponent } from '@/lib/component-needs'
 import {
+  assemblyWipWarning,
   overrunWarning,
   summarizeComponent,
   syncedSets,
@@ -41,6 +42,8 @@ type RecordInput = {
 export type ComponentOutputView = {
   id: string
   order_line_id: string
+  /** 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088). */
+  kind: 'part' | 'assembly'
   cluster: string | null
   name: string
   total_needed: number
@@ -143,6 +146,38 @@ export const entriesService = {
       if (w) warnings.push(w)
     }
 
+    // Cảnh báo WIP LIÊN CẤP (0088): nhập CỤM ở công đoạn ĐẦU của nó (vd hàn) mà
+    // số cụm vượt số chi tiết con đã xong ở công đoạn cuối của chúng. Không chặn.
+    const addingByComp = new Map<string, number>()
+    for (const e of input.entries) {
+      addingByComp.set(e.component_id, (addingByComp.get(e.component_id) ?? 0) + e.qty)
+    }
+    for (const [compId, adding] of addingByComp) {
+      const asm = byId.get(compId)
+      if (!asm || asm.kind !== 'assembly') continue
+      // Chỉ đối chiếu tiêu hao chi tiết ở công đoạn đầu của cụm (nơi ghép lại).
+      if (asm.first_stage && input.stage !== asm.first_stage) continue
+      const assembliesAfter =
+        (doneByCompStage.get(`${compId}|${input.stage}`) ?? 0) + adding
+      const children = components
+        .filter(
+          (c) =>
+            c.kind !== 'assembly' &&
+            c.order_line_id === asm.order_line_id &&
+            c.cluster != null &&
+            c.cluster === asm.cluster &&
+            c.qty_per_assembly != null &&
+            c.final_stage != null,
+        )
+        .map((c) => ({
+          name: c.name,
+          qtyPerAssembly: Number(c.qty_per_assembly),
+          partDone: doneByCompStage.get(`${c.id}|${c.final_stage}`) ?? 0,
+        }))
+      const w = assemblyWipWarning(asm.name, assembliesAfter, children)
+      if (w) warnings.push(w)
+    }
+
     await entriesRepo.insertMany(
       input.entries.map((e) => ({
         production_order_id: lsxId,
@@ -212,6 +247,7 @@ export const entriesService = {
       return {
         id: c.id,
         order_line_id: c.order_line_id,
+        kind: c.kind,
         cluster: c.cluster,
         name: c.name,
         total_needed: totalByComponent.get(c.id) ?? 0,
@@ -221,14 +257,26 @@ export const entriesService = {
           route ?? stageOrder,
           outputs,
           c.final_stage,
+          c.first_stage,
         ),
       }
     })
 
-    // Đồng bộ per dòng SP: min theo chi tiết của floor(done_final / CT-trên-SP).
+    // Đồng bộ per dòng SP: min theo bộ phận "đầu ra cuối" của floor(done_final /
+    // đơn-vị-trên-SP). Chỉ tính component TOP-LEVEL (cụm + chi tiết KHÔNG bị gộp
+    // vào cụm) — chi tiết đã hàn thành cụm thì cụm quyết định đồng bộ, không đếm
+    // trùng (0088). Lệnh không có cụm → mọi chi tiết đều top-level = như cũ.
     const synced = orderLines.map((l) => {
-      const comps = components
-        .filter((c) => c.order_line_id === l.id)
+      const lineComps = components.filter((c) => c.order_line_id === l.id)
+      const assemblyClusters = new Set(
+        lineComps.filter((c) => c.kind === 'assembly' && c.cluster).map((c) => c.cluster),
+      )
+      const comps = lineComps
+        .filter(
+          (c) =>
+            c.kind === 'assembly' ||
+            !(c.cluster != null && assemblyClusters.has(c.cluster)),
+        )
         .map((c) => ({
           qty_per_unit: c.qty_per_unit,
           done_final: views.find((v) => v.id === c.id)?.summary.done_final ?? 0,
@@ -239,7 +287,7 @@ export const entriesService = {
         product_name: l.product_name,
         qty: l.qty,
         synced_sets: comps.length ? syncedSets(comps) : 0,
-        has_components: comps.length > 0,
+        has_components: lineComps.length > 0,
       }
     })
 

@@ -5,6 +5,8 @@ export type ComponentRow = {
   id: string
   production_order_id: string
   order_line_id: string
+  /** 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088). */
+  kind: 'part' | 'assembly'
   cluster: string | null
   name: string
   material_id: string | null
@@ -12,9 +14,17 @@ export type ComponentRow = {
   spec_thickness_mm: number | null
   spec_width_mm: number | null
   spec_length_mm: number | null
+  /** Độ dày thành ống (mm); null = thanh ĐẶC — 0089. */
+  wall_thickness_mm: number | null
+  /** Đơn vị tính (cái/cụm/bộ/kg/m); null = suy theo kind — 0089. */
+  unit: string | null
   qty_per_unit: number
   dm_kg: number | null
   pcs_per_bar: number | null
+  /** Số chi tiết dùng cho 1 cụm cùng `cluster` (dòng chi tiết; cụm = null). */
+  qty_per_assembly: number | null
+  /** Công đoạn đầu của chuỗi (cụm bắt đầu ở hàn); null = từ đầu lộ trình. */
+  first_stage: string | null
   final_stage: string | null
   sort_order: number
   note: string | null
@@ -25,6 +35,7 @@ export type ComponentRow = {
 
 export type ComponentInput = {
   order_line_id: string
+  kind?: 'part' | 'assembly'
   cluster?: string | null
   name: string
   material_id?: string | null
@@ -32,15 +43,19 @@ export type ComponentInput = {
   spec_thickness_mm?: number | null
   spec_width_mm?: number | null
   spec_length_mm?: number | null
+  wall_thickness_mm?: number | null
+  unit?: string | null
   qty_per_unit: number
   dm_kg?: number | null
   pcs_per_bar?: number | null
+  qty_per_assembly?: number | null
+  first_stage?: string | null
   final_stage?: string | null
   note?: string | null
 }
 
 const COLS =
-  'id, production_order_id, order_line_id, cluster, name, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, qty_per_unit, dm_kg, pcs_per_bar, final_stage, sort_order, note'
+  'id, production_order_id, order_line_id, kind, cluster, name, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
 
 type Raw = Omit<ComponentRow, 'material_code' | 'material_name' | 'material_unit'> & {
   material:
@@ -108,6 +123,7 @@ export const componentsRepo = {
         lines.map((l, i) => ({
           production_order_id: productionOrderId,
           order_line_id: l.order_line_id,
+          kind: l.kind ?? 'part',
           cluster: l.cluster ?? null,
           name: l.name,
           material_id: l.material_id ?? null,
@@ -115,9 +131,13 @@ export const componentsRepo = {
           spec_thickness_mm: l.spec_thickness_mm ?? null,
           spec_width_mm: l.spec_width_mm ?? null,
           spec_length_mm: l.spec_length_mm ?? null,
+          wall_thickness_mm: l.wall_thickness_mm ?? null,
+          unit: l.unit ?? null,
           qty_per_unit: l.qty_per_unit,
           dm_kg: l.dm_kg ?? null,
           pcs_per_bar: l.pcs_per_bar ?? null,
+          qty_per_assembly: l.qty_per_assembly ?? null,
+          first_stage: l.first_stage ?? null,
           final_stage: l.final_stage ?? null,
           note: l.note ?? null,
           sort_order: i,

@@ -90,6 +90,7 @@ const COMP = {
   qty_per_unit: 2,
   dm_kg: null,
   pcs_per_bar: null,
+  first_stage: null,
   final_stage: null,
   line_qty: 50,
 }
@@ -107,7 +108,14 @@ beforeEach(() => {
   vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
     { ...JOB, id: 'j0', stage: 'phoi', seq: 0, status: 'done' },
     JOB,
-    { ...JOB, id: 'j2', stage: 'son', seq: 2, status: 'todo', team_department_id: 'dept-son' },
+    {
+      ...JOB,
+      id: 'j2',
+      stage: 'son',
+      seq: 2,
+      status: 'todo',
+      team_department_id: 'dept-son',
+    },
   ])
   vi.mocked(componentsRepo.listByLsxBulk).mockResolvedValue([COMP] as never)
   vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([])
@@ -153,6 +161,33 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
     )
     // c2 (final=han) không cần ở sơn → chỉ c1 tính, và c1 đủ.
     expect(p.ready).toBe(true)
+  })
+
+  it('CỤM (first_stage=han) KHÔNG bị tính ở công đoạn phôi (0088)', () => {
+    const cum = {
+      ...COMP,
+      id: 'asm',
+      name: 'CỤM TỰA',
+      first_stage: 'han',
+      final_stage: 'son',
+    }
+    // Ở PHÔI: chỉ chi tiết c1 tính (cụm chưa xuất hiện) → c1 đủ 100 là ready.
+    const atPhoi = assessJobProgress(
+      { order_line_id: 'line1', stage: 'phoi' },
+      ['phoi', 'han', 'son'],
+      [COMP, cum],
+      new Map([['c1|phoi', 100]]),
+    )
+    expect(atPhoi.ready).toBe(true)
+    expect(atPhoi.shortfalls).toEqual([])
+    // Ở HÀN: cụm được tính (và c1 cũng, vì final=null tới cuối) → cần cả hai.
+    const atHan = assessJobProgress(
+      { order_line_id: 'line1', stage: 'han' },
+      ['phoi', 'han', 'son'],
+      [COMP, cum],
+      new Map([['c1|han', 100]]),
+    )
+    expect(atHan.shortfalls.map((s) => s.name)).toContain('CỤM TỰA')
   })
 
   it('dòng chưa có bảng chi tiết → has_components=false, không ready', () => {

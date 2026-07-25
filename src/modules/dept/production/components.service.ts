@@ -101,9 +101,15 @@ export const componentsService = {
     const stagesByLine = await jobStagesByLine(lsxId)
     for (const l of input) {
       const allowed = stagesByLine.get(l.order_line_id)
-      if (allowed && l.final_stage && !allowed.includes(l.final_stage)) {
+      if (!allowed) continue
+      if (l.final_stage && !allowed.includes(l.final_stage)) {
         throw BadRequest(
-          `Chi tiết "${l.name}": công đoạn cuối không thuộc kế hoạch của SP — đổi công đoạn cuối hoặc sửa kế hoạch trước`,
+          `${l.kind === 'assembly' ? 'Cụm' : 'Chi tiết'} "${l.name}": công đoạn cuối không thuộc kế hoạch của SP — đổi công đoạn cuối hoặc sửa kế hoạch trước`,
+        )
+      }
+      if (l.first_stage && !allowed.includes(l.first_stage)) {
+        throw BadRequest(
+          `${l.kind === 'assembly' ? 'Cụm' : 'Chi tiết'} "${l.name}": công đoạn đầu không thuộc kế hoạch của SP — đổi công đoạn đầu hoặc sửa kế hoạch trước`,
         )
       }
     }
@@ -215,6 +221,7 @@ export const componentsService = {
       pickedLsxByProduct.set(row.product_id, row.production_order_id)
       out.push({
         order_line_id: targetLineId,
+        kind: row.kind,
         cluster: row.cluster,
         name: row.name,
         material_id: row.material_id,
@@ -222,9 +229,13 @@ export const componentsService = {
         spec_thickness_mm: row.spec_thickness_mm,
         spec_width_mm: row.spec_width_mm,
         spec_length_mm: row.spec_length_mm,
+        wall_thickness_mm: row.wall_thickness_mm,
+        unit: row.unit,
         qty_per_unit: row.qty_per_unit,
         dm_kg: row.dm_kg,
         pcs_per_bar: row.pcs_per_bar,
+        qty_per_assembly: row.qty_per_assembly,
+        first_stage: row.first_stage,
         final_stage: row.final_stage,
         note: row.note,
       })

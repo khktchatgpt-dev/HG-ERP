@@ -19,6 +19,7 @@ export type PendingCells = Record<string, Cell> // key `${lsxId}|${stage}|${comp
 
 type GridComponent = {
   id: string
+  kind?: 'part' | 'assembly'
   name: string
   cluster: string | null
   total_needed: number
@@ -91,8 +92,12 @@ export function FastEntryGrid({
   }, [pendingKeys.length])
 
   const data = summaries.get(lsxId)
-  const rows = (data?.components ?? []).filter(
-    (c) => !c.allowed_stages || c.allowed_stages.includes(stage),
+  // Chỉ hiện dòng ĐI QUA công đoạn đang chọn: summary.stages = khoảng công đoạn
+  // hiệu lực của dòng ([first_stage..final_stage] — 0088), nên chi tiết chỉ hiện
+  // ở phôi, cụm chỉ hiện từ hàn. Dòng chưa lên kế hoạch → summary trải toàn danh
+  // mục nên vẫn hiện (nhập tự do như cũ).
+  const rows = (data?.components ?? []).filter((c) =>
+    c.summary.stages.some((s) => s.stage === stage),
   )
   const key = (componentId: string) => `${lsxId}|${stage}|${componentId}`
   const setCell = (componentId: string, patch: Partial<Cell>) =>
@@ -145,19 +150,28 @@ export function FastEntryGrid({
             { method: 'POST', body: { stage: g.stage, entry_date: date, entries } },
           )
           toast.success(`${lsxCode}: đã ghi ${entries.length} dòng`, date)
-          for (const w of res.warnings) toast.error('⚠ Vượt tổng cần', w)
+          for (const w of res.warnings) toast.error('⚠ Cảnh báo', w)
           // Nhóm ghi xong thì xoá khỏi buffer (nhóm lỗi giữ lại để sửa).
           setPending((p) => {
             const next = { ...p }
             for (const k of g.keys) delete next[k]
             return next
           })
-          // Cache summary của lệnh này đã cũ → nạp lại lần chọn tới.
-          setSummaries((m) => {
-            const next = new Map(m)
-            next.delete(g.lsxId)
-            return next
-          })
+          // Nạp LẠI summary của lệnh vừa ghi để cập nhật "Còn" ngay. Chỉ xoá
+          // cache (như trước) sẽ kẹt "Đang tải" vì effect nạp chỉ phụ thuộc
+          // [lsxId] — xoá cache không kích hoạt lại nó khi cùng lệnh.
+          try {
+            const fresh = await api<OutputData>(
+              `/api/dept/production/lsx/${g.lsxId}/entries`,
+            )
+            setSummaries((m) => new Map(m).set(g.lsxId, fresh))
+          } catch {
+            setSummaries((m) => {
+              const next = new Map(m)
+              next.delete(g.lsxId)
+              return next
+            })
+          }
         } catch (e) {
           toast.error(
             `${lsxCode}: ghi sổ thất bại`,
@@ -303,6 +317,11 @@ export function FastEntryGrid({
                     className="border-t border-zinc-100 dark:border-zinc-900"
                   >
                     <td className="py-1 pr-2">
+                      {c.kind === 'assembly' && (
+                        <span className="mr-1 rounded bg-indigo-100 px-1 py-0.5 text-[9px] font-medium text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300">
+                          CỤM
+                        </span>
+                      )}
                       {c.cluster && (
                         <span className="text-[10px] text-zinc-400">{c.cluster} · </span>
                       )}

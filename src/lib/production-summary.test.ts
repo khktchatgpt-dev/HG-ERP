@@ -4,6 +4,7 @@ import {
   summarizeOutsource,
   syncedSets,
   overrunWarning,
+  assemblyWipWarning,
 } from './production-summary'
 
 const STAGES = ['phoi', 'han', 'nguoi', 'son']
@@ -53,6 +54,33 @@ describe('summarizeComponent — thiếu/dư, %HT per công đoạn + tổng (FR
   it('final_stage không khớp danh mục → dùng công đoạn cuối danh mục (an toàn)', () => {
     const s = summarizeComponent(10, STAGES, [], 'khong-ton-tai')
     expect(s.stages).toHaveLength(4)
+  })
+
+  it('CỤM (0088): first_stage=han → chỉ tính từ HÀN trở đi, không có cột phôi', () => {
+    const s = summarizeComponent(
+      2400,
+      STAGES,
+      [
+        { stage: 'han', done: 2400, defect: 0 },
+        { stage: 'son', done: 2400, defect: 0 },
+      ],
+      null,
+      'han',
+    )
+    expect(s.stages.map((x) => x.stage)).toEqual(['han', 'nguoi', 'son'])
+    expect(s.done_final).toBe(2400)
+    expect(s.status).toBe('done')
+  })
+
+  it('first_stage + final_stage → khoảng [first..final] (cụm chỉ hàn→nguội)', () => {
+    const s = summarizeComponent(
+      100,
+      STAGES,
+      [{ stage: 'han', done: 100, defect: 0 }],
+      'nguoi',
+      'han',
+    )
+    expect(s.stages.map((x) => x.stage)).toEqual(['han', 'nguoi'])
   })
 
   it('trạng thái: chưa làm / đang làm / hoàn thành (dựa công đoạn cuối)', () => {
@@ -112,5 +140,26 @@ describe('overrunWarning — cảnh báo nhập vượt tổng cần (FR-PR-07, 
   it('chưa vượt / tổng cần 0 → null', () => {
     expect(overrunWarning('x', 'phôi', 90, 6, 96)).toBeNull()
     expect(overrunWarning('x', 'phôi', 5, 5, 0)).toBeNull()
+  })
+})
+
+describe('assemblyWipWarning — cảnh báo WIP liên cấp cụm/chi tiết (0088)', () => {
+  it('hàn 100 cụm nhưng chi tiết chân (2/cụm) mới xong 150 → cảnh báo', () => {
+    const w = assemblyWipWarning('CỤM TỰA', 100, [
+      { name: 'CHÂN', qtyPerAssembly: 2, partDone: 150 }, // cần 200, mới 150 → thiếu
+      { name: 'MẶT', qtyPerAssembly: 1, partDone: 120 }, // cần 100, đủ
+    ])
+    expect(w).toContain('VƯỢT')
+    expect(w).toContain('CHÂN cần 200 nhưng mới xong 150')
+    expect(w).not.toContain('MẶT')
+  })
+
+  it('đủ chi tiết cho số cụm → null', () => {
+    expect(
+      assemblyWipWarning('CỤM MÊ', 50, [
+        { name: 'KHUNG', qtyPerAssembly: 1, partDone: 60 },
+      ]),
+    ).toBeNull()
+    expect(assemblyWipWarning('x', 10, [])).toBeNull()
   })
 })
