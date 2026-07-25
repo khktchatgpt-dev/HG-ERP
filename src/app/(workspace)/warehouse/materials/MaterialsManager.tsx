@@ -496,10 +496,16 @@ function MaterialForm({
   submitLabel: string
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
   scope?: 'warehouse' | 'purchasing'
-  /** Danh mục hiện có — cảnh báo trùng tên gần giống khi tạo (chống 1 món 2 mã). */
-  existing?: Pick<Material, 'id' | 'code' | 'name'>[]
+  /** Danh mục hiện có — cảnh báo trùng tên gần giống + gợi ý kệ đã dùng. */
+  existing?: Pick<Material, 'id' | 'code' | 'name' | 'shelf_location'>[]
 }) {
   const purchasing = scope === 'purchasing'
+  // Các kệ đã dùng → gợi ý (datalist) để chọn lại, tránh gõ lệch tách 1 kệ làm nhiều.
+  const shelfOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const m of existing) if (m.shelf_location) set.add(m.shelf_location)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [existing])
   const [busy, setBusy] = useState(false)
   // Tên controlled để dò trùng tên gần giống ngay khi gõ.
   const [name, setName] = useState(initial?.name ?? '')
@@ -742,6 +748,7 @@ function MaterialForm({
         Vị trí kệ
         <input
           name="shelf_location"
+          list="material-shelf-options"
           maxLength={60}
           placeholder="VD: A-01"
           defaultValue={initial?.shelf_location ?? ''}
@@ -749,6 +756,16 @@ function MaterialForm({
           title={purchasing ? 'Kho quản vị trí kệ' : undefined}
           className={`${cls} disabled:opacity-50`}
         />
+        <datalist id="material-shelf-options">
+          {shelfOptions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+        {!purchasing && shelfOptions.length > 0 && (
+          <span className="text-xs text-zinc-400">
+            Gõ để chọn lại kệ đã có — tránh tạo trùng do gõ lệch.
+          </span>
+        )}
       </label>
 
       {/* Bù tồn (nghiệp vụ ①): ngưỡng/lô đặt lại + trần tồn — Kho quản, nuôi gợi ý PO ngoài LSX */}

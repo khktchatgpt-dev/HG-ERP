@@ -65,6 +65,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
 
   const [q, setQ] = useState('')
   const [groupFilter, setGroupFilter] = useState('all')
+  const [shelfFilter, setShelfFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
   const groups = useMemo(() => {
@@ -73,19 +74,31 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
   }, [stock])
 
+  const shelves = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of stock) if (s.shelf_location) set.add(s.shelf_location)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [stock])
+
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return stock.filter((s) => {
       if (groupFilter !== 'all' && (s.group_name ?? '') !== groupFilter) return false
+      if (shelfFilter !== 'all' && (s.shelf_location ?? '') !== shelfFilter) return false
       if (statusFilter === 'low' && !s.is_low) return false
       if (statusFilter === 'out' && s.on_hand > 0) return false
       if (statusFilter === 'ok' && (s.is_low || s.on_hand === 0)) return false
       if (statusFilter === 'short' && s.available >= 0) return false
-      if (ql && !`${s.code} ${s.name} ${s.group_name ?? ''}`.toLowerCase().includes(ql))
+      if (
+        ql &&
+        !`${s.code} ${s.name} ${s.group_name ?? ''} ${s.shelf_location ?? ''}`
+          .toLowerCase()
+          .includes(ql)
+      )
         return false
       return true
     })
-  }, [stock, q, groupFilter, statusFilter])
+  }, [stock, q, groupFilter, shelfFilter, statusFilter])
 
   const stats = useMemo(() => {
     let low = 0
@@ -258,6 +271,10 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
     { value: 'all', label: 'Mọi nhóm' },
     ...groups.map((g) => ({ value: g, label: g })),
   ]
+  const shelfOptions = [
+    { value: 'all', label: 'Mọi kệ' },
+    ...shelves.map((s) => ({ value: s, label: s })),
+  ]
   const statusOptions = [
     { value: 'all' as const, label: 'Mọi trạng thái' },
     { value: 'low' as const, label: 'Tồn thấp' },
@@ -311,7 +328,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
               <ToolbarInput
                 value={q}
                 onChange={setQ}
-                placeholder="Tìm theo mã, tên, nhóm…"
+                placeholder="Tìm theo mã, tên, nhóm, kệ…"
                 icon="⌕"
                 className="w-64"
               />
@@ -319,6 +336,11 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
                 value={groupFilter}
                 onChange={setGroupFilter}
                 options={groupOptions}
+              />
+              <ToolbarSelect
+                value={shelfFilter}
+                onChange={setShelfFilter}
+                options={shelfOptions}
               />
               <ToolbarSelect
                 value={statusFilter}
