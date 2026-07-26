@@ -88,3 +88,26 @@ RBAC: permission mới `production.plan.manage` (0085); định hình dùng
 - Kế hoạch tuần dạng lịch/Gantt (jobs đã có planned_start/planned_end).
 - QC/nghiệm thu, kho thành phẩm, packing list (user chốt: chưa cần).
 - Sửa spec in LSX từ màn Sales (API `/specs` giữ nguyên, UI gỡ tạm).
+
+## Bàn giao vào tổ + sổ sản lượng đủ cột sổ giấy (0090)
+
+Đối chiếu file Excel thật của thống kê ("Tổng TĐ SX- TK - KT.xlsx"):
+
+- `production_transfers` — vế ĐẦU VÀO, append-only: thống kê ghi SL giao
+  phôi/WIP vào tổ theo đợt (`issue`) / tổ trả lại lỗi-thừa (`return`, bắt buộc
+  lý do). Tồn tại tổ = giao − trả − Σ(qty+phế của production_entries) — dẫn
+  xuất ở `summarizeTeamWip`, KHÔNG lưu cứng. Ghi sản lượng vượt số được giao →
+  cảnh báo `teamWipShortageWarning`, không chặn (triết lý FR-PR-07). Gia công
+  ngoài vẫn ở `production_outsource_entries` (không gộp).
+- `production_entries` thêm `worker_name` (Người làm — text như sổ giấy) và
+  `finish_state` ('tran' hàng trần / 'dang_may' đang mây). Kg bỏ trống được
+  backflush = `dm_kg × qty` ở service (`backflushKg`) — như Excel tự tính KL.
+- Action RBAC `production.transfers.record` dùng lại permission
+  `production.output.record` (cùng người ghi sổ).
+- Màn thống kê mới: `/thongke/giao-to` (ghi giao/trả + đối chiếu tồn tại tổ),
+  `/thongke/so-tong` (sổ tổng kiểu sheet `quan li`: hàng chi tiết/cụm × cột
+  công đoạn theo lộ trình thật, đồng bộ bộ SP, trạng thái ⚪🟠🟡🟢✅),
+  `/thongke/bao-cao` (ma trận 1 cột/ngày theo tổ + tháng, nút In — bản nộp
+  kế toán). FastEntryGrid: thêm cột Người làm, nhãn cột meta đổi theo công
+  đoạn (Máy/quy cách · Loại máy hàn · Thao tác · Màu/loại sơn — lưu chung
+  `machine_note`), kg placeholder gợi ý ĐM × SL.

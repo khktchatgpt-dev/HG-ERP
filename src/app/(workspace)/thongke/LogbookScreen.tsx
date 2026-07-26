@@ -44,6 +44,7 @@ type LogEntry = {
   defect_qty: number
   defect_reason: string | null
   machine_note: string | null
+  worker_name: string | null
   note: string | null
   created_at: string
   team_name: string | null
@@ -343,6 +344,7 @@ export function LogbookScreen({
                   <th className="w-14 py-1.5 pr-2 text-right">Phế</th>
                   <th className="py-1.5 pr-2">Nguyên nhân lỗi</th>
                   <th className="w-16 py-1.5 pr-2 text-right">Kg</th>
+                  <th className="py-1.5 pr-2">Người làm</th>
                   <th className="py-1.5 pr-2">Máy / màu</th>
                   <th className="py-1.5 pr-2">Người ghi</th>
                   <th className="w-8 py-1.5" />
@@ -394,6 +396,7 @@ export function LogbookScreen({
                       <td className="py-1.5 pr-2 text-right">
                         {en.kg != null ? Number(en.kg).toLocaleString('vi-VN') : '—'}
                       </td>
+                      <td className="py-1.5 pr-2">{en.worker_name || '—'}</td>
                       <td className="py-1.5 pr-2 text-zinc-500">
                         {en.machine_note || '—'}
                       </td>

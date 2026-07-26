@@ -7,11 +7,15 @@ import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { calcComponent } from '@/lib/component-needs'
 import {
   assemblyWipWarning,
+  backflushKg,
   overrunWarning,
   summarizeComponent,
+  summarizeTeamWip,
   syncedSets,
+  teamWipShortageWarning,
   type ComponentSummary,
 } from '@/lib/production-summary'
+import { transfersRepo } from './transfers.repo'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
@@ -35,6 +39,8 @@ type RecordInput = {
     defect_qty?: number
     defect_reason?: string | null
     machine_note?: string | null
+    worker_name?: string | null
+    finish_state?: 'tran' | 'dang_may' | null
     note?: string | null
   }[]
 }
@@ -47,6 +53,8 @@ export type ComponentOutputView = {
   cluster: string | null
   name: string
   total_needed: number
+  /** ĐM kg/đơn vị — lưới nhập gợi ý kg = ĐM × SL (0090). */
+  dm_kg: number | null
   /** Lộ trình công đoạn của dòng SP (jobs theo seq); null = chưa lên kế hoạch. */
   allowed_stages: string[] | null
   summary: ComponentSummary
@@ -132,6 +140,16 @@ export const entriesService = {
       const k = `${en.component_id}|${en.stage}`
       doneByCompStage.set(k, (doneByCompStage.get(k) ?? 0) + Number(en.qty))
     }
+    // Đã dùng đầu vào per (chi tiết × công đoạn × tổ) — phế cũng ăn đầu vào.
+    const usedByTriple = new Map<string, number>()
+    for (const en of existing) {
+      if (!en.team_department_id) continue
+      const k = `${en.component_id}|${en.stage}|${en.team_department_id}`
+      usedByTriple.set(
+        k,
+        (usedByTriple.get(k) ?? 0) + Number(en.qty) + Number(en.defect_qty),
+      )
+    }
     const warnings: string[] = []
     for (const e of input.entries) {
       const comp = byId.get(e.component_id)
@@ -178,6 +196,35 @@ export const entriesService = {
       if (w) warnings.push(w)
     }
 
+    // Cảnh báo VƯỢT SỐ ĐƯỢC GIAO (0090): tổ có đi qua sổ bàn giao (issued > 0)
+    // mà ghi quá available = giao − trả − đã dùng. Không chặn (FR-PR-07).
+    if (team) {
+      const transfers = await transfersRepo.listRawByLsx(lsxId)
+      const byTriple = new Map<string, { direction: 'issue' | 'return'; qty: number }[]>()
+      for (const t of transfers) {
+        const k = `${t.component_id}|${t.stage}|${t.team_department_id}`
+        const arr = byTriple.get(k) ?? []
+        arr.push(t)
+        byTriple.set(k, arr)
+      }
+      for (const [compId, addingQty] of addingByComp) {
+        const k = `${compId}|${input.stage}|${team}`
+        const same = byTriple.get(k)
+        if (!same?.length) continue
+        const addingDefect = input.entries
+          .filter((e) => e.component_id === compId)
+          .reduce((a, e) => a + (e.defect_qty ?? 0), 0)
+        const wip = summarizeTeamWip(same, usedByTriple.get(k) ?? 0)
+        const w = teamWipShortageWarning(
+          byId.get(compId)!.name,
+          input.stage,
+          wip,
+          addingQty + addingDefect,
+        )
+        if (w) warnings.push(w)
+      }
+    }
+
     await entriesRepo.insertMany(
       input.entries.map((e) => ({
         production_order_id: lsxId,
@@ -186,10 +233,13 @@ export const entriesService = {
         team_department_id: team,
         entry_date: input.entry_date,
         qty: e.qty,
-        kg: e.kg ?? null,
+        // Bỏ trống kg → backflush ĐM × SL (Excel cũng tính, không nhập tay).
+        kg: backflushKg(e.kg, byId.get(e.component_id)!.dm_kg, e.qty),
         defect_qty: e.defect_qty ?? 0,
         defect_reason: (e.defect_qty ?? 0) > 0 ? (e.defect_reason ?? null) : null,
         machine_note: e.machine_note ?? null,
+        worker_name: e.worker_name ?? null,
+        finish_state: e.finish_state ?? null,
         note: e.note ?? null,
         created_by: user.id,
       })),
@@ -251,6 +301,7 @@ export const entriesService = {
         cluster: c.cluster,
         name: c.name,
         total_needed: totalByComponent.get(c.id) ?? 0,
+        dm_kg: c.dm_kg,
         allowed_stages: route,
         summary: summarizeComponent(
           totalByComponent.get(c.id) ?? 0,

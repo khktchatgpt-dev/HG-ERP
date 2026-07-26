@@ -14,7 +14,14 @@ import type { RunningLsx, Stage } from './LogbookScreen'
  * Ghi sổ gom nhóm và POST endpoint per-LSX sẵn có (mọi guard server tự áp).
  */
 
-type Cell = { qty: string; defect: string; reason: string; kg: string; machine: string }
+type Cell = {
+  qty: string
+  defect: string
+  reason: string
+  kg: string
+  worker: string
+  machine: string
+}
 export type PendingCells = Record<string, Cell> // key `${lsxId}|${stage}|${componentId}`
 
 type GridComponent = {
@@ -23,20 +30,43 @@ type GridComponent = {
   name: string
   cluster: string | null
   total_needed: number
+  dm_kg: number | null
   allowed_stages: string[] | null
   summary: { stages: { stage: string; done: number; missing: number }[] }
 }
 type OutputData = { components: GridComponent[] }
 
-const emptyCell = (): Cell => ({ qty: '', defect: '', reason: '', kg: '', machine: '' })
+const emptyCell = (): Cell => ({
+  qty: '',
+  defect: '',
+  reason: '',
+  kg: '',
+  worker: '',
+  machine: '',
+})
 const hasValue = (c: Cell) => c.qty !== '' && Number(c.qty) > 0
 const needsReason = (c: Cell) => c.defect !== '' && Number(c.defect) > 0 && !c.reason
 
 const inp =
   'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
-/** Cột theo thứ tự bàn phím: SL → Phế → Lý do → Kg → Máy/màu. */
-const COL_COUNT = 5
+/** Cột theo thứ tự bàn phím: SL → Phế → Lý do → Kg → Người làm → Máy/màu. */
+const COL_COUNT = 6
+
+/**
+ * Cột ghi chú kỹ thuật đổi NHÃN theo công đoạn (0090) — Excel mỗi sheet công
+ * đoạn có đúng 1 cột meta riêng: PHÔI = Máy/Quy cách, HÀN = Loại máy hàn,
+ * NGUỘI/MÀI = Thao tác, SƠN = Màu/Loại sơn. Vẫn lưu chung machine_note.
+ */
+const STAGE_NOTE: Record<string, { label: string; ph: string }> = {
+  phoi: { label: 'Máy / quy cách', ph: 'máy cắt 2…' },
+  han: { label: 'Loại máy hàn', ph: 'TIG / MIG…' },
+  nguoi: { label: 'Thao tác', ph: 'mài / đánh bóng…' },
+  mai: { label: 'Thao tác', ph: 'mài / đánh bóng…' },
+  son: { label: 'Màu / loại sơn', ph: 'H-SM-96 tĩnh điện…' },
+}
+const stageNote = (stage: string) =>
+  STAGE_NOTE[stage] ?? { label: 'Máy / màu', ph: 'máy cắt 2 / màu H-SM-96…' }
 
 export function FastEntryGrid({
   lsxList,
@@ -139,7 +169,8 @@ export function FastEntryGrid({
             qty: Number(c.qty),
             defect_qty: c.defect === '' ? 0 : Number(c.defect),
             defect_reason: c.reason || null,
-            kg: c.kg === '' ? null : Number(c.kg),
+            kg: c.kg === '' ? null : Number(c.kg), // trống → server backflush ĐM × SL
+            worker_name: c.worker.trim() || null,
             machine_note: c.machine.trim() || null,
           }
         })
@@ -301,8 +332,11 @@ export function FastEntryGrid({
                 <th className="w-24 py-1 pr-2">SL đạt</th>
                 <th className="w-16 py-1 pr-2">Phế</th>
                 <th className="w-44 py-1 pr-2">Lý do phế</th>
-                <th className="w-20 py-1 pr-2">Kg</th>
-                <th className="py-1 pr-2">Máy / màu</th>
+                <th className="w-20 py-1 pr-2" title="Bỏ trống = tự tính ĐM × SL">
+                  Kg
+                </th>
+                <th className="w-28 py-1 pr-2">Người làm</th>
+                <th className="py-1 pr-2">{stageNote(stage).label}</th>
               </tr>
             </thead>
             <tbody>
@@ -387,16 +421,32 @@ export function FastEntryGrid({
                         onChange={(e) => setCell(c.id, { kg: e.target.value })}
                         onKeyDown={(e) => onGridKeyDown(e, row, 3)}
                         className={inp}
+                        placeholder={
+                          c.dm_kg != null && cell.qty !== '' && Number(cell.qty) > 0
+                            ? String(Math.round(c.dm_kg * Number(cell.qty) * 100) / 100)
+                            : ''
+                        }
+                        title="Bỏ trống = tự tính ĐM × SL khi ghi sổ"
                       />
                     </td>
                     <td className="py-1 pr-2">
                       <input
                         ref={setRef(row, 4)}
-                        value={cell.machine}
-                        onChange={(e) => setCell(c.id, { machine: e.target.value })}
+                        value={cell.worker}
+                        onChange={(e) => setCell(c.id, { worker: e.target.value })}
                         onKeyDown={(e) => onGridKeyDown(e, row, 4)}
                         className={inp}
-                        placeholder="máy cắt 2 / màu H-SM-96…"
+                        placeholder="tên người làm…"
+                      />
+                    </td>
+                    <td className="py-1 pr-2">
+                      <input
+                        ref={setRef(row, 5)}
+                        value={cell.machine}
+                        onChange={(e) => setCell(c.id, { machine: e.target.value })}
+                        onKeyDown={(e) => onGridKeyDown(e, row, 5)}
+                        className={inp}
+                        placeholder={stageNote(stage).ph}
                       />
                     </td>
                   </tr>

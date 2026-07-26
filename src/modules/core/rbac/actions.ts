@@ -295,6 +295,15 @@ export const ACTIONS: Action[] = [
     rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL.',
   },
   {
+    // Bàn giao NỘI BỘ vào tổ (0090) — cùng người ghi sổ sản lượng nên dùng lại
+    // permission production.output.record, không thêm quyền mới.
+    key: 'production.transfers.record',
+    label: 'Ghi bàn giao phôi/WIP vào tổ',
+    domain: 'production',
+    rule: perm('production.output.record'),
+    rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL.',
+  },
+  {
     key: 'production.daylock.lock',
     label: 'Chốt sổ ngày (theo tổ)',
     domain: 'production',

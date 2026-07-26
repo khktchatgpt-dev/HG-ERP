@@ -13,6 +13,10 @@ export const entryLineSchema = z
     defect_qty: z.coerce.number().min(0).default(0),
     defect_reason: z.string().trim().max(200).optional().nullable(),
     machine_note: z.string().trim().max(200).optional().nullable(),
+    /** "Người làm" trực tiếp (0090) — text tự do như sổ giấy. */
+    worker_name: z.string().trim().max(100).optional().nullable(),
+    /** Hàng trần / hàng đang mây (0090) — cột ghi chú trạng thái của Excel. */
+    finish_state: z.enum(['tran', 'dang_may']).optional().nullable(),
     note: z.string().trim().max(500).optional().nullable(),
   })
   .superRefine((e, ctx) => {

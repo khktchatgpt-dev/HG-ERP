@@ -163,6 +163,71 @@ export function assemblyWipWarning(
   return `${assemblyName}: hàn ${assembliesAfter} cụm VƯỢT số chi tiết đã xong — ${detail}`
 }
 
+/**
+ * Đối chiếu BÀN GIAO NỘI BỘ per (chi tiết × công đoạn × tổ) — 0090, thay cột
+ * "SL giao 1..4 / Tổng giao / Thiếu-Dư" của sheet tổ trong Excel:
+ *  - issued/returned = Σ production_transfers direction issue/return;
+ *  - used = Σ (qty + defect_qty) của production_entries cùng bộ ba — phế cũng
+ *    tiêu tốn đầu vào;
+ *  - available = issued − returned − used (âm = tổ làm vượt số được giao).
+ * issued = 0 nghĩa là tổ không đi qua sổ bàn giao → caller bỏ qua cảnh báo.
+ */
+export type TeamWipSummary = {
+  issued: number
+  returned: number
+  used: number
+  available: number
+}
+
+export function summarizeTeamWip(
+  transfers: { direction: 'issue' | 'return'; qty: number }[],
+  used: number,
+): TeamWipSummary {
+  let issued = 0
+  let returned = 0
+  for (const t of transfers) {
+    if (t.direction === 'issue') issued += t.qty
+    else returned += t.qty
+  }
+  return {
+    issued: r2(issued),
+    returned: r2(returned),
+    used: r2(used),
+    available: r2(issued - returned - used),
+  }
+}
+
+/**
+ * Cảnh báo ghi sản lượng VƯỢT số đã được bàn giao (0090). Không chặn (đồng bộ
+ * FR-PR-07) — chỉ nhắc khi tổ CÓ đi qua sổ bàn giao (issued > 0).
+ * @param adding qty + defect sắp ghi (phế cũng ăn đầu vào)
+ */
+export function teamWipShortageWarning(
+  name: string,
+  stage: string,
+  wip: TeamWipSummary,
+  adding: number,
+): string | null {
+  if (wip.issued <= 0) return null
+  if (adding - wip.available <= 0.001) return null
+  return `${name} @ ${stage}: tổ được giao ${wip.issued} (trả lại ${wip.returned}, đã dùng ${wip.used}) — ghi thêm ${r2(adding)} là VƯỢT ${r2(adding - wip.available)} so với số được giao`
+}
+
+/**
+ * Backflush khối lượng (0090): kg bỏ trống → dm_kg × qty (Excel cũng TÍNH
+ * "Khối lượng đã làm" = ĐM × SL chứ không nhập tay). Người nhập ghi đè được;
+ * không có định mức → null (không đoán).
+ */
+export function backflushKg(
+  kg: number | null | undefined,
+  dmKg: number | null,
+  qty: number,
+): number | null {
+  if (kg != null) return kg
+  if (dmKg == null || dmKg <= 0 || qty <= 0) return null
+  return r2(dmKg * qty)
+}
+
 /** Cảnh báo nhập vượt (FR-PR-07): đã làm + sắp nhập > tổng cần → chuỗi cảnh báo. */
 export function overrunWarning(
   name: string,
