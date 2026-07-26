@@ -7,7 +7,8 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
 /**
  * Layout workspace Sales. Shell (sidebar + topbar) đặt ở đây — page trả nội
  * dung trực tiếp (chuẩn CLAUDE.md). Quyền vào: theo `canEnterWorkspace`
- * (openView — mọi NV xem chéo được). Ghi vẫn bị service chặn theo phòng Sales.
+ * — từ 0086 xem chéo phải có quyền tường minh `workspace.view.sales` (openView
+ * đã bỏ). Ghi vẫn bị service chặn theo phòng Sales.
  * Lưu ý: Cung ứng theo dõi đơn nên dùng route riêng /planning/tracking
  * (re-export) để giữ menu Cung ứng thay vì nhảy shell.
  */
