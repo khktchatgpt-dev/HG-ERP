@@ -1,0 +1,516 @@
+﻿code_moi,code_cu,ma_vat_lieu,ten_san_pham,nguon_ma,file_bom
+AC000001HG-XX,A0001HG-XX,XX,,ĐỀ XUẤT - cần duyệt,BKQC - BCNKZ Santorin 650130X650X750.xlsx
+AC000002HG-IR,A0002HG-IR,IR,,ĐỀ XUẤT - cần duyệt,BKQC - So sanh mê ngồi.xlsx
+BN000002HG-AL,B0002HG-AL,AL,Bench 1,Từ file BOM,BKQC - B0002HG-AL Bench 1.xlsx
+BN000003HG-AL,B0003HG-AL,AL,Bench 2,Từ file BOM,BKQC - B0003HG-AL  Bench 2.xlsx
+BN000004HG-AL,B0004HG-AL,AL,Ghế dài,Từ file BOM,BKQC - DINING SET - Ghỗ bạch đàn.xlsx
+BN000005HG-AL,B0005HG-AL,AL,SOFA Trần Nhôm ống Bank 2,Từ file BOM,BKQC - C0085HG-AL -SOFA Trần Nhôm.xlsx
+BN000006HG-AL,B0006HG-AL,AL,Bank 2,Từ file BOM,BKQC - B0006HG-AL-Club Chair  Bank 2.xlsx
+BN000007HG-AL,B0007HG-AL,AL,Bank 3,Từ file BOM,BKQC - B0007HG-AL-Club Chair - Bank 3.xlsx
+BN000008HG-AL,B0008HG-AL,AL,ARMCHAIR,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000009HG-IR,B0009HG-IR,IR,ARMCHAIR,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000010HG-AL,B0010HG-AL,AL,3 SEAT SOFA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000011HG-IR,B0011HG-IR,IR,3 SEAT SOFA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000012HG-AL,B0012HG-AL,AL,Ghế tựa cong,Từ file BOM,B0012HG-AL-GHẾ TỰA CONG-GIGA-N775P221509.xlsx
+BN000013HG-AL,B0013HG-AL,AL,Sorley Sofa Brief,Từ file BOM,BKQC-B0013HG-AL--SORLEY--GD27GFURN-95- sofa bank 2.xlsx
+BN000014HG-AL,B0014HG-AL,AL,2 SEATER WITH TYPE 1 SIDE TABLE,Từ file BOM,B0014HG-AL+B0015HG-IR-2 SEATER WITH TYPE 1 SIDE TABLE.xlsx
+BN000015HG-IR,B0015HG-IR,IR,2 SEATER WITH TYPE 1 SIDE TABLE,Từ file BOM,B0014HG-AL+B0015HG-IR-2 SEATER WITH TYPE 1 SIDE TABLE.xlsx
+BN000016HG-AL,B0016HG-AL,AL,2 SEATER WITH TYPE 1 SIDE TABLE,Từ file BOM,B0016HG-AL+B0017HG-IR-2 SEATER WITH TYPE 2 SIDE TABLE.xlsx
+BN000017HG-IR,B0017HG-IR,IR,2 SEATER WITH TYPE 1 SIDE TABLE,Từ file BOM,B0016HG-AL+B0017HG-IR-2 SEATER WITH TYPE 2 SIDE TABLE.xlsx
+BN000018HG-AL,B0018HG-AL,AL,SINGLE CHAIR,Từ file BOM,B0018HG-AL+B0019HG-IR-SINGLE CHAIR.xlsx
+BN000019HG-IR,B0019HG-IR,IR,SINGLE CHAIR,Từ file BOM,B0018HG-AL+B0019HG-IR-SINGLE CHAIR.xlsx
+BN000020HG-AL,B0020HG-AL,AL,Sorley Armchair Brief,Từ file BOM,BKQC-B0020HG-AL-SORLEY--GD27GFURN-96 - Sorley Armchair Brief.xlsx
+BN000021HG-AL,B0021HG-AL,AL,3 Seater Sofa-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000022HG-IR,B0022HG-IR,IR,3 Seater Sofa-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000023HG-AL,B0023HG-AL,AL,Arm chair-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000024HG-IR,B0024HG-IR,IR,Arm chair-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000025HG-AL,B0025HG-AL,AL,Corner Arm Piece-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000026HG-IR,B0026HG-IR,IR,Corner Arm Piece-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000027HG-AL,B0027HG-AL,AL,Armless Piece-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000028HG-IR,B0028HG-IR,IR,Armless Piece-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000029HG-AL,B0029HG-AL,AL,Imani 3 Seater Sofa,Từ file BOM,B0029HG-AL+B0030HG-IR-Imani 3 Seater Sofa.xlsx
+BN000030HG-IR,B0030HG-IR,IR,Imani 3 Seater Sofa,Từ file BOM,B0029HG-AL+B0030HG-IR-Imani 3 Seater Sofa.xlsx
+BN000031HG-AL,B0031HG-AL,AL,ARM CHAIR,Từ file BOM,B0031HG-AL+B0032HG-IR-Imani Arm chair Sofa.xlsx
+BN000032HG-AL,B0032HG-AL,AL,ARM CHAIR,Từ file BOM,B0031HG-AL+B0032HG-IR-Imani Arm chair Sofa.xlsx
+BN000032HG-IR,B0032HG-IR,IR,Imani Arm chair Sofa,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000033HG-AL,B0033HG-AL,AL,2 seater sofa-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000034HG-IR,B0034HG-IR,IR,2 seater sofa-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000035HG-AL,B0035HG-AL,AL,ARMLESS CHAIR-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000036HG-IR,B0036HG-IR,IR,ARMLESS CHAIR-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000037HG-AL,B0037HG-AL,AL,CORNER SECTION MODULE-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000038HG-IR,B0038HG-IR,IR,CORNER SECTION MODULE-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+BN000045HG-IR,B0045HG-IR,IR,Bench,Từ file BOM,BKQC - B0045HG-IR - FZS71084F Bench.xlsx
+BN000046HG-AL,B0046HG-AL,AL,Double sofa,ĐỀ XUẤT - cần duyệt,BKQC - Aluminum sofa.xlsx
+BN000047HG-AL,B0047HG-AL,AL,Single sofa,ĐỀ XUẤT - cần duyệt,BKQC - Aluminum sofa.xlsx
+BN000048HG-AL,B0048HG-AL,AL,Triple sofa,ĐỀ XUẤT - cần duyệt,BKQC - Aluminum sofa.xlsx
+BN000049HG-XX,B0049HG-XX,XX,Ghế Bank 1 (1 cái/bộ),ĐỀ XUẤT - cần duyệt,BKQC - Bộ 170 asley - cập nhật 26-03-2025.xlsx
+BN000050HG-AL,B0050HG-AL,AL,Ghế Bank 2 (2 cái/Bộ),ĐỀ XUẤT - cần duyệt,BKQC - Bộ 170 asley - cập nhật 26-03-2025.xlsx
+BN000051HG-AL,B0051HG-AL,AL,Ghế Bank Góc ( 1 cái/bộ),ĐỀ XUẤT - cần duyệt,BKQC - Bộ 170 asley - cập nhật 26-03-2025.xlsx
+BN000052HG-AL,B0052HG-AL,AL,HARLOWE SOFA ARMCHAIR,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE SOFA  kê profile HG.xlsx
+BN000053HG-AL,B0053HG-AL,AL,HARLOWE SOFA ARMCHAIR,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE SOFA  kê profile HG.xlsx
+BN000054HG-AL,B0054HG-AL,AL,HARLOWE SOFA ARMCHAIR,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE SOFA ARMCHAIR kê đúng profile theo BV khách.xlsx
+BN000055HG-AL,B0055HG-AL,AL,OTTOMAN FRAME (D80 x W56 X H34) CM,ĐỀ XUẤT - cần duyệt,BKQC - OTTOMAN FRAME (D80 x W56 X H34) CM.xlsx
+BN000056HG-XX,B0056HG-XX,XX,Ghe 1,ĐỀ XUẤT - cần duyệt,BKQC - Sofa ghỗ đan dây.xlsx
+BN000057HG-XX,B0057HG-XX,XX,Ghe 2,ĐỀ XUẤT - cần duyệt,BKQC - Sofa ghỗ đan dây.xlsx
+BN000058HG-AL,B0058HG-AL,AL,Ghế góc ( Ráp chết ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa góc đan mây.xlsx
+BN000059HG-AL,B0059HG-AL,AL,Ghế không tay ( Ráp chết ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa góc đan mây.xlsx
+BN000060HG-AL,B0060HG-AL,AL,Ghế trái - phải ( Ráp chết ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa góc đan mây.xlsx
+BN000061HG-IR,B0061HG-IR,IR,SOFA GARDEN  Bank 1,ĐỀ XUẤT - cần duyệt,BKQC - TOKY - JOY GARDEN - KHUNG ĐAN SỢI WICKER XOẮN.xlsx
+BN000062HG-IR,B0062HG-IR,IR,SOFA GARDEN  Bank 2,ĐỀ XUẤT - cần duyệt,BKQC - TOKY - JOY GARDEN - KHUNG ĐAN SỢI WICKER XOẮN.xlsx
+BN000063HG-IR,B0063HG-IR,IR,SOFA GARDEN  Bank 3,ĐỀ XUẤT - cần duyệt,BKQC - TOKY - JOY GARDEN - KHUNG ĐAN SỢI WICKER XOẮN.xlsx
+CH000001HG-AL,C0001HG-AL,AL,Ghế XC Naxos tay vịn nhôm gián giấy,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000002HG-IR,C0002HG-IR,IR,2PK High Dining Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000003HG-AL,C0003HG-AL,AL,GHẾ NHÔM LƯỚI THÁO RỜI,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000004HG-AL,C0004HG-AL,AL,"Itanos folding chair Midi
+Ghế xếp lưới
+tay vịn + tựa đầu ply wood",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000005HG-AL,C0005HG-AL,AL,Ghế 5 bậc Astros tay vịn Polywood,Từ file BOM,BKQC - C0005HG-AL  Ghế 5 bậc Astros - 21620-217.xlsx
+CH000104HG-IR,C00104HG-IR,IR,"Ghế xếp chồng không tháo rời
+Khung sắt",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000105HG-IR,C00105HG-IR,IR,"Ghế xếp chồng tháo rời
+Khung sắt",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000011HG-AL,C0011HG-AL,AL,Ghế 5 bậc Florenz tay Polywood,Từ file BOM,BKQC - C0011HG-AL  Ghế 5 bậc Florenz tay Polywood.xlsx
+CH000012HG-AL,C0012HG-AL,AL,Mê ngồi vải,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000013HG-AL,C0013HG-AL,AL,Ghế 5 bậc Astros tay vịn nhôm dán giấy,Từ file BOM,BKQC - C0013HG-AL  Ghế 5 bậc Astros - 21620-217 - Tay vịn nhôm dán giấy.xlsx
+CH000014HG-AL,C0014HG-AL,AL,Ghế XC Tilos tăng cao tựa 910,Từ file BOM,BKQC - C0009HG-AL  Ghế XC Tilos tăng cao tựa 910.xlsx
+CH000015HG-AL,C0015HG-AL,AL,"Ghế XC Tilos tăng cao tựa 910
+Tay vịn+tựa đầu Plywood",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000015HG-IR,C0015HG-IR,IR,Ghế xoay đan mây,Từ file BOM,BKQC - C0015HG-IR Ghế xoay đan mây.xlsx
+CH000016HG-IR,C0016HG-IR,IR,Rocking Chair -  đan mây,Từ file BOM,BKQC - C0016HG-IR Rocking Chair -  đan mây.xlsx
+CH000017HG-AL,C0017HG-AL,AL,Ghế 5pos Tilos - Tay + tựa Polywood,Từ file BOM,BKQC - C0007HG-AL  Ghế 5pos Tilos - Tay vịn Polywood.xlsx
+CH000018HG-AL,C0018HG-AL,AL,Tilos balcony arm chair,Từ file BOM,BKQC - C0018HG-AL  Tilos balcony arm chair.xlsx
+CH000019HG-AL,C0019HG-AL,AL,ghế 5 bậc siena tay giá rẻ,Từ file BOM,BKQC - C0019HG-AL  ghế 5 bậc siena tay giá rẻ.xlsx
+CH000020HG-AL,C0020HG-AL,AL,Ghế XC Mê ngồi nhôm tấm- tựa dây dù - tay Polywood,Từ file BOM,BKQC - C0020HG-AL  Ghế XC Mê ngồi nhôm tấm- tựa dây dù - tay Polywood.xlsx
+CH000021HG-AL,C0021HG-AL,AL,Ghế XC Đan dây dù tay Polywood,Từ file BOM,BKQC - C0021HG-AL  Ghế XC Đan dây dù tay Polywood.xlsx
+CH000022HG-AL,C0022HG-AL,AL,"Ghế xếp chồng Astros, khung nhôm, tay ghế bằng polywood",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000023HG-AL,C0023HG-AL,AL,Ghế xếp vải,Từ file BOM,BKQC - C0023HG-AL  Ghế xếp vải.xlsx
+CH000024HG-IR,C0024HG-IR,IR,Rattan chair,Từ file BOM,BKQC - C0024HG-IR  Rattan chair with stowable ottoman.xlsx
+CH000025HG-AL,C0025HG-AL,AL,Ghế 5 bậc Florenz,Từ file BOM,BKQC - C0025HG-AL  Ghế 5 bậc Florenz tay nhôm 26000-309.xlsx
+CH000026HG-AL,C0026HG-AL,AL,"Astros stack chair
+Tay vịn nhôm dán giấy",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000027HG-IR,C0027HG-IR,IR,"Ghế xoay đan mây+Bàn
+Ghế: 2pcs
+Bàn: 1pcs",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000028HG-IR,C0028HG-IR,IR,IR Swivel Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000029HG-AL,C0029HG-AL,AL,Sofa amr chair,Từ file BOM,BKQC - C0029HG-AL Sofa amr chair.xlsx
+CH000029HG-IR,C0029HG-IR,IR,IR Stationary Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000030HG-AL,C0030HG-AL,AL,Ghế đạo diễn,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000031HG-AL,C0031HG-AL,AL,Amr Chair,Từ file BOM,BKQC - C0031HG-AL  Amr Chair - Copy.xlsx
+CH000032HG-AL,C0032HG-AL,AL,"Rope Chair
+Frame: Alu
+Cushion: D25, fabric 320g & USFR, 
+thk seat 7cm back 19cm
+Carton: 275lbs, outer layer reinforced 
+with honeycomb paper 
+for enhanced strenght and impact protection",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000033HG-AL,C0033HG-AL,AL,"Rope Chair
+Frame: Alu
+Cushion: D25, fabric 320g & USFR, 
+thk seat 26cm back 20cm
+Carton: 275lbs, outer layer reinforced 
+with honeycomb paper 
+for enhanced strenght and impact protection",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000034HG-IR,C0034HG-IR,IR,Armless Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000035HG-AL,C0035HG-AL,AL,Arm Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000036HG-AL,C0036HG-AL,AL,Outdoor CLUB CHAIR 20x90,Từ file BOM,VE-BKQC - C0036HG-AL Outdoor CLUB CHAIR 20x90 - CC-71734.xlsx
+CH000037HG-IR,C0037HG-IR,IR,Swivel Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000038HG-AL,C0038HG-AL,AL,Ghế vải tháo rời,Từ file BOM,BKQC - mẫu định mức nguyên liệu - Ghế.xlsx
+CH000039HG-IR,C0039HG-IR,IR,Arm Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000040HG-IR,C0040HG-IR,IR,Arm Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000041HG-AL,C0041HG-AL,AL,Outdoor dining arm chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000042HG-IR,C0042HG-IR,IR,Arm Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000046HG-IR,C0046HG-IR,IR,Arm Chair,Từ file BOM,BKQC - C0046HG-AL  Arm Chair.xlsx
+CH000047HG-AL,C0047HG-AL,AL,Bench 3,Từ file BOM,BKQC - Bench - 25x50-OLD.xlsx
+CH000048HG-AL,C0048HG-AL,AL,Bench 2,Từ file BOM,BKQC - Bench - 25x50-OLD.xlsx
+CH000049HG-IR,C0049HG-IR,IR,Stacking Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000051HG-IR,C0051HG-IR,IR,Lounge Chair,Từ file BOM,BKQC-LINYA-C0051HG-IR Lounge Chair.xlsx
+CH000052HG-AL,C0052HG-AL,AL,Folding Chair,Từ file BOM,BKQC - C0052HG-AL  Folding Chair1.xlsx
+CH000053HG-AL,C0053HG-AL,AL,Stacking Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000055HG-AL,C0055HG-AL,AL,Bench 1,Từ file BOM,C0055HG-AL-Ghế 1 profile 25x50.xlsx
+CH000057HG-AL,C0057HG-AL,AL,Ghế ngắn,Từ file BOM,BKQC - DINING SET - Ghỗ bạch đàn.xlsx
+CH000060HG-IR,C0060HG-IR,IR,ghế bành sân vườn,Từ file BOM,BKQC -C0060HG-IR- GIGA - Ghế bành sân vườn .xlsx
+CH000061HG-IR,C0061HG-IR,IR,Ghế Xoay Tựa dây,Từ file BOM,BKQC - C0061HG-IR - Ghế Xoay Tựa dây.xlsx
+CH000062HG-IR,C0062HG-IR,IR,Ghế Xoay  Tựa Mây,Từ file BOM,BKQC - C0062HG-IR - Ghế Xoay Tựa Mây.xlsx
+CH000065HG-AL,C0065HG-AL,AL,Ghế đan mây Rattan,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+CH000066HG-AL,C0066HG-AL,AL,Genova textil chair GD,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000067HG-AL,C0067HG-AL,AL,Ghế ăn ngoài trời Rolando,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+CH000068HG-AL,C0068HG-AL,AL,Ghế xoay,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000069HG-AL,C0069HG-AL,AL,Ghế vải,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000071HG-AL,C0071HG-AL,AL,"Stacking chair:
+        Frame:Stanless steel SS304
+        Armrest : Teak wood",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000072HG-AL,C0072HG-AL,AL,Ghế xoay,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000073HG-AL,C0073HG-AL,AL,Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000074HG-IN,C0074HG-IN,IN,"Chair with backrest:
+       Frame:
+       Back rail + seat rail + armrest : Teak wood",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000075HG-IN,C0075HG-IN,IN,Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000077HG-IR,C0077HG-IR,IR,Ghế xoay Wings,Từ file BOM,BKQC - C0077HG-IR -Ghế xoay Wings.xlsx
+CH000079HG-AL,C0079HG-AL,AL,Ghế Tựa tròn textilene,Từ file BOM,BKQC - C0079HG-AL -Ghế Tựa tròn textilene.xlsx
+CH000080HG-AL,C0080HG-AL,AL,Lucas single sofa-AlphaMarts,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000081HG-AL,C0081HG-AL,AL,Lucas Swivel Chair-AlphaMarts,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000082HG-AL,C0082HG-AL,AL,ghế bành tay gỗ teak,Từ file BOM,BKQC - C0079HG-AL  - ghế bành tay gỗ teak.xlsx
+CH000083HG-AL,C0083HG-AL,AL,Ghế xoay - dây dù,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000084HG-AL,C0084HG-AL,AL,Club Chair,Từ file BOM,BKQC - B0006HG-AL-Club Chair  Bank 2.xlsx
+CH000085HG-AL,C0085HG-AL,AL,SOFA trần Nhôm ống,Từ file BOM,BKQC - C0085HG-AL -SOFA Trần Nhôm.xlsx
+CH000086HG-IR,C0086HG-IR,IR,Lucas single sofa-AlphaMarts,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000087HG-IR,C0087HG-IR,IR,Lucas Swivel Chair-AlphaMarts,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000088HG-AL,C0088HG-AL,AL,"Ghế xếp chồng không tháo rời
+Khung nhôm",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000089HG-AL,C0089HG-AL,AL,Ghế đan mây tháo rời,Từ file BOM,BKQC -C0089HG-AL - Ghế Đan Mây Tháo Rời 26082025.xlsx
+CH000090HG-AL,C0090HG-AL,AL,Ghế đan mây dây tròn,Từ file BOM,BKQC - C0090HG-AL-Ghê đan mây dây tròn 1526082025.xlsx
+CH000091HG-AL,C0091HG-AL,AL,Ghế đan mây - Khung nhôm,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000092HG-AL,C0092HG-AL,AL,Nệm bọc mê + tựa,Từ file BOM,BKQC - C0092HG-AL-Ghế nệm bọc mê.xlsx
+CH000093HG-AL,C0093HG-AL,AL,Bank 2 Sofa,Từ file BOM,BKQC - C0093HG-AL - Bank 2 ghế sofa  - 0803092025.xlsx
+CH000094HG-AL,C0094HG-AL,AL,Bank3 ghế sofa,Từ file BOM,BKQC - C0094HG-AL - Bank3 ghế sofa - 11030925.xlsx
+CH000095HG-IR,C0095HG-IR,IR,Ghế đan mây - Khung sắt,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000097HG-IR,C0097HG-IR,IR,Ghế đan khung sắt,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000098HG-AL,C0098HG-AL,AL,DINING CHAIR,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000099HG-IR,C0099HG-IR,IR,DINING CHAIR,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000100HG-AL,C0100HG-AL,AL,Club Chair,Từ file BOM,BKQC - C0100HG-AL-Outdoor Chat set.xlsx
+CH000100HG-IR,C0100HG-IR,IR,Ghế,Từ file BOM,BKQC -  C0100HG-IR- GIGA - Ghế  - Outdoor Swivel Chair  .xlsx
+CH000101HG-AL,C0101HG-AL,AL,Barstools,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000102HG-IR,C0102HG-IR,IR,Barstools,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000103HG-AL,C0103HG-AL,AL,outdoor seating,Từ file BOM,BKQC -C0103HG-AL - outdor Seating CC-FX-174.xlsx
+CH000106HG-AL,C0106HG-AL,AL,Ghê Cong tháo rời,Từ file BOM,BKQC - C0106HG-AL - GIGA -Ghế cong 20x70 tháo rời.xlsx
+CH000107HG-IR,C0107HG-IR,IR,Hali Dining Chair with Thicker Weave Brief,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000108HG-AL,C0108HG-AL,AL,Ghế Tựa mê bọc vải có foam,Từ file BOM,BKQC--SORLEY--GD27GFURN-56 -ghế bọc tựa mê.xlsx
+CH000109HG-AL,C0109HG-AL,AL,"Counter Stools-Aluminum Frame
+(Heat Transfer Printing)",Từ file TỔNG HỢP,(chưa có file BOM)
+CH000110HG-IR,C0110HG-IR,IR,Counter Stools-IRON Frame-Powder Coated,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000111HG-IR,C0111HG-IR,IR,Ghế xếp Vải mê tựa,Từ file BOM,BKQC - C0111HG-IR - Ghế xếp vải mê tựa.xlsx
+CH000112HG-IR,C0112HG-IR,IR,Armchair,Từ file BOM,C0112HG-IR+C0113HG-AL-GD27GFURN-67.xlsx
+CH000113HG-AL,C0113HG-AL,AL,Armchair,Từ file BOM,C0112HG-IR+C0113HG-AL-GD27GFURN-67.xlsx
+CH000114HG-IR,C0114HG-IR,IR,Armchair,Từ file BOM,C0114HG-IR+C0115HG-AL-GD27GFURN-66.xlsx
+CH000115HG-AL,C0115HG-AL,AL,Khung nhôm,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000116HG-IR,C0116HG-IR,IR,Dining Chair,Từ file BOM,C0116HG-IR+C0117HG-AL-GD27GFURN-69.xlsx
+CH000117HG-AL,C0117HG-AL,AL,Dining Chair,Từ file BOM,C0116HG-IR+C0117HG-AL-GD27GFURN-69.xlsx
+CH000118HG-AL,C0118HG-AL,AL,Ghế,Từ file BOM,BKQC - C0118HG-AL - Ghế .xlsx
+CH000119HG-IR,C0119HG-IR,IR,Outdoor Rattan Dining Chairs,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000120HG-AL,C0120HG-AL,AL,DINING CHAIR-YOKO,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000121HG-IR,C0121HG-IR,IR,DINING CHAIR-YOKO,Từ file TỔNG HỢP,(chưa có file BOM)
+CH000126HG-AL,C0126HG-AL,AL,Ghế  bar,Từ file BOM,BKQC -C0126HG-AL -  N775P361567G - Ghê Bar.xlsx
+CH000134HG-IR,C0134HG-IR,IR,Ghế Tựa đan dây chéo,Từ file BOM,BKQC - C0134HG-IR.xlsx
+CH000135HG-IR,C0135HG-IR,IR,Ghê vải bọc tựa,Từ file BOM,BKQC - C0135HG-IR.xlsx
+CH000136HG-AL,C0136HG-AL,AL,Ghế 5 bậc nhôm lưới Tilos,ĐỀ XUẤT - cần duyệt,BKQC - 21600-217 Ghế 5pos Tilos.xlsx
+CH000137HG-AL,C0137HG-AL,AL,Ghế XC Tilos,ĐỀ XUẤT - cần duyệt,BKQC - 21601-217 Ghế XC Tilos.xlsx
+CH000138HG-AL,C0138HG-AL,AL,Ghế XC Tinos,ĐỀ XUẤT - cần duyệt,BKQC - 21625-217 Ghế XC Tinos.xlsx
+CH000139HG-AL,C0139HG-AL,AL,Ghế xc Naxos,ĐỀ XUẤT - cần duyệt,BKQC - 22000-309 Ghế xc Naxos.xlsx
+CH000140HG-IR,C0140HG-IR,IR,Wave Dining Chair,ĐỀ XUẤT - cần duyệt,BKQC - 70178 Wave Dining Chair.xlsx
+CH000141HG-AL,C0141HG-AL,AL,Amr chair ( ráp chết),ĐỀ XUẤT - cần duyệt,BKQC - Amr chair 1.xlsx
+CH000142HG-AL,C0142HG-AL,AL,Amr chair ( ráp chết),ĐỀ XUẤT - cần duyệt,BKQC - Amr chair.xlsx
+CH000143HG-IR,C0143HG-IR,IR,Ghế,ĐỀ XUẤT - cần duyệt,BKQC - FRS71267.xlsx
+CH000144HG-IN,C0144HG-IN,IN,GHẾ XẾP CHỒNG KHUNG INOX - NAN GHỖ,ĐỀ XUẤT - cần duyệt,BKQC - GHẾ XẾP CHỒNG KHUNG INOX - NAN GHỖ.xlsx
+CH000145HG-IN,C0145HG-IN,IN,GHẾ XẾP CHỒNG KHUNG INOX - NAN POLYWOOD,ĐỀ XUẤT - cần duyệt,BKQC - GHẾ XẾP CHỒNG KHUNG INOX - NAN POLYWOOD.xlsx
+CH000146HG-IR,C0146HG-IR,IR,Ghế đu đưa,ĐỀ XUẤT - cần duyệt,BKQC - GSS00395A.xlsx
+CH000147HG-AL,C0147HG-AL,AL,Ghế 5 bật santorin,ĐỀ XUẤT - cần duyệt,BKQC - Ghế 5 bật santorin -22020-209 .xlsx
+CH000148HG-IN,C0148HG-IN,IN,Ghế bar,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Bar.xlsx
+CH000149HG-AL,C0149HG-AL,AL,Ghế xoay Sắt,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay Sắt.xlsx
+CH000150HG-AL,C0150HG-AL,AL,Dining Chair,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay.xlsx
+CH000151HG-AL,C0151HG-AL,AL,Ghế xoay,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay.xlsx
+CH000152HG-AL,C0152HG-AL,AL,Ghế xoay vải,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay.xlsx
+CH000153HG-AL,C0153HG-AL,AL,Ghế đan dây dù,ĐỀ XUẤT - cần duyệt,BKQC - Ghế dây dù - Bodesari.xlsx
+CH000154HG-AL,C0154HG-AL,AL,Ghế nhôm đan dây dù bảng lớn ( Ráp chết ),ĐỀ XUẤT - cần duyệt,BKQC - Ghế nhôm đan dây dù bảng lớn.xlsx
+CH000155HG-AL,C0155HG-AL,AL,Ghế đan dây dù 8 ly ( Ráp chết ),ĐỀ XUẤT - cần duyệt,BKQC - Ghế Đan dây dù tròn 8 ly.xlsx
+CH000156HG-AL,C0156HG-AL,AL,HARLOWE 2 SEATER,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE 2-SEATER.xlsx
+CH000157HG-AL,C0157HG-AL,AL,HARLOWE 3 SEATER,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE 3-SEATER.xlsx
+CH000158HG-AL,C0158HG-AL,AL,Ghế nâu tựa vải,ĐỀ XUẤT - cần duyệt,BKQC ghế nâu.xlsx
+OT000002HG-AL,O0002HG-AL,AL,Sunbed,Từ file BOM,BKQC - O0002HG-AL  Sunbed.xlsx
+OT000003HG-IR,O0003HG-IR,IR,Daybed,Từ file BOM,BKQC - O0003HG-IR  Daybed.xlsx
+OT000004HG-AL,O0004HG-AL,AL,CAPE CORAL KD CHAISE LOUNGE GRY,Từ file BOM,BKQC - O0004HG-AL  CAPE CORAL KD CHAISE LOUNGE GRY.xlsx
+OT000004HG-IR,O0004HG-IR,IR,Daybed - 2,Từ file BOM,BKQC - O0004HG-IR  Daybed 2.xlsx
+OT000005HG-IR,O0005HG-IR,IR,Daybed,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000006HG-AL,O0006HG-AL,AL,MYERS CHAISE LOUNGE,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000007HG-AL,O0007HG-AL,AL,NAVAN CHAISE LOUNGE,Từ file BOM,BKQC - O0007HG-AL  NAVAN CHAISE LOUNGE.xlsx
+OT000008HG-AL,O0008HG-AL,AL,Dù ngoài trời,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000009HG-AL,O0009HG-AL,AL,Liều Mái Cuốn,Từ file BOM,BKQC -O0009HG-AL - GIGA - Lều 1.xlsx
+OT000010HG-AL,O0010HG-AL,AL,Giường tắm nắng Pacific Stackable,Từ file BOM,BKQC -O0010HG-AL - GIGA-Giường tắm nắng Pacific Stackable .xlsx
+OT000010HG-IR,O0010HG-IR,IR,Giường tắm nắng Pacific Stackable,Từ file BOM,BKQC -O0010HG-IR - GIGA-Giường tắm nắng Pacific Stackable.xlsx
+OT000011HG-AL,O0011HG-AL,AL,Giường tắm nắng ngoài trời,Từ file BOM,BKQC -O0011HG-AL - GIGA-Giường tắm nắng ngoài trời  .xlsx
+OT000011HG-IR,O0011HG-IR,IR,Giường Miura-bisque,Từ file BOM,BKQC - O0011HG-IR -  Giường Miura-bisque .xlsx
+OT000013HG-AL,O0013HG-AL,AL,"Lều sắt 2 giường:
+     Khung giường
+     Khung lều
+     Tựa đầu
+     Khung nằm",Từ file TỔNG HỢP,(chưa có file BOM)
+OT000015HG-AL,O0015HG-AL,AL,GTN  nhôm Textilene màu xám,Từ file BOM,BKQC O0015HG-AL -GTN Textilene Mesh Seating in Grey .xlsx
+OT000016HG-AL,O0016HG-AL,AL,GTN Black Frame + Grey Mesh,Từ file BOM,BKQC O0016HG-AL -GTN Black Frame + Grey Mesh  .xlsx
+OT000018HG-AL,O0018HG-AL,AL,Giường tắm nắng Everlee,Từ file BOM,BKQC - O0018HG-AL Giường tắm nắng Everlee - nhôm  - Copy.xlsx
+OT000019HG-AL,O0019HG-AL,AL,Tủ Lớn Đan mây,Từ file BOM,BKQC - O0019HG-IR+AL  Tủ lớn đan mây- Copy.xlsx
+OT000019HG-IR,O0019HG-IR,IR,Tủ Lớn Đan mây,Từ file BOM,BKQC - O0019HG-IR+AL  Tủ lớn đan mây- Copy.xlsx
+OT000020HG-IR,O0020HG-IR,IR,GTN có bàn phụ,Từ file BOM,BKQC - O0020HG-IR -Giường tắm nắng có bàn phụ 10040925.xlsx
+OT000021HG-AL,O0021HG-AL,AL,Louvered Pergola White WO Curtain & Netting,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000022HG-AL,O0022HG-AL,AL,Aluminum Louvered Pergola - Brown,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000023HG-AL,O0023HG-AL,AL,GTN đan mây,Từ file BOM,BKQC -O0023HG-AL+IR- GTN đan mây chân gỗ tách 2 mảnh.xlsx
+OT000023HG-IR,O0023HG-IR,IR,GTN đan mây,Từ file BOM,BKQC -O0023HG-AL+IR- GTN đan mây chân gỗ tách 2 mảnh.xlsx
+OT000025HG-AL,O0025HG-AL,AL,CORNER PIECE,Từ file BOM,O0025HG-AL+O0026HG-IR-CORNER PIECE.xlsx
+OT000026HG-IR,O0026HG-IR,IR,CORNER PIECE-SENERITY,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000027HG-AL,O0027HG-AL,AL,FOOTSTOOL,Từ file BOM,O0027HG-AL+O0028HG-IR-FOOTSTOOL.xlsx
+OT000028HG-IR,O0028HG-IR,IR,FOOTSTOOL-SENERITY,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000029HG-IR,O0029HG-IR,IR,Xích đu,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000032HG-AL,O0032HG-AL,AL,FOOT STOOL-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000033HG-IR,O0033HG-IR,IR,FOOT STOOL-LUCIA,Từ file TỔNG HỢP,(chưa có file BOM)
+OT000034HG-IR,O0034HG-IR,IR,Bàn làm việc,Từ file BOM,BKQC - O0034HG-IR- Bàn làm việc có 2 kệ.xlsx
+OT000035HG-IR,O0035HG-IR,IR,Bàn ngăn kéo mini,Từ file BOM,BKQC - O0035HG-IR  .xlsx
+OT000036HG-AL,O0036HG-AL,AL,Giường,ĐỀ XUẤT - cần duyệt,BKQC - Giường.xlsx
+OT000037HG-AL,O0037HG-AL,AL,Lều tròn,ĐỀ XUẤT - cần duyệt,BKQC - Liều tròn - 2.xlsx
+OT000038HG-AL,O0038HG-AL,AL,Lều tròn,ĐỀ XUẤT - cần duyệt,BKQC - Liều tròn.xlsx
+OT000039HG-IR,O0039HG-IR,IR,nhà lều,ĐỀ XUẤT - cần duyệt,BKQC - Nhà lều có vải .xlsx
+OT000040HG-IR,O0040HG-IR,IR,Giường tắm nắng Everlee,ĐỀ XUẤT - cần duyệt,BKQC - O0018HG-IR Giường tắm nắng Everlee - Sắt.xlsx
+OT000041HG-IR,O0041HG-IR,IR,nhà lều,ĐỀ XUẤT - cần duyệt,BKQC -Nhà lều Phi 37 - 4x6 mét.xlsx
+OT000042HG-IR,O0042HG-IR,IR,Lều sắt 2 giường,ĐỀ XUẤT - cần duyệt,BKQC-định mức nguyên liệu-Lều sắt 2 giường.xlsx
+OT000043HG-AL,O0043HG-AL,AL,095-DAYBED,ĐỀ XUẤT - cần duyệt,QCBG- GIGA DAYBED 095-096-097.xlsx
+OT000044HG-AL,O0044HG-AL,AL,096-DAYBED,ĐỀ XUẤT - cần duyệt,QCBG- GIGA DAYBED 095-096-097.xlsx
+OT000045HG-AL,O0045HG-AL,AL,097-DAYBED,ĐỀ XUẤT - cần duyệt,QCBG- GIGA DAYBED 095-096-097.xlsx
+ST000001HG-IR,S0001HG-IR,IR,Chair,Từ file BOM,BKQC - S0001HG-IR  Coffee set.xlsx
+ST000005HG-AL,S0005HG-AL,AL,"Sofa set (table + 2 bank I + bank III)
+Table: Frame by alu + table top by dán giấy
+Bank I + Bank II: Frame by alu + Armchair dán giấy",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000006HG-AL,S0006HG-AL,AL,"Sofa set (table + 2 bank I + bank III)
+Table: Frame by alu + table top by dán giấy
+Bank I + Bank II: Frame by alu + Armchair dán giấy",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000007HG-AL,S0007HG-AL,AL,"DINING SET
+Bàn chữ nhật-Khung nhôm
+Mặt bàn gỗ keo
+Ghế đan dây Ø5",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000008HG-AL,S0008HG-AL,AL,"DINING SET
+Bàn tròn-Khung nhôm
+Mặt bàn gỗ keo
+Ghế đan dây Ø5",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000012HG-AL,S0012HG-AL,AL,"Sofa set:
+Table: Frame by alu + table top by polywood: 1pcs
+Bank I: Frame by alu+arm rest PW: 2pcs
+Bank II: Frame by alu+arm rest PW: 1pcs
+Ottoman: Frame by alu: 1pcs",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000014HG-AL,S0014HG-AL,AL,"Sofa set
+     Table
+     Corner sofa
+     Left sofa
+     Right sofa",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000023HG-IR,S0023HG-IR,IR,Sofa set - Table,Từ file BOM,BKQC - S0023HG-IR  Sofa set.xlsx
+ST000026HG-IR,S0026HG-IR,IR,Bàn,Từ file BOM,BKQC - S0026HG-IR  Sofa Set - Đan mây.xlsx
+ST000027HG-AL,S0027HG-AL,AL,,Từ file BOM,BKQC - S0027HG-AL  Bộ bancony góc nhôm lưới.xlsx
+ST000028HG-AL,S0028HG-AL,AL,Sofa fits bed Set - ES151L,Từ file BOM,BKQC - S0028HG-AL  Sofa fits bed Set mới 15.08.xlsx
+ST000029HG-AL,S0029HG-AL,AL,ghế,Từ file BOM,BKQC - S0029HG-AL - Licosa Set  nan Polywood.xlsx
+ST000030HG-IR,S0030HG-IR,IR,Sofa set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000031HG-AL,S0031HG-AL,AL,Armless,Từ file BOM,BKQC - S0031HG-AL  Nolan 6PC Deep Seating.xlsx
+ST000032HG-AL,S0032HG-AL,AL,Long  - Left Arm Chair,Từ file BOM,BKQC - S0032HG-AL -KS - Westport 6pc Deep Seating.xlsx
+ST000033HG-AL,S0033HG-AL,AL,Sofa set - Southdale,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000034HG-AL,S0034HG-AL,AL,3-seater,Từ file BOM,BKQC - S0034HG-AL - KS - Holbrook 6 PC  Conversation Set.xlsx
+ST000035HG-IR,S0035HG-IR,IR,Sofa Set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000037HG-AL,S0037HG-AL,AL,Dining chair,Từ file BOM,BKQC - S0037HG-AL Dining set.xlsx
+ST000040HG-AL,S0040HG-AL,AL,Kimora coffee Footrest,Từ file BOM,BKQC - S0040HG-AL RM Kimora coffee set.xlsx
+ST000041HG-AL,S0041HG-AL,AL,Kimora Corner  Corner,Từ file BOM,BKQC - S0041HG-AL RM Kimora  Corner set .xlsx
+ST000042HG-AL,S0042HG-AL,AL,Kimora lounge Lounge chair,Từ file BOM,BKQC - S0042HG-AL RM Kimora  lounge set .xlsx
+ST000043HG-AL,S0043HG-AL,AL,Éclat Bank I,Từ file BOM,BKQC - S0043HG-AL - GIGA- ÉCLAT SOFA.xlsx
+ST000044HG-AL,S0044HG-AL,AL,U_STYLE Bank I,Từ file BOM,BKQC - S0044HG-IR - GIGA - Bộ ghế ngoài trời chất lượng cao.xlsx
+ST000044HG-IR,S0044HG-IR,IR,U_STYLE Table,Từ file BOM,BKQC - S0044HG-IR - GIGA - Bộ ghế ngoài trời chất lượng cao.xlsx
+ST000045HG-AL,S0045HG-AL,AL,RIVA Large Bank left+right,Từ file BOM,BKQC - S0046HG-IR - Deuba - Large sofa riva.xlsx
+ST000045HG-IR,S0045HG-IR,IR,RIVA Bank left+right,Từ file BOM,BKQC - S0045HG-IR - Deuba - Small sofa riva.xlsx
+ST000047HG-AL,S0047HG-AL,AL,"Bàn khung nhôm, kính sơn
+Bank I - khung nhôm
+Bank II - khung nhôm
+Bank III - khung nhôm
+Nệm D20 Vải polyester 250gr, UV500h",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000048HG-AL,S0048HG-AL,AL,Corner sofa with tapered leg,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000049HG-AL,S0049HG-AL,AL,"Sofa set (table + 2 bank I + bank II)
+Table: Frame by alu
+Bank I + Bank II: Frame by alu",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000050HG-IR,S0050HG-IR,IR,"Sofa set (2 table + 2 bank I + bank II)
+Table: Frame by alu
+Bank I + Bank II: Frame by alu",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000051HG-AL,S0051HG-AL,AL,"Sofa set  table + 2 bank I + bank II)
+Table: Frame by alu + table top by transparent glass
+Bank I + Bank III: Frame by alu
+tính lại bb",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000052HG-AL,S0052HG-AL,AL,"Sofa set ( table + 2 bank I + bank III)
+Frame: alu + half round wicker",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000053HG-AL,S0053HG-AL,AL,"Sofa set (1 table + 1 corner sofa + 1 open sofa + 1 bench with storage)
+Alu frame + wicker as sample",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000054HG-AL,S0054HG-AL,AL,Sofa set ( 2 table + Bank I + Bank II + Bank III ),Từ file TỔNG HỢP,(chưa có file BOM)
+ST000055HG-IN,S0055HG-IN,IN,Sofa set ( table +2 corner sofa + 3 bank I ),Từ file TỔNG HỢP,(chưa có file BOM)
+ST000062HG-AL,S0062HG-AL,AL,"Sofa set:
+     Table:
+        Frame: Alu
+        Top table: Polywood
+     Bank I:
+        Legs: Stanless steel SS304
+        Frame: Carbon steel
+     Bank II:
+        Legs: Stanless steel SS304
+        Frame: Carbon steel",Từ file TỔNG HỢP,(chưa có file BOM)
+ST000069HG-AL,S0069HG-AL,AL,4 seat dinning,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000070HG-AL,S0070HG-AL,AL,6 seat dinning,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000071HG-AL,S0071HG-AL,AL,8 seat dinning,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000072HG-AL,S0072HG-AL,AL,In between set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000073HG-AL,S0073HG-AL,AL,Lounge set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000074HG-AL,S0074HG-AL,AL,Dinining set - 6 Chair,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000075HG-AL,S0075HG-AL,AL,Lucas sofa set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000076HG-IR,S0076HG-IR,IR,Lucas set - Bank II,Từ file BOM,BKQC-S0076HG-IR-Lucas set.xlsx
+ST000077HG-AL,S0077HG-AL,AL,TABLE,Từ file BOM,BKQC_TABLE1150X1150.xlsx
+ST000078HG-AL,S0078HG-AL,AL,S0078HG-AL-Sofa set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000079HG-AL,S0079HG-AL,AL,Dining set - Table KD,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000080HG-IR,S0080HG-IR,IR,Lucas set - Bank III - KD,Từ file BOM,BKQC-S0080HG-IR-Lucas set- KD structure.xlsx
+ST000081HG-IR,S0081HG-IR,IR,SOFA SET,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000083HG-AL,S0083HG-AL,AL,Lucas sofa set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000085HG-IR,S0085HG-IR,IR,Lucas sofa set,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000086HG-AL,S0086HG-AL,AL,Wilder 8-piece Sectional,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000087HG-AL,S0087HG-AL,AL,Sofa set - Bank I,Từ file BOM,S0087HG-AL-Sofa set - CASUAL.xlsx
+ST000088HG-AL,S0088HG-AL,AL,Airm chair,Từ file BOM,BKQC - sybil -airm chair - 44 .xlsx
+ST000089HG-IR,S0089HG-IR,IR,SOFA SET - BANK I,Từ file BOM,S0047HG-AL-SOFA SET KHUNG NHÔM.xlsx
+ST000092HG-AL,S0092HG-AL,AL,SOFA SET,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000094HG-AL,S0094HG-AL,AL,Bank 3 20x65,Từ file BOM,BKQC - S0094HG-AL- Sofa 20x65.xlsx
+ST000095HG-IR,S0095HG-IR,IR,SOFA SET ĐAN MÂY MẶT BÀN GỖ,Từ file TỔNG HỢP,(chưa có file BOM)
+ST000096HG-AL,S0096HG-AL,AL,Bank 2,Từ file BOM,BKQC - S0096HG-AL- Sofa Góc-Nhôm .xlsx
+ST000097HG-AL,S0097HG-AL,AL,Table,Từ file BOM,BKQC - Bộ sofa đan dây + bàn gỗ keo.xlsx
+ST000098HG-AL,S0098HG-AL,AL,Sofa Set - bank1,Từ file BOM,BKQC - S0098HG-AL - GD99622 COFFEE SET.xlsx
+ST000099HG-IR,S0099HG-IR,IR,Bank 1,ĐỀ XUẤT - cần duyệt,BKQC - - JOY GARDEN - LOUNGE CORNER SET - CORNER - KHUNG SẮT ĐAN.xlsx
+ST000100HG-IR,S0100HG-IR,IR,Bank 2,ĐỀ XUẤT - cần duyệt,BKQC - - JOY GARDEN - LOUNGE CORNER SET - CORNER - KHUNG SẮT ĐAN.xlsx
+ST000101HG-IR,S0101HG-IR,IR,Bank L+R,ĐỀ XUẤT - cần duyệt,BKQC - - JOY GARDEN - LOUNGE CORNER SET - CORNER - KHUNG SẮT ĐAN.xlsx
+ST000102HG-IR,S0102HG-IR,IR,Góc,ĐỀ XUẤT - cần duyệt,BKQC - - JOY GARDEN - LOUNGE CORNER SET - CORNER - KHUNG SẮT ĐAN.xlsx
+ST000103HG-AL,S0103HG-AL,AL,Sofa bench,ĐỀ XUẤT - cần duyệt,BKQC - Alu Sofa Set - dây dù.xlsx
+ST000104HG-AL,S0104HG-AL,AL,Big Table,ĐỀ XUẤT - cần duyệt,BKQC - Alu Sofa Set - dây dù.xlsx
+ST000105HG-AL,S0105HG-AL,AL,Amr Chair,ĐỀ XUẤT - cần duyệt,BKQC - Alu Sofa Set - dây dù.xlsx
+ST000106HG-AL,S0106HG-AL,AL,Small Table,ĐỀ XUẤT - cần duyệt,BKQC - Alu Sofa Set - dây dù.xlsx
+ST000107HG-AL,S0107HG-AL,AL,Bàn (P340-701),ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa B340.xlsx
+ST000108HG-AL,S0108HG-AL,AL,Bàn vuông (P340-702),ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa B340.xlsx
+ST000109HG-AL,S0109HG-AL,AL,Ghế 1 (P340-820),ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa B340.xlsx
+ST000110HG-AL,S0110HG-AL,AL,Ghế Bank 2 (P340-835),ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa B340.xlsx
+ST000111HG-AL,S0111HG-AL,AL,Ghế Bank 3 (P340-838),ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa B340.xlsx
+ST000112HG-AL,S0112HG-AL,AL,Bank 1,ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa đan dây + bàn gỗ keo.xlsx
+ST000113HG-AL,S0113HG-AL,AL,Bank 1,ĐỀ XUẤT - cần duyệt,BKQC - Bộ sofa đan dây + bàn gỗ keo.xlsx
+ST000114HG-IR,S0114HG-IR,IR,Round Table Chat Set 3PCS,ĐỀ XUẤT - cần duyệt,BKQC - Chat Set 3PCS.xlsx
+ST000115HG-IR,S0115HG-IR,IR,Chair Chat Set 3PCS,ĐỀ XUẤT - cần duyệt,BKQC - Chat Set 3PCS.xlsx
+ST000116HG-IR,S0116HG-IR,IR,Bàn,ĐỀ XUẤT - cần duyệt,BKQC - DINING SET.xlsx
+ST000117HG-AL,S0117HG-AL,AL,DINING CHAIR,ĐỀ XUẤT - cần duyệt,BKQC - DINING SET.xlsx
+ST000118HG-AL,S0118HG-AL,AL,BÀN Nan nhôm dán giấy hộp 10x86,ĐỀ XUẤT - cần duyệt,BKQC - LYPRODAN SET - Nan bàn và tay vịn dán giấy.xlsx
+ST000119HG-AL,S0119HG-AL,AL,Ghế 1,ĐỀ XUẤT - cần duyệt,BKQC - LYPRODAN SET - Nan bàn và tay vịn dán giấy.xlsx
+ST000120HG-AL,S0120HG-AL,AL,Ghế 2,ĐỀ XUẤT - cần duyệt,BKQC - LYPRODAN SET - Nan bàn và tay vịn dán giấy.xlsx
+ST000121HG-AL,S0121HG-AL,AL,Đôn,ĐỀ XUẤT - cần duyệt,BKQC - LYPRODAN SET - Nan bàn và tay vịn dán giấy.xlsx
+ST000122HG-AL,S0122HG-AL,AL,Sofa Amr Chair,ĐỀ XUẤT - cần duyệt,BKQC - S0006HG-AL SOFA SET -hộp 20x100 - Nan bàn nhôm gián giấy.xlsx
+ST000123HG-AL,S0123HG-AL,AL,Sofa bench 3,ĐỀ XUẤT - cần duyệt,BKQC - S0006HG-AL SOFA SET -hộp 20x100 - Nan bàn nhôm gián giấy.xlsx
+ST000124HG-AL,S0124HG-AL,AL,Table,ĐỀ XUẤT - cần duyệt,BKQC - S0006HG-AL SOFA SET -hộp 20x100 - Nan bàn nhôm gián giấy.xlsx
+ST000125HG-AL,S0125HG-AL,AL,Licosa Set  nan Polywood,ĐỀ XUẤT - cần duyệt,BKQC - S0029HG-AL  Licosa Set-CŨ.xlsx
+ST000126HG-IR,S0126HG-IR,IR,Bàn,ĐỀ XUẤT - cần duyệt,BKQC - SOFA SET.xlsx
+ST000127HG-IR,S0127HG-IR,IR,Ghế Băng 1,ĐỀ XUẤT - cần duyệt,BKQC - SOFA SET.xlsx
+ST000128HG-IR,S0128HG-IR,IR,Ghế Băng 3,ĐỀ XUẤT - cần duyệt,BKQC - SOFA SET.xlsx
+ST000129HG-IR,S0129HG-IR,IR,Đôn,ĐỀ XUẤT - cần duyệt,BKQC - SOFA SET.xlsx
+ST000130HG-AL,S0130HG-AL,AL,Big Table (Tháo chân ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set - bàn nan ghỗ.xlsx
+ST000131HG-AL,S0131HG-AL,AL,Big Table (Tháo chân ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set - bàn nan ghỗ.xlsx
+ST000132HG-AL,S0132HG-AL,AL,Left Bench (Tháo chân ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set - bàn nan ghỗ.xlsx
+ST000133HG-AL,S0133HG-AL,AL,Right Bench (Tháo chân ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set - bàn nan ghỗ.xlsx
+ST000134HG-AL,S0134HG-AL,AL,Ghế STOOL (full set 1 ghế ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set- mê ngồi vải.xlsx
+ST000135HG-AL,S0135HG-AL,AL,Ghế  (full set 2 ghế ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set- mê ngồi vải.xlsx
+ST000136HG-AL,S0136HG-AL,AL,Ghế 3 (full set 1 ghế ),ĐỀ XUẤT - cần duyệt,BKQC - Sofa set- mê ngồi vải.xlsx
+ST000137HG-AL,S0137HG-AL,AL,Big Table,ĐỀ XUẤT - cần duyệt,BKQC - Sofa set- mê ngồi vải.xlsx
+ST000138HG-AL,S0138HG-AL,AL,Bàn nhỏ,ĐỀ XUẤT - cần duyệt,BKQC - Sofa set- mê ngồi vải.xlsx
+SL000001HG-IR,SU001HG-IR,IR,"Giường tắm nắng
+Khung giường: 20x40",Từ file TỔNG HỢP,(chưa có file BOM)
+SL000002HG-IR,SU002HG-IR,IR,"Giường tắm nắng
+Khung giường: 25x50",Từ file TỔNG HỢP,(chưa có file BOM)
+SL000003HG-AL,SU003HG-AL,AL,GTN khung nhôm,Từ file TỔNG HỢP,(chưa có file BOM)
+SL000005HG-IR,SU005HG-IR,IR,GIƯỜNG TẮM NĂNG KHUNG SẮT ĐAN MÂY,Từ file TỔNG HỢP,(chưa có file BOM)
+SL000006HG-IR,SU006HG-IR,IR,Giường đôi có mái che - Khung sắt - Chân dán giấy,Từ file TỔNG HỢP,(chưa có file BOM)
+SL000007HG-AL,SU007HG-AL,AL,Outdoor chaise lounge,Từ file BOM,BKQC - SU007HG-AL - 2504-1-US-PH-128 - Outdoor chaise lounge white textilene.xlsx
+SL000008HG-AL,SU008HG-AL,AL,Outdoor chaise lounge,Từ file BOM,BKQC - SU008HG-AL - 2504-1-US-PH-111 Outdoor chaise lounge gray cushion.xlsx
+SL000009HG-IR,SU009HG-IR,IR,Outdoor chaise lounge,Từ file BOM,BKQC - SU009HG-IR - 2504-1-US-PH-125- Outdoor chaise lounge - rope+cushion.xlsx
+SL000010HG-AL,SU010HG-AL,AL,Outdoor chaise lounge,Từ file BOM,BKQC - SU010HG-AL - 2504-1-US-PH-112 - Outdoor chaise lounge gray textilene.xlsx
+SL000011HG-AL,SU011HG-AL,AL,Outdoor chaise lounge brown,Từ file BOM,BKQC - SU011HG-AL -  2504-1-US-PH-108 - Outdoor chaise lounge - brown .xlsx
+TB000002HG-AL,T0002HG-AL,AL,Bàn 150 (210)x90 nan Polywood,Từ file BOM,BKQC - T0002HG-AL  Bàn 150(210)x90 nan Polywood.xlsx
+TB000004HG-AL,T0004HG-AL,AL,Table 150(210)x90x75 Gạch vân ghỗ,Từ file BOM,BKQC - T0004HG-AL Table 150(210)x90 Gạch vân ghỗ.xlsx
+TB000005HG-AL,T0005HG-AL,AL,Table 150x90x76 Nan nhôm dán giấy,Từ file BOM,BKQC  T0005HG-AL  Bàn 150x90x76 Nan nhôm dán giấy.xlsx
+TB000006HG-AL,T0006HG-AL,AL,Table 150(210)x90x75 Nan nhôm,Từ file BOM,BKQC - T0006HG-AL Table 150(210)x90  Nan nhôm.xlsx
+TB000007HG-AL,T0007HG-AL,AL,Rega Complete Table,Từ file BOM,BKQC - T0007HG-AL  Rega Complete Table.xlsx
+TB000008HG-AL,T0008HG-AL,AL,BÀN 150 / 200 x90 x75 cm,Từ file BOM,BKQC - T0008HG-AL  BÀN 150-200x90 NANPOLYWOOD 21660-011.xlsx
+TB000009HG-AL,T0009HG-AL,AL,BÀN 150 / 200 x90 x75 cm,Từ file BOM,BKQC - T0009HG-AL  BÀN 150-200x90 NANPOLYWOOD - 2 nan ngang.xlsx
+TB000010HG-AL,T0010HG-AL,AL,Bàn 140 x 80 polywood,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000011HG-AL,T0011HG-AL,AL,"Bàn chữ nhật
+Khung nhôm
+Mặt bàn gỗ keo",Từ file TỔNG HỢP,(chưa có file BOM)
+TB000012HG-AL,T0012HG-AL,AL,BÀN CN 150X90 TILOS Nan nhôm dán giấy,Từ file BOM,BKQC-T0012HG-AL  BÀN CN 150X90 TILOS-nan nhôm dán giấy.xlsx
+TB000013HG-IR,T0013HG-IR,IR,"Bàn chữ nhật-Khung sắt
+Mặt bàn gỗ keo",Từ file TỔNG HỢP,(chưa có file BOM)
+TB000014HG-IR,T0014HG-IR,IR,"Bàn tròn-Khung sắt
+Mặt bàn gỗ keo",Từ file TỔNG HỢP,(chưa có file BOM)
+TB000018HG-AL,T0018HG-AL,AL,Bàn lưới 140x80,Từ file BOM,BKQC - T0018HG-AL   Bàn lưới 140x80.xlsx
+TB000019HG-IR,T0019HG-IR,IR,Bàn vuông,Từ file BOM,BKQC - T0019HG-IR Bàn vuông.xlsx
+TB000020HG-AL,T0020HG-AL,AL,Bàn đá 65,Từ file BOM,"BKQC - T0020HG-AL  Ban da 1225,610x685x750.xlsx"
+TB000021HG-AL,T0021HG-AL,AL,Bàn CN 220x100x75  nan Polywood,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000022HG-AL,T0022HG-AL,AL,Bàn KZ 685x605(1210)x750 - Mặt gạch vân gỗ,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000023HG-AL,T0023HG-AL,AL,Bàn bancony KG,Từ file BOM,BKQC - T0023HG-AL  Bàn bancony 1200-800 x 800 x 750.xlsx
+TB000025HG-IR,T0025HG-IR,IR,High Dining Table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000026HG-IR,T0026HG-IR,IR,Slat Top Dining Table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000027HG-AL,T0027HG-AL,AL,Table,Từ file BOM,BKQC - T0027HG-AL  Table (1).xlsx
+TB000028HG-AL,T0028HG-AL,AL,Table: Frame by alu + table top by  poly wood,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000029HG-AL,T0029HG-AL,AL,Square table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000030HG-AL,T0030HG-AL,AL,Bàn 180(240)x100 nan Polywood,Từ file BOM,BKQC -T0030HG-AL  Bàn 180(240)x100 nan Polywood.xlsx
+TB000031HG-IR,T0031HG-IR,IR,Table,Từ file BOM,BKQC - T0031HG-IR  Table.xlsx
+TB000033HG-IR,T0033HG-IR,IR,Round Table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000034HG-IR,T0034HG-IR,IR,Square Table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000036HG-AL,T0036HG-AL,AL,Bàn kéo dãn nan nhôm,Từ file BOM,BKQC-T0036HG-AL Bàn kéo dãn nan nhôm.xlsx
+TB000037HG-IR,T0037HG-IR,IR,Coffee table,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000038HG-IR,T0038HG-IR,IR,Coffee table KD top.,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000041HG-AL,T0041HG-AL,AL,Bàn kéo dãn nan gỗ,Từ file BOM,BKQC - DINING SET - Ghỗ bạch đàn.xlsx
+TB000043HG-AL,T0043HG-AL,AL,Bàn Rosarito Brown+Black,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+TB000046HG-AL,T0046HG-AL,AL,Bàn nhôm kính Grey,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+TB000047HG-AL,T0047HG-AL,AL,Bàn nhôm Polywood Natural,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+TB000048HG-AL,T0048HG-AL,AL,Bàn nhôm kính màu grey,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+TB000049HG-AL,T0049HG-AL,AL,Bàn nhôm vuông,Từ file BOM,BKQC - GIGA Tổng hợp Tháng 7.2025 - 1.xlsx
+TB000050HG-AL,T0050HG-AL,AL,Bàn nan nhôm,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000056HG-AL,T0056HG-AL,AL,Table ceramic,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000057HG-AL,T0057HG-AL,AL,"Bàn CNKG 150(200)x90x75 cm, khung nhôm
+Mặt bàn bằng nan Polywood",Từ file TỔNG HỢP,(chưa có file BOM)
+TB000058HG-AL,T0058HG-AL,AL,Bàn đen nan Nhôm,Từ file BOM,BKQC -T0058HG-AL -Table 25082025.xlsx
+TB000059HG-AL,T0059HG-AL,AL,Bàn mở rộng,Từ file BOM,BKQC -T0059HG-AL -Bàn mở rộng 25082025 .xlsx
+TB000060HG-AL,T0060HG-AL,AL,Bàn kéo dãn nan gỗ,Từ file BOM,BKQC-T0060HG-AL-Bàn kéo  dãn nan gỗ-Cũ.xlsx
+TB000061HG-AL,T0061HG-AL,AL,Bàn kéo dãn nan gỗ,Từ file BOM,BKQC-T0061HG-AL-Bàn kéo  dãn nan gỗ.xlsx
+TB000062HG-AL,T0062HG-AL,AL,Bàn kéo dãn nan gỗ nan ngang - R160,Từ file BOM,BKQC-T0062HG-AL-Bàn kéo  dãn nan gỗ-nan ngang R160.xlsx
+TB000063HG-AL,T0063HG-AL,AL,Bàn kéo  dãn nan gỗ-nan ngang R50,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000064HG-AL,T0064HG-AL,AL,Bàn mở rộng nan gỗ bạch đàn,Từ file BOM,BKQC -T0064HG-AL - Bàn mở rộng Nan gỗ bạch đàn 27082025.xlsx
+TB000065HG-AL,T0065HG-AL,AL,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000066HG-IR,T0066HG-IR,IR,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000067HG-AL,T0067HG-AL,AL,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000068HG-IR,T0068HG-IR,IR,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000069HG-AL,T0069HG-AL,AL,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000070HG-IR,T0070HG-IR,IR,,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000072HG-AL,T0072HG-AL,AL,COFFE TABLE,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000073HG-IR,T0073HG-IR,IR,COFFE TABLE,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000074HG-AL,T0074HG-AL,AL,COFFE TABLE,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000075HG-IR,T0075HG-IR,IR,COFFE TABLE,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000076HG-AL,T0076HG-AL,AL,Table,Từ file BOM,BKQC - T0076HG-AL - Bàn nhôm kính CC-69969.00.xlsx
+TB000077HG-IR,T0077HG-IR,IR,Bàn GTN,Từ file BOM,F-BKQC - T0077HG-IR - Outdoor Side Table 27.09 - Copy.xlsx
+TB000078HG-IR,T0078HG-IR,IR,FOLDING SLAT SQ TABLE POWER COATING RAL 7009,Từ file BOM,T0078HG-IR-STS FOLDING SLAT SQ TABLE.xlsx
+TB000080HG-IR,T0080HG-IR,IR,FOLD RD STL GLASS TABLE POWER COATING RAL 7009,Từ file BOM,T0080HG-IR-FOLD RD STL GLASS TABLE.xlsx
+TB000082HG-AL,T0082HG-AL,AL,Sorley Dinning Table,Từ file BOM,BKQC -T0082HG-AL -  180cm Dining Table Brief.xlsx
+TB000083HG-AL,T0083HG-AL,AL,Bàn kéo dãn nan gỗ dọc - R60,Từ file BOM,T0083HG-AL-Bàn kéo  dãn nan gỗ nan dọc góc R60-240-180 x 100 x 75 cm.xlsx
+TB000084HG-AL,T0084HG-AL,AL,Sorley Coffe Table,Từ file BOM,BKQC -T0082HG-AL -coffe Table Brief.xlsx
+TB000085HG-IR,T0085HG-IR,IR,COFFEE TABLE-SENERITY,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000087HG-IR,T0087HG-IR,IR,Bàn tròn tấm sắt,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000088HG-AL,T0088HG-AL,AL,Bàn kéo dãn nan gỗ nan ngang - R50,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000089HG-AL,T0089HG-AL,AL,Bàn kéo dãn nan gỗ nan dọc - R50,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000091HG-AL,T0091HG-AL,AL,Coffee table-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000092HG-AL,T0092HG-AL,AL,Bàn tròn gỗ teck,Từ file BOM,BKQC - T0092HG-AL - GD101463 Brisbane round table.xlsx
+TB000092HG-IR,T0092HG-IR,IR,Coffee table-TRISTAN,Từ file TỔNG HỢP,(chưa có file BOM)
+TB000097HG-AL,T0097HG-AL,AL,Bàn KZ nan gạch vân ghỗ,Từ file BOM,BKQC -T0097HG-AL - Bàn KZ nan gạch vân ghỗ.xlsx
+TB000098HG-AL,T0098HG-AL,AL,"Bàn CN 150x90 cm, Khung nhôm , gỗ keo",ĐỀ XUẤT - cần duyệt,"BKQC - 21604-217 Bàn CN 150x90 cm, Khung nhôm , gỗ keo.xlsx"
+TB000099HG-AL,T0099HG-AL,AL,Bàn CN 150x90 nan nhôm 10x86,ĐỀ XUẤT - cần duyệt,BKQC - 21670-217 Bàn 150x90 nan nhôm.xlsx
+TB000100HG-AL,T0100HG-AL,AL,Coffee Table,ĐỀ XUẤT - cần duyệt,BKQC - Aluminum sofa.xlsx
+TB000101HG-AL,T0101HG-AL,AL,Side Table,ĐỀ XUẤT - cần duyệt,BKQC - Aluminum sofa.xlsx
+TB000102HG-AL,T0102HG-AL,AL,Bàn CN 150x90 nan Tre,ĐỀ XUẤT - cần duyệt,BKQC - Bàn 150x90 Nan tre.xlsx
+TB000103HG-XX,T0103HG-XX,XX,Bàn KZ Tilos (21605-217) 150-200x90x74 Nan tre,ĐỀ XUẤT - cần duyệt,BKQC - Bàn KZ Tilos (21605-217) 150-200x90x74 Nan tre.xlsx
+TB000104HG-XX,T0104HG-XX,XX,Bàn Lớn ( 1 cái/bộ),ĐỀ XUẤT - cần duyệt,BKQC - Bộ 170 asley - cập nhật 26-03-2025.xlsx
+TB000105HG-AL,T0105HG-AL,AL,Bàn CN 185x90x75  Mặt đá vân ghỗ,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay - Ban CN.xlsx
+TB000106HG-AL,T0106HG-AL,AL,Dining Chair,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay - Ban CN.xlsx
+TB000107HG-AL,T0107HG-AL,AL,Ghế xoay vải,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay - Ban CN.xlsx
+TB000108HG-AL,T0108HG-AL,AL,Bàn CN 185x90x75  Mặt đá vân ghỗ,ĐỀ XUẤT - cần duyệt,BKQC - Ghế Xoay.xlsx
+TB000109HG-AL,T0109HG-AL,AL,LARGE COCKTAIL TABLE 94 x H33.5 cm,ĐỀ XUẤT - cần duyệt,BKQC - HARLOWE SOFA  kê profile HG.xlsx
+TB000110HG-AL,T0110HG-AL,AL,Bàn KZ nan gạch vân ghỗ,ĐỀ XUẤT - cần duyệt,BKQC - KZ INOX nan gạch vân ghỗ.xlsx
+TB000111HG-AL,T0111HG-AL,AL,LARGE COCKTAIL TABLE  ∅94 x H33.5 cm,ĐỀ XUẤT - cần duyệt,BKQC - LARGE COCKTAIL TABLE  ∅94 x H33.5 cm.xlsx
+TB000112HG-AL,T0112HG-AL,AL,ROUND TABLE D54xH56 CM,ĐỀ XUẤT - cần duyệt,BKQC - ROUND TABLE D54xH56 CM.xlsx
+TB000113HG-AL,T0113HG-AL,AL,SMALL COCKTAIL TABLE,ĐỀ XUẤT - cần duyệt,BKQC - SMALL COCKTAIL TABLE (D69 X W69 X H 42.5) CM.xlsx
+TB000114HG-XX,T0114HG-XX,XX,Coffee Table,ĐỀ XUẤT - cần duyệt,BKQC - Sofa ghỗ đan dây.xlsx
+TB000115HG-IR,T0115HG-IR,IR,Bàn vuông kính khung sắt,ĐỀ XUẤT - cần duyệt,BKQC -FTS81690 Bàn.xlsx
+TB000116HG-AL,T0116HG-AL,AL,Bàn lớn,ĐỀ XUẤT - cần duyệt,BKQC -T0104HG-IR Bàn tròn 3 chân.xlsx
+TB000117HG-AL,T0117HG-AL,AL,Bàn nhỏ,ĐỀ XUẤT - cần duyệt,BKQC -T0104HG-IR Bàn tròn 3 chân.xlsx
+TB000118HG-IR,T0118HG-IR,IR,Table,ĐỀ XUẤT - cần duyệt,BKQC -TABLE_FTS61754.xlsx
+TB000119HG-XX,T0119HG-XX,XX,Bàn CNKG,ĐỀ XUẤT - cần duyệt,BKQC-.xlsx

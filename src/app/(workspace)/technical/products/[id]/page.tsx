@@ -1,16 +1,14 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
-import {
-  ProductDetailView,
-  type ProductView,
-} from '@/components/technical/ProductDetailView'
+import { ProductProfileTab } from '@/components/technical/ProductProfileTab'
+import { toProductView } from '@/components/technical/product-sections'
 
-/** Trang chi tiết sản phẩm (tách riêng khỏi thư viện) — đủ trường + ảnh + BOM. */
-export default async function ProductDetailPage({
+/** Tab Hồ sơ — chỉ thông tin cơ bản + ảnh. Quy cách / thông số / tài liệu / định
+ *  mức nằm ở tab riêng nên trang này KHÔNG nạp BOM hay phương án đóng gói. */
+export default async function ProductProfilePage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -19,63 +17,28 @@ export default async function ProductDetailPage({
   const { id } = await params
   const canEdit = user.role === 'admin' || user.role === 'manager'
 
-  let data
+  let product
+  // Giá trị đã dùng ở SP khác → datalist gợi ý cho các ô gõ tự do khi sửa.
+  let suggestions: Record<string, string[]> = {}
   try {
-    data = await productsService.getBom(user, id)
+    ;[product, suggestions] = await Promise.all([
+      productsService.get(user, id),
+      productsService.fieldSuggestions(),
+    ])
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { product, lines } = data
 
-  const [customer, imageUrl] = await Promise.all([
-    product.customer_id
-      ? customersRepo.findById(product.customer_id).catch(() => null)
-      : null,
-    product.image_file_id
-      ? filesService.getDownloadUrl(user, product.image_file_id).catch(() => null)
-      : null,
-  ])
-
-  const view: ProductView = {
-    id: product.id,
-    code: product.code,
-    name: product.name,
-    category: product.category,
-    customer_item_code: product.customer_item_code,
-    description_en: product.description_en,
-    unit: product.unit,
-    bom_status: product.bom_status,
-    packing: product.packing ?? {},
-    image_file_id: product.image_file_id,
-    notes: product.notes,
-    name_foreign: product.name_foreign,
-    shipping_mark: product.shipping_mark,
-    barcode: product.barcode,
-    showroom_sample: product.showroom_sample,
-    reference_price: product.reference_price,
-    tech_spec: product.tech_spec ?? {},
-    hs_code: product.hs_code,
-    origin_country: product.origin_country,
-    material: product.material,
-    max_load_kg: product.max_load_kg,
-    assembly: product.assembly,
-    set_contents: product.set_contents,
-    is_active: product.is_active,
-  }
+  const imageUrl = product.image_file_id
+    ? await filesService.getDownloadUrl(user, product.image_file_id).catch(() => null)
+    : null
 
   return (
-    <ProductDetailView
-      product={view}
-      customerName={customer?.name ?? null}
+    <ProductProfileTab
+      product={toProductView(product)}
       imageUrl={imageUrl}
-      bom={lines.map((l) => ({
-        material_code: l.material_code,
-        material_name: l.material_name,
-        material_unit: l.material_unit,
-        qty_per_unit: l.qty_per_unit,
-        note: l.note,
-      }))}
+      suggestions={suggestions}
       canEdit={canEdit}
     />
   )

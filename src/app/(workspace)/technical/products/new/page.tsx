@@ -1,24 +1,31 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { customersRepo } from '@/modules/dept/sales/sales.repo'
+import { productsService } from '@/modules/dept/technical/technical.service'
+import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { ProductForm } from '@/components/technical/ProductForm'
 
-/** Trang Thêm sản phẩm (trang riêng, không còn modal che màn hình). */
+/** Trang Thêm sản phẩm — chỉ phần nhận diện, phần còn lại điền ở trang chi tiết. */
 export default async function NewProductPage() {
   const user = (await authService.currentUser())!
   const canEdit = user.role === 'admin' || user.role === 'manager'
   if (!canEdit) redirect('/technical/products')
 
-  const { rows: customers } = await customersRepo.list({
-    active_only: true,
-    page: 1,
-    page_size: 1000,
-  })
+  const defaultType = PRODUCT_TYPES[0].code
+  const defaultMaterial = FRAME_MATERIALS[0].code
+
+  // Nhãn khách/nhóm chỉ để GỢI Ý khi gõ — không ràng buộc danh mục khách (0091).
+  // Mã đầu tiên cấp luôn ở server: mở form là thấy mã, khỏi chớp một nhịp trống.
+  const [names, initialCode] = await Promise.all([
+    productsService.customerNames(),
+    productsService.nextCode(user, defaultType, defaultMaterial),
+  ])
 
   return (
     <ProductForm
-      mode="create"
-      customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+      defaultType={defaultType}
+      defaultMaterial={defaultMaterial}
+      initialCode={initialCode}
+      customerNames={names.map((n) => n.name)}
     />
   )
 }
