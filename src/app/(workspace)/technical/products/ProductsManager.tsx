@@ -10,6 +10,7 @@ import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
+import { parseProductCode } from '@/lib/product-code'
 import { downloadCsv } from '@/lib/csv'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
@@ -49,7 +50,8 @@ type Product = {
   code: string
   name: string
   category: string | null
-  customer_id: string | null
+  /** Nhãn khách/nhóm gõ tự do (0091) — null = mẫu chung. */
+  customer_name: string | null
   customer_item_code: string | null
   description_en: string | null
   unit: string
@@ -83,7 +85,7 @@ type ProductRow = Pick<
   | 'code'
   | 'name'
   | 'category'
-  | 'customer_id'
+  | 'customer_name'
   | 'customer_item_code'
   | 'unit'
   | 'bom_status'
@@ -101,7 +103,8 @@ type ProductCounts = {
 }
 type Filters = { q: string; customer: string; bom: string; status: string }
 
-type CustomerOption = { id: string; name: string }
+/** Nhãn khách/nhóm đã dùng + số SP — đổ vào dropdown lọc & ô gợi ý. */
+type CustomerNameOption = { name: string; count: number }
 type MaterialOption = { id: string; code: string; name: string; unit: string }
 
 /** SP tối thiểu để mở BOM editor (nhận cả ProductRow lẫn Product đầy đủ). */
@@ -109,6 +112,9 @@ type BomTarget = Pick<Product, 'id' | 'code' | 'name' | 'bom_status'>
 
 /** Dòng BOM đang biên tập (id chỉ có với dòng đã lưu). */
 type BomRow = { material_id: string; qty_per_unit: number | ''; note: string }
+
+/** Giá trị lọc "chưa gõ nhãn khách" — PHẢI khớp NO_CUSTOMER_FILTER ở technical.repo.ts. */
+const NO_CUSTOMER = '__common'
 
 const BOM_LABEL: Record<BomStatus, string> = {
   none: 'Chưa có BOM',
@@ -128,7 +134,7 @@ export function ProductsManager({
   pageSize,
   counts,
   filters,
-  customers,
+  customerNames,
   imageUrls,
   canEdit,
 }: {
@@ -138,7 +144,7 @@ export function ProductsManager({
   pageSize: number
   counts: ProductCounts
   filters: Filters
-  customers: CustomerOption[]
+  customerNames: CustomerNameOption[]
   imageUrls: Record<string, string>
   canEdit: boolean
 }) {
@@ -149,6 +155,8 @@ export function ProductsManager({
   const [busy, setBusy] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [cloning, setCloning] = useState<Product | null>(null)
+  /** Mã gợi ý cho bản sao — xin sẵn ở `openClone`, '' nếu không suy ra được. */
+  const [cloneCode, setCloneCode] = useState('')
   const [bomFor, setBomFor] = useState<{ product: BomTarget; rows: BomRow[] } | null>(
     null,
   )
@@ -158,12 +166,6 @@ export function ProductsManager({
 
   // Ô tìm (debounce) — đẩy xuống URL để SERVER lọc, không lọc toàn bộ ở client.
   const [q, setQ] = useState(filters.q)
-
-  const customerName = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const c of customers) m.set(c.id, c.name)
-    return m
-  }, [customers])
 
   // Đổi bộ lọc/trang → cập nhật query param → server refetch đúng 1 trang.
   const applyParams = useCallback(
@@ -235,11 +237,28 @@ export function ProductsManager({
       return null
     }
   }
+  /**
+   * Mở hộp nhân bản. Xin luôn mã kế tiếp ở ĐÂY (không phải trong form) để form
+   * không phải chạy effect gọi API lúc mount. Bản sao giữ nguyên loại + vật
+   * liệu của mẫu gốc; mẫu mang mã cũ không suy ra được thì để trống, nhập tay.
+   */
   async function openClone(id: string) {
     setBusy(true)
     const p = await fetchFull(id)
+    let suggested = ''
+    const src = p ? parseProductCode(p.code) : null
+    if (src) {
+      suggested = await api<{ code: string }>(
+        `/api/dept/technical/products/next-code?type=${src.type}&material=${src.material}`,
+      )
+        .then((r) => r.code)
+        .catch(() => '')
+    }
     setBusy(false)
-    if (p) setCloning(p)
+    if (p) {
+      setCloneCode(suggested)
+      setCloning(p)
+    }
   }
 
   /** Vật tư (cho BOM editor) — nạp 1 lần khi cần, cache lại cho các lần mở sau. */
@@ -313,10 +332,9 @@ export function ProductsManager({
       },
       { key: 'name', header: 'Tên' },
       {
-        key: 'customer_id',
+        key: 'customer_name',
         header: 'Khách hàng',
-        get: (p) =>
-          p.customer_id ? (customerName.get(p.customer_id) ?? '') : 'Mẫu chung',
+        get: (p) => p.customer_name ?? 'Mẫu chung',
       },
       { key: 'category', header: 'Danh mục' },
       { key: 'unit', header: 'ĐVT' },
@@ -361,11 +379,11 @@ export function ProductsManager({
     {
       key: 'customer',
       header: 'Khách hàng',
-      sortValue: (p) => (p.customer_id ? (customerName.get(p.customer_id) ?? 'zzz') : ''),
+      sortValue: (p) => p.customer_name ?? '',
       width: '160px',
       cell: (p) =>
-        p.customer_id ? (
-          <span className="truncate">{customerName.get(p.customer_id) ?? '?'}</span>
+        p.customer_name ? (
+          <span className="truncate">{p.customer_name}</span>
         ) : (
           <Badge tone="gray">Mẫu chung</Badge>
         ),
@@ -445,8 +463,8 @@ export function ProductsManager({
 
   const customerOptions = [
     { value: 'all', label: 'Mọi khách hàng' },
-    { value: 'common', label: 'Mẫu chung' },
-    ...customers.map((c) => ({ value: c.id, label: c.name })),
+    { value: NO_CUSTOMER, label: 'Mẫu chung' },
+    ...customerNames.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` })),
   ]
   const bomOptions = [
     { value: 'all' as const, label: 'BOM: tất cả' },
@@ -465,12 +483,12 @@ export function ProductsManager({
   const btnPrimary =
     'rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700'
 
-  // Nhóm SP theo khách (thư viện tổ chức theo khách; "Mẫu chung" xếp cuối).
+  // Nhóm SP theo nhãn khách (thư viện tổ chức theo khách; "Mẫu chung" xếp cuối).
   const groups = useMemo(() => {
     const map = new Map<string, { name: string; items: ProductRow[] }>()
     for (const p of products) {
-      const key = p.customer_id ?? '__common'
-      const name = p.customer_id ? (customerName.get(p.customer_id) ?? '?') : 'Mẫu chung'
+      const key = p.customer_name ?? NO_CUSTOMER
+      const name = p.customer_name ?? 'Mẫu chung'
       if (!map.has(key)) map.set(key, { name, items: [] })
       map.get(key)!.items.push(p)
     }
@@ -479,7 +497,7 @@ export function ProductsManager({
       if (b.name === 'Mẫu chung') return -1
       return a.name.localeCompare(b.name)
     })
-  }, [products, customerName])
+  }, [products])
 
   function dims(p: ProductRow) {
     const k = p.packing ?? {}
@@ -754,7 +772,8 @@ export function ProductsManager({
         {cloning && (
           <CloneForm
             source={cloning}
-            customers={customers}
+            suggestedCode={cloneCode}
+            customerNames={customerNames}
             onSubmit={async (body) => {
               const ok = await send(
                 `/api/dept/technical/products/${cloning.id}/clone`,
@@ -812,24 +831,29 @@ export function ProductsManager({
 
 function CloneForm({
   source,
-  customers,
+  suggestedCode,
+  customerNames,
   onSubmit,
 }: {
   source: Product
-  customers: CustomerOption[]
+  /** Mã kế tiếp cùng loại + vật liệu, xin sẵn ở `openClone`. '' = phải nhập tay. */
+  suggestedCode: string
+  customerNames: CustomerNameOption[]
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
 }) {
   const [busy, setBusy] = useState(false)
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
+  const [code, setCode] = useState(suggestedCode)
+
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const body: Record<string, unknown> = {
-      code: String(fd.get('code') ?? '').trim(),
+      code: code.trim(),
       name: String(fd.get('name') ?? '').trim() || undefined,
-      customer_id: String(fd.get('customer_id') ?? '') || null,
+      customer_name: String(fd.get('customer_name') ?? '').trim() || null,
       customer_item_code: String(fd.get('customer_item_code') ?? '').trim() || null,
     }
     setBusy(true)
@@ -845,26 +869,39 @@ function CloneForm({
       </p>
       <label className="flex flex-col gap-1 text-sm">
         Mã SP mới <span className="text-red-500">*</span>
-        <input name="code" required maxLength={100} className={`${cls} font-mono`} />
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          required
+          maxLength={100}
+          placeholder="Nhập mã"
+          className={`${cls} font-mono`}
+        />
+        <span className="text-xs text-zinc-500">
+          {suggestedCode
+            ? 'Mã kế tiếp cùng loại và vật liệu, cấp sẵn — sửa được.'
+            : 'Mẫu gốc mang mã cũ, không suy ra được mã mới — nhập tay.'}
+        </span>
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Tên (bỏ trống = giữ tên gốc)
         <input name="name" maxLength={200} placeholder={source.name} className={cls} />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Gắn cho khách hàng
-        <select
-          name="customer_id"
-          defaultValue={source.customer_id ?? ''}
+        Khách hàng / nhóm
+        <input
+          name="customer_name"
+          list="clone-customer-names"
+          maxLength={200}
+          defaultValue={source.customer_name ?? ''}
           className={cls}
-        >
-          <option value="">Mẫu chung (không gắn khách)</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
+          placeholder="Gõ tên bất kỳ — để trống là mẫu chung"
+        />
+        <datalist id="clone-customer-names">
+          {customerNames.map((c) => (
+            <option key={c.name} value={c.name} />
           ))}
-        </select>
+        </datalist>
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Mã KH đặt (Customer Item)

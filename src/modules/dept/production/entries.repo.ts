@@ -19,6 +19,10 @@ export type ProductionEntry = {
   defect_qty: number
   defect_reason: string | null
   machine_note: string | null
+  /** "Người làm" trực tiếp (0090) — text tự do như sổ giấy. */
+  worker_name: string | null
+  /** 'tran' (hàng trần) | 'dang_may' (hàng đang mây) — 0090. */
+  finish_state: string | null
   note: string | null
   created_by: string | null
   created_at: string
@@ -34,7 +38,7 @@ export type ProductionEntryJoined = ProductionEntry & {
 }
 
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, worker_name, finish_state, note, created_by, created_at'
 const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, cluster, order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null

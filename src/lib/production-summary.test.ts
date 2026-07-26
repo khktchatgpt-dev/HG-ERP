@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import {
   summarizeComponent,
   summarizeOutsource,
+  summarizeTeamWip,
   syncedSets,
   overrunWarning,
   assemblyWipWarning,
+  backflushKg,
+  teamWipShortageWarning,
 } from './production-summary'
 
 const STAGES = ['phoi', 'han', 'nguoi', 'son']
@@ -140,6 +143,74 @@ describe('overrunWarning — cảnh báo nhập vượt tổng cần (FR-PR-07, 
   it('chưa vượt / tổng cần 0 → null', () => {
     expect(overrunWarning('x', 'phôi', 90, 6, 96)).toBeNull()
     expect(overrunWarning('x', 'phôi', 5, 5, 0)).toBeNull()
+  })
+})
+
+describe('summarizeTeamWip — bàn giao nội bộ: giao − trả − đã dùng (0090)', () => {
+  it('kiểu sheet tổ Excel: giao 300 (2 đợt) − trả 2 phôi móp − đã dùng 250 → còn 48', () => {
+    const s = summarizeTeamWip(
+      [
+        { direction: 'issue', qty: 200 },
+        { direction: 'issue', qty: 100 },
+        { direction: 'return', qty: 2 },
+      ],
+      250,
+    )
+    expect(s).toEqual({ issued: 300, returned: 2, used: 250, available: 48 })
+  })
+
+  it('chưa giao gì → issued 0 (caller bỏ qua cảnh báo)', () => {
+    expect(summarizeTeamWip([], 50)).toEqual({
+      issued: 0,
+      returned: 0,
+      used: 50,
+      available: -50,
+    })
+  })
+})
+
+describe('teamWipShortageWarning — ghi sản lượng vượt số được giao (0090)', () => {
+  it('tổ được giao 300, đã dùng 250 → ghi thêm 60 là vượt 10', () => {
+    const w = teamWipShortageWarning(
+      'TAY+TỰA',
+      'han',
+      { issued: 300, returned: 0, used: 250, available: 50 },
+      60,
+    )
+    expect(w).toContain('VƯỢT 10')
+  })
+
+  it('trong hạn mức / tổ không đi qua sổ bàn giao (issued 0) → null', () => {
+    expect(
+      teamWipShortageWarning(
+        'x',
+        'han',
+        { issued: 300, returned: 0, used: 250, available: 50 },
+        50,
+      ),
+    ).toBeNull()
+    expect(
+      teamWipShortageWarning(
+        'x',
+        'han',
+        { issued: 0, returned: 0, used: 0, available: 0 },
+        999,
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('backflushKg — kg bỏ trống tự tính ĐM × SL (0090)', () => {
+  it('kg trống + có ĐM → ĐM × SL (làm tròn 2 chữ số như Excel)', () => {
+    expect(backflushKg(null, 0.6, 2400)).toBe(1440)
+    expect(backflushKg(undefined, 0.165, 396)).toBe(65.34)
+  })
+
+  it('người nhập ghi đè → giữ nguyên; không ĐM / SL 0 → null (không đoán)', () => {
+    expect(backflushKg(1500, 0.6, 2400)).toBe(1500)
+    expect(backflushKg(0, 0.6, 2400)).toBe(0) // 0 là giá trị chủ ý, không backflush
+    expect(backflushKg(null, null, 100)).toBeNull()
+    expect(backflushKg(null, 0.6, 0)).toBeNull()
   })
 })
 

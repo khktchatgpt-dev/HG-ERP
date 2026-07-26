@@ -145,6 +145,19 @@ export const productionRepo = {
     return ((data as { id: string }[] | null) ?? []).map((r) => r.id)
   },
 
+  /** Mã LSX theo danh sách id — nhãn cho báo cáo tháng thống kê (0090). */
+  async listCodesByIds(ids: string[]): Promise<Map<string, string>> {
+    if (!ids.length) return new Map()
+    const { data } = await db()
+      .from('production_orders')
+      .select('id, code')
+      .in('id', ids)
+      .limit(1000)
+    return new Map(
+      ((data as { id: string; code: string }[] | null) ?? []).map((r) => [r.id, r.code]),
+    )
+  },
+
   async findById(id: string): Promise<ProductionOrderWithOrder | null> {
     const { data } = await db()
       .from('production_orders')

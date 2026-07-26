@@ -27,6 +27,9 @@ vi.mock('./day-locks.repo', () => ({
     deleteByTeamDate: vi.fn(),
   },
 }))
+vi.mock('./transfers.repo', () => ({
+  transfersRepo: { listRawByLsx: vi.fn() },
+}))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn(), patch: vi.fn() },
 }))
@@ -37,6 +40,7 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
 
 import { entriesService } from './entries.service'
 import { entriesRepo } from './entries.repo'
+import { transfersRepo } from './transfers.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
@@ -101,6 +105,7 @@ beforeEach(() => {
   ] as never)
   vi.mocked(jobsRepo.listByLsx).mockResolvedValue([JOB_HAN] as never)
   vi.mocked(entriesRepo.listByLsx).mockResolvedValue([])
+  vi.mocked(transfersRepo.listRawByLsx).mockResolvedValue([])
   vi.mocked(dayLocksRepo.find).mockResolvedValue(null)
 })
 
@@ -188,6 +193,51 @@ describe('entriesService.record', () => {
     expect(warnings.length).toBe(1)
     expect(warnings[0]).toContain('CHÂN cần 200 nhưng mới xong 150')
     expect(entriesRepo.insertMany).toHaveBeenCalled()
+  })
+
+  it('ghi vượt số được BÀN GIAO cho tổ → KHÔNG chặn, trả warning (0090)', async () => {
+    // Tổ d-han được giao 60, đã dùng 50 → còn 10; ghi thêm 30 là vượt 20.
+    // (Tổng cần 100, sau khi ghi = 80 → không dính cảnh báo vượt tổng cần.)
+    vi.mocked(transfersRepo.listRawByLsx).mockResolvedValue([
+      {
+        component_id: 'c1',
+        stage: 'han',
+        team_department_id: 'd-han',
+        direction: 'issue',
+        qty: 60,
+      } as never,
+    ])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'c1',
+        stage: 'han',
+        team_department_id: 'd-han',
+        qty: 50,
+        defect_qty: 0,
+      } as never,
+    ])
+    const { warnings } = await entriesService.record(thongKe, 'lsx1', record())
+    expect(warnings.length).toBe(1)
+    expect(warnings[0]).toContain('VƯỢT 20')
+    expect(entriesRepo.insertMany).toHaveBeenCalled()
+  })
+
+  it('kg bỏ trống → backflush ĐM × SL; ghi đè thì giữ nguyên (0090)', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      { ...COMP, dm_kg: 0.6 },
+    ] as never)
+    await entriesService.record(thongKe, 'lsx1', record())
+    expect(entriesRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ kg: 18 }), // 0.6 × 30
+    ])
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ entries: [{ component_id: 'c1', qty: 30, defect_qty: 0, kg: 20 }] }),
+    )
+    expect(entriesRepo.insertMany).toHaveBeenLastCalledWith([
+      expect.objectContaining({ kg: 20 }),
+    ])
   })
 
   it('chi tiết không thuộc lệnh → 400', async () => {

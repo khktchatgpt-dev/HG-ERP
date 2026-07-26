@@ -1,6 +1,5 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
 // (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
@@ -27,19 +26,19 @@ export default async function TechnicalProductsPage({
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
   const { rows, total } = await productsService.listLite(user, {
     q,
-    customer_id: customer === 'all' ? undefined : customer,
+    customer_name: customer === 'all' ? undefined : customer,
     bom_status: bom === 'all' ? undefined : (bom as BomStatus),
     is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
     page,
     page_size: PAGE_SIZE,
   })
 
-  // Khách cho bộ lọc/nhãn nhóm + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
+  // Nhãn khách/nhóm cho bộ lọc + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
   // suy từ FILE đã upload (chỉ cho SP của trang này). Vật tư cho BOM editor
   // KHÔNG nạp ở đây nữa — lazy-load khi mở editor (đỡ egress mỗi lần tải).
-  const [stats, { rows: customers }, docFlags] = await Promise.all([
+  const [stats, customerNames, docFlags] = await Promise.all([
     productsService.stats(),
-    customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    productsService.customerNames(),
     filesService.productDocFlags(rows.map((p) => p.id)),
   ])
 
@@ -61,7 +60,7 @@ export default async function TechnicalProductsPage({
         code: p.code,
         name: p.name,
         category: p.category,
-        customer_id: p.customer_id,
+        customer_name: p.customer_name,
         customer_item_code: p.customer_item_code,
         unit: p.unit,
         bom_status: p.bom_status,
@@ -76,7 +75,7 @@ export default async function TechnicalProductsPage({
       pageSize={PAGE_SIZE}
       counts={stats}
       filters={{ q: q ?? '', customer, bom, status }}
-      customers={customers.map((c) => ({ id: c.id, name: c.name }))}
+      customerNames={customerNames}
       imageUrls={imageUrls}
       canEdit={canEdit}
     />

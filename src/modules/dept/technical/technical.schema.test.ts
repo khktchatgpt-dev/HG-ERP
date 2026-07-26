@@ -80,20 +80,31 @@ describe('productCreateSchema', () => {
     const p = productCreateSchema.parse({
       code: '1705775',
       name: 'Ghế Hali khung sắt, dây dù',
-      customer_id: UUID,
+      customer_name: 'Möbel Hali GmbH',
       customer_item_code: 'P334',
       description_en: 'FSC eucalyptus wood with powder-coated aluminium frame',
       unit: 'pcs',
       packing: { l_cm: 75, w_cm: 67, h_cm: 63 },
     })
     expect(p.customer_item_code).toBe('P334')
+    expect(p.customer_name).toBe('Möbel Hali GmbH')
     expect(p.packing?.l_cm).toBe(75)
   })
 
-  it('unit mặc định "cai"; customer_id nullable (mẫu chung)', () => {
-    const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_id: null })
+  it('unit mặc định "cai"; customer_name nullable (mẫu chung)', () => {
+    const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_name: null })
     expect(p.unit).toBe('cai')
-    expect(p.customer_id).toBeNull()
+    expect(p.customer_name).toBeNull()
+  })
+
+  // 0091: Kỹ thuật gõ nhãn khách tự do — KHÔNG còn ràng buộc uuid của sales_customers.
+  it('customer_name nhận tên bất kỳ, không cần là khách có trong danh mục', () => {
+    const p = productCreateSchema.parse({
+      code: 'X',
+      name: 'Y',
+      customer_name: '  Khách lẻ Đà Nẵng  ',
+    })
+    expect(p.customer_name).toBe('Khách lẻ Đà Nẵng')
   })
 
   it('KHÔNG nhận bom_status khi tạo (mặc định none từ DB)', () => {
@@ -164,9 +175,12 @@ describe('productCloneSchema', () => {
 })
 
 describe('productListQuerySchema', () => {
-  it('lọc theo khách + cờ BOM (FR-ENG-06)', () => {
-    const p = productListQuerySchema.parse({ customer_id: UUID, bom_status: 'none' })
-    expect(p.customer_id).toBe(UUID)
+  it('lọc theo nhãn khách + cờ BOM (FR-ENG-06)', () => {
+    const p = productListQuerySchema.parse({
+      customer_name: 'Möbel Hali GmbH',
+      bom_status: 'none',
+    })
+    expect(p.customer_name).toBe('Möbel Hali GmbH')
     expect(p.bom_status).toBe('none')
     expect(p.page).toBe(1)
   })

@@ -330,8 +330,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Thống kê',
         items: [
           { href: '/thongke', label: 'Sổ số liệu', icon: '☷' },
+          { href: '/thongke/giao-to', label: 'Giao tổ', icon: '⇥' },
           { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: '▥' },
           { href: '/thongke/gia-cong', label: 'Gia công ngoài', icon: '⇄' },
+          { href: '/thongke/so-tong', label: 'Sổ tổng', icon: '▦' },
+          { href: '/thongke/bao-cao', label: 'Báo cáo tháng', icon: '⎙' },
           { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: '◧' },
         ],
       },

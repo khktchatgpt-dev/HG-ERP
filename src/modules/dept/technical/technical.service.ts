@@ -1,14 +1,23 @@
 import {
   bomLinesRepo,
+  partGroupsRepo,
+  productProfileRepo,
   productsRepo,
   type Product,
   type ProductPacking,
   type ProductTechSpec,
 } from './technical.repo'
-import type { BomStatus } from './technical.schema'
+import type {
+  BomStatus,
+  ProductPartInput as PartInput,
+  ProductPartPatch as PartPatch,
+} from './technical.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
-import { Conflict, NotFound } from '@/server/http'
+import { BadRequest, Conflict, NotFound } from '@/server/http'
+import { buildCopiedParts } from '@/lib/bom-copy'
+import { calcPartDerived } from '@/lib/bom-calc'
+import { MAX_SERIAL, buildProductCode, nextSerial } from '@/lib/product-code'
 
 // Phase B RBAC: mọi guard method đọc thẳng registry `actions.ts` qua
 // `assertAction` (nguồn sự thật). `isTechnicalStaff` giữ lại vì các module khác
@@ -21,7 +30,8 @@ type CreateInput = {
   code: string
   name: string
   category?: string | null
-  customer_id?: string | null
+  /** Nhãn khách/nhóm gõ tự do (0091) — không ràng buộc danh mục khách Kinh doanh. */
+  customer_name?: string | null
   customer_item_code?: string | null
   description_en?: string | null
   unit?: string
@@ -47,7 +57,7 @@ export const productsService = {
     opts: {
       q?: string
       category?: string
-      customer_id?: string
+      customer_name?: string
       bom_status?: BomStatus
       active_only?: boolean
       page: number
@@ -59,7 +69,7 @@ export const productsService = {
     return productsRepo.list({
       q: opts.q,
       category: opts.category,
-      customer_id: opts.customer_id,
+      customer_name: opts.customer_name,
       bom_status: opts.bom_status,
       active_only: opts.active_only ?? true,
       page: opts.page,
@@ -72,7 +82,7 @@ export const productsService = {
     _user: User,
     opts: {
       q?: string
-      customer_id?: string
+      customer_name?: string
       bom_status?: BomStatus
       is_active?: boolean
       page: number
@@ -80,6 +90,24 @@ export const productsService = {
     },
   ) {
     return productsRepo.listLite(opts)
+  },
+
+  /** Nhãn khách/nhóm đã dùng — gợi ý khi gõ ở form + dropdown lọc thư viện. */
+  async customerNames() {
+    return productsRepo.customerNames()
+  },
+
+  /**
+   * Gợi ý cho MỌI ô gõ tự do của hồ sơ SP (danh mục / ĐVT / chất liệu / máy /
+   * nệm / sơn / kính / gỗ / đơn vị đóng gói / khách hàng). Thư viện SP đọc được
+   * cho mọi NV nên không lọc theo user.
+   */
+  async fieldSuggestions(): Promise<Record<string, string[]>> {
+    const [byField, customers] = await Promise.all([
+      productsRepo.fieldSuggestions(),
+      productsRepo.customerNames(),
+    ])
+    return { ...byField, customer_name: customers.map((c) => c.name) }
   },
 
   /** Đếm cho StatsBar (HEAD count) — không kéo toàn bộ dòng. Thư viện SP là tài
@@ -95,6 +123,29 @@ export const productsService = {
     return product
   },
 
+  /**
+   * Cấp mã kế tiếp cho một (loại, vật liệu) — form tạo SP gọi khi người dùng
+   * chọn xong hai ô này, thay cho việc tự nghĩ mã.
+   *
+   * KHÔNG giữ chỗ: mã chỉ thực sự thuộc về SP khi insert thành công. Hai người
+   * mở form cùng lúc sẽ nhận cùng một số, người lưu sau bị `create` trả 409
+   * CODE_TAKEN và form xin mã mới — đúng hơn là dựng cơ chế đặt chỗ rồi rò rỉ số
+   * mỗi lần ai đó mở form xong bỏ đi.
+   */
+  async nextCode(user: User, type: string, material: string): Promise<string> {
+    await assertAction(user, 'technical.product.create')
+    const codes = await productsRepo.codesByType(type)
+    let serial = nextSerial(codes, type)
+    // `nextSerial` đã lấy max của cả loại nên bình thường vòng này chạy đúng 1
+    // lượt; nó chỉ nhảy tiếp khi có SP vừa được chèn xen vào giữa 2 truy vấn.
+    for (let i = 0; i < 100 && serial <= MAX_SERIAL; i++) {
+      const code = buildProductCode(type, serial, material)
+      if (!(await productsRepo.existsByCode(code))) return code
+      serial++
+    }
+    throw Conflict(`Không cấp được mã mới cho loại "${type}"`, 'CODE_EXHAUSTED')
+  },
+
   async create(user: User, input: CreateInput): Promise<Product> {
     await assertAction(user, 'technical.product.create')
     if (await productsRepo.existsByCode(input.code)) {
@@ -104,7 +155,7 @@ export const productsService = {
       code: input.code,
       name: input.name,
       category: input.category ?? null,
-      customer_id: input.customer_id ?? null,
+      customer_name: input.customer_name || null,
       customer_item_code: input.customer_item_code ?? null,
       description_en: input.description_en ?? null,
       unit: input.unit ?? 'cai',
@@ -152,11 +203,17 @@ export const productsService = {
     if (await productsRepo.existsByCode(input.code)) {
       throw Conflict(`Mã "${input.code}" đã tồn tại`, 'CODE_TAKEN')
     }
+    // Đường Kinh doanh vẫn gắn FK khách (form báo giá chia rổ theo customer_id);
+    // điền luôn nhãn tương ứng để SP hiện đúng nhóm trong thư viện Kỹ thuật.
+    const customer_name = input.customer_id
+      ? await productsRepo.customerNameById(input.customer_id)
+      : null
     return productsRepo.insert({
       code: input.code,
       name: input.name,
       unit: input.unit ?? 'cai',
       customer_id: input.customer_id ?? null,
+      customer_name,
       customer_item_code: input.customer_item_code ?? null,
       description_en: input.description_en ?? null,
       notes: input.notes ?? null,
@@ -202,7 +259,7 @@ export const productsService = {
     input: {
       code: string
       name?: string
-      customer_id?: string | null
+      customer_name?: string | null
       customer_item_code?: string | null
     },
   ): Promise<Product> {
@@ -217,7 +274,12 @@ export const productsService = {
       code: input.code,
       name: input.name ?? src.name,
       category: src.category,
-      customer_id: input.customer_id === undefined ? src.customer_id : input.customer_id,
+      // Nhân bản để gắn cho khách khác: chưa gõ nhãn mới thì giữ nhãn mẫu gốc.
+      // customer_id KHÔNG copy — FK đó là của Kinh doanh, mẫu mới chưa thuộc khách nào.
+      customer_name:
+        input.customer_name === undefined
+          ? src.customer_name
+          : input.customer_name || null,
       customer_item_code: input.customer_item_code ?? null,
       description_en: src.description_en,
       unit: src.unit,
@@ -253,11 +315,186 @@ export const productsService = {
     return { product, lines }
   },
 
+  /** Tab Hồ sơ: KHÔNG kéo định mức (có SP tới 145 dòng) — tab Định mức lo. */
+  async getProfileInfo(user: User, productId: string) {
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const packing = await productProfileRepo.packingOptions(productId)
+    return { product, packing }
+  },
+
+  /** Tab Định mức: định mức + món trong bộ + danh mục nhóm. */
+  async getPartsInfo(user: User, productId: string) {
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const [parts, setItems, groups] = await Promise.all([
+      productProfileRepo.parts(productId),
+      productProfileRepo.setItems(productId),
+      partGroupsRepo.list(),
+    ])
+    return { product, parts, setItems, groups }
+  },
+
+  /**
+   * Hồ sơ sản phẩm đầy đủ (0092): định mức tự mô tả + món trong bộ + các phương
+   * án đóng gói. Ba truy vấn chạy song song vì độc lập nhau.
+   */
+  async getProfile(user: User, productId: string) {
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const [parts, setItems, packing, groups] = await Promise.all([
+      productProfileRepo.parts(productId),
+      productProfileRepo.setItems(productId),
+      productProfileRepo.packingOptions(productId),
+      partGroupsRepo.list(),
+    ])
+    return { product, parts, setItems, packing, groups }
+  },
+
   /**
    * Bóc tách / cập nhật BOM (FR-ENG-04): Kỹ thuật + Sales (manager/admin).
    * Ghi đè trọn bộ dòng; nếu SP đang 'none' và BOM có dòng → tự nâng cờ 'drawing'
    * (bước 'done' vẫn do người dùng xác nhận tay — BR-03).
    */
+  /**
+   * Thêm / sửa / xoá TỪNG DÒNG định mức của hồ sơ sản phẩm (0092) — sửa nhỏ tại
+   * chỗ thay vì ghi đè trọn bộ như `saveBom`. Dùng chung quyền `technical.bom.save`.
+   *
+   * Cờ `bom_status` tự nâng khi sản phẩm có dòng đầu tiên và tự hạ khi hết dòng,
+   * để thư viện không còn cảnh "59 dòng định mức mà vẫn hiện Chưa có BOM".
+   */
+  async addPart(user: User, productId: string, input: PartInput) {
+    await assertAction(user, 'technical.bom.save')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const sort_order =
+      input.sort_order ?? (await productProfileRepo.nextSortOrder(productId))
+    const part = await productProfileRepo.insertPart(productId, { ...input, sort_order })
+    if (product.bom_status === 'none') {
+      await productsRepo.patch(productId, { bom_status: 'done' })
+    }
+    return part
+  },
+
+  async updatePart(user: User, productId: string, partId: string, patch: PartPatch) {
+    await assertAction(user, 'technical.bom.save')
+    const part = await productProfileRepo.patchPart(productId, partId, patch)
+    if (!part) throw NotFound('Dòng định mức không tồn tại')
+    return part
+  },
+
+  async removePart(user: User, productId: string, partId: string) {
+    await assertAction(user, 'technical.bom.save')
+    const ok = await productProfileRepo.deletePart(productId, partId)
+    if (!ok) throw NotFound('Dòng định mức không tồn tại')
+    const left = await productProfileRepo.parts(productId)
+    if (left.length === 0) {
+      const product = await productsRepo.findById(productId)
+      if (product && product.bom_status !== 'none') {
+        await productsRepo.patch(productId, { bom_status: 'none' })
+      }
+    }
+    return { ok: true }
+  },
+
+  /**
+   * Nhập nhiều dòng định mức một lượt. Khối / đơn vị tính / nhóm / món khai một
+   * lần rồi áp cho cả lô.
+   *
+   * Đại lượng dẫn xuất (tổng dài, kg, m² sơn) tính LẠI Ở SERVER thay vì tin số
+   * client gửi — client có thể gửi thiếu, mà báo cáo khối lượng khung lại đọc
+   * thẳng các cột này. Khối lượng người dùng nhập tay thì được giữ.
+   */
+  async addParts(
+    user: User,
+    productId: string,
+    input: {
+      group_code: string
+      section_title?: string | null
+      unit_basis?: string | null
+      set_item_label?: string | null
+      lines: Record<string, unknown>[]
+    },
+  ) {
+    await assertAction(user, 'technical.bom.save')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+
+    let order = await productProfileRepo.nextSortOrder(productId)
+    const rows = input.lines.map((l) => {
+      const geo = {
+        profile_shape: (l.profile_shape as string | null) ?? null,
+        material_kind: (l.material_kind as string | null) ?? null,
+        dim_a_mm: (l.dim_a_mm as number | null) ?? null,
+        dim_b_mm: (l.dim_b_mm as number | null) ?? null,
+        wall_thickness_mm: (l.wall_thickness_mm as number | null) ?? null,
+        cut_length_mm: (l.cut_length_mm as number | null) ?? null,
+        qty: (l.qty as number | null) ?? null,
+      }
+      const d = calcPartDerived(geo)
+      return {
+        ...l,
+        product_id: productId,
+        group_code: input.group_code,
+        section_title: input.section_title ?? null,
+        unit_basis: input.unit_basis ?? null,
+        set_item_label: input.set_item_label ?? null,
+        weight_kg: (l.weight_kg as number | null) ?? d.weight_kg,
+        total_length_m: d.total_length_m,
+        paint_area_m2: d.paint_area_m2,
+        sort_order: order++,
+      }
+    })
+
+    const added = await productProfileRepo.insertParts(rows)
+    if (added > 0 && product.bom_status === 'none')
+      await productsRepo.patch(productId, { bom_status: 'done' })
+    return { added }
+  },
+
+  /**
+   * Chép định mức từ sản phẩm khác — lối dựng định mức mới hay dùng nhất (ghế
+   * biến thể chỉ khác vài dòng). 'replace' xoá sạch định mức đích trước khi chép.
+   */
+  async copyPartsFrom(
+    user: User,
+    targetId: string,
+    input: { source_product_id: string; mode: 'append' | 'replace'; groups?: string[] },
+  ) {
+    await assertAction(user, 'technical.bom.save')
+    if (input.source_product_id === targetId)
+      throw BadRequest('Không thể chép định mức từ chính sản phẩm đó')
+
+    const [target, source] = await Promise.all([
+      productsRepo.findById(targetId),
+      productsRepo.findById(input.source_product_id),
+    ])
+    if (!target) throw NotFound('Sản phẩm đích không tồn tại')
+    if (!source) throw NotFound('Sản phẩm nguồn không tồn tại')
+
+    const srcParts = await productProfileRepo.parts(input.source_product_id)
+    if (srcParts.length === 0)
+      throw BadRequest(`Sản phẩm ${source.code} chưa có định mức để chép`)
+
+    let removed = 0
+    if (input.mode === 'replace')
+      removed = await productProfileRepo.deleteAllParts(targetId)
+
+    const startOrder =
+      input.mode === 'replace' ? 1 : await productProfileRepo.nextSortOrder(targetId)
+    const rows = buildCopiedParts(srcParts as unknown as Record<string, unknown>[], {
+      productId: targetId,
+      startOrder,
+      groups: input.groups,
+    })
+    const added = await productProfileRepo.insertParts(rows)
+
+    if (added > 0 && target.bom_status === 'none')
+      await productsRepo.patch(targetId, { bom_status: 'done' })
+
+    return { added, removed, source_code: source.code }
+  },
+
   async saveBom(
     user: User,
     productId: string,
