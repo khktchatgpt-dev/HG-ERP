@@ -9,8 +9,6 @@ export type Material = {
   barcode: string | null
   /** Quy cách (0056) — kích thước/thông số, tự điền vào dòng đơn khi chọn vật tư. */
   spec: string | null
-  /** Loại quy đổi A/B/C (0055) — lái form đặt: A đơn vị đơn, B hệ số cứng, C cân thực. */
-  conversion_profile: 'A' | 'B' | 'C'
   /** Đơn vị TÍNH GIÁ ('kg', 'm²'…) — NULL = giá theo ĐVT mua (0053, giá đv kép). */
   price_unit: string | null
   /** B: hệ số cứng (SL×hệ số); C: định mức kg/đơn-vị-đặt (vd 10.1 kg/cây) — sửa theo cân thực. */
@@ -33,7 +31,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, conversion_profile, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string

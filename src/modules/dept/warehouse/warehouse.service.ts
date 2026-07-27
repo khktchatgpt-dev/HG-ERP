@@ -25,7 +25,6 @@ type CreateInput = {
   unit: string
   barcode?: string | null
   spec?: string | null
-  conversion_profile?: 'A' | 'B' | 'C'
   price_unit?: string | null
   unit2_factor?: number | null
   group_name?: string | null
@@ -99,7 +98,6 @@ export const materialsService = {
       // '' → null để unique partial index (0078) không bắt trùng chuỗi rỗng.
       barcode: input.barcode?.trim() || null,
       spec: input.spec ?? null,
-      conversion_profile: input.conversion_profile ?? 'A',
       price_unit: input.price_unit ?? null,
       unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,

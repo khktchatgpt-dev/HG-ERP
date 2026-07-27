@@ -3417,7 +3417,6 @@ export type Database = {
         Row: {
           barcode: string | null
           code: string
-          conversion_profile: string
           created_at: string
           default_supplier_id: string | null
           group_name: string | null
@@ -3441,7 +3440,6 @@ export type Database = {
         Insert: {
           barcode?: string | null
           code: string
-          conversion_profile?: string
           created_at?: string
           default_supplier_id?: string | null
           group_name?: string | null
@@ -3465,7 +3463,6 @@ export type Database = {
         Update: {
           barcode?: string | null
           code?: string
-          conversion_profile?: string
           created_at?: string
           default_supplier_id?: string | null
           group_name?: string | null

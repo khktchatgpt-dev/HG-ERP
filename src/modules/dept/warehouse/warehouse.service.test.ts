@@ -54,7 +54,6 @@ describe('materialsService.update — chia chủ quyền theo nhóm trường (v
       name: 'Ống sắt tròn Ø25',
       default_supplier_id: 's1',
       vat_rate: 10,
-      conversion_profile: 'C',
       last_purchase_price: 77000,
     })
     expect(assertAction).toHaveBeenCalledWith(
