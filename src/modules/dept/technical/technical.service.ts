@@ -1,22 +1,27 @@
 import {
-  bomLinesRepo,
   partGroupsRepo,
   productProfileRepo,
   productsRepo,
+  NO_CUSTOMER_FILTER,
   type Product,
   type ProductPacking,
+  type ProductLite,
+  type ProductPart,
   type ProductTechSpec,
 } from './technical.repo'
 import type {
   BomStatus,
   ProductPartInput as PartInput,
   ProductPartPatch as PartPatch,
+  ProductClusterInput as ClusterInput,
+  ProductClusterPatch as ClusterPatch,
 } from './technical.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
+import { worthFuzzy } from '@/lib/search-text'
 import { MAX_SERIAL, buildProductCode, nextSerial } from '@/lib/product-code'
 
 // Phase B RBAC: mọi guard method đọc thẳng registry `actions.ts` qua
@@ -24,6 +29,65 @@ import { MAX_SERIAL, buildProductCode, nextSerial } from '@/lib/product-code'
 // (files/loans/samples/showroom) còn dùng để suy "thuộc phòng Kỹ thuật".
 async function isTechnicalStaff(user: User): Promise<boolean> {
   return hasPermission(user, 'technical.member')
+}
+
+/** Các trường hình học — đụng bất kỳ trường nào thì phải tính lại số dẫn xuất. */
+const GEO_KEYS = [
+  'profile_shape',
+  'material_kind',
+  'dim_a_mm',
+  'dim_b_mm',
+  'wall_thickness_mm',
+  'cut_length_mm',
+  'bend_waste_mm',
+  'tenon_mm',
+  'kg_per_m',
+  'qty',
+] as const
+
+/**
+ * Chuẩn hoá một dòng định mức trước khi ghi:
+ *
+ *  1. `cluster_name` → `cluster_id` (gõ tên cụm mới thì tạo, tên đã có thì gán
+ *     vào cụm đó). Lưu bằng khoá chứ không bằng chuỗi nên đổi tên cụm về sau
+ *     không làm dòng rơi ra khỏi cụm.
+ *  2. Tính lại tổng chiều dài / khối lượng / diện tích / m³ **ở server**. Client
+ *     tính sẵn để hiện ngay khi gõ, nhưng số ghi xuống DB không được phụ thuộc
+ *     vào việc client có gửi đủ hay không — báo cáo khối lượng đọc thẳng cột này.
+ *     Số người dùng NHẬP TAY thì giữ (profile gân, hợp kim lạ thì hình học sai).
+ *
+ * `base` là dòng đang có trong DB khi sửa — cần để tính đúng lúc người dùng chỉ
+ * đổi một ô (sửa mỗi số lượng mà tính lại từ patch rỗng thì kích thước thành null).
+ */
+async function resolveLine<T extends Record<string, unknown>>(
+  productId: string,
+  input: T,
+  base?: ProductPart | null,
+): Promise<Record<string, unknown>> {
+  const { cluster_name, ...rest } = input as T & { cluster_name?: string | null }
+  const row: Record<string, unknown> = { ...rest }
+
+  if (cluster_name !== undefined) {
+    const name = (cluster_name ?? '').trim()
+    row.cluster_id = name
+      ? (await productProfileRepo.ensureCluster(productId, name)).id
+      : null
+  }
+
+  const touchesGeo = GEO_KEYS.some((k) => k in row)
+  if (!touchesGeo && base == null) return row
+
+  const geo = Object.fromEntries(
+    GEO_KEYS.map((k) => [k, (k in row ? row[k] : base?.[k]) ?? null]),
+  )
+  const d = calcPartDerived(geo)
+  // `?? d.x` chứ không phải `d.x ?? ...`: người dùng gửi số thì số của họ thắng.
+  row.total_length_m = (row.total_length_m as number | null) ?? d.total_length_m
+  row.weight_kg = (row.weight_kg as number | null) ?? d.weight_kg
+  row.paint_area_m2 = (row.paint_area_m2 as number | null) ?? d.paint_area_m2
+  row.paint_area_box_m2 = d.paint_area_box_m2
+  row.volume_m3 = (row.volume_m3 as number | null) ?? d.volume_m3
+  return row
 }
 
 type CreateInput = {
@@ -77,7 +141,17 @@ export const productsService = {
     })
   },
 
-  /** Danh sách nhẹ (thư viện) — lọc/tìm/phân trang phía server, cột tối thiểu. */
+  /**
+   * Thư viện SP — lọc/tìm/phân trang phía server, cột tối thiểu. Tìm hai nhịp:
+   *
+   *  1. KHỚP CHẶT — mọi từ khoá phải có mặt trong `search_text` (đã bỏ dấu).
+   *  2. GẦN ĐÚNG — chỉ khi nhịp 1 ra 0 dòng: xếp hạng theo độ giống trigram
+   *     (0098) để "folrenz" vẫn ra "Florenz". Trả kèm cờ `fuzzy` để màn hình nói
+   *     rõ đây là kết quả gần đúng, chứ không lặng lẽ đưa thứ khác cho người dùng.
+   *
+   * Nhánh gần đúng KHÔNG phân trang: nó chỉ để cứu một lần gõ sai, đưa vài chục
+   * kết quả gần nhất. Gõ lại cho đúng thì về nhánh 1 với phân trang đầy đủ.
+   */
   async listLite(
     _user: User,
     opts: {
@@ -88,8 +162,26 @@ export const productsService = {
       page: number
       page_size: number
     },
-  ) {
-    return productsRepo.listLite(opts)
+  ): Promise<{ rows: ProductLite[]; total: number; fuzzy?: boolean }> {
+    const strict = await productsRepo.listLite(opts)
+    if (strict.total > 0 || !opts.q || !worthFuzzy(opts.q)) return strict
+
+    const ids = await productsRepo.fuzzyIds(opts.q, opts.page_size)
+    if (ids.length === 0) return strict
+
+    const rows = await productsRepo.listLiteByIds(ids)
+    // Bộ lọc đang bật vẫn phải được tôn trọng — người dùng lọc "khách A" thì kết
+    // quả gần đúng cũng chỉ được nằm trong khách A.
+    const kept = rows.filter(
+      (r) =>
+        (opts.is_active == null || r.is_active === opts.is_active) &&
+        (opts.customer_name == null ||
+          (opts.customer_name === NO_CUSTOMER_FILTER
+            ? r.customer_name == null
+            : r.customer_name === opts.customer_name)) &&
+        (opts.bom_status == null || r.bom_status === opts.bom_status),
+    )
+    return kept.length > 0 ? { rows: kept, total: kept.length, fuzzy: true } : strict
   },
 
   /** Nhãn khách/nhóm đã dùng — gợi ý khi gõ ở form + dropdown lọc thư viện. */
@@ -300,19 +392,20 @@ export const productsService = {
       assembly: src.assembly,
       set_contents: src.set_contents,
     })
-    const copied = await bomLinesRepo.copyAll(src.id, created.id)
+    // Chép định mức chi tiết (0096: chỉ còn một loại định mức duy nhất —
+    // technical_product_parts). SP mới chưa có dòng nào nên chép thẳng vào.
+    const srcParts = await productProfileRepo.parts(src.id)
+    const copied = srcParts.length
+      ? await productProfileRepo.insertParts(
+          buildCopiedParts(srcParts as unknown as Record<string, unknown>[], {
+            productId: created.id,
+          }),
+        )
+      : 0
     if (copied > 0 && src.bom_status !== 'none') {
       return productsRepo.patch(created.id, { bom_status: src.bom_status })
     }
     return created
-  },
-
-  /** Đọc BOM: mọi NV xem được (các phòng đọc trạng thái/định mức — đặc tả 4.2). */
-  async getBom(user: User, productId: string) {
-    const product = await productsRepo.findById(productId)
-    if (!product) throw NotFound('Sản phẩm không tồn tại')
-    const lines = await bomLinesRepo.listWithMaterials(productId)
-    return { product, lines }
   },
 
   /** Tab Hồ sơ: KHÔNG kéo định mức (có SP tới 145 dòng) — tab Định mức lo. */
@@ -327,12 +420,13 @@ export const productsService = {
   async getPartsInfo(user: User, productId: string) {
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    const [parts, setItems, groups] = await Promise.all([
+    const [parts, setItems, groups, clusters] = await Promise.all([
       productProfileRepo.parts(productId),
       productProfileRepo.setItems(productId),
       partGroupsRepo.list(),
+      productProfileRepo.clusters(productId),
     ])
-    return { product, parts, setItems, groups }
+    return { product, parts, setItems, groups, clusters }
   },
 
   /**
@@ -342,13 +436,14 @@ export const productsService = {
   async getProfile(user: User, productId: string) {
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    const [parts, setItems, packing, groups] = await Promise.all([
+    const [parts, setItems, packing, groups, clusters] = await Promise.all([
       productProfileRepo.parts(productId),
       productProfileRepo.setItems(productId),
       productProfileRepo.packingOptions(productId),
       partGroupsRepo.list(),
+      productProfileRepo.clusters(productId),
     ])
-    return { product, parts, setItems, packing, groups }
+    return { product, parts, setItems, packing, groups, clusters }
   },
 
   /**
@@ -369,7 +464,15 @@ export const productsService = {
     if (!product) throw NotFound('Sản phẩm không tồn tại')
     const sort_order =
       input.sort_order ?? (await productProfileRepo.nextSortOrder(productId))
-    const part = await productProfileRepo.insertPart(productId, { ...input, sort_order })
+    const row = await resolveLine(productId, input)
+    const part = await productProfileRepo.insertPart(productId, {
+      ...(row as Partial<ProductPart>),
+      part_name: input.part_name,
+      qty: input.qty,
+      group_code: input.group_code,
+      sort_order,
+      updated_by: user.id,
+    })
     if (product.bom_status === 'none') {
       await productsRepo.patch(productId, { bom_status: 'done' })
     }
@@ -378,7 +481,93 @@ export const productsService = {
 
   async updatePart(user: User, productId: string, partId: string, patch: PartPatch) {
     await assertAction(user, 'technical.bom.save')
-    const part = await productProfileRepo.patchPart(productId, partId, patch)
+    const base = await productProfileRepo.findPart(productId, partId)
+    if (!base) throw NotFound('Dòng định mức không tồn tại')
+    const row = await resolveLine(productId, patch, base)
+    const part = await productProfileRepo.patchPart(productId, partId, {
+      ...row,
+      updated_by: user.id,
+    })
+    if (!part) throw NotFound('Dòng định mức không tồn tại')
+    return part
+  },
+
+  // ── CỤM ────────────────────────────────────────────────────────────────────
+
+  async listClusters(user: User, productId: string) {
+    return productProfileRepo.clusters(productId)
+  },
+
+  async addCluster(user: User, productId: string, input: ClusterInput) {
+    await assertAction(user, 'technical.bom.save')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+    const cluster = await productProfileRepo.ensureCluster(productId, input.name)
+    // `ensureCluster` chỉ đặt tên — các số của cụm (SL cụm/SP, lộ trình) đi tiếp
+    // qua patch để "gõ tên mới" và "khai đầy đủ" dùng chung một đường.
+    const rest = { ...input, name: undefined }
+    return (await productProfileRepo.patchCluster(productId, cluster.id, rest)) ?? cluster
+  },
+
+  async updateCluster(
+    user: User,
+    productId: string,
+    clusterId: string,
+    patch: ClusterPatch,
+  ) {
+    await assertAction(user, 'technical.bom.save')
+    const cluster = await productProfileRepo.patchCluster(productId, clusterId, patch)
+    if (!cluster) throw NotFound('Cụm không tồn tại')
+    return cluster
+  },
+
+  /** Xoá cụm — các dòng của nó về RỜI (`on delete set null`), không mất dòng nào. */
+  async removeCluster(user: User, productId: string, clusterId: string) {
+    await assertAction(user, 'technical.bom.save')
+    const ok = await productProfileRepo.deleteCluster(productId, clusterId)
+    if (!ok) throw NotFound('Cụm không tồn tại')
+    return { ok: true }
+  },
+
+  /** "Gom thành cụm…" — chọn nhiều dòng rồi gán một lượt. */
+  async assignCluster(
+    user: User,
+    productId: string,
+    input: { part_ids: string[]; cluster_id?: string | null; cluster_name?: string },
+  ) {
+    await assertAction(user, 'technical.bom.save')
+    const product = await productsRepo.findById(productId)
+    if (!product) throw NotFound('Sản phẩm không tồn tại')
+
+    let clusterId: string | null = input.cluster_id ?? null
+    if (input.cluster_name) {
+      clusterId = (await productProfileRepo.ensureCluster(productId, input.cluster_name))
+        .id
+    }
+    const moved = await productProfileRepo.assignCluster(
+      productId,
+      input.part_ids,
+      clusterId,
+    )
+    return { moved, cluster_id: clusterId }
+  },
+
+  /**
+   * "Xác nhận Phôi" — cột có sẵn trong biểu mẫu, quyền của XƯỞNG chứ không phải
+   * Kỹ thuật. Tick được cả khi hồ sơ đã chốt vì nó không đụng số liệu định mức:
+   * chỉ ghi nhận "phôi cắt ra đúng như dòng này".
+   */
+  async setBlankConfirmed(
+    user: User,
+    productId: string,
+    partId: string,
+    confirmed: boolean,
+  ) {
+    await assertAction(user, 'production.component.save')
+    const part = await productProfileRepo.patchPart(productId, partId, {
+      blank_confirmed_at: confirmed ? new Date().toISOString() : null,
+      blank_confirmed_by: confirmed ? user.id : null,
+    })
     if (!part) throw NotFound('Dòng định mức không tồn tại')
     return part
   },
@@ -412,7 +601,6 @@ export const productsService = {
       group_code: string
       section_title?: string | null
       unit_basis?: string | null
-      set_item_label?: string | null
       lines: Record<string, unknown>[]
     },
   ) {
@@ -420,8 +608,24 @@ export const productsService = {
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
 
+    // Cột `Parts/ Bộ phận` dán từ Excel lặp lại tên cụm trên MỌI dòng của cụm đó
+    // (file mẫu: "Cụm khung" ×4 dòng). Giải một lượt theo tên duy nhất — 2 cụm
+    // thay vì 10 lượt gọi DB.
+    const names = [
+      ...new Set(
+        input.lines
+          .map((l) => String(l.cluster_name ?? '').trim())
+          .filter((s) => s.length > 0),
+      ),
+    ]
+    const clusterIds = new Map<string, string>()
+    for (const name of names) {
+      clusterIds.set(name, (await productProfileRepo.ensureCluster(productId, name)).id)
+    }
+
     let order = await productProfileRepo.nextSortOrder(productId)
     const rows = input.lines.map((l) => {
+      const { cluster_name, ...rest } = l
       const geo = {
         profile_shape: (l.profile_shape as string | null) ?? null,
         material_kind: (l.material_kind as string | null) ?? null,
@@ -429,19 +633,25 @@ export const productsService = {
         dim_b_mm: (l.dim_b_mm as number | null) ?? null,
         wall_thickness_mm: (l.wall_thickness_mm as number | null) ?? null,
         cut_length_mm: (l.cut_length_mm as number | null) ?? null,
+        bend_waste_mm: (l.bend_waste_mm as number | null) ?? null,
+        tenon_mm: (l.tenon_mm as number | null) ?? null,
+        kg_per_m: (l.kg_per_m as number | null) ?? null,
         qty: (l.qty as number | null) ?? null,
       }
       const d = calcPartDerived(geo)
       return {
-        ...l,
+        ...rest,
         product_id: productId,
         group_code: input.group_code,
         section_title: input.section_title ?? null,
         unit_basis: input.unit_basis ?? null,
-        set_item_label: input.set_item_label ?? null,
+        cluster_id: clusterIds.get(String(cluster_name ?? '').trim()) ?? null,
         weight_kg: (l.weight_kg as number | null) ?? d.weight_kg,
         total_length_m: d.total_length_m,
         paint_area_m2: d.paint_area_m2,
+        paint_area_box_m2: d.paint_area_box_m2,
+        volume_m3: d.volume_m3,
+        updated_by: user.id,
         sort_order: order++,
       }
     })
@@ -480,12 +690,27 @@ export const productsService = {
     if (input.mode === 'replace')
       removed = await productProfileRepo.deleteAllParts(targetId)
 
+    // Dựng lại CỤM bên SP đích trước khi chép dòng: cụm là bản ghi riêng của mỗi
+    // SP, chép thẳng `cluster_id` sang thì dòng của SP đích trỏ vào cụm SP nguồn.
+    const srcClusters = await productProfileRepo.clusters(input.source_product_id)
+    const clusterMap = new Map<string, string>()
+    for (const c of srcClusters) {
+      const dest = await productProfileRepo.ensureCluster(targetId, c.name)
+      await productProfileRepo.patchCluster(targetId, dest.id, {
+        qty_per_product: c.qty_per_product,
+        first_stage: c.first_stage,
+        final_stage: c.final_stage,
+      })
+      clusterMap.set(c.id, dest.id)
+    }
+
     const startOrder =
       input.mode === 'replace' ? 1 : await productProfileRepo.nextSortOrder(targetId)
     const rows = buildCopiedParts(srcParts as unknown as Record<string, unknown>[], {
       productId: targetId,
       startOrder,
       groups: input.groups,
+      clusterMap,
     })
     const added = await productProfileRepo.insertParts(rows)
 
@@ -495,22 +720,10 @@ export const productsService = {
     return { added, removed, source_code: source.code }
   },
 
-  async saveBom(
-    user: User,
-    productId: string,
-    lines: { material_id: string; qty_per_unit: number; note?: string | null }[],
-  ) {
-    await assertAction(user, 'technical.bom.save')
-    const product = await productsRepo.findById(productId)
-    if (!product) throw NotFound('Sản phẩm không tồn tại')
-
-    await bomLinesRepo.replaceAll(productId, lines)
-
-    if (product.bom_status === 'none' && lines.length > 0) {
-      await productsRepo.patch(productId, { bom_status: 'drawing' })
-    }
-    return bomLinesRepo.listWithMaterials(productId)
-  },
+  // `saveBom` (ghi đè trọn bộ BOM cũ) ĐÃ BỎ ở 0096. Định mức giờ chỉ sửa theo
+  // TỪNG DÒNG (addPart/patchPart/removePart) — giữ lại lối "xoá sạch rồi ghi
+  // lại" là để ngỏ khả năng một cú lưu quét bay toàn bộ quy cách, tiết diện,
+  // chiều dài cắt của sản phẩm. Chép hàng loạt dùng `copyPartsFrom`.
 
   async remove(user: User, id: string): Promise<void> {
     await assertAction(user, 'technical.product.remove')

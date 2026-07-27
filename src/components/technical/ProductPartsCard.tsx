@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronRight, Copy, Layers, Pencil, Search } from 'lucide-react'
 import { Card } from '@/components/shadcn/card'
@@ -8,11 +8,20 @@ import { Separator } from '@/components/shadcn/separator'
 import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PartLineEdit } from './PartLineEdit'
 import { PartsCopyDialog } from './PartsCopyDialog'
 import { PartsBulkEntry } from './PartsBulkEntry'
-import { PartRowInline, PartRowNew } from './PartRowInline'
-import type { PartGroupView, PartView } from './ProductProfileCards'
+import { InlineHead, PartRowInline, PartRowNew, inlineColSpan } from './PartRowInline'
+import type { ClusterView, PartGroupView, PartView } from './ProductProfileCards'
+import {
+  columnsFor,
+  defaultSectionTitle,
+  layoutOf,
+  splitNote,
+  type LayoutKey,
+  type PartColumn,
+} from './part-layouts'
 
 const n = (v: number | null | undefined, d = 0) =>
   v == null ? null : v.toLocaleString('en-US', { maximumFractionDigits: d })
@@ -37,7 +46,7 @@ const SHAPE_LABEL: Record<string, string> = {
  * Quy cách gọn: "hộp 20×40 dày 1" · "tròn Ø27 dày 0.8" · "vuông 20 dày 0.8".
  * Tròn/vuông tiết diện đều nên chỉ nêu một chiều — ghi "27×27" là thừa.
  */
-export function specOf(p: PartView): string | null {
+export function specOf(p: PartView, opts?: { withWall?: boolean }): string | null {
   if (p.profile_code) return p.profile_code
   const shape = p.profile_shape ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape) : null
   const { dim_a_mm: a, dim_b_mm: b } = p
@@ -49,7 +58,10 @@ export function specOf(p: PartView): string | null {
     const dims = [a, b].filter((x) => x != null)
     core = dims.length ? dims.map((x) => n(x, 1)).join('×') : null
   }
+  // Bảng khung có CỘT RIÊNG "Dày vật liệu (δ)" — nhét độ dày vào cả chuỗi quy
+  // cách nữa thì cùng một số hiện hai lần trên một dòng, đọc như số liệu vênh.
   const wall =
+    opts?.withWall !== false &&
     p.wall_thickness_mm != null &&
     p.profile_shape !== 'TRONDAC' &&
     p.profile_shape !== 'LA'
@@ -58,13 +70,86 @@ export function specOf(p: PartView): string | null {
   return [shape, core, wall].filter(Boolean).join(' ') || null
 }
 
+/**
+ * Tên hiển thị. Khối VẬT TƯ trong biểu mẫu BOM có một cột "TÊN HÀNG HÓA" duy
+ * nhất ("Vít bắn gỗ M4x25"), nhưng web cũ tách thành tên + quy cách nên nếu chỉ
+ * lấy `part_name` thì ra "Vít" — một sản phẩm có 3 dòng cùng tên "Nút", 2 dòng
+ * "Đế". Ghép lại cho khối vật tư; khối gia công thì quy cách đã có cột riêng.
+ */
+function nameOf(p: PartView, layout: LayoutKey): string {
+  if (layout !== 'supply') return p.part_name
+  const { spec } = splitNote(p.material_note)
+  if (!spec) return p.part_name
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  // Quy cách đã chứa sẵn tên (hoặc ngược lại) thì không ghép, tránh "Vít Vít 4x15".
+  if (norm(spec).includes(norm(p.part_name))) return spec
+  return `${p.part_name} ${spec}`.replace(/\s+/g, ' ')
+}
+
+/**
+ * Nội dung một ô theo mã cột (`part-layouts.ts`). Đơn vị và số chữ số thập phân
+ * bám theo biểu mẫu BOM gốc: dài (mm) 1 số lẻ, tổng dài (m) 2, kg 3, m² 4, m³ 6.
+ */
+function cellOf(p: PartView, key: string): ReactNode {
+  switch (key) {
+    case 'spec':
+      // Quy cách đã tách sẵn ra cột δ nên bỏ độ dày khỏi chuỗi. Không parse được
+      // thì mới rơi về phần quy cách thô của `material_note`.
+      return specOf(p, { withWall: false }) ?? splitNote(p.material_note).spec ?? '—'
+    case 'dims': {
+      const dims = [p.dim_a_mm, p.dim_b_mm].filter((x) => x != null)
+      return dims.length ? dims.map((x) => n(x, 1)).join(' × ') : '—'
+    }
+    case 'tenon':
+      return p.tenon ?? '—'
+    case 'tenonMm':
+      return n(p.tenon_mm, 1) ?? '—'
+    case 'cut':
+      return n(p.cut_length_mm, 1) ?? '—'
+    case 'waste':
+      return p.bend_waste_mm ? n(p.bend_waste_mm, 1) : '—'
+    case 'color':
+      return p.color ?? '—'
+    case 'blank':
+      // "Xác nhận Phôi" — xưởng phôi tick. Chưa tick thì để vòng tròn rỗng chứ
+      // không để trống, vì cột này là việc CẦN LÀM chứ không phải ô dữ liệu.
+      return p.blank_confirmed_at ? (
+        <span title={`Đã xác nhận phôi ${p.blank_confirmed_at.slice(0, 10)}`}>✓</span>
+      ) : (
+        <span className="text-muted-foreground/40">○</span>
+      )
+    case 'qty':
+      return n(p.qty, 4)
+    case 'unit':
+      return p.unit ?? '—'
+    case 'len':
+      return p.total_length_m != null ? p.total_length_m.toFixed(2) : '—'
+    case 'kg':
+      return p.weight_kg != null ? p.weight_kg.toFixed(3) : '—'
+    case 'm2':
+      return p.paint_area_m2 != null ? p.paint_area_m2.toFixed(4) : '—'
+    case 'm3':
+      return p.volume_m3 != null ? p.volume_m3.toFixed(6) : '—'
+    case 'wall':
+      return n(p.wall_thickness_mm, 2) ?? '—'
+    case 'mat':
+      return splitNote(p.material_note).material ?? '—'
+    case 'code':
+      return p.material_code ?? '—'
+    case 'note':
+      return p.note ?? ''
+    default:
+      return null
+  }
+}
+
 const haystack = (p: PartView) =>
   [
     p.part_name,
-    p.set_item_label,
     p.section_title,
     p.material_note,
     p.tenon,
+    p.color,
     p.material_code,
     p.profile_code,
     specOf(p),
@@ -74,26 +159,59 @@ const haystack = (p: PartView) =>
     .join(' ')
     .toLowerCase()
 
-/** Khối định mức: một tiêu đề + các dòng thuộc nó. */
-type Section = { title: string | null; unitBasis: string | null; rows: PartView[] }
-type SubGroup = {
-  label: string | null
-  rows: PartView[]
+/** Tổng của một tập dòng — hiện ở chân cụm và chân khối, luôn TÍNH chứ không nhập. */
+export type Totals = {
+  qty: number
+  len: number
   kg: number
-  sections: Section[]
+  m2: number
+  m3: number
+}
+
+export function sumRows(rows: PartView[]): Totals {
+  return rows.reduce(
+    (t, p) => ({
+      qty: t.qty + (p.qty ?? 0),
+      len: t.len + (p.total_length_m ?? 0),
+      kg: t.kg + (p.weight_kg ?? 0),
+      m2: t.m2 + (p.paint_area_m2 ?? 0),
+      m3: t.m3 + (p.volume_m3 ?? 0),
+    }),
+    { qty: 0, len: 0, kg: 0, m2: 0, m3: 0 },
+  )
+}
+
+/**
+ * CỤM trong một khối. `cluster: null` = nhóm **RỜI** (dòng không thuộc cụm nào).
+ *
+ * Nhóm Rời luôn được dựng và luôn hiện khi có dòng — đúng 2 dòng Pát của file
+ * mẫu `30x100 uống cong` bị lọt khỏi dòng "Tổng cộng" của Excel chính vì chúng
+ * không thuộc cụm nào và bị bỏ quên.
+ */
+type ClusterBlock = {
+  cluster: ClusterView | null
+  rows: PartView[]
+  totals: Totals
+}
+/** Khối định mức: một tiêu đề + các cụm thuộc nó. */
+type Section = {
+  title: string | null
+  unitBasis: string | null
+  rows: PartView[]
+  blocks: ClusterBlock[]
 }
 type Group = {
   code: string
   label: string
   rows: PartView[]
-  kg: number
-  subs: SubGroup[]
+  totals: Totals
+  sections: Section[]
 }
 
 const sumKg = (rows: PartView[]) => rows.reduce((s, p) => s + (p.weight_kg ?? 0), 0)
 
 /** Gom theo tiêu đề khối, giữ thứ tự xuất hiện. */
-function toSections(rows: PartView[]): Section[] {
+function toSections(rows: PartView[], clusters: ClusterView[]): Section[] {
   const out: Section[] = []
   for (const p of rows) {
     const last = out[out.length - 1]
@@ -103,9 +221,183 @@ function toSections(rows: PartView[]): Section[] {
         title: p.section_title ?? null,
         unitBasis: p.unit_basis ?? null,
         rows: [p],
+        blocks: [],
       })
   }
+  for (const sec of out) sec.blocks = toClusterBlocks(sec.rows, clusters)
   return out
+}
+
+/** Cụm theo thứ tự danh mục, nhóm RỜI xuống cuối. */
+function toClusterBlocks(rows: PartView[], clusters: ClusterView[]): ClusterBlock[] {
+  const byCluster = new Map<string, PartView[]>()
+  const loose: PartView[] = []
+  for (const p of rows) {
+    if (p.cluster_id)
+      byCluster.set(p.cluster_id, [...(byCluster.get(p.cluster_id) ?? []), p])
+    else loose.push(p)
+  }
+  const blocks: ClusterBlock[] = clusters
+    .filter((c) => byCluster.has(c.id))
+    .map((c) => {
+      const r = byCluster.get(c.id)!
+      return { cluster: c, rows: r, totals: sumRows(r) }
+    })
+  if (loose.length) blocks.push({ cluster: null, rows: loose, totals: sumRows(loose) })
+  return blocks
+}
+
+/**
+ * Dải tiêu đề của một CỤM — tick chọn cả cụm, tên cụm, số dòng, khối lượng, lộ
+ * trình công đoạn và SL cụm/SP nếu đã khai. Nhóm **RỜI** cũng có dải riêng chứ
+ * không im lặng trộn vào bảng: dòng không thuộc cụm nào là thứ dễ bị bỏ quên nhất.
+ */
+function ClusterHead({
+  block,
+  colSpan,
+  canEdit,
+  allPicked,
+  onPickAll,
+  renaming,
+  onStartRename,
+  onRename,
+  onDrop,
+}: {
+  block: ClusterBlock
+  colSpan: number
+  canEdit: boolean
+  allPicked: boolean
+  onPickAll: (on: boolean) => void
+  renaming: boolean
+  onStartRename: (id: string | null) => void
+  onRename: (c: ClusterView, name: string) => void
+  onDrop: (c: ClusterView) => void
+}) {
+  const c = block.cluster
+  const route = [c?.first_stage, c?.final_stage].filter(Boolean).join(' → ')
+  return (
+    <tr className={cn('border-b', c ? 'bg-sky-50/60 dark:bg-sky-950/20' : 'bg-muted/20')}>
+      <td colSpan={colSpan} className="px-1 py-1.5">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {canEdit && (
+            <input
+              type="checkbox"
+              className="size-3.5"
+              aria-label={c ? `Chọn cả cụm ${c.name}` : 'Chọn các dòng rời'}
+              checked={allPicked}
+              onChange={(e) => onPickAll(e.target.checked)}
+            />
+          )}
+          {renaming && c ? (
+            <input
+              autoFocus
+              defaultValue={c.name}
+              aria-label="Tên cụm"
+              onBlur={(e) => {
+                onRename(c, e.target.value)
+                onStartRename(null)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+                if (e.key === 'Escape') onStartRename(null)
+              }}
+              className="w-40 rounded border border-sky-400 px-1.5 py-0.5 text-xs font-semibold dark:bg-zinc-900"
+            />
+          ) : (
+            <span
+              className={cn(
+                'text-xs font-semibold',
+                !c && 'text-muted-foreground font-medium',
+              )}
+            >
+              {c ? `⬢ ${c.name}` : '○ Rời (không thuộc cụm)'}
+            </span>
+          )}
+          <span className="text-muted-foreground text-[11px] tabular-nums">
+            {block.rows.length} chi tiết
+            {block.totals.kg > 0 && ` · ${block.totals.kg.toFixed(3)} kg`}
+            {block.totals.m3 > 0 && ` · ${block.totals.m3.toFixed(4)} m³`}
+          </span>
+          {route && (
+            <span className="rounded bg-zinc-200 px-1.5 py-px text-[10px] font-medium dark:bg-zinc-800">
+              {route}
+            </span>
+          )}
+          {c?.qty_per_product != null && (
+            <span className="rounded bg-zinc-200 px-1.5 py-px text-[10px] font-medium tabular-nums dark:bg-zinc-800">
+              {c.qty_per_product} cụm/SP
+            </span>
+          )}
+          {canEdit && c && (
+            <span className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={() => onStartRename(c.id)}
+                className="text-muted-foreground text-[11px] hover:underline"
+              >
+                Đổi tên
+              </button>
+              <button
+                type="button"
+                onClick={() => onDrop(c)}
+                className="text-muted-foreground text-[11px] hover:underline"
+              >
+                Bỏ cụm
+              </button>
+            </span>
+          )}
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+/**
+ * Dòng tổng của một cụm — chỉ điền vào những cột thực sự cộng được.
+ *
+ * KHÔNG dùng cho khối vật tư/bao bì: ở đó mỗi dòng một đơn vị khác nhau (cái ·
+ * m² · cuộn · gói), cộng số lượng lại ra một con số vô nghĩa.
+ */
+function ClusterTotalRow({
+  block,
+  cols,
+  canEdit,
+}: {
+  block: ClusterBlock
+  cols: PartColumn[]
+  canEdit: boolean
+}) {
+  const t = block.totals
+  const val = (key: string) =>
+    key === 'qty'
+      ? n(t.qty, 4)
+      : key === 'len'
+        ? t.len.toFixed(2)
+        : key === 'kg'
+          ? t.kg.toFixed(3)
+          : key === 'm2'
+            ? t.m2.toFixed(4)
+            : key === 'm3'
+              ? t.m3.toFixed(6)
+              : ''
+  return (
+    <tr className="border-b text-xs font-medium">
+      {canEdit && <td />}
+      <td />
+      <td className="text-muted-foreground py-1 pr-3">
+        Σ {block.cluster?.name ?? 'Rời'}
+      </td>
+      {cols.map((c) => (
+        <td
+          key={c.key}
+          className={cn('py-1 pr-3', c.align === 'right' && 'text-right tabular-nums')}
+        >
+          {val(c.key)}
+        </td>
+      ))}
+      {canEdit && <td />}
+    </tr>
+  )
 }
 
 /**
@@ -116,16 +408,22 @@ function toSections(rows: PartView[]): Section[] {
 export function ProductPartsCard({
   parts,
   partGroups,
+  clusters,
   productId,
+  baseMaterial,
   canEdit,
 }: {
   parts: PartView[]
   partGroups: PartGroupView[]
+  clusters: ClusterView[]
   productId: string
+  /** Ô "Nhiên Liệu" của sản phẩm — mặc định vật liệu cho khối mới. */
+  baseMaterial: string | null
   canEdit: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [editing, setEditing] = useState<{ part: PartView | null; group: string } | null>(
     null,
   )
@@ -134,6 +432,13 @@ export function ProductPartsCard({
   const [copying, setCopying] = useState(false)
   const [bulk, setBulk] = useState(false)
   const [inline, setInline] = useState(false)
+  /** Dòng đang tick để gom cụm hàng loạt. */
+  const [picked, setPicked] = useState<string[]>([])
+  const [grouping, setGrouping] = useState(false)
+  /** Tên cụm đang gõ ở thanh gom. */
+  const [newCluster, setNewCluster] = useState('')
+  /** Cụm đang đổi tên tại chỗ (id) — không dùng hộp thoại. */
+  const [renaming, setRenaming] = useState<string | null>(null)
   /**
    * Khối đang tạo mới. Cần riêng vì dòng nhập nằm TRONG khối, mà khối lại suy từ
    * các dòng đã có — sản phẩm chưa có định mức thì không có chỗ nào để gõ.
@@ -142,7 +447,7 @@ export function ProductPartsCard({
     group: string
     title: string
     unitBasis: string
-    setLabel: string
+    cluster: string
     material: string
   } | null>(null)
 
@@ -167,24 +472,32 @@ export function ProductPartsCard({
 
     return codes.map(([code, label]) => {
       const rows = byGroup.get(code)!
-      const bySub = new Map<string, PartView[]>()
-      for (const p of rows) {
-        const k = p.set_item_label ?? ''
-        bySub.set(k, [...(bySub.get(k) ?? []), p])
+      return {
+        code,
+        label,
+        rows,
+        totals: sumRows(rows),
+        sections: toSections(rows, clusters),
       }
-      // Chỉ tách theo món khi SP thực sự là bộ — 1 món thì tách chỉ thêm nhiễu.
-      const subs: SubGroup[] =
-        bySub.size > 1
-          ? [...bySub.entries()].map(([k, r]) => ({
-              label: k || null,
-              rows: r,
-              kg: sumKg(r),
-              sections: toSections(r),
-            }))
-          : [{ label: null, rows, kg: 0, sections: toSections(rows) }]
-      return { code, label, rows, kg: sumKg(rows), subs }
     })
-  }, [filtered, partGroups])
+  }, [filtered, partGroups, clusters])
+
+  /**
+   * Bộ cột RIÊNG cho từng nhóm (xem `part-layouts.ts`): biểu mẫu BOM không có
+   * bảng chung — khung kim loại tính kg, gỗ tính m³, ngũ kim không có kích thước.
+   * Trong mỗi họ còn giấu tiếp cột mà cả nhóm không có số nào.
+   *
+   * Tính trên TOÀN BỘ dòng của nhóm (`parts`, không phải `filtered`) để cột
+   * không nhảy khi đang gõ ô tìm. Phải đứng TRƯỚC lệnh return sớm (rules-of-hooks).
+   */
+  const colsByGroup = useMemo(() => {
+    const byGroup = new Map<string, PartView[]>()
+    for (const p of parts)
+      byGroup.set(p.group_code, [...(byGroup.get(p.group_code) ?? []), p])
+    return new Map(
+      [...byGroup.entries()].map(([code, rows]) => [code, columnsFor(code, rows)]),
+    )
+  }, [parts])
 
   const [closed, setClosed] = useState<string[]>(() =>
     // SP nhiều dòng thì mặc định chỉ mở nhóm đầu, tránh đổ một bảng dài lê thê.
@@ -204,20 +517,23 @@ export function ProductPartsCard({
           section_title: p.section_title,
           unit_basis: p.unit_basis,
           part_name: `${p.part_name} (bản sao)`,
-          set_item_label: p.set_item_label,
+          cluster_id: p.cluster_id,
           material_code: p.material_code,
           material_kind: p.material_kind,
           material_note: p.material_note,
           tenon: p.tenon,
+          tenon_mm: p.tenon_mm,
           profile_shape: p.profile_shape,
           profile_code: p.profile_code,
           dim_a_mm: p.dim_a_mm,
           dim_b_mm: p.dim_b_mm,
           wall_thickness_mm: p.wall_thickness_mm,
           cut_length_mm: p.cut_length_mm,
+          bend_waste_mm: p.bend_waste_mm,
+          kg_per_m: p.kg_per_m,
           qty: p.qty,
           unit: p.unit,
-          waste_pct: p.waste_pct,
+          color: p.color,
           weight_kg: p.weight_kg,
           note: p.note,
         },
@@ -231,16 +547,113 @@ export function ProductPartsCard({
     }
   }
 
+  /** Gán các dòng đang tick vào một cụm — tên mới thì server tự tạo cụm. */
+  async function assignPicked(target: { cluster_id: string | null } | { name: string }) {
+    setGrouping(true)
+    try {
+      const { moved } = await api<{ moved: number }>(
+        `/api/dept/technical/products/${productId}/parts/assign-cluster`,
+        {
+          method: 'POST',
+          body:
+            'name' in target
+              ? { part_ids: picked, cluster_name: target.name }
+              : { part_ids: picked, cluster_id: target.cluster_id },
+        },
+      )
+      setPicked([])
+      setNewCluster('')
+      router.refresh()
+      toast.success(
+        'name' in target
+          ? `Đã gom ${moved} dòng vào “${target.name}”`
+          : `Đã chuyển ${moved} dòng`,
+      )
+    } catch (err) {
+      toast.error('Gom cụm thất bại', apiErrorText(err))
+    } finally {
+      setGrouping(false)
+    }
+  }
+
+  /** Đổi tên cụm — sửa một chỗ, mọi dòng của cụm theo, không drift. */
+  async function renameCluster(c: ClusterView, name: string) {
+    if (!name.trim() || name.trim() === c.name) return
+    try {
+      await api(`/api/dept/technical/products/${productId}/clusters/${c.id}`, {
+        method: 'PATCH',
+        body: { name: name.trim() },
+      })
+      router.refresh()
+      toast.success('Đã đổi tên cụm', name.trim())
+    } catch (err) {
+      toast.error('Đổi tên thất bại', apiErrorText(err))
+    }
+  }
+
+  async function dropCluster(c: ClusterView) {
+    const ok = await confirm({
+      title: `Bỏ cụm “${c.name}”?`,
+      description: `Cụm biến mất khỏi bảng, nhưng ${
+        parts.filter((p) => p.cluster_id === c.id).length
+      } dòng chi tiết của nó KHÔNG bị xoá — chúng chuyển sang nhóm “Rời”.`,
+      confirmLabel: 'Bỏ cụm',
+    })
+    if (!ok) return
+    try {
+      await api(`/api/dept/technical/products/${productId}/clusters/${c.id}`, {
+        method: 'DELETE',
+      })
+      router.refresh()
+      toast.success('Đã bỏ cụm', `Dòng của “${c.name}” về nhóm Rời`)
+    } catch (err) {
+      toast.error('Bỏ cụm thất bại', apiErrorText(err))
+    }
+  }
+
   if (parts.length === 0 && !canEdit) return null
 
   const totalKg = sumKg(parts)
   const firstGroup = partGroups[0]?.code ?? 'FRAME'
   const hasQuery = q.trim() !== ''
-  /** Số cột của bảng theo chế độ — dùng cho dải tiêu đề khối. */
-  const cols = inline ? 12 : canEdit ? 11 : 10
+  const confirmed = parts.filter((p) => p.blank_confirmed_at).length
+  /** Số cột của dải tiêu đề khối — STT + Chi tiết + cột riêng của nhóm + ô nút. */
+  const colSpanOf = (groupCode: string) =>
+    inline
+      ? inlineColSpan(groupCode)
+      : (canEdit ? 1 : 0) +
+        2 +
+        (colsByGroup.get(groupCode)?.length ?? 0) +
+        (canEdit ? 1 : 0)
 
-  const openNewSection = () =>
-    setNewSec({ group: firstGroup, title: '', unitBasis: '', setLabel: '', material: '' })
+  /**
+   * Mở khối mới với tiêu đề + vật liệu ĐIỀN SẴN: tiêu đề lấy đúng chữ của biểu
+   * mẫu theo nhóm, vật liệu lấy ô "Nhiên Liệu" của sản phẩm. Dựng định mức mới
+   * đáng ra chỉ cần chọn nhóm rồi gõ ngay, không phải khai 5 ô trước đã.
+   */
+  const openNewSection = (group = firstGroup) =>
+    setNewSec({
+      group,
+      title: defaultSectionTitle(group),
+      unitBasis: '',
+      cluster: '',
+      material: baseMaterial ?? '',
+    })
+
+  /** Đổi nhóm thì tiêu đề mặc định đổi theo — trừ khi người dùng đã tự sửa. */
+  const changeNewGroup = (group: string) =>
+    setNewSec((s) =>
+      s === null
+        ? s
+        : {
+            ...s,
+            group,
+            title:
+              s.title === '' || s.title === defaultSectionTitle(s.group)
+                ? defaultSectionTitle(group)
+                : s.title,
+          },
+    )
 
   const headInp =
     'rounded border border-zinc-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -252,7 +665,7 @@ export function ProductPartsCard({
         <span className="text-xs font-semibold">Khối mới</span>
         <select
           value={newSec.group}
-          onChange={(e) => setNewSec({ ...newSec, group: e.target.value })}
+          onChange={(e) => changeNewGroup(e.target.value)}
           className={headInp}
           aria-label="Nhóm hạng mục"
         >
@@ -283,12 +696,15 @@ export function ProductPartsCard({
           <option value="RA">Mây / nhựa đan</option>
           <option value="GL">Kính</option>
         </select>
+        {/* Cụm của cả khối mới — gõ tên có sẵn thì gán vào cụm đó, tên mới thì
+            server tạo cụm. Bỏ trống = các dòng thuộc nhóm Rời. */}
         <input
-          value={newSec.setLabel}
-          onChange={(e) => setNewSec({ ...newSec, setLabel: e.target.value })}
-          className={`${headInp} w-28`}
-          placeholder="Món trong bộ"
-          aria-label="Món trong bộ"
+          value={newSec.cluster}
+          onChange={(e) => setNewSec({ ...newSec, cluster: e.target.value })}
+          className={`${headInp} w-32`}
+          placeholder="Cụm (Bộ phận)"
+          aria-label="Cụm"
+          list="cluster-names"
         />
         <input
           value={newSec.unitBasis}
@@ -308,20 +724,9 @@ export function ProductPartsCard({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
-              <th className="w-10 py-1.5 pr-1 text-right font-medium">STT</th>
-              <th className="w-52 py-1.5 pr-2 font-medium">Chi tiết</th>
-              <th className="w-24 py-1.5 pr-2 font-medium">Dạng</th>
-              <th className="w-16 py-1.5 pr-1 font-medium">Dày A</th>
-              <th className="w-16 py-1.5 pr-1 font-medium">Rộng B</th>
-              <th className="w-16 py-1.5 pr-1 font-medium">Dày thành</th>
-              <th className="w-20 py-1.5 pr-1 font-medium">Dài cắt</th>
-              <th className="w-16 py-1.5 pr-1 font-medium">SL</th>
-              <th className="w-14 py-1.5 pr-1 font-medium">ĐVT</th>
-              <th className="w-20 py-1.5 pr-2 text-right font-medium">KL</th>
-              <th className="py-1.5 pr-1 font-medium">Ghi chú</th>
-              <th className="w-16 py-1.5" />
-            </tr>
+            {/* Ô nhập đổi theo nhóm hạng mục vừa chọn ở trên: chọn "Bao bì" thì
+                6 ô kích thước biến mất, hiện ra ô Vật liệu + Màu. */}
+            <InlineHead groupCode={newSec.group} />
           </thead>
           <tbody>
             <PartRowNew
@@ -329,9 +734,8 @@ export function ProductPartsCard({
               groupCode={newSec.group}
               sectionTitle={newSec.title.trim() || null}
               unitBasis={newSec.unitBasis.trim() || null}
-              setItemLabel={newSec.setLabel.trim() || null}
+              clusterName={newSec.cluster.trim() || null}
               materialKind={newSec.material || null}
-              colSpanExtra={1}
             />
           </tbody>
         </table>
@@ -349,9 +753,17 @@ export function ProductPartsCard({
         <Layers className="text-muted-foreground size-4 shrink-0" />
         <h2 className="text-sm font-semibold">Định mức chi tiết</h2>
         <span className="text-muted-foreground text-xs">
-          · {hasQuery ? `${filtered.length}/${parts.length}` : parts.length} dòng
+          · {hasQuery ? `${filtered.length}/${parts.length}` : parts.length} chi tiết
+          {clusters.length > 0 && ` · ${clusters.length} cụm`}
           {totalKg > 0 && ` · ${totalKg.toFixed(2)} kg`}
+          {confirmed > 0 && ` · ${confirmed}/${parts.length} ✓phôi`}
         </span>
+        {/* Gợi ý tên cụm cho mọi ô nhập cụm trong thẻ này. */}
+        <datalist id="cluster-names">
+          {clusters.map((c) => (
+            <option key={c.id} value={c.name} />
+          ))}
+        </datalist>
         <div className="ml-auto flex items-center gap-2">
           {parts.length > 8 && !inline && (
             <div className="relative">
@@ -400,6 +812,69 @@ export function ProductPartsCard({
         </div>
       </div>
 
+      {/* Thanh gom cụm — chỉ nổi lên khi đã tick dòng, để bảng lúc bình thường
+          không cõng thêm một hàng nút. */}
+      {canEdit && picked.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 border-y bg-sky-100/70 px-5 py-2 text-xs dark:bg-sky-950/40">
+          <span className="font-medium">Đã chọn {picked.length} dòng</span>
+          <input
+            value={newCluster}
+            onChange={(e) => setNewCluster(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && newCluster.trim()) {
+                e.preventDefault()
+                void assignPicked({ name: newCluster.trim() })
+              }
+            }}
+            placeholder="Tên cụm, vd: Cụm khung"
+            aria-label="Tên cụm mới"
+            list="cluster-names"
+            className="w-44 rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <button
+            type="button"
+            disabled={grouping || !newCluster.trim()}
+            onClick={() => void assignPicked({ name: newCluster.trim() })}
+            className="rounded-md bg-sky-600 px-2.5 py-1 font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          >
+            Gom thành cụm
+          </button>
+          {clusters.length > 0 && (
+            <select
+              disabled={grouping}
+              value=""
+              onChange={(e) => {
+                if (e.target.value) void assignPicked({ cluster_id: e.target.value })
+              }}
+              className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+              aria-label="Chuyển sang cụm có sẵn"
+            >
+              <option value="">Chuyển sang cụm…</option>
+              {clusters.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <button
+            type="button"
+            disabled={grouping}
+            onClick={() => void assignPicked({ cluster_id: null })}
+            className="text-muted-foreground hover:underline disabled:opacity-50"
+          >
+            Đưa về Rời
+          </button>
+          <button
+            type="button"
+            onClick={() => setPicked([])}
+            className="text-muted-foreground ml-auto hover:underline"
+          >
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       {inline && (
         <p className="text-muted-foreground border-y bg-sky-50/60 px-5 py-2 text-xs dark:bg-sky-950/30">
           Sửa thẳng trong ô, rời khỏi dòng hoặc bấm Enter là lưu. Dòng trống cuối mỗi khối
@@ -411,27 +886,66 @@ export function ProductPartsCard({
 
       {filtered.length === 0 ? (
         <div className="px-5 py-4">
-          <p className="text-muted-foreground text-center text-sm">
-            {hasQuery
-              ? `Không có dòng nào khớp “${q.trim()}”.`
-              : inline
-                ? 'Chưa có dòng nào — tạo khối đầu tiên rồi gõ chi tiết vào đó.'
-                : 'Chưa bóc tách định mức. Bấm “Nhập tại chỗ” để bắt đầu gõ, hoặc “Dán từ Excel”.'}
-          </p>
-          {/* SP chưa có định mức: phải có lối tạo khối, không thì bật "Nhập tại
-              chỗ" ra bảng trống không có ô nào để gõ. */}
-          {inline && !hasQuery && !newSec && (
-            <div className="mt-3 text-center">
-              <button
-                type="button"
-                onClick={openNewSection}
-                className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white shadow hover:bg-sky-700"
-              >
-                + Tạo khối đầu tiên
-              </button>
-            </div>
+          {hasQuery ? (
+            <p className="text-muted-foreground text-center text-sm">
+              Không có dòng nào khớp “{q.trim()}”.
+            </p>
+          ) : (
+            !newSec && (
+              /**
+               * SP chưa có định mức. Trước đây chỗ này chỉ là một dòng chữ + nút
+               * "Tạo khối đầu tiên" — người dùng phải đoán "khối" là gì. Nay bày
+               * thẳng các khối của biểu mẫu: bấm một cái là vào gõ ngay, tiêu đề
+               * khối và vật liệu đã điền sẵn.
+               */
+              <div className="mx-auto max-w-lg py-2 text-center">
+                <p className="text-sm font-medium">Chưa có định mức</p>
+                <p className="text-muted-foreground mt-1 text-xs">
+                  Chọn một khối để bắt đầu gõ — hoặc dán cả bảng từ file BOM.
+                </p>
+                {canEdit && (
+                  <>
+                    <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                      {partGroups
+                        .filter((gr) => !gr.parent_code)
+                        .map((gr) => (
+                          <button
+                            key={gr.code}
+                            type="button"
+                            onClick={() => {
+                              setInline(true)
+                              openNewSection(gr.code)
+                            }}
+                            className="hover:border-primary hover:text-primary rounded-md border px-2.5 py-1 text-xs font-medium"
+                          >
+                            + {gr.label}
+                          </button>
+                        ))}
+                    </div>
+                    <div className="text-muted-foreground mt-3 text-xs">
+                      hoặc{' '}
+                      <button
+                        type="button"
+                        onClick={() => setBulk(true)}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        dán từ Excel
+                      </button>{' '}
+                      ·{' '}
+                      <button
+                        type="button"
+                        onClick={() => setCopying(true)}
+                        className="text-primary font-medium hover:underline"
+                      >
+                        chép từ SP khác
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
           )}
-          {inline && newSectionBlock}
+          {newSec && newSectionBlock}
         </div>
       ) : (
         <div className="divide-y">
@@ -454,88 +968,63 @@ export function ProductPartsCard({
                   <span className="text-muted-foreground text-xs">
                     {g.rows.length} dòng
                   </span>
-                  {g.kg > 0 && (
+                  {g.totals.kg > 0 && (
                     <span className="text-muted-foreground ml-auto text-xs tabular-nums">
-                      {g.kg.toFixed(2)} kg
+                      {g.totals.kg.toFixed(2)} kg
                     </span>
                   )}
                 </button>
 
                 {open && (
                   <div className="px-5 pb-3">
-                    {g.subs.map((sub, si) => (
-                      <div key={sub.label ?? si} className={si > 0 ? 'mt-4' : ''}>
-                        {sub.label && (
-                          <div className="mb-1 flex items-baseline gap-2">
-                            <span className="text-xs font-semibold">{sub.label}</span>
-                            <span className="text-muted-foreground text-[11px]">
-                              {sub.rows.length} dòng
-                              {sub.kg > 0 && ` · ${sub.kg.toFixed(2)} kg`}
-                            </span>
-                          </div>
-                        )}
+                    {
+                      <div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               {inline ? (
-                                <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
-                                  <th className="w-10 py-1.5 pr-1 text-right font-medium">
-                                    STT
-                                  </th>
-                                  <th className="w-52 py-1.5 pr-2 font-medium">
-                                    Chi tiết
-                                  </th>
-                                  <th className="w-24 py-1.5 pr-2 font-medium">Dạng</th>
-                                  <th className="w-16 py-1.5 pr-1 font-medium">Dày A</th>
-                                  <th className="w-16 py-1.5 pr-1 font-medium">Rộng B</th>
-                                  <th className="w-16 py-1.5 pr-1 font-medium">
-                                    Dày thành
-                                  </th>
-                                  <th className="w-20 py-1.5 pr-1 font-medium">
-                                    Dài cắt
-                                  </th>
-                                  <th className="w-16 py-1.5 pr-1 font-medium">SL</th>
-                                  <th className="w-14 py-1.5 pr-1 font-medium">ĐVT</th>
-                                  <th className="w-20 py-1.5 pr-2 text-right font-medium">
-                                    KL
-                                  </th>
-                                  <th className="py-1.5 pr-1 font-medium">Ghi chú</th>
-                                  <th className="w-16 py-1.5" />
-                                </tr>
+                                // Ô nhập theo ĐÚNG họ khối — ngũ kim không có ô
+                                // kích thước nào, gỗ/nệm có ô Mộng. Xem
+                                // `part-layouts.ts`.
+                                <InlineHead groupCode={g.code} />
                               ) : (
                                 <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
+                                  {canEdit && <th className="w-7 py-1.5" />}
                                   <th className="w-8 py-1.5 pr-2 text-right font-medium">
                                     STT
                                   </th>
-                                  <th className="py-1.5 pr-3 font-medium">Chi tiết</th>
-                                  <th className="py-1.5 pr-3 font-medium">Quy cách</th>
-                                  <th className="py-1.5 pr-3 text-right font-medium">
-                                    Dài cắt
+                                  {/* "TÊN HÀNG HÓA" cho khối vật tư/ngũ kim,
+                                      "Tên chi tiết" cho khối gia công — đúng
+                                      chữ dùng trong biểu mẫu BOM gốc. */}
+                                  <th className="py-1.5 pr-3 font-medium">
+                                    {layoutOf(g.code) === 'supply'
+                                      ? 'Tên hàng hoá'
+                                      : 'Tên chi tiết'}
                                   </th>
-                                  <th className="py-1.5 pr-3 text-right font-medium">
-                                    SL
-                                  </th>
-                                  <th className="py-1.5 pr-3 text-right font-medium">
-                                    Tổng dài
-                                  </th>
-                                  <th className="py-1.5 pr-3 text-right font-medium">
-                                    KL
-                                  </th>
-                                  <th className="py-1.5 pr-3 text-right font-medium">
-                                    DT sơn
-                                  </th>
-                                  <th className="py-1.5 pr-3 font-medium">Mã vật tư</th>
-                                  <th className="py-1.5 font-medium">Ghi chú</th>
+                                  {(colsByGroup.get(g.code) ?? []).map((c) => (
+                                    <th
+                                      key={c.key}
+                                      className={cn(
+                                        'py-1.5 pr-3 font-medium',
+                                        c.align === 'right' && 'text-right',
+                                      )}
+                                    >
+                                      {c.label}
+                                    </th>
+                                  ))}
                                   {canEdit && <th className="w-14 py-1.5" />}
                                 </tr>
                               )}
                             </thead>
                             <tbody>
-                              {sub.sections.map((sec, sx) => (
+                              {g.sections.map((sec, sx) => (
                                 <Fragment key={`${sec.title ?? ''}-${sx}`}>
                                   {sec.title && (
                                     <tr className="bg-muted/40">
-                                      <td colSpan={cols} className="px-1 py-1.5">
+                                      <td
+                                        colSpan={colSpanOf(g.code)}
+                                        className="px-1 py-1.5"
+                                      >
                                         <span className="text-xs font-semibold">
                                           {sec.title}
                                         </span>
@@ -549,138 +1038,173 @@ export function ProductPartsCard({
                                     </tr>
                                   )}
 
-                                  {sec.rows.map((p) =>
-                                    inline ? (
-                                      <PartRowInline
-                                        key={p.id}
-                                        productId={productId}
-                                        part={p}
-                                        colSpanExtra={1}
-                                        onDeleted={() => setBusyId(null)}
+                                  {sec.blocks.map((blk) => (
+                                    <Fragment key={blk.cluster?.id ?? '__loose'}>
+                                      <ClusterHead
+                                        block={blk}
+                                        colSpan={colSpanOf(g.code)}
+                                        canEdit={canEdit}
+                                        allPicked={blk.rows.every((r) =>
+                                          picked.includes(r.id),
+                                        )}
+                                        onPickAll={(on) =>
+                                          setPicked((cur) => {
+                                            const ids = blk.rows.map((r) => r.id)
+                                            return on
+                                              ? [...new Set([...cur, ...ids])]
+                                              : cur.filter((x) => !ids.includes(x))
+                                          })
+                                        }
+                                        renaming={renaming === blk.cluster?.id}
+                                        onStartRename={setRenaming}
+                                        onRename={renameCluster}
+                                        onDrop={dropCluster}
                                       />
-                                    ) : (
-                                      <tr
-                                        key={p.id}
-                                        className={cn(
-                                          'group border-b last:border-0',
-                                          canEdit && 'hover:bg-muted/40',
-                                          busyId === p.id && 'opacity-50',
-                                        )}
-                                      >
-                                        <td className="text-muted-foreground py-1.5 pr-2 text-right text-xs tabular-nums">
-                                          {p.part_no ?? ''}
-                                        </td>
-                                        <td className="py-1.5 pr-3">
-                                          {p.part_name}
-                                          {!sub.label && p.set_item_label && (
-                                            <span className="text-muted-foreground ml-1.5 text-xs">
-                                              ({p.set_item_label})
-                                            </span>
-                                          )}
-                                          {p.tenon && (
-                                            <span className="text-muted-foreground ml-1.5 text-xs">
-                                              mộng {p.tenon}
-                                            </span>
-                                          )}
-                                          {p.waste_pct > 0 && (
-                                            <span className="ml-1.5 rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
-                                              hao {n(p.waste_pct, 2)}%
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="text-muted-foreground py-1.5 pr-3 text-xs">
-                                          {specOf(p) ?? '—'}
-                                          {p.material_note && (
-                                            <span className="ml-1 opacity-80">
-                                              · {p.material_note}
-                                            </span>
-                                          )}
-                                        </td>
-                                        <td className="py-1.5 pr-3 text-right tabular-nums">
-                                          {n(p.cut_length_mm, 1) ?? '—'}
-                                        </td>
-                                        <td className="py-1.5 pr-3 text-right tabular-nums">
-                                          {n(p.qty, 4)}
-                                          {p.unit ? (
-                                            <span className="text-muted-foreground">
-                                              {' '}
-                                              {p.unit}
-                                            </span>
-                                          ) : null}
-                                        </td>
-                                        <td className="text-muted-foreground py-1.5 pr-3 text-right tabular-nums">
-                                          {p.total_length_m != null
-                                            ? p.total_length_m.toFixed(2)
-                                            : '—'}
-                                        </td>
-                                        <td className="py-1.5 pr-3 text-right tabular-nums">
-                                          {p.weight_kg != null
-                                            ? p.weight_kg.toFixed(3)
-                                            : '—'}
-                                        </td>
-                                        <td className="text-muted-foreground py-1.5 pr-3 text-right tabular-nums">
-                                          {p.paint_area_m2 != null
-                                            ? p.paint_area_m2.toFixed(4)
-                                            : '—'}
-                                        </td>
-                                        <td className="text-muted-foreground py-1.5 pr-3 font-mono text-[11px]">
-                                          {p.material_code ?? '—'}
-                                        </td>
-                                        <td
-                                          className="text-muted-foreground max-w-40 truncate py-1.5 text-xs"
-                                          title={p.note ?? undefined}
-                                        >
-                                          {p.note ?? ''}
-                                        </td>
-                                        {canEdit && (
-                                          <td className="py-1.5">
-                                            {/* Hiện khi rê chuột / focus bàn phím */}
-                                            <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-                                              <button
-                                                type="button"
-                                                title="Nhân bản dòng"
-                                                disabled={busyId === p.id}
-                                                onClick={() => void duplicate(p)}
-                                                className="hover:bg-muted rounded p-1 disabled:opacity-40"
-                                              >
-                                                <Copy className="text-muted-foreground size-3.5" />
-                                              </button>
-                                              <button
-                                                type="button"
-                                                title="Sửa dòng"
-                                                onClick={() =>
-                                                  setEditing({ part: p, group: g.code })
-                                                }
-                                                className="hover:bg-muted rounded p-1"
-                                              >
-                                                <Pencil className="text-muted-foreground size-3.5" />
-                                              </button>
-                                            </div>
-                                          </td>
-                                        )}
-                                      </tr>
-                                    ),
-                                  )}
 
-                                  {/* Dòng trống cuối khối — vòng "tạo trực tiếp". */}
-                                  {inline && (
-                                    <PartRowNew
-                                      productId={productId}
-                                      groupCode={g.code}
-                                      sectionTitle={sec.title}
-                                      unitBasis={sec.unitBasis}
-                                      setItemLabel={sub.label}
-                                      materialKind={sec.rows[0]?.material_kind ?? null}
-                                      colSpanExtra={1}
-                                    />
-                                  )}
+                                      {blk.rows.map((p, pi) =>
+                                        inline ? (
+                                          <PartRowInline
+                                            key={p.id}
+                                            productId={productId}
+                                            part={p}
+                                            groupCode={g.code}
+                                            clusterName={blk.cluster?.name ?? null}
+                                            onDeleted={() => setBusyId(null)}
+                                          />
+                                        ) : (
+                                          <tr
+                                            key={p.id}
+                                            className={cn(
+                                              'group border-b last:border-0',
+                                              canEdit && 'hover:bg-muted/40',
+                                              busyId === p.id && 'opacity-50',
+                                            )}
+                                          >
+                                            {canEdit && (
+                                              <td className="py-1.5">
+                                                <input
+                                                  type="checkbox"
+                                                  className="size-3.5 align-middle"
+                                                  aria-label={`Chọn ${p.part_name}`}
+                                                  checked={picked.includes(p.id)}
+                                                  onChange={(e) =>
+                                                    setPicked((cur) =>
+                                                      e.target.checked
+                                                        ? [...cur, p.id]
+                                                        : cur.filter((x) => x !== p.id),
+                                                    )
+                                                  }
+                                                />
+                                              </td>
+                                            )}
+                                            {/* Dòng nạp từ nguồn cũ không có part_no —
+                                            đánh số theo vị trí, không để cột trống */}
+                                            <td className="text-muted-foreground py-1.5 pr-2 text-right text-xs tabular-nums">
+                                              {p.part_no ?? pi + 1}
+                                            </td>
+                                            <td className="py-1.5 pr-3">
+                                              {nameOf(p, layoutOf(g.code))}
+                                            </td>
+                                            {(colsByGroup.get(g.code) ?? []).map((c) => (
+                                              <td
+                                                key={c.key}
+                                                className={cn(
+                                                  'py-1.5 pr-3',
+                                                  c.align === 'right' &&
+                                                    'text-right tabular-nums',
+                                                  c.key !== 'qty' &&
+                                                    'text-muted-foreground',
+                                                  (c.key === 'spec' ||
+                                                    c.key === 'dims' ||
+                                                    c.key === 'note' ||
+                                                    c.key === 'mat') &&
+                                                    'text-xs',
+                                                  c.key === 'code' &&
+                                                    'font-mono text-[11px]',
+                                                  c.key === 'note' && 'max-w-40 truncate',
+                                                )}
+                                                title={
+                                                  c.key === 'spec' &&
+                                                  specOf(p) &&
+                                                  p.material_note
+                                                    ? p.material_note
+                                                    : c.key === 'note'
+                                                      ? (p.note ?? undefined)
+                                                      : undefined
+                                                }
+                                              >
+                                                {cellOf(p, c.key)}
+                                              </td>
+                                            ))}
+                                            {canEdit && (
+                                              <td className="py-1.5">
+                                                {/* Hiện khi rê chuột / focus bàn phím */}
+                                                <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                                                  <button
+                                                    type="button"
+                                                    title="Nhân bản dòng"
+                                                    disabled={busyId === p.id}
+                                                    onClick={() => void duplicate(p)}
+                                                    className="hover:bg-muted rounded p-1 disabled:opacity-40"
+                                                  >
+                                                    <Copy className="text-muted-foreground size-3.5" />
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    title="Sửa dòng"
+                                                    onClick={() =>
+                                                      setEditing({
+                                                        part: p,
+                                                        group: g.code,
+                                                      })
+                                                    }
+                                                    className="hover:bg-muted rounded p-1"
+                                                  >
+                                                    <Pencil className="text-muted-foreground size-3.5" />
+                                                  </button>
+                                                </div>
+                                              </td>
+                                            )}
+                                          </tr>
+                                        ),
+                                      )}
+
+                                      {/* Tổng của cụm — luôn TÍNH, không nhập.
+                                          Dòng "Tổng cộng" của file Excel bỏ sót
+                                          2 dòng vì dải SUM chưa nới. */}
+                                      {!inline &&
+                                        blk.rows.length > 1 &&
+                                        layoutOf(g.code) !== 'supply' && (
+                                          <ClusterTotalRow
+                                            block={blk}
+                                            cols={colsByGroup.get(g.code) ?? []}
+                                            canEdit={canEdit}
+                                          />
+                                        )}
+
+                                      {/* Dòng trống cuối CỤM — vòng "tạo trực tiếp",
+                                          gõ xong là dòng mới vào đúng cụm đó. */}
+                                      {inline && (
+                                        <PartRowNew
+                                          productId={productId}
+                                          groupCode={g.code}
+                                          sectionTitle={sec.title}
+                                          unitBasis={sec.unitBasis}
+                                          clusterName={blk.cluster?.name ?? null}
+                                          materialKind={
+                                            blk.rows[0]?.material_kind ?? null
+                                          }
+                                        />
+                                      )}
+                                    </Fragment>
+                                  ))}
                                 </Fragment>
                               ))}
                             </tbody>
                           </table>
                         </div>
                       </div>
-                    ))}
+                    }
 
                     {canEdit && !hasQuery && !inline && (
                       <button
@@ -705,7 +1229,7 @@ export function ProductPartsCard({
               ) : (
                 <button
                   type="button"
-                  onClick={openNewSection}
+                  onClick={() => openNewSection()}
                   className="text-primary text-xs font-medium hover:underline"
                 >
                   + Khối mới
@@ -739,6 +1263,7 @@ export function ProductPartsCard({
           part={editing.part}
           defaultGroup={editing.group}
           groups={partGroups}
+          clusters={clusters}
           onClose={() => setEditing(null)}
         />
       )}

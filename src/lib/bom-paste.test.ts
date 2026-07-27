@@ -36,7 +36,7 @@ describe('parseBomPaste — dán từ biểu mẫu BOM gốc (13 cột)', () => 
 
   it('nhận đúng bố cục biểu mẫu và bỏ dòng tiêu đề / tổng cộng', () => {
     const r = parseBomPaste(paste)
-    expect(r.layout).toBe('bom-form')
+    expect(r.source).toBe('header')
     expect(r.rows).toHaveLength(2)
     expect(r.skipped.map((s) => s.reason)).toEqual(['dòng tiêu đề', 'dòng tổng cộng'])
   })
@@ -64,7 +64,7 @@ describe('parseBomPaste — dán gọn theo thứ tự lưới nhập', () => {
     const r = parseBomPaste(
       ['Chân trước\tHộp\t20\t40\t1\t500\t4', 'Tay\tTròn\t25\t25\t1.2\t380\t2'].join('\n'),
     )
-    expect(r.layout).toBe('compact')
+    expect(r.source).toBe('guess')
     expect(r.rows).toHaveLength(2)
     expect(r.rows[0]).toMatchObject({
       part_name: 'Chân trước',
@@ -115,5 +115,94 @@ describe('parseBomPaste — đầu vào lạ', () => {
   it('tách được khi dán bằng dấu ; hoặc nhiều khoảng trắng', () => {
     expect(parseBomPaste('Chân;Hộp;20;40;1;500;4').rows[0].part_name).toBe('Chân')
     expect(parseBomPaste('Chân   Hộp   20   40   1   500   4').rows[0].qty).toBe(4)
+  })
+})
+
+/**
+ * BIỂU MẪU MỚI (hiệu lực 28-02-2026) — chèn cột `Parts/ Bộ phận` giữa Stt và Tên
+ * chi tiết. Dòng lấy đúng từ `BOM_Shelter Home_ ghế 3 30x100 uống cong.xlsx`.
+ */
+describe('parseBomPaste — biểu mẫu BOM mới, có cột Cụm', () => {
+  const head =
+    'Stt\tParts/ Bộ phận\tTên chi tiết\tLoại\tDày\tRộng\tDài\tPhi hao chi tiết uốn\tSố lượng\tTổng chiều dài (m)\tTrọng lượng (kg)\tDiện tích sơn (M²)\tDày vật liệu (δ)\tGhi chú'
+  const rows = [
+    '\tCụm khung\tChân trước + Tay vin\tHộp\t30\t100\t1575\t\t2\t3.15\t3.6608922\t0.819\t1.7\t',
+    '\tCụm khung\tChân sau\tHộp\t30\t100\t475\t60\t2\t1.07\t1.24354116\t0.247\t1.7\t',
+    '\t\tPát góc\tHộp\t20\t40\t60\t\t4\t0.24\t0.08957952\t0.0288\t1.2\t',
+  ]
+
+  it('đọc cột Cụm và KHÔNG lệch quy cách một ô', () => {
+    const r = parseBomPaste([head, ...rows].join('\n'))
+    expect(r.source).toBe('header')
+    expect(r.rows).toHaveLength(3)
+    expect(r.rows[0]).toMatchObject({
+      cluster_name: 'Cụm khung',
+      part_name: 'Chân trước + Tay vin',
+      profile_shape: 'HOP',
+      dim_a_mm: 30,
+      dim_b_mm: 100,
+      cut_length_mm: 1575,
+      qty: 2,
+      wall_thickness_mm: 1.7,
+    })
+    // Dòng không thuộc cụm nào → về nhóm Rời, không phải chuỗi rỗng.
+    expect(r.rows[2].cluster_name).toBeNull()
+  })
+
+  it('lấy PHI HAO UỐN và bỏ các cột tính được', () => {
+    const r = parseBomPaste([head, ...rows].join('\n'))
+    expect(r.rows[1].bend_waste_mm).toBe(60)
+    expect(r.rows[0].bend_waste_mm).toBeNull()
+    // Tổng chiều dài + diện tích sơn là công thức của file — app tự tính lại.
+    expect(r.mapped.some((m) => m.field === 'cut_length_mm')).toBe(true)
+    expect(r.mapped.every((m) => m.label !== 'Tổng chiều dài')).toBe(true)
+  })
+
+  it('không có tiêu đề vẫn neo đúng nhờ vị trí cột "Loại"', () => {
+    const r = parseBomPaste(rows.join('\n'))
+    expect(r.source).toBe('guess')
+    expect(r.rows[0]).toMatchObject({
+      cluster_name: 'Cụm khung',
+      part_name: 'Chân trước + Tay vin',
+      dim_a_mm: 30,
+      cut_length_mm: 1575,
+      qty: 2,
+    })
+    expect(r.rows[1].bend_waste_mm).toBe(60)
+  })
+})
+
+describe('parseBomPaste — khối gỗ và khối vật tư', () => {
+  it('khối GỖ: không có cột "Loại", có cột Mộng', () => {
+    const r = parseBomPaste(
+      [
+        'Stt\tTên chi tiết\tDày\tRộng\tDài\tMộng\tSố lượng\tDiện Tích (m2)\tK. Lượng (m3)\tGhi chú',
+        '1\tTay Vịn\t20\t52\t520\t\t2\t0.14976\t0.0010816\t',
+        '2\tĐố trước\t25\t70\t2230\t15\t1\t0.4237\t0.0039025\t',
+      ].join('\n'),
+    )
+    expect(r.rows).toHaveLength(2)
+    expect(r.rows[0]).toMatchObject({ part_name: 'Tay Vịn', dim_a_mm: 20, qty: 2 })
+    expect(r.rows[1].tenon_mm).toBe(15)
+    // Không có cột Loại thì đừng bịa ra dạng.
+    expect(r.rows[0].profile_shape).toBeNull()
+  })
+
+  it('khối NGŨ KIM: chỉ có ĐVT · SL · Vật Liệu, không kích thước nào', () => {
+    const r = parseBomPaste(
+      [
+        'STT\tTÊN HÀNG HÓA\tĐVT\tSL/SP\tVật Liệu\tGhi chú',
+        '4\tBulon M6x25 + Londen + tán rút\tcái\t27\tsắt xi đen\t',
+        '5\tlục giác\t\t1\t\t',
+      ].join('\n'),
+    )
+    expect(r.rows).toHaveLength(2)
+    expect(r.rows[0]).toMatchObject({
+      part_name: 'Bulon M6x25 + Londen + tán rút',
+      unit: 'cái',
+      qty: 27,
+      material_note: 'sắt xi đen',
+    })
+    expect(r.rows[0].dim_a_mm).toBeNull()
   })
 })

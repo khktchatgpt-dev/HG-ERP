@@ -110,8 +110,12 @@ export function crossSectionM2(
     return mm2ToM2(a * b - x * y)
   }
 
-  // La (thanh dẹt) và Tấm: đặc, tiết diện = dày × rộng.
-  return pos(a) && pos(b) ? mm2ToM2(a * b) : null
+  // La (thanh dẹt) và Tấm: đặc, tiết diện = dày × rộng. Biểu mẫu BOM mới lấy dày
+  // từ cột "Dày vật liệu (δ)" chứ không phải cột "Dày" của quy cách tinh — dòng
+  // tole 1.2 × 50 khai Dày=1.2 ở δ, còn cột Dày để trống. Ưu tiên δ, thiếu mới
+  // rơi về cột Dày.
+  const thick = pos(wall) ? wall : a
+  return pos(thick) && pos(b) ? mm2ToM2(thick * b) : null
 }
 
 /** Chu vi mặt ngoài (m) — dùng tính diện tích sơn. */
@@ -133,14 +137,29 @@ export type PartGeometry = {
   dim_b_mm?: number | null
   wall_thickness_mm?: number | null
   cut_length_mm?: number | null
+  /** "Phi hao chi tiết uốn" (mm) — chi tiết uốn cong tốn thêm phôi. */
+  bend_waste_mm?: number | null
+  /** "Mộng" (mm) của khối gỗ/nệm — cộng vào chiều dài khi tính DT và m³. */
+  tenon_mm?: number | null
+  /** Profile tra bảng kg/m (vd TD-HG04 = 0.260) — thắng phép tính hình học. */
+  kg_per_m?: number | null
   qty?: number | null
 }
 
 export type PartDerived = {
-  /** Tổng chiều dài phôi (m) = dài cắt × số lượng. */
+  /** "Tổng chiều dài (m)" = (dài cắt + phi hao uốn) × SL / 1000. */
   total_length_m: number | null
   weight_kg: number | null
+  /** DT bề mặt theo chu vi THẬT (ống tròn = π·Ø). Cột chính. */
   paint_area_m2: number | null
+  /**
+   * DT theo công thức của biểu mẫu — chu vi hình hộp `(Dày+Rộng)×2` áp cho MỌI
+   * dạng, kể cả ống tròn. Giữ để đối chiếu với bảng kê giấy xưởng đang ký
+   * (quyết định D2); ống Ø16 ra 64 mm thay vì 50,3 mm, dư 27%.
+   */
+  paint_area_box_m2: number | null
+  /** "K. Lượng (m3)" của khối gỗ/nệm. */
+  volume_m3: number | null
 }
 
 const round = (v: number, d: number) => {
@@ -148,12 +167,26 @@ const round = (v: number, d: number) => {
   return Math.round(v * f) / f
 }
 
-/** Tính cả 3 đại lượng. Trường nào không đủ dữ liệu thì để null. */
+/**
+ * Tính mọi đại lượng dẫn xuất. Trường nào không đủ dữ liệu thì để null.
+ *
+ * Hai chiều dài KHÁC NHAU, đúng như biểu mẫu:
+ *   · `totalM` (dài + phi hao uốn) — dùng cho tổng chiều dài và khối lượng, vì
+ *     phần phôi uốn hao vẫn phải mua.
+ *   · `faceM`  (dài + mộng, KHÔNG có phi hao) — dùng cho diện tích và m³, vì bề
+ *     mặt sơn tính trên chi tiết thành phẩm chứ không trên phôi.
+ */
 export function calcPartDerived(p: PartGeometry): PartDerived {
   const len = pos(p.cut_length_mm) ? p.cut_length_mm : null
   const qty = pos(p.qty) ? p.qty : null
-  const totalM = len != null && qty != null ? (len / 1000) * qty : null
+  const bend = pos(p.bend_waste_mm) ? p.bend_waste_mm : 0
+  const tenon = pos(p.tenon_mm) ? p.tenon_mm : 0
 
+  const totalM = len != null && qty != null ? ((len + bend) / 1000) * qty : null
+  const faceM = len != null && qty != null ? ((len + tenon) / 1000) * qty : null
+
+  // Profile tra bảng kg/m (TD-HG04 = 0.260 kg/m) thắng phép tính hình học: đó là
+  // thanh định hình có gân, tiết diện không suy ra từ 3 kích thước bao được.
   const area = crossSectionM2(
     p.profile_shape,
     p.dim_a_mm,
@@ -161,16 +194,42 @@ export function calcPartDerived(p: PartGeometry): PartDerived {
     p.wall_thickness_mm,
   )
   const rho = p.material_kind ? MATERIAL_DENSITY[p.material_kind] : undefined
-  const weight =
-    area != null && totalM != null && rho != null ? area * totalM * rho : null
+  const weight = pos(p.kg_per_m)
+    ? totalM != null
+      ? p.kg_per_m * totalM
+      : null
+    : area != null && totalM != null && rho != null
+      ? area * totalM * rho
+      : null
 
+  // Chu vi hình hộp — không cần biết dạng, nên tính được cho cả dòng gỗ/nệm (là
+  // đúng: khối gỗ trong biểu mẫu không có cột "Loại").
+  const boxPer =
+    pos(p.dim_a_mm) && pos(p.dim_b_mm) ? (2 * (p.dim_a_mm + p.dim_b_mm)) / 1000 : null
+  const paintBox = boxPer != null && faceM != null ? boxPer * faceM : null
+
+  // Chu vi THẬT chỉ khác chu vi hộp ở profile tròn. Chi tiết KHÔNG khai dạng
+  // (gỗ, nệm, vải — biểu mẫu không cho các khối đó cột "Loại") vốn là khối chữ
+  // nhật, nên chu vi hộp CHÍNH LÀ chu vi thật. Trả null ở đây thì cột "Diện Tích
+  // (m2)" của khối gỗ/nệm trống trơn dù biểu mẫu gốc có số.
   const per = perimeterM(p.profile_shape, p.dim_a_mm, p.dim_b_mm)
-  const paint = per != null && totalM != null ? per * totalM : null
+  const paint =
+    per != null && faceM != null ? per * faceM : !p.profile_shape ? paintBox : null
+
+  // m³ chỉ có nghĩa với chi tiết ĐẶC khai theo 3 kích thước (gỗ, nệm, vải) — các
+  // dòng đó trong biểu mẫu không có cột "Loại", nên `profile_shape` rỗng là dấu
+  // hiệu nhận biết. Dòng khung có dạng thì để null, tránh đẻ cột m³ thừa.
+  const volume =
+    !p.profile_shape && pos(p.dim_a_mm) && pos(p.dim_b_mm) && faceM != null
+      ? ((p.dim_a_mm * p.dim_b_mm) / 1e6) * faceM
+      : null
 
   return {
     total_length_m: totalM == null ? null : round(totalM, 4),
     weight_kg: weight == null ? null : round(weight, 6),
     paint_area_m2: paint == null ? null : round(paint, 6),
+    paint_area_box_m2: paintBox == null ? null : round(paintBox, 6),
+    volume_m3: volume == null ? null : round(volume, 8),
   }
 }
 

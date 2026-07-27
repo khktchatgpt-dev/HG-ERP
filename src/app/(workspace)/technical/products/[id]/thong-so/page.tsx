@@ -5,7 +5,7 @@ import { HttpError } from '@/server/http'
 import { ProductSpecsTab } from '@/components/technical/ProductSpecsTab'
 import { toProductView } from '@/components/technical/product-sections'
 
-/** Tab Thông số — đặc tính SP + thông số in trên LSX (+ BOM gắn kho cũ, chỉ đọc). */
+/** Tab Thông số — đặc tính SP + thông số in trên LSX. Định mức nằm ở tab riêng. */
 export default async function ProductSpecsPage({
   params,
 }: {
@@ -19,7 +19,7 @@ export default async function ProductSpecsPage({
   let suggestions: Record<string, string[]> = {}
   try {
     ;[data, suggestions] = await Promise.all([
-      productsService.getBom(user, id),
+      productsService.getProfileInfo(user, id),
       productsService.fieldSuggestions(),
     ])
   } catch (e) {
@@ -30,13 +30,6 @@ export default async function ProductSpecsPage({
   return (
     <ProductSpecsTab
       product={toProductView(data.product)}
-      bom={data.lines.map((l) => ({
-        material_code: l.material_code,
-        material_name: l.material_name,
-        material_unit: l.material_unit,
-        qty_per_unit: l.qty_per_unit,
-        note: l.note,
-      }))}
       suggestions={suggestions}
       canEdit={canEdit}
     />

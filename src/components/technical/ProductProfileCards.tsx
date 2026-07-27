@@ -16,9 +16,12 @@ export type PartView = {
   unit_basis: string | null
   material_note: string | null
   tenon: string | null
+  /** "Mộng" (mm) — tham gia công thức diện tích / m³ của khối gỗ, nệm. */
+  tenon_mm: number | null
+  /** CỤM (`Parts/ Bộ phận`). null = dòng RỜI, trực thuộc sản phẩm. */
+  cluster_id: string | null
   part_no: number | null
   total_length_m: number | null
-  set_item_label: string | null
   part_name: string
   material_code: string | null
   material_kind: string | null
@@ -28,12 +31,33 @@ export type PartView = {
   dim_b_mm: number | null
   wall_thickness_mm: number | null
   cut_length_mm: number | null
+  /** "Phi hao chi tiết uốn" (mm) — cộng vào phôi, KHÔNG vào diện tích sơn. */
+  bend_waste_mm: number | null
+  /** Profile tra bảng kg/m (TD-HG04 = 0.260). */
+  kg_per_m: number | null
   qty: number
   unit: string | null
-  waste_pct: number
+  color: string | null
   weight_kg: number | null
   paint_area_m2: number | null
+  /** DT theo công thức biểu mẫu (chu vi hình hộp) — để đối chiếu bảng kê giấy. */
+  paint_area_box_m2: number | null
+  /** Khối GỖ/POLYWOOD tính khối lượng bằng m³ (file BOM: "K. Lượng (m3)"). */
+  volume_m3: number | null
+  /** "Xác nhận Phôi" — xưởng phôi tick. */
+  blank_confirmed_at: string | null
   note: string | null
+}
+
+/** Một CỤM của sản phẩm — dải gom các chi tiết trong tab Định mức. */
+export type ClusterView = {
+  id: string
+  name: string
+  qty_per_product: number | null
+  first_stage: string | null
+  final_stage: string | null
+  note: string | null
+  sort_order: number
 }
 
 export type SetItemView = {

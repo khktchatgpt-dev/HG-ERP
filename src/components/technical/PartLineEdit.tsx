@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
 import { calcPartDerived, deviation, isCalculable } from '@/lib/bom-calc'
-import type { PartGroupView, PartView } from './ProductProfileCards'
+import type { ClusterView, PartGroupView, PartView } from './ProductProfileCards'
 
 const cls =
   'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -73,6 +73,7 @@ export function PartLineEdit({
   part,
   defaultGroup,
   groups,
+  clusters,
   onClose,
 }: {
   productId: string
@@ -80,6 +81,7 @@ export function PartLineEdit({
   part: PartView | null
   defaultGroup: string
   groups: PartGroupView[]
+  clusters: ClusterView[]
   onClose: () => void
 }) {
   const router = useRouter()
@@ -136,7 +138,9 @@ export function PartLineEdit({
       unit_basis: txtOrNull(fd.get('unit_basis')),
       material_note: txtOrNull(fd.get('material_note')),
       tenon: txtOrNull(fd.get('tenon')),
-      set_item_label: txtOrNull(fd.get('set_item_label')),
+      tenon_mm: numOrNull(fd.get('tenon_mm')),
+      // Gõ tên cụm → server khớp cụm có sẵn hoặc tạo mới. Bỏ trống = dòng Rời.
+      cluster_name: txtOrNull(fd.get('cluster_name')),
       material_code: txtOrNull(fd.get('material_code')),
       material_kind: txtOrNull(fd.get('material_kind')),
       profile_shape: txtOrNull(fd.get('profile_shape')),
@@ -145,14 +149,17 @@ export function PartLineEdit({
       dim_b_mm: numOrNull(fd.get('dim_b_mm')),
       wall_thickness_mm: numOrNull(fd.get('wall_thickness_mm')),
       cut_length_mm: numOrNull(fd.get('cut_length_mm')),
+      bend_waste_mm: numOrNull(fd.get('bend_waste_mm')),
+      kg_per_m: numOrNull(fd.get('kg_per_m')),
       qty: numOrNull(fd.get('qty')) ?? 0,
       unit: txtOrNull(fd.get('unit')),
-      waste_pct: numOrNull(fd.get('waste_pct')) ?? 0,
+      color: txtOrNull(fd.get('color')),
       // Khối lượng: lấy số người nhập, bỏ trống thì dùng số tính từ hình học.
       weight_kg: numOrNull(fd.get('weight_kg')) ?? derived.weight_kg,
-      // Tổng dài và diện tích sơn luôn suy từ hình học — không có ô nhập riêng.
+      // Tổng dài, diện tích và m³ luôn suy từ hình học — không có ô nhập riêng.
       total_length_m: derived.total_length_m,
       paint_area_m2: derived.paint_area_m2,
+      volume_m3: derived.volume_m3,
       note: txtOrNull(fd.get('note')),
     }
     if (!body.part_name) return toast.error('Thiếu thông tin', 'Cần tên chi tiết')
@@ -228,14 +235,22 @@ export function PartLineEdit({
             ))}
           </select>
         </Field>
-        <Field label="Món trong bộ (nếu là bộ)">
+        {/* CỤM — gõ tên có sẵn thì gán vào cụm đó, tên mới thì server tạo cụm.
+            Bỏ trống = dòng RỜI, trực thuộc sản phẩm. */}
+        <Field label="Cụm (Parts / Bộ phận)">
           <input
-            name="set_item_label"
-            maxLength={100}
-            defaultValue={part?.set_item_label ?? ''}
+            name="cluster_name"
+            maxLength={120}
+            defaultValue={clusters.find((c) => c.id === part?.cluster_id)?.name ?? ''}
             className={cls}
-            placeholder="Bàn / Ghế đơn / Bank I"
+            placeholder="Cụm khung / Cụm mê"
+            list="cluster-names-edit"
           />
+          <datalist id="cluster-names-edit">
+            {clusters.map((c) => (
+              <option key={c.id} value={c.name} />
+            ))}
+          </datalist>
         </Field>
         <Field label="Tiêu đề khối" wide>
           <input
@@ -401,15 +416,48 @@ export function PartLineEdit({
             placeholder="cái / kg / mét"
           />
         </Field>
-        <Field label="Phí hao (%)">
+        {/* Biểu mẫu ghi phi hao bằng MILIMET cộng thẳng vào chiều dài cắt (chi
+            tiết uốn cong tốn thêm phôi), không phải phần trăm. */}
+        <Field label="Phi hao uốn (mm)">
           <input
-            name="waste_pct"
+            name="bend_waste_mm"
             type="number"
-            step="0.01"
+            step="0.1"
             min="0"
-            max="100"
-            defaultValue={part?.waste_pct ?? 0}
+            defaultValue={part?.bend_waste_mm ?? ''}
             className={cls}
+          />
+        </Field>
+        <Field label="Mộng (mm)">
+          <input
+            name="tenon_mm"
+            type="number"
+            step="0.1"
+            min="0"
+            defaultValue={part?.tenon_mm ?? ''}
+            className={cls}
+          />
+        </Field>
+        <Field label="Màu">
+          <input
+            name="color"
+            maxLength={100}
+            defaultValue={part?.color ?? ''}
+            className={cls}
+            placeholder="7 màu / xi trắng"
+          />
+        </Field>
+        {/* Thanh định hình có gân — tiết diện không suy ra từ 3 kích thước bao
+            được, phải tra bảng. Ví dụ ngay trong file mẫu: TD-HG04 = 0.260 kg/m. */}
+        <Field label="kg / mét (profile tra bảng)">
+          <input
+            name="kg_per_m"
+            type="number"
+            step="0.0001"
+            min="0"
+            defaultValue={part?.kg_per_m ?? ''}
+            className={cls}
+            placeholder="0.260"
           />
         </Field>
         <Field label="Khối lượng (kg)">

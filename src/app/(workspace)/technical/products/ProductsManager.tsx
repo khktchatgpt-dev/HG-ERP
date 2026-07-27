@@ -130,6 +130,7 @@ const BOM_TONE: Record<BomStatus, 'gray' | 'amber' | 'green'> = {
 export function ProductsManager({
   products,
   total,
+  fuzzy,
   page,
   pageSize,
   counts,
@@ -138,6 +139,8 @@ export function ProductsManager({
   imageUrls,
   canEdit,
 }: {
+  /** Kết quả là GẦN ĐÚNG (0098) — khớp chặt ra 0 dòng nên đã tìm theo độ giống. */
+  fuzzy?: boolean
   products: ProductRow[]
   total: number
   page: number
@@ -177,16 +180,32 @@ export function ProductsManager({
       }
       if (!('page' in patch)) next.delete('page') // đổi lọc → về trang 1
       const qs = next.toString()
-      router.push(qs ? `/technical/products?${qs}` : '/technical/products')
+      // `replace`: lọc/tìm không phải là "đi tới trang khác", đẩy vào lịch sử chỉ
+      // khiến nút Back phải bấm hàng chục lần mới ra khỏi thư viện.
+      router.replace(qs ? `/technical/products?${qs}` : '/technical/products')
     },
     [router, sp],
   )
 
+  /**
+   * Đẩy từ khoá xuống URL sau 1 GIÂY ngừng gõ.
+   *
+   * Mỗi lần đẩy là một lượt điều hướng → server truy vấn lại cả trang, nên nhịp
+   * này phải theo tốc độ gõ của người dùng chứ không theo từng phím. 400ms cũ
+   * vẫn bắn giữa chừng khi gõ chậm hoặc gõ tiếng Việt có dấu (bộ gõ nhả phím
+   * thành nhiều nhịp), thành ra vài lượt gọi cho một từ khoá.
+   *
+   * `router.replace` chứ không `push`: gõ "ghế" mà đẩy 1 mục lịch sử cho mỗi
+   * nhịp thì bấm Back phải qua từng ký tự mới thoát khỏi ô tìm.
+   */
   useEffect(() => {
-    if (q === filters.q) return
-    const t = setTimeout(() => applyParams({ q: q.trim() || undefined }), 400)
+    if (q.trim() === (filters.q ?? '')) return
+    const t = setTimeout(() => applyParams({ q: q.trim() || undefined }), 1000)
     return () => clearTimeout(t)
   }, [q, filters.q, applyParams])
+
+  /** Đang chờ nhịp debounce / server trả về — để ô tìm nói "đang tìm…". */
+  const searching = q.trim() !== (filters.q ?? '')
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const hasFilter =
@@ -630,7 +649,7 @@ export function ProductsManager({
                 value={q}
                 onChange={setQ}
                 placeholder="Tìm mã, tên, mã KH đặt, khách hàng…"
-                icon="⌕"
+                icon={searching ? '⋯' : '⌕'}
                 className="w-72"
               />
               <ToolbarSelect
@@ -697,6 +716,16 @@ export function ProductsManager({
             </div>
           }
         />
+
+        {/* Kết quả gần đúng phải NÓI RA: người tra mã mà nhận nhầm sản phẩm khác
+            là chuyện tốn tiền, không được lặng lẽ đưa thứ na ná. */}
+        {fuzzy && (
+          <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            Không có kết quả khớp đúng “<b>{filters.q}</b>” — đây là {products.length} sản
+            phẩm có tên/mã <b>gần giống</b>, xếp theo độ giống. Kiểm lại mã trước khi
+            dùng.
+          </div>
+        )}
 
         {products.length === 0 ? (
           <EmptyState

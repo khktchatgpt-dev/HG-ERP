@@ -3,7 +3,7 @@ import { entriesRepo } from './entries.repo'
 import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { bomLinesRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import {
@@ -116,60 +116,14 @@ export const componentsService = {
     await componentsRepo.replaceAll(lsxId, input)
   },
 
-  /**
-   * LƯU NGƯỢC bảng định hình của 1 dòng SP thành BOM KỸ THUẬT của SP (user
-   * chốt 07/2026: thống kê tự tạo BOM từ định hình — lần sau "Gợi ý từ BOM"
-   * là có sẵn). Chỉ dòng có VẬT TƯ mới lên BOM (BOM = định mức vật tư/SP);
-   * nhiều chi tiết cùng vật tư được GỘP (unique product×material), ghi chú
-   * giữ tên chi tiết để truy ngược. GHI ĐÈ BOM hiện có — UI phải confirm.
-   */
-  async saveAsBom(
-    user: User,
-    lsxId: string,
-    orderLineId: string,
-  ): Promise<{ product_code: string; bom_lines: number; skipped_no_material: number }> {
-    await assertAction(user, 'production.shaping.manage')
-    const { orderLines } = await lsxWithLines(lsxId)
-    const line = orderLines.find((l) => l.id === orderLineId)
-    if (!line) throw BadRequest('Dòng SP không thuộc lệnh này')
-
-    const comps = (await componentsRepo.listByLsx(lsxId)).filter(
-      (c) => c.order_line_id === orderLineId,
-    )
-    if (comps.length === 0) {
-      throw BadRequest('SP chưa có dòng chi tiết nào — nhập bảng định hình trước')
-    }
-    const withMat = comps.filter((c) => c.material_id)
-    if (withMat.length === 0) {
-      throw BadRequest(
-        'Chưa dòng nào gắn vật tư — BOM là định mức vật tư/SP, gắn vật tư trước khi lưu làm BOM',
-      )
-    }
-
-    // Gộp theo vật tư: qty_per_unit = Σ CT/SP; note = các chi tiết dùng nó.
-    const byMat = new Map<string, { qty: number; names: string[] }>()
-    for (const c of withMat) {
-      const cur = byMat.get(c.material_id!) ?? { qty: 0, names: [] }
-      cur.qty += Number(c.qty_per_unit)
-      cur.names.push(`${c.name} ×${c.qty_per_unit}`)
-      byMat.set(c.material_id!, cur)
-    }
-    await bomLinesRepo.replaceAll(
-      line.product_id,
-      [...byMat.entries()].map(([material_id, v]) => ({
-        material_id,
-        qty_per_unit: v.qty,
-        note: `Từ định hình LSX: ${v.names.join(', ')}`,
-      })),
-    )
-    // BOM giờ đã có thật → cờ SP sang 'done' (đầu vào cảnh báo BR-07).
-    await productsRepo.patch(line.product_id, { bom_status: 'done' })
-    return {
-      product_code: line.product_code,
-      bom_lines: byMat.size,
-      skipped_no_material: comps.length - withMat.length,
-    }
-  },
+  // `saveAsBom` (lưu ngược bảng định hình thành BOM kỹ thuật) ĐÃ BỎ ở 0096.
+  //
+  // Nó ghi đè TRỌN BỘ định mức của sản phẩm bằng vài dòng "vật tư + số lượng"
+  // gộp từ bảng định hình. Khi còn hai bảng định mức thì vô hại vì nó ghi vào
+  // bảng cũ (technical_bom_lines). Gộp về một bảng rồi thì một cú bấm từ màn
+  // Sản xuất sẽ quét sạch quy cách, tiết diện, chiều dài cắt, khối lượng và
+  // diện tích sơn mà Kỹ thuật đã dựng — không có đường lùi. Định mức là hồ sơ
+  // của Kỹ thuật, chỉ sửa từ tab Định mức, theo từng dòng.
 
   /**
    * Gợi ý điền sẵn — KHÔNG ghi DB, trả dòng cho grid để thống kê sửa:
@@ -185,19 +139,36 @@ export const componentsService = {
     const { orderLines } = await lsxWithLines(lsxId)
 
     if (source === 'bom') {
+      // 0096: đọc ĐỊNH MỨC (technical_product_parts) — bảng duy nhất còn lại.
+      // Giàu hơn BOM cũ: có sẵn tên chi tiết thật và quy cách phôi, nên điền
+      // thẳng vào cột spec_* thay vì để thống kê gõ lại. KHÔNG có material_id
+      // vì định mức không gắn danh mục kho — người nhập tự chọn vật tư nếu cần.
       const out: ComponentInput[] = []
       for (const line of orderLines) {
-        const bom = await bomLinesRepo.listWithMaterials(line.product_id)
-        for (const b of bom) {
+        const [parts, clusters] = await Promise.all([
+          productProfileRepo.parts(line.product_id),
+          productProfileRepo.clusters(line.product_id),
+        ])
+        // 0097: CỤM là bản ghi thật (cột `Parts/ Bộ phận` của biểu mẫu BOM mới).
+        // Trước đây chỗ này phải MƯỢN `set_item_label` — nhãn món trong bộ — làm
+        // cụm, vì định mức chưa có cấp cụm nào khác để lấy.
+        const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
+        for (const p of parts) {
           out.push({
             order_line_id: line.id,
-            cluster: null,
-            name: b.material_name, // tên tạm — người nhập đổi thành tên chi tiết
-            material_id: b.material_id,
-            qty_per_unit: b.qty_per_unit,
+            cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
+            name: p.part_name,
+            material_id: null,
+            material_type: p.material_kind ?? null,
+            spec_thickness_mm: p.dim_a_mm ?? null,
+            spec_width_mm: p.dim_b_mm ?? null,
+            spec_length_mm: p.cut_length_mm ?? null,
+            wall_thickness_mm: p.wall_thickness_mm ?? null,
+            unit: p.unit ?? null,
+            qty_per_unit: Number(p.qty),
             dm_kg: null,
             pcs_per_bar: null,
-            note: b.note ?? null,
+            note: p.material_code ?? null,
           })
         }
       }

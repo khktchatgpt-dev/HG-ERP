@@ -31,6 +31,7 @@ type Row = DraftPart & { key: number; material_kind: string | null }
 const blank = (key: number): Row => ({
   key,
   part_no: null,
+  cluster_name: null,
   part_name: '',
   profile_shape: null,
   material_kind: null,
@@ -38,8 +39,11 @@ const blank = (key: number): Row => ({
   dim_b_mm: null,
   wall_thickness_mm: null,
   cut_length_mm: null,
+  bend_waste_mm: null,
+  tenon_mm: null,
   qty: null,
   unit: null,
+  material_note: null,
   weight_kg: null,
   note: null,
 })
@@ -75,7 +79,7 @@ export function PartsBulkEntry({
   const [group, setGroup] = useState(defaultGroup)
   const [sectionTitle, setSectionTitle] = useState('')
   const [unitBasis, setUnitBasis] = useState('')
-  const [setLabel, setSetLabel] = useState('')
+  const [clusterName, setClusterName] = useState('')
   const [material, setMaterial] = useState('')
   const [rows, setRows] = useState<Row[]>(() => [blank(0)])
   const [pasteOpen, setPasteOpen] = useState(false)
@@ -83,6 +87,8 @@ export function PartsBulkEntry({
   const [skipped, setSkipped] = useState<
     { line: number; text: string; reason: string }[]
   >([])
+  /** Cột nào vừa nhận ra — bày lại để người dán kiểm trước khi lưu. */
+  const [mapped, setMapped] = useState<{ index: number; label: string }[]>([])
   const [busy, setBusy] = useState(false)
 
   const patch = (key: number, p: Partial<Row>) =>
@@ -117,14 +123,19 @@ export function PartsBulkEntry({
       toast.error('Không đọc được dòng nào', 'Kiểm tra lại vùng đã copy')
       return
     }
-    // Vùng dán từ Excel không có cột vật liệu — dùng ô "Vật liệu chung" ở đầu.
+    // Vùng dán không có cột hệ vật liệu (nhôm/sắt) — dùng ô "Vật liệu chung".
     setRows(res.rows.map((r) => ({ ...r, key: seq.current++, material_kind: null })))
     setSkipped(res.skipped)
+    setMapped(res.mapped)
     setPasteOpen(false)
     setPasteText('')
+    // Cụm đọc được từ vùng dán thì đừng để ô "Cụm chung" đè lên.
+    if (res.rows.some((r) => r.cluster_name)) setClusterName('')
     toast.success(
       `Đã đọc ${res.rows.length} dòng`,
-      res.layout === 'bom-form' ? 'Nhận dạng: biểu mẫu BOM' : 'Nhận dạng: bảng gọn',
+      res.source === 'header'
+        ? 'Nhận cột theo tiêu đề của vùng dán'
+        : 'Không có dòng tiêu đề — đoán cột theo vị trí, kiểm lại giúp',
     )
   }
 
@@ -141,18 +152,23 @@ export function PartsBulkEntry({
             group_code: group,
             section_title: sectionTitle.trim() || null,
             unit_basis: unitBasis.trim() || null,
-            set_item_label: setLabel.trim() || null,
             lines: valid.map((r) => ({
               part_no: r.part_no,
               part_name: r.part_name.trim(),
+              // Cụm ĐỌC ĐƯỢC TỪ VÙNG DÁN thắng ô khai chung: biểu mẫu mới ghi
+              // cụm trên từng dòng, một lần dán có thể gồm nhiều cụm.
+              cluster_name: r.cluster_name ?? clusterName.trim() ?? null,
               material_kind: r.material_kind ?? material ?? null,
               profile_shape: r.profile_shape,
               dim_a_mm: r.dim_a_mm,
               dim_b_mm: r.dim_b_mm,
               wall_thickness_mm: r.wall_thickness_mm,
               cut_length_mm: r.cut_length_mm,
+              bend_waste_mm: r.bend_waste_mm,
+              tenon_mm: r.tenon_mm,
               qty: r.qty,
               unit: r.unit,
+              material_note: r.material_note,
               weight_kg: r.weight_kg,
               note: r.note,
             })),
@@ -216,12 +232,12 @@ export function PartsBulkEntry({
             </select>
           </label>
           <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-            Món trong bộ (nếu là bộ)
+            Cụm (Parts / Bộ phận) — áp cho cả lô
             <input
-              value={setLabel}
-              onChange={(e) => setSetLabel(e.target.value)}
+              value={clusterName}
+              onChange={(e) => setClusterName(e.target.value)}
               className={head}
-              placeholder="Bàn / Ghế đơn"
+              placeholder="Cụm khung / Cụm mê"
             />
           </label>
           <label className="flex flex-col gap-1 text-sm sm:col-span-2">
@@ -274,6 +290,22 @@ export function PartsBulkEntry({
                 Đọc vào lưới
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Cột nào đã nhận ra — bày ra để soi trước khi lưu, vì đọc lệch một ô
+            là toàn bộ quy cách sai mà nhìn bảng nháp rất khó thấy. */}
+        {mapped.length > 0 && (
+          <div className="text-muted-foreground flex flex-wrap items-center gap-1 rounded-md border p-2.5 text-xs">
+            <span className="font-medium">Cột đã nhận:</span>
+            {mapped.map((m) => (
+              <span
+                key={m.index}
+                className="rounded bg-zinc-100 px-1.5 py-px tabular-nums dark:bg-zinc-800"
+              >
+                {m.index + 1}. {m.label}
+              </span>
+            ))}
           </div>
         )}
 
