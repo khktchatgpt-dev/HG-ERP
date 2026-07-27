@@ -1,4 +1,10 @@
--- 0090_hr_leave_requests.sql — VÁ SCHEMA DRIFT: bảng đơn nghỉ phép.
+-- 0100_hr_leave_requests.sql — VÁ SCHEMA DRIFT: bảng đơn nghỉ phép.
+--
+-- ĐÁNH SỐ LẠI khi merge nhánh `fix/adm-housekeeping` (28/07/2026): file ra đời
+-- với số 0090, nhưng main đã dùng 0090 cho `production_transfers_worker`. Đổi
+-- sang số trống kế tiếp cho khỏi nhập nhằng thứ tự chạy. Nội dung KHÔNG đổi —
+-- và vì đây vốn là migration VÁ (bảng đã tồn tại sẵn, lệnh đều idempotent) nên
+-- đổi tên không ảnh hưởng gì tới DB đang chạy.
 --
 -- Bảng `hr_leave_requests` đang CHẠY THẬT trên DB (có trong src/lib/database.types.ts,
 -- module src/modules/dept/hr/* đọc/ghi hằng ngày) nhưng KHÔNG có migration nào tạo nó

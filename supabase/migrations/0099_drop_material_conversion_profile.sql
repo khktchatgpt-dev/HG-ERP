@@ -1,4 +1,10 @@
--- 0071_drop_material_conversion_profile.sql
+-- 0099_drop_material_conversion_profile.sql
+--
+-- ĐÁNH SỐ LẠI khi merge nhánh `refactor/remove-abc-conversion` (28/07/2026):
+-- file này ra đời với số 0071, nhưng trong lúc nhánh nằm chờ thì main đã dùng
+-- 0071 cho `order_tracking_commercial`. Hai file cùng số làm thứ tự chạy migration
+-- thành nhập nhằng, nên đổi sang số trống kế tiếp. Nội dung KHÔNG đổi, và migration
+-- này CHƯA chạy trên DB thật (cột `conversion_profile` vẫn còn) nên đổi tên an toàn.
 -- Bỏ hẳn khái niệm "loại quy đổi" A/B/C: cột warehouse_materials.conversion_profile
 -- (thêm ở 0055) không còn dùng. Form đặt vật tư & danh mục nay lái quy đổi TRỰC TIẾP
 -- theo price_unit (0053): có price_unit → dòng đặt có ô SL-tính-giá nhập tay; unit2_factor
