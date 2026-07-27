@@ -6,7 +6,8 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
 
 /**
  * Layout workspace Kế hoạch - Cung ứng. Shell ở layout (chuẩn CLAUDE.md).
- * Quyền vào: theo `canEnterWorkspace` (openView — mọi NV xem chéo được).
+ * Quyền vào: theo `canEnterWorkspace` — từ 0086 xem chéo phải có quyền tường
+ * minh `workspace.view.planning` (openView đã bỏ).
  * Ghi vẫn bị service chặn theo phòng "Kế Hoạch Sản Xuất-cung ứng".
  */
 export default async function PlanningLayout({

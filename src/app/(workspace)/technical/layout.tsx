@@ -8,8 +8,9 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
  * Layout workspace Kỹ thuật. Shell (sidebar + topbar sky) đặt ở đây nên
  * giữ nguyên khi điều hướng — chỉ nội dung thay bằng loading.tsx.
  *
- * Quyền vào: theo `canEnterWorkspace` (openView — mọi NV xem chéo được, xem
- * workspaces/access.ts). Ghi vẫn bị service chặn theo phòng Kỹ thuật.
+ * Quyền vào: theo `canEnterWorkspace` — từ 0086 xem chéo phải có quyền tường
+ * minh `workspace.view.technical` (openView đã bỏ, xem workspaces/access.ts).
+ * Ghi vẫn bị service chặn theo phòng Kỹ thuật.
  */
 export default async function TechnicalLayout({
   children,

@@ -6,9 +6,9 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
 
 /**
  * Layout workspace Kho. Shell (sidebar + topbar) đặt ở đây nên giữ nguyên khi
- * điều hướng. Quyền vào: theo `canEnterWorkspace` (openView — mọi NV xem chéo
- * được, bao trùm cả nhu cầu Cung ứng xem phiếu kho trước đây). Ghi vẫn bị
- * service chặn theo phòng Kho.
+ * điều hướng. Quyền vào: theo `canEnterWorkspace` — từ 0086 xem chéo phải có
+ * quyền tường minh `workspace.view.warehouse` (openView đã bỏ); quyền này được
+ * seed cho Cung ứng để xem phiếu kho. Ghi vẫn bị service chặn theo phòng Kho.
  */
 export default async function WarehouseLayout({
   children,

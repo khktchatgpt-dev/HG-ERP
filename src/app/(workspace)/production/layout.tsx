@@ -6,8 +6,9 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
 
 /**
  * Layout workspace Sản xuất (xưởng) — plan-production-workspace P1.
- * Quyền vào: theo `canEnterWorkspace` (openView — mọi NV xem chéo được, bao
- * trùm cả nhu cầu Cung ứng giám sát tiến độ trước đây, SX-P5).
+ * Quyền vào: theo `canEnterWorkspace` — từ 0086 xem chéo phải có quyền tường
+ * minh `workspace.view.production` (openView đã bỏ); quyền này được seed cho
+ * Kế hoạch & Cung ứng để giám sát tiến độ (SX-P5).
  * Ghi (tiến độ/sản lượng) vẫn do service guard.
  */
 export default async function ProductionLayout({

@@ -437,12 +437,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: '▤',
             roles: ['admin'],
           },
-          {
-            href: '/admin/defect-codes',
-            label: 'Nguyên nhân lỗi SX',
-            icon: '⚑',
-            roles: ['admin'],
-          },
+          // "Nguyên nhân lỗi SX" (/admin/defect-codes) đã gỡ khỏi nav: bảng
+          // production_defect_codes (0067) có sẵn nhưng TRANG QUẢN LÝ CHƯA DỰNG
+          // → bấm vào là 404. Thêm lại item này khi có màn thật.
           {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',
