@@ -3,26 +3,44 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Check, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { SHAPE_OPTIONS, calcPartDerived, isCalculable } from '@/lib/bom-calc'
+import {
+  derivedPreviewFor,
+  inputCellsFor,
+  type InputCell,
+  type InputKey,
+} from './part-layouts'
 import type { PartView } from './ProductProfileCards'
 
 const inp =
   'w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-zinc-300 focus:border-sky-500 focus:bg-background focus:outline-none dark:hover:border-zinc-700'
 
-/** Các ô sửa được tại chỗ. Bỏ qua các cột dẫn xuất — chúng tự tính. */
-type Draft = {
-  part_no: string
-  part_name: string
-  profile_shape: string
-  dim_a_mm: string
-  dim_b_mm: string
-  wall_thickness_mm: string
-  cut_length_mm: string
-  qty: string
-  unit: string
-  note: string
+/**
+ * Bản nháp một dòng đang gõ. Chứa MỌI trường của mọi họ khối; ô nào thật sự hiện
+ * do `inputCellsFor(group)` quyết định — xem `part-layouts.ts`. Các cột dẫn xuất
+ * (tổng dài, khối lượng, diện tích, m³) không nằm ở đây vì chúng tự tính.
+ */
+type Draft = Record<InputKey, string>
+
+const EMPTY: Draft = {
+  part_no: '',
+  cluster_name: '',
+  part_name: '',
+  profile_shape: '',
+  dim_a_mm: '',
+  dim_b_mm: '',
+  wall_thickness_mm: '',
+  cut_length_mm: '',
+  bend_waste_mm: '',
+  tenon_mm: '',
+  qty: '',
+  unit: '',
+  material_note: '',
+  color: '',
+  note: '',
 }
 
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -33,31 +51,23 @@ const nOrNull = (v: string) => {
   return Number.isFinite(x) ? x : null
 }
 
-const fromPart = (p: PartView): Draft => ({
+const fromPart = (p: PartView, clusterName: string | null): Draft => ({
   part_no: s(p.part_no),
+  cluster_name: clusterName ?? '',
   part_name: p.part_name,
   profile_shape: s(p.profile_shape),
   dim_a_mm: s(p.dim_a_mm),
   dim_b_mm: s(p.dim_b_mm),
   wall_thickness_mm: s(p.wall_thickness_mm),
   cut_length_mm: s(p.cut_length_mm),
+  bend_waste_mm: s(p.bend_waste_mm),
+  tenon_mm: s(p.tenon_mm),
   qty: s(p.qty),
   unit: s(p.unit),
+  material_note: s(p.material_note),
+  color: s(p.color),
   note: s(p.note),
 })
-
-const EMPTY: Draft = {
-  part_no: '',
-  part_name: '',
-  profile_shape: '',
-  dim_a_mm: '',
-  dim_b_mm: '',
-  wall_thickness_mm: '',
-  cut_length_mm: '',
-  qty: '',
-  unit: '',
-  note: '',
-}
 
 /** Thân yêu cầu gửi lên — dùng chung cho sửa và thêm. */
 const toBody = (d: Draft, materialKind: string | null) => {
@@ -68,6 +78,8 @@ const toBody = (d: Draft, materialKind: string | null) => {
     dim_b_mm: nOrNull(d.dim_b_mm),
     wall_thickness_mm: nOrNull(d.wall_thickness_mm),
     cut_length_mm: nOrNull(d.cut_length_mm),
+    bend_waste_mm: nOrNull(d.bend_waste_mm),
+    tenon_mm: nOrNull(d.tenon_mm),
     qty: nOrNull(d.qty),
   }
   const der = calcPartDerived(geo)
@@ -75,26 +87,36 @@ const toBody = (d: Draft, materialKind: string | null) => {
     ...geo,
     part_no: nOrNull(d.part_no),
     part_name: d.part_name.trim(),
+    // Chuỗi rỗng phải thành null chứ không phải "" — bỏ trống ô Cụm nghĩa là đưa
+    // dòng về nhóm Rời, còn undefined thì server hiểu là "không đụng tới cụm".
+    cluster_name: d.cluster_name.trim() || null,
     unit: d.unit.trim() || null,
+    material_note: d.material_note.trim() || null,
+    color: d.color.trim() || null,
     note: d.note.trim() || null,
     total_length_m: der.total_length_m,
     paint_area_m2: der.paint_area_m2,
-    _weight: der.weight_kg,
+    volume_m3: der.volume_m3,
+    _derived: der,
   }
 }
 
+/** Các ô của một dòng, dựng theo họ khối. */
 function Cells({
+  cells,
   draft,
   set,
   onEnter,
-  weight,
+  preview,
   shapeOff,
   nameRef,
 }: {
+  cells: InputCell[]
   draft: Draft
-  set: (k: keyof Draft, v: string) => void
+  set: (k: InputKey, v: string) => void
   onEnter: () => void
-  weight: number | null
+  /** Số tự tính hiện ở cuối lưới (KL hoặc m³) — null nếu họ khối không có. */
+  preview: { label: string; value: number | null; digits: number } | null
   shapeOff: boolean
   /** Ô tên — dòng thêm mới cần giữ để trả con trỏ về sau khi lưu. */
   nameRef?: React.RefObject<HTMLInputElement | null>
@@ -105,90 +127,93 @@ function Cells({
       onEnter()
     }
   }
-  const numCells: [keyof Draft, string][] = [
-    ['dim_a_mm', 'Dày A'],
-    ['dim_b_mm', 'Rộng B'],
-    ['wall_thickness_mm', 'Dày thành'],
-    ['cut_length_mm', 'Dài cắt'],
-    ['qty', 'SL'],
-  ]
+
   return (
     <>
-      <td className="py-0.5 pr-1">
-        <input
-          value={draft.part_no}
-          onChange={(e) => set('part_no', e.target.value)}
-          onKeyDown={key}
-          className={`${inp} text-right`}
-          aria-label="STT"
-        />
-      </td>
-      <td className="py-0.5 pr-2">
-        <input
-          ref={nameRef}
-          value={draft.part_name}
-          onChange={(e) => set('part_name', e.target.value)}
-          onKeyDown={key}
-          className={inp}
-          placeholder="Tên chi tiết…"
-          aria-label="Tên chi tiết"
-        />
-      </td>
-      <td className="py-0.5 pr-2">
-        <select
-          value={draft.profile_shape}
-          onChange={(e) => set('profile_shape', e.target.value)}
-          className={inp}
-          aria-label="Dạng"
-        >
-          <option value="">—</option>
-          {SHAPE_OPTIONS.map((o) => (
-            <option key={o.code} value={o.code}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </td>
-      {numCells.map(([k, label]) => (
-        <td key={k} className="py-0.5 pr-1">
-          <input
-            value={draft[k]}
-            onChange={(e) => set(k, e.target.value)}
-            onKeyDown={key}
-            inputMode="decimal"
-            className={`${inp} text-right`}
-            aria-label={label}
-          />
+      {cells.map((c) => (
+        <td key={c.key} className="py-0.5 pr-1">
+          {c.kind === 'shape' ? (
+            <select
+              value={draft.profile_shape}
+              onChange={(e) => set('profile_shape', e.target.value)}
+              className={inp}
+              aria-label={c.label}
+            >
+              <option value="">—</option>
+              {SHAPE_OPTIONS.map((o) => (
+                <option key={o.code} value={o.code}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              ref={c.key === 'part_name' ? nameRef : undefined}
+              value={draft[c.key]}
+              onChange={(e) => set(c.key, e.target.value)}
+              onKeyDown={key}
+              inputMode={c.kind === 'num' ? 'decimal' : undefined}
+              // Ô Cụm gợi ý các cụm đã có của sản phẩm; gõ tên mới thì tạo cụm.
+              list={c.kind === 'cluster' ? 'cluster-names' : undefined}
+              placeholder={c.placeholder}
+              className={cn(inp, c.kind === 'num' && 'text-right')}
+              aria-label={c.label}
+            />
+          )}
         </td>
       ))}
-      <td className="py-0.5 pr-1">
-        <input
-          value={draft.unit}
-          onChange={(e) => set('unit', e.target.value)}
-          onKeyDown={key}
-          className={inp}
-          aria-label="ĐVT"
-        />
-      </td>
-      <td
-        className="text-muted-foreground py-0.5 pr-2 text-right text-xs tabular-nums"
-        title={
-          shapeOff ? 'Dạng này tiết diện tuỳ ý — không tính được khối lượng' : undefined
-        }
-      >
-        {weight != null ? weight.toFixed(3) : shapeOff ? '—' : ''}
-      </td>
-      <td className="py-0.5 pr-1">
-        <input
-          value={draft.note}
-          onChange={(e) => set('note', e.target.value)}
-          onKeyDown={key}
-          className={inp}
-          aria-label="Ghi chú"
-        />
-      </td>
+      {preview && (
+        <td
+          className="text-muted-foreground py-0.5 pr-2 text-right text-xs tabular-nums"
+          title={
+            shapeOff ? 'Dạng này tiết diện tuỳ ý — không tính được khối lượng' : undefined
+          }
+        >
+          {preview.value != null
+            ? preview.value.toFixed(preview.digits)
+            : shapeOff
+              ? '—'
+              : ''}
+        </td>
+      )}
     </>
   )
+}
+
+/** Số cột của lưới nhập một họ khối — để tính colSpan cho dải tiêu đề. */
+export function inlineColSpan(groupCode: string): number {
+  return inputCellsFor(groupCode).length + (derivedPreviewFor(groupCode) ? 1 : 0) + 1
+}
+
+/** Hàng tiêu đề của lưới nhập — cùng nguồn định nghĩa với các ô. */
+export function InlineHead({ groupCode }: { groupCode: string }) {
+  const cells = inputCellsFor(groupCode)
+  const preview = derivedPreviewFor(groupCode)
+  return (
+    <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
+      {cells.map((c) => (
+        <th
+          key={c.key}
+          className={cn(c.w, 'py-1.5 pr-1 font-medium', c.kind === 'num' && 'text-right')}
+        >
+          {c.label}
+        </th>
+      ))}
+      {preview && (
+        <th className="w-20 py-1.5 pr-2 text-right font-medium">{preview.label}</th>
+      )}
+      <th className="w-16 py-1.5" />
+    </tr>
+  )
+}
+
+function usePreview(draft: Draft, materialKind: string | null, groupCode: string) {
+  const body = toBody(draft, materialKind)
+  const spec = derivedPreviewFor(groupCode)
+  const preview = spec
+    ? { label: spec.label, value: body._derived[spec.key], digits: spec.digits }
+    : null
+  return { body, preview }
 }
 
 /**
@@ -198,17 +223,20 @@ function Cells({
 export function PartRowInline({
   productId,
   part,
-  colSpanExtra,
+  groupCode,
+  clusterName,
   onDeleted,
 }: {
   productId: string
   part: PartView
-  colSpanExtra: number
+  groupCode: string
+  /** Tên cụm hiện tại của dòng — đổ vào ô Cụm để sửa được ngay trên dòng. */
+  clusterName: string | null
   onDeleted: () => void
 }) {
   const router = useRouter()
   const toast = useToast()
-  const [draft, setDraft] = useState<Draft>(() => fromPart(part))
+  const [draft, setDraft] = useState<Draft>(() => fromPart(part, clusterName))
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
   const saving = useRef(false)
@@ -219,15 +247,15 @@ export function PartRowInline({
   //
   // Chỉ ghi đè khi người dùng KHÔNG sửa dở: dòng khác lưu cũng làm mới cả trang,
   // ghi đè vô điều kiện sẽ xoá mất phần đang gõ ở dòng này.
-  const serverSnapshot = JSON.stringify(fromPart(part))
+  const serverSnapshot = JSON.stringify(fromPart(part, clusterName))
   const [baseline, setBaseline] = useState(serverSnapshot)
   if (serverSnapshot !== baseline) {
     setBaseline(serverSnapshot)
-    if (JSON.stringify(draft) === baseline) setDraft(fromPart(part))
+    if (JSON.stringify(draft) === baseline) setDraft(fromPart(part, clusterName))
   }
 
-  const set = (k: keyof Draft, v: string) => setDraft((d) => ({ ...d, [k]: v }))
-  const body = toBody(draft, part.material_kind)
+  const set = (k: InputKey, v: string) => setDraft((d) => ({ ...d, [k]: v }))
+  const { body, preview } = usePreview(draft, part.material_kind, groupCode)
   const dirty = serverSnapshot !== JSON.stringify(draft)
 
   async function save() {
@@ -237,10 +265,10 @@ export function PartRowInline({
     saving.current = true
     setBusy(true)
     try {
-      const { _weight, ...rest } = body
+      const { _derived, ...rest } = body
       await api(`/api/dept/technical/products/${productId}/parts/${part.id}`, {
         method: 'PATCH',
-        body: { ...rest, weight_kg: part.weight_kg ?? _weight },
+        body: { ...rest, weight_kg: part.weight_kg ?? _derived.weight_kg },
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 1200)
@@ -277,13 +305,18 @@ export function PartRowInline({
       className={busy ? 'border-b opacity-60' : 'border-b last:border-0'}
     >
       <Cells
+        cells={inputCellsFor(groupCode)}
         draft={draft}
         set={set}
         onEnter={() => void save()}
-        weight={part.weight_kg ?? body._weight}
+        preview={
+          preview && preview.label.startsWith('KL')
+            ? { ...preview, value: part.weight_kg ?? preview.value }
+            : preview
+        }
         shapeOff={!!draft.profile_shape && !isCalculable(draft.profile_shape)}
       />
-      <td className="py-0.5" colSpan={colSpanExtra}>
+      <td className="py-0.5">
         <div className="flex items-center justify-end gap-1">
           {saved && <Check className="size-3.5 text-emerald-600" />}
           {dirty && !saved && (
@@ -306,7 +339,7 @@ export function PartRowInline({
 }
 
 /**
- * Dòng TRỐNG ở cuối mỗi khối — gõ tên + số lượng rồi Enter là tạo dòng mới, và
+ * Dòng TRỐNG ở cuối mỗi cụm — gõ tên + số lượng rồi Enter là tạo dòng mới, và
  * dòng trống mới lại xuất hiện. Đây là vòng "tạo định mức trực tiếp trên bảng".
  */
 export function PartRowNew({
@@ -314,45 +347,48 @@ export function PartRowNew({
   groupCode,
   sectionTitle,
   unitBasis,
-  setItemLabel,
+  clusterName,
   materialKind,
-  colSpanExtra,
 }: {
   productId: string
   groupCode: string
   sectionTitle: string | null
   unitBasis: string | null
-  setItemLabel: string | null
+  /** Cụm mà dòng mới rơi vào — dòng trống nằm ngay dưới cụm nào thì theo cụm đó. */
+  clusterName: string | null
   materialKind: string | null
-  colSpanExtra: number
 }) {
   const router = useRouter()
   const toast = useToast()
-  const [draft, setDraft] = useState<Draft>(EMPTY)
+  const [draft, setDraft] = useState<Draft>({
+    ...EMPTY,
+    cluster_name: clusterName ?? '',
+  })
   const [busy, setBusy] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
 
-  const set = (k: keyof Draft, v: string) => setDraft((d) => ({ ...d, [k]: v }))
-  const body = toBody(draft, materialKind)
+  const set = (k: InputKey, v: string) => setDraft((d) => ({ ...d, [k]: v }))
+  const { body, preview } = usePreview(draft, materialKind, groupCode)
   const ready = !!body.part_name && !!body.qty && body.qty > 0
 
   async function create() {
     if (!ready || busy) return
     setBusy(true)
     try {
-      const { _weight, ...rest } = body
+      const { _derived, ...rest } = body
       await api(`/api/dept/technical/products/${productId}/parts`, {
         method: 'POST',
         body: {
           ...rest,
-          weight_kg: _weight,
+          weight_kg: _derived.weight_kg,
           group_code: groupCode,
           section_title: sectionTitle,
           unit_basis: unitBasis,
-          set_item_label: setItemLabel,
         },
       })
-      setDraft(EMPTY)
+      // Giữ lại cụm + ĐVT: gõ tiếp trong cùng cụm là việc thường, gõ lại mỗi dòng
+      // thì mất hết cái lợi của lưới nhập liên tục.
+      setDraft({ ...EMPTY, cluster_name: draft.cluster_name, unit: draft.unit })
       router.refresh()
       // Con trỏ về ô tên để gõ dòng tiếp — nhập liên tục không cần chuột.
       //
@@ -373,14 +409,15 @@ export function PartRowNew({
   return (
     <tr className={busy ? 'bg-muted/20 opacity-60' : 'bg-muted/20'}>
       <Cells
+        cells={inputCellsFor(groupCode)}
         draft={draft}
         set={set}
         onEnter={() => void create()}
-        weight={body._weight}
+        preview={preview}
         shapeOff={!!draft.profile_shape && !isCalculable(draft.profile_shape)}
         nameRef={nameRef}
       />
-      <td className="py-0.5" colSpan={colSpanExtra}>
+      <td className="py-0.5">
         <button
           type="button"
           onClick={() => void create()}

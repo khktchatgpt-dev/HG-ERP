@@ -16,8 +16,7 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn() },
 }))
 vi.mock('@/modules/dept/technical/technical.repo', () => ({
-  bomLinesRepo: { replaceAll: vi.fn(), listWithMaterials: vi.fn() },
-  productsRepo: { patch: vi.fn() },
+  productProfileRepo: { parts: vi.fn(), clusters: vi.fn() },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
@@ -25,10 +24,9 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
 }))
 
 import { componentsService } from './components.service'
-import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
-import { bomLinesRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const thongKe = { id: 'u-tk', role: 'employee' } as unknown as User
@@ -42,70 +40,51 @@ const LINE = {
   qty: 10,
 }
 
-const comp = (over: Record<string, unknown>) => ({
-  id: 'c?',
-  production_order_id: 'lsx1',
-  order_line_id: 'line1',
-  cluster: null,
-  name: '?',
-  material_id: null,
-  qty_per_unit: 1,
-  dm_kg: null,
-  pcs_per_bar: null,
-  final_stage: null,
-  note: null,
-  ...over,
-})
-
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
   vi.mocked(ordersRepo.listLines).mockResolvedValue([LINE] as never)
+  vi.mocked(productProfileRepo.clusters).mockResolvedValue([
+    { id: 'cl1', name: 'Cụm khung' },
+  ] as never)
 })
 
-describe('componentsService.saveAsBom — định hình → BOM kỹ thuật', () => {
-  it('gộp chi tiết cùng vật tư, ghi đè BOM, bom_status → done', async () => {
-    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
-      comp({ id: 'c1', name: 'KHUNG CHÂN', material_id: 'm-sat', qty_per_unit: 2 }),
-      comp({ id: 'c2', name: 'THANH GIẰNG', material_id: 'm-sat', qty_per_unit: 4 }),
-      comp({ id: 'c3', name: 'TỰA LƯNG', material_id: 'm-nhom', qty_per_unit: 1 }),
-      comp({ id: 'c4', name: 'NỆM (chưa gắn VT)', material_id: null }),
+describe('componentsService.suggest("bom") — gợi ý từ ĐỊNH MỨC (0096/0097)', () => {
+  it('map quy cách phôi sang cột spec_*, KHÔNG gắn material_id', async () => {
+    vi.mocked(productProfileRepo.parts).mockResolvedValue([
+      {
+        part_name: 'Chân bàn',
+        cluster_id: 'cl1',
+        material_kind: 'AL',
+        material_code: 'VT-AL-TRON-60',
+        dim_a_mm: 60,
+        dim_b_mm: null,
+        wall_thickness_mm: 1.1,
+        cut_length_mm: 570,
+        qty: 4,
+        unit: 'Cái',
+      },
     ] as never)
 
-    const out = await componentsService.saveAsBom(thongKe, 'lsx1', 'line1')
+    const out = await componentsService.suggest(thongKe, 'lsx1', 'bom')
 
-    expect(out).toEqual({ product_code: 'SP1', bom_lines: 2, skipped_no_material: 1 })
-    expect(bomLinesRepo.replaceAll).toHaveBeenCalledWith('p1', [
-      expect.objectContaining({
-        material_id: 'm-sat',
-        qty_per_unit: 6, // 2 + 4 gộp
-        note: expect.stringContaining('KHUNG CHÂN ×2'),
-      }),
-      expect.objectContaining({ material_id: 'm-nhom', qty_per_unit: 1 }),
-    ])
-    expect(productsRepo.patch).toHaveBeenCalledWith('p1', { bom_status: 'done' })
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      order_line_id: 'line1',
+      cluster: 'Cụm khung',
+      name: 'Chân bàn', // tên chi tiết thật, không phải tên vật tư kho
+      spec_thickness_mm: 60,
+      spec_length_mm: 570,
+      wall_thickness_mm: 1.1,
+      qty_per_unit: 4,
+      unit: 'Cái',
+    })
+    // Định mức KHÔNG gắn danh mục kho — người nhập tự chọn vật tư nếu cần.
+    expect(out[0].material_id).toBeNull()
   })
 
-  it('SP không có dòng chi tiết → 400', async () => {
-    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([] as never)
-    await expect(
-      componentsService.saveAsBom(thongKe, 'lsx1', 'line1'),
-    ).rejects.toMatchObject({ status: 400 })
-    expect(bomLinesRepo.replaceAll).not.toHaveBeenCalled()
-  })
-
-  it('không dòng nào gắn vật tư → 400 (BOM = định mức vật tư)', async () => {
-    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
-      comp({ id: 'c1', name: 'KHUNG', material_id: null }),
-    ] as never)
-    await expect(
-      componentsService.saveAsBom(thongKe, 'lsx1', 'line1'),
-    ).rejects.toMatchObject({ status: 400 })
-  })
-
-  it('dòng SP không thuộc lệnh → 400', async () => {
-    await expect(
-      componentsService.saveAsBom(thongKe, 'lsx1', 'line-la'),
-    ).rejects.toMatchObject({ status: 400 })
+  it('SP chưa có định mức → không gợi ý dòng nào', async () => {
+    vi.mocked(productProfileRepo.parts).mockResolvedValue([] as never)
+    await expect(componentsService.suggest(thongKe, 'lsx1', 'bom')).resolves.toEqual([])
   })
 })

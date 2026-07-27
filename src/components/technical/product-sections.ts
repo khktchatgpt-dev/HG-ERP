@@ -97,14 +97,6 @@ export function toProductView(p: Product): ProductView {
   }
 }
 
-export type BomLineView = {
-  material_code: string
-  material_name: string
-  material_unit: string
-  qty_per_unit: number
-  note: string | null
-}
-
 /**
  * Hồ sơ chia thành từng phần sửa riêng, thay vì mở một form dài sửa tất cả.
  * Mỗi phần PATCH đúng các trường của nó (`productUpdateSchema` là partial).

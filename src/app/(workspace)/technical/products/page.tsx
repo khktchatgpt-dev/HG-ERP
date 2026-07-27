@@ -24,7 +24,7 @@ export default async function TechnicalProductsPage({
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
 
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
-  const { rows, total } = await productsService.listLite(user, {
+  const { rows, total, fuzzy } = await productsService.listLite(user, {
     q,
     customer_name: customer === 'all' ? undefined : customer,
     bom_status: bom === 'all' ? undefined : (bom as BomStatus),
@@ -71,6 +71,7 @@ export default async function TechnicalProductsPage({
         has_bom: docFlags[p.id]?.bom ?? false,
       }))}
       total={total}
+      fuzzy={fuzzy ?? false}
       page={page}
       pageSize={PAGE_SIZE}
       counts={stats}

@@ -27,7 +27,10 @@ export default async function ProductPartsPage({
       productId={id}
       parts={data.parts}
       partGroups={data.groups}
+      clusters={data.clusters}
       setItems={data.setItems}
+      paintCoverage={data.product.paint_coverage_m2_per_kg ?? null}
+      baseMaterial={data.product.base_material ?? null}
       canEdit={canEdit}
     />
   )

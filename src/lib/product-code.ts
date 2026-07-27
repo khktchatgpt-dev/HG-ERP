@@ -2,11 +2,20 @@
  * Quy tắc mã sản phẩm — đã chốt 25/07/2026
  * (`docs/product-profile-redesign-plan.md` §4 và §7).
  *
- *     CH000201HG-IN
- *     ││└──┬──┘ │ └── vật liệu khung (2 ký tự)
- *     ││   │    └──── "HG" cố định
- *     ││   └───────── số thứ tự 6 chữ số, ĐẾM RIÊNG theo từng loại
- *     └┴───────────── loại sản phẩm (2 ký tự)
+ *     CH0201HG-IN
+ *     ││└─┬┘ │ └── vật liệu khung (2 ký tự)
+ *     ││  │  └──── "HG" cố định
+ *     ││  └─────── số thứ tự 4 chữ số, ĐẾM RIÊNG theo từng loại
+ *     └┴────────── loại sản phẩm (2 ký tự)
+ *
+ * Rút từ 6 xuống 4 chữ số ngày 27/07/2026: serial lớn nhất thực tế mới là 197
+ * (loại CH) nên 6 chữ số chỉ tạo ra ba số 0 vô nghĩa ở MỌI mã. 4 chữ số trùng
+ * đúng dạng mã cũ `S0049HG-AL` mà xưởng đang quen đọc, vẫn dư tới 9.999 SP/loại.
+ * 445 mã cũ đã được đánh lại cùng ngày (giữ nguyên serial, chỉ bớt số 0).
+ *
+ * `CODE_RE` vẫn nhận 4–6 chữ số: mã 6 số còn nằm trên chứng từ đã in và trong
+ * các file Excel cũ, dán lại vào ô tìm kiếm phải parse được chứ không thành
+ * "mã lạ". Chỉ `buildProductCode` là luôn sinh ra 4 chữ số.
  *
  * Kiểm trên dữ liệu thật (451 SP, 26/07/2026): 445 mã đúng quy tắc, 6 mã cũ
  * nhập tay từ trước (`RHONE-CHAIR`, `28256-228`…) — parse trả null, không phá
@@ -43,11 +52,12 @@ export const FRAME_MATERIAL_CODES = FRAME_MATERIALS.map((m) => m.code)
 export type ProductTypeCode = (typeof PRODUCT_TYPES)[number]['code']
 export type FrameMaterialCode = (typeof FRAME_MATERIALS)[number]['code']
 
-const SERIAL_DIGITS = 6
-/** Hết số thứ tự 6 chữ số của một loại — 999.999 SP, thực tế không chạm tới. */
+const SERIAL_DIGITS = 4
+/** Hết số thứ tự 4 chữ số của một loại — 9.999 SP, gấp ~50 lần mức đang dùng. */
 export const MAX_SERIAL = 10 ** SERIAL_DIGITS - 1
 
-const CODE_RE = /^([A-Z]{2})(\d{6})HG-([A-Z]{2})$/
+/** Nhận 4–6 chữ số để mã 6 số trên chứng từ cũ vẫn parse được (xem đầu file). */
+const CODE_RE = /^([A-Z]{2})(\d{4,6})HG-([A-Z]{2})$/
 
 export type ParsedCode = { type: string; serial: number; material: string }
 

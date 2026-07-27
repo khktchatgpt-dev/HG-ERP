@@ -209,37 +209,6 @@ export function LsxComponentsPanel({
     setDirty(true)
   }
 
-  /** Lưu bảng của 1 SP thành BOM kỹ thuật (ghi đè BOM cũ — confirm trước). */
-  async function saveAsBom(line: OrderLine) {
-    if (dirty) {
-      toast.error('Bảng chưa lưu', 'Bấm "Lưu bảng chi tiết" trước, rồi mới lưu làm BOM')
-      return
-    }
-    const ok = await confirm({
-      title: `Lưu làm BOM kỹ thuật cho ${line.product_code}?`,
-      description:
-        'BOM hiện có của SP sẽ bị GHI ĐÈ bằng định mức vật tư gộp từ bảng này (chi tiết cùng vật tư được cộng dồn). Lần sau "Gợi ý từ BOM" sẽ dùng bản mới.',
-      confirmLabel: 'Ghi đè BOM',
-      tone: 'danger',
-    })
-    if (!ok) return
-    setBusy(true)
-    try {
-      const r = await api<{ bom_lines: number; skipped_no_material: number }>(
-        `/api/dept/production/lsx/${lsxId}/components/save-bom`,
-        { method: 'POST', body: { order_line_id: line.id } },
-      )
-      toast.success(
-        `Đã lưu BOM ${line.product_code}`,
-        `${r.bom_lines} dòng vật tư${r.skipped_no_material ? ` · bỏ ${r.skipped_no_material} dòng chưa gắn vật tư` : ''}`,
-      )
-    } catch (e) {
-      toast.error('Lưu BOM thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function suggest(source: 'bom' | 'previous') {
     if (rows.length > 0) {
       const ok = await confirm({
@@ -792,20 +761,9 @@ export function LsxComponentsPanel({
                     </div>
                     {editable && (
                       <div className="flex gap-1.5">
-                        {items.length > 0 && (
-                          <button
-                            disabled={busy || dirty}
-                            onClick={() => void saveAsBom(line)}
-                            title={
-                              dirty
-                                ? 'Lưu bảng chi tiết trước rồi mới lưu làm BOM'
-                                : 'Ghi đè BOM kỹ thuật của SP bằng định mức vật tư từ bảng này'
-                            }
-                            className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-white disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                          >
-                            ↥ Lưu làm BOM kỹ thuật
-                          </button>
-                        )}
+                        {/* Nút "Lưu làm BOM kỹ thuật" đã bỏ ở 0096: định mức là
+                            hồ sơ của Kỹ thuật, chỉ sửa ở tab Định mức theo từng
+                            dòng — không cho màn Sản xuất ghi đè trọn bộ. */}
                         <button
                           disabled={busy}
                           onClick={() => addRow(line.id, 'part')}

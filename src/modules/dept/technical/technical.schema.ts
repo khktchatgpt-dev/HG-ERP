@@ -110,21 +110,9 @@ export const productSetImageSchema = z.object({
 })
 
 /** BOM per-SP (FR-ENG-04): PUT ghi đè trọn bộ dòng định mức. */
-export const bomLineInputSchema = z.object({
-  material_id: z.string().uuid(),
-  qty_per_unit: z.coerce.number().positive(),
-  note: z.string().trim().max(500).optional().nullable(),
-})
-
-export const bomSaveSchema = z.object({
-  lines: z
-    .array(bomLineInputSchema)
-    .max(500)
-    .refine(
-      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
-      'Vật tư bị trùng dòng trong BOM',
-    ),
-})
+// `bomLineInputSchema` / `bomSaveSchema` ĐÃ BỎ ở 0096 cùng bảng
+// technical_bom_lines. Định mức chỉ còn một loại — xem `productPartInputSchema`
+// bên dưới, sửa theo từng dòng chứ không ghi đè trọn bộ.
 
 /**
  * Một dòng ĐỊNH MỨC của hồ sơ sản phẩm (0092) — tự mô tả vật tư bằng quy cách,
@@ -140,7 +128,14 @@ export const productPartCreateSchema = z.object({
   unit_basis: z.string().trim().max(40).optional().nullable(),
   material_note: z.string().trim().max(200).optional().nullable(),
   tenon: z.string().trim().max(100).optional().nullable(),
-  set_item_label: z.string().trim().max(100).optional().nullable(),
+  tenon_mm: z.coerce.number().min(0).optional().nullable(),
+  /**
+   * Cụm — nhận MỘT trong hai: `cluster_id` khi chọn từ danh sách, hoặc
+   * `cluster_name` khi gõ tên mới (service tạo cụm rồi gán). Cả hai để trống =
+   * dòng RỜI, trực thuộc sản phẩm.
+   */
+  cluster_id: z.string().uuid().optional().nullable(),
+  cluster_name: z.string().trim().max(120).optional().nullable(),
   part_no: z.coerce.number().int().optional().nullable(),
   // Quy cách vật tư — mã chuẩn hoá dạng text để sau này nối sang kho.
   material_code: z.string().trim().max(80).optional().nullable(),
@@ -151,22 +146,56 @@ export const productPartCreateSchema = z.object({
   dim_b_mm: z.coerce.number().min(0).optional().nullable(),
   wall_thickness_mm: z.coerce.number().min(0).optional().nullable(),
   cut_length_mm: z.coerce.number().min(0).optional().nullable(),
+  bend_waste_mm: z.coerce.number().min(0).optional().nullable(),
+  kg_per_m: z.coerce.number().min(0).optional().nullable(),
   qty: z.coerce.number().positive(),
   unit: z.string().trim().max(30).optional().nullable(),
-  waste_pct: z.coerce.number().min(0).max(100).default(0),
+  color: z.string().trim().max(100).optional().nullable(),
   // Đại lượng dẫn xuất: app tính từ hình học (src/lib/bom-calc.ts), người dùng
   // ghi đè được — profile gân / hợp kim lạ thì số hình học không đúng.
   weight_kg: z.coerce.number().min(0).optional().nullable(),
   total_length_m: z.coerce.number().min(0).optional().nullable(),
   paint_area_m2: z.coerce.number().min(0).optional().nullable(),
+  volume_m3: z.coerce.number().min(0).optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
   sort_order: z.coerce.number().int().optional(),
 })
+
+/**
+ * CỤM (`Parts/ Bộ phận`). `qty_per_product` và lộ trình để trống là bình thường
+ * — biểu mẫu BOM không có 2 ô đó, chỉ sổ `Tổng TĐ SX` của xưởng mới cần.
+ */
+export const productClusterCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  qty_per_product: z.coerce.number().positive().optional().nullable(),
+  first_stage: z.string().trim().max(30).optional().nullable(),
+  final_stage: z.string().trim().max(30).optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(),
+  sort_order: z.coerce.number().int().optional(),
+})
+
+export const productClusterUpdateSchema = productClusterCreateSchema.partial()
+
+/**
+ * Gom nhiều dòng vào một cụm. `cluster_id: null` = đưa các dòng về RỜI.
+ * `cluster_name` = tạo cụm mới rồi gom vào (thao tác "Gom thành cụm…").
+ */
+export const productPartsAssignClusterSchema = z
+  .object({
+    part_ids: z.array(z.string().uuid()).min(1).max(500),
+    cluster_id: z.string().uuid().nullable().optional(),
+    cluster_name: z.string().trim().min(1).max(120).optional(),
+  })
+  .refine((v) => !(v.cluster_id && v.cluster_name), {
+    message: 'Chọn cụm có sẵn hoặc đặt tên cụm mới, không dùng cả hai',
+  })
 
 export const productPartUpdateSchema = productPartCreateSchema.partial()
 
 export type ProductPartInput = z.infer<typeof productPartCreateSchema>
 export type ProductPartPatch = z.infer<typeof productPartUpdateSchema>
+export type ProductClusterInput = z.infer<typeof productClusterCreateSchema>
+export type ProductClusterPatch = z.infer<typeof productClusterUpdateSchema>
 
 /**
  * Nhập NHIỀU dòng định mức một lượt (lưới nhập / dán từ Excel).
@@ -178,25 +207,29 @@ export const productPartsBulkSchema = z.object({
   group_code: z.string().trim().min(1).max(40),
   section_title: z.string().trim().max(300).optional().nullable(),
   unit_basis: z.string().trim().max(40).optional().nullable(),
-  set_item_label: z.string().trim().max(100).optional().nullable(),
   lines: z
     .array(
       z.object({
         part_no: z.coerce.number().int().optional().nullable(),
         part_name: z.string().trim().min(1).max(300),
+        /** Cột `Parts/ Bộ phận` dán từ Excel — tên cụm, service tự tạo/khớp. */
+        cluster_name: z.string().trim().max(120).optional().nullable(),
         material_kind: z.string().trim().max(10).optional().nullable(),
         profile_shape: z.string().trim().max(20).optional().nullable(),
         profile_code: z.string().trim().max(30).optional().nullable(),
         material_code: z.string().trim().max(80).optional().nullable(),
         material_note: z.string().trim().max(200).optional().nullable(),
         tenon: z.string().trim().max(100).optional().nullable(),
+        tenon_mm: z.coerce.number().min(0).optional().nullable(),
         dim_a_mm: z.coerce.number().min(0).optional().nullable(),
         dim_b_mm: z.coerce.number().min(0).optional().nullable(),
         wall_thickness_mm: z.coerce.number().min(0).optional().nullable(),
         cut_length_mm: z.coerce.number().min(0).optional().nullable(),
+        bend_waste_mm: z.coerce.number().min(0).optional().nullable(),
+        kg_per_m: z.coerce.number().min(0).optional().nullable(),
         qty: z.coerce.number().positive(),
         unit: z.string().trim().max(30).optional().nullable(),
-        waste_pct: z.coerce.number().min(0).max(100).default(0),
+        color: z.string().trim().max(100).optional().nullable(),
         weight_kg: z.coerce.number().min(0).optional().nullable(),
         note: z.string().trim().max(500).optional().nullable(),
       }),

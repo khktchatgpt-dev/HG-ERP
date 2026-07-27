@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { searchTokens } from '@/lib/search-text'
 import type { BomStatus } from './technical.schema'
 
 export type ProductPacking = {
@@ -56,29 +57,26 @@ export type Product = {
   max_load_kg: number | null
   assembly: 'assembled' | 'kd' | null
   set_contents: string | null
+  // Đầu biểu mẫu "BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN" (0097).
+  /** Ô "Nhiên Liệu" — 'AL' | 'IR' | 'IN', nguồn tra tỉ trọng. Mặc định của SP. */
+  base_material: string | null
+  /** Ô "KL.Thực tế / BK" — khối lượng cân thật, để so với khối lượng tính ra. */
+  actual_weight_kg: number | null
+  /** m² sơn phủ được trên 1 kg sơn. Biểu mẫu hard-code 5. */
+  paint_coverage_m2_per_kg: number | null
+  /** Khối kiểm soát tài liệu ISO (HG-QT-07/M02). */
+  bom_rev: number | null
+  bom_effective_date: string | null
+  bom_prepared_by: string | null
+  bom_approved_by: string | null
   is_active: boolean
   created_at: string
   updated_at: string
 }
 
-export type BomLine = {
-  id: string
-  product_id: string
-  material_id: string
-  qty_per_unit: number
-  note: string | null
-  sort_order: number
-}
-
-export type BomLineWithMaterial = BomLine & {
-  material_code: string
-  material_name: string
-  material_unit: string
-}
-
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
@@ -113,8 +111,26 @@ export type ProductCounts = {
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
 export const NO_CUSTOMER_FILTER = '__common'
 
-const searchOr = (q: string) =>
-  `name.ilike.%${q}%,code.ilike.%${q}%,customer_item_code.ilike.%${q}%,customer_name.ilike.%${q}%`
+/**
+ * Lọc theo từ khoá trên cột `search_text` (0098) — cột đã gộp sẵn mã, mã cũ, tên,
+ * tên theo khách, mã KH đặt và nhãn khách, đã hạ chữ thường và BỎ DẤU.
+ *
+ * `code_legacy` nằm trong cột đó: mã cũ (`S0049HG-AL`) là mã mà mọi file Excel,
+ * bản vẽ và chứng từ giấy đang gọi — người dùng gõ nó chứ không gõ mã mới
+ * (`ST000049HG-AL`). Thiếu nó thì tra mã trong file ra 0 kết quả.
+ *
+ * Mỗi từ là một điều kiện `ilike` RIÊNG và chúng AND với nhau, nên "ghe florenz"
+ * ra đúng "Ghế xếp Florenz" — cách cũ ghép cả chuỗi vào một `%…%` nên đòi hai từ
+ * phải nằm liền nhau đúng thứ tự.
+ */
+function applySearch<T extends { ilike: (col: string, pat: string) => T }>(
+  query: T,
+  q: string,
+): T {
+  let out = query
+  for (const token of searchTokens(q)) out = out.ilike('search_text', `%${token}%`)
+  return out
+}
 
 export const productsRepo = {
   async list(filter: {
@@ -137,7 +153,7 @@ export const productsRepo = {
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
     if (filter.bom_status) q = q.eq('bom_status', filter.bom_status)
-    if (filter.q) q = q.or(searchOr(filter.q))
+    if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     const to = from + filter.page_size - 1
     q = q.range(from, to)
@@ -162,11 +178,33 @@ export const productsRepo = {
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
     if (filter.bom_status) q = q.eq('bom_status', filter.bom_status)
-    if (filter.q) q = q.or(searchOr(filter.q))
+    if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     return { rows: (data ?? []) as ProductLite[], total: count ?? 0 }
+  },
+
+  /**
+   * Id các SP GẦN GIỐNG từ khoá, xếp theo độ giống (0098). Chỉ gọi khi tìm khớp
+   * chặt ra 0 dòng — xem `productsService.list`.
+   */
+  async fuzzyIds(q: string, limit = 50): Promise<string[]> {
+    const { data, error } = await db().rpc('technical_products_fuzzy', {
+      p_q: q,
+      p_limit: limit,
+    })
+    if (error) throw new Error(error.message)
+    return (data ?? []).map((r: { id: string }) => r.id)
+  },
+
+  /** Như `listLite` nhưng lấy đúng một tập id, GIỮ thứ tự id truyền vào. */
+  async listLiteByIds(ids: string[]): Promise<ProductLite[]> {
+    if (ids.length === 0) return []
+    const { data } = await db().from('technical_products').select(LITE_COLS).in('id', ids)
+    const byId = new Map((data ?? []).map((r) => [(r as ProductLite).id, r]))
+    // `.in()` trả về theo thứ tự bảng, còn thứ tự ta cần là thứ tự ĐỘ GIỐNG.
+    return ids.map((id) => byId.get(id)).filter(Boolean) as ProductLite[]
   },
 
   /**
@@ -380,7 +418,10 @@ export type ProductPart = {
   /** Cột "Vật liệu" trên dòng: "Nhựa", "7 màu". */
   material_note: string | null
   tenon: string | null
-  set_item_label: string | null
+  /** "Mộng" (mm) — tham gia công thức diện tích / m³ của khối gỗ, nệm. */
+  tenon_mm: number | null
+  /** Cụm (`Parts/ Bộ phận`). null = dòng RỜI, trực thuộc sản phẩm. */
+  cluster_id: string | null
   part_no: number | null
   part_name: string
   material_code: string | null
@@ -391,12 +432,41 @@ export type ProductPart = {
   dim_b_mm: number | null
   wall_thickness_mm: number | null
   cut_length_mm: number | null
+  /** "Phi hao chi tiết uốn" (mm) — cộng vào chiều dài phôi, KHÔNG vào diện tích. */
+  bend_waste_mm: number | null
+  /** Profile tra bảng kg/m (TD-HG04 = 0.260) — thay cho phép tính hình học. */
+  kg_per_m: number | null
   qty: number
   unit: string | null
-  waste_pct: number
+  /** Màu sơn / màu vật tư — là quy cách, không phải giá. */
+  color: string | null
   weight_kg: number | null
   total_length_m: number | null
   paint_area_m2: number | null
+  /** DT theo công thức của biểu mẫu (chu vi hình hộp) — để đối chiếu bảng kê giấy. */
+  paint_area_box_m2: number | null
+  /** Khối GỖ/POLYWOOD tính khối lượng bằng m³ ("K. Lượng (m3)" trong biểu mẫu). */
+  volume_m3: number | null
+  /** "Xác nhận Phôi" — xưởng phôi tick, không sửa số liệu nên tick được cả khi đã chốt. */
+  blank_confirmed_at: string | null
+  blank_confirmed_by: string | null
+  note: string | null
+  sort_order: number
+  /** Ghi vết ai sửa cuối — bảo đảm bằng dấu vết, không bằng rào cản. */
+  updated_by?: string | null
+}
+
+/**
+ * CỤM (`Parts/ Bộ phận` của biểu mẫu). Bảng riêng chứ không phải cột text trên
+ * dòng định mức: tên lưu một chỗ nên đổi tên không drift, và cụm có chỗ treo số
+ * riêng (SL cụm/SP, lộ trình công đoạn) mà dòng chi tiết không mang được.
+ */
+export type ProductCluster = {
+  id: string
+  name: string
+  qty_per_product: number | null
+  first_stage: string | null
+  final_stage: string | null
   note: string | null
   sort_order: number
 }
@@ -433,8 +503,15 @@ export type PackingOption = {
   packages: ProductPackage[]
 }
 
+// `volume_m3` bắt buộc có: khối GỖ/POLYWOOD trong file BOM tính khối lượng bằng
+// **m³**, không phải kg như khối khung kim loại — thiếu cột này thì dòng gỗ hiện
+// ra trống trơn dù nguồn có số. KHÔNG còn `unit_price`/`amount`: định mức trả lời
+// "cần bao nhiêu", giá thuộc bảng giá NCC bên Cung ứng (0097, quyết định D4).
 const PART_COLS =
-  'id, group_code, section_title, unit_basis, material_note, tenon, set_item_label, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, qty, unit, waste_pct, weight_kg, total_length_m, paint_area_m2, note, sort_order'
+  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
+
+const CLUSTER_COLS =
+  'id, name, qty_per_product, first_stage, final_stage, note, sort_order'
 
 export const productProfileRepo = {
   async parts(productId: string): Promise<ProductPart[]> {
@@ -478,6 +555,16 @@ export const productProfileRepo = {
       .single()
     if (error || !data) throw new Error(error?.message ?? 'Thêm dòng định mức thất bại')
     return data as ProductPart
+  },
+
+  async findPart(productId: string, partId: string): Promise<ProductPart | null> {
+    const { data } = await db()
+      .from('technical_product_parts')
+      .select(PART_COLS)
+      .eq('id', partId)
+      .eq('product_id', productId)
+      .maybeSingle()
+    return (data as ProductPart | null) ?? null
   },
 
   /** Ràng buộc product_id để không sửa nhầm dòng của sản phẩm khác. */
@@ -530,6 +617,102 @@ export const productProfileRepo = {
     return !!data
   },
 
+  // ── CỤM ────────────────────────────────────────────────────────────────────
+
+  async clusters(productId: string): Promise<ProductCluster[]> {
+    const { data } = await db()
+      .from('technical_product_clusters')
+      .select(CLUSTER_COLS)
+      .eq('product_id', productId)
+      .order('sort_order')
+    return (data ?? []) as ProductCluster[]
+  },
+
+  /**
+   * Lấy cụm theo tên, chưa có thì tạo. Đây là chỗ dựa của ô "Cụm" kiểu combobox:
+   * gõ tên đã có thì gán vào cụm đó, gõ tên mới thì tạo — y như gõ cột B của
+   * Excel, nhưng lưu bằng khoá chứ không bằng chuỗi nên đổi tên không drift.
+   */
+  async ensureCluster(productId: string, name: string): Promise<ProductCluster> {
+    const clean = name.trim()
+    const { data: found } = await db()
+      .from('technical_product_clusters')
+      .select(CLUSTER_COLS)
+      .eq('product_id', productId)
+      .eq('name', clean)
+      .maybeSingle()
+    if (found) return found as ProductCluster
+
+    const { data, error } = await db()
+      .from('technical_product_clusters')
+      .insert({
+        product_id: productId,
+        name: clean,
+        sort_order: await this.nextClusterOrder(productId),
+      })
+      .select(CLUSTER_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Tạo cụm thất bại')
+    return data as ProductCluster
+  },
+
+  async nextClusterOrder(productId: string): Promise<number> {
+    const { data } = await db()
+      .from('technical_product_clusters')
+      .select('sort_order')
+      .eq('product_id', productId)
+      .order('sort_order', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    return ((data?.sort_order as number | undefined) ?? 0) + 1
+  },
+
+  async patchCluster(
+    productId: string,
+    clusterId: string,
+    patch: Partial<Omit<ProductCluster, 'id'>>,
+  ): Promise<ProductCluster | null> {
+    const { data, error } = await db()
+      .from('technical_product_clusters')
+      .update(patch)
+      .eq('id', clusterId)
+      .eq('product_id', productId)
+      .select(CLUSTER_COLS)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return (data as ProductCluster | null) ?? null
+  },
+
+  /** Xoá cụm — dòng con về RỜI nhờ `on delete set null`, không mất dòng nào. */
+  async deleteCluster(productId: string, clusterId: string): Promise<boolean> {
+    const { data, error } = await db()
+      .from('technical_product_clusters')
+      .delete()
+      .eq('id', clusterId)
+      .eq('product_id', productId)
+      .select('id')
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    return !!data
+  },
+
+  /** Gán nhiều dòng vào một cụm (hoặc `null` để đưa về Rời) trong 1 lượt. */
+  async assignCluster(
+    productId: string,
+    partIds: string[],
+    clusterId: string | null,
+  ): Promise<number> {
+    if (partIds.length === 0) return 0
+    const { data, error } = await db()
+      .from('technical_product_parts')
+      .update({ cluster_id: clusterId })
+      .eq('product_id', productId)
+      .in('id', partIds)
+      .select('id')
+    if (error) throw new Error(error.message)
+    return (data ?? []).length
+  },
+
   async setItems(productId: string): Promise<ProductSetItem[]> {
     const { data } = await db()
       .from('technical_product_set_items')
@@ -557,90 +740,5 @@ export const productProfileRepo = {
       ...o,
       packages: (o.packages ?? []).sort((a, b) => a.sort_order - b.sort_order),
     }))
-  },
-}
-
-export const bomLinesRepo = {
-  async listByProduct(productId: string): Promise<BomLine[]> {
-    const { data } = await db()
-      .from('technical_bom_lines')
-      .select('id, product_id, material_id, qty_per_unit, note, sort_order')
-      .eq('product_id', productId)
-      .order('sort_order')
-    return (data ?? []) as BomLine[]
-  },
-
-  /** Dòng BOM kèm thông tin vật tư (mã kho = mã BOM — đặc tả 4.2). */
-  async listWithMaterials(productId: string): Promise<BomLineWithMaterial[]> {
-    const { data } = await db()
-      .from('technical_bom_lines')
-      .select(
-        'id, product_id, material_id, qty_per_unit, note, sort_order, material:warehouse_materials(code, name, unit)',
-      )
-      .eq('product_id', productId)
-      .order('sort_order')
-    type Raw = BomLine & {
-      material:
-        | { code: string; name: string; unit: string }
-        | { code: string; name: string; unit: string }[]
-        | null
-    }
-    return ((data ?? []) as Raw[]).map((r) => {
-      const m = Array.isArray(r.material) ? r.material[0] : r.material
-      return {
-        id: r.id,
-        product_id: r.product_id,
-        material_id: r.material_id,
-        qty_per_unit: r.qty_per_unit,
-        note: r.note,
-        sort_order: r.sort_order,
-        material_code: m?.code ?? '?',
-        material_name: m?.name ?? '?',
-        material_unit: m?.unit ?? '',
-      }
-    })
-  },
-
-  /** Ghi đè trọn bộ BOM của 1 SP (delete + insert — bộ nhỏ, chấp nhận không transaction). */
-  async replaceAll(
-    productId: string,
-    lines: { material_id: string; qty_per_unit: number; note?: string | null }[],
-  ): Promise<void> {
-    const { error: delErr } = await db()
-      .from('technical_bom_lines')
-      .delete()
-      .eq('product_id', productId)
-    if (delErr) throw new Error(delErr.message)
-    if (lines.length === 0) return
-    const { error } = await db()
-      .from('technical_bom_lines')
-      .insert(
-        lines.map((l, i) => ({
-          product_id: productId,
-          material_id: l.material_id,
-          qty_per_unit: l.qty_per_unit,
-          note: l.note ?? null,
-          sort_order: i,
-        })),
-      )
-    if (error) throw new Error(error.message)
-  },
-
-  async copyAll(fromProductId: string, toProductId: string): Promise<number> {
-    const lines = await this.listByProduct(fromProductId)
-    if (lines.length === 0) return 0
-    const { error } = await db()
-      .from('technical_bom_lines')
-      .insert(
-        lines.map((l) => ({
-          product_id: toProductId,
-          material_id: l.material_id,
-          qty_per_unit: l.qty_per_unit,
-          note: l.note,
-          sort_order: l.sort_order,
-        })),
-      )
-    if (error) throw new Error(error.message)
-    return lines.length
   },
 }
