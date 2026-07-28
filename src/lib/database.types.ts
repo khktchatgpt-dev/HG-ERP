@@ -742,6 +742,7 @@ export type Database = {
           defect_qty: number
           defect_reason: string | null
           entry_date: string
+          finish_state: string | null
           id: string
           kg: number | null
           machine_note: string | null
@@ -750,6 +751,7 @@ export type Database = {
           qty: number
           stage: string
           team_department_id: string | null
+          worker_name: string | null
         }
         Insert: {
           component_id: string
@@ -758,6 +760,7 @@ export type Database = {
           defect_qty?: number
           defect_reason?: string | null
           entry_date: string
+          finish_state?: string | null
           id?: string
           kg?: number | null
           machine_note?: string | null
@@ -766,6 +769,7 @@ export type Database = {
           qty: number
           stage: string
           team_department_id?: string | null
+          worker_name?: string | null
         }
         Update: {
           component_id?: string
@@ -774,6 +778,7 @@ export type Database = {
           defect_qty?: number
           defect_reason?: string | null
           entry_date?: string
+          finish_state?: string | null
           id?: string
           kg?: number | null
           machine_note?: string | null
@@ -782,6 +787,7 @@ export type Database = {
           qty?: number
           stage?: string
           team_department_id?: string | null
+          worker_name?: string | null
         }
         Relationships: [
           {
@@ -1142,6 +1148,87 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_transfers: {
+        Row: {
+          component_id: string
+          created_at: string
+          created_by: string | null
+          direction: string
+          entry_date: string
+          id: string
+          note: string | null
+          production_order_id: string
+          qty: number
+          reason: string | null
+          stage: string
+          team_department_id: string
+        }
+        Insert: {
+          component_id: string
+          created_at?: string
+          created_by?: string | null
+          direction: string
+          entry_date: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+          qty: number
+          reason?: string | null
+          stage: string
+          team_department_id: string
+        }
+        Update: {
+          component_id?: string
+          created_at?: string
+          created_by?: string | null
+          direction?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+          qty?: number
+          reason?: string | null
+          stage?: string
+          team_department_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_transfers_component_id_fkey"
+            columns: ["component_id"]
+            isOneToOne: false
+            referencedRelation: "production_components"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_transfers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_transfers_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_transfers_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_transfers_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
