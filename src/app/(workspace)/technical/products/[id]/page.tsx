@@ -6,8 +6,13 @@ import { HttpError } from '@/server/http'
 import { ProductProfileTab } from '@/components/technical/ProductProfileTab'
 import { toProductView } from '@/components/technical/product-sections'
 
-/** Tab Hồ sơ — chỉ thông tin cơ bản + ảnh. Quy cách / thông số / tài liệu / định
- *  mức nằm ở tab riêng nên trang này KHÔNG nạp BOM hay phương án đóng gói. */
+/**
+ * Tab Hồ sơ — thông tin cơ bản + ảnh + tóm tắt đóng gói. Định mức (có SP tới
+ * 145 dòng) vẫn KHÔNG nạp ở đây — nặng, tab riêng lo. Phương án đóng gói thì
+ * nhẹ (≤ vài kiện) nên nạp kèm: nhiều SP có kiện thật (import từ BOM) nhưng ô
+ * tóm tắt đóng gói (nhập tay) bỏ trống — không nạp thì băng "Quy cách xuất
+ * khẩu" hiện toàn "—" dù dữ liệu đã có sẵn (withPackingFallback bù chỗ trống).
+ */
 export default async function ProductProfilePage({
   params,
 }: {
@@ -17,12 +22,12 @@ export default async function ProductProfilePage({
   const { id } = await params
   const canEdit = user.role === 'admin' || user.role === 'manager'
 
-  let product
+  let data
   // Giá trị đã dùng ở SP khác → datalist gợi ý cho các ô gõ tự do khi sửa.
   let suggestions: Record<string, string[]> = {}
   try {
-    ;[product, suggestions] = await Promise.all([
-      productsService.get(user, id),
+    ;[data, suggestions] = await Promise.all([
+      productsService.getProfileInfo(user, id),
       productsService.fieldSuggestions(),
     ])
   } catch (e) {
@@ -30,13 +35,16 @@ export default async function ProductProfilePage({
     throw e
   }
 
-  const imageUrl = product.image_file_id
-    ? await filesService.getDownloadUrl(user, product.image_file_id).catch(() => null)
+  const imageUrl = data.product.image_file_id
+    ? await filesService
+        .getDownloadUrl(user, data.product.image_file_id)
+        .catch(() => null)
     : null
 
   return (
     <ProductProfileTab
-      product={toProductView(product)}
+      product={toProductView(data.product)}
+      packingOptions={data.packing}
       imageUrl={imageUrl}
       suggestions={suggestions}
       canEdit={canEdit}

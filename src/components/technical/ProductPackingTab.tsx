@@ -11,6 +11,7 @@ import {
   cartonCbm,
   dim3,
   num,
+  withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
 
@@ -27,7 +28,9 @@ export function ProductPackingTab({
   canEdit: boolean
 }) {
   const { editHandler, node } = useSectionEditor(product, suggestions, canEdit)
-  const pk = product.packing ?? {}
+  // Bù các ô còn trống bằng phương án đóng gói mặc định — cùng dữ liệu hiện
+  // ở "Phương án đóng gói" bên dưới, tránh cảnh 2 khối cùng trang mâu thuẫn nhau.
+  const pk = withPackingFallback(product.packing ?? {}, packingOptions)
   const cbm = cartonCbm(pk)
 
   return (

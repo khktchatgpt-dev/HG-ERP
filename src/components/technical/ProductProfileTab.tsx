@@ -15,11 +15,13 @@ import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { ProductImagePanel } from '@/components/technical/ProductImagePanel'
 import { EYEBROW, SpecSection, TextCard } from '@/components/technical/ProductSpecCards'
 import { useSectionEditor } from '@/components/technical/useSectionEditor'
+import type { PackingOptionView } from '@/components/technical/ProductProfileCards'
 import {
   SECTION_TAB,
   cartonCbm,
   dim3,
   num,
+  withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
 
@@ -35,11 +37,14 @@ import {
  */
 export function ProductProfileTab({
   product,
+  packingOptions,
   imageUrl,
   suggestions,
   canEdit,
 }: {
   product: ProductView
+  /** Bù các ô "Quy cách xuất khẩu" còn trống bằng phương án đóng gói mặc định. */
+  packingOptions: PackingOptionView[]
   imageUrl: string | null
   suggestions: Record<string, string[]>
   canEdit: boolean
@@ -54,7 +59,10 @@ export function ProductProfileTab({
     canEdit,
   )
 
-  const pk = product.packing ?? {}
+  const pk = useMemo(
+    () => withPackingFallback(product.packing ?? {}, packingOptions),
+    [product.packing, packingOptions],
+  )
   const ts = product.tech_spec ?? {}
   const dims = dim3(pk.l_cm, pk.w_cm, pk.h_cm)
   const carton = dim3(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm)

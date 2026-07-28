@@ -76,12 +76,15 @@ export type PackingOptionView = {
   label: string | null
   cartons_per_set: number | null
   loading_40hc: number | null
+  /** Phương án chốt dùng — nguồn ưu tiên khi bù vào ô tóm tắt (product-sections.withPackingFallback). */
+  is_default: boolean
   packages: {
     id: string
     package_label: string
     carton_l_mm: number | null
     carton_w_mm: number | null
     carton_h_mm: number | null
+    net_weight_kg: number | null
     gross_weight_kg: number | null
   }[]
 }

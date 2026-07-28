@@ -408,11 +408,18 @@ export const productsService = {
     return created
   },
 
-  /** Tab Hồ sơ: KHÔNG kéo định mức (có SP tới 145 dòng) — tab Định mức lo. */
+  /**
+   * Tab Hồ sơ / Đóng gói / Thông số: SP + phương án đóng gói (nhẹ, ≤ vài kiện).
+   * KHÔNG kéo định mức (có SP tới 145 dòng) — tab Định mức lo riêng. Trên
+   * đường tải của cả 3 tab nên chạy song song thay vì chờ product xong mới
+   * hỏi packing (packing không phụ thuộc kết quả product, chỉ cần productId).
+   */
   async getProfileInfo(user: User, productId: string) {
-    const product = await productsRepo.findById(productId)
+    const [product, packing] = await Promise.all([
+      productsRepo.findById(productId),
+      productProfileRepo.packingOptions(productId),
+    ])
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    const packing = await productProfileRepo.packingOptions(productId)
     return { product, packing }
   },
 

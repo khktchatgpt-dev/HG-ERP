@@ -340,3 +340,49 @@ export const cartonCbm = (pk: Packing) =>
   pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
     ? (pk.carton_l_cm * pk.carton_w_cm * pk.carton_h_cm) / 1_000_000
     : null
+
+const mmToCm = (mm: number | null | undefined): number | undefined =>
+  mm != null ? Math.round((mm / 10) * 100) / 100 : undefined
+
+/** Phần phương án đóng gói cần cho `withPackingFallback` — khớp cấu trúc với
+ *  `PackingOptionView` (ProductProfileCards.tsx), không import chéo file đó. */
+type PackingOptionForFallback = {
+  is_default: boolean
+  loading_40hc: number | null
+  packages: {
+    carton_l_mm: number | null
+    carton_w_mm: number | null
+    carton_h_mm: number | null
+    net_weight_kg?: number | null
+    gross_weight_kg: number | null
+  }[]
+}
+
+/**
+ * Vá lỗ hổng "đã nhập nhưng không hiện": nhiều SP có phương án đóng gói / kiện
+ * thật (import từ file BOM) nhưng ô tóm tắt `packing` (jsonb, nhập tay riêng)
+ * vẫn trống → băng "Quy cách xuất khẩu" hiện toàn "—" dù dữ liệu đã có sẵn
+ * ngay trong hồ sơ (phát hiện qua đối chiếu DB: ~160/537 SP rơi vào cảnh này).
+ *
+ * Giá trị NHẬP TAY luôn thắng (không bao giờ bị ghi đè). Chỉ bù khi trống:
+ *   - Loading 40'HC: lấy thẳng từ phương án mặc định — không phụ thuộc số kiện.
+ *   - Carton / NW / GW: CHỈ bù khi phương án có ĐÚNG 1 kiện — nhiều kiện thì
+ *     kích thước/khối lượng không gộp về 1 con số được, để trống mới là đúng.
+ */
+export function withPackingFallback(
+  pk: Packing,
+  options: PackingOptionForFallback[],
+): Packing {
+  if (options.length === 0) return pk
+  const opt = options.find((o) => o.is_default) ?? options[0]
+  const single = opt.packages.length === 1 ? opt.packages[0] : null
+  return {
+    ...pk,
+    loading_40hc: pk.loading_40hc ?? opt.loading_40hc ?? undefined,
+    carton_l_cm: pk.carton_l_cm ?? mmToCm(single?.carton_l_mm),
+    carton_w_cm: pk.carton_w_cm ?? mmToCm(single?.carton_w_mm),
+    carton_h_cm: pk.carton_h_cm ?? mmToCm(single?.carton_h_mm),
+    gw_kg: pk.gw_kg ?? single?.gross_weight_kg ?? undefined,
+    nw_kg: pk.nw_kg ?? single?.net_weight_kg ?? undefined,
+  }
+}
