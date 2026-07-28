@@ -45,6 +45,7 @@ export default async function ProductProfilePage({
     <ProductProfileTab
       product={toProductView(data.product)}
       packingOptions={data.packing}
+      bomRows={data.bomRows}
       imageUrl={imageUrl}
       suggestions={suggestions}
       canEdit={canEdit}

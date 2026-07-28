@@ -1,26 +1,44 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowRight, Check, Globe2, Package, Ship, StickyNote } from 'lucide-react'
+import {
+  Check,
+  Factory,
+  Package,
+  Receipt,
+  Ruler,
+  ShieldCheck,
+  StickyNote,
+  Tags,
+} from 'lucide-react'
 import { Button } from '@/components/shadcn/button'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
 import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
+import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { ProductImagePanel } from '@/components/technical/ProductImagePanel'
-import { EYEBROW, SpecSection, TextCard } from '@/components/technical/ProductSpecCards'
+import {
+  EYEBROW,
+  NumberBand,
+  SectionIcon,
+  SpecSection,
+  TONE,
+  TextCard,
+  type Tone,
+} from '@/components/technical/ProductSpecCards'
 import { useSectionEditor } from '@/components/technical/useSectionEditor'
 import type { PackingOptionView } from '@/components/technical/ProductProfileCards'
 import {
   SECTION_TAB,
   cartonCbm,
-  dim3,
+  dec,
   num,
+  productDims,
   withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
@@ -28,9 +46,9 @@ import {
 /**
  * Tab HỒ SƠ — đọc như một tờ PHIẾU THÔNG SỐ sản phẩm, không phải dashboard:
  *
- *  1. Măng-sét: ảnh + tên khách gọi + các mã nhận diện.
- *  2. Dải hoàn thiện: % + những mục còn thiếu, bấm được để nhảy thẳng tới nơi điền.
- *  3. Băng quy cách xuất khẩu: mấy con số cả nhà máy chạy theo, cỡ chữ lớn nhất trang.
+ *  1. Măng-sét: ảnh lớn + loại SP / vật liệu khung + các mã nhận diện.
+ *  2. Dải hoàn thiện: TÁCH hai vế sản xuất và thương mại (xem `TRACKS`).
+ *  3. Hai băng số: kích thước–khối lượng (từ BOM) và quy cách xuất khẩu.
  *  4. Tóm tắt đặc tính / thông số SX / mô tả — chỉ đọc, sửa nằm ở tab của nó.
  *
  * Mã và tên SP KHÔNG lặp ở đây: `layout.tsx` đã in trên PageHeader + badge.
@@ -38,6 +56,7 @@ import {
 export function ProductProfileTab({
   product,
   packingOptions,
+  bomRows,
   imageUrl,
   suggestions,
   canEdit,
@@ -45,6 +64,8 @@ export function ProductProfileTab({
   product: ProductView
   /** Bù các ô "Quy cách xuất khẩu" còn trống bằng phương án đóng gói mặc định. */
   packingOptions: PackingOptionView[]
+  /** Số dòng định mức THẬT trong app — khác `product.part_count` (từ Excel). */
+  bomRows: number
   imageUrl: string | null
   suggestions: Record<string, string[]>
   canEdit: boolean
@@ -64,44 +85,31 @@ export function ProductProfileTab({
     [product.packing, packingOptions],
   )
   const ts = product.tech_spec ?? {}
-  const dims = dim3(pk.l_cm, pk.w_cm, pk.h_cm)
-  const carton = dim3(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm)
+  const dims = productDims(product, pk)
+  const carton =
+    pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
+      ? `${pk.carton_l_cm} × ${pk.carton_w_cm} × ${pk.carton_h_cm}`
+      : null
   const cbm = cartonCbm(pk)
   const base = `/technical/products/${product.id}`
 
-  // ── Hồ sơ hoàn thiện ──
-  // Checklist bao trùm CẢ 4 tab, không riêng tab này. Cột thứ 3 là PHẦN chứa
-  // trường đó, để mỗi mục còn thiếu bấm được và nhảy đúng chỗ điền.
-  const checklist = useMemo(
-    () =>
-      [
-        ['Ảnh sản phẩm', !!product.image_file_id, null],
-        ['Tên theo khách', !!product.name_foreign, 'identity'],
-        ['Mã KH đặt', !!product.customer_item_code, 'identity'],
-        ['Barcode', !!product.barcode, 'identity'],
-        ['Giá tham khảo', product.reference_price != null, 'identity'],
-        ['Mô tả', !!product.description_en, 'text'],
-        ['Chất liệu', !!product.material, 'export'],
-        ['Tải trọng', product.max_load_kg != null, 'export'],
-        ['Lắp ráp', !!product.assembly, 'export'],
-        ['Kích thước SP', dims != null, 'packing'],
-        ['Đóng gói carton', carton != null, 'packing'],
-        ['SP / thùng', pk.qty_per_carton != null, 'packing'],
-        ['Loading 40′HC', pk.loading_40hc != null, 'packing'],
-        ['NW / GW', pk.nw_kg != null || pk.gw_kg != null, 'packing'],
-        ['BOM / bản vẽ', product.bom_status !== 'none', null],
-      ] as [string, boolean, string | null][],
-    [product, dims, carton, pk.qty_per_carton, pk.loading_40hc, pk.nw_kg, pk.gw_kg],
+  // Chỉ nhận giá trị nguyên thuỷ: `ts`/`dims` là object dựng lại mỗi lần render
+  // nên đưa vào deps thì memo không bao giờ trúng.
+  const hasDims = dims != null
+  const hasCarton = carton != null
+  const hasLoading = pk.loading_40hc != null
+  const tracks = useMemo(
+    () => buildTracks(product, hasDims, hasCarton, hasLoading),
+    [product, hasDims, hasCarton, hasLoading],
   )
-  const done = checklist.filter(([, v]) => v).length
-  const pct = Math.round((done / checklist.length) * 100)
-  const missing = checklist.filter(([, v]) => !v)
 
-  /** Phần nằm ở tab khác thì điều hướng sang đó, ở tab này thì mở form tại chỗ. */
-  function fillGap(section: string) {
-    const tab = SECTION_TAB[section] ?? ''
+  /** Mục nằm ở tab khác thì điều hướng, ở tab này thì mở form tại chỗ. */
+  function fillGap(gap: Gap) {
+    if (gap.href) return router.push(gap.href)
+    if (!gap.section) return
+    const tab = SECTION_TAB[gap.section] ?? ''
     if (tab) router.push(`${base}/${tab}`)
-    else editHandler(section)?.()
+    else editHandler(gap.section)?.()
   }
 
   async function toggleActive() {
@@ -151,13 +159,14 @@ export function ProductProfileTab({
         )}
       >
         <div className="flex flex-col gap-5 p-5 sm:flex-row">
-          <div className="shrink-0 sm:w-52">
+          <div className="shrink-0 sm:w-60">
             <ProductImagePanel
               productId={product.id}
               productName={product.name}
               imageFileId={product.image_file_id}
               imageUrl={imageUrl}
               canEdit={canEdit}
+              className="h-56 w-full sm:h-60"
             />
           </div>
 
@@ -168,15 +177,27 @@ export function ProductProfileTab({
               <>
                 <div className="flex items-start gap-3">
                   <div className="min-w-0">
-                    <p className={EYEBROW}>Tên theo khách · in trên LSX</p>
-                    <p
-                      className={cn(
-                        'mt-1 text-lg leading-snug font-medium',
-                        !product.name_foreign && 'text-muted-foreground/50',
+                    {/*
+                     * Dòng dẫn là LOẠI SP + VẬT LIỆU KHUNG chứ không phải "tên
+                     * theo khách": tên theo khách chỉ 5/537 SP có, để nó làm
+                     * dòng to nhất thì 99% hồ sơ mở ra là một câu xám "chưa có".
+                     * Loại + vật liệu thì 529/537 SP có, và đúng là thứ nhận ra
+                     * sản phẩm ngoài xưởng.
+                     */}
+                    <p className={EYEBROW}>Loại sản phẩm · khung</p>
+                    <p className="mt-1 text-lg leading-snug font-medium">
+                      {labelOf(PRODUCT_TYPES, product.product_type) ?? 'Chưa phân loại'}
+                      {product.frame_material && (
+                        <span className="text-muted-foreground font-normal">
+                          {' · khung '}
+                          {(
+                            labelOf(FRAME_MATERIALS, product.frame_material) ??
+                            product.frame_material
+                          ).toLowerCase()}
+                        </span>
                       )}
-                    >
-                      {product.name_foreign || 'Chưa có tên theo khách'}
                     </p>
+                    <TraitChips product={product} />
                   </div>
                   {canEdit && (
                     <button
@@ -196,6 +217,8 @@ export function ProductProfileTab({
                     [
                       ['Khách hàng / nhóm', product.customer_name ?? 'Mẫu chung', false],
                       ['Mã KH đặt', product.customer_item_code, true],
+                      ['Mã cũ', product.code_legacy, true],
+                      ['Tên theo khách', product.name_foreign, false],
                       ['Danh mục', product.category, false],
                       ['ĐVT bán', product.unit, false],
                       ['Barcode', product.barcode, true],
@@ -228,31 +251,81 @@ export function ProductProfileTab({
         </div>
       </Card>
 
-      {/* ── 2. Dải hoàn thiện — mỗi mục thiếu là một lối đi thẳng tới nơi điền ── */}
-      <CompletenessStrip
-        pct={pct}
-        done={done}
-        total={checklist.length}
-        missing={missing}
-        onFill={canEdit ? fillGap : null}
+      {/* ── 2. Dải hoàn thiện — hai vế đọc riêng, mỗi mục thiếu bấm được ── */}
+      <ReadinessCard tracks={tracks} onFill={canEdit ? fillGap : null} />
+
+      {/* ── 3a. Băng kích thước & khối lượng — số của chính sản phẩm ── */}
+      <NumberBand
+        icon={Ruler}
+        tone="sky"
+        title="Kích thước & khối lượng"
+        hint="báo giá / kế hoạch phôi"
+        href={`${base}/dinh-muc`}
+        hrefLabel="Xem định mức"
+        emptyText="Chưa có số tổng hợp. Các số này nạp từ file BOM khi import, hoặc suy ra khi nhập định mức chi tiết."
+        cells={[
+          {
+            label: 'Kích thước SP',
+            value: dims?.text ?? null,
+            unit: dims?.unit,
+            sub: dims?.source === 'bom' ? 'từ file BOM' : undefined,
+          },
+          {
+            /*
+             * App có dòng thật thì đếm dòng thật; chưa có thì mượn con số người
+             * nhập đã tính trong file Excel, NHƯNG phải nói rõ — nếu không thì
+             * ô ghi "103 dòng" mà bấm "Xem định mức" lại ra bảng trắng.
+             */
+            label: 'Số chi tiết',
+            value: num(bomRows > 0 ? bomRows : product.part_count),
+            unit: 'dòng',
+            sub:
+              bomRows === 0 && product.part_count != null
+                ? 'theo file BOM, chưa nhập vào app'
+                : undefined,
+          },
+          { label: 'KL khung', value: dec(product.frame_weight_kg, 2), unit: 'kg' },
+          { label: 'KL tịnh', value: dec(product.net_weight_kg, 2), unit: 'kg' },
+          { label: 'Tổng mét khung', value: dec(product.frame_length_m, 1), unit: 'm' },
+          { label: 'Diện tích sơn', value: dec(product.paint_area_m2, 2), unit: 'm²' },
+        ]}
       />
 
-      {/* ── 3. Băng quy cách — mấy con số cả nhà máy chạy theo ── */}
-      <PackingBand
+      {/* ── 3b. Băng quy cách — mấy con số xếp cont chạy theo ── */}
+      <NumberBand
+        icon={Package}
+        tone="amber"
+        title="Quy cách xuất khẩu"
+        hint="báo giá / xếp cont"
         href={`${base}/dong-goi`}
+        /*
+         * SP nhiều kiện thì kích thước/khối lượng không gộp về một con số được
+         * (withPackingFallback chỉ bù khi phương án có đúng 1 kiện) — nói thẳng
+         * là dữ liệu NẰM Ở tab Đóng gói, đừng để người đọc tưởng chưa ai nhập.
+         */
+        emptyText={
+          packingOptions.length > 0
+            ? `Đã có ${packingOptions.length} phương án đóng gói nhiều kiện — số từng kiện xem ở tab Đóng gói.`
+            : 'Chưa có quy cách đóng gói. Nhập ở tab Đóng gói, hoặc nạp cùng phương án đóng gói từ file BOM.'
+        }
         cells={[
-          ['Kích thước SP', dims],
-          ['SP / thùng', num(pk.qty_per_carton)],
-          ['Xếp 40′HC', num(pk.loading_40hc)],
-          ['CBM / thùng', cbm != null ? `${cbm.toFixed(3)} m³` : null],
-          ['GW / thùng', num(pk.gw_kg, ' kg')],
+          { label: 'Carton', value: carton, unit: 'cm' },
+          { label: 'SP / thùng', value: num(pk.qty_per_carton) },
+          { label: 'Xếp 40′HC', value: num(pk.loading_40hc), unit: 'thùng' },
+          {
+            label: 'CBM / thùng',
+            value: cbm != null ? cbm.toFixed(3) : null,
+            unit: 'm³',
+          },
+          { label: 'GW / thùng', value: dec(pk.gw_kg, 2), unit: 'kg' },
         ]}
       />
 
       {/* ── 4. Tóm tắt phần còn lại — chỉ đọc, sửa nằm ở tab tương ứng ── */}
       <div className="grid items-start gap-4 xl:grid-cols-2">
         <SpecSection
-          icon={Globe2}
+          icon={Tags}
+          tone="violet"
           title="Đặc tính sản phẩm"
           hint="catalogue / báo giá"
           fields={[
@@ -272,7 +345,8 @@ export function ProductProfileTab({
         />
 
         <SpecSection
-          icon={Ship}
+          icon={Factory}
+          tone="emerald"
           title="Thông số sản xuất"
           hint="in trên LSX"
           fields={[
@@ -289,6 +363,7 @@ export function ProductProfileTab({
 
       <TextCard
         icon={StickyNote}
+        tone="slate"
         title="Mô tả & ghi chú"
         blocks={[
           ['Mô tả tiếng Anh (in báo giá)', product.description_en],
@@ -298,6 +373,8 @@ export function ProductProfileTab({
         onEdit={editHandler('text')}
         editing={node('text')}
       />
+
+      <DocControlLine product={product} />
 
       {canEdit && (
         <>
@@ -327,34 +404,165 @@ export function ProductProfileTab({
   )
 }
 
+const labelOf = (
+  list: readonly { code: string; label: string }[],
+  code: string | null,
+) => (code ? (list.find((x) => x.code === code)?.label ?? null) : null)
+
 /**
- * Dải hoàn thiện hồ sơ. Mỗi mục còn thiếu là một chip BẤM ĐƯỢC — mở đúng hộp
- * thoại hoặc nhảy sang tab chứa nó, thay vì chỉ đọc một câu "còn thiếu…".
+ * Đặc tính bật/tắt — quyết định SP đi qua tổ nào, nên hiện ngay dưới dòng dẫn.
+ * Màu theo cùng bảng `TONE`: nệm/bọc là việc của tổ may (violet, miền thương
+ * phẩm), kính là chi tiết đo–lắp (sky), bộ nhiều món là chuyện đóng gói (amber).
  */
-function CompletenessStrip({
-  pct,
-  done,
-  total,
-  missing,
+function TraitChips({ product }: { product: ProductView }) {
+  const traits = (
+    [
+      // Loại 'ST' đã dịch ra "Bộ sản phẩm" ngay dòng trên — không lặp thành chip.
+      [product.is_set && product.product_type !== 'ST', 'Bộ sản phẩm', 'amber'],
+      [product.is_upholstered, 'Có nệm / bọc', 'violet'],
+      [product.has_glass, 'Có kính', 'sky'],
+      // "Ngừng dùng" KHÔNG lặp ở đây — layout.tsx đã in badge trạng thái.
+    ] as [boolean, string, Tone][]
+  ).filter(([on]) => on)
+  if (traits.length === 0) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {traits.map(([, label, tone]) => (
+        <span
+          key={label}
+          className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', TONE[tone])}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+// ── Hoàn thiện hồ sơ ─────────────────────────────────────────────────────────
+
+type Gap = {
+  label: string
+  done: boolean
+  /** Phần sửa được — mở form tại chỗ hoặc nhảy sang tab chứa nó. */
+  section?: string
+  /** Đường dẫn riêng cho mục không thuộc phần sửa nào (định mức). */
+  href?: string
+}
+
+type Track = {
+  key: string
+  label: string
+  hint: string
+  icon: React.ComponentType<{ className?: string }>
+  tone: Tone
+  gaps: Gap[]
+}
+
+/**
+ * Hai VẾ, không phải một con số.
+ *
+ * Trước đây 15 mục gộp chung một thanh %: trộn thứ xưởng cần (định mức, kích
+ * thước, đóng gói) với thứ phòng kinh doanh cần (barcode, giá, mô tả EN). Vì
+ * nhóm thương mại gần như trống toàn thư viện (barcode 4/537, giá 7/537), mọi
+ * SP đều hiện ~13% kèm một dãy chip đỏ — người dùng quen mắt rồi bỏ qua, kể cả
+ * khi thiếu đúng thứ chặn sản xuất. Tách ra thì mỗi vế nói đúng một câu hỏi:
+ * "xưởng làm được chưa?" và "bán/khai báo được chưa?".
+ */
+function buildTracks(
+  p: ProductView,
+  hasDims: boolean,
+  hasCarton: boolean,
+  hasLoading: boolean,
+): Track[] {
+  const base = `/technical/products/${p.id}`
+  const ts = p.tech_spec ?? {}
+  return [
+    {
+      key: 'production',
+      label: 'Sẵn sàng sản xuất',
+      hint: 'xưởng đọc',
+      icon: Factory,
+      tone: 'emerald',
+      gaps: [
+        {
+          label: 'Định mức / BOM',
+          done: p.bom_status !== 'none',
+          href: `${base}/dinh-muc`,
+        },
+        { label: 'Kích thước SP', done: hasDims, section: 'packing' },
+        { label: 'Chất liệu', done: !!p.material, section: 'export' },
+        {
+          label: 'Thông số SX',
+          done: !!(ts.machine || ts.paint || ts.cushion || ts.glass || ts.wood),
+          section: 'techSpec',
+        },
+        { label: 'Đóng gói carton', done: hasCarton, section: 'packing' },
+        { label: 'Xếp 40′HC', done: hasLoading, section: 'packing' },
+      ],
+    },
+    {
+      key: 'commercial',
+      label: 'Đủ hồ sơ thương mại',
+      hint: 'báo giá / chứng từ',
+      icon: Receipt,
+      tone: 'violet',
+      gaps: [
+        { label: 'Ảnh sản phẩm', done: !!p.image_file_id },
+        { label: 'Tên theo khách', done: !!p.name_foreign, section: 'identity' },
+        { label: 'Mã KH đặt', done: !!p.customer_item_code, section: 'identity' },
+        { label: 'Barcode', done: !!p.barcode, section: 'identity' },
+        { label: 'Giá tham khảo', done: p.reference_price != null, section: 'identity' },
+        { label: 'Mô tả tiếng Anh', done: !!p.description_en, section: 'text' },
+      ],
+    },
+  ]
+}
+
+function ReadinessCard({
+  tracks,
   onFill,
 }: {
-  pct: number
-  done: number
-  total: number
-  /** [nhãn, đã điền, phần chứa nó] — phần null là mục không sửa bằng hộp thoại. */
-  missing: [string, boolean, string | null][]
-  onFill: ((section: string) => void) | null
+  tracks: Track[]
+  onFill: ((gap: Gap) => void) | null
 }) {
-  const tone = pct >= 75 ? 'bg-emerald-500' : pct >= 40 ? 'bg-sky-500' : 'bg-amber-500'
   return (
-    <div className="bg-card flex flex-wrap items-center gap-x-4 gap-y-2.5 rounded-xl border px-5 py-3">
-      <div className="flex items-center gap-2.5">
-        <span className={EYEBROW}>Hồ sơ hoàn thiện</span>
-        <span className="text-base font-semibold tabular-nums">{pct}%</span>
+    <Card className="gap-0 divide-y py-0">
+      {tracks.map((t) => (
+        <TrackRow key={t.key} track={t} onFill={onFill} />
+      ))}
+    </Card>
+  )
+}
+
+function TrackRow({
+  track,
+  onFill,
+}: {
+  track: Track
+  onFill: ((gap: Gap) => void) | null
+}) {
+  const done = track.gaps.filter((g) => g.done).length
+  const total = track.gaps.length
+  const missing = track.gaps.filter((g) => !g.done)
+  const pct = Math.round((done / total) * 100)
+  const tone = pct === 100 ? 'bg-emerald-500' : pct >= 50 ? 'bg-sky-500' : 'bg-amber-500'
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3">
+      <div className="flex w-full min-w-0 items-center gap-2.5 sm:w-72">
+        <SectionIcon icon={track.icon} tone={track.tone} />
+        <div className="min-w-0">
+          <span className="text-sm font-medium">{track.label}</span>
+          <span className="text-muted-foreground ml-1.5 text-xs">· {track.hint}</span>
+        </div>
+        <span className="text-muted-foreground ml-auto shrink-0 text-xs tabular-nums">
+          {done}/{total}
+        </span>
         <div
-          className="bg-muted h-1.5 w-24 overflow-hidden rounded-full"
+          className="bg-muted h-1.5 w-14 shrink-0 overflow-hidden rounded-full"
           role="progressbar"
-          aria-label={`Đã điền ${done}/${total} trường`}
+          aria-label={`${track.label}: đã điền ${done}/${total} mục`}
           aria-valuenow={pct}
           aria-valuemin={0}
           aria-valuemax={100}
@@ -368,79 +576,62 @@ function CompletenessStrip({
 
       {missing.length === 0 ? (
         <span className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-          <Check className="size-3.5" /> Đã điền đủ {total} mục
+          <Check className="size-3.5" /> Đủ cả {total} mục
         </span>
       ) : (
-        <>
-          <span className={EYEBROW}>Còn thiếu</span>
-          <div className="flex flex-wrap items-center gap-1.5">
-            {missing.map(([label, , section]) =>
-              section && onFill ? (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => onFill(section)}
-                  className="hover:border-primary hover:text-primary focus-visible:ring-ring text-muted-foreground rounded-full border border-dashed px-2.5 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  {label}
-                </button>
-              ) : (
-                <span
-                  key={label}
-                  className="text-muted-foreground/70 rounded-full border border-dashed px-2.5 py-0.5 text-xs"
-                >
-                  {label}
-                </span>
-              ),
-            )}
-          </div>
-        </>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+          {missing.map((gap) =>
+            (gap.section || gap.href) && onFill ? (
+              <button
+                key={gap.label}
+                type="button"
+                onClick={() => onFill(gap)}
+                className="hover:border-primary hover:text-primary focus-visible:ring-ring text-muted-foreground rounded-full border border-dashed px-2.5 py-0.5 text-xs transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {gap.label}
+              </button>
+            ) : (
+              <span
+                key={gap.label}
+                className="text-muted-foreground/70 rounded-full border border-dashed px-2.5 py-0.5 text-xs"
+              >
+                {gap.label}
+              </span>
+            ),
+          )}
+        </div>
       )}
     </div>
   )
 }
 
 /**
- * Băng quy cách xuất khẩu — chỗ DUY NHẤT trên trang dùng cỡ chữ lớn. Đây là bộ
- * số quyết định báo giá và xếp cont, nên đọc được từ xa; mọi thứ khác giữ nhỏ.
+ * Khối kiểm soát tài liệu ISO (HG-QT-07/M02) — chỉ SP đã có BOM ký duyệt mới
+ * có, nên ẩn hẳn khi trống thay vì in bốn dấu "—".
  */
-function PackingBand({
-  cells,
-  href,
-}: {
-  cells: [string, string | null][]
-  href: string
-}) {
+function DocControlLine({ product }: { product: ProductView }) {
+  const items = [
+    product.bom_rev != null && ['Rev.', String(product.bom_rev)],
+    product.bom_effective_date && [
+      'Hiệu lực',
+      new Date(product.bom_effective_date).toLocaleDateString('vi-VN'),
+    ],
+    product.bom_prepared_by && ['Người lập', product.bom_prepared_by],
+    product.bom_approved_by && ['Người duyệt', product.bom_approved_by],
+  ].filter((x): x is [string, string] => Array.isArray(x))
+  if (items.length === 0) return null
+
   return (
-    <Card className="gap-0 overflow-hidden py-0">
-      <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-        <Package className="text-muted-foreground size-4" />
-        <h2 className="text-sm font-semibold">Quy cách xuất khẩu</h2>
-        <span className="text-muted-foreground text-xs">· báo giá / xếp cont</span>
-        <Link
-          href={href}
-          className="text-primary focus-visible:ring-ring ml-auto inline-flex items-center gap-1 rounded text-xs font-medium hover:underline focus-visible:ring-2 focus-visible:outline-none"
-        >
-          Xem chi tiết <ArrowRight className="size-3.5" />
-        </Link>
-      </div>
-      {/* gap-px trên nền border = kẻ hairline giữa các ô, đúng cả khi xuống dòng */}
-      <div className="bg-border grid grid-cols-2 gap-px border-t sm:grid-cols-3 xl:grid-cols-5">
-        {cells.map(([label, value]) => (
-          <div key={label} className="bg-card px-5 py-3.5">
-            <div
-              className={cn(
-                'truncate text-lg font-semibold tracking-tight tabular-nums',
-                !value && 'text-muted-foreground/40',
-              )}
-              title={value ?? undefined}
-            >
-              {value || '—'}
-            </div>
-            <div className={cn(EYEBROW, 'mt-1')}>{label}</div>
-          </div>
-        ))}
-      </div>
-    </Card>
+    <div className="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-xs">
+      <span className="inline-flex items-center gap-1.5">
+        <ShieldCheck className="size-3.5" />
+        Kiểm soát tài liệu BOM
+      </span>
+      {items.map(([label, value]) => (
+        <span key={label}>
+          {label}: <span className="text-foreground font-medium">{value}</span>
+        </span>
+      ))}
+    </div>
   )
 }

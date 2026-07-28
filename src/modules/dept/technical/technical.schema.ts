@@ -57,6 +57,26 @@ export const productCreateSchema = z.object({
   max_load_kg: z.coerce.number().min(0).optional().nullable(), // tải trọng tối đa
   assembly: z.enum(ASSEMBLY_TYPES).optional().nullable(), // nguyên chiếc / KD
   set_contents: z.string().trim().max(500).optional().nullable(), // bộ gồm: "1 bàn + 6 ghế"
+  // Đặc tính bật/tắt (0092) — quyết định SP đi qua tổ nào. Trước chỉ import BOM
+  // ghi được, hồ sơ hiện ra mà không có lối sửa; nay Kỹ thuật chỉnh tay được.
+  is_upholstered: z.boolean().optional(), // có nệm / bọc → qua tổ may
+  has_glass: z.boolean().optional(),
+  is_set: z.boolean().optional(), // bộ nhiều món → ảnh hưởng đóng gói
+  /** Mã cũ (C0201HG-IN) — unique khi khác null, xem index ở 0092. */
+  code_legacy: z.string().trim().max(100).optional().nullable(),
+  /** Khối lượng tịnh CÂN THẬT — khác `frame_weight_kg` (Σ tính từ định mức). */
+  net_weight_kg: z.coerce.number().min(0).optional().nullable(),
+  // Khối kiểm soát tài liệu ISO (HG-QT-07/M02) — xem `SECTIONS.docControl`.
+  bom_rev: z.coerce.number().int().min(0).optional().nullable(),
+  // Cột `date` của Postgres — chặn chuỗi rác ngay ở biên, đừng để DB ném 22007.
+  bom_effective_date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải dạng YYYY-MM-DD')
+    .optional()
+    .nullable(),
+  bom_prepared_by: z.string().trim().max(200).optional().nullable(),
+  bom_approved_by: z.string().trim().max(200).optional().nullable(),
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({

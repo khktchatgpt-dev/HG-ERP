@@ -11,6 +11,7 @@ import {
   cartonCbm,
   dim3,
   num,
+  productDims,
   withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
@@ -32,15 +33,19 @@ export function ProductPackingTab({
   // ở "Phương án đóng gói" bên dưới, tránh cảnh 2 khối cùng trang mâu thuẫn nhau.
   const pk = withPackingFallback(product.packing ?? {}, packingOptions)
   const cbm = cartonCbm(pk)
+  // Cùng nguồn với băng trên tab Hồ sơ: chưa gõ tay thì lấy kích thước file BOM
+  // ghi (mm), thay vì để trống trong khi hồ sơ bên cạnh lại hiện số.
+  const dims = productDims(product, pk)
 
   return (
     <div className="flex flex-col gap-6 pb-6">
       <SpecSection
         icon={Package}
+        tone="amber"
         title="Đóng gói xuất khẩu"
         hint="in báo giá / xếp cont"
         fields={[
-          ['Kích thước SP', dim3(pk.l_cm, pk.w_cm, pk.h_cm)],
+          ['Kích thước SP', dims && `${dims.text} ${dims.unit}`],
           ['Carton', dim3(pk.carton_l_cm, pk.carton_w_cm, pk.carton_h_cm)],
           ['SP / thùng', num(pk.qty_per_carton)],
           ['Loading 40′HC', num(pk.loading_40hc)],

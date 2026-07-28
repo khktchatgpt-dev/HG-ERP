@@ -57,6 +57,28 @@ export type Product = {
   max_load_kg: number | null
   assembly: 'assembled' | 'kd' | null
   set_contents: string | null
+  // ── Nhận diện + số tổng hợp lấy từ file BOM khi import (0092) ──
+  // Đã nằm trong DB từ lâu nhưng KHÔNG được đọc lên: trang hồ sơ vì thế in
+  // "Kích thước SP —" cho 292/537 SP thực ra có đủ dài×rộng×cao. Xem
+  // ProductProfileTab để biết chỗ dùng.
+  /** Loại SP phân rã từ mã (TB/CH/BN/ST/SL/OT/AC) — nhãn ở `PRODUCT_TYPES`. */
+  product_type: string | null
+  /** Vật liệu KHUNG phân rã từ mã (AL/IR/IN…) — nhãn ở `FRAME_MATERIALS`. */
+  frame_material: string | null
+  /** Mã cũ (C0201HG-IN) — chứng từ, file BOM và ảnh cũ đều gọi theo mã này. */
+  code_legacy: string | null
+  is_upholstered: boolean
+  has_glass: boolean
+  is_set: boolean
+  net_weight_kg: number | null
+  frame_weight_kg: number | null
+  frame_length_m: number | null
+  paint_area_m2: number | null
+  part_count: number | null
+  /** Kích thước tổng thể SP — file BOM ghi **mm**, `packing` jsonb ghi **cm**. */
+  length_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
   // Đầu biểu mẫu "BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN" (0097).
   /** Ô "Nhiên Liệu" — 'AL' | 'IR' | 'IN', nguồn tra tỉ trọng. Mặc định của SP. */
   base_material: string | null
@@ -76,7 +98,7 @@ export type Product = {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */

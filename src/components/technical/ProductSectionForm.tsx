@@ -10,7 +10,7 @@ import { Spinner } from '@/components/erp/Spinner'
 export type FieldSpec = {
   name: string
   label: string
-  kind?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox'
+  kind?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'date'
   /** Trường nằm trong jsonb con thay vì cột phẳng. */
   json?: 'packing' | 'tech_spec'
   options?: { value: string; label: string }[]
@@ -154,7 +154,11 @@ export function ProductSectionForm({
               <>
                 <input
                   name={f.name}
-                  type={f.kind === 'number' ? 'number' : 'text'}
+                  // `date` cho ra đúng chuỗi YYYY-MM-DD mà cột `date` của
+                  // Postgres và `bom_effective_date` trong schema chờ sẵn.
+                  type={
+                    f.kind === 'number' ? 'number' : f.kind === 'date' ? 'date' : 'text'
+                  }
                   step={f.step}
                   min={f.kind === 'number' ? '0' : undefined}
                   maxLength={f.maxLength}

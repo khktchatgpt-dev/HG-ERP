@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { Modal } from '@/components/Modal'
+import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { isSvgUrl } from '@/lib/image'
 import { useToast } from '@/components/ui/Toast'
@@ -28,6 +29,7 @@ export function ProductImagePanel({
   imageFileId,
   imageUrl,
   canEdit,
+  className,
 }: {
   productId: string
   productName: string
@@ -35,6 +37,8 @@ export function ProductImagePanel({
   /** URL ảnh đại diện, ký sẵn từ server (RSC) — dùng cho ô ảnh ngoài. */
   imageUrl: string | null
   canEdit: boolean
+  /** Khổ ô ảnh — nơi gọi quyết định (trang hồ sơ để ảnh to hơn). */
+  className?: string
 }) {
   const [open, setOpen] = useState(false)
 
@@ -44,15 +48,18 @@ export function ProductImagePanel({
         type="button"
         onClick={() => setOpen(true)}
         aria-label={imageUrl ? 'Xem ảnh sản phẩm' : 'Thêm ảnh sản phẩm'}
-        className="group relative flex h-48 items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition hover:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-sky-500"
+        className={cn(
+          'group relative flex h-48 w-full items-center justify-center overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 transition hover:border-sky-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-sky-500',
+          className,
+        )}
       >
         {imageUrl ? (
           <>
             <Image
               src={imageUrl}
               alt={productName}
-              width={200}
-              height={192}
+              width={480}
+              height={480}
               unoptimized={isSvgUrl(imageUrl)}
               className="max-h-full max-w-full object-contain"
             />

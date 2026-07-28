@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Boxes, PackageOpen } from 'lucide-react'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
+import { SectionIcon, type Tone } from '@/components/technical/ProductSpecCards'
 import { cn } from '@/lib/utils'
 
 export type PartView = {
@@ -102,19 +103,21 @@ const n = (v: number | null | undefined, d = 0) =>
 
 function CardHead({
   icon: Icon,
+  tone,
   title,
   hint,
   right,
 }: {
   icon: React.ComponentType<{ className?: string }>
+  tone?: Tone
   title: string
   hint?: string
   right?: React.ReactNode
 }) {
   return (
     <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3">
-      <div className="flex min-w-0 items-center gap-2">
-        <Icon className="text-muted-foreground size-4 shrink-0" />
+      <div className="flex min-w-0 items-center gap-2.5">
+        <SectionIcon icon={Icon} tone={tone} />
         <h2 className="truncate text-sm font-semibold">{title}</h2>
         {hint && <span className="text-muted-foreground shrink-0 text-xs">· {hint}</span>}
       </div>
@@ -128,7 +131,7 @@ export function SetItemsCard({ items }: { items: SetItemView[] }) {
   if (items.length === 0) return null
   return (
     <Card className="gap-0 py-0">
-      <CardHead icon={Boxes} title="Bộ gồm" hint={`${items.length} món`} />
+      <CardHead icon={Boxes} tone="amber" title="Bộ gồm" hint={`${items.length} món`} />
       <Separator />
       <div className="overflow-x-auto px-5 py-2">
         <table className="w-full text-sm">
@@ -174,6 +177,7 @@ export function PackingOptionsCard({ options }: { options: PackingOptionView[] }
     <Card className="gap-0 py-0">
       <CardHead
         icon={PackageOpen}
+        tone="amber"
         title="Phương án đóng gói"
         hint={options.length > 1 ? `${options.length} phương án` : undefined}
       />

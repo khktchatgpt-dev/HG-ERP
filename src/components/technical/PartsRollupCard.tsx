@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { Sigma } from 'lucide-react'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
+import { SectionIcon } from '@/components/technical/ProductSpecCards'
 import { MATERIAL_DENSITY } from '@/lib/bom-calc'
 import { layoutOf } from './part-layouts'
 import type { PartView } from './ProductProfileCards'
@@ -113,8 +114,8 @@ export function PartsRollupCard({
 
   return (
     <Card className="gap-0 py-0">
-      <div className="flex items-center gap-2 px-5 pt-4 pb-3">
-        <Sigma className="text-muted-foreground size-4 shrink-0" />
+      <div className="flex items-center gap-2.5 px-5 pt-4 pb-3">
+        <SectionIcon icon={Sigma} tone="emerald" />
         <h2 className="text-sm font-semibold">Tổng hợp vật tư</h2>
         <span className="text-muted-foreground text-xs">
           · tự tính từ định mức — Cung ứng đọc bảng này

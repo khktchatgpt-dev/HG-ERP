@@ -415,12 +415,17 @@ export const productsService = {
    * hỏi packing (packing không phụ thuộc kết quả product, chỉ cần productId).
    */
   async getProfileInfo(user: User, productId: string) {
-    const [product, packing] = await Promise.all([
+    // `bomRows` là ĐẾM dòng định mức thật trong app — cố tình tách khỏi cột
+    // `product.part_count` (số người nhập đã tính sẵn trong file Excel). Hai số
+    // này lệch nhau ở hầu hết SP (325 SP có part_count, 4 SP có dòng thật), nên
+    // hồ sơ phải nói rõ đang khoe số nào; xem băng "Kích thước & khối lượng".
+    const [product, packing, bomRows] = await Promise.all([
       productsRepo.findById(productId),
       productProfileRepo.packingOptions(productId),
+      productProfileRepo.partsCount(productId),
     ])
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    return { product, packing }
+    return { product, packing, bomRows }
   },
 
   /** Tab Định mức: định mức + món trong bộ + danh mục nhóm. */

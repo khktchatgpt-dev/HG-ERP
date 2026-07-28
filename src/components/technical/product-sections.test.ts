@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { withPackingFallback, cartonCbm, dim3 } from './product-sections'
+import {
+  withPackingFallback,
+  cartonCbm,
+  dec,
+  dim3,
+  productDims,
+} from './product-sections'
 
 const opt = (over: Partial<Parameters<typeof withPackingFallback>[1][number]> = {}) => ({
   is_default: true,
@@ -84,5 +90,48 @@ describe('withPackingFallback — bù ô tóm tắt đóng gói trống bằng p
       opt({ is_default: false, loading_40hc: 200 }),
     ])
     expect(r.loading_40hc).toBe(100)
+  })
+})
+
+describe('productDims — hai nguồn kích thước, khác đơn vị', () => {
+  const bom = { length_mm: 755, width_mm: 1425, height_mm: 750 }
+  const none = { length_mm: null, width_mm: null, height_mm: null }
+
+  it('gõ tay (cm) thắng số import từ BOM (mm)', () => {
+    expect(productDims(bom, { l_cm: 75.5, w_cm: 142.5, h_cm: 75 })).toEqual({
+      text: '75.5 × 142.5 × 75',
+      unit: 'cm',
+      source: 'manual',
+    })
+  })
+
+  it('chưa gõ tay → lấy số file BOM và nói rõ đơn vị mm', () => {
+    expect(productDims(bom, {})).toEqual({
+      text: '755 × 1425 × 750',
+      unit: 'mm',
+      source: 'bom',
+    })
+  })
+
+  it('gõ tay thiếu 1 chiều → KHÔNG trộn hai nguồn, rơi về bản BOM', () => {
+    expect(productDims(bom, { l_cm: 75.5, w_cm: 142.5 })?.source).toBe('bom')
+  })
+
+  it('cả hai nguồn đều thiếu → null (băng số tự thu về dòng mời nhập)', () => {
+    expect(productDims(none, {})).toBeNull()
+    expect(productDims({ ...bom, height_mm: null }, {})).toBeNull()
+  })
+})
+
+describe('dec — số thập phân cố định cho đại lượng tính toán', () => {
+  it('giữ đủ chữ số kể cả khi tròn', () => {
+    expect(dec(22.0625, 2)).toBe('22.06')
+    expect(dec(92, 1)).toBe('92.0')
+  })
+
+  it('phân biệt 0 với chưa có số', () => {
+    expect(dec(0, 2)).toBe('0.00')
+    expect(dec(null, 2)).toBeNull()
+    expect(dec(undefined, 2)).toBeNull()
   })
 })

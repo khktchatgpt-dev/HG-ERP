@@ -64,6 +64,26 @@ export type ProductView = {
   assembly: 'assembled' | 'kd' | null
   set_contents: string | null
   is_active: boolean
+  // ── Số tổng hợp từ file BOM (0092) ──
+  product_type: string | null
+  frame_material: string | null
+  code_legacy: string | null
+  is_upholstered: boolean
+  has_glass: boolean
+  is_set: boolean
+  net_weight_kg: number | null
+  frame_weight_kg: number | null
+  frame_length_m: number | null
+  paint_area_m2: number | null
+  part_count: number | null
+  /** mm — KHÁC `packing.l_cm` (cm, nhập tay). Xem `productDims`. */
+  length_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
+  bom_rev: number | null
+  bom_effective_date: string | null
+  bom_prepared_by: string | null
+  bom_approved_by: string | null
 }
 
 /** Cắt hàng SP từ repo xuống đúng những gì các tab cần (dùng ở cả 4 page). */
@@ -94,6 +114,24 @@ export function toProductView(p: Product): ProductView {
     assembly: p.assembly,
     set_contents: p.set_contents,
     is_active: p.is_active,
+    product_type: p.product_type,
+    frame_material: p.frame_material,
+    code_legacy: p.code_legacy,
+    is_upholstered: p.is_upholstered,
+    has_glass: p.has_glass,
+    is_set: p.is_set,
+    net_weight_kg: p.net_weight_kg,
+    frame_weight_kg: p.frame_weight_kg,
+    frame_length_m: p.frame_length_m,
+    paint_area_m2: p.paint_area_m2,
+    part_count: p.part_count,
+    length_mm: p.length_mm,
+    width_mm: p.width_mm,
+    height_mm: p.height_mm,
+    bom_rev: p.bom_rev,
+    bom_effective_date: p.bom_effective_date,
+    bom_prepared_by: p.bom_prepared_by,
+    bom_approved_by: p.bom_approved_by,
   }
 }
 
@@ -116,6 +154,13 @@ export const SECTIONS: Record<string, SectionSpec> = {
       },
       { name: 'customer_name', label: 'Khách hàng / nhóm', maxLength: 200 },
       { name: 'customer_item_code', label: 'Mã KH đặt', mono: true, maxLength: 100 },
+      {
+        name: 'code_legacy',
+        label: 'Mã cũ',
+        mono: true,
+        maxLength: 100,
+        placeholder: 'S0031HG-AL',
+      },
       { name: 'category', label: 'Danh mục', maxLength: 100 },
       { name: 'unit', label: 'ĐVT bán', maxLength: 30, required: true },
       { name: 'barcode', label: 'Barcode', mono: true, maxLength: 50 },
@@ -242,11 +287,20 @@ export const SECTIONS: Record<string, SectionSpec> = {
         ],
       },
       {
+        name: 'net_weight_kg',
+        label: 'Khối lượng tịnh (kg)',
+        kind: 'number',
+        step: '0.001',
+      },
+      {
         name: 'set_contents',
         label: 'Bộ gồm',
         maxLength: 500,
         placeholder: '1 bàn + 6 ghế',
       },
+      // Đi liền ô "Bộ gồm" — bật cờ mà bỏ trắng nội dung thì đóng gói không biết
+      // phải chia mấy kiện.
+      { name: 'is_set', label: 'Là bộ nhiều món', kind: 'checkbox' },
     ],
   },
   techSpec: {
@@ -259,7 +313,27 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'paint', label: 'Sơn (mã màu)', maxLength: 200, json: 'tech_spec' },
       { name: 'glass', label: 'Kính', maxLength: 200, json: 'tech_spec' },
       { name: 'wood', label: 'Gỗ', maxLength: 200, json: 'tech_spec' },
+      // Cờ bật/tắt đặt CẠNH ô mô tả tương ứng (Nệm ↔ có nệm, Kính ↔ có kính):
+      // hai thứ luôn phải khớp, để xa nhau thì sửa một mà quên cái kia.
+      { name: 'is_upholstered', label: 'Có nệm / bọc (qua tổ may)', kind: 'checkbox' },
+      { name: 'has_glass', label: 'Có kính', kind: 'checkbox' },
       { name: 'showroom_sample', label: 'Có mẫu tại showroom', kind: 'checkbox' },
+    ],
+  },
+  /**
+   * Khối kiểm soát tài liệu ISO (HG-QT-07/M02) của bảng định mức. Tách riêng
+   * khỏi "Thông số sản xuất" vì đây là chữ ký/phiên bản chứng từ, không phải
+   * thông số làm hàng — và chỉ người duyệt BOM mới đụng tới.
+   */
+  docControl: {
+    key: 'docControl',
+    title: 'Kiểm soát tài liệu BOM',
+    hint: 'HG-QT-07/M02',
+    fields: [
+      { name: 'bom_rev', label: 'Lần sửa đổi (Rev.)', kind: 'number', step: '1' },
+      { name: 'bom_effective_date', label: 'Ngày hiệu lực', kind: 'date' },
+      { name: 'bom_prepared_by', label: 'Người lập', maxLength: 200 },
+      { name: 'bom_approved_by', label: 'Người duyệt', maxLength: 200 },
     ],
   },
   text: {
@@ -301,6 +375,7 @@ export const SECTION_TAB: Record<string, string> = {
   packing: 'dong-goi',
   export: 'thong-so',
   techSpec: 'thong-so',
+  docControl: 'thong-so',
 }
 
 /**
@@ -334,6 +409,37 @@ export const dim3 = (a?: number, b?: number, c?: number) =>
 
 export const num = (n?: number | null, suffix = '') =>
   n != null ? `${n.toLocaleString('en-US')}${suffix}` : null
+
+/** Số có phần thập phân cố định — cho các đại lượng tính toán (kg, m, m²). */
+export const dec = (n: number | null | undefined, d: number) =>
+  n == null
+    ? null
+    : n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
+
+/**
+ * Kích thước tổng thể SP. HAI nguồn cùng mô tả một thứ, khác đơn vị:
+ * `length_mm…` do import BOM ghi (mm, 292/537 SP có) và `packing.l_cm` do người
+ * dùng gõ tay (cm, 12/537 SP có). Ưu tiên bản gõ tay — người đã sửa thì đó là
+ * số đúng — rồi mới tới bản import, thay vì bỏ trắng như trước.
+ */
+export function productDims(
+  p: Pick<ProductView, 'length_mm' | 'width_mm' | 'height_mm'>,
+  pk: Packing,
+): { text: string; unit: string; source: 'manual' | 'bom' } | null {
+  if (pk.l_cm != null && pk.w_cm != null && pk.h_cm != null)
+    return {
+      text: `${pk.l_cm} × ${pk.w_cm} × ${pk.h_cm}`,
+      unit: 'cm',
+      source: 'manual',
+    }
+  if (p.length_mm != null && p.width_mm != null && p.height_mm != null)
+    return {
+      text: `${p.length_mm} × ${p.width_mm} × ${p.height_mm}`,
+      unit: 'mm',
+      source: 'bom',
+    }
+  return null
+}
 
 /** CBM một thùng carton — chỉ tính khi có đủ 3 chiều. */
 export const cartonCbm = (pk: Packing) =>
