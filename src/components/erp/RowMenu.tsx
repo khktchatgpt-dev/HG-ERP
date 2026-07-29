@@ -18,7 +18,17 @@ export type RowMenuItem = {
  * bị `overflow` của bảng cắt (bug menu bị che ở dòng cuối). Tự lật lên khi gần
  * đáy màn hình; đóng khi cuộn / resize / Esc / click ngoài.
  */
-export function RowMenu({ items }: { items: RowMenuItem[] }) {
+export function RowMenu({
+  items,
+  trigger,
+  triggerClassName,
+}: {
+  items: RowMenuItem[]
+  /** Nội dung nút mở menu. Mặc định '⋯' — thẻ/card truyền icon riêng. */
+  trigger?: React.ReactNode
+  /** Thay class nút mở menu (không cộng dồn) — dùng khi nút nằm đè lên ảnh. */
+  triggerClassName?: string
+}) {
   const [open, setOpen] = useState(false)
   const btnRef = useRef<HTMLButtonElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -82,9 +92,12 @@ export function RowMenu({ items }: { items: RowMenuItem[] }) {
         aria-label="Actions"
         aria-haspopup="menu"
         aria-expanded={open}
-        className="rounded border border-zinc-200 px-2 py-0.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        className={
+          triggerClassName ??
+          'rounded border border-zinc-200 px-2 py-0.5 text-sm hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800'
+        }
       >
-        ⋯
+        {trigger ?? '⋯'}
       </button>
       {open &&
         typeof document !== 'undefined' &&

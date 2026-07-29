@@ -1,11 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
-import { isSvgUrl } from '@/lib/image'
-import { Badge } from '@/components/Badge'
+import { ChevronLeft, ChevronRight, Download, PackageSearch, Plus, X } from 'lucide-react'
+import { Button } from '@/components/shadcn/button'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -13,120 +12,38 @@ import { api, ApiError } from '@/lib/api'
 import { parseProductCode } from '@/lib/product-code'
 import { downloadCsv } from '@/lib/csv'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { StatsBar } from '@/components/erp/StatsBar'
-import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
-import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
-import { RowMenu } from '@/components/erp/RowMenu'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
-
-type Packing = {
-  l_cm?: number
-  w_cm?: number
-  h_cm?: number
-  carton_l_cm?: number
-  carton_w_cm?: number
-  carton_h_cm?: number
-  qty_per_carton?: number
-  loading_40hc?: number
-  pack_unit_label?: string
-  nw_kg?: number
-  gw_kg?: number
-}
-
-/** Thông số sản xuất (jsonb tech_spec) — in trên LSX. */
-type TechSpec = {
-  machine?: string
-  cushion?: string
-  paint?: string
-  glass?: string
-  wood?: string
-}
-
-type BomStatus = 'none' | 'drawing' | 'done'
-
-type Product = {
-  id: string
-  code: string
-  name: string
-  category: string | null
-  /** Nhãn khách/nhóm gõ tự do (0091) — null = mẫu chung. */
-  customer_name: string | null
-  customer_item_code: string | null
-  description_en: string | null
-  unit: string
-  bom_status: BomStatus
-  packing: Packing
-  image_file_id: string | null
-  notes: string | null
-  name_foreign: string | null
-  shipping_mark: string | null
-  barcode: string | null
-  showroom_sample: boolean
-  reference_price: number | null
-  tech_spec: TechSpec
-  // Thông tin XK + đặc tính nội thất (0037).
-  hs_code: string | null
-  origin_country: string | null
-  material: string | null
-  max_load_kg: number | null
-  assembly: 'assembled' | 'kd' | null
-  set_contents: string | null
-  is_active: boolean
-}
+import type { RowMenuItem } from '@/components/erp/RowMenu'
+import { TopProgressBar } from '@/components/erp/Spinner'
+import { BomEditor } from './_components/BomEditor'
+import { CloneForm } from './_components/CloneForm'
+import { FilterBar } from './_components/FilterBar'
+import { ImagePreviewModal } from './_components/ImagePreviewModal'
+import { ProductCard } from './_components/ProductCard'
+import { ProductTable } from './_components/ProductTable'
+import { classLabel } from './_components/product-meta'
+import {
+  ACCENT_SOLID,
+  BOM_LABEL,
+  VIEW_STORAGE_KEY,
+  type BomRow,
+  type BomTarget,
+  type CustomerNameOption,
+  type Filters,
+  type MaterialOption,
+  type Product,
+  type ProductCounts,
+  type ProductRow,
+  type ToggleFilterKey,
+} from './_components/types'
 
 /**
- * Dòng nhẹ cho thư viện (thẻ/bảng) — chỉ trường cần; full nạp khi mở form sửa.
- * `has_drawing` / `has_bom` suy từ FILE đã upload (doc_type), không phải link cũ.
+ * Màn Thư viện sản phẩm — chỉ giữ TRẠNG THÁI và ĐIỀU PHỐI.
+ *
+ * Phần nhìn nằm ở `_components/`: FilterBar (thanh lọc), ProductCard (thẻ lưới),
+ * ProductTable (chế độ bảng), ImagePreviewModal / CloneForm / BomEditor (3 hộp
+ * thoại), product-meta (dải hồ sơ + nhãn phân loại), types (kiểu + hằng).
  */
-type ProductRow = Pick<
-  Product,
-  | 'id'
-  | 'code'
-  | 'name'
-  | 'category'
-  | 'customer_name'
-  | 'customer_item_code'
-  | 'unit'
-  | 'bom_status'
-  | 'packing'
-  | 'image_file_id'
-  | 'is_active'
-> & { has_drawing: boolean; has_bom: boolean }
-
-type ProductCounts = {
-  total: number
-  active: number
-  bom_none: number
-  bom_drawing: number
-  bom_done: number
-}
-type Filters = { q: string; customer: string; bom: string; status: string }
-
-/** Nhãn khách/nhóm đã dùng + số SP — đổ vào dropdown lọc & ô gợi ý. */
-type CustomerNameOption = { name: string; count: number }
-type MaterialOption = { id: string; code: string; name: string; unit: string }
-
-/** SP tối thiểu để mở BOM editor (nhận cả ProductRow lẫn Product đầy đủ). */
-type BomTarget = Pick<Product, 'id' | 'code' | 'name' | 'bom_status'>
-
-/** Dòng BOM đang biên tập (id chỉ có với dòng đã lưu). */
-type BomRow = { material_id: string; qty_per_unit: number | ''; note: string }
-
-/** Giá trị lọc "chưa gõ nhãn khách" — PHẢI khớp NO_CUSTOMER_FILTER ở technical.repo.ts. */
-const NO_CUSTOMER = '__common'
-
-const BOM_LABEL: Record<BomStatus, string> = {
-  none: 'Chưa có BOM',
-  drawing: 'Đang vẽ',
-  done: 'Đã vẽ',
-}
-const BOM_TONE: Record<BomStatus, 'gray' | 'amber' | 'green'> = {
-  none: 'gray',
-  drawing: 'amber',
-  done: 'green',
-}
-
 export function ProductsManager({
   products,
   total,
@@ -158,6 +75,13 @@ export function ProductsManager({
   const [busy, setBusy] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [cloning, setCloning] = useState<Product | null>(null)
+  /**
+   * Ảnh đang xem phóng to. URL đã được server ký sẵn cho lưới nên mở hộp xem
+   * KHÔNG tốn thêm lượt gọi API — chỉ hiện to đúng tấm đang có.
+   */
+  const [preview, setPreview] = useState<{ product: ProductRow; url: string } | null>(
+    null,
+  )
   /** Mã gợi ý cho bản sao — xin sẵn ở `openClone`, '' nếu không suy ra được. */
   const [cloneCode, setCloneCode] = useState('')
   const [bomFor, setBomFor] = useState<{ product: BomTarget; rows: BomRow[] } | null>(
@@ -169,6 +93,20 @@ export function ProductsManager({
 
   // Ô tìm (debounce) — đẩy xuống URL để SERVER lọc, không lọc toàn bộ ở client.
   const [q, setQ] = useState(filters.q)
+
+  // Kiểu xem là thói quen cá nhân (KT hay soi ảnh, KH hay tra bảng) nên nhớ lại.
+  // Đọc SAU hydration: lazy-init từ localStorage sẽ lệch với HTML server.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem(VIEW_STORAGE_KEY)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync 1 lần từ localStorage
+    if (saved === 'grid' || saved === 'list') setView(saved)
+  }, [])
+
+  function changeView(v: 'grid' | 'list') {
+    setView(v)
+    if (typeof window !== 'undefined') localStorage.setItem(VIEW_STORAGE_KEY, v)
+  }
 
   // Đổi bộ lọc/trang → cập nhật query param → server refetch đúng 1 trang.
   const applyParams = useCallback(
@@ -185,6 +123,14 @@ export function ProductsManager({
       router.replace(qs ? `/technical/products?${qs}` : '/technical/products')
     },
     [router, sp],
+  )
+
+  /** Chip lọc: bấm lại giá trị đang bật thì bỏ lọc đó. */
+  const toggleParam = useCallback(
+    (key: ToggleFilterKey, value: string) => {
+      applyParams({ [key]: filters[key] === value ? undefined : value })
+    },
+    [applyParams, filters],
   )
 
   /**
@@ -212,7 +158,21 @@ export function ProductsManager({
     !!filters.q ||
     filters.customer !== 'all' ||
     filters.bom !== 'all' ||
-    filters.status !== 'all'
+    filters.status !== 'all' ||
+    filters.image !== 'all' ||
+    filters.type !== 'all'
+
+  function clearFilters() {
+    setQ('')
+    applyParams({
+      q: undefined,
+      customer: undefined,
+      bom: undefined,
+      status: undefined,
+      image: undefined,
+      type: undefined,
+    })
+  }
 
   async function send(
     url: string,
@@ -256,6 +216,7 @@ export function ProductsManager({
       return null
     }
   }
+
   /**
    * Mở hộp nhân bản. Xin luôn mã kế tiếp ở ĐÂY (không phải trong form) để form
    * không phải chạy effect gọi API lúc mount. Bản sao giữ nguyên loại + vật
@@ -320,7 +281,7 @@ export function ProductsManager({
     }
   }
 
-  // Deep-link từ trang chi tiết: ?edit / ?clone / ?openbom = <id> → nạp full rồi mở
+  // Deep-link từ trang chi tiết: ?clone / ?openbom = <id> → nạp full rồi mở
   // modal (SP có thể không ở trang hiện tại nên GET theo id). Dùng 'openbom' KHÁC
   // tham số lọc 'bom' của thư viện để không đụng nhau.
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -355,14 +316,15 @@ export function ProductsManager({
         header: 'Khách hàng',
         get: (p) => p.customer_name ?? 'Mẫu chung',
       },
-      { key: 'category', header: 'Danh mục' },
+      // Cột `category` đã bỏ khỏi CSV: 9/537 dòng có giá trị và toàn là tên
+      // khách gõ nhầm ô, nên nó chỉ lặp lại cột "Khách hàng" ở trên.
+      { key: 'product_type', header: 'Loại', get: (p) => classLabel(p) ?? '' },
       { key: 'unit', header: 'ĐVT' },
       { key: 'bom_status', header: 'BOM', get: (p) => BOM_LABEL[p.bom_status] },
       {
         key: 'packing',
         header: 'Loading 40HC',
-        get: (p) =>
-          p.packing?.loading_40hc != null ? String(p.packing.loading_40hc) : '',
+        get: (p) => (p.loading_40hc != null ? String(p.loading_40hc) : ''),
       },
       {
         key: 'is_active',
@@ -373,163 +335,9 @@ export function ProductsManager({
     toast.success(`Đã xuất ${products.length} dòng (trang hiện tại) ra CSV`)
   }
 
-  const columns: Column<ProductRow>[] = [
-    {
-      key: 'code',
-      header: 'Mã / Tên',
-      sortValue: (p) => p.code,
-      cell: (p) => (
-        <Link
-          href={`/technical/products/${p.id}`}
-          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
-        >
-          <span className="font-mono text-xs text-zinc-400">
-            {p.code}
-            {p.customer_item_code && (
-              <span className="ml-1 text-sky-600 dark:text-sky-400">
-                · KH: {p.customer_item_code}
-              </span>
-            )}
-          </span>
-          <span className="truncate font-medium">{p.name}</span>
-        </Link>
-      ),
-    },
-    {
-      key: 'customer',
-      header: 'Khách hàng',
-      sortValue: (p) => p.customer_name ?? '',
-      width: '160px',
-      cell: (p) =>
-        p.customer_name ? (
-          <span className="truncate">{p.customer_name}</span>
-        ) : (
-          <Badge tone="gray">Mẫu chung</Badge>
-        ),
-    },
-    {
-      key: 'bom',
-      header: 'BOM',
-      sortValue: (p) => p.bom_status,
-      width: '120px',
-      cell: (p) => <Badge tone={BOM_TONE[p.bom_status]}>{BOM_LABEL[p.bom_status]}</Badge>,
-    },
-    {
-      key: 'docs',
-      header: 'Tài liệu',
-      width: '140px',
-      cell: (p) => (
-        <div className="flex items-center gap-2 text-xs">
-          {p.has_drawing ? (
-            <span className="text-emerald-600 dark:text-emerald-400">Bản vẽ ✓</span>
-          ) : (
-            <span className="text-amber-600">Thiếu BV</span>
-          )}
-          {p.has_bom && (
-            <span className="text-emerald-600 dark:text-emerald-400">BOM ✓</span>
-          )}
-        </div>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Trạng thái',
-      sortValue: (p) => (p.is_active ? 0 : 1),
-      width: '110px',
-      cell: (p) =>
-        p.is_active ? (
-          <Badge tone="green">Đang dùng</Badge>
-        ) : (
-          <Badge tone="gray">Ngừng</Badge>
-        ),
-    },
-    {
-      key: 'actions',
-      header: '',
-      width: '56px',
-      align: 'right',
-      cell: (p) => {
-        const items: { label: string; onClick: () => void; danger?: boolean }[] = [
-          {
-            label: 'Xem chi tiết',
-            onClick: () => router.push(`/technical/products/${p.id}`),
-          },
-          { label: 'BOM định mức', onClick: () => void openBom(p) },
-        ]
-        if (canEdit) {
-          items.push(
-            {
-              label: 'Sửa',
-              onClick: () => router.push(`/technical/products/${p.id}/edit`),
-            },
-            { label: 'Nhân bản mẫu', onClick: () => void openClone(p.id) },
-            {
-              label: p.is_active ? 'Ngừng sử dụng' : 'Kích hoạt lại',
-              onClick: () =>
-                send(`/api/dept/technical/products/${p.id}`, 'PATCH', {
-                  is_active: !p.is_active,
-                }),
-            },
-          )
-        }
-        const menuItems = canEdit
-          ? [...items, { label: 'Xoá', onClick: () => deleteProduct(p), danger: true }]
-          : items
-        return <RowMenu items={menuItems} />
-      },
-    },
-  ]
-
-  const customerOptions = [
-    { value: 'all', label: 'Mọi khách hàng' },
-    { value: NO_CUSTOMER, label: 'Mẫu chung' },
-    ...customerNames.map((c) => ({ value: c.name, label: `${c.name} (${c.count})` })),
-  ]
-  const bomOptions = [
-    { value: 'all' as const, label: 'BOM: tất cả' },
-    { value: 'none' as const, label: 'Chưa có BOM' },
-    { value: 'drawing' as const, label: 'Đang vẽ' },
-    { value: 'done' as const, label: 'Đã vẽ' },
-  ]
-  const statusOptions = [
-    { value: 'all' as const, label: 'Mọi trạng thái' },
-    { value: 'active' as const, label: 'Đang dùng' },
-    { value: 'inactive' as const, label: 'Ngừng' },
-  ]
-
-  const btnSecondary =
-    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900'
-  const btnPrimary =
-    'rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700'
-
-  // Nhóm SP theo nhãn khách (thư viện tổ chức theo khách; "Mẫu chung" xếp cuối).
-  const groups = useMemo(() => {
-    const map = new Map<string, { name: string; items: ProductRow[] }>()
-    for (const p of products) {
-      const key = p.customer_name ?? NO_CUSTOMER
-      const name = p.customer_name ?? 'Mẫu chung'
-      if (!map.has(key)) map.set(key, { name, items: [] })
-      map.get(key)!.items.push(p)
-    }
-    return [...map.values()].sort((a, b) => {
-      if (a.name === 'Mẫu chung') return 1
-      if (b.name === 'Mẫu chung') return -1
-      return a.name.localeCompare(b.name)
-    })
-  }, [products])
-
-  function dims(p: ProductRow) {
-    const k = p.packing ?? {}
-    return k.l_cm != null && k.w_cm != null && k.h_cm != null
-      ? `${k.l_cm}×${k.w_cm}×${k.h_cm}`
-      : null
-  }
-
-  function renderCard(p: ProductRow) {
-    const img = imageUrls[p.id]
-    const d = dims(p)
-    const load = p.packing?.loading_40hc
-    const menuItems: { label: string; onClick: () => void; danger?: boolean }[] = [
+  /** Menu ⋯ dùng chung cho thẻ và dòng bảng — một bộ hành động, một thứ tự. */
+  function rowActions(p: ProductRow): RowMenuItem[] {
+    const items: RowMenuItem[] = [
       {
         label: 'Xem chi tiết',
         onClick: () => router.push(`/technical/products/${p.id}`),
@@ -537,67 +345,28 @@ export function ProductsManager({
       { label: 'BOM định mức', onClick: () => void openBom(p) },
     ]
     if (canEdit) {
-      menuItems.push(
+      items.push(
+        // Sửa nằm ngay trong tab Hồ sơ của trang chi tiết — không có route /edit.
         {
-          label: 'Sửa',
-          onClick: () => router.push(`/technical/products/${p.id}/edit`),
+          label: 'Sửa hồ sơ',
+          onClick: () => router.push(`/technical/products/${p.id}`),
         },
         { label: 'Nhân bản mẫu', onClick: () => void openClone(p.id) },
+        {
+          label: p.is_active ? 'Ngừng sử dụng' : 'Kích hoạt lại',
+          onClick: () =>
+            send(`/api/dept/technical/products/${p.id}`, 'PATCH', {
+              is_active: !p.is_active,
+            }),
+        },
         { label: 'Xoá', onClick: () => void deleteProduct(p), danger: true },
       )
     }
-    return (
-      <div
-        key={p.id}
-        className={`relative overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950 ${!p.is_active ? 'opacity-60' : ''}`}
-      >
-        <div className="absolute top-2 right-2 z-10">
-          <RowMenu items={menuItems} />
-        </div>
-        <Link href={`/technical/products/${p.id}`} className="block">
-          <div className="flex h-28 items-center justify-center border-b border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
-            {img ? (
-              <Image
-                src={img}
-                alt={p.name}
-                width={160}
-                height={112}
-                unoptimized={isSvgUrl(img)}
-                className="max-h-full max-w-full object-contain"
-              />
-            ) : (
-              <span className="text-[11px] text-amber-600 dark:text-amber-500">
-                chưa có ảnh
-              </span>
-            )}
-            <span className="absolute top-2 left-2">
-              <Badge tone={BOM_TONE[p.bom_status]}>{BOM_LABEL[p.bom_status]}</Badge>
-            </span>
-          </div>
-          <div className="p-2.5">
-            <div className="truncate font-mono text-[11px] text-zinc-400">
-              {p.code}
-              {p.customer_item_code && ` · KH: ${p.customer_item_code}`}
-            </div>
-            <div className="line-clamp-2 text-sm font-medium">{p.name}</div>
-            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-zinc-500">
-              {d && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                  📐 {d}
-                </span>
-              )}
-              {load != null && (
-                <span className="rounded-full bg-zinc-100 px-2 py-0.5 dark:bg-zinc-800">
-                  40HC {load}
-                </span>
-              )}
-              {!p.has_drawing && <span className="text-amber-600">Thiếu BV</span>}
-            </div>
-          </div>
-        </Link>
-      </div>
-    )
+    return items
   }
+
+  const from = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const to = Math.min(page * pageSize, total)
 
   return (
     <div className="flex flex-col gap-4">
@@ -608,189 +377,127 @@ export function ProductsManager({
           { label: 'Thư viện sản phẩm' },
         ]}
         title="Thư viện sản phẩm"
-        description={`${total} sản phẩm · trang ${page}/${totalPages} — tổ chức theo khách hàng, kèm cờ BOM.`}
+        description={
+          hasFilter
+            ? `${total} kết quả · lọc từ ${counts.total} sản phẩm`
+            : `${counts.total} sản phẩm · ${customerNames.length} khách hàng`
+        }
         actions={
           <>
-            <button onClick={exportCsv} className={btnSecondary}>
-              Export CSV
-            </button>
+            <Button variant="outline" size="sm" onClick={exportCsv}>
+              <Download /> Xuất CSV
+            </Button>
             {canEdit && (
-              <Link href="/technical/products/new" className={btnPrimary}>
-                + Thêm sản phẩm
-              </Link>
+              <Button size="sm" className={ACCENT_SOLID} asChild>
+                <Link href="/technical/products/new">
+                  <Plus /> Thêm sản phẩm
+                </Link>
+              </Button>
             )}
           </>
         }
       />
 
-      <StatsBar
-        stats={[
-          { label: 'Tổng SP', value: counts.total, tone: 'default' },
-          { label: 'Đang dùng', value: counts.active, tone: 'green' },
-          { label: 'BOM đã vẽ', value: counts.bom_done, tone: 'green' },
-          {
-            label: 'Đang vẽ',
-            value: counts.bom_drawing,
-            tone: counts.bom_drawing ? 'amber' : 'gray',
-          },
-          {
-            label: 'Chưa có BOM',
-            value: counts.bom_none,
-            tone: counts.bom_none ? 'amber' : 'gray',
-          },
-        ]}
+      <FilterBar
+        filters={filters}
+        counts={counts}
+        customerNames={customerNames}
+        q={q}
+        onQChange={setQ}
+        searching={searching}
+        view={view}
+        onViewChange={changeView}
+        onParamChange={applyParams}
+        onToggle={toggleParam}
+        hasFilter={hasFilter}
+        onClear={clearFilters}
       />
 
-      <div>
-        <Toolbar
-          left={
-            <>
-              <ToolbarInput
-                value={q}
-                onChange={setQ}
-                placeholder="Tìm mã, tên, mã KH đặt, khách hàng…"
-                icon={searching ? '⋯' : '⌕'}
-                className="w-72"
-              />
-              <ToolbarSelect
-                value={filters.customer}
-                onChange={(v) => applyParams({ customer: v })}
-                options={customerOptions}
-              />
-              <ToolbarSelect
-                value={filters.bom}
-                onChange={(v) => applyParams({ bom: v })}
-                options={bomOptions}
-              />
-              <ToolbarSelect
-                value={filters.status}
-                onChange={(v) => applyParams({ status: v })}
-                options={statusOptions}
-              />
-              {(filters.q ||
-                filters.customer !== 'all' ||
-                filters.bom !== 'all' ||
-                filters.status !== 'all') && (
-                <button
-                  onClick={() => {
-                    setQ('')
-                    applyParams({
-                      q: undefined,
-                      customer: undefined,
-                      bom: undefined,
-                      status: undefined,
-                    })
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
-                >
-                  Xoá lọc
-                </button>
-              )}
-            </>
+      {/* Kết quả gần đúng phải NÓI RA: người tra mã mà nhận nhầm sản phẩm khác
+          là chuyện tốn tiền, không được lặng lẽ đưa thứ na ná. */}
+      {fuzzy && (
+        <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+          Không có kết quả khớp đúng “<b>{filters.q}</b>” — đây là {products.length} sản
+          phẩm có tên/mã <b>gần giống</b>, xếp theo độ giống. Kiểm lại mã trước khi dùng.
+        </div>
+      )}
+
+      {products.length === 0 ? (
+        <EmptyState
+          icon={<PackageSearch className="size-6 text-sky-500" />}
+          title={hasFilter ? 'Không tìm thấy sản phẩm nào' : 'Chưa có sản phẩm nào'}
+          description={
+            hasFilter
+              ? 'Thử bỏ bớt bộ lọc hoặc gõ lại từ khoá.'
+              : canEdit
+                ? 'Thêm sản phẩm đầu tiên để bắt đầu thư viện.'
+                : 'Liên hệ Kỹ thuật để bổ sung sản phẩm vào thư viện.'
           }
-          right={
-            <div className="flex items-center gap-2">
-              {busy && (
-                <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
-                  <Spinner size={12} /> Đang xử lý…
-                </span>
-              )}
-              <div className="inline-flex overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700">
-                <button
-                  onClick={() => setView('grid')}
-                  aria-label="Xem lưới"
-                  title="Lưới (thư viện)"
-                  className={`px-2.5 py-1.5 text-sm ${view === 'grid' ? 'bg-sky-600 text-white' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900'}`}
-                >
-                  ▦
-                </button>
-                <button
-                  onClick={() => setView('list')}
-                  aria-label="Xem danh sách"
-                  title="Danh sách (bảng)"
-                  className={`border-l border-zinc-300 px-2.5 py-1.5 text-sm dark:border-zinc-700 ${view === 'list' ? 'bg-sky-600 text-white' : 'text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-900'}`}
-                >
-                  ☰
-                </button>
-              </div>
-            </div>
+          action={
+            hasFilter ? (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                <X /> Xoá lọc
+              </Button>
+            ) : canEdit ? (
+              <Button size="sm" className={ACCENT_SOLID} asChild>
+                <Link href="/technical/products/new">
+                  <Plus /> Thêm sản phẩm
+                </Link>
+              </Button>
+            ) : undefined
           }
         />
+      ) : view === 'list' ? (
+        <ProductTable
+          products={products}
+          imageUrls={imageUrls}
+          rowActions={rowActions}
+          onZoom={(product, url) => setPreview({ product, url })}
+        />
+      ) : (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          {products.map((p) => (
+            <ProductCard
+              key={p.id}
+              p={p}
+              imageUrl={imageUrls[p.id]}
+              actions={rowActions(p)}
+              onZoom={(url) => setPreview({ product: p, url })}
+            />
+          ))}
+        </div>
+      )}
 
-        {/* Kết quả gần đúng phải NÓI RA: người tra mã mà nhận nhầm sản phẩm khác
-            là chuyện tốn tiền, không được lặng lẽ đưa thứ na ná. */}
-        {fuzzy && (
-          <div className="mb-3 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-            Không có kết quả khớp đúng “<b>{filters.q}</b>” — đây là {products.length} sản
-            phẩm có tên/mã <b>gần giống</b>, xếp theo độ giống. Kiểm lại mã trước khi
-            dùng.
-          </div>
-        )}
-
-        {products.length === 0 ? (
-          <EmptyState
-            icon="◇"
-            title={hasFilter ? 'Không khớp bộ lọc' : 'Thư viện sản phẩm trống'}
-            description={
-              hasFilter
-                ? 'Thử điều chỉnh bộ lọc.'
-                : canEdit
-                  ? 'Thêm sản phẩm đầu tiên để khởi tạo thư viện.'
-                  : 'Chưa có sản phẩm nào — liên hệ Kỹ thuật để bổ sung.'
-            }
-            action={
-              canEdit && !hasFilter ? (
-                <Link href="/technical/products/new" className={btnPrimary}>
-                  + Thêm sản phẩm
-                </Link>
-              ) : undefined
-            }
-          />
-        ) : view === 'list' ? (
-          <DataTable<ProductRow>
-            rows={products}
-            columns={columns}
-            storageKey="tech-products"
-            rowClassName={(p) => (!p.is_active ? 'opacity-60' : '')}
-          />
-        ) : (
-          <div className="mt-1 flex flex-col gap-5">
-            {groups.map((g) => (
-              <div key={g.name}>
-                <div className="mb-2 flex items-center gap-2 text-sm text-zinc-500">
-                  <span className="font-medium">{g.name}</span>
-                  <span className="text-xs text-zinc-400">· {g.items.length} SP</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {g.items.map(renderCard)}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-center gap-3 text-sm">
-            <button
+      {products.length > 0 && totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {from}–{to} / {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="outline"
+              size="sm"
               disabled={page <= 1}
               onClick={() => applyParams({ page: String(page - 1) })}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
-              ‹ Trước
-            </button>
-            <span className="text-zinc-500">
-              Trang {page} / {totalPages}
+              <ChevronLeft /> Trước
+            </Button>
+            <span className="text-muted-foreground px-2 text-xs tabular-nums">
+              {page} / {totalPages}
             </span>
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               disabled={page >= totalPages}
               onClick={() => applyParams({ page: String(page + 1) })}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
-              Sau ›
-            </button>
+              Sau <ChevronRight />
+            </Button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      <ImagePreviewModal preview={preview} onClose={() => setPreview(null)} />
 
       {/* Clone (FR-ENG-02: tái sử dụng mẫu) */}
       <Modal
@@ -852,295 +559,6 @@ export function ProductsManager({
           />
         )}
       </Modal>
-    </div>
-  )
-}
-
-// ── Clone form (FR-ENG-02) ───────────────────────────────────────────────
-
-function CloneForm({
-  source,
-  suggestedCode,
-  customerNames,
-  onSubmit,
-}: {
-  source: Product
-  /** Mã kế tiếp cùng loại + vật liệu, xin sẵn ở `openClone`. '' = phải nhập tay. */
-  suggestedCode: string
-  customerNames: CustomerNameOption[]
-  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
-}) {
-  const [busy, setBusy] = useState(false)
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  const [code, setCode] = useState(suggestedCode)
-
-  async function handle(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const body: Record<string, unknown> = {
-      code: code.trim(),
-      name: String(fd.get('name') ?? '').trim() || undefined,
-      customer_name: String(fd.get('customer_name') ?? '').trim() || null,
-      customer_item_code: String(fd.get('customer_item_code') ?? '').trim() || null,
-    }
-    setBusy(true)
-    await onSubmit(body)
-    setBusy(false)
-  }
-
-  return (
-    <form onSubmit={handle} className="flex flex-col gap-3">
-      <p className="text-sm text-zinc-500">
-        Copy toàn bộ thuộc tính + BOM của <span className="font-mono">{source.code}</span>{' '}
-        sang sản phẩm mới — dùng khi khách đặt lại mẫu cũ.
-      </p>
-      <label className="flex flex-col gap-1 text-sm">
-        Mã SP mới <span className="text-red-500">*</span>
-        <input
-          value={code}
-          onChange={(e) => setCode(e.target.value.toUpperCase())}
-          required
-          maxLength={100}
-          placeholder="Nhập mã"
-          className={`${cls} font-mono`}
-        />
-        <span className="text-xs text-zinc-500">
-          {suggestedCode
-            ? 'Mã kế tiếp cùng loại và vật liệu, cấp sẵn — sửa được.'
-            : 'Mẫu gốc mang mã cũ, không suy ra được mã mới — nhập tay.'}
-        </span>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Tên (bỏ trống = giữ tên gốc)
-        <input name="name" maxLength={200} placeholder={source.name} className={cls} />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Khách hàng / nhóm
-        <input
-          name="customer_name"
-          list="clone-customer-names"
-          maxLength={200}
-          defaultValue={source.customer_name ?? ''}
-          className={cls}
-          placeholder="Gõ tên bất kỳ — để trống là mẫu chung"
-        />
-        <datalist id="clone-customer-names">
-          {customerNames.map((c) => (
-            <option key={c.name} value={c.name} />
-          ))}
-        </datalist>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Mã KH đặt (Customer Item)
-        <input name="customer_item_code" maxLength={100} className={`${cls} font-mono`} />
-      </label>
-      <div className="mt-1 flex justify-end">
-        <button
-          disabled={busy}
-          className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-        >
-          {busy && <Spinner size={14} />}
-          {busy ? 'Đang nhân bản…' : 'Nhân bản'}
-        </button>
-      </div>
-    </form>
-  )
-}
-
-// ── BOM editor (FR-ENG-04) ───────────────────────────────────────────────
-
-function BomEditor({
-  initialRows,
-  bomStatus,
-  materials,
-  canEdit,
-  onSave,
-}: {
-  initialRows: BomRow[]
-  bomStatus: BomStatus
-  materials: MaterialOption[]
-  canEdit: boolean
-  onSave: (
-    rows: { material_id: string; qty_per_unit: number; note: string }[],
-  ) => Promise<void>
-}) {
-  const [rows, setRows] = useState<BomRow[]>(initialRows)
-  const [busy, setBusy] = useState(false)
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  const materialById = useMemo(() => {
-    const m = new Map<string, MaterialOption>()
-    for (const mt of materials) m.set(mt.id, mt)
-    return m
-  }, [materials])
-
-  const usedIds = new Set(rows.map((r) => r.material_id))
-  const dup = rows.length !== usedIds.size
-
-  function setRow(i: number, patch: Partial<BomRow>) {
-    setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
-  }
-
-  async function handleSave() {
-    const clean = rows.filter((r) => r.material_id)
-    if (clean.some((r) => r.qty_per_unit === '' || Number(r.qty_per_unit) <= 0)) {
-      return // nút save đã disable, đây chỉ là chốt chặn
-    }
-    setBusy(true)
-    await onSave(
-      clean.map((r) => ({
-        material_id: r.material_id,
-        qty_per_unit: Number(r.qty_per_unit),
-        note: r.note,
-      })),
-    )
-    setBusy(false)
-  }
-
-  const invalid =
-    dup ||
-    rows.some(
-      (r) => !r.material_id || r.qty_per_unit === '' || Number(r.qty_per_unit) <= 0,
-    )
-
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-zinc-500">
-          Định mức vật tư cho <b>1 sản phẩm</b> — mã vật tư dùng chung với danh mục Kho.
-        </span>
-        <Badge tone={BOM_TONE[bomStatus]}>{BOM_LABEL[bomStatus]}</Badge>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
-              <th className="py-2 pr-2">Vật tư</th>
-              <th className="w-28 py-2 pr-2">Định mức / SP</th>
-              <th className="w-16 py-2 pr-2">ĐVT</th>
-              <th className="py-2 pr-2">Ghi chú</th>
-              {canEdit && <th className="w-10 py-2" />}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="py-6 text-center text-zinc-400">
-                  Chưa có dòng vật tư nào.
-                </td>
-              </tr>
-            )}
-            {rows.map((r, i) => {
-              const mat = materialById.get(r.material_id)
-              return (
-                <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
-                  <td className="py-1.5 pr-2">
-                    {canEdit ? (
-                      <select
-                        value={r.material_id}
-                        onChange={(e) => setRow(i, { material_id: e.target.value })}
-                        className={cls}
-                      >
-                        <option value="">— chọn vật tư —</option>
-                        {materials.map((m) => (
-                          <option
-                            key={m.id}
-                            value={m.id}
-                            disabled={usedIds.has(m.id) && m.id !== r.material_id}
-                          >
-                            {m.code} — {m.name}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <span>
-                        <span className="font-mono text-xs text-zinc-400">
-                          {mat?.code}
-                        </span>{' '}
-                        {mat?.name ?? '?'}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-2">
-                    {canEdit ? (
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={r.qty_per_unit}
-                        onChange={(e) =>
-                          setRow(i, {
-                            qty_per_unit:
-                              e.target.value === '' ? '' : Number(e.target.value),
-                          })
-                        }
-                        className={cls}
-                      />
-                    ) : (
-                      String(r.qty_per_unit)
-                    )}
-                  </td>
-                  <td className="py-1.5 pr-2 text-zinc-500">{mat?.unit ?? ''}</td>
-                  <td className="py-1.5 pr-2">
-                    {canEdit ? (
-                      <input
-                        value={r.note}
-                        maxLength={500}
-                        onChange={(e) => setRow(i, { note: e.target.value })}
-                        className={cls}
-                        placeholder="vd: chân trước, khung ngồi…"
-                      />
-                    ) : (
-                      r.note || '—'
-                    )}
-                  </td>
-                  {canEdit && (
-                    <td className="py-1.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setRows((rs) => rs.filter((_, idx) => idx !== i))}
-                        className="rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                        aria-label="Xoá dòng"
-                      >
-                        ✕
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {dup && <p className="text-xs text-red-600">Có vật tư bị chọn trùng 2 dòng.</p>}
-
-      {canEdit && (
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() =>
-              setRows((rs) => [...rs, { material_id: '', qty_per_unit: '', note: '' }])
-            }
-            className="rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
-          >
-            + Thêm dòng vật tư
-          </button>
-          <button
-            type="button"
-            disabled={busy || invalid}
-            onClick={() => void handleSave()}
-            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {busy && <Spinner size={14} />}
-            {busy ? 'Đang lưu…' : 'Lưu BOM'}
-          </button>
-        </div>
-      )}
     </div>
   )
 }

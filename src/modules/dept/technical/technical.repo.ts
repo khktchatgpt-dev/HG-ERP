@@ -103,7 +103,7 @@ const COLS =
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 const LITE_COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, unit, bom_status, packing, image_file_id, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, image_file_id, is_active, created_at'
 
 export type ProductLite = Pick<
   Product,
@@ -111,6 +111,10 @@ export type ProductLite = Pick<
   | 'code'
   | 'name'
   | 'category'
+  // Phân loại THẬT của thư viện (529/537 SP có, khớp 100% với mã SP). Cột
+  // `category` thì gần như rỗng và bị gõ nhầm tên khách vào — đừng dùng nó.
+  | 'product_type'
+  | 'frame_material'
   | 'customer_id'
   | 'customer_name'
   | 'customer_item_code'
@@ -128,6 +132,8 @@ export type ProductCounts = {
   bom_none: number
   bom_drawing: number
   bom_done: number
+  /** SP chưa có ảnh đại diện — lỗ hổng hồ sơ thấy được ngay trên thẻ thư viện. */
+  no_image: number
 }
 
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
@@ -189,6 +195,10 @@ export const productsRepo = {
     customer_name?: string
     bom_status?: BomStatus
     is_active?: boolean
+    /** false = chỉ SP CHƯA có ảnh; true = chỉ SP đã có; bỏ trống = không lọc. */
+    has_image?: boolean
+    /** Mã loại SP 2 ký tự ('CH', 'TB'…) — xem PRODUCT_TYPES ở lib/product-code. */
+    product_type?: string
     page: number
     page_size: number
   }): Promise<{ rows: ProductLite[]; total: number }> {
@@ -200,6 +210,9 @@ export const productsRepo = {
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
     if (filter.bom_status) q = q.eq('bom_status', filter.bom_status)
+    if (filter.product_type) q = q.eq('product_type', filter.product_type)
+    if (filter.has_image === false) q = q.is('image_file_id', null)
+    else if (filter.has_image === true) q = q.not('image_file_id', 'is', null)
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -243,6 +256,7 @@ export const productsRepo = {
       bom_none: Number(r?.bom_none ?? 0),
       bom_drawing: Number(r?.bom_drawing ?? 0),
       bom_done: Number(r?.bom_done ?? 0),
+      no_image: Number(r?.no_image ?? 0),
     }
   },
 
@@ -762,5 +776,37 @@ export const productProfileRepo = {
       ...o,
       packages: (o.packages ?? []).sort((a, b) => a.sort_order - b.sort_order),
     }))
+  },
+
+  /**
+   * Số xếp cont 40HC theo SP, cho MỘT TRANG thư viện (map productId → loading).
+   *
+   * Số thật nằm ở `technical_packing_options`, KHÔNG phải jsonb
+   * `technical_products.packing` — jsonb chỉ là ô tóm tắt nhập tay và phần lớn
+   * SP bỏ trống (5/537 có số, trong khi 168 SP đã có phương án đóng gói thật).
+   * Đọc nhầm chỗ thì thư viện báo "chưa có đóng gói" cho SP đã khai đủ — đúng
+   * lỗi mà trang chi tiết đã phải sửa bằng `withPackingFallback`.
+   *
+   * Nhiều phương án thì lấy phương án MẶC ĐỊNH, không có mặc định thì lấy
+   * `option_no` nhỏ nhất — cùng thứ tự ưu tiên với trang chi tiết.
+   */
+  async packingLoadingByProducts(ids: string[]): Promise<Record<string, number>> {
+    if (ids.length === 0) return {}
+    const { data } = await db()
+      .from('technical_packing_options')
+      .select('product_id, loading_40hc, is_default, option_no')
+      .in('product_id', ids)
+      .not('loading_40hc', 'is', null)
+      .order('option_no')
+
+    const best = new Map<string, { loading: number; is_default: boolean }>()
+    for (const r of data ?? []) {
+      const cur = best.get(r.product_id)
+      // `.order('option_no')` đã lo thứ tự, nên chỉ cần cướp chỗ khi gặp mặc định.
+      if (!cur || (r.is_default && !cur.is_default)) {
+        best.set(r.product_id, { loading: r.loading_40hc!, is_default: r.is_default })
+      }
+    }
+    return Object.fromEntries([...best].map(([id, v]) => [id, v.loading]))
   },
 }

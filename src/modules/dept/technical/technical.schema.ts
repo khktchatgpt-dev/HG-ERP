@@ -35,6 +35,21 @@ export const productCreateSchema = z.object({
   code: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(200),
   category: z.string().trim().max(100).optional().nullable(),
+  /**
+   * Phân loại SP — cột thật, KHÁC hai ký tự nằm trong mã.
+   *
+   * Bỏ trống thì service tự suy từ mã (`parseProductCode`), nên đường tạo nào
+   * cũng có phân loại mà không phải khai lại. Chỉ cần gửi tường minh khi mã
+   * KHÔNG theo quy tắc (SP mã cũ nhập tay) — lúc đó suy từ mã ra null.
+   */
+  product_type: z
+    .enum(PRODUCT_TYPE_CODES as unknown as [string, ...string[]])
+    .optional()
+    .nullable(),
+  frame_material: z
+    .enum(FRAME_MATERIAL_CODES as unknown as [string, ...string[]])
+    .optional()
+    .nullable(),
   // Nhãn khách/nhóm gõ tự do (0091) — Kỹ thuật KHÔNG chọn từ danh mục khách của
   // Kinh doanh nữa. null/rỗng = mẫu chung.
   customer_name: z.string().trim().max(200).optional().nullable(),

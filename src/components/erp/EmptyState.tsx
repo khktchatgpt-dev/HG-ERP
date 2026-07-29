@@ -4,7 +4,8 @@ export function EmptyState({
   description,
   action,
 }: {
-  icon?: string
+  /** Ký tự (◌, ▦…) hoặc một icon component — cả hai đều là ReactNode. */
+  icon?: React.ReactNode
   title: string
   description?: string
   action?: React.ReactNode
@@ -15,9 +16,7 @@ export function EmptyState({
         {icon}
       </div>
       <h3 className="text-sm font-medium">{title}</h3>
-      {description && (
-        <p className="max-w-md text-xs text-zinc-500">{description}</p>
-      )}
+      {description && <p className="max-w-md text-xs text-zinc-500">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
     </div>
   )

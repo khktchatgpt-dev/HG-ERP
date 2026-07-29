@@ -4005,6 +4005,7 @@ export type Database = {
           bom_done: number
           bom_drawing: number
           bom_none: number
+          no_image: number
           total: number
         }[]
       }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { X } from 'lucide-react'
 
 export function Modal({
   open,
@@ -35,16 +36,16 @@ export function Modal({
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full ${maxWidth} rounded-t-xl bg-white p-6 shadow-xl dark:bg-zinc-950 sm:rounded-xl`}
+        className={`w-full ${maxWidth} rounded-t-xl bg-white p-6 shadow-xl sm:rounded-xl dark:bg-zinc-950`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-semibold">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Đóng"
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
           >
-            ✕
+            <X className="size-4" />
           </button>
         </div>
         {children}
