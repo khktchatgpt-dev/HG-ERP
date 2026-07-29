@@ -22,7 +22,36 @@ import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
 import { worthFuzzy } from '@/lib/search-text'
-import { MAX_SERIAL, buildProductCode, nextSerial } from '@/lib/product-code'
+import {
+  MAX_SERIAL,
+  buildProductCode,
+  nextSerial,
+  parseProductCode,
+} from '@/lib/product-code'
+
+/**
+ * Phân loại (loại SP + vật liệu khung) cho một SP sắp tạo.
+ *
+ * Mã SP đã mang sẵn hai thông tin này nên SUY TỪ MÃ là nguồn khỏi lệch — dữ
+ * liệu thật đang khớp 100% giữa mã và hai cột. Giá trị gửi tường minh vẫn
+ * thắng, để SP mã cũ (`RHONE-CHAIR`, `28256-228`… — parse ra null) còn đường
+ * khai phân loại bằng tay.
+ *
+ * Trước đây hai cột này KHÔNG có đường nào ghi từ app (schema không nhận, service
+ * không set, DB không có trigger) — chỉ script import điền. Nên mọi SP tạo qua
+ * giao diện đều rơi ra ngoài cột "Loại" và bộ lọc loại của thư viện.
+ */
+function classify(input: {
+  code: string
+  product_type?: string | null
+  frame_material?: string | null
+}): { product_type: string | null; frame_material: string | null } {
+  const parsed = parseProductCode(input.code)
+  return {
+    product_type: input.product_type ?? parsed?.type ?? null,
+    frame_material: input.frame_material ?? parsed?.material ?? null,
+  }
+}
 
 // Phase B RBAC: mọi guard method đọc thẳng registry `actions.ts` qua
 // `assertAction` (nguồn sự thật). `isTechnicalStaff` giữ lại vì các module khác
@@ -159,6 +188,8 @@ export const productsService = {
       customer_name?: string
       bom_status?: BomStatus
       is_active?: boolean
+      has_image?: boolean
+      product_type?: string
       page: number
       page_size: number
     },
@@ -179,7 +210,9 @@ export const productsService = {
           (opts.customer_name === NO_CUSTOMER_FILTER
             ? r.customer_name == null
             : r.customer_name === opts.customer_name)) &&
-        (opts.bom_status == null || r.bom_status === opts.bom_status),
+        (opts.bom_status == null || r.bom_status === opts.bom_status) &&
+        (opts.has_image == null || (r.image_file_id != null) === opts.has_image) &&
+        (opts.product_type == null || r.product_type === opts.product_type),
     )
     return kept.length > 0 ? { rows: kept, total: kept.length, fuzzy: true } : strict
   },
@@ -187,6 +220,15 @@ export const productsService = {
   /** Nhãn khách/nhóm đã dùng — gợi ý khi gõ ở form + dropdown lọc thư viện. */
   async customerNames() {
     return productsRepo.customerNames()
+  },
+
+  /**
+   * Số xếp cont 40HC của MỘT TRANG SP (map productId → loading) — thư viện dùng
+   * để chấm mục "đóng gói" trên dải hồ sơ. Thư viện SP đọc được cho mọi NV nên
+   * không lọc theo user.
+   */
+  async packingLoading(_user: User, productIds: string[]) {
+    return productProfileRepo.packingLoadingByProducts(productIds)
   },
 
   /**
@@ -247,6 +289,7 @@ export const productsService = {
       code: input.code,
       name: input.name,
       category: input.category ?? null,
+      ...classify(input),
       customer_name: input.customer_name || null,
       customer_item_code: input.customer_item_code ?? null,
       description_en: input.description_en ?? null,
@@ -303,6 +346,8 @@ export const productsService = {
     return productsRepo.insert({
       code: input.code,
       name: input.name,
+      // Kinh doanh tạo nhanh thì không chọn loại/vật liệu — suy từ mã là đủ.
+      ...classify(input),
       unit: input.unit ?? 'cai',
       customer_id: input.customer_id ?? null,
       customer_name,

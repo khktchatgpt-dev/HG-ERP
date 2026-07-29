@@ -2,6 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
+import { PRODUCT_TYPE_CODES } from '@/lib/product-code'
 // (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
 import { ProductsManager } from './ProductsManager'
 
@@ -21,6 +22,12 @@ export default async function TechnicalProductsPage({
   const customer = str(spRaw.customer) || 'all'
   const bom = str(spRaw.bom) || 'all'
   const status = str(spRaw.status) || 'all'
+  // 'missing' = chưa có ảnh, 'has' = đã có. Giá trị lạ coi như không lọc.
+  const image = str(spRaw.image) || 'all'
+  // Mã loại SP 2 ký tự; chỉ nhận mã có thật trong PRODUCT_TYPES để URL bịa ra
+  // một mã lạ thì trả về danh sách đầy đủ chứ không phải 0 dòng khó hiểu.
+  const typeRaw = str(spRaw.type).toUpperCase()
+  const type = PRODUCT_TYPE_CODES.includes(typeRaw as never) ? typeRaw : 'all'
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
 
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
@@ -29,6 +36,8 @@ export default async function TechnicalProductsPage({
     customer_name: customer === 'all' ? undefined : customer,
     bom_status: bom === 'all' ? undefined : (bom as BomStatus),
     is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
+    has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
+    product_type: type === 'all' ? undefined : type,
     page,
     page_size: PAGE_SIZE,
   })
@@ -36,10 +45,15 @@ export default async function TechnicalProductsPage({
   // Nhãn khách/nhóm cho bộ lọc + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
   // suy từ FILE đã upload (chỉ cho SP của trang này). Vật tư cho BOM editor
   // KHÔNG nạp ở đây nữa — lazy-load khi mở editor (đỡ egress mỗi lần tải).
-  const [stats, customerNames, docFlags] = await Promise.all([
+  //
+  // `packingLoading`: số xếp cont THẬT nằm ở technical_packing_options, không
+  // phải jsonb `packing` — xem chú thích ở packingLoadingByProducts.
+  const ids = rows.map((p) => p.id)
+  const [stats, customerNames, docFlags, packingLoading] = await Promise.all([
     productsService.stats(),
     productsService.customerNames(),
-    filesService.productDocFlags(rows.map((p) => p.id)),
+    filesService.productDocFlags(ids),
+    productsService.packingLoading(user, ids),
   ])
 
   // Ảnh SP của TRANG hiện tại — batch 1 query files + 1 lần ký/bucket (thay N lần).
@@ -60,6 +74,8 @@ export default async function TechnicalProductsPage({
         code: p.code,
         name: p.name,
         category: p.category,
+        product_type: p.product_type,
+        frame_material: p.frame_material,
         customer_name: p.customer_name,
         customer_item_code: p.customer_item_code,
         unit: p.unit,
@@ -69,13 +85,15 @@ export default async function TechnicalProductsPage({
         is_active: p.is_active,
         has_drawing: docFlags[p.id]?.drawing ?? false,
         has_bom: docFlags[p.id]?.bom ?? false,
+        // Phương án đóng gói thật; jsonb chỉ là ô tóm tắt nhập tay nên đứng sau.
+        loading_40hc: packingLoading[p.id] ?? p.packing?.loading_40hc ?? null,
       }))}
       total={total}
       fuzzy={fuzzy ?? false}
       page={page}
       pageSize={PAGE_SIZE}
       counts={stats}
-      filters={{ q: q ?? '', customer, bom, status }}
+      filters={{ q: q ?? '', customer, bom, status, image, type }}
       customerNames={customerNames}
       imageUrls={imageUrls}
       canEdit={canEdit}

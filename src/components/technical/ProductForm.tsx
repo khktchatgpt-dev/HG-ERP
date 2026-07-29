@@ -95,6 +95,10 @@ export function ProductForm({
       name_foreign: str('name_foreign') || null,
       customer_name: str('customer_name') || null,
       unit: str('unit') || 'cai',
+      // Gửi tường minh chứ không để server suy từ mã: nhập mã tay (SP mã cũ)
+      // thì mã không parse được, mà hai ô này người dùng vừa chọn hẳn hoi.
+      product_type: type,
+      frame_material: material,
     }
     if (!body.code) {
       toast.error('Chưa có mã sản phẩm', 'Chọn loại và vật liệu, hoặc nhập mã tay')
