@@ -4,6 +4,9 @@ import { productsService } from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
+import { PRODUCT_TYPES } from '@/lib/product-code'
+
+const TYPE_LABEL = new Map<string, string>(PRODUCT_TYPES.map((t) => [t.code, t.label]))
 
 export default async function TechnicalHome() {
   const user = (await authService.currentUser())!
@@ -72,7 +75,7 @@ export default async function TechnicalHome() {
                 <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wider text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
                   <tr>
                     <th className="px-3 py-2">Mã / Tên</th>
-                    <th className="px-3 py-2">Danh mục</th>
+                    <th className="px-3 py-2">Loại SP</th>
                     <th className="px-3 py-2">Tài liệu</th>
                   </tr>
                 </thead>
@@ -83,7 +86,14 @@ export default async function TechnicalHome() {
                         <div className="font-mono text-xs text-zinc-400">{p.code}</div>
                         <div className="font-medium">{p.name}</div>
                       </td>
-                      <td className="px-3 py-2 text-zinc-500">{p.category ?? '—'}</td>
+                      {/*
+                       * LOẠI SP (suy từ mã, 529/537 SP có) chứ không phải cột
+                       * `category`: cột đó 528/537 để trống nên bảng này trước đây
+                       * gần như chỉ hiện một dãy "—".
+                       */}
+                      <td className="px-3 py-2 text-zinc-500">
+                        {TYPE_LABEL.get(p.product_type ?? '') ?? '—'}
+                      </td>
                       <td className="px-3 py-2 text-xs">
                         {hasDoc(p.id).drawing ? (
                           <span className="mr-2 text-sky-600">Bản vẽ ✓</span>

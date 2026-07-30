@@ -18,7 +18,9 @@ import { PRODUCT_TYPES } from '@/lib/product-code'
 import { Spinner } from '@/components/erp/Spinner'
 import {
   ACCENT_SOLID,
+  NO_CATEGORY,
   NO_CUSTOMER,
+  type CategoryOption,
   type CustomerNameOption,
   type Filters,
   type ProductCounts,
@@ -160,6 +162,7 @@ export function FilterBar({
   filters,
   counts,
   customerNames,
+  categories,
   q,
   onQChange,
   searching,
@@ -173,6 +176,8 @@ export function FilterBar({
   filters: Filters
   counts: ProductCounts
   customerNames: CustomerNameOption[]
+  /** Danh mục SP đang hiệu lực; rỗng = chưa ai khai ở /admin/catalogs. */
+  categories: CategoryOption[]
   q: string
   onQChange: (v: string) => void
   /** Đang chờ nhịp debounce / server trả về — để ô tìm nói "đang tìm…". */
@@ -195,6 +200,16 @@ export function FilterBar({
   const typeOptions = [
     { value: 'all', label: 'Mọi loại sản phẩm' },
     ...PRODUCT_TYPES.map((t) => ({ value: t.code, label: t.label })),
+  ]
+  /*
+   * Danh mục là dữ liệu (admin khai ở /admin/catalogs), khác LOẠI SP suy từ mã.
+   * Chưa khai danh mục nào thì ẩn hẳn select — một dropdown chỉ có "Mọi danh mục"
+   * là ô nhiễu, không phải tính năng.
+   */
+  const categoryOptions = [
+    { value: 'all', label: 'Mọi danh mục' },
+    { value: NO_CATEGORY, label: 'Chưa phân loại' },
+    ...categories.map((c) => ({ value: c.code, label: c.label })),
   ]
   const inactiveCount = Math.max(0, counts.total - counts.active)
 
@@ -240,6 +255,14 @@ export function FilterBar({
           label="Lọc theo loại sản phẩm"
           options={typeOptions}
         />
+        {categories.length > 0 && (
+          <FilterSelect
+            value={filters.category}
+            onChange={(v) => onParamChange({ category: v })}
+            label="Lọc theo danh mục"
+            options={categoryOptions}
+          />
+        )}
 
         <ViewToggle view={view} onChange={onViewChange} />
       </div>

@@ -19,7 +19,7 @@ export default async function NewOrderPage() {
   const [{ rows: sentQuotes }, { rows: customers }, { rows: products }] =
     await Promise.all([
       quotesService.list(user, { status: 'sent', page: 1, page_size: 500 }),
-      customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+      customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
       productsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     ])
 

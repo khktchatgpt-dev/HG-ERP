@@ -110,6 +110,8 @@ export type Filters = {
   image: string
   /** Mã loại SP 2 ký tự ('CH', 'TB'…) hoặc 'all'. Server đã kiểm mã hợp lệ. */
   type: string
+  /** Mã danh mục SP, `NO_CATEGORY` = chưa phân loại, hoặc 'all'. */
+  category: string
 }
 
 /** Bộ lọc bật/tắt được bằng chip — bấm lại giá trị đang bật thì bỏ lọc đó. */
@@ -127,6 +129,12 @@ export type BomRow = { material_id: string; qty_per_unit: number | ''; note: str
 
 /** Giá trị lọc "chưa gõ nhãn khách" — PHẢI khớp NO_CUSTOMER_FILTER ở technical.repo.ts. */
 export const NO_CUSTOMER = '__common'
+
+/** Giá trị lọc "chưa gán danh mục" — PHẢI khớp NO_CATEGORY_FILTER ở technical.repo.ts. */
+export const NO_CATEGORY = '__uncategorized'
+
+/** Danh mục SP dùng chung (admin quản lý ở /admin/catalogs). */
+export type CategoryOption = { code: string; label: string }
 
 export const VIEW_STORAGE_KEY = 'tech-products-view'
 

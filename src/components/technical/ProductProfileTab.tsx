@@ -31,7 +31,10 @@ import {
   TextCard,
   type Tone,
 } from '@/components/technical/ProductSpecCards'
-import { useSectionEditor } from '@/components/technical/useSectionEditor'
+import {
+  useSectionEditor,
+  type CategoryOption,
+} from '@/components/technical/useSectionEditor'
 import type { PackingOptionView } from '@/components/technical/ProductProfileCards'
 import {
   SECTION_TAB,
@@ -39,6 +42,7 @@ import {
   dec,
   num,
   productDims,
+  productDimsOpen,
   withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
@@ -59,6 +63,7 @@ export function ProductProfileTab({
   bomRows,
   imageUrl,
   suggestions,
+  categories,
   canEdit,
 }: {
   product: ProductView
@@ -68,6 +73,8 @@ export function ProductProfileTab({
   bomRows: number
   imageUrl: string | null
   suggestions: Record<string, string[]>
+  /** Danh mục SP đang hiệu lực — đổ vào ô "Danh mục" ở phần Nhận diện. */
+  categories: CategoryOption[]
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -78,6 +85,7 @@ export function ProductProfileTab({
     product,
     suggestions,
     canEdit,
+    categories,
   )
 
   const pk = useMemo(
@@ -85,7 +93,12 @@ export function ProductProfileTab({
     [product.packing, packingOptions],
   )
   const ts = product.tech_spec ?? {}
+  /** Nhãn danh mục; SP còn mang giá trị ngoài danh mục thì hiện nguyên văn. */
+  const categoryLabel = product.category
+    ? (categories.find((c) => c.code === product.category)?.label ?? product.category)
+    : null
   const dims = productDims(product, pk)
+  const dimsOpen = productDimsOpen(product)
   const carton =
     pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
       ? `${pk.carton_l_cm} × ${pk.carton_w_cm} × ${pk.carton_h_cm}`
@@ -219,7 +232,9 @@ export function ProductProfileTab({
                       ['Mã KH đặt', product.customer_item_code, true],
                       ['Mã cũ', product.code_legacy, true],
                       ['Tên theo khách', product.name_foreign, false],
-                      ['Danh mục', product.category, false],
+                      // Hiện NHÃN danh mục, không hiện mã: `category` lưu code
+                      // (`ban_ghe_ngoai_troi`), người đọc cần "Bàn ghế ngoài trời".
+                      ['Danh mục', categoryLabel, false],
                       ['ĐVT bán', product.unit, false],
                       ['Barcode', product.barcode, true],
                       [
@@ -268,7 +283,16 @@ export function ProductProfileTab({
             label: 'Kích thước SP',
             value: dims?.text ?? null,
             unit: dims?.unit,
-            sub: dims?.source === 'bom' ? 'từ file BOM' : undefined,
+            /*
+             * SP gập/mở thì nói luôn số lúc MỞ ngay dưới ô: bàn kéo giãn
+             * 1800→2500, ghế gấp mở ra lại THẤP xuống. Không hiện thành ô riêng
+             * vì tuyệt đại đa số SP không gập/mở, thêm ô là thêm một dãy "—".
+             */
+            sub: dimsOpen
+              ? `mở: ${dimsOpen.text} ${dimsOpen.unit}`
+              : dims?.source === 'bom'
+                ? 'từ file BOM'
+                : undefined,
           },
           {
             /*

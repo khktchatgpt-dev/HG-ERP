@@ -4,11 +4,14 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
-import { toProductPick } from '@/modules/dept/sales/orders.view'
+import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
 import { QuoteForm } from '@/components/sales/QuoteForm'
 
-/** Sửa báo giá nháp (chỉ draft) — dùng chung QuoteForm. */
+/**
+ * Sửa báo giá nháp (chỉ draft) — dùng chung QuoteForm. Chỉ nạp ĐÚNG các SP đang
+ * nằm trên dòng (không phải cả thư viện): ô chọn SP tự tìm ở server.
+ */
 export default async function EditQuotePage({
   params,
 }: {
@@ -34,9 +37,9 @@ export default async function EditQuotePage({
   // Chỉ báo giá nháp mới sửa được — đã gửi thì bất biến.
   if (quote.status !== 'draft') redirect(`/sales/quotes/${id}`)
 
-  const [{ rows: customers }, { rows: products }] = await Promise.all([
-    customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
-    productsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+  const [{ rows: customers }, lineProducts] = await Promise.all([
+    customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
+    productsRepo.listPickByIds(lines.map((l) => l.product_id)),
   ])
 
   return (
@@ -49,7 +52,7 @@ export default async function EditQuotePage({
         default_price_term: c.default_price_term,
         default_payment_terms: c.default_payment_terms,
       }))}
-      products={products.map(toProductPick)}
+      lineProducts={lineProducts.map(toQuotePickPayload)}
       initial={{
         id: quote.id,
         code: quote.code,

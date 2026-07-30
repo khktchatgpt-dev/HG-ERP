@@ -25,10 +25,15 @@ export const customerUpdateSchema = customerCreateSchema.partial().extend({
   is_active: z.boolean().optional(),
 })
 
+/** Bộ lọc trạng thái giao dịch — xem `CustomerStatusFilter` ở sales.repo. */
+export const CUSTOMER_STATUS_FILTERS = ['all', 'active', 'inactive'] as const
+
 export const customerListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   owner_id: z.string().uuid().optional(),
-  active_only: z.coerce.boolean().default(true),
+  /** Chỉ KH chưa gán phụ trách — thắng `owner_id` nếu gửi cả hai. */
+  unassigned: z.coerce.boolean().optional(),
+  status: z.enum(CUSTOMER_STATUS_FILTERS).default('active'),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(20),
 })

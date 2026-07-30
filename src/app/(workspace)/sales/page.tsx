@@ -52,7 +52,7 @@ export default async function SalesHomePage() {
 
   const [{ total: customerCount }, draftQuotes, sentQuotes, tracking, { rows: orders }] =
     await Promise.all([
-      salesService.list(user, { page: 1, page_size: 1, active_only: true }),
+      salesService.list(user, { page: 1, page_size: 1, status: 'active' }),
       quotesService.list(user, { status: 'draft', page: 1, page_size: 100 }),
       quotesService.list(user, { status: 'sent', page: 1, page_size: 1 }),
       productionRepo.listTracking(),

@@ -1,7 +1,14 @@
-import { customersRepo, type Customer, type CustomerWithOwner } from './sales.repo'
+import {
+  customersRepo,
+  type Customer,
+  type CustomerActivity,
+  type CustomerCounts,
+  type CustomerStatusFilter,
+  type CustomerWithOwner,
+} from './sales.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
-import { Forbidden, NotFound } from '@/server/http'
+import { Conflict, Forbidden, NotFound } from '@/server/http'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isSalesUser(user: User): Promise<boolean> {
@@ -47,7 +54,8 @@ export const salesService = {
     opts: {
       q?: string
       owner_id?: string
-      active_only?: boolean
+      unassigned?: boolean
+      status?: CustomerStatusFilter
       page: number
       page_size: number
     },
@@ -55,10 +63,24 @@ export const salesService = {
     return customersRepo.list({
       q: opts.q,
       owner_id: opts.owner_id,
-      active_only: opts.active_only ?? true,
+      unassigned: opts.unassigned,
+      status: opts.status ?? 'active',
       page: opts.page,
       page_size: opts.page_size,
     })
+  },
+
+  /**
+   * Số cho StatsBar của danh sách KH — không phụ thuộc bộ lọc đang bật. Danh mục
+   * KH đọc mở (`sales.customer.view` = PUBLIC) nên không gác theo user.
+   */
+  async counts(): Promise<CustomerCounts> {
+    return customersRepo.counts()
+  },
+
+  /** Số báo giá/đơn của đúng các KH đang hiện trên trang. */
+  async activity(_user: User, ids: string[]): Promise<Record<string, CustomerActivity>> {
+    return customersRepo.activityByCustomers(ids)
   },
 
   async get(_user: User, id: string): Promise<CustomerWithOwner> {
@@ -71,6 +93,9 @@ export const salesService = {
     await assertAction(user, 'sales.customer.create')
     // Default owner = current user when not specified.
     const owner_id = input.owner_id ?? user.id
+    if (input.code && (await customersRepo.existsByCode(input.code))) {
+      throw Conflict(`Mã KH "${input.code}" đã có khách khác dùng`, 'CODE_TAKEN')
+    }
 
     return customersRepo.insert({
       name: input.name,
@@ -100,15 +125,41 @@ export const salesService = {
     if (!canEdit(user, before)) {
       throw Forbidden('Bạn chỉ sửa được KH do mình phụ trách')
     }
+    if (
+      patch.code &&
+      patch.code !== before.code &&
+      (await customersRepo.existsByCode(patch.code, id))
+    ) {
+      throw Conflict(`Mã KH "${patch.code}" đã có khách khác dùng`, 'CODE_TAKEN')
+    }
     return customersRepo.patch(id, patch)
   },
 
+  /**
+   * Xoá KH — chỉ khi CHƯA có lịch sử.
+   *
+   * `sales_quotes.customer_id` và `sales_orders.customer_id` đều `on delete
+   * restrict`: xoá KH đã từng báo giá / đặt hàng sẽ bị DB chặn và người dùng nhận
+   * lỗi Postgres thô. Đếm trước để nói đúng chuyện và chỉ sang "Ngừng giao dịch" —
+   * đó mới là việc người ta thật sự muốn làm (giữ lịch sử, ẩn khỏi danh sách).
+   */
   async remove(user: User, id: string): Promise<void> {
     await assertAction(user, 'sales.customer.remove')
     const before = await customersRepo.findById(id)
     if (!before) throw NotFound('Khách hàng không tồn tại')
     if (!canEdit(user, before)) {
       throw Forbidden('Bạn chỉ xoá được KH do mình phụ trách')
+    }
+    const used = await customersRepo.usageCounts(id)
+    if (used.quotes > 0 || used.orders > 0) {
+      const parts = [
+        used.quotes > 0 && `${used.quotes} báo giá`,
+        used.orders > 0 && `${used.orders} đơn hàng`,
+      ].filter(Boolean)
+      throw Conflict(
+        `Không xoá được: KH đang có ${parts.join(' và ')}. Dùng "Ngừng giao dịch" để ẩn khỏi danh sách mà vẫn giữ lịch sử.`,
+        'CUSTOMER_IN_USE',
+      )
     }
     await customersRepo.delete(id)
   },

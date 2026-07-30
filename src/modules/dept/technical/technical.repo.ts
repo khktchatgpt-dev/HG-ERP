@@ -75,10 +75,22 @@ export type Product = {
   frame_length_m: number | null
   paint_area_m2: number | null
   part_count: number | null
-  /** Kích thước tổng thể SP — file BOM ghi **mm**, `packing` jsonb ghi **cm**. */
+  /**
+   * Kích thước tổng thể SP ở trạng thái ĐÓNG/GẤP — file BOM ghi **mm**,
+   * `packing` jsonb ghi **cm**. Đây là bộ số dùng để xếp cont và in báo giá.
+   */
   length_mm: number | null
   width_mm: number | null
   height_mm: number | null
+  /**
+   * Kích thước ở trạng thái MỞ / KÉO GIÃN (mm) — null với SP không gập/mở, tức
+   * đại đa số thư viện (0104). Bàn kéo giãn chỉ đổi một chiều
+   * (1800→2500); ghế gấp đổi hai chiều và chiều CAO đi NGƯỢC: mở ra thì thấp
+   * xuống (1110→995), nên `height_open_mm` có thể nhỏ hơn `height_mm`.
+   */
+  length_open_mm: number | null
+  width_open_mm: number | null
+  height_open_mm: number | null
   // Đầu biểu mẫu "BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN" (0097).
   /** Ô "Nhiên Liệu" — 'AL' | 'IR' | 'IN', nguồn tra tỉ trọng. Mặc định của SP. */
   base_material: string | null
@@ -98,7 +110,7 @@ export type Product = {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
@@ -126,6 +138,35 @@ export type ProductLite = Pick<
   | 'created_at'
 >
 
+/**
+ * Cột cho Ô CHỌN SP ở báo giá / đơn hàng — hẹp hơn cả `LITE_COLS`: chỉ những gì
+ * ô chọn hiển thị và báo giá in ra. Trước đây form báo giá nạp `COLS` (49 cột,
+ * cả `tech_spec`/`notes`/`search_text`) cho toàn bộ 537 SP mỗi lần mở trang —
+ * ~715 kB egress Supabase cho một cái `<select>`. Nay tìm ở server, trả ≤25 dòng.
+ */
+const PICK_COLS =
+  'id, code, name, unit, customer_id, customer_item_code, bom_status, packing, image_file_id, description_en, length_mm, width_mm, height_mm'
+
+export type ProductPickRow = Pick<
+  Product,
+  | 'id'
+  | 'code'
+  | 'name'
+  | 'unit'
+  | 'customer_id'
+  | 'customer_item_code'
+  | 'bom_status'
+  | 'packing'
+  | 'image_file_id'
+  | 'description_en'
+  // Kích thước do import BOM ghi (mm) — nguồn thứ hai của cùng một thứ với
+  // `packing.l_cm…` (cm, gõ tay). Xem `toQuotePickPayload`: 290/537 SP chỉ có bộ
+  // mm này, form báo giá đọc mỗi `packing` nên báo "thiếu" oan.
+  | 'length_mm'
+  | 'width_mm'
+  | 'height_mm'
+>
+
 export type ProductCounts = {
   total: number
   active: number
@@ -138,6 +179,9 @@ export type ProductCounts = {
 
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
 export const NO_CUSTOMER_FILTER = '__common'
+
+/** Giá trị lọc đặc biệt = SP chưa gán danh mục (`category` null). */
+export const NO_CATEGORY_FILTER = '__uncategorized'
 
 /**
  * Lọc theo từ khoá trên cột `search_text` (0098) — cột đã gộp sẵn mã, mã cũ, tên,
@@ -199,6 +243,11 @@ export const productsRepo = {
     has_image?: boolean
     /** Mã loại SP 2 ký tự ('CH', 'TB'…) — xem PRODUCT_TYPES ở lib/product-code. */
     product_type?: string
+    /**
+     * Mã danh mục SP (`catalog_items` loại `product_category`), hoặc
+     * `NO_CATEGORY_FILTER` = chưa gán danh mục.
+     */
+    category?: string
     page: number
     page_size: number
   }): Promise<{ rows: ProductLite[]; total: number }> {
@@ -211,6 +260,8 @@ export const productsRepo = {
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
     if (filter.bom_status) q = q.eq('bom_status', filter.bom_status)
     if (filter.product_type) q = q.eq('product_type', filter.product_type)
+    if (filter.category === NO_CATEGORY_FILTER) q = q.is('category', null)
+    else if (filter.category) q = q.eq('category', filter.category)
     if (filter.has_image === false) q = q.is('image_file_id', null)
     else if (filter.has_image === true) q = q.not('image_file_id', 'is', null)
     if (filter.q) q = applySearch(q, filter.q)
@@ -240,6 +291,41 @@ export const productsRepo = {
     const byId = new Map((data ?? []).map((r) => [(r as ProductLite).id, r]))
     // `.in()` trả về theo thứ tự bảng, còn thứ tự ta cần là thứ tự ĐỘ GIỐNG.
     return ids.map((id) => byId.get(id)).filter(Boolean) as ProductLite[]
+  },
+
+  /**
+   * Ô chọn SP ở báo giá/đơn — MỘT query, cột hẹp, có giới hạn.
+   *
+   * Không gõ gì + biết khách: trả SP CỦA KHÁCH ĐÓ + mẫu chung (rổ hay dùng nhất),
+   * khỏi bắt sale lướt qua SP của khách khác. Có gõ: tìm toàn thư viện trên cột
+   * `search_text` (đã bỏ dấu, gộp cả mã cũ) — client tự chia nhóm own/chung/khác
+   * trên đúng mấy chục dòng trả về.
+   */
+  async listForPick(filter: {
+    q?: string
+    customer_id?: string
+    limit: number
+  }): Promise<ProductPickRow[]> {
+    let q = db()
+      .from('technical_products')
+      .select(PICK_COLS)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(filter.limit)
+    if (filter.q) q = applySearch(q, filter.q)
+    else if (filter.customer_id) {
+      q = q.or(`customer_id.eq.${filter.customer_id},customer_id.is.null`)
+    }
+    const { data } = await q
+    return (data ?? []) as ProductPickRow[]
+  },
+
+  /** Như `listForPick` nhưng lấy đúng một tập id, GIỮ thứ tự id truyền vào. */
+  async listPickByIds(ids: string[]): Promise<ProductPickRow[]> {
+    if (ids.length === 0) return []
+    const { data } = await db().from('technical_products').select(PICK_COLS).in('id', ids)
+    const byId = new Map((data ?? []).map((r) => [(r as ProductPickRow).id, r]))
+    return ids.map((id) => byId.get(id)).filter(Boolean) as ProductPickRow[]
   },
 
   /**

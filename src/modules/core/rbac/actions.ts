@@ -74,6 +74,15 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('sales.member'), memberEdit('technical.member', 'technical.edit')),
   },
   {
+    key: 'technical.product.fill_specs',
+    label: 'Bổ sung quy cách SP còn thiếu (từ báo giá)',
+    domain: 'technical',
+    // Cùng tầm với quick_create: sale khai được các trường này lúc tạo nhanh SP,
+    // thì cũng phải điền được cho SP cũ còn trống — nếu không tờ báo giá in ra
+    // thiếu quy cách và phải chờ Kỹ thuật. KHÔNG bao gồm mã/tên/BOM.
+    rule: anyOf(perm('sales.member'), memberEdit('technical.member', 'technical.edit')),
+  },
+  {
     key: 'technical.product.update',
     label: 'Sửa sản phẩm',
     domain: 'technical',

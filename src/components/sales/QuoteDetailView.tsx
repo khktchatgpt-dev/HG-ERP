@@ -12,7 +12,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { DocumentFiles } from '@/components/DocumentFiles'
-import type { Packing } from '@/components/sales/QuoteForm'
+import type { Packing } from '@/components/sales/ProductPicker'
 
 type QuoteStatus = 'draft' | 'sent'
 

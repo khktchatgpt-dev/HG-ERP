@@ -1,36 +1,26 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useTransition } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Badge } from '@/components/Badge'
+import { Modal } from '@/components/Modal'
+import { Button } from '@/components/ui/Button'
+import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { api, apiErrorText } from '@/lib/api'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
+import { TopProgressBar } from '@/components/erp/Spinner'
+import {
+  CustomerForm,
+  type CustomerView,
+  type MemberOption,
+} from '@/components/sales/CustomerForm'
 
-type Customer = {
-  id: string
-  code: string | null
-  name: string
-  email: string | null
-  phone: string | null
-  address: string | null
-  notes: string | null
-  owner_id: string | null
-  owner_name: string | null
-  owner_email: string | null
-  tax_code: string | null
-  country: string | null
-  contact_person: string | null
-  default_currency: string | null
-  default_price_term: string | null
-  default_payment_terms: string | null
-  port_of_discharge: string | null
-  fax: string | null
-  representative_title: string | null
-  fsc_cert: string | null
-  is_active: boolean
-  created_at: string
-}
+type Customer = CustomerView
 
 type QuoteRow = {
   id: string
@@ -89,13 +79,89 @@ export function CustomerDetail({
   quotes,
   orders,
   changes,
+  currentUserId,
+  role,
+  members,
 }: {
   customer: Customer
   quotes: QuoteRow[]
   orders: OrderRow[]
   changes: ChangeRow[]
+  currentUserId: string
+  role: 'admin' | 'manager' | 'employee'
+  members: MemberOption[]
 }) {
   const [tab, setTab] = useState<'quotes' | 'orders' | 'activity'>('quotes')
+  const router = useRouter()
+  const toast = useToast()
+  const confirm = useConfirm()
+  const [navigating, startTransition] = useTransition()
+  const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
+
+  // Sale chỉ sửa KH mình phụ trách (service cũng gác — đây chỉ là để mờ nút).
+  const canEdit = role === 'admin' || role === 'manager' || c.owner_id === currentUserId
+
+  async function patch(body: Record<string, unknown>): Promise<boolean> {
+    setSaving(true)
+    try {
+      await api(`/api/dept/sales/customers/${c.id}`, { method: 'PATCH', body })
+      startTransition(() => router.refresh())
+      return true
+    } catch (e) {
+      toast.error('Chưa lưu được', apiErrorText(e))
+      return false
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  /**
+   * Ngừng / mở lại giao dịch — đây là lối đúng cho KH đã có lịch sử, vì xoá bị
+   * chặn (báo giá & đơn tham chiếu KH với `on delete restrict`).
+   */
+  async function toggleActive() {
+    const off = c.is_active
+    const ok = await confirm({
+      title: off ? `Ngừng giao dịch với "${c.name}"?` : `Mở lại "${c.name}"?`,
+      description: off
+        ? 'KH bị ẩn khỏi danh sách mặc định và không chọn được khi lập báo giá / tạo đơn. Toàn bộ lịch sử vẫn giữ, mở lại được bất cứ lúc nào.'
+        : 'KH trở lại danh sách đang giao dịch và chọn được khi lập báo giá.',
+      confirmLabel: off ? 'Ngừng giao dịch' : 'Mở lại',
+      tone: off ? 'danger' : 'default',
+    })
+    if (!ok) return
+    if (await patch({ is_active: !c.is_active })) {
+      toast.success(off ? 'Đã ngừng giao dịch' : 'Đã mở lại', c.name)
+    }
+  }
+
+  async function remove() {
+    if (quotes.length > 0 || orders.length > 0) {
+      toast.error(
+        'Không xoá được KH đã có lịch sử',
+        `Đang có ${quotes.length} báo giá / ${orders.length} đơn. Dùng "Ngừng giao dịch" để ẩn mà vẫn giữ lịch sử.`,
+      )
+      return
+    }
+    const ok = await confirm({
+      title: `Xoá KH "${c.name}"?`,
+      description: 'KH chưa có báo giá / đơn nào nên xoá được. Hành động không hoàn tác.',
+      tone: 'danger',
+      confirmLabel: 'Xoá',
+    })
+    if (!ok) return
+    setSaving(true)
+    try {
+      await api(`/api/dept/sales/customers/${c.id}`, { method: 'DELETE' })
+      toast.success('Đã xoá khách hàng', c.name)
+      router.push('/sales/customers')
+    } catch (e) {
+      toast.error('Xoá thất bại', apiErrorText(e))
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   const thisYear = today.slice(0, 4)
@@ -322,6 +388,7 @@ export function CustomerDetail({
 
   return (
     <div className="flex flex-col gap-4">
+      <TopProgressBar active={navigating || saving} />
       <PageHeader
         breadcrumbs={[
           { label: 'Kinh doanh', href: '/sales' },
@@ -335,8 +402,36 @@ export function CustomerDetail({
             <Badge tone={c.is_active ? 'green' : 'gray'}>
               {c.is_active ? 'Đang giao dịch' : 'Ngừng giao dịch'}
             </Badge>
-            {c.owner_name && <Badge tone="blue">Phụ trách: {c.owner_name}</Badge>}
+            {c.owner_name ? (
+              <Badge tone="blue">Phụ trách: {c.owner_name}</Badge>
+            ) : (
+              <Badge tone="amber">Chưa gán phụ trách</Badge>
+            )}
             {c.country && <Badge tone="gray">{c.country}</Badge>}
+          </>
+        }
+        actions={
+          <>
+            {c.is_active && (
+              <Link href={`/sales/quotes/new?customer=${c.id}`}>
+                <Button variant="primary">+ Lập báo giá</Button>
+              </Link>
+            )}
+            <Button
+              onClick={() => setEditing(true)}
+              disabled={!canEdit}
+              title={canEdit ? undefined : 'Chỉ sửa KH do mình phụ trách'}
+            >
+              Sửa hồ sơ
+            </Button>
+            <Button onClick={() => void toggleActive()} disabled={!canEdit}>
+              {c.is_active ? 'Ngừng giao dịch' : 'Mở lại'}
+            </Button>
+            {quotes.length === 0 && orders.length === 0 && (
+              <Button variant="danger" onClick={() => void remove()} disabled={!canEdit}>
+                Xoá
+              </Button>
+            )}
           </>
         }
       />
@@ -485,6 +580,29 @@ export function CustomerDetail({
             </ul>
           ))}
       </div>
+
+      <Modal
+        open={editing}
+        onClose={() => setEditing(false)}
+        title={`Sửa hồ sơ — ${c.name}`}
+        maxWidth="sm:max-w-3xl"
+      >
+        <CustomerForm
+          members={members}
+          currentUserId={currentUserId}
+          initial={c}
+          submitLabel="Lưu thay đổi"
+          saving={saving}
+          withActive
+          onCancel={() => setEditing(false)}
+          onSubmit={async (body) => {
+            if (await patch(body)) {
+              toast.success('Đã lưu hồ sơ', c.name)
+              setEditing(false)
+            }
+          }}
+        />
+      </Modal>
     </div>
   )
 }

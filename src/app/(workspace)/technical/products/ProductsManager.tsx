@@ -28,6 +28,7 @@ import {
   VIEW_STORAGE_KEY,
   type BomRow,
   type BomTarget,
+  type CategoryOption,
   type CustomerNameOption,
   type Filters,
   type MaterialOption,
@@ -53,6 +54,7 @@ export function ProductsManager({
   counts,
   filters,
   customerNames,
+  categories,
   imageUrls,
   canEdit,
 }: {
@@ -65,6 +67,8 @@ export function ProductsManager({
   counts: ProductCounts
   filters: Filters
   customerNames: CustomerNameOption[]
+  /** Danh mục SP dùng chung (admin khai ở /admin/catalogs) — bộ lọc + nhãn thẻ. */
+  categories: CategoryOption[]
   imageUrls: Record<string, string>
   canEdit: boolean
 }) {
@@ -160,7 +164,8 @@ export function ProductsManager({
     filters.bom !== 'all' ||
     filters.status !== 'all' ||
     filters.image !== 'all' ||
-    filters.type !== 'all'
+    filters.type !== 'all' ||
+    filters.category !== 'all'
 
   function clearFilters() {
     setQ('')
@@ -171,6 +176,7 @@ export function ProductsManager({
       status: undefined,
       image: undefined,
       type: undefined,
+      category: undefined,
     })
   }
 
@@ -402,6 +408,7 @@ export function ProductsManager({
         filters={filters}
         counts={counts}
         customerNames={customerNames}
+        categories={categories}
         q={q}
         onQChange={setQ}
         searching={searching}

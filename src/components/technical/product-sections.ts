@@ -80,6 +80,9 @@ export type ProductView = {
   length_mm: number | null
   width_mm: number | null
   height_mm: number | null
+  length_open_mm: number | null
+  width_open_mm: number | null
+  height_open_mm: number | null
   bom_rev: number | null
   bom_effective_date: string | null
   bom_prepared_by: string | null
@@ -126,6 +129,9 @@ export function toProductView(p: Product): ProductView {
     paint_area_m2: p.paint_area_m2,
     part_count: p.part_count,
     length_mm: p.length_mm,
+    length_open_mm: p.length_open_mm,
+    width_open_mm: p.width_open_mm,
+    height_open_mm: p.height_open_mm,
     width_mm: p.width_mm,
     height_mm: p.height_mm,
     bom_rev: p.bom_rev,
@@ -161,7 +167,17 @@ export const SECTIONS: Record<string, SectionSpec> = {
         maxLength: 100,
         placeholder: 'S0031HG-AL',
       },
-      { name: 'category', label: 'Danh mục', maxLength: 100 },
+      /*
+       * Danh mục = nhóm hàng do DN tự định nghĩa, quản lý ở /admin/catalogs
+       * (`catalog_items` loại `product_category`). Options đổ vào lúc render
+       * (`withSuggest`), không hằng hoá ở đây.
+       *
+       * PHẢI là select: hồi còn là ô gõ tự do thì 528/537 SP để trống và 9 SP có
+       * giá trị đều là TÊN KHÁCH (BUNNING, MERXX, YOTRIO…) — tên khách thuộc ô
+       * "Khách hàng / nhóm" ngay phía trên. Loại SP (Bàn/Ghế/…) là chuyện khác
+       * nữa: nó suy từ mã SP, không nhập ở đây.
+       */
+      { name: 'category', label: 'Danh mục', kind: 'select' },
       { name: 'unit', label: 'ĐVT bán', maxLength: 30, required: true },
       { name: 'barcode', label: 'Barcode', mono: true, maxLength: 50 },
       { name: 'reference_price', label: 'Giá tham khảo', kind: 'number', step: '0.01' },
@@ -182,6 +198,24 @@ export const SECTIONS: Record<string, SectionSpec> = {
     title: 'Đóng gói xuất khẩu',
     hint: 'in báo giá / xếp cont',
     fields: [
+      // Kích thước mm (từ file BOM) — mở cho sửa tay vì 5 SP gập/mở có KTSP
+      // nhập nhằng, bộ trích cố ý bỏ trống chờ người khai đúng (0104).
+      {
+        name: 'length_mm',
+        label: 'Dài SP (mm) — gấp',
+        kind: 'number',
+        step: '1',
+      },
+      { name: 'width_mm', label: 'Rộng SP (mm) — gấp', kind: 'number', step: '1' },
+      { name: 'height_mm', label: 'Cao SP (mm) — gấp', kind: 'number', step: '1' },
+      {
+        name: 'length_open_mm',
+        label: 'Dài khi MỞ (mm)',
+        kind: 'number',
+        step: '1',
+      },
+      { name: 'width_open_mm', label: 'Rộng khi MỞ (mm)', kind: 'number', step: '1' },
+      { name: 'height_open_mm', label: 'Cao khi MỞ (mm)', kind: 'number', step: '1' },
       {
         name: 'l_cm',
         label: 'Dài SP (cm)',
@@ -387,21 +421,57 @@ const SEED_SUGGEST: Record<string, string[]> = {
   pack_unit_label: ['ctn', 'pallet'],
 }
 
-/** Gắn `suggest` vào từng ô của một phần trước khi mở hộp thoại sửa. */
+/**
+ * Gắn `suggest` (datalist) và `options` (select) vào từng ô của một phần trước khi
+ * mở form sửa.
+ *
+ * `dynamicOptions` dành cho select mà danh sách nằm trong DB chứ không hằng hoá
+ * được — hiện là `category` (danh mục SP quản lý ở /admin/catalogs). Ô select đã
+ * khai `options` sẵn (vd bom_status) thì giữ nguyên.
+ */
 export function withSuggest(
   section: SectionSpec,
   suggestions: Record<string, string[]>,
+  dynamicOptions: Record<string, { value: string; label: string }[]> = {},
 ): SectionSpec {
   return {
     ...section,
     fields: section.fields.map((f) => {
-      if (f.kind === 'select' || f.kind === 'checkbox' || f.kind === 'number') return f
+      if (f.kind === 'select') {
+        const dyn = dynamicOptions[f.name]
+        return dyn && !f.options ? { ...f, options: dyn } : f
+      }
+      if (f.kind === 'checkbox' || f.kind === 'number') return f
       const merged = [
         ...new Set([...(suggestions[f.name] ?? []), ...(SEED_SUGGEST[f.name] ?? [])]),
       ]
       return merged.length ? { ...f, suggest: merged } : f
     }),
   }
+}
+
+/**
+ * Options cho ô "Danh mục": ô trống + danh mục đang hiệu lực.
+ *
+ * `current` (giá trị SP đang lưu) được thêm vào nếu không có trong danh mục — nếu
+ * không, mở form sửa rồi lưu là ÂM THẦM XOÁ mất giá trị cũ. Đúng cảnh 9 SP đang
+ * mang tên khách ở ô này.
+ */
+export function categoryOptions(
+  categories: { code: string; label: string }[],
+  current: string | null,
+): { value: string; label: string }[] {
+  const opts = [
+    {
+      value: '',
+      label: categories.length ? '— chưa phân loại —' : '— chưa có danh mục —',
+    },
+    ...categories.map((c) => ({ value: c.code, label: c.label })),
+  ]
+  if (current && !categories.some((c) => c.code === current)) {
+    opts.push({ value: current, label: `${current} (ngoài danh mục)` })
+  }
+  return opts
 }
 
 export const dim3 = (a?: number, b?: number, c?: number) =>
@@ -439,6 +509,33 @@ export function productDims(
       source: 'bom',
     }
   return null
+}
+
+/**
+ * Kích thước ở trạng thái MỞ / KÉO GIÃN — chỉ SP gập/mở mới có (0104).
+ *
+ * Chỉ chiều nào ĐỔI mới khai `*_open_mm`; chiều giữ nguyên để null và lấy lại số
+ * của trạng thái đóng, để dòng in ra vẫn đủ ba chiều. Trả null khi SP không
+ * gập/mở — tuyệt đại đa số thư viện.
+ */
+export function productDimsOpen(
+  p: Pick<
+    ProductView,
+    | 'length_mm'
+    | 'width_mm'
+    | 'height_mm'
+    | 'length_open_mm'
+    | 'width_open_mm'
+    | 'height_open_mm'
+  >,
+): { text: string; unit: string } | null {
+  const l = p.length_open_mm ?? p.length_mm
+  const w = p.width_open_mm ?? p.width_mm
+  const h = p.height_open_mm ?? p.height_mm
+  const hasOpen =
+    p.length_open_mm != null || p.width_open_mm != null || p.height_open_mm != null
+  if (!hasOpen || l == null || w == null || h == null) return null
+  return { text: `${l} × ${w} × ${h}`, unit: 'mm' }
 }
 
 /** CBM một thùng carton — chỉ tính khi có đủ 3 chiều. */

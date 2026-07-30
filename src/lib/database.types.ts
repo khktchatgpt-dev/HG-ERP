@@ -2944,6 +2944,7 @@ export type Database = {
           frame_weight_kg: number | null
           has_glass: boolean
           height_mm: number | null
+          height_open_mm: number | null
           hs_code: string | null
           id: string
           image_file_id: string | null
@@ -2951,6 +2952,7 @@ export type Database = {
           is_set: boolean
           is_upholstered: boolean
           length_mm: number | null
+          length_open_mm: number | null
           material: string | null
           max_load_kg: number | null
           name: string
@@ -2974,6 +2976,7 @@ export type Database = {
           unit: string
           updated_at: string
           width_mm: number | null
+          width_open_mm: number | null
         }
         Insert: {
           actual_weight_kg?: number | null
@@ -3000,6 +3003,7 @@ export type Database = {
           frame_weight_kg?: number | null
           has_glass?: boolean
           height_mm?: number | null
+          height_open_mm?: number | null
           hs_code?: string | null
           id?: string
           image_file_id?: string | null
@@ -3007,6 +3011,7 @@ export type Database = {
           is_set?: boolean
           is_upholstered?: boolean
           length_mm?: number | null
+          length_open_mm?: number | null
           material?: string | null
           max_load_kg?: number | null
           name: string
@@ -3030,6 +3035,7 @@ export type Database = {
           unit?: string
           updated_at?: string
           width_mm?: number | null
+          width_open_mm?: number | null
         }
         Update: {
           actual_weight_kg?: number | null
@@ -3056,6 +3062,7 @@ export type Database = {
           frame_weight_kg?: number | null
           has_glass?: boolean
           height_mm?: number | null
+          height_open_mm?: number | null
           hs_code?: string | null
           id?: string
           image_file_id?: string | null
@@ -3063,6 +3070,7 @@ export type Database = {
           is_set?: boolean
           is_upholstered?: boolean
           length_mm?: number | null
+          length_open_mm?: number | null
           material?: string | null
           max_load_kg?: number | null
           name?: string
@@ -3086,6 +3094,7 @@ export type Database = {
           unit?: string
           updated_at?: string
           width_mm?: number | null
+          width_open_mm?: number | null
         }
         Relationships: [
           {

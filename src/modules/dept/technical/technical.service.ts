@@ -2,11 +2,13 @@ import {
   partGroupsRepo,
   productProfileRepo,
   productsRepo,
+  NO_CATEGORY_FILTER,
   NO_CUSTOMER_FILTER,
   type Product,
   type ProductPacking,
   type ProductLite,
   type ProductPart,
+  type ProductPickRow,
   type ProductTechSpec,
 } from './technical.repo'
 import type {
@@ -190,6 +192,7 @@ export const productsService = {
       is_active?: boolean
       has_image?: boolean
       product_type?: string
+      category?: string
       page: number
       page_size: number
     },
@@ -212,9 +215,70 @@ export const productsService = {
             : r.customer_name === opts.customer_name)) &&
         (opts.bom_status == null || r.bom_status === opts.bom_status) &&
         (opts.has_image == null || (r.image_file_id != null) === opts.has_image) &&
-        (opts.product_type == null || r.product_type === opts.product_type),
+        (opts.product_type == null || r.product_type === opts.product_type) &&
+        (opts.category == null ||
+          (opts.category === NO_CATEGORY_FILTER
+            ? r.category == null
+            : r.category === opts.category)),
     )
     return kept.length > 0 ? { rows: kept, total: kept.length, fuzzy: true } : strict
+  },
+
+  /**
+   * Ô CHỌN SP ở báo giá/đơn hàng. Thư viện SP đọc mở (`technical.product.view` =
+   * PUBLIC) nên không gác quyền — nhưng CÓ giới hạn số dòng, vì đây là đường thay
+   * thế cho việc nạp cả 537 SP vào một `<select>`.
+   *
+   * Giữ nguyên lối chịu-lỗi-gõ của thư viện: khớp chặt ra 0 dòng thì thử gần đúng
+   * (`fuzzyIds`), để sale gõ "florez" vẫn ra "Florenz".
+   */
+  async pick(
+    _user: User,
+    opts: { q?: string; customer_id?: string; ids?: string[]; limit: number },
+  ): Promise<{ rows: ProductPickRow[]; fuzzy?: boolean }> {
+    if (opts.ids) return { rows: await productsRepo.listPickByIds(opts.ids) }
+
+    const rows = await productsRepo.listForPick(opts)
+    if (rows.length > 0 || !opts.q || !worthFuzzy(opts.q)) return { rows }
+
+    const ids = await productsRepo.fuzzyIds(opts.q, opts.limit)
+    if (ids.length === 0) return { rows }
+    return { rows: await productsRepo.listPickByIds(ids), fuzzy: true }
+  },
+
+  /**
+   * Kinh doanh BỔ SUNG thông tin SP còn thiếu ngay trong form báo giá.
+   *
+   * Cùng tầm quyền với `quickCreate`: sale đã tự khai được đúng các trường này
+   * lúc tạo nhanh SP, nên chặn họ điền tiếp cho SP cũ chỉ khiến tờ báo giá in ra
+   * trống chỗ quy cách rồi phải chờ Kỹ thuật.
+   *
+   * `packing` GỘP vào bản cũ chứ không ghi đè: payload chỉ chứa mấy ô sale vừa
+   * điền, ghi đè cả cục sẽ xoá số Kỹ thuật đã khai. Muốn XOÁ một số thì vào hồ sơ
+   * SP bên Kỹ thuật.
+   */
+  async fillSpecs(
+    user: User,
+    id: string,
+    input: {
+      packing?: ProductPacking
+      description_en?: string | null
+      unit?: string
+      customer_item_code?: string | null
+      material?: string | null
+      hs_code?: string | null
+      origin_country?: string | null
+      name_foreign?: string | null
+    },
+  ): Promise<Product> {
+    await assertAction(user, 'technical.product.fill_specs')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Sản phẩm không tồn tại')
+    const { packing, ...rest } = input
+    return productsRepo.patch(id, {
+      ...rest,
+      ...(packing ? { packing: { ...(before.packing ?? {}), ...packing } } : {}),
+    })
   },
 
   /** Nhãn khách/nhóm đã dùng — gợi ý khi gõ ở form + dropdown lọc thư viện. */

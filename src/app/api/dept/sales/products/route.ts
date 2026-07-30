@@ -1,8 +1,26 @@
 import { NextResponse } from 'next/server'
-import { handle, parseJson } from '@/server/http'
+import { handle, parseJson, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { quickProductCreateSchema } from '@/modules/dept/technical/technical.schema'
+import {
+  productPickQuerySchema,
+  quickProductCreateSchema,
+} from '@/modules/dept/technical/technical.schema'
+import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
+
+/**
+ * Ô chọn SP của form báo giá / đơn hàng: tìm phía server, trả ≤25 dòng cột hẹp.
+ * `?ids=` = nạp lại đúng các SP đang nằm trên dòng (mở form sửa).
+ */
+export const GET = handle(async (req: Request) => {
+  const user = await authService.requireUser()
+  const q = parseQuery(new URL(req.url), productPickQuerySchema)
+  const { rows, fuzzy } = await productsService.pick(user, q)
+  return NextResponse.json({
+    products: rows.map(toQuotePickPayload),
+    fuzzy: fuzzy ?? false,
+  })
+})
 
 /**
  * Tạo nhanh sản phẩm từ màn Kinh doanh (báo giá/đơn) — cho phép Sales tự thêm SP
