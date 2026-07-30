@@ -4,6 +4,7 @@ import { salesService, isSalesUser } from '@/modules/dept/sales/sales.service'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { db } from '@/server/db'
 import { HttpError } from '@/server/http'
 import { CustomerDetail } from './CustomerDetail'
 
@@ -30,10 +31,11 @@ export default async function CustomerDetailPage({
     throw e
   }
 
-  const [{ rows: quotes }, orders, changes] = await Promise.all([
+  const [{ rows: quotes }, orders, changes, { data: salesMembers }] = await Promise.all([
     quotesService.list(user, { customer_id: id, page: 1, page_size: 500 }),
     ordersService.listByCustomer(user, id),
     ordersRepo.listChangesByCustomer(id),
+    db().from('users').select('id, name, email').eq('is_active', true).order('name'),
   ])
   // Giá trị từng đơn — thống kê tiền (doanh số năm, TB đơn) tính phía client.
   const totals = await ordersRepo.totalsByOrderIds(orders.map((o) => o.id))
@@ -70,6 +72,12 @@ export default async function CustomerDetailPage({
         type: (c.change as { type?: string }).type ?? 'update',
         note: c.note,
         created_at: c.created_at,
+      }))}
+      currentUserId={user.id}
+      role={user.role}
+      members={(salesMembers ?? []).map((m) => ({
+        id: m.id,
+        label: m.name ?? m.email,
       }))}
     />
   )

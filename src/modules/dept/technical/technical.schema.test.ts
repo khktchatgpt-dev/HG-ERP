@@ -5,6 +5,8 @@ import {
   productUpdateSchema,
   productCloneSchema,
   productListQuerySchema,
+  productPickQuerySchema,
+  productFillSpecsSchema,
 } from './technical.schema'
 
 describe('packingSchema', () => {
@@ -145,5 +147,47 @@ describe('productListQuerySchema', () => {
 
   it('từ chối bom_status lạ', () => {
     expect(() => productListQuerySchema.parse({ bom_status: 'xxx' })).toThrow()
+  })
+})
+
+describe('productPickQuerySchema — ô chọn SP ở báo giá/đơn', () => {
+  it('mặc định giới hạn 25 dòng (không cho kéo cả thư viện)', () => {
+    expect(productPickQuerySchema.parse({}).limit).toBe(25)
+    expect(() => productPickQuerySchema.parse({ limit: 500 })).toThrow()
+  })
+
+  it('ids: CSV → mảng, loại uuid rác im lặng', () => {
+    const ok = '11111111-1111-1111-1111-111111111111'
+    const p = productPickQuerySchema.parse({ ids: `${ok},khong-phai-uuid,${ok}` })
+    expect(p.ids).toEqual([ok, ok])
+  })
+
+  it('ids rỗng / toàn rác → undefined (rơi về nhánh tìm kiếm)', () => {
+    expect(productPickQuerySchema.parse({ ids: '' }).ids).toBeUndefined()
+    expect(productPickQuerySchema.parse({ ids: 'a,b,c' }).ids).toBeUndefined()
+  })
+})
+
+describe('productFillSpecsSchema — Kinh doanh bổ sung quy cách', () => {
+  it('nhận packing một phần + ép số từ chuỗi (form gửi string)', () => {
+    const p = productFillSpecsSchema.parse({ packing: { qty_per_carton: '2' } })
+    expect(p.packing).toEqual({ qty_per_carton: 2 })
+  })
+
+  it('KHÔNG cho sửa mã / tên / BOM qua đường này', () => {
+    const p = productFillSpecsSchema.parse({
+      code: 'HACK-01',
+      name: 'Đổi tên',
+      bom_status: 'done',
+      description_en: 'Alu frame',
+    }) as Record<string, unknown>
+    expect(p.description_en).toBe('Alu frame')
+    expect(p.code).toBeUndefined()
+    expect(p.name).toBeUndefined()
+    expect(p.bom_status).toBeUndefined()
+  })
+
+  it('payload rỗng bị từ chối (không ghi DB vô ích)', () => {
+    expect(() => productFillSpecsSchema.parse({})).toThrow()
   })
 })

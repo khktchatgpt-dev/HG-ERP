@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
+import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
 import { PRODUCT_TYPE_CODES } from '@/lib/product-code'
 // (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
@@ -28,6 +29,9 @@ export default async function TechnicalProductsPage({
   // một mã lạ thì trả về danh sách đầy đủ chứ không phải 0 dòng khó hiểu.
   const typeRaw = str(spRaw.type).toUpperCase()
   const type = PRODUCT_TYPE_CODES.includes(typeRaw as never) ? typeRaw : 'all'
+  // Mã danh mục SP (catalog_items) hoặc '__uncategorized'. Không kiểm mã ở đây:
+  // catalog có thể đổi, mã lạ chỉ ra 0 dòng chứ không gây lỗi.
+  const category = str(spRaw.category) || 'all'
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
 
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
@@ -38,6 +42,7 @@ export default async function TechnicalProductsPage({
     is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
     has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
     product_type: type === 'all' ? undefined : type,
+    category: category === 'all' ? undefined : category,
     page,
     page_size: PAGE_SIZE,
   })
@@ -49,12 +54,16 @@ export default async function TechnicalProductsPage({
   // `packingLoading`: số xếp cont THẬT nằm ở technical_packing_options, không
   // phải jsonb `packing` — xem chú thích ở packingLoadingByProducts.
   const ids = rows.map((p) => p.id)
-  const [stats, customerNames, docFlags, packingLoading] = await Promise.all([
+  const [stats, customerNames, docFlags, packingLoading, catalog] = await Promise.all([
     productsService.stats(),
     productsService.customerNames(),
     filesService.productDocFlags(ids),
     productsService.packingLoading(user, ids),
+    catalogsService.list(user, 'product_category'),
   ])
+  const categories = catalog
+    .filter((c) => c.is_active)
+    .map((c) => ({ code: c.code, label: c.label }))
 
   // Ảnh SP của TRANG hiện tại — batch 1 query files + 1 lần ký/bucket (thay N lần).
   const urlByFileId = await filesService.getDownloadUrls(
@@ -93,8 +102,9 @@ export default async function TechnicalProductsPage({
       page={page}
       pageSize={PAGE_SIZE}
       counts={stats}
-      filters={{ q: q ?? '', customer, bom, status, image, type }}
+      filters={{ q: q ?? '', customer, bom, status, image, type, category }}
       customerNames={customerNames}
+      categories={categories}
       imageUrls={imageUrls}
       canEdit={canEdit}
     />

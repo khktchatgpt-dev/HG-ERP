@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/Badge'
@@ -9,34 +9,14 @@ import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { QuickAddProduct, type QuickProduct } from '@/components/sales/QuickAddProduct'
+import {
+  ProductPicker,
+  invalidateProductPickCache,
+  type ProductPick,
+} from '@/components/sales/ProductPicker'
+import { ProductSpecFill, hasNoSpec } from '@/components/sales/ProductSpecFill'
 
-/** Quy cách đóng gói (từ Kỹ thuật) — mọi field optional, thiếu = chưa khai. */
-export type Packing = {
-  l_cm?: number
-  w_cm?: number
-  h_cm?: number
-  carton_l_cm?: number
-  carton_w_cm?: number
-  carton_h_cm?: number
-  qty_per_carton?: number
-  loading_40hc?: number
-  nw_kg?: number
-  gw_kg?: number
-  pack_unit_label?: string
-}
-
-export type ProductPick = {
-  id: string
-  code: string
-  name: string
-  unit: string
-  customer_id: string | null
-  customer_item_code: string | null
-  bom_status: 'none' | 'drawing' | 'done'
-  description_en: string | null
-  has_image: boolean
-  packing: Packing
-}
+export type { ProductPick }
 
 export type CustomerOption = {
   id: string
@@ -81,6 +61,16 @@ const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
 const cls =
   'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
+/** Giá đã báo cho ĐÚNG khách này, theo SP — dùng để tự điền đơn giá. */
+async function fetchLastPrices(
+  customerId: string,
+): Promise<Map<string, { unit_price: number; quote_code: string }>> {
+  const data = await api<{
+    prices: { product_id: string; unit_price: number; quote_code: string }[]
+  }>(`/api/dept/sales/quotes/last-prices?customer_id=${customerId}`)
+  return new Map(data.prices.map((x) => [x.product_id, x]))
+}
+
 /** "60.2×58.1×92.4" từ 3 chiều — thiếu bất kỳ chiều nào = null. */
 function dimStr(a?: number, b?: number, c?: number): string | null {
   return a != null && b != null && c != null ? `${a}×${b}×${c}` : null
@@ -94,7 +84,13 @@ function inchStr(a?: number, b?: number, c?: number): string | null {
 export function QuoteForm(props: {
   mode: 'create' | 'edit'
   customers: CustomerOption[]
-  products: ProductPick[]
+  /**
+   * CHỈ các SP đang nằm trên dòng của báo giá đang sửa — không phải cả thư viện.
+   * Ô chọn SP tự tìm ở server khi sale mở nó (xem `ProductPicker`).
+   */
+  lineProducts: ProductPick[]
+  /** Chọn sẵn khách khi TẠO MỚI (vào từ hồ sơ KH) — server đã kiểm id có thật. */
+  preselectCustomerId?: string
   initial?: QuoteInitial
   initialLines?: QuoteLineInitial[]
 }) {
@@ -104,15 +100,31 @@ export function QuoteForm(props: {
   const [busy, setBusy] = useState(false)
   const keyRef = useRef(props.initialLines?.length ?? 0)
 
-  const [customerId, setCustomerId] = useState(initial?.customer_id ?? '')
-  const [currency, setCurrency] = useState(initial?.currency ?? 'USD')
-  const [priceTerm, setPriceTerm] = useState(initial?.price_term ?? '')
-  const [payTerms, setPayTerms] = useState(initial?.payment_terms ?? '')
+  const preselect = initial ? undefined : props.preselectCustomerId
+  const [customerId, setCustomerId] = useState(initial?.customer_id ?? preselect ?? '')
+  const preselectDefaults = preselect
+    ? props.customers.find((c) => c.id === preselect)
+    : undefined
+  const [currency, setCurrency] = useState(
+    initial?.currency ?? preselectDefaults?.default_currency ?? 'USD',
+  )
+  const [priceTerm, setPriceTerm] = useState(
+    initial?.price_term ?? preselectDefaults?.default_price_term ?? '',
+  )
+  const [payTerms, setPayTerms] = useState(
+    initial?.payment_terms ?? preselectDefaults?.default_payment_terms ?? '',
+  )
   const [validFrom, setValidFrom] = useState(initial?.valid_from ?? '')
   const [validTo, setValidTo] = useState(initial?.valid_to ?? '')
   const [note, setNote] = useState(initial?.note ?? '')
 
-  const [productList, setProductList] = useState<ProductPick[]>(props.products)
+  // SP đã BIẾT: dòng có sẵn + SP sale vừa chọn / vừa tạo. Không có "cả thư viện"
+  // nữa — ô chọn tìm ở server, form chỉ giữ những SP thực sự đang dùng.
+  const [known, setKnown] = useState<Map<string, ProductPick>>(
+    () => new Map(props.lineProducts.map((p) => [p.id, p])),
+  )
+  const rememberProduct = (p: ProductPick) => setKnown((m) => new Map(m).set(p.id, p))
+
   const [lines, setLines] = useState<LineRow[]>(() =>
     (props.initialLines ?? []).map((l, i) => ({
       key: i,
@@ -145,17 +157,18 @@ export function QuoteForm(props: {
       .catch(() => setMarketPrices(new Map()))
   }, [])
 
-  async function loadLastPrices(cid: string) {
-    if (!cid) return setLastPrices(new Map())
-    try {
-      const data = await api<{
-        prices: { product_id: string; unit_price: number; quote_code: string }[]
-      }>(`/api/dept/sales/quotes/last-prices?customer_id=${cid}`)
-      setLastPrices(new Map(data.prices.map((x) => [x.product_id, x])))
-    } catch {
-      setLastPrices(new Map())
-    }
-  }
+  /*
+   * Khách đã biết ngay khi mở form (sửa báo giá, hoặc vào từ hồ sơ KH qua
+   * `?customer=`) → nạp giá gần nhất luôn. Trước chỉ nạp khi người dùng ĐỔI ô
+   * khách, nên hai lối vào đó mất hẳn gợi ý "khách này lần trước báo bao nhiêu".
+   */
+  const firstCustomerId = initial?.customer_id ?? preselect ?? ''
+  useEffect(() => {
+    if (!firstCustomerId) return
+    fetchLastPrices(firstCustomerId)
+      .then(setLastPrices)
+      .catch(() => setLastPrices(new Map()))
+  }, [firstCustomerId])
 
   // Chọn khách khi TẠO MỚI → đổ điều khoản mặc định vào ô còn trống.
   function applyCustomerDefaults(cid: string) {
@@ -166,20 +179,6 @@ export function QuoteForm(props: {
     if (c.default_price_term) setPriceTerm((v) => v || c.default_price_term!)
     if (c.default_payment_terms) setPayTerms((v) => v || c.default_payment_terms!)
   }
-
-  const productById = useMemo(() => {
-    const m = new Map<string, ProductPick>()
-    for (const p of productList) m.set(p.id, p)
-    return m
-  }, [productList])
-
-  const productChoices = useMemo(() => {
-    return {
-      own: productList.filter((p) => p.customer_id === customerId),
-      common: productList.filter((p) => !p.customer_id),
-      others: productList.filter((p) => p.customer_id && p.customer_id !== customerId),
-    }
-  }, [productList, customerId])
 
   const usedIds = new Set(lines.filter((l) => l.productId).map((l) => l.productId))
 
@@ -196,11 +195,10 @@ export function QuoteForm(props: {
   else if (lines.some((l) => l.unitPrice === '')) missing.push('nhập đơn giá')
   const invalid = missing.length > 0
 
-  // Đếm SP thiếu quy cách (nhắc Kỹ thuật trước khi gửi).
+  // Đếm SP thiếu quy cách — nay sale tự bổ sung được ngay tại dòng.
   const missingSpecCount = lines.filter((l) => {
-    const p = l.productId ? productById.get(l.productId) : undefined
-    const pk = p?.packing ?? {}
-    return p && !dimStr(pk.l_cm, pk.w_cm, pk.h_cm) && pk.qty_per_carton == null
+    const p = l.productId ? known.get(l.productId) : undefined
+    return p ? hasNoSpec(p) : false
   }).length
 
   function setLine(key: number, patch: Partial<LineRow>) {
@@ -224,21 +222,20 @@ export function QuoteForm(props: {
   }
 
   function addQuickProduct(p: QuickProduct, unitPrice: number | null) {
-    setProductList((prev) => [
-      {
-        id: p.id,
-        code: p.code,
-        name: p.name,
-        unit: p.unit,
-        customer_id: p.customer_id,
-        customer_item_code: p.customer_item_code,
-        bom_status: p.bom_status,
-        description_en: p.description_en,
-        has_image: !!p.image_file_id,
-        packing: p.packing ?? {},
-      },
-      ...prev,
-    ])
+    rememberProduct({
+      id: p.id,
+      code: p.code,
+      name: p.name,
+      unit: p.unit,
+      customer_id: p.customer_id,
+      customer_item_code: p.customer_item_code,
+      bom_status: p.bom_status,
+      description_en: p.description_en,
+      has_image: !!p.image_file_id,
+      packing: p.packing ?? {},
+    })
+    // Thư viện vừa có SP mới — cache của ô chọn (chưa có nó) phải bỏ đi.
+    invalidateProductPickCache()
     setLines((ls) => [
       ...ls,
       {
@@ -323,9 +320,15 @@ export function QuoteForm(props: {
             <select
               value={customerId}
               onChange={(e) => {
-                setCustomerId(e.target.value)
-                applyCustomerDefaults(e.target.value)
-                void loadLastPrices(e.target.value)
+                const cid = e.target.value
+                setCustomerId(cid)
+                applyCustomerDefaults(cid)
+                if (!cid) setLastPrices(new Map())
+                else {
+                  fetchLastPrices(cid)
+                    .then(setLastPrices)
+                    .catch(() => setLastPrices(new Map()))
+                }
               }}
               className={cls}
             >
@@ -412,7 +415,7 @@ export function QuoteForm(props: {
         ) : (
           <div className="flex flex-col gap-3">
             {lines.map((l) => {
-              const p = l.productId ? productById.get(l.productId) : undefined
+              const p = l.productId ? known.get(l.productId) : undefined
               const pk = p?.packing ?? {}
               const specs: [string, string | null][] = [
                 ['Mã KH đặt', p?.customer_item_code ?? null],
@@ -446,40 +449,22 @@ export function QuoteForm(props: {
                 >
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
-                      <select
+                      <ProductPicker
                         value={l.productId}
-                        onChange={(e) => {
-                          const last = lastPrices.get(e.target.value)
+                        selected={p}
+                        customerId={customerId || null}
+                        usedIds={usedIds}
+                        onPick={(picked) => {
+                          rememberProduct(picked)
+                          const last = lastPrices.get(picked.id)
                           setLine(l.key, {
-                            productId: e.target.value,
+                            productId: picked.id,
                             ...(l.unitPrice === '' && last
                               ? { unitPrice: last.unit_price }
                               : {}),
                           })
                         }}
-                        className={cls}
-                      >
-                        <option value="">— chọn sản phẩm —</option>
-                        {productChoices.own.length > 0 && (
-                          <optgroup label="SP của khách này">
-                            {productChoices.own.map((o) => opt(o, usedIds, l.productId))}
-                          </optgroup>
-                        )}
-                        {productChoices.common.length > 0 && (
-                          <optgroup label="Mẫu chung">
-                            {productChoices.common.map((o) =>
-                              opt(o, usedIds, l.productId),
-                            )}
-                          </optgroup>
-                        )}
-                        {productChoices.others.length > 0 && (
-                          <optgroup label="SP khách khác">
-                            {productChoices.others.map((o) =>
-                              opt(o, usedIds, l.productId),
-                            )}
-                          </optgroup>
-                        )}
-                      </select>
+                      />
                       {p && (
                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
                           <span className="font-mono">{p.code}</span>
@@ -528,10 +513,11 @@ export function QuoteForm(props: {
                   )}
                   {noSpec && p && (
                     <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-500">
-                      ⚠ SP <b>{p.code}</b> thiếu quy cách — in báo giá sẽ trống. Nhờ Kỹ
-                      thuật bổ sung packing.
+                      ⚠ SP <b>{p.code}</b> thiếu quy cách — in báo giá sẽ trống. Điền ngay
+                      bên dưới, hoặc nhờ Kỹ thuật bổ sung.
                     </p>
                   )}
+                  {p && <ProductSpecFill product={p} onSaved={rememberProduct} />}
 
                   {/* Ô sửa: đơn giá / CK% / ghi chú (báo giá KHÔNG có số lượng) */}
                   <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -645,15 +631,6 @@ export function QuoteForm(props: {
         </div>
       </div>
     </div>
-  )
-}
-
-function opt(p: ProductPick, used: Set<string>, current: string) {
-  const bom = p.bom_status === 'done' ? '✓BOM' : p.bom_status === 'drawing' ? '…BOM' : ''
-  return (
-    <option key={p.id} value={p.id} disabled={used.has(p.id) && p.id !== current}>
-      {p.code} — {p.name} {bom}
-    </option>
   )
 }
 

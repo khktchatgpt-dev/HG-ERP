@@ -2,7 +2,15 @@
 
 import { useState } from 'react'
 import { ProductSectionForm } from './ProductSectionForm'
-import { SECTIONS, withSuggest, type ProductView } from './product-sections'
+import {
+  SECTIONS,
+  categoryOptions,
+  withSuggest,
+  type ProductView,
+} from './product-sections'
+
+/** Danh mục SP đang hiệu lực (từ `catalog_items` loại `product_category`). */
+export type CategoryOption = { code: string; label: string }
 
 /**
  * Lối sửa từng phần hồ sơ, dùng chung cho cả 4 tab. Form hiện NGAY TRONG thẻ
@@ -20,6 +28,8 @@ export function useSectionEditor(
   product: ProductView,
   suggestions: Record<string, string[]>,
   canEdit: boolean,
+  /** Chỉ tab "Hồ sơ" cần (ô Danh mục nằm ở phần Nhận diện). */
+  categories: CategoryOption[] = [],
 ) {
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const pk = product.packing ?? {}
@@ -37,7 +47,9 @@ export function useSectionEditor(
     if (!section) return null
     return (
       <ProductSectionForm
-        section={withSuggest(section, suggestions)}
+        section={withSuggest(section, suggestions, {
+          category: categoryOptions(categories, product.category),
+        })}
         productId={product.id}
         values={{
           ...(product as unknown as Record<string, string | number | boolean | null>),

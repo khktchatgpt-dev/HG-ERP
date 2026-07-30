@@ -81,6 +81,17 @@ export const productCreateSchema = z.object({
   code_legacy: z.string().trim().max(100).optional().nullable(),
   /** Khối lượng tịnh CÂN THẬT — khác `frame_weight_kg` (Σ tính từ định mức). */
   net_weight_kg: z.coerce.number().min(0).optional().nullable(),
+  /**
+   * Kích thước tổng thể (mm). Trước chỉ import BOM ghi được, giao diện không có
+   * lối sửa — nên 5 SP có KTSP nhập nhằng (lẫn cm, hoặc chỉ chiều cao gập/mở)
+   * không ai điền tay được. Bộ `*_open_mm` là trạng thái MỞ/kéo giãn (0104).
+   */
+  length_mm: z.coerce.number().min(0).optional().nullable(),
+  width_mm: z.coerce.number().min(0).optional().nullable(),
+  height_mm: z.coerce.number().min(0).optional().nullable(),
+  length_open_mm: z.coerce.number().min(0).optional().nullable(),
+  width_open_mm: z.coerce.number().min(0).optional().nullable(),
+  height_open_mm: z.coerce.number().min(0).optional().nullable(),
   // Khối kiểm soát tài liệu ISO (HG-QT-07/M02) — xem `SECTIONS.docControl`.
   bom_rev: z.coerce.number().int().min(0).optional().nullable(),
   // Cột `date` của Postgres — chặn chuỗi rác ngay ở biên, đừng để DB ném 22007.
@@ -138,6 +149,49 @@ export const quickProductCreateSchema = z.object({
   name_foreign: z.string().trim().max(300).optional().nullable(), // tên theo khách
   shipping_mark: z.string().trim().max(2000).optional().nullable(), // ký mã hiệu (LSX)
 })
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Ô CHỌN SP ở báo giá/đơn — tìm phía server, trả ≤ `limit` dòng cột hẹp.
+ *
+ * `ids` (CSV uuid) là chế độ NẠP LẠI: form sửa báo giá chỉ cần đúng những SP đang
+ * nằm trên dòng, không cần cả thư viện. Uuid gõ sai bị loại im lặng — đây là
+ * tham số của máy sinh ra, không phải người nhập.
+ */
+export const productPickQuerySchema = z.object({
+  q: z.string().trim().max(200).optional(),
+  customer_id: z.string().uuid().optional(),
+  ids: z
+    .string()
+    .trim()
+    .max(4000)
+    .optional()
+    .transform((s) => {
+      if (!s) return undefined
+      const ids = s.split(',').filter((x) => UUID_RE.test(x))
+      return ids.length > 0 ? ids.slice(0, 200) : undefined
+    }),
+  limit: z.coerce.number().int().min(1).max(50).default(25),
+})
+
+/**
+ * Kinh doanh BỔ SUNG thông tin SP còn thiếu ngay trên form báo giá — chỉ các
+ * trường IN LÊN BÁO GIÁ + nhận diện hàng. KHÔNG có mã SP / tên / BOM / thông số
+ * sản xuất: sửa mấy thứ đó là việc của Kỹ thuật.
+ */
+export const productFillSpecsSchema = z
+  .object({
+    packing: packingSchema.optional(),
+    description_en: z.string().trim().max(2000).optional().nullable(),
+    unit: z.string().trim().min(1).max(30).optional(),
+    customer_item_code: z.string().trim().max(100).optional().nullable(),
+    material: z.string().trim().max(300).optional().nullable(),
+    hs_code: z.string().trim().max(20).optional().nullable(),
+    origin_country: z.string().trim().max(100).optional().nullable(),
+    name_foreign: z.string().trim().max(300).optional().nullable(),
+  })
+  .refine((v) => Object.keys(v).length > 0, 'Không có thông tin nào để lưu')
 
 /** Đặt ảnh đại diện SP (file đã upload vào parent product) — Kinh doanh/Kỹ thuật. */
 export const productSetImageSchema = z.object({

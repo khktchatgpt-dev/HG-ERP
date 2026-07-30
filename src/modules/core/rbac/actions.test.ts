@@ -106,6 +106,11 @@ describe('canDo — Sales xem KT được, sửa không (ví dụ user nêu)', (
     expect(canDo(byKey('technical.product.set_image'), salesCtx)).toBe(true)
   })
 
+  it('Sales bổ sung quy cách SP thiếu → được, nhưng vẫn KHÔNG sửa được SP', () => {
+    expect(canDo(byKey('technical.product.fill_specs'), salesCtx)).toBe(true)
+    expect(canDo(byKey('technical.product.update'), salesCtx)).toBe(false)
+  })
+
   it('admin bypass → làm được mọi thao tác', () => {
     const adminCtx = { role: 'admin' as const, has: has([]) }
     expect(ACTIONS.every((a) => canDo(a, adminCtx))).toBe(true)

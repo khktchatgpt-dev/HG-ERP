@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Copy } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { Badge } from '@/components/shadcn/badge'
 import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -34,6 +35,17 @@ export default async function ProductDetailLayout({
   if (!product) notFound()
   const partCount = await productProfileRepo.partsCount(id)
 
+  /*
+   * `category` lưu MÃ danh mục (`catalog_items` loại `product_category`) nên phải
+   * tra nhãn để badge không in ra mã máy. Chỉ tra khi SP có danh mục — 528/537 SP
+   * đang để trống, không đáng thêm một truy vấn cho mọi lần mở hồ sơ.
+   */
+  const categoryLabel = product.category
+    ? ((await catalogsService.list(user, 'product_category')).find(
+        (c) => c.code === product.category,
+      )?.label ?? product.category)
+    : null
+
   const status = (product.bom_status ?? 'none') as keyof typeof BOM_LABEL
 
   return (
@@ -64,7 +76,7 @@ export default async function ProductDetailLayout({
         <Badge variant={product.is_active ? 'secondary' : 'outline'}>
           {product.is_active ? 'Đang dùng' : 'Ngừng dùng'}
         </Badge>
-        {product.category && <Badge variant="outline">{product.category}</Badge>}
+        {categoryLabel && <Badge variant="outline">{categoryLabel}</Badge>}
         <Badge
           variant="outline"
           className={product.customer_name ? '' : 'text-muted-foreground'}

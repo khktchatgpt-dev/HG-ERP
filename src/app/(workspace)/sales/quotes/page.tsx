@@ -13,7 +13,7 @@ export default async function SalesQuotesPage() {
 
   const [{ rows: quotes }, { rows: customers }] = await Promise.all([
     quotesService.list(user, { page: 1, page_size: 500 }),
-    customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
   ])
 
   return (

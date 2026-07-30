@@ -36,7 +36,7 @@ export default async function EditOrderPage({
   }
 
   const [{ rows: customers }, { rows: products }] = await Promise.all([
-    customersRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
     productsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
   ])
 

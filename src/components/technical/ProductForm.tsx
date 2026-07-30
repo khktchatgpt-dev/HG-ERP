@@ -31,6 +31,7 @@ export function ProductForm({
   defaultMaterial,
   initialCode,
   customerNames,
+  categories,
 }: {
   defaultType: string
   defaultMaterial: string
@@ -38,6 +39,8 @@ export function ProductForm({
   initialCode: string
   /** Nhãn khách/nhóm đã dùng — chỉ để gợi ý, KHÔNG giới hạn giá trị nhập. */
   customerNames: string[]
+  /** Danh mục SP đang hiệu lực (`catalog_items` loại `product_category`). */
+  categories: { code: string; label: string }[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -94,6 +97,7 @@ export function ProductForm({
       name: str('name'),
       name_foreign: str('name_foreign') || null,
       customer_name: str('customer_name') || null,
+      category: str('category') || null,
       unit: str('unit') || 'cai',
       // Gửi tường minh chứ không để server suy từ mã: nhập mã tay (SP mã cũ)
       // thì mã không parse được, mà hai ô này người dùng vừa chọn hẳn hoi.
@@ -253,6 +257,25 @@ export function ProductForm({
               ))}
             </datalist>
           </label>
+
+          {/*
+           * Danh mục = nhóm hàng do DN tự định nghĩa (admin khai ở
+           * /admin/catalogs). Chưa khai mục nào thì ẩn ô này: một select rỗng chỉ
+           * làm người tạo SP bối rối. Loại SP + vật liệu khung nằm ở phần mã trên.
+           */}
+          {categories.length > 0 && (
+            <label className="flex flex-col gap-1 text-sm">
+              Danh mục
+              <select name="category" defaultValue="" className={cls}>
+                <option value="">— chưa phân loại —</option>
+                {categories.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label className="flex flex-col gap-1 text-sm">
             ĐVT bán
