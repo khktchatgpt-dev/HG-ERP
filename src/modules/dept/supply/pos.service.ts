@@ -1,4 +1,5 @@
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
+import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -11,13 +12,48 @@ type PoInput = {
   /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
   production_order_id?: string | null
   supplier_id: string
+  template?: PoTemplate
   currency: string
   vat_rate?: number | null
   price_includes_vat: boolean
+  discount_amount?: number | null
+  contract_no?: string | null
   expected_at?: string | null
   terms?: string | null
+  terms_quality?: string | null
+  terms_delivery_place?: string | null
+  terms_payment?: string | null
+  terms_invoice?: string | null
+  terms_lead_time?: string | null
+  signer_role?: string | null
   note?: string | null
   lines: PoLineInput[]
+}
+
+/**
+ * Chốt (qty2, unit2, price_basis) của từng dòng theo MẪU ĐƠN — server tính, không
+ * tin số client gửi. Client vẫn tính y hệt để hiển thị (cùng `deriveLine`), nhưng
+ * con số vào DB phải là con số server dẫn ra từ chính thông số của dòng; nếu
+ * không, một request thủ công có thể ghi tổng kg không khớp kg/m × dài × cây rồi
+ * đi thẳng qua bàn duyệt của Giám đốc.
+ */
+function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] {
+  return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+}
+
+/** Điều khoản/chữ ký bỏ trống → lấy mặc định của mẫu, để phiếu in không rỗng. */
+function withTemplateDefaults(input: PoInput, template: PoTemplate) {
+  const meta = poTemplateMeta(template)
+  const pick = (v: string | null | undefined, fallback: string) =>
+    v != null && v.trim() !== '' ? v.trim() : fallback || null
+  return {
+    terms_quality: pick(input.terms_quality, meta.terms.quality),
+    terms_delivery_place: pick(input.terms_delivery_place, meta.terms.delivery_place),
+    terms_payment: pick(input.terms_payment, meta.terms.payment),
+    terms_invoice: pick(input.terms_invoice, meta.terms.invoice),
+    terms_lead_time: pick(input.terms_lead_time, meta.terms.lead_time),
+    signer_role: pick(input.signer_role, meta.signerRole),
+  }
 }
 
 export const posService = {
@@ -57,21 +93,26 @@ export const posService = {
       }
     }
 
+    const template = input.template ?? 'simple'
     const code = await posRepo.nextCode()
     const po = await posRepo.insert(
       {
         code,
         production_order_id: lsxId,
         supplier_id: input.supplier_id,
+        template,
         currency: input.currency,
         vat_rate: input.vat_rate ?? null,
         price_includes_vat: input.price_includes_vat,
+        discount_amount: input.discount_amount ?? null,
+        contract_no: input.contract_no ?? null,
         expected_at: input.expected_at ?? null,
         terms: input.terms ?? null,
+        ...withTemplateDefaults(input, template),
         note: input.note ?? null,
         created_by: user.id,
       },
-      input.lines,
+      withDerived(template, input.lines),
     )
 
     const approvers = (await usersRepo.list()).filter(
@@ -97,16 +138,23 @@ export const posService = {
     if (before.status !== 'pending_approval') {
       throw BadRequest('Chỉ đơn chờ duyệt mới sửa được')
     }
+    // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
+    // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
+    const template = input.template ?? before.template ?? 'simple'
     const po = await posRepo.patch(id, {
       supplier_id: input.supplier_id,
+      template,
       currency: input.currency,
       vat_rate: input.vat_rate ?? null,
       price_includes_vat: input.price_includes_vat,
+      discount_amount: input.discount_amount ?? null,
+      contract_no: input.contract_no ?? null,
       expected_at: input.expected_at ?? null,
       terms: input.terms ?? null,
+      ...withTemplateDefaults(input, template),
       note: input.note ?? null,
     })
-    await posRepo.replaceLines(id, input.lines)
+    await posRepo.replaceLines(id, withDerived(template, input.lines))
     return po
   },
 

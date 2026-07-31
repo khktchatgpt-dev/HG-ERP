@@ -2,20 +2,15 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
-import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { PoCreateForm } from './PoCreateForm'
 
-const PO_OPEN = [
-  'pending_approval',
-  'approved',
-  'ordered',
-  'confirmed',
-  'in_transit',
-  'partial',
-]
-
+/**
+ * Trang soạn đơn đặt hàng.
+ *
+ * Chỉ nạp NCC + LSX. Vật tư TÌM Ở SERVER qua `/api/dept/supply/po-materials` khi
+ * gõ — bản cũ nạp sẵn 1.000 vật tư + toàn bộ tồn kho + 500 PO ngay ở render chỉ
+ * để phục vụ một ô lọc, tốn egress Supabase mỗi lần mở trang.
+ */
 export default async function NewPoPage({
   searchParams,
 }: {
@@ -26,27 +21,10 @@ export default async function NewPoPage({
   if (!canEdit) redirect('/planning/pos')
   const { supplier: defaultSupplierId } = await searchParams
 
-  const [{ rows: suppliers }, { rows: lsxAll }, stock, { rows: allPos }, { rows: mats }] =
-    await Promise.all([
-      suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
-      productionRepo.list({ page: 1, page_size: 200 }),
-      // Vật tư kèm tồn kho realtime (warehouse_stock) — tự hiện khi chọn vật tư.
-      stockRepo.list({ low_only: false }),
-      posRepo.list({ page: 1, page_size: 500 }),
-      // View stock không có price_unit/unit2_factor (giá đv kép 0053) — nạp
-      // trực tiếp từ repo (read-only, service kho guard theo phòng Kho).
-      materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
-    ])
-
-  // Cấu hình vật tư (profile + giá đv kép + tự-điền) → form đọc khi chọn vật tư.
-  const matCfg = new Map(mats.map((m) => [m.id, m]))
-
-  // PO đang mở theo NCC — hiện ở thẻ tóm tắt để người mua cân nhắc dồn đơn.
-  const openBySupplier = new Map<string, number>()
-  for (const p of allPos) {
-    if (!PO_OPEN.includes(p.status)) continue
-    openBySupplier.set(p.supplier_id, (openBySupplier.get(p.supplier_id) ?? 0) + 1)
-  }
+  const [{ rows: suppliers }, { rows: lsxAll }] = await Promise.all([
+    suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
+    productionRepo.list({ page: 1, page_size: 200 }),
+  ])
 
   return (
     <PoCreateForm
@@ -57,8 +35,6 @@ export default async function NewPoPage({
         rating: s.rating,
         lead_time_days: s.lead_time_days,
         payment_terms: s.payment_terms,
-        phone: s.phone,
-        open_po_count: openBySupplier.get(s.id) ?? 0,
       }))}
       // Chỉ LSX đã qua duyệt GĐ mới đặt vật tư được (service cũng chặn — BR-05).
       lsxs={lsxAll
@@ -69,23 +45,6 @@ export default async function NewPoPage({
           order_code: l.order_code,
           customer_name: l.customer_name,
         }))}
-      materials={stock.map((s) => {
-        const cfg = matCfg.get(s.material_id)
-        return {
-          id: s.material_id,
-          code: s.code,
-          name: s.name,
-          unit: s.unit,
-          on_hand: s.on_hand,
-          min_stock: cfg?.min_stock ?? 0,
-          spec: cfg?.spec ?? null,
-          price_unit: cfg?.price_unit ?? null,
-          unit2_factor: cfg?.unit2_factor ?? null,
-          vat_rate: cfg?.vat_rate ?? null,
-          default_supplier_id: cfg?.default_supplier_id ?? null,
-          last_purchase_price: cfg?.last_purchase_price ?? null,
-        }
-      })}
     />
   )
 }

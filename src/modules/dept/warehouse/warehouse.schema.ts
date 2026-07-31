@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const materialCreateSchema = z.object({
   code: z.string().trim().min(1).max(60),
@@ -22,6 +23,11 @@ export const materialCreateSchema = z.object({
   vat_rate: z.coerce.number().min(0).max(100).optional().nullable(),
   default_supplier_id: z.string().uuid().optional().nullable(),
   last_purchase_price: z.coerce.number().min(0).optional().nullable(),
+  // Mẫu đơn đặt hàng mặc định của vật tư (0106) — quyết định bộ cột khi soạn đơn.
+  po_template: z.enum(PO_TEMPLATES).optional().nullable(),
+  // Nhôm: kg/m và chiều dài cây mặc định — mẫu đơn nhôm tự tính tổng kg từ đây.
+  kg_per_m: z.coerce.number().min(0).optional().nullable(),
+  default_bar_length_m: z.coerce.number().min(0).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
 })
 
