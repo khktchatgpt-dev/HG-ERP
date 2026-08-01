@@ -143,6 +143,12 @@ và khối chữ ký "TRƯỞNG PHÒNG KẾ HOẠCH".
   nhóm vật tư "Khuôn nhôm" (mặt hàng khuôn để MUA).
 - Chưa làm: trục **BKVT → gán NCC → tách đơn theo NCC** (mô hình thật trong file
   Excel: đơn hàng = bảng kê vật tư lọc theo cột NCC). Hiện vẫn soạn từng đơn một.
+  Đây là việc lớn nhất còn lại: một LSX ra 7–8 đơn cho các NCC khác nhau, giờ phải
+  soạn từng đơn.
+- **ĐANG DỞ — danh sách NCC thật + số ĐH `3/2026-HG/TTL`**: xem
+  [po-suppliers-wip.md](./po-suppliers-wip.md). Đã rút được hồ sơ 10 NCC (một số
+  trường bị cắt cụt, phải đọc lại từ file) rồi dừng vì thư mục nguồn `E:\PO` mất
+  kết nối. `supply_suppliers` hiện chỉ có 5 NCC demo, không phải NCC thật.
 - Chưa làm: cột theo dõi về hàng ngay trên đơn (`Ngày về / SL / Số kg / Còn lại`)
-  mà mẫu nhôm và inox có sẵn trong file.
-- Số ĐH vẫn là `PO-YYYY-NNNN`, chưa theo dạng `3/2026-HG/TTL` (cần mã ngắn NCC).
+  mà mẫu nhôm và inox có sẵn trong file. App đã có phiếu nhập nên có thể thừa —
+  cần DN xác nhận có muốn in lên đơn không.
