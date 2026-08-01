@@ -104,13 +104,26 @@ và khối chữ ký "TRƯỞNG PHÒNG KẾ HOẠCH".
 
 ## Còn lại / lưu ý
 
-- **`warehouse_materials.kg_per_m` đang rỗng toàn bộ** (cột do phiên khác thêm qua
-  SQL editor, chưa nạp số). Mẫu nhôm vì thế lấy kg/m từ ô chọn khuôn hoặc gõ tay.
-  Muốn tự điền từ vật tư thì phải backfill cột này.
+- **`warehouse_materials.kg_per_m`**: nhóm "Nhôm" có sẵn 252/276 dòng, nên phần lớn
+  dòng nhôm tự điền được kg/m ngay khi chọn vật tư; 24 dòng còn lại tra qua ô chọn
+  khuôn hoặc gõ tay. Nhóm "Sắt"/"Inox" thì gần như trống (1/232) — mẫu `metal_kg`
+  vốn nhập kg/đơn-vị theo phiếu cân của NCC nên không chặn.
+  (Cột `kg_per_m` + `default_bar_length_m` có trên DB nhưng KHÔNG migration nào
+  trong repo tạo ra — ai đó thêm qua SQL editor.)
 - **`item_categories` (migration 0042/0043) chưa từng được apply lên DB thật** —
   bảng không tồn tại, `warehouse_materials` cũng không có `category_id`. Grouping
   đang chạy thật vẫn là cột text `group_name`. Vì vậy `po_template` gắn thẳng lên
-  `warehouse_materials`. Suy từ `group_name` được 850/914 vật tư, còn 64 chưa khai.
+  `warehouse_materials`.
+
+- **Phân loại mẫu theo `group_name` (0106) đoán sai 2 chỗ, đã vá ở `0107`:**
+  "Khuôn nhôm" (169) bị gán `aluminium` vì khớp `%nhôm%` — nhưng mua khuôn là mua
+  **bộ khuôn**, giá theo bộ, không có kg/m (0/169 dòng có `kg_per_m`, trong khi
+  nhóm "Nhôm" là 252/276), và mẫu nhôm bắt buộc kg/m + dài cây mới cho gửi đơn →
+  chuyển về `simple`. 64 vật tư chưa khai (Mây-dây, Kính, Sơn, Hoá chất, Gỗ) →
+  `simple`, riêng "Ngũ kim" → `accessory`. Sau vá: nhôm 276 · inox/sắt 232 ·
+  simple 230 · phụ kiện 124 · carton 52, không còn dòng nào chưa khai.
+  ⚠️ Đừng nhầm `technical_dies` (danh mục khuôn, để TRA kg/m khi đặt nhôm cây) với
+  nhóm vật tư "Khuôn nhôm" (mặt hàng khuôn để MUA).
 - Chưa làm: trục **BKVT → gán NCC → tách đơn theo NCC** (mô hình thật trong file
   Excel: đơn hàng = bảng kê vật tư lọc theo cột NCC). Hiện vẫn soạn từng đơn một.
 - Chưa làm: cột theo dõi về hàng ngay trên đơn (`Ngày về / SL / Số kg / Còn lại`)
