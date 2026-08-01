@@ -50,6 +50,23 @@ thành tiền 0.
 
 ### Form
 
+**Một form duy nhất cho tạo / sửa / nhân bản.** `PoCreateForm` nhận `initial`
+(`mode: 'edit' | 'duplicate'`); `/planning/pos/[id]/edit` dựng nó từ
+`posService.detail`, `?duplicate=1` thì lưu thành đơn mới.
+
+Trước đây `PosManager` có form sửa RIÊNG trong modal theo mô hình cũ (~645 dòng,
+bảng cột cứng, không biết mẫu đơn). Sửa một đơn nhôm bằng form đó sẽ hạ mẫu về
+`simple`, xoá kg/m + dài cây, và thành tiền tụt từ (tổng kg × giá/kg) xuống
+(số cây × giá/kg) — sai ~6 lần, im lặng. Đã xoá hẳn form đó; `PosManager` giờ
+điều hướng sang trang soạn đơn (1621 → 818 dòng, trang danh sách cũng thôi nạp
+1.000 vật tư + 200 LSX vốn chỉ để nuôi cái modal).
+
+Hồi quy khoá bug này: `src/app/(workspace)/planning/pos/new/po-line.test.ts` —
+mở đơn đã lưu ra sửa phải cho lại ĐÚNG số tiền cũ, cả 5 mẫu.
+
+`poUpdateSchema` bỏ `.default('simple')` cho `template`: khi tạo, không khai thì
+là `simple`; khi sửa, không khai phải là "giữ nguyên mẫu cũ".
+
 Chọn LSX → chọn mẫu → chọn NCC. Bảng tự đổi cột theo mẫu. Ô **nền xám** là số hệ
 thống tự tính (tổng kg, m², thành tiền) — không gõ được. Hai ô luôn phải gõ là
 **SL đặt** và **Đơn giá**. Dòng nhập nhanh nằm cuối bảng: chọn vật tư xong con trỏ

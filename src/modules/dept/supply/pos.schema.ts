@@ -92,8 +92,18 @@ export const poCreateSchema = z.object({
     ),
 })
 
-/** Chỉ PO chờ duyệt được sửa (service chặn). */
-export const poUpdateSchema = poCreateSchema
+/**
+ * Chỉ PO chờ duyệt được sửa (service chặn).
+ *
+ * `template` BỎ default: khi tạo, không khai thì là 'simple'; khi sửa, không khai
+ * phải là "giữ nguyên mẫu cũ" (service đọc `input.template ?? before.template`).
+ * Để nguyên `.default('simple')` thì mọi client cũ không gửi `template` sẽ ngầm
+ * hạ mẫu của đơn về 'simple' — đơn nhôm mất kg/m và thành tiền tụt từ
+ * (tổng kg × giá/kg) xuống (số cây × giá/kg).
+ */
+export const poUpdateSchema = poCreateSchema.extend({
+  template: z.enum(PO_TEMPLATES).optional(),
+})
 
 export const poListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),

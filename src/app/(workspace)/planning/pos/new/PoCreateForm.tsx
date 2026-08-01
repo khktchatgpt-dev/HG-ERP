@@ -8,7 +8,12 @@ import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPicker, type PoMaterial } from '@/components/supply/MaterialPicker'
-import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import {
+  PO_TEMPLATES,
+  poTemplateMeta,
+  type PoTemplate,
+  type PoTerms,
+} from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import { draftOf, lineAmount, lineReady, newLine, type Line } from './po-line'
@@ -33,6 +38,28 @@ type Need = {
   suggest: number
 }
 
+/** Đơn đang mở sẵn — server page dựng từ `posService.detail`. */
+export type PoInitial = {
+  mode: 'edit' | 'duplicate'
+  po: {
+    id: string
+    code: string
+    template: PoTemplate
+    production_order_id: string | null
+    supplier_id: string
+    currency: string
+    vat_rate: number | null
+    price_includes_vat: boolean
+    discount_amount: number | null
+    contract_no: string | null
+    expected_at: string | null
+    note: string | null
+    signer_role: string | null
+    terms: PoTerms
+  }
+  lines: Line[]
+}
+
 const num = (n: number) => n.toLocaleString('vi-VN')
 const field =
   'h-[32px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -54,39 +81,52 @@ export function PoCreateForm({
   suppliers,
   lsxs,
   defaultSupplierId,
+  initial,
 }: {
   suppliers: SupplierOption[]
   lsxs: LsxOption[]
   defaultSupplierId?: string
+  /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
+  initial?: PoInitial
 }) {
   const router = useRouter()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
 
-  const [template, setTemplate] = useState<PoTemplate>('accessory')
-  const [poType, setPoType] = useState<'lsx' | 'standalone'>('lsx')
-  const [lsxId, setLsxId] = useState('')
-  const [supplierId, setSupplierId] = useState(
-    defaultSupplierId && suppliers.some((s) => s.id === defaultSupplierId)
-      ? defaultSupplierId
-      : '',
+  const isEdit = initial?.mode === 'edit'
+  const start = initial?.po
+  const startMeta = poTemplateMeta(start?.template ?? 'accessory')
+
+  const [template, setTemplate] = useState<PoTemplate>(start?.template ?? 'accessory')
+  const [poType, setPoType] = useState<'lsx' | 'standalone'>(
+    start ? (start.production_order_id ? 'lsx' : 'standalone') : 'lsx',
   )
-  const [expectedAt, setExpectedAt] = useState('')
-  const [contractNo, setContractNo] = useState('')
-  const [currency, setCurrency] = useState('VND')
-  const [note, setNote] = useState('')
-  const [discount, setDiscount] = useState<number | ''>('')
+  const [lsxId, setLsxId] = useState(start?.production_order_id ?? '')
+  const [supplierId, setSupplierId] = useState(
+    start?.supplier_id ??
+      (defaultSupplierId && suppliers.some((s) => s.id === defaultSupplierId)
+        ? defaultSupplierId
+        : ''),
+  )
+  const [expectedAt, setExpectedAt] = useState(start?.expected_at ?? '')
+  const [contractNo, setContractNo] = useState(start?.contract_no ?? '')
+  const [currency, setCurrency] = useState(start?.currency ?? 'VND')
+  const [note, setNote] = useState(start?.note ?? '')
+  const [discount, setDiscount] = useState<number | ''>(start?.discount_amount ?? '')
 
   const meta = poTemplateMeta(template)
   // VAT và điều khoản đi theo mẫu, nhưng phải sửa được: cùng mẫu vẫn có NCC chào
-  // khác. Đổi mẫu thì nạp lại mặc định của mẫu mới (xem selectTemplate).
-  const [vat, setVat] = useState<number | ''>(meta.vatRate ?? '')
-  const [inclVat, setInclVat] = useState(meta.priceIncludesVat)
-  const [terms, setTerms] = useState(meta.terms)
-  const [signerRole, setSignerRole] = useState(meta.signerRole)
+  // khác. Đổi mẫu thì nạp lại mặc định của mẫu mới (xem selectTemplate). Mở đơn có
+  // sẵn thì giữ nguyên số đã chốt với NCC, không áp lại mặc định của mẫu.
+  const [vat, setVat] = useState<number | ''>(start?.vat_rate ?? startMeta.vatRate ?? '')
+  const [inclVat, setInclVat] = useState(
+    start?.price_includes_vat ?? startMeta.priceIncludesVat,
+  )
+  const [terms, setTerms] = useState(start?.terms ?? startMeta.terms)
+  const [signerRole, setSignerRole] = useState(start?.signer_role ?? startMeta.signerRole)
   const [showTerms, setShowTerms] = useState(false)
 
-  const [lines, setLines] = useState<Line[]>([])
+  const [lines, setLines] = useState<Line[]>(initial?.lines ?? [])
   const [needs, setNeeds] = useState<Need[]>([])
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
@@ -196,62 +236,72 @@ export function PoCreateForm({
     if (problem || busy) return
     setBusy(true)
     try {
-      const { po } = await api<{ po: { code: string } }>('/api/dept/supply/pos', {
-        method: 'POST',
-        body: {
-          production_order_id: poType === 'lsx' ? lsxId : null,
-          supplier_id: supplierId,
-          template,
-          currency,
-          vat_rate: vat === '' ? null : Number(vat),
-          price_includes_vat: inclVat,
-          discount_amount: discountAmount || null,
-          contract_no: contractNo.trim() || null,
-          expected_at: expectedAt || null,
-          terms_quality: terms.quality || null,
-          terms_delivery_place: terms.delivery_place || null,
-          terms_payment: terms.payment || null,
-          terms_invoice: terms.invoice || null,
-          terms_lead_time: terms.lead_time || null,
-          signer_role: signerRole || null,
-          note: note.trim() || null,
-          lines: lines.map((l) => {
-            const d = draftOf(l)
-            return {
-              material_id: l.material_id,
-              qty_ordered: d.qty_ordered,
-              unit_price: l.price === '' ? null : Number(l.price),
-              spec: l.spec.trim() || null,
-              note: l.note.trim() || null,
-              material_grade: l.material_grade.trim() || null,
-              product_code: l.product_code.trim() || null,
-              dm_per_sp: l.dm_per_sp === '' ? null : Number(l.dm_per_sp),
-              qty_demand: l.qty_demand === '' ? null : Number(l.qty_demand),
-              qty_on_hand: l.qty_on_hand === '' ? null : Number(l.qty_on_hand),
-              waste_pct: l.waste_pct === '' ? null : Number(l.waste_pct),
-              die_code: l.die_code.trim() || null,
-              weight_per_m: d.weight_per_m,
-              bar_length_m: d.bar_length_m,
-              bar_surplus: l.bar_surplus === '' ? null : Number(l.bar_surplus),
-              dimension_text: l.dimension_text.trim() || null,
-              finish: l.finish.trim() || null,
-              weight_per_unit: d.weight_per_unit,
-              open_style: l.open_style || null,
-              pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
-              inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),
-              inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
-              inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
-              area_m2: d.area_m2,
-              carton_basis: template === 'carton' ? l.carton_basis : null,
-            }
-          }),
+      const { po } = await api<{ po: { code: string } }>(
+        isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos',
+        {
+          // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
+          method: isEdit ? 'PATCH' : 'POST',
+          body: {
+            production_order_id: poType === 'lsx' ? lsxId : null,
+            supplier_id: supplierId,
+            template,
+            currency,
+            vat_rate: vat === '' ? null : Number(vat),
+            price_includes_vat: inclVat,
+            discount_amount: discountAmount || null,
+            contract_no: contractNo.trim() || null,
+            expected_at: expectedAt || null,
+            terms_quality: terms.quality || null,
+            terms_delivery_place: terms.delivery_place || null,
+            terms_payment: terms.payment || null,
+            terms_invoice: terms.invoice || null,
+            terms_lead_time: terms.lead_time || null,
+            signer_role: signerRole || null,
+            note: note.trim() || null,
+            lines: lines.map((l) => {
+              const d = draftOf(l)
+              return {
+                material_id: l.material_id,
+                qty_ordered: d.qty_ordered,
+                unit_price: l.price === '' ? null : Number(l.price),
+                spec: l.spec.trim() || null,
+                note: l.note.trim() || null,
+                material_grade: l.material_grade.trim() || null,
+                product_code: l.product_code.trim() || null,
+                dm_per_sp: l.dm_per_sp === '' ? null : Number(l.dm_per_sp),
+                qty_demand: l.qty_demand === '' ? null : Number(l.qty_demand),
+                qty_on_hand: l.qty_on_hand === '' ? null : Number(l.qty_on_hand),
+                waste_pct: l.waste_pct === '' ? null : Number(l.waste_pct),
+                die_code: l.die_code.trim() || null,
+                weight_per_m: d.weight_per_m,
+                bar_length_m: d.bar_length_m,
+                bar_surplus: l.bar_surplus === '' ? null : Number(l.bar_surplus),
+                dimension_text: l.dimension_text.trim() || null,
+                finish: l.finish.trim() || null,
+                weight_per_unit: d.weight_per_unit,
+                open_style: l.open_style || null,
+                pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
+                inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),
+                inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
+                inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
+                area_m2: d.area_m2,
+                carton_basis: template === 'carton' ? l.carton_basis : null,
+              }
+            }),
+          },
         },
-      })
-      toast.success(`Đã tạo ${po.code}`, 'Đơn đang chờ Giám đốc duyệt')
+      )
+      toast.success(
+        isEdit ? `Đã lưu ${po.code}` : `Đã tạo ${po.code}`,
+        'Đơn đang chờ Giám đốc duyệt',
+      )
       router.push('/planning/pos')
       router.refresh()
     } catch (err) {
-      toast.error('Tạo đơn thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
+      toast.error(
+        isEdit ? 'Lưu đơn thất bại' : 'Tạo đơn thất bại',
+        err instanceof ApiError ? err.message : 'Có lỗi',
+      )
       setBusy(false)
     }
   }
@@ -265,9 +315,15 @@ export function PoCreateForm({
         breadcrumbs={[
           { label: 'Kế hoạch - Cung ứng', href: '/planning' },
           { label: 'Đơn đặt vật tư', href: '/planning/pos' },
-          { label: 'Soạn đơn' },
+          {
+            label: isEdit
+              ? `Sửa ${initial!.po.code}`
+              : initial
+                ? `Nhân bản ${initial.po.code}`
+                : 'Soạn đơn',
+          },
         ]}
-        title="Soạn đơn đặt hàng"
+        title={isEdit ? `Sửa đơn ${initial!.po.code}` : 'Soạn đơn đặt hàng'}
         description="Chọn mẫu đơn theo loại hàng — bảng tự đổi cột, ô nền xám hệ thống tự tính. Bạn chỉ nhập SL đặt và đơn giá."
         actions={
           <Link
@@ -684,7 +740,7 @@ export function PoCreateForm({
             className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
           >
             {busy && <Spinner size={14} />}
-            {busy ? 'Đang lưu…' : 'Tạo đơn → gửi GĐ duyệt'}
+            {busy ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Tạo đơn → gửi GĐ duyệt'}
           </button>
         </div>
       </div>
