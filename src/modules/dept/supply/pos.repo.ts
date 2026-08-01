@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
+import type { PoTemplate } from '@/lib/po-template'
 import type { PoStatus } from './pos.schema'
 
 export type Po = {
@@ -9,11 +10,21 @@ export type Po = {
   production_order_id: string | null
   supplier_id: string
   status: PoStatus
+  /** Mẫu đơn theo loại hàng (0106) — cột nhập, công thức tiền, mẫu phiếu in. */
+  template: PoTemplate
   currency: string
   vat_rate: number | null
   price_includes_vat: boolean
+  discount_amount: number | null
+  contract_no: string | null
   expected_at: string | null
   terms: string | null
+  terms_quality: string | null
+  terms_delivery_place: string | null
+  terms_payment: string | null
+  terms_invoice: string | null
+  terms_lead_time: string | null
+  signer_role: string | null
   approved_by: string | null
   approved_at: string | null
   ordered_at: string | null
@@ -30,7 +41,32 @@ export type PoWithRefs = Po & {
   order_code: string | null
 }
 
-export type PoLine = {
+/** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
+export type PoLineTemplateFields = {
+  material_grade: string | null
+  product_code: string | null
+  dm_per_sp: number | null
+  qty_demand: number | null
+  qty_on_hand: number | null
+  waste_pct: number | null
+  die_code: string | null
+  weight_per_m: number | null
+  bar_length_m: number | null
+  bar_surplus: number | null
+  dimension_text: string | null
+  finish: string | null
+  weight_per_unit: number | null
+  open_style: string | null
+  pcs_per_ctn: number | null
+  inner_l_mm: number | null
+  inner_w_mm: number | null
+  inner_h_mm: number | null
+  area_m2: number | null
+  price_per_m2: number | null
+  carton_basis: 'ctn' | 'm2' | null
+}
+
+export type PoLine = PoLineTemplateFields & {
   id: string
   po_id: string
   material_id: string
@@ -47,10 +83,11 @@ export type PoLine = {
   material_unit: string
 }
 
-export type PoLineInput = {
+export type PoLineInput = Partial<PoLineTemplateFields> & {
   material_id: string
   qty_ordered: number
   unit_price?: number | null
+  /** Service tự dẫn xuất từ mẫu đơn (`deriveLine`) — client không gửi. */
   price_basis?: 'unit' | 'unit2'
   spec?: string | null
   qty2?: number | null
@@ -58,8 +95,59 @@ export type PoLineInput = {
   note?: string | null
 }
 
+const TEMPLATE_LINE_COLS = [
+  'material_grade',
+  'product_code',
+  'dm_per_sp',
+  'qty_demand',
+  'qty_on_hand',
+  'waste_pct',
+  'die_code',
+  'weight_per_m',
+  'bar_length_m',
+  'bar_surplus',
+  'dimension_text',
+  'finish',
+  'weight_per_unit',
+  'open_style',
+  'pcs_per_ctn',
+  'inner_l_mm',
+  'inner_w_mm',
+  'inner_h_mm',
+  'area_m2',
+  'price_per_m2',
+  'carton_basis',
+] as const
+
 const COLS =
-  'id, code, production_order_id, supplier_id, status, currency, vat_rate, price_includes_vat, expected_at, terms, approved_by, approved_at, ordered_at, note, created_by, created_at, updated_at'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, note, created_by, created_at, updated_at'
+
+/** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
+const NUMERIC_LINE_COLS = [
+  'dm_per_sp',
+  'qty_demand',
+  'qty_on_hand',
+  'waste_pct',
+  'weight_per_m',
+  'bar_length_m',
+  'bar_surplus',
+  'weight_per_unit',
+  'pcs_per_ctn',
+  'inner_l_mm',
+  'inner_w_mm',
+  'inner_h_mm',
+  'area_m2',
+  'price_per_m2',
+] as const
+
+function numericLineFields(row: Record<string, unknown>): Record<string, number | null> {
+  const out: Record<string, number | null> = {}
+  for (const k of NUMERIC_LINE_COLS) {
+    const v = row[k]
+    out[k] = v == null ? null : Number(v)
+  }
+  return out
+}
 
 type Raw = Po & {
   supplier: { name: string } | { name: string }[] | null
@@ -219,7 +307,10 @@ export const posRepo = {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material:warehouse_materials(code, name, unit)',
+        // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
+        // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
+        // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, product_code, dm_per_sp, qty_demand, qty_on_hand, waste_pct, die_code, weight_per_m, bar_length_m, bar_surplus, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -231,6 +322,7 @@ export const posRepo = {
       const m = Array.isArray(r.material) ? r.material[0] : r.material
       return {
         ...r,
+        ...numericLineFields(r as unknown as Record<string, unknown>),
         material: undefined,
         material_code: m?.code ?? '?',
         material_name: m?.name ?? '?',
@@ -244,11 +336,20 @@ export const posRepo = {
       code: string
       production_order_id: string | null
       supplier_id: string
+      template: PoTemplate
       currency: string
       vat_rate?: number | null
       price_includes_vat: boolean
+      discount_amount?: number | null
+      contract_no?: string | null
       expected_at?: string | null
       terms?: string | null
+      terms_quality?: string | null
+      terms_delivery_place?: string | null
+      terms_payment?: string | null
+      terms_invoice?: string | null
+      terms_lead_time?: string | null
+      signer_role?: string | null
       note?: string | null
       created_by: string
     },
@@ -275,18 +376,25 @@ export const posRepo = {
     const { error } = await db()
       .from('supply_purchase_order_lines')
       .insert(
-        lines.map((l, i) => ({
-          po_id: poId,
-          material_id: l.material_id,
-          qty_ordered: l.qty_ordered,
-          unit_price: l.unit_price ?? null,
-          price_basis: l.price_basis ?? 'unit',
-          spec: l.spec ?? null,
-          qty2: l.qty2 ?? null,
-          unit2: l.unit2 ?? null,
-          note: l.note ?? null,
-          sort_order: i,
-        })),
+        lines.map((l, i) => {
+          // Ô của mẫu khác để trống — trải cả bộ rồi ghi null cho ô không dùng,
+          // để sửa đơn từ mẫu này sang mẫu khác không sót số cũ của mẫu trước.
+          const tpl: Record<string, unknown> = {}
+          for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
+          return {
+            po_id: poId,
+            material_id: l.material_id,
+            qty_ordered: l.qty_ordered,
+            unit_price: l.unit_price ?? null,
+            price_basis: l.price_basis ?? 'unit',
+            spec: l.spec ?? null,
+            qty2: l.qty2 ?? null,
+            unit2: l.unit2 ?? null,
+            note: l.note ?? null,
+            sort_order: i,
+            ...tpl,
+          }
+        }),
       )
     if (error) throw new Error(error.message)
   },

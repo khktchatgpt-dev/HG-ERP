@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Modal } from '@/components/Modal'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
+import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
+import type { PoTemplate } from '@/lib/po-template'
 
 export type CreatedMaterial = {
   id: string
@@ -50,30 +52,58 @@ function normalizeName(s: string): string {
 
 export function QuickAddMaterial({
   onCreated,
-  existing = [],
+  template,
 }: {
   onCreated: (m: CreatedMaterial) => void
-  /** Danh mục hiện có — cảnh báo trùng tên gần giống (chống 1 món 2 mã). */
-  existing?: { code: string; name: string }[]
+  /** Mẫu đơn đang soạn — vật tư mới khai luôn mẫu này để lần sau khỏi hỏi. */
+  template: PoTemplate
 }) {
   const toast = useToast()
   const [open, setOpen] = useState(false)
+  /** Vật tư gần giống, dò Ở SERVER theo tên đang gõ (chống 1 món 2 mã). */
+  const [similar, setSimilar] = useState<{ code: string; name: string }[]>([])
   const [busy, setBusy] = useState(false)
   const [f, setF] = useState(EMPTY)
   // Vật tư có "đơn vị tính giá" (kg/m²…) → dòng đặt sẽ có ô SL-tính-giá nhập tay.
   // Suy TRỰC TIẾP từ price_unit, không còn nhãn quy đổi A/B/C.
   const dual = f.price_unit.trim() !== ''
 
+  /*
+   * Dò trùng tên ở SERVER. Bản cũ so với danh mục 1.000 vật tư nạp sẵn vào trang;
+   * trang không nạp nữa (tìm ở server) nên cảnh báo phải đi hỏi API. Debounce
+   * 350ms và chỉ hỏi khi tên đủ dài để không bắn request mỗi ký tự.
+   *
+   * Mọi setState nằm TRONG timer, không gọi thẳng trong thân effect — gọi đồng bộ
+   * ở thân effect gây cascading render (react-hooks/set-state-in-effect).
+   */
   const nName = normalizeName(f.name)
-  const similar =
-    nName.length < 4
-      ? []
-      : existing
-          .filter((m) => {
-            const other = normalizeName(m.name)
-            return other.includes(nName) || nName.includes(other)
-          })
-          .slice(0, 3)
+  useEffect(() => {
+    const tooShort = !open || nName.length < 4
+    const t = setTimeout(
+      async () => {
+        if (tooShort) return setSimilar([])
+        try {
+          const { materials } = await api<{
+            materials: { code: string; name: string }[]
+          }>(
+            `/api/dept/supply/po-materials?limit=8&q=${encodeURIComponent(f.name.trim())}`,
+          )
+          setSimilar(
+            materials
+              .filter((m) => {
+                const other = normalizeName(m.name)
+                return other.includes(nName) || nName.includes(other)
+              })
+              .slice(0, 3),
+          )
+        } catch {
+          setSimilar([]) // chỉ là cảnh báo, lỗi mạng không được chặn tạo vật tư
+        }
+      },
+      tooShort ? 0 : 350,
+    )
+    return () => clearTimeout(t)
+  }, [open, f.name, nName])
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }))
@@ -97,11 +127,16 @@ export function QuickAddMaterial({
             price_unit: f.price_unit.trim() || null,
             unit2_factor:
               dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
+            // Khai luôn mẫu đơn đang soạn — lần sau vật tư này tự về đúng mẫu.
+            po_template: template,
             min_stock: 0,
           },
         },
       )
       toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
+      // Ô chọn vật tư cache kết quả tìm theo tab — không xoá thì vật tư vừa tạo
+      // không hiện ra khi gõ lại đúng từ khoá cũ.
+      invalidateMaterialPickCache()
       onCreated(material)
       setF(EMPTY)
       setOpen(false)

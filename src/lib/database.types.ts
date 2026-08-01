@@ -1858,52 +1858,133 @@ export type Database = {
       }
       supply_purchase_order_lines: {
         Row: {
+          area_m2: number | null
           bar_length_m: number | null
-          cuts_per_bar: number | null
+          bar_surplus: number | null
+          carton_basis: string | null
+          color: string | null
+          die_code: string | null
+          dim_length_mm: number | null
+          dim_thickness_mm: number | null
+          dim_width_mm: number | null
+          dimension_text: string | null
+          dm_per_sp: number | null
+          finish: string | null
+          for_product: string | null
+          for_product_code: string | null
           id: string
+          inner_h_mm: number | null
+          inner_l_mm: number | null
+          inner_w_mm: number | null
           kg_per_m: number | null
+          material_grade: string | null
           material_id: string
           note: string | null
+          open_style: string | null
+          pcs_per_ctn: number | null
           po_id: string
           price_basis: string
+          price_per_m2: number | null
+          product_code: string | null
+          qty_basis: string
+          qty_demand: number | null
+          qty_needed: number | null
+          qty_on_hand: number | null
           qty_ordered: number
           qty2: number | null
           sort_order: number
           spec: string | null
           unit_price: number | null
           unit2: string | null
+          waste_pct: number | null
+          weight_per_m: number | null
+          weight_per_unit: number | null
         }
         Insert: {
+          area_m2?: number | null
           bar_length_m?: number | null
-          cuts_per_bar?: number | null
+          bar_surplus?: number | null
+          carton_basis?: string | null
+          color?: string | null
+          die_code?: string | null
+          dim_length_mm?: number | null
+          dim_thickness_mm?: number | null
+          dim_width_mm?: number | null
+          dimension_text?: string | null
+          dm_per_sp?: number | null
+          finish?: string | null
+          for_product?: string | null
+          for_product_code?: string | null
           id?: string
+          inner_h_mm?: number | null
+          inner_l_mm?: number | null
+          inner_w_mm?: number | null
           kg_per_m?: number | null
+          material_grade?: string | null
           material_id: string
           note?: string | null
+          open_style?: string | null
+          pcs_per_ctn?: number | null
           po_id: string
           price_basis?: string
+          price_per_m2?: number | null
+          product_code?: string | null
+          qty_basis?: string
+          qty_demand?: number | null
+          qty_needed?: number | null
+          qty_on_hand?: number | null
           qty_ordered: number
           qty2?: number | null
           sort_order?: number
           spec?: string | null
           unit_price?: number | null
           unit2?: string | null
+          waste_pct?: number | null
+          weight_per_m?: number | null
+          weight_per_unit?: number | null
         }
         Update: {
+          area_m2?: number | null
           bar_length_m?: number | null
-          cuts_per_bar?: number | null
+          bar_surplus?: number | null
+          carton_basis?: string | null
+          color?: string | null
+          die_code?: string | null
+          dim_length_mm?: number | null
+          dim_thickness_mm?: number | null
+          dim_width_mm?: number | null
+          dimension_text?: string | null
+          dm_per_sp?: number | null
+          finish?: string | null
+          for_product?: string | null
+          for_product_code?: string | null
           id?: string
+          inner_h_mm?: number | null
+          inner_l_mm?: number | null
+          inner_w_mm?: number | null
           kg_per_m?: number | null
+          material_grade?: string | null
           material_id?: string
           note?: string | null
+          open_style?: string | null
+          pcs_per_ctn?: number | null
           po_id?: string
           price_basis?: string
+          price_per_m2?: number | null
+          product_code?: string | null
+          qty_basis?: string
+          qty_demand?: number | null
+          qty_needed?: number | null
+          qty_on_hand?: number | null
           qty_ordered?: number
           qty2?: number | null
           sort_order?: number
           spec?: string | null
           unit_price?: number | null
           unit2?: string | null
+          waste_pct?: number | null
+          weight_per_m?: number | null
+          weight_per_unit?: number | null
         }
         Relationships: [
           {
@@ -1934,58 +2015,94 @@ export type Database = {
           approved_at: string | null
           approved_by: string | null
           code: string
+          contract_no: string | null
           created_at: string
           created_by: string | null
           currency: string
+          delivery_place: string | null
+          discount_amount: number | null
           expected_at: string | null
           id: string
           note: string | null
           ordered_at: string | null
           price_includes_vat: boolean
           production_order_id: string | null
+          signer_role: string | null
           status: string
+          supplier_doc_no: string | null
           supplier_id: string
+          template: string
           terms: string | null
+          terms_delivery_place: string | null
+          terms_invoice: string | null
+          terms_lead_time: string | null
+          terms_payment: string | null
+          terms_quality: string | null
           updated_at: string
           vat_rate: number | null
+          weigh_on_receipt: boolean
         }
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
           code: string
+          contract_no?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_place?: string | null
+          discount_amount?: number | null
           expected_at?: string | null
           id?: string
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          signer_role?: string | null
           status?: string
+          supplier_doc_no?: string | null
           supplier_id: string
+          template?: string
           terms?: string | null
+          terms_delivery_place?: string | null
+          terms_invoice?: string | null
+          terms_lead_time?: string | null
+          terms_payment?: string | null
+          terms_quality?: string | null
           updated_at?: string
           vat_rate?: number | null
+          weigh_on_receipt?: boolean
         }
         Update: {
           approved_at?: string | null
           approved_by?: string | null
           code?: string
+          contract_no?: string | null
           created_at?: string
           created_by?: string | null
           currency?: string
+          delivery_place?: string | null
+          discount_amount?: number | null
           expected_at?: string | null
           id?: string
           note?: string | null
           ordered_at?: string | null
           price_includes_vat?: boolean
           production_order_id?: string | null
+          signer_role?: string | null
           status?: string
+          supplier_doc_no?: string | null
           supplier_id?: string
+          template?: string
           terms?: string | null
+          terms_delivery_place?: string | null
+          terms_invoice?: string | null
+          terms_lead_time?: string | null
+          terms_payment?: string | null
+          terms_quality?: string | null
           updated_at?: string
           vat_rate?: number | null
+          weigh_on_receipt?: boolean
         }
         Relationships: [
           {
@@ -2104,6 +2221,8 @@ export type Database = {
           code: string | null
           company_name: string | null
           complaint_count: number
+          contact_name: string | null
+          contact_phone: string | null
           country: string | null
           created_at: string
           created_by: string | null
@@ -2156,6 +2275,8 @@ export type Database = {
           code?: string | null
           company_name?: string | null
           complaint_count?: number
+          contact_name?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           created_by?: string | null
@@ -2208,6 +2329,8 @@ export type Database = {
           code?: string | null
           company_name?: string | null
           complaint_count?: number
+          contact_name?: string | null
+          contact_phone?: string | null
           country?: string | null
           created_at?: string
           created_by?: string | null
@@ -2501,6 +2624,68 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_dies: {
+        Row: {
+          code: string
+          created_at: string
+          die_price: number | null
+          effective_date: string | null
+          id: string
+          is_current: boolean
+          name: string | null
+          note: string | null
+          profile_spec: string | null
+          status: string
+          supplier_id: string | null
+          supplier_name: string | null
+          unit: string | null
+          updated_at: string
+          weight_per_m: number | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          die_price?: number | null
+          effective_date?: string | null
+          id?: string
+          is_current?: boolean
+          name?: string | null
+          note?: string | null
+          profile_spec?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          unit?: string | null
+          updated_at?: string
+          weight_per_m?: number | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          die_price?: number | null
+          effective_date?: string | null
+          id?: string
+          is_current?: boolean
+          name?: string | null
+          note?: string | null
+          profile_spec?: string | null
+          status?: string
+          supplier_id?: string | null
+          supplier_name?: string | null
+          unit?: string | null
+          updated_at?: string
+          weight_per_m?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_dies_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
             referencedColumns: ["id"]
           },
         ]
@@ -3537,15 +3722,18 @@ export type Database = {
           barcode: string | null
           code: string
           created_at: string
+          default_bar_length_m: number | null
           default_supplier_id: string | null
           group_name: string | null
           id: string
           is_active: boolean
+          kg_per_m: number | null
           last_purchase_price: number | null
           max_stock: number | null
           min_stock: number
           name: string
           note: string | null
+          po_template: string | null
           price_unit: string | null
           reorder_point: number | null
           reorder_qty: number | null
@@ -3560,15 +3748,18 @@ export type Database = {
           barcode?: string | null
           code: string
           created_at?: string
+          default_bar_length_m?: number | null
           default_supplier_id?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
+          kg_per_m?: number | null
           last_purchase_price?: number | null
           max_stock?: number | null
           min_stock?: number
           name: string
           note?: string | null
+          po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null
           reorder_qty?: number | null
@@ -3583,15 +3774,18 @@ export type Database = {
           barcode?: string | null
           code?: string
           created_at?: string
+          default_bar_length_m?: number | null
           default_supplier_id?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
+          kg_per_m?: number | null
           last_purchase_price?: number | null
           max_stock?: number | null
           min_stock?: number
           name?: string
           note?: string | null
+          po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null
           reorder_qty?: number | null
@@ -3626,6 +3820,7 @@ export type Database = {
           qc_status: string | null
           qty: number
           qty_rejected: number
+          qty2_actual: number | null
           ref_no: string | null
           ref_type: string
           shelf_location: string | null
@@ -3646,6 +3841,7 @@ export type Database = {
           qc_status?: string | null
           qty: number
           qty_rejected?: number
+          qty2_actual?: number | null
           ref_no?: string | null
           ref_type: string
           shelf_location?: string | null
@@ -3666,6 +3862,7 @@ export type Database = {
           qc_status?: string | null
           qty?: number
           qty_rejected?: number
+          qty2_actual?: number | null
           ref_no?: string | null
           ref_type?: string
           shelf_location?: string | null
@@ -3829,6 +4026,8 @@ export type Database = {
       supply_po_line_status: {
         Row: {
           id: string | null
+          kg_received: number | null
+          last_received_at: string | null
           material_id: string | null
           note: string | null
           po_id: string | null
