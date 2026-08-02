@@ -1,0 +1,24 @@
+-- BỎ BẢNG KÊ VẬT TƯ THEO LSX (BKVT) — gỡ hẳn tính năng tách đơn theo NCC.
+--
+-- `supply_lsx_material_plan` do 0108 tạo (đã apply lên DB thật 01/08/2026) và
+-- chỉ phục vụ một màn duy nhất: /planning/lsx/[id]/bkvt — nạp sheet BKVT từ file
+-- LSX, gán NCC từng dòng, rồi bấm một nút ra N đơn đặt. Chủ dự án chốt bỏ hướng
+-- này (02/08/2026); toàn bộ code của nó xoá cùng migration này. Đơn đặt vật tư
+-- quay lại soạn tay từng đơn trên /planning/pos/new.
+--
+-- KHÔNG ĐỘNG TỚI ĐƠN ĐÃ TẠO. Quan hệ là một chiều: bảng kê trỏ SANG dòng đơn qua
+-- `po_line_id`, không có chiều ngược lại. Đơn nào từng tách ra từ bảng kê vẫn còn
+-- nguyên trong `supply_purchase_orders` / `..._lines` cùng LSX, ghi chú và số
+-- tiền của nó — drop bảng này chỉ mất VẾT "dòng bảng kê nào đẻ ra dòng đơn nào".
+--
+-- Các cột `dm_per_sp / qty_demand / qty_on_hand / waste_pct` trên dòng đơn KHÔNG
+-- thuộc migration này: chúng đến từ mẫu đơn phụ kiện (0106), form soạn đơn vẫn
+-- nhập tay và vẫn cần.
+--
+-- Dữ liệu: UAT 01/08 đã xoá sạch sau khi kiểm (6 đơn + 20 dòng + 41 dòng bảng
+-- kê). Nếu môi trường nào còn dòng thì `drop table` cuốn theo — đó là chủ đích.
+--
+-- Idempotent: `if exists`, chạy lại vô hại. Index và trigger `set_updated_at`
+-- của bảng đi theo bảng, không phải drop riêng.
+
+drop table if exists public.supply_lsx_material_plan;

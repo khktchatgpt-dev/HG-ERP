@@ -52,8 +52,6 @@ export type LsxLineData = {
 
 export type SupplyPanelData = {
   hasBom: boolean
-  /** Link sang bảng kê vật tư (chỉ shell Kế hoạch — nơi được phép tách đơn). */
-  bkvtHref?: string | null
   pos: {
     id: string
     code: string
@@ -429,14 +427,6 @@ export function LsxDetailView({
             <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
               <div className="mb-3 flex items-center gap-2">
                 <h2 className="text-sm font-semibold">Vật tư & cung ứng</h2>
-                {supply.bkvtHref && (
-                  <Link
-                    href={supply.bkvtHref}
-                    className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
-                  >
-                    Bảng kê vật tư → tách đơn theo NCC →
-                  </Link>
-                )}
               </div>
               {!supply.hasBom && (
                 <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">

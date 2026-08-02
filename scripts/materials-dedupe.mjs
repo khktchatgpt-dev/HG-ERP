@@ -102,7 +102,6 @@ async function refCount(id) {
   const tables = [
     ['supply_purchase_order_lines', 'material_id'],
     ['supply_supplier_prices', 'material_id'],
-    ['supply_lsx_material_plan', 'material_id'],
     ['warehouse_movements', 'material_id'],
   ]
   let n = 0

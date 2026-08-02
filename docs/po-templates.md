@@ -141,10 +141,10 @@ và khối chữ ký "TRƯỞNG PHÒNG KẾ HOẠCH".
   simple 230 · phụ kiện 124 · carton 52, không còn dòng nào chưa khai.
   ⚠️ Đừng nhầm `technical_dies` (danh mục khuôn, để TRA kg/m khi đặt nhôm cây) với
   nhóm vật tư "Khuôn nhôm" (mặt hàng khuôn để MUA).
-- **BKVT → gán NCC → tách đơn: XONG (01/08)** — xem
-  [bkvt-tach-don.md](./bkvt-tach-don.md). Màn `/planning/lsx/[id]/bkvt`: nạp sheet
-  BKVT từ chính file LSX, gán NCC hàng loạt, bấm một nút ra N đơn (mỗi NCC một
-  đơn, gắn LSX). Migration `0108_lsx_material_plan.sql` đã apply.
+- **BKVT → gán NCC → tách đơn: ĐÃ BỎ (02/08)**, gỡ hẳn code + drop bảng
+  (`0110_drop_lsx_material_plan.sql`). Từng có màn `/planning/lsx/[id]/bkvt` nạp
+  sheet BKVT từ file LSX rồi bấm một nút ra N đơn theo NCC. Đơn đặt vật tư quay
+  lại soạn tay từng đơn trên `/planning/pos/new`. Lịch sử ở commit `80e366f`.
 - **Danh sách NCC thật: XONG (01/08)** — 26 NCC nạp từ 62 sheet đơn bằng
   `scripts/suppliers-import.mjs`, xem [po-suppliers-wip.md](./po-suppliers-wip.md).
   Còn treo phần **số ĐH `3/2026-HG/TTL`**: đã có mã viết tắt nhưng file gốc dùng

@@ -63,8 +63,6 @@ export async function LsxDetailScreen({
     const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
     supply = {
       hasBom: (summary?.components.length ?? 0) > 0,
-      // Bảng kê + tách đơn chỉ mở trong shell Kế hoạch - Cung ứng; GĐ chỉ xem.
-      bkvtHref: variant === 'planning' ? `/planning/lsx/${id}/bkvt` : null,
       pos: poRows.map((p) => ({
         id: p.id,
         code: p.code,
