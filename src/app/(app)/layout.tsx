@@ -9,11 +9,7 @@ import { AppShell } from '@/components/AppShell'
  * Pages inside this group still call AppShell themselves with their own title/subtitle/actions
  * — this layout only validates the session.
  */
-export default async function AppLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
   return <>{children}</>

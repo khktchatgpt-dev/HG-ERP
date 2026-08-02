@@ -262,6 +262,36 @@ export const productionRepo = {
   },
 }
 
+/**
+ * Danh sách MÃ SP của một lệnh — chỉ mã/tên/SL, không kéo theo thông số kỹ thuật.
+ *
+ * Dùng cho ô "Mã SP" trên dòng đơn đặt hàng: phòng Cung ứng mua GỘP chi tiết của
+ * cả lệnh cho rẻ (một đơn vít dùng chung cho 4 mã SP), nên dòng đơn phải chỉ ra
+ * được nó phục vụ (những) sản phẩm nào. Gõ tay mã SP là sai chính tả và không
+ * đối chiếu lại được — chọn từ đúng lệnh mới chắc.
+ */
+export async function listLsxProducts(
+  salesOrderId: string,
+): Promise<{ code: string; name: string; qty: number }[]> {
+  const { data } = await db()
+    .from('sales_order_lines')
+    .select('qty, sort_order, product:technical_products(code, name)')
+    .eq('order_id', salesOrderId)
+    .order('sort_order')
+
+  type P = { code: string; name: string }
+  const out: { code: string; name: string; qty: number }[] = []
+  for (const r of (data as { qty: unknown; product: P | P[] | null }[] | null) ?? []) {
+    const p = Array.isArray(r.product) ? r.product[0] : r.product
+    if (!p?.code) continue
+    // Cùng một mã SP có thể nằm 2 dòng đơn hàng (giao 2 đợt) — cộng dồn số lượng.
+    const hit = out.find((x) => x.code === p.code)
+    if (hit) hit.qty += Number(r.qty ?? 0)
+    else out.push({ code: p.code, name: p.name, qty: Number(r.qty ?? 0) })
+  }
+  return out
+}
+
 /** Dòng SP + đủ thông số kỹ thuật để in phiếu LSX (mẫu Hoàng Gia). */
 export type LsxPrintLine = {
   order_line_id: string

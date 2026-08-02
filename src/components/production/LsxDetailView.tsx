@@ -425,7 +425,9 @@ export function LsxDetailView({
           {/* Cung ứng (exec/planning) */}
           {supply && (
             <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-              <h2 className="mb-3 text-sm font-semibold">Vật tư & cung ứng</h2>
+              <div className="mb-3 flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Vật tư & cung ứng</h2>
+              </div>
               {!supply.hasBom && (
                 <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
                   ⚠ Chưa có bảng chi tiết — nhu cầu vật tư chưa bóc được.

@@ -10,11 +10,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'html'],
       include: ['src/**/*.ts'],
-      exclude: [
-        'src/**/*.test.ts',
-        'src/lib/database.types.ts',
-        'src/app/**',
-      ],
+      exclude: ['src/**/*.test.ts', 'src/lib/database.types.ts', 'src/app/**'],
     },
   },
   resolve: {

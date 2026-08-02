@@ -83,7 +83,7 @@ export default async function TaskDetail({
   return (
     <AppShell title={task.task_code} subtitle={task.title}>
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:col-span-2">
           <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
             <div className="mb-4 flex items-center gap-2">
               <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium dark:bg-zinc-800">
@@ -96,11 +96,11 @@ export default async function TaskDetail({
               />
             </div>
             {task.description ? (
-              <p className="mb-5 whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+              <p className="mb-5 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                 {task.description}
               </p>
             ) : (
-              <p className="mb-5 text-sm italic text-zinc-400">Không có mô tả.</p>
+              <p className="mb-5 text-sm text-zinc-400 italic">Không có mô tả.</p>
             )}
             <ProgressSlider
               taskId={task.id}
@@ -117,7 +117,7 @@ export default async function TaskDetail({
           />
 
           <section>
-            <h2 className="mb-2 text-sm font-semibold uppercase text-zinc-500">
+            <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">
               Bình luận & Báo cáo
             </h2>
             <CommentForm taskId={task.id} canReport={isAssignee} />
@@ -139,7 +139,7 @@ export default async function TaskDetail({
                     </span>
                     <time>{new Date(c.created_at).toLocaleString('vi-VN')}</time>
                   </div>
-                  <p className="whitespace-pre-wrap text-sm">{c.body}</p>
+                  <p className="text-sm whitespace-pre-wrap">{c.body}</p>
                 </li>
               ))}
             </ul>
@@ -148,7 +148,7 @@ export default async function TaskDetail({
 
         <aside className="flex flex-col gap-4 text-sm">
           <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <h3 className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+            <h3 className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
               Thông tin
             </h3>
             <dl className="space-y-1">
@@ -171,9 +171,7 @@ export default async function TaskDetail({
               <div className="flex justify-between gap-2">
                 <dt className="text-zinc-500">Hạn</dt>
                 <dd>
-                  {task.due_date
-                    ? new Date(task.due_date).toLocaleString('vi-VN')
-                    : '—'}
+                  {task.due_date ? new Date(task.due_date).toLocaleString('vi-VN') : '—'}
                 </dd>
               </div>
               <div className="flex justify-between gap-2">
@@ -190,7 +188,7 @@ export default async function TaskDetail({
           </div>
 
           <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-            <h3 className="mb-2 text-xs font-semibold uppercase text-zinc-500">
+            <h3 className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
               Lịch sử
             </h3>
             <ol className="space-y-1.5 text-xs">

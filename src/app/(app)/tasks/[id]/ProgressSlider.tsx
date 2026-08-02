@@ -35,7 +35,7 @@ export function ProgressSlider({
   if (!canEdit) {
     return (
       <div>
-        <div className="mb-1 text-xs font-semibold uppercase text-zinc-500">
+        <div className="mb-1 text-xs font-semibold text-zinc-500 uppercase">
           % hoàn thành
         </div>
         <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
@@ -52,7 +52,7 @@ export function ProgressSlider({
   return (
     <div>
       <div className="mb-2 flex items-center justify-between text-xs">
-        <span className="font-semibold uppercase text-zinc-500">% hoàn thành</span>
+        <span className="font-semibold text-zinc-500 uppercase">% hoàn thành</span>
         <span className="tabular-nums">{value}%</span>
       </div>
       <input

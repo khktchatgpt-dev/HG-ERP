@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 
 export type Material = {
   id: string
@@ -14,6 +15,8 @@ export type Material = {
   /** B: hệ số cứng (SL×hệ số); C: định mức kg/đơn-vị-đặt (vd 10.1 kg/cây) — sửa theo cân thực. */
   unit2_factor: number | null
   group_name: string | null
+  /** Nhóm phụ trong nhóm chính (0111) — 106 nhóm của sổ Cung ứng. */
+  sub_group: string | null
   min_stock: number
   /** Bù tồn (0043, nghiệp vụ ① Cung ứng): trần tồn + ngưỡng/lô đặt lại. */
   max_stock: number | null
@@ -24,6 +27,11 @@ export type Material = {
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null
+  /** Mẫu đơn đặt hàng mặc định (0106) — quyết định bộ cột khi soạn đơn cho vật tư này. */
+  po_template: PoTemplate | null
+  /** Nhôm (0109): kg/m và dài cây mặc định — mẫu đơn nhôm nhân ra tổng kg. */
+  kg_per_m: number | null
+  default_bar_length_m: number | null
   note: string | null
   is_active: boolean
   created_at: string
@@ -31,7 +39,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, default_bar_length_m, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -54,6 +62,12 @@ function toMaterial(row: Record<string, unknown>): Material {
     vat_rate: row.vat_rate == null ? null : Number(row.vat_rate),
     last_purchase_price:
       row.last_purchase_price == null ? null : Number(row.last_purchase_price),
+    // Cột DB là text tự do — lọc qua isPoTemplate để giá trị lạ về null thay vì
+    // chảy xuống form soạn đơn rồi hỏng bộ cột.
+    po_template: isPoTemplate(row.po_template) ? row.po_template : null,
+    kg_per_m: row.kg_per_m == null ? null : Number(row.kg_per_m),
+    default_bar_length_m:
+      row.default_bar_length_m == null ? null : Number(row.default_bar_length_m),
   }
 }
 
@@ -82,6 +96,34 @@ export const materialsRepo = {
     }
   },
 
+  /**
+   * Đếm theo BỘ LỌC ĐANG XEM, không đếm cả danh mục.
+   *
+   * StatsBar trước đây cộng từ mảng đã nạp về client. Trang nạp 1.000 dòng đầu
+   * trong khi danh mục có 12.991 nên mọi con số đều là của 1.000 dòng đó, mà
+   * nhãn thì không nói gì — đọc xong tưởng cả kho chỉ có ngần ấy.
+   */
+  async counts(filter: {
+    q?: string
+    group_name?: string
+  }): Promise<{ total: number; active: number; noShelf: number }> {
+    const base = () => {
+      let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
+      if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      if (filter.q)
+        q = q.or(
+          `code.ilike.%${filter.q}%,name.ilike.%${filter.q}%,barcode.ilike.%${filter.q}%`,
+        )
+      return q
+    }
+    const [all, act, shelf] = await Promise.all([
+      base(),
+      base().eq('is_active', true),
+      base().is('shelf_location', null),
+    ])
+    return { total: all.count ?? 0, active: act.count ?? 0, noShelf: shelf.count ?? 0 }
+  },
+
   async findById(id: string): Promise<Material | null> {
     const { data } = await db()
       .from('warehouse_materials')
@@ -98,6 +140,43 @@ export const materialsRepo = {
       .eq('code', code)
       .maybeSingle()
     return data ? toMaterial(data) : null
+  },
+
+  /**
+   * Mã + tên của một NHÓM — đủ để so trùng tên và suy tiền tố mã đang dùng.
+   *
+   * Chỉ lấy hai cột: nhóm to nhất (Nhôm) là 276 dòng, kéo cả `COLS` mỗi lần khai
+   * vật tư là tiền egress thuần tuý. Nhóm trống ('' hoặc null) gom về một rọ —
+   * đúng như script dọn trùng vẫn làm, để không so chéo vật liệu.
+   */
+  async namesInGroup(
+    groupName: string | null,
+  ): Promise<{ code: string; name: string }[]> {
+    let q = db().from('warehouse_materials').select('code, name').limit(2000)
+    q = groupName ? q.eq('group_name', groupName) : q.is('group_name', null)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    return (data as { code: string; name: string }[] | null) ?? []
+  },
+
+  /**
+   * Số lớn nhất đang dùng của một tiền tố, để cấp mã kế tiếp.
+   *
+   * Mã đệm 0 đủ 4 chữ số nên sắp theo CHUỖI giảm dần cũng chính là sắp theo số —
+   * chỉ cần một dòng, không phải kéo cả danh mục về đếm. (Vượt 9999 thì thứ tự
+   * chuỗi vỡ; lúc đó `NK-10000` vẫn lớn hơn `NK-9999` theo chuỗi nên vẫn đúng.)
+   */
+  async maxCodeNo(prefix: string): Promise<number> {
+    const { data, error } = await db()
+      .from('warehouse_materials')
+      .select('code')
+      .like('code', `${prefix}-%`)
+      .order('code', { ascending: false })
+      .limit(1)
+    if (error) throw new Error(error.message)
+    const code = (data as { code: string }[] | null)?.[0]?.code
+    const hit = code?.match(/^[A-Z]{2,3}-(\d+)$/)
+    return hit ? Number(hit[1]) : 0
   },
 
   async insert(

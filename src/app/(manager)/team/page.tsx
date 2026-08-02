@@ -44,8 +44,8 @@ export default async function TeamPage({
       return (
         <AppShell title="Đội nhóm">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
-            Trang này chỉ dành cho <strong>Trưởng phòng ban</strong> và quản trị
-            viên. Admin có thể gán bạn làm trưởng BP từ{' '}
+            Trang này chỉ dành cho <strong>Trưởng phòng ban</strong> và quản trị viên.
+            Admin có thể gán bạn làm trưởng BP từ{' '}
             <Link href="/admin/departments" className="underline">
               Quản trị → Phòng ban
             </Link>
@@ -73,7 +73,6 @@ export default async function TeamPage({
       }
     >
       <div>
-
         {/* Totals */}
         <section className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {[
@@ -97,12 +96,12 @@ export default async function TeamPage({
 
         {/* Members WIP */}
         <section className="mb-8">
-          <h2 className="mb-2 text-sm font-semibold uppercase text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">
             Khối lượng công việc theo thành viên
           </h2>
           <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+              <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
                 <tr>
                   <th className="px-4 py-2.5">Thành viên</th>
                   <th className="px-4 py-2.5 text-right">Chưa làm</th>
@@ -132,9 +131,7 @@ export default async function TeamPage({
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {m.counts.todo}
-                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{m.counts.todo}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {m.counts.in_progress}
                     </td>
@@ -159,7 +156,7 @@ export default async function TeamPage({
 
         {/* Recent dept tasks */}
         <section>
-          <h2 className="mb-2 text-sm font-semibold uppercase text-zinc-500">
+          <h2 className="mb-2 text-sm font-semibold text-zinc-500 uppercase">
             10 công việc gần nhất của phòng ban
           </h2>
           {recent.length === 0 ? (

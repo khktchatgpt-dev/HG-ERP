@@ -28,17 +28,27 @@ type Row = {
 }
 
 const TYPE_LABEL: Record<string, string> = {
-  annual: 'Nghỉ phép', sick: 'Ốm', unpaid: 'Không lương',
-  marriage: 'Cưới', funeral: 'Tang', maternity: 'Thai sản', other: 'Khác',
+  annual: 'Nghỉ phép',
+  sick: 'Ốm',
+  unpaid: 'Không lương',
+  marriage: 'Cưới',
+  funeral: 'Tang',
+  maternity: 'Thai sản',
+  other: 'Khác',
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: 'Chờ duyệt', approved: 'Đã duyệt',
-  rejected: 'Từ chối', cancelled: 'Đã huỷ',
+  pending: 'Chờ duyệt',
+  approved: 'Đã duyệt',
+  rejected: 'Từ chối',
+  cancelled: 'Đã huỷ',
 }
 
 const STATUS_TONE: Record<string, Parameters<typeof Badge>[0]['tone']> = {
-  pending: 'amber', approved: 'green', rejected: 'red', cancelled: 'gray',
+  pending: 'amber',
+  approved: 'green',
+  rejected: 'red',
+  cancelled: 'gray',
 }
 
 const SCOPES = [
@@ -89,7 +99,9 @@ export function LeaveManager({
               key={s.id}
               href={`?scope=${s.id}`}
               className={`-mb-px border-b-2 px-3 py-2 ${
-                scope === s.id ? 'border-black dark:border-white' : 'border-transparent text-zinc-500'
+                scope === s.id
+                  ? 'border-black dark:border-white'
+                  : 'border-transparent text-zinc-500'
               }`}
             >
               {s.label}
@@ -105,7 +117,11 @@ export function LeaveManager({
         <EmptyState
           icon="☰"
           title="Không có đơn nào"
-          description={scope === 'pending' ? 'Không có đơn nào chờ duyệt.' : 'Bấm "+ Tạo đơn" để gửi đơn nghỉ phép đầu tiên.'}
+          description={
+            scope === 'pending'
+              ? 'Không có đơn nào chờ duyệt.'
+              : 'Bấm "+ Tạo đơn" để gửi đơn nghỉ phép đầu tiên.'
+          }
         />
       ) : (
         <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
@@ -141,7 +157,9 @@ export function LeaveManager({
                         variant="success"
                         size="sm"
                         loading={busy}
-                        onClick={() => send(`/api/dept/hr/leave/${r.id}`, { action: 'approve' })}
+                        onClick={() =>
+                          send(`/api/dept/hr/leave/${r.id}`, { action: 'approve' })
+                        }
                       >
                         Duyệt
                       </Button>
@@ -158,7 +176,10 @@ export function LeaveManager({
                             tone: 'danger',
                           })
                           if (note !== null) {
-                            send(`/api/dept/hr/leave/${r.id}`, { action: 'reject', approver_note: note || undefined })
+                            send(`/api/dept/hr/leave/${r.id}`, {
+                              action: 'reject',
+                              approver_note: note || undefined,
+                            })
                           }
                         }}
                       >
@@ -171,7 +192,11 @@ export function LeaveManager({
                       size="sm"
                       loading={busy}
                       onClick={async () => {
-                        const ok = await confirm({ title: 'Huỷ đơn này?', tone: 'danger', confirmLabel: 'Huỷ đơn' })
+                        const ok = await confirm({
+                          title: 'Huỷ đơn này?',
+                          tone: 'danger',
+                          confirmLabel: 'Huỷ đơn',
+                        })
                         if (ok) send(`/api/dept/hr/leave/${r.id}`, { action: 'cancel' })
                       }}
                     >
@@ -185,7 +210,11 @@ export function LeaveManager({
         </ul>
       )}
 
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Tạo đơn nghỉ phép">
+      <Modal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        title="Tạo đơn nghỉ phép"
+      >
         <CreateLeaveForm
           onSubmit={async (body) => {
             const ok = await send('/api/dept/hr/leave', body)
@@ -197,14 +226,19 @@ export function LeaveManager({
   )
 }
 
-function CreateLeaveForm({ onSubmit }: { onSubmit: (body: Record<string, unknown>) => Promise<void> | void }) {
+function CreateLeaveForm({
+  onSubmit,
+}: {
+  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
+}) {
   const [busy, setBusy] = useState(false)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
   function days() {
     if (!from || !to) return 0
-    const a = new Date(from), b = new Date(to)
+    const a = new Date(from),
+      b = new Date(to)
     const d = Math.floor((b.getTime() - a.getTime()) / 86400_000) + 1
     return d > 0 ? d : 0
   }
@@ -229,12 +263,19 @@ function CreateLeaveForm({ onSubmit }: { onSubmit: (body: Record<string, unknown
       <Field label="Loại nghỉ" className="sm:col-span-2">
         <Select name="leave_type" defaultValue="annual">
           {Object.entries(TYPE_LABEL).map(([k, v]) => (
-            <option key={k} value={k}>{v}</option>
+            <option key={k} value={k}>
+              {v}
+            </option>
           ))}
         </Select>
       </Field>
       <Field label="Từ ngày" required>
-        <Input type="date" required value={from} onChange={(e) => setFrom(e.target.value)} />
+        <Input
+          type="date"
+          required
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+        />
       </Field>
       <Field label="Đến ngày" required>
         <Input type="date" required value={to} onChange={(e) => setTo(e.target.value)} />

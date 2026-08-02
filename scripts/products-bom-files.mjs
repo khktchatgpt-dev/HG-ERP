@@ -198,7 +198,9 @@ async function one(item) {
 
 // Chạy 4 file một lúc — nhanh hơn tuần tự mà không dồn quá nhiều vào Storage.
 for (const batch of chunk(todo, 4)) {
-  const res = await Promise.all(batch.map((it) => one(it).catch((e) => ({ r: 'fail', why: e.message }))))
+  const res = await Promise.all(
+    batch.map((it) => one(it).catch((e) => ({ r: 'fail', why: e.message }))),
+  )
   res.forEach((x, i) => {
     if (x.r === 'ok') ok++
     else {

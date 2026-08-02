@@ -28,14 +28,14 @@ Nền tảng ERP nội bộ cho **Công ty SXTM Hoàng Gia** (sản xuất nội
 
 ## Công nghệ & kiến trúc
 
-| Lớp | Công nghệ |
-|---|---|
-| Frontend | Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS v4 |
-| Backend | Next.js Route Handlers (API), tổ chức domain-driven 3 lớp |
+| Lớp      | Công nghệ                                                                                |
+| -------- | ---------------------------------------------------------------------------------------- |
+| Frontend | Next.js 16 (App Router, Turbopack), React 19, Tailwind CSS v4                            |
+| Backend  | Next.js Route Handlers (API), tổ chức domain-driven 3 lớp                                |
 | Database | Supabase Postgres — **RLS bật, không policy** (chặn anon, server bypass bằng secret key) |
-| Auth | Custom: `bcryptjs` + `jose` (JWT HS256) |
-| Validate | Zod ở biên API |
-| Test | Vitest |
+| Auth     | Custom: `bcryptjs` + `jose` (JWT HS256)                                                  |
+| Validate | Zod ở biên API                                                                           |
+| Test     | Vitest                                                                                   |
 
 **Nguyên tắc kiến trúc**
 
@@ -98,6 +98,7 @@ npm run dev            # http://localhost:3000
 ```
 
 Sinh `SESSION_SECRET`:
+
 ```bash
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 ```
@@ -106,15 +107,15 @@ node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 
 ## Scripts
 
-| Lệnh | Mô tả |
-|---|---|
-| `npm run dev` | Dev server (Turbopack) |
-| `npm run build` / `start` | Build & chạy production |
-| `npm run typecheck` | Kiểm tra kiểu TypeScript |
-| `npm run lint` | ESLint |
-| `npm test` | Vitest |
-| `npm run format` | Prettier (tự sắp class Tailwind) |
-| `npm run check` | typecheck + lint + test (gate trước khi coi là xong) |
+| Lệnh                      | Mô tả                                                |
+| ------------------------- | ---------------------------------------------------- |
+| `npm run dev`             | Dev server (Turbopack)                               |
+| `npm run build` / `start` | Build & chạy production                              |
+| `npm run typecheck`       | Kiểm tra kiểu TypeScript                             |
+| `npm run lint`            | ESLint                                               |
+| `npm test`                | Vitest                                               |
+| `npm run format`          | Prettier (tự sắp class Tailwind)                     |
+| `npm run check`           | typecheck + lint + test (gate trước khi coi là xong) |
 
 ---
 

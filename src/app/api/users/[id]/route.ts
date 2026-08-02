@@ -2,10 +2,7 @@ import { NextResponse } from 'next/server'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { usersService } from '@/modules/core/users/users.service'
-import {
-  userDeleteSchema,
-  userUpdateSchema,
-} from '@/modules/core/users/users.schema'
+import { userDeleteSchema, userUpdateSchema } from '@/modules/core/users/users.schema'
 
 type Params = { params: Promise<{ id: string }> }
 

@@ -50,6 +50,23 @@ thành tiền 0.
 
 ### Form
 
+**Một form duy nhất cho tạo / sửa / nhân bản.** `PoCreateForm` nhận `initial`
+(`mode: 'edit' | 'duplicate'`); `/planning/pos/[id]/edit` dựng nó từ
+`posService.detail`, `?duplicate=1` thì lưu thành đơn mới.
+
+Trước đây `PosManager` có form sửa RIÊNG trong modal theo mô hình cũ (~645 dòng,
+bảng cột cứng, không biết mẫu đơn). Sửa một đơn nhôm bằng form đó sẽ hạ mẫu về
+`simple`, xoá kg/m + dài cây, và thành tiền tụt từ (tổng kg × giá/kg) xuống
+(số cây × giá/kg) — sai ~6 lần, im lặng. Đã xoá hẳn form đó; `PosManager` giờ
+điều hướng sang trang soạn đơn (1621 → 818 dòng, trang danh sách cũng thôi nạp
+1.000 vật tư + 200 LSX vốn chỉ để nuôi cái modal).
+
+Hồi quy khoá bug này: `src/app/(workspace)/planning/pos/new/po-line.test.ts` —
+mở đơn đã lưu ra sửa phải cho lại ĐÚNG số tiền cũ, cả 5 mẫu.
+
+`poUpdateSchema` bỏ `.default('simple')` cho `template`: khi tạo, không khai thì
+là `simple`; khi sửa, không khai phải là "giữ nguyên mẫu cũ".
+
 Chọn LSX → chọn mẫu → chọn NCC. Bảng tự đổi cột theo mẫu. Ô **nền xám** là số hệ
 thống tự tính (tổng kg, m², thành tiền) — không gõ được. Hai ô luôn phải gõ là
 **SL đặt** và **Đơn giá**. Dòng nhập nhanh nằm cuối bảng: chọn vật tư xong con trỏ
@@ -104,15 +121,35 @@ và khối chữ ký "TRƯỞNG PHÒNG KẾ HOẠCH".
 
 ## Còn lại / lưu ý
 
-- **`warehouse_materials.kg_per_m` đang rỗng toàn bộ** (cột do phiên khác thêm qua
-  SQL editor, chưa nạp số). Mẫu nhôm vì thế lấy kg/m từ ô chọn khuôn hoặc gõ tay.
-  Muốn tự điền từ vật tư thì phải backfill cột này.
+- **`warehouse_materials.kg_per_m`**: nhóm "Nhôm" có sẵn 252/276 dòng, nên phần lớn
+  dòng nhôm tự điền được kg/m ngay khi chọn vật tư; 24 dòng còn lại tra qua ô chọn
+  khuôn hoặc gõ tay. Nhóm "Sắt"/"Inox" thì gần như trống (1/232) — mẫu `metal_kg`
+  vốn nhập kg/đơn-vị theo phiếu cân của NCC nên không chặn.
+  (Cột `kg_per_m` + `default_bar_length_m` có trên DB nhưng KHÔNG migration nào
+  trong repo tạo ra — ai đó thêm qua SQL editor.)
 - **`item_categories` (migration 0042/0043) chưa từng được apply lên DB thật** —
   bảng không tồn tại, `warehouse_materials` cũng không có `category_id`. Grouping
   đang chạy thật vẫn là cột text `group_name`. Vì vậy `po_template` gắn thẳng lên
-  `warehouse_materials`. Suy từ `group_name` được 850/914 vật tư, còn 64 chưa khai.
-- Chưa làm: trục **BKVT → gán NCC → tách đơn theo NCC** (mô hình thật trong file
-  Excel: đơn hàng = bảng kê vật tư lọc theo cột NCC). Hiện vẫn soạn từng đơn một.
+  `warehouse_materials`.
+
+- **Phân loại mẫu theo `group_name` (0106) đoán sai 2 chỗ, đã vá ở `0107`:**
+  "Khuôn nhôm" (169) bị gán `aluminium` vì khớp `%nhôm%` — nhưng mua khuôn là mua
+  **bộ khuôn**, giá theo bộ, không có kg/m (0/169 dòng có `kg_per_m`, trong khi
+  nhóm "Nhôm" là 252/276), và mẫu nhôm bắt buộc kg/m + dài cây mới cho gửi đơn →
+  chuyển về `simple`. 64 vật tư chưa khai (Mây-dây, Kính, Sơn, Hoá chất, Gỗ) →
+  `simple`, riêng "Ngũ kim" → `accessory`. Sau vá: nhôm 276 · inox/sắt 232 ·
+  simple 230 · phụ kiện 124 · carton 52, không còn dòng nào chưa khai.
+  ⚠️ Đừng nhầm `technical_dies` (danh mục khuôn, để TRA kg/m khi đặt nhôm cây) với
+  nhóm vật tư "Khuôn nhôm" (mặt hàng khuôn để MUA).
+- **BKVT → gán NCC → tách đơn: ĐÃ BỎ (02/08)**, gỡ hẳn code + drop bảng
+  (`0110_drop_lsx_material_plan.sql`). Từng có màn `/planning/lsx/[id]/bkvt` nạp
+  sheet BKVT từ file LSX rồi bấm một nút ra N đơn theo NCC. Đơn đặt vật tư quay
+  lại soạn tay từng đơn trên `/planning/pos/new`. Lịch sử ở commit `80e366f`.
+- **Danh sách NCC thật: XONG (01/08)** — 26 NCC nạp từ 62 sheet đơn bằng
+  `scripts/suppliers-import.mjs`, xem [po-suppliers-wip.md](./po-suppliers-wip.md).
+  Còn treo phần **số ĐH `3/2026-HG/TTL`**: đã có mã viết tắt nhưng file gốc dùng
+  4 định dạng khác nhau, phải chốt một dạng với phòng Cung ứng. 5 NCC demo giữ
+  nguyên vì đã dính chứng từ.
 - Chưa làm: cột theo dõi về hàng ngay trên đơn (`Ngày về / SL / Số kg / Còn lại`)
-  mà mẫu nhôm và inox có sẵn trong file.
-- Số ĐH vẫn là `PO-YYYY-NNNN`, chưa theo dạng `3/2026-HG/TTL` (cần mã ngắn NCC).
+  mà mẫu nhôm và inox có sẵn trong file. App đã có phiếu nhập nên có thể thừa —
+  cần DN xác nhận có muốn in lên đơn không.

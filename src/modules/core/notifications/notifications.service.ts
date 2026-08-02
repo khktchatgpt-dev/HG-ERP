@@ -1,4 +1,7 @@
-import { notificationsRepo, type NotificationType } from '@/modules/core/notifications/notifications.repo'
+import {
+  notificationsRepo,
+  type NotificationType,
+} from '@/modules/core/notifications/notifications.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 export const notificationsService = {

@@ -13,13 +13,48 @@ type Cmd = {
 
 const COMMANDS_STATIC: Omit<Cmd, 'action'>[] = [
   { id: 'nav-dashboard', label: 'Đi tới Tổng quan', group: 'Điều hướng', hint: '/admin' },
-  { id: 'nav-users', label: 'Đi tới Người dùng', group: 'Điều hướng', hint: '/admin/users' },
-  { id: 'nav-departments', label: 'Đi tới Phòng ban', group: 'Điều hướng', hint: '/admin/departments' },
-  { id: 'nav-audit', label: 'Đi tới Nhật ký thao tác', group: 'Điều hướng', hint: '/admin/audit' },
-  { id: 'nav-health', label: 'Đi tới Sức khoẻ hệ thống', group: 'Điều hướng', hint: '/admin/health' },
-  { id: 'nav-settings', label: 'Đi tới Cấu hình', group: 'Điều hướng', hint: '/admin/settings' },
-  { id: 'new-user', label: 'Tạo tài khoản mới', group: 'Thao tác', hint: '/admin/users?new=1' },
-  { id: 'import-users', label: 'Import Excel người dùng', group: 'Thao tác', hint: '/admin/users?import=1' },
+  {
+    id: 'nav-users',
+    label: 'Đi tới Người dùng',
+    group: 'Điều hướng',
+    hint: '/admin/users',
+  },
+  {
+    id: 'nav-departments',
+    label: 'Đi tới Phòng ban',
+    group: 'Điều hướng',
+    hint: '/admin/departments',
+  },
+  {
+    id: 'nav-audit',
+    label: 'Đi tới Nhật ký thao tác',
+    group: 'Điều hướng',
+    hint: '/admin/audit',
+  },
+  {
+    id: 'nav-health',
+    label: 'Đi tới Sức khoẻ hệ thống',
+    group: 'Điều hướng',
+    hint: '/admin/health',
+  },
+  {
+    id: 'nav-settings',
+    label: 'Đi tới Cấu hình',
+    group: 'Điều hướng',
+    hint: '/admin/settings',
+  },
+  {
+    id: 'new-user',
+    label: 'Tạo tài khoản mới',
+    group: 'Thao tác',
+    hint: '/admin/users?new=1',
+  },
+  {
+    id: 'import-users',
+    label: 'Import Excel người dùng',
+    group: 'Thao tác',
+    hint: '/admin/users?import=1',
+  },
 ]
 
 const HREF_MAP: Record<string, string> = {
@@ -138,7 +173,7 @@ export function CommandPalette() {
           )}
           {Array.from(groups.entries()).map(([group, items]) => (
             <div key={group}>
-              <div className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              <div className="px-3 pt-2 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase">
                 {group}
               </div>
               {items.map(({ c, realIdx }) => (
@@ -154,7 +189,9 @@ export function CommandPalette() {
                 >
                   <span>{c.label}</span>
                   {c.hint && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">{c.hint}</span>
+                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
+                      {c.hint}
+                    </span>
                   )}
                 </button>
               ))}

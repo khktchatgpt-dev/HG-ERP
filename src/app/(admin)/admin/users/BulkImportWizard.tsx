@@ -58,7 +58,7 @@ function parseRows(raw: string, departments: Dept[]): ParsedRow[] {
     const rawRole = (idx('role') >= 0 ? cols[idx('role')] : '').toLowerCase()
     const role: Role = ROLE_MAP[rawRole] ?? 'employee'
     const rawDept = idx('department') >= 0 ? cols[idx('department')].toLowerCase() : ''
-    const department_id = rawDept ? deptByName.get(rawDept) ?? null : null
+    const department_id = rawDept ? (deptByName.get(rawDept) ?? null) : null
 
     const errors: string[] = []
     if (!email.includes('@')) errors.push('email không hợp lệ')
@@ -142,7 +142,9 @@ export function BulkImportWizard({
           value={raw}
           onChange={(e) => setRaw(e.target.value)}
           rows={8}
-          placeholder={'email\tpassword\tname\trole\tdepartment\nnv1@hg.com\tpass1234\tNV 1\temployee\tKỹ thuật'}
+          placeholder={
+            'email\tpassword\tname\trole\tdepartment\nnv1@hg.com\tpass1234\tNV 1\temployee\tKỹ thuật'
+          }
           className="rounded-md border border-zinc-300 px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>
@@ -161,7 +163,10 @@ export function BulkImportWizard({
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {parsed.map((r, i) => (
-                <tr key={i} className={r._error ? 'bg-red-50 dark:bg-red-900/20' : undefined}>
+                <tr
+                  key={i}
+                  className={r._error ? 'bg-red-50 dark:bg-red-900/20' : undefined}
+                >
                   <td className="px-2 py-1">{r.email}</td>
                   <td className="px-2 py-1">{r.name ?? '—'}</td>
                   <td className="px-2 py-1">{r.role}</td>

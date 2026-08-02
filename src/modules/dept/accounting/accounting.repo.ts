@@ -20,7 +20,8 @@ export type Invoice = {
   updated_at: string
 }
 
-const COLS = 'id, invoice_no, party_name, direction, amount, currency, issued_date, due_date, status, paid_at, notes, created_by, created_at, updated_at'
+const COLS =
+  'id, invoice_no, party_name, direction, amount, currency, issued_date, due_date, status, paid_at, notes, created_by, created_at, updated_at'
 
 export const invoicesRepo = {
   async list(filter: {
@@ -30,11 +31,14 @@ export const invoicesRepo = {
     page: number
     page_size: number
   }): Promise<{ rows: Invoice[]; total: number; sumByCurrency: Record<string, number> }> {
-    let q = db().from('accounting_invoices').select(COLS, { count: 'exact' })
+    let q = db()
+      .from('accounting_invoices')
+      .select(COLS, { count: 'exact' })
       .order('issued_date', { ascending: false })
     if (filter.direction) q = q.eq('direction', filter.direction)
     if (filter.status) q = q.eq('status', filter.status)
-    if (filter.q) q = q.or(`invoice_no.ilike.%${filter.q}%,party_name.ilike.%${filter.q}%`)
+    if (filter.q)
+      q = q.or(`invoice_no.ilike.%${filter.q}%,party_name.ilike.%${filter.q}%`)
     const from = (filter.page - 1) * filter.page_size
     const to = from + filter.page_size - 1
     q = q.range(from, to)
@@ -48,18 +52,35 @@ export const invoicesRepo = {
   },
 
   async findById(id: string): Promise<Invoice | null> {
-    const { data } = await db().from('accounting_invoices').select(COLS).eq('id', id).maybeSingle()
+    const { data } = await db()
+      .from('accounting_invoices')
+      .select(COLS)
+      .eq('id', id)
+      .maybeSingle()
     return (data as Invoice | null) ?? null
   },
 
-  async insert(row: Omit<Invoice, 'id' | 'status' | 'paid_at' | 'created_at' | 'updated_at'> & { status?: InvoiceStatus }): Promise<Invoice> {
-    const { data, error } = await db().from('accounting_invoices').insert(row).select(COLS).single()
+  async insert(
+    row: Omit<Invoice, 'id' | 'status' | 'paid_at' | 'created_at' | 'updated_at'> & {
+      status?: InvoiceStatus
+    },
+  ): Promise<Invoice> {
+    const { data, error } = await db()
+      .from('accounting_invoices')
+      .insert(row)
+      .select(COLS)
+      .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert invoice failed')
     return data as Invoice
   },
 
   async patch(id: string, patch: Partial<Invoice>): Promise<Invoice> {
-    const { data, error } = await db().from('accounting_invoices').update(patch).eq('id', id).select(COLS).single()
+    const { data, error } = await db()
+      .from('accounting_invoices')
+      .update(patch)
+      .eq('id', id)
+      .select(COLS)
+      .single()
     if (error || !data) throw new Error(error?.message ?? 'Update invoice failed')
     return data as Invoice
   },

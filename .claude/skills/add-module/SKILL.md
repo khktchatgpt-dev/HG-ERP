@@ -10,6 +10,7 @@ Sinh một domain module đúng convention trong CLAUDE.md. Mục tiêu: mọi m
 ## Trước khi bắt đầu
 
 Hỏi (nếu chưa rõ):
+
 - **Tên domain** (kebab, số ít): vd `products`, `invoices`, `leaves`.
 - **Thuộc nhóm nào**: `core/*` (dùng chung), `dept/*` (theo phòng ban), `workflow/*` (quy trình).
 - **Bảng DB** đã có chưa? Nếu chưa → chạy skill `add-migration` trước, apply, rồi `sync-types`.

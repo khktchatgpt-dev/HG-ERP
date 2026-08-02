@@ -21,7 +21,10 @@ export default async function Home() {
 
   type Card = { label: string; value: number; tone?: 'red' | 'amber' }
   const cards: Card[] = [
-    { label: 'Cần làm', value: stats.mine.todo + stats.mine.in_progress + stats.mine.rejected },
+    {
+      label: 'Cần làm',
+      value: stats.mine.todo + stats.mine.in_progress + stats.mine.rejected,
+    },
     { label: 'Đang chờ duyệt', value: stats.mine.submitted },
     { label: 'Hoàn thành', value: stats.mine.done },
     { label: 'Quá hạn', value: stats.overdue, tone: 'red' },
@@ -53,7 +56,7 @@ export default async function Home() {
     >
       <div className="flex flex-col gap-8">
         <section>
-          <h2 className="mb-3 text-sm font-semibold uppercase text-zinc-500">
+          <h2 className="mb-3 text-sm font-semibold text-zinc-500 uppercase">
             Công việc của tôi
           </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
@@ -68,7 +71,7 @@ export default async function Home() {
                       : 'border-zinc-200 dark:border-zinc-800'
                 }`}
               >
-                <div className="text-xs uppercase text-zinc-500">{c.label}</div>
+                <div className="text-xs text-zinc-500 uppercase">{c.label}</div>
                 <div className="mt-1 text-3xl font-semibold">{c.value}</div>
               </div>
             ))}
@@ -77,34 +80,34 @@ export default async function Home() {
 
         {isAdmin && org && (
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase text-zinc-500">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-500 uppercase">
               Toàn hệ thống
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
               <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-                <div className="text-xs uppercase text-zinc-500">Tổng công việc</div>
+                <div className="text-xs text-zinc-500 uppercase">Tổng công việc</div>
                 <div className="mt-1 text-3xl font-semibold">{org.total}</div>
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
-                <div className="text-xs uppercase text-zinc-500">Chờ duyệt</div>
+                <div className="text-xs text-zinc-500 uppercase">Chờ duyệt</div>
                 <div className="mt-1 text-3xl font-semibold">{org.pending_approvals}</div>
               </div>
               <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/30">
-                <div className="text-xs uppercase text-zinc-500">Hoàn thành</div>
+                <div className="text-xs text-zinc-500 uppercase">Hoàn thành</div>
                 <div className="mt-1 text-3xl font-semibold">{org.by_status.done}</div>
               </div>
               <Link
                 href="/admin/users"
                 className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
               >
-                <div className="text-xs uppercase text-zinc-500">Nhân viên</div>
+                <div className="text-xs text-zinc-500 uppercase">Nhân viên</div>
                 <div className="mt-1 text-3xl font-semibold">{org.users}</div>
               </Link>
               <Link
                 href="/admin/departments"
                 className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
               >
-                <div className="text-xs uppercase text-zinc-500">Phòng ban</div>
+                <div className="text-xs text-zinc-500 uppercase">Phòng ban</div>
                 <div className="mt-1 text-3xl font-semibold">{org.departments}</div>
               </Link>
             </div>
@@ -113,7 +116,7 @@ export default async function Home() {
 
         {isAdmin && pending && pending.rows.length > 0 && (
           <section>
-            <h2 className="mb-3 text-sm font-semibold uppercase text-zinc-500">
+            <h2 className="mb-3 text-sm font-semibold text-zinc-500 uppercase">
               Việc chờ duyệt gần đây
             </h2>
             <ul className="divide-y divide-zinc-200 rounded border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">

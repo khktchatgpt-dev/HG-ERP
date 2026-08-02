@@ -1,3 +1,9 @@
+-- ⚠️ CHƯA TỪNG APPLY — ĐỪNG CHẠY (rà DB thật ngày 01/08/2026), đi kèm 0042.
+--
+-- File này thêm `category_id` trỏ sang `item_categories` — bảng chưa tồn tại.
+-- Phân nhóm đang chạy bằng `warehouse_materials.group_name` (text). Xem đầu file
+-- 0042 cho lý do đầy đủ.
+--
 -- Item master chuẩn ERP (2/4): mở rộng `warehouse_materials` — docs/thiet-ke-item-master-erp.md §4.
 --
 -- Nâng item master tối giản (0009) lên chuẩn ERP: phân loại (item_type +

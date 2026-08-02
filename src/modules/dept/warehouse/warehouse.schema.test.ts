@@ -41,12 +41,17 @@ describe('materialCreateSchema', () => {
     expect(p2.min_stock).toBe(0)
   })
 
-  it('reject thiếu mã', () => {
-    expect(() => materialCreateSchema.parse({ name: 'Y' })).toThrow()
+  /*
+   * MÃ KHÔNG CÒN BẮT BUỘC (02/08) — bỏ trống thì service tự cấp `XX-0000` nối
+   * tiếp theo nhóm. Gõ tay mã là một hạng lỗi không cần tồn tại: quy ước mã là
+   * của danh mục, không phải thứ người soạn đơn đang vội phải nhớ.
+   */
+  it('thiếu mã vẫn parse được — server cấp sau', () => {
+    expect(materialCreateSchema.parse({ name: 'Y' }).code).toBeUndefined()
   })
 
-  it('reject mã rỗng', () => {
-    expect(() => materialCreateSchema.parse({ code: '', name: 'Y' })).toThrow()
+  it('mã rỗng cũng qua, service coi như chưa khai', () => {
+    expect(materialCreateSchema.parse({ code: '', name: 'Y' }).code).toBe('')
   })
 
   it('reject tên rỗng', () => {
@@ -185,14 +190,19 @@ describe('stockListQuerySchema & movementListQuerySchema', () => {
   })
 })
 
-
 describe('receiptDocSchema — phiếu nhập nhiều dòng', () => {
   it('parse OK: theo PO với QC', () => {
     const p = receiptDocSchema.parse({
       po_id: UUID,
       counterparty: 'Tài xế NCC Tiến Đạt',
       lines: [
-        { material_id: UUID, qty: '60', qty_rejected: '5', qc_status: 'partial', po_line_id: UUID },
+        {
+          material_id: UUID,
+          qty: '60',
+          qty_rejected: '5',
+          qc_status: 'partial',
+          po_line_id: UUID,
+        },
       ],
     })
     expect(p.lines[0].qty).toBe(60)
@@ -221,7 +231,10 @@ describe('issueDocSchema — BR-09 ở tầng schema', () => {
   })
 
   it('xuất thường ngày không cần LSX', () => {
-    const p = issueDocSchema.parse({ kind: 'daily', lines: [{ material_id: UUID, qty: 2 }] })
+    const p = issueDocSchema.parse({
+      kind: 'daily',
+      lines: [{ material_id: UUID, qty: 2 }],
+    })
     expect(p.kind).toBe('daily')
   })
 })

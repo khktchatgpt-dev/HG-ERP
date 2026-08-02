@@ -95,7 +95,13 @@ export function UserForm({
       {mode === 'create' && (
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
           Mật khẩu (≥ 8 ký tự)
-          <input name="password" type="password" required minLength={8} className={inputCls} />
+          <input
+            name="password"
+            type="password"
+            required
+            minLength={8}
+            className={inputCls}
+          />
         </label>
       )}
       <label className="flex flex-col gap-1 text-sm">
@@ -137,7 +143,8 @@ export function UserForm({
       </div>
       {mode === 'edit' && (
         <p className="text-xs text-zinc-500 sm:col-span-2">
-          Đổi email hoặc vai trò cần dùng dropdown vai trò ngay trên bảng, hoặc tạo tài khoản mới.
+          Đổi email hoặc vai trò cần dùng dropdown vai trò ngay trên bảng, hoặc tạo tài
+          khoản mới.
         </p>
       )}
     </form>

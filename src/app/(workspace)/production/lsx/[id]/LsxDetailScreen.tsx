@@ -111,10 +111,7 @@ export async function LsxDetailScreen({
       canManage: isMgr || isProd,
       planHref: null,
       shapingHref: null,
-      breadcrumbs: [
-        { label: 'Tổ sản xuất', href: '/to' },
-        { label: `LSX ${lsx.code}` },
-      ],
+      breadcrumbs: [{ label: 'Tổ sản xuất', href: '/to' }, { label: `LSX ${lsx.code}` }],
     },
     stat: {
       canApprove: false,

@@ -21,13 +21,11 @@ export async function AppShell({
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar title={title} subtitle={subtitle} actions={actions} />
         {subnav && (
-          <div className="border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+          <div className="border-b border-zinc-200 bg-white px-4 sm:px-6 dark:border-zinc-800 dark:bg-zinc-950">
             {subnav}
           </div>
         )}
-        <main className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">
-          {children}
-        </main>
+        <main className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">{children}</main>
       </div>
     </div>
   )

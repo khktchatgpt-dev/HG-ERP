@@ -2,7 +2,9 @@ import { z } from 'zod'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const materialCreateSchema = z.object({
-  code: z.string().trim().min(1).max(60),
+  // Bỏ trống → server tự cấp `XX-0000` nối tiếp theo nhóm. Gõ tay mã là một hạng
+  // lỗi không cần tồn tại; Kho vẫn khai được tay khi cần bám mã cũ.
+  code: z.string().trim().max(60).optional().nullable(),
   name: z.string().trim().min(1).max(200),
   unit: z.string().trim().min(1).max(30).default('cái'),
   // Mã vạch sẵn có của NCC (0078) — quét khớp cả code lẫn barcode, không in tem.
@@ -13,6 +15,8 @@ export const materialCreateSchema = z.object({
   price_unit: z.string().trim().max(30).optional().nullable(),
   unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),
+  // Nhóm phụ (0111) — tầng phân loại thứ hai, 106 nhóm của sổ Cung ứng.
+  sub_group: z.string().trim().max(100).optional().nullable(),
   min_stock: z.coerce.number().min(0).default(0),
   // Bù tồn (0043, nghiệp vụ ①): trần tồn + ngưỡng/lô đặt lại — Kho quản.
   max_stock: z.coerce.number().min(0).optional().nullable(),

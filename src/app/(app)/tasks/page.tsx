@@ -42,8 +42,8 @@ export default async function TasksPage({
   if (!user) redirect('/login')
 
   const sp = await searchParams
-  const scope = (SCOPES.find((s) => s.id === sp.scope)?.id ?? 'mine') as
-    (typeof SCOPES)[number]['id']
+  const scope = (SCOPES.find((s) => s.id === sp.scope)?.id ??
+    'mine') as (typeof SCOPES)[number]['id']
   const status = TASK_STATUSES.includes(sp.status as TaskStatus)
     ? (sp.status as TaskStatus)
     : undefined

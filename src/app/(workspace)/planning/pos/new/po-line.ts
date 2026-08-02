@@ -1,5 +1,6 @@
 import { poLineAmount } from '@/lib/po-line'
 import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
+import { kgPerOrderUnit } from '@/lib/metal-weight'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -144,7 +145,18 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     bar_surplus: '',
     dimension_text: m.spec ?? '',
     finish: '',
-    weight_per_unit: '',
+    /*
+     * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt. Trước đây LUÔN để trống, kể cả khi vật tư
+     * đã có barem trong danh mục — mà `lineReady` lại CHẶN gửi khi ô này trống,
+     * nên người soạn đơn bị kẹt và gõ đại một số cho qua. Số gõ đại đi thẳng vào
+     * (SL × kg/đv) × giá/kg rồi lên bàn duyệt của Giám đốc, không ai đối chiếu.
+     *
+     * Không chép thẳng `kg_per_m`: barem theo MÉT còn đơn đặt theo CÂY — inox
+     * Kim Vĩnh Phú là 9,325 kg/cây, tức ~1,55 kg/m. Điền nhầm là đơn hụt 6 lần.
+     * `kgPerOrderUnit` chỉ quy đổi khi biết chắc ĐVT và dài cây, còn lại trả null
+     * → ô vẫn trống, nhân viên nhập theo phiếu cân NCC như cũ.
+     */
+    weight_per_unit: kgPerOrderUnit(m.kg_per_m, m.unit, m.default_bar_length_m) ?? '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
@@ -152,6 +164,85 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     inner_h_mm: '',
     area_m2: '',
     carton_basis: 'ctn',
+  }
+}
+
+/** Dòng đơn như repo trả về — chỉ những trường form cần. */
+export type PoLineDto = {
+  material_id: string
+  material_code: string
+  material_name: string
+  material_unit: string
+  qty_ordered: number
+  unit_price: number | null
+  spec: string | null
+  note: string | null
+  material_grade: string | null
+  product_code: string | null
+  dm_per_sp: number | null
+  qty_demand: number | null
+  qty_on_hand: number | null
+  waste_pct: number | null
+  die_code: string | null
+  weight_per_m: number | null
+  bar_length_m: number | null
+  bar_surplus: number | null
+  dimension_text: string | null
+  finish: string | null
+  weight_per_unit: number | null
+  open_style: string | null
+  pcs_per_ctn: number | null
+  inner_l_mm: number | null
+  inner_w_mm: number | null
+  inner_h_mm: number | null
+  area_m2: number | null
+  carton_basis: 'ctn' | 'm2' | null
+}
+
+const n2 = (v: number | null | undefined): Num => (v == null ? '' : Number(v))
+const s2 = (v: string | null | undefined): string => v ?? ''
+
+/**
+ * Dựng dòng form từ dòng đơn đã lưu — dùng khi mở SỬA hoặc NHÂN BẢN đơn.
+ *
+ * Phải giữ TRỌN thông số quy đổi của mẫu (kg/m, dài cây, kg/đv, m²): mất chúng
+ * thì `deriveLine` rơi về 'unit' và thành tiền dòng nhôm tụt từ (tổng kg × giá/kg)
+ * xuống (số cây × giá/kg) — sai khoảng 6 lần mà không báo gì.
+ *
+ * `on_hand` lấy tồn HIỆN TẠI (server page nạp kèm), không phải `qty_on_hand` đã
+ * chốt lúc lập đơn — hai số khác nghĩa: một là tồn bây giờ, một là ảnh chụp để in.
+ */
+export function lineFromPo(l: PoLineDto, onHand = 0): Line {
+  return {
+    material_id: l.material_id,
+    code: l.material_code,
+    name: l.material_name,
+    unit: l.material_unit,
+    on_hand: onHand,
+    spec: s2(l.spec),
+    note: s2(l.note),
+    qty: n2(l.qty_ordered),
+    price: n2(l.unit_price),
+    material_grade: s2(l.material_grade),
+    product_code: s2(l.product_code),
+    dm_per_sp: n2(l.dm_per_sp),
+    qty_demand: n2(l.qty_demand),
+    qty_on_hand: n2(l.qty_on_hand),
+    waste_pct: n2(l.waste_pct),
+    die_code: s2(l.die_code),
+    weight_per_m: n2(l.weight_per_m),
+    bar_length_m: n2(l.bar_length_m),
+    bar_surplus: n2(l.bar_surplus),
+    dimension_text: s2(l.dimension_text),
+    finish: s2(l.finish),
+    weight_per_unit: n2(l.weight_per_unit),
+    open_style: s2(l.open_style),
+    pcs_per_ctn: n2(l.pcs_per_ctn),
+    inner_l_mm: n2(l.inner_l_mm),
+    inner_w_mm: n2(l.inner_w_mm),
+    inner_h_mm: n2(l.inner_h_mm),
+    area_m2: n2(l.area_m2),
+    carton_basis: l.carton_basis ?? 'ctn',
   }
 }
 

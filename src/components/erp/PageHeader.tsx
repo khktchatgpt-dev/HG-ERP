@@ -25,9 +25,7 @@ export function PageHeader({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-lg font-semibold sm:text-xl">{title}</h1>
-          {description && (
-            <p className="mt-0.5 text-sm text-zinc-500">{description}</p>
-          )}
+          {description && <p className="mt-0.5 text-sm text-zinc-500">{description}</p>}
           {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}

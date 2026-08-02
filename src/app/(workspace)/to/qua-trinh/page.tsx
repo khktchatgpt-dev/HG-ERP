@@ -31,10 +31,7 @@ export default async function TeamActivityPage({
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-        breadcrumbs={[
-          { label: 'Tổ sản xuất', href: '/to' },
-          { label: 'Quá trình tổ' },
-        ]}
+        breadcrumbs={[{ label: 'Tổ sản xuất', href: '/to' }, { label: 'Quá trình tổ' }]}
         title="Quá trình của tổ"
         description="Số thống kê đã ghi cho tổ mình — sai thì báo thống kê sửa sổ."
       />

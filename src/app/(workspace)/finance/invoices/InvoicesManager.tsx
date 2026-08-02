@@ -22,16 +22,26 @@ type Invoice = {
 }
 
 const STATUS_LABEL: Record<string, string> = {
-  pending: 'Chờ', sent: 'Đã gửi', paid: 'Đã thanh toán',
-  overdue: 'Quá hạn', cancelled: 'Đã huỷ',
+  pending: 'Chờ',
+  sent: 'Đã gửi',
+  paid: 'Đã thanh toán',
+  overdue: 'Quá hạn',
+  cancelled: 'Đã huỷ',
 }
 const STATUS_TONE: Record<string, Parameters<typeof Badge>[0]['tone']> = {
-  pending: 'gray', sent: 'amber', paid: 'green', overdue: 'red', cancelled: 'gray',
+  pending: 'gray',
+  sent: 'amber',
+  paid: 'green',
+  overdue: 'red',
+  cancelled: 'gray',
 }
 const DIR_LABEL: Record<string, string> = { incoming: 'NCC gửi', outgoing: 'Mình xuất' }
 
 export function InvoicesManager({
-  initial, total, page, currentUserId,
+  initial,
+  total,
+  page,
+  currentUserId,
 }: {
   initial: Invoice[]
   total: number
@@ -88,7 +98,9 @@ export function InvoicesManager({
           >
             <option value="">Mọi trạng thái</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
-              <option key={k} value={k}>{v}</option>
+              <option key={k} value={k}>
+                {v}
+              </option>
             ))}
           </select>
         </div>
@@ -102,12 +114,16 @@ export function InvoicesManager({
           icon="₫"
           title="Chưa có hoá đơn nào"
           description='Bấm "+ Thêm hoá đơn" để tạo hoá đơn đầu tiên.'
-          action={<Button variant="primary" onClick={() => setOpenCreate(true)}>+ Thêm hoá đơn</Button>}
+          action={
+            <Button variant="primary" onClick={() => setOpenCreate(true)}>
+              + Thêm hoá đơn
+            </Button>
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
               <tr>
                 <th className="px-4 py-2.5">Số / Bên</th>
                 <th className="px-4 py-2.5">Chiều</th>
@@ -119,11 +135,17 @@ export function InvoicesManager({
             </thead>
             <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
               {initial.map((inv) => {
-                const overdue = inv.due_date && new Date(inv.due_date) < new Date() && inv.status !== 'paid' && inv.status !== 'cancelled'
+                const overdue =
+                  inv.due_date &&
+                  new Date(inv.due_date) < new Date() &&
+                  inv.status !== 'paid' &&
+                  inv.status !== 'cancelled'
                 return (
                   <tr key={inv.id}>
                     <td className="px-4 py-3">
-                      <div className="font-mono text-xs text-zinc-400">{inv.invoice_no}</div>
+                      <div className="font-mono text-xs text-zinc-400">
+                        {inv.invoice_no}
+                      </div>
                       <div className="font-medium">{inv.party_name}</div>
                     </td>
                     <td className="px-4 py-3 text-sm">{DIR_LABEL[inv.direction]}</td>
@@ -131,7 +153,9 @@ export function InvoicesManager({
                       {Number(inv.amount).toLocaleString('vi-VN')} {inv.currency}
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">
-                      <div>Phát hành: {new Date(inv.issued_date).toLocaleDateString('vi-VN')}</div>
+                      <div>
+                        Phát hành: {new Date(inv.issued_date).toLocaleDateString('vi-VN')}
+                      </div>
                       {inv.due_date && (
                         <div className={overdue ? 'text-red-600' : ''}>
                           Hạn: {new Date(inv.due_date).toLocaleDateString('vi-VN')}
@@ -139,7 +163,9 @@ export function InvoicesManager({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Badge tone={STATUS_TONE[inv.status]}>{STATUS_LABEL[inv.status]}</Badge>
+                      <Badge tone={STATUS_TONE[inv.status]}>
+                        {STATUS_LABEL[inv.status]}
+                      </Badge>
                     </td>
                     <td className="px-4 py-3 text-right">
                       {inv.status !== 'paid' && inv.status !== 'cancelled' && (
@@ -148,8 +174,13 @@ export function InvoicesManager({
                           size="sm"
                           loading={busy}
                           onClick={async () => {
-                            const ok = await send(`/api/dept/accounting/invoices/${inv.id}`, 'PATCH', { status: 'paid' })
-                            if (ok) toast.success('Đã ghi nhận thanh toán', inv.invoice_no)
+                            const ok = await send(
+                              `/api/dept/accounting/invoices/${inv.id}`,
+                              'PATCH',
+                              { status: 'paid' },
+                            )
+                            if (ok)
+                              toast.success('Đã ghi nhận thanh toán', inv.invoice_no)
                           }}
                         >
                           Đánh dấu đã TT
@@ -167,8 +198,22 @@ export function InvoicesManager({
       <div className="flex items-center justify-between text-sm text-zinc-500">
         <span>Tổng: {total}</span>
         <div className="flex gap-2">
-          {page > 1 && <button onClick={() => setParam('page', String(page - 1))} className="underline">← Trước</button>}
-          {page * 20 < total && <button onClick={() => setParam('page', String(page + 1))} className="underline">Sau →</button>}
+          {page > 1 && (
+            <button
+              onClick={() => setParam('page', String(page - 1))}
+              className="underline"
+            >
+              ← Trước
+            </button>
+          )}
+          {page * 20 < total && (
+            <button
+              onClick={() => setParam('page', String(page + 1))}
+              className="underline"
+            >
+              Sau →
+            </button>
+          )}
         </div>
       </div>
 
@@ -184,9 +229,14 @@ export function InvoicesManager({
   )
 }
 
-function InvoiceForm({ onSubmit }: { onSubmit: (body: Record<string, unknown>) => Promise<void> | void }) {
+function InvoiceForm({
+  onSubmit,
+}: {
+  onSubmit: (body: Record<string, unknown>) => Promise<void> | void
+}) {
   const [busy, setBusy] = useState(false)
-  const cls = 'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
+  const cls =
+    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -237,7 +287,13 @@ function InvoiceForm({ onSubmit }: { onSubmit: (body: Record<string, unknown>) =
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Ngày phát hành
-        <input name="issued_date" type="date" required defaultValue={new Date().toISOString().slice(0,10)} className={cls} />
+        <input
+          name="issued_date"
+          type="date"
+          required
+          defaultValue={new Date().toISOString().slice(0, 10)}
+          className={cls}
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Hạn thanh toán

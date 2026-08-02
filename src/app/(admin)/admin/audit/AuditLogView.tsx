@@ -58,13 +58,29 @@ export function AuditLogView({
 
   function exportCsv() {
     downloadCsv(`audit-${new Date().toISOString().slice(0, 10)}.csv`, entries, [
-      { key: 'created_at', header: 'Thời gian', get: (e) => new Date(e.created_at).toLocaleString('vi-VN') },
-      { key: 'action', header: 'Hành động', get: (e) => ACTION_LABEL[e.action] ?? e.action },
+      {
+        key: 'created_at',
+        header: 'Thời gian',
+        get: (e) => new Date(e.created_at).toLocaleString('vi-VN'),
+      },
+      {
+        key: 'action',
+        header: 'Hành động',
+        get: (e) => ACTION_LABEL[e.action] ?? e.action,
+      },
       { key: 'target_user', header: 'Mục tiêu' },
       { key: 'actor', header: 'Bởi' },
       { key: 'reason', header: 'Ghi chú' },
-      { key: 'before', header: 'Trước', get: (e) => (e.before ? JSON.stringify(e.before) : '') },
-      { key: 'after', header: 'Sau', get: (e) => (e.after ? JSON.stringify(e.after) : '') },
+      {
+        key: 'before',
+        header: 'Trước',
+        get: (e) => (e.before ? JSON.stringify(e.before) : ''),
+      },
+      {
+        key: 'after',
+        header: 'Sau',
+        get: (e) => (e.after ? JSON.stringify(e.after) : ''),
+      },
     ])
     toast.success(`Đã xuất ${entries.length} dòng CSV`)
   }
@@ -148,74 +164,86 @@ export function AuditLogView({
         />
 
         <div className="overflow-x-auto rounded-b-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-zinc-50 text-xs uppercase text-zinc-500 dark:bg-zinc-900/50">
-            <tr>
-              <th className="px-3 py-2">Thời gian</th>
-              <th className="px-3 py-2">Hành động</th>
-              <th className="px-3 py-2">Mục tiêu</th>
-              <th className="px-3 py-2">Bởi</th>
-              <th className="px-3 py-2">Ghi chú</th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {entries.length === 0 && (
+          <table className="w-full text-left text-sm">
+            <thead className="bg-zinc-50 text-xs text-zinc-500 uppercase dark:bg-zinc-900/50">
               <tr>
-                <td colSpan={6} className="px-3 py-12 text-center text-sm text-zinc-500">
-                  Không có thao tác nào khớp bộ lọc.
-                </td>
+                <th className="px-3 py-2">Thời gian</th>
+                <th className="px-3 py-2">Hành động</th>
+                <th className="px-3 py-2">Mục tiêu</th>
+                <th className="px-3 py-2">Bởi</th>
+                <th className="px-3 py-2">Ghi chú</th>
+                <th className="px-3 py-2"></th>
               </tr>
-            )}
-            {entries.map((e) => {
-              const hasDetail = !!(e.before || e.after)
-              const isExpanded = expanded === e.id
-              return (
-                <>
-                  <tr key={e.id}>
-                    <td className="px-3 py-2 text-xs text-zinc-500">
-                      {new Date(e.created_at).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="px-3 py-2 font-medium">
-                      {ACTION_LABEL[e.action] ?? e.action}
-                    </td>
-                    <td className="px-3 py-2">{e.target_user}</td>
-                    <td className="px-3 py-2 text-zinc-500">{e.actor}</td>
-                    <td className="px-3 py-2 text-xs text-zinc-500">{e.reason ?? '—'}</td>
-                    <td className="px-3 py-2 text-right">
-                      {hasDetail && (
-                        <button
-                          onClick={() => setExpanded(isExpanded ? null : e.id)}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          {isExpanded ? 'Ẩn' : 'Chi tiết'}
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                  {isExpanded && hasDetail && (
-                    <tr key={`${e.id}-detail`} className="bg-zinc-50 dark:bg-zinc-900/40">
-                      <td colSpan={6} className="px-3 py-2 text-xs">
-                        {e.before && (
-                          <div>
-                            <span className="font-medium text-zinc-500">Trước:</span>{' '}
-                            <code className="text-red-600">{JSON.stringify(e.before)}</code>
-                          </div>
-                        )}
-                        {e.after && (
-                          <div>
-                            <span className="font-medium text-zinc-500">Sau:</span>{' '}
-                            <code className="text-green-600">{JSON.stringify(e.after)}</code>
-                          </div>
+            </thead>
+            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+              {entries.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="px-3 py-12 text-center text-sm text-zinc-500"
+                  >
+                    Không có thao tác nào khớp bộ lọc.
+                  </td>
+                </tr>
+              )}
+              {entries.map((e) => {
+                const hasDetail = !!(e.before || e.after)
+                const isExpanded = expanded === e.id
+                return (
+                  <>
+                    <tr key={e.id}>
+                      <td className="px-3 py-2 text-xs text-zinc-500">
+                        {new Date(e.created_at).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="px-3 py-2 font-medium">
+                        {ACTION_LABEL[e.action] ?? e.action}
+                      </td>
+                      <td className="px-3 py-2">{e.target_user}</td>
+                      <td className="px-3 py-2 text-zinc-500">{e.actor}</td>
+                      <td className="px-3 py-2 text-xs text-zinc-500">
+                        {e.reason ?? '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {hasDetail && (
+                          <button
+                            onClick={() => setExpanded(isExpanded ? null : e.id)}
+                            className="text-xs text-blue-600 hover:underline"
+                          >
+                            {isExpanded ? 'Ẩn' : 'Chi tiết'}
+                          </button>
                         )}
                       </td>
                     </tr>
-                  )}
-                </>
-              )
-            })}
-          </tbody>
-        </table>
+                    {isExpanded && hasDetail && (
+                      <tr
+                        key={`${e.id}-detail`}
+                        className="bg-zinc-50 dark:bg-zinc-900/40"
+                      >
+                        <td colSpan={6} className="px-3 py-2 text-xs">
+                          {e.before && (
+                            <div>
+                              <span className="font-medium text-zinc-500">Trước:</span>{' '}
+                              <code className="text-red-600">
+                                {JSON.stringify(e.before)}
+                              </code>
+                            </div>
+                          )}
+                          {e.after && (
+                            <div>
+                              <span className="font-medium text-zinc-500">Sau:</span>{' '}
+                              <code className="text-green-600">
+                                {JSON.stringify(e.after)}
+                              </code>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

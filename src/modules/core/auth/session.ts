@@ -52,9 +52,7 @@ export async function getSession(): Promise<SessionPayload | null> {
   }
 }
 
-export async function verifySessionToken(
-  token: string,
-): Promise<SessionPayload | null> {
+export async function verifySessionToken(token: string): Promise<SessionPayload | null> {
   try {
     const { payload } = await jwtVerify(token, secret())
     if (typeof payload.sub !== 'string' || typeof payload.email !== 'string') {

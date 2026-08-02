@@ -19,7 +19,9 @@ export function Tabs({
   className?: string
 }) {
   return (
-    <div className={`flex gap-1 border-b border-zinc-200 text-sm dark:border-zinc-800 ${className}`}>
+    <div
+      className={`flex gap-1 border-b border-zinc-200 text-sm dark:border-zinc-800 ${className}`}
+    >
       {items.map((t) => (
         <Link
           key={t.id}

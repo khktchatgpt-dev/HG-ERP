@@ -438,8 +438,7 @@ function OrderDetail({
 }) {
   const today = new Date().toISOString().slice(0, 10)
   const due = dueBadge(daysUntil(r.due_date, today))
-  const stageLabel =
-    r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null
+  const stageLabel = r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null
   const pendingApproval = r.lsx_status === 'pending_approval'
   const lsxHref = r.production_order_id ? `/exec/lsx/${r.production_order_id}` : null
 

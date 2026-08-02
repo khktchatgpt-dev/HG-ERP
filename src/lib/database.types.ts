@@ -3739,6 +3739,7 @@ export type Database = {
           reorder_qty: number | null
           shelf_location: string | null
           spec: string | null
+          sub_group: string | null
           unit: string
           unit2_factor: number | null
           updated_at: string
@@ -3765,6 +3766,7 @@ export type Database = {
           reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
+          sub_group?: string | null
           unit?: string
           unit2_factor?: number | null
           updated_at?: string
@@ -3791,6 +3793,7 @@ export type Database = {
           reorder_qty?: number | null
           shelf_location?: string | null
           spec?: string | null
+          sub_group?: string | null
           unit?: string
           unit2_factor?: number | null
           updated_at?: string
