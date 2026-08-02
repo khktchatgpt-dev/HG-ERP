@@ -27,12 +27,25 @@ export function nod(s: string | null | undefined): string {
     .toLowerCase()
 }
 
-/** Khoá "chắc chắn": bỏ dấu câu, chữ "màu", đuôi đơn vị ly/li, mọi khoảng trắng. */
+/**
+ * Khoá "chắc chắn": bỏ dấu câu, chữ "màu", đuôi đơn vị ly/li, mọi khoảng trắng.
+ *
+ * DẤU GẠCH CHÉO GIỮA HAI SỐ ĐƯỢC GIỮ. Bỏ nó đi thì "Cục típ 1/2" (1/2 inch) và
+ * "Cục típ 12" (12 mm) ra cùng khoá — hai mặt hàng thật bị coi là một, và vì mức
+ * "chắc chắn" CHẶN CỨNG lúc tạo nên hậu quả là không khai được vật tư, tức quên
+ * mua. Phát hiện khi dry-run nhập sổ Drive 02/08.
+ *
+ * Đánh đổi: "Đầu cos 25/8" và "Đầu cos 25-8" (cùng một món, hai cách viết cỡ)
+ * thôi không tự gộp nữa. Chấp nhận được — `softKey` vẫn gom chúng vào mức "nghi
+ * ngờ" cho người rà, mà mức đó không chặn ai cả. Mức "chắc chắn" sai một lần là
+ * mất hàng; mức "nghi ngờ" sai chỉ tốn một lượt nhìn.
+ */
 export function sureKey(name: string | null | undefined): string {
   return nod(name)
     .replace(/\bmau\b/g, ' ')
     .replace(/(\d)\s*(?:ly|li)\b/g, '$1')
-    .replace(/[^a-z0-9]/g, '')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1⁄$2') // ⁄ sống sót qua bước lọc dưới
+    .replace(/[^a-z0-9⁄]/g, '')
 }
 
 /**

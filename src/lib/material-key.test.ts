@@ -31,6 +31,27 @@ describe('sureKey — mức CHẮC CHẮN, chặn được lúc tạo', () => {
   it('khác quy cách thì khác khoá', () => {
     expect(sureKey('LĐN 6x16x2')).not.toBe(sureKey('LĐN 8x16x2'))
   })
+
+  /*
+   * HỒI QUY: bỏ dấu "/" làm "Cục típ 1/2" (1/2 inch) đụng "Cục típ 12" (12 mm).
+   * Mức "chắc chắn" CHẶN CỨNG lúc tạo nên gộp sai ở đây = không khai được vật
+   * tư = quên mua. Cả hai mã đều có thật trong sổ Cung ứng (DCC0195, DCC0197).
+   */
+  it('phân số KHÔNG được đụng số nguyên viết liền', () => {
+    expect(sureKey('Cục típ 1/2')).not.toBe(sureKey('Cục típ 12'))
+    expect(sureKey('Đầu cos 25/8')).not.toBe(sureKey('Đầu cos 258'))
+  })
+
+  it('cùng phân số, khác cách viết khoảng trắng → vẫn cùng khoá', () => {
+    expect(sureKey('Cục típ 1/2')).toBe(sureKey('Cục típ 1 / 2'))
+  })
+
+  it('"25/8" và "25-8" thôi tự gộp — nhường cho mức nghi ngờ', () => {
+    // Đánh đổi có chủ đích: mức "chắc chắn" không được sai, mức "nghi ngờ" bắt
+    // hộ và chỉ cảnh báo chứ không chặn.
+    expect(sureKey('Đầu cos 25/8')).not.toBe(sureKey('Đầu cos 25-8'))
+    expect(softKey('Đầu cos 25/8')).toBe(softKey('Đầu cos 25-8'))
+  })
 })
 
 describe('softKey — mức NGHI NGỜ, chỉ cảnh báo', () => {
