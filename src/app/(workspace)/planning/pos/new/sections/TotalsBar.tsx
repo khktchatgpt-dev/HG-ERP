@@ -115,16 +115,23 @@ export function TotalsBar({
           <span className="text-zinc-400">Tổng thanh toán</span>
           <b className="text-lg tabular-nums">{num(grandTotal)}</b>
         </span>
+        {/*
+          Lý do nút bị khoá phải NHÌN LÀ THẤY. Trước đây là chữ nhỏ màu hổ phách
+          lẫn trong thanh tổng tiền đầy số — người dùng thấy nút xám và đoán.
+          Nay: viền + nền cảnh báo, kèm `title` trên chính nút để rê chuột cũng ra.
+        */}
         {problem && (
-          <span className="text-[12px] text-amber-600 dark:text-amber-500">
-            {problem}
+          <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[12px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+            <span aria-hidden>⚠</span>
+            Chưa gửi được: {problem}
           </span>
         )}
         <button
           type="button"
           disabled={busy || !!problem}
+          title={problem ? `Chưa gửi được: ${problem}` : undefined}
           onClick={onSubmit}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy && <Spinner size={14} />}
           {busy ? 'Đang lưu…' : submitLabel}

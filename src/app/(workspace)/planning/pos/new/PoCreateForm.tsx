@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPicker, type PoMaterial } from '@/components/supply/MaterialPicker'
+import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
@@ -367,19 +368,18 @@ export function PoCreateForm({
             <span>
               Nhà cung cấp <span className="text-red-500">*</span>
             </span>
-            <select
+            {/*
+              Ô TÌM, không phải <select>. Danh sách NCC ngày 02/08 đi từ 39 lên
+              150; cuộn dropdown 151 mục giữa lúc soạn đơn là việc không nên có,
+              và trình duyệt chỉ cho gõ nhảy theo ký tự ĐẦU nên gõ "tường" không
+              tới được "CÔNG TY TNHH SX-TM TƯỜNG NGUYÊN".
+            */}
+            <SupplierPicker
               value={supplierId}
-              onChange={(e) => setSupplierId(e.target.value)}
+              onChange={setSupplierId}
+              suppliers={suppliers}
               className={field}
-            >
-              <option value="">— chọn NCC —</option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                  {s.rating ? ` (hạng ${s.rating})` : ''}
-                </option>
-              ))}
-            </select>
+            />
             {supplier && (
               <span className="text-xs text-zinc-400">
                 {[

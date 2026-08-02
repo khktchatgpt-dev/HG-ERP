@@ -123,12 +123,22 @@ describe('draftProblem — chặn gửi khi đơn chưa đủ', () => {
     expect(draftProblem(header({ poType: 'standalone', lsxId: '' }), [line()])).toBeNull()
   })
 
-  it('thiếu NCC / thiếu dòng / dòng thiếu số', () => {
+  it('thiếu NCC / thiếu dòng', () => {
     expect(draftProblem(header({ supplierId: '' }), [line()])).toMatch(/nhà cung cấp/)
     expect(draftProblem(header(), [])).toMatch(/chưa có dòng/)
+  })
+
+  /*
+   * Lý do phải CHỈ ĐÍCH DANH: đơn 20 dòng mà chỉ báo "2 dòng còn thiếu số" thì
+   * người dùng phải tự dò từng dòng, trong khi `lineProblem` đã biết chính xác.
+   */
+  it('dòng thiếu số → nói rõ DÒNG NÀO và THIẾU GÌ', () => {
     expect(draftProblem(header(), [line(), line({ material_id: 'm2', qty: '' })])).toBe(
-      '1 dòng còn thiếu số',
+      'dòng 2 thiếu SL đặt',
     )
+    expect(
+      draftProblem(header(), [line({ price: '' }), line({ material_id: 'm2', qty: '' })]),
+    ).toBe('dòng 1 thiếu đơn giá (và 1 dòng nữa)')
   })
 })
 

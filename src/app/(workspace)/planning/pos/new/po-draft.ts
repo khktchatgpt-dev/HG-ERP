@@ -1,5 +1,12 @@
 import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
-import { draftOf, lineAmount, lineReady, type Line, type Num } from './po-line'
+import {
+  draftOf,
+  lineAmount,
+  lineProblem,
+  lineReady,
+  type Line,
+  type Num,
+} from './po-line'
 
 /**
  * QUY TẮC CỦA BẢN NHÁP ĐƠN — phần THUẦN, không dính React.
@@ -67,14 +74,26 @@ export function poTotals(header: PoHeader, lines: Line[]) {
   }
 }
 
-/** Lý do CHƯA gửi được đơn — null là gửi được. Thứ tự theo mức nghiêm trọng. */
+/**
+ * Lý do CHƯA gửi được đơn — null là gửi được. Thứ tự theo mức nghiêm trọng.
+ *
+ * Dòng thiếu số thì CHỈ ĐÍCH DANH dòng đầu tiên và thiếu gì. Bản cũ chỉ nói
+ * "2 dòng còn thiếu số": đơn 20 dòng thì người dùng phải tự dò từng dòng xem
+ * chỗ nào đỏ, trong khi `lineProblem` đã biết chính xác thiếu ô nào.
+ */
 export function draftProblem(header: PoHeader, lines: Line[]): string | null {
-  const ready = lines.filter((l) => lineReady(header.template, l)).length
   if (header.poType === 'lsx' && !header.lsxId) return 'chưa chọn LSX'
   if (!header.supplierId) return 'chưa chọn nhà cung cấp'
   if (lines.length === 0) return 'chưa có dòng vật tư nào'
-  if (ready < lines.length) return `${lines.length - ready} dòng còn thiếu số`
-  return null
+
+  const thieu = lines
+    .map((l, i) => ({ i, why: lineProblem(header.template, l) }))
+    .filter((x) => x.why)
+  if (thieu.length === 0) return null
+
+  const first = thieu[0]
+  const dau = `dòng ${first.i + 1} ${first.why}`
+  return thieu.length === 1 ? dau : `${dau} (và ${thieu.length - 1} dòng nữa)`
 }
 
 export function readyLineCount(template: PoTemplate, lines: Line[]): number {
