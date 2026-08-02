@@ -36,9 +36,22 @@
 
 import { readFileSync } from 'node:fs'
 import { client, chunk } from './products-lib.mjs'
-import { sureKey, MIN_KEY_LEN } from '../src/lib/material-key.ts'
+import { sureKey, softKey, MIN_KEY_LEN } from '../src/lib/material-key.ts'
 
 const APPLY = process.argv.includes('--apply')
+/**
+ * `--clean-only`: CHỈ nhập những NHÓM PHỤ không đụng danh mục app dòng nào.
+ *
+ * Dành cho 9 nhóm mà app đã có một phần. Hai danh mục đặt tên theo hai hệ khác
+ * nhau — app gọi theo tiết diện ("Hộp 25x50x1"), sổ gọi mô tả ("Thép hộp mạ kẽm
+ * 25x50x1.0mm") — nên khớp tự động chỉ được 1,5%. Đổ cả vào là dựng danh mục
+ * song song ở đúng nhóm đắt tiền nhất, người soạn đơn gõ "hộp 25x50" ra hai kết
+ * quả không biết chọn cái nào.
+ *
+ * Nhóm phụ nào KHÔNG có lấy một dòng khớp (kể cả mức "nghi ngờ") thì đó là họ
+ * hàng app chưa từng có — vòng bi, dung môi, ron gioăng… — nhập an toàn.
+ */
+const CLEAN_ONLY = process.argv.includes('--clean-only')
 const SRC =
   process.argv.find((a) => a.endsWith('.json')) ??
   'supabase/backups/2026-08-02_drive-so-vat-tu-5-nhom.json'
@@ -54,7 +67,7 @@ async function readAll() {
   for (let from = 0; from < 40_000; from += PAGE) {
     const { data, error } = await sb
       .from('warehouse_materials')
-      .select('id, code, name, group_name')
+      .select('id, code, name, group_name, note')
       .order('code')
       .range(from, from + PAGE - 1)
     if (error) throw new Error(error.message)
@@ -74,13 +87,60 @@ for (const m of existing) {
   byNameKey.set(`${(m.group_name ?? '').toLowerCase()}::${k}`, m)
 }
 
+/*
+ * Lọc theo NHÓM PHỤ: nhóm nào có dù chỉ MỘT dòng chạm danh mục app (chắc chắn
+ * hoặc nghi ngờ) thì để lại toàn bộ nhóm cho người rà. Nửa vời — nhập phần
+ * không khớp, bỏ phần khớp — là tệ nhất: cùng một họ hàng nằm hai nơi.
+ */
+let src_rows = src.rows
+let bỏNhóm = []
+if (CLEAN_ONLY) {
+  /*
+   * Chỉ so với danh mục GỐC của app, BỎ QUA những dòng chính script này đã nạp
+   * từ sổ Drive (nhận ra qua `note`).
+   *
+   * Vấn đề cần cách ly là hai HỆ ĐẶT TÊN khác nhau — app gọi theo tiết diện, sổ
+   * gọi mô tả. Trùng giữa hai nhóm phụ của CÙNG cuốn sổ thì không phải vấn đề
+   * đó: cùng một cách gọi, và bộ lọc trùng theo từng dòng bên dưới xử lý đủ.
+   * Không tách ra thì đợt nhập trước tự làm bẩn đợt sau — nguyên cả nhóm "Vòng
+   * bi - bạc đạn" 152 mã bị loại chỉ vì vài mã đã vào theo nhóm Dụng cụ.
+   */
+  const goc = existing.filter(
+    (m) => !/Nguồn: sổ vật tư Cung ứng \(Drive\)/.test(m.note ?? ''),
+  )
+  const appKey = new Set()
+  const appSoft = new Set()
+  for (const m of goc) {
+    const k = sureKey(m.name)
+    if (k.length >= MIN_KEY_LEN) appKey.add(k)
+    const s = softKey(m.name)
+    if (s) appSoft.add(s)
+  }
+  console.log(
+    `  (so với ${goc.length} vật tư gốc của app, bỏ ${existing.length - goc.length} dòng đã nạp từ sổ)`,
+  )
+  const dirty = new Set()
+  for (const r of src.rows) {
+    const k = sureKey(r.name)
+    const s = softKey(r.name)
+    if ((k.length >= MIN_KEY_LEN && appKey.has(k)) || (s && appSoft.has(s)))
+      dirty.add(`${r.group_name} › ${r.sub_group}`)
+  }
+  const before = src_rows.length
+  src_rows = src.rows.filter((r) => !dirty.has(`${r.group_name} › ${r.sub_group}`))
+  bỏNhóm = [...dirty]
+  console.log(
+    `\n--clean-only: bỏ ${dirty.size} nhóm phụ đụng danh mục app (${before - src_rows.length} mã)`,
+  )
+}
+
 const insert = []
 const dupCode = []
 const dupName = []
 const dupInBatch = []
 const seenBatch = new Map()
 
-for (const r of src.rows) {
+for (const r of src_rows) {
   if (byCode.has(r.code)) {
     dupCode.push(r)
     continue
