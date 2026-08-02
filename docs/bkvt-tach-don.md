@@ -92,11 +92,21 @@ Nạp sheet BKVT của `LSX 04` (41 dòng) vào một LSX, gán NCC, bấm tách
 
 Dữ liệu UAT đã xoá sạch sau khi kiểm (6 đơn + 20 dòng + 41 dòng bảng kê + 78 thông báo).
 
-Hai điều rút ra:
-- Tách 6 đơn mất **~13 giây** (tạo tuần tự, mỗi đơn kèm notify Giám đốc). Nút có
-  spinner nhưng nên gộp notify hoặc chạy song song nếu lệnh nhiều NCC hơn.
-- Trang cần **tải lại** mới thấy trạng thái mới: `router.refresh()` chạy trước khi
-  loạt đơn tạo xong.
+Hai điều rút ra — **đã vá 02/08**:
+
+- Tách 6 đơn mất **~13 giây** (tạo tuần tự, mỗi đơn kèm notify Giám đốc). Nay mỗi
+  NCC một nhánh chạy song song, và 20 câu update gắn `po_line_id` cũng bắn cùng
+  lúc thay vì nối đuôi. `next_doc_code()` là upsert nguyên tử (`0011_catalogs.sql`)
+  nên xin mã đồng thời vẫn ra số khác nhau — đổi lại **thứ tự số đơn giữa các NCC
+  không đoán trước được**, mà cùng một lượt bấm thì thứ tự đó vốn không mang nghĩa.
+  Notify vẫn để **mỗi đơn một cái**: mỗi đơn là một lượt duyệt riêng của Giám đốc,
+  gộp lại thì duyệt xong cái này không biết còn cái nào.
+- Trang cần **tải lại** mới thấy trạng thái mới. Không phải `router.refresh()` chạy
+  sớm — nó chạy sau khi đơn tạo xong, nhưng **không chờ được**: gọi xong trả về
+  ngay, còn bảng mới thì server phải truy vấn lại. Spinner tắt trước khi dữ liệu
+  về nên người dùng tưởng nút hỏng. Nay bọc `startTransition(() => router.refresh())`
+  (đúng nếp `CustomersManager`) — cờ bận = `saving || refreshing`, giữ tới lúc bảng
+  mới hiện lên.
 
 ## Việc còn lại
 

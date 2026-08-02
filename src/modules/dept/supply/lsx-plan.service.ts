@@ -294,80 +294,99 @@ export const lsxPlanService = {
       bySupplier.set(r.supplier_id!, list)
     }
 
-    const out: { supplier_id: string; po_id: string; code: string; lines: number }[] = []
-    for (const [supplierId, group] of bySupplier) {
-      const byMaterial = new Map<string, PlanRow[]>()
-      for (const r of group) {
-        const list = byMaterial.get(r.material_id!) ?? []
-        list.push(r)
-        byMaterial.set(r.material_id!, list)
-      }
-
-      const lines = [...byMaterial.entries()].map(([materialId, rs]) => {
-        const first = rs[0]
-        return {
-          material_id: materialId,
-          qty_ordered: rs.reduce((s, r) => s + r.qty_to_order, 0),
-          unit_price: rs.find((r) => r.unit_price != null)?.unit_price ?? null,
-          // Gộp mã SP của mọi dòng dồn vào đây — dòng đơn mua chung cho nhiều SP
-          // vẫn chỉ ra được nó phục vụ những sản phẩm nào (cùng quy ước " · " với
-          // ô "Mã SP" trên form soạn đơn).
-          product_code:
-            [...new Set(rs.map((r) => r.product_code).filter(Boolean))]
-              .join(' · ')
-              .slice(0, 200) || null,
-          dm_per_sp: rs.length === 1 ? first.qty_per_product : null,
-          qty_demand: rs.reduce((s, r) => s + r.qty_required, 0),
-          qty_on_hand: first.qty_on_hand,
-          waste_pct: first.waste_pct,
-          // Vết truy nguồn: "Bàn Santorin (4/sp) · XC Keros (2/sp)".
-          note:
-            rs
-              .map((r) =>
-                [
-                  r.product_name ?? r.product_code,
-                  r.qty_per_product && `(${r.qty_per_product}/sp)`,
-                ]
-                  .filter(Boolean)
-                  .join(' '),
-              )
-              .filter(Boolean)
-              .join(' · ')
-              .slice(0, 500) || null,
+    /*
+     * MỘT LƯỢT TÁCH = N ĐƠN CHẠY SONG SONG.
+     *
+     * UAT 01/08: tách 6 đơn tuần tự mất ~13 giây — mỗi vòng phải tra NCC, tra
+     * LSX, sinh mã, insert, gọi danh sách người duyệt rồi notify, xong mới update
+     * từng vật tư một. Không có ràng buộc nào bắt xếp hàng: `next_doc_code()` là
+     * một câu upsert nguyên tử (`0011_catalogs.sql`) nên hai đơn xin mã cùng lúc
+     * vẫn ra hai số khác nhau.
+     *
+     * Đánh đổi: SỐ đơn giữa các NCC không còn theo thứ tự nhóm — cùng một lượt
+     * bấm thì thứ tự đó vốn không mang nghĩa gì. Một NCC lỗi vẫn để lại đơn của
+     * các NCC khác (y như bản tuần tự), nhưng dòng bảng kê chỉ đổi trạng thái sau
+     * khi đơn của chính nó tạo xong nên không có nhóm nào "đã vào đơn" mà thiếu đơn.
+     */
+    const out = await Promise.all(
+      [...bySupplier.entries()].map(async ([supplierId, group]) => {
+        const byMaterial = new Map<string, PlanRow[]>()
+        for (const r of group) {
+          const list = byMaterial.get(r.material_id!) ?? []
+          list.push(r)
+          byMaterial.set(r.material_id!, list)
         }
-      })
 
-      const po = await posService.create(user, {
-        production_order_id: input.production_order_id,
-        supplier_id: supplierId,
-        template: pickTemplate(group),
-        currency: input.currency,
-        price_includes_vat: false,
-        expected_at: input.expected_at ?? null,
-        note: `Tách từ bảng kê vật tư của lệnh sản xuất`,
-        lines,
-      })
+        const lines = [...byMaterial.entries()].map(([materialId, rs]) => {
+          const first = rs[0]
+          return {
+            material_id: materialId,
+            qty_ordered: rs.reduce((s, r) => s + r.qty_to_order, 0),
+            unit_price: rs.find((r) => r.unit_price != null)?.unit_price ?? null,
+            // Gộp mã SP của mọi dòng dồn vào đây — dòng đơn mua chung cho nhiều SP
+            // vẫn chỉ ra được nó phục vụ những sản phẩm nào (cùng quy ước " · " với
+            // ô "Mã SP" trên form soạn đơn).
+            product_code:
+              [...new Set(rs.map((r) => r.product_code).filter(Boolean))]
+                .join(' · ')
+                .slice(0, 200) || null,
+            dm_per_sp: rs.length === 1 ? first.qty_per_product : null,
+            qty_demand: rs.reduce((s, r) => s + r.qty_required, 0),
+            qty_on_hand: first.qty_on_hand,
+            waste_pct: first.waste_pct,
+            // Vết truy nguồn: "Bàn Santorin (4/sp) · XC Keros (2/sp)".
+            note:
+              rs
+                .map((r) =>
+                  [
+                    r.product_name ?? r.product_code,
+                    r.qty_per_product && `(${r.qty_per_product}/sp)`,
+                  ]
+                    .filter(Boolean)
+                    .join(' '),
+                )
+                .filter(Boolean)
+                .join(' · ')
+                .slice(0, 500) || null,
+          }
+        })
 
-      // Gắn dòng bảng kê vào đúng dòng đơn vừa tạo — sau này sửa/huỷ còn lần ra.
-      const poLines = await posRepo.listLines(po.id)
-      const lineByMaterial = new Map(poLines.map((l) => [l.material_id, l.id]))
-      for (const [materialId, rs] of byMaterial) {
-        await lsxPlanRepo.updateMany(
-          rs.map((r) => r.id),
-          {
-            status: 'ordered',
-            po_line_id: lineByMaterial.get(materialId) ?? null,
-            updated_by: user.id,
-          },
+        const po = await posService.create(user, {
+          production_order_id: input.production_order_id,
+          supplier_id: supplierId,
+          template: pickTemplate(group),
+          currency: input.currency,
+          price_includes_vat: false,
+          expected_at: input.expected_at ?? null,
+          note: `Tách từ bảng kê vật tư của lệnh sản xuất`,
+          lines,
+        })
+
+        // Gắn dòng bảng kê vào đúng dòng đơn vừa tạo — sau này sửa/huỷ còn lần ra.
+        // Mỗi vật tư một câu update (po_line_id khác nhau nên không gộp `.in()`
+        // được), nhưng bắn cùng lúc: 20 dòng đơn từng là 20 lượt đi-về nối đuôi.
+        const poLines = await posRepo.listLines(po.id)
+        const lineByMaterial = new Map(poLines.map((l) => [l.material_id, l.id]))
+        await Promise.all(
+          [...byMaterial.entries()].map(([materialId, rs]) =>
+            lsxPlanRepo.updateMany(
+              rs.map((r) => r.id),
+              {
+                status: 'ordered',
+                po_line_id: lineByMaterial.get(materialId) ?? null,
+                updated_by: user.id,
+              },
+            ),
+          ),
         )
-      }
-      out.push({
-        supplier_id: supplierId,
-        po_id: po.id,
-        code: po.code,
-        lines: lines.length,
-      })
-    }
+        return {
+          supplier_id: supplierId,
+          po_id: po.id,
+          code: po.code,
+          lines: lines.length,
+        }
+      }),
+    )
     return out
   },
 }

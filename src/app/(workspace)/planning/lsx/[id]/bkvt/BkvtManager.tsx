@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
@@ -80,7 +80,15 @@ export function BkvtManager({
   const router = useRouter()
   const toast = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
-  const [busy, setBusy] = useState(false)
+  const [saving, setSaving] = useState(false)
+  /*
+   * `router.refresh()` KHÔNG chờ được: gọi xong là trả về ngay, còn bảng mới thì
+   * server phải truy vấn lại rồi mới về. UAT 01/08 bấm "Tách đơn" thấy spinner
+   * tắt mà bảng vẫn nguyên trạng thái cũ → tưởng nút hỏng, đi tải lại trang tay.
+   * Bọc trong transition thì `refreshing` giữ true tới lúc dữ liệu mới hiện lên.
+   */
+  const [refreshing, startTransition] = useTransition()
+  const busy = saving || refreshing
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('all')
   const [selected, setSelected] = useState<PlanRowView[]>([])
@@ -135,7 +143,7 @@ export function BkvtManager({
 
   async function assign(patch: Record<string, unknown>) {
     if (selected.length === 0) return
-    setBusy(true)
+    setSaving(true)
     try {
       await api('/api/dept/supply/lsx-plan', {
         method: 'PATCH',
@@ -143,41 +151,41 @@ export function BkvtManager({
       })
       setSelected([])
       setBulkSupplier('')
-      router.refresh()
+      startTransition(() => router.refresh())
       toast.success('Đã cập nhật', `${selected.length} dòng`)
     } catch (e) {
       toast.error('Không cập nhật được', apiErrorText(e))
     } finally {
-      setBusy(false)
+      setSaving(false)
     }
   }
 
   /** Gán tay vật tư kho cho một dòng bảng kê chưa khớp. */
   async function assignMaterial(id: string, materialId: string) {
-    setBusy(true)
+    setSaving(true)
     try {
       await api('/api/dept/supply/lsx-plan', {
         method: 'PATCH',
         body: { ids: [id], material_id: materialId },
       })
       setPickingId(null)
-      router.refresh()
+      startTransition(() => router.refresh())
       toast.success('Đã gán vật tư')
     } catch (e) {
       toast.error('Không gán được vật tư', apiErrorText(e))
     } finally {
-      setBusy(false)
+      setSaving(false)
     }
   }
 
   async function split() {
-    setBusy(true)
+    setSaving(true)
     try {
       const res = await api<{ created: { code: string; lines: number }[] }>(
         '/api/dept/supply/lsx-plan/split',
         { method: 'POST', body: { production_order_id: lsxId, currency: 'VND' } },
       )
-      router.refresh()
+      startTransition(() => router.refresh())
       toast.success(
         `Đã tạo ${res.created.length} đơn đặt`,
         res.created.map((c) => `${c.code} (${c.lines} dòng)`).join(' · '),
@@ -185,7 +193,7 @@ export function BkvtManager({
     } catch (e) {
       toast.error('Không tách đơn được', apiErrorText(e))
     } finally {
-      setBusy(false)
+      setSaving(false)
     }
   }
 
@@ -195,7 +203,7 @@ export function BkvtManager({
    * chỉ vào xem bảng.
    */
   async function onFile(file: File) {
-    setBusy(true)
+    setSaving(true)
     try {
       const XLSX = await import('xlsx')
       const wb = XLSX.read(await file.arrayBuffer(), { type: 'array' })
@@ -229,7 +237,7 @@ export function BkvtManager({
           rows: parsed,
         },
       })
-      router.refresh()
+      startTransition(() => router.refresh())
       toast.success(
         `Đã nạp ${res.inserted} dòng từ sheet "${sheet}"`,
         `Khớp kho ${res.matched_material}/${res.inserted} · khớp NCC ${res.matched_supplier}/${res.inserted}`,
@@ -237,7 +245,7 @@ export function BkvtManager({
     } catch (e) {
       toast.error('Nạp file thất bại', apiErrorText(e))
     } finally {
-      setBusy(false)
+      setSaving(false)
       if (fileRef.current) fileRef.current.value = ''
     }
   }
