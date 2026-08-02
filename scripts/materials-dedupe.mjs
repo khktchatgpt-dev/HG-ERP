@@ -21,6 +21,7 @@
 // Từ 02/08 server CHẶN sẵn trùng mức "chắc chắn" lúc tạo, nên script này chủ yếu
 // để dọn phần danh mục nạp trước đó.
 
+import { writeFileSync } from 'node:fs'
 import { client } from './products-lib.mjs'
 
 const APPLY = process.argv.includes('--apply')
@@ -98,8 +99,12 @@ console.log(`Danh mục: ${mats.length} vật tư`)
 console.log(
   `\n── CỤM TRÙNG CHẮC CHẮN (chỉ khác dấu câu / "màu" / đuôi ly): ${sure.length} ──`,
 )
-for (const g of sure.slice(0, 20))
-  console.log(`  ${g.map((x) => `${x.code} "${x.name}"`).join('  ≡  ')}`)
+for (const g of sure.slice(0, 20)) {
+  const [k, ...d] = chonGiuLai(g)
+  console.log(
+    `  GIỮ ${k.code} "${k.name.slice(0, 38)}"  ←  bỏ ${d.map((x) => `${x.code} "${x.name.slice(0, 38)}"`).join(' · ')}`,
+  )
+}
 if (sure.length > 20) console.log(`  … còn ${sure.length - 20} cụm`)
 
 console.log(`\n── CỤM NGHI NGỜ (cần người rà, KHÔNG tự gộp): ${soft.length} ──`)
@@ -112,11 +117,70 @@ if (!APPLY) {
   process.exit(0)
 }
 
+/**
+ * Chọn dòng GIỮ LẠI trong một cụm trùng.
+ *
+ * Ưu tiên MÃ CỦA SỔ CUNG ỨNG (không dấu gạch: `BAO0679`) hơn mã app tự cấp
+ * (`BB-0009`) — chủ dự án chốt 02/08 lấy sổ làm chuẩn, và mã sổ là thứ in trên
+ * báo giá, đơn đặt, nằm trong trí nhớ nhân viên. Cùng loại thì lấy mã nhỏ hơn
+ * (vào danh mục trước).
+ */
+function chonGiuLai(cum) {
+  const laSo = (m) => !m.code.includes('-')
+  return [...cum].sort((a, b) => {
+    if (laSo(a) !== laSo(b)) return laSo(a) ? -1 : 1
+    return a.code.localeCompare(b.code)
+  })
+}
+
+/**
+ * Những trường mà dòng bị bỏ có thể đang giữ còn dòng giữ lại thì trống.
+ *
+ * Xoá thẳng là mất luôn — và mất kiểu này không ai thấy: `kg_per_m` của 635
+ * dòng nhôm/sắt lấy từ bảng quy cách Đức Toàn, sổ Cung ứng chỉ suy được cho
+ * 389/8.015 dòng. Gộp trùng mà đánh rơi barem là dòng đơn nhôm sau đó tính
+ * tiền theo số cây thay vì theo kg.
+ */
+const CUU_TRUONG = [
+  'kg_per_m',
+  'default_bar_length_m',
+  'spec',
+  'sub_group',
+  'vat_rate',
+  'default_supplier_id',
+  'last_purchase_price',
+  'po_template',
+  'barcode',
+]
+
 let merged = 0
 let skipped = 0
+let rescued = 0
 for (const g of sure) {
-  // Giữ mã nhỏ nhất (vào danh mục trước), bỏ các mã sau.
-  const [keep, ...drop] = [...g].sort((a, b) => a.code.localeCompare(b.code))
+  const [keep, ...drop] = chonGiuLai(g)
+
+  // Đọc đủ trường của cả cụm để cứu dữ liệu trước khi xoá.
+  const { data: full } = await sb
+    .from('warehouse_materials')
+    .select(`id, code, note, ${CUU_TRUONG.join(', ')}`)
+    .in(
+      'id',
+      g.map((x) => x.id),
+    )
+  const byId = new Map((full ?? []).map((r) => [r.id, r]))
+  const patch = {}
+  const keepRow = byId.get(keep.id) ?? {}
+  for (const f of CUU_TRUONG) {
+    if (keepRow[f] != null && keepRow[f] !== '') continue
+    const donor = drop
+      .map((d) => byId.get(d.id))
+      .find((r) => r?.[f] != null && r[f] !== '')
+    if (donor) {
+      patch[f] = donor[f]
+      rescued++
+    }
+  }
+
   for (const d of drop) {
     const refs = await refCount(d.id)
     if (refs > 0) {
@@ -131,14 +195,59 @@ for (const g of sure) {
     }
     merged++
   }
-  // Ghi lại các cách viết đã gộp vào note của mã giữ lại — sau còn tra ngược.
+
+  // Ghi vết + cứu trường vào MỘT lần update trên mã giữ lại.
   if (drop.length) {
-    await sb
+    /*
+     * NỐI vào note cũ, KHÔNG ghi đè.
+     *
+     * Note đang mang dấu nguồn "Nguồn: sổ vật tư Cung ứng (Drive)" — đó là
+     * đường ĐẢO LẠI cả đợt nạp 11.744 dòng. Bản đầu ghi đè và xoá mất dấu của
+     * 72 dòng: lệnh dọn theo dấu đó sẽ bỏ sót đúng 72 dòng, im lặng.
+     */
+    const cu = String(keepRow.note ?? '').trim()
+    const them = `Gộp trùng danh mục 02/08/2026: ${drop.map((d) => `${d.code} "${d.name}"`).join(' · ')}${
+      Object.keys(patch).length
+        ? ` · giữ lại từ mã bỏ: ${Object.keys(patch).join(', ')}`
+        : ''
+    }`
+    const { error } = await sb
       .from('warehouse_materials')
-      .update({
-        note: `Gộp trùng danh mục: ${drop.map((d) => `${d.code} "${d.name}"`).join(' · ')}`,
-      })
+      .update({ ...patch, note: cu ? `${them} · ${cu}` : them })
       .eq('id', keep.id)
+    if (error) console.error(`  ✗ cập nhật ${keep.code}: ${error.message}`)
   }
 }
-console.log(`\n✓ gộp ${merged} mã trùng · giữ lại ${skipped} mã (có chứng từ)`)
+/*
+ * Bảng rà TÊN sau khi gộp.
+ *
+ * `sureKey` bỏ dấu nên "Thẽ treo" và "Thẻ treo" là một cụm — đúng để NHẬN ra
+ * trùng, nhưng lúc chọn tên giữ lại thì máy không có cơ sở nào để biết bên nào
+ * viết đúng chính tả. Giữ theo mã sổ là quy tắc đã chốt, còn tên thì in ra cho
+ * người sửa: 73 dòng, mắt người liếc qua là xong.
+ */
+const rows = sure.map((g) => {
+  const [k, ...d] = chonGiuLai(g)
+  const khacDau = d.some(
+    (x) =>
+      nod(x.name).replace(/[^a-z0-9]/g, '') !== nod(k.name).replace(/[^a-z0-9]/g, ''),
+  )
+  return { k, d, khacDau }
+})
+const canRa = rows.filter((r) => r.khacDau)
+let md = `# Gộp trùng danh mục 02/08/2026\n\n`
+md += `${sure.length} cụm trùng mức "chắc chắn" đã gộp. Giữ MÃ CỦA SỔ Cung ứng\n`
+md += `(không dấu gạch), bỏ mã app tự cấp — theo quyết định lấy sổ làm chuẩn.\n\n`
+md += `## ${canRa.length} cụm nên rà lại TÊN\n\n`
+md += `\`sureKey\` bỏ dấu để nhận ra trùng, nên "Thẽ treo" và "Thẻ treo" vào cùng cụm.\n`
+md += `Máy giữ tên theo mã sổ; chỗ nào sổ viết sai chính tả thì sửa tay tên của mã giữ lại.\n\n`
+md += `| Mã giữ | Tên đang giữ | Tên của mã đã bỏ |\n|---|---|---|\n`
+for (const r of canRa)
+  md += `| ${r.k.code} | ${r.k.name} | ${r.d.map((x) => `${x.code} "${x.name}"`).join(' · ')} |\n`
+md += `\n## ${sure.length - canRa.length} cụm tên trùng khít, không cần rà\n`
+writeFileSync('D:/HG-ERP/docs/gop-trung-danh-muc.md', md, 'utf8')
+
+console.log(
+  `\n✓ gộp ${merged} mã trùng · cứu ${rescued} giá trị khỏi mã bị bỏ · giữ lại ${skipped} mã (có chứng từ)`,
+)
+console.log(`  ${canRa.length} cụm cần rà tên → docs/gop-trung-danh-muc.md`)
