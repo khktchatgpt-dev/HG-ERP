@@ -468,6 +468,7 @@ export function PoCreateForm({
                 name: m.name,
                 unit: m.unit,
                 group_name: m.group_name,
+                sub_group: m.sub_group,
                 spec: m.spec,
                 po_template: m.po_template,
                 kg_per_m: m.kg_per_m,

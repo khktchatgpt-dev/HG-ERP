@@ -17,6 +17,8 @@ export type PoMaterial = {
   name: string
   unit: string
   group_name: string | null
+  /** Nhóm phụ (0111) — hiện trên dòng kết quả để phân biệt hàng cùng tên. */
+  sub_group: string | null
   spec: string | null
   po_template: PoTemplate | null
   kg_per_m: number | null
@@ -28,7 +30,7 @@ export type PoMaterial = {
 }
 
 const COLS =
-  'id, code, name, unit, group_name, spec, po_template, kg_per_m, default_bar_length_m, vat_rate, default_supplier_id, last_purchase_price'
+  'id, code, name, unit, group_name, sub_group, spec, po_template, kg_per_m, default_bar_length_m, vat_rate, default_supplier_id, last_purchase_price'
 
 function toMaterial(r: Record<string, unknown>, onHand: number): PoMaterial {
   const tpl = r.po_template
@@ -38,6 +40,7 @@ function toMaterial(r: Record<string, unknown>, onHand: number): PoMaterial {
     name: r.name as string,
     unit: (r.unit as string) ?? '',
     group_name: (r.group_name as string | null) ?? null,
+    sub_group: (r.sub_group as string | null) ?? null,
     spec: (r.spec as string | null) ?? null,
     po_template: isPoTemplate(tpl) ? tpl : null,
     // numeric của PostgREST về dạng chuỗi → ép về number.
@@ -75,6 +78,8 @@ export const poMaterialsRepo = {
   async search(opts: {
     q?: string
     template?: PoTemplate
+    /** Lọc theo nhóm — danh mục 13k dòng, gõ "hộp" ra hàng trăm kết quả. */
+    group?: string
     limit: number
   }): Promise<PoMaterial[]> {
     let query = db().from('warehouse_materials').select(COLS).eq('is_active', true)
@@ -83,6 +88,7 @@ export const poMaterialsRepo = {
       const q = opts.q.replace(/[%,()]/g, ' ').trim()
       if (q) query = query.or(`code.ilike.%${q}%,name.ilike.%${q}%,barcode.ilike.%${q}%`)
     }
+    if (opts.group) query = query.eq('group_name', opts.group)
     if (opts.template) {
       query = query
         .or(`po_template.eq.${opts.template},po_template.is.null`)

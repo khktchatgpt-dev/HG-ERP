@@ -158,6 +158,7 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     name: 'Inox hộp 25x50x1',
     unit: 'cây',
     group_name: 'Inox',
+    sub_group: null,
     spec: null,
     po_template: 'metal_kg',
     kg_per_m: 1.5542,
