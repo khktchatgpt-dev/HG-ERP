@@ -3,6 +3,7 @@ import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 import { type PoTemplate } from '@/lib/po-template'
+import { MIN_KEY_LEN, prefixForGroup, sureKey } from '@/lib/material-key'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -21,7 +22,8 @@ async function canViewWarehouse(user: User): Promise<boolean> {
 }
 
 type CreateInput = {
-  code: string
+  /** Bỏ trống → server tự cấp theo nhóm (xem `nextCode`). */
+  code?: string | null
   name: string
   unit: string
   barcode?: string | null
@@ -72,6 +74,29 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'default_bar_length_m',
 ])
 
+/**
+ * Cấp mã kế tiếp cho nhóm: `NK-0125`.
+ *
+ * Tiền tố lấy theo ĐA SỐ mã đang dùng trong nhóm; nhóm chưa có mã nào (hoặc mã
+ * cũ không theo quy ước) thì tra bảng theo tên nhóm; không khớp gì thì `VT`.
+ * Số thì đếm TOÀN DANH MỤC theo tiền tố — hai nhóm cùng tiền tố mà đếm riêng là
+ * đụng mã nhau.
+ */
+async function nextCode(
+  group: string | null,
+  siblings: { code: string }[],
+): Promise<string> {
+  const count = new Map<string, number>()
+  for (const m of siblings) {
+    const hit = m.code?.match(/^([A-Z]{2,3})-\d+$/)
+    if (hit) count.set(hit[1], (count.get(hit[1]) ?? 0) + 1)
+  }
+  const top = [...count.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+  const prefix = top ?? prefixForGroup(group) ?? 'VT'
+  const no = await materialsRepo.maxCodeNo(prefix)
+  return `${prefix}-${String(no + 1).padStart(4, '0')}`
+}
+
 export const materialsService = {
   async list(
     user: User,
@@ -97,11 +122,47 @@ export const materialsService = {
     // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
     // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).
     await assertAction(user, 'warehouse.material.create')
-    const dup = await materialsRepo.findByCode(input.code)
-    if (dup) throw Conflict(`Mã vật tư "${input.code}" đã tồn tại`)
+
+    const group = input.group_name ?? null
+    const siblings = await materialsRepo.namesInGroup(group)
+
+    /*
+     * CHẶN TRÙNG TÊN Ở MỨC "CHẮC CHẮN".
+     *
+     * Trước đây chỉ chặn trùng MÃ, còn tên thì để form cảnh báo mềm — bấm tiếp
+     * vẫn tạo được. Kết quả là cùng một con long đền có bốn mã, mỗi đơn trỏ một
+     * mã, tồn kho và giá mua vỡ vụn (xem `scripts/materials-dedupe.mjs`, viết ra
+     * để đi dọn hậu quả đó). Mức "chắc chắn" chỉ bỏ qua dấu câu / khoảng trắng /
+     * chữ "màu" / đuôi "ly|li" nên nghĩa không đổi, chặn là chặn đúng.
+     *
+     * Mức "nghi ngờ" vẫn chỉ cảnh báo trên form: "LĐN 6x16x2 đen" và "… xám" là
+     * hai mặt hàng thật, chặn nhầm thì không khai được hàng mới.
+     */
+    const key = sureKey(input.name)
+    if (key.length >= MIN_KEY_LEN) {
+      const same = siblings.find((m) => sureKey(m.name) === key)
+      if (same) {
+        throw Conflict(
+          `Vật tư này đã có trong danh mục: ${same.code} — ${same.name}. ` +
+            `Dùng lại mã đó thay vì tạo mã mới (khác nhau mỗi dấu câu/khoảng trắng).`,
+        )
+      }
+    }
+
+    /*
+     * MÃ: người dùng khai thì tôn trọng, bỏ trống thì server tự cấp.
+     *
+     * Gõ tay mã là một hạng lỗi không cần tồn tại — quy ước thật là `XX-0000`
+     * nối tiếp theo nhóm, gõ `NH999` là lệch khỏi cả danh mục. Tiền tố suy từ
+     * chính các mã đang dùng TRONG NHÓM (đa số thắng) chứ không từ bảng cứng:
+     * nhóm nào cũng tự bám theo nếp sẵn có, thêm nhóm mới không phải sửa code.
+     */
+    const code = input.code?.trim() || (await nextCode(group, siblings))
+    const dup = await materialsRepo.findByCode(code)
+    if (dup) throw Conflict(`Mã vật tư "${code}" đã tồn tại`)
 
     return materialsRepo.insert({
-      code: input.code,
+      code,
       name: input.name,
       unit: input.unit,
       // '' → null để unique partial index (0078) không bắt trùng chuỗi rỗng.
@@ -151,7 +212,13 @@ export const materialsService = {
       if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
     }
     if ('barcode' in patch) patch.barcode = patch.barcode?.trim() || null
-    return materialsRepo.patch(id, patch)
+    /*
+     * `code` nay cho phép bỏ trống khi TẠO (server tự cấp). Lúc SỬA thì bỏ trống
+     * nghĩa là "giữ nguyên mã", tuyệt đối không phải "xoá mã" — mã là thứ mọi
+     * chứng từ in ra đang trỏ vào. Gỡ khỏi patch chứ không ghi null xuống.
+     */
+    const { code, ...rest } = patch
+    return materialsRepo.patch(id, code ? { ...rest, code } : rest)
   },
 
   async remove(user: User, id: string): Promise<void> {

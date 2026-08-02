@@ -112,6 +112,43 @@ export const materialsRepo = {
     return data ? toMaterial(data) : null
   },
 
+  /**
+   * Mã + tên của một NHÓM — đủ để so trùng tên và suy tiền tố mã đang dùng.
+   *
+   * Chỉ lấy hai cột: nhóm to nhất (Nhôm) là 276 dòng, kéo cả `COLS` mỗi lần khai
+   * vật tư là tiền egress thuần tuý. Nhóm trống ('' hoặc null) gom về một rọ —
+   * đúng như script dọn trùng vẫn làm, để không so chéo vật liệu.
+   */
+  async namesInGroup(
+    groupName: string | null,
+  ): Promise<{ code: string; name: string }[]> {
+    let q = db().from('warehouse_materials').select('code, name').limit(2000)
+    q = groupName ? q.eq('group_name', groupName) : q.is('group_name', null)
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    return (data as { code: string; name: string }[] | null) ?? []
+  },
+
+  /**
+   * Số lớn nhất đang dùng của một tiền tố, để cấp mã kế tiếp.
+   *
+   * Mã đệm 0 đủ 4 chữ số nên sắp theo CHUỖI giảm dần cũng chính là sắp theo số —
+   * chỉ cần một dòng, không phải kéo cả danh mục về đếm. (Vượt 9999 thì thứ tự
+   * chuỗi vỡ; lúc đó `NK-10000` vẫn lớn hơn `NK-9999` theo chuỗi nên vẫn đúng.)
+   */
+  async maxCodeNo(prefix: string): Promise<number> {
+    const { data, error } = await db()
+      .from('warehouse_materials')
+      .select('code')
+      .like('code', `${prefix}-%`)
+      .order('code', { ascending: false })
+      .limit(1)
+    if (error) throw new Error(error.message)
+    const code = (data as { code: string }[] | null)?.[0]?.code
+    const hit = code?.match(/^[A-Z]{2,3}-(\d+)$/)
+    return hit ? Number(hit[1]) : 0
+  },
+
   async insert(
     row: Omit<Material, 'id' | 'created_at' | 'updated_at' | 'is_active'> & {
       is_active?: boolean

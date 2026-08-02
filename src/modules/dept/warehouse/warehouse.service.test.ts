@@ -4,6 +4,8 @@ vi.mock('./warehouse.repo', () => ({
   materialsRepo: {
     findById: vi.fn(),
     findByCode: vi.fn(),
+    namesInGroup: vi.fn(),
+    maxCodeNo: vi.fn(),
     insert: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
@@ -31,6 +33,8 @@ beforeEach(() => {
   vi.mocked(materialsRepo.findById).mockResolvedValue(MAT as never)
   vi.mocked(materialsRepo.findByCode).mockResolvedValue(null)
   vi.mocked(materialsRepo.patch).mockResolvedValue(MAT as never)
+  vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([])
+  vi.mocked(materialsRepo.maxCodeNo).mockResolvedValue(0)
 })
 
 describe('materialsService.update — chia chủ quyền theo nhóm trường (view Material Master)', () => {
@@ -160,5 +164,125 @@ describe('materialsService.create — không được rơi trường nào xuốn
       }),
     ).rejects.toMatchObject({ status: 409 })
     expect(materialsRepo.insert).not.toHaveBeenCalled()
+  })
+})
+
+/*
+ * HAI CHỐT CHẶN LÚC KHAI VẬT TƯ (02/08).
+ *
+ * Trước đó chỉ chặn trùng MÃ, còn mã thì gõ tay và tên trùng chỉ cảnh báo mềm.
+ * Kết quả là cùng một con long đền có bốn mã — `scripts/materials-dedupe.mjs`
+ * viết ra chính để đi dọn hậu quả đó.
+ */
+describe('materialsService.create — tự cấp mã theo nếp của nhóm', () => {
+  beforeEach(() => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.insert).mockResolvedValue(MAT as never)
+  })
+
+  const NEW = { name: 'Vít 4x15 bảy màu', unit: 'con', min_stock: 0 }
+
+  it('bỏ trống mã → suy tiền tố từ mã ĐANG DÙNG trong nhóm, số nối tiếp', async () => {
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0001', name: 'Vít 3x10' },
+      { code: 'NK-0002', name: 'Bulon 6x75' },
+      { code: 'XX-0009', name: 'Hàng lạc' }, // thiểu số, không thắng
+    ] as never)
+    vi.mocked(materialsRepo.maxCodeNo).mockResolvedValue(124)
+
+    await materialsService.create(cungUng, { ...NEW, group_name: 'Ngũ kim - phụ kiện' })
+
+    expect(materialsRepo.maxCodeNo).toHaveBeenCalledWith('NK')
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'NK-0125' }),
+    )
+  })
+
+  it('nhóm chưa có mã nào → tra bảng theo tên nhóm', async () => {
+    await materialsService.create(cungUng, { ...NEW, group_name: 'Inox' })
+    expect(materialsRepo.maxCodeNo).toHaveBeenCalledWith('IX')
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'IX-0001' }),
+    )
+  })
+
+  it('nhóm lạ, không suy được gì → VT', async () => {
+    await materialsService.create(cungUng, { ...NEW, group_name: 'Hàng linh tinh' })
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'VT-0001' }),
+    )
+  })
+
+  it('người dùng khai mã thì TÔN TRỌNG, không tự cấp đè', async () => {
+    // Kho vẫn cần gõ tay khi bám mã cũ / mã theo NCC.
+    await materialsService.create(kho, { ...NEW, code: 'LEGACY-77' })
+    expect(materialsRepo.maxCodeNo).not.toHaveBeenCalled()
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'LEGACY-77' }),
+    )
+  })
+})
+
+describe('materialsService.create — chặn cứng trùng tên mức "chắc chắn"', () => {
+  beforeEach(() => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.insert).mockResolvedValue(MAT as never)
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0007', name: 'LĐN 6x16x2 đen' },
+    ] as never)
+  })
+
+  it.each(['LĐN 6x16x2, màu đen', 'lđn 6x16x2  đen', 'LĐN 6x16x2 đen'])(
+    '"%s" → 409, chỉ tên mã cũ ra',
+    async (name) => {
+      await expect(
+        materialsService.create(cungUng, {
+          name,
+          unit: 'con',
+          min_stock: 0,
+          group_name: 'Ngũ kim - phụ kiện',
+        }),
+      ).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining('NK-0007'),
+      })
+      expect(materialsRepo.insert).not.toHaveBeenCalled()
+    },
+  )
+
+  it('KHÁC MÀU vẫn tạo được — chặn nhầm là không khai được hàng mới', async () => {
+    await materialsService.create(cungUng, {
+      name: 'LĐN 6x16x2 xám',
+      unit: 'con',
+      min_stock: 0,
+      group_name: 'Ngũ kim - phụ kiện',
+    })
+    expect(materialsRepo.insert).toHaveBeenCalled()
+  })
+
+  it('so trùng TRONG NHÓM, không so chéo vật liệu', async () => {
+    // namesInGroup đã lọc theo nhóm — nhóm khác thì không thấy nhau.
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([] as never)
+    await materialsService.create(cungUng, {
+      name: 'LĐN 6x16x2 đen',
+      unit: 'con',
+      min_stock: 0,
+      group_name: 'Nhôm',
+    })
+    expect(materialsRepo.namesInGroup).toHaveBeenCalledWith('Nhôm')
+    expect(materialsRepo.insert).toHaveBeenCalled()
+  })
+
+  it('tên quá ngắn thì bỏ qua chặn, không chặn bừa', async () => {
+    vi.mocked(materialsRepo.namesInGroup).mockResolvedValue([
+      { code: 'NK-0001', name: 'Ốc' },
+    ] as never)
+    await materialsService.create(cungUng, {
+      name: 'Ốc',
+      unit: 'con',
+      min_stock: 0,
+      group_name: 'Ngũ kim - phụ kiện',
+    })
+    expect(materialsRepo.insert).toHaveBeenCalled()
   })
 })

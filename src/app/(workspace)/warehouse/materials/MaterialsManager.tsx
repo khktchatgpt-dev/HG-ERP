@@ -530,7 +530,7 @@ function MaterialForm({
         ? Number(fd.get('unit2_factor')) || null
         : null
     const body: Record<string, unknown> = {
-      code: String(fd.get('code') ?? '').trim(),
+      code: String(fd.get('code') ?? '').trim() || null,
       name: name.trim(),
       unit: String(fd.get('unit') ?? '').trim() || 'cái',
       barcode: String(fd.get('barcode') ?? '').trim() || null,
@@ -568,14 +568,21 @@ function MaterialForm({
   return (
     <form onSubmit={handle} className="grid gap-3 sm:grid-cols-2">
       <label className="flex flex-col gap-1 text-sm">
-        Mã vật tư <span className="text-red-500">*</span>
+        Mã vật tư
         <input
           name="code"
-          required
           maxLength={60}
           defaultValue={initial?.code ?? ''}
+          placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
           className={`${cls} font-mono`}
         />
+        {!initial && (
+          // Kho vẫn gõ tay được khi cần bám mã cũ; bỏ trống thì server cấp
+          // `XX-0000` nối tiếp tiền tố mà nhóm đó đang dùng.
+          <span className="text-xs text-zinc-500">
+            Bỏ trống là an toàn — server cấp mã nối tiếp đúng nếp của nhóm.
+          </span>
+        )}
       </label>
       <label className="flex flex-col gap-1 text-sm">
         ĐVT đặt hàng <span className="text-red-500">*</span>

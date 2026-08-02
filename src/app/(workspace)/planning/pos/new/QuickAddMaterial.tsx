@@ -33,7 +33,6 @@ const cls =
   'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
 const EMPTY = {
-  code: '',
   name: '',
   unit: '',
   spec: '',
@@ -149,7 +148,7 @@ export function QuickAddMaterial({
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }))
 
-  const invalid = !f.code.trim() || !f.name.trim() || !f.unit.trim()
+  const invalid = !f.name.trim() || !f.unit.trim()
 
   /** Số kg/m sẽ ghi: ưu tiên số người gõ, bỏ trống thì lấy số máy đọc được. */
   const kgToSave = f.kg_per_m.trim() ? Number(f.kg_per_m) || null : (derived?.kg ?? null)
@@ -163,7 +162,6 @@ export function QuickAddMaterial({
         {
           method: 'POST',
           body: {
-            code: f.code.trim(),
             name: f.name.trim(),
             unit: f.unit.trim(),
             spec: f.spec.trim() || null,
@@ -218,17 +216,12 @@ export function QuickAddMaterial({
           maxWidth="sm:max-w-2xl"
         >
           <div className="flex flex-col gap-3">
-            <div className="grid gap-3 sm:grid-cols-[140px_1fr_110px]">
-              <label className="flex flex-col gap-1 text-sm">
-                Mã VT <span className="text-red-500">*</span>
-                <input
-                  value={f.code}
-                  onChange={set('code')}
-                  maxLength={60}
-                  className={`${cls} font-mono`}
-                  autoFocus
-                />
-              </label>
+            {/*
+              KHÔNG CÓ Ô "MÃ VT" — server tự cấp `XX-0000` nối tiếp theo nhóm.
+              Quy ước mã là của danh mục, không phải thứ người soạn đơn phải nhớ;
+              gõ `NH999` giữa lúc vội là lệch khỏi cả nghìn mã còn lại.
+            */}
+            <div className="grid gap-3 sm:grid-cols-[1fr_110px]">
               <label className="flex flex-col gap-1 text-sm">
                 Tên vật tư <span className="text-red-500">*</span>
                 <input
@@ -236,6 +229,7 @@ export function QuickAddMaterial({
                   onChange={set('name')}
                   maxLength={200}
                   className={cls}
+                  autoFocus
                 />
               </label>
               <label className="flex flex-col gap-1 text-sm">

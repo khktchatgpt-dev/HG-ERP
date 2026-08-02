@@ -41,12 +41,17 @@ describe('materialCreateSchema', () => {
     expect(p2.min_stock).toBe(0)
   })
 
-  it('reject thiếu mã', () => {
-    expect(() => materialCreateSchema.parse({ name: 'Y' })).toThrow()
+  /*
+   * MÃ KHÔNG CÒN BẮT BUỘC (02/08) — bỏ trống thì service tự cấp `XX-0000` nối
+   * tiếp theo nhóm. Gõ tay mã là một hạng lỗi không cần tồn tại: quy ước mã là
+   * của danh mục, không phải thứ người soạn đơn đang vội phải nhớ.
+   */
+  it('thiếu mã vẫn parse được — server cấp sau', () => {
+    expect(materialCreateSchema.parse({ name: 'Y' }).code).toBeUndefined()
   })
 
-  it('reject mã rỗng', () => {
-    expect(() => materialCreateSchema.parse({ code: '', name: 'Y' })).toThrow()
+  it('mã rỗng cũng qua, service coi như chưa khai', () => {
+    expect(materialCreateSchema.parse({ code: '', name: 'Y' }).code).toBe('')
   })
 
   it('reject tên rỗng', () => {

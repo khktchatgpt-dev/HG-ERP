@@ -15,41 +15,20 @@
 //     tả "đem"/"đen", khác hậu tố). CHỈ IN RA cho người rà: "LĐN 6x16x2 đen" và
 //     "LĐN 6x16x2 xám" là hai mặt hàng thật, gộp là đặt nhầm màu.
 //
-// AN TOÀN: trước khi gộp, đếm chứng từ đang trỏ vào mã sắp bỏ (dòng PO, tồn kho,
-// bảng giá, bảng kê LSX). Có chứng từ thì KHÔNG đụng, chỉ in ra.
+// AN TOÀN: trước khi gộp, đếm chứng từ đang trỏ vào mã sắp bỏ (dòng PO, bảng giá
+// NCC, phiếu kho). Có chứng từ thì KHÔNG đụng, chỉ in ra.
+//
+// Từ 02/08 server CHẶN sẵn trùng mức "chắc chắn" lúc tạo, nên script này chủ yếu
+// để dọn phần danh mục nạp trước đó.
 
 import { client } from './products-lib.mjs'
 
 const APPLY = process.argv.includes('--apply')
 
-const nod = (s) =>
-  String(s ?? '')
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-
-/** Khoá "chắc chắn": bỏ dấu câu, chữ "màu", đuôi đơn vị ly/li, mọi khoảng trắng. */
-const sureKey = (name) =>
-  nod(name)
-    .replace(/\bmau\b/g, ' ')
-    .replace(/(\d)\s*(?:ly|li)\b/g, '$1')
-    .replace(/[^a-z0-9]/g, '')
-
-/**
- * Khoá "nghi ngờ": chữ đầu + BỘ SỐ. Bắt sai chính tả ở phần chữ ("đem"/"đen") mà
- * vẫn cùng quy cách.
- *
- * Bắt buộc có số: không có số thì "Bao bì — Ghế Hali", "Bao bì bàn", "Bao bì
- * bank I" gom thành một cụm 12 mặt hàng khác nhau — danh sách rà thành vô dụng.
- */
-const softKey = (name) => {
-  const s = nod(name).replace(/[^a-z0-9\s]/g, ' ')
-  const first = s.trim().split(/\s+/)[0] ?? ''
-  const nums = (s.match(/\d+(?:\.\d+)?/g) ?? []).join('x')
-  if (!nums || !first) return null
-  return `${first}|${nums}`
-}
+// Khoá so trùng dùng CHUNG với server (src/lib/material-key.ts) — chỗ CHẶN lúc
+// tạo và chỗ DÒ lúc dọn phải hiểu "trùng" giống hệt nhau, không thì chặn hụt rồi
+// lại đi dọn tay. Node 24 chạy thẳng .ts nhờ type-stripping.
+import { nod, sureKey, softKey, MIN_KEY_LEN } from '../src/lib/material-key.ts'
 
 const sb = await client(import.meta.url)
 
@@ -83,7 +62,7 @@ const group = (keyFn) => {
   const m = new Map()
   for (const x of mats) {
     const k = keyFn(x.name)
-    if (!k || k.length < 3) continue
+    if (!k || k.length < MIN_KEY_LEN) continue
     const full = `${nod(x.group_name ?? '—')}::${k}`
     if (!m.has(full)) m.set(full, [])
     m.get(full).push(x)
