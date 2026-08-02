@@ -104,19 +104,52 @@ export function isService(name, unit) {
 }
 
 /**
- * MẪU ĐƠN GÁN THEO NHÓM PHỤ, không theo nhóm chính.
- * Nhóm "Sắt thép - inox - nhôm - tôn" chứa cả 542 mã nhôm lẫn 1.613 mã sắt —
- * gán chung một mẫu là sai bộ cột cho một nửa danh mục.
+ * MẪU ĐƠN GÁN THEO TÊN TỪNG MÓN; nhóm phụ chỉ là chỗ dựa cuối.
+ *
+ * Bản đầu gán theo nhóm phụ và sai nặng: cụm "Nhôm - thanh & tấm" của sổ có 548
+ * dòng nhưng chỉ 180 là nhôm cây/tấm thật — 317 dòng chữ "nhôm" chỉ bổ nghĩa
+ * (Cromate nhôm là hoá chất, Dây hàn mig nhôm là vật tư hàn, Cân treo nhôm
+ * 150kg là cái cân), 51 dòng không phải nhôm (Đồng thanh, Thép hộp mạ kẽm). Gán
+ * cả cụm thành `aluminium` là 2/3 mang bộ cột kg/m × dài cây mà chẳng liên quan.
+ *
+ * `derivedKg` = kg/m máy đọc được từ tên. Mẫu `aluminium` CHỈ gán khi có số này:
+ * thiếu kg/m thì `lineReady` chặn không cho gửi dòng, người soạn đơn bị kẹt rồi
+ * gõ đại. Không barem thì để `simple` — SL × giá vẫn đúng nghiệp vụ.
  */
-export function templateFor(sub) {
+export function templateFor(sub, name = '', derivedKg = null) {
+  const n = String(name).toLowerCase()
   const s = String(sub ?? '').toLowerCase()
-  if (s.includes('nhôm')) return 'aluminium'
-  if (/sắt|inox|thép/.test(s)) return 'metal_kg'
-  if (s.startsWith('thùng')) return 'carton'
-  if (/tem|nhãn|thẻ|logo|mạc|góc nhựa/.test(s)) return 'accessory'
-  if (/bulon|vít|đinh|lông đền|ty|móc|mắc cáo|vòng|kẹp|chốt|ốc/.test(s))
+
+  // Hoá chất / sơn / dầu mỡ / keo — "nhôm" trong tên chỉ là đối tượng xử lý.
+  if (/cromate|thụ động|hoá chất|hóa chất|dung môi|sơn |dầu |nhớt|mỡ |keo /.test(n))
+    return 'simple'
+  // Vật tư hàn: dây hàn nhôm vẫn là dây hàn, bán theo cuộn/kg.
+  if (/dây hàn|que hàn|đá cắt|đá mài|béc |chụp khí/.test(n)) return 'simple'
+
+  /*
+   * NGŨ KIM XÉT TRƯỚC VẬT LIỆU. "Bu lông LGC 6x20x15 sắt xi 7 màu" có chữ "sắt"
+   * và có tiết diện, nhưng "sắt xi" là lớp mạ chứ không phải mặt hàng sắt cây —
+   * xét vật liệu trước thì 89 con bu lông mang mẫu metal_kg, tức bị đòi khai
+   * kg/đơn-vị mới gửi được đơn, trong khi NCC chào theo con.
+   */
+  if (
+    /vít|bu ?lon|bu ?lông|tán |đinh |lđn|lđs|long đền|lông đền|pát|pat |ty ren|ty sắt|\beru\b|chốt |ốc /.test(
+      n,
+    )
+  )
     return 'accessory'
-  if (/nút nhựa|bánh xe|gót chân|lót|nắp|tay nắm|ben hơi|nẹp|phụ kiện nội thất/.test(s))
+  if (/^thùng\b|carton/.test(n)) return 'carton'
+  if (/\btem\b|nhãn|thẻ treo|logo|mạc |góc nhựa|góc giấy/.test(n)) return 'accessory'
+  if (/nút nhựa|bánh xe|gót chân|bịt chân|nắp bịt|tay nắm|bản lề|khoá |khóa /.test(n))
     return 'accessory'
+
+  const tietDien = /\d+\s*[x×]\s*\d+|phi\s*\d+|\bd\d+\b/.test(n)
+  if (/^\s*nh[ôo]m\b/.test(n) && tietDien) return derivedKg ? 'aluminium' : 'simple'
+  if (/\b(thép|sắt|inox|tôn|kẽm)\b/.test(n) && tietDien) return 'metal_kg'
+
+  // Hết đường suy từ tên thì mới nhìn nhóm phụ.
+  if (/bulon|vít|đinh|lông đền|kẹp|chốt/.test(s)) return 'accessory'
+  if (/tem|nhãn|thẻ|logo|mạc/.test(s)) return 'accessory'
+  if (/nút nhựa|bánh xe|gót chân|lót ghế|nắp|tay nắm/.test(s)) return 'accessory'
   return 'simple'
 }
