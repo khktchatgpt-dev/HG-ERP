@@ -5,6 +5,10 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
 import { smartLsxNeeds, reservedByOtherLsx } from '@/modules/dept/warehouse/stock.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import {
+  productionRepo,
+  listLsxProducts,
+} from '@/modules/dept/production/production.repo'
 import { suggestForMaterial } from '@/lib/po-suggestion'
 
 const querySchema = z.object({
@@ -29,6 +33,11 @@ export const GET = handle(async (req: Request) => {
   const needs = await smartLsxNeeds(production_order_id)
   const matIds = needs.map((n) => n.material_id)
 
+  // Mã SP của chính lệnh — đổ vào ô "Mã SP" trên dòng đơn. Mua gộp chi tiết cho
+  // cả lệnh nên một dòng có thể phục vụ nhiều mã; chọn từ danh sách này thay vì gõ.
+  const lsx = await productionRepo.findById(production_order_id)
+  const products = lsx?.sales_order_id ? await listLsxProducts(lsx.sales_order_id) : []
+
   const [stock, reserved, orderedPending] = await Promise.all([
     stockInfoMany(matIds),
     reservedByOtherLsx(production_order_id, matIds),
@@ -37,6 +46,7 @@ export const GET = handle(async (req: Request) => {
   const onHand = new Map(stock.map((s) => [s.material_id, s.on_hand]))
 
   return NextResponse.json({
+    products,
     needs: needs.map((n) => {
       const op = orderedPending.get(n.material_id)
       const s = suggestForMaterial({

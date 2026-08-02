@@ -6,17 +6,25 @@ import Link from 'next/link'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPicker, type PoMaterial } from '@/components/supply/MaterialPicker'
-import {
-  PO_TEMPLATES,
-  poTemplateMeta,
-  type PoTemplate,
-  type PoTerms,
-} from '@/lib/po-template'
+import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
-import { draftOf, lineAmount, lineReady, newLine, type Line } from './po-line'
+import {
+  buildPoPayload,
+  draftProblem,
+  poTotals,
+  readyLineCount,
+  templateDefaults,
+  type PoHeader,
+} from './po-draft'
+import { ContextStrip } from './sections/ContextStrip'
+import { TemplatePicker } from './sections/TemplatePicker'
+import { NeedsPanel, type Need } from './sections/NeedsPanel'
+import { TermsSection } from './sections/TermsSection'
+import { TotalsBar } from './sections/TotalsBar'
+import { newLine, type Line } from './po-line'
 
 type SupplierOption = {
   id: string
@@ -26,17 +34,6 @@ type SupplierOption = {
   payment_terms: string | null
 }
 type LsxOption = { id: string; code: string; order_code: string; customer_name: string }
-
-/** Nhu cầu vật tư của LSX từ BOM — API /dept/supply/needs. */
-type Need = {
-  material_id: string
-  material_code: string
-  material_name: string
-  unit: string
-  qty_needed: number
-  available: number
-  suggest: number
-}
 
 /** Đơn đang mở sẵn — server page dựng từ `posService.detail`. */
 export type PoInitial = {
@@ -60,7 +57,6 @@ export type PoInitial = {
   lines: Line[]
 }
 
-const num = (n: number) => n.toLocaleString('vi-VN')
 const field =
   'h-[32px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
@@ -82,12 +78,15 @@ export function PoCreateForm({
   lsxs,
   defaultSupplierId,
   initial,
+  initialProducts = [],
 }: {
   suppliers: SupplierOption[]
   lsxs: LsxOption[]
   defaultSupplierId?: string
   /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
   initial?: PoInitial
+  /** Mã SP của LSX gắn với đơn đang mở — server nạp sẵn cho form sửa. */
+  initialProducts?: { code: string; name: string }[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -128,6 +127,13 @@ export function PoCreateForm({
 
   const [lines, setLines] = useState<Line[]>(initial?.lines ?? [])
   const [needs, setNeeds] = useState<Need[]>([])
+  /**
+   * Mã SP của lệnh đang chọn — đổ vào ô "Mã SP" từng dòng (mua gộp nhiều SP).
+   * Mở form SỬA thì server đã nạp sẵn (`initialProducts`), khỏi chờ người dùng
+   * chọn lại đúng cái LSX đang hiện trên form thì ô mới có danh sách.
+   */
+  const [lsxProducts, setLsxProducts] =
+    useState<{ code: string; name: string }[]>(initialProducts)
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
 
@@ -140,25 +146,29 @@ export function PoCreateForm({
   const supplier = suppliers.find((s) => s.id === supplierId)
 
   /** Đổi mẫu → nạp lại VAT + điều khoản + chữ ký mặc định của mẫu mới. */
+  /** Đổi mẫu → nạp lại VAT + điều khoản + chữ ký mặc định (quy tắc ở `po-draft`). */
   function selectTemplate(t: PoTemplate) {
-    const m = poTemplateMeta(t)
+    const d = templateDefaults(t)
     setTemplate(t)
-    setVat(m.vatRate ?? '')
-    setInclVat(m.priceIncludesVat)
-    setTerms(m.terms)
-    setSignerRole(m.signerRole)
+    setVat(d.vat)
+    setInclVat(d.inclVat)
+    setTerms(d.terms)
+    setSignerRole(d.signerRole)
   }
 
   async function selectLsx(id: string) {
     setLsxId(id)
     setNeeds([])
+    setLsxProducts([])
     if (!id) return
     setLoadingNeeds(true)
     try {
-      const data = await api<{ needs: Need[] }>(
-        `/api/dept/supply/needs?production_order_id=${id}`,
-      )
+      const data = await api<{
+        needs: Need[]
+        products: { code: string; name: string }[]
+      }>(`/api/dept/supply/needs?production_order_id=${id}`)
       setNeeds(data.needs)
+      setLsxProducts(data.products ?? [])
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -208,29 +218,25 @@ export function PoCreateForm({
     setLines((ls) => ls.filter((_, idx) => idx !== i))
   }
 
-  // ── Tổng tiền: cộng hàng → trừ chiết khấu → VAT (đúng thứ tự trên phiếu thật).
-  // Làm tròn về đồng NGAY ở tiền hàng: tiền dòng lẻ vô hạn (kg × đơn giá) mà để
-  // trôi xuống thì tổng thanh toán in ra "44.477.168,4" — không ai ký được.
-  const subtotal = Math.round(lines.reduce((s, l) => s + lineAmount(template, l), 0))
-  const discountAmount = discount === '' ? 0 : Number(discount)
-  const base = Math.max(0, subtotal - discountAmount)
-  const vatRate = vat === '' ? 0 : Number(vat)
-  const vatAmount = inclVat
-    ? Math.round((base * vatRate) / (100 + vatRate))
-    : Math.round((base * vatRate) / 100)
-  const grandTotal = inclVat ? base : base + vatAmount
-
-  const readyLines = lines.filter((l) => lineReady(template, l)).length
-  const problem =
-    poType === 'lsx' && !lsxId
-      ? 'chưa chọn LSX'
-      : !supplierId
-        ? 'chưa chọn nhà cung cấp'
-        : lines.length === 0
-          ? 'chưa có dòng vật tư nào'
-          : readyLines < lines.length
-            ? `${lines.length - readyLines} dòng còn thiếu số`
-            : null
+  /** Gom đầu đơn lại để đưa cho các hàm thuần ở `po-draft.ts` (có test riêng). */
+  const header: PoHeader = {
+    template,
+    poType,
+    lsxId,
+    supplierId,
+    expectedAt,
+    contractNo,
+    currency,
+    note,
+    discount,
+    vat,
+    inclVat,
+    terms,
+    signerRole,
+  }
+  const { subtotal, vatAmount, grandTotal } = poTotals(header, lines)
+  const readyLines = readyLineCount(template, lines)
+  const problem = draftProblem(header, lines)
 
   async function submit() {
     if (problem || busy) return
@@ -241,54 +247,7 @@ export function PoCreateForm({
         {
           // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
           method: isEdit ? 'PATCH' : 'POST',
-          body: {
-            production_order_id: poType === 'lsx' ? lsxId : null,
-            supplier_id: supplierId,
-            template,
-            currency,
-            vat_rate: vat === '' ? null : Number(vat),
-            price_includes_vat: inclVat,
-            discount_amount: discountAmount || null,
-            contract_no: contractNo.trim() || null,
-            expected_at: expectedAt || null,
-            terms_quality: terms.quality || null,
-            terms_delivery_place: terms.delivery_place || null,
-            terms_payment: terms.payment || null,
-            terms_invoice: terms.invoice || null,
-            terms_lead_time: terms.lead_time || null,
-            signer_role: signerRole || null,
-            note: note.trim() || null,
-            lines: lines.map((l) => {
-              const d = draftOf(l)
-              return {
-                material_id: l.material_id,
-                qty_ordered: d.qty_ordered,
-                unit_price: l.price === '' ? null : Number(l.price),
-                spec: l.spec.trim() || null,
-                note: l.note.trim() || null,
-                material_grade: l.material_grade.trim() || null,
-                product_code: l.product_code.trim() || null,
-                dm_per_sp: l.dm_per_sp === '' ? null : Number(l.dm_per_sp),
-                qty_demand: l.qty_demand === '' ? null : Number(l.qty_demand),
-                qty_on_hand: l.qty_on_hand === '' ? null : Number(l.qty_on_hand),
-                waste_pct: l.waste_pct === '' ? null : Number(l.waste_pct),
-                die_code: l.die_code.trim() || null,
-                weight_per_m: d.weight_per_m,
-                bar_length_m: d.bar_length_m,
-                bar_surplus: l.bar_surplus === '' ? null : Number(l.bar_surplus),
-                dimension_text: l.dimension_text.trim() || null,
-                finish: l.finish.trim() || null,
-                weight_per_unit: d.weight_per_unit,
-                open_style: l.open_style || null,
-                pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
-                inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),
-                inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
-                inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
-                area_m2: d.area_m2,
-                carton_basis: template === 'carton' ? l.carton_basis : null,
-              }
-            }),
-          },
+          body: buildPoPayload(header, lines),
         },
       )
       toast.success(
@@ -335,50 +294,19 @@ export function PoCreateForm({
         }
       />
 
-      {/* ── Mẫu đơn: quyết định cột nhập, công thức tiền, VAT và phiếu in ── */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mb-2 text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
-          Loại hàng / mẫu đơn
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {PO_TEMPLATES.map((t) => {
-            const m = poTemplateMeta(t)
-            const on = t === template
-            return (
-              <button
-                key={t}
-                type="button"
-                onClick={() => selectTemplate(t)}
-                aria-pressed={on}
-                className={
-                  'rounded-lg border px-3 py-2 text-left transition-colors ' +
-                  (on
-                    ? 'border-sky-500 bg-sky-50 dark:border-sky-600 dark:bg-sky-950/40'
-                    : 'border-zinc-200 hover:border-sky-300 dark:border-zinc-800')
-                }
-              >
-                <div
-                  className={
-                    'text-[13px] font-semibold ' +
-                    (on ? 'text-sky-700 dark:text-sky-300' : '')
-                  }
-                >
-                  {m.label}
-                </div>
-                <div className="mt-0.5 max-w-[230px] text-[11px] text-zinc-400">
-                  {m.hint}
-                </div>
-              </button>
-            )
-          })}
-        </div>
-        {lines.length > 0 && (
-          <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-500">
-            Đổi mẫu giữ nguyên {lines.length} dòng đang có — cột và cách tính tiền đổi
-            theo mẫu mới, kiểm lại số trước khi gửi.
-          </p>
-        )}
-      </section>
+      <ContextStrip
+        templateLabel={meta.label}
+        lsxLabel={poType === 'standalone' ? 'ngoài LSX' : (lsx?.code ?? '— chưa chọn —')}
+        supplierName={supplier?.name ?? null}
+        readyLines={readyLines}
+        totalLines={lines.length}
+      />
+
+      <TemplatePicker
+        value={template}
+        lineCount={lines.length}
+        onChange={selectTemplate}
+      />
 
       {/* ── Bối cảnh đơn ── */}
       <section className="rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -488,74 +416,14 @@ export function PoCreateForm({
 
       {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc ── */}
       {poType === 'lsx' && lsxId && (
-        <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center gap-2 px-3.5 py-2.5 text-[13px]">
-            <b>Nhu cầu từ BOM của LSX</b>
-            <span className="text-zinc-400">
-              {loadingNeeds
-                ? 'đang tải…'
-                : `${pendingNeeds.length} vật tư cần mua / ${needs.length} trong BOM`}
-            </span>
-            {pendingNeeds.length > 0 && (
-              <button
-                type="button"
-                onClick={() => void addFromNeeds(pendingNeeds)}
-                className="ml-auto rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
-              >
-                ＋ Thêm tất cả ({pendingNeeds.length})
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setShowNeeds((v) => !v)}
-              className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
-            >
-              {showNeeds ? 'Thu gọn' : 'Xem'}
-            </button>
-          </div>
-          {showNeeds && pendingNeeds.length > 0 && (
-            <div className="grid gap-2 border-t border-zinc-100 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-800">
-              {pendingNeeds.slice(0, 24).map((n) => (
-                <div
-                  key={n.material_id}
-                  className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 dark:border-zinc-800"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div
-                      className="truncate text-xs font-semibold"
-                      title={n.material_name}
-                    >
-                      {n.material_name}
-                    </div>
-                    <div className="font-mono text-[10px] text-zinc-400">
-                      {n.material_code} · cần {num(n.qty_needed)} · KD {num(n.available)}
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right text-[10px] text-zinc-400">
-                    đề xuất
-                    <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
-                      {num(n.suggest)} {n.unit}
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void addFromNeeds([n])}
-                    className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-zinc-300 text-sm font-bold text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700"
-                    aria-label={`Thêm ${n.material_name}`}
-                  >
-                    +
-                  </button>
-                </div>
-              ))}
-              {pendingNeeds.length > 24 && (
-                <p className="col-span-full text-[11px] text-zinc-400">
-                  … và {pendingNeeds.length - 24} vật tư nữa — dùng “Thêm tất cả” hoặc gõ
-                  tìm ở dòng cuối bảng.
-                </p>
-              )}
-            </div>
-          )}
-        </section>
+        <NeedsPanel
+          needs={needs}
+          pending={pendingNeeds}
+          loading={loadingNeeds}
+          open={showNeeds}
+          onToggle={() => setShowNeeds((v) => !v)}
+          onAdd={(list) => void addFromNeeds(list)}
+        />
       )}
 
       {/* ── Bảng dòng: cột đổi theo mẫu ── */}
@@ -573,11 +441,17 @@ export function PoCreateForm({
           template={template}
           lines={lines}
           suggestions={suggestions}
+          products={lsxProducts}
           currency={currency}
           onPatch={patchLine}
           onRemove={removeLine}
           addRow={
-            <MaterialPicker template={template} usedIds={usedIds} onPick={addMaterial} />
+            <MaterialPicker
+              template={template}
+              usedIds={usedIds}
+              onPick={addMaterial}
+              needs={suggestions}
+            />
           }
         />
         <div className="border-t border-zinc-100 p-3 dark:border-zinc-800">
@@ -607,143 +481,36 @@ export function PoCreateForm({
       </section>
 
       {/* ── Điều khoản: mặc định theo mẫu, sửa được ── */}
-      <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <button
-          type="button"
-          onClick={() => setShowTerms((v) => !v)}
-          className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px]"
-        >
-          <b>Điều khoản &amp; ghi chú</b>
-          <span className="text-[11px] text-zinc-400">
-            đã điền sẵn theo mẫu {meta.label.toLowerCase()}
-          </span>
-          <span className="ml-auto text-xs text-zinc-400">{showTerms ? '▲' : '▼'}</span>
-        </button>
-        {showTerms && (
-          <div className="grid gap-3 border-t border-zinc-100 p-3.5 sm:grid-cols-2 dark:border-zinc-800">
-            {(
-              [
-                ['quality', 'Tiêu chuẩn chất lượng'],
-                ['delivery_place', 'Địa điểm giao hàng'],
-                ['payment', 'Hình thức thanh toán'],
-                ['invoice', 'Chứng từ thanh toán'],
-                ['lead_time', 'Thời gian giao hàng'],
-              ] as const
-            ).map(([k, label]) => (
-              <label key={k} className="flex flex-col gap-1 text-xs text-zinc-500">
-                {label}
-                <input
-                  maxLength={1000}
-                  value={terms[k]}
-                  onChange={(e) => setTerms((t) => ({ ...t, [k]: e.target.value }))}
-                  className={field}
-                />
-              </label>
-            ))}
-            <label className="flex flex-col gap-1 text-xs text-zinc-500">
-              Chữ ký giữa phiếu
-              <input
-                maxLength={100}
-                value={signerRole}
-                onChange={(e) => setSignerRole(e.target.value)}
-                className={field}
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-zinc-500 sm:col-span-2">
-              Ghi chú đơn
-              <input
-                maxLength={2000}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className={field}
-              />
-            </label>
-          </div>
-        )}
-      </section>
+      <TermsSection
+        templateLabel={meta.label}
+        open={showTerms}
+        onToggle={() => setShowTerms((v) => !v)}
+        terms={terms}
+        onTermsChange={setTerms}
+        signerRole={signerRole}
+        onSignerChange={setSignerRole}
+        note={note}
+        onNoteChange={setNote}
+      />
 
-      {/* ── Thanh tổng dính đáy ── */}
-      <div className="sticky bottom-0 z-20 -mx-1 rounded-xl border border-zinc-200 bg-white/95 px-3.5 py-2.5 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px]">
-          <span className="text-zinc-400">
-            Cộng tiền hàng{' '}
-            <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
-              {num(subtotal)}
-            </b>
-          </span>
-          {meta.hasDiscount && (
-            <label className="flex items-center gap-1.5 text-zinc-400">
-              Chiết khấu
-              <input
-                type="number"
-                min="0"
-                step="1000"
-                value={discount}
-                onChange={(e) =>
-                  setDiscount(e.target.value === '' ? '' : Number(e.target.value))
-                }
-                className="h-[28px] w-[110px] rounded-md border border-zinc-300 px-2 text-right text-[13px] dark:border-zinc-700 dark:bg-zinc-900"
-                aria-label="Chiết khấu"
-              />
-            </label>
-          )}
-          <label className="flex items-center gap-1.5 text-zinc-400">
-            VAT %
-            <input
-              type="number"
-              min="0"
-              max="100"
-              step="0.5"
-              value={vat}
-              onChange={(e) =>
-                setVat(e.target.value === '' ? '' : Number(e.target.value))
-              }
-              className="h-[28px] w-[62px] rounded-md border border-zinc-300 px-2 text-right text-[13px] dark:border-zinc-700 dark:bg-zinc-900"
-              aria-label="VAT %"
-            />
-            <select
-              value={inclVat ? 'in' : 'ex'}
-              onChange={(e) => setInclVat(e.target.value === 'in')}
-              className="h-[28px] rounded-md border border-zinc-300 px-1 text-[12px] dark:border-zinc-700 dark:bg-zinc-900"
-              aria-label="Đơn giá đã gồm VAT chưa"
-            >
-              <option value="in">đã gồm</option>
-              <option value="ex">chưa gồm</option>
-            </select>
-            <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
-              {num(vatAmount)}
-            </b>
-          </label>
-          <select
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="h-[28px] rounded-md border border-zinc-300 px-1 text-[12px] dark:border-zinc-700 dark:bg-zinc-900"
-            aria-label="Tiền tệ"
-          >
-            <option value="VND">VND</option>
-            <option value="USD">USD</option>
-          </select>
-
-          <span className="ml-auto flex items-baseline gap-2">
-            <span className="text-zinc-400">Tổng thanh toán</span>
-            <b className="text-lg tabular-nums">{num(grandTotal)}</b>
-          </span>
-          {problem && (
-            <span className="text-[12px] text-amber-600 dark:text-amber-500">
-              {problem}
-            </span>
-          )}
-          <button
-            type="button"
-            disabled={busy || !!problem}
-            onClick={() => void submit()}
-            className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-          >
-            {busy && <Spinner size={14} />}
-            {busy ? 'Đang lưu…' : isEdit ? 'Lưu thay đổi' : 'Tạo đơn → gửi GĐ duyệt'}
-          </button>
-        </div>
-      </div>
+      <TotalsBar
+        subtotal={subtotal}
+        vat={vat}
+        vatAmount={vatAmount}
+        inclVat={inclVat}
+        discount={discount}
+        hasDiscount={meta.hasDiscount}
+        grandTotal={grandTotal}
+        currency={currency}
+        problem={problem}
+        busy={busy}
+        submitLabel={isEdit ? 'Lưu thay đổi' : 'Tạo đơn → gửi GĐ duyệt'}
+        onVatChange={setVat}
+        onInclVatChange={setInclVat}
+        onDiscountChange={setDiscount}
+        onCurrencyChange={setCurrency}
+        onSubmit={() => void submit()}
+      />
     </div>
   )
 }

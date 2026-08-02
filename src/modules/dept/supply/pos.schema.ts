@@ -35,7 +35,10 @@ export const poLineInputSchema = z.object({
   note: optText(500), // truy vết: "50 bàn santorin (4c/sp)" / vị trí chi tiết
   // Dùng chung nhiều mẫu
   material_grade: optText(100), // vật liệu: "Nhựa đen", "Sắt xi trắng", "inox 201"
-  product_code: optText(50), // mã SP — mẫu tem nhãn và bao bì in cột này
+  // Mã SP dòng này phục vụ. NHIỀU mã ghép bằng " · " — phòng Cung ứng mua gộp chi
+  // tiết của cả lệnh cho rẻ, một dòng vít dùng chung cho 4 mã SP. 50 ký tự chỉ đủ
+  // 2 mã nên nới lên 200.
+  product_code: optText(200),
   dm_per_sp: optNum(1e6), // định mức / sản phẩm
   qty_demand: optNum(1e9), // SL đơn hàng (nhu cầu gộp)
   qty_on_hand: optNum(1e9), // tồn kho lúc lập đơn

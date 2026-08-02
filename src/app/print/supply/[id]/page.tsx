@@ -4,6 +4,12 @@ import { settingsService } from '@/modules/core/settings/settings.service'
 import { posRepo, type PoLine } from '@/modules/dept/supply/pos.repo'
 import { poLineAmount } from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import {
+  PO_PRINT_ORDER,
+  PO_PRINT_QTY_LABEL,
+  poField,
+  type PoField,
+} from '@/lib/po-fields'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { PrintToolbar } from '../../PrintToolbar'
 
@@ -31,8 +37,14 @@ const colName: Col = {
   ),
 }
 const colUnit: Col = { label: 'ĐVT', cell: (l) => l.material_unit }
-const colQty: Col = { label: 'Số lượng', cell: (l) => fmt(l.qty_ordered), align: 'right' }
 const colNote: Col = { label: 'Ghi chú', cell: (l) => l.note ?? '', align: 'left' }
+/**
+ * "Mã hàng" của đơn giấy = mã SẢN PHẨM dòng này phục vụ (22024-217), không phải
+ * mã vật tư kho (đã in dưới tên hàng). Cả 8 file đơn thật đều có cột này ngay sau
+ * STT ở MỌI mẫu — một đơn thường gom vật tư của nhiều mã SP trong cùng lệnh, bỏ
+ * cột này thì NCC và kho nhận hàng không biết hàng về cho sản phẩm nào.
+ */
+const colProductCode: Col = { label: 'Mã SP', cell: (l) => l.product_code ?? '' }
 const colAmount: Col = {
   label: 'Thành tiền',
   align: 'right',
@@ -44,105 +56,78 @@ const priceCol = (unit: string | null): Col => ({
   align: 'right',
   cell: (l) => fmt(l.unit_price),
 })
-const colKgTotal: Col = {
-  label: 'Tổng kg',
-  align: 'right',
-  cell: (l) => fmt(l.qty2),
+/** Giá trị in của một cột khai báo — chuyển `kind` thành chữ trên giấy. */
+function printCell(f: PoField): (l: PoLine) => React.ReactNode {
+  const get = (l: PoLine) =>
+    f.field ? (l as unknown as Record<string, unknown>)[f.field] : null
+  switch (f.kind) {
+    case 'text':
+    case 'die':
+    case 'openStyle':
+      return (l) => (get(l) as string | null) ?? ''
+    case 'number':
+    case 'area':
+      return (l) => fmt(get(l) as number | null)
+    case 'calc':
+      return (l) => fmt(l.qty2)
+    case 'inner':
+      return (l) =>
+        l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
+          ? `${fmt(l.inner_l_mm)}×${fmt(l.inner_w_mm)}×${fmt(l.inner_h_mm)}`
+          : ''
+    default:
+      return () => ''
+  }
 }
 
 /**
- * Bộ cột của phiếu in theo MẪU ĐƠN — lấy đúng từ đơn thật của phòng Cung ứng.
- * Phiếu nhôm phải có kg/m và tổng kg thì NCC mới đối chiếu barem được; phiếu phụ
- * kiện phải có SL đơn hàng/tồn kho thì kho NCC mới hiểu vì sao đặt con số đó.
+ * Bộ cột của phiếu in theo MẪU ĐƠN — thứ tự và nhãn đọc từ `PO_PRINT_ORDER`
+ * (`@/lib/po-fields`), chung một khai báo với form nhập. Bộ cột này là mẫu NCC
+ * đang ký nên `po-fields.test.ts` khoá lại từng nhãn, đổi là test đỏ.
+ *
+ * Phiếu nhôm phải có kg/m + tổng kg thì NCC mới đối chiếu barem; phiếu phụ kiện
+ * phải có SL đơn hàng + tồn kho thì kho NCC mới hiểu vì sao đặt con số đó.
  */
 function columnsFor(t: PoTemplate): Col[] {
   const meta = poTemplateMeta(t)
-  switch (t) {
-    case 'accessory':
-      return [
-        colStt,
-        colName,
-        { label: 'Vật liệu', cell: (l) => l.material_grade ?? '' },
-        { label: 'Quy cách', cell: (l) => l.spec ?? '' },
-        { label: 'SL đơn hàng', cell: (l) => fmt(l.qty_demand), align: 'right' },
-        { label: 'Tồn kho', cell: (l) => fmt(l.qty_on_hand), align: 'right' },
-        { label: 'SL đặt', cell: (l) => fmt(l.qty_ordered), align: 'right' },
-        colUnit,
-        priceCol(null),
-        colAmount,
-        colNote,
-      ]
-    case 'aluminium':
-      return [
-        colStt,
-        colName,
-        { label: 'Mã khuôn', cell: (l) => l.die_code ?? '' },
-        { label: 'kg/m', cell: (l) => fmt(l.weight_per_m), align: 'right' },
-        { label: 'Dài cây (m)', cell: (l) => fmt(l.bar_length_m), align: 'right' },
-        { label: 'Số cây', cell: (l) => fmt(l.qty_ordered), align: 'right' },
-        { label: 'Cây dư', cell: (l) => fmt(l.bar_surplus), align: 'right' },
-        colKgTotal,
-        priceCol(meta.priceUnit),
-        colAmount,
-        colNote,
-      ]
-    case 'metal_kg':
-      return [
-        colStt,
-        colName,
-        { label: 'Vật liệu', cell: (l) => l.material_grade ?? '' },
-        { label: 'Kích thước', cell: (l) => l.dimension_text ?? l.spec ?? '' },
-        { label: 'Màu / bề mặt', cell: (l) => l.finish ?? '' },
-        colUnit,
-        colQty,
-        {
-          label: 'kg / đơn vị',
-          cell: (l) => fmt(l.weight_per_unit),
-          align: 'right',
-        },
-        colKgTotal,
-        priceCol(meta.priceUnit),
-        colAmount,
-      ]
-    case 'carton':
-      return [
-        colStt,
-        { label: 'Mã SP', cell: (l) => l.product_code ?? '' },
-        colName,
-        { label: 'Cách mở', cell: (l) => l.open_style ?? '' },
-        { label: 'Pcs/thùng', cell: (l) => fmt(l.pcs_per_ctn), align: 'right' },
-        { label: 'Số thùng', cell: (l) => fmt(l.qty_ordered), align: 'right' },
-        {
-          label: 'Lọt lòng D×R×C (mm)',
-          cell: (l) =>
-            l.inner_l_mm && l.inner_w_mm && l.inner_h_mm
-              ? `${fmt(l.inner_l_mm)}×${fmt(l.inner_w_mm)}×${fmt(l.inner_h_mm)}`
-              : '',
-        },
-        { label: 'm²/thùng', cell: (l) => fmt(l.area_m2), align: 'right' },
-        {
-          label: 'Đơn giá',
-          align: 'right',
-          cell: (l) =>
-            l.unit_price != null
-              ? `${fmt(l.unit_price)}${l.carton_basis === 'm2' ? '/m²' : '/thùng'}`
-              : '',
-        },
-        colAmount,
-        colNote,
-      ]
-    default:
-      return [
-        colStt,
-        colName,
-        { label: 'Quy cách', cell: (l) => l.spec ?? '' },
-        colUnit,
-        colQty,
-        priceCol(null),
-        colAmount,
-        colNote,
-      ]
+  const fixed: Record<string, Col> = {
+    '@stt': colStt,
+    '@productcode': colProductCode,
+    '@name': colName,
+    '@unit': colUnit,
+    '@qty': {
+      label: PO_PRINT_QTY_LABEL[t],
+      align: 'right',
+      cell: (l) => fmt(l.qty_ordered),
+    },
+    '@price':
+      t === 'carton'
+        ? {
+            // Bao bì chốt cơ sở tính tiền TỪNG DÒNG nên đơn giá phải nói rõ kèm đơn vị.
+            label: 'Đơn giá',
+            align: 'right',
+            cell: (l) =>
+              l.unit_price != null
+                ? `${fmt(l.unit_price)}${l.carton_basis === 'm2' ? '/m²' : '/thùng'}`
+                : '',
+          }
+        : priceCol(meta.priceUnit),
+    '@amount': colAmount,
+    '@note': colNote,
   }
+
+  return PO_PRINT_ORDER[t].map((key) => {
+    const hit = fixed[key]
+    if (hit) return hit
+    const f = poField(t, key)!
+    return {
+      label: f.printLabel ?? f.label,
+      align: f.align === 'right' ? 'right' : 'left',
+      // "Kích thước" của mẫu inox/sắt: chưa nhập thì lấy tạm quy cách chung.
+      cell:
+        f.key === 'dim' ? (l: PoLine) => l.dimension_text ?? l.spec ?? '' : printCell(f),
+    } satisfies Col
+  })
 }
 
 /**

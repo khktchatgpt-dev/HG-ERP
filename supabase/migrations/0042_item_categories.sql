@@ -1,3 +1,14 @@
+-- ⚠️ CHƯA TỪNG APPLY — ĐỪNG CHẠY (rà DB thật ngày 01/08/2026).
+--
+-- Bảng `item_categories` KHÔNG tồn tại trên DB thật và `warehouse_materials`
+-- cũng không có `category_id`. Thực tế phân nhóm vật tư vẫn chạy bằng cột text
+-- `group_name` (13 nhóm, 1.318 vật tư), và mẫu đơn đặt hàng gắn thẳng lên
+-- `warehouse_materials.po_template` (migration 0106/0107).
+--
+-- Chạy file này bây giờ sẽ dựng một cây nhóm rỗng chẳng ai đọc, rồi 0043 lại
+-- thêm `category_id` không ai ghi — hai nguồn phân nhóm song song. Muốn dùng thì
+-- phải viết lại kèm bước dời dữ liệu từ `group_name` sang.
+--
 -- Item master chuẩn ERP (1/4): cây nhóm vật tư phân cấp — docs/thiet-ke-item-master-erp.md §3.2.
 --
 -- Thay dần `warehouse_materials.group_name` (text tự do) bằng nhóm có cấu trúc,

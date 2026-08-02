@@ -1,7 +1,10 @@
 import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { productionRepo } from '@/modules/dept/production/production.repo'
+import {
+  productionRepo,
+  listLsxProducts,
+} from '@/modules/dept/production/production.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { poMaterialsRepo } from '@/modules/dept/supply/po-materials.repo'
 import { poTemplateMeta } from '@/lib/po-template'
@@ -50,6 +53,15 @@ export default async function EditPoPage({
   const onHand = new Map(mats.map((m) => [m.id, m.on_hand]))
   const meta = poTemplateMeta(po.template)
 
+  // Mã SP của lệnh gắn với đơn — ô "Mã SP" từng dòng chọn từ đây. Nạp ở server
+  // để mở form sửa là có sẵn, không phải chọn lại LSX mới ra danh sách.
+  const lsxOfPo = po.production_order_id
+    ? await productionRepo.findById(po.production_order_id)
+    : null
+  const lsxProducts = lsxOfPo?.sales_order_id
+    ? await listLsxProducts(lsxOfPo.sales_order_id)
+    : []
+
   return (
     <PoCreateForm
       suppliers={suppliers.map((s) => ({
@@ -96,6 +108,7 @@ export default async function EditPoPage({
         },
         lines: lines.map((l) => lineFromPo(l, onHand.get(l.material_id) ?? 0)),
       }}
+      initialProducts={lsxProducts}
     />
   )
 }

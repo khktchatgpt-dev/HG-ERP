@@ -63,6 +63,8 @@ export async function LsxDetailScreen({
     const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
     supply = {
       hasBom: (summary?.components.length ?? 0) > 0,
+      // Bảng kê + tách đơn chỉ mở trong shell Kế hoạch - Cung ứng; GĐ chỉ xem.
+      bkvtHref: variant === 'planning' ? `/planning/lsx/${id}/bkvt` : null,
       pos: poRows.map((p) => ({
         id: p.id,
         code: p.code,
@@ -111,10 +113,7 @@ export async function LsxDetailScreen({
       canManage: isMgr || isProd,
       planHref: null,
       shapingHref: null,
-      breadcrumbs: [
-        { label: 'Tổ sản xuất', href: '/to' },
-        { label: `LSX ${lsx.code}` },
-      ],
+      breadcrumbs: [{ label: 'Tổ sản xuất', href: '/to' }, { label: `LSX ${lsx.code}` }],
     },
     stat: {
       canApprove: false,

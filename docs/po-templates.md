@@ -141,14 +141,15 @@ và khối chữ ký "TRƯỞNG PHÒNG KẾ HOẠCH".
   simple 230 · phụ kiện 124 · carton 52, không còn dòng nào chưa khai.
   ⚠️ Đừng nhầm `technical_dies` (danh mục khuôn, để TRA kg/m khi đặt nhôm cây) với
   nhóm vật tư "Khuôn nhôm" (mặt hàng khuôn để MUA).
-- Chưa làm: trục **BKVT → gán NCC → tách đơn theo NCC** (mô hình thật trong file
-  Excel: đơn hàng = bảng kê vật tư lọc theo cột NCC). Hiện vẫn soạn từng đơn một.
-  Đây là việc lớn nhất còn lại: một LSX ra 7–8 đơn cho các NCC khác nhau, giờ phải
-  soạn từng đơn.
-- **ĐANG DỞ — danh sách NCC thật + số ĐH `3/2026-HG/TTL`**: xem
-  [po-suppliers-wip.md](./po-suppliers-wip.md). Đã rút được hồ sơ 10 NCC (một số
-  trường bị cắt cụt, phải đọc lại từ file) rồi dừng vì thư mục nguồn `E:\PO` mất
-  kết nối. `supply_suppliers` hiện chỉ có 5 NCC demo, không phải NCC thật.
+- **BKVT → gán NCC → tách đơn: XONG (01/08)** — xem
+  [bkvt-tach-don.md](./bkvt-tach-don.md). Màn `/planning/lsx/[id]/bkvt`: nạp sheet
+  BKVT từ chính file LSX, gán NCC hàng loạt, bấm một nút ra N đơn (mỗi NCC một
+  đơn, gắn LSX). Migration `0108_lsx_material_plan.sql` đã apply.
+- **Danh sách NCC thật: XONG (01/08)** — 26 NCC nạp từ 62 sheet đơn bằng
+  `scripts/suppliers-import.mjs`, xem [po-suppliers-wip.md](./po-suppliers-wip.md).
+  Còn treo phần **số ĐH `3/2026-HG/TTL`**: đã có mã viết tắt nhưng file gốc dùng
+  4 định dạng khác nhau, phải chốt một dạng với phòng Cung ứng. 5 NCC demo giữ
+  nguyên vì đã dính chứng từ.
 - Chưa làm: cột theo dõi về hàng ngay trên đơn (`Ngày về / SL / Số kg / Còn lại`)
   mà mẫu nhôm và inox có sẵn trong file. App đã có phiếu nhập nên có thể thừa —
   cần DN xác nhận có muốn in lên đơn không.

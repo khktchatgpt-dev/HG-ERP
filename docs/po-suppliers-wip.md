@@ -1,73 +1,99 @@
-# Danh sách NCC rút từ đơn đặt thật — ĐANG DỞ
+# Danh sách NCC rút từ đơn đặt thật — ĐÃ NẠP
 
-Trạng thái: **chưa xong, đang chờ file nguồn.** Ghi lại 31/07/2026 để không mất
-phần đã rút được.
+Trạng thái: **xong phần hồ sơ NCC** (01/08/2026). Phần sinh số ĐH còn treo, xem
+mục cuối.
 
-## Việc đang làm
+Nguồn: 8 file đơn của phòng Cung ứng ở `E:\PO` (mỗi file 1 LSX, mỗi sheet NCC là
+1 đơn) — **62 sheet đơn → 26 nhà cung cấp**. Nạp bằng
+[`scripts/suppliers-import.mjs`](../scripts/suppliers-import.mjs), chạy lại được:
 
-Mã viết tắt trên số ĐH (`3/2026-HG/**TTL**`) chính là tên NCC viết tắt. Cần:
+```bash
+node scripts/suppliers-import.mjs                # dry-run, in bảng + xung đột
+node scripts/suppliers-import.mjs --apply        # ghi vào supply_suppliers
+```
 
-1. Đọc hết các sheet đơn trong 8 file để lấy **tên đầy đủ, địa chỉ, MST, người
-   liên hệ** của từng NCC + mã viết tắt tương ứng.
-2. Bổ sung vào `supply_suppliers` (hiện chỉ có 5 NCC demo: Gia công TTP, Gia công
-   Vinh, Gỗ Tân Mai, Nhôm Việt Phát, Phụ kiện Hải Long — không phải NCC thật).
-3. Có mã viết tắt rồi mới sinh được số ĐH dạng `3/2026-HG/TTL` thay cho
-   `PO-YYYY-NNNN` hiện tại.
+`supply_suppliers` trước đó chỉ có 5 NCC seed demo (Gia công TTP, Gia công Vinh,
+Gỗ Tân Mai, Nhôm Việt Phát, Phụ kiện Hải Long). **Vẫn giữ nguyên** vì đã dính
+chứng từ (4 PO + 10 dòng bảng giá) — cần thì ẩn bằng `is_active`, đừng xoá.
 
-## Vì sao dừng
+## 26 NCC đã nạp
 
-**Thư mục `E:\PO` không còn truy cập được** (ổ rút ra hoặc đã chuyển chỗ). Trong
-`~/Downloads` có bản sao của 3/8 file (`Copy of LSX 01/02/03…`) nhưng chưa quét.
+Mã = mã viết tắt trên số ĐH. Mẫu = mẫu đơn hay dùng (xem [po-templates.md](./po-templates.md)).
 
-Cần bạn cắm lại ổ `E:` hoặc cho biết thư mục mới, rồi chạy tiếp.
+| Mã | Tên đầy đủ | MST | Liên hệ | Mẫu |
+|---|---|---|---|---|
+| TTL | CÔNG TY TNHH SX & TM DV TÂN THÀNH LONG | 4101075030 | 097.557.3135 (Chị Yến) | accessory |
+| MT | CÔNG TY TNHH TM-DV-TH MINH THẮNG | 4100942107 | 0935579589 (chị Loan) | accessory |
+| TN | CÔNG TY TNHH SX & TM TƯỜNG NGUYÊN | 4100577768 | 0914.412.818 (Cô Thu) | accessory |
+| TP | CÔNG TY TNHH DV & TM TÂN PHÁT | — | 0982.049.880 (Chị Hoa) | accessory |
+| ATP | CÔNG TY TNHH SX TM TH AN THÀNH PHÁT | 4101577898 | 0914.062.935 (anh Ánh) | accessory |
+| STP | CÔNG TY CỔ PHẦN HAPPYCO | 3603421388 | 0909.525.400 | accessory |
+| PQ | Doanh Nghiệp Tư Nhân PQ | 4100777083 | 0935772772 (Anh Ẩn) | accessory |
+| WC | CÔNG TY CỔ PHẦN WECARE GROUP | 4101562154 | 0378.339.009 (chị Hương) | accessory |
+| HH | CÔNG TY TNHH THIẾT BỊ CN HUY HOÀNG | 0901035551 | 0912.912.177 (Anh Hiếu) | accessory |
+| CT | CÔNG TY TNHH XUẤT NHẬP KHẨU CÁT TƯỜNG | — | 0909460776 | accessory |
+| THP | CỬA HÀNG TÂN HIỆP PHÁT | — | — | accessory |
+| TĐ | Công Ty TNHH Nhôm Tiến Đạt | 3700775914 | 08 37291230 | aluminium |
+| VEC | Công ty TNHH Aluminum Việt Eco | 2301031894 | 0949179881 (Sơn) | aluminium |
+| TW | Công Ty TNHH Sản xuất thương mại Ngô Sơn | 1102022847 | 0931 468 214 (Thi) | aluminium |
+| VY | Công ty TNHH Nhôm Việt Ý | 0107595790 | 0832322666 (Bích Ngọc) | aluminium |
+| HGHN | Công ty CP SX và XNK nhôm Hoàng Gia | 0107595790 | — | aluminium |
+| — | Công Ty TNHH Nhôm Taiwant | 1102022847 | 0931 468 214 (Thi) | aluminium |
+| — | Công Ty TNHH Nhôm Đoàn Gia | — | 0931 468 214 (Thi) | aluminium |
+| KVP | Công ty TNHH SX TM DV Kim Vĩnh Phú | 0311147703 | — | metal_kg |
+| HTH | Công ty TNHH TM SX Hào Tư Hùng | 4100725409 | 0905 412 939 | metal_kg |
+| GA | Công ty Gia Anh | — | 0978729965 (A. Tuyên) | metal_kg |
+| NTL | Công ty TNHH SX-TM Nam Thuận Lợi | — | 086 264 0815 (Hiền) | metal_kg |
+| AHP | CÔNG TY TNHH TM VÀ DỊCH VỤ ÂN HOÀN PHÁT | — | 0934970779 | metal_kg |
+| — | Công ty TNHH SX TM DV Thông Đạt | 0313199295 | 0983 310304 | metal_kg |
+| — | Công Ty TNHH đầu tư Thép Sơn Giang Thịnh | 0314261002 | 0909185797 | metal_kg |
+| 3/2 | CÔNG TY CỔ PHẦN BAO BÌ 3/2 | 4200528940 | 0933358636 (Chị Hạnh) | carton |
 
-## Đã rút được (KHÔNG đầy đủ — đọc kỹ phần cảnh báo)
+Địa chỉ đầy đủ nằm trong DB — bảng này rút gọn cho dễ đọc. 22/26 có MST, 23/26 có
+số điện thoại, 26/26 có địa chỉ.
 
-⚠️ Nhiều giá trị **bị cắt cụt ở 38 ký tự** do cách tôi in ra lúc khảo sát, không
-phải nội dung thật của file. Chỗ nào cắt cụt đều đánh dấu `…`. **Đừng nhập thẳng
-vào hệ thống** — phải đọc lại từ file gốc.
+## Quyết định đã chốt (01/08/2026) — mã dùng chung cho hai pháp nhân
 
-| Viết tắt | Tên đầy đủ (từ "Kính gửi") | MST | Địa chỉ | Liên hệ | Nhóm hàng | Mẫu đơn |
-|---|---|---|---|---|---|---|
-| TTL | CÔNG TY TNHH SX & TM DV TÂN THÀNH LON… | 4101075030 | Thôn Ngọc Thạch 1, Xã Tuy Phước Tây, T… | 097.557.3135 (Chị Yến) | Nút nhựa, LĐN, pát, mạc đồng, nút chân | accessory |
-| MT | CÔNG TY TNHH TM-DV-TH MINH THẮNG | 4100942107 | 45 Mai Hắc Đế, TP. Quy Nhơn | 0935579589 (chị Loan) | Vít, eru, bộ tip, LĐ | accessory |
-| STP *(sheet ghi HAPPYCO)* | CÔNG TY CỔ PHẦN HAPPYCO | 3603421388 | Số 526/2, KP 8A, P.Long Bình, T.Đồng N… | 0909.525.400 | Khoá bấm đà | accessory |
-| PQ | Doanh Nghiệp Tư Nhân PQ | 4100777083 | Tổ 8-KV4-Phường Quy Nhơn Bắc-Tỉnh Gia … | 0935772772 (Anh Ẩn) | Nhãn, thẻ treo | accessory |
-| 3/2 | CÔNG TY CỔ PHẦN BAO BÌ 3/2 | 4200528940 | QL 1A Xã Suối Hiệp, Huyện Diên Khánh, … | Chị Hạnh - 0933358636 | Thùng carton | carton |
-| TĐ | Công ty TNHH sản xuất thương mại dịch … *(sheet tên "Thông Đạt")* | 0313199295 | 454A/8 Hưng Phú, Phường 9, Quận 8, TP.… | 0983 310304 (anh Cường) | Inox tấm | metal_kg |
-| HTH | Công ty TNHH thương mại sản xuất Hào … *(Hào Tư Hùng)* | 4100725409 | Số 1035 Trần Hưng Đạo, Phường Quy Nhơn… | 0905 412 939 | Inox cây/ống | metal_kg |
-| KVP | Công ty TNHH sản xuất thương … *(sheet tên "Kim Vĩnh Phú")* | 0311147703 | 779 Quốc Lộ 13, Khu Phố 7, Ph… | — | Inox | metal_kg |
-| VEC | Công ty TNHH Aluminum Việt E… *(Việt Eco)* | 2301031894 | Lô II-2.5, Đường N2, KCN Quế… | — | Nhôm | aluminium |
-| HGHN | Công ty Cổ Phần Sản xuất và … *(sheet "HG HN")* | 0107595790 | Số 84, Hữu Lê, Thành Phố Hà N… | — | Nhôm | aluminium |
+`supply_suppliers.code` là UNIQUE, mà file gốc dùng một mã cho hai công ty (người
+lập copy sheet cũ, sửa tên mà quên sửa số ĐH). Bốn ca, đã chốt và **ghi thành
+`CODE_RULES` trong script** để chạy lại vẫn ra đúng:
 
-### Mới biết tên, CHƯA có hồ sơ
+| Mã | Giữ mã | Để trống (chờ Cung ứng đặt mã) | Căn cứ |
+|---|---|---|---|
+| `TĐ` | Nhôm Tiến Đạt (7 đơn) | Thông Đạt (inox, 2 đơn) | áp đảo về số đơn |
+| `GA` | Gia Anh | Kim Vĩnh Phú → nhận mã riêng `KVP` | 1 sheet KVP ghi "ĐH: 01HG/KVP" |
+| `TW` | Ngô Sơn | Taiwant · Đoàn Gia | Đoàn Gia là pháp nhân khác, mượn mã |
+| `CT` | Cát Tường (10 đơn) | Thép Sơn Giang Thịnh | sheet "SƠN THỊNH" mượn mã |
 
-Từ sheet "Tổng hợp ĐH" của LSX 04 (có mã ↔ tên, chưa có MST/địa chỉ):
+NCC không có mã vẫn nạp đủ hồ sơ, `note` ghi rõ mã từng thấy trên đơn.
 
-- **TN** – Tường Nguyên (ty sắt, vít) · **TP** – Tân Phát (vít 4x15)
-- **ATP** – An Thành Phát (bộ thanh trượt, con lăn, nút)
+## Hai chỗ dữ liệu gốc mâu thuẫn — CẦN XÁC MINH
 
-Từ tên sheet / cột NCC trong BKVT, chưa rút hồ sơ:
+Script **không tự gộp**, nạp cả hai và đánh dấu trong `note`:
 
-- Nhôm: **Tiến Đạt**, **Cát Tường**, **Taiwant**, **Việt Ý**, **Sơn Thịnh**
-- Inox: **Nam Thuận Lợi**, **Gia Anh**
-- Khác: **Wecare (WC)**, **VICTORY**, **Huy Hoàng**, **Ân Hoàng Phát**, **HÀO** (túi vải)
+- **MST 0107595790** đứng tên cả `Nhôm Việt Ý` (3 đơn) lẫn `CP SX & XNK nhôm
+  Hoàng Gia` (HG HN, 1 đơn) — địa chỉ y hệt nhau (Ô CN 11, CCN Nguyên Khê, Hà Nội).
+- **MST 1102022847** đứng tên cả `SX TM Ngô Sơn` lẫn `Nhôm Taiwant`. Nhiều khả
+  năng Taiwant là tên cũ/thương hiệu, Ngô Sơn là pháp nhân — nhưng chưa có giấy.
 
-### Hai mã KHÔNG phải nhà cung cấp
+Đối chiếu hoá đơn rồi gộp tay là xong; gộp bừa theo MST thì mất hẳn một NCC.
 
-Trong cột NCC của BKVT có hai giá trị đặc biệt, đừng tạo thành NCC:
+## Việc còn treo: số ĐH `3/2026-HG/TTL`
 
-- **HGIA** = Hoàng Gia tự làm (pát xưởng làm rồi xuất đi xi).
-- **TQ** = hàng Trung Quốc / **ĐỦ** = tồn đủ khỏi mua / **CHƯA MUA** = chưa chốt NCC.
+Đã có mã viết tắt nên **sinh được** số ĐH theo nếp phòng, nhưng định dạng trong
+file không thống nhất: `3/2026- HG/TTL` · `01 HG/TĐ` · `04/202 (HG-PQ)` · `HG/VEC`.
+Phải chốt MỘT dạng chuẩn với phòng Cung ứng rồi mới thay `PO-YYYY-NNNN` hiện tại
+— cố khớp cả bốn dạng thì không parse lại được.
 
-## Lưu ý khi làm tiếp
+## Ghi chú cho lần chạy lại
 
-- Mã viết tắt trên số ĐH **không phải lúc nào cũng khớp tên sheet**: sheet
-  "HAPPYCO" nhưng số ĐH ghi `01 HG/STP`. Lấy mã theo **số ĐH**, tên sheet chỉ để
-  đối chiếu.
-- Định dạng số ĐH không thống nhất giữa các đơn: `3/2026- HG/TTL`, `01 HG/TĐ`,
-  `04/202 (HG-PQ)`, `HG/VEC`. Nếu sinh tự động thì phải chốt một dạng chuẩn với
-  phòng Cung ứng chứ đừng cố khớp cả bốn.
-- `supply_suppliers` đã có sẵn cột `code`, `short_name`, `tax_no`, `address`,
-  `phone` — đủ chỗ chứa, không cần migration mới. `code` nên giữ mã viết tắt
-  (TTL/MT/TN) vì đó là thứ đi vào số ĐH.
+Script chịu được những chỗ bẩn sau (có comment trong file):
+
+- Hai kiểu khối đầu sheet: nhãn + giá trị chung ô (mẫu cũ) và tách ô (mẫu mới).
+- Dòng đầu sheet là hồ sơ Hoàng Gia — chặn cứng MST `4100644894`, chỉ đọc từ
+  dòng "Kính gửi" trở xuống.
+- Ô MST định dạng SỐ bị Excel nuốt số 0 đầu (`107595790`) → bù lại thành 10 số,
+  không thì một NCC ra hai hồ sơ.
+- Mã `3/2` của Bao bì 3/2 — cắt ở dấu "/" đầu thì thành `3`.
+- Chỉ ĐIỀN Ô TRỐNG khi NCC đã tồn tại, không ghi đè dữ liệu người dùng đã sửa
+  trên app.
