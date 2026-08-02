@@ -68,7 +68,9 @@ export function RunningLsxList({
                   {r.plan_overdue > 0 && (
                     <Badge tone="amber">{r.plan_overdue} việc quá hạn KH</Badge>
                   )}
-                  {!r.lsx.materials_received_at && <Badge tone="gray">Chưa nhận VT</Badge>}
+                  {!r.lsx.materials_received_at && (
+                    <Badge tone="gray">Chưa nhận VT</Badge>
+                  )}
                   <span className="ml-auto text-xs text-zinc-500">
                     Xuất: <b>{fmtD(r.lsx.ship_date)}</b>
                   </span>

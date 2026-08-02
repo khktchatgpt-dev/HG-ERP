@@ -80,8 +80,7 @@ export function orderProgress(
     return { label: 'Chuẩn bị sản xuất', pct: 15, tone }
 
   // Đang chạy: % theo số công đoạn đã xong / tổng (0084 — jobs thay con trỏ).
-  const pct =
-    r.jobs_total > 0 ? Math.round(15 + (75 * r.jobs_done) / r.jobs_total) : 40
+  const pct = r.jobs_total > 0 ? Math.round(15 + (75 * r.jobs_done) / r.jobs_total) : 40
   const label =
     r.jobs_total > 0
       ? `Đang sản xuất (${r.jobs_done}/${r.jobs_total} công đoạn)`

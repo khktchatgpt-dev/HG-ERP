@@ -24,10 +24,7 @@ export default async function TeamLsxInfoPage() {
       rows={rows}
       myStages={myStages}
       lsxBase="/to/lsx"
-      breadcrumbs={[
-        { label: 'Tổ sản xuất', href: '/to' },
-        { label: 'Lệnh đang chạy' },
-      ]}
+      breadcrumbs={[{ label: 'Tổ sản xuất', href: '/to' }, { label: 'Lệnh đang chạy' }]}
       description="Toàn bộ lệnh xưởng đang chạy — ô viền xanh là công đoạn tổ mình phụ trách."
     />
   )

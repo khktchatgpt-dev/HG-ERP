@@ -204,18 +204,14 @@ export function PlanBoard({
                 type="checkbox"
                 checked={t.status === 'done'}
                 disabled={busy}
-                onChange={(e) =>
-                  setStatus(t.id, e.target.checked ? 'done' : 'todo')
-                }
+                onChange={(e) => setStatus(t.id, e.target.checked ? 'done' : 'todo')}
                 className="h-4 w-4 shrink-0 rounded border-zinc-300"
               />
               <div className="min-w-0 flex-1">
                 <Link
                   href={`/tasks/${t.id}`}
                   className={`block truncate text-sm ${
-                    t.status === 'done'
-                      ? 'text-zinc-400 line-through'
-                      : 'font-medium'
+                    t.status === 'done' ? 'text-zinc-400 line-through' : 'font-medium'
                   }`}
                 >
                   <span className="mr-2 font-mono text-xs text-zinc-400">

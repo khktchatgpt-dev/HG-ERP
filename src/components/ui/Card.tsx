@@ -28,9 +28,7 @@ export function Card({
         >
           <div className="min-w-0">
             {title && <h2 className="text-sm font-semibold">{title}</h2>}
-            {description && (
-              <p className="text-xs text-zinc-500">{description}</p>
-            )}
+            {description && <p className="text-xs text-zinc-500">{description}</p>}
           </div>
           {actions && <div className="shrink-0">{actions}</div>}
         </header>

@@ -85,9 +85,7 @@ export function TeamActivityPanel({
                   <span className="text-xs text-red-500">phế {fmtN(e.defect_qty)}</span>
                 )}
                 {full && (
-                  <span className="text-xs text-zinc-400">
-                    {e.created_by_name ?? ''}
-                  </span>
+                  <span className="text-xs text-zinc-400">{e.created_by_name ?? ''}</span>
                 )}
               </li>
             ))}

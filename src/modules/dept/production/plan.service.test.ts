@@ -4,7 +4,12 @@ vi.mock('./production.repo', () => ({
   productionRepo: { findById: vi.fn(), listStages: vi.fn(), patch: vi.fn() },
 }))
 vi.mock('./jobs.repo', () => ({
-  jobsRepo: { listByLsx: vi.fn(), replaceForLine: vi.fn(), findById: vi.fn(), patch: vi.fn() },
+  jobsRepo: {
+    listByLsx: vi.fn(),
+    replaceForLine: vi.fn(),
+    findById: vi.fn(),
+    patch: vi.fn(),
+  },
 }))
 vi.mock('./plan.repo', () => ({
   planRepo: { defaultRoutesByProducts: vi.fn(), saveDefaultRoute: vi.fn() },
@@ -74,7 +79,11 @@ describe('planService.saveLinePlan', () => {
   })
 
   it('lộ trình hợp lệ → replaceForLine với tổ mặc định theo stage_code', async () => {
-    await planService.saveLinePlan(planner, 'lsx1', input([{ stage: 'phoi' }, { stage: 'han' }]))
+    await planService.saveLinePlan(
+      planner,
+      'lsx1',
+      input([{ stage: 'phoi' }, { stage: 'han' }]),
+    )
     expect(jobsRepo.replaceForLine).toHaveBeenCalledWith('lsx1', 'line1', [
       expect.objectContaining({ stage: 'phoi', team_department_id: null }),
       expect.objectContaining({ stage: 'han', team_department_id: 'd-han' }),
@@ -89,7 +98,11 @@ describe('planService.saveLinePlan', () => {
 
   it('công đoạn lặp → 400', async () => {
     await expect(
-      planService.saveLinePlan(planner, 'lsx1', input([{ stage: 'han' }, { stage: 'han' }])),
+      planService.saveLinePlan(
+        planner,
+        'lsx1',
+        input([{ stage: 'han' }, { stage: 'han' }]),
+      ),
     ).rejects.toMatchObject({ status: 400 })
   })
 
@@ -105,7 +118,11 @@ describe('planService.saveLinePlan', () => {
       } as never,
     ])
     await expect(
-      planService.saveLinePlan(planner, 'lsx1', input([{ stage: 'phoi' }, { stage: 'son' }])),
+      planService.saveLinePlan(
+        planner,
+        'lsx1',
+        input([{ stage: 'phoi' }, { stage: 'son' }]),
+      ),
     ).rejects.toMatchObject({ status: 400 })
     expect(jobsRepo.replaceForLine).not.toHaveBeenCalled()
   })

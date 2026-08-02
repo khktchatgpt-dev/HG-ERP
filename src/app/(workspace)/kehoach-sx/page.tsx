@@ -15,11 +15,7 @@ export default async function PlanPage() {
   const user = (await authService.currentUser())!
   // Màn ĐIỀU PHỐI (0086): thành viên xưởng thường không xem — về màn của vai.
   const canEditPlan = await canManagePlan(user)
-  if (
-    user.role === 'employee' &&
-    !canEditPlan &&
-    (await isProductionStaff(user))
-  ) {
+  if (user.role === 'employee' && !canEditPlan && (await isProductionStaff(user))) {
     redirect('/to')
   }
   const [{ rows }, canEdit] = await Promise.all([

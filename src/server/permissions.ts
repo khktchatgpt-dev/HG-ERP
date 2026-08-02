@@ -2,8 +2,8 @@ import type { User } from '@/modules/core/users/users.repo'
 import { Forbidden } from '@/server/http'
 
 export type Action =
-  | 'task.create_self'   // tự tạo task cho mình
-  | 'task.assign'        // giao cho người khác
+  | 'task.create_self' // tự tạo task cho mình
+  | 'task.assign' // giao cho người khác
   | 'task.update'
   | 'task.delete'
   | 'task.approve'
@@ -50,9 +50,7 @@ export function can(user: User, action: Action, ctx: Ctx = {}): boolean {
       )
 
     case 'task.submit':
-      return (
-        ctx.task?.assignee_id === user.id && ctx.task?.kind !== 'self'
-      )
+      return ctx.task?.assignee_id === user.id && ctx.task?.kind !== 'self'
 
     case 'task.view':
       if (!ctx.task) return false

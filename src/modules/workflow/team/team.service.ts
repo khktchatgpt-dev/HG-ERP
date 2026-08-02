@@ -1,5 +1,8 @@
 import { db } from '@/server/db'
-import { departmentsRepo, type Department } from '@/modules/core/departments/departments.repo'
+import {
+  departmentsRepo,
+  type Department,
+} from '@/modules/core/departments/departments.repo'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { Forbidden, NotFound } from '@/server/http'

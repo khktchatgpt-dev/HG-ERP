@@ -1,11 +1,7 @@
 import { db } from '@/server/db'
 
 export type CommentKind =
-  | 'comment'
-  | 'progress_report'
-  | 'approval'
-  | 'rejection'
-  | 'system'
+  'comment' | 'progress_report' | 'approval' | 'rejection' | 'system'
 
 export type Comment = {
   id: string
@@ -29,7 +25,10 @@ export const commentsRepo = {
       .order('created_at', { ascending: true })
 
     type Raw = Omit<Comment, 'user_name' | 'user_email'> & {
-      users: { name: string | null; email: string } | { name: string | null; email: string }[] | null
+      users:
+        | { name: string | null; email: string }
+        | { name: string | null; email: string }[]
+        | null
     }
     return ((data ?? []) as unknown as Raw[]).map((r) => {
       const u = Array.isArray(r.users) ? r.users[0] : r.users

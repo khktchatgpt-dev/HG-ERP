@@ -16,11 +16,7 @@ export function downloadCsv<T extends Record<string, unknown>>(
 ): void {
   const header = columns.map((c) => esc(c.header)).join(',')
   const body = rows
-    .map((r) =>
-      columns
-        .map((c) => esc(c.get ? c.get(r) : r[c.key]))
-        .join(','),
-    )
+    .map((r) => columns.map((c) => esc(c.get ? c.get(r) : r[c.key])).join(','))
     .join('\n')
   // BOM để Excel VN mở UTF-8 đúng
   const blob = new Blob(['﻿' + header + '\n' + body], {

@@ -57,7 +57,8 @@ function die(msg) {
 loadEnvLocal()
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL
 const key = process.env.SUPABASE_SECRET_KEY
-if (!url || !key) die('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY (env or .env.local)')
+if (!url || !key)
+  die('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SECRET_KEY (env or .env.local)')
 
 const args = parseArgs(process.argv.slice(2))
 const email = (args.email || '').toString().trim().toLowerCase()
@@ -77,7 +78,9 @@ const { data: existing } = await db
 
 if (existing) {
   if (!args.promote) {
-    die(`User ${email} already exists (id=${existing.id}, role=${existing.role}). Pass --promote to change role/activate.`)
+    die(
+      `User ${email} already exists (id=${existing.id}, role=${existing.role}). Pass --promote to change role/activate.`,
+    )
   }
   const { data, error } = await db
     .from('users')
@@ -91,7 +94,8 @@ if (existing) {
 }
 
 const password = (args.password || '').toString()
-if (password.length < 8) die('--password is required (≥ 8 chars) when creating a new user')
+if (password.length < 8)
+  die('--password is required (≥ 8 chars) when creating a new user')
 
 const password_hash = await bcrypt.hash(password, ROUNDS)
 const row = {

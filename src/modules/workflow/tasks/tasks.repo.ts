@@ -1,13 +1,7 @@
 import { db } from '@/server/db'
 
 export type TaskStatus =
-  | 'todo'
-  | 'in_progress'
-  | 'submitted'
-  | 'done'
-  | 'rejected'
-  | 'cancelled'
-  | 'on_hold'
+  'todo' | 'in_progress' | 'submitted' | 'done' | 'rejected' | 'cancelled' | 'on_hold'
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
 export type TaskKind = 'assigned' | 'self'
 
@@ -92,11 +86,11 @@ export type ListFilter = {
   assignee_id?: string
   assigner_id?: string
   department_id?: string
-  parent_id?: string | null    // null = root tasks only
-  planned_from?: string         // YYYY-MM-DD inclusive
-  planned_to?: string           // YYYY-MM-DD inclusive
-  created_from?: string         // ISO timestamp
-  created_to?: string           // ISO timestamp
+  parent_id?: string | null // null = root tasks only
+  planned_from?: string // YYYY-MM-DD inclusive
+  planned_to?: string // YYYY-MM-DD inclusive
+  created_from?: string // ISO timestamp
+  created_to?: string // ISO timestamp
   completed_from?: string
   completed_to?: string
   has_planned_date?: boolean
@@ -109,11 +103,7 @@ export type ListFilter = {
 
 export const tasksRepo = {
   async findById(id: string): Promise<Task | null> {
-    const { data } = await db()
-      .from('tasks')
-      .select(BASE_COLS)
-      .eq('id', id)
-      .maybeSingle()
+    const { data } = await db().from('tasks').select(BASE_COLS).eq('id', id).maybeSingle()
     return (data as Task | null) ?? null
   },
 
@@ -131,8 +121,9 @@ export const tasksRepo = {
 
     switch (filter.order ?? 'created_desc') {
       case 'planned_asc':
-        q = q.order('planned_date', { ascending: true, nullsFirst: false })
-             .order('priority', { ascending: false })
+        q = q
+          .order('planned_date', { ascending: true, nullsFirst: false })
+          .order('priority', { ascending: false })
         break
       case 'due_asc':
         q = q.order('due_date', { ascending: true, nullsFirst: false })
@@ -237,7 +228,8 @@ export const tasksRepo = {
       .select('assignee_id, status')
       .eq('department_id', departmentId)
       .not('status', 'in', '(done,cancelled)')
-    const map: Record<string, { todo: number; in_progress: number; submitted: number }> = {}
+    const map: Record<string, { todo: number; in_progress: number; submitted: number }> =
+      {}
     for (const r of (data ?? []) as { assignee_id: string; status: TaskStatus }[]) {
       const m = (map[r.assignee_id] ??= { todo: 0, in_progress: 0, submitted: 0 })
       if (r.status === 'todo' || r.status === 'in_progress' || r.status === 'submitted') {

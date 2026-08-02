@@ -26,7 +26,7 @@ export function StatsBar({ stats }: { stats: Stat[] }) {
         <div key={i} className="px-4 py-3">
           <div className="flex items-center gap-1.5">
             <span className={`h-1.5 w-1.5 rounded-full ${DOT[s.tone ?? 'default']}`} />
-            <span className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+            <span className="text-[10px] font-medium tracking-wider text-zinc-500 uppercase">
               {s.label}
             </span>
           </div>

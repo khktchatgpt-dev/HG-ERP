@@ -44,7 +44,8 @@ export function ResetPasswordForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <p className="text-sm text-zinc-500">
-        Đặt lại mật khẩu cho <b>{userLabel}</b>. Hệ thống không gửi email — bạn tự thông báo cho người dùng.
+        Đặt lại mật khẩu cho <b>{userLabel}</b>. Hệ thống không gửi email — bạn tự thông
+        báo cho người dùng.
       </p>
       <label className="flex flex-col gap-1 text-sm">
         Mật khẩu mới (≥ 8 ký tự)

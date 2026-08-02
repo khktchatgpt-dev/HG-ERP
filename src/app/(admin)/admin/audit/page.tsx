@@ -6,7 +6,12 @@ import { AuditLogView } from './AuditLogView'
 export default async function AdminAuditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; actor?: string; target?: string; limit?: string }>
+  searchParams: Promise<{
+    action?: string
+    actor?: string
+    target?: string
+    limit?: string
+  }>
 }) {
   const user = (await authService.currentUser())!
   const sp = await searchParams
@@ -36,7 +41,7 @@ export default async function AdminAuditPage({
         id: e.id,
         target_user: userMap.get(e.target_user_id) ?? e.target_user_id.slice(0, 8),
         target_user_id: e.target_user_id,
-        actor: e.actor_id ? userMap.get(e.actor_id) ?? '—' : 'Hệ thống',
+        actor: e.actor_id ? (userMap.get(e.actor_id) ?? '—') : 'Hệ thống',
         actor_id: e.actor_id,
         action: e.action,
         before: e.before as Record<string, unknown> | null,

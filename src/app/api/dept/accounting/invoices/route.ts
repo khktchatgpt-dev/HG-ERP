@@ -2,7 +2,10 @@ import { NextResponse } from 'next/server'
 import { handle, parseJson, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { invoicesService } from '@/modules/dept/accounting/accounting.service'
-import { invoiceCreateSchema, invoiceListQuerySchema } from '@/modules/dept/accounting/accounting.schema'
+import {
+  invoiceCreateSchema,
+  invoiceListQuerySchema,
+} from '@/modules/dept/accounting/accounting.schema'
 
 export const GET = handle(async (req: Request) => {
   const user = await authService.requireUser()

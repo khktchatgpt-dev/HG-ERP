@@ -185,14 +185,19 @@ describe('stockListQuerySchema & movementListQuerySchema', () => {
   })
 })
 
-
 describe('receiptDocSchema — phiếu nhập nhiều dòng', () => {
   it('parse OK: theo PO với QC', () => {
     const p = receiptDocSchema.parse({
       po_id: UUID,
       counterparty: 'Tài xế NCC Tiến Đạt',
       lines: [
-        { material_id: UUID, qty: '60', qty_rejected: '5', qc_status: 'partial', po_line_id: UUID },
+        {
+          material_id: UUID,
+          qty: '60',
+          qty_rejected: '5',
+          qc_status: 'partial',
+          po_line_id: UUID,
+        },
       ],
     })
     expect(p.lines[0].qty).toBe(60)
@@ -221,7 +226,10 @@ describe('issueDocSchema — BR-09 ở tầng schema', () => {
   })
 
   it('xuất thường ngày không cần LSX', () => {
-    const p = issueDocSchema.parse({ kind: 'daily', lines: [{ material_id: UUID, qty: 2 }] })
+    const p = issueDocSchema.parse({
+      kind: 'daily',
+      lines: [{ material_id: UUID, qty: 2 }],
+    })
     expect(p.kind).toBe('daily')
   })
 })

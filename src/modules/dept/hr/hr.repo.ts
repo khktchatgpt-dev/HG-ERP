@@ -1,7 +1,8 @@
 import { db } from '@/server/db'
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
-export type LeaveType = 'annual' | 'sick' | 'unpaid' | 'marriage' | 'funeral' | 'maternity' | 'other'
+export type LeaveType =
+  'annual' | 'sick' | 'unpaid' | 'marriage' | 'funeral' | 'maternity' | 'other'
 
 export type LeaveRequest = {
   id: string
@@ -29,7 +30,10 @@ const COLS =
   'id, user_id, leave_type, from_date, to_date, days_count, reason, status, approver_id, approver_note, approved_at, created_at, updated_at'
 
 type Raw = LeaveRequest & {
-  user: { name: string | null; email: string } | { name: string | null; email: string }[] | null
+  user:
+    | { name: string | null; email: string }
+    | { name: string | null; email: string }[]
+    | null
   approver: { name: string | null } | { name: string | null }[] | null
 }
 
@@ -53,7 +57,8 @@ export const leaveRepo = {
     page: number
     page_size: number
   }): Promise<{ rows: LeaveRow[]; total: number }> {
-    let q = db().from('hr_leave_requests')
+    let q = db()
+      .from('hr_leave_requests')
       .select(
         `${COLS},
          user:users!hr_leave_requests_user_id_fkey(name, email),
@@ -71,7 +76,11 @@ export const leaveRepo = {
   },
 
   async findById(id: string): Promise<LeaveRequest | null> {
-    const { data } = await db().from('hr_leave_requests').select(COLS).eq('id', id).maybeSingle()
+    const { data } = await db()
+      .from('hr_leave_requests')
+      .select(COLS)
+      .eq('id', id)
+      .maybeSingle()
     return (data as LeaveRequest | null) ?? null
   },
 
@@ -83,13 +92,22 @@ export const leaveRepo = {
     days_count: number
     reason?: string | null
   }): Promise<LeaveRequest> {
-    const { data, error } = await db().from('hr_leave_requests').insert(row).select(COLS).single()
+    const { data, error } = await db()
+      .from('hr_leave_requests')
+      .insert(row)
+      .select(COLS)
+      .single()
     if (error || !data) throw new Error(error?.message ?? 'Insert leave request failed')
     return data as LeaveRequest
   },
 
   async patch(id: string, patch: Partial<LeaveRequest>): Promise<LeaveRequest> {
-    const { data, error } = await db().from('hr_leave_requests').update(patch).eq('id', id).select(COLS).single()
+    const { data, error } = await db()
+      .from('hr_leave_requests')
+      .update(patch)
+      .eq('id', id)
+      .select(COLS)
+      .single()
     if (error || !data) throw new Error(error?.message ?? 'Update leave failed')
     return data as LeaveRequest
   },

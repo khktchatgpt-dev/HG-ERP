@@ -39,10 +39,17 @@ export function TaskActions({ taskId, status, isAssignee, isAssigner }: Props) {
     }
   }
 
-  type Btn = { label: string; onClick: () => void; variant?: 'primary' | 'secondary' | 'danger' | 'success' }
+  type Btn = {
+    label: string
+    onClick: () => void
+    variant?: 'primary' | 'secondary' | 'danger' | 'success'
+  }
   const buttons: Btn[] = []
 
-  if (isAssignee && (status === 'todo' || status === 'rejected' || status === 'on_hold')) {
+  if (
+    isAssignee &&
+    (status === 'todo' || status === 'rejected' || status === 'on_hold')
+  ) {
     buttons.push({
       label: status === 'on_hold' ? 'Tiếp tục' : 'Bắt đầu',
       onClick: () => call('/status', { status: 'in_progress' }),
@@ -80,7 +87,10 @@ export function TaskActions({ taskId, status, isAssignee, isAssigner }: Props) {
       },
     })
   }
-  if (isAssigner && ['todo', 'in_progress', 'rejected', 'submitted', 'on_hold'].includes(status)) {
+  if (
+    isAssigner &&
+    ['todo', 'in_progress', 'rejected', 'submitted', 'on_hold'].includes(status)
+  ) {
     buttons.push({
       label: 'Huỷ',
       variant: 'danger',
@@ -101,7 +111,12 @@ export function TaskActions({ taskId, status, isAssignee, isAssigner }: Props) {
   return (
     <div className="flex flex-wrap gap-2">
       {buttons.map((b) => (
-        <Button key={b.label} variant={b.variant ?? 'secondary'} loading={busy} onClick={b.onClick}>
+        <Button
+          key={b.label}
+          variant={b.variant ?? 'secondary'}
+          loading={busy}
+          onClick={b.onClick}
+        >
           {b.label}
         </Button>
       ))}

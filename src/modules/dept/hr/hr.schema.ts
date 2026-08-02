@@ -1,7 +1,13 @@
 import { z } from 'zod'
 
 export const LEAVE_TYPES = [
-  'annual', 'sick', 'unpaid', 'marriage', 'funeral', 'maternity', 'other',
+  'annual',
+  'sick',
+  'unpaid',
+  'marriage',
+  'funeral',
+  'maternity',
+  'other',
 ] as const
 
 export const LEAVE_STATUSES = ['pending', 'approved', 'rejected', 'cancelled'] as const

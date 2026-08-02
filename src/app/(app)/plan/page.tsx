@@ -20,10 +20,7 @@ export default async function PlanPage() {
       title="Kế hoạch của tôi"
       subtitle="Tự lên lịch công việc cá nhân, không cần ai duyệt"
     >
-      <PlanBoard
-        initial={{ today, week, overdue, upcoming }}
-        currentUserId={user.id}
-      />
+      <PlanBoard initial={{ today, week, overdue, upcoming }} currentUserId={user.id} />
     </AppShell>
   )
 }

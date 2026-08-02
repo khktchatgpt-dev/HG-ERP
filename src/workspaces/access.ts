@@ -168,9 +168,7 @@ async function visibleProductionFamily(
     return new Set(['production', 'team', 'stat', 'prodplan'])
   }
   if (homeId === 'production') {
-    return (await isProductionStat(user))
-      ? new Set(['stat', 'team'])
-      : new Set(['team'])
+    return (await isProductionStat(user)) ? new Set(['stat', 'team']) : new Set(['team'])
   }
   if ((await isPlannerStaff(user)) || (await canManagePlan(user))) {
     return new Set(['prodplan', 'production'])
@@ -214,8 +212,7 @@ export async function listAccessibleWorkspaces(
         workspace: WORKSPACES[id],
         // Badge "Chỉ xem": không phải nhà + không có vai tác nghiệp chéo.
         // (permission per-request đã cache — không tốn thêm query.)
-        readonly:
-          user.role === 'employee' && !isHome && !(await hasCrossRole(user, id)),
+        readonly: user.role === 'employee' && !isHome && !(await hasCrossRole(user, id)),
       }
     }),
   )

@@ -40,7 +40,7 @@ export function ToolbarInput({
   return (
     <div className={`relative ${className}`}>
       {icon && (
-        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-zinc-400">
+        <span className="absolute top-1/2 left-2 -translate-y-1/2 text-xs text-zinc-400">
           {icon}
         </span>
       )}

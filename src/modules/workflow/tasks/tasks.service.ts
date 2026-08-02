@@ -188,10 +188,7 @@ export const tasksService = {
   },
 
   // --- Plan helpers ---
-  async myPlan(
-    user: User,
-    range: 'today' | 'week' | 'overdue' | 'upcoming' | 'all',
-  ) {
+  async myPlan(user: User, range: 'today' | 'week' | 'overdue' | 'upcoming' | 'all') {
     const today = new Date()
     const ymd = (d: Date) => d.toISOString().slice(0, 10)
     const startOfWeek = new Date(today)
@@ -419,8 +416,7 @@ export const tasksService = {
       action: 'commented',
       payload: { kind: input.kind },
     })
-    const recipient =
-      user.id === task.assignee_id ? task.assigner_id : task.assignee_id
+    const recipient = user.id === task.assignee_id ? task.assigner_id : task.assignee_id
     if (recipient !== user.id) {
       await emit({
         name: 'task.commented',
@@ -451,7 +447,11 @@ export const tasksService = {
   /** Quick progress update — anyone who can view + is assignee or assigner. */
   async setProgress(user: User, id: string, percent: number) {
     const task = await loadAndAuthorize(id, user, 'task.view')
-    if (task.assignee_id !== user.id && task.assigner_id !== user.id && user.role !== 'admin') {
+    if (
+      task.assignee_id !== user.id &&
+      task.assigner_id !== user.id &&
+      user.role !== 'admin'
+    ) {
       throw Forbidden('Only the assignee or assigner can update progress')
     }
     const next = await tasksRepo.patch(id, { progress_percent: percent })
@@ -465,10 +465,7 @@ export const tasksService = {
   },
 
   /** Weekly report for a department (or org-wide for admin). */
-  async weeklyReport(
-    user: User,
-    opts: { week_start?: string; department_id?: string },
-  ) {
+  async weeklyReport(user: User, opts: { week_start?: string; department_id?: string }) {
     const { db } = await import('@/server/db')
     let deptId = opts.department_id
     if (user.role === 'manager' || user.role === 'employee') {
@@ -490,32 +487,51 @@ export const tasksService = {
 
     const ymd = (d: Date) => d.toISOString().slice(0, 10)
 
-    let memberQuery = db().from('users')
+    let memberQuery = db()
+      .from('users')
       .select('id, name, email, title, department_id')
       .eq('is_active', true)
       .order('name')
     if (deptId) memberQuery = memberQuery.eq('department_id', deptId)
     const { data: membersRaw } = await memberQuery
     const members = (membersRaw ?? []) as Array<{
-      id: string; name: string | null; email: string; title: string | null; department_id: string | null
+      id: string
+      name: string | null
+      email: string
+      title: string | null
+      department_id: string | null
     }>
 
-    const f = (assigneeId: string, extra: Partial<Parameters<typeof tasksRepo.list>[0]>) => ({
-      assignee_id: assigneeId,
-      page: 1,
-      page_size: 1,           // we only need .total
-      ...extra,
-    } as Parameters<typeof tasksRepo.list>[0])
+    const f = (
+      assigneeId: string,
+      extra: Partial<Parameters<typeof tasksRepo.list>[0]>,
+    ) =>
+      ({
+        assignee_id: assigneeId,
+        page: 1,
+        page_size: 1, // we only need .total
+        ...extra,
+      }) as Parameters<typeof tasksRepo.list>[0]
 
     const nowIso = new Date().toISOString()
 
     const rows = await Promise.all(
       members.map(async (m) => {
         const [assignedWeek, completedWeek, inProgress, dueNextWeek] = await Promise.all([
-          tasksRepo.list(f(m.id, { created_from: start.toISOString(), created_to: end.toISOString() })),
-          tasksRepo.list(f(m.id, { status: 'done', completed_from: start.toISOString(), completed_to: end.toISOString() })),
+          tasksRepo.list(
+            f(m.id, { created_from: start.toISOString(), created_to: end.toISOString() }),
+          ),
+          tasksRepo.list(
+            f(m.id, {
+              status: 'done',
+              completed_from: start.toISOString(),
+              completed_to: end.toISOString(),
+            }),
+          ),
           tasksRepo.list(f(m.id, { status: 'in_progress' })),
-          tasksRepo.list(f(m.id, { planned_from: ymd(end), planned_to: ymd(nextWeekEnd) })),
+          tasksRepo.list(
+            f(m.id, { planned_from: ymd(end), planned_to: ymd(nextWeekEnd) }),
+          ),
         ])
         const { count: overdueCount } = await db()
           .from('tasks')

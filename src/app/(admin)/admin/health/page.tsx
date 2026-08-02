@@ -17,7 +17,11 @@ async function checkRls(): Promise<Check> {
 }
 
 async function checkTableCounts(): Promise<Check[]> {
-  const tables: Array<{ table: 'users' | 'departments' | 'tasks' | 'notifications' | 'user_audit_log' | 'files'; label: string }> = [
+  const tables: Array<{
+    table:
+      'users' | 'departments' | 'tasks' | 'notifications' | 'user_audit_log' | 'files'
+    label: string
+  }> = [
     { table: 'users', label: 'Users' },
     { table: 'departments', label: 'Departments' },
     { table: 'tasks', label: 'Tasks' },
@@ -31,7 +35,11 @@ async function checkTableCounts(): Promise<Check[]> {
         .from(t.table)
         .select('id', { count: 'exact', head: true })
       if (error) {
-        return { name: `Bảng ${t.label}`, status: 'fail' as CheckStatus, detail: error.message }
+        return {
+          name: `Bảng ${t.label}`,
+          status: 'fail' as CheckStatus,
+          detail: error.message,
+        }
       }
       return {
         name: `Bảng ${t.label}`,
@@ -58,7 +66,11 @@ async function checkStorageBuckets(): Promise<Check> {
       detail: `Thiếu bucket: ${missing.join(', ')}`,
     }
   }
-  return { name: 'Storage buckets', status: 'ok', detail: `Có đủ: ${expected.join(', ')}` }
+  return {
+    name: 'Storage buckets',
+    status: 'ok',
+    detail: `Có đủ: ${expected.join(', ')}`,
+  }
 }
 
 async function checkOrphanedFiles(): Promise<Check> {
@@ -152,54 +164,71 @@ export default async function AdminHealthPage() {
   return (
     <div className="flex flex-col gap-4">
       <PageHeader
-          breadcrumbs={[
-            { label: 'Quản trị', href: '/admin' },
-            { label: 'Sức khoẻ hệ thống' },
-          ]}
-          title="Sức khoẻ hệ thống"
-          description={`${allChecks.length} kiểm tra tự động. F5 để chạy lại.`}
-        />
+        breadcrumbs={[
+          { label: 'Quản trị', href: '/admin' },
+          { label: 'Sức khoẻ hệ thống' },
+        ]}
+        title="Sức khoẻ hệ thống"
+        description={`${allChecks.length} kiểm tra tự động. F5 để chạy lại.`}
+      />
 
-        <StatsBar
-          stats={[
-            { label: 'OK', value: summary.ok, tone: 'green' },
-            { label: 'Cảnh báo', value: summary.warn, tone: summary.warn ? 'amber' : 'gray' },
-            { label: 'Lỗi', value: summary.fail, tone: summary.fail ? 'red' : 'gray' },
-          ]}
-        />
+      <StatsBar
+        stats={[
+          { label: 'OK', value: summary.ok, tone: 'green' },
+          {
+            label: 'Cảnh báo',
+            value: summary.warn,
+            tone: summary.warn ? 'amber' : 'gray',
+          },
+          { label: 'Lỗi', value: summary.fail, tone: summary.fail ? 'red' : 'gray' },
+        ]}
+      />
 
-        <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs uppercase text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900/50">
-              <tr>
-                <th className="px-4 py-2.5">Kiểm tra</th>
-                <th className="px-4 py-2.5">Trạng thái</th>
-                <th className="px-4 py-2.5">Chi tiết</th>
+      <section className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+            <tr>
+              <th className="px-4 py-2.5">Kiểm tra</th>
+              <th className="px-4 py-2.5">Trạng thái</th>
+              <th className="px-4 py-2.5">Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            {allChecks.map((c) => (
+              <tr key={c.name}>
+                <td className="px-4 py-3 font-medium">{c.name}</td>
+                <td className="px-4 py-3">
+                  <StatusBadge status={c.status} />
+                </td>
+                <td className="px-4 py-3 text-sm text-zinc-500">{c.detail}</td>
               </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {allChecks.map((c) => (
-                <tr key={c.name}>
-                  <td className="px-4 py-3 font-medium">{c.name}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={c.status} />
-                  </td>
-                  <td className="px-4 py-3 text-sm text-zinc-500">{c.detail}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
+            ))}
+          </tbody>
+        </table>
+      </section>
     </div>
   )
 }
 
 function StatusBadge({ status }: { status: CheckStatus }) {
   const map = {
-    ok: { label: 'OK', cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300' },
-    warn: { label: 'CẢNH BÁO', cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300' },
-    fail: { label: 'LỖI', cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300' },
+    ok: {
+      label: 'OK',
+      cls: 'bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300',
+    },
+    warn: {
+      label: 'CẢNH BÁO',
+      cls: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
+    },
+    fail: {
+      label: 'LỖI',
+      cls: 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300',
+    },
   }
   const it = map[status]
-  return <span className={`rounded px-2 py-0.5 text-xs font-medium ${it.cls}`}>{it.label}</span>
+  return (
+    <span className={`rounded px-2 py-0.5 text-xs font-medium ${it.cls}`}>
+      {it.label}
+    </span>
+  )
 }

@@ -90,7 +90,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
     <ConfirmCtx.Provider value={{ confirm, prompt: promptFn }}>
       {children}
 
-      <Modal open={cState.open} onClose={() => closeConfirm(false)} title={cState.opts.title}>
+      <Modal
+        open={cState.open}
+        onClose={() => closeConfirm(false)}
+        title={cState.opts.title}
+      >
         {cState.opts.description && (
           <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
             {cState.opts.description}
@@ -110,7 +114,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         </div>
       </Modal>
 
-      <Modal open={pState.open} onClose={() => closePrompt(null)} title={pState.opts.title}>
+      <Modal
+        open={pState.open}
+        onClose={() => closePrompt(null)}
+        title={pState.opts.title}
+      >
         {pState.opts.description && (
           <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
             {pState.opts.description}

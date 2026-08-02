@@ -1,7 +1,13 @@
 import { z } from 'zod'
 
 export const INVOICE_DIRECTIONS = ['incoming', 'outgoing'] as const
-export const INVOICE_STATUSES = ['pending', 'sent', 'paid', 'overdue', 'cancelled'] as const
+export const INVOICE_STATUSES = [
+  'pending',
+  'sent',
+  'paid',
+  'overdue',
+  'cancelled',
+] as const
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
 

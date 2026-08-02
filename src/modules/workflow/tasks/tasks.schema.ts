@@ -14,10 +14,7 @@ export const TASK_STATUSES = [
 export const TASK_PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
 export const TASK_KINDS = ['assigned', 'self'] as const
 
-const tagsSchema = z
-  .array(z.string().trim().min(1).max(40))
-  .max(20)
-  .optional()
+const tagsSchema = z.array(z.string().trim().min(1).max(40)).max(20).optional()
 
 export const taskCreateSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -27,12 +24,20 @@ export const taskCreateSchema = z.object({
   priority: z.enum(TASK_PRIORITIES).optional(),
   due_date: z.string().datetime({ offset: true }).optional().nullable(),
   // NEW — planning fields
-  planned_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD').optional().nullable(),
+  planned_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD')
+    .optional()
+    .nullable(),
   category: z.string().trim().max(50).optional().nullable(),
   tags: tagsSchema,
   estimate_hours: z.number().min(0).max(9999.99).optional().nullable(),
   parent_id: uuidSchema.optional().nullable(),
-  period_month: z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').optional().nullable(),
+  period_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'YYYY-MM')
+    .optional()
+    .nullable(),
 })
 
 export const taskUpdateSchema = z.object({
@@ -42,13 +47,21 @@ export const taskUpdateSchema = z.object({
   department_id: uuidSchema.nullable().optional(),
   priority: z.enum(TASK_PRIORITIES).optional(),
   due_date: z.string().datetime({ offset: true }).nullable().optional(),
-  planned_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  planned_date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   category: z.string().trim().max(50).nullable().optional(),
   tags: tagsSchema,
   estimate_hours: z.number().min(0).max(9999.99).nullable().optional(),
   actual_hours: z.number().min(0).max(9999.99).nullable().optional(),
   progress_percent: z.number().int().min(0).max(100).optional(),
-  period_month: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
+  period_month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .nullable()
+    .optional(),
 })
 
 export const taskStatusSchema = z.object({
@@ -60,7 +73,10 @@ export const taskProgressSchema = z.object({
 })
 
 export const weeklyReportQuerySchema = z.object({
-  week_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  week_start: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   department_id: z.string().uuid().optional(),
 })
 
