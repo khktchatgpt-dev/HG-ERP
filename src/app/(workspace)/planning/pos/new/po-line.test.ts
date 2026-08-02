@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { poLineAmount } from '@/lib/po-line'
 import { deriveLine, type PoTemplate } from '@/lib/po-template'
-import { draftOf, lineAmount, lineFromPo, lineProblem, lineReady } from './po-line'
+import {
+  draftOf,
+  lineAmount,
+  lineFromPo,
+  lineProblem,
+  lineReady,
+  newLine,
+} from './po-line'
 import type { PoLineDto } from './po-line'
+import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
  * MỞ ĐƠN ĐỂ SỬA KHÔNG ĐƯỢC LÀM ĐỔI SỐ TIỀN.
@@ -132,5 +140,61 @@ describe('mở đơn để sửa — thành tiền phải y nguyên', () => {
     // NCC cho hàng khuyến mãi / hàng bù — giá 0 là số thật, không phải chưa nhập.
     const l = lineFromPo({ ...base, unit_price: 0 })
     expect(l.price).toBe(0)
+  })
+})
+
+/*
+ * DÒNG MỚI PHẢI MANG SẴN BAREM CỦA VẬT TƯ.
+ *
+ * `lineReady` CHẶN gửi khi mẫu metal_kg thiếu kg/đơn-vị. Trước đây newLine luôn
+ * để ô đó trống kể cả khi vật tư đã có barem trong danh mục, nên người soạn đơn
+ * bị chặn rồi gõ đại một số cho qua — số đó đi thẳng vào (SL × kg/đv) × giá/kg
+ * và lên bàn duyệt Giám đốc mà không ai đối chiếu.
+ */
+describe('newLine — tự điền barem, nhưng không đoán', () => {
+  const inox: PoMaterial = {
+    id: 'm-inox',
+    code: 'IN-0001',
+    name: 'Inox hộp 25x50x1',
+    unit: 'cây',
+    group_name: 'Inox',
+    spec: null,
+    po_template: 'metal_kg',
+    kg_per_m: 1.5542,
+    default_bar_length_m: 6,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    on_hand: 0,
+  }
+
+  it('metal_kg: kg/đơn-vị = kg/m × dài cây, không phải kg/m', () => {
+    // Đơn thật Kim Vĩnh Phú: 9,325 kg/cây. Chép thẳng kg/m là đơn hụt 6 lần.
+    const l = newLine('metal_kg', inox)
+    expect(l.weight_per_unit).toBeCloseTo(9.3252, 4)
+    expect(lineProblem('metal_kg', { ...l, qty: 20, price: 73_200 })).toBeNull()
+  })
+
+  it('chưa khai dài cây → để trống, KHÔNG mặc định 6m', () => {
+    const l = newLine('metal_kg', { ...inox, default_bar_length_m: null })
+    expect(l.weight_per_unit).toBe('')
+    expect(lineProblem('metal_kg', { ...l, qty: 20, price: 73_200 })).toBe(
+      'thiếu kg/đơn vị',
+    )
+  })
+
+  it('chưa có barem → để trống, nhập theo phiếu cân NCC', () => {
+    const l = newLine('metal_kg', { ...inox, kg_per_m: null })
+    expect(l.weight_per_unit).toBe('')
+  })
+
+  it('aluminium vẫn lấy thẳng kg/m + dài cây của vật tư', () => {
+    const l = newLine('aluminium', {
+      ...inox,
+      kg_per_m: 0.248,
+      default_bar_length_m: 5.65,
+    })
+    expect(l.weight_per_m).toBe(0.248)
+    expect(l.bar_length_m).toBe(5.65)
   })
 })

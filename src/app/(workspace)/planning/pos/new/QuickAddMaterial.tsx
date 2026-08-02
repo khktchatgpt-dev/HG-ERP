@@ -1,12 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/Modal'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import type { PoTemplate } from '@/lib/po-template'
+import { kgPerM, rhoFor } from '@/lib/metal-weight'
 
 export type CreatedMaterial = {
   id: string
@@ -80,12 +81,33 @@ export function QuickAddMaterial({
   // Suy TRỰC TIẾP từ price_unit, không còn nhãn quy đổi A/B/C.
   const dual = f.price_unit.trim() !== ''
   /*
-   * Mẫu nhôm tính tiền bằng (kg/m × dài cây × số cây) × giá/kg — thiếu kg/m thì
-   * `deriveLine` tụt về (số cây × giá/kg), sai cỡ 6 lần. Vật tư nhôm khai ở đây
-   * mà bỏ trống ô này là dòng đầu tiên dùng nó đã tính sai, nên hỏi luôn tại chỗ.
-   * Vẫn cho bỏ trống: còn đường tra qua ô chọn khuôn trên dòng đặt.
+   * Hai mẫu tính tiền theo KHỐI LƯỢNG nên bắt buộc có barem, và `lineReady` chặn
+   * gửi dòng khi thiếu:
+   *   aluminium → (kg/m × dài cây × số cây) × giá/kg
+   *   metal_kg  → (SL × kg/đơn-vị) × giá/kg,  kg/đơn-vị = kg/m × dài cây
+   * Bị chặn mà không có số thì người soạn đơn gõ đại cho qua — nên hỏi ngay lúc
+   * khai vật tư, và hỏi kèm số máy tính sẵn chứ không đưa ô trống.
    */
-  const alu = template === 'aluminium'
+  const needsWeight = template === 'aluminium' || template === 'metal_kg'
+
+  /*
+   * BAREM MÁY ĐỌC ĐƯỢC TỪ TÊN — hình học trong tên × tỷ trọng xưởng.
+   * Đây là chỗ thay "gõ tay không ai kiểm" bằng "máy tính, người xác nhận":
+   * "Sắt vuông 30x30x0.8" ra đúng 0,7445 kg/m như barem xưởng đang cân.
+   * Đọc không ra thì trả null kèm lý do, KHÔNG đoán — đoán độ dày là sai tiền.
+   */
+  const derived = useMemo(() => {
+    if (!needsWeight || f.name.trim().length < 4) return null
+    return kgPerM(f.name, rhoFor(f.name, f.group_name))
+  }, [needsWeight, f.name, f.group_name])
+
+  /** Số đang gõ lệch hẳn số máy đọc được → nhiều khả năng gõ nhầm dấu chấm. */
+  const kgTyped = Number(f.kg_per_m)
+  const kgOff =
+    derived?.kg && Number.isFinite(kgTyped) && kgTyped > 0
+      ? Math.abs(kgTyped - derived.kg) / derived.kg
+      : 0
+  const kgMismatch = kgOff > 0.05
 
   /*
    * Dò trùng tên ở SERVER. Bản cũ so với danh mục 1.000 vật tư nạp sẵn vào trang;
@@ -129,6 +151,9 @@ export function QuickAddMaterial({
 
   const invalid = !f.code.trim() || !f.name.trim() || !f.unit.trim()
 
+  /** Số kg/m sẽ ghi: ưu tiên số người gõ, bỏ trống thì lấy số máy đọc được. */
+  const kgToSave = f.kg_per_m.trim() ? Number(f.kg_per_m) || null : (derived?.kg ?? null)
+
   async function handle() {
     if (invalid || busy) return
     setBusy(true)
@@ -148,9 +173,11 @@ export function QuickAddMaterial({
               dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
             // Khai luôn mẫu đơn đang soạn — lần sau vật tư này tự về đúng mẫu.
             po_template: template,
-            kg_per_m: alu && f.kg_per_m.trim() ? Number(f.kg_per_m) || null : null,
+            // Bỏ trống mà máy đọc được thì lấy số máy — không để vật tư ra đời
+            // thiếu barem rồi đẩy việc gõ số sang người soạn đơn đang vội.
+            kg_per_m: needsWeight ? kgToSave : null,
             default_bar_length_m:
-              alu && f.default_bar_length_m.trim()
+              needsWeight && f.default_bar_length_m.trim()
                 ? Number(f.default_bar_length_m) || null
                 : null,
             min_stock: 0,
@@ -275,18 +302,22 @@ export function QuickAddMaterial({
                 />
               </label>
             </div>
-            {alu && (
+            {needsWeight && (
               <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:grid-cols-2 dark:bg-sky-950/30">
                 <label className="flex flex-col gap-1 text-sm">
-                  kg/m <span className="text-xs text-zinc-500">(mẫu nhôm)</span>
+                  kg/m
                   <input
                     value={f.kg_per_m}
                     onChange={set('kg_per_m')}
                     type="number"
                     min={0}
                     step="0.0001"
-                    placeholder="vd 0.248"
-                    className={`${cls} tabular-nums`}
+                    placeholder={
+                      derived?.kg ? `${derived.kg} (máy đọc được)` : 'vd 0.248'
+                    }
+                    className={`${cls} tabular-nums ${
+                      kgMismatch ? 'border-red-400 dark:border-red-600' : ''
+                    }`}
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-sm">
@@ -301,10 +332,47 @@ export function QuickAddMaterial({
                     className={`${cls} tabular-nums`}
                   />
                 </label>
+
+                {/* Máy đọc được barem từ quy cách trong tên → đưa số ra, không bắt gõ. */}
+                {derived?.kg != null && (
+                  <p className="flex flex-wrap items-center gap-2 text-xs sm:col-span-2">
+                    <span className="text-emerald-700 dark:text-emerald-400">
+                      Máy đọc được <b className="tabular-nums">{derived.kg}</b> kg/m từ
+                      quy cách trong tên.
+                    </span>
+                    {!f.kg_per_m.trim() ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setF((s) => ({ ...s, kg_per_m: String(derived.kg) }))
+                        }
+                        className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                      >
+                        Dùng số này
+                      </button>
+                    ) : null}
+                  </p>
+                )}
+                {derived?.kg == null && derived?.reason && (
+                  <p className="text-xs text-zinc-500 sm:col-span-2">
+                    Máy không tính được barem ({derived.reason}) — nhập theo phiếu cân của
+                    NCC hoặc sổ tay.
+                  </p>
+                )}
+                {kgMismatch && derived?.kg != null && (
+                  <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 sm:col-span-2 dark:bg-red-950/40 dark:text-red-400">
+                    ⚠ Số đang nhập lệch {Math.round(kgOff * 100)}% so với {derived.kg}{' '}
+                    kg/m máy tính từ quy cách. Kiểm lại dấu chấm thập phân — sai chỗ này
+                    là sai thẳng số tiền trên đơn.
+                  </p>
+                )}
+
                 <p className="text-xs text-zinc-500 sm:col-span-2">
-                  Đơn nhôm tính tiền bằng (kg/m × dài cây × số cây) × giá/kg. Bỏ trống thì
-                  dòng đặt tính theo số cây — sai số lớn; tra được kg/m qua ô chọn mã
-                  khuôn trên dòng.
+                  {template === 'aluminium'
+                    ? 'Đơn nhôm tính tiền bằng (kg/m × dài cây × số cây) × giá/kg.'
+                    : 'Đơn inox/sắt tính tiền bằng (SL × kg/đơn-vị) × giá/kg; kg/đơn-vị = kg/m × dài cây.'}{' '}
+                  Bỏ trống mà máy đọc được thì lấy số máy. Nhôm định hình theo khuôn thì
+                  tra mã khuôn trên dòng đặt — tên không suy ra được mặt cắt.
                 </p>
               </div>
             )}

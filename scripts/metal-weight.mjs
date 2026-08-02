@@ -1,128 +1,30 @@
-// TÍNH BAREM kg/m CHO SẮT & INOX từ quy cách nằm trong TÊN vật tư.
+// TÍNH BAREM kg/m CHO SẮT & INOX từ quy cách nằm trong TÊN vật tư — chạy để lấp
+// `kg_per_m` cho DANH MỤC CŨ. Vật tư khai mới thì app tự tính ngay trên form,
+// không phải chạy lại script này.
 //
 //   node scripts/metal-weight.mjs            # dry-run, in bảng đối chiếu
 //   node scripts/metal-weight.mjs --apply    # ghi kg_per_m
 //
-// Vì sao cần: mẫu đơn `metal_kg` tính tiền = (SL × kg/đơn-vị) × giá/kg. Kho có
-// 174 mã sắt và 58 mã inox nhưng gần như không mã nào có `kg_per_m`, nên mỗi
-// dòng đơn phải tra sổ tay rồi gõ lại.
+// CÔNG THỨC KHÔNG NẰM Ở ĐÂY NỮA. Bản gốc duy nhất là `src/lib/metal-weight.ts`
+// (có test đối chiếu barem xưởng); file này chỉ lo phần đọc/ghi Supabase. Trước
+// đây script giữ một bản chép riêng — hai bản lệch nhau nghĩa là barem tính trên
+// đơn khác barem đã backfill vào danh mục, mà lệch kiểu đó thì không ai thấy.
 //
-// KHÔNG cần nguồn ngoài: khối lượng suy được từ hình học + tỷ trọng. Công thức và
-// tỷ trọng lấy đúng của xưởng — sheet `WeightList` trong
-// `Data/QC BÀN 150 NAN POLYWOOD.xlsx`: sắt 7850, inox 7930, nhôm 2750 kg/m³.
-//
-//   ống/hộp/vuông rỗng : (chu vi trung bình × dày) × tỷ trọng
-//   la (thanh đặc)      : (rộng × dày) × tỷ trọng
-//   tròn đặc            : (π r²) × tỷ trọng
-//   tròn rỗng           : π × (R² − r²) × tỷ trọng
-//
-// CHỈ TÍNH KHI ĐỌC ĐƯỢC ĐỦ SỐ. Tên thiếu độ dày ("Sắt hộp 20x40") thì bỏ qua —
-// đoán độ dày là ra sai số tiền, mà đây là số đi thẳng vào đơn đặt hàng.
+// Node 24 chạy thẳng .ts nhờ type-stripping nên import được, không cần build.
 
 import { client } from './products-lib.mjs'
+import { kgPerM, isSheetLike, RHO } from '../src/lib/metal-weight.ts'
 
 const APPLY = process.argv.includes('--apply')
 
-/**
- * kg/m³ dùng để tính.
- *
- * SẮT = 7968 chứ KHÔNG phải 7850 như ô "tỷ trọng" ghi trong sheet WeightList:
- * suy ngược từ chính BAREM xưởng đang dùng trong file QC thì ra 7968, khớp tuyệt
- * đối cả ba mẫu thử —
- *   vuông 30×30×0.8 → 93,44 mm² → 0,7445 kg/m  (file ghi 0,7445)
- *   vuông 25×25×0.8 → 77,44 mm² → 0,6170       (file ghi 0,6170)
- *   la 40×1         → 40,00 mm² → 0,3187       (file ghi 0,3187)
- * Lấy 7850 thì mọi dòng thấp hơn xưởng 1,5% — đặt hàng theo kg là thiếu hàng.
- */
-const RHO = { sat: 7968, inox: 7930, nhom: 2750 }
-
+/** Bỏ dấu — chỉ để nhận diện dòng khi in báo cáo bên dưới. */
 const nod = (s) =>
   String(s ?? '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/đ/gi, 'd')
     .toLowerCase()
-    // DẤU PHẨY THẬP PHÂN trước đã: "50x100x1,8li" mà đổi phẩy thành khoảng trắng
-    // thì độ dày đọc ra 8 thay vì 1,8 — sai gần 7 lần khối lượng.
-    .replace(/(\d),(\d)/g, '$1.$2')
-    .replace(/[,;]/g, ' ')
-    .replace(/\s+/g, ' ')
     .trim()
-
-/**
- * Hàng TẤM / CUỘN / LƯỚI bán theo tấm hoặc theo kg, KHÔNG theo mét dài — barem
- * kg/m vô nghĩa. Tên còn hay mang mã mác thép ("Tole 3li - Inox 304") mà 304 bị
- * đọc nhầm thành chiều rộng 304mm → 7,3 kg/m cho một tấm tole.
- */
-const isSheet = (s) => /\btam\b|\bton\b|\btole\b|\bcuon\b|\bluoi\b|kho \d/.test(s)
-
-const num = (v) => {
-  const n = parseFloat(String(v).replace(',', '.'))
-  return Number.isFinite(n) ? n : null
-}
-
-/**
- * Đọc quy cách từ tên → kg/m.
- * Trả `null` khi không đủ dữ kiện; `reason` để in ra biết vì sao bỏ qua.
- */
-export function kgPerM(name, rho) {
-  const s = nod(name)
-    .replace(/[x×*]/g, 'x')
-    .replace(/\bphi\b|ø|\bf(?=\d)/g, 'phi')
-  // Bỏ phần đuôi mô tả (màu, mạ kẽm, tên hàng) để số không lẫn.
-  const nums = (s.match(/\d+(?:\.\d+)?/g) ?? []).map(Number)
-
-  if (isSheet(s)) return { kg: null, reason: 'hàng tấm/cuộn — không tính theo mét' }
-
-  const isTron = /\bphi\b|\btron\b|\bong\b/.test(s) && !/hop|vuong/.test(s)
-  const isLa = /\bla\b/.test(s)
-  const isHopVuong = /\bhop\b|\bvuong\b/.test(s)
-
-  // Độ dày viết kiểu "dày 1.2", "1.2li", "x1.2" ở cuối, hoặc "T1.2".
-  const dayHit =
-    s.match(/day\s*(\d+(?:\.\d+)?)/) ??
-    s.match(/(\d+(?:\.\d+)?)\s*(?:li|ly)\b/) ??
-    s.match(/\bt\s*(\d+(?:\.\d+)?)\b/)
-  const day = dayHit ? num(dayHit[1]) : null
-
-  const mm2ToKgM = (mm2) => +((mm2 / 1e6) * rho).toFixed(4)
-
-  if (isHopVuong) {
-    // "hộp 20x40x1" · "vuông 25x25x0.8" · "hộp 20x40 dày 1li" · "vuông 60x1.2li"
-    const dims = nums.filter((n) => n >= 5 && n <= 400)
-    // "Vuông 60x1.2" = 60×60 dày 1.2 — vuông chỉ ghi MỘT cạnh là chuyện thường.
-    if (dims.length === 1 && /vuong/.test(s)) dims.push(dims[0])
-    if (dims.length < 2) return { kg: null, reason: 'thiếu tiết diện' }
-    const [a, b] = dims
-    // Độ dày = số nhỏ (<5mm) còn lại sau khi lấy hai cạnh — "Hộp 25x50x1" không
-    // ghi "li" nhưng số 1 vẫn là độ dày, bỏ qua thì mất gần nửa danh mục.
-    const rest = nums.filter((n) => n > 0 && n < 5)
-    const t = day ?? rest[rest.length - 1] ?? null
-    if (!t) return { kg: null, reason: 'thiếu độ dày' }
-    // Chu vi trung bình của ống chữ nhật rỗng: 2(a+b) − 4t
-    return { kg: mm2ToKgM((2 * (a + b) - 4 * t) * t) }
-  }
-  if (isTron) {
-    const d = nums.find((n) => n >= 4 && n <= 300)
-    if (!d) return { kg: null, reason: 'thiếu đường kính' }
-    if (/dac\b/.test(s)) return { kg: mm2ToKgM(Math.PI * (d / 2) ** 2) }
-    // "Phi 25x1" — số nhỏ đi sau đường kính là độ dày dù không ghi "li".
-    const t = day ?? nums.filter((n) => n > 0 && n < 5).pop() ?? null
-    if (!t) return { kg: null, reason: 'thiếu độ dày' }
-    const r = d / 2
-    return { kg: mm2ToKgM(Math.PI * (r ** 2 - (r - t) ** 2)) }
-  }
-  if (isLa) {
-    // "la 40x3" · "sắt la 20x2li" · "tole 1.2x131"
-    const dims = nums.filter((n) => n > 0 && n <= 400)
-    if (dims.length < 2) return { kg: null, reason: 'thiếu tiết diện' }
-    const t = day ?? Math.min(...dims.slice(0, 2))
-    const w = Math.max(...dims.slice(0, 2))
-    if (!t || !w || t >= w) return { kg: null, reason: 'không rõ dày/rộng' }
-    return { kg: mm2ToKgM(w * t) }
-  }
-  return { kg: null, reason: 'không nhận ra hình dạng' }
-}
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/'))) {
   const sb = await client(import.meta.url)
@@ -176,7 +78,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '
         continue
       }
       if (!kg) {
-        if (isSheet(nod(m.name))) wrong.push({ ...m, kg: null, cu, reason })
+        if (isSheetLike(m.name)) wrong.push({ ...m, kg: null, cu, reason })
       } else if (Math.abs(cu - kg) / Math.max(cu, kg) > 0.02) {
         wrong.push({ ...m, kg, cu, reason: 'số cũ lệch >2%' })
       }

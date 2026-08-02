@@ -1,5 +1,6 @@
 import { poLineAmount } from '@/lib/po-line'
 import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
+import { kgPerOrderUnit } from '@/lib/metal-weight'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -144,7 +145,18 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     bar_surplus: '',
     dimension_text: m.spec ?? '',
     finish: '',
-    weight_per_unit: '',
+    /*
+     * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt. Trước đây LUÔN để trống, kể cả khi vật tư
+     * đã có barem trong danh mục — mà `lineReady` lại CHẶN gửi khi ô này trống,
+     * nên người soạn đơn bị kẹt và gõ đại một số cho qua. Số gõ đại đi thẳng vào
+     * (SL × kg/đv) × giá/kg rồi lên bàn duyệt của Giám đốc, không ai đối chiếu.
+     *
+     * Không chép thẳng `kg_per_m`: barem theo MÉT còn đơn đặt theo CÂY — inox
+     * Kim Vĩnh Phú là 9,325 kg/cây, tức ~1,55 kg/m. Điền nhầm là đơn hụt 6 lần.
+     * `kgPerOrderUnit` chỉ quy đổi khi biết chắc ĐVT và dài cây, còn lại trả null
+     * → ô vẫn trống, nhân viên nhập theo phiếu cân NCC như cũ.
+     */
+    weight_per_unit: kgPerOrderUnit(m.kg_per_m, m.unit, m.default_bar_length_m) ?? '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
