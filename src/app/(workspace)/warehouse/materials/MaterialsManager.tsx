@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useMemo, useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -15,6 +15,7 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { PAGE_SIZE } from './constants'
 
 type Material = {
   id: string
@@ -59,11 +60,21 @@ export function MaterialsManager({
   materials,
   suppliers,
   canEdit,
+  counts,
+  page,
+  filters,
+  groups,
   scope = 'warehouse',
 }: {
   materials: Material[]
   suppliers: SupplierOption[]
   canEdit: boolean
+  /** Đếm ở DB theo bộ lọc — KHÔNG phải số dòng đang hiện trên trang. */
+  counts: { total: number; active: number; noShelf: number }
+  page: number
+  filters: { q: string; group: string }
+  /** 14 nhóm chuẩn từ catalog_items, không suy từ trang đang xem. */
+  groups: string[]
   /**
    * Chia chủ quyền danh mục (1 danh mục chung): 'warehouse' = Kho sửa đủ trường;
    * 'purchasing' = view cho Cung ứng (/planning/materials) — trường tồn trữ
@@ -79,39 +90,47 @@ export function MaterialsManager({
   const [openCreate, setOpenCreate] = useState(false)
   const [editing, setEditing] = useState<Material | null>(null)
 
-  const [q, setQ] = useState('')
-  const [groupFilter, setGroupFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const sp = useSearchParams()
+  const [navigating, startTransition] = useTransition()
+  const [q, setQ] = useState(filters.q)
 
-  const groups = useMemo(() => {
-    const set = new Set<string>()
-    for (const m of materials) if (m.group_name) set.add(m.group_name)
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
-  }, [materials])
-
-  const filtered = useMemo(() => {
-    const ql = q.trim().toLowerCase()
-    return materials.filter((m) => {
-      if (groupFilter !== 'all' && (m.group_name ?? '') !== groupFilter) return false
-      if (statusFilter === 'active' && !m.is_active) return false
-      if (statusFilter === 'inactive' && m.is_active) return false
-      if (ql) {
-        const hay = `${m.code} ${m.name} ${m.group_name ?? ''}`.toLowerCase()
-        if (!hay.includes(ql)) return false
+  /*
+   * BỘ LỌC ĐẨY XUỐNG URL để SERVER lọc lại.
+   *
+   * Bản cũ lọc trong mảng đã nạp — mà trang chỉ nạp 1.000 dòng đầu trong khi
+   * danh mục có 12.991. Gõ "Thép hộp mạ kẽm" ra "Không khớp bộ lọc" dù mã có
+   * thật, chỉ vì nó nằm ngoài 1.000 mã đầu theo thứ tự chữ cái.
+   */
+  const pushFilter = useCallback(
+    (patch: Record<string, string>) => {
+      const next = new URLSearchParams(sp.toString())
+      for (const [k, v] of Object.entries(patch)) {
+        if (!v) next.delete(k)
+        else next.set(k, v)
       }
-      return true
-    })
-  }, [materials, q, groupFilter, statusFilter])
+      if (!('page' in patch)) next.delete('page') // đổi lọc → về trang 1
+      const qs = next.toString()
+      // replace: lọc không phải "đi tới trang khác"; push vào lịch sử chỉ khiến
+      // nút Back phải bấm hàng chục lần mới thoát khỏi danh sách.
+      startTransition(() => router.replace(qs ? `?${qs}` : '?'))
+    },
+    [router, sp],
+  )
 
-  const stats = useMemo(() => {
-    let active = 0
-    let noShelf = 0
-    for (const m of materials) {
-      if (m.is_active) active++
-      if (!m.shelf_location) noShelf++
-    }
-    return { active, noShelf }
-  }, [materials])
+  /** Trạng thái lọc ở client — server chưa nhận tham số này, giữ trong trang. */
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const filtered = useMemo(
+    () =>
+      materials.filter((m) =>
+        statusFilter === 'all'
+          ? true
+          : statusFilter === 'active'
+            ? m.is_active
+            : !m.is_active,
+      ),
+    [materials, statusFilter],
+  )
+  const stats = { active: counts.active, noShelf: counts.noShelf }
 
   async function send(
     url: string,
@@ -165,7 +184,14 @@ export function MaterialsManager({
       },
       { key: 'note', header: 'Ghi chú', get: (m) => m.note ?? '' },
     ])
-    toast.success(`Đã xuất ${filtered.length} dòng CSV`)
+    // Chỉ TRANG ĐANG XEM. Xuất cả 13k dòng là kéo về client một lượt — nếu
+    // cần cả danh mục thì làm export ở server, đừng làm im lặng ở đây.
+    toast.success(
+      `Đã xuất ${filtered.length} dòng CSV`,
+      counts.total > filtered.length
+        ? `Chỉ trang đang xem — bộ lọc đang khớp ${counts.total.toLocaleString('vi-VN')} dòng`
+        : undefined,
+    )
   }
 
   const columns: Column<Material>[] = [
@@ -284,7 +310,7 @@ export function MaterialsManager({
   ]
 
   const groupOptions = [
-    { value: 'all', label: 'Mọi nhóm' },
+    { value: '', label: 'Mọi nhóm' },
     ...groups.map((g) => ({ value: g, label: g })),
   ]
   const statusOptions = [
@@ -313,8 +339,8 @@ export function MaterialsManager({
         title={purchasing ? 'Vật tư & giá mua' : 'Danh mục vật tư'}
         description={
           purchasing
-            ? `${filtered.length} / ${materials.length} vật tư (danh mục dùng chung với Kho). Cung ứng sửa trường mua hàng: NCC mặc định, VAT, loại quy đổi giá… Tồn tối thiểu/kệ/barcode do Kho quản.`
-            : `${filtered.length} / ${materials.length} vật tư. Mã, ĐVT, nhóm, tồn tối thiểu, vị trí kệ.`
+            ? `${counts.total.toLocaleString('vi-VN')} vật tư khớp lọc (danh mục dùng chung với Kho). Cung ứng sửa trường mua hàng: NCC mặc định, VAT, loại quy đổi giá… Tồn tối thiểu/kệ/barcode do Kho quản.`
+            : `${counts.total.toLocaleString('vi-VN')} vật tư khớp lọc. Mã, ĐVT, nhóm, tồn tối thiểu, vị trí kệ.`
         }
         actions={
           <>
@@ -332,7 +358,7 @@ export function MaterialsManager({
 
       <StatsBar
         stats={[
-          { label: 'Tổng VT', value: materials.length, tone: 'default' },
+          { label: 'Khớp lọc', value: counts.total, tone: 'default' },
           { label: 'Đang dùng', value: stats.active, tone: 'green' },
           { label: 'Nhóm', value: groups.length, tone: 'blue' },
           {
@@ -347,16 +373,19 @@ export function MaterialsManager({
         <Toolbar
           left={
             <>
+              {/* Enter mới tìm, không tìm theo từng phím: mỗi lượt là một vòng
+                  server + đếm lại trên 13k dòng. */}
               <ToolbarInput
                 value={q}
                 onChange={setQ}
-                placeholder="Tìm theo mã, tên, nhóm…"
+                onEnter={() => pushFilter({ q })}
+                placeholder="Tìm mã, tên, mã vạch… (Enter)"
                 icon="⌕"
                 className="w-64"
               />
               <ToolbarSelect
-                value={groupFilter}
-                onChange={setGroupFilter}
+                value={filters.group}
+                onChange={(v) => pushFilter({ group: v })}
                 options={groupOptions}
               />
               <ToolbarSelect
@@ -364,12 +393,12 @@ export function MaterialsManager({
                 onChange={(v) => setStatusFilter(v)}
                 options={statusOptions}
               />
-              {(q || groupFilter !== 'all' || statusFilter !== 'all') && (
+              {(filters.q || filters.group || statusFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setQ('')
-                    setGroupFilter('all')
                     setStatusFilter('all')
+                    pushFilter({ q: '', group: '' })
                   }}
                   className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
                 >
@@ -415,6 +444,40 @@ export function MaterialsManager({
             />
           }
         />
+
+        {/* Phân trang — trang này từng nạp cứng 1.000 dòng đầu và im lặng cắt
+            phần còn lại; giờ nói rõ đang ở đâu trong bao nhiêu. */}
+        {counts.total > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+            <span>
+              {((page - 1) * PAGE_SIZE + 1).toLocaleString('vi-VN')}–
+              {Math.min(page * PAGE_SIZE, counts.total).toLocaleString('vi-VN')} trên{' '}
+              <b className="text-zinc-700 dark:text-zinc-200">
+                {counts.total.toLocaleString('vi-VN')}
+              </b>
+            </span>
+            <span className="flex items-center gap-2">
+              {navigating && <Spinner size={12} />}
+              <button
+                disabled={page <= 1 || navigating}
+                onClick={() => pushFilter({ page: String(page - 1) })}
+                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+              >
+                ← Trước
+              </button>
+              <span>
+                trang {page} / {Math.max(1, Math.ceil(counts.total / PAGE_SIZE))}
+              </span>
+              <button
+                disabled={page * PAGE_SIZE >= counts.total || navigating}
+                onClick={() => pushFilter({ page: String(page + 1) })}
+                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+              >
+                Sau →
+              </button>
+            </span>
+          </div>
+        )}
       </div>
 
       <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Thêm vật tư">

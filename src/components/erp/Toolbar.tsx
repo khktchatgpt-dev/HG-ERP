@@ -30,12 +30,19 @@ export function ToolbarInput({
   placeholder,
   icon,
   className = '',
+  onEnter,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   icon?: string
   className?: string
+  /**
+   * Có onEnter = tìm ở SERVER, chỉ chạy khi bấm Enter.
+   * Danh sách lớn (13k vật tư) mà tìm theo từng phím là mỗi ký tự một vòng
+   * server + một lượt đếm lại; gõ "thép hộp" là 8 vòng cho một lần tìm.
+   */
+  onEnter?: () => void
 }) {
   return (
     <div className={`relative ${className}`}>
@@ -47,6 +54,12 @@ export function ToolbarInput({
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && onEnter) {
+            e.preventDefault()
+            onEnter()
+          }
+        }}
         placeholder={placeholder}
         className={`w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 ${
           icon ? 'pl-7' : ''

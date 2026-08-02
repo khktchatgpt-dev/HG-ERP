@@ -96,6 +96,34 @@ export const materialsRepo = {
     }
   },
 
+  /**
+   * Đếm theo BỘ LỌC ĐANG XEM, không đếm cả danh mục.
+   *
+   * StatsBar trước đây cộng từ mảng đã nạp về client. Trang nạp 1.000 dòng đầu
+   * trong khi danh mục có 12.991 nên mọi con số đều là của 1.000 dòng đó, mà
+   * nhãn thì không nói gì — đọc xong tưởng cả kho chỉ có ngần ấy.
+   */
+  async counts(filter: {
+    q?: string
+    group_name?: string
+  }): Promise<{ total: number; active: number; noShelf: number }> {
+    const base = () => {
+      let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
+      if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      if (filter.q)
+        q = q.or(
+          `code.ilike.%${filter.q}%,name.ilike.%${filter.q}%,barcode.ilike.%${filter.q}%`,
+        )
+      return q
+    }
+    const [all, act, shelf] = await Promise.all([
+      base(),
+      base().eq('is_active', true),
+      base().is('shelf_location', null),
+    ])
+    return { total: all.count ?? 0, active: act.count ?? 0, noShelf: shelf.count ?? 0 }
+  },
+
   async findById(id: string): Promise<Material | null> {
     const { data } = await db()
       .from('warehouse_materials')

@@ -122,6 +122,12 @@ export const materialsService = {
     })
   },
 
+  /** Số liệu StatsBar — đếm ở DB theo bộ lọc, không cộng từ trang đang xem. */
+  async counts(user: User, opts: { q?: string; group_name?: string }) {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    return materialsRepo.counts(opts)
+  },
+
   async create(user: User, input: CreateInput): Promise<Material> {
     // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
     // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).
