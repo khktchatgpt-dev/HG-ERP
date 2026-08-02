@@ -86,4 +86,79 @@ describe('materialsService.update — chia chủ quyền theo nhóm trường (v
       materialsService.update(cungUng, 'm1', { name: 'y' }),
     ).rejects.toMatchObject({ status: 403 })
   })
+
+  it('Cung ứng khai được mẫu đơn + kg/m — quyết định bộ cột và cách tính tiền', async () => {
+    vi.mocked(canAction).mockResolvedValue(false)
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+
+    await materialsService.update(cungUng, 'm1', {
+      po_template: 'aluminium',
+      kg_per_m: 0.248,
+      default_bar_length_m: 5.65,
+    })
+    expect(materialsRepo.patch).toHaveBeenCalled()
+  })
+})
+
+/*
+ * HỒI QUY: create() từng NUỐT po_template / kg_per_m / default_bar_length_m.
+ * Schema nhận, form "Vật tư mới" trong đơn đặt vẫn gửi po_template lên, nhưng
+ * CreateInput không khai nên chúng rơi ở service và DB nhận null — vật tư vừa
+ * khai xong đã mang nhãn "chưa khai mẫu", chỉ lộ ra ở lần đặt sau.
+ */
+describe('materialsService.create — không được rơi trường nào xuống repo', () => {
+  beforeEach(() => {
+    vi.mocked(assertAction).mockResolvedValue(undefined)
+    vi.mocked(materialsRepo.insert).mockResolvedValue(MAT as never)
+  })
+
+  it('chuyển nguyên mẫu đơn + thông số nhôm xuống repo', async () => {
+    await materialsService.create(cungUng, {
+      code: 'NH-999',
+      name: 'La nhôm 22x2',
+      unit: 'cây',
+      min_stock: 0,
+      po_template: 'aluminium',
+      kg_per_m: 0.119,
+      default_bar_length_m: 6,
+    })
+
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        po_template: 'aluminium',
+        kg_per_m: 0.119,
+        default_bar_length_m: 6,
+      }),
+    )
+  })
+
+  it('không khai thì về null, không phải undefined (cột vẫn được ghi rõ)', async () => {
+    await materialsService.create(cungUng, {
+      code: 'NK-01',
+      name: 'Vít 4x15',
+      unit: 'con',
+      min_stock: 0,
+    })
+
+    const row = vi.mocked(materialsRepo.insert).mock.calls[0][0]
+    expect(row).toMatchObject({
+      po_template: null,
+      kg_per_m: null,
+      default_bar_length_m: null,
+    })
+  })
+
+  it('trùng mã → 409, không insert', async () => {
+    vi.mocked(materialsRepo.findByCode).mockResolvedValue(MAT as never)
+
+    await expect(
+      materialsService.create(cungUng, {
+        code: 'VT-01',
+        name: 'Ống sắt',
+        unit: 'cây',
+        min_stock: 0,
+      }),
+    ).rejects.toMatchObject({ status: 409 })
+    expect(materialsRepo.insert).not.toHaveBeenCalled()
+  })
 })

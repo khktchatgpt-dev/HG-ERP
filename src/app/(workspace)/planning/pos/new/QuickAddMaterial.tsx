@@ -14,8 +14,18 @@ export type CreatedMaterial = {
   name: string
   unit: string
   spec: string | null
+  group_name: string | null
   price_unit: string | null
   unit2_factor: number | null
+  /*
+   * Ba trường này ĐỌC LẠI TỪ SERVER chứ không suy ở client. Trước đây form gọi
+   * xong là tự gán `po_template = mẫu đang soạn` cho dòng, trong khi service
+   * nuốt mất trường đó nên DB lưu null — màn hình một đằng, danh mục một nẻo,
+   * và chỉ lộ ra ở lần đặt sau. Lấy đúng số server trả về thì lệch là thấy ngay.
+   */
+  po_template: PoTemplate | null
+  kg_per_m: number | null
+  default_bar_length_m: number | null
 }
 
 const cls =
@@ -29,6 +39,8 @@ const EMPTY = {
   group_name: '',
   price_unit: '',
   unit2_factor: '',
+  kg_per_m: '',
+  default_bar_length_m: '',
 }
 
 /**
@@ -67,6 +79,13 @@ export function QuickAddMaterial({
   // Vật tư có "đơn vị tính giá" (kg/m²…) → dòng đặt sẽ có ô SL-tính-giá nhập tay.
   // Suy TRỰC TIẾP từ price_unit, không còn nhãn quy đổi A/B/C.
   const dual = f.price_unit.trim() !== ''
+  /*
+   * Mẫu nhôm tính tiền bằng (kg/m × dài cây × số cây) × giá/kg — thiếu kg/m thì
+   * `deriveLine` tụt về (số cây × giá/kg), sai cỡ 6 lần. Vật tư nhôm khai ở đây
+   * mà bỏ trống ô này là dòng đầu tiên dùng nó đã tính sai, nên hỏi luôn tại chỗ.
+   * Vẫn cho bỏ trống: còn đường tra qua ô chọn khuôn trên dòng đặt.
+   */
+  const alu = template === 'aluminium'
 
   /*
    * Dò trùng tên ở SERVER. Bản cũ so với danh mục 1.000 vật tư nạp sẵn vào trang;
@@ -129,6 +148,11 @@ export function QuickAddMaterial({
               dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
             // Khai luôn mẫu đơn đang soạn — lần sau vật tư này tự về đúng mẫu.
             po_template: template,
+            kg_per_m: alu && f.kg_per_m.trim() ? Number(f.kg_per_m) || null : null,
+            default_bar_length_m:
+              alu && f.default_bar_length_m.trim()
+                ? Number(f.default_bar_length_m) || null
+                : null,
             min_stock: 0,
           },
         },
@@ -251,6 +275,39 @@ export function QuickAddMaterial({
                 />
               </label>
             </div>
+            {alu && (
+              <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:grid-cols-2 dark:bg-sky-950/30">
+                <label className="flex flex-col gap-1 text-sm">
+                  kg/m <span className="text-xs text-zinc-500">(mẫu nhôm)</span>
+                  <input
+                    value={f.kg_per_m}
+                    onChange={set('kg_per_m')}
+                    type="number"
+                    min={0}
+                    step="0.0001"
+                    placeholder="vd 0.248"
+                    className={`${cls} tabular-nums`}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm">
+                  Dài cây mặc định (m)
+                  <input
+                    value={f.default_bar_length_m}
+                    onChange={set('default_bar_length_m')}
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="vd 5.65"
+                    className={`${cls} tabular-nums`}
+                  />
+                </label>
+                <p className="text-xs text-zinc-500 sm:col-span-2">
+                  Đơn nhôm tính tiền bằng (kg/m × dài cây × số cây) × giá/kg. Bỏ trống thì
+                  dòng đặt tính theo số cây — sai số lớn; tra được kg/m qua ô chọn mã
+                  khuôn trên dòng.
+                </p>
+              </div>
+            )}
             <p className="text-xs text-zinc-500">
               Nhập &quot;đơn vị tính giá&quot; khi NCC báo giá theo đơn vị khác ĐVT đặt
               (vd đặt cây, giá theo kg) — dòng đặt sẽ có ô SL-tính-giá nhập tay. Hệ số chỉ

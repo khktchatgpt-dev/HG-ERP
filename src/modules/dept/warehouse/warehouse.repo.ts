@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 
 export type Material = {
   id: string
@@ -24,6 +25,11 @@ export type Material = {
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null
+  /** Mẫu đơn đặt hàng mặc định (0106) — quyết định bộ cột khi soạn đơn cho vật tư này. */
+  po_template: PoTemplate | null
+  /** Nhôm (0109): kg/m và dài cây mặc định — mẫu đơn nhôm nhân ra tổng kg. */
+  kg_per_m: number | null
+  default_bar_length_m: number | null
   note: string | null
   is_active: boolean
   created_at: string
@@ -31,7 +37,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, default_bar_length_m, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -54,6 +60,12 @@ function toMaterial(row: Record<string, unknown>): Material {
     vat_rate: row.vat_rate == null ? null : Number(row.vat_rate),
     last_purchase_price:
       row.last_purchase_price == null ? null : Number(row.last_purchase_price),
+    // Cột DB là text tự do — lọc qua isPoTemplate để giá trị lạ về null thay vì
+    // chảy xuống form soạn đơn rồi hỏng bộ cột.
+    po_template: isPoTemplate(row.po_template) ? row.po_template : null,
+    kg_per_m: row.kg_per_m == null ? null : Number(row.kg_per_m),
+    default_bar_length_m:
+      row.default_bar_length_m == null ? null : Number(row.default_bar_length_m),
   }
 }
 

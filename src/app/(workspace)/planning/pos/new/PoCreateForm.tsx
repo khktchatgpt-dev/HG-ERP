@@ -459,17 +459,19 @@ export function PoCreateForm({
             template={template}
             onCreated={(m) =>
               // NCC chào loại mới ngay lúc đặt — khai vật tư tại chỗ rồi vào thẳng
-              // dòng, khỏi chạy sang danh mục Kho khai trước.
+              // dòng, khỏi chạy sang danh mục Kho khai trước. Lấy ĐÚNG số server
+              // vừa ghi (mẫu đơn, kg/m…) chứ không suy lại ở client: suy lại thì
+              // dòng vẫn đẹp kể cả khi server ghi hụt, và lệch chỉ lộ ở lần sau.
               addMaterial({
                 id: m.id,
                 code: m.code,
                 name: m.name,
                 unit: m.unit,
-                group_name: null,
+                group_name: m.group_name,
                 spec: m.spec,
-                po_template: template,
-                kg_per_m: null,
-                default_bar_length_m: null,
+                po_template: m.po_template,
+                kg_per_m: m.kg_per_m,
+                default_bar_length_m: m.default_bar_length_m,
                 vat_rate: null,
                 default_supplier_id: null,
                 last_purchase_price: null,

@@ -2,6 +2,7 @@ import { materialsRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
+import { type PoTemplate } from '@/lib/po-template'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -36,6 +37,9 @@ type CreateInput = {
   vat_rate?: number | null
   default_supplier_id?: string | null
   last_purchase_price?: number | null
+  po_template?: PoTemplate | null
+  kg_per_m?: number | null
+  default_bar_length_m?: number | null
   note?: string | null
 }
 
@@ -61,6 +65,11 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'vat_rate',
   'default_supplier_id',
   'last_purchase_price',
+  // Mẫu đơn + thông số quy đổi nhôm: quyết định BỘ CỘT và CÁCH TÍNH TIỀN khi
+  // soạn đơn — việc của Cung ứng, không phải của Kho.
+  'po_template',
+  'kg_per_m',
+  'default_bar_length_m',
 ])
 
 export const materialsService = {
@@ -109,6 +118,16 @@ export const materialsService = {
       vat_rate: input.vat_rate ?? null,
       default_supplier_id: input.default_supplier_id ?? null,
       last_purchase_price: input.last_purchase_price ?? null,
+      /*
+       * BA TRƯỜNG NÀY TRƯỚC ĐÂY BỊ NUỐT. `materialCreateSchema` nhận chúng và
+       * form "Vật tư mới" trong đơn đặt vẫn gửi `po_template` lên, nhưng
+       * `CreateInput` không khai nên chúng rơi ở đây và DB nhận null. Hậu quả:
+       * vật tư vừa khai xong đã mang nhãn "chưa khai mẫu", lần đặt sau bị xếp
+       * cuối danh sách tìm — trong khi màn hình vừa báo tạo thành công.
+       */
+      po_template: input.po_template ?? null,
+      kg_per_m: input.kg_per_m ?? null,
+      default_bar_length_m: input.default_bar_length_m ?? null,
       note: input.note ?? null,
     })
   },
