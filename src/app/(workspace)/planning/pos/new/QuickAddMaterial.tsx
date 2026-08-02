@@ -8,6 +8,9 @@ import { Spinner } from '@/components/erp/Spinner'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import type { PoTemplate } from '@/lib/po-template'
 import { kgPerM, rhoFor } from '@/lib/metal-weight'
+import { guessTemplate, resolveTemplate } from '@/lib/po-template-guess'
+import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import { PO_TEMPLATES, poTemplateMeta } from '@/lib/po-template'
 
 export type CreatedMaterial = {
   id: string
@@ -16,6 +19,7 @@ export type CreatedMaterial = {
   unit: string
   spec: string | null
   group_name: string | null
+  sub_group: string | null
   price_unit: string | null
   unit2_factor: number | null
   /*
@@ -37,6 +41,8 @@ const EMPTY = {
   unit: '',
   spec: '',
   group_name: '',
+  sub_group: '',
+  po_template: '',
   price_unit: '',
   unit2_factor: '',
   kg_per_m: '',
@@ -64,10 +70,14 @@ function normalizeName(s: string): string {
 
 export function QuickAddMaterial({
   onCreated,
-  template,
+  template: soanTheoMau,
 }: {
   onCreated: (m: CreatedMaterial) => void
-  /** Mẫu đơn đang soạn — vật tư mới khai luôn mẫu này để lần sau khỏi hỏi. */
+  /**
+   * Mẫu đơn ĐANG SOẠN — chỉ dùng làm gợi ý cuối khi máy không đoán được từ tên.
+   * KHÔNG còn gán cứng cho vật tư mới: người dùng hay tiện tay khai luôn món
+   * không thuộc mẫu đang soạn, mà mẫu quyết định bộ cột của mọi đơn sau này.
+   */
   template: PoTemplate
 }) {
   const toast = useToast()
@@ -79,6 +89,42 @@ export function QuickAddMaterial({
   // Vật tư có "đơn vị tính giá" (kg/m²…) → dòng đặt sẽ có ô SL-tính-giá nhập tay.
   // Suy TRỰC TIẾP từ price_unit, không còn nhãn quy đổi A/B/C.
   const dual = f.price_unit.trim() !== ''
+
+  /** ĐVT · nhóm · nhóm phụ — nạp một lần khi mở modal. */
+  const [tax, setTax] = useState<MaterialTaxonomy>({ units: [], groups: [] })
+  const subs = useMemo(
+    () => tax.groups.find((g) => g.name === f.group_name)?.subs ?? [],
+    [tax, f.group_name],
+  )
+
+  /*
+   * BAREM MÁY ĐỌC ĐƯỢC TỪ TÊN — hình học trong tên × tỷ trọng xưởng.
+   * "Sắt vuông 30x30x0.8" ra đúng 0,7445 kg/m như barem xưởng đang cân.
+   * Đọc không ra thì trả null kèm lý do, KHÔNG đoán — đoán độ dày là sai tiền.
+   *
+   * Tính TRƯỚC khi đoán mẫu, vì mẫu nhôm chỉ được chọn khi đã có kg/m.
+   */
+  const derived = useMemo(() => {
+    if (f.name.trim().length < 4) return null
+    return kgPerM(f.name, rhoFor(f.name, f.group_name))
+  }, [f.name, f.group_name])
+
+  /*
+   * MẪU ĐƠN: ĐỀ XUẤT theo tên, không suy ngầm từ mẫu đang soạn.
+   *
+   * Bản cũ gán cứng `po_template = mẫu đang soạn`. Đúng khi người dùng khai đúng
+   * thứ họ đang mua, sai khi tiện tay khai luôn món khác — và mẫu quyết định bộ
+   * cột lẫn cách tính tiền của mọi đơn sau này.
+   */
+  const guess = useMemo(() => {
+    const g = guessTemplate(f.name, f.sub_group, derived?.kg ?? null)
+    // Tên chưa nói lên gì thì mới mượn mẫu đang soạn.
+    return g.reason.startsWith('không suy được')
+      ? { template: soanTheoMau, reason: 'theo mẫu đơn đang soạn' }
+      : g
+  }, [f.name, f.sub_group, derived, soanTheoMau])
+  const template = resolveTemplate(f.po_template || null, guess)
+
   /*
    * Hai mẫu tính tiền theo KHỐI LƯỢNG nên bắt buộc có barem, và `lineReady` chặn
    * gửi dòng khi thiếu:
@@ -89,17 +135,6 @@ export function QuickAddMaterial({
    */
   const needsWeight = template === 'aluminium' || template === 'metal_kg'
 
-  /*
-   * BAREM MÁY ĐỌC ĐƯỢC TỪ TÊN — hình học trong tên × tỷ trọng xưởng.
-   * Đây là chỗ thay "gõ tay không ai kiểm" bằng "máy tính, người xác nhận":
-   * "Sắt vuông 30x30x0.8" ra đúng 0,7445 kg/m như barem xưởng đang cân.
-   * Đọc không ra thì trả null kèm lý do, KHÔNG đoán — đoán độ dày là sai tiền.
-   */
-  const derived = useMemo(() => {
-    if (!needsWeight || f.name.trim().length < 4) return null
-    return kgPerM(f.name, rhoFor(f.name, f.group_name))
-  }, [needsWeight, f.name, f.group_name])
-
   /** Số đang gõ lệch hẳn số máy đọc được → nhiều khả năng gõ nhầm dấu chấm. */
   const kgTyped = Number(f.kg_per_m)
   const kgOff =
@@ -107,6 +142,23 @@ export function QuickAddMaterial({
       ? Math.abs(kgTyped - derived.kg) / derived.kg
       : 0
   const kgMismatch = kgOff > 0.05
+
+  /*
+   * Nạp ĐVT + nhóm + nhóm phụ một lần khi MỞ modal, không nạp lúc render trang:
+   * nút này nằm dưới bảng dòng hàng, phần lớn lượt soạn đơn không bấm tới.
+   * setState nằm trong callback, không gọi thẳng thân effect (cascading render).
+   */
+  useEffect(() => {
+    if (!open || tax.units.length > 0) return
+    const t = setTimeout(async () => {
+      try {
+        setTax(await api<MaterialTaxonomy>('/api/dept/warehouse/material-taxonomy'))
+      } catch {
+        // Danh mục chỉ để gợi ý — hỏng thì vẫn gõ tay được, đừng chặn khai vật tư.
+      }
+    }, 0)
+    return () => clearTimeout(t)
+  }, [open, tax.units.length])
 
   /*
    * Dò trùng tên ở SERVER. Bản cũ so với danh mục 1.000 vật tư nạp sẵn vào trang;
@@ -147,6 +199,8 @@ export function QuickAddMaterial({
 
   const set = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((s) => ({ ...s, [k]: e.target.value }))
+  const set2 = (k: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLSelectElement>) =>
+    setF((s) => ({ ...s, [k]: e.target.value }))
 
   const invalid = !f.name.trim() || !f.unit.trim()
 
@@ -166,10 +220,11 @@ export function QuickAddMaterial({
             unit: f.unit.trim(),
             spec: f.spec.trim() || null,
             group_name: f.group_name.trim() || null,
+            sub_group: f.sub_group.trim() || null,
             price_unit: f.price_unit.trim() || null,
             unit2_factor:
               dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
-            // Khai luôn mẫu đơn đang soạn — lần sau vật tư này tự về đúng mẫu.
+            // Mẫu đã chốt ở trên: người dùng chọn, hoặc máy đoán theo tên.
             po_template: template,
             // Bỏ trống mà máy đọc được thì lấy số máy — không để vật tư ra đời
             // thiếu barem rồi đẩy việc gõ số sang người soạn đơn đang vội.
@@ -234,13 +289,25 @@ export function QuickAddMaterial({
               </label>
               <label className="flex flex-col gap-1 text-sm">
                 ĐVT <span className="text-red-500">*</span>
+                {/*
+                  GỢI Ý TỪ DANH MỤC, vẫn gõ tự do được. Danh mục có 55 nhãn
+                  chuẩn, nhưng hàng lạ như "Lố", "Nhãn", "Thẻ" là ĐVT thật của
+                  xưởng — khoá cứng là không khai được. Server chuẩn hoá lại
+                  hoa/thường + NFC lúc lưu (xem `normUnitInput`).
+                */}
                 <input
                   value={f.unit}
                   onChange={set('unit')}
+                  list="dvt-chuan"
                   maxLength={30}
-                  placeholder="cây / tấm…"
+                  placeholder="Cây / Tấm…"
                   className={cls}
                 />
+                <datalist id="dvt-chuan">
+                  {tax.units.map((u) => (
+                    <option key={u} value={u} />
+                  ))}
+                </datalist>
               </label>
             </div>
             {similar.length > 0 && (
@@ -261,17 +328,54 @@ export function QuickAddMaterial({
               />
             </label>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            {/*
+              NHÓM LÀ DANH SÁCH CHỐT, không gõ tự do.
+              Nhóm quyết định phạm vi so trùng tên khi server chặn tạo trùng —
+              gõ sai nhóm là chặn hụt. Danh mục vừa gộp 29 nhóm còn 15; để gõ
+              tay thì có nhóm thứ 16 ngay hôm sau.
+              Nhóm PHỤ thì ngược lại: 106 giá trị do phòng Cung ứng đặt và còn
+              đẻ thêm, nên gợi ý mà vẫn cho gõ mới.
+            */}
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm">
                 Nhóm
-                <input
+                <select
                   value={f.group_name}
-                  onChange={set('group_name')}
-                  maxLength={100}
-                  placeholder="Sắt thép…"
+                  onChange={(e) =>
+                    setF((s) => ({ ...s, group_name: e.target.value, sub_group: '' }))
+                  }
                   className={cls}
-                />
+                >
+                  <option value="">— chọn nhóm —</option>
+                  {tax.groups.map((g) => (
+                    <option key={g.name} value={g.name}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
               </label>
+              <label className="flex flex-col gap-1 text-sm">
+                Nhóm phụ
+                <input
+                  value={f.sub_group}
+                  onChange={set('sub_group')}
+                  list="nhom-phu"
+                  maxLength={100}
+                  disabled={!f.group_name}
+                  placeholder={
+                    f.group_name ? 'chọn hoặc gõ mới…' : 'chọn nhóm chính trước'
+                  }
+                  className={`${cls} disabled:opacity-50`}
+                />
+                <datalist id="nhom-phu">
+                  {subs.map((x) => (
+                    <option key={x} value={x} />
+                  ))}
+                </datalist>
+              </label>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm">
                 Đơn vị tính giá
                 <input
@@ -296,6 +400,36 @@ export function QuickAddMaterial({
                 />
               </label>
             </div>
+            {/*
+              MẪU ĐƠN: máy ĐỀ XUẤT kèm lý do, người chốt.
+              Bản cũ gán cứng mẫu đang soạn, nên khai một con vít giữa lúc soạn
+              đơn nhôm là con vít mang mẫu nhôm — và mẫu quyết định bộ cột lẫn
+              cách tính tiền của MỌI đơn sau này.
+            */}
+            <label className="flex flex-col gap-1 text-sm">
+              Mẫu đơn đặt hàng
+              <select
+                value={f.po_template}
+                onChange={set2('po_template')}
+                className={cls}
+              >
+                <option value="">
+                  Đề xuất: {poTemplateMeta(guess.template).label} — {guess.reason}
+                </option>
+                {PO_TEMPLATES.map((t) => (
+                  <option key={t} value={t}>
+                    {poTemplateMeta(t).label}
+                  </option>
+                ))}
+              </select>
+              {f.po_template && f.po_template !== guess.template && (
+                <span className="text-xs text-amber-600 dark:text-amber-400">
+                  Bạn chọn khác đề xuất ({poTemplateMeta(guess.template).label}) — được,
+                  chỉ nhắc để khỏi bấm nhầm.
+                </span>
+              )}
+            </label>
+
             {needsWeight && (
               <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:grid-cols-2 dark:bg-sky-950/30">
                 <label className="flex flex-col gap-1 text-sm">

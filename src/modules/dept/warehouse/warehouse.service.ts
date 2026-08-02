@@ -4,6 +4,8 @@ import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 import { type PoTemplate } from '@/lib/po-template'
 import { MIN_KEY_LEN, prefixForGroup, sureKey } from '@/lib/material-key'
+import { invalidateTaxonomy } from './taxonomy.service'
+import { normalizeUnit } from '@/lib/unit'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -31,6 +33,7 @@ type CreateInput = {
   price_unit?: string | null
   unit2_factor?: number | null
   group_name?: string | null
+  sub_group?: string | null
   min_stock: number
   max_stock?: number | null
   reorder_point?: number | null
@@ -59,6 +62,7 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'unit',
   'spec',
   'group_name',
+  'sub_group',
   'note',
   // mua hàng
   'conversion_profile',
@@ -161,16 +165,20 @@ export const materialsService = {
     const dup = await materialsRepo.findByCode(code)
     if (dup) throw Conflict(`Mã vật tư "${code}" đã tồn tại`)
 
-    return materialsRepo.insert({
+    const created = await materialsRepo.insert({
       code,
       name: input.name,
-      unit: input.unit,
+      // Gọn khoảng trắng + NFC + khớp nhãn chuẩn không phân biệt hoa/thường.
+      // Không có bước này thì "cái" dựng sẵn và "cái" dấu rời là hai ĐVT khác
+      // nhau trong DB mà mắt không phân biệt được.
+      unit: normalizeUnit(input.unit),
       // '' → null để unique partial index (0078) không bắt trùng chuỗi rỗng.
       barcode: input.barcode?.trim() || null,
       spec: input.spec ?? null,
       price_unit: input.price_unit ?? null,
       unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,
+      sub_group: input.sub_group ?? null,
       min_stock: input.min_stock,
       max_stock: input.max_stock ?? null,
       reorder_point: input.reorder_point ?? null,
@@ -191,6 +199,11 @@ export const materialsService = {
       default_bar_length_m: input.default_bar_length_m ?? null,
       note: input.note ?? null,
     })
+
+    // Vật tư mới có thể mang nhóm phụ chưa từng có — xoá cache để form kế tiếp
+    // thấy ngay, không phải chờ hết 5 phút.
+    invalidateTaxonomy()
+    return created
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {

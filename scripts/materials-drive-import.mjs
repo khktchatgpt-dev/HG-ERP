@@ -93,7 +93,6 @@ for (const m of existing) {
  * không khớp, bỏ phần khớp — là tệ nhất: cùng một họ hàng nằm hai nơi.
  */
 let src_rows = src.rows
-let bỏNhóm = []
 if (CLEAN_ONLY) {
   /*
    * Chỉ so với danh mục GỐC của app, BỎ QUA những dòng chính script này đã nạp
@@ -128,7 +127,6 @@ if (CLEAN_ONLY) {
   }
   const before = src_rows.length
   src_rows = src.rows.filter((r) => !dirty.has(`${r.group_name} › ${r.sub_group}`))
-  bỏNhóm = [...dirty]
   console.log(
     `\n--clean-only: bỏ ${dirty.size} nhóm phụ đụng danh mục app (${before - src_rows.length} mã)`,
   )
@@ -166,11 +164,12 @@ for (const r of src_rows) {
     unit: r.unit,
     spec: r.spec,
     group_name: r.group_name,
+    sub_group: r.sub_group ?? null,
     po_template: r.po_template,
     min_stock: 0,
     is_active: true,
-    // Nhóm phụ (109 nhóm con của sổ) chưa có cột riêng — giữ trong note để
-    // không mất tầng phân loại thứ hai, sau này cần thì bóc ra cột.
+    // Vẫn ghi nhóm phụ vào `note` nữa: đợt nạp 02/08 chạy trước migration 0111
+    // nên dữ liệu cũ chỉ có trong note, giữ cùng dạng để đối chiếu hai đợt.
     note: [
       r.sub_group && `Nhóm phụ: ${r.sub_group}`,
       r.unit_raw !== r.unit && `ĐVT gốc: "${r.unit_raw}"`,

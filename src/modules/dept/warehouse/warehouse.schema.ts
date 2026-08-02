@@ -15,6 +15,8 @@ export const materialCreateSchema = z.object({
   price_unit: z.string().trim().max(30).optional().nullable(),
   unit2_factor: z.coerce.number().positive().optional().nullable(),
   group_name: z.string().trim().max(100).optional().nullable(),
+  // Nhóm phụ (0111) — tầng phân loại thứ hai, 106 nhóm của sổ Cung ứng.
+  sub_group: z.string().trim().max(100).optional().nullable(),
   min_stock: z.coerce.number().min(0).default(0),
   // Bù tồn (0043, nghiệp vụ ①): trần tồn + ngưỡng/lô đặt lại — Kho quản.
   max_stock: z.coerce.number().min(0).optional().nullable(),

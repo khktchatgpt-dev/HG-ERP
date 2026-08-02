@@ -15,6 +15,8 @@ export type Material = {
   /** B: hệ số cứng (SL×hệ số); C: định mức kg/đơn-vị-đặt (vd 10.1 kg/cây) — sửa theo cân thực. */
   unit2_factor: number | null
   group_name: string | null
+  /** Nhóm phụ trong nhóm chính (0111) — 106 nhóm của sổ Cung ứng. */
+  sub_group: string | null
   min_stock: number
   /** Bù tồn (0043, nghiệp vụ ① Cung ứng): trần tồn + ngưỡng/lô đặt lại. */
   max_stock: number | null
@@ -37,7 +39,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, default_bar_length_m, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, default_bar_length_m, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
