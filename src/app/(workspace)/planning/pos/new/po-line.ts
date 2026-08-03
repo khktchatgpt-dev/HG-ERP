@@ -26,16 +26,13 @@ export type Line = {
   price: Num
   // accessory / chung
   material_grade: string
-  product_code: string
   dm_per_sp: Num
   qty_demand: Num
   qty_on_hand: Num
-  waste_pct: Num
   // aluminium
   die_code: string
   weight_per_m: Num
   bar_length_m: Num
-  bar_surplus: Num
   // metal_kg
   dimension_text: string
   finish: string
@@ -118,8 +115,8 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
 
 /**
  * Dựng dòng mới từ vật tư vừa chọn. TỰ ĐIỀN mọi thứ suy được — quy cách, kg/m và
- * chiều dài cây mặc định của vật tư, hao hụt 3% cho mẫu phụ kiện, giá mua lần
- * trước. Còn lại nhân viên chỉ gõ SL và đơn giá, đúng như yêu cầu.
+ * chiều dài cây mặc định của vật tư, giá mua lần trước. Còn lại nhân viên chỉ
+ * gõ SL và đơn giá, đúng như yêu cầu.
  */
 export function newLine(t: PoTemplate, m: PoMaterial): Line {
   return {
@@ -134,15 +131,12 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // Giá mua lần trước là GỢI Ý, điền sẵn để đơn lặp lại hàng tháng khỏi gõ lại.
     price: m.last_purchase_price ?? '',
     material_grade: '',
-    product_code: '',
     dm_per_sp: '',
     qty_demand: '',
     qty_on_hand: m.on_hand,
-    waste_pct: t === 'accessory' ? 3 : '',
     die_code: '',
     weight_per_m: m.kg_per_m ?? '',
     bar_length_m: m.default_bar_length_m ?? '',
-    bar_surplus: '',
     dimension_text: m.spec ?? '',
     finish: '',
     /*
@@ -151,12 +145,18 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
      * nên người soạn đơn bị kẹt và gõ đại một số cho qua. Số gõ đại đi thẳng vào
      * (SL × kg/đv) × giá/kg rồi lên bàn duyệt của Giám đốc, không ai đối chiếu.
      *
+     * HAI NGUỒN, theo thứ tự tin cậy:
+     *   1. `kg_per_unit` — số CÂN THẬT khai ở danh mục (kg/tấm, kg/cuộn, kg/cây).
+     *      Đúng cho mọi dạng hàng, kể cả tấm/cuộn vốn không có barem theo mét.
+     *   2. `kg_per_m × dài cây` — suy ra, chỉ dùng được cho hàng cây/thanh.
+     *
      * Không chép thẳng `kg_per_m`: barem theo MÉT còn đơn đặt theo CÂY — inox
      * Kim Vĩnh Phú là 9,325 kg/cây, tức ~1,55 kg/m. Điền nhầm là đơn hụt 6 lần.
      * `kgPerOrderUnit` chỉ quy đổi khi biết chắc ĐVT và dài cây, còn lại trả null
      * → ô vẫn trống, nhân viên nhập theo phiếu cân NCC như cũ.
      */
-    weight_per_unit: kgPerOrderUnit(m.kg_per_m, m.unit, m.default_bar_length_m) ?? '',
+    weight_per_unit:
+      m.kg_per_unit ?? kgPerOrderUnit(m.kg_per_m, m.unit, m.default_bar_length_m) ?? '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
@@ -178,15 +178,12 @@ export type PoLineDto = {
   spec: string | null
   note: string | null
   material_grade: string | null
-  product_code: string | null
   dm_per_sp: number | null
   qty_demand: number | null
   qty_on_hand: number | null
-  waste_pct: number | null
   die_code: string | null
   weight_per_m: number | null
   bar_length_m: number | null
-  bar_surplus: number | null
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
@@ -224,15 +221,12 @@ export function lineFromPo(l: PoLineDto, onHand = 0): Line {
     qty: n2(l.qty_ordered),
     price: n2(l.unit_price),
     material_grade: s2(l.material_grade),
-    product_code: s2(l.product_code),
     dm_per_sp: n2(l.dm_per_sp),
     qty_demand: n2(l.qty_demand),
     qty_on_hand: n2(l.qty_on_hand),
-    waste_pct: n2(l.waste_pct),
     die_code: s2(l.die_code),
     weight_per_m: n2(l.weight_per_m),
     bar_length_m: n2(l.bar_length_m),
-    bar_surplus: n2(l.bar_surplus),
     dimension_text: s2(l.dimension_text),
     finish: s2(l.finish),
     weight_per_unit: n2(l.weight_per_unit),

@@ -1,7 +1,5 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { AnchoredPopover } from '@/components/erp/AnchoredPopover'
 import { DiePicker } from '@/components/supply/DiePicker'
 import type { PoField } from '@/lib/po-fields'
 import { recalcCartonArea, type Line } from './po-line'
@@ -21,7 +19,86 @@ export const cell =
 export const calc =
   'flex h-[30px] items-center justify-end rounded-md bg-zinc-100 px-2 text-[13px] font-medium tabular-nums dark:bg-zinc-800'
 
+/**
+ * LĂN CHUỘT KHÔNG ĐƯỢC ĐỔI SỐ.
+ *
+ * `<input type="number">` đang focus mà lăn chuột là trình duyệt tăng/giảm giá
+ * trị — im lặng, không undo được. Trên bảng đơn thì cú lăn để đọc dòng dưới có
+ * thể vừa sửa đơn giá dòng trên, và sai số tiền chỉ lộ ra lúc đối chiếu hoá đơn.
+ * Bỏ focus khi lăn: cuộn trang vẫn chạy, số đứng yên.
+ */
+export const blurOnWheel = (e: React.WheelEvent<HTMLInputElement>) =>
+  e.currentTarget.blur()
+
 const num = (n: number) => n.toLocaleString('vi-VN')
+
+/**
+ * Ô CHỮ TỰ NỞ THEO NỘI DUNG.
+ *
+ * `<input>` một dòng thì nội dung dài hơn ô bị cuộn ngầm bên trong: nhìn vào chỉ
+ * thấy "Sắt xi trắ…" và không có cách nào biết đuôi còn gì mà không bấm vào rồi
+ * lia con trỏ. Trên đơn đặt hàng thì đuôi ấy là thứ phân biệt hàng — "Inox 304
+ * bề mặt phẳng" khác "Inox 304 bề mặt xước".
+ *
+ * Dùng `<textarea>` một dòng, tự cao thêm theo nội dung, nên gõ tới đâu đọc được
+ * tới đó. Enter bị chặn vì đây vẫn là một ô giá trị đơn — xuống dòng thật chỉ
+ * làm hỏng dữ liệu in ra phiếu.
+ */
+function grow(el: HTMLTextAreaElement, max?: number) {
+  el.style.height = 'auto'
+  // `scrollHeight` KHÔNG tính viền, còn `height` với `border-box` thì có. Thiếu
+  // phần bù này thì ô luôn hụt đúng 2px và dòng chữ cuối vẫn bị cuộn ngầm —
+  // sát tới mức nhìn tưởng đủ, nhưng chữ vẫn cụt.
+  const border = el.offsetHeight - el.clientHeight
+  const need = el.scrollHeight + border
+  el.style.height = `${max ? Math.min(need, max) : need}px`
+}
+
+export function AutoGrowCell({
+  value,
+  onChange,
+  label,
+  placeholder,
+  className = '',
+  maxLength = 200,
+  growMax,
+}: {
+  value: string
+  onChange: (v: string) => void
+  label: string
+  placeholder?: string
+  className?: string
+  maxLength?: number
+  /**
+   * Trần chiều cao (px). BỎ TRỐNG = nở hết, không cuộn ngầm.
+   *
+   * Cột của mẫu đơn chỉ rộng ~100px nên một quy cách 56 ký tự đã cần 5-6 dòng;
+   * đặt trần 96px là vẫn giấu mất đuôi, đúng cái lỗi đang đi sửa. Các cột này
+   * chặn 200 ký tự nên nở hết cũng không thành hàng khổng lồ.
+   */
+  growMax?: number
+}) {
+  return (
+    <textarea
+      value={value}
+      rows={1}
+      maxLength={maxLength}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.preventDefault()
+      }}
+      onInput={(e) => grow(e.currentTarget, growMax)}
+      ref={(el) => {
+        // Mở lại đơn cũ: nội dung có sẵn phải nở NGAY, không đợi người dùng gõ.
+        if (el) grow(el, growMax)
+      }}
+      className={`${cell} min-h-[30px] resize-none py-1.5 leading-tight break-words ${className}`}
+      aria-label={label}
+      title={value}
+    />
+  )
+}
 
 /** Đọc/ghi trường của `Line` theo tên khai báo — ép kiểu gói gọn trong file này. */
 const get = (l: Line, field?: string) =>
@@ -49,13 +126,11 @@ export function LineCell({
   switch (f.kind) {
     case 'text':
       return (
-        <input
+        <AutoGrowCell
           value={String(get(l, f.field) ?? '')}
-          maxLength={200}
           placeholder={f.placeholder}
-          onChange={(e) => onPatch(index, patchOf(f.field!, e.target.value))}
-          className={cell}
-          aria-label={label}
+          onChange={(v) => onPatch(index, patchOf(f.field!, v))}
+          label={label}
         />
       )
 
@@ -66,6 +141,7 @@ export function LineCell({
           min="0"
           max={f.max}
           step={f.step ?? '0.01'}
+          onWheel={blurOnWheel}
           value={String(get(l, f.field) ?? '')}
           onChange={(e) =>
             onPatch(
@@ -136,6 +212,7 @@ export function LineCell({
               type="number"
               min="0"
               step="1"
+              onWheel={blurOnWheel}
               value={l[k]}
               onChange={(e) => {
                 const v = e.target.value === '' ? '' : Number(e.target.value)
@@ -158,6 +235,7 @@ export function LineCell({
           type="number"
           min="0"
           step="0.0001"
+          onWheel={blurOnWheel}
           value={l.area_m2}
           onChange={(e) =>
             onPatch(index, {
@@ -187,127 +265,12 @@ export function LineCell({
   }
 }
 
-// ── Hai ô cố định hai đầu hàng, mẫu nào cũng có ──────────────────────────────
-
-/** Mã SP trên một dòng: nhiều mã ghép bằng " · " vì một dòng mua gộp cho nhiều SP. */
-const SEP = ' · '
-const splitCodes = (v: string) =>
-  v
-    .split(/[·,;]/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+// ── Ô cố định cuối hàng, mẫu nào cũng có ────────────────────────────────────
 
 /**
- * Ô "Mã SP": CHỌN từ danh sách sản phẩm của chính LSX, chọn được NHIỀU mã.
- *
- * Phòng Cung ứng mua gộp chi tiết của cả lệnh cho rẻ — một đơn vít dùng chung cho
- * 4 mã SP, nên ô này phải cho tick nhiều mã. Đơn ngoài LSX (không có danh sách)
- * thì quay về gõ tay.
+ * Ghi chú dòng — cùng ô nở theo nội dung với các cột chữ khác, chỉ cho dài hơn
+ * (500 ký tự): ghi chú là chỗ người mua dặn NCC nên hay viết cả câu.
  */
-export function ProductCodeCell({
-  value,
-  products,
-  onChange,
-  label,
-}: {
-  value: string
-  products: { code: string; name: string }[]
-  onChange: (v: string) => void
-  label: string
-}) {
-  const [anchor, setAnchor] = useState<DOMRect | null>(null)
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const picked = splitCodes(value)
-
-  if (products.length === 0) {
-    return (
-      <input
-        value={value}
-        maxLength={200}
-        placeholder="22027-209"
-        onChange={(e) => onChange(e.target.value)}
-        className={`${cell} font-mono text-[12px]`}
-        aria-label={label}
-        title={value}
-      />
-    )
-  }
-
-  const toggle = (code: string) => {
-    const next = picked.includes(code)
-      ? picked.filter((c) => c !== code)
-      : [...picked, code]
-    // Giữ đúng thứ tự sản phẩm trong lệnh để mọi dòng đọc giống nhau.
-    onChange(
-      products
-        .map((p) => p.code)
-        .filter((c) => next.includes(c))
-        .join(SEP),
-    )
-  }
-
-  return (
-    <div className="relative">
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={() =>
-          setAnchor((a) => (a ? null : (btnRef.current?.getBoundingClientRect() ?? null)))
-        }
-        className={`${cell} flex items-center justify-between gap-1 text-left font-mono text-[11px] ${
-          picked.length === 0 ? 'text-zinc-400' : ''
-        }`}
-        aria-label={label}
-        title={picked.join(SEP)}
-      >
-        <span className="truncate">
-          {picked.length === 0
-            ? '— chọn —'
-            : picked.length === 1
-              ? picked[0]
-              : `${picked.length} SP`}
-        </span>
-        <span className="text-[9px] text-zinc-400">▾</span>
-      </button>
-      {anchor && (
-        <AnchoredPopover anchor={anchor} onClose={() => setAnchor(null)} width={260}>
-          <div className="p-1">
-            {products.map((p) => (
-              <label
-                key={p.code}
-                className="flex cursor-pointer items-start gap-2 rounded px-1.5 py-1 text-[12px] hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              >
-                <input
-                  type="checkbox"
-                  checked={picked.includes(p.code)}
-                  onChange={() => toggle(p.code)}
-                  className="mt-0.5"
-                />
-                <span className="min-w-0">
-                  <span className="block font-mono text-[11px]">{p.code}</span>
-                  <span className="block text-[11px] break-words text-zinc-500">
-                    {p.name}
-                  </span>
-                </span>
-              </label>
-            ))}
-            {picked.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange('')}
-                className="mt-1 w-full rounded px-1.5 py-1 text-left text-[11px] text-zinc-500 hover:bg-zinc-50 dark:hover:bg-zinc-800"
-              >
-                Bỏ chọn hết
-              </button>
-            )}
-          </div>
-        </AnchoredPopover>
-      )}
-    </div>
-  )
-}
-
-/** Ghi chú dòng — ô nở theo nội dung để ghi chú dài không bị giấu mất đuôi. */
 export function NoteCell({
   value,
   placeholder,
@@ -320,20 +283,13 @@ export function NoteCell({
   onChange: (v: string) => void
 }) {
   return (
-    <textarea
+    <AutoGrowCell
       value={value}
-      maxLength={500}
-      rows={1}
+      onChange={onChange}
+      label={label}
       placeholder={placeholder}
-      onChange={(e) => onChange(e.target.value)}
-      onInput={(e) => {
-        const t = e.currentTarget
-        t.style.height = 'auto'
-        t.style.height = `${Math.min(t.scrollHeight, 120)}px`
-      }}
-      className={`${cell} min-h-[30px] resize-none py-1.5 leading-tight`}
-      aria-label={label}
-      title={value}
+      maxLength={500}
+      growMax={160}
     />
   )
 }

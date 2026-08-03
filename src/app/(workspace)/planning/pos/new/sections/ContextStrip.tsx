@@ -25,7 +25,9 @@ export function ContextStrip({
 }) {
   const thieu = totalLines - readyLines
   return (
-    <div className="sticky top-16 z-[9] -mx-1 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-[12px] shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+    // `top-[59px]` = đúng đáy topbar (2px accent + h-14). Để `top-16` (64px)
+    // thì giữa hai thanh hở 5px và nội dung trang chạy qua khe đó khi cuộn.
+    <div className="sticky top-[59px] z-[9] -mx-1 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-[12px] shadow-sm backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
       <span className="rounded bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
         {templateLabel}
       </span>

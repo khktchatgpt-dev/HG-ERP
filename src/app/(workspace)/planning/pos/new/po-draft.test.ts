@@ -20,15 +20,12 @@ const line = (over: Partial<Line> = {}): Line => ({
   qty: 100,
   price: 1000,
   material_grade: '',
-  product_code: '',
   dm_per_sp: '',
   qty_demand: '',
   qty_on_hand: '',
-  waste_pct: '',
   die_code: '',
   weight_per_m: '',
   bar_length_m: '',
-  bar_surplus: '',
   dimension_text: '',
   finish: '',
   weight_per_unit: '',
@@ -55,16 +52,16 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   vat: 8,
   inclVat: false,
   terms: poTemplateMeta('accessory').terms,
-  signerRole: 'Người Lập',
+  signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
   ...over,
 })
 
 describe('templateDefaults — đổi mẫu kéo theo VAT / điều khoản / chữ ký', () => {
-  it('phụ kiện: VAT 8% chưa gồm, ký "Người Lập"', () => {
+  it('phụ kiện: VAT 8% chưa gồm, ký "TRƯỞNG PHÒNG CUNG ỨNG"', () => {
     const d = templateDefaults('accessory')
     expect(d.vat).toBe(8)
     expect(d.inclVat).toBe(false)
-    expect(d.signerRole).toBe('Người Lập')
+    expect(d.signerRole).toBe('TRƯỞNG PHÒNG CUNG ỨNG')
   })
 
   it('nhôm: VAT 10% chưa gồm, ký TP KẾ HOẠCH', () => {
@@ -159,9 +156,8 @@ describe('buildPoPayload', () => {
   })
 
   it('ô trống gửi null, không gửi 0 — "chưa nhập" khác "nhập 0"', () => {
-    const l = buildPoPayload(header(), [line({ price: '', waste_pct: '' })]).lines[0]
+    const l = buildPoPayload(header(), [line({ price: '' })]).lines[0]
     expect(l.unit_price).toBeNull()
-    expect(l.waste_pct).toBeNull()
   })
 
   it('chiết khấu 0 gửi null cho sạch chứng từ', () => {

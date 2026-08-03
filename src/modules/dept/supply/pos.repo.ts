@@ -44,15 +44,12 @@ export type PoWithRefs = Po & {
 /** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
 export type PoLineTemplateFields = {
   material_grade: string | null
-  product_code: string | null
   dm_per_sp: number | null
   qty_demand: number | null
   qty_on_hand: number | null
-  waste_pct: number | null
   die_code: string | null
   weight_per_m: number | null
   bar_length_m: number | null
-  bar_surplus: number | null
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
@@ -97,15 +94,12 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
 
 const TEMPLATE_LINE_COLS = [
   'material_grade',
-  'product_code',
   'dm_per_sp',
   'qty_demand',
   'qty_on_hand',
-  'waste_pct',
   'die_code',
   'weight_per_m',
   'bar_length_m',
-  'bar_surplus',
   'dimension_text',
   'finish',
   'weight_per_unit',
@@ -127,10 +121,8 @@ const NUMERIC_LINE_COLS = [
   'dm_per_sp',
   'qty_demand',
   'qty_on_hand',
-  'waste_pct',
   'weight_per_m',
   'bar_length_m',
-  'bar_surplus',
   'weight_per_unit',
   'pcs_per_ctn',
   'inner_l_mm',
@@ -310,7 +302,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, product_code, dm_per_sp, qty_demand, qty_on_hand, waste_pct, die_code, weight_per_m, bar_length_m, bar_surplus, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
