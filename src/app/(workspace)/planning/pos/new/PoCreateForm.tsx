@@ -1,13 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { TopProgressBar } from '@/components/erp/Spinner'
-import { MaterialPicker, type PoMaterial } from '@/components/supply/MaterialPicker'
+import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
@@ -26,6 +26,9 @@ import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
 import { newLine, type Line } from './po-line'
+import { Modal } from '@/components/Modal'
+import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
+import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
 
 type SupplierOption = {
   id: string
@@ -33,6 +36,10 @@ type SupplierOption = {
   rating: string | null
   lead_time_days: number | null
   payment_terms: string | null
+  /** Chỉ dùng cho khối "Kính gửi" của phiếu xem trước. */
+  address?: string | null
+  tax_no?: string | null
+  phone?: string | null
 }
 type LsxOption = { id: string; code: string; order_code: string; customer_name: string }
 
@@ -77,17 +84,17 @@ const field =
 export function PoCreateForm({
   suppliers,
   lsxs,
+  company,
   defaultSupplierId,
   initial,
-  initialProducts = [],
 }: {
   suppliers: SupplierOption[]
   lsxs: LsxOption[]
+  /** Đầu phiếu (tên cty, MST, địa danh) cho bản xem trước — từ Cài đặt. */
+  company: Record<string, string | null>
   defaultSupplierId?: string
   /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
   initial?: PoInitial
-  /** Mã SP của LSX gắn với đơn đang mở — server nạp sẵn cho form sửa. */
-  initialProducts?: { code: string; name: string }[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -128,13 +135,6 @@ export function PoCreateForm({
 
   const [lines, setLines] = useState<Line[]>(initial?.lines ?? [])
   const [needs, setNeeds] = useState<Need[]>([])
-  /**
-   * Mã SP của lệnh đang chọn — đổ vào ô "Mã SP" từng dòng (mua gộp nhiều SP).
-   * Mở form SỬA thì server đã nạp sẵn (`initialProducts`), khỏi chờ người dùng
-   * chọn lại đúng cái LSX đang hiện trên form thì ô mới có danh sách.
-   */
-  const [lsxProducts, setLsxProducts] =
-    useState<{ code: string; name: string }[]>(initialProducts)
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
 
@@ -160,16 +160,13 @@ export function PoCreateForm({
   async function selectLsx(id: string) {
     setLsxId(id)
     setNeeds([])
-    setLsxProducts([])
     if (!id) return
     setLoadingNeeds(true)
     try {
-      const data = await api<{
-        needs: Need[]
-        products: { code: string; name: string }[]
-      }>(`/api/dept/supply/needs?production_order_id=${id}`)
+      const data = await api<{ needs: Need[] }>(
+        `/api/dept/supply/needs?production_order_id=${id}`,
+      )
       setNeeds(data.needs)
-      setLsxProducts(data.products ?? [])
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -177,9 +174,32 @@ export function PoCreateForm({
     }
   }
 
+  /**
+   * VÒNG NHẬP, không rời bàn phím: chọn vật tư ở hộp thoại → con trỏ vào SL đặt
+   * của dòng đầu vừa thêm → Enter → Đơn giá → Enter → về lại nút "Thêm vật tư"
+   * (bấm Enter/Space là mở hộp thoại cho lượt kế).
+   */
+  const pickerRef = useRef<HTMLButtonElement | null>(null)
+  const [focusIndex, setFocusIndex] = useState<number | null>(null)
+  const [pickOpen, setPickOpen] = useState(false)
+  /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
+  const [previewOpen, setPreviewOpen] = useState(false)
+
   function addMaterial(m: PoMaterial) {
-    if (usedIds.has(m.id)) return
-    setLines((ls) => [...ls, newLine(template, m)])
+    addMaterials([m])
+  }
+
+  /**
+   * Thêm NHIỀU vật tư một lượt — hộp thoại cho tích cả giỏ rồi chốt một lần.
+   *
+   * Con trỏ nhảy vào SL đặt của dòng ĐẦU TIÊN vừa thêm, không phải dòng cuối:
+   * người dùng tích theo thứ tự cần nhập, nên nhập cũng đi theo thứ tự đó.
+   */
+  function addMaterials(list: PoMaterial[]) {
+    const add = list.filter((m) => !usedIds.has(m.id))
+    if (add.length === 0) return
+    setFocusIndex(lines.length) // dòng mới nối vào cuối bảng
+    setLines((ls) => [...ls, ...add.map((m) => newLine(template, m))])
   }
 
   /**
@@ -286,12 +306,34 @@ export function PoCreateForm({
         title={isEdit ? `Sửa đơn ${initial!.po.code}` : 'Soạn đơn đặt hàng'}
         description="Chọn mẫu đơn theo loại hàng — bảng tự đổi cột, ô nền xám hệ thống tự tính. Bạn chỉ nhập SL đặt và đơn giá."
         actions={
-          <Link
-            href="/planning/pos"
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
-            ← Về danh sách
-          </Link>
+          <div className="flex items-center gap-2">
+            {/*
+              XEM TRƯỚC PHIẾU IN ngay lúc soạn.
+
+              Trước đây muốn thấy tờ phiếu phải TẠO đơn thật rồi mở lại — tức
+              mọi sai sót về điều khoản, chữ ký hay bố cục cột chỉ lộ ra khi đơn
+              đã nằm chờ Giám đốc duyệt. Bản xem trước dùng ĐÚNG component của
+              trang in thật (`PoPrintSheet`) nên không có đường nào để hai bản
+              lệch nhau.
+            */}
+            <button
+              type="button"
+              disabled={lines.length === 0}
+              onClick={() => setPreviewOpen(true)}
+              title={
+                lines.length === 0 ? 'Thêm ít nhất một dòng hàng đã' : undefined
+              }
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              🖨 Xem trước phiếu in
+            </button>
+            <Link
+              href="/planning/pos"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              ← Về danh sách
+            </Link>
+          </div>
         }
       />
 
@@ -441,20 +483,48 @@ export function PoCreateForm({
           template={template}
           lines={lines}
           suggestions={suggestions}
-          products={lsxProducts}
           currency={currency}
           onPatch={patchLine}
           onRemove={removeLine}
-          addRow={
-            <MaterialPicker
-              template={template}
-              usedIds={usedIds}
-              onPick={addMaterial}
-              needs={suggestions}
-            />
-          }
+          focusIndex={focusIndex}
+          onFocused={() => setFocusIndex(null)}
+          onDoneRow={() => pickerRef.current?.focus()}
         />
-        <div className="border-t border-zinc-100 p-3 dark:border-zinc-800">
+
+        {/*
+          THANH THÊM DÒNG — NẰM NGOÀI BẢNG.
+
+          Trước đây ô tìm là một `<tr>` cuối bảng, tức nằm trong khung cuộn ngang.
+          Bảng rộng hơn màn hình nên chỉ cần cuộn sang phải xem cột Ghi chú là ô
+          tìm trôi đi mất; muốn thêm dòng phải cuộn ngược lại. Ô tìm cũng bị bóp
+          theo bề rộng cột, và nút "vật tư mới" thì lạc xuống một khối riêng bên
+          dưới — hai việc cùng một mục đích mà nằm hai chỗ.
+
+          Đưa ra ngoài `overflow-x-auto`: ô tìm luôn đứng yên, rộng hết khổ, và
+          nút khai vật tư mới đứng ngay cạnh. Vẫn đặt DƯỚI bảng vì dòng mới nối
+          vào cuối — mắt không phải nhảy từ đầu bảng xuống cuối sau mỗi lần thêm.
+        */}
+        <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
+          <span className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
+            Thêm dòng
+          </span>
+          {/*
+            NÚT MỞ HỘP THOẠI, không phải ô gõ tại chỗ.
+
+            Danh mục 13.064 vật tư: chọn vật tư không phải "gõ một chữ rồi bấm"
+            mà là một phiên — thu hẹp theo nhóm, đọc quy cách, so tồn, đối chiếu
+            số lệnh cần. Ô gõ nhét trong trang chỉ đủ chỗ vài dòng kết quả, và
+            mỗi món lại phải mở lại từ đầu. Hộp thoại mở MỘT LẦN, tích đủ giỏ,
+            chốt một lượt — đơn 20 dòng thành một lượt mở thay vì hai mươi.
+          */}
+          <button
+            ref={pickerRef}
+            type="button"
+            onClick={() => setPickOpen(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+          >
+            ⌕ Chọn vật tư…
+          </button>
           <QuickAddMaterial
             template={template}
             onCreated={(m) =>
@@ -472,6 +542,7 @@ export function PoCreateForm({
                 spec: m.spec,
                 po_template: m.po_template,
                 kg_per_m: m.kg_per_m,
+                kg_per_unit: m.kg_per_unit,
                 default_bar_length_m: m.default_bar_length_m,
                 vat_rate: null,
                 default_supplier_id: null,
@@ -480,7 +551,22 @@ export function PoCreateForm({
               })
             }
           />
+          {/* Dòng nhắc phím LUÔN xuống hàng riêng: để nó chen cùng hàng thì ô
+              tìm — ô nhập chính của cả màn — bị bóp còn ~250px. */}
+          <span className="w-full text-[11px] text-zinc-400">
+            chọn xong → con trỏ vào <b>SL đặt</b> → <b>Enter</b> → đơn giá → <b>Enter</b>{' '}
+            quay lại nút này
+          </span>
         </div>
+
+        <MaterialPickDialog
+          open={pickOpen}
+          onClose={() => setPickOpen(false)}
+          template={template}
+          usedIds={usedIds}
+          onAdd={addMaterials}
+          needs={suggestions}
+        />
       </section>
 
       {/* ── Điều khoản: mặc định theo mẫu, sửa được ── */}
@@ -495,6 +581,39 @@ export function PoCreateForm({
         note={note}
         onNoteChange={setNote}
       />
+
+      <Modal
+        open={previewOpen}
+        onClose={() => setPreviewOpen(false)}
+        title={`Xem trước phiếu in — mẫu ${meta.label.toLowerCase()}`}
+        maxWidth="sm:max-w-5xl"
+      >
+        <div className="overflow-x-auto">
+          <PoPrintSheet
+            company={company}
+            po={previewHeaderFromDraft(header, {
+              // Số đơn do server cấp lúc lưu — bản nháp chưa có, nói thẳng ra
+              // thay vì bịa một mã trông như thật.
+              code: isEdit ? initial!.po.code : '(cấp khi lưu)',
+              supplierName: supplier?.name ?? '—',
+              lsxCode: poType === 'lsx' ? (lsx?.code ?? null) : null,
+              orderCode: poType === 'lsx' ? (lsx?.order_code ?? null) : null,
+              createdAt: new Date().toISOString(),
+            })}
+            supplier={
+              supplier
+                ? {
+                    name: supplier.name,
+                    address: supplier.address,
+                    tax_no: supplier.tax_no,
+                    phone: supplier.phone,
+                  }
+                : null
+            }
+            lines={previewLinesFromDraft(template, lines)}
+          />
+        </div>
+      </Modal>
 
       <TotalsBar
         subtotal={subtotal}

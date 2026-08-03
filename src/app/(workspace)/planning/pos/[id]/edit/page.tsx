@@ -1,11 +1,9 @@
 import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import {
-  productionRepo,
-  listLsxProducts,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { settingsService } from '@/modules/core/settings/settings.service'
 import { poMaterialsRepo } from '@/modules/dept/supply/po-materials.repo'
 import { poTemplateMeta } from '@/lib/po-template'
 import { PoCreateForm } from '../../new/PoCreateForm'
@@ -45,31 +43,27 @@ export default async function EditPoPage({
   // đơn đã duyệt thì đẩy về danh sách thay vì để bấm Lưu rồi mới báo lỗi.
   if (mode === 'edit' && po.status !== 'pending_approval') redirect('/planning/pos')
 
-  const [{ rows: suppliers }, { rows: lsxAll }, mats] = await Promise.all([
+  const [{ rows: suppliers }, { rows: lsxAll }, mats, company] = await Promise.all([
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.list({ page: 1, page_size: 200 }),
     poMaterialsRepo.byIds(lines.map((l) => l.material_id)),
+    settingsService.getAll(),
   ])
   const onHand = new Map(mats.map((m) => [m.id, m.on_hand]))
   const meta = poTemplateMeta(po.template)
 
-  // Mã SP của lệnh gắn với đơn — ô "Mã SP" từng dòng chọn từ đây. Nạp ở server
-  // để mở form sửa là có sẵn, không phải chọn lại LSX mới ra danh sách.
-  const lsxOfPo = po.production_order_id
-    ? await productionRepo.findById(po.production_order_id)
-    : null
-  const lsxProducts = lsxOfPo?.sales_order_id
-    ? await listLsxProducts(lsxOfPo.sales_order_id)
-    : []
-
   return (
     <PoCreateForm
+      company={company}
       suppliers={suppliers.map((s) => ({
         id: s.id,
         name: s.name,
         rating: s.rating,
         lead_time_days: s.lead_time_days,
         payment_terms: s.payment_terms,
+        address: s.address,
+        tax_no: s.tax_no,
+        phone: s.phone,
       }))}
       lsxs={lsxAll
         .filter((l) => l.status === 'approved' || l.status === 'in_progress')
@@ -108,7 +102,6 @@ export default async function EditPoPage({
         },
         lines: lines.map((l) => lineFromPo(l, onHand.get(l.material_id) ?? 0)),
       }}
-      initialProducts={lsxProducts}
     />
   )
 }
