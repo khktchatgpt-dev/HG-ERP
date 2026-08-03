@@ -7,6 +7,7 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import { BadRequest, NotFound } from '@/server/http'
+import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 
 type PoInput = {
   /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
@@ -222,6 +223,37 @@ export const posService = {
     return posRepo.patch(id, {
       status: to,
       ...(to === 'ordered' ? { ordered_at: new Date().toISOString() } : {}),
+    })
+  },
+
+  /**
+   * DỜI HẸN GIAO của đơn đã duyệt/đã gửi — thao tác HẸP, chỉ đụng `expected_at`.
+   *
+   * Vì sao không mở lại `update`: sau khi duyệt, giá và dòng hàng là cam kết với
+   * Giám đốc và bản NCC đang cầm. Nhưng ngày giao thì đổi thật và đổi thường
+   * xuyên; không có đường ghi lại thì người dùng phải chọn giữa để ngày sai trên
+   * hệ thống (cảnh báo "quá hẹn" kêu oan) hoặc huỷ đơn tạo lại (mất số PO đã gửi
+   * NCC). Cả hai đều tệ hơn là cho dời ngày kèm lý do và ghi vết.
+   */
+  async reschedule(
+    user: User,
+    id: string,
+    input: { expected_at: string; reason: string },
+  ): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    const guard = canReschedule(before.status)
+    if (!guard.ok) throw BadRequest(guard.reason)
+
+    return posRepo.patch(id, {
+      expected_at: input.expected_at,
+      note: rescheduleNote(
+        before.expected_at,
+        input.expected_at,
+        input.reason,
+        before.note,
+      ),
     })
   },
 
