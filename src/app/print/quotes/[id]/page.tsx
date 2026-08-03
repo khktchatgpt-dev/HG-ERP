@@ -3,7 +3,13 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { quotesRepo, listQuoteLinesForPrint } from '@/modules/dept/sales/quotes.repo'
 import { filesService } from '@/modules/core/files/files.service'
-import { PrintToolbar } from '../../PrintToolbar'
+import {
+  PrintLetterhead,
+  PrintMeta,
+  PrintPage,
+  PrintSignatures,
+  PrintTitle,
+} from '../../PrintSheet'
 
 /**
  * In báo giá theo mẫu Quotation Hoàng Gia (bảng dims / carton / loading 40HC /
@@ -65,40 +71,33 @@ export default async function QuotePrintPage({
   }
 
   return (
-    <div className="mx-auto max-w-5xl bg-white p-6 text-[13px] text-black print:p-0">
-      <style>{`@page { size: A4 landscape; margin: 10mm; }`}</style>
-      <PrintToolbar />
+    <PrintPage maxWidth="max-w-5xl">
+      {/*
+        BÁO GIÁ KHÔNG IN QUỐC HIỆU.
+        Đây là tờ gửi khách NƯỚC NGOÀI (MERXX, YOTRIO) và soạn bằng tiếng Anh —
+        đóng "CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM" lên đó là sai đối tượng đọc.
+        Phần còn lại của khung (khối công ty, tiêu đề, khối định danh, chữ ký)
+        vẫn dùng chung để nhìn ra là cùng một nhà phát hành.
+      */}
+      <PrintLetterhead
+        company={company}
+        date={new Date()}
+        nationalHeading={false}
+        dateLabel={`Date: ${new Date().toLocaleDateString('en-GB')}`}
+      />
+      <PrintTitle vi="BÁO GIÁ" en="QUOTATION" />
 
-      {/* Header công ty */}
-      <div className="flex items-start justify-between border-b-2 border-black pb-2">
-        <div>
-          <div className="text-xl font-bold">{company.company_name?.toUpperCase()}</div>
-          {company.company_address && <div>{company.company_address}</div>}
-          <div className="text-xs">
-            {company.company_phone && <>Tel: {company.company_phone} · </>}
-            {company.company_tax_code && <>MST: {company.company_tax_code}</>}
-          </div>
-        </div>
-      </div>
+      <PrintMeta
+        rows={[
+          ['To:', quote.customer_name],
+          ['Valid date:', `From ${fmtD(quote.valid_from)} to ${fmtD(quote.valid_to)}`],
+        ]}
+        refs={[['Quotation No:', <b key="c">{quote.code}</b>]]}
+      />
 
-      <h1 className="my-3 bg-sky-100 py-1 text-center text-xl font-bold text-red-700 print:bg-sky-100">
-        QUOTATION — {quote.code}
-      </h1>
-
-      <table className="mb-3 text-[13px]">
-        <tbody>
-          <tr>
-            <td className="pr-4 font-semibold text-sky-700">To:</td>
-            <td>{quote.customer_name}</td>
-          </tr>
-          <tr>
-            <td className="pr-4 font-semibold text-sky-700">Valid date:</td>
-            <td>
-              From {fmtD(quote.valid_from)} to {fmtD(quote.valid_to)}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <p className="mt-2 mb-1 text-[12px]">
+        We are pleased to quote you the following items:
+      </p>
 
       <table className="w-full border-collapse border border-black text-center text-[12px]">
         <thead>
@@ -193,7 +192,7 @@ export default async function QuotePrintPage({
       </table>
 
       <div className="mt-3 text-[13px]">
-        <div className="font-bold text-red-700">Note:</div>
+        <div className="font-bold text-black">Note:</div>
         <table>
           <tbody>
             {quote.price_term && (
@@ -217,6 +216,13 @@ export default async function QuotePrintPage({
           </tbody>
         </table>
       </div>
-    </div>
+      <PrintSignatures
+        cols={[
+          { role: 'KHÁCH HÀNG / CUSTOMER', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+          { role: 'NGƯỜI LẬP / PREPARED BY', hint: 'Ký, ghi rõ họ tên' },
+          { role: 'GIÁM ĐỐC / DIRECTOR', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+        ]}
+      />
+    </PrintPage>
   )
 }

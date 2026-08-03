@@ -2,7 +2,13 @@ import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docsRepo } from '@/modules/dept/warehouse/stock.repo'
-import { PrintToolbar } from '../../PrintToolbar'
+import {
+  PrintLetterhead,
+  PrintMeta,
+  PrintPage,
+  PrintSignatures,
+  PrintTitle,
+} from '../../PrintSheet'
 
 /**
  * In phiếu kho theo mẫu 01-VT (nhập) / 02-VT (xuất) TT200 — 2 cột số lượng
@@ -36,51 +42,42 @@ export default async function WarehouseDocPrintPage({
   )
 
   return (
-    <div className="mx-auto max-w-3xl bg-white p-6 text-[13px] text-black print:p-0">
-      <style>{`@page { size: A4 portrait; margin: 12mm; }`}</style>
-      <PrintToolbar />
-
-      <div className="flex justify-between text-[12px]">
-        <div>
-          <div className="font-bold">{company.company_name}</div>
-          {company.company_address && <div>{company.company_address}</div>}
-        </div>
-        <div className="text-right">
-          <div className="font-bold">Mẫu số: {form}</div>
-          <div className="text-[10px] italic">
-            Ban hành theo Thông tư số 200/2014/TT-BTC
-            <br />
-            ngày 22/12/2014 của Bộ Tài chính
-          </div>
-        </div>
-      </div>
-
-      <h1 className="mt-4 text-center text-2xl font-bold">{title}</h1>
-      <div className="text-center text-[12px]">
-        Ngày {d.getDate()} tháng {d.getMonth() + 1} năm {d.getFullYear()}
-      </div>
+    <PrintPage orientation="portrait" maxWidth="max-w-3xl">
+      {/* Phiếu kho theo Thông tư 200 nên chỗ quốc hiệu là "Mẫu số 01-VT/02-VT" —
+          luật quy định, không thay bằng khối chung được. Phần còn lại của đầu
+          phiếu (khối công ty, dòng ngày kèm địa danh) thì dùng chung. */}
+      <PrintLetterhead
+        company={company}
+        date={d}
+        nationalHeading={false}
+        formNo={{
+          code: form,
+          note: (
+            <>
+              Ban hành theo Thông tư số 200/2014/TT-BTC
+              <br />
+              ngày 22/12/2014 của Bộ Tài chính
+            </>
+          ),
+        }}
+      />
+      <PrintTitle vi={title} />
       <div className="mb-3 text-center text-[12px]">
         Số: <b className="font-mono">{doc.code}</b>
       </div>
 
-      <table className="mb-2 text-[12px]">
-        <tbody>
-          <tr>
-            <td className="pr-2">— Họ và tên người {isReceipt ? 'giao' : 'nhận'}:</td>
-            <td className="font-semibold">{doc.counterparty ?? '……………………………'}</td>
-          </tr>
-          {!isReceipt && (
-            <tr>
-              <td className="pr-2">— Lý do xuất kho:</td>
-              <td>{doc.reason ?? '……………………………'}</td>
-            </tr>
-          )}
-          <tr>
-            <td className="pr-2">— {isReceipt ? 'Nhập tại kho' : 'Xuất tại kho'}:</td>
-            <td>Kho chính</td>
-          </tr>
-        </tbody>
-      </table>
+      <PrintMeta
+        rows={[
+          [`— Họ và tên người ${isReceipt ? 'giao' : 'nhận'}:`, doc.counterparty ?? '……………………………'],
+          ...(isReceipt
+            ? []
+            : ([['— Lý do xuất kho:', doc.reason ?? '……………………………']] as [
+                string,
+                string,
+              ][])),
+          [`— ${isReceipt ? 'Nhập tại kho' : 'Xuất tại kho'}:`, 'Kho chính'],
+        ]}
+      />
 
       <table className="w-full border-collapse border border-black text-center text-[12px]">
         <thead>
@@ -155,28 +152,23 @@ export default async function WarehouseDocPrintPage({
 
       {doc.note && <div className="mt-2 text-[12px]">— Ghi chú: {doc.note}</div>}
 
-      <div className="mt-8 grid grid-cols-4 gap-2 text-center text-[12px]">
-        <div>
-          <div className="font-semibold">Người lập phiếu</div>
-          <div className="italic">(Ký, ghi rõ họ tên)</div>
-          <div className="mt-16">{doc.created_by_name ?? ''}</div>
-        </div>
-        <div>
-          <div className="font-semibold">
-            Người {isReceipt ? 'giao hàng' : 'nhận hàng'}
-          </div>
-          <div className="italic">(Ký, ghi rõ họ tên)</div>
-          <div className="mt-16">{doc.counterparty ?? ''}</div>
-        </div>
-        <div>
-          <div className="font-semibold">Thủ kho</div>
-          <div className="italic">(Ký, ghi rõ họ tên)</div>
-        </div>
-        <div>
-          <div className="font-semibold">Kế toán trưởng</div>
-          <div className="italic">(Ký, ghi rõ họ tên)</div>
-        </div>
-      </div>
-    </div>
+      <PrintSignatures
+        space="mt-8"
+        cols={[
+          {
+            role: 'Người lập phiếu',
+            hint: 'Ký, ghi rõ họ tên',
+            name: doc.created_by_name ?? '',
+          },
+          {
+            role: `Người ${isReceipt ? 'giao hàng' : 'nhận hàng'}`,
+            hint: 'Ký, ghi rõ họ tên',
+            name: doc.counterparty ?? '',
+          },
+          { role: 'Thủ kho', hint: 'Ký, ghi rõ họ tên' },
+          { role: 'Kế toán trưởng', hint: 'Ký, ghi rõ họ tên' },
+        ]}
+      />
+    </PrintPage>
   )
 }

@@ -5,6 +5,7 @@ export const settingsUpdateSchema = z
     company_name: z.string().trim().min(1).max(200),
     company_tax_code: z.string().trim().max(50).or(z.literal('')),
     company_address: z.string().trim().max(500).or(z.literal('')),
+    company_locality: z.string().trim().max(100).or(z.literal('')),
     company_phone: z.string().trim().max(30).or(z.literal('')),
     company_email: z.string().trim().max(120).or(z.literal('')),
     company_fax: z.string().trim().max(50).or(z.literal('')),

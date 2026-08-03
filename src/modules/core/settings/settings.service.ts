@@ -6,6 +6,15 @@ export type Settings = {
   company_name: string
   company_tax_code: string
   company_address: string
+  /**
+   * ĐỊA DANH mở đầu dòng ngày tháng trên phiếu in: "Gia Lai, ngày 06 tháng 07…".
+   *
+   * Là ô riêng chứ không suy từ `company_address`: bản trước cắt đoạn cuối địa
+   * chỉ ra làm địa danh, mà địa chỉ đang lưu bằng tiếng Anh nên phiếu in ra
+   * "Vietnam, ngày…" rồi "Binh Dinh Province, ngày…". Địa danh trên văn bản là
+   * thứ pháp lý, không phải thứ để đoán.
+   */
+  company_locality: string
   company_phone: string
   // Bên bán trên hợp đồng (Sales Contract).
   company_email: string
@@ -30,6 +39,9 @@ const DEFAULTS: Settings = {
   company_name: 'Công ty SXTM Hoàng Gia',
   company_tax_code: '',
   company_address: '',
+  // Trụ sở ở Cụm công nghiệp Cát Nhơn, Xã Xuân An — địa danh trên mọi đơn đặt
+  // hàng thật của phòng Cung ứng năm 2026 là "Gia Lai".
+  company_locality: 'Gia Lai',
   company_phone: '',
   company_email: '',
   company_fax: '',
