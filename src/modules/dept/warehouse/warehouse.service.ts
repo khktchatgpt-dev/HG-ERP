@@ -44,6 +44,8 @@ type CreateInput = {
   last_purchase_price?: number | null
   po_template?: PoTemplate | null
   kg_per_m?: number | null
+  /** kg mỗi đơn vị đặt (0112) — hàng tấm/cuộn khai thẳng. */
+  kg_per_unit?: number | null
   default_bar_length_m?: number | null
   note?: string | null
 }
@@ -202,6 +204,7 @@ export const materialsService = {
        */
       po_template: input.po_template ?? null,
       kg_per_m: input.kg_per_m ?? null,
+      kg_per_unit: input.kg_per_unit ?? null,
       default_bar_length_m: input.default_bar_length_m ?? null,
       note: input.note ?? null,
     })

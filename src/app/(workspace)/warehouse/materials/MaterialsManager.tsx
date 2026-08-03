@@ -15,6 +15,15 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import {
+  Field,
+  FormSection,
+  MaterialCoreFields,
+  coreFromMaterial,
+  useMaterialCore,
+} from '@/components/warehouse/MaterialCoreFields'
+import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
+import type { PoTemplate } from '@/lib/po-template'
 import { PAGE_SIZE } from './constants'
 
 type Material = {
@@ -28,6 +37,17 @@ type Material = {
   price_unit: string | null
   unit2_factor: number | null
   group_name: string | null
+  /*
+   * Bốn trường PHÂN LOẠI. Repo đã trả về từ lâu nhưng form danh mục không hỏi,
+   * nên vật tư khai ở đây ra đời thiếu mẫu đơn và barem — không tính được tiền
+   * ở đơn nhôm/inox. Nay khai chung một khối với form trong đơn đặt.
+   */
+  sub_group: string | null
+  po_template: PoTemplate | null
+  kg_per_m: number | null
+  default_bar_length_m: number | null
+  /** kg mỗi đơn vị đặt (0112) — hàng tấm/cuộn khai thẳng, không suy theo mét. */
+  kg_per_unit: number | null
   min_stock: number
   /** Bù tồn (0079): trần tồn + ngưỡng/lô đặt lại — Kho quản. */
   max_stock: number | null
@@ -45,17 +65,6 @@ type SupplierOption = { id: string; name: string }
 
 type StatusFilter = 'all' | 'active' | 'inactive'
 
-/** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
-function normalizeName(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/\s+/g, ' ')
-    .trim()
-}
-
 export function MaterialsManager({
   materials,
   suppliers,
@@ -63,7 +72,7 @@ export function MaterialsManager({
   counts,
   page,
   filters,
-  groups,
+  taxonomy,
   scope = 'warehouse',
 }: {
   materials: Material[]
@@ -73,8 +82,11 @@ export function MaterialsManager({
   counts: { total: number; active: number; noShelf: number }
   page: number
   filters: { q: string; group: string }
-  /** 14 nhóm chuẩn từ catalog_items, không suy từ trang đang xem. */
-  groups: string[]
+  /**
+   * ĐVT + nhóm + nhóm phụ chuẩn, nạp sẵn ở server (trang đã gọi `materialTaxonomy`
+   * cho bộ lọc rồi). Đưa cả cụm xuống thì form khai vật tư khỏi gọi lại API.
+   */
+  taxonomy: MaterialTaxonomy
   /**
    * Chia chủ quyền danh mục (1 danh mục chung): 'warehouse' = Kho sửa đủ trường;
    * 'purchasing' = view cho Cung ứng (/planning/materials) — trường tồn trữ
@@ -83,6 +95,7 @@ export function MaterialsManager({
   scope?: 'warehouse' | 'purchasing'
 }) {
   const purchasing = scope === 'purchasing'
+  const groups = useMemo(() => taxonomy.groups.map((g) => g.name), [taxonomy])
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
@@ -480,11 +493,19 @@ export function MaterialsManager({
         )}
       </div>
 
-      <Modal open={openCreate} onClose={() => setOpenCreate(false)} title="Thêm vật tư">
+      {/* Form dài (tới 4 mảng) — modal rộng hơn mặc định để hai cột còn thở
+          được, và `Modal` nay tự cuộn phần thân nên không tràn ra ngoài màn. */}
+      <Modal
+        open={openCreate}
+        onClose={() => setOpenCreate(false)}
+        title="Thêm vật tư"
+        maxWidth="sm:max-w-3xl"
+      >
         <MaterialForm
           suppliers={suppliers}
           scope={scope}
-          existing={materials}
+          taxonomy={taxonomy}
+          shelfOptions={materials}
           submitLabel="Thêm vật tư"
           onSubmit={async (body) => {
             const ok = await send('/api/dept/warehouse/materials', 'POST', body)
@@ -500,12 +521,14 @@ export function MaterialsManager({
         open={!!editing}
         onClose={() => setEditing(null)}
         title={editing ? `Sửa — ${editing.name}` : ''}
+        maxWidth="sm:max-w-3xl"
       >
         {editing && (
           <MaterialForm
             suppliers={suppliers}
             scope={scope}
-            existing={materials}
+            taxonomy={taxonomy}
+            shelfOptions={materials}
             initial={editing}
             submitLabel="Lưu thay đổi"
             onSubmit={async (body) => {
@@ -528,100 +551,83 @@ export function MaterialsManager({
 
 // ── Form ─────────────────────────────────────────────────────────────────
 
+/**
+ * KHAI VẬT TƯ Ở DANH MỤC — bốn mảng theo đúng thứ tự người khai nghĩ:
+ * vật tư này là gì (Nhận dạng) → xếp vào đâu, tính tiền kiểu nào (Phân loại) →
+ * NCC báo giá ra sao → Kho giữ bao nhiêu (Tồn trữ).
+ *
+ * Ba mảng đầu là `MaterialCoreFields`, DÙNG CHUNG với form thêm nhanh trong đơn
+ * đặt. Trước đây hai chỗ hỏi lệch nhau: ở đây nhóm là ô GÕ TAY và không có ô
+ * nhóm phụ / mẫu đơn / kg/m, nên vật tư khai từ danh mục ra đời thiếu mẫu và
+ * barem — đơn nhôm/inox không tính được tiền cho nó.
+ *
+ * Cung ứng (`scope='purchasing'`) KHÔNG thấy mảng Tồn trữ và ô mã vạch. Bản cũ
+ * vẫn vẽ ra rồi `disabled`: mười ô xám nằm giữa form, kéo dài thêm cái hộp vốn
+ * đã cao 1234px trên màn 768px, mà bấm vào cũng không được gì.
+ */
 function MaterialForm({
   initial,
   suppliers,
   submitLabel,
   onSubmit,
   scope = 'warehouse',
-  existing = [],
+  taxonomy,
+  shelfOptions = [],
 }: {
   initial?: Partial<Material>
   suppliers: SupplierOption[]
   submitLabel: string
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
   scope?: 'warehouse' | 'purchasing'
-  /** Danh mục hiện có — cảnh báo trùng tên gần giống + gợi ý kệ đã dùng. */
-  existing?: Pick<Material, 'id' | 'code' | 'name' | 'shelf_location'>[]
+  taxonomy: MaterialTaxonomy
+  /** Dòng đang xem — chỉ để gợi ý lại các vị trí kệ đã dùng. */
+  shelfOptions?: Pick<Material, 'shelf_location'>[]
 }) {
   const purchasing = scope === 'purchasing'
-  // Các kệ đã dùng → gợi ý (datalist) để chọn lại, tránh gõ lệch tách 1 kệ làm nhiều.
-  const shelfOptions = useMemo(() => {
-    const set = new Set<string>()
-    for (const m of existing) if (m.shelf_location) set.add(m.shelf_location)
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
-  }, [existing])
   const [busy, setBusy] = useState(false)
-  // Tên controlled để dò trùng tên gần giống ngay khi gõ.
-  const [name, setName] = useState(initial?.name ?? '')
-  const similar = useMemo(() => {
-    const n = normalizeName(name)
-    if (n.length < 4) return []
-    return existing
-      .filter((m) => m.id !== initial?.id)
-      .filter((m) => {
-        const other = normalizeName(m.name)
-        return other.includes(n) || n.includes(other)
-      })
-      .slice(0, 3)
-  }, [name, existing, initial?.id])
-  // unit + price_unit controlled: price_unit != '' → vật tư có đơn vị tính giá riêng
-  // (dòng đặt sẽ có ô SL-tính-giá nhập tay). Không còn nhãn quy đổi A/B/C.
-  const [unit, setUnit] = useState(initial?.unit ?? 'cái')
-  const [priceUnit, setPriceUnit] = useState(initial?.price_unit ?? '')
+  const core = useMaterialCore({
+    active: true,
+    initial: initial ? coreFromMaterial(initial) : undefined,
+    taxonomy,
+    excludeCode: initial?.code,
+  })
+
+  // Các kệ đã dùng → gợi ý để chọn lại, tránh gõ lệch tách một kệ làm nhiều.
+  const shelves = useMemo(() => {
+    const set = new Set<string>()
+    for (const m of shelfOptions) if (m.shelf_location) set.add(m.shelf_location)
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  }, [shelfOptions])
+
   const cls =
     'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
-  const dual = priceUnit.trim() !== '' // có đơn vị tính giá → dùng hệ số tham khảo
-  const factorLabel = `Hệ số tham khảo (1 ${unit || 'đơn vị'} ≈ ? ${priceUnit || 'đv giá'})`
-  const factorHint =
-    'Chỉ để gợi ý tổng SL-tính-giá = SL × hệ số trên form đặt; nhân viên sửa được theo cân/báo giá thực.'
-
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (core.invalid || busy) return
     const fd = new FormData(e.currentTarget)
-    // Ô số để trống (hoặc bị disable — không vào FormData) → null, không phải 0.
+    // Ô số để trống → null, không phải 0.
     const numOrNull = (k: string) => {
       const v = fd.get(k)
       return v != null && String(v).trim() !== '' ? Number(v) : null
     }
-    // `priceUnit` là state controlled nên đọc thẳng, không qua FormData — ô này
-    // không bao giờ bị disable nữa sau khi bỏ quy đổi A/B/C.
-    const priceUnitVal = priceUnit.trim() || null
-    const factorVal =
-      priceUnitVal && fd.get('unit2_factor')
-        ? Number(fd.get('unit2_factor')) || null
-        : null
     const body: Record<string, unknown> = {
+      // Nhận dạng + phân loại + cách báo giá — chung với form trong đơn đặt.
+      ...core.corePayload(),
       code: String(fd.get('code') ?? '').trim() || null,
-      name: name.trim(),
-      unit: String(fd.get('unit') ?? '').trim() || 'cái',
-      barcode: String(fd.get('barcode') ?? '').trim() || null,
-      spec: String(fd.get('spec') ?? '').trim() || null,
-      group_name: String(fd.get('group_name') ?? '').trim() || null,
-      min_stock: Number(fd.get('min_stock') ?? 0) || 0,
-      max_stock: numOrNull('max_stock'),
-      reorder_point: numOrNull('reorder_point'),
-      reorder_qty: numOrNull('reorder_qty'),
-      price_unit: priceUnitVal,
-      unit2_factor: factorVal,
-      shelf_location: String(fd.get('shelf_location') ?? '').trim() || null,
       default_supplier_id: String(fd.get('default_supplier_id') ?? '') || null,
-      vat_rate: fd.get('vat_rate') !== '' ? Number(fd.get('vat_rate')) : null,
-      last_purchase_price:
-        fd.get('last_purchase_price') !== ''
-          ? Number(fd.get('last_purchase_price'))
-          : null,
+      vat_rate: numOrNull('vat_rate'),
+      last_purchase_price: numOrNull('last_purchase_price'),
       note: String(fd.get('note') ?? '').trim() || null,
     }
-    // Cung ứng: trường tồn trữ của Kho không gửi lên (server cũng chặn).
-    if (purchasing) {
-      delete body.min_stock
-      delete body.max_stock
-      delete body.reorder_point
-      delete body.reorder_qty
-      delete body.shelf_location
-      delete body.barcode
+    // Trường tồn trữ là của Kho — Cung ứng không gửi lên (server cũng chặn).
+    if (!purchasing) {
+      body.barcode = String(fd.get('barcode') ?? '').trim() || null
+      body.min_stock = Number(fd.get('min_stock') ?? 0) || 0
+      body.max_stock = numOrNull('max_stock')
+      body.reorder_point = numOrNull('reorder_point')
+      body.reorder_qty = numOrNull('reorder_qty')
+      body.shelf_location = String(fd.get('shelf_location') ?? '').trim() || null
     }
     setBusy(true)
     await onSubmit(body)
@@ -629,252 +635,168 @@ function MaterialForm({
   }
 
   return (
-    <form onSubmit={handle} className="grid gap-3 sm:grid-cols-2">
-      <label className="flex flex-col gap-1 text-sm">
-        Mã vật tư
-        <input
-          name="code"
-          maxLength={60}
-          defaultValue={initial?.code ?? ''}
-          placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
-          className={`${cls} font-mono`}
-        />
-        {!initial && (
-          // Kho vẫn gõ tay được khi cần bám mã cũ; bỏ trống thì server cấp
-          // `XX-0000` nối tiếp tiền tố mà nhóm đó đang dùng.
-          <span className="text-xs text-zinc-500">
-            Bỏ trống là an toàn — server cấp mã nối tiếp đúng nếp của nhóm.
-          </span>
-        )}
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        ĐVT đặt hàng <span className="text-red-500">*</span>
-        <input
-          name="unit"
-          required
-          maxLength={30}
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Tên vật tư <span className="text-red-500">*</span>
-        <input
-          name="name"
-          required
-          maxLength={200}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={cls}
-        />
-        {similar.length > 0 && (
-          <span className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
-            ⚠ Tên gần giống vật tư đã có:{' '}
-            {similar.map((s) => `${s.code} — ${s.name}`).join(' · ')}. Kiểm tra trước khi
-            tạo mã mới (tránh 1 món 2 mã).
-          </span>
-        )}
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Quy cách
-        <input
-          name="spec"
-          maxLength={200}
-          placeholder="VD: 25×25×1.2mm (cây 6m) · dày 18mm · 1220×2440…"
-          defaultValue={initial?.spec ?? ''}
-          className={cls}
-        />
-        <span className="text-xs text-zinc-400">
-          Kích thước/thông số — tự điền vào dòng đơn khi chọn vật tư.
-        </span>
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Mã vạch (barcode NCC)
-        <input
-          name="barcode"
-          maxLength={64}
-          placeholder="Quét mã có sẵn trên bao bì NCC vào đây (nếu có)…"
-          defaultValue={initial?.barcode ?? ''}
-          disabled={purchasing}
-          className={`${cls} font-mono disabled:opacity-50`}
-        />
-        <span className="text-xs text-zinc-400">
-          {purchasing
-            ? 'Kho quản mã vạch (gắn với quét nhập/xuất).'
-            : 'Ô quét ở phiếu nhập/xuất khớp cả mã vật tư lẫn mã vạch này. Không in tem.'}
-        </span>
-      </label>
+    <form onSubmit={handle} className="flex flex-col gap-3">
+      <MaterialCoreFields
+        s={core}
+        inputClass={cls}
+        unitListId="mat-dvt"
+        subListId="mat-nhom-phu"
+        /* Chỉ danh mục mới hỏi "NCC báo giá theo đơn vị nào" — form trong đơn đặt
+           tắt đi, lý do ở khai báo `pricingNote`. */
+        pricingNote
+      />
 
-      {/* Đơn vị tính giá (tùy chọn) — có giá trị thì dòng đặt có ô SL-tính-giá nhập tay */}
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Đơn vị tính giá
-        <input
-          name="price_unit"
-          maxLength={30}
-          placeholder="kg / m² / lít… (bỏ trống nếu giá theo ĐVT đặt)"
-          value={priceUnit}
-          onChange={(e) => setPriceUnit(e.target.value)}
-          className={cls}
-        />
-        <span className="text-xs text-zinc-400">
-          Điền khi NCC báo giá theo đơn vị khác ĐVT đặt (vd đặt cây, giá theo kg). Bỏ
-          trống = giá theo chính ĐVT đặt.
-        </span>
-      </label>
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        {factorLabel}
-        <input
-          name="unit2_factor"
-          type="number"
-          min={0}
-          step="0.0001"
-          placeholder="VD: 10.1"
-          defaultValue={initial?.unit2_factor ?? ''}
-          disabled={!dual}
-          className={`${cls} tabular-nums disabled:opacity-50`}
-        />
-        <span className="text-xs text-zinc-400">{factorHint}</span>
-      </label>
-
-      <label className="flex flex-col gap-1 text-sm">
-        Nhóm
-        <input
-          name="group_name"
-          maxLength={100}
-          defaultValue={initial?.group_name ?? ''}
-          className={cls}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Tồn tối thiểu
-        <input
-          name="min_stock"
-          type="number"
-          min={0}
-          step="0.01"
-          defaultValue={initial?.min_stock ?? 0}
-          disabled={purchasing}
-          title={purchasing ? 'Kho quản tồn tối thiểu' : undefined}
-          className={`${cls} tabular-nums disabled:opacity-50`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Vị trí kệ
-        <input
-          name="shelf_location"
-          list="material-shelf-options"
-          maxLength={60}
-          placeholder="VD: A-01"
-          defaultValue={initial?.shelf_location ?? ''}
-          disabled={purchasing}
-          title={purchasing ? 'Kho quản vị trí kệ' : undefined}
-          className={`${cls} disabled:opacity-50`}
-        />
-        <datalist id="material-shelf-options">
-          {shelfOptions.map((s) => (
-            <option key={s} value={s} />
-          ))}
-        </datalist>
-        {!purchasing && shelfOptions.length > 0 && (
-          <span className="text-xs text-zinc-400">
-            Gõ để chọn lại kệ đã có — tránh tạo trùng do gõ lệch.
-          </span>
-        )}
-      </label>
-
-      {/* Bù tồn (nghiệp vụ ①): ngưỡng/lô đặt lại + trần tồn — Kho quản, nuôi gợi ý PO ngoài LSX */}
-      <label className="flex flex-col gap-1 text-sm">
-        Ngưỡng đặt lại
-        <input
-          name="reorder_point"
-          type="number"
-          min={0}
-          step="0.01"
-          placeholder="bỏ trống = dùng tồn tối thiểu"
-          defaultValue={initial?.reorder_point ?? ''}
-          disabled={purchasing}
-          title={purchasing ? 'Kho quản chính sách bù tồn' : undefined}
-          className={`${cls} tabular-nums disabled:opacity-50`}
-        />
-        <span className="text-xs text-zinc-400">
-          Khả dụng + đang về tụt dưới mức này → gợi ý mua bù (PO ngoài LSX).
-        </span>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Lô đặt lại / Tồn tối đa
-        <span className="flex gap-2">
+      <FormSection title="Mua hàng" hint="tự điền lên đơn đặt">
+        <Field label="NCC mặc định">
+          <select
+            name="default_supplier_id"
+            defaultValue={initial?.default_supplier_id ?? ''}
+            className={cls}
+          >
+            <option value="">— không —</option>
+            {suppliers.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="VAT mặc định (%)">
           <input
-            name="reorder_qty"
+            name="vat_rate"
             type="number"
             min={0}
-            step="0.01"
-            placeholder="SL mỗi lần mua"
-            defaultValue={initial?.reorder_qty ?? ''}
-            disabled={purchasing}
-            className={`${cls} tabular-nums disabled:opacity-50`}
+            max={100}
+            step="0.1"
+            placeholder="VD: 10"
+            defaultValue={initial?.vat_rate ?? ''}
+            className={`${cls} tabular-nums`}
           />
+        </Field>
+        <Field label="Đơn giá tham chiếu" hint="Prefill đơn giá khi lên đơn đặt.">
           <input
-            name="max_stock"
+            name="last_purchase_price"
             type="number"
             min={0}
-            step="0.01"
-            placeholder="trần tồn"
-            defaultValue={initial?.max_stock ?? ''}
-            disabled={purchasing}
-            className={`${cls} tabular-nums disabled:opacity-50`}
+            step="1"
+            placeholder={core.dual ? `đ / ${core.f.price_unit}` : 'đ / đơn vị đặt'}
+            defaultValue={initial?.last_purchase_price ?? ''}
+            className={`${cls} tabular-nums`}
           />
-        </span>
-        <span className="text-xs text-zinc-400">
-          Có lô → mỗi lần gợi ý đúng lô; không thì bù tới trần tồn / về ngưỡng.
-        </span>
-      </label>
-
-      {/* Tự-điền lên đơn: NCC mặc định / VAT / giá tham chiếu */}
-      <label className="flex flex-col gap-1 text-sm">
-        NCC mặc định
-        <select
-          name="default_supplier_id"
-          defaultValue={initial?.default_supplier_id ?? ''}
-          className={cls}
+        </Field>
+        <Field
+          label="Mã vật tư"
+          hint={
+            initial ? undefined : 'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
+          }
         >
-          <option value="">— không —</option>
-          {suppliers.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        VAT mặc định (%)
-        <input
-          name="vat_rate"
-          type="number"
-          min={0}
-          max={100}
-          step="0.1"
-          placeholder="VD: 10"
-          defaultValue={initial?.vat_rate ?? ''}
-          className={`${cls} tabular-nums`}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-sm">
-        Đơn giá tham chiếu
-        <input
-          name="last_purchase_price"
-          type="number"
-          min={0}
-          step="1"
-          placeholder={dual && priceUnit ? `đ / ${priceUnit}` : 'đ / đơn vị đặt'}
-          defaultValue={initial?.last_purchase_price ?? ''}
-          className={`${cls} tabular-nums`}
-        />
-        <span className="text-xs text-zinc-400">Prefill đơn giá khi lên đơn đặt.</span>
-      </label>
+          {/* Kho vẫn gõ tay được khi cần bám mã cũ; bỏ trống thì server cấp
+              `XX-0000` nối tiếp tiền tố mà nhóm đó đang dùng. */}
+          <input
+            name="code"
+            maxLength={60}
+            defaultValue={initial?.code ?? ''}
+            placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
+            className={`${cls} font-mono`}
+          />
+        </Field>
+      </FormSection>
 
-      <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-        Ghi chú
+      {purchasing ? (
+        <p className="text-xs text-zinc-400">
+          Tồn tối thiểu, ngưỡng bù tồn, vị trí kệ và mã vạch do Kho quản — sửa ở
+          <b> Kho › Danh mục vật tư</b>.
+        </p>
+      ) : (
+        <FormSection title="Tồn trữ" hint="Kho quản — nuôi gợi ý mua bù ngoài LSX">
+          <Field label="Tồn tối thiểu">
+            <input
+              name="min_stock"
+              type="number"
+              min={0}
+              step="0.01"
+              defaultValue={initial?.min_stock ?? 0}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+          <Field
+            label="Vị trí kệ"
+            hint={
+              shelves.length > 0
+                ? 'Gõ để chọn lại kệ đã có — tránh tạo trùng do gõ lệch.'
+                : undefined
+            }
+          >
+            <input
+              name="shelf_location"
+              list="material-shelf-options"
+              maxLength={60}
+              placeholder="VD: A-01"
+              defaultValue={initial?.shelf_location ?? ''}
+              className={cls}
+            />
+            <datalist id="material-shelf-options">
+              {shelves.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
+          </Field>
+          <Field
+            label="Ngưỡng đặt lại"
+            hint="Khả dụng + đang về tụt dưới mức này → gợi ý mua bù (PO ngoài LSX)."
+          >
+            <input
+              name="reorder_point"
+              type="number"
+              min={0}
+              step="0.01"
+              placeholder="bỏ trống = dùng tồn tối thiểu"
+              defaultValue={initial?.reorder_point ?? ''}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+          <Field
+            label="Lô đặt lại / Tồn tối đa"
+            hint="Có lô → mỗi lần gợi ý đúng lô; không thì bù tới trần tồn."
+          >
+            <span className="flex gap-2">
+              <input
+                name="reorder_qty"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="SL mỗi lần mua"
+                defaultValue={initial?.reorder_qty ?? ''}
+                className={`${cls} tabular-nums`}
+              />
+              <input
+                name="max_stock"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="trần tồn"
+                defaultValue={initial?.max_stock ?? ''}
+                className={`${cls} tabular-nums`}
+              />
+            </span>
+          </Field>
+          <Field
+            label="Mã vạch (barcode NCC)"
+            span
+            hint="Ô quét ở phiếu nhập/xuất khớp cả mã vật tư lẫn mã vạch này. Không in tem."
+          >
+            <input
+              name="barcode"
+              maxLength={64}
+              placeholder="Quét mã có sẵn trên bao bì NCC vào đây (nếu có)…"
+              defaultValue={initial?.barcode ?? ''}
+              className={`${cls} font-mono`}
+            />
+          </Field>
+        </FormSection>
+      )}
+
+      <Field label="Ghi chú">
         <textarea
           name="note"
           rows={2}
@@ -882,10 +804,18 @@ function MaterialForm({
           defaultValue={initial?.note ?? ''}
           className={cls}
         />
-      </label>
-      <div className="mt-2 flex justify-end sm:col-span-2">
+      </Field>
+
+      {/* Nút lưu ghim đáy hộp thoại: form bốn mảng dài hơn một màn, cuộn tới
+          cuối mới thấy nút là bắt người khai đi tìm. */}
+      <div className="sticky bottom-0 -mx-6 -mb-5 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white/95 px-6 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+        {core.invalid && (
+          <span className="mr-auto text-xs text-amber-600 dark:text-amber-500">
+            Cần tên vật tư và ĐVT.
+          </span>
+        )}
         <button
-          disabled={busy}
+          disabled={busy || core.invalid}
           className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
         >
           {busy && <Spinner size={14} />}

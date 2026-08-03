@@ -50,7 +50,7 @@ export default async function MaterialsPage({
       counts={counts}
       page={page}
       filters={{ q: sp.q ?? '', group: sp.group ?? '' }}
-      groups={tax.groups.map((g) => g.name)}
+      taxonomy={tax}
     />
   )
 }
