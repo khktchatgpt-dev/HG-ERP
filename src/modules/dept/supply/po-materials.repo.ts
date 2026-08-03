@@ -22,6 +22,7 @@ export type PoMaterial = {
   spec: string | null
   po_template: PoTemplate | null
   kg_per_m: number | null
+  kg_per_unit: number | null
   default_bar_length_m: number | null
   vat_rate: number | null
   default_supplier_id: string | null
@@ -30,7 +31,7 @@ export type PoMaterial = {
 }
 
 const COLS =
-  'id, code, name, unit, group_name, sub_group, spec, po_template, kg_per_m, default_bar_length_m, vat_rate, default_supplier_id, last_purchase_price'
+  'id, code, name, unit, group_name, sub_group, spec, po_template, kg_per_m, kg_per_unit, default_bar_length_m, vat_rate, default_supplier_id, last_purchase_price'
 
 function toMaterial(r: Record<string, unknown>, onHand: number): PoMaterial {
   const tpl = r.po_template
@@ -45,6 +46,7 @@ function toMaterial(r: Record<string, unknown>, onHand: number): PoMaterial {
     po_template: isPoTemplate(tpl) ? tpl : null,
     // numeric của PostgREST về dạng chuỗi → ép về number.
     kg_per_m: r.kg_per_m == null ? null : Number(r.kg_per_m),
+    kg_per_unit: r.kg_per_unit == null ? null : Number(r.kg_per_unit),
     default_bar_length_m:
       r.default_bar_length_m == null ? null : Number(r.default_bar_length_m),
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),

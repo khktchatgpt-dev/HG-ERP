@@ -113,30 +113,40 @@ describe('mẫu bao bì — chọn giá theo thùng hoặc theo m² từng dòng
   })
 })
 
-describe('SL cần đặt gợi ý — trừ tồn rồi cộng hao hụt, làm tròn LÊN', () => {
-  it('khớp cột "SL cần đặt (hh 3%)" của đơn TTL', () => {
-    // File: nhu cầu 200, tồn 0, hao hụt 3% → 206
-    expect(suggestOrderQty(200, 0, 3)).toBe(206)
-    // Nhu cầu 400 → 412 · 1200 → 1236 · 350 → 361 (file ghi 360,5 chưa làm tròn)
-    expect(suggestOrderQty(400, 0, 3)).toBe(412)
-    expect(suggestOrderQty(1200, 0, 3)).toBe(1236)
-    expect(suggestOrderQty(350, 0, 3)).toBe(361)
+/*
+ * HAO HỤT ĐÃ BỎ (yêu cầu phòng Cung ứng).
+ *
+ * Trước đây gợi ý nhân thêm 3% mặc định cho mẫu phụ kiện. Con số đó áp cứng cho
+ * mọi mặt hàng trong khi hao hụt thật khác nhau theo loại, nên người mua vẫn gõ
+ * đè — cộng ngầm chỉ làm số gợi ý lệch khỏi thứ họ tự tính.
+ *
+ * Gợi ý nay là phép trừ trần trụi: nhu cầu − tồn.
+ */
+describe('SL cần đặt gợi ý — chỉ trừ tồn, KHÔNG cộng hao hụt', () => {
+  it('nhu cầu trừ tồn, không nhân thêm gì', () => {
+    expect(suggestOrderQty(200, 0)).toBe(200)
+    expect(suggestOrderQty(400, 0)).toBe(400)
+    expect(suggestOrderQty(1200, 0)).toBe(1200)
   })
 
   it('tồn đủ → 0, không đặt', () => {
     // File TTL dòng 3: cần 100, tồn 100 → 0
-    expect(suggestOrderQty(100, 100, 3)).toBe(0)
-    expect(suggestOrderQty(100, 500, 3)).toBe(0)
+    expect(suggestOrderQty(100, 100)).toBe(0)
+    expect(suggestOrderQty(100, 500)).toBe(0)
   })
 
   it('tồn một phần thì chỉ đặt phần thiếu', () => {
     // File HAPPYCO: cần 2800, tồn 800 → thiếu 2000 (đơn chốt 2500 do NCC bán lô)
-    expect(suggestOrderQty(2800, 800, 0)).toBe(2000)
-    expect(suggestOrderQty(2800, 800, 3)).toBe(2060)
+    expect(suggestOrderQty(2800, 800)).toBe(2000)
   })
 
-  it('hao hụt trống coi như 0%', () => {
-    expect(suggestOrderQty(100, 0, null)).toBe(100)
+  it('phần thiếu lẻ thì làm tròn LÊN — đặt thiếu còn tệ hơn đặt dư', () => {
+    expect(suggestOrderQty(350.5, 0)).toBe(351)
+  })
+
+  it('ô trống coi như 0', () => {
+    expect(suggestOrderQty(100, null)).toBe(100)
+    expect(suggestOrderQty(null, 50)).toBe(0)
   })
 })
 
@@ -154,7 +164,7 @@ describe('metadata mẫu', () => {
   })
 
   it('khối chữ ký khác nhau', () => {
-    expect(poTemplateMeta('accessory').signerRole).toBe('Người Lập')
+    expect(poTemplateMeta('accessory').signerRole).toBe('TRƯỞNG PHÒNG CUNG ỨNG')
     expect(poTemplateMeta('aluminium').signerRole).toBe('TRƯỞNG PHÒNG KẾ HOẠCH')
   })
 

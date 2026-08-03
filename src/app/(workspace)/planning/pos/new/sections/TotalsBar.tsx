@@ -53,7 +53,7 @@ export function TotalsBar({
 }) {
   return (
     <div className="sticky bottom-0 z-20 -mx-1 rounded-xl border border-zinc-200 bg-white/95 px-3.5 py-2.5 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
         <span className="text-zinc-400">
           Cộng tiền hàng{' '}
           <b className="text-zinc-700 tabular-nums dark:text-zinc-200">{num(subtotal)}</b>
@@ -65,6 +65,7 @@ export function TotalsBar({
               type="number"
               min="0"
               step="1000"
+              onWheel={(e) => e.currentTarget.blur()}
               value={discount}
               onChange={(e) =>
                 onDiscountChange(e.target.value === '' ? '' : Number(e.target.value))
@@ -81,6 +82,7 @@ export function TotalsBar({
             min="0"
             max="100"
             step="0.5"
+            onWheel={(e) => e.currentTarget.blur()}
             value={vat}
             onChange={(e) =>
               onVatChange(e.target.value === '' ? '' : Number(e.target.value))
@@ -111,31 +113,46 @@ export function TotalsBar({
           <option value="USD">USD</option>
         </select>
 
-        <span className="ml-auto flex items-baseline gap-2">
-          <span className="text-zinc-400">Tổng thanh toán</span>
-          <b className="text-lg tabular-nums">{num(grandTotal)}</b>
+        {/*
+          Tổng · lý do khoá · nút gửi đi LIỀN MỘT CỤM ở mép phải.
+          Để rời nhau thì trên màn 1366 cụm bị xuống dòng và nút chính tụt xuống
+          hàng hai — thanh cao 94px, ăn thêm một phần ba màn vốn đã chật vì bảng.
+          Lý do khoá co lại được (`truncate`), nút thì không.
+        */}
+        {/*
+          TỔNG TIỀN VÀ NÚT GỬI ĐI LIỀN NHAU, KHÔNG TÁCH.
+          Bản cũ để nút là một item rời của khung `flex-wrap`: trên màn 1366 nó
+          bị đẩy xuống hàng hai một mình, thanh cao 94px — ăn hơn một phần mười
+          màn hình vốn đã chật vì bảng dòng hàng.
+        */}
+        <span className="ml-auto flex shrink-0 items-center gap-3">
+          <span className="flex items-baseline gap-2">
+            <span className="text-zinc-400">Tổng thanh toán</span>
+            <b className="text-lg tabular-nums">{num(grandTotal)}</b>
+          </span>
+          <button
+            type="button"
+            disabled={busy || !!problem}
+            title={problem ? `Chưa gửi được: ${problem}` : undefined}
+            onClick={onSubmit}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy && <Spinner size={14} />}
+            {busy ? 'Đang lưu…' : submitLabel}
+          </button>
         </span>
         {/*
-          Lý do nút bị khoá phải NHÌN LÀ THẤY. Trước đây là chữ nhỏ màu hổ phách
-          lẫn trong thanh tổng tiền đầy số — người dùng thấy nút xám và đoán.
-          Nay: viền + nền cảnh báo, kèm `title` trên chính nút để rê chuột cũng ra.
+          Lý do nút bị khoá phải NHÌN LÀ THẤY — trước đây là chữ nhỏ màu hổ phách
+          lẫn trong thanh đầy số, người dùng thấy nút xám rồi đoán. `basis-full`
+          cho nó HẲN một dòng riêng bên dưới: cắt cụt thành mỗi dấu ⚠ để nhét vừa
+          hàng trên thì cũng bằng không nói gì.
         */}
         {problem && (
-          <span className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-[12px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+          <span className="inline-flex basis-full items-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-400">
             <span aria-hidden>⚠</span>
             Chưa gửi được: {problem}
           </span>
         )}
-        <button
-          type="button"
-          disabled={busy || !!problem}
-          title={problem ? `Chưa gửi được: ${problem}` : undefined}
-          onClick={onSubmit}
-          className="inline-flex items-center justify-center gap-2 rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {busy && <Spinner size={14} />}
-          {busy ? 'Đang lưu…' : submitLabel}
-        </button>
       </div>
     </div>
   )

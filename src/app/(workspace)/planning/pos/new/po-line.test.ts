@@ -31,15 +31,12 @@ const base: PoLineDto = {
   spec: null,
   note: 'Dọc ngồi',
   material_grade: null,
-  product_code: null,
   dm_per_sp: null,
   qty_demand: null,
   qty_on_hand: null,
-  waste_pct: null,
   die_code: null,
   weight_per_m: null,
   bar_length_m: null,
-  bar_surplus: null,
   dimension_text: null,
   finish: null,
   weight_per_unit: null,
@@ -75,7 +72,7 @@ describe('mở đơn để sửa — thành tiền phải y nguyên', () => {
     [
       'nhôm (kg/m × dài cây × số cây)',
       'aluminium',
-      { ...base, weight_per_m: 0.248, bar_length_m: 5.65, bar_surplus: 3 },
+      { ...base, weight_per_m: 0.248, bar_length_m: 5.65 },
     ],
     [
       'inox theo kg/cây',
@@ -161,6 +158,7 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     sub_group: null,
     spec: null,
     po_template: 'metal_kg',
+    kg_per_unit: null,
     kg_per_m: 1.5542,
     default_bar_length_m: 6,
     vat_rate: null,
@@ -186,6 +184,39 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
 
   it('chưa có barem → để trống, nhập theo phiếu cân NCC', () => {
     const l = newLine('metal_kg', { ...inox, kg_per_m: null })
+    expect(l.weight_per_unit).toBe('')
+  })
+
+  /*
+   * HÀNG TẤM / CUỘN (0112). Tấm inox không có barem theo mét — cân theo TẤM, đúng
+   * như cột "Trọng lượng tấm (kg)" trên đơn Thông Đạt / Hào Tư Hùng. Trước 0112
+   * chúng luôn để trống ô kg/đơn-vị nên phải gõ tay mỗi lần đặt.
+   */
+  const tam: PoMaterial = {
+    ...inox,
+    id: 'm-tam',
+    code: 'IN-0002',
+    name: 'Inox tấm 304 khổ 1220x2440 dày 1.0',
+    unit: 'tấm',
+    kg_per_m: null,
+    default_bar_length_m: null,
+    kg_per_unit: 23.94,
+  }
+
+  it('hàng tấm: lấy thẳng kg/đơn-vị đã khai ở danh mục', () => {
+    const l = newLine('metal_kg', tam)
+    expect(l.weight_per_unit).toBe(23.94)
+    expect(lineProblem('metal_kg', { ...l, qty: 10, price: 73_200 })).toBeNull()
+  })
+
+  it('kg/đơn-vị khai tay THẮNG số suy từ kg/m × dài cây', () => {
+    // Số cân thật luôn đúng hơn số suy ra — kể cả khi vật tư có đủ cả hai.
+    const l = newLine('metal_kg', { ...inox, kg_per_unit: 9.41 })
+    expect(l.weight_per_unit).toBe(9.41)
+  })
+
+  it('hàng tấm chưa khai kg/đơn-vị → vẫn để trống, không suy bừa', () => {
+    const l = newLine('metal_kg', { ...tam, kg_per_unit: null })
     expect(l.weight_per_unit).toBe('')
   })
 

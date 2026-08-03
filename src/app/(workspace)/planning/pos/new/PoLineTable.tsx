@@ -2,15 +2,43 @@
 
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { LineCell, NoteCell, ProductCodeCell, calc, cell } from './PoLineCells'
+import { LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
 import { lineAmount, lineProblem, lineQty2, type Line, type Num } from './po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
 /**
+ * Ô GHIM hai mép, kèm BÓNG ĐỔ ở cạnh trong.
+ *
+ * Không có bóng thì cột ghim và cột đang trượt dưới nó dính liền một khối —
+ * nhìn ra y hệt "chữ bị cắt mất" chứ không phải "còn nội dung ở bên kia". Bóng
+ * là thứ duy nhất nói cho người dùng biết bảng còn cuộn được.
+ */
+const stickyLeft =
+  'sticky left-0 z-[1] w-[196px] min-w-[196px] bg-white shadow-[6px_0_6px_-6px_rgba(0,0,0,0.18)] dark:bg-zinc-950'
+const stickyRight =
+  'sticky right-0 z-[1] bg-white shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.18)] dark:bg-zinc-950'
+
+/**
+ * Ô kế tiếp trong CÙNG MỘT HÀNG, tìm theo `data-cell`.
+ *
+ * Dùng DOM thay vì một mảng ref: bảng dựng động theo mẫu đơn nên số ô mỗi hàng
+ * đổi theo mẫu, còn chuỗi nhập thì luôn cố định `SL đặt → Đơn giá → ô tìm`.
+ */
+function focusInRow(from: HTMLElement, cellName: string): boolean {
+  const next = from
+    .closest('tr')
+    ?.querySelector<HTMLInputElement>(`[data-cell="${cellName}"]`)
+  if (!next) return false
+  next.focus()
+  next.select?.()
+  return true
+}
+
+/**
  * BẢNG DÒNG HÀNG của đơn đặt.
  *
- * Khung hàng cố định hai đầu — `# · Mã SP · Vật tư · … · SL đặt · Đơn giá ·
+ * Khung hàng cố định hai đầu — `# · Vật tư · … · SL đặt · Đơn giá ·
  * Thành tiền · Ghi chú` — đúng thứ tự đơn giấy phòng Cung ứng đang ký. Phần giữa
  * là cột riêng của mẫu, đọc từ khai báo `PO_FIELDS`; file này không biết mẫu nào
  * có cột gì, nên thêm mẫu đơn thứ sáu không phải sửa ở đây.
@@ -22,32 +50,41 @@ export function PoLineTable({
   template,
   lines,
   suggestions,
-  products = [],
   currency,
   onPatch,
   onRemove,
-  addRow,
+  focusIndex = null,
+  onFocused,
+  onDoneRow,
 }: {
   template: PoTemplate
   lines: Line[]
   /** SL đề xuất từ nhu cầu BOM theo material_id — chỉ hiện, không tự điền. */
   suggestions: Map<string, number>
-  /** Mã SP của LSX đang chọn — rỗng = đơn ngoài LSX, ô Mã SP quay về gõ tay. */
-  products?: { code: string; name: string }[]
   currency: string
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
-  /** Ô chọn vật tư luôn nằm cuối bảng — dòng nhập nhanh. */
-  addRow: React.ReactNode
+  /**
+   * Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó.
+   *
+   * Trước đây chọn xong vật tư là con trỏ ở lại ô tìm, trong khi dòng mới chèn
+   * PHÍA TRÊN: mỗi dòng phải bỏ bàn phím, rê chuột lên gõ SL rồi đơn giá. Ghi
+   * chú trong `MaterialPicker` vẫn hứa "con trỏ tự nhảy sang SL" — nay mới có.
+   */
+  focusIndex?: number | null
+  /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */
+  onFocused?: () => void
+  /** Gõ xong đơn giá dòng cuối → trả con trỏ về ô tìm để thêm dòng kế. */
+  onDoneRow?: () => void
 }) {
   const meta = poTemplateMeta(template)
   const cols = PO_FIELDS[template]
   const priceLabel = meta.priceUnit ? `Đơn giá / ${meta.priceUnit}` : 'Đơn giá'
   /**
-   * Số cột một hàng: `# · Mã SP · Vật tư` + cột riêng của mẫu +
+   * Số cột một hàng: `Nhận dạng` (gộp # · Vật tư) + cột riêng của mẫu +
    * `SL đặt · Đơn giá · Thành tiền · Ghi chú` + nút xoá.
    */
-  const totalColSpan = 8 + cols.length
+  const totalColSpan = 6 + cols.length
 
   return (
     <div className="overflow-x-auto">
@@ -56,33 +93,55 @@ export function PoLineTable({
         vừa màn hình — ô Ghi chú tụt còn ~30px và chữ rơi từng ký tự một dòng.
         Có min-w thì khung `overflow-x-auto` bên ngoài cuộn ngang, cột giữ nguyên.
       */}
-      <table className="w-full min-w-[1240px] text-[13px] tabular-nums">
+      <table className="w-full min-w-[1120px] text-[13px] tabular-nums">
         <thead className="bg-zinc-50 dark:bg-zinc-900/50">
-          <tr className="text-left text-[10px] text-zinc-500 uppercase">
-            {/* Ba cột đầu GHIM lại — bảng rộng hơn màn hình, cuộn sang phải mà mất
-                mã SP + tên vật tư thì không biết đang gõ số cho dòng nào. */}
-            <th className="sticky left-0 z-[2] w-7 bg-zinc-50 py-2 pl-3 text-center dark:bg-zinc-900">
-              #
-            </th>
-            <th className="sticky left-7 z-[2] w-[92px] bg-zinc-50 py-2 pr-2 dark:bg-zinc-900">
-              Mã SP
-            </th>
-            <th className="sticky left-[120px] z-[2] min-w-[190px] bg-zinc-50 py-2 pr-2 dark:bg-zinc-900">
-              Vật tư
+          <tr className="text-left text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:text-zinc-300">
+            {/*
+              MỘT CỘT GHIM DUY NHẤT, gộp `# · Vật tư`.
+
+              Trước là ba ô sticky rời (`#`, `Mã SP`, `Vật tư`) với `left` gõ
+              cứng: `left-7` (28px) và `left-[112px]`. Nhưng bảng dùng
+              `table-layout: auto` — khi bị ép về `min-w`, trình duyệt bóp cột
+              nhỏ lại: đo thực tế `#` còn 27px và `Mã SP` còn 77px, tổng 104 chứ
+              không phải 112. Ô "Vật tư" vẫn ghim ở 112 nên ĐÈ LÊN cột kế 8px —
+              đúng chỗ chữ "VẬT LIỆU" mất chữ "V". Gõ cứng số nào cũng sai, vì
+              bề rộng đổi theo mẫu đơn và theo bề ngang màn hình.
+
+              Gộp thành một ô `left-0` thì không còn phép cộng nào để sai, và
+              `min-w` giữ cho nó không bị bóp.
+            */}
+            <th
+              className={`${stickyLeft} z-[2]! bg-zinc-50! py-2 pr-2 pl-3 dark:bg-zinc-900!`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="w-4 shrink-0 text-center">#</span>
+                <span className="min-w-0 flex-1">Vật tư</span>
+              </div>
             </th>
             {cols.map((c) => (
               <th
                 key={c.key}
-                className={`${c.width} py-2 pr-2 ${c.align === 'right' ? 'text-right' : ''}`}
+                className={`${c.width} py-2 pr-2 whitespace-nowrap ${c.align === 'right' ? 'text-right' : ''}`}
               >
                 {c.label}
               </th>
             ))}
-            <th className="w-[88px] py-2 pr-2 text-right">SL đặt</th>
-            <th className="w-[112px] py-2 pr-2 text-right">{priceLabel}</th>
-            <th className="w-[108px] py-2 pr-2 text-right">Thành tiền</th>
-            <th className="w-[210px] py-2 pr-2">Ghi chú</th>
-            <th className="w-7 py-2" />
+            <th className="w-[80px] py-2 pr-2 text-right whitespace-nowrap">SL đặt</th>
+            <th className="w-[104px] py-2 pr-2 text-right whitespace-nowrap">
+              {priceLabel}
+            </th>
+            <th className="w-[100px] py-2 pr-2 text-right whitespace-nowrap">
+              Thành tiền
+            </th>
+            <th className="w-[150px] py-2 pr-2 whitespace-nowrap">Ghi chú</th>
+            {/* NÚT XOÁ GHIM BÊN PHẢI. Mẫu inox/bao bì có tới 5 cột riêng nên
+                bảng rộng ~1270px trong khung 1061px của laptop 1366 — đo được
+                179px bị đẩy khuất, và thứ rơi ra ngoài đầu tiên đúng là cột
+                này. Muốn xoá một dòng phải cuộn ngang, mà cuộn ngang thì mọi
+                danh sách đang mở tự đóng (`AnchoredPopover`). */}
+            <th
+              className={`${stickyRight} z-[2]! w-8 bg-zinc-50! py-2 dark:bg-zinc-900!`}
+            />
           </tr>
         </thead>
         <tbody>
@@ -90,9 +149,9 @@ export function PoLineTable({
             <tr>
               <td
                 colSpan={totalColSpan}
-                className="py-6 text-center text-xs text-zinc-400"
+                className="py-6 text-center text-xs text-zinc-500"
               >
-                Chưa có dòng nào — gõ tên vật tư ở ô dưới cùng để thêm.
+                Chưa có dòng nào — gõ tên vật tư ở thanh “Thêm dòng” ngay dưới bảng.
               </td>
             </tr>
           )}
@@ -101,14 +160,17 @@ export function PoLineTable({
             const kg = lineQty2(template, l)
             const problem = lineProblem(template, l)
             const suggest = suggestions.get(l.material_id) ?? null
-            // Mẫu phụ kiện: SL gợi ý = (nhu cầu − tồn) × (1 + hao hụt%), làm tròn lên.
-            const wasteSuggest =
-              template === 'accessory' && l.qty_demand !== ''
-                ? suggestOrderQty(
-                    Number(l.qty_demand),
-                    Number(l.qty_on_hand) || 0,
-                    Number(l.waste_pct) || 0,
-                  )
+            /*
+             * SL gợi ý = nhu cầu − tồn. Không cộng hao hụt.
+             *
+             * Điều kiện là "dòng có SL đơn hàng", KHÔNG phải "mẫu là phụ kiện":
+             * cặp ô SL đơn hàng · Tồn kho nay có ở phụ kiện, nhôm và bao bì (xem
+             * `PO_FIELDS`). Khoá theo tên mẫu thì thêm mẫu nào cũng phải nhớ sửa
+             * thêm ở đây — mà quên thì mất gợi ý mà chẳng có gì báo.
+             */
+            const shortSuggest =
+              l.qty_demand !== ''
+                ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0)
                 : null
 
             return (
@@ -116,25 +178,40 @@ export function PoLineTable({
                 key={l.material_id}
                 className="border-t border-zinc-100 align-top dark:border-zinc-900"
               >
-                <td className="sticky left-0 z-[1] bg-white py-2 pl-3 text-center text-xs text-zinc-400 dark:bg-zinc-950">
-                  <div className="flex h-[30px] items-center justify-center">{i + 1}</div>
-                </td>
-                <td className="sticky left-7 z-[1] bg-white py-2 pr-2 dark:bg-zinc-950">
-                  <ProductCodeCell
-                    value={l.product_code}
-                    products={products}
-                    onChange={(v) => onPatch(i, { product_code: v })}
-                    label={`Mã SP ${l.name}`}
-                  />
-                </td>
-                <td className="sticky left-[120px] z-[1] bg-white py-2 pr-2 dark:bg-zinc-950">
-                  {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua phải đọc
-                      được đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết đúng hàng. */}
-                  <div className="text-xs font-semibold break-words" title={l.name}>
-                    {l.name}
-                  </div>
-                  <div className="mt-0.5 font-mono text-[10px] text-zinc-400">
-                    {l.code} · {l.unit} · tồn {num(l.on_hand)}
+                <td className={`${stickyLeft} py-2 pr-2 pl-3`}>
+                  <div className="flex items-start gap-2">
+                    <span className="w-4 shrink-0 pt-2 text-center text-xs font-medium text-zinc-500">
+                      {i + 1}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua phải
+                          đọc đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết đúng hàng. */}
+                      <div
+                        className="text-xs leading-snug font-semibold break-words text-zinc-900 dark:text-zinc-100"
+                        title={l.name}
+                      >
+                        {l.name}
+                      </div>
+                      {/* Mã đậm ngang tên: tên hàng trong danh mục trùng nhau
+                          nhiều, mã mới là thứ chốt đúng món và là thứ đọc cho
+                          NCC qua điện thoại. ĐVT/tồn nhạt hơn nhưng vẫn đọc
+                          được — không còn zinc-400. */}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                        <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-200">
+                          {l.code}
+                        </span>
+                        <span aria-hidden>·</span>
+                        <span>{l.unit}</span>
+                        <span aria-hidden>·</span>
+                        <span
+                          className={
+                            l.on_hand > 0 ? 'text-emerald-700 dark:text-emerald-400' : ''
+                          }
+                        >
+                          tồn {num(l.on_hand)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </td>
 
@@ -149,6 +226,21 @@ export function PoLineTable({
                     type="number"
                     min="0"
                     step="0.01"
+                    data-cell="qty"
+                    onWheel={blurOnWheel}
+                    /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột lên bảng. */
+                    ref={(el) => {
+                      if (el && focusIndex === i) {
+                        el.focus()
+                        el.select()
+                        onFocused?.()
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      e.preventDefault()
+                      focusInRow(e.currentTarget, 'price')
+                    }}
                     value={l.qty}
                     onChange={(e) =>
                       onPatch(i, {
@@ -158,21 +250,22 @@ export function PoLineTable({
                     className={`${cell} text-right font-medium`}
                     aria-label={`SL đặt ${l.name}`}
                   />
-                  {/* Gợi ý SL: từ hao hụt (mẫu phụ kiện) hoặc từ nhu cầu BOM. */}
+                  {/* Gợi ý SL: phần còn thiếu của dòng (mẫu phụ kiện), hoặc đề
+                      xuất từ nhu cầu BOM của lệnh. */}
                   {l.qty === '' &&
-                    (wasteSuggest ?? suggest) != null &&
-                    (wasteSuggest ?? suggest)! > 0 && (
+                    (shortSuggest ?? suggest) != null &&
+                    (shortSuggest ?? suggest)! > 0 && (
                       <button
                         type="button"
-                        onClick={() => onPatch(i, { qty: (wasteSuggest ?? suggest)! })}
-                        className="mt-0.5 block w-full text-right text-[10px] text-sky-600 hover:underline dark:text-sky-400"
+                        onClick={() => onPatch(i, { qty: (shortSuggest ?? suggest)! })}
+                        className="mt-0.5 block w-full text-right text-[10px] font-medium text-sky-700 hover:underline dark:text-sky-400"
                         title={
-                          wasteSuggest != null
-                            ? 'Từ (SL đơn hàng − tồn) × hao hụt — bấm để dùng'
+                          shortSuggest != null
+                            ? 'SL đơn hàng − tồn kho — bấm để dùng'
                             : 'Đề xuất từ nhu cầu BOM — bấm để dùng'
                         }
                       >
-                        dùng {num((wasteSuggest ?? suggest)!)} ↩
+                        dùng {num((shortSuggest ?? suggest)!)} ↩
                       </button>
                     )}
                 </td>
@@ -181,6 +274,15 @@ export function PoLineTable({
                     type="number"
                     min="0"
                     step="1"
+                    data-cell="price"
+                    onWheel={blurOnWheel}
+                    /* Xong đơn giá là xong dòng — Enter trả con trỏ về ô tìm để
+                       gõ dòng kế, cả đơn nhập được không rời bàn phím. */
+                    onKeyDown={(e) => {
+                      if (e.key !== 'Enter') return
+                      e.preventDefault()
+                      onDoneRow?.()
+                    }}
                     value={l.price}
                     onChange={(e) =>
                       onPatch(i, {
@@ -223,7 +325,7 @@ export function PoLineTable({
                     onChange={(v) => onPatch(i, { note: v })}
                   />
                 </td>
-                <td className="py-2 pr-1 text-center">
+                <td className={`${stickyRight} py-2 pr-1 text-center`}>
                   <button
                     type="button"
                     onClick={() => onRemove(i)}
@@ -236,18 +338,6 @@ export function PoLineTable({
               </tr>
             )
           })}
-
-          {/* Dòng nhập nhanh — luôn ở cuối bảng, focus sẵn để gõ liên tục. */}
-          <tr className="border-t border-sky-200 bg-sky-50/50 dark:border-sky-900 dark:bg-sky-950/20">
-            <td className="py-2.5 pl-3 text-center text-xs text-zinc-400">＋</td>
-            {/* Ô tìm trải từ cột Mã SP tới hết phần cột riêng của mẫu. */}
-            <td colSpan={cols.length + 2} className="py-2.5 pr-2">
-              {addRow}
-            </td>
-            <td colSpan={5} className="py-2.5 pr-3 text-right text-[11px] text-zinc-400">
-              chọn vật tư → nhập SL → nhập đơn giá
-            </td>
-          </tr>
         </tbody>
         {lines.length > 0 && (
           <tfoot>
@@ -256,14 +346,14 @@ export function PoLineTable({
                   cột Thành tiền; hai cột cuối (Ghi chú, nút xoá) để đơn vị tiền. */}
               <td
                 colSpan={totalColSpan - 3}
-                className="py-2 pr-2 text-right text-[10px] font-semibold text-zinc-500 uppercase"
+                className="py-2 pr-2 text-right text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:text-zinc-300"
               >
                 Cộng tiền hàng ({lines.length} dòng)
               </td>
               <td className="py-2 pr-2 text-right font-bold whitespace-nowrap">
                 {num(Math.round(lines.reduce((s, l) => s + lineAmount(template, l), 0)))}
               </td>
-              <td colSpan={2} className="py-2 pl-2 text-xs text-zinc-400">
+              <td colSpan={2} className="py-2 pl-2 text-xs font-medium text-zinc-500">
                 {currency}
               </td>
             </tr>

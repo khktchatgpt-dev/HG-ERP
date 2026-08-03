@@ -1856,6 +1856,161 @@ export type Database = {
           },
         ]
       }
+      supply_lsx_material_plan: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          material_id: string | null
+          material_name: string
+          note: string | null
+          po_line_id: string | null
+          product_code: string | null
+          product_id: string | null
+          product_name: string | null
+          product_qty: number | null
+          production_order_id: string
+          qty_on_hand: number | null
+          qty_per_product: number | null
+          qty_required: number
+          qty_to_order: number
+          source: string
+          status: string
+          supplier_id: string | null
+          supplier_label: string | null
+          unit: string | null
+          unit_price: number | null
+          updated_at: string
+          updated_by: string | null
+          waste_pct: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string | null
+          material_name: string
+          note?: string | null
+          po_line_id?: string | null
+          product_code?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          product_qty?: number | null
+          production_order_id: string
+          qty_on_hand?: number | null
+          qty_per_product?: number | null
+          qty_required?: number
+          qty_to_order?: number
+          source?: string
+          status?: string
+          supplier_id?: string | null
+          supplier_label?: string | null
+          unit?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          waste_pct?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          material_id?: string | null
+          material_name?: string
+          note?: string | null
+          po_line_id?: string | null
+          product_code?: string | null
+          product_id?: string | null
+          product_name?: string | null
+          product_qty?: number | null
+          production_order_id?: string
+          qty_on_hand?: number | null
+          qty_per_product?: number | null
+          qty_required?: number
+          qty_to_order?: number
+          source?: string
+          status?: string
+          supplier_id?: string | null
+          supplier_label?: string | null
+          unit?: string | null
+          unit_price?: number | null
+          updated_at?: string
+          updated_by?: string | null
+          waste_pct?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_lsx_material_plan_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_po_line_id_fkey"
+            columns: ["po_line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_material_plan_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_purchase_order_lines: {
         Row: {
           area_m2: number | null
@@ -3728,6 +3883,7 @@ export type Database = {
           id: string
           is_active: boolean
           kg_per_m: number | null
+          kg_per_unit: number | null
           last_purchase_price: number | null
           max_stock: number | null
           min_stock: number
@@ -3755,6 +3911,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           kg_per_m?: number | null
+          kg_per_unit?: number | null
           last_purchase_price?: number | null
           max_stock?: number | null
           min_stock?: number
@@ -3782,6 +3939,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           kg_per_m?: number | null
+          kg_per_unit?: number | null
           last_purchase_price?: number | null
           max_stock?: number | null
           min_stock?: number

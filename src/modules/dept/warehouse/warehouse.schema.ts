@@ -31,6 +31,7 @@ export const materialCreateSchema = z.object({
   po_template: z.enum(PO_TEMPLATES).optional().nullable(),
   // Nhôm: kg/m và chiều dài cây mặc định — mẫu đơn nhôm tự tính tổng kg từ đây.
   kg_per_m: z.coerce.number().min(0).optional().nullable(),
+  kg_per_unit: z.coerce.number().min(0).optional().nullable(),
   default_bar_length_m: z.coerce.number().min(0).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
 })

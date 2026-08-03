@@ -12,6 +12,8 @@ type Settings = {
   company_name: string
   company_tax_code: string
   company_address: string
+  /** Địa danh mở đầu dòng ngày tháng trên phiếu in ("Gia Lai, ngày …"). */
+  company_locality: string
   company_phone: string
   company_email: string
   company_fax: string
@@ -155,6 +157,19 @@ export function SettingsForm({ initial }: { initial: Settings }) {
             <input
               value={s.company_address}
               onChange={(e) => upd('company_address', e.target.value)}
+              className={cls}
+            />
+          </Field>
+
+          <Field
+            label="Địa danh trên phiếu in"
+            hint='Mở đầu dòng ngày tháng: "Gia Lai, ngày 06 tháng 07 năm 2026".'
+            className="sm:col-span-2"
+          >
+            <input
+              value={s.company_locality}
+              onChange={(e) => upd('company_locality', e.target.value)}
+              placeholder="Gia Lai"
               className={cls}
             />
           </Field>
@@ -303,11 +318,14 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({
   label,
   required,
+  hint,
   children,
   className = '',
 }: {
   label: string
   required?: boolean
+  /** Câu giải thích dưới ô — dùng khi tên ô chưa nói hết công dụng. */
+  hint?: string
   children: React.ReactNode
   className?: string
 }) {
@@ -318,6 +336,7 @@ function Field({
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
       {children}
+      {hint && <span className="text-xs text-zinc-400">{hint}</span>}
     </label>
   )
 }

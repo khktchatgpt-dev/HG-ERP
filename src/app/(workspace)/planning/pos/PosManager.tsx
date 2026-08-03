@@ -20,6 +20,9 @@ import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { RefChain, type ChainNode } from '@/components/erp/RefChain'
 import { PoStatusStepper } from './PoStatusStepper'
+import { PosByLsx } from './PosByLsx'
+import { groupPosByLsx, type LsxRef } from './pos-groups'
+import { canReschedule } from '@/lib/po-reschedule'
 
 type PoStatus =
   | 'pending_approval'
@@ -120,11 +123,14 @@ const daysBetween = (aIso: string, bIso: string) =>
 export function PosManager({
   pos,
   suppliers,
+  lsxs,
   canEdit,
   canApprove,
 }: {
   pos: Po[]
   suppliers: SupplierOption[]
+  /** LSX đang chạy (đã duyệt / đang SX) — để nêu cả lệnh CHƯA có đơn nào. */
+  lsxs: LsxRef[]
   canEdit: boolean
   canApprove: boolean
 }) {
@@ -137,12 +143,25 @@ export function PosManager({
     lines: PoLine[]
     statusLines: StatusLine[]
   } | null>(null)
+  /** Đơn đang dời hẹn giao — mở hộp thoại nhỏ, không mở lại cả form soạn đơn. */
+  const [rescheduling, setRescheduling] = useState<{
+    po: Po
+    date: string
+    reason: string
+  } | null>(null)
 
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'late' | PoStatus>('all')
   const [supplierFilter, setSupplierFilter] = useState('all')
   // Loại đơn: theo lệnh SX / ngoài LSX (0076).
   const [typeFilter, setTypeFilter] = useState<'all' | 'lsx' | 'standalone'>('all')
+  /*
+   * KIỂU XEM. Mặc định XẾP THEO LỆNH: câu hỏi thường trực của người làm kế hoạch
+   * là "lệnh này đã đặt những gì, còn thiếu gì", mà bảng phẳng chỉ trả lời được
+   * câu ngược lại. Bảng phẳng vẫn giữ nguyên cho lúc cần soi một đơn cụ thể hoặc
+   * sắp xếp theo cột — không bỏ đi, chỉ thôi làm mặc định.
+   */
+  const [view, setView] = useState<'lsx' | 'flat'>('lsx')
 
   // PO quá hẹn giao NCC — chỉ hiển thị (notification đẩy để GĐ2, xem late-risk.ts).
   const today = new Date().toISOString().slice(0, 10)
@@ -165,6 +184,13 @@ export function PosManager({
       return true
     })
   }, [pos, q, statusFilter, supplierFilter, typeFilter, today])
+
+  // Gom theo lệnh — chạy trên KẾT QUẢ ĐÃ LỌC để bộ lọc trên thanh công cụ có tác
+  // dụng ở cả hai kiểu xem.
+  const grouped = useMemo(
+    () => groupPosByLsx(filtered, lsxs, today),
+    [filtered, lsxs, today],
+  )
 
   const stats = useMemo(() => {
     let pending = 0
@@ -268,6 +294,32 @@ export function PosManager({
     }
   }
 
+  /**
+   * DỜI HẸN GIAO — thao tác duy nhất được phép trên đơn ĐÃ DUYỆT.
+   *
+   * Đơn đã duyệt không cho sửa lại (giá và dòng hàng là cam kết với GĐ và là bản
+   * NCC đang cầm). Nhưng ngày giao thì đổi thật; không có đường ghi lại thì người
+   * dùng phải chọn giữa để ngày sai (cảnh báo "quá hẹn" kêu oan) hoặc huỷ đơn
+   * tạo lại (mất số PO đã gửi NCC).
+   */
+  async function submitReschedule() {
+    if (!rescheduling) return
+    const { po, date, reason } = rescheduling
+    if (!date || !reason.trim()) return
+    const ok = await send(`/api/dept/supply/pos/${po.id}/reschedule`, 'POST', {
+      expected_at: date,
+      reason: reason.trim(),
+    })
+    if (ok) {
+      toast.success(
+        `Đã dời hẹn giao ${po.code}`,
+        `${new Date(date).toLocaleDateString('vi-VN')} — lý do đã ghi vào đơn`,
+      )
+      setRescheduling(null)
+      setViewing(null)
+    }
+  }
+
   async function cancelPo(po: Po) {
     const reason = window.prompt(`Lý do huỷ ${po.code}:`)?.trim()
     if (!reason) return
@@ -276,6 +328,52 @@ export function PosManager({
       toast.success('Đã huỷ', po.code)
       setViewing(null)
     }
+  }
+
+  /** Menu ⋯ của một đơn — dùng chung cho cả bảng phẳng lẫn thẻ theo lệnh. */
+  function rowMenuFor(p: Po) {
+    const items: { label: string; onClick: () => void; danger?: boolean }[] = [
+      { label: 'Xem chi tiết', onClick: () => void openView(p) },
+    ]
+    if (canEdit && p.status === 'pending_approval') {
+      items.push({ label: 'Sửa', onClick: () => void openEdit(p, 'edit') })
+    }
+    if (canEdit && p.status === 'cancelled') {
+      items.push({
+        label: 'Tạo lại từ đơn này',
+        onClick: () => void openEdit(p, 'duplicate'),
+      })
+    }
+    if (canApprove && p.status === 'pending_approval') {
+      items.push(
+        { label: 'Duyệt', onClick: () => void decide(p, 'approve') },
+        { label: 'Từ chối', onClick: () => void decide(p, 'reject'), danger: true },
+      )
+    }
+    if (canEdit && canReschedule(p.status).ok) {
+      items.push({
+        label: 'Đổi hẹn giao',
+        onClick: () =>
+          setRescheduling({
+            po: p,
+            date: p.expected_at?.slice(0, 10) ?? '',
+            reason: '',
+          }),
+      })
+    }
+    if (canEdit && p.status === 'approved') {
+      items.push({ label: 'Gửi NCC', onClick: () => void advance(p, 'ordered') })
+    }
+    if (canEdit && p.status === 'ordered') {
+      items.push({ label: 'NCC xác nhận', onClick: () => void advance(p, 'confirmed') })
+    }
+    if (canEdit && ['ordered', 'confirmed'].includes(p.status)) {
+      items.push({ label: 'Đang giao', onClick: () => void advance(p, 'in_transit') })
+    }
+    if (canEdit && !['received', 'cancelled'].includes(p.status)) {
+      items.push({ label: 'Huỷ đơn', onClick: () => void cancelPo(p), danger: true })
+    }
+    return <RowMenu items={items} />
   }
 
   const columns: Column<Po>[] = [
@@ -386,48 +484,7 @@ export function PosManager({
     // Cột đệm co giãn: hút hết khoảng trống thừa về đây (giữa Ngày tạo và ⋯)
     // nên các cột nội dung bám trái gọn, nút ⋯ bám phải — không phình cột mã.
     { key: '_spacer', header: '', cell: () => null },
-    {
-      key: 'actions',
-      header: '',
-      width: '56px',
-      align: 'right',
-      cell: (p) => {
-        const items: { label: string; onClick: () => void; danger?: boolean }[] = [
-          { label: 'Xem chi tiết', onClick: () => void openView(p) },
-        ]
-        if (canEdit && p.status === 'pending_approval') {
-          items.push({ label: 'Sửa', onClick: () => void openEdit(p, 'edit') })
-        }
-        if (canEdit && p.status === 'cancelled') {
-          items.push({
-            label: 'Tạo lại từ đơn này',
-            onClick: () => void openEdit(p, 'duplicate'),
-          })
-        }
-        if (canApprove && p.status === 'pending_approval') {
-          items.push(
-            { label: 'Duyệt', onClick: () => void decide(p, 'approve') },
-            { label: 'Từ chối', onClick: () => void decide(p, 'reject'), danger: true },
-          )
-        }
-        if (canEdit && p.status === 'approved') {
-          items.push({ label: 'Gửi NCC', onClick: () => void advance(p, 'ordered') })
-        }
-        if (canEdit && p.status === 'ordered') {
-          items.push({
-            label: 'NCC xác nhận',
-            onClick: () => void advance(p, 'confirmed'),
-          })
-        }
-        if (canEdit && ['ordered', 'confirmed'].includes(p.status)) {
-          items.push({ label: 'Đang giao', onClick: () => void advance(p, 'in_transit') })
-        }
-        if (canEdit && !['received', 'cancelled'].includes(p.status)) {
-          items.push({ label: 'Huỷ đơn', onClick: () => void cancelPo(p), danger: true })
-        }
-        return <RowMenu items={items} />
-      },
-    },
+    { key: 'actions', header: '', width: '56px', align: 'right', cell: rowMenuFor },
   ]
 
   const btnPrimary =
@@ -439,10 +496,10 @@ export function PosManager({
       <PageHeader
         breadcrumbs={[
           { label: 'Kế hoạch - Cung ứng', href: '/planning' },
-          { label: 'Đơn đặt vật tư' },
+          { label: 'Quản lý đơn đặt hàng' },
         ]}
-        title="Đơn đặt vật tư (PO)"
-        description="Mỗi đơn = 1 NCC · gắn 1 LSX hoặc ngoài LSX (tiêu hao/dùng chung). GĐ duyệt xong mới gửi NCC (BR-05); về hàng do Kho ghi nhận."
+        title="Quản lý đơn đặt hàng"
+        description="Xếp theo lệnh sản xuất: mỗi lệnh gom đủ đơn của nó, kèm lệnh chưa đặt gì. Mỗi đơn = 1 NCC; GĐ duyệt xong mới gửi NCC (BR-05), về hàng do Kho ghi nhận."
         actions={
           canEdit && (
             <Link href="/planning/pos/new" className={btnPrimary}>
@@ -513,34 +570,74 @@ export function PosManager({
             </>
           }
           right={
-            busy ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
-                <Spinner size={12} /> Đang xử lý…
-              </span>
-            ) : undefined
+            <>
+              {busy && (
+                <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+                  <Spinner size={12} /> Đang xử lý…
+                </span>
+              )}
+              {/* Chuyển kiểu xem — "theo lệnh" để nắm việc, "danh sách" để soi
+                  một đơn hoặc sắp xếp theo cột. */}
+              <div className="inline-flex rounded-lg border border-zinc-200 p-0.5 text-[12px] dark:border-zinc-700">
+                {(
+                  [
+                    ['lsx', 'Theo lệnh SX'],
+                    ['flat', 'Danh sách'],
+                  ] as const
+                ).map(([v, label]) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={
+                      'rounded-md px-2.5 py-1 font-medium transition-colors ' +
+                      (view === v
+                        ? 'bg-sky-600 text-white'
+                        : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
+                    }
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </>
           }
         />
 
-        <DataTable<Po>
-          rows={filtered}
-          columns={columns}
-          storageKey="supply-pos"
-          rowClassName={(p) => (p.status === 'cancelled' ? 'opacity-60' : '')}
-          emptyState={
-            <EmptyState
-              icon="▩"
-              title={pos.length === 0 ? 'Chưa có đơn đặt nào' : 'Không khớp bộ lọc'}
-              description="Chọn LSX + NCC, tìm vật tư cần mua — hệ thống tự hiện tồn kho, bạn chỉ điền số lượng."
-              action={
-                canEdit && pos.length === 0 ? (
-                  <Link href="/planning/pos/new" className={btnPrimary}>
-                    + Tạo đơn đặt
-                  </Link>
-                ) : undefined
-              }
-            />
-          }
-        />
+        {view === 'lsx' ? (
+          <PosByLsx
+            groups={grouped.groups}
+            standalone={grouped.standalone}
+            emptyLsxs={grouped.emptyLsxs}
+            today={today}
+            canEdit={canEdit}
+            statusLabel={(p) => STATUS_LABEL[p.status]}
+            statusTone={(p) => STATUS_TONE[p.status]}
+            onView={(p) => void openView(p)}
+            renderActions={rowMenuFor}
+          />
+        ) : (
+          <DataTable<Po>
+            rows={filtered}
+            columns={columns}
+            storageKey="supply-pos"
+            rowClassName={(p) => (p.status === 'cancelled' ? 'opacity-60' : '')}
+            emptyState={
+              <EmptyState
+                icon="▩"
+                title={pos.length === 0 ? 'Chưa có đơn đặt nào' : 'Không khớp bộ lọc'}
+                description="Chọn LSX + NCC, tìm vật tư cần mua — hệ thống tự hiện tồn kho, bạn chỉ điền số lượng."
+                action={
+                  canEdit && pos.length === 0 ? (
+                    <Link href="/planning/pos/new" className={btnPrimary}>
+                      + Tạo đơn đặt
+                    </Link>
+                  ) : undefined
+                }
+              />
+            }
+          />
+        )}
       </div>
 
       {/* Chi tiết */}
@@ -561,7 +658,85 @@ export function PosManager({
             onAdvance={(to) => void advance(viewing.po, to)}
             onCancel={() => void cancelPo(viewing.po)}
             onEdit={() => void openEdit(viewing.po, 'edit')}
+            onReschedule={() =>
+              setRescheduling({
+                po: viewing.po,
+                date: viewing.po.expected_at?.slice(0, 10) ?? '',
+                reason: '',
+              })
+            }
           />
+        )}
+      </Modal>
+
+      <Modal
+        open={!!rescheduling}
+        onClose={() => setRescheduling(null)}
+        title={rescheduling ? `Đổi hẹn giao — ${rescheduling.po.code}` : ''}
+        maxWidth="sm:max-w-md"
+      >
+        {rescheduling && (
+          <div className="flex flex-col gap-3 text-sm">
+            <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+              Chỉ đổi <b>ngày giao</b>. Nhà cung cấp, dòng hàng và tiền giữ nguyên — đơn
+              đã duyệt nên chữ ký của Giám đốc vẫn còn giá trị. Lý do được ghi vào ghi chú
+              của đơn.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Hẹn giao hiện tại
+              </span>
+              <span className="text-zinc-500">
+                {rescheduling.po.expected_at
+                  ? new Date(rescheduling.po.expected_at).toLocaleDateString('vi-VN')
+                  : 'chưa hẹn'}
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Ngày giao mới <span className="text-red-500">*</span>
+              </span>
+              <input
+                type="date"
+                value={rescheduling.date}
+                onChange={(e) =>
+                  setRescheduling((s) => s && { ...s, date: e.target.value })
+                }
+                className="h-9 w-full rounded-md border border-zinc-300 px-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Lý do <span className="text-red-500">*</span>
+              </span>
+              <textarea
+                rows={2}
+                maxLength={1000}
+                value={rescheduling.reason}
+                onChange={(e) =>
+                  setRescheduling((s) => s && { ...s, reason: e.target.value })
+                }
+                placeholder="NCC báo trễ tàu · xưởng giục sớm · đổi lịch giao…"
+                className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              />
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setRescheduling(null)}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Huỷ
+              </button>
+              <button
+                disabled={busy || !rescheduling.date || !rescheduling.reason.trim()}
+                onClick={() => void submitReschedule()}
+                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {busy && <Spinner size={14} />}
+                Lưu hẹn giao mới
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
     </div>
@@ -580,6 +755,7 @@ export function PoDetail({
   onAdvance,
   onCancel,
   onEdit,
+  onReschedule,
 }: {
   po: Po
   lines: PoLine[]
@@ -591,6 +767,8 @@ export function PoDetail({
   onCancel: () => void
   /** Mở form sửa (chỉ khi pending_approval) — không truyền = ẩn nút (màn GĐ read-only). */
   onEdit?: () => void
+  /** Đổi hẹn giao của đơn đã duyệt — không truyền = ẩn nút. */
+  onReschedule?: () => void
 }) {
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   // Giá đv kép (0053): dòng unit2 tính qty2 × giá — cùng công thức server.
@@ -760,6 +938,14 @@ export function PoDetail({
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             Sửa đơn
+          </button>
+        )}
+        {canEdit && onReschedule && canReschedule(po.status).ok && (
+          <button
+            onClick={onReschedule}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Đổi hẹn giao
           </button>
         )}
         {canApprove && po.status === 'pending_approval' && (

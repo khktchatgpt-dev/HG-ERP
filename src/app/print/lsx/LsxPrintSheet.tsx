@@ -1,5 +1,11 @@
 import type { LsxPrintLine } from '@/modules/dept/production/production.repo'
-import { PrintToolbar } from '../PrintToolbar'
+import {
+  PrintLetterhead,
+  PrintMeta,
+  PrintPage,
+  PrintSignatures,
+  PrintTitle,
+} from '../PrintSheet'
 
 /**
  * Phiếu LỆNH SẢN XUẤT mẫu Hoàng Gia (A4 ngang) — template dùng chung cho:
@@ -38,54 +44,30 @@ export function LsxPrintSheet({
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
 
   return (
-    <div className="mx-auto max-w-6xl bg-white p-6 text-[12px] text-black print:p-0">
-      <style>{`@page { size: A4 landscape; margin: 8mm; }`}</style>
-      <PrintToolbar />
-
+    <PrintPage maxWidth="max-w-6xl">
       {watermark && (
         <div className="mb-3 border-2 border-dashed border-red-500 bg-red-50 py-1.5 text-center text-sm font-bold tracking-widest text-red-600 uppercase">
           {watermark}
         </div>
       )}
 
-      {/* Đầu phiếu */}
-      <div className="flex items-start justify-between border-b-2 border-black pb-2">
-        <div>
-          <div className="text-lg font-bold">{company.company_name?.toUpperCase()}</div>
-          {company.company_address && <div>{company.company_address}</div>}
-          {company.company_phone && (
-            <div className="text-xs">Tel: {company.company_phone}</div>
-          )}
-        </div>
-        <table className="text-[12px]">
-          <tbody>
-            <tr>
-              <td className="pr-3 font-semibold">Khách hàng:</td>
-              <td>{header.customer_name}</td>
-            </tr>
-            <tr>
-              <td className="pr-3 font-semibold">Đơn hàng số:</td>
-              <td>{header.order_ref}</td>
-            </tr>
-            <tr>
-              <td className="pr-3 font-semibold">Ngày nhận:</td>
-              <td>{fmtD(header.received_date)}</td>
-            </tr>
-            <tr>
-              <td className="pr-3 font-semibold">Ngày hoàn thành:</td>
-              <td>{fmtD(header.completed_at)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <PrintLetterhead company={company} date={new Date()} />
+      <PrintTitle vi="LỆNH SẢN XUẤT" en="PRODUCTION ORDER" />
 
-      <h1 className="my-2 text-center text-xl font-bold">LỆNH SẢN XUẤT</h1>
-      <div className="mb-2 text-center">
-        <span className="border border-black px-4 py-1 font-semibold">
-          SỐ: {header.code}
-          {header.note ? ` (${header.note})` : ''}
-        </span>
-      </div>
+      <PrintMeta
+        rows={[
+          ['Khách hàng:', header.customer_name],
+          ['Đơn hàng số:', header.order_ref],
+          ['Ngày nhận:', fmtD(header.received_date)],
+          ['Ngày hoàn thành:', fmtD(header.completed_at)],
+        ]}
+        refs={[
+          ['Số:', <b key="c">{header.code}</b>],
+          ...(header.note ? ([['Ghi chú:', header.note]] as [string, string][]) : []),
+        ]}
+      />
+
+      <p className="mt-2 text-[12px]">Đề nghị các bộ phận triển khai sản xuất:</p>
 
       <table className="w-full border-collapse text-center text-[11px]">
         <thead>
@@ -172,9 +154,13 @@ export function LsxPrintSheet({
         liệu, phòng kế hoạch, phòng kế toán.
       </div>
 
-      <div className="mt-8 flex justify-end pr-16 text-center font-semibold">
-        <div>Giám đốc</div>
-      </div>
-    </div>
+      <PrintSignatures
+        cols={[
+          { role: 'PHÒNG KẾ HOẠCH', hint: 'Ký, ghi rõ họ tên' },
+          { role: 'QUẢN LÝ SẢN XUẤT', hint: 'Ký, ghi rõ họ tên' },
+          { role: 'GIÁM ĐỐC', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+        ]}
+      />
+    </PrintPage>
   )
 }

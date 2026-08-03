@@ -64,6 +64,15 @@ const n = (
  *
  * Nguồn: 8 file đơn thật của phòng Cung ứng — xem `po-template.ts` cho bảng đối
  * chiếu mẫu ↔ nhà cung cấp.
+ *
+ * "SL ĐƠN HÀNG" nuôi gợi ý "SL đặt = nhu cầu − tồn" — có ở phụ kiện, nhôm, bao bì
+ * (inox/sắt và đơn giản không có: đơn thật của ba NCC inox chỉ ghi "Số lượng
+ * (cây)", hàng đó đặt theo bảng cân từng lệnh chứ không trừ tồn).
+ *
+ * KHÔNG có cột "Tồn kho" riêng ở mẫu nhôm: tồn đã hiện sẵn ngay dưới tên vật tư
+ * ở cột ghim trái ("mã · ĐVT · tồn N"), bày thêm một cột nữa là nói hai lần cùng
+ * một số. Số tồn vẫn được điền ngầm vào dòng lúc chọn vật tư nên gợi ý vẫn trừ
+ * tồn đúng — chỉ là không còn ô để gõ đè.
  */
 export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   accessory: [
@@ -71,13 +80,12 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('spec', 'Quy cách', 'w-[110px]', 'spec', '25×50×1li…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'),
-    n('waste', 'HH %', 'w-[62px]', 'waste_pct', '0.5', '100'),
   ],
   aluminium: [
     { key: 'die', label: 'Mã khuôn', width: 'w-[120px]', kind: 'die', field: 'die_code' },
     n('kgm', 'kg/m', 'w-[80px]', 'weight_per_m', '0.0001'),
     n('barlen', 'Dài cây (m)', 'w-[92px]', 'bar_length_m'),
-    n('surplus', 'Cây dư', 'w-[70px]', 'bar_surplus', '1'),
+    n('demand', 'SL đơn hàng', 'w-[84px]', 'qty_demand'),
     { key: 'kgtotal', label: 'Tổng kg', width: 'w-[92px]', kind: 'calc', align: 'right' },
   ],
   metal_kg: [
@@ -96,6 +104,8 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       field: 'open_style',
     },
     n('pcs', 'Pcs/thùng', 'w-[78px]', 'pcs_per_ctn', '1'),
+    n('demand', 'SL đơn hàng', 'w-[84px]', 'qty_demand'),
+    n('onhand', 'Tồn kho', 'w-[74px]', 'qty_on_hand'),
     { key: 'inner', label: 'Lọt lòng D×R×C (mm)', width: 'w-[168px]', kind: 'inner' },
     {
       key: 'area',
@@ -128,12 +138,12 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
  *
  * Token `@…` là cột cố định do trang in tự dựng (STT, tên hàng, đơn giá, thành
  * tiền…), còn lại là `key` trong `PO_FIELDS` của mẫu đó.
- * `waste` cố ý KHÔNG in: hao hụt là số nội bộ, không phải việc của NCC.
+ * Hao hụt đã BỎ HẲN: không phải cột nhập, không in cho NCC, và cũng không còn
+ * cộng vào SL gợi ý (xem `suggestOrderQty`).
  */
 export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   accessory: [
     '@stt',
-    '@productcode',
     '@name',
     'grade',
     'spec',
@@ -147,13 +157,15 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     '@stt',
-    '@productcode',
     '@name',
     'die',
     'kgm',
     'barlen',
+    // ĐVT có ở MỌI sheet nhôm của form đặt hàng mới (Tiến Đạt, Việt ECO, Việt Ý,
+    // Cát Tường, Taiwan, Sơn Thịnh) — nằm ngay trước cột số lượng. Thiếu nó thì
+    // phiếu nhôm là mẫu duy nhất không nói đặt theo cây hay theo tấm.
+    '@unit',
     '@qty',
-    'surplus',
     'kgtotal',
     '@price',
     '@amount',
@@ -161,7 +173,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     '@stt',
-    '@productcode',
     '@name',
     'grade',
     'dim',
@@ -176,7 +187,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   carton: [
     '@stt',
-    '@productcode',
     '@name',
     'open',
     'pcs',
@@ -187,17 +197,7 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     '@note',
   ],
-  simple: [
-    '@stt',
-    '@productcode',
-    '@name',
-    'spec',
-    '@unit',
-    '@qty',
-    '@price',
-    '@amount',
-    '@note',
-  ],
+  simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
 }
 
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */

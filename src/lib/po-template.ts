@@ -63,7 +63,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: true,
-    signerRole: 'Người Lập',
+    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
     terms: {
       quality: 'Hàng đúng mẫu, đúng chuẩn loại theo yêu cầu',
       delivery_place: DELIVERY_HG,
@@ -115,7 +115,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'Người Lập',
+    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
     terms: {
       quality: 'Đúng định lượng, đúng quy cách, thùng không móp rách',
       delivery_place: DELIVERY_HG,
@@ -132,7 +132,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: true,
     hasDiscount: false,
-    signerRole: 'Người Lập',
+    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
     terms: {
       quality: '',
       delivery_place: DELIVERY_HG,
@@ -235,18 +235,22 @@ export function cartonAreaM2(
 }
 
 /**
- * SL cần đặt gợi ý = (nhu cầu − tồn) × (1 + hao hụt%), LÀM TRÒN LÊN.
+ * SL cần đặt gợi ý = nhu cầu − tồn, LÀM TRÒN LÊN. Tồn ≥ nhu cầu → 0 (khỏi đặt).
  *
- * Chỉ là GỢI Ý, form cho ghi đè tự do: file thật có dòng lệch hẳn công thức vì
- * quy đổi đơn vị lúc đặt (LĐ chẻ lỗ cần 1400 đặt 1000 vì mua theo bó; Vít 4x25
- * cần 700 đặt 540 vì mua theo bộ). Tồn ≥ nhu cầu → 0 (khỏi đặt).
+ * KHÔNG cộng hao hụt (bỏ theo yêu cầu phòng Cung ứng). Trước đây nhân thêm 3%
+ * mặc định, nhưng đó là con số áp cứng cho mọi mặt hàng trong khi hao hụt thật
+ * khác nhau theo loại — cộng ngầm chỉ làm số gợi ý lệch khỏi thứ người mua tự
+ * tính, rồi họ gõ đè, thành ra vô ích.
+ *
+ * Vẫn chỉ là GỢI Ý, form cho ghi đè tự do: file thật có dòng lệch hẳn công thức
+ * vì quy đổi đơn vị lúc đặt (LĐ chẻ lỗ cần 1400 đặt 1000 vì mua theo bó; Vít
+ * 4x25 cần 700 đặt 540 vì mua theo bộ).
  */
 export function suggestOrderQty(
   demand: number | null | undefined,
   onHand: number | null | undefined,
-  wastePct: number | null | undefined,
 ): number {
   const short = (Number(demand) || 0) - (Number(onHand) || 0)
   if (short <= 0) return 0
-  return Math.ceil(short * (1 + (Number(wastePct) || 0) / 100))
+  return Math.ceil(short)
 }

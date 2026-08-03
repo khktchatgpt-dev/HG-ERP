@@ -35,19 +35,21 @@ export const poLineInputSchema = z.object({
   note: optText(500), // truy vết: "50 bàn santorin (4c/sp)" / vị trí chi tiết
   // Dùng chung nhiều mẫu
   material_grade: optText(100), // vật liệu: "Nhựa đen", "Sắt xi trắng", "inox 201"
-  // Mã SP dòng này phục vụ. NHIỀU mã ghép bằng " · " — phòng Cung ứng mua gộp chi
-  // tiết của cả lệnh cho rẻ, một dòng vít dùng chung cho 4 mã SP. 50 ký tự chỉ đủ
-  // 2 mã nên nới lên 200.
-  product_code: optText(200),
+  // Không còn `product_code`: ô "Mã SP" đã bỏ khỏi form soạn đơn và phiếu in
+  // (yêu cầu phòng Cung ứng). Cột DB giữ nguyên cho dữ liệu cũ — lúc bỏ thì
+  // 11/11 dòng đang để trống nên không mất gì.
   dm_per_sp: optNum(1e6), // định mức / sản phẩm
   qty_demand: optNum(1e9), // SL đơn hàng (nhu cầu gộp)
   qty_on_hand: optNum(1e9), // tồn kho lúc lập đơn
-  waste_pct: optNum(100), // hao hụt %, mặc định 3 ở mẫu phụ kiện
+  // Không còn `waste_pct`: hao hụt đã bỏ khỏi cả ô nhập lẫn SL gợi ý (yêu cầu
+  // phòng Cung ứng — 3% áp cứng cho mọi mặt hàng là số vô nghĩa). Cột DB giữ
+  // nguyên cho đơn cũ.
   // Mẫu aluminium
   die_code: optText(100),
   weight_per_m: optNum(1e4),
   bar_length_m: optNum(1e4),
-  bar_surplus: optNum(1e9),
+  // Không còn `bar_surplus` ("cây dư"): bỏ khỏi form nhập và phiếu in theo yêu
+  // cầu phòng Cung ứng. Cột DB giữ nguyên cho đơn cũ.
   // Mẫu metal_kg
   dimension_text: optText(200),
   finish: optText(100),
@@ -83,7 +85,7 @@ export const poCreateSchema = z.object({
   terms_payment: optText(500),
   terms_invoice: optText(500),
   terms_lead_time: optText(500),
-  signer_role: optText(100), // "Người Lập" / "TRƯỞNG PHÒNG KẾ HOẠCH"
+  signer_role: optText(100), // "TRƯỞNG PHÒNG CUNG ỨNG" / "TRƯỞNG PHÒNG KẾ HOẠCH"
   note: optText(2000),
   lines: z
     .array(poLineInputSchema)
@@ -136,4 +138,14 @@ export const poAdvanceSchema = z.object({
 
 export const poCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
+})
+
+/**
+ * Dời hẹn giao của đơn ĐÃ GỬI — chỉ ngày và lý do, không đụng tiền/dòng hàng.
+ * Bắt buộc lý do: đây là thay đổi trên đơn đã có chữ ký duyệt, phải trả lời được
+ * "vì sao" khi đối chiếu về sau.
+ */
+export const poRescheduleSchema = z.object({
+  expected_at: z.string().trim().min(1, 'Chọn ngày giao mới').max(30),
+  reason: z.string().trim().min(1, 'Dời hẹn giao phải kèm lý do').max(1000),
 })
