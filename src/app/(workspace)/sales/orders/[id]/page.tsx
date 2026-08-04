@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
+import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -38,6 +39,17 @@ export default async function OrderDetailPage({
   const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
   const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
   const lsx = await productionRepo.findByOrder(order.id)
+
+  // Đơn cùng khách chưa có lệnh — Sales tick để gộp chung một LSX (0113).
+  const mergeCandidates =
+    canIssue && order.status === 'confirmed' && !lsx
+      ? (await ordersRepo.listMergeCandidates(order.customer_id)).filter(
+          (o) => o.id !== order.id,
+        )
+      : []
+  const mergeLineCounts = await productionRepo.linesCountByOrder(
+    mergeCandidates.map((o) => o.id),
+  )
 
   // Timeline: owner + công đoạn đã xong (jobs — 0084) + nhãn giai đoạn.
   const [owner, jobs, stages] = await Promise.all([
@@ -78,16 +90,23 @@ export default async function OrderDetailPage({
       page: 1,
       page_size: 200,
     })
+    const lsxShared = lsx.order_ids.some((oid) => oid !== order.id)
     cancelImpact = {
       lsx_active: ['pending_approval', 'approved', 'in_progress'].includes(lsx.status),
-      pos_auto: pos
-        .filter((p) => p.status === 'pending_approval' || p.status === 'approved')
-        .map((p) => p.code),
-      pos_manual: pos
-        .filter((p) =>
-          ['ordered', 'confirmed', 'in_transit', 'partial'].includes(p.status),
-        )
-        .map((p) => p.code),
+      lsx_shared: lsxShared,
+      // Lệnh còn phục vụ đơn khác → PO của lệnh không đụng tới (vật tư mua gộp).
+      pos_auto: lsxShared
+        ? []
+        : pos
+            .filter((p) => p.status === 'pending_approval' || p.status === 'approved')
+            .map((p) => p.code),
+      pos_manual: lsxShared
+        ? []
+        : pos
+            .filter((p) =>
+              ['ordered', 'confirmed', 'in_transit', 'partial'].includes(p.status),
+            )
+            .map((p) => p.code),
     }
   }
 
@@ -175,6 +194,12 @@ export default async function OrderDetailPage({
       }))}
       stageLabels={Object.fromEntries(stages.map((s) => [s.code, s.label]))}
       cancelImpact={cancelImpact}
+      mergeCandidates={mergeCandidates.map((o) => ({
+        id: o.id,
+        code: o.code,
+        due_date: o.due_date,
+        line_count: mergeLineCounts.get(o.id) ?? 0,
+      }))}
     />
   )
 }

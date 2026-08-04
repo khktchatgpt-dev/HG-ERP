@@ -22,6 +22,8 @@ const TYPE_LABEL: Record<string, string> = {
   lsx_submitted: 'gửi LSX chờ bạn duyệt',
   lsx_approved: 'đã duyệt LSX',
   lsx_rejected: 'đã từ chối LSX',
+  lsx_orders_changed: 'đã đổi danh sách đơn của LSX đang chạy',
+  lsx_revised: 'đã phát bản chỉnh sửa LSX — in lại phiếu',
   order_changed: 'đã sửa đơn hàng sau khi phát LSX',
   order_cancelled: 'đã huỷ đơn hàng',
   stage_handoff: 'bàn giao công đoạn sản xuất',

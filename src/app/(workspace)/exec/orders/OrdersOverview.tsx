@@ -382,7 +382,7 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
                       id: selected.production_order_id,
                       code: selected.lsx_code ?? selected.code,
                       customer_name: selected.customer_name,
-                      order_code: selected.code,
+                      order_codes: [selected.code],
                     }),
                   )
                 }
@@ -393,7 +393,7 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
                       id: selected.production_order_id,
                       code: selected.lsx_code ?? selected.code,
                       customer_name: selected.customer_name,
-                      order_code: selected.code,
+                      order_codes: [selected.code],
                     }),
                   )
                 }

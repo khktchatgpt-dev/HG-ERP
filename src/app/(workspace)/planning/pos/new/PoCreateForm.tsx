@@ -41,7 +41,12 @@ type SupplierOption = {
   tax_no?: string | null
   phone?: string | null
 }
-type LsxOption = { id: string; code: string; order_code: string; customer_name: string }
+type LsxOption = {
+  id: string
+  code: string
+  order_codes: string[]
+  customer_name: string
+}
 
 /** Đơn đang mở sẵn — server page dựng từ `posService.detail`. */
 export type PoInitial = {
@@ -401,7 +406,7 @@ export function PoCreateForm({
               </select>
               {lsx && (
                 <span className="text-xs text-zinc-400">
-                  Đơn hàng <b className="font-mono text-zinc-500">{lsx.order_code}</b>
+                  Đơn hàng <b className="font-mono text-zinc-500">{lsx.order_codes.join(", ")}</b>
                 </span>
               )}
             </label>
@@ -597,7 +602,7 @@ export function PoCreateForm({
               code: isEdit ? initial!.po.code : '(cấp khi lưu)',
               supplierName: supplier?.name ?? '—',
               lsxCode: poType === 'lsx' ? (lsx?.code ?? null) : null,
-              orderCode: poType === 'lsx' ? (lsx?.order_code ?? null) : null,
+              orderCode: poType === 'lsx' ? (lsx?.order_codes.join(", ") || null) : null,
               createdAt: new Date().toISOString(),
             })}
             supplier={

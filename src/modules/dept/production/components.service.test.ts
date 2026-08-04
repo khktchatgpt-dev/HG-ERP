@@ -13,7 +13,7 @@ vi.mock('./production.repo', () => ({
   productionRepo: { findById: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
-  ordersRepo: { listLines: vi.fn() },
+  ordersRepo: { listLines: vi.fn(), listLinesByOrders: vi.fn() },
 }))
 vi.mock('@/modules/dept/technical/technical.repo', () => ({
   productProfileRepo: { parts: vi.fn(), clusters: vi.fn() },
@@ -23,27 +23,44 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   hasPermission: vi.fn(),
 }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { componentsService } from './components.service'
 import { productionRepo } from './production.repo'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const thongKe = { id: 'u-tk', role: 'employee' } as unknown as User
 
-const LSX = { id: 'lsx1', code: 'LSX-01', sales_order_id: 'o1', status: 'in_progress' }
+const LSX = { id: 'lsx1', code: 'LSX-01', customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'], status: 'in_progress' }
 const LINE = {
   id: 'line1',
+  group_id: 'g1',
   product_id: 'p1',
   product_code: 'SP1',
-  product_name: 'Ghế A',
+  name_vi: 'Ghế A',
+  unit: 'cái',
   qty: 10,
+  specs: {},
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(productionRepo.findById).mockResolvedValue(LSX as never)
-  vi.mocked(ordersRepo.listLines).mockResolvedValue([LINE] as never)
+  vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([LINE] as never)
+  vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([{ id: 'g1' }] as never)
   vi.mocked(productProfileRepo.clusters).mockResolvedValue([
     { id: 'cl1', name: 'Cụm khung' },
   ] as never)
@@ -70,7 +87,7 @@ describe('componentsService.suggest("bom") — gợi ý từ ĐỊNH MỨC (0096
 
     expect(out).toHaveLength(1)
     expect(out[0]).toMatchObject({
-      order_line_id: 'line1',
+      production_order_line_id: 'line1',
       cluster: 'Cụm khung',
       name: 'Chân bàn', // tên chi tiết thật, không phải tên vật tư kho
       spec_thickness_mm: 60,

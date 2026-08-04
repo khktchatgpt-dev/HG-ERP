@@ -423,6 +423,17 @@ export const productsRepo = {
     return (data as Product | null) ?? null
   },
 
+  /** Hồ sơ đầy đủ theo lô id — nạp snapshot dòng lệnh sản xuất (0114). */
+  async listByIds(ids: string[]): Promise<Product[]> {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('technical_products')
+      .select(COLS)
+      .in('id', ids)
+      .limit(2000)
+    return (data ?? []) as unknown as Product[]
+  },
+
   /**
    * Mã của MỘT loại SP (prefix 2 ký tự) — để cấp số thứ tự kế tiếp. Chỉ kéo cột
    * `code`; loại đông nhất mới 134 dòng nên rẻ hơn hẳn một RPC riêng.

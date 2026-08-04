@@ -15,7 +15,7 @@ vi.mock('./plan.repo', () => ({
   planRepo: { defaultRoutesByProducts: vi.fn(), saveDefaultRoute: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
-  ordersRepo: { listLines: vi.fn() },
+  ordersRepo: { listLines: vi.fn(), listLinesByOrders: vi.fn() },
 }))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
   departmentsRepo: { list: vi.fn() },
@@ -25,11 +25,22 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   hasPermission: vi.fn(),
 }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { planService } from './plan.service'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { planRepo } from './plan.repo'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
@@ -38,7 +49,9 @@ const planner = { id: 'u-kh', role: 'employee', department_id: 'd-kh' } as unkno
 const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
-  sales_order_id: 'o1',
+  customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'],
   status: 'approved',
   priority: 0,
   ship_date: null,
@@ -48,10 +61,13 @@ const LSX = {
 
 const LINE = {
   id: 'line1',
+  group_id: 'g1',
   product_id: 'p1',
   product_code: 'SP1',
-  product_name: 'Ghế A',
+  name_vi: 'Ghế A',
+  unit: 'cái',
   qty: 50,
+  specs: {},
 }
 
 beforeEach(() => {
@@ -62,7 +78,10 @@ beforeEach(() => {
     { code: 'han', label: 'Hàn' },
     { code: 'son', label: 'Sơn' },
   ])
-  vi.mocked(ordersRepo.listLines).mockResolvedValue([LINE] as never)
+  vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([LINE] as never)
+  vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+    { id: 'g1', title: 'Đơn DH-01' },
+  ] as never)
   vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
   vi.mocked(departmentsRepo.list).mockResolvedValue([
     { id: 'd-han', name: 'Tổ Hàn', workspace_id: 'production', stage_code: 'han' },
@@ -111,7 +130,7 @@ describe('planService.saveLinePlan', () => {
       {
         id: 'j1',
         production_order_id: 'lsx1',
-        order_line_id: 'line1',
+        production_order_line_id: 'line1',
         stage: 'han',
         seq: 1,
         status: 'doing',
@@ -132,7 +151,7 @@ describe('planService.saveLinePlan', () => {
       {
         id: 'j1',
         production_order_id: 'lsx1',
-        order_line_id: 'line1',
+        production_order_line_id: 'line1',
         stage: 'han',
         seq: 1,
         status: 'todo',

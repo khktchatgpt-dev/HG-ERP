@@ -12,7 +12,7 @@ export type JobStatus = 'todo' | 'doing' | 'done'
 export type Job = {
   id: string
   production_order_id: string
-  order_line_id: string
+  production_order_line_id: string
   stage: string
   seq: number
   team_department_id: string | null
@@ -28,7 +28,7 @@ export type Job = {
 }
 
 const COLS =
-  'id, production_order_id, order_line_id, stage, seq, team_department_id, planned_start, planned_end, status, done_by, done_at, note, created_at, updated_at'
+  'id, production_order_id, production_order_line_id, stage, seq, team_department_id, planned_start, planned_end, status, done_by, done_at, note, created_at, updated_at'
 const SELECT_JOINED = `${COLS}, team:departments(name)`
 
 type Raw = Omit<Job, 'team_name'> & {
@@ -58,7 +58,7 @@ export const jobsRepo = {
       .from('production_jobs')
       .select(SELECT_JOINED)
       .eq('production_order_id', productionOrderId)
-      .order('order_line_id')
+      .order('production_order_line_id')
       .order('seq')
     return unwrap(data as unknown as Raw[] | null)
   },
@@ -70,7 +70,7 @@ export const jobsRepo = {
       .from('production_jobs')
       .select(SELECT_JOINED)
       .in('production_order_id', ids)
-      .order('order_line_id')
+      .order('production_order_line_id')
       .order('seq')
       .limit(20000)
     return unwrap(data as unknown as Raw[] | null)
@@ -108,7 +108,7 @@ export const jobsRepo = {
       .from('production_jobs')
       .delete()
       .eq('production_order_id', productionOrderId)
-      .eq('order_line_id', orderLineId)
+      .eq('production_order_line_id', orderLineId)
     const { error: delErr } = keep.size
       ? await del.not('stage', 'in', `(${[...keep].map((s) => `"${s}"`).join(',')})`)
       : await del
@@ -121,14 +121,14 @@ export const jobsRepo = {
       .upsert(
         stages.map((s, i) => ({
           production_order_id: productionOrderId,
-          order_line_id: orderLineId,
+          production_order_line_id: orderLineId,
           stage: s.stage,
           seq: i,
           team_department_id: s.team_department_id ?? null,
           planned_start: s.planned_start ?? null,
           planned_end: s.planned_end ?? null,
         })),
-        { onConflict: 'production_order_id,order_line_id,stage' },
+        { onConflict: 'production_order_id,production_order_line_id,stage' },
       )
     if (error) throw new Error(error.message)
   },
@@ -168,7 +168,7 @@ export const jobsRepo = {
       .from('production_jobs')
       .update({ status: 'doing' })
       .eq('production_order_id', productionOrderId)
-      .eq('order_line_id', orderLineId)
+      .eq('production_order_line_id', orderLineId)
       .eq('stage', stage)
       .eq('status', 'todo')
     if (error) throw new Error(error.message)

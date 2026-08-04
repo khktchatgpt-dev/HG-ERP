@@ -2,7 +2,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
-import { listLsxPrintLines } from '@/modules/dept/production/production.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { filesService } from '@/modules/core/files/files.service'
@@ -45,16 +45,22 @@ export default async function ExecApprovalsPage() {
     ),
     Promise.all(
       pendingLsx.map(async (l) => {
-        const [orderLines, printLines, order] = await Promise.all([
-          ordersRepo.listLines(l.sales_order_id),
-          listLsxPrintLines(l.id, l.sales_order_id),
-          ordersRepo.findById(l.sales_order_id),
+        const [orderLines, printLines, orders, lineGroups] = await Promise.all([
+          ordersRepo.listLinesByOrders(l.order_ids),
+          lsxLinesRepo.listLines(l.id),
+          ordersRepo.listByProductionOrder(l.id),
+          lsxLinesRepo.listGroups(l.id),
         ])
         return {
           id: l.id,
           printLines,
-          order,
+          // Lệnh gộp nhiều đơn: khối thương mại lấy đơn đầu (cùng khách nên
+          // điều khoản thường trùng), danh sách đủ nằm ở `orders`.
+          order: orders[0] ?? null,
+          orders,
+          orderLines,
           bomByLineId: new Map(orderLines.map((ol) => [ol.id, ol])),
+          groupTitle: new Map(lineGroups.map((g) => [g.id, g.title ?? ''])),
           order_value: orderLines.reduce((s, ol) => s + ol.qty * ol.unit_price, 0),
           bom_pending: orderLines.filter((ol) => ol.bom_status !== 'done').length,
         }
@@ -113,7 +119,7 @@ export default async function ExecApprovalsPage() {
         return {
           id: l.id,
           code: l.code,
-          order_code: l.order_code,
+          order_codes: l.order_codes,
           customer_name: l.customer_name,
           created_at: l.created_at,
           issued_by_name: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
@@ -145,23 +151,29 @@ export default async function ExecApprovalsPage() {
                   : null,
               }
             : null,
+          orders: (e?.orders ?? []).map((o) => ({
+            code: o.code,
+            due_date: o.due_date,
+            currency: o.currency,
+            value: (e?.orderLines ?? [])
+              .filter((ol) => ol.order_id === o.id)
+              .reduce((s, ol) => s + ol.qty * ol.unit_price, 0),
+            line_count: (e?.orderLines ?? []).filter((ol) => ol.order_id === o.id).length,
+          })),
           lines: (e?.printLines ?? []).map((pl) => {
-            const ol = e?.bomByLineId.get(pl.order_line_id)
+            const ol = pl.sales_order_line_id
+              ? e?.bomByLineId.get(pl.sales_order_line_id)
+              : undefined
             return {
+              order_code: e?.groupTitle.get(pl.group_id) ?? '',
               product_code: pl.product_code,
-              product_name: pl.name_vi,
+              product_name: pl.name_vi ?? pl.product_code,
               product_unit: pl.unit,
               qty: pl.qty,
               unit_price: ol?.unit_price ?? 0,
               bom_status: ol?.bom_status ?? 'none',
               image_url: pl.image_file_id ? (imageUrls[pl.image_file_id] ?? null) : null,
-              spec: {
-                machine: pl.tech_spec.machine ?? '',
-                cushion: pl.tech_spec.cushion ?? '',
-                paint: pl.tech_spec.paint ?? '',
-                glass: pl.tech_spec.glass ?? '',
-                wood: pl.tech_spec.wood ?? '',
-              },
+              spec: pl.specs,
             }
           }),
         }

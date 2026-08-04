@@ -118,7 +118,8 @@ export type DomainEvent =
       name: 'lsx.submitted'
       production_order_id: string
       code: string
-      order_code: string
+      /** Mã các đơn được gộp vào lệnh (0113 — một lệnh nhiều đơn cùng khách). */
+      order_codes: string[]
       customer_name: string
       lines_bom_pending: number
       submitted_by: string
@@ -135,6 +136,29 @@ export type DomainEvent =
       issued_by: string | null
       reason?: string
       // approved → báo Cung ứng + Kỹ thuật; rejected → báo người phát.
+      notify_ids: string[]
+    }
+  | {
+      // Phát BẢN CHỈNH SỬA của lệnh đã duyệt (0114): dòng/SL/spec đổi. Xưởng
+      // phải in lại phiếu — dòng đổi được tô vàng trên bản mới.
+      name: 'lsx.revised'
+      production_order_id: string
+      code: string
+      revision: number
+      changed_lines: number
+      note: string | null
+      revised_by: string
+      notify_ids: string[]
+    }
+  | {
+      // Đổi phạm vi lệnh ĐANG CHẠY: gộp thêm / gỡ bớt đơn (0113). Kế hoạch phải
+      // thêm-bớt việc, Cung ứng phải soát lại vật tư đã đặt.
+      name: 'lsx.orders.changed'
+      production_order_id: string
+      code: string
+      added: string[]
+      removed: string[]
+      changed_by: string
       notify_ids: string[]
     }
 

@@ -34,12 +34,15 @@ function LinePlanBlock({
   stages,
   teams,
   canEdit,
+  showOrder,
 }: {
   lsxId: string
   line: PlanView['lines'][number]
   stages: { code: string; label: string }[]
   teams: PlanView['teams']
   canEdit: boolean
+  /** Lệnh gộp nhiều đơn → mỗi dòng SP phải nói rõ nó của đơn nào (0113). */
+  showOrder: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -129,6 +132,7 @@ function LinePlanBlock({
           {line.product_name}{' '}
           <span className="font-mono text-xs text-zinc-500">
             {line.product_code} · {line.qty.toLocaleString('vi-VN')} SP
+            {showOrder && line.group_title ? ` · ${line.group_title}` : ''}
           </span>
         </h3>
         {canEdit && !editing && (
@@ -324,7 +328,7 @@ export function PlanEditor({ data, canEdit }: { data: PlanView; canEdit: boolean
           { label: lsx.code },
         ]}
         title={`Kế hoạch ${lsx.code}`}
-        description={`${lsx.customer_name} · Đơn ${lsx.order_code} · Hạn xuất: ${
+        description={`${lsx.customer_name} · ${lsx.order_codes.length > 1 ? `${lsx.order_codes.length} đơn: ` : 'Đơn '}${lsx.order_codes.join(', ')} · Hạn xuất: ${
           lsx.ship_date ? new Date(lsx.ship_date).toLocaleDateString('vi-VN') : '—'
         } · Ưu tiên ${lsx.priority}`}
         actions={
@@ -347,6 +351,7 @@ export function PlanEditor({ data, canEdit }: { data: PlanView; canEdit: boolean
             stages={stages}
             teams={teams}
             canEdit={canEdit && lsx.status !== 'completed' && lsx.status !== 'cancelled'}
+            showOrder={lsx.order_codes.length > 1}
           />
         ))
       )}

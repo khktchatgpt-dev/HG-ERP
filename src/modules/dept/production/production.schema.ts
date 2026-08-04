@@ -49,11 +49,68 @@ export const lsxSpecsSaveSchema = z.object({
 
 export const issueLsxSchema = z.object({
   code: z.string().trim().min(1, 'Nhập số LSX').max(50), // người dùng tự đặt số LSX
-  order_id: z.string().uuid(),
+  // 0113: một lệnh gộp nhiều đơn của CÙNG một khách (service kiểm tra).
+  order_ids: z.array(z.string().uuid()).min(1, 'Chọn ít nhất một đơn hàng').max(50),
   ship_date: z.string().date().optional().nullable(),
   received_date: z.string().date().optional().nullable(), // Ngày nhận (in trên LSX)
   container_summary: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
+})
+
+/**
+ * Bản soạn dòng lệnh (0114): nhóm → dòng. `id` có thì là sửa, không có thì là
+ * thêm mới; nhóm/dòng vắng mặt trong payload bị xoá (service chặn nếu đã chạy).
+ */
+const kvSchema = z.record(z.string(), z.string().max(2000))
+
+export const lsxLineSaveSchema = z.object({
+  id: z.string().uuid().optional(),
+  product_id: z.string().uuid().nullable().optional(),
+  sales_order_line_id: z.string().uuid().nullable().optional(),
+  // Mã SP là TEXT tự do: file thật có "Thông báo sau", "26300-309 ( có 1 mẫu bạc )".
+  product_code: z.string().trim().max(200).default(''),
+  customer_item_code: z.string().trim().max(200).nullable().optional(),
+  name_foreign: z.string().trim().max(500).nullable().optional(),
+  name_vi: z.string().trim().max(500).nullable().optional(),
+  name_customs: z.string().trim().max(500).nullable().optional(),
+  barcode: z.string().trim().max(100).nullable().optional(),
+  unit: z.string().trim().max(50).default(''),
+  qty: z.coerce.number().min(0).default(0),
+  packing: z.string().trim().max(300).nullable().optional(),
+  cbm: z.coerce.number().min(0).nullable().optional(),
+  ship_date: z.string().date().nullable().optional(),
+  // Nhãn đợt xuất giữ nguyên chữ Sales gõ: "w37.26", "DỰ KIẾN kiểm hàng 5/10".
+  ship_label: z.string().trim().max(300).nullable().optional(),
+  specs: kvSchema.default({}),
+  checks: kvSchema.default({}),
+  extras: kvSchema.default({}),
+  note: z.string().trim().max(2000).nullable().optional(),
+  important_note: z.string().trim().max(2000).nullable().optional(),
+  image_file_id: z.string().uuid().nullable().optional(),
+  sort_order: z.coerce.number().int().default(0),
+})
+
+export const lsxGroupSaveSchema = z.object({
+  id: z.string().uuid().optional(),
+  sales_order_id: z.string().uuid().nullable().optional(),
+  title: z.string().trim().max(300).nullable().optional(),
+  buyer_name: z.string().trim().max(200).nullable().optional(),
+  po_no: z.string().trim().max(200).nullable().optional(),
+  ship_date: z.string().date().nullable().optional(),
+  ship_label: z.string().trim().max(300).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+  sort_order: z.coerce.number().int().default(0),
+  lines: z.array(lsxLineSaveSchema).max(2000),
+})
+
+export const lsxSheetSaveSchema = z.object({
+  groups: z.array(lsxGroupSaveSchema).min(1, 'Lệnh phải có ít nhất một nhóm').max(200),
+  revision_note: z.string().trim().max(1000).optional().nullable(),
+})
+
+/** Gộp thêm / gỡ bớt đơn của một lệnh đang chạy (0113). */
+export const lsxOrdersSchema = z.object({
+  order_ids: z.array(z.string().uuid()).min(1, 'Chọn ít nhất một đơn hàng').max(50),
 })
 
 /** Hoàn thành LSX — gate "mọi việc đã xong"; QL được ép qua kèm lý do. */

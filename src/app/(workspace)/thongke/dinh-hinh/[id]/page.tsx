@@ -44,7 +44,7 @@ export default async function ShapingDetailPage({
           { label: lsx.code },
         ]}
         title={`Định hình ${lsx.code}`}
-        description={`${lsx.customer_name} · Đơn ${lsx.order_code}${
+        description={`${lsx.customer_name} · ${lsx.order_codes.length > 1 ? `${lsx.order_codes.length} đơn: ` : 'Đơn '}${lsx.order_codes.join(', ')}${
           data.locked_by_entries
             ? ' — LSX đã có sổ số liệu, bảng chi tiết khoá (xoá sổ trước nếu thật sự cần sửa).'
             : ''

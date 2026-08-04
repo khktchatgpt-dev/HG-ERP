@@ -16,7 +16,7 @@ import { useToast } from '@/components/ui/Toast'
 export type PlanRow = {
   id: string
   code: string
-  order_code: string
+  order_codes: string[]
   customer_name: string
   status: string
   priority: number
@@ -50,7 +50,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
           if (filter === 'plan_overdue' && r.plan_overdue === 0) return false
           if (
             ql &&
-            !`${r.code} ${r.customer_name} ${r.order_code}`.toLowerCase().includes(ql)
+            !`${r.code} ${r.customer_name} ${r.order_codes.join(" ")}`.toLowerCase().includes(ql)
           )
             return false
           return true
@@ -101,7 +101,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
       cell: (r) => (
         <span>
           <span className="font-medium">{r.customer_name}</span>{' '}
-          <span className="text-xs text-zinc-500">· {r.order_code}</span>
+          <span className="text-xs text-zinc-500">· {r.order_codes.join(", ")}</span>
         </span>
       ),
     },

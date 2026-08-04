@@ -5,7 +5,7 @@ import { z } from 'zod'
  * khảo (plan-lsx-components, SRS FR-MD-02/03). PUT ghi đè trọn bộ như BOM editor.
  */
 export const componentLineSchema = z.object({
-  order_line_id: z.string().uuid(), // chi tiết thuộc dòng SP nào trong lệnh
+  production_order_line_id: z.string().uuid(), // chi tiết thuộc dòng SP nào trong lệnh
   // 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088).
   kind: z.enum(['part', 'assembly']).default('part'),
   cluster: z.string().trim().max(100).optional().nullable(), // "CỤM TỰA"

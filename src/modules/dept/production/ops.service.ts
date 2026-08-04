@@ -79,7 +79,7 @@ export type CeoOverview = {
     lsx: {
       id: string
       code: string
-      order_code: string
+      order_codes: string[]
       customer_name: string
       created_at: string
     }[]
@@ -198,14 +198,23 @@ export const opsService = {
     const FINAL = new Set(['completed', 'delivered', 'cancelled'])
     const running = tracking.filter((r) => !FINAL.has(r.status))
 
-    // Đơn trọng điểm = đơn có LSX đang chạy; %HT từ synced_by_line của LSX đó.
-    const summaryByOrderId = new Map(
-      summaries.map((s) => [s.lsx.sales_order_id, s.summary]),
-    )
+    // Đơn trọng điểm = đơn có LSX đang chạy; %HT từ synced_by_line. Lệnh gộp
+    // nhiều đơn (0113) → gom dòng đồng bộ THEO ĐƠN để mỗi đơn ra % của riêng nó.
+    const syncedByOrderId = new Map<
+      string,
+      (typeof summaries)[number]['summary']['synced_by_line']
+    >()
+    for (const s of summaries) {
+      for (const line of s.summary.synced_by_line) {
+        const arr = syncedByOrderId.get(line.order_id) ?? []
+        arr.push(line)
+        syncedByOrderId.set(line.order_id, arr)
+      }
+    }
     const key_orders = running
       .filter((r) => r.production_order_id)
       .map((r) => {
-        const sum = summaryByOrderId.get(r.id)
+        const synced = syncedByOrderId.get(r.id)
         const risk = assessLateRisk(r, today)
         return {
           order_id: r.id,
@@ -214,7 +223,7 @@ export const opsService = {
           due_date: r.due_date,
           stage_label:
             r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null,
-          pct: sum ? orderSyncPct(sum.synced_by_line) : 0,
+          pct: synced ? orderSyncPct(synced) : 0,
           bom_pending: r.lines_bom_pending,
           pos_open: r.pos_open,
           late_level: risk?.level ?? null,
@@ -268,7 +277,7 @@ export const opsService = {
         lsx: pendingLsx.rows.map((l) => ({
           id: l.id,
           code: l.code,
-          order_code: l.order_code,
+          order_codes: l.order_codes,
           customer_name: l.customer_name,
           created_at: l.created_at,
         })),

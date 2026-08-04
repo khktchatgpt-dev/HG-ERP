@@ -6,11 +6,17 @@ vi.mock('./production.repo', () => ({
     patch: vi.fn(),
     insert: vi.fn(),
     existsByCode: vi.fn(),
+    attachOrders: vi.fn(),
+    detachOrders: vi.fn(),
   },
   saveLsxLineSpecs: vi.fn(),
 }))
 vi.mock('./jobs.repo', () => ({
-  jobsRepo: { listByLsx: vi.fn() },
+  jobsRepo: { listByLsx: vi.fn(), replaceForLine: vi.fn() },
+}))
+vi.mock('./entries.repo', () => ({ entriesRepo: { listByLsx: vi.fn() } }))
+vi.mock('./components.repo', () => ({
+  componentsRepo: { listByLsx: vi.fn(), deleteByLines: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: {
@@ -18,6 +24,8 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
     patch: vi.fn(),
     insertChange: vi.fn(),
     listLines: vi.fn(),
+    listLinesByOrders: vi.fn(),
+    listByProductionOrder: vi.fn(),
   },
 }))
 vi.mock('@/modules/core/departments/departments.repo', () => ({
@@ -31,10 +39,26 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { lsxService } from './lsx.service'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
+import { entriesRepo } from './entries.repo'
+import { componentsRepo } from './components.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 const quanDoc = { id: 'u-qd', role: 'employee', department_id: 'd-vp' } as unknown as User
@@ -43,12 +67,23 @@ const manager = { id: 'u-mgr', role: 'manager', department_id: null } as unknown
 const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
-  sales_order_id: 'o1',
+  customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'],
   status: 'in_progress',
   note: null,
-  order_code: 'DH-01',
   customer_name: 'KH A',
 }
+
+/** Đơn đã xác nhận, chưa thuộc lệnh nào — ứng viên gộp hợp lệ. */
+const freeOrder = (id: string, code: string, customerId = 'c1') => ({
+  id,
+  code,
+  customer_id: customerId,
+  customer_name: 'KH A',
+  status: 'confirmed',
+  production_order_id: null,
+})
 
 const doneJob = (id: string, stage: string) => ({
   id,
@@ -127,6 +162,150 @@ describe('lsxService.complete — gate mọi việc đã xong', () => {
     const out = await lsxService.complete(quanDoc, 'lsx1')
     expect(out.status).toBe('completed')
     expect(productionRepo.patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('lsxService.issue — một lệnh gộp nhiều đơn (0113)', () => {
+  beforeEach(() => {
+    vi.mocked(productionRepo.existsByCode).mockResolvedValue(false)
+    vi.mocked(productionRepo.insert).mockResolvedValue({
+      order: { ...LSX, id: 'lsx9', code: 'LSX-09', status: 'pending_approval' },
+      duplicate: false,
+    } as never)
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([])
+    vi.mocked(usersRepo.list).mockResolvedValue([])
+  })
+
+  it('nhiều đơn cùng khách → gắn hết vào lệnh + mọi đơn sang lsx_pending', async () => {
+    vi.mocked(ordersRepo.findById).mockImplementation(
+      async (id) => freeOrder(id, id === 'o1' ? 'DH-01' : 'DH-02') as never,
+    )
+    await lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1', 'o2'] })
+    expect(productionRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ customer_id: 'c1' }),
+    )
+    expect(productionRepo.attachOrders).toHaveBeenCalledWith('lsx9', ['o1', 'o2'])
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'lsx_pending' })
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o2', { status: 'lsx_pending' })
+  })
+
+  it('đơn khác khách → 400, không tạo lệnh', async () => {
+    vi.mocked(ordersRepo.findById).mockImplementation(
+      async (id) => freeOrder(id, 'DH-0x', id === 'o1' ? 'c1' : 'c-khac') as never,
+    )
+    await expect(
+      lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1', 'o2'] }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(productionRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('đơn đã thuộc lệnh khác → 409', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...freeOrder('o1', 'DH-01'),
+      production_order_id: 'lsx-cu',
+    } as never)
+    await expect(
+      lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1'] }),
+    ).rejects.toMatchObject({ status: 409 })
+  })
+
+  it('đơn chưa xác nhận → 400', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...freeOrder('o1', 'DH-01'),
+      status: 'lsx_issued',
+    } as never)
+    await expect(
+      lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1'] }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+describe('lsxService.addOrders / removeOrders (0113)', () => {
+  beforeEach(() => {
+    vi.mocked(usersRepo.list).mockResolvedValue([])
+    vi.mocked(departmentsRepo.list).mockResolvedValue([])
+  })
+
+  it('gộp thêm vào lệnh ĐANG CHẠY → đơn sang lsx_issued', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(freeOrder('o2', 'DH-02') as never)
+    await lsxService.addOrders(quanDoc, 'lsx1', ['o2'])
+    expect(productionRepo.attachOrders).toHaveBeenCalledWith('lsx1', ['o2'])
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o2', { status: 'lsx_issued' })
+  })
+
+  it('lệnh đã hoàn thành → 400', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'completed',
+    } as never)
+    await expect(lsxService.addOrders(quanDoc, 'lsx1', ['o2'])).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('gỡ đơn chưa chạy → detach + đơn về confirmed + xoá job/định hình của nó', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      order_ids: ['o1', 'o2'],
+      order_codes: ['DH-01', 'DH-02'],
+    } as never)
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
+      { id: 'o1', code: 'DH-01' },
+      { id: 'o2', code: 'DH-02' },
+    ] as never)
+    vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+      { id: 'g1', sales_order_id: 'o1' },
+      { id: 'g2', sales_order_id: 'o2' },
+    ] as never)
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+      { id: 'line2', group_id: 'g2' },
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+      { id: 'j1', production_order_line_id: 'line2', status: 'todo' },
+    ] as never)
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([])
+
+    await lsxService.removeOrders(quanDoc, 'lsx1', ['o2'])
+    // Xoá nhóm của đơn → cascade dòng + job/định hình của riêng nó.
+    expect(lsxLinesRepo.deleteGroups).toHaveBeenCalledWith(['g2'])
+    expect(productionRepo.detachOrders).toHaveBeenCalledWith(['o2'])
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o2', { status: 'confirmed' })
+  })
+
+  it('đơn đã có công đoạn chạy → 400, không gỡ', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      order_ids: ['o1', 'o2'],
+      order_codes: ['DH-01', 'DH-02'],
+    } as never)
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
+      { id: 'o1', code: 'DH-01' },
+      { id: 'o2', code: 'DH-02' },
+    ] as never)
+    vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+      { id: 'g1', sales_order_id: 'o1' },
+      { id: 'g2', sales_order_id: 'o2' },
+    ] as never)
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+      { id: 'line2', group_id: 'g2' },
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+      { id: 'j1', production_order_line_id: 'line2', status: 'doing' },
+    ] as never)
+    await expect(lsxService.removeOrders(quanDoc, 'lsx1', ['o2'])).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(productionRepo.detachOrders).not.toHaveBeenCalled()
+  })
+
+  it('gỡ đơn cuối cùng → 400 (lệnh phải còn ít nhất một đơn)', async () => {
+    vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
+      { id: 'o1', code: 'DH-01' },
+    ] as never)
+    await expect(lsxService.removeOrders(quanDoc, 'lsx1', ['o1'])).rejects.toMatchObject({
+      status: 400,
+    })
   })
 })
 

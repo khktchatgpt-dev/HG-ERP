@@ -51,7 +51,7 @@ export default async function NewPoPage({
         .map((l) => ({
           id: l.id,
           code: l.code,
-          order_code: l.order_code,
+          order_codes: l.order_codes,
           customer_name: l.customer_name,
         }))}
     />

@@ -253,7 +253,10 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
         <Card>
           <Chain
             nodes={[
-              { label: 'Đơn hàng', value: l.order_code },
+              {
+                label: l.order_codes.length > 1 ? 'Đơn hàng (gộp)' : 'Đơn hàng',
+                value: l.order_codes.join(', ') || '—',
+              },
               { label: 'LSX', value: l.code },
             ]}
           />

@@ -4,7 +4,7 @@ import { db } from '@/server/db'
 export type ComponentRow = {
   id: string
   production_order_id: string
-  order_line_id: string
+  production_order_line_id: string
   /** 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088). */
   kind: 'part' | 'assembly'
   cluster: string | null
@@ -34,7 +34,7 @@ export type ComponentRow = {
 }
 
 export type ComponentInput = {
-  order_line_id: string
+  production_order_line_id: string
   kind?: 'part' | 'assembly'
   cluster?: string | null
   name: string
@@ -55,7 +55,7 @@ export type ComponentInput = {
 }
 
 const COLS =
-  'id, production_order_id, order_line_id, kind, cluster, name, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
+  'id, production_order_id, production_order_line_id, kind, cluster, name, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
 
 type Raw = Omit<ComponentRow, 'material_code' | 'material_name' | 'material_unit'> & {
   material:
@@ -88,7 +88,7 @@ export const componentsRepo = {
   },
 
   /**
-   * Chi tiết của NHIỀU lệnh kèm SL sản phẩm dòng đơn (join sales_order_lines)
+   * Chi tiết của NHIỀU lệnh kèm SL của DÒNG LỆNH (join production_order_lines)
    * — gate xác nhận công đoạn + màn toàn cảnh tính needed/done không N query.
    */
   async listByLsxBulk(
@@ -97,7 +97,7 @@ export const componentsRepo = {
     if (!productionOrderIds.length) return []
     const { data } = await db()
       .from('production_components')
-      .select(`${COLS}, line:sales_order_lines(qty)`)
+      .select(`${COLS}, line:production_order_lines(qty)`)
       .in('production_order_id', productionOrderIds)
       .order('sort_order')
       .limit(20000)
@@ -107,6 +107,20 @@ export const componentsRepo = {
       const line = raw ? (Array.isArray(raw.line) ? raw.line[0] : raw.line) : null
       return { ...r, line_qty: Number(line?.qty) || 0 }
     })
+  },
+
+  /**
+   * Xoá dòng định hình của một số dòng SP trong lệnh — dùng khi GỠ ĐƠN khỏi
+   * lệnh gộp (0113). Caller phải đảm bảo các dòng đó chưa có sổ số liệu.
+   */
+  async deleteByLines(productionOrderId: string, orderLineIds: string[]): Promise<void> {
+    if (!orderLineIds.length) return
+    const { error } = await db()
+      .from('production_components')
+      .delete()
+      .eq('production_order_id', productionOrderId)
+      .in('production_order_line_id', orderLineIds)
+    if (error) throw new Error(error.message)
   },
 
   /** Ghi đè trọn bộ bảng chi tiết của 1 LSX (pattern BOM editor). */
@@ -122,7 +136,7 @@ export const componentsRepo = {
       .insert(
         lines.map((l, i) => ({
           production_order_id: productionOrderId,
-          order_line_id: l.order_line_id,
+          production_order_line_id: l.production_order_line_id,
           kind: l.kind ?? 'part',
           cluster: l.cluster ?? null,
           name: l.name,
@@ -158,7 +172,7 @@ export const componentsRepo = {
     const { data } = await db()
       .from('production_components')
       .select(
-        `${COLS}, created_at, material:warehouse_materials(code, name, unit), line:sales_order_lines!inner(product_id)`,
+        `${COLS}, created_at, material:warehouse_materials(code, name, unit), line:production_order_lines!inner(product_id)`,
       )
       .neq('production_order_id', excludeLsxId)
       .in('line.product_id', productIds)
@@ -193,7 +207,7 @@ export const componentsRepo = {
     const { data } = await db()
       .from('production_components')
       .select(
-        'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:sales_order_lines(qty)',
+        'production_order_id, material_id, qty_per_unit, dm_kg, pcs_per_bar, line:production_order_lines(qty)',
       )
       .in('production_order_id', productionOrderIds)
       .limit(20000)

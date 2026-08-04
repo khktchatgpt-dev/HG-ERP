@@ -8,6 +8,7 @@ import { quotesService } from './quotes.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -306,7 +307,17 @@ export const ordersService = {
     const posManual: string[] = []
     try {
       const lsx = await productionRepo.findByOrder(id)
-      if (lsx) {
+      if (lsx && lsx.order_ids.some((oid) => oid !== id)) {
+        // Lệnh gộp nhiều đơn (0113): huỷ MỘT đơn không được dừng cả lệnh —
+        // chỉ gỡ đơn đó ra, lệnh vẫn chạy cho các đơn còn lại. PO cũng giữ
+        // nguyên vì vật tư mua gộp cho cả lệnh.
+        lsxCode = lsx.code
+        await productionRepo.detachOrders([id])
+        // Bỏ luôn công việc đã lên kế hoạch cho dòng SP của đơn này, không thì
+        // gate "hoàn thành lệnh" đứng mãi vì chờ việc của đơn đã huỷ.
+        const lines = await ordersRepo.listLines(id)
+        await Promise.all(lines.map((l) => jobsRepo.replaceForLine(lsx.id, l.id, [])))
+      } else if (lsx) {
         lsxCode = lsx.code
         if (
           lsx.status === 'pending_approval' ||

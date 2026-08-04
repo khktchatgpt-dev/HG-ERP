@@ -27,7 +27,7 @@ export default async function PlanPage() {
       rows={rows.map((r) => ({
         id: r.lsx.id,
         code: r.lsx.code,
-        order_code: r.lsx.order_code,
+        order_codes: r.lsx.order_codes,
         customer_name: r.lsx.customer_name,
         status: r.lsx.status,
         priority: r.lsx.priority,

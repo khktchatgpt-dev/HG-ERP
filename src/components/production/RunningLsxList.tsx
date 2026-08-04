@@ -76,7 +76,7 @@ export function RunningLsxList({
                   </span>
                 </div>
                 <div className="mt-0.5 text-xs text-zinc-500">
-                  {r.lsx.customer_name} · Đơn {r.lsx.order_code}
+                  {r.lsx.customer_name} · {r.lsx.order_codes.length > 1 ? `${r.lsx.order_codes.length} đơn: ${r.lsx.order_codes.join(", ")}` : `Đơn ${r.lsx.order_codes[0] ?? "—"}`}
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
                   {r.chips.length === 0 ? (

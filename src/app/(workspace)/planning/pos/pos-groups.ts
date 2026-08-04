@@ -19,7 +19,8 @@ import type { Po } from './PosManager'
 export type LsxRef = {
   id: string
   code: string
-  order_code: string
+  /** Mã các đơn của lệnh (0113 — một lệnh gộp nhiều đơn). */
+  order_codes: string[]
   customer_name: string
 }
 
@@ -104,7 +105,7 @@ export function groupPosByLsx(
     const l = lsxById.get(g.key)
     if (l) {
       g.customer_name = l.customer_name
-      g.order_code = g.order_code ?? l.order_code
+      g.order_code = g.order_code ?? (l.order_codes.join(", ") || null)
     }
   }
 

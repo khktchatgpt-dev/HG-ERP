@@ -28,6 +28,8 @@ export type PendingPo = {
 
 /** 1 dòng sản phẩm của LSX (từ đơn hàng) — dữ liệu GĐ cần để thẩm định. */
 export type ApprovalLsxLine = {
+  /** Đơn chứa dòng — lệnh gộp nhiều đơn thì bảng SP nhóm theo đơn (0113). */
+  order_code: string
   product_code: string
   product_name: string
   product_unit: string
@@ -36,20 +38,15 @@ export type ApprovalLsxLine = {
   bom_status: 'none' | 'drawing' | 'done'
   /** Ảnh đại diện SP (URL đã ký) — null nếu chưa đặt ảnh. */
   image_url: string | null
-  /** Thông số kỹ thuật SX (tech_spec) — GĐ xem SP hoàn thiện thế nào. */
-  spec: {
-    machine: string
-    cushion: string
-    paint: string
-    glass: string
-    wood: string
-  }
+  /** Spec sản xuất của dòng lệnh — khoá theo MẪU CỘT của khách (0114). */
+  spec: Record<string, string>
 }
 
 export type PendingLsx = {
   id: string
   code: string
-  order_code: string
+  /** Mã các đơn của lệnh — 0113: một lệnh gộp nhiều đơn cùng khách. */
+  order_codes: string[]
   customer_name: string
   created_at: string
   /** Tên người phát lệnh (LSX.issued_by) — chỉ có ở màn duyệt đầy đủ. */
@@ -64,8 +61,19 @@ export type PendingLsx = {
   bom_pending?: number
   /** Ngày nhận đơn (LSX.received_date). */
   received_date?: string | null
-  /** Thông tin thương mại của đơn hàng gốc (bên Sales) — bối cảnh để GĐ duyệt. */
+  /**
+   * Thông tin thương mại của đơn hàng gốc (bên Sales) — bối cảnh để GĐ duyệt.
+   * Lệnh gộp nhiều đơn thì đây là đơn ĐẦU TIÊN; xem `orders` cho cả nhóm.
+   */
   order?: ApprovalOrderInfo | null
+  /** Tóm tắt từng đơn trong lệnh (0113) — GĐ thấy mình đang duyệt cho những đơn nào. */
+  orders?: {
+    code: string
+    due_date: string | null
+    currency: string
+    value: number
+    line_count: number
+  }[]
   lines?: ApprovalLsxLine[]
 }
 

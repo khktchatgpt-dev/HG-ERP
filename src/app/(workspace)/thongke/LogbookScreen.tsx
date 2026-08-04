@@ -18,7 +18,7 @@ export type RunningLsx = {
   id: string
   code: string
   customer_name: string
-  order_code: string
+  order_codes: string[]
   ship_date: string | null
   late: 'overdue' | 'at_risk' | null
 }

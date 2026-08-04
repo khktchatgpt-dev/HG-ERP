@@ -34,13 +34,13 @@ import type { PendingLsx, PendingPo } from './approval-types'
 export type DecideTarget = { kind: 'lsx' | 'po'; id: string; code: string; label: string }
 
 export function targetLsx(
-  l: Pick<PendingLsx, 'id' | 'code' | 'customer_name' | 'order_code'>,
+  l: Pick<PendingLsx, 'id' | 'code' | 'customer_name' | 'order_codes'>,
 ): DecideTarget {
   return {
     kind: 'lsx',
     id: l.id,
     code: l.code,
-    label: `${l.customer_name} · đơn ${l.order_code}`,
+    label: `${l.customer_name} · ${l.order_codes.length > 1 ? `${l.order_codes.length} đơn` : `đơn ${l.order_codes[0] ?? '?'}`}`,
   }
 }
 export function targetPo(

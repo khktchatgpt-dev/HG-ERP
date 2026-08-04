@@ -31,13 +31,30 @@ vi.mock('./transfers.repo', () => ({
   transfersRepo: { listRawByLsx: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
-  ordersRepo: { listLines: vi.fn(), patch: vi.fn() },
+  ordersRepo: {
+    listLines: vi.fn(),
+    listLinesByOrders: vi.fn(),
+    listByProductionOrder: vi.fn(),
+    patch: vi.fn(),
+  },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   hasPermission: vi.fn(),
 }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { entriesService } from './entries.service'
 import { entriesRepo } from './entries.repo'
 import { transfersRepo } from './transfers.repo'
@@ -58,7 +75,9 @@ const admin = { id: 'u-adm', role: 'admin', department_id: null } as unknown as 
 const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
-  sales_order_id: 'o1',
+  customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'],
   status: 'approved',
   note: null,
 }
@@ -66,7 +85,7 @@ const LSX = {
 const COMP = {
   id: 'c1',
   production_order_id: 'lsx1',
-  order_line_id: 'line1',
+  production_order_line_id: 'line1',
   cluster: null,
   name: 'TAY+TỰA',
   qty_per_unit: 2,
@@ -78,7 +97,7 @@ const COMP = {
 const JOB_HAN = {
   id: 'j1',
   production_order_id: 'lsx1',
-  order_line_id: 'line1',
+  production_order_line_id: 'line1',
   stage: 'han',
   seq: 0,
   status: 'todo',
@@ -100,8 +119,22 @@ beforeEach(() => {
     { code: 'han', label: 'Hàn' },
   ])
   vi.mocked(componentsRepo.listByLsx).mockResolvedValue([COMP] as never)
-  vi.mocked(ordersRepo.listLines).mockResolvedValue([
-    { id: 'line1', qty: 50, product_code: 'SP1', product_name: 'Ghế A' },
+  vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+    {
+      id: 'line1',
+      group_id: 'g1',
+      qty: 50,
+      product_code: 'SP1',
+      name_vi: 'Ghế A',
+      unit: 'cái',
+      specs: {},
+    },
+  ] as never)
+  vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+    { id: 'g1', sales_order_id: 'o1', title: 'Đơn DH-01' },
+  ] as never)
+  vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
+    { id: 'o1', code: 'DH-01', status: 'lsx_issued' },
   ] as never)
   vi.mocked(jobsRepo.listByLsx).mockResolvedValue([JOB_HAN] as never)
   vi.mocked(entriesRepo.listByLsx).mockResolvedValue([])
@@ -155,7 +188,7 @@ describe('entriesService.record', () => {
     const part = {
       id: 'chan',
       production_order_id: 'lsx1',
-      order_line_id: 'line1',
+      production_order_line_id: 'line1',
       kind: 'part',
       cluster: 'CỤM TỰA',
       name: 'CHÂN',
@@ -169,7 +202,7 @@ describe('entriesService.record', () => {
     const asm = {
       id: 'asm',
       production_order_id: 'lsx1',
-      order_line_id: 'line1',
+      production_order_line_id: 'line1',
       kind: 'assembly',
       cluster: 'CỤM TỰA',
       name: 'CỤM TỰA',

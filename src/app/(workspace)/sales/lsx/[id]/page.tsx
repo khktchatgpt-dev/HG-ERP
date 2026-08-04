@@ -2,11 +2,11 @@ import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
-import {
-  productionRepo,
-  listLsxPrintLines,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
+import { colKey, specColumnsOf } from '@/modules/dept/sales/lsx-template'
 import { entriesService } from '@/modules/dept/production/entries.service'
+import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
 import { LsxDetailView } from '@/components/production/LsxDetailView'
@@ -32,16 +32,18 @@ export default async function LsxDetailPage({
   }
   const { lsx, jobs } = data
 
-  const [lines, stages, summary, dept] = await Promise.all([
-    listLsxPrintLines(id, lsx.sales_order_id),
+  const [sheet, stages, summary, dept] = await Promise.all([
+    lsxLinesService.sheet(user, id),
     productionRepo.listStages(),
     entriesService.summary(user, id).catch(() => null),
     user.department_id ? departmentsRepo.findById(user.department_id) : null,
   ])
+  const groupTitle = new Map(sheet.groups.map((g) => [g.id, g.title ?? '']))
+  const sheetLines = sheet.groups.flatMap((g) => g.lines)
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
-    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
+    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
       try {
         imageUrls.set(
           fid as string,
@@ -56,14 +58,21 @@ export default async function LsxDetailPage({
   const isMgr = user.role === 'admin' || user.role === 'manager'
   const isSales = user.role === 'admin' || dept?.name === 'Bán Hàng'
 
+  // Đơn cùng khách chưa thuộc lệnh nào — Sales gộp thêm vào lệnh này (0113).
+  const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
+  const candidates =
+    isSales && ordersEditable ? await ordersRepo.listMergeCandidates(lsx.customer_id) : []
+  const candidateLineCounts = await productionRepo.linesCountByOrder(
+    candidates.map((o) => o.id),
+  )
+
   return (
     <LsxDetailView
       lsx={{
         id: lsx.id,
         code: lsx.code,
         status: lsx.status,
-        order_id: lsx.sales_order_id,
-        order_code: lsx.order_code,
+        orders: lsx.order_ids.map((oid, i) => ({ id: oid, code: lsx.order_codes[i] })),
         customer_name: lsx.customer_name,
         priority: lsx.priority,
         ship_date: lsx.ship_date,
@@ -76,20 +85,20 @@ export default async function LsxDetailPage({
         note: lsx.note,
         created_at: lsx.created_at,
       }}
-      lines={lines.map((l) => ({
-        order_line_id: l.order_line_id,
+      lines={sheetLines.map((l) => ({
+        order_line_id: l.id,
+        group_title: groupTitle.get(l.group_id) ?? '',
         product_code: l.product_code,
-        name_vi: l.name_vi,
+        name_vi: l.name_vi ?? l.product_code,
         unit: l.unit,
         qty: l.qty,
+        ship_text: l.ship_label ?? l.ship_date ?? '',
         image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
-        spec: {
-          machine: l.tech_spec.machine ?? '',
-          cushion: l.tech_spec.cushion ?? '',
-          paint: l.tech_spec.paint ?? '',
-          glass: l.tech_spec.glass ?? '',
-          wood: l.tech_spec.wood ?? '',
-        },
+        spec: l.specs,
+      }))}
+      specColumns={specColumnsOf(sheet.template).map((c) => ({
+        key: colKey(c),
+        label: c.label,
       }))}
       jobs={jobs}
       stages={stages}
@@ -100,6 +109,13 @@ export default async function LsxDetailPage({
       canApprove={isMgr}
       canManage={isMgr}
       canResubmit={isSales}
+      canEditOrders={isSales}
+      linesHref={isSales ? `/sales/lsx/${lsx.id}/dong` : null}
+      mergeCandidates={candidates.map((o) => ({
+        id: o.id,
+        code: o.code,
+        line_count: candidateLineCounts.get(o.id) ?? 0,
+      }))}
     />
   )
 }

@@ -1,8 +1,6 @@
 import { posRepo } from '@/modules/dept/supply/pos.repo'
-import {
-  productionRepo,
-  listLsxPrintLines,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { filesService } from '@/modules/core/files/files.service'
@@ -57,17 +55,21 @@ export async function loadPendingLsxDetail(
   const lsx = await productionRepo.findById(id)
   if (!lsx || lsx.status !== 'pending_approval') return null
 
-  const [orderLines, printLines, order, issuedByName] = await Promise.all([
-    ordersRepo.listLines(lsx.sales_order_id),
-    listLsxPrintLines(lsx.id, lsx.sales_order_id),
-    ordersRepo.findById(lsx.sales_order_id),
+  const [orderLines, printLines, orders, issuedByName] = await Promise.all([
+    ordersRepo.listLinesByOrders(lsx.order_ids),
+    lsxLinesRepo.listLines(lsx.id),
+    ordersRepo.listByProductionOrder(lsx.id),
     lsx.issued_by
       ? usersRepo
           .displayNamesByIds([lsx.issued_by])
           .then((m) => m.get(lsx.issued_by!) ?? null)
       : Promise.resolve(null),
   ])
+  // Dòng lệnh trỏ ngược về dòng đơn → lấy được đơn giá bán + trạng thái BOM.
   const bomByLineId = new Map(orderLines.map((ol) => [ol.id, ol]))
+  const groupTitle = new Map(
+    (await lsxLinesRepo.listGroups(lsx.id)).map((g) => [g.id, g.title ?? '']),
+  )
 
   const fileIds = [
     ...new Set(printLines.map((pl) => pl.image_file_id).filter((x): x is string => !!x)),
@@ -79,15 +81,27 @@ export async function loadPendingLsxDetail(
     /* ảnh lỗi không chặn duyệt */
   }
 
+  // Lệnh gộp nhiều đơn: khối "thông tin thương mại" bám đơn đầu tiên (điều
+  // khoản thường giống nhau vì cùng khách), còn `orders` liệt kê đủ cả nhóm.
+  const order = orders[0] ?? null
   const ownerName = order?.created_by
     ? ((await usersRepo.displayNamesByIds([order.created_by])).get(order.created_by) ??
       null)
     : null
+  const valueByOrder = new Map<string, number>()
+  const linesByOrder = new Map<string, number>()
+  for (const ol of orderLines) {
+    valueByOrder.set(
+      ol.order_id,
+      (valueByOrder.get(ol.order_id) ?? 0) + ol.qty * ol.unit_price,
+    )
+    linesByOrder.set(ol.order_id, (linesByOrder.get(ol.order_id) ?? 0) + 1)
+  }
 
   return {
     id: lsx.id,
     code: lsx.code,
-    order_code: lsx.order_code,
+    order_codes: lsx.order_codes,
     customer_name: lsx.customer_name,
     created_at: lsx.created_at,
     issued_by_name: issuedByName,
@@ -117,23 +131,27 @@ export async function loadPendingLsxDetail(
           owner_name: ownerName,
         }
       : null,
+    orders: orders.map((o) => ({
+      code: o.code,
+      due_date: o.due_date,
+      currency: o.currency,
+      value: valueByOrder.get(o.id) ?? 0,
+      line_count: linesByOrder.get(o.id) ?? 0,
+    })),
     lines: printLines.map((pl) => {
-      const ol = bomByLineId.get(pl.order_line_id)
+      const ol = pl.sales_order_line_id
+        ? bomByLineId.get(pl.sales_order_line_id)
+        : undefined
       return {
+        order_code: groupTitle.get(pl.group_id) ?? '',
         product_code: pl.product_code,
-        product_name: pl.name_vi,
+        product_name: pl.name_vi ?? pl.product_code,
         product_unit: pl.unit,
         qty: pl.qty,
         unit_price: ol?.unit_price ?? 0,
         bom_status: ol?.bom_status ?? 'none',
         image_url: pl.image_file_id ? (imageUrls[pl.image_file_id] ?? null) : null,
-        spec: {
-          machine: pl.tech_spec.machine ?? '',
-          cushion: pl.tech_spec.cushion ?? '',
-          paint: pl.tech_spec.paint ?? '',
-          glass: pl.tech_spec.glass ?? '',
-          wood: pl.tech_spec.wood ?? '',
-        },
+        spec: pl.specs,
       }
     }),
   }

@@ -2,7 +2,7 @@ import { componentsRepo, type ComponentInput, type ComponentRow } from './compon
 import { entriesRepo } from './entries.repo'
 import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -25,8 +25,9 @@ import { BadRequest, NotFound } from '@/server/http'
 export { canEditComponents }
 
 export type ComponentOrderLine = {
+  /** id DÒNG LỆNH (production_order_lines) — 0114. */
   id: string
-  product_id: string
+  product_id: string | null
   product_code: string
   product_name: string
   qty: number
@@ -35,12 +36,12 @@ export type ComponentOrderLine = {
 async function lsxWithLines(lsxId: string) {
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) throw NotFound('LSX không tồn tại')
-  const orderLines = await ordersRepo.listLines(lsx.sales_order_id)
+  const orderLines = await lsxLinesRepo.listLines(lsxId)
   const lines: ComponentOrderLine[] = orderLines.map((l) => ({
     id: l.id,
     product_id: l.product_id,
     product_code: l.product_code,
-    product_name: l.product_name,
+    product_name: l.name_vi ?? l.product_code,
     qty: l.qty,
   }))
   return { lsx, orderLines: lines }
@@ -51,9 +52,9 @@ async function jobStagesByLine(lsxId: string): Promise<Map<string, string[]>> {
   const jobs = await jobsRepo.listByLsx(lsxId)
   const map = new Map<string, string[]>()
   for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
-    const arr = map.get(j.order_line_id) ?? []
+    const arr = map.get(j.production_order_line_id) ?? []
     arr.push(j.stage)
-    map.set(j.order_line_id, arr)
+    map.set(j.production_order_line_id, arr)
   }
   return map
 }
@@ -92,7 +93,7 @@ export const componentsService = {
     }
     const validLineIds = new Set(orderLines.map((l) => l.id))
     for (const l of input) {
-      if (!validLineIds.has(l.order_line_id)) {
+      if (!validLineIds.has(l.production_order_line_id)) {
         throw BadRequest('Có dòng chi tiết gắn vào dòng SP không thuộc lệnh này')
       }
     }
@@ -100,7 +101,7 @@ export const componentsService = {
     // — nếu lọt, %HT của chi tiết không bao giờ đạt vì sổ chặn công đoạn đó.
     const stagesByLine = await jobStagesByLine(lsxId)
     for (const l of input) {
-      const allowed = stagesByLine.get(l.order_line_id)
+      const allowed = stagesByLine.get(l.production_order_line_id)
       if (!allowed) continue
       if (l.final_stage && !allowed.includes(l.final_stage)) {
         throw BadRequest(
@@ -145,6 +146,8 @@ export const componentsService = {
       // vì định mức không gắn danh mục kho — người nhập tự chọn vật tư nếu cần.
       const out: ComponentInput[] = []
       for (const line of orderLines) {
+        // Dòng lệnh chưa gắn SP (mã "Thông báo sau") thì không có định mức để lấy.
+        if (!line.product_id) continue
         const [parts, clusters] = await Promise.all([
           productProfileRepo.parts(line.product_id),
           productProfileRepo.clusters(line.product_id),
@@ -155,7 +158,7 @@ export const componentsService = {
         const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
         for (const p of parts) {
           out.push({
-            order_line_id: line.id,
+            production_order_line_id: line.id,
             cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
             name: p.part_name,
             material_id: null,
@@ -177,7 +180,9 @@ export const componentsService = {
 
     // 'previous': lấy bảng của LSX MỚI NHẤT có chứa SP tương ứng, remap sang
     // dòng đơn hiện tại theo product_id.
-    const productIds = [...new Set(orderLines.map((l) => l.product_id))]
+    const productIds = [
+      ...new Set(orderLines.map((l) => l.product_id).filter((x): x is string => !!x)),
+    ]
     const prev = await componentsRepo.listPreviousByProducts(productIds, lsxId)
     const lineByProduct = new Map(orderLines.map((l) => [l.product_id, l.id]))
     // Hàng đã sort created_at desc — LSX đầu tiên gặp per product là mới nhất.
@@ -191,7 +196,7 @@ export const componentsService = {
       if (picked && picked !== row.production_order_id) continue
       pickedLsxByProduct.set(row.product_id, row.production_order_id)
       out.push({
-        order_line_id: targetLineId,
+        production_order_line_id: targetLineId,
         kind: row.kind,
         cluster: row.cluster,
         name: row.name,
@@ -233,7 +238,7 @@ export async function componentMaterialNeeds(
   if (rows.length === 0) return null
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) throw NotFound('LSX không tồn tại')
-  const orderLines = await ordersRepo.listLines(lsx.sales_order_id)
+  const orderLines = await lsxLinesRepo.listLines(lsxId)
   const qtyByLine = new Map(orderLines.map((l) => [l.id, l.qty]))
 
   const agg = aggregateMaterialNeeds(
@@ -241,7 +246,7 @@ export async function componentMaterialNeeds(
       material_id: r.material_id,
       calc: calcComponent(
         { qty_per_unit: r.qty_per_unit, dm_kg: r.dm_kg, pcs_per_bar: r.pcs_per_bar },
-        qtyByLine.get(r.order_line_id) ?? 0,
+        qtyByLine.get(r.production_order_line_id) ?? 0,
       ),
     })),
   )

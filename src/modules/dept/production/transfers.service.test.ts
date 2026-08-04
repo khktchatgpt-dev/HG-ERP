@@ -25,6 +25,17 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
 }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
 import { transfersService } from './transfers.service'
 import { transfersRepo } from './transfers.repo'
 import { entriesRepo } from './entries.repo'
@@ -39,9 +50,11 @@ const thongKe = {
   department_id: 'd-tk',
 } as unknown as User
 
-const LSX = { id: 'lsx1', code: 'LSX-01', sales_order_id: 'o1', status: 'in_progress' }
-const COMP = { id: 'c1', order_line_id: 'line1', name: 'TAY+TỰA' }
-const JOB_HAN = { id: 'j1', order_line_id: 'line1', stage: 'han', seq: 0 }
+const LSX = { id: 'lsx1', code: 'LSX-01', customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'], status: 'in_progress' }
+const COMP = { id: 'c1', production_order_line_id: 'line1', name: 'TAY+TỰA' }
+const JOB_HAN = { id: 'j1', production_order_line_id: 'line1', stage: 'han', seq: 0 }
 
 const input = (over: Record<string, unknown> = {}) => ({
   component_id: 'c1',
