@@ -48,6 +48,7 @@ export default async function SalesLsxPage() {
   const rows: LsxRow[] = lsxRows.map((r) => ({
     id: r.id,
     code: r.code,
+    customer_id: r.customer_id,
     customer_name: r.customer_name,
     order_codes: r.order_codes,
     status: r.status,

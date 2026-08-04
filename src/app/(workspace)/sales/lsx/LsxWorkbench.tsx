@@ -10,24 +10,20 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { LSX_STATUS } from '@/lib/lsx-status'
+import { IssueLsxDialog, type IssueForm } from './IssueLsxDialog'
 
 /**
  * TRANG LỆNH SẢN XUẤT của Sales — thay trang "Theo dõi đơn" cũ.
  *
  * Trước đây Sales chỉ có bảng trạng thái ĐƠN, muốn phát lệnh phải mở từng đơn;
  * mà từ 0113 một lệnh gộp nhiều đơn nên nhìn theo đơn là nhìn ngược. Trang này
- * lấy LỆNH làm trục:
- *
- *   · khối trên  — ĐƠN CHỜ PHÁT LỆNH, gom theo khách: tick nhiều đơn của cùng
- *     một khách rồi phát MỘT lệnh cho cả nhóm ngay tại đây;
- *   · khối dưới  — DANH SÁCH LỆNH: lọc theo trạng thái, vào hồ sơ, soạn dòng,
- *     in phiếu.
- *
- * Chọn chéo khách bị chặn ngay ở nút (server + trigger DB vẫn chặn lần nữa).
+ * lấy LỆNH làm trục: danh sách lệnh (lọc, vào hồ sơ, soạn dòng, in phiếu), còn
+ * việc phát lệnh nằm gọn trong hộp thoại "Phát lệnh sản xuất" (khách → đơn,
+ * xem IssueLsxDialog).
  */
 
 export type AwaitingOrder = {
@@ -43,6 +39,7 @@ export type AwaitingOrder = {
 export type LsxRow = {
   id: string
   code: string
+  customer_id: string
   customer_name: string
   order_codes: string[]
   status: string
@@ -77,27 +74,14 @@ export function LsxWorkbench({
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const [status, setStatus] = useState('')
-  const [picked, setPicked] = useState<string[]>([])
-  const [form, setForm] = useState({ code: '', ship_date: '', container: '' })
+  const [issuing, setIssuing] = useState(false)
 
-  // Đơn chờ phát lệnh, gom theo khách — mỗi khách một khối tick riêng.
-  const byCustomer = useMemo(() => {
-    const m = new Map<string, { name: string; orders: AwaitingOrder[] }>()
-    for (const o of awaiting) {
-      const g = m.get(o.customer_id) ?? { name: o.customer_name, orders: [] }
-      g.orders.push(o)
-      m.set(o.customer_id, g)
-    }
-    return [...m.entries()].sort((a, b) => a[1].name.localeCompare(b[1].name))
-  }, [awaiting])
-
-  const pickedCustomer = useMemo(() => {
-    const first = awaiting.find((o) => o.id === picked[0])
-    return first?.customer_id ?? null
-  }, [picked, awaiting])
-
-  const pickedOrders = awaiting.filter((o) => picked.includes(o.id))
-  const pickedQty = pickedOrders.reduce((s, o) => s + o.qty, 0)
+  // Mã lệnh đã phát của từng khách — để hộp thoại gợi ý số lệnh kế tiếp.
+  const codesByCustomer = useMemo(() => {
+    const m: Record<string, string[]> = {}
+    for (const r of rows) (m[r.customer_id] ??= []).push(r.code)
+    return m
+  }, [rows])
 
   const shown = useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -110,17 +94,8 @@ export function LsxWorkbench({
     })
   }, [rows, q, status])
 
-  function toggle(o: AwaitingOrder) {
-    setPicked((prev) => {
-      if (prev.includes(o.id)) return prev.filter((x) => x !== o.id)
-      // Đổi khách → bỏ chọn nhóm cũ, vì một lệnh chỉ gộp đơn của MỘT khách.
-      if (pickedCustomer && pickedCustomer !== o.customer_id) return [o.id]
-      return [...prev, o.id]
-    })
-  }
-
-  async function issue() {
-    if (!form.code.trim() || !picked.length) return
+  async function issue(orderIds: string[], form: IssueForm) {
+    if (!form.code.trim() || !orderIds.length) return
     setBusy(true)
     try {
       const { lsx } = await api<{ lsx: { id: string; code: string } }>(
@@ -129,7 +104,7 @@ export function LsxWorkbench({
           method: 'POST',
           body: JSON.stringify({
             code: form.code.trim(),
-            order_ids: picked,
+            order_ids: orderIds,
             ship_date: form.ship_date || null,
             container_summary: form.container.trim() || null,
           }),
@@ -137,10 +112,9 @@ export function LsxWorkbench({
       )
       toast.success(
         `Đã phát lệnh ${lsx.code}`,
-        `${picked.length} đơn · chờ Giám đốc duyệt`,
+        `${orderIds.length} đơn · chờ Giám đốc duyệt`,
       )
-      setPicked([])
-      setForm({ code: '', ship_date: '', container: '' })
+      setIssuing(false)
       // Đi thẳng sang soạn dòng: dòng vừa nạp tự động gần như luôn phải sửa.
       router.push(`/sales/lsx/${lsx.id}/dong`)
     } catch (e) {
@@ -246,6 +220,27 @@ export function LsxWorkbench({
       <PageHeader
         title="Lệnh sản xuất"
         description="Phát một lệnh cho nhiều đơn của cùng khách, rồi theo dõi và sửa lệnh đang chạy."
+        actions={
+          canIssue && (
+            <button
+              onClick={() => setIssuing(true)}
+              disabled={awaiting.length === 0}
+              title={
+                awaiting.length === 0
+                  ? 'Không còn đơn nào chờ phát lệnh'
+                  : `${awaiting.length} đơn đang chờ phát lệnh`
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+            >
+              ＋ Phát lệnh sản xuất
+              {awaiting.length > 0 && (
+                <span className="rounded-full bg-white/20 px-1.5 text-xs">
+                  {awaiting.length}
+                </span>
+              )}
+            </button>
+          )
+        }
       />
 
       <StatsBar
@@ -271,119 +266,15 @@ export function LsxWorkbench({
         ]}
       />
 
-      {/* ── Đơn chờ phát lệnh ─────────────────────────────────────────────── */}
       {canIssue && (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold">
-              Đơn chờ phát lệnh ({awaiting.length})
-            </h2>
-            <span className="text-xs text-zinc-500">
-              tick các đơn của CÙNG một khách rồi phát chung một lệnh
-            </span>
-          </div>
-
-          {awaiting.length === 0 ? (
-            <p className="mt-3 text-sm text-zinc-500">
-              Không còn đơn nào chờ — mọi đơn đã xác nhận đều đã có lệnh sản xuất.
-            </p>
-          ) : (
-            <div className="mt-3 flex flex-col gap-3">
-              {byCustomer.map(([cid, g]) => {
-                const dim = pickedCustomer !== null && pickedCustomer !== cid
-                return (
-                  <div
-                    key={cid}
-                    className={`rounded-lg border p-2.5 ${
-                      dim
-                        ? 'border-zinc-200 opacity-50 dark:border-zinc-800'
-                        : 'border-zinc-300 dark:border-zinc-700'
-                    }`}
-                  >
-                    <div className="mb-1.5 text-sm font-medium">
-                      {g.name}{' '}
-                      <span className="text-xs font-normal text-zinc-500">
-                        {g.orders.length} đơn
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-x-5 gap-y-1.5">
-                      {g.orders.map((o) => (
-                        <label
-                          key={o.id}
-                          className="flex items-center gap-2 text-sm"
-                          title={dim ? 'Bỏ chọn khách kia trước' : undefined}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={picked.includes(o.id)}
-                            onChange={() => toggle(o)}
-                          />
-                          <span className="font-mono">{o.code}</span>
-                          <span className="text-xs text-zinc-500">
-                            {o.line_count} dòng · {fmtN(o.qty)} SP
-                            {o.due_date ? ` · hạn ${fmtD(o.due_date)}` : ''}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })}
-
-              {picked.length > 0 && (
-                <div className="flex flex-wrap items-end gap-2 rounded-lg border border-emerald-300 bg-emerald-50 p-3 dark:border-emerald-800 dark:bg-emerald-950/40">
-                  <label className="flex flex-col gap-1 text-xs">
-                    Số lệnh <span className="text-red-500">*</span>
-                    <input
-                      value={form.code}
-                      onChange={(e) => setForm({ ...form, code: e.target.value })}
-                      placeholder="01/26 - Rosco"
-                      maxLength={50}
-                      className="w-56 rounded-md border border-zinc-300 px-2 py-1.5 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs">
-                    Hạn xuất dự kiến
-                    <input
-                      type="date"
-                      value={form.ship_date}
-                      onChange={(e) => setForm({ ...form, ship_date: e.target.value })}
-                      className="rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  </label>
-                  <label className="flex flex-col gap-1 text-xs">
-                    Container
-                    <input
-                      value={form.container}
-                      onChange={(e) => setForm({ ...form, container: e.target.value })}
-                      placeholder="3 x 40'HC"
-                      className="w-32 rounded-md border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                    />
-                  </label>
-                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                    Đã chọn <b>{picked.length}</b> đơn · <b>{fmtN(pickedQty)}</b> SP
-                  </span>
-                  <div className="ml-auto flex gap-2">
-                    <button
-                      onClick={() => setPicked([])}
-                      className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm hover:bg-white dark:border-zinc-700"
-                    >
-                      Bỏ chọn
-                    </button>
-                    <button
-                      disabled={busy || !form.code.trim()}
-                      onClick={() => void issue()}
-                      className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                      {busy && <Spinner size={14} />}
-                      Phát lệnh cho {picked.length} đơn
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </section>
+        <IssueLsxDialog
+          open={issuing}
+          onClose={() => setIssuing(false)}
+          awaiting={awaiting}
+          codesByCustomer={codesByCustomer}
+          busy={busy}
+          onIssue={issue}
+        />
       )}
 
       {/* ── Danh sách lệnh ────────────────────────────────────────────────── */}
@@ -424,7 +315,11 @@ export function LsxWorkbench({
           emptyState={
             <EmptyState
               title="Chưa có lệnh sản xuất nào"
-              description="Tick đơn ở khối trên rồi bấm Phát lệnh."
+              description={
+                canIssue
+                  ? 'Bấm "Phát lệnh sản xuất" ở góc trên để làm lệnh đầu tiên.'
+                  : 'Sales sẽ phát lệnh từ các đơn đã xác nhận.'
+              }
             />
           }
         />
