@@ -20,7 +20,10 @@ vi.mock('./quotes.service', () => ({
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
 vi.mock('./sales.repo', () => ({ customersRepo: { findById: vi.fn() } }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
-  productionRepo: { findByOrder: vi.fn(), patch: vi.fn() },
+  productionRepo: { findByOrder: vi.fn(), patch: vi.fn(), detachOrders: vi.fn() },
+}))
+vi.mock('@/modules/dept/production/jobs.repo', () => ({
+  jobsRepo: { replaceForLine: vi.fn() },
 }))
 vi.mock('@/modules/dept/supply/pos.repo', () => ({
   posRepo: { list: vi.fn(), patch: vi.fn() },
@@ -39,6 +42,7 @@ import { ordersRepo } from './orders.repo'
 import { quotesService } from './quotes.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { jobsRepo } from '@/modules/dept/production/jobs.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -256,7 +260,7 @@ describe('ordersService.update — FR-SAL-05: mọi thay đổi có vết', () =
 })
 
 describe('ordersService.update — báo Cung ứng khi sửa sau phát LSX (P2)', () => {
-  const LSX = { id: 'lsx1', code: 'LSX-01', status: 'in_progress' }
+  const LSX = { id: 'lsx1', code: 'LSX-01', status: 'in_progress', order_ids: ['o1'] }
 
   it('đơn in_production đổi dòng SP → emit order.changed_after_lsx', async () => {
     vi.mocked(ordersRepo.findById).mockResolvedValue({
@@ -344,6 +348,7 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
       code: 'LSX-01',
       status: 'in_progress',
       current_stage: 'han',
+      order_ids: ['o1'],
     } as never)
     vi.mocked(posRepo.list).mockResolvedValue({
       rows: [
@@ -378,11 +383,32 @@ describe('ordersService.cancel — khép chuỗi LSX/PO (P3)', () => {
     )
   })
 
+  it('lệnh gộp còn đơn khác → chỉ gỡ đơn khỏi lệnh, lệnh KHÔNG dừng, PO giữ nguyên (0113)', async () => {
+    vi.mocked(productionRepo.findByOrder).mockResolvedValue({
+      id: 'lsx1',
+      code: 'LSX-01',
+      status: 'in_progress',
+      order_ids: ['o1', 'o2'],
+    } as never)
+    vi.mocked(ordersRepo.listLines).mockResolvedValue([{ id: 'line1' }] as never)
+
+    await ordersService.cancel(sales, 'o1', 'Khách huỷ 1 đơn')
+
+    expect(productionRepo.detachOrders).toHaveBeenCalledWith(['o1'])
+    expect(productionRepo.patch).not.toHaveBeenCalled()
+    expect(posRepo.patch).not.toHaveBeenCalled()
+    expect(jobsRepo.replaceForLine).toHaveBeenCalledWith('lsx1', 'line1', [])
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'order.cancelled', lsx_cancelled: false }),
+    )
+  })
+
   it('LSX đã hoàn thành → không đụng LSX', async () => {
     vi.mocked(productionRepo.findByOrder).mockResolvedValue({
       id: 'lsx1',
       code: 'LSX-01',
       status: 'completed',
+      order_ids: ['o1'],
     } as never)
 
     await ordersService.cancel(sales, 'o1', 'x')

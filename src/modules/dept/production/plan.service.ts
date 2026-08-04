@@ -3,7 +3,7 @@ import { productionRepo } from './production.repo'
 import { jobsRepo, type Job } from './jobs.repo'
 import { planRepo } from './plan.repo'
 import type { linePlanSchema } from './plan.schema'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -18,8 +18,11 @@ import { BadRequest, NotFound } from '@/server/http'
  */
 
 export type PlanLine = {
+  /** id DÒNG LỆNH (production_order_lines) — 0114. */
   order_line_id: string
-  product_id: string
+  /** Tên nhóm chứa dòng (số PO / bộ sưu tập) để planner biết dòng của đơn nào. */
+  group_title: string
+  product_id: string | null
   product_code: string
   product_name: string
   qty: number
@@ -35,7 +38,7 @@ export type PlanView = {
     status: string
     priority: number
     ship_date: string | null
-    order_code: string
+    order_codes: string[]
     customer_name: string
   }
   lines: PlanLine[]
@@ -64,19 +67,22 @@ export const planService = {
   async get(_user: User, lsxId: string): Promise<PlanView> {
     const lsx = await lsxOrThrow(lsxId)
     const [orderLines, jobs, stages, depts] = await Promise.all([
-      ordersRepo.listLines(lsx.sales_order_id),
+      lsxLinesRepo.listLines(lsxId),
       jobsRepo.listByLsx(lsxId),
       productionRepo.listStages(),
       departmentsRepo.list(),
     ])
     const defaults = await planRepo.defaultRoutesByProducts([
-      ...new Set(orderLines.map((l) => l.product_id)),
+      ...new Set(orderLines.map((l) => l.product_id).filter((x): x is string => !!x)),
     ])
+    const groupTitle = new Map(
+      (await lsxLinesRepo.listGroups(lsxId)).map((g) => [g.id, g.title ?? '']),
+    )
     const jobsByLine = new Map<string, Job[]>()
     for (const j of jobs) {
-      const arr = jobsByLine.get(j.order_line_id) ?? []
+      const arr = jobsByLine.get(j.production_order_line_id) ?? []
       arr.push(j)
-      jobsByLine.set(j.order_line_id, arr)
+      jobsByLine.set(j.production_order_line_id, arr)
     }
     return {
       lsx: {
@@ -85,16 +91,17 @@ export const planService = {
         status: lsx.status,
         priority: lsx.priority,
         ship_date: lsx.ship_date,
-        order_code: lsx.order_code,
+        order_codes: lsx.order_codes,
         customer_name: lsx.customer_name,
       },
       lines: orderLines.map((l) => ({
         order_line_id: l.id,
+        group_title: groupTitle.get(l.group_id) ?? '',
         product_id: l.product_id,
         product_code: l.product_code,
-        product_name: l.product_name,
+        product_name: l.name_vi ?? l.product_code,
         qty: l.qty,
-        default_route: defaults.get(l.product_id) ?? null,
+        default_route: l.product_id ? (defaults.get(l.product_id) ?? null) : null,
         jobs: jobsByLine.get(l.id) ?? [],
       })),
       stages,
@@ -122,7 +129,7 @@ export const planService = {
     const lsx = await lsxOrThrow(lsxId)
     assertEditable(lsx.status)
 
-    const orderLines = await ordersRepo.listLines(lsx.sales_order_id)
+    const orderLines = await lsxLinesRepo.listLines(lsxId)
     const line = orderLines.find((l) => l.id === input.order_line_id)
     if (!line) throw BadRequest('Dòng SP không thuộc lệnh này')
 
@@ -144,7 +151,7 @@ export const planService = {
 
     // Chặn xoá công đoạn đã chạy — việc đã có trạng thái/sổ không được biến mất.
     const existing = (await jobsRepo.listByLsx(lsxId)).filter(
-      (j) => j.order_line_id === input.order_line_id,
+      (j) => j.production_order_line_id === input.order_line_id,
     )
     const removedActive = existing.filter(
       (j) => j.status !== 'todo' && !seen.has(j.stage),
@@ -178,7 +185,9 @@ export const planService = {
       })),
     )
 
-    if (input.save_as_default && input.stages.length) {
+    // Lộ trình mặc định gắn vào SP — dòng lệnh chưa gắn SP (mã "Thông báo sau")
+    // thì không có chỗ để lưu, bỏ qua im lặng.
+    if (input.save_as_default && input.stages.length && line.product_id) {
       await planRepo.saveDefaultRoute(
         line.product_id,
         input.stages.map((s) => s.stage),

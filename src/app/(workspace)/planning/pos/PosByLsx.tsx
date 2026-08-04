@@ -263,7 +263,9 @@ function EmptyLsxPanel({ lsxs, canEdit }: { lsxs: LsxRef[]; canEdit: boolean }) 
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[12px] font-semibold">{l.code}</div>
                 <div className="truncate text-[11px] text-zinc-500">
-                  {[l.customer_name, l.order_code].filter(Boolean).join(' · ')}
+                  {[l.customer_name, l.order_codes.join(', ')]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </div>
               </div>
               {canEdit && (

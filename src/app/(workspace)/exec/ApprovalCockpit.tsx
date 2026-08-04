@@ -113,7 +113,7 @@ function targetLsx(l: PendingLsx): DecideTarget {
     kind: 'lsx',
     id: l.id,
     code: l.code,
-    label: `${l.customer_name} · đơn ${l.order_code}`,
+    label: `${l.customer_name} · ${l.order_codes.length > 1 ? `${l.order_codes.length} đơn` : `đơn ${l.order_codes[0] ?? '?'}`}`,
   }
 }
 function targetPo(
@@ -188,7 +188,7 @@ export function ApprovalCockpit({
         if (!ql) return true
         const hay =
           r.kind === 'lsx'
-            ? `${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_code}`
+            ? `${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_codes.join(' ')}`
             : `${r.po.code} ${r.po.supplier_name} ${r.po.lsx_code ?? ''} ${r.po.order_code ?? ''}`
         return hay.toLowerCase().includes(ql)
       })
@@ -815,7 +815,9 @@ export function LsxDetail({
         )}
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3 lg:grid-cols-4">
-          <Fact label="Đơn hàng">{l.order_code}</Fact>
+          <Fact label={l.order_codes.length > 1 ? 'Đơn hàng (gộp)' : 'Đơn hàng'}>
+            {l.order_codes.join(', ') || '—'}
+          </Fact>
           <Fact label="Hạn giao khách" tone={due.tone}>
             <span className="inline-flex items-center gap-1">
               <Truck className="size-3.5" />

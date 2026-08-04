@@ -1,8 +1,8 @@
 import { jobsRepo, type Job } from './jobs.repo'
+import { lsxLinesRepo } from './lsx-lines.repo'
 import {
-  listLsxPrintLines,
   productionRepo,
-  type ProductionOrderWithOrder,
+  type ProductionOrderWithOrders,
 } from './production.repo'
 import { componentsRepo } from './components.repo'
 import { entriesRepo } from './entries.repo'
@@ -70,7 +70,8 @@ export type TeamJobCard = Job & {
   /** File id ảnh SP — page ký URL rồi map sang image_url cho client. */
   image_file_id: string | null
   /** Thông số SX in trên LSX (đã gộp override) — tổ trưởng xem tại thẻ. */
-  spec: { machine: string; cushion: string; paint: string; glass: string; wood: string }
+  /** Spec sản xuất của dòng lệnh — bộ khoá theo MẪU CỘT của khách (0114). */
+  spec: Record<string, string>
   progress: JobProgress
 }
 
@@ -86,7 +87,8 @@ export type OverviewRow = {
   lsx: {
     id: string
     code: string
-    order_code: string
+    /** Mã các đơn lệnh đang chạy (0113 — một lệnh gộp nhiều đơn). */
+    order_codes: string[]
     customer_name: string
     status: string
     priority: number
@@ -125,12 +127,12 @@ type ComponentWithQty = Awaited<ReturnType<typeof componentsRepo.listByLsxBulk>>
  * Thuần — có test.
  */
 export function assessJobProgress(
-  job: Pick<Job, 'order_line_id' | 'stage'>,
+  job: Pick<Job, 'production_order_line_id' | 'stage'>,
   lineStages: string[],
   components: Pick<
     ComponentWithQty,
     | 'id'
-    | 'order_line_id'
+    | 'production_order_line_id'
     | 'name'
     | 'qty_per_unit'
     | 'dm_kg'
@@ -142,7 +144,7 @@ export function assessJobProgress(
   doneByCompStage: Map<string, number>,
 ): JobProgress {
   const mine = components.filter((c) => {
-    if (c.order_line_id !== job.order_line_id) return false
+    if (c.production_order_line_id !== job.production_order_line_id) return false
     if (lineStages.length) {
       const idx = lineStages.indexOf(job.stage)
       // Chi tiết dừng ở final_stage: công đoạn SAU final_stage không tính nó.
@@ -216,7 +218,7 @@ async function loadActiveContext(lsxIds?: string[]) {
 function lineStagesOf(jobs: Job[]): Map<string, string[]> {
   const map = new Map<string, string[]>()
   for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
-    const key = `${j.production_order_id}|${j.order_line_id}`
+    const key = `${j.production_order_id}|${j.production_order_line_id}`
     const arr = map.get(key) ?? []
     arr.push(j.stage)
     map.set(key, arr)
@@ -258,6 +260,7 @@ export const jobsService = {
     type LineInfo = {
       product_code: string
       product_name: string
+      order_code: string
       qty: number
       image_file_id: string | null
       spec: TeamJobCard['spec']
@@ -265,20 +268,20 @@ export const jobsService = {
     const lineInfo = new Map<string, LineInfo>()
     await Promise.all(
       lsxOfTeam.map(async (id) => {
-        const lines = await listLsxPrintLines(id, byLsx.get(id)!.sales_order_id)
+        const [lines, groups] = await Promise.all([
+          lsxLinesRepo.listLines(id),
+          lsxLinesRepo.listGroups(id),
+        ])
+        const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
         for (const l of lines) {
-          lineInfo.set(l.order_line_id, {
+          lineInfo.set(l.id, {
             product_code: l.product_code,
-            product_name: l.name_vi,
+            product_name: l.name_vi ?? l.product_code,
+            order_code: groupTitle.get(l.group_id) ?? '',
             qty: l.qty,
             image_file_id: l.image_file_id,
-            spec: {
-              machine: l.tech_spec.machine ?? '',
-              cushion: l.tech_spec.cushion ?? '',
-              paint: l.tech_spec.paint ?? '',
-              glass: l.tech_spec.glass ?? '',
-              wood: l.tech_spec.wood ?? '',
-            },
+            // Spec của dòng lệnh là bộ cột theo khách → thẻ việc hiện nguyên văn.
+            spec: l.specs,
           })
         }
       }),
@@ -288,14 +291,15 @@ export const jobsService = {
       .filter((j) => j.team_department_id === teamId && byLsx.has(j.production_order_id))
       .map((j) => {
         const lsx = byLsx.get(j.production_order_id)!
-        const info = lineInfo.get(j.order_line_id)
+        const info = lineInfo.get(j.production_order_line_id)
         const lineStages =
-          stagesByLine.get(`${j.production_order_id}|${j.order_line_id}`) ?? []
+          stagesByLine.get(`${j.production_order_id}|${j.production_order_line_id}`) ?? []
         return {
           ...j,
           stage_label: stages.find((s) => s.code === j.stage)?.label ?? j.stage,
           lsx_code: lsx.code,
-          order_code: lsx.order_code,
+          // Lệnh gộp nhiều đơn → mã đơn lấy theo DÒNG SP, không theo lệnh (0113).
+          order_code: info?.order_code ?? '?',
           customer_name: lsx.customer_name,
           ship_date: lsx.ship_date,
           priority: lsx.priority,
@@ -304,13 +308,7 @@ export const jobsService = {
           product_name: info?.product_name ?? '?',
           line_qty: info?.qty ?? 0,
           image_file_id: info?.image_file_id ?? null,
-          spec: info?.spec ?? {
-            machine: '',
-            cushion: '',
-            paint: '',
-            glass: '',
-            wood: '',
-          },
+          spec: info?.spec ?? {},
           progress: assessJobProgress(j, lineStages, components, doneByCompStage),
         }
       })
@@ -362,7 +360,7 @@ export const jobsService = {
         lsx: {
           id: lsx.id,
           code: lsx.code,
-          order_code: lsx.order_code,
+          order_codes: lsx.order_codes,
           customer_name: lsx.customer_name,
           status: lsx.status,
           priority: lsx.priority,
@@ -425,7 +423,7 @@ export const jobsService = {
       job.production_order_id,
     ])
     const lineStages =
-      lineStagesOf(jobs).get(`${job.production_order_id}|${job.order_line_id}`) ?? []
+      lineStagesOf(jobs).get(`${job.production_order_id}|${job.production_order_line_id}`) ?? []
     const progress = assessJobProgress(job, lineStages, components, doneByCompStage)
 
     if (!progress.ready) {
@@ -460,13 +458,13 @@ export const jobsService = {
     // Bàn giao: báo tổ giữ công đoạn KẾ TIẾP trên lộ trình dòng SP + quản đốc.
     const lsx = (await productionRepo.findById(
       job.production_order_id,
-    )) as ProductionOrderWithOrder
+    )) as ProductionOrderWithOrders
     const stages = await productionRepo.listStages()
     const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
     const next = jobs
       .filter(
         (j) =>
-          j.order_line_id === job.order_line_id && j.seq > job.seq && j.status !== 'done',
+          j.production_order_line_id === job.production_order_line_id && j.seq > job.seq && j.status !== 'done',
       )
       .sort((a, b) => a.seq - b.seq)[0]
     let notifyNext: string[] = []

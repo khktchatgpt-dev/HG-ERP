@@ -4,6 +4,7 @@ import { productionRepo } from './production.repo'
 import { jobsRepo, type Job } from './jobs.repo'
 import { dayLocksRepo } from './day-locks.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { lsxLinesRepo } from './lsx-lines.repo'
 import { calcComponent } from '@/lib/component-needs'
 import {
   assemblyWipWarning,
@@ -63,29 +64,40 @@ export type ComponentOutputView = {
 async function loadLsxContext(lsxId: string) {
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) throw NotFound('LSX không tồn tại')
-  const [components, orderLines, jobs] = await Promise.all([
+  const [components, orderLines, groups, jobs] = await Promise.all([
     componentsRepo.listByLsx(lsxId),
-    ordersRepo.listLines(lsx.sales_order_id),
+    lsxLinesRepo.listLines(lsxId),
+    lsxLinesRepo.listGroups(lsxId),
     jobsRepo.listByLsx(lsxId),
   ])
+  // Dòng lệnh thuộc NHÓM, nhóm mới gắn đơn (0114) → tra đơn qua nhóm.
+  const orderIdByGroup = new Map(groups.map((g) => [g.id, g.sales_order_id]))
   const qtyByLine = new Map(orderLines.map((l) => [l.id, l.qty]))
   const totalByComponent = new Map(
     components.map((c) => [
       c.id,
       calcComponent(
         { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
-        qtyByLine.get(c.order_line_id) ?? 0,
+        qtyByLine.get(c.production_order_line_id) ?? 0,
       ).total_needed,
     ]),
   )
   // Lộ trình CÓ THỨ TỰ per dòng SP = jobs theo seq (thay bảng routes cũ).
   const routeByLine = new Map<string, string[]>()
   for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
-    const arr = routeByLine.get(j.order_line_id) ?? []
+    const arr = routeByLine.get(j.production_order_line_id) ?? []
     arr.push(j.stage)
-    routeByLine.set(j.order_line_id, arr)
+    routeByLine.set(j.production_order_line_id, arr)
   }
-  return { lsx, components, orderLines, jobs, totalByComponent, routeByLine }
+  return {
+    lsx,
+    components,
+    orderLines,
+    orderIdByGroup,
+    jobs,
+    totalByComponent,
+    routeByLine,
+  }
 }
 
 export const entriesService = {
@@ -99,7 +111,8 @@ export const entriesService = {
     input: RecordInput,
   ): Promise<{ warnings: string[] }> {
     await assertAction(user, 'production.entries.record')
-    const { lsx, components, totalByComponent, routeByLine } = await loadLsxContext(lsxId)
+    const { lsx, components, orderLines, orderIdByGroup, totalByComponent, routeByLine } =
+      await loadLsxContext(lsxId)
     if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
     }
@@ -125,7 +138,7 @@ export const entriesService = {
     // thì nhập tự do — cùng chính sách lệnh cũ).
     for (const e of input.entries) {
       const comp = byId.get(e.component_id)!
-      const route = routeByLine.get(comp.order_line_id)
+      const route = routeByLine.get(comp.production_order_line_id)
       if (route && !route.includes(input.stage)) {
         throw BadRequest(
           `Chi tiết "${comp.name}" không đi qua công đoạn này theo kế hoạch — kiểm tra lại hoặc sửa kế hoạch ở màn Kế hoạch SX`,
@@ -181,7 +194,7 @@ export const entriesService = {
         .filter(
           (c) =>
             c.kind !== 'assembly' &&
-            c.order_line_id === asm.order_line_id &&
+            c.production_order_line_id === asm.production_order_line_id &&
             c.cluster != null &&
             c.cluster === asm.cluster &&
             c.qty_per_assembly != null &&
@@ -247,17 +260,30 @@ export const entriesService = {
 
     // Job (dòng SP × công đoạn) tự nhích todo → doing khi có số đầu tiên.
     const affectedLines = new Set(
-      input.entries.map((e) => byId.get(e.component_id)!.order_line_id),
+      input.entries.map((e) => byId.get(e.component_id)!.production_order_line_id),
     )
     await Promise.all(
       [...affectedLines].map((lineId) => jobsRepo.markDoing(lsxId, lineId, input.stage)),
     )
 
-    // Lần ghi sổ đầu tiên của lệnh đã duyệt → lệnh + đơn sang "đang sản xuất".
+    // Lần ghi sổ đầu tiên của lệnh đã duyệt → lệnh sang "đang sản xuất".
     if (lsx.status === 'approved') {
       await productionRepo.patch(lsxId, { status: 'in_progress' })
-      await ordersRepo.patch(lsx.sales_order_id, { status: 'in_production' })
     }
+    // Lệnh gộp nhiều đơn (0113): chỉ ĐƠN có dòng vừa được ghi sổ mới sang "đang
+    // sản xuất" — đơn cùng lệnh nhưng chưa ai làm thì vẫn là "đã phát lệnh".
+    const orderIdsOfLines = new Set(
+      orderLines
+        .filter((l) => affectedLines.has(l.id))
+        .map((l) => orderIdByGroup.get(l.group_id))
+        .filter((x): x is string => !!x),
+    )
+    const started = await ordersRepo.listByProductionOrder(lsxId)
+    await Promise.all(
+      started
+        .filter((o) => orderIdsOfLines.has(o.id) && o.status === 'lsx_issued')
+        .map((o) => ordersRepo.patch(o.id, { status: 'in_production' })),
+    )
     return { warnings }
   },
 
@@ -266,7 +292,7 @@ export const entriesService = {
    * một payload cho màn hồ sơ lệnh/bảng tổng. Đọc: mọi NV đã đăng nhập.
    */
   async summary(_user: User, lsxId: string) {
-    const { components, orderLines, jobs, totalByComponent, routeByLine } =
+    const { components, orderLines, orderIdByGroup, jobs, totalByComponent, routeByLine } =
       await loadLsxContext(lsxId)
     const [entries, stages] = await Promise.all([
       entriesRepo.listByLsx(lsxId),
@@ -293,10 +319,10 @@ export const entriesService = {
         done: v.done,
         defect: v.defect,
       }))
-      const route = routeByLine.get(c.order_line_id) ?? null
+      const route = routeByLine.get(c.production_order_line_id) ?? null
       return {
         id: c.id,
-        order_line_id: c.order_line_id,
+        order_line_id: c.production_order_line_id,
         kind: c.kind,
         cluster: c.cluster,
         name: c.name,
@@ -318,7 +344,7 @@ export const entriesService = {
     // vào cụm) — chi tiết đã hàn thành cụm thì cụm quyết định đồng bộ, không đếm
     // trùng (0088). Lệnh không có cụm → mọi chi tiết đều top-level = như cũ.
     const synced = orderLines.map((l) => {
-      const lineComps = components.filter((c) => c.order_line_id === l.id)
+      const lineComps = components.filter((c) => c.production_order_line_id === l.id)
       const assemblyClusters = new Set(
         lineComps.filter((c) => c.kind === 'assembly' && c.cluster).map((c) => c.cluster),
       )
@@ -334,8 +360,10 @@ export const entriesService = {
         }))
       return {
         order_line_id: l.id,
+        /** Đơn chứa dòng — lệnh gộp nhiều đơn nên %HT tách được theo đơn (0113). */
+        order_id: orderIdByGroup.get(l.group_id) ?? '',
         product_code: l.product_code,
-        product_name: l.product_name,
+        product_name: l.name_vi ?? l.product_code,
         qty: l.qty,
         synced_sets: comps.length ? syncedSets(comps) : 0,
         has_components: lineComps.length > 0,

@@ -1,3 +1,4 @@
+import type { Json } from '@/lib/database.types'
 import { db } from '@/server/db'
 
 export type Customer = {
@@ -19,6 +20,8 @@ export type Customer = {
   fax: string | null
   representative_title: string | null
   fsc_cert: string | null
+  /** Mẫu cột phiếu LSX của khách (0114) — xem lsx-template.ts. */
+  lsx_template: Json | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -30,7 +33,7 @@ export type CustomerWithOwner = Customer & {
 }
 
 const COLS =
-  'id, code, name, email, phone, address, notes, owner_id, tax_code, country, contact_person, default_currency, default_price_term, default_payment_terms, port_of_discharge, fax, representative_title, fsc_cert, is_active, created_at, updated_at'
+  'id, code, name, email, phone, address, notes, owner_id, tax_code, country, contact_person, default_currency, default_price_term, default_payment_terms, port_of_discharge, fax, representative_title, fsc_cert, lsx_template, is_active, created_at, updated_at'
 
 /**
  * `active` = đang giao dịch, `inactive` = đã ngừng, `all` = cả hai.
@@ -215,7 +218,11 @@ export const customersRepo = {
   },
 
   async insert(
-    row: Omit<Customer, 'id' | 'created_at' | 'updated_at' | 'is_active'> & {
+    row: Omit<
+      Customer,
+      'id' | 'created_at' | 'updated_at' | 'is_active' | 'lsx_template'
+    > & {
+      lsx_template?: Json | null
       is_active?: boolean
     },
   ): Promise<Customer> {

@@ -26,7 +26,7 @@ export default async function LogbookPage() {
     id: l.id,
     code: l.code,
     customer_name: l.customer_name,
-    order_code: l.order_code,
+    order_codes: l.order_codes,
     ship_date: l.ship_date,
     late: lateByShipDate(l.ship_date, today),
   }))

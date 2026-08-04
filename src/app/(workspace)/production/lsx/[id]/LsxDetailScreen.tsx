@@ -1,10 +1,9 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { lsxService } from '@/modules/dept/production/lsx.service'
-import {
-  productionRepo,
-  listLsxPrintLines,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
+import { colKey, specColumnsOf } from '@/modules/dept/sales/lsx-template'
 import { entriesService } from '@/modules/dept/production/entries.service'
 import {
   isProductionStaff,
@@ -45,12 +44,14 @@ export async function LsxDetailScreen({
   }
   const { lsx, jobs } = data
 
-  const [lines, stages, summary] = await Promise.all([
-    listLsxPrintLines(id, lsx.sales_order_id),
+  const [sheet, stages, summary] = await Promise.all([
+    lsxLinesService.sheet(user, id),
     productionRepo.listStages(),
     // Tổng hợp số liệu — lỗi không làm sập trang.
     entriesService.summary(user, id).catch(() => null),
   ])
+  const groupTitle = new Map(sheet.groups.map((g) => [g.id, g.title ?? '']))
+  const sheetLines = sheet.groups.flatMap((g) => g.lines)
 
   // Cung ứng / vật tư — CHỈ shell GĐ + Kế hoạch (PO có tiền = cam kết chi).
   let supply: SupplyPanelData | null = null
@@ -77,7 +78,7 @@ export async function LsxDetailScreen({
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
-    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
+    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
       try {
         imageUrls.set(
           fid as string,
@@ -161,8 +162,7 @@ export async function LsxDetailScreen({
         id: lsx.id,
         code: lsx.code,
         status: lsx.status,
-        order_id: lsx.sales_order_id,
-        order_code: lsx.order_code,
+        orders: lsx.order_ids.map((oid, i) => ({ id: oid, code: lsx.order_codes[i] })),
         customer_name: lsx.customer_name,
         priority: lsx.priority,
         ship_date: lsx.ship_date,
@@ -175,20 +175,20 @@ export async function LsxDetailScreen({
         note: lsx.note,
         created_at: lsx.created_at,
       }}
-      lines={lines.map((l) => ({
-        order_line_id: l.order_line_id,
+      lines={sheetLines.map((l) => ({
+        order_line_id: l.id,
+        group_title: groupTitle.get(l.group_id) ?? '',
         product_code: l.product_code,
-        name_vi: l.name_vi,
+        name_vi: l.name_vi ?? l.product_code,
         unit: l.unit,
         qty: l.qty,
+        ship_text: l.ship_label ?? l.ship_date ?? '',
         image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
-        spec: {
-          machine: l.tech_spec.machine ?? '',
-          cushion: l.tech_spec.cushion ?? '',
-          paint: l.tech_spec.paint ?? '',
-          glass: l.tech_spec.glass ?? '',
-          wood: l.tech_spec.wood ?? '',
-        },
+        spec: l.specs,
+      }))}
+      specColumns={specColumnsOf(sheet.template).map((c) => ({
+        key: colKey(c),
+        label: c.label,
       }))}
       jobs={jobs}
       stages={stages}

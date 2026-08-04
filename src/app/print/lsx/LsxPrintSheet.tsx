@@ -1,50 +1,178 @@
-import type { LsxPrintLine } from '@/modules/dept/production/production.repo'
+import { Fragment } from 'react'
+import type { LsxSheetColumn, LsxTemplate } from '@/modules/dept/sales/lsx-template'
+import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 import {
   PrintLetterhead,
-  PrintMeta,
   PrintPage,
   PrintSignatures,
   PrintTitle,
+  type PrintCompany,
 } from '../PrintSheet'
 
 /**
- * Phiếu LỆNH SẢN XUẤT mẫu Hoàng Gia (A4 ngang) — template dùng chung cho:
- *   - bản CHÍNH THỨC  /print/lsx/[id]           (lệnh đã phát)
- *   - bản XEM TRƯỚC   /print/lsx/preview/[orderId] (Sales dò trước khi phát —
- *     watermark rõ để bản in thử không bị dùng nhầm làm bản thật)
+ * Phiếu LỆNH SẢN XUẤT — bày ĐÚNG như file Excel của Sales (docs/lsx-redesign.md).
+ *
+ * Bảng dựng theo `template.columns`: mỗi khách một trật tự cột riêng, cột trống
+ * vẫn in (file thật giữ cả cột Kính rỗng). Nhóm dòng theo đúng kiểu của từng file:
+ *
+ *   · `group_mode: 'columns'` (ROSCO) — STT/KHÁCH HÀNG/SỐ PO/THỜI GIAN GIAO
+ *     HÀNG/GHI CHÚ nằm ở cột riêng, GỘP Ô suốt các dòng của nhóm (rowSpan),
+ *     khép nhóm bằng dòng "Total Cube:". STT đếm theo NHÓM.
+ *   · `group_mode: 'title_row'` (LAURA) — một dòng chữ tên bộ sưu tập ở cột thứ
+ *     hai, STT đánh lại từ 1 trong mỗi nhóm.
+ *   · `group_mode: 'none'` (MERXX/YOTRIO) — bảng phẳng, khép bằng dòng "Tổng".
+ *
+ * Thứ DUY NHẤT app thêm so với Excel: bản chỉnh sửa (revision > 1) tô vàng dòng
+ * vừa đổi và gắn ▲ trước STT — Excel không nói được dòng nào đã sửa.
  */
+
 export type LsxSheetHeader = {
   customer_name: string
-  /** PO khách hoặc số đơn. */
-  order_ref: string
+  code: string
+  issued_at: string | null
   received_date: string | null
   completed_at: string | null
-  code: string
+  container_summary: string | null
   note: string | null
-  ship_date: string | null
+  revision: number
+  revised_at: string | null
 }
 
-const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '…')
-const th = 'border border-black px-1 py-0.5'
+export type LsxSheetGroup = Pick<
+  LsxGroup,
+  'id' | 'title' | 'buyer_name' | 'po_no' | 'ship_date' | 'ship_label' | 'note'
+> & { lines: LsxLine[] }
+
+const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '')
+const fmtN = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
+const td = 'border border-black px-1 py-0.5 align-top'
+
+/** Đợt xuất in ra: ưu tiên đúng chữ Sales gõ ("w37.26"), không có thì ngày. */
+const shipText = (x: { ship_label: string | null; ship_date: string | null }) =>
+  x.ship_label?.trim() || (x.ship_date ? fmtD(x.ship_date) : '')
+
+const alignCls = (c: LsxSheetColumn) =>
+  c.align === 'left' ? 'text-left' : c.align === 'right' ? 'text-right' : 'text-center'
+
+/**
+ * MÀU — lấy đúng chỗ Sales đang bôi trong file Excel, không tự bịa thêm:
+ *   · đỏ  : SỐ LƯỢNG · THỜI GIAN XUẤT · SỐ PO (cả 4 file đều bôi đỏ cột này);
+ *   · vàng: nguyên khối BOM/BẢNG VẼ/MẪU (MERXX bôi vàng cả khối).
+ * Khai ở `emphasis` của cột nên đổi ý chỉ sửa một chỗ.
+ */
+const emphasisCls = (c: LsxSheetColumn, head: boolean) => {
+  if (c.emphasis === 'red') return 'text-red-600'
+  if (c.emphasis === 'yellow')
+    return head
+      ? 'bg-yellow-200 print:bg-yellow-200'
+      : 'bg-yellow-100 print:bg-yellow-100'
+  return ''
+}
+
+const norm = (v: string) => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+/**
+ * Tô theo GIÁ TRỊ — thứ xưởng cần thấy ngay mà bảng đen trắng nuốt mất:
+ *   · thiếu hồ sơ ("Không", "thiếu phụ kiện đóng gói") → chữ đỏ đậm;
+ *   · chưa chốt ("xác nhận sau", "Thông báo sau", "chờ ký mẫu", "đợi") → nền cam
+ *     nhạt + chữ đỏ, vì đó là ô CHƯA CÓ THÔNG TIN chứ không phải giá trị thật.
+ * MERXX bôi đỏ đúng chữ "Không" ở cột MẪU; YOTRIO bôi đỏ "Đợi thông tin
+ * shipping mark" — hai quy tắc này gộp lại cho mọi khách.
+ */
+/**
+ * SP đã đủ mẫu → nền xanh nhạt ở ô Mã SP. MERXX bôi xanh 9 mã trong file, đối
+ * chiếu ra đúng các dòng có cột MẪU ghi "Có" trơn (không kèm "thiếu…").
+ */
+function readyCls(l: LsxLine): string {
+  const mau = norm(l.checks.mau ?? '')
+  return mau.startsWith('co') && !/thieu|chua/.test(mau)
+    ? 'bg-green-100 print:bg-green-100'
+    : ''
+}
+
+function valueCls(text: string, isCheck: boolean): string {
+  const t = norm(text)
+  if (!t) return ''
+  if (
+    /(xac nhan sau|thong bao sau|cho ky|cho xac nhan|dang cho|doi thong tin|se gui|sau khi)/.test(
+      t,
+    )
+  )
+    return 'bg-orange-100 font-semibold text-red-600 print:bg-orange-100'
+  if (isCheck && /(khong|thieu|chua)/.test(t)) return 'font-semibold text-red-600'
+  return ''
+}
+
+/** Giá trị một ô của DÒNG (cột nhóm xử lý riêng vì phải gộp ô). */
+function lineCell(col: LsxSheetColumn, l: LsxLine): string {
+  const src = col.source
+  switch (src.kind) {
+    case 'image':
+      return '' // ảnh render riêng, không phải text
+    case 'line':
+      switch (src.field) {
+        case 'qty':
+          return fmtN(l.qty)
+        case 'cbm':
+          return l.cbm ? fmtN(l.cbm) : ''
+        case 'ship':
+          return shipText(l)
+        default:
+          return (l[src.field] as string | null) ?? ''
+      }
+    case 'total_cbm':
+      return l.cbm ? fmtN(l.cbm * l.qty) : ''
+    case 'spec':
+      return l.specs[src.key] ?? ''
+    case 'check':
+      return l.checks[src.key] ?? ''
+    case 'extra':
+      return l.extras[src.key] ?? ''
+    default:
+      return ''
+  }
+}
+
+function groupCell(col: LsxSheetColumn, g: LsxSheetGroup): string {
+  if (col.source.kind !== 'group') return ''
+  switch (col.source.field) {
+    case 'ship':
+      return shipText(g)
+    case 'title':
+      return g.title ?? ''
+    default:
+      return (g[col.source.field] as string | null) ?? ''
+  }
+}
 
 export function LsxPrintSheet({
   company,
   header,
-  lines,
+  template,
+  groups,
   imageUrls,
   watermark,
 }: {
-  company: Record<string, string | null>
+  company: PrintCompany & Record<string, string | null>
   header: LsxSheetHeader
-  lines: LsxPrintLine[]
+  template: LsxTemplate
+  groups: LsxSheetGroup[]
   imageUrls: Map<string, string>
   /** vd "BẢN XEM TRƯỚC — LỆNH CHƯA PHÁT". null = bản chính thức. */
   watermark?: string | null
 }) {
+  const cols = template.columns
+  const lines = groups.flatMap((g) => g.lines)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
+  const isRevision = header.revision > 1
+  const bands = cols.some((c) => c.band)
+  const qtyIdx = cols.findIndex(
+    (c) => c.source.kind === 'line' && c.source.field === 'qty',
+  )
+  const cubeIdx = cols.findIndex((c) => c.source.kind === 'total_cbm')
 
   return (
-    <PrintPage maxWidth="max-w-6xl">
+    <PrintPage maxWidth="max-w-[1400px]">
       {watermark && (
         <div className="mb-3 border-2 border-dashed border-red-500 bg-red-50 py-1.5 text-center text-sm font-bold tracking-widest text-red-600 uppercase">
           {watermark}
@@ -52,113 +180,263 @@ export function LsxPrintSheet({
       )}
 
       <PrintLetterhead company={company} date={new Date()} />
-      <PrintTitle vi="LỆNH SẢN XUẤT" en="PRODUCTION ORDER" />
-
-      <PrintMeta
-        rows={[
-          ['Khách hàng:', header.customer_name],
-          ['Đơn hàng số:', header.order_ref],
-          ['Ngày nhận:', fmtD(header.received_date)],
-          ['Ngày hoàn thành:', fmtD(header.completed_at)],
-        ]}
-        refs={[
-          ['Số:', <b key="c">{header.code}</b>],
-          ...(header.note ? ([['Ghi chú:', header.note]] as [string, string][]) : []),
-        ]}
+      <PrintTitle
+        vi="LỆNH SẢN XUẤT"
+        en={
+          isRevision
+            ? `CHỈNH SỬA LẦN ${header.revision} — NGÀY ${fmtD(header.revised_at)}`
+            : undefined
+        }
       />
 
-      <p className="mt-2 text-[12px]">Đề nghị các bộ phận triển khai sản xuất:</p>
+      <div className="mt-2 flex items-start justify-between gap-4 text-[12px]">
+        <div>
+          <div>
+            Tên khách hàng: <b>{header.customer_name}</b>
+          </div>
+          <div>Ngày phát hành: {fmtD(header.issued_at)}</div>
+          {header.received_date && <div>Ngày nhận đơn: {fmtD(header.received_date)}</div>}
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="text-[13px] font-bold">SỐ {header.code}</div>
+          {header.container_summary && <div>Cont: {header.container_summary}</div>}
+          {header.completed_at && <div>Hoàn thành: {fmtD(header.completed_at)}</div>}
+        </div>
+      </div>
 
-      <table className="w-full border-collapse text-center text-[11px]">
-        <thead>
+      <p className="mt-2 text-[12px]">
+        Phòng kế hoạch yêu cầu các tổ trưởng và các bộ phận liên quan thực hiện đơn hàng
+        với các điều kiện sau:
+      </p>
+
+      <table className="mt-1 w-full border-collapse text-center text-[11px]">
+        <thead className="print:table-header-group">
+          {/* Tiêu đề hai tầng khi mẫu có cột gộp (YOTRIO). */}
           <tr className="bg-zinc-100 font-semibold print:bg-zinc-100">
-            <td className={th}>STT</td>
-            <td className={th}>Hình ảnh</td>
-            <td className={th}>Mã SP</td>
-            <td className={th}>Tên theo khách</td>
-            <td className={th}>Tên tiếng Việt</td>
-            <td className={th}>Shipping mark</td>
-            <td className={th}>Barcode</td>
-            <td className={th}>ĐVT</td>
-            <td className={th}>SL</td>
-            <td className={th}>Máy</td>
-            <td className={th}>Nệm</td>
-            <td className={th}>Sơn</td>
-            <td className={th}>Kính</td>
-            <td className={th}>Gỗ</td>
-            <td className={th}>Đóng gói</td>
-            <td className={th}>TG xuất</td>
-            <td className={th}>Showroom</td>
+            {cols.map((c, i) => {
+              if (!c.band) {
+                return (
+                  <td
+                    key={i}
+                    className={`${td} whitespace-pre-line ${emphasisCls(c, true)}`}
+                    rowSpan={bands ? 2 : undefined}
+                  >
+                    {c.label}
+                  </td>
+                )
+              }
+              // Chỉ vẽ ô band ở cột ĐẦU của dải cùng band.
+              if (i > 0 && cols[i - 1]?.band === c.band) return null
+              const span = cols.filter((x) => x.band === c.band).length
+              return (
+                <td key={i} className={`${td} ${emphasisCls(c, true)}`} colSpan={span}>
+                  {c.band}
+                </td>
+              )
+            })}
           </tr>
-        </thead>
-        <tbody>
-          {lines.map((l, i) => (
-            <tr key={l.order_line_id}>
-              <td className={th}>{i + 1}</td>
-              <td className={th}>
-                {l.image_file_id && imageUrls.get(l.image_file_id) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={imageUrls.get(l.image_file_id)}
-                    alt={l.name_vi}
-                    className="mx-auto h-12 w-16 object-contain"
-                  />
-                ) : null}
-              </td>
-              <td className={`${th} font-mono`}>
-                {l.product_code}
-                {l.customer_item_code && (
-                  <div className="text-[9px] text-zinc-500">{l.customer_item_code}</div>
-                )}
-              </td>
-              <td className={`${th} text-left`}>{l.name_foreign ?? ''}</td>
-              <td className={`${th} text-left`}>{l.name_vi}</td>
-              <td className={`${th} text-left`}>
-                {l.shipping_mark && (
-                  <div className="whitespace-pre-wrap">{l.shipping_mark}</div>
-                )}
-              </td>
-              <td className={`${th} font-mono`}>{l.barcode ?? ''}</td>
-              <td className={th}>{l.unit}</td>
-              <td className={`${th} font-semibold`}>{l.qty.toLocaleString('en-US')}</td>
-              <td className={th}>{l.tech_spec.machine ?? ''}</td>
-              <td className={th}>{l.tech_spec.cushion ?? ''}</td>
-              <td className={th}>{l.tech_spec.paint ?? ''}</td>
-              <td className={th}>{l.tech_spec.glass ?? ''}</td>
-              <td className={th}>{l.tech_spec.wood ?? ''}</td>
-              <td className={th}>
-                {l.qty_per_carton != null
-                  ? `${l.qty_per_carton} ${l.unit}/${l.pack_unit_label ?? 'thùng'}`
-                  : ''}
-              </td>
-              <td className={th}>{fmtD(header.ship_date)}</td>
-              <td className={th}>{l.showroom_sample ? '✓' : ''}</td>
+          {bands && (
+            <tr className="bg-zinc-100 font-semibold print:bg-zinc-100">
+              {cols
+                .filter((c) => c.band)
+                .map((c, i) => (
+                  <td key={i} className={`${td} ${emphasisCls(c, true)}`}>
+                    {c.label}
+                  </td>
+                ))}
             </tr>
-          ))}
-          <tr className="font-bold">
-            <td className={`${th} text-right`} colSpan={7}>
-              Tổng
-            </td>
-            <td className={th}>{totalQty.toLocaleString('en-US')}</td>
-            <td className={th} colSpan={8}></td>
-          </tr>
+          )}
+        </thead>
+
+        <tbody>
+          {groups.map((g, gi) => {
+            const gCbm = g.lines.reduce((s, l) => s + (l.cbm ?? 0) * l.qty, 0)
+            // Cột nhóm gộp ô suốt các dòng + dòng "Total Cube" khép nhóm.
+            const span = g.lines.length + (template.group_total ? 1 : 0)
+            return (
+              <Fragment key={g.id}>
+                {template.group_mode === 'title_row' && g.title && (
+                  <tr>
+                    <td className={td} />
+                    <td
+                      className={`${td} text-left font-semibold`}
+                      colSpan={cols.length - 1}
+                    >
+                      {g.title}
+                    </td>
+                  </tr>
+                )}
+
+                {g.lines.map((l, li) => {
+                  const changed = isRevision && l.changed_in_rev === header.revision
+                  return (
+                    <tr
+                      key={l.id}
+                      className={changed ? 'bg-amber-100 print:bg-amber-100' : undefined}
+                    >
+                      {cols.map((c, ci) => {
+                        // Cột NHÓM (gồm cả STT khi đếm theo nhóm): chỉ vẽ ở dòng
+                        // đầu, gộp ô xuống hết nhóm — y như merged cell của Excel.
+                        const isGroupCol =
+                          c.source.kind === 'group' ||
+                          (c.source.kind === 'stt' && template.stt_mode === 'group')
+                        if (isGroupCol && template.group_mode === 'columns') {
+                          if (li > 0) return null
+                          return (
+                            <td
+                              key={ci}
+                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)} whitespace-pre-wrap`}
+                              rowSpan={span}
+                            >
+                              {c.source.kind === 'stt' ? gi + 1 : groupCell(c, g)}
+                            </td>
+                          )
+                        }
+                        if (c.source.kind === 'group') {
+                          return (
+                            <td
+                              key={ci}
+                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)}`}
+                            >
+                              {li === 0 ? groupCell(c, g) : ''}
+                            </td>
+                          )
+                        }
+                        if (c.source.kind === 'stt') {
+                          return (
+                            <td key={ci} className={td}>
+                              {changed && (
+                                <span className="font-bold text-amber-700">▲ </span>
+                              )}
+                              {li + 1}
+                            </td>
+                          )
+                        }
+                        if (c.source.kind === 'image') {
+                          const url = l.image_file_id
+                            ? imageUrls.get(l.image_file_id)
+                            : undefined
+                          return (
+                            <td key={ci} className={td}>
+                              {url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={url}
+                                  alt={l.name_vi ?? l.product_code}
+                                  className="mx-auto h-12 w-16 object-contain"
+                                />
+                              ) : null}
+                            </td>
+                          )
+                        }
+                        const mono =
+                          c.source.kind === 'line' &&
+                          (c.source.field === 'product_code' ||
+                            c.source.field === 'barcode')
+                        const text = lineCell(c, l)
+                        return (
+                          <td
+                            key={ci}
+                            className={`${td} ${alignCls(c)} whitespace-pre-wrap ${
+                              mono ? 'font-mono' : ''
+                            } ${
+                              c.source.kind === 'line' && c.source.field === 'qty'
+                                ? 'font-semibold'
+                                : ''
+                            } ${emphasisCls(c, false)} ${valueCls(
+                              text,
+                              c.source.kind === 'check',
+                            )} ${
+                              c.source.kind === 'line' &&
+                              c.source.field === 'product_code'
+                                ? readyCls(l)
+                                : ''
+                            }`}
+                          >
+                            {text}
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  )
+                })}
+
+                {/* "Total Cube:" — ROSCO khép mỗi PO bằng tổng khối. */}
+                {template.group_total === 'cube' && (
+                  <tr className="font-semibold">
+                    {cols.map((c, ci) => {
+                      const isGroupCol =
+                        c.source.kind === 'group' ||
+                        (c.source.kind === 'stt' && template.stt_mode === 'group')
+                      if (isGroupCol && template.group_mode === 'columns') return null
+                      if (ci === qtyIdx)
+                        return (
+                          <td key={ci} className={`${td} text-right`}>
+                            Total Cube:
+                          </td>
+                        )
+                      if (ci === cubeIdx)
+                        return (
+                          <td key={ci} className={`${td} text-right`}>
+                            {fmtN(gCbm)}
+                          </td>
+                        )
+                      return <td key={ci} className={td} />
+                    })}
+                  </tr>
+                )}
+              </Fragment>
+            )
+          })}
+
+          {/* "Tổng" — LAURA/MERXX khép phiếu bằng tổng số lượng. */}
+          {template.grand_total === 'qty' && (
+            <tr className="font-bold">
+              {cols.map((c, ci) => {
+                if (ci === 1)
+                  return (
+                    <td key={ci} className={`${td} text-left`}>
+                      Tổng
+                    </td>
+                  )
+                if (ci === qtyIdx)
+                  return (
+                    <td key={ci} className={`${td} text-right`}>
+                      {fmtN(totalQty)}
+                    </td>
+                  )
+                return <td key={ci} className={td} />
+              })}
+            </tr>
+          )}
         </tbody>
       </table>
 
-      <p className="mt-3 text-[11px] italic">
-        Để đảm bảo thời hạn xuất hàng, đề nghị các bộ phận phối hợp giải quyết kịp thời
-        các vấn đề liên quan.
-      </p>
-      <div className="mt-1 text-[11px]">
-        Nơi nhận: Quản lý sản xuất, các tổ trưởng, trưởng bộ phận, kho vật tư, nguyên
-        liệu, phòng kế hoạch, phòng kế toán.
+      {header.note && (
+        <div className="mt-2 text-[12px]">
+          <b>Ghi chú lệnh:</b> <span className="whitespace-pre-wrap">{header.note}</span>
+        </div>
+      )}
+
+      {template.notes_footer && (
+        <div className="mt-3 text-[12px]">
+          <div className="font-bold">MỘT SỐ LƯU Ý CHUNG:</div>
+          <div className="whitespace-pre-wrap">{template.notes_footer}</div>
+        </div>
+      )}
+
+      <div className="mt-3 text-[12px]">
+        <div className="font-semibold">Nơi nhận:</div>
+        <div>- Quản lý sản xuất</div>
+        <div>- Các tổ trưởng, trưởng bộ phận</div>
+        <div>- Kho vật tư, nguyên liệu</div>
       </div>
 
       <PrintSignatures
         cols={[
-          { role: 'PHÒNG KẾ HOẠCH', hint: 'Ký, ghi rõ họ tên' },
-          { role: 'QUẢN LÝ SẢN XUẤT', hint: 'Ký, ghi rõ họ tên' },
-          { role: 'GIÁM ĐỐC', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+          { role: 'Người lập' },
+          { role: 'Trưởng phòng kế hoạch' },
+          { role: 'Giám Đốc' },
         ]}
       />
     </PrintPage>

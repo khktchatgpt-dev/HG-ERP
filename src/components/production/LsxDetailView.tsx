@@ -25,8 +25,8 @@ export type LsxHeaderData = {
   id: string
   code: string
   status: string
-  order_id: string
-  order_code: string
+  /** Các đơn lệnh đang chạy (0113 — một lệnh gộp nhiều đơn cùng khách). */
+  orders: { id: string; code: string }[]
   customer_name: string
   priority: number
   ship_date: string | null
@@ -41,13 +41,18 @@ export type LsxHeaderData = {
 }
 
 export type LsxLineData = {
+  /** id DÒNG LỆNH (production_order_lines) — 0114. */
   order_line_id: string
+  /** Nhóm chứa dòng (số PO / bộ sưu tập) — lệnh gộp nhiều đơn. */
+  group_title: string
   product_code: string
   name_vi: string
   unit: string
   qty: number
+  ship_text: string
   image_url: string | null
-  spec: { machine: string; cushion: string; paint: string; glass: string; wood: string }
+  /** Spec theo MẪU CỘT của khách — khoá động, nhãn nằm ở specColumns. */
+  spec: Record<string, string>
 }
 
 export type SupplyPanelData = {
@@ -93,6 +98,10 @@ export function LsxDetailView({
   canResubmit = false,
   planHref,
   shapingHref,
+  canEditOrders = false,
+  mergeCandidates = [],
+  specColumns = [],
+  linesHref,
 }: {
   lsx: LsxHeaderData
   lines: LsxLineData[]
@@ -111,6 +120,14 @@ export function LsxDetailView({
   /** Link sang màn Kế hoạch / Định hình (chỉ shell production/planning). */
   planHref?: string | null
   shapingHref?: string | null
+  /** Sales — gộp thêm/gỡ đơn khi lệnh chưa hoàn thành (0113). */
+  canEditOrders?: boolean
+  /** Đơn cùng khách đã xác nhận, chưa thuộc lệnh nào — ứng viên gộp thêm. */
+  mergeCandidates?: { id: string; code: string; line_count: number }[]
+  /** Cột spec theo mẫu của khách (0114) — quyết định bảng SP hiện cột nào. */
+  specColumns?: { key: string; label: string }[]
+  /** Link màn soạn dòng lệnh (chỉ shell Sales). */
+  linesHref?: string | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -119,6 +136,8 @@ export function LsxDetailView({
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
   const [resubmitOpen, setResubmitOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
+  const [addIds, setAddIds] = useState<string[]>([])
   const [resubmit, setResubmit] = useState({
     ship_date: lsx.ship_date ?? '',
     received_date: lsx.received_date ?? '',
@@ -127,15 +146,17 @@ export function LsxDetailView({
   })
 
   const st = LSX_STATUS[lsx.status as keyof typeof LSX_STATUS]
+  // Đổi danh sách đơn được tới khi lệnh kết thúc (server chặn lần cuối).
+  const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
   const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
   const lineName = (id: string) =>
     lines.find((l) => l.order_line_id === id)?.name_vi ?? '?'
 
   const jobsByLine = new Map<string, Job[]>()
   for (const j of jobs) {
-    const arr = jobsByLine.get(j.order_line_id) ?? []
+    const arr = jobsByLine.get(j.production_order_line_id) ?? []
     arr.push(j)
-    jobsByLine.set(j.order_line_id, arr)
+    jobsByLine.set(j.production_order_line_id, arr)
   }
 
   async function call(path: string, body: unknown, okMsg: string) {
@@ -153,13 +174,32 @@ export function LsxDetailView({
     }
   }
 
+  /** Gộp thêm / gỡ đơn của lệnh (0113) — cùng endpoint, khác method. */
+  async function changeOrders(method: 'POST' | 'DELETE', ids: string[], okMsg: string) {
+    setBusy(true)
+    try {
+      await api(`/api/dept/production/lsx/${lsx.id}/orders`, {
+        method,
+        body: JSON.stringify({ order_ids: ids }),
+      })
+      toast.success(okMsg)
+      setAddOpen(false)
+      setAddIds([])
+      router.refresh()
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Không đổi được danh sách đơn')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={breadcrumbs}
         title={`Lệnh sản xuất ${lsx.code}`}
-        description={`${lsx.customer_name} · Đơn ${lsx.order_code}`}
+        description={`${lsx.customer_name} · ${lsx.orders.length > 1 ? `${lsx.orders.length} đơn: ` : 'Đơn '}${lsx.orders.map((o) => o.code).join(', ')}`}
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <Badge tone={st?.tone ?? 'gray'}>{st?.label ?? lsx.status}</Badge>
@@ -248,7 +288,11 @@ export function LsxDetailView({
       {lsx.status === 'completed' && (
         <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300">
           Xưởng đã hoàn thành {fmtD(lsx.completed_at)} — chờ Sales xác nhận giao hàng để
-          khép chuỗi đơn {lsx.order_code}.
+          khép chuỗi{' '}
+          {lsx.orders.length > 1
+            ? `${lsx.orders.length} đơn`
+            : `đơn ${lsx.orders[0]?.code ?? ''}`}
+          .
         </div>
       )}
 
@@ -277,6 +321,84 @@ export function LsxDetailView({
 
       {tab === 'overview' && (
         <div className="flex flex-col gap-4">
+          {/* Đơn hàng của lệnh — một lệnh chạy chung cho nhiều đơn (0113) */}
+          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold">
+                Đơn hàng trong lệnh ({lsx.orders.length})
+              </h2>
+              {canEditOrders && ordersEditable && mergeCandidates.length > 0 && (
+                <button
+                  onClick={() => setAddOpen((v) => !v)}
+                  className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
+                >
+                  {addOpen ? 'Đóng' : '+ Gộp thêm đơn'}
+                </button>
+              )}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {lsx.orders.map((o) => (
+                <span
+                  key={o.id}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs dark:border-zinc-700"
+                >
+                  <Link
+                    href={`/sales/orders/${o.id}`}
+                    className="font-mono hover:underline"
+                  >
+                    {o.code}
+                  </Link>
+                  {canEditOrders && ordersEditable && lsx.orders.length > 1 && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void changeOrders('DELETE', [o.id], `Đã gỡ đơn ${o.code}`)
+                      }
+                      title="Gỡ đơn khỏi lệnh"
+                      className="text-zinc-400 hover:text-red-600 disabled:opacity-50"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </span>
+              ))}
+            </div>
+            {addOpen && (
+              <div className="mt-3 flex flex-col gap-1.5 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
+                {mergeCandidates.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={addIds.includes(c.id)}
+                      onChange={(e) =>
+                        setAddIds((prev) =>
+                          e.target.checked
+                            ? [...prev, c.id]
+                            : prev.filter((x) => x !== c.id),
+                        )
+                      }
+                    />
+                    <span className="font-mono">{c.code}</span>
+                    <span className="text-xs text-zinc-500">{c.line_count} dòng SP</span>
+                  </label>
+                ))}
+                <button
+                  disabled={busy || !addIds.length}
+                  onClick={() =>
+                    void changeOrders(
+                      'POST',
+                      addIds,
+                      `Đã gộp ${addIds.length} đơn vào ${lsx.code}`,
+                    )
+                  }
+                  className="mt-1 self-start rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  Gộp vào lệnh
+                </button>
+              </div>
+            )}
+          </section>
+
           {/* Kế hoạch công đoạn per dòng SP */}
           <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
             <div className="flex items-center gap-2">
@@ -372,7 +494,17 @@ export function LsxDetailView({
 
           {/* Dòng SP + spec in */}
           <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <h2 className="mb-3 text-sm font-semibold">Sản phẩm ({lines.length})</h2>
+            <div className="mb-3 flex items-center gap-2">
+              <h2 className="text-sm font-semibold">Sản phẩm ({lines.length})</h2>
+              {linesHref && (
+                <Link
+                  href={linesHref}
+                  className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
+                >
+                  Soạn dòng lệnh →
+                </Link>
+              )}
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
@@ -380,10 +512,12 @@ export function LsxDetailView({
                     <th className="py-1.5 pr-2">SP</th>
                     <th className="py-1.5 pr-2">Mã</th>
                     <th className="w-20 py-1.5 pr-2 text-right">SL</th>
-                    <th className="py-1.5 pr-2">Máy/dây</th>
-                    <th className="py-1.5 pr-2">Nệm</th>
-                    <th className="py-1.5 pr-2">Sơn</th>
-                    <th className="py-1.5">Kính/Gỗ</th>
+                    <th className="py-1.5 pr-2">Nhóm / đợt xuất</th>
+                    {specColumns.map((c) => (
+                      <th key={c.key} className="py-1.5 pr-2">
+                        {c.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -409,12 +543,14 @@ export function LsxDetailView({
                       <td className="py-1.5 pr-2 text-right">
                         {fmtN(l.qty)} {l.unit}
                       </td>
-                      <td className="py-1.5 pr-2 text-xs">{l.spec.machine || '—'}</td>
-                      <td className="py-1.5 pr-2 text-xs">{l.spec.cushion || '—'}</td>
-                      <td className="py-1.5 pr-2 text-xs">{l.spec.paint || '—'}</td>
-                      <td className="py-1.5 text-xs">
-                        {[l.spec.glass, l.spec.wood].filter(Boolean).join(' · ') || '—'}
+                      <td className="py-1.5 pr-2 text-xs text-zinc-500">
+                        {[l.group_title, l.ship_text].filter(Boolean).join(' · ') || '—'}
                       </td>
+                      {specColumns.map((c) => (
+                        <td key={c.key} className="py-1.5 pr-2 text-xs whitespace-pre-wrap">
+                          {l.spec[c.key] || '—'}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>

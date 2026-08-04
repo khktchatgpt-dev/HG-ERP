@@ -24,7 +24,7 @@ vi.mock('./entries.repo', () => ({
   entriesRepo: { listByLsxBulk: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
-  ordersRepo: { listLines: vi.fn() },
+  ordersRepo: { listLines: vi.fn(), listLinesByOrders: vi.fn() },
 }))
 vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
@@ -34,6 +34,17 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
 vi.mock('@/events/register', () => ({}))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
+vi.mock('./lsx-lines.repo', () => ({
+  lsxLinesRepo: {
+    listLines: vi.fn(),
+    listGroups: vi.fn(),
+    listLinesBulk: vi.fn(),
+    findLine: vi.fn(),
+    replaceAll: vi.fn(),
+    deleteGroups: vi.fn(),
+    markChanged: vi.fn(),
+  },
+}))
 import { assessJobProgress, jobsService, lateByShipDate } from './jobs.service'
 import { jobsRepo, type Job } from './jobs.repo'
 import { productionRepo } from './production.repo'
@@ -54,7 +65,7 @@ const toTruong = {
 const JOB: Job = {
   id: 'j1',
   production_order_id: 'lsx1',
-  order_line_id: 'line1',
+  production_order_line_id: 'line1',
   stage: 'han',
   seq: 1,
   team_department_id: 'dept-han',
@@ -72,7 +83,9 @@ const JOB: Job = {
 const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
-  sales_order_id: 'o1',
+  customer_id: 'c1',
+  order_ids: ['o1'],
+  order_codes: ['DH-01'],
   status: 'in_progress',
   priority: 0,
   ship_date: null,
@@ -85,7 +98,7 @@ const LSX = {
 // Chi tiết: 2 CT/SP × 50 SP = cần 100 mỗi công đoạn.
 const COMP = {
   id: 'c1',
-  order_line_id: 'line1',
+  production_order_line_id: 'line1',
   name: 'TAY+TỰA',
   qty_per_unit: 2,
   dm_kg: null,
@@ -131,7 +144,7 @@ beforeEach(() => {
 describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuần)', () => {
   it('đủ số → ready', () => {
     const p = assessJobProgress(
-      { order_line_id: 'line1', stage: 'han' },
+      { production_order_line_id: 'line1', stage: 'han' },
       ['phoi', 'han', 'son'],
       [COMP],
       new Map([['c1|han', 100]]),
@@ -142,7 +155,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
 
   it('thiếu số → not ready + liệt kê thiếu', () => {
     const p = assessJobProgress(
-      { order_line_id: 'line1', stage: 'han' },
+      { production_order_line_id: 'line1', stage: 'han' },
       ['phoi', 'han', 'son'],
       [COMP],
       new Map([['c1|han', 30]]),
@@ -154,7 +167,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
   it('chi tiết dừng ở final_stage không tính vào công đoạn SAU đó', () => {
     const cut = { ...COMP, id: 'c2', name: 'ỐC VÍT', final_stage: 'han' }
     const p = assessJobProgress(
-      { order_line_id: 'line1', stage: 'son' },
+      { production_order_line_id: 'line1', stage: 'son' },
       ['phoi', 'han', 'son'],
       [COMP, cut],
       new Map([['c1|son', 100]]),
@@ -173,7 +186,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
     }
     // Ở PHÔI: chỉ chi tiết c1 tính (cụm chưa xuất hiện) → c1 đủ 100 là ready.
     const atPhoi = assessJobProgress(
-      { order_line_id: 'line1', stage: 'phoi' },
+      { production_order_line_id: 'line1', stage: 'phoi' },
       ['phoi', 'han', 'son'],
       [COMP, cum],
       new Map([['c1|phoi', 100]]),
@@ -182,7 +195,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
     expect(atPhoi.shortfalls).toEqual([])
     // Ở HÀN: cụm được tính (và c1 cũng, vì final=null tới cuối) → cần cả hai.
     const atHan = assessJobProgress(
-      { order_line_id: 'line1', stage: 'han' },
+      { production_order_line_id: 'line1', stage: 'han' },
       ['phoi', 'han', 'son'],
       [COMP, cum],
       new Map([['c1|han', 100]]),
@@ -192,7 +205,7 @@ describe('assessJobProgress — đối chiếu số vs bảng chi tiết (thuầ
 
   it('dòng chưa có bảng chi tiết → has_components=false, không ready', () => {
     const p = assessJobProgress(
-      { order_line_id: 'line1', stage: 'han' },
+      { production_order_line_id: 'line1', stage: 'han' },
       ['han'],
       [],
       new Map(),

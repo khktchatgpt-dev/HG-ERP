@@ -23,6 +23,8 @@ export type Order = {
   port_of_discharge: string | null
   payment_method: string | null
   required_docs: string | null
+  /** Lệnh sản xuất đang chạy đơn này — NULL = chưa phát lệnh (0113). */
+  production_order_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -67,7 +69,7 @@ export type OrderChange = {
 }
 
 const COLS =
-  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, created_by, created_at, updated_at'
+  'id, code, quote_id, customer_id, customer_po_no, status, currency, due_date, deposit_percent, price_term, payment_terms, container_summary, note, qty_tolerance_pct, partial_shipment, transhipment, port_of_loading, port_of_discharge, payment_method, required_docs, production_order_id, created_by, created_at, updated_at'
 
 type RawOrder = Order & {
   customer: { name: string } | { name: string }[] | null
@@ -148,13 +150,60 @@ export const ordersRepo = {
     return totals
   },
 
+  /** Đơn thuộc một lệnh sản xuất (N đơn : 1 LSX, 0113) — sắp theo mã đơn. */
+  async listByProductionOrder(lsxId: string): Promise<OrderWithCustomer[]> {
+    const { data } = await db()
+      .from('sales_orders')
+      .select(`${COLS}, customer:sales_customers(name), quote:sales_quotes(code)`)
+      .eq('production_order_id', lsxId)
+      .order('code')
+    return unwrap(data as RawOrder[] | null)
+  },
+
+  /**
+   * Đơn đã xác nhận, CHƯA thuộc lệnh nào, của một khách — danh sách để gộp vào
+   * lệnh sản xuất (phát lệnh mới hoặc thêm vào lệnh đang chạy).
+   */
+  async listMergeCandidates(customerId: string): Promise<OrderWithCustomer[]> {
+    const { data } = await db()
+      .from('sales_orders')
+      .select(`${COLS}, customer:sales_customers(name), quote:sales_quotes(code)`)
+      .eq('customer_id', customerId)
+      .eq('status', 'confirmed')
+      .is('production_order_id', null)
+      .order('code')
+      .limit(200)
+    return unwrap(data as RawOrder[] | null)
+  },
+
+  /**
+   * MỌI đơn đã xác nhận mà CHƯA phát lệnh — hàng đợi việc của Sales trên trang
+   * Lệnh sản xuất. Khác `listMergeCandidates` ở chỗ không giới hạn một khách.
+   */
+  async listAwaitingLsx(): Promise<OrderWithCustomer[]> {
+    const { data } = await db()
+      .from('sales_orders')
+      .select(`${COLS}, customer:sales_customers(name), quote:sales_quotes(code)`)
+      .eq('status', 'confirmed')
+      .is('production_order_id', null)
+      .order('created_at', { ascending: true })
+      .limit(300)
+    return unwrap(data as RawOrder[] | null)
+  },
+
   async listLines(orderId: string): Promise<OrderLine[]> {
+    return ordersRepo.listLinesByOrders([orderId])
+  },
+
+  /** Dòng SP của NHIỀU đơn — lệnh gộp nhiều đơn đọc một phát cho cả lệnh. */
+  async listLinesByOrders(orderIds: string[]): Promise<OrderLine[]> {
+    if (!orderIds.length) return []
     const { data } = await db()
       .from('sales_order_lines')
       .select(
         'id, order_id, product_id, qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, bom_status, image_file_id)',
       )
-      .eq('order_id', orderId)
+      .in('order_id', orderIds)
       .order('sort_order')
     type P = {
       code: string

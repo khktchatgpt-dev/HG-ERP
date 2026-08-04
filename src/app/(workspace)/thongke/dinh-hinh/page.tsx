@@ -22,7 +22,7 @@ export default async function ShapingPage() {
     .map((r) => ({
       id: r.id,
       code: r.code,
-      order_code: r.order_code,
+      order_codes: r.order_codes,
       customer_name: r.customer_name,
       status: r.status,
       ship_date: r.ship_date,

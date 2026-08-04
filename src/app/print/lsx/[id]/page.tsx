@@ -1,17 +1,14 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
-import {
-  productionRepo,
-  listLsxPrintLines,
-} from '@/modules/dept/production/production.repo'
-import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { LsxPrintSheet } from '../LsxPrintSheet'
 
 /**
- * In phiếu LỆNH SẢN XUẤT chính thức (mẫu Hoàng Gia) — template dùng chung ở
- * LsxPrintSheet.tsx; bản xem trước khi CHƯA phát: /print/lsx/preview/[orderId].
+ * In phiếu LỆNH SẢN XUẤT chính thức — nhóm + dòng lệnh (0114), bộ cột theo mẫu
+ * của khách. Bản xem trước khi CHƯA phát: /print/lsx/preview/[orderId].
  */
 export default async function LsxPrintPage({
   params,
@@ -23,23 +20,24 @@ export default async function LsxPrintPage({
   const { id } = await params
 
   const lsx = await productionRepo.findById(id)
-  if (!lsx) redirect('/sales/tracking')
+  if (!lsx) redirect("/sales/lsx")
 
-  const [lines, order, company] = await Promise.all([
-    listLsxPrintLines(id, lsx.sales_order_id),
-    ordersRepo.findById(lsx.sales_order_id),
+  const [sheet, company] = await Promise.all([
+    lsxLinesService.sheet(user, id),
     settingsService.getAll(),
   ])
 
-  // Ảnh SP (cột Hình ảnh) — signed URL ngắn hạn, lỗi thì bỏ ảnh.
+  // Ảnh SP (cột Hình ảnh) — signed URL ngắn hạn, lỗi thì bỏ ảnh, không chặn in.
+  const fileIds = [
+    ...new Set(
+      sheet.groups.flatMap((g) => g.lines.map((l) => l.image_file_id).filter(Boolean)),
+    ),
+  ] as string[]
   const imageUrls = new Map<string, string>()
   await Promise.all(
-    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
+    fileIds.map(async (fid) => {
       try {
-        imageUrls.set(
-          fid as string,
-          await filesService.getDownloadUrl(user, fid as string),
-        )
+        imageUrls.set(fid, await filesService.getDownloadUrl(user, fid))
       } catch {
         /* thiếu ảnh không chặn in */
       }
@@ -51,14 +49,17 @@ export default async function LsxPrintPage({
       company={company}
       header={{
         customer_name: lsx.customer_name,
-        order_ref: order?.customer_po_no || lsx.order_code,
-        received_date: lsx.received_date ?? order?.created_at ?? null,
-        completed_at: lsx.completed_at,
         code: lsx.code,
+        issued_at: lsx.issued_at,
+        received_date: lsx.received_date,
+        completed_at: lsx.completed_at,
+        container_summary: lsx.container_summary,
         note: lsx.note,
-        ship_date: lsx.ship_date,
+        revision: lsx.revision,
+        revised_at: lsx.revised_at,
       }}
-      lines={lines}
+      template={sheet.template}
+      groups={sheet.groups}
       imageUrls={imageUrls}
     />
   )

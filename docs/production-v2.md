@@ -27,10 +27,33 @@ xưởng (dept workspace 'production') mở cửa CẢ gia đình; người ngo�
 `workspace.view.production`; landing sau login theo nhãn/vai
 (resolveDefaultWorkspace). Switcher chỉ bày workspace đúng vai.
 
+## Một lệnh — nhiều đơn hàng (0113, chốt 04/08/2026)
+
+Bỏ BR-01 ("1 đơn = 1 LSX"). Xưởng chạy MỘT lệnh cho NHIỀU đơn cùng lúc:
+
+- Quan hệ **N đơn : 1 LSX** — khoá ngoại nằm ở `sales_orders.production_order_id`
+  (nên mỗi đơn tối đa một lệnh, không cần bảng nối). `production_orders.customer_id`
+  giữ khách của lệnh.
+- **Chỉ gộp đơn cùng một khách** — service chặn, trigger DB
+  `assert_lsx_same_customer` là chốt cuối.
+- **Thêm/bớt đơn tới khi lệnh hoàn thành**: `lsxService.addOrders/removeOrders`
+  (API `POST|DELETE /api/dept/production/lsx/[id]/orders`). Trạng thái đơn mới bám
+  trạng thái lệnh (chờ duyệt → `lsx_pending`, bị từ chối → `confirmed`, đang chạy
+  → `lsx_issued`). Gỡ đơn bị CHẶN khi nó đã có sổ số liệu hoặc job doing/done;
+  chưa chạy thì gỡ kèm job `todo` + dòng định hình của riêng đơn đó. Lệnh phải
+  còn ít nhất một đơn.
+- Mọi bước vòng đời (duyệt/từ chối/gửi lại/hoàn thành) tác động lên TẤT CẢ đơn
+  của lệnh. Riêng `in_production` chỉ gắn cho đơn có dòng SP vừa được ghi sổ.
+- `v_order_tracking` đếm `jobs_total/jobs_done` **theo từng đơn** (lọc job qua
+  dòng SP của đơn); `pos_open` vẫn ở mức lệnh vì vật tư mua gộp cả lệnh.
+- Phiếu in LSX chèn hàng phân cách "Đơn hàng &lt;mã&gt;" khi lệnh có nhiều đơn.
+- Event `lsx.orders.changed` báo Kế hoạch/Cung ứng/xưởng khi lệnh ĐANG CHẠY đổi
+  phạm vi.
+
 ## Mô hình dữ liệu (0084)
 
 - `production_orders` — header LSX (giữ; + `priority`, `materials_received_at/by`;
-  − `current_stage`).
+  − `current_stage`; 0113: + `customer_id`, − `sales_order_id`).
 - `production_jobs` ★ — 1 dòng = LSX × dòng SP × công đoạn: seq lộ trình, tổ,
   hạn kế hoạch, status todo/doing/done + xác nhận. **Nguồn TRẠNG THÁI duy nhất.**
 - `production_components` — bảng định hình (snapshot từ `technical_bom_lines`).

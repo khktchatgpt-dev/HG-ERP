@@ -23,6 +23,8 @@ export type NotificationType =
   | 'lsx_submitted'
   | 'lsx_approved'
   | 'lsx_rejected'
+  | 'lsx_orders_changed'
+  | 'lsx_revised'
   | 'order_changed'
   | 'order_cancelled'
   | 'stage_handoff'

@@ -594,9 +594,10 @@ export type Database = {
           material_type: string | null
           name: string
           note: string | null
-          order_line_id: string
+          order_line_id: string | null
           pcs_per_bar: number | null
           production_order_id: string
+          production_order_line_id: string | null
           qty_per_assembly: number | null
           qty_per_unit: number
           sort_order: number
@@ -619,9 +620,10 @@ export type Database = {
           material_type?: string | null
           name: string
           note?: string | null
-          order_line_id: string
+          order_line_id?: string | null
           pcs_per_bar?: number | null
           production_order_id: string
+          production_order_line_id?: string | null
           qty_per_assembly?: number | null
           qty_per_unit: number
           sort_order?: number
@@ -644,9 +646,10 @@ export type Database = {
           material_type?: string | null
           name?: string
           note?: string | null
-          order_line_id?: string
+          order_line_id?: string | null
           pcs_per_bar?: number | null
           production_order_id?: string
+          production_order_line_id?: string | null
           qty_per_assembly?: number | null
           qty_per_unit?: number
           sort_order?: number
@@ -692,6 +695,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "v_order_tracking"
             referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_components_production_order_line_id_fkey"
+            columns: ["production_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "production_order_lines"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -834,10 +844,11 @@ export type Database = {
           done_by: string | null
           id: string
           note: string | null
-          order_line_id: string
+          order_line_id: string | null
           planned_end: string | null
           planned_start: string | null
           production_order_id: string
+          production_order_line_id: string | null
           seq: number
           stage: string
           status: string
@@ -850,10 +861,11 @@ export type Database = {
           done_by?: string | null
           id?: string
           note?: string | null
-          order_line_id: string
+          order_line_id?: string | null
           planned_end?: string | null
           planned_start?: string | null
           production_order_id: string
+          production_order_line_id?: string | null
           seq?: number
           stage: string
           status?: string
@@ -866,10 +878,11 @@ export type Database = {
           done_by?: string | null
           id?: string
           note?: string | null
-          order_line_id?: string
+          order_line_id?: string | null
           planned_end?: string | null
           planned_start?: string | null
           production_order_id?: string
+          production_order_line_id?: string | null
           seq?: number
           stage?: string
           status?: string
@@ -906,10 +919,91 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "production_jobs_production_order_line_id_fkey"
+            columns: ["production_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "production_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "production_jobs_team_department_id_fkey"
             columns: ["team_department_id"]
             isOneToOne: false
             referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_order_groups: {
+        Row: {
+          buyer_name: string | null
+          created_at: string
+          id: string
+          note: string | null
+          po_no: string | null
+          production_order_id: string
+          sales_order_id: string | null
+          ship_date: string | null
+          ship_label: string | null
+          sort_order: number
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          buyer_name?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          po_no?: string | null
+          production_order_id: string
+          sales_order_id?: string | null
+          ship_date?: string | null
+          ship_label?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          buyer_name?: string | null
+          created_at?: string
+          id?: string
+          note?: string | null
+          po_no?: string | null
+          production_order_id?: string
+          sales_order_id?: string | null
+          ship_date?: string | null
+          ship_label?: string | null
+          sort_order?: number
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_groups_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_groups_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_groups_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_groups_sales_order_id_fkey"
+            columns: ["sales_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
             referencedColumns: ["id"]
           },
         ]
@@ -969,6 +1063,139 @@ export type Database = {
           },
         ]
       }
+      production_order_lines: {
+        Row: {
+          barcode: string | null
+          cbm: number | null
+          changed_in_rev: number | null
+          checks: Json
+          created_at: string
+          customer_item_code: string | null
+          extras: Json
+          group_id: string
+          id: string
+          image_file_id: string | null
+          important_note: string | null
+          name_customs: string | null
+          name_foreign: string | null
+          name_vi: string | null
+          note: string | null
+          packing: string | null
+          product_code: string
+          product_id: string | null
+          production_order_id: string
+          qty: number
+          sales_order_line_id: string | null
+          ship_date: string | null
+          ship_label: string | null
+          sort_order: number
+          specs: Json
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          cbm?: number | null
+          changed_in_rev?: number | null
+          checks?: Json
+          created_at?: string
+          customer_item_code?: string | null
+          extras?: Json
+          group_id: string
+          id?: string
+          image_file_id?: string | null
+          important_note?: string | null
+          name_customs?: string | null
+          name_foreign?: string | null
+          name_vi?: string | null
+          note?: string | null
+          packing?: string | null
+          product_code?: string
+          product_id?: string | null
+          production_order_id: string
+          qty?: number
+          sales_order_line_id?: string | null
+          ship_date?: string | null
+          ship_label?: string | null
+          sort_order?: number
+          specs?: Json
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          cbm?: number | null
+          changed_in_rev?: number | null
+          checks?: Json
+          created_at?: string
+          customer_item_code?: string | null
+          extras?: Json
+          group_id?: string
+          id?: string
+          image_file_id?: string | null
+          important_note?: string | null
+          name_customs?: string | null
+          name_foreign?: string | null
+          name_vi?: string | null
+          note?: string | null
+          packing?: string | null
+          product_code?: string
+          product_id?: string | null
+          production_order_id?: string
+          qty?: number
+          sales_order_line_id?: string | null
+          ship_date?: string | null
+          ship_label?: string | null
+          sort_order?: number
+          specs?: Json
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_order_lines_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "production_order_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_image_file_id_fkey"
+            columns: ["image_file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_order_lines_sales_order_line_id_fkey"
+            columns: ["sales_order_line_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_lines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production_orders: {
         Row: {
           approved_at: string | null
@@ -977,6 +1204,7 @@ export type Database = {
           completed_at: string | null
           container_summary: string | null
           created_at: string
+          customer_id: string
           id: string
           issued_at: string | null
           issued_by: string | null
@@ -986,7 +1214,10 @@ export type Database = {
           priority: number
           received_date: string | null
           rejected_reason: string | null
-          sales_order_id: string
+          revised_at: string | null
+          revised_by: string | null
+          revision: number
+          revision_note: string | null
           ship_date: string | null
           status: string
           updated_at: string
@@ -998,6 +1229,7 @@ export type Database = {
           completed_at?: string | null
           container_summary?: string | null
           created_at?: string
+          customer_id: string
           id?: string
           issued_at?: string | null
           issued_by?: string | null
@@ -1007,7 +1239,10 @@ export type Database = {
           priority?: number
           received_date?: string | null
           rejected_reason?: string | null
-          sales_order_id: string
+          revised_at?: string | null
+          revised_by?: string | null
+          revision?: number
+          revision_note?: string | null
           ship_date?: string | null
           status?: string
           updated_at?: string
@@ -1019,6 +1254,7 @@ export type Database = {
           completed_at?: string | null
           container_summary?: string | null
           created_at?: string
+          customer_id?: string
           id?: string
           issued_at?: string | null
           issued_by?: string | null
@@ -1028,7 +1264,10 @@ export type Database = {
           priority?: number
           received_date?: string | null
           rejected_reason?: string | null
-          sales_order_id?: string
+          revised_at?: string | null
+          revised_by?: string | null
+          revision?: number
+          revision_note?: string | null
           ship_date?: string | null
           status?: string
           updated_at?: string
@@ -1039,6 +1278,13 @@ export type Database = {
             columns: ["approved_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_orders_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "sales_customers"
             referencedColumns: ["id"]
           },
           {
@@ -1056,17 +1302,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "production_orders_sales_order_id_fkey"
-            columns: ["sales_order_id"]
-            isOneToOne: true
-            referencedRelation: "sales_orders"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "production_orders_sales_order_id_fkey"
-            columns: ["sales_order_id"]
-            isOneToOne: true
-            referencedRelation: "v_order_tracking"
+            foreignKeyName: "production_orders_revised_by_fkey"
+            columns: ["revised_by"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1364,6 +1603,7 @@ export type Database = {
           fsc_cert: string | null
           id: string
           is_active: boolean
+          lsx_template: Json
           name: string
           notes: string | null
           owner_id: string | null
@@ -1387,6 +1627,7 @@ export type Database = {
           fsc_cert?: string | null
           id?: string
           is_active?: boolean
+          lsx_template?: Json
           name: string
           notes?: string | null
           owner_id?: string | null
@@ -1410,6 +1651,7 @@ export type Database = {
           fsc_cert?: string | null
           id?: string
           is_active?: boolean
+          lsx_template?: Json
           name?: string
           notes?: string | null
           owner_id?: string | null
@@ -1549,6 +1791,7 @@ export type Database = {
           port_of_discharge: string | null
           port_of_loading: string | null
           price_term: string | null
+          production_order_id: string | null
           qty_tolerance_pct: number | null
           quote_id: string | null
           required_docs: string | null
@@ -1574,6 +1817,7 @@ export type Database = {
           port_of_discharge?: string | null
           port_of_loading?: string | null
           price_term?: string | null
+          production_order_id?: string | null
           qty_tolerance_pct?: number | null
           quote_id?: string | null
           required_docs?: string | null
@@ -1599,6 +1843,7 @@ export type Database = {
           port_of_discharge?: string | null
           port_of_loading?: string | null
           price_term?: string | null
+          production_order_id?: string | null
           qty_tolerance_pct?: number | null
           quote_id?: string | null
           required_docs?: string | null
@@ -1620,6 +1865,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "sales_customers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_orders_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_orders_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
           },
           {
             foreignKeyName: "sales_orders_quote_id_fkey"

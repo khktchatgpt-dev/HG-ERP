@@ -126,8 +126,18 @@ const fmtDT = (d: string) => new Date(d).toLocaleString('vi-VN')
 /** Hệ quả khi huỷ đơn — server tính sẵn để confirm dialog nói thật (P3). */
 export type CancelImpact = {
   lsx_active: boolean
+  /** Lệnh còn chạy cho đơn khác → huỷ đơn này chỉ gỡ nó khỏi lệnh (0113). */
+  lsx_shared: boolean
   pos_auto: string[] // PO chưa gửi NCC — sẽ tự huỷ
   pos_manual: string[] // PO đã gửi NCC — Cung ứng xử lý tay
+}
+
+/** Đơn cùng khách đủ điều kiện gộp chung một lệnh sản xuất (0113). */
+export type MergeCandidate = {
+  id: string
+  code: string
+  due_date: string | null
+  line_count: number
 }
 
 type Tab = 'overview' | 'timeline' | 'docs'
@@ -142,6 +152,7 @@ export function OrderDetailView({
   progress,
   stageLabels,
   cancelImpact,
+  mergeCandidates,
 }: {
   order: OrderView
   lines: LineView[]
@@ -152,6 +163,7 @@ export function OrderDetailView({
   progress: ProgressView[]
   stageLabels: Record<string, string>
   cancelImpact: CancelImpact | null
+  mergeCandidates: MergeCandidate[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -162,6 +174,7 @@ export function OrderDetailView({
   const [lsxCode, setLsxCode] = useState('')
   const [shipDate, setShipDate] = useState(order.due_date ?? '')
   const [container, setContainer] = useState(order.container_summary ?? '')
+  const [mergeIds, setMergeIds] = useState<string[]>([])
 
   const editable = order.status !== 'delivered' && order.status !== 'cancelled'
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
@@ -284,12 +297,15 @@ export function OrderDetailView({
         method: 'POST',
         body: {
           code: lsxCode.trim(),
-          order_id: order.id,
+          order_ids: [order.id, ...mergeIds],
           ship_date: shipDate || null,
           container_summary: container.trim() || order.container_summary,
         },
       })
-      toast.success('Đã phát LSX — chờ Giám đốc duyệt', order.code)
+      toast.success(
+        'Đã phát LSX — chờ Giám đốc duyệt',
+        mergeIds.length ? `${order.code} + ${mergeIds.length} đơn gộp` : order.code,
+      )
       setIssuing(false)
       router.refresh()
     } catch (e) {
@@ -325,7 +341,11 @@ export function OrderDetailView({
     const reason = window.prompt(`Lý do huỷ đơn ${order.code}:`)?.trim()
     if (!reason) return
     const impact: string[] = ['Đơn đã huỷ không khôi phục được.']
-    if (cancelImpact?.lsx_active && lsx) {
+    if (cancelImpact?.lsx_shared && lsx) {
+      impact.push(
+        `LSX ${lsx.code} còn chạy cho đơn khác — đơn này chỉ được gỡ khỏi lệnh, lệnh KHÔNG dừng.`,
+      )
+    } else if (cancelImpact?.lsx_active && lsx) {
       impact.push(`LSX ${lsx.code} sẽ dừng (Đã huỷ).`)
     }
     if (cancelImpact?.pos_auto.length) {
@@ -338,7 +358,7 @@ export function OrderDetailView({
         `${cancelImpact.pos_manual.length} PO ĐÃ GỬI NCC không tự huỷ — Cung ứng xử lý tay: ${cancelImpact.pos_manual.join(', ')}.`,
       )
     }
-    if (cancelImpact?.lsx_active) {
+    if (cancelImpact?.lsx_active && !cancelImpact.lsx_shared) {
       impact.push(
         'Vật tư đã xuất không tự hoàn kho — Kho lập phiếu nhập lại nếu thu hồi.',
       )
@@ -649,8 +669,40 @@ export function OrderDetailView({
               {issuing ? (
                 <div className="flex flex-col gap-3">
                   <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                    Một đơn chỉ phát đúng 1 LSX (BR-01). Không bắt buộc đủ BOM (BR-07).
+                    Một đơn chỉ thuộc 1 lệnh; một lệnh gộp được nhiều đơn của cùng khách.
+                    Không bắt buộc đủ BOM (BR-07).
                   </p>
+                  {/* Gộp đơn: xưởng chạy chung một lệnh cho nhiều đơn cùng khách. */}
+                  {mergeCandidates.length > 0 && (
+                    <div className="flex flex-col gap-1.5 rounded-md border border-zinc-200 p-2.5 dark:border-zinc-800">
+                      <div className="text-sm font-medium">
+                        Gộp thêm đơn của {order.customer_name}
+                        <span className="ml-1 text-xs font-normal text-zinc-500">
+                          (đã xác nhận, chưa có lệnh)
+                        </span>
+                      </div>
+                      {mergeCandidates.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={mergeIds.includes(c.id)}
+                            onChange={(e) =>
+                              setMergeIds((prev) =>
+                                e.target.checked
+                                  ? [...prev, c.id]
+                                  : prev.filter((x) => x !== c.id),
+                              )
+                            }
+                          />
+                          <span className="font-mono">{c.code}</span>
+                          <span className="text-xs text-zinc-500">
+                            {c.line_count} dòng SP
+                            {c.due_date ? ` · hạn ${c.due_date}` : ''}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  )}
                   <div className="grid gap-3 sm:grid-cols-2">
                     <label className="flex flex-col gap-1 text-sm sm:col-span-2">
                       Số LSX <span className="text-red-500">*</span>
@@ -687,7 +739,9 @@ export function OrderDetailView({
                     <a
                       href={`/print/lsx/preview/${order.id}?code=${encodeURIComponent(
                         lsxCode.trim(),
-                      )}&ship_date=${encodeURIComponent(shipDate)}`}
+                      )}&ship_date=${encodeURIComponent(shipDate)}${
+                        mergeIds.length ? `&orders=${mergeIds.join(',')}` : ''
+                      }`}
                       target="_blank"
                       rel="noopener"
                       className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"

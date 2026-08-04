@@ -97,7 +97,7 @@ export const transfersService = {
     // chính sách với sổ sản lượng.
     const jobs = await jobsRepo.listByLsx(lsxId)
     const route = jobs
-      .filter((j) => j.order_line_id === comp.order_line_id)
+      .filter((j) => j.production_order_line_id === comp.production_order_line_id)
       .sort((a, b) => a.seq - b.seq)
       .map((j) => j.stage)
     if (route.length > 0 && !route.includes(input.stage)) {
