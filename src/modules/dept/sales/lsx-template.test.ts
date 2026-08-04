@@ -83,6 +83,16 @@ describe('form phiếu LSX chuẩn', () => {
   it('luôn có cột CBM (kiểm tra đóng đầy container)', () => {
     expect(hasCbm(LSX_FORM)).toBe(true)
   })
+
+  it('tô nổi ĐÚNG chỗ Sales đang bôi trong file Excel', () => {
+    const red = LSX_FORM.columns.filter((c) => c.emphasis === 'red').map((c) => c.label)
+    // Cả 4 file đều bôi đỏ ba cột này — sai là hỏng lô hàng.
+    expect(red).toEqual(['Số PO', 'Số lượng', 'Thời gian xuất'])
+    // MERXX bôi vàng nguyên khối kiểm tra hồ sơ.
+    const yellow = LSX_FORM.columns.filter((c) => c.emphasis === 'yellow')
+    expect(yellow.map((c) => c.label)).toEqual(['BOM', 'Bản vẽ', 'Mẫu', 'Mẫu tại showroom'])
+    expect(yellow.every((c) => c.band === 'Kiểm tra hồ sơ')).toBe(true)
+  })
 })
 
 describe('resolveLsxTemplate — khách KHÔNG đổi được bộ cột', () => {

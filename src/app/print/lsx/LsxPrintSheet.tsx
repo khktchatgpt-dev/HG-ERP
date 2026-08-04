@@ -54,6 +54,55 @@ const shipText = (x: { ship_label: string | null; ship_date: string | null }) =>
 const alignCls = (c: LsxSheetColumn) =>
   c.align === 'left' ? 'text-left' : c.align === 'right' ? 'text-right' : 'text-center'
 
+/**
+ * MÀU — lấy đúng chỗ Sales đang bôi trong file Excel, không tự bịa thêm:
+ *   · đỏ  : SỐ LƯỢNG · THỜI GIAN XUẤT · SỐ PO (cả 4 file đều bôi đỏ cột này);
+ *   · vàng: nguyên khối BOM/BẢNG VẼ/MẪU (MERXX bôi vàng cả khối).
+ * Khai ở `emphasis` của cột nên đổi ý chỉ sửa một chỗ.
+ */
+const emphasisCls = (c: LsxSheetColumn, head: boolean) => {
+  if (c.emphasis === 'red') return 'text-red-600'
+  if (c.emphasis === 'yellow')
+    return head
+      ? 'bg-yellow-200 print:bg-yellow-200'
+      : 'bg-yellow-100 print:bg-yellow-100'
+  return ''
+}
+
+const norm = (v: string) => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+
+/**
+ * Tô theo GIÁ TRỊ — thứ xưởng cần thấy ngay mà bảng đen trắng nuốt mất:
+ *   · thiếu hồ sơ ("Không", "thiếu phụ kiện đóng gói") → chữ đỏ đậm;
+ *   · chưa chốt ("xác nhận sau", "Thông báo sau", "chờ ký mẫu", "đợi") → nền cam
+ *     nhạt + chữ đỏ, vì đó là ô CHƯA CÓ THÔNG TIN chứ không phải giá trị thật.
+ * MERXX bôi đỏ đúng chữ "Không" ở cột MẪU; YOTRIO bôi đỏ "Đợi thông tin
+ * shipping mark" — hai quy tắc này gộp lại cho mọi khách.
+ */
+/**
+ * SP đã đủ mẫu → nền xanh nhạt ở ô Mã SP. MERXX bôi xanh 9 mã trong file, đối
+ * chiếu ra đúng các dòng có cột MẪU ghi "Có" trơn (không kèm "thiếu…").
+ */
+function readyCls(l: LsxLine): string {
+  const mau = norm(l.checks.mau ?? '')
+  return mau.startsWith('co') && !/thieu|chua/.test(mau)
+    ? 'bg-green-100 print:bg-green-100'
+    : ''
+}
+
+function valueCls(text: string, isCheck: boolean): string {
+  const t = norm(text)
+  if (!t) return ''
+  if (
+    /(xac nhan sau|thong bao sau|cho ky|cho xac nhan|dang cho|doi thong tin|se gui|sau khi)/.test(
+      t,
+    )
+  )
+    return 'bg-orange-100 font-semibold text-red-600 print:bg-orange-100'
+  if (isCheck && /(khong|thieu|chua)/.test(t)) return 'font-semibold text-red-600'
+  return ''
+}
+
 /** Giá trị một ô của DÒNG (cột nhóm xử lý riêng vì phải gộp ô). */
 function lineCell(col: LsxSheetColumn, l: LsxLine): string {
   const src = col.source
@@ -169,7 +218,7 @@ export function LsxPrintSheet({
                 return (
                   <td
                     key={i}
-                    className={`${td} whitespace-pre-line`}
+                    className={`${td} whitespace-pre-line ${emphasisCls(c, true)}`}
                     rowSpan={bands ? 2 : undefined}
                   >
                     {c.label}
@@ -180,7 +229,7 @@ export function LsxPrintSheet({
               if (i > 0 && cols[i - 1]?.band === c.band) return null
               const span = cols.filter((x) => x.band === c.band).length
               return (
-                <td key={i} className={td} colSpan={span}>
+                <td key={i} className={`${td} ${emphasisCls(c, true)}`} colSpan={span}>
                   {c.band}
                 </td>
               )
@@ -191,7 +240,7 @@ export function LsxPrintSheet({
               {cols
                 .filter((c) => c.band)
                 .map((c, i) => (
-                  <td key={i} className={td}>
+                  <td key={i} className={`${td} ${emphasisCls(c, true)}`}>
                     {c.label}
                   </td>
                 ))}
@@ -236,7 +285,7 @@ export function LsxPrintSheet({
                           return (
                             <td
                               key={ci}
-                              className={`${td} ${alignCls(c)} whitespace-pre-wrap`}
+                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)} whitespace-pre-wrap`}
                               rowSpan={span}
                             >
                               {c.source.kind === 'stt' ? gi + 1 : groupCell(c, g)}
@@ -245,7 +294,10 @@ export function LsxPrintSheet({
                         }
                         if (c.source.kind === 'group') {
                           return (
-                            <td key={ci} className={`${td} ${alignCls(c)}`}>
+                            <td
+                              key={ci}
+                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)}`}
+                            >
                               {li === 0 ? groupCell(c, g) : ''}
                             </td>
                           )
@@ -281,6 +333,7 @@ export function LsxPrintSheet({
                           c.source.kind === 'line' &&
                           (c.source.field === 'product_code' ||
                             c.source.field === 'barcode')
+                        const text = lineCell(c, l)
                         return (
                           <td
                             key={ci}
@@ -290,9 +343,17 @@ export function LsxPrintSheet({
                               c.source.kind === 'line' && c.source.field === 'qty'
                                 ? 'font-semibold'
                                 : ''
+                            } ${emphasisCls(c, false)} ${valueCls(
+                              text,
+                              c.source.kind === 'check',
+                            )} ${
+                              c.source.kind === 'line' &&
+                              c.source.field === 'product_code'
+                                ? readyCls(l)
+                                : ''
                             }`}
                           >
-                            {lineCell(c, l)}
+                            {text}
                           </td>
                         )
                       })}

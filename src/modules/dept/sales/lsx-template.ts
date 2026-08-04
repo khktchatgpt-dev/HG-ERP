@@ -53,6 +53,12 @@ export type LsxSheetColumn = {
   /** Ô nhập nhiều dòng ở màn soạn (spec thật hay 2 dòng: "Sơn xám cát ⏎ PT-7476"). */
   multiline?: boolean
   hint?: string
+  /**
+   * Tô nổi cả cột (tiêu đề + giá trị) — bắt chước đúng chỗ Sales bôi màu trong
+   * file Excel: `red` cho SỐ LƯỢNG · THỜI GIAN XUẤT · SỐ PO (sai là hỏng lô
+   * hàng), `yellow` cho khối kiểm tra hồ sơ.
+   */
+  emphasis?: 'red' | 'yellow'
 }
 
 export type LsxTemplate = {
@@ -73,7 +79,7 @@ export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
   { label: 'STT', source: { kind: 'stt' } },
   // Nhóm = một đơn hàng / một PO (lệnh gộp nhiều đơn — 0113). Gộp ô suốt nhóm.
   { label: 'Đơn hàng', source: { kind: 'group', field: 'title' }, align: 'left' },
-  { label: 'Số PO', source: { kind: 'group', field: 'po_no' } },
+  { label: 'Số PO', source: { kind: 'group', field: 'po_no' }, emphasis: 'red' },
   { label: 'Hình ảnh sp', source: { kind: 'image' } },
   { label: 'Mã SP', source: { kind: 'line', field: 'product_code' } },
   { label: 'Mã khách', source: { kind: 'line', field: 'customer_item_code' } },
@@ -90,7 +96,12 @@ export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
   },
   { label: 'Số barcode', source: { kind: 'line', field: 'barcode' } },
   { label: 'ĐVT', source: { kind: 'line', field: 'unit' } },
-  { label: 'Số lượng', source: { kind: 'line', field: 'qty' }, align: 'right' },
+  {
+    label: 'Số lượng',
+    source: { kind: 'line', field: 'qty' },
+    align: 'right',
+    emphasis: 'red',
+  },
   { label: 'CBM', source: { kind: 'line', field: 'cbm' }, align: 'right' },
   { label: 'Tổng CBM', source: { kind: 'total_cbm' }, align: 'right' },
   {
@@ -119,20 +130,41 @@ export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
     hint: 'Acacia FSC 100% / Màu 142',
   },
   { label: 'Đóng gói', source: { kind: 'line', field: 'packing' }, hint: '4 cái/ thùng' },
-  { label: 'Thời gian xuất', source: { kind: 'line', field: 'ship' }, hint: 'w37.26' },
+  {
+    label: 'Thời gian xuất',
+    source: { kind: 'line', field: 'ship' },
+    hint: 'w37.26',
+    emphasis: 'red',
+  },
   { label: 'Note', source: { kind: 'line', field: 'note' }, align: 'left' },
   {
     label: 'Lưu ý quan trọng',
     source: { kind: 'line', field: 'important_note' },
     align: 'left',
   },
-  { label: 'BOM', source: { kind: 'check', key: 'bom' }, band: 'Kiểm tra hồ sơ' },
-  { label: 'Bản vẽ', source: { kind: 'check', key: 'ban_ve' }, band: 'Kiểm tra hồ sơ' },
-  { label: 'Mẫu', source: { kind: 'check', key: 'mau' }, band: 'Kiểm tra hồ sơ' },
+  {
+    label: 'BOM',
+    source: { kind: 'check', key: 'bom' },
+    band: 'Kiểm tra hồ sơ',
+    emphasis: 'yellow',
+  },
+  {
+    label: 'Bản vẽ',
+    source: { kind: 'check', key: 'ban_ve' },
+    band: 'Kiểm tra hồ sơ',
+    emphasis: 'yellow',
+  },
+  {
+    label: 'Mẫu',
+    source: { kind: 'check', key: 'mau' },
+    band: 'Kiểm tra hồ sơ',
+    emphasis: 'yellow',
+  },
   {
     label: 'Mẫu tại showroom',
     source: { kind: 'check', key: 'showroom' },
     band: 'Kiểm tra hồ sơ',
+    emphasis: 'yellow',
   },
 ]
 
