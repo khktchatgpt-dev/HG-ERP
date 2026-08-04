@@ -148,19 +148,19 @@ export default async function SalesHomePage() {
         <Kpi
           label="Đơn đang thực hiện"
           value={String(openTracking.length)}
-          href="/sales/tracking"
+          href="/sales/orders"
         />
         <Kpi
           label="Sắp giao (≤7 ngày)"
           value={String(dueSoon.length)}
           tone={dueSoon.length ? 'amber' : undefined}
-          href="/sales/tracking"
+          href="/sales/orders"
         />
         <Kpi
           label="Đơn trễ hạn"
           value={String(overdue.length)}
           tone={overdue.length ? 'red' : undefined}
-          href="/sales/tracking"
+          href="/sales/orders"
         />
         <Kpi
           label="Giá trị đơn tháng này"
@@ -232,9 +232,9 @@ export default async function SalesHomePage() {
           <QuickLink href="/sales/quotes" title="Báo giá" desc="Lập & gửi khách" />
           <QuickLink href="/sales/orders" title="Đơn hàng" desc="Tạo đơn, phát LSX" />
           <QuickLink
-            href="/sales/tracking"
-            title="Theo dõi đơn"
-            desc="Tiến độ & cảnh báo"
+            href="/sales/lsx"
+            title="Lệnh sản xuất"
+            desc="Phát lệnh & theo dõi"
           />
           <QuickLink href="/sales/customers" title="Khách hàng" desc="Hồ sơ & lịch sử" />
         </div>

@@ -176,6 +176,21 @@ export const ordersRepo = {
     return unwrap(data as RawOrder[] | null)
   },
 
+  /**
+   * MỌI đơn đã xác nhận mà CHƯA phát lệnh — hàng đợi việc của Sales trên trang
+   * Lệnh sản xuất. Khác `listMergeCandidates` ở chỗ không giới hạn một khách.
+   */
+  async listAwaitingLsx(): Promise<OrderWithCustomer[]> {
+    const { data } = await db()
+      .from('sales_orders')
+      .select(`${COLS}, customer:sales_customers(name), quote:sales_quotes(code)`)
+      .eq('status', 'confirmed')
+      .is('production_order_id', null)
+      .order('created_at', { ascending: true })
+      .limit(300)
+    return unwrap(data as RawOrder[] | null)
+  },
+
   async listLines(orderId: string): Promise<OrderLine[]> {
     return ordersRepo.listLinesByOrders([orderId])
   },

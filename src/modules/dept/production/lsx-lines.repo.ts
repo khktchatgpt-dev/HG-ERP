@@ -113,6 +113,29 @@ export const lsxLinesRepo = {
     return ((data ?? []) as Record<string, unknown>[]).map(unwrapLine)
   },
 
+  /**
+   * Số dòng + tổng SL của NHIỀU lệnh — cột "Dòng SP / SL" ở danh sách lệnh,
+   * một truy vấn cho cả bảng thay vì đọc dòng từng lệnh.
+   */
+  async summaryByLsx(
+    lsxIds: string[],
+  ): Promise<Map<string, { lines: number; qty: number }>> {
+    const out = new Map<string, { lines: number; qty: number }>()
+    if (!lsxIds.length) return out
+    const { data } = await db()
+      .from('production_order_lines')
+      .select('production_order_id, qty')
+      .in('production_order_id', lsxIds)
+      .limit(20000)
+    for (const r of (data ?? []) as { production_order_id: string; qty: number }[]) {
+      const cur = out.get(r.production_order_id) ?? { lines: 0, qty: 0 }
+      cur.lines += 1
+      cur.qty += Number(r.qty) || 0
+      out.set(r.production_order_id, cur)
+    }
+    return out
+  },
+
   async findLine(id: string): Promise<LsxLine | null> {
     const { data } = await db()
       .from('production_order_lines')
