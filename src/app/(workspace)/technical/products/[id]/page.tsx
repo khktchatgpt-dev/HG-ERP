@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import {
+  canEditProducts,
+  productsService,
+} from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { HttpError } from '@/server/http'
@@ -21,7 +24,7 @@ export default async function ProductProfilePage({
 }) {
   const user = (await authService.currentUser())!
   const { id } = await params
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const canEdit = await canEditProducts(user)
 
   let data
   // Giá trị đã dùng ở SP khác → datalist gợi ý cho các ô gõ tự do khi sửa.

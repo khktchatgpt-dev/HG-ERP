@@ -19,7 +19,7 @@ import type {
   ProductClusterPatch as ClusterPatch,
 } from './technical.schema'
 import type { User } from '@/modules/core/users/users.repo'
-import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
+import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
@@ -60,6 +60,25 @@ function classify(input: {
 // (files/loans/samples/showroom) còn dùng để suy "thuộc phòng Kỹ thuật".
 async function isTechnicalStaff(user: User): Promise<boolean> {
   return hasPermission(user, 'technical.member')
+}
+
+/**
+ * Cờ SỬA cho giao diện Kỹ thuật. Trước đây mỗi trang tự tính
+ * `user.role === 'admin' || 'manager'` — NV phòng Kỹ thuật (role `employee`,
+ * vai dẫn xuất `technical_staff`) vào được nhưng KHÔNG thấy nút nào, dù guard
+ * server đã cho phép. Đọc thẳng registry thao tác để UI và guard cùng nguồn.
+ */
+async function canEditProducts(user: User): Promise<boolean> {
+  return canAction(user, 'technical.product.update')
+}
+
+async function canCreateProducts(user: User): Promise<boolean> {
+  return canAction(user, 'technical.product.create')
+}
+
+/** Bóc tách / sửa BOM — luật riêng (`technical.bom.edit` VÀ `technical.edit`). */
+async function canEditBom(user: User): Promise<boolean> {
+  return canAction(user, 'technical.bom.save')
 }
 
 /** Các trường hình học — đụng bất kỳ trường nào thì phải tính lại số dẫn xuất. */
@@ -877,4 +896,4 @@ export const productsService = {
   },
 }
 
-export { isTechnicalStaff }
+export { isTechnicalStaff, canEditProducts, canCreateProducts, canEditBom }

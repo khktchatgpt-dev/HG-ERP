@@ -1,6 +1,9 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import {
+  canEditProducts,
+  productsService,
+} from '@/modules/dept/technical/technical.service'
 import { HttpError } from '@/server/http'
 import { ProductPackingTab } from '@/components/technical/ProductPackingTab'
 import { toProductView } from '@/components/technical/product-sections'
@@ -13,7 +16,7 @@ export default async function ProductPackingPage({
 }) {
   const user = (await authService.currentUser())!
   const { id } = await params
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const canEdit = await canEditProducts(user)
 
   let data
   let suggestions: Record<string, string[]> = {}
