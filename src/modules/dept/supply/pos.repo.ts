@@ -328,6 +328,8 @@ export const posRepo = {
       code: string
       production_order_id: string | null
       supplier_id: string
+      /** Bỏ trống = default DB ('pending_approval'); luồng 0116 tạo 'draft'. */
+      status?: PoStatus
       template: PoTemplate
       currency: string
       vat_rate?: number | null

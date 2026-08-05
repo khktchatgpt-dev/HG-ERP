@@ -14,10 +14,17 @@ import { PosManager } from './PosManager'
  * nên phải biết cả những lệnh CHƯA có đơn nào — thứ mà bảng đơn không thể suy
  * ra, vì lệnh chưa đặt gì thì đơn giản là không có dòng nào nhắc tới nó.
  */
-export default async function PlanningPosPage() {
+export default async function PlanningPosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>
+}) {
   const user = (await authService.currentUser())!
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   const canApprove = user.role === 'admin' || user.role === 'manager'
+  // `?view=<id>`: form soạn đơn redirect về đây sau khi LƯU NHÁP (0116) — mở
+  // ngay chi tiết đơn vừa tạo để người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
+  const { view } = await searchParams
 
   const [{ rows: pos }, { rows: suppliers }, lsxs] = await Promise.all([
     posService.list(user, { page: 1, page_size: 300 }),
@@ -40,6 +47,7 @@ export default async function PlanningPosPage() {
       }))}
       canEdit={!!canEdit}
       canApprove={canApprove}
+      openId={view ?? null}
     />
   )
 }

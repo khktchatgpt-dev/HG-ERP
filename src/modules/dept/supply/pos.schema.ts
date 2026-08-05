@@ -2,6 +2,9 @@ import { z } from 'zod'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const PO_STATUSES = [
+  // NHÁP (0116): tạo đơn = lưu nháp, sửa/xoá tự do; bấm "Gửi GĐ duyệt" mới sang
+  // pending_approval và notify người duyệt.
+  'draft',
   'pending_approval',
   'approved',
   'ordered',

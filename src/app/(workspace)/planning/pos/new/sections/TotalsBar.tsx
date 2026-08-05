@@ -1,16 +1,26 @@
 'use client'
 
+import { useRef, useState } from 'react'
+import { TriangleAlert } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
+import { Segmented } from './Segmented'
 import type { Num } from '../po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 const box =
-  'h-[28px] rounded-md border border-zinc-300 px-2 text-right text-[13px] dark:border-zinc-700 dark:bg-zinc-900'
+  'h-[28px] rounded-md border border-zinc-300 px-2 text-right text-[13px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+
+/** Các mức VAT NCC hay chào — một cú bấm thay vì gõ vào ô số bé. */
+const VAT_PRESETS = [0, 8, 10] as const
 
 /**
  * Thanh tổng DÍNH ĐÁY: cộng tiền hàng · chiết khấu · VAT · tổng thanh toán · nút
  * gửi duyệt. Dính đáy vì bảng dòng hàng dài, cuộn tới cuối mới thấy tổng thì
  * người soạn không biết mình đang ở mức tiền nào.
+ *
+ * VAT là NÚT CHỌN NHANH 0/8/10% + "Khác…", không còn mỗi ô số 62px: phòng Cung
+ * ứng phản hồi "tưởng VAT bị khoá theo mẫu" — vì mặc định của mẫu điền sẵn và ô
+ * sửa quá kín tiếng, trong khi nhiều NCC chào 10%.
  *
  * Chiết khấu chỉ hiện ở mẫu có — đơn nhôm/inox không chiết khấu, bày ô trống ra
  * chỉ tổ gõ nhầm.
@@ -51,11 +61,20 @@ export function TotalsBar({
   onCurrencyChange: (v: string) => void
   onSubmit: () => void
 }) {
+  const isPreset = vat !== '' && (VAT_PRESETS as readonly number[]).includes(Number(vat))
+  /**
+   * Ô "Khác…" chỉ bày ra khi cần: hoặc VAT hiện tại nằm ngoài 0/8/10 (đơn cũ mở
+   * lại), hoặc người dùng vừa bấm "Khác…". Không thì thanh gọn đúng 4 nút.
+   */
+  const [customOpen, setCustomOpen] = useState(!isPreset && vat !== '')
+  const customRef = useRef<HTMLInputElement | null>(null)
+  const showCustom = customOpen || (!isPreset && vat !== '')
+
   return (
-    <div className="sticky bottom-0 z-20 -mx-1 rounded-xl border border-zinc-200 bg-white/95 px-3.5 py-2.5 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/95">
+    <div className="sticky bottom-3 z-20 -mx-1 rounded-xl border border-zinc-200 bg-white/90 px-4 py-3 shadow-[0_-6px_24px_rgba(24,24,27,0.1)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
         <span className="text-zinc-400">
-          Cộng tiền hàng{' '}
+          Tiền hàng{' '}
           <b className="text-zinc-700 tabular-nums dark:text-zinc-200">{num(subtotal)}</b>
         </span>
         {hasDiscount && (
@@ -75,34 +94,63 @@ export function TotalsBar({
             />
           </label>
         )}
-        <label className="flex items-center gap-1.5 text-zinc-400">
-          VAT %
-          <input
-            type="number"
-            min="0"
-            max="100"
-            step="0.5"
-            onWheel={(e) => e.currentTarget.blur()}
-            value={vat}
-            onChange={(e) =>
-              onVatChange(e.target.value === '' ? '' : Number(e.target.value))
-            }
-            className={`${box} w-[62px]`}
-            aria-label="VAT %"
+
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+            VAT
+          </span>
+          <Segmented
+            label="Thuế suất VAT"
+            options={[
+              ...VAT_PRESETS.map((p) => ({ value: p, label: `${p}%` })),
+              { value: -1, label: 'Khác…' },
+            ]}
+            value={showCustom ? -1 : vat === '' ? null : Number(vat)}
+            onSelect={(v) => {
+              if (v === -1) {
+                setCustomOpen(true)
+                // Bấm "Khác…" là để gõ — đưa con trỏ vào ô luôn.
+                requestAnimationFrame(() => customRef.current?.focus())
+              } else {
+                setCustomOpen(false)
+                onVatChange(v)
+              }
+            }}
           />
-          <select
+          {showCustom && (
+            <input
+              ref={customRef}
+              type="number"
+              min="0"
+              max="100"
+              step="0.5"
+              onWheel={(e) => e.currentTarget.blur()}
+              value={vat}
+              onChange={(e) =>
+                onVatChange(e.target.value === '' ? '' : Number(e.target.value))
+              }
+              className={`${box} w-[62px]`}
+              aria-label="VAT % tuỳ chọn"
+              placeholder="%"
+            />
+          )}
+          <Segmented
+            label="Đơn giá đã gồm VAT chưa"
+            options={[
+              { value: 'ex', label: 'chưa gồm' },
+              { value: 'in', label: 'đã gồm' },
+            ]}
             value={inclVat ? 'in' : 'ex'}
-            onChange={(e) => onInclVatChange(e.target.value === 'in')}
-            className={`${box} px-1 text-[12px]`}
-            aria-label="Đơn giá đã gồm VAT chưa"
-          >
-            <option value="in">đã gồm</option>
-            <option value="ex">chưa gồm</option>
-          </select>
-          <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
-            {num(vatAmount)}
-          </b>
-        </label>
+            onSelect={(v) => onInclVatChange(v === 'in')}
+          />
+          <span className="text-zinc-400">
+            ={' '}
+            <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
+              {num(vatAmount)}
+            </b>
+          </span>
+        </span>
+
         <select
           value={currency}
           onChange={(e) => onCurrencyChange(e.target.value)}
@@ -114,21 +162,17 @@ export function TotalsBar({
         </select>
 
         {/*
-          Tổng · lý do khoá · nút gửi đi LIỀN MỘT CỤM ở mép phải.
-          Để rời nhau thì trên màn 1366 cụm bị xuống dòng và nút chính tụt xuống
-          hàng hai — thanh cao 94px, ăn thêm một phần ba màn vốn đã chật vì bảng.
-          Lý do khoá co lại được (`truncate`), nút thì không.
-        */}
-        {/*
-          TỔNG TIỀN VÀ NÚT GỬI ĐI LIỀN NHAU, KHÔNG TÁCH.
-          Bản cũ để nút là một item rời của khung `flex-wrap`: trên màn 1366 nó
-          bị đẩy xuống hàng hai một mình, thanh cao 94px — ăn hơn một phần mười
-          màn hình vốn đã chật vì bảng dòng hàng.
+          Tổng tiền và nút gửi đi LIỀN MỘT CỤM ở mép phải — để rời nhau thì trên
+          màn 1366 nút bị đẩy xuống hàng hai một mình và thanh cao thêm 1/3.
         */}
         <span className="ml-auto flex shrink-0 items-center gap-3">
-          <span className="flex items-baseline gap-2">
-            <span className="text-zinc-400">Tổng thanh toán</span>
-            <b className="text-lg tabular-nums">{num(grandTotal)}</b>
+          <span className="flex flex-col items-end leading-tight">
+            <span className="text-[11px] text-zinc-400">
+              Tổng thanh toán{vat !== '' && Number(vat) > 0 ? ` · VAT ${vat}%` : ''}
+            </span>
+            <b className="text-xl font-bold tracking-tight tabular-nums">
+              {num(grandTotal)}
+            </b>
           </span>
           <button
             type="button"
@@ -142,14 +186,12 @@ export function TotalsBar({
           </button>
         </span>
         {/*
-          Lý do nút bị khoá phải NHÌN LÀ THẤY — trước đây là chữ nhỏ màu hổ phách
-          lẫn trong thanh đầy số, người dùng thấy nút xám rồi đoán. `basis-full`
-          cho nó HẲN một dòng riêng bên dưới: cắt cụt thành mỗi dấu ⚠ để nhét vừa
-          hàng trên thì cũng bằng không nói gì.
+          Lý do nút bị khoá phải NHÌN LÀ THẤY — `basis-full` cho hẳn một dòng
+          riêng bên dưới, không cắt cụt để nhét vừa hàng trên.
         */}
         {problem && (
           <span className="inline-flex basis-full items-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-400">
-            <span aria-hidden>⚠</span>
+            <TriangleAlert className="size-3.5" aria-hidden />
             Chưa gửi được: {problem}
           </span>
         )}

@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import {
+  canCreateProducts,
+  productsService,
+} from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
@@ -10,7 +13,7 @@ const TYPE_LABEL = new Map<string, string>(PRODUCT_TYPES.map((t) => [t.code, t.l
 
 export default async function TechnicalHome() {
   const user = (await authService.currentUser())!
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const canEdit = await canCreateProducts(user)
 
   // Đếm bằng HEAD count + chỉ nạp 6 SP gần đây (không kéo cả thư viện về nữa).
   // Cờ "thiếu bản vẽ / BOM" suy từ FILE đã upload (doc_type), không phải link cũ.

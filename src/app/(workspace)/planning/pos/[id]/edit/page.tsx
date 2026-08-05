@@ -39,9 +39,11 @@ export default async function EditPoPage({
   if (!detail) notFound()
   const { po, lines } = detail
 
-  // BR: chỉ đơn chờ duyệt mới sửa được (service cũng chặn) — vào thẳng URL khi
-  // đơn đã duyệt thì đẩy về danh sách thay vì để bấm Lưu rồi mới báo lỗi.
-  if (mode === 'edit' && po.status !== 'pending_approval') redirect('/planning/pos')
+  // BR: chỉ đơn NHÁP / chờ duyệt mới sửa được (service cũng chặn) — vào thẳng
+  // URL khi đơn đã duyệt thì đẩy về danh sách thay vì để bấm Lưu rồi mới báo lỗi.
+  if (mode === 'edit' && po.status !== 'draft' && po.status !== 'pending_approval') {
+    redirect('/planning/pos')
+  }
 
   const [{ rows: suppliers }, { rows: lsxAll }, mats, company] = await Promise.all([
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),

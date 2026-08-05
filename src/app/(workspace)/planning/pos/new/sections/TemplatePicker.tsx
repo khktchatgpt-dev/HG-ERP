@@ -1,7 +1,25 @@
 'use client'
 
 import { useState } from 'react'
+import {
+  Box,
+  Check,
+  FileText,
+  Package,
+  Ruler,
+  Weight,
+  type LucideIcon,
+} from 'lucide-react'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+
+/** Icon đại diện từng mẫu — neo mắt khi quét năm thẻ, chữ không phải đọc hết. */
+const TEMPLATE_ICONS: Record<PoTemplate, LucideIcon> = {
+  accessory: Package,
+  aluminium: Ruler,
+  metal_kg: Weight,
+  carton: Box,
+  simple: FileText,
+}
 
 /**
  * Chọn LOẠI HÀNG / MẪU ĐƠN — thứ quyết định cột nhập, công thức tiền, VAT và mẫu
@@ -21,8 +39,14 @@ export function TemplatePicker({
   lineCount: number
   onChange: (t: PoTemplate) => void
 }) {
-  const [open, setOpen] = useState(false)
+  /**
+   * Đơn TRỐNG thì bày sẵn 5 thẻ — chọn mẫu là việc ĐẦU TIÊN của đơn mới, giấu
+   * sau nút "Đổi mẫu" là bắt người dùng bấm thêm một nhịp vô cớ. Đã có dòng
+   * (mở sửa/nhân bản) thì thu gọn: lúc đó mẫu hiếm khi đổi, trả chỗ cho bảng.
+   */
+  const [open, setOpen] = useState(lineCount === 0)
   const cur = poTemplateMeta(value)
+  const CurIcon = TEMPLATE_ICONS[value]
 
   if (!open) {
     return (
@@ -30,14 +54,17 @@ export function TemplatePicker({
         <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
           Loại hàng
         </span>
-        <b className="text-[13px] text-sky-700 dark:text-sky-300">{cur.label}</b>
+        <b className="inline-flex items-center gap-1.5 text-[13px] text-violet-700 dark:text-violet-300">
+          <CurIcon className="size-3.5" aria-hidden />
+          {cur.label}
+        </b>
         <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">
           {cur.hint}
         </span>
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
         >
           Đổi mẫu
         </button>
@@ -59,9 +86,10 @@ export function TemplatePicker({
           Thu gọn ▲
         </button>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
         {PO_TEMPLATES.map((t) => {
           const m = poTemplateMeta(t)
+          const Icon = TEMPLATE_ICONS[t]
           const on = t === value
           return (
             <button
@@ -73,23 +101,27 @@ export function TemplatePicker({
               }}
               aria-pressed={on}
               className={
-                'rounded-lg border px-3 py-2 text-left transition-colors ' +
+                'relative rounded-lg border px-3 py-2 text-left transition-colors ' +
                 (on
-                  ? 'border-sky-500 bg-sky-50 dark:border-sky-600 dark:bg-sky-950/40'
-                  : 'border-zinc-200 hover:border-sky-300 dark:border-zinc-800')
+                  ? 'border-violet-500 bg-violet-50 ring-1 ring-violet-500 dark:border-violet-600 dark:bg-violet-950/40'
+                  : 'border-zinc-200 hover:border-violet-300 dark:border-zinc-800 dark:hover:border-violet-800')
               }
             >
+              {on && (
+                <span className="absolute top-2 right-2 grid size-4 place-items-center rounded-full bg-violet-600 text-white">
+                  <Check className="size-2.5" strokeWidth={3} aria-hidden />
+                </span>
+              )}
               <div
                 className={
-                  'text-[13px] font-semibold ' +
-                  (on ? 'text-sky-700 dark:text-sky-300' : '')
+                  'inline-flex items-center gap-1.5 text-[13px] font-semibold ' +
+                  (on ? 'text-violet-700 dark:text-violet-300' : '')
                 }
               >
+                <Icon className="size-3.5" aria-hidden />
                 {m.label}
               </div>
-              <div className="mt-0.5 max-w-[230px] text-[11px] text-zinc-400">
-                {m.hint}
-              </div>
+              <div className="mt-0.5 text-[11px] text-zinc-400">{m.hint}</div>
             </button>
           )
         })}

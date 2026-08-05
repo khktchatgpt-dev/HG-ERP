@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import { canEditBom, productsService } from '@/modules/dept/technical/technical.service'
 import { HttpError } from '@/server/http'
 import { ProductPartsTab } from '@/components/technical/ProductPartsTab'
 
@@ -12,7 +12,8 @@ export default async function ProductPartsPage({
 }) {
   const user = (await authService.currentUser())!
   const { id } = await params
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  // Định mức = BOM → luật riêng (`technical.bom.save`), không dùng cờ SP chung.
+  const canEdit = await canEditBom(user)
 
   let data
   try {

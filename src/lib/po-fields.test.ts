@@ -19,9 +19,17 @@ import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fie
  * mọi mẫu trừ bao bì (đơn vị của bao bì luôn là thùng). Nhãn ở đây giả định đơn
  * VND — trang in lấy đúng `po.currency`.
  */
+/**
+ * KHUNG CHUẨN 08/2026: mọi mẫu mở đầu `STT · LSX · Mã sản phẩm · Tên SP/vật tư`
+ * (đối chiếu đơn ĐH chuẩn — đơn sơn 01/26 HG/MĐ của phòng Cung ứng). "Mã sản
+ * phẩm" là mã vật tư danh mục, luôn có — khác cột "Mã SP" gõ tay đã bỏ ở 0106.
+ * Mẫu đơn giản thêm `Ngày đặt hàng · Thời gian giao hàng` đúng ảnh chuẩn.
+ */
 const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   accessory: [
     'STT',
+    'LSX',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Quy cách',
@@ -35,6 +43,8 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     'STT',
+    'LSX',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Mã khuôn',
     'kg/m',
@@ -51,6 +61,8 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     'STT',
+    'LSX',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Kích thước',
@@ -65,6 +77,8 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   carton: [
     'STT',
+    'LSX',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Cách mở',
     'Pcs/thùng',
@@ -77,12 +91,16 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   simple: [
     'STT',
+    'LSX',
+    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
+    'Ngày đặt hàng',
+    'Thời gian giao hàng',
     'Ghi chú',
   ],
 }
@@ -91,10 +109,14 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
 function nhanCot(t: PoTemplate): string[] {
   const CO_DINH: Record<string, string> = {
     '@stt': 'STT',
+    '@lsx': 'LSX',
+    '@code': 'Mã sản phẩm',
     '@name': 'Tên sản phẩm / vật tư',
     '@unit': 'ĐVT',
     '@price': 'Đơn giá (VND)',
     '@amount': 'Thành tiền (VND)',
+    '@orderdate': 'Ngày đặt hàng',
+    '@delivery': 'Thời gian giao hàng',
     '@note': 'Ghi chú',
   }
   const unit = poTemplateMeta(t).priceUnit

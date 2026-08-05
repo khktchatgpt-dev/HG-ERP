@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { Copy } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
+import { canEditProducts } from '@/modules/dept/technical/technical.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { Badge } from '@/components/shadcn/badge'
 import { Button } from '@/components/shadcn/button'
@@ -29,7 +30,7 @@ export default async function ProductDetailLayout({
 }) {
   const user = (await authService.currentUser())!
   const { id } = await params
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const canEdit = await canEditProducts(user)
 
   const product = await productsRepo.findById(id)
   if (!product) notFound()

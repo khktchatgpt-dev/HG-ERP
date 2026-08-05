@@ -1,5 +1,8 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import {
+  canEditProducts,
+  productsService,
+} from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
@@ -15,7 +18,7 @@ export default async function TechnicalProductsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const user = (await authService.currentUser())!
-  const canEdit = user.role === 'admin' || user.role === 'manager'
+  const canEdit = await canEditProducts(user)
 
   const spRaw = await searchParams
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? ''

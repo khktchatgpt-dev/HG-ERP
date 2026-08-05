@@ -1,5 +1,7 @@
 'use client'
 
+import { Plus, Sparkles } from 'lucide-react'
+
 /** Nhu cầu vật tư của LSX từ BOM — payload của `/api/dept/supply/needs`. */
 export type Need = {
   material_id: string
@@ -37,10 +39,14 @@ export function NeedsPanel({
   onAdd: (list: Need[]) => void
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20">
       <div className="flex items-center gap-2 px-3.5 py-2.5 text-[13px]">
+        <Sparkles
+          className="size-4 shrink-0 text-violet-600 dark:text-violet-400"
+          aria-hidden
+        />
         <b>Nhu cầu từ BOM của LSX</b>
-        <span className="text-zinc-400">
+        <span className="text-zinc-500 dark:text-zinc-400">
           {loading
             ? 'đang tải…'
             : `${pending.length} vật tư cần mua / ${needs.length} trong BOM`}
@@ -49,25 +55,25 @@ export function NeedsPanel({
           <button
             type="button"
             onClick={() => onAdd(pending)}
-            className="ml-auto rounded-md border border-dashed border-zinc-300 px-2.5 py-1 text-xs text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400"
+            className="ml-auto inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 shadow-xs hover:bg-violet-50 dark:border-violet-800 dark:bg-zinc-950 dark:text-violet-300 dark:hover:bg-violet-950/40"
           >
-            ＋ Thêm tất cả ({pending.length})
+            <Plus className="size-3" aria-hidden /> Thêm tất cả ({pending.length})
           </button>
         )}
         <button
           type="button"
           onClick={onToggle}
-          className="rounded-md border border-zinc-300 px-2.5 py-1 text-xs dark:border-zinc-700"
+          className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs shadow-xs dark:border-zinc-700 dark:bg-zinc-950"
         >
           {open ? 'Thu gọn' : 'Xem'}
         </button>
       </div>
       {open && pending.length > 0 && (
-        <div className="grid gap-2 border-t border-zinc-100 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-800">
+        <div className="grid gap-2 border-t border-violet-100 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-violet-950">
           {pending.slice(0, 24).map((n) => (
             <div
               key={n.material_id}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1.5 dark:border-zinc-800"
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950"
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-semibold" title={n.material_name}>

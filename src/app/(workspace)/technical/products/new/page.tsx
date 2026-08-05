@@ -1,6 +1,9 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { productsService } from '@/modules/dept/technical/technical.service'
+import {
+  canCreateProducts,
+  productsService,
+} from '@/modules/dept/technical/technical.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { FRAME_MATERIALS, PRODUCT_TYPES } from '@/lib/product-code'
 import { ProductForm } from '@/components/technical/ProductForm'
@@ -8,8 +11,7 @@ import { ProductForm } from '@/components/technical/ProductForm'
 /** Trang Thêm sản phẩm — chỉ phần nhận diện, phần còn lại điền ở trang chi tiết. */
 export default async function NewProductPage() {
   const user = (await authService.currentUser())!
-  const canEdit = user.role === 'admin' || user.role === 'manager'
-  if (!canEdit) redirect('/technical/products')
+  if (!(await canCreateProducts(user))) redirect('/technical/products')
 
   const defaultType = PRODUCT_TYPES[0].code
   const defaultMaterial = FRAME_MATERIALS[0].code

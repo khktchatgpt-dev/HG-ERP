@@ -111,16 +111,18 @@ const colStt: Col = { label: 'STT', cell: (_l, i) => i + 1 }
  * ngoặc — "Đơn giá (VND)", "Thành tiền (VND)". Trước đây phiếu app gọi "Tên vật
  * tư" / "Đơn giá" / "Thành tiền", lại thêm "Đơn giá / kg" riêng cho hai mẫu tính
  * theo khối lượng, nên năm mẫu in ra đọc như năm biểu mẫu khác nhau.
+ *
+ * Mã vật tư ĐÃ TÁCH thành cột "Mã sản phẩm" riêng (khung chuẩn 08/2026) — không
+ * còn in nhỏ dưới tên.
  */
 const colName: Col = {
   label: 'Tên sản phẩm / vật tư',
   align: 'left',
-  cell: (l) => (
-    <>
-      {l.material_name}
-      <div className="font-mono text-[10px] text-zinc-600">{l.material_code}</div>
-    </>
-  ),
+  cell: (l) => l.material_name,
+}
+const colCode: Col = {
+  label: 'Mã sản phẩm',
+  cell: (l) => <span className="font-mono">{l.material_code}</span>,
 }
 const colUnit: Col = { label: 'ĐVT', cell: (l) => l.material_unit }
 const colNote: Col = { label: 'Ghi chú', cell: (l) => l.note ?? '', align: 'left' }
@@ -170,12 +172,26 @@ function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
  * Phiếu nhôm phải có kg/m + tổng kg thì NCC mới đối chiếu barem; phiếu phụ kiện
  * phải có SL đơn hàng + tồn kho thì kho NCC mới hiểu vì sao đặt con số đó.
  */
-function columnsFor(t: PoTemplate, currency: string): Col[] {
+function columnsFor(
+  t: PoTemplate,
+  currency: string,
+  /** Giá trị đầu đơn lặp xuống từng dòng (khung chuẩn 08/2026). */
+  ctx: { lsxCode: string | null; orderDate: Date; expectedAt: string | null },
+): Col[] {
   const meta = poTemplateMeta(t)
+  const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
   const fixed: Record<string, Col> = {
     '@stt': colStt,
+    // LSX của đầu đơn in lặp từng dòng — đúng đơn ĐH chuẩn (một đơn một LSX).
+    '@lsx': { label: 'LSX', cell: () => ctx.lsxCode ?? '' },
+    '@code': colCode,
     '@name': colName,
     '@unit': colUnit,
+    '@orderdate': { label: 'Ngày đặt hàng', cell: () => dmy(ctx.orderDate) },
+    '@delivery': {
+      label: 'Thời gian giao hàng',
+      cell: () => (ctx.expectedAt ? dmy(new Date(ctx.expectedAt)) : ''),
+    },
     '@qty': {
       label: PO_PRINT_QTY_LABEL[t],
       align: 'right',
@@ -206,7 +222,9 @@ function columnsFor(t: PoTemplate, currency: string): Col[] {
       align: f.align === 'right' ? 'right' : 'left',
       // "Kích thước" của mẫu inox/sắt: chưa nhập thì lấy tạm quy cách chung.
       cell:
-        f.key === 'dim' ? (l: PoPrintLine) => l.dimension_text ?? l.spec ?? '' : printCell(f),
+        f.key === 'dim'
+          ? (l: PoPrintLine) => l.dimension_text ?? l.spec ?? ''
+          : printCell(f),
     } satisfies Col
   })
 }
@@ -231,12 +249,35 @@ export function PoPrintSheet({
 }) {
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
-  const cols = columnsFor(template, po.currency)
-  const amountIdx = cols.findIndex((c) => c.isAmount)
-
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
   // dựng — dùng chung với báo giá, lệnh SX và phiếu kho.
   const d = new Date(po.created_at)
+  // Đơn NGOÀI LSX: bỏ hẳn cột LSX thay vì in một cột rỗng suốt phiếu.
+  const cols = columnsFor(template, po.currency, {
+    lsxCode: po.lsx_code,
+    orderDate: d,
+    expectedAt: po.expected_at,
+  }).filter((c) => c.label !== 'LSX' || po.lsx_code)
+  const amountIdx = cols.findIndex((c) => c.isAmount)
+
+  /*
+   * DÒNG "TỔNG SỐ KG" — đơn ĐH chuẩn in tổng khối lượng ngay dưới bảng hàng.
+   * Mẫu tính theo kg (nhôm, inox/sắt) cộng cột tổng kg; mẫu còn lại cộng SL đặt
+   * nhưng CHỈ khi mọi dòng cùng ĐVT — cộng "10 cây + 5 thùng" là ra số rác.
+   */
+  const kgBased = template === 'aluminium' || template === 'metal_kg'
+  const qtyTotal = kgBased
+    ? lines.reduce((s, l) => s + (l.qty2 ?? 0), 0)
+    : new Set(lines.map((l) => l.material_unit)).size === 1
+      ? lines.reduce((s, l) => s + l.qty_ordered, 0)
+      : null
+  const qtyTotalLabel = kgBased
+    ? 'Tổng số KG'
+    : `Tổng số ${(lines[0]?.material_unit ?? '').toUpperCase()}`
+  // Ô nhận số tổng: cột "Tổng kg" với mẫu kg, cột số lượng với mẫu còn lại.
+  const qtyTotalIdx = kgBased
+    ? cols.findIndex((c) => c.label === 'Tổng kg')
+    : cols.findIndex((c) => c.label === PO_PRINT_QTY_LABEL[template])
   // Cùng thứ tự với phiếu thật: cộng tiền hàng → chiết khấu → thuế GTGT → tổng.
   // Làm tròn về đồng ngay ở tiền hàng — phiếu gửi NCC không in số lẻ đồng.
   const subtotal = Math.round(lines.reduce((s, l) => s + poLineAmount(l), 0))
@@ -313,6 +354,24 @@ export function PoPrintSheet({
           ))}
 
           {/*
+            "TỔNG SỐ KG" đứng NGAY DƯỚI bảng hàng, trước khối tiền — đúng vị trí
+            trên đơn ĐH chuẩn. Số nằm thẳng cột tổng kg (mẫu kg) / cột số lượng
+            (mẫu còn lại); ĐVT lẫn lộn thì bỏ dòng, không cộng ra số rác.
+          */}
+          {qtyTotal != null && qtyTotal > 0 && qtyTotalIdx > 0 && (
+            <tr className="font-semibold">
+              <td colSpan={qtyTotalIdx} className="border border-black px-2 text-right">
+                {qtyTotalLabel}
+              </td>
+              <td className="border border-black px-1 text-right">{fmt(qtyTotal)}</td>
+              <td
+                colSpan={cols.length - qtyTotalIdx - 1}
+                className="border border-black"
+              />
+            </tr>
+          )}
+
+          {/*
             KHỐI TỔNG — bốn dòng, thứ tự và cách gọi tên đúng phiếu đang ký:
             Cộng tiền hàng → Chiết khấu → Thuế GTGT → TỔNG THANH TOÁN, nhãn có
             dấu hai chấm.
@@ -368,16 +427,26 @@ export function PoPrintSheet({
         {/* Cột `terms` cũ — đơn tạo trước 0106 chỉ có một dòng điều khoản gộp. */}
         {po.terms && !hasTerms && <div>{po.terms}</div>}
         {po.note && <div className="italic">{po.note}</div>}
+        {/* Câu chốt lấy nguyên văn đơn ĐH chuẩn của phòng Cung ứng. */}
         <div className="italic">
-          (Sau khi nhận đơn hàng xin vui lòng xác nhận lại cho công ty chúng tôi.)
+          Đề nghị Quý công ty fax lại xác nhận thông tin cho công ty chúng tôi. Xin cảm
+          ơn!
         </div>
       </div>
 
+      {/*
+       * KHỐI CHỮ KÝ theo đơn ĐH chuẩn 08/2026: Xác nhận của NCC · người lập
+       * (chức danh theo mẫu, sửa được trên form) · TÊN CÔNG TY (nơi GĐ ký, đóng
+       * dấu) — thay cho "Đơn vị cung cấp / … / Giám đốc" cũ.
+       */}
       <PrintSignatures
         cols={[
-          { role: 'ĐƠN VỊ CUNG CẤP', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+          { role: 'XÁC NHẬN CỦA NHÀ CUNG CẤP', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
           { role: po.signer_role ?? meta.signerRole, hint: 'Ký, ghi rõ họ tên' },
-          { role: 'GIÁM ĐỐC', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
+          {
+            role: (company.company_name ?? 'GIÁM ĐỐC').toUpperCase(),
+            hint: 'Ký tên, đóng dấu',
+          },
         ]}
       />
     </PrintPage>
