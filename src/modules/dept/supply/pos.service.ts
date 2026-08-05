@@ -76,8 +76,10 @@ export const posService = {
   /**
    * Tạo PO (FR-SUP-02, BR-06): đúng 1 NCC; LSX gắn hoặc không (0076) —
    * gắn LSX = PO theo lệnh SX (LSX phải đã được GĐ duyệt), null = PO ngoài LSX
-   * (tiêu hao/dùng chung). Sinh mã PO-YYYY-NNNN, vào thẳng 'pending_approval'
-   * và notify GĐ (không có bước nháp — đặc tả 4.3).
+   * (tiêu hao/dùng chung). Sinh mã PO-YYYY-NNNN, vào trạng thái NHÁP (0116 —
+   * chủ dự án chốt 05/08/2026, thay đặc tả 4.3 cũ "vào thẳng pending"): người
+   * soạn xem lại / sửa / xoá tự do, bấm `submit` mới tới bàn duyệt của GĐ và
+   * lúc đó mới notify — không làm phiền sếp bằng đơn còn đang gõ dở.
    */
   async create(user: User, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
@@ -96,11 +98,12 @@ export const posService = {
 
     const template = input.template ?? 'simple'
     const code = await posRepo.nextCode()
-    const po = await posRepo.insert(
+    return posRepo.insert(
       {
         code,
         production_order_id: lsxId,
         supplier_id: input.supplier_id,
+        status: 'draft',
         template,
         currency: input.currency,
         vat_rate: input.vat_rate ?? null,
@@ -115,6 +118,29 @@ export const posService = {
       },
       withDerived(template, input.lines),
     )
+  },
+
+  /**
+   * GỬI GĐ DUYỆT (0116): draft → pending_approval, và CHỈ lúc này mới notify
+   * người duyệt — emit `po.submitted` chuyển từ create() sang đây.
+   */
+  async submit(user: User, id: string): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    if (before.status !== 'draft') {
+      throw BadRequest('Chỉ đơn nháp mới gửi duyệt được')
+    }
+    if ((await posRepo.listLines(id)).length === 0) {
+      throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
+    }
+    const [supplier, lsx] = await Promise.all([
+      suppliersRepo.findById(before.supplier_id),
+      before.production_order_id
+        ? productionRepo.findById(before.production_order_id)
+        : Promise.resolve(null),
+    ])
+    const po = await posRepo.patch(id, { status: 'pending_approval' })
 
     const approvers = (await usersRepo.list()).filter(
       (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
@@ -123,7 +149,7 @@ export const posService = {
       name: 'po.submitted',
       po_id: po.id,
       code: po.code,
-      supplier_name: supplier.name,
+      supplier_name: supplier?.name ?? '—',
       lsx_code: lsx?.code ?? null,
       submitted_by: user.id,
       approver_ids: approvers.map((a) => a.id),
@@ -131,13 +157,13 @@ export const posService = {
     return po
   },
 
-  /** Chỉ PO đang chờ duyệt được sửa (sau duyệt là cam kết với GĐ/NCC). */
+  /** Sửa được khi còn là NHÁP hoặc CHỜ DUYỆT (sau duyệt là cam kết với GĐ/NCC). */
   async update(user: User, id: string, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
-    if (before.status !== 'pending_approval') {
-      throw BadRequest('Chỉ đơn chờ duyệt mới sửa được')
+    if (before.status !== 'draft' && before.status !== 'pending_approval') {
+      throw BadRequest('Chỉ đơn nháp / chờ duyệt mới sửa được')
     }
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
@@ -257,7 +283,7 @@ export const posService = {
     })
   },
 
-  /** Huỷ (trước khi nhận hàng) — kèm lý do. */
+  /** Huỷ (trước khi nhận hàng) — kèm lý do. Nháp thì dùng `remove` (xoá hẳn). */
   async cancel(user: User, id: string, reason: string): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
@@ -269,5 +295,20 @@ export const posService = {
       status: 'cancelled',
       note: `[Huỷ] ${reason}${before.note ? ` · ${before.note}` : ''}`,
     })
+  },
+
+  /**
+   * XOÁ HẲN — chỉ đơn NHÁP (0116). Nháp chưa qua bàn duyệt, chưa gửi ai, nên
+   * xoá là sạch (dòng hàng cascade theo). Đơn đã gửi duyệt trở đi KHÔNG xoá:
+   * số PO đã lọt vào thông báo/nhật ký của người khác — chỉ được huỷ có lý do.
+   */
+  async remove(user: User, id: string): Promise<void> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    if (before.status !== 'draft') {
+      throw BadRequest('Chỉ đơn nháp mới xoá được — đơn đã gửi duyệt thì dùng Huỷ')
+    }
+    await posRepo.delete(id)
   },
 }

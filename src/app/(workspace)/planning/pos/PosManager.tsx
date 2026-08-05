@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Badge } from '@/components/Badge'
@@ -25,6 +25,7 @@ import { groupPosByLsx, type LsxRef } from './pos-groups'
 import { canReschedule } from '@/lib/po-reschedule'
 
 type PoStatus =
+  | 'draft'
   | 'pending_approval'
   | 'approved'
   | 'ordered'
@@ -87,6 +88,7 @@ export type StatusLine = {
 
 type SupplierOption = { id: string; name: string }
 const STATUS_LABEL: Record<PoStatus, string> = {
+  draft: 'Nháp',
   pending_approval: 'Chờ duyệt',
   approved: 'Đã duyệt',
   ordered: 'Đã gửi NCC',
@@ -97,6 +99,7 @@ const STATUS_LABEL: Record<PoStatus, string> = {
   cancelled: 'Đã huỷ',
 }
 const STATUS_TONE: Record<PoStatus, 'gray' | 'amber' | 'blue' | 'green' | 'red'> = {
+  draft: 'gray',
   pending_approval: 'amber',
   approved: 'blue',
   ordered: 'blue',
@@ -108,6 +111,7 @@ const STATUS_TONE: Record<PoStatus, 'gray' | 'amber' | 'blue' | 'green' | 'red'>
 }
 /** Gợi ý việc kế tiếp theo trạng thái — hiện dưới pill để người mua biết bước sau. */
 const NEXT_HINT: Partial<Record<PoStatus, string>> = {
+  draft: 'kiểm tra rồi gửi GĐ duyệt',
   pending_approval: 'chờ GĐ duyệt',
   approved: 'gửi NCC',
   ordered: 'chờ NCC xác nhận',
@@ -126,6 +130,7 @@ export function PosManager({
   lsxs,
   canEdit,
   canApprove,
+  openId = null,
 }: {
   pos: Po[]
   suppliers: SupplierOption[]
@@ -133,6 +138,8 @@ export function PosManager({
   lsxs: LsxRef[]
   canEdit: boolean
   canApprove: boolean
+  /** Mở sẵn chi tiết đơn này (form soạn redirect về sau khi lưu nháp — 0116). */
+  openId?: string | null
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -162,6 +169,22 @@ export function PosManager({
    * sắp xếp theo cột — không bỏ đi, chỉ thôi làm mặc định.
    */
   const [view, setView] = useState<'lsx' | 'flat'>('lsx')
+
+  /**
+   * `?view=<id>` (0116): form soạn đơn redirect về đây sau khi LƯU NHÁP — mở
+   * ngay chi tiết để kiểm tra rồi bấm "Gửi GĐ duyệt". Chỉ mở MỘT lần; xoá query
+   * khỏi URL để refresh / back không bật lại modal.
+   */
+  const openedRef = useRef(false)
+  useEffect(() => {
+    if (!openId || openedRef.current) return
+    const target = pos.find((p) => p.id === openId)
+    if (!target) return
+    openedRef.current = true
+    void openView(target)
+    window.history.replaceState(null, '', '/planning/pos')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openView đổi identity mỗi render, openedRef đã chặn lặp
+  }, [openId, pos])
 
   // PO quá hẹn giao NCC — chỉ hiển thị (notification đẩy để GĐ2, xem late-risk.ts).
   const today = new Date().toISOString().slice(0, 10)
@@ -193,11 +216,13 @@ export function PosManager({
   )
 
   const stats = useMemo(() => {
+    let draft = 0
     let pending = 0
     let open = 0
     let done = 0
     let late = 0
     for (const p of pos) {
+      if (p.status === 'draft') draft++
       if (p.status === 'pending_approval') pending++
       if (
         ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'].includes(p.status)
@@ -206,7 +231,7 @@ export function PosManager({
       if (p.status === 'received') done++
       if (assessPoLate(p, today) === 'overdue') late++
     }
-    return { pending, open, done, late }
+    return { draft, pending, open, done, late }
   }, [pos, today])
 
   async function send(url: string, method: 'POST' | 'PATCH', body?: unknown) {
@@ -330,13 +355,56 @@ export function PosManager({
     }
   }
 
+  /** Gửi GĐ duyệt (0116): nháp → chờ duyệt, lúc này GĐ mới nhận thông báo. */
+  async function submitPo(po: Po) {
+    const ok = await confirm({
+      title: `Gửi ${po.code} cho Giám đốc duyệt?`,
+      description: `NCC: ${po.supplier_name} · ${po.lsx_code ? `LSX ${po.lsx_code}` : 'đơn ngoài LSX'}. Gửi rồi thì hết sửa thoải mái — chỉ còn sửa được khi đơn vẫn chưa duyệt.`,
+      confirmLabel: 'Gửi duyệt',
+    })
+    if (!ok) return
+    const ok2 = await send(`/api/dept/supply/pos/${po.id}/submit`, 'POST')
+    if (ok2) {
+      toast.success('Đã gửi GĐ duyệt', po.code)
+      setViewing(null)
+    }
+  }
+
+  /** Xoá hẳn đơn NHÁP — chưa gửi ai nên xoá là sạch, không cần lý do huỷ. */
+  async function deleteDraft(po: Po) {
+    const ok = await confirm({
+      title: `Xoá nháp ${po.code}?`,
+      description: 'Đơn chưa gửi duyệt — xoá là mất hẳn, không khôi phục được.',
+      confirmLabel: 'Xoá nháp',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/supply/pos/${po.id}`, { method: 'DELETE' })
+      toast.success('Đã xoá nháp', po.code)
+      setViewing(null)
+      router.refresh()
+    } catch (e) {
+      toast.error('Xoá thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /** Menu ⋯ của một đơn — dùng chung cho cả bảng phẳng lẫn thẻ theo lệnh. */
   function rowMenuFor(p: Po) {
     const items: { label: string; onClick: () => void; danger?: boolean }[] = [
       { label: 'Xem chi tiết', onClick: () => void openView(p) },
     ]
-    if (canEdit && p.status === 'pending_approval') {
+    if (canEdit && (p.status === 'draft' || p.status === 'pending_approval')) {
       items.push({ label: 'Sửa', onClick: () => void openEdit(p, 'edit') })
+    }
+    if (canEdit && p.status === 'draft') {
+      items.push(
+        { label: 'Gửi GĐ duyệt', onClick: () => void submitPo(p) },
+        { label: 'Xoá nháp', onClick: () => void deleteDraft(p), danger: true },
+      )
     }
     if (canEdit && p.status === 'cancelled') {
       items.push({
@@ -370,7 +438,8 @@ export function PosManager({
     if (canEdit && ['ordered', 'confirmed'].includes(p.status)) {
       items.push({ label: 'Đang giao', onClick: () => void advance(p, 'in_transit') })
     }
-    if (canEdit && !['received', 'cancelled'].includes(p.status)) {
+    // Nháp không có "Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho đơn đã gửi đi.
+    if (canEdit && !['draft', 'received', 'cancelled'].includes(p.status)) {
       items.push({ label: 'Huỷ đơn', onClick: () => void cancelPo(p), danger: true })
     }
     return <RowMenu items={items} />
@@ -512,6 +581,7 @@ export function PosManager({
       <StatsBar
         stats={[
           { label: 'Tổng PO', value: pos.length, tone: 'default' },
+          { label: 'Nháp', value: stats.draft, tone: stats.draft ? 'default' : 'gray' },
           {
             label: 'Chờ duyệt',
             value: stats.pending,
@@ -658,6 +728,8 @@ export function PosManager({
             onAdvance={(to) => void advance(viewing.po, to)}
             onCancel={() => void cancelPo(viewing.po)}
             onEdit={() => void openEdit(viewing.po, 'edit')}
+            onSubmit={() => void submitPo(viewing.po)}
+            onDelete={() => void deleteDraft(viewing.po)}
             onReschedule={() =>
               setRescheduling({
                 po: viewing.po,
@@ -756,6 +828,8 @@ export function PoDetail({
   onCancel,
   onEdit,
   onReschedule,
+  onSubmit,
+  onDelete,
 }: {
   po: Po
   lines: PoLine[]
@@ -765,15 +839,21 @@ export function PoDetail({
   onDecide: (d: 'approve' | 'reject') => void
   onAdvance: (to: 'ordered' | 'confirmed' | 'in_transit') => void
   onCancel: () => void
-  /** Mở form sửa (chỉ khi pending_approval) — không truyền = ẩn nút (màn GĐ read-only). */
+  /** Mở form sửa (nháp / chờ duyệt) — không truyền = ẩn nút (màn GĐ read-only). */
   onEdit?: () => void
   /** Đổi hẹn giao của đơn đã duyệt — không truyền = ẩn nút. */
   onReschedule?: () => void
+  /** Gửi GĐ duyệt — chỉ đơn NHÁP (0116); không truyền = ẩn nút. */
+  onSubmit?: () => void
+  /** Xoá hẳn đơn NHÁP — không truyền = ẩn nút. */
+  onDelete?: () => void
 }) {
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   // Giá đv kép (0053): dòng unit2 tính qty2 × giá — cùng công thức server.
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
-  const showReceived = !['pending_approval', 'approved', 'cancelled'].includes(po.status)
+  const showReceived = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
+    po.status,
+  )
 
   // Chuỗi liên kết: Đơn hàng → LSX → PO này (bỏ node không có; PO ngoài LSX chỉ còn chính nó).
   const chainNodes: ChainNode[] = [
@@ -789,7 +869,10 @@ export function PoDetail({
       <PoStatusStepper
         status={po.status}
         dates={{
-          pending_approval: po.created_at,
+          draft: po.created_at,
+          // Đơn cũ (trước 0116) tạo là vào thẳng chờ duyệt nên created_at chính
+          // là mốc gửi; đơn nháp thì chưa gửi — không có mốc.
+          pending_approval: po.status === 'draft' ? null : po.created_at,
           approved: po.approved_at,
           ordered: po.ordered_at,
         }}
@@ -932,12 +1015,30 @@ export function PoDetail({
         >
           🖨 In đơn đặt hàng
         </a>
-        {canEdit && onEdit && po.status === 'pending_approval' && (
+        {/* NHÁP (0116): xoá hẳn · sửa · gửi GĐ duyệt — đơn chưa tới bàn sếp,
+            người soạn toàn quyền. */}
+        {canEdit && onDelete && po.status === 'draft' && (
+          <button
+            onClick={onDelete}
+            className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
+          >
+            Xoá nháp
+          </button>
+        )}
+        {canEdit && onEdit && ['draft', 'pending_approval'].includes(po.status) && (
           <button
             onClick={onEdit}
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             Sửa đơn
+          </button>
+        )}
+        {canEdit && onSubmit && po.status === 'draft' && (
+          <button
+            onClick={onSubmit}
+            className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+          >
+            Gửi GĐ duyệt
           </button>
         )}
         {canEdit && onReschedule && canReschedule(po.status).ok && (
@@ -988,7 +1089,7 @@ export function PoDetail({
             Đang giao
           </button>
         )}
-        {canEdit && !['received', 'cancelled'].includes(po.status) && (
+        {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
           <button
             onClick={onCancel}
             className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"

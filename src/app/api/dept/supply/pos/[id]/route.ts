@@ -13,11 +13,19 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
   return NextResponse.json(result)
 })
 
-/** Sửa đơn — chỉ khi đang chờ duyệt. */
+/** Sửa đơn — khi còn là nháp / chờ duyệt. */
 export const PATCH = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
   const input = await parseJson(req, poUpdateSchema)
   const po = await posService.update(user, id, input)
   return NextResponse.json({ po })
+})
+
+/** Xoá hẳn — chỉ đơn NHÁP (0116); đơn đã gửi duyệt dùng /cancel. */
+export const DELETE = handle(async (_req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  await posService.remove(user, id)
+  return NextResponse.json({ ok: true })
 })

@@ -2,6 +2,7 @@ import type { PoStatus } from '@/modules/dept/supply/pos.schema'
 
 /** Chuỗi chặng "happy path" của 1 PO — cancelled xử lý riêng. */
 const STEPS: { key: PoStatus; label: string }[] = [
+  { key: 'draft', label: 'Nháp' },
   { key: 'pending_approval', label: 'Chờ duyệt' },
   { key: 'approved', label: 'GĐ duyệt' },
   { key: 'ordered', label: 'Gửi NCC' },

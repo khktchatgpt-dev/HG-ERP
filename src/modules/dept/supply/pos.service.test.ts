@@ -60,7 +60,7 @@ beforeEach(() => {
 })
 
 describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
-  it('tạo PO: kiểm NCC + LSX tồn tại, notify GĐ', async () => {
+  it('tạo PO (0116): kiểm NCC + LSX tồn tại, lưu NHÁP, CHƯA notify GĐ', async () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       name: 'Nhôm Tiến Đạt',
@@ -73,9 +73,6 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
     } as never)
     vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0001')
     vi.mocked(posRepo.insert).mockResolvedValue(PO as never)
-    vi.mocked(usersRepo.list).mockResolvedValue([
-      { id: 'u-boss', role: 'manager' },
-    ] as never)
 
     await posService.create(staff, {
       production_order_id: 'lsx1',
@@ -85,12 +82,10 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
       lines: [{ material_id: 'm1', qty_ordered: 150, unit_price: 77000, unit2: 'kg' }],
     })
 
-    const evt = vi.mocked(emit).mock.calls[0][0] as {
-      name: string
-      approver_ids: string[]
-    }
-    expect(evt.name).toBe('po.submitted')
-    expect(evt.approver_ids).toEqual(['u-boss'])
+    // Nháp: chưa tới bàn duyệt, KHÔNG bắn po.submitted lúc tạo (chuyển sang submit()).
+    const row = vi.mocked(posRepo.insert).mock.calls[0][0] as { status: string }
+    expect(row.status).toBe('draft')
+    expect(emit).not.toHaveBeenCalled()
   })
 
   it('NCC ngừng giao dịch → chặn', async () => {
@@ -129,7 +124,7 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
     ).rejects.toMatchObject({ status: 400 })
   })
 
-  it('PO ngoài LSX (0076): không gắn LSX — bỏ qua tra LSX, lưu null, event lsx_code null', async () => {
+  it('PO ngoài LSX (0076): không gắn LSX — bỏ qua tra LSX, lưu null', async () => {
     vi.mocked(suppliersRepo.findById).mockResolvedValue({
       id: 's1',
       name: 'Nhôm Tiến Đạt',
@@ -154,8 +149,6 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
       production_order_id: string | null
     }
     expect(row.production_order_id).toBeNull()
-    const evt = vi.mocked(emit).mock.calls[0][0] as { lsx_code: string | null }
-    expect(evt.lsx_code).toBeNull()
   })
 
   it('ngoài phòng Cung ứng không tạo được', async () => {
@@ -170,6 +163,75 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
       }),
     ).rejects.toMatchObject({ status: 403 })
   })
+})
+
+describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
+  const DRAFT = { ...PO, status: 'draft' }
+
+  it('draft → pending_approval + emit po.submitted cho người duyệt', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(DRAFT as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([{ id: 'l1' }] as never)
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      name: 'Nhôm Tiến Đạt',
+    } as never)
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      code: 'LSX-2026-0001',
+    } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({
+      ...PO,
+      status: 'pending_approval',
+    } as never)
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'u-boss', role: 'manager' },
+      { id: 'u-sup', role: 'employee' },
+    ] as never)
+
+    await posService.submit(staff, 'po1')
+
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('pending_approval')
+    const evt = vi.mocked(emit).mock.calls[0][0] as {
+      name: string
+      approver_ids: string[]
+      lsx_code: string | null
+    }
+    expect(evt.name).toBe('po.submitted')
+    expect(evt.approver_ids).toEqual(['u-boss'])
+    expect(evt.lsx_code).toBe('LSX-2026-0001')
+  })
+
+  it('đơn không còn là nháp → chặn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+    await expect(posService.submit(staff, 'po1')).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('nháp rỗng (0 dòng) → chặn gửi duyệt', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(DRAFT as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([] as never)
+    await expect(posService.submit(staff, 'po1')).rejects.toMatchObject({ status: 400 })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('posService.remove — chỉ xoá hẳn được NHÁP', () => {
+  it('draft → xoá hẳn (dòng cascade theo)', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    await posService.remove(staff, 'po1')
+    expect(posRepo.delete).toHaveBeenCalledWith('po1')
+  })
+
+  it.each(['pending_approval', 'approved', 'received'] as const)(
+    'đơn "%s" không xoá được — phải dùng huỷ',
+    async (st) => {
+      vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+      await expect(posService.remove(staff, 'po1')).rejects.toMatchObject({
+        status: 400,
+      })
+      expect(posRepo.delete).not.toHaveBeenCalled()
+    },
+  )
 })
 
 describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
