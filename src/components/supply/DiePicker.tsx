@@ -137,7 +137,7 @@ export function DiePicker({
         }}
         placeholder="TD-B768…"
         aria-label={ariaLabel}
-        className="h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        className="h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
       />
       {open && anchor && rows.length > 0 && (
         <AnchoredPopover

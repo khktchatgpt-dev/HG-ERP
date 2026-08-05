@@ -3,6 +3,14 @@
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import {
+  ArrowLeft,
+  Building2,
+  CalendarDays,
+  FileText,
+  Printer,
+  Search,
+} from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -21,6 +29,7 @@ import {
   type PoHeader,
 } from './po-draft'
 import { ContextStrip } from './sections/ContextStrip'
+import { Segmented } from './sections/Segmented'
 import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
@@ -71,7 +80,12 @@ export type PoInitial = {
 }
 
 const field =
-  'h-[32px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'h-9 w-full rounded-lg border border-zinc-300 bg-white px-2.5 text-[13px] shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950'
+/** Nhãn micro trên ô — cùng khuôn với nhãn SL đặt/Đơn giá của dòng hàng. */
+const fieldLabel = 'text-[11px] font-semibold tracking-wide text-zinc-400 uppercase'
+/** Icon neo mắt bên trái ô — ô nào có icon thì input thêm `pl-8`. */
+const fieldIcon =
+  'pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400'
 
 /**
  * SOẠN ĐƠN ĐẶT HÀNG — trục là MẪU ĐƠN THEO LOẠI HÀNG.
@@ -134,6 +148,12 @@ export function PoCreateForm({
   const [inclVat, setInclVat] = useState(
     start?.price_includes_vat ?? startMeta.priceIncludesVat,
   )
+  /**
+   * Người dùng ĐÃ TỰ CHỈNH VAT chưa. Có thì đổi mẫu KHÔNG đè lại mặc định của
+   * mẫu mới nữa — phòng Cung ứng phản hồi "nhiều NCC để 10%" mà chỉnh xong đổi
+   * mẫu là số bị áp lại 8%. Mở đơn có sẵn coi như đã chỉnh (số đã chốt với NCC).
+   */
+  const [vatDirty, setVatDirty] = useState(!!start)
   const [terms, setTerms] = useState(start?.terms ?? startMeta.terms)
   const [signerRole, setSignerRole] = useState(start?.signer_role ?? startMeta.signerRole)
   const [showTerms, setShowTerms] = useState(false)
@@ -151,13 +171,17 @@ export function PoCreateForm({
   const lsx = lsxs.find((l) => l.id === lsxId)
   const supplier = suppliers.find((s) => s.id === supplierId)
 
-  /** Đổi mẫu → nạp lại VAT + điều khoản + chữ ký mặc định của mẫu mới. */
-  /** Đổi mẫu → nạp lại VAT + điều khoản + chữ ký mặc định (quy tắc ở `po-draft`). */
+  /**
+   * Đổi mẫu → nạp lại điều khoản + chữ ký mặc định (quy tắc ở `po-draft`).
+   * VAT chỉ áp mặc định khi người dùng CHƯA tự chỉnh — xem `vatDirty`.
+   */
   function selectTemplate(t: PoTemplate) {
     const d = templateDefaults(t)
     setTemplate(t)
-    setVat(d.vat)
-    setInclVat(d.inclVat)
+    if (!vatDirty) {
+      setVat(d.vat)
+      setInclVat(d.inclVat)
+    }
     setTerms(d.terms)
     setSignerRole(d.signerRole)
   }
@@ -268,7 +292,7 @@ export function PoCreateForm({
     if (problem || busy) return
     setBusy(true)
     try {
-      const { po } = await api<{ po: { code: string } }>(
+      const { po } = await api<{ po: { id: string; code: string } }>(
         isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos',
         {
           // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
@@ -276,11 +300,15 @@ export function PoCreateForm({
           body: buildPoPayload(header, lines),
         },
       )
+      // 0116: tạo = LƯU NHÁP, chưa tới bàn duyệt của GĐ. Redirect kèm ?view= để
+      // danh sách mở ngay chi tiết — người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
       toast.success(
-        isEdit ? `Đã lưu ${po.code}` : `Đã tạo ${po.code}`,
-        'Đơn đang chờ Giám đốc duyệt',
+        isEdit ? `Đã lưu ${po.code}` : `Đã lưu nháp ${po.code}`,
+        isEdit
+          ? 'Thay đổi đã ghi vào đơn'
+          : 'Kiểm tra lại trong chi tiết rồi bấm "Gửi GĐ duyệt"',
       )
-      router.push('/planning/pos')
+      router.push(isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`)
       router.refresh()
     } catch (err) {
       toast.error(
@@ -325,18 +353,16 @@ export function PoCreateForm({
               type="button"
               disabled={lines.length === 0}
               onClick={() => setPreviewOpen(true)}
-              title={
-                lines.length === 0 ? 'Thêm ít nhất một dòng hàng đã' : undefined
-              }
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              title={lines.length === 0 ? 'Thêm ít nhất một dòng hàng đã' : undefined}
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
-              🖨 Xem trước phiếu in
+              <Printer className="size-4" aria-hidden /> Xem trước phiếu in
             </button>
             <Link
               href="/planning/pos"
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
-              ← Về danh sách
+              <ArrowLeft className="size-4" aria-hidden /> Về danh sách
             </Link>
           </div>
         }
@@ -356,63 +382,59 @@ export function PoCreateForm({
         onChange={selectTemplate}
       />
 
-      {/* ── Bối cảnh đơn ── */}
-      <section className="rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mb-3 inline-flex rounded-lg border border-zinc-200 p-0.5 text-[13px] dark:border-zinc-700">
-          {(
-            [
-              ['lsx', 'Theo lệnh sản xuất'],
-              ['standalone', 'Ngoài LSX'],
-            ] as const
-          ).map(([t, label]) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => {
+      {/* ── Bối cảnh đơn: card có header, nhãn micro uppercase, icon neo mắt ── */}
+      <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800">
+          <b className="text-[13px]">Bối cảnh đơn</b>
+          <div className="ml-auto">
+            <Segmented
+              label="Đơn theo LSX hay ngoài LSX"
+              options={[
+                { value: 'lsx', label: 'Theo lệnh sản xuất' },
+                { value: 'standalone', label: 'Ngoài LSX' },
+              ]}
+              value={poType}
+              onSelect={(t) => {
                 setPoType(t)
                 if (t === 'standalone') {
                   setLsxId('')
                   setNeeds([])
                 }
               }}
-              className={
-                'rounded-md px-3 py-1 font-medium transition-colors ' +
-                (poType === t
-                  ? 'bg-sky-600 text-white'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
-              }
-            >
-              {label}
-            </button>
-          ))}
+            />
+          </div>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 p-3.5 sm:grid-cols-2 lg:grid-cols-4">
           {poType === 'lsx' && (
-            <label className="flex flex-col gap-1 text-sm">
-              <span>
+            <label className="flex flex-col gap-1.5">
+              <span className={fieldLabel}>
                 LSX <span className="text-red-500">*</span>
               </span>
-              <select
-                value={lsxId}
-                onChange={(e) => void selectLsx(e.target.value)}
-                className={field}
-              >
-                <option value="">— chọn LSX đã duyệt —</option>
-                {lsxs.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.code} — {l.customer_name}
-                  </option>
-                ))}
-              </select>
+              <span className="relative">
+                <FileText className={fieldIcon} aria-hidden />
+                <select
+                  value={lsxId}
+                  onChange={(e) => void selectLsx(e.target.value)}
+                  className={`${field} pl-8`}
+                >
+                  <option value="">— chọn LSX đã duyệt —</option>
+                  {lsxs.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.code} — {l.customer_name}
+                    </option>
+                  ))}
+                </select>
+              </span>
               {lsx && (
                 <span className="text-xs text-zinc-400">
-                  Đơn hàng <b className="font-mono text-zinc-500">{lsx.order_codes.join(", ")}</b>
+                  Đơn hàng{' '}
+                  <b className="font-mono text-zinc-500">{lsx.order_codes.join(', ')}</b>
                 </span>
               )}
             </label>
           )}
-          <label className="flex flex-col gap-1 text-sm">
-            <span>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>
               Nhà cung cấp <span className="text-red-500">*</span>
             </span>
             {/*
@@ -421,12 +443,15 @@ export function PoCreateForm({
               và trình duyệt chỉ cho gõ nhảy theo ký tự ĐẦU nên gõ "tường" không
               tới được "CÔNG TY TNHH SX-TM TƯỜNG NGUYÊN".
             */}
-            <SupplierPicker
-              value={supplierId}
-              onChange={setSupplierId}
-              suppliers={suppliers}
-              className={field}
-            />
+            <span className="relative">
+              <Building2 className={fieldIcon} aria-hidden />
+              <SupplierPicker
+                value={supplierId}
+                onChange={setSupplierId}
+                suppliers={suppliers}
+                className={`${field} pl-8`}
+              />
+            </span>
             {supplier && (
               <span className="text-xs text-zinc-400">
                 {[
@@ -440,21 +465,25 @@ export function PoCreateForm({
               </span>
             )}
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Hẹn giao
-            <input
-              type="date"
-              value={expectedAt}
-              onChange={(e) => setExpectedAt(e.target.value)}
-              className={field}
-            />
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>Hẹn giao</span>
+            <span className="relative">
+              <CalendarDays className={fieldIcon} aria-hidden />
+              <input
+                type="date"
+                value={expectedAt}
+                onChange={(e) => setExpectedAt(e.target.value)}
+                className={`${field} pl-8`}
+              />
+            </span>
           </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Theo HĐ số
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>Theo HĐ số</span>
             <input
               maxLength={100}
               value={contractNo}
               onChange={(e) => setContractNo(e.target.value)}
+              placeholder="HĐ nguyên tắc 02/26…"
               className={field}
             />
           </label>
@@ -473,14 +502,20 @@ export function PoCreateForm({
         />
       )}
 
-      {/* ── Bảng dòng: cột đổi theo mẫu ── */}
+      {/* ── Dòng hàng: thẻ 2 tầng, ô đổi theo mẫu ── */}
       <section className="min-w-0 rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800">
+        <div className="flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 dark:border-zinc-800">
           <b className="text-[13px]">Dòng hàng</b>
-          <span className="rounded bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+          <span className="rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300">
             mẫu {meta.label}
           </span>
-          <span className="ml-auto text-[11px] text-zinc-400">
+          {/* Vòng nhập không rời bàn phím — nói bằng phím, không phải một câu dài. */}
+          <span className="ml-auto flex items-center gap-1 text-[11px] text-zinc-400">
+            <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+              Enter
+            </kbd>
+            SL đặt → đơn giá → dòng kế
+            <span aria-hidden>·</span>
             {readyLines}/{lines.length} dòng đủ số
           </span>
         </div>
@@ -510,9 +545,6 @@ export function PoCreateForm({
           vào cuối — mắt không phải nhảy từ đầu bảng xuống cuối sau mỗi lần thêm.
         */}
         <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
-          <span className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
-            Thêm dòng
-          </span>
           {/*
             NÚT MỞ HỘP THOẠI, không phải ô gõ tại chỗ.
 
@@ -521,14 +553,24 @@ export function PoCreateForm({
             số lệnh cần. Ô gõ nhét trong trang chỉ đủ chỗ vài dòng kết quả, và
             mỗi món lại phải mở lại từ đầu. Hộp thoại mở MỘT LẦN, tích đủ giỏ,
             chốt một lượt — đơn 20 dòng thành một lượt mở thay vì hai mươi.
+
+            TẠO HÌNH như một Ô TÌM trải hết khổ (viền đứt + icon kính lúp):
+            nhìn là biết "gõ tìm ở đây", đúng thói quen từ các ô tìm khác của
+            app — nhưng vẫn là nút, bấm/Enter là mở phiên chọn.
           */}
           <button
             ref={pickerRef}
             type="button"
             onClick={() => setPickOpen(true)}
-            className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-3.5 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+            className="flex h-[38px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-dashed border-zinc-300 bg-white px-3 text-left text-[13px] text-zinc-400 transition-colors hover:border-violet-400 hover:text-zinc-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-violet-600 dark:hover:text-zinc-300"
           >
-            ⌕ Chọn vật tư…
+            <Search className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">
+              Tìm và chọn vật tư — mở phiên chọn, tích nhiều món một lượt…
+            </span>
+            <kbd className="ml-auto hidden rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 sm:inline dark:border-zinc-700 dark:bg-zinc-900">
+              Enter
+            </kbd>
           </button>
           <QuickAddMaterial
             template={template}
@@ -556,12 +598,6 @@ export function PoCreateForm({
               })
             }
           />
-          {/* Dòng nhắc phím LUÔN xuống hàng riêng: để nó chen cùng hàng thì ô
-              tìm — ô nhập chính của cả màn — bị bóp còn ~250px. */}
-          <span className="w-full text-[11px] text-zinc-400">
-            chọn xong → con trỏ vào <b>SL đặt</b> → <b>Enter</b> → đơn giá → <b>Enter</b>{' '}
-            quay lại nút này
-          </span>
         </div>
 
         <MaterialPickDialog
@@ -602,7 +638,7 @@ export function PoCreateForm({
               code: isEdit ? initial!.po.code : '(cấp khi lưu)',
               supplierName: supplier?.name ?? '—',
               lsxCode: poType === 'lsx' ? (lsx?.code ?? null) : null,
-              orderCode: poType === 'lsx' ? (lsx?.order_codes.join(", ") || null) : null,
+              orderCode: poType === 'lsx' ? lsx?.order_codes.join(', ') || null : null,
               createdAt: new Date().toISOString(),
             })}
             supplier={
@@ -631,9 +667,15 @@ export function PoCreateForm({
         currency={currency}
         problem={problem}
         busy={busy}
-        submitLabel={isEdit ? 'Lưu thay đổi' : 'Tạo đơn → gửi GĐ duyệt'}
-        onVatChange={setVat}
-        onInclVatChange={setInclVat}
+        submitLabel={isEdit ? 'Lưu thay đổi' : 'Lưu nháp'}
+        onVatChange={(v) => {
+          setVat(v)
+          setVatDirty(true)
+        }}
+        onInclVatChange={(v) => {
+          setInclVat(v)
+          setVatDirty(true)
+        }}
         onDiscountChange={setDiscount}
         onCurrencyChange={setCurrency}
         onSubmit={() => void submit()}

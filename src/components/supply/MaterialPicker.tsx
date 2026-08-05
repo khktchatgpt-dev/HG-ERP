@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/api'
-import { Boxes, Layers, Ruler, Target, TriangleAlert, Weight } from 'lucide-react'
+import {
+  Boxes,
+  Layers,
+  Ruler,
+  Search as SearchIcon,
+  Target,
+  TriangleAlert,
+  Weight,
+} from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
@@ -286,26 +294,32 @@ export function MaterialPickDialog({
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap gap-2">
-          <input
-            ref={inputRef}
-            autoFocus
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={onKeyDown}
-            role="combobox"
-            aria-expanded
-            aria-controls={listId}
-            aria-autocomplete="list"
-            placeholder="Gõ mã hoặc tên vật tư…"
-            className="h-9 min-w-[220px] flex-1 rounded-md border border-zinc-300 px-3 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
-          />
+          <span className="relative min-w-[220px] flex-1">
+            <SearchIcon
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400"
+              aria-hidden
+            />
+            <input
+              ref={inputRef}
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={onKeyDown}
+              role="combobox"
+              aria-expanded
+              aria-controls={listId}
+              aria-autocomplete="list"
+              placeholder="Gõ mã hoặc tên vật tư…"
+              className="h-9 w-full rounded-lg border border-zinc-300 bg-white pr-3 pl-8 text-sm shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950"
+            />
+          </span>
           {groups.length > 0 && (
             <select
               value={group}
               onChange={(e) => setGroup(e.target.value)}
               onKeyDown={onKeyDown}
               aria-label="Lọc theo nhóm vật tư"
-              className="h-9 rounded-md border border-zinc-300 px-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-9 rounded-lg border border-zinc-300 bg-white px-2 text-sm shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950"
             >
               <option value="">— tất cả {groups.length} nhóm —</option>
               {groups.map((g) => (
@@ -521,14 +535,25 @@ export function MaterialPickDialog({
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] text-zinc-400">
-            ↑↓ chạy danh sách · <b>Enter</b> tích/bỏ · <b>Ctrl+Enter</b> thêm hết
+          <span className="flex items-center gap-1 text-[11px] text-zinc-400">
+            <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+              ↑↓
+            </kbd>
+            chạy danh sách
+            <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+              Enter
+            </kbd>
+            tích/bỏ
+            <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1 py-0.5 font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+              Ctrl+Enter
+            </kbd>
+            thêm hết
           </span>
           <div className="ml-auto flex gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               Huỷ
             </button>

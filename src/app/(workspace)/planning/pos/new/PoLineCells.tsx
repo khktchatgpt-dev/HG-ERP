@@ -15,7 +15,7 @@ import { recalcCartonArea, type Line } from './po-line'
  */
 
 export const cell =
-  'h-[30px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'h-[30px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 export const calc =
   'flex h-[30px] items-center justify-end rounded-md bg-zinc-100 px-2 text-[13px] font-medium tabular-nums dark:bg-zinc-800'
 

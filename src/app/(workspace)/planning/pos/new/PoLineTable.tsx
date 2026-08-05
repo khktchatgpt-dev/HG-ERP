@@ -1,33 +1,30 @@
 'use client'
 
+import { useState } from 'react'
+import {
+  Check,
+  PackageSearch,
+  StickyNote,
+  Trash2,
+  TriangleAlert,
+  Weight,
+} from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
+import { LineCell, NoteCell, blurOnWheel, cell } from './PoLineCells'
 import { lineAmount, lineProblem, lineQty2, type Line, type Num } from './po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
 /**
- * Ô GHIM hai mép, kèm BÓNG ĐỔ ở cạnh trong.
+ * Ô kế tiếp trong CÙNG MỘT DÒNG, tìm theo `data-cell` bên trong khối `data-line`.
  *
- * Không có bóng thì cột ghim và cột đang trượt dưới nó dính liền một khối —
- * nhìn ra y hệt "chữ bị cắt mất" chứ không phải "còn nội dung ở bên kia". Bóng
- * là thứ duy nhất nói cho người dùng biết bảng còn cuộn được.
- */
-const stickyLeft =
-  'sticky left-0 z-[1] w-[196px] min-w-[196px] bg-white shadow-[6px_0_6px_-6px_rgba(0,0,0,0.18)] dark:bg-zinc-950'
-const stickyRight =
-  'sticky right-0 z-[1] bg-white shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.18)] dark:bg-zinc-950'
-
-/**
- * Ô kế tiếp trong CÙNG MỘT HÀNG, tìm theo `data-cell`.
- *
- * Dùng DOM thay vì một mảng ref: bảng dựng động theo mẫu đơn nên số ô mỗi hàng
+ * Dùng DOM thay vì một mảng ref: dòng dựng động theo mẫu đơn nên số ô mỗi dòng
  * đổi theo mẫu, còn chuỗi nhập thì luôn cố định `SL đặt → Đơn giá → ô tìm`.
  */
 function focusInRow(from: HTMLElement, cellName: string): boolean {
   const next = from
-    .closest('tr')
+    .closest<HTMLElement>('[data-line]')
     ?.querySelector<HTMLInputElement>(`[data-cell="${cellName}"]`)
   if (!next) return false
   next.focus()
@@ -35,16 +32,22 @@ function focusInRow(from: HTMLElement, cellName: string): boolean {
   return true
 }
 
+const cellLabel =
+  'mb-1 block text-right text-[10px] font-semibold tracking-wide text-zinc-400 uppercase'
+
 /**
- * BẢNG DÒNG HÀNG của đơn đặt.
+ * DANH SÁCH DÒNG HÀNG của đơn đặt — mỗi dòng là một THẺ HAI TẦNG, không còn bảng
+ * 12–13 cột cuộn ngang (phòng Cung ứng phản hồi "bố cục phần vật tư khó nhìn").
  *
- * Khung hàng cố định hai đầu — `# · Vật tư · … · SL đặt · Đơn giá ·
- * Thành tiền · Ghi chú` — đúng thứ tự đơn giấy phòng Cung ứng đang ký. Phần giữa
- * là cột riêng của mẫu, đọc từ khai báo `PO_FIELDS`; file này không biết mẫu nào
- * có cột gì, nên thêm mẫu đơn thứ sáu không phải sửa ở đây.
+ *   · Tầng trên: nhận diện (tên · mã · tồn) + ba ô người mua nhìn nhiều nhất
+ *     trên tờ đơn giấy — SL đặt · Đơn giá · Thành tiền — ô to, nhãn ngay trên ô.
+ *   · Tầng dưới: thông số riêng của mẫu (kg/m, dài cây, lọt lòng…), đọc từ khai
+ *     báo `PO_FIELDS` nên thêm mẫu đơn thứ sáu không phải sửa ở đây. Ô "tổng kg"
+ *     tự tính thành pill tím cuối tầng. Ghi chú thu thành nút, bấm mới mở —
+ *     đa số dòng của đơn thật không có ghi chú.
  *
- * Ô NỀN XÁM là số hệ thống tự tính (tổng kg, thành tiền) — không gõ được. Hai ô
- * luôn phải gõ ở mọi mẫu là SL đặt và Đơn giá.
+ * Hết sticky + cuộn ngang: màn 1366 nhìn trọn dòng, dòng thiếu số báo bằng badge
+ * cam ngay chỗ Thành tiền và viền cam đúng ô cần điền (LineCell lo phần ô).
  */
 export function PoLineTable({
   template,
@@ -58,19 +61,13 @@ export function PoLineTable({
   onDoneRow,
 }: {
   template: PoTemplate
-  lines: Line[]
   /** SL đề xuất từ nhu cầu BOM theo material_id — chỉ hiện, không tự điền. */
   suggestions: Map<string, number>
+  lines: Line[]
   currency: string
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
-  /**
-   * Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó.
-   *
-   * Trước đây chọn xong vật tư là con trỏ ở lại ô tìm, trong khi dòng mới chèn
-   * PHÍA TRÊN: mỗi dòng phải bỏ bàn phím, rê chuột lên gõ SL rồi đơn giá. Ghi
-   * chú trong `MaterialPicker` vẫn hứa "con trỏ tự nhảy sang SL" — nay mới có.
-   */
+  /** Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó. */
   focusIndex?: number | null
   /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */
   onFocused?: () => void
@@ -80,240 +77,244 @@ export function PoLineTable({
   const meta = poTemplateMeta(template)
   const cols = PO_FIELDS[template]
   const priceLabel = meta.priceUnit ? `Đơn giá / ${meta.priceUnit}` : 'Đơn giá'
+  // Ô tổng tự tính (tổng kg) tách khỏi các ô nhập để render thành pill cuối tầng.
+  const calcCol = cols.find((c) => c.kind === 'calc')
+  const inputCols = cols.filter((c) => c.kind !== 'calc')
+
   /**
-   * Số cột một hàng: `Nhận dạng` (gộp # · Vật tư) + cột riêng của mẫu +
-   * `SL đặt · Đơn giá · Thành tiền · Ghi chú` + nút xoá.
+   * Dòng nào đang MỞ ô ghi chú. Dòng có sẵn ghi chú (mở đơn cũ) luôn mở — giấu
+   * đi thì người sửa đơn không biết dòng có lời dặn NCC.
    */
-  const totalColSpan = 6 + cols.length
+  const [openNotes, setOpenNotes] = useState<ReadonlySet<string>>(new Set())
+  const noteOpen = (l: Line) => l.note !== '' || openNotes.has(l.material_id)
+  const toggleNote = (l: Line, i: number) => {
+    // Đóng ô đang có chữ = xoá ghi chú — chủ ý, như bấm ✕ trên chip.
+    if (l.note !== '') onPatch(i, { note: '' })
+    setOpenNotes((s) => {
+      const next = new Set(s)
+      if (next.has(l.material_id) || l.note !== '') next.delete(l.material_id)
+      else next.add(l.material_id)
+      return next
+    })
+  }
+
+  if (lines.length === 0) {
+    return (
+      <div className="flex flex-col items-center gap-2 px-4 py-10 text-center">
+        <PackageSearch className="size-8 text-zinc-300 dark:text-zinc-600" aria-hidden />
+        <p className="text-xs text-zinc-500">
+          Chưa có dòng nào — bấm <b>Chọn vật tư</b> ở thanh ngay dưới để bắt đầu.
+        </p>
+      </div>
+    )
+  }
 
   return (
-    <div className="overflow-x-auto">
-      {/*
-        `min-w` GIỮ bề rộng cột: bảng `w-full` với 12 cột sẽ bóp cột hẹp nhất cho
-        vừa màn hình — ô Ghi chú tụt còn ~30px và chữ rơi từng ký tự một dòng.
-        Có min-w thì khung `overflow-x-auto` bên ngoài cuộn ngang, cột giữ nguyên.
-      */}
-      <table className="w-full min-w-[1120px] text-[13px] tabular-nums">
-        <thead className="bg-zinc-50 dark:bg-zinc-900/50">
-          <tr className="text-left text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:text-zinc-300">
-            {/*
-              MỘT CỘT GHIM DUY NHẤT, gộp `# · Vật tư`.
+    <div className="flex flex-col gap-2.5 p-3">
+      {lines.map((l, i) => {
+        const amount = lineAmount(template, l)
+        const kg = lineQty2(template, l)
+        const problem = lineProblem(template, l)
+        const suggest = suggestions.get(l.material_id) ?? null
+        /*
+         * SL gợi ý = nhu cầu − tồn. Không cộng hao hụt. Điều kiện là "dòng có SL
+         * đơn hàng", KHÔNG phải "mẫu là phụ kiện" — cặp ô này có ở phụ kiện,
+         * nhôm và bao bì (xem `PO_FIELDS`).
+         */
+        const shortSuggest =
+          l.qty_demand !== ''
+            ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0)
+            : null
+        const useSuggest = shortSuggest ?? suggest
 
-              Trước là ba ô sticky rời (`#`, `Mã SP`, `Vật tư`) với `left` gõ
-              cứng: `left-7` (28px) và `left-[112px]`. Nhưng bảng dùng
-              `table-layout: auto` — khi bị ép về `min-w`, trình duyệt bóp cột
-              nhỏ lại: đo thực tế `#` còn 27px và `Mã SP` còn 77px, tổng 104 chứ
-              không phải 112. Ô "Vật tư" vẫn ghim ở 112 nên ĐÈ LÊN cột kế 8px —
-              đúng chỗ chữ "VẬT LIỆU" mất chữ "V". Gõ cứng số nào cũng sai, vì
-              bề rộng đổi theo mẫu đơn và theo bề ngang màn hình.
-
-              Gộp thành một ô `left-0` thì không còn phép cộng nào để sai, và
-              `min-w` giữ cho nó không bị bóp.
-            */}
-            <th
-              className={`${stickyLeft} z-[2]! bg-zinc-50! py-2 pr-2 pl-3 dark:bg-zinc-900!`}
-            >
-              <div className="flex items-center gap-2">
-                <span className="w-4 shrink-0 text-center">#</span>
-                <span className="min-w-0 flex-1">Vật tư</span>
-              </div>
-            </th>
-            {cols.map((c) => (
-              <th
-                key={c.key}
-                className={`${c.width} py-2 pr-2 whitespace-nowrap ${c.align === 'right' ? 'text-right' : ''}`}
-              >
-                {c.label}
-              </th>
-            ))}
-            <th className="w-[80px] py-2 pr-2 text-right whitespace-nowrap">SL đặt</th>
-            <th className="w-[104px] py-2 pr-2 text-right whitespace-nowrap">
-              {priceLabel}
-            </th>
-            <th className="w-[100px] py-2 pr-2 text-right whitespace-nowrap">
-              Thành tiền
-            </th>
-            <th className="w-[150px] py-2 pr-2 whitespace-nowrap">Ghi chú</th>
-            {/* NÚT XOÁ GHIM BÊN PHẢI. Mẫu inox/bao bì có tới 5 cột riêng nên
-                bảng rộng ~1270px trong khung 1061px của laptop 1366 — đo được
-                179px bị đẩy khuất, và thứ rơi ra ngoài đầu tiên đúng là cột
-                này. Muốn xoá một dòng phải cuộn ngang, mà cuộn ngang thì mọi
-                danh sách đang mở tự đóng (`AnchoredPopover`). */}
-            <th
-              className={`${stickyRight} z-[2]! w-8 bg-zinc-50! py-2 dark:bg-zinc-900!`}
-            />
-          </tr>
-        </thead>
-        <tbody>
-          {lines.length === 0 && (
-            <tr>
-              <td
-                colSpan={totalColSpan}
-                className="py-6 text-center text-xs text-zinc-500"
-              >
-                Chưa có dòng nào — gõ tên vật tư ở thanh “Thêm dòng” ngay dưới bảng.
-              </td>
-            </tr>
-          )}
-          {lines.map((l, i) => {
-            const amount = lineAmount(template, l)
-            const kg = lineQty2(template, l)
-            const problem = lineProblem(template, l)
-            const suggest = suggestions.get(l.material_id) ?? null
-            /*
-             * SL gợi ý = nhu cầu − tồn. Không cộng hao hụt.
-             *
-             * Điều kiện là "dòng có SL đơn hàng", KHÔNG phải "mẫu là phụ kiện":
-             * cặp ô SL đơn hàng · Tồn kho nay có ở phụ kiện, nhôm và bao bì (xem
-             * `PO_FIELDS`). Khoá theo tên mẫu thì thêm mẫu nào cũng phải nhớ sửa
-             * thêm ở đây — mà quên thì mất gợi ý mà chẳng có gì báo.
-             */
-            const shortSuggest =
-              l.qty_demand !== ''
-                ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0)
-                : null
-
-            return (
-              <tr
-                key={l.material_id}
-                className="border-t border-zinc-100 align-top dark:border-zinc-900"
-              >
-                <td className={`${stickyLeft} py-2 pr-2 pl-3`}>
-                  <div className="flex items-start gap-2">
-                    <span className="w-4 shrink-0 pt-2 text-center text-xs font-medium text-zinc-500">
-                      {i + 1}
+        return (
+          <div
+            key={l.material_id}
+            data-line
+            className="overflow-hidden rounded-lg border border-zinc-200 bg-white transition-[border-color,box-shadow] hover:border-zinc-300 hover:shadow-sm dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
+          >
+            {/* ── Tầng trên: nhận diện + SL đặt · Đơn giá · Thành tiền ── */}
+            <div className="flex items-start gap-3 px-3 py-2.5">
+              <span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full border border-zinc-200 bg-zinc-50 text-[11px] font-semibold text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400">
+                {i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua phải đọc
+                    đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết đúng hàng. */}
+                <div
+                  className="text-[13.5px] leading-snug font-semibold break-words text-zinc-900 dark:text-zinc-100"
+                  title={l.name}
+                >
+                  {l.name}
+                </div>
+                {/* Mã nổi thành chip mono: tên trong danh mục trùng nhau nhiều,
+                    mã mới là thứ chốt đúng món và đọc cho NCC qua điện thoại. */}
+                <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                  <span className="rounded border border-zinc-200 bg-zinc-50 px-1.5 font-mono font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300">
+                    {l.code}
+                  </span>
+                  <span>{l.unit}</span>
+                  <span aria-hidden>·</span>
+                  {l.on_hand > 0 ? (
+                    <span className="inline-flex items-center gap-0.5 text-emerald-700 dark:text-emerald-400">
+                      <Check className="size-3" aria-hidden /> tồn {num(l.on_hand)}
                     </span>
-                    <div className="min-w-0 flex-1">
-                      {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua phải
-                          đọc đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết đúng hàng. */}
-                      <div
-                        className="text-xs leading-snug font-semibold break-words text-zinc-900 dark:text-zinc-100"
-                        title={l.name}
-                      >
-                        {l.name}
-                      </div>
-                      {/* Mã đậm ngang tên: tên hàng trong danh mục trùng nhau
-                          nhiều, mã mới là thứ chốt đúng món và là thứ đọc cho
-                          NCC qua điện thoại. ĐVT/tồn nhạt hơn nhưng vẫn đọc
-                          được — không còn zinc-400. */}
-                      <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                        <span className="font-mono font-semibold text-zinc-800 dark:text-zinc-200">
-                          {l.code}
-                        </span>
-                        <span aria-hidden>·</span>
-                        <span>{l.unit}</span>
-                        <span aria-hidden>·</span>
-                        <span
-                          className={
-                            l.on_hand > 0 ? 'text-emerald-700 dark:text-emerald-400' : ''
-                          }
-                        >
-                          tồn {num(l.on_hand)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </td>
-
-                {cols.map((c) => (
-                  <td key={c.key} className="py-2 pr-2">
-                    <LineCell f={c} line={l} index={i} kgTotal={kg} onPatch={onPatch} />
-                  </td>
-                ))}
-
-                <td className="py-2 pr-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    data-cell="qty"
-                    onWheel={blurOnWheel}
-                    /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột lên bảng. */
-                    ref={(el) => {
-                      if (el && focusIndex === i) {
-                        el.focus()
-                        el.select()
-                        onFocused?.()
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return
-                      e.preventDefault()
-                      focusInRow(e.currentTarget, 'price')
-                    }}
-                    value={l.qty}
-                    onChange={(e) =>
-                      onPatch(i, {
-                        qty: (e.target.value === '' ? '' : Number(e.target.value)) as Num,
-                      })
-                    }
-                    className={`${cell} text-right font-medium`}
-                    aria-label={`SL đặt ${l.name}`}
-                  />
-                  {/* Gợi ý SL: phần còn thiếu của dòng (mẫu phụ kiện), hoặc đề
-                      xuất từ nhu cầu BOM của lệnh. */}
-                  {l.qty === '' &&
-                    (shortSuggest ?? suggest) != null &&
-                    (shortSuggest ?? suggest)! > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => onPatch(i, { qty: (shortSuggest ?? suggest)! })}
-                        className="mt-0.5 block w-full text-right text-[10px] font-medium text-sky-700 hover:underline dark:text-sky-400"
-                        title={
-                          shortSuggest != null
-                            ? 'SL đơn hàng − tồn kho — bấm để dùng'
-                            : 'Đề xuất từ nhu cầu BOM — bấm để dùng'
-                        }
-                      >
-                        dùng {num((shortSuggest ?? suggest)!)} ↩
-                      </button>
-                    )}
-                </td>
-                <td className="py-2 pr-2">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    data-cell="price"
-                    onWheel={blurOnWheel}
-                    /* Xong đơn giá là xong dòng — Enter trả con trỏ về ô tìm để
-                       gõ dòng kế, cả đơn nhập được không rời bàn phím. */
-                    onKeyDown={(e) => {
-                      if (e.key !== 'Enter') return
-                      e.preventDefault()
-                      onDoneRow?.()
-                    }}
-                    value={l.price}
-                    onChange={(e) =>
-                      onPatch(i, {
-                        price: (e.target.value === ''
-                          ? ''
-                          : Number(e.target.value)) as Num,
-                      })
-                    }
-                    className={`${cell} text-right`}
-                    aria-label={`Đơn giá ${l.name}`}
-                  />
-                </td>
-                <td className="py-2 pr-2">
-                  <div
-                    className={`${calc} bg-transparent font-semibold dark:bg-transparent`}
-                  >
-                    {amount > 0 ? (
-                      num(Math.round(amount))
-                    ) : (
-                      <span className="font-normal text-zinc-300 dark:text-zinc-600">
-                        —
-                      </span>
-                    )}
-                  </div>
-                  {problem && (
-                    <div className="mt-0.5 text-right text-[10px] text-amber-600 dark:text-amber-500">
-                      {problem}
-                    </div>
+                  ) : (
+                    <span>tồn 0</span>
                   )}
-                </td>
-                <td className="py-2 pr-2">
+                </div>
+              </div>
+
+              <div className="w-[92px] shrink-0">
+                <label className={cellLabel} htmlFor={`qty-${l.material_id}`}>
+                  SL đặt
+                </label>
+                <input
+                  id={`qty-${l.material_id}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  data-cell="qty"
+                  onWheel={blurOnWheel}
+                  /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột lên bảng. */
+                  ref={(el) => {
+                    if (el && focusIndex === i) {
+                      el.focus()
+                      el.select()
+                      onFocused?.()
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    focusInRow(e.currentTarget, 'price')
+                  }}
+                  value={l.qty}
+                  onChange={(e) =>
+                    onPatch(i, {
+                      qty: (e.target.value === '' ? '' : Number(e.target.value)) as Num,
+                    })
+                  }
+                  className={`${cell} h-[34px]! text-right font-medium`}
+                  aria-label={`SL đặt ${l.name}`}
+                />
+                {/* Gợi ý SL: phần còn thiếu của dòng, hoặc đề xuất từ BOM lệnh. */}
+                {l.qty === '' && useSuggest != null && useSuggest > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onPatch(i, { qty: useSuggest })}
+                    className="mt-0.5 block w-full text-right text-[11px] font-medium text-sky-700 hover:underline dark:text-sky-400"
+                    title={
+                      shortSuggest != null
+                        ? 'SL đơn hàng − tồn kho — bấm để dùng'
+                        : 'Đề xuất từ nhu cầu BOM — bấm để dùng'
+                    }
+                  >
+                    dùng {num(useSuggest)} ↩
+                  </button>
+                )}
+              </div>
+
+              <div className="w-[108px] shrink-0">
+                <label className={cellLabel} htmlFor={`price-${l.material_id}`}>
+                  {priceLabel}
+                </label>
+                <input
+                  id={`price-${l.material_id}`}
+                  type="number"
+                  min="0"
+                  step="1"
+                  data-cell="price"
+                  onWheel={blurOnWheel}
+                  /* Xong đơn giá là xong dòng — Enter trả con trỏ về ô tìm để
+                     gõ dòng kế, cả đơn nhập được không rời bàn phím. */
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    e.preventDefault()
+                    onDoneRow?.()
+                  }}
+                  value={l.price}
+                  onChange={(e) =>
+                    onPatch(i, {
+                      price: (e.target.value === '' ? '' : Number(e.target.value)) as Num,
+                    })
+                  }
+                  className={`${cell} h-[34px]! text-right`}
+                  aria-label={`Đơn giá ${l.name}`}
+                />
+              </div>
+
+              <div className="w-[116px] shrink-0 text-right">
+                <span className={cellLabel}>Thành tiền</span>
+                {amount > 0 ? (
+                  <div className="pt-1 text-[15px] font-semibold tabular-nums">
+                    {num(Math.round(amount))}
+                  </div>
+                ) : (
+                  <div className="pt-1 text-[15px] text-zinc-300 dark:text-zinc-600">
+                    —
+                  </div>
+                )}
+                {/* Thiếu số nói TO ngay tại chỗ tiền — không phải chữ 10px chìm. */}
+                {problem && (
+                  <span className="mt-0.5 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
+                    <TriangleAlert className="size-3" aria-hidden /> {problem}
+                  </span>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onRemove(i)}
+                className="mt-4 rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                aria-label={`Xoá dòng ${l.name}`}
+              >
+                <Trash2 className="size-4" aria-hidden />
+              </button>
+            </div>
+
+            {/* ── Tầng dưới: thông số theo mẫu + ghi chú + pill tổng kg ── */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-zinc-100 bg-zinc-50/70 py-2 pr-3 pl-12 text-[12px] dark:border-zinc-800 dark:bg-zinc-900/40">
+              {inputCols.map((c) => (
+                <label
+                  key={c.key}
+                  className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400"
+                >
+                  <span className="whitespace-nowrap">{c.label}</span>
+                  <span className={c.width}>
+                    <LineCell f={c} line={l} index={i} kgTotal={kg} onPatch={onPatch} />
+                  </span>
+                </label>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => toggleNote(l, i)}
+                className={
+                  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors ' +
+                  (noteOpen(l)
+                    ? 'text-sky-700 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/40'
+                    : 'text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800')
+                }
+                aria-expanded={noteOpen(l)}
+                aria-label={`Ghi chú dòng ${l.name}`}
+              >
+                <StickyNote className="size-3" aria-hidden />
+                {noteOpen(l) ? 'Bỏ ghi chú' : 'Ghi chú'}
+              </button>
+
+              {calcCol && (
+                <span
+                  className="ml-auto inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-[11px] font-semibold text-violet-700 tabular-nums dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300"
+                  title="Hệ thống tự tính từ thông số dòng"
+                >
+                  <Weight className="size-3" aria-hidden />
+                  {calcCol.label.toLowerCase()} {kg == null ? '—' : num(kg)}
+                </span>
+              )}
+
+              {noteOpen(l) && (
+                <div className="w-full">
                   <NoteCell
                     value={l.note}
                     label={`Ghi chú ${l.name}`}
@@ -324,42 +325,21 @@ export function PoLineTable({
                     }
                     onChange={(v) => onPatch(i, { note: v })}
                   />
-                </td>
-                <td className={`${stickyRight} py-2 pr-1 text-center`}>
-                  <button
-                    type="button"
-                    onClick={() => onRemove(i)}
-                    className="mt-1 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                    aria-label={`Xoá dòng ${l.name}`}
-                  >
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-        {lines.length > 0 && (
-          <tfoot>
-            <tr className="border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50">
-              {/* Nhãn trải tới hết cột Đơn giá, rồi tới ô tổng nằm đúng dưới
-                  cột Thành tiền; hai cột cuối (Ghi chú, nút xoá) để đơn vị tiền. */}
-              <td
-                colSpan={totalColSpan - 3}
-                className="py-2 pr-2 text-right text-[10px] font-semibold tracking-wide text-zinc-600 uppercase dark:text-zinc-300"
-              >
-                Cộng tiền hàng ({lines.length} dòng)
-              </td>
-              <td className="py-2 pr-2 text-right font-bold whitespace-nowrap">
-                {num(Math.round(lines.reduce((s, l) => s + lineAmount(template, l), 0)))}
-              </td>
-              <td colSpan={2} className="py-2 pl-2 text-xs font-medium text-zinc-500">
-                {currency}
-              </td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Dòng cộng cuối danh sách — con số đối chiếu nhanh với thanh tổng. */}
+      <div className="flex items-baseline justify-end gap-2 px-1 pt-0.5 text-[12px] text-zinc-500">
+        Cộng tiền hàng ({lines.length} dòng)
+        <b className="text-[13.5px] font-bold text-zinc-800 tabular-nums dark:text-zinc-100">
+          {num(Math.round(lines.reduce((s, x) => s + lineAmount(template, x), 0)))}
+        </b>
+        <span className="text-[11px]">{currency}</span>
+      </div>
     </div>
   )
 }
