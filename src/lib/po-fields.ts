@@ -133,8 +133,17 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
  *
  * Trên giấy, cột số lượng chen vào GIỮA phần thông số chứ không dồn về cuối:
  * đơn nhôm là `… dài cây · SỐ CÂY · cây dư · tổng kg`, đơn bao bì là
- * `… pcs/thùng · SỐ THÙNG · lọt lòng`. Đây là mẫu NCC đang ký nên giữ nguyên
- * từng vị trí; đảo cột là họ phải dò lại.
+ * `… pcs/thùng · SỐ THÙNG · lọt lòng`. Cột kỹ thuật là mẫu NCC đang ký nên giữ
+ * nguyên từng vị trí; đảo cột là họ phải dò lại.
+ *
+ * KHUNG CHUẨN 08/2026 (đối chiếu đơn ĐH chuẩn của phòng Cung ứng, đơn sơn
+ * 01/26 HG/MĐ): mọi mẫu mở đầu bằng `STT · LSX · Mã sản phẩm · Tên SP/vật tư`.
+ * "Mã sản phẩm" ở đây là MÃ VẬT TƯ trong danh mục (trước in nhỏ dưới tên) —
+ * khác cột "Mã SP" tự gõ đã bỏ năm 0106 vì không ai điền. Cột LSX lặp số lệnh
+ * của đầu đơn xuống từng dòng; đơn NGOÀI LSX thì trang in tự ẩn cột này.
+ * Riêng mẫu ít cột (đơn giản — sơn/hoá chất dùng) thêm `Ngày đặt hàng · Thời
+ * gian giao hàng` đúng ảnh chuẩn; các mẫu kỹ thuật nhiều cột không nhét thêm
+ * được trong khổ giấy — hai ngày đó vẫn nằm ở đầu phiếu.
  *
  * Token `@…` là cột cố định do trang in tự dựng (STT, tên hàng, đơn giá, thành
  * tiền…), còn lại là `key` trong `PO_FIELDS` của mẫu đó.
@@ -144,6 +153,8 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
 export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   accessory: [
     '@stt',
+    '@lsx',
+    '@code',
     '@name',
     'grade',
     'spec',
@@ -157,6 +168,8 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     '@stt',
+    '@lsx',
+    '@code',
     '@name',
     'die',
     'kgm',
@@ -173,6 +186,8 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     '@stt',
+    '@lsx',
+    '@code',
     '@name',
     'grade',
     'dim',
@@ -187,6 +202,8 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   carton: [
     '@stt',
+    '@lsx',
+    '@code',
     '@name',
     'open',
     'pcs',
@@ -197,7 +214,20 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     '@note',
   ],
-  simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+  simple: [
+    '@stt',
+    '@lsx',
+    '@code',
+    '@name',
+    'spec',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    '@orderdate',
+    '@delivery',
+    '@note',
+  ],
 }
 
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */
