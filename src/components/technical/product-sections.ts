@@ -20,6 +20,8 @@ export type Packing = {
   pack_unit_label?: string
   nw_kg?: number
   gw_kg?: number
+  /** CBM/thùng khai trực tiếp (m³) — khi chưa đo 3 chiều thùng (LSX ROSCO). */
+  cbm?: number
 }
 
 export type TechSpec = {
@@ -538,11 +540,14 @@ export function productDimsOpen(
   return { text: `${l} × ${w} × ${h}`, unit: 'mm' }
 }
 
-/** CBM một thùng carton — chỉ tính khi có đủ 3 chiều. */
+/**
+ * CBM một thùng carton — ưu tiên TÍNH từ 3 chiều (số đo là nguồn mạnh nhất);
+ * chưa đo thùng thì lấy số khai trực tiếp `cbm` (LSX ROSCO chốt sẵn CBM/SP).
+ */
 export const cartonCbm = (pk: Packing) =>
   pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
     ? (pk.carton_l_cm * pk.carton_w_cm * pk.carton_h_cm) / 1_000_000
-    : null
+    : (pk.cbm ?? null)
 
 const mmToCm = (mm: number | null | undefined): number | undefined =>
   mm != null ? Math.round((mm / 10) * 100) / 100 : undefined

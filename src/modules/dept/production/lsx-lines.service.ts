@@ -146,7 +146,19 @@ export const lsxLinesService = {
           const pack = (p?.packing ?? {}) as {
             qty_per_carton?: number
             pack_unit_label?: string
+            carton_l_cm?: number
+            carton_w_cm?: number
+            carton_h_cm?: number
+            cbm?: number
           }
+          // CBM/thùng cho cột soát đóng cont: đo được 3 chiều thì tính, chưa đo
+          // thì lấy số hồ sơ khai trực tiếp (cùng thứ tự ưu tiên với cartonCbm).
+          const cbm =
+            pack.carton_l_cm != null &&
+            pack.carton_w_cm != null &&
+            pack.carton_h_cm != null
+              ? (pack.carton_l_cm * pack.carton_w_cm * pack.carton_h_cm) / 1_000_000
+              : (pack.cbm ?? null)
           return {
             product_id: l.product_id,
             sales_order_line_id: l.id,
@@ -161,7 +173,7 @@ export const lsxLinesService = {
             packing: pack.qty_per_carton
               ? `${pack.qty_per_carton} ${l.product_unit}/${pack.pack_unit_label ?? 'thùng'}`
               : null,
-            cbm: null,
+            cbm,
             ship_date: o.due_date,
             ship_label: null,
             specs,

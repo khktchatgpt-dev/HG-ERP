@@ -14,6 +14,12 @@ export type ProductPacking = {
   pack_unit_label?: string
   nw_kg?: number // Net weight / carton
   gw_kg?: number // Gross weight / carton
+  /**
+   * CBM/thùng KHAI TRỰC TIẾP (m³) — khách như ROSCO chốt sẵn con số trên LSX
+   * để soát đóng đầy cont. Có kích thước thùng thì `cartonCbm` vẫn ưu tiên
+   * TÍNH từ 3 chiều; ô này là đường nhập cho SP chưa đo thùng.
+   */
+  cbm?: number
 }
 
 /** Thông số sản xuất (jsonb `tech_spec`) — in trên LSX. */
