@@ -26,7 +26,6 @@ describe('form phiếu LSX chuẩn', () => {
       'Mã khách',
       'Tên nước ngoài\n(nội dung trên shipping mark)',
       'Tên tiếng việt',
-      'Tên khai hải quan\n(kế toán)',
       'Số barcode',
       'ĐVT',
       'Số lượng',
@@ -40,7 +39,6 @@ describe('form phiếu LSX chuẩn', () => {
       'Đóng gói',
       'Thời gian xuất',
       'Note',
-      'Lưu ý quan trọng',
       'BOM',
       'Bản vẽ',
       'Mẫu',
@@ -90,7 +88,12 @@ describe('form phiếu LSX chuẩn', () => {
     expect(red).toEqual(['Số PO', 'Số lượng', 'Thời gian xuất'])
     // MERXX bôi vàng nguyên khối kiểm tra hồ sơ.
     const yellow = LSX_FORM.columns.filter((c) => c.emphasis === 'yellow')
-    expect(yellow.map((c) => c.label)).toEqual(['BOM', 'Bản vẽ', 'Mẫu', 'Mẫu tại showroom'])
+    expect(yellow.map((c) => c.label)).toEqual([
+      'BOM',
+      'Bản vẽ',
+      'Mẫu',
+      'Mẫu tại showroom',
+    ])
     expect(yellow.every((c) => c.band === 'Kiểm tra hồ sơ')).toBe(true)
   })
 })

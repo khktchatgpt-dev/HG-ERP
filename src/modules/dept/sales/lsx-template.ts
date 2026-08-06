@@ -15,6 +15,11 @@
  * Thứ CÒN RIÊNG theo khách chỉ là NỘI DUNG, không phải hình thức: khối "một số
  * lưu ý chung" cuối phiếu (bảo hành, tiêu chuẩn nệm, logo…) — khai ở
  * `sales_customers.lsx_template.notes_footer`.
+ *
+ * Chỉnh 05/08/2026 theo chủ dự án: mọi ô trên phiếu CĂN GIỮA (bỏ hẳn khai
+ * `align` theo cột); bỏ cột "Tên khai hải quan (kế toán)" — xưởng không cần;
+ * ghi chú chỉ còn MỘT cột "Note" (cột "Lưu ý quan trọng" trùng vai, đã bỏ —
+ * trường `important_note` vẫn nằm trong DB, chỉ không in).
  */
 
 export type LsxLineField =
@@ -49,7 +54,6 @@ export type LsxSheetColumn = {
   source: LsxColSource
   /** Tiêu đề tầng trên gộp nhiều cột. */
   band?: string
-  align?: 'left' | 'center' | 'right'
   /** Ô nhập nhiều dòng ở màn soạn (spec thật hay 2 dòng: "Sơn xám cát ⏎ PT-7476"). */
   multiline?: boolean
   hint?: string
@@ -78,7 +82,7 @@ export type LsxTemplate = {
 export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
   { label: 'STT', source: { kind: 'stt' } },
   // Nhóm = một đơn hàng / một PO (lệnh gộp nhiều đơn — 0113). Gộp ô suốt nhóm.
-  { label: 'Đơn hàng', source: { kind: 'group', field: 'title' }, align: 'left' },
+  { label: 'Đơn hàng', source: { kind: 'group', field: 'title' } },
   { label: 'Số PO', source: { kind: 'group', field: 'po_no' }, emphasis: 'red' },
   { label: 'Hình ảnh sp', source: { kind: 'image' } },
   { label: 'Mã SP', source: { kind: 'line', field: 'product_code' } },
@@ -86,24 +90,17 @@ export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
   {
     label: 'Tên nước ngoài\n(nội dung trên shipping mark)',
     source: { kind: 'line', field: 'name_foreign' },
-    align: 'left',
   },
-  { label: 'Tên tiếng việt', source: { kind: 'line', field: 'name_vi' }, align: 'left' },
-  {
-    label: 'Tên khai hải quan\n(kế toán)',
-    source: { kind: 'line', field: 'name_customs' },
-    align: 'left',
-  },
+  { label: 'Tên tiếng việt', source: { kind: 'line', field: 'name_vi' } },
   { label: 'Số barcode', source: { kind: 'line', field: 'barcode' } },
   { label: 'ĐVT', source: { kind: 'line', field: 'unit' } },
   {
     label: 'Số lượng',
     source: { kind: 'line', field: 'qty' },
-    align: 'right',
     emphasis: 'red',
   },
-  { label: 'CBM', source: { kind: 'line', field: 'cbm' }, align: 'right' },
-  { label: 'Tổng CBM', source: { kind: 'total_cbm' }, align: 'right' },
+  { label: 'CBM', source: { kind: 'line', field: 'cbm' } },
+  { label: 'Tổng CBM', source: { kind: 'total_cbm' } },
   {
     label: 'Mây',
     source: { kind: 'spec', key: 'may' },
@@ -136,12 +133,7 @@ export const LSX_FORM_COLUMNS: LsxSheetColumn[] = [
     hint: 'w37.26',
     emphasis: 'red',
   },
-  { label: 'Note', source: { kind: 'line', field: 'note' }, align: 'left' },
-  {
-    label: 'Lưu ý quan trọng',
-    source: { kind: 'line', field: 'important_note' },
-    align: 'left',
-  },
+  { label: 'Note', source: { kind: 'line', field: 'note' } },
   {
     label: 'BOM',
     source: { kind: 'check', key: 'bom' },

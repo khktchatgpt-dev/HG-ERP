@@ -2,6 +2,13 @@ import { Fragment } from 'react'
 import type { LsxSheetColumn, LsxTemplate } from '@/modules/dept/sales/lsx-template'
 import type { LsxGroup, LsxLine } from '@/modules/dept/production/lsx-lines.repo'
 import {
+  fmtN,
+  groupCell,
+  isReady,
+  lineCell,
+  valueState,
+} from '@/modules/dept/production/lsx-sheet-cells'
+import {
   PrintLetterhead,
   PrintPage,
   PrintSignatures,
@@ -44,24 +51,23 @@ export type LsxSheetGroup = Pick<
 > & { lines: LsxLine[] }
 
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '')
-const fmtN = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
-const td = 'border border-black px-1 py-0.5 align-top'
+// Mọi ô CĂN GIỮA cả hai chiều (chốt 05/08/2026) — bảng đã text-center sẵn.
+const td = 'border border-black px-1 py-0.5 align-middle'
 
-/** Đợt xuất in ra: ưu tiên đúng chữ Sales gõ ("w37.26"), không có thì ngày. */
-const shipText = (x: { ship_label: string | null; ship_date: string | null }) =>
-  x.ship_label?.trim() || (x.ship_date ? fmtD(x.ship_date) : '')
-
-const alignCls = (c: LsxSheetColumn) =>
-  c.align === 'left' ? 'text-left' : c.align === 'right' ? 'text-right' : 'text-center'
+/** Hàng tiêu đề cột — nền VÀNG cho nổi khối tên trường (chốt 06/08/2026). */
+const HEAD_ROW = 'bg-yellow-200 font-semibold print:bg-yellow-200'
 
 /**
  * MÀU — lấy đúng chỗ Sales đang bôi trong file Excel, không tự bịa thêm:
- *   · đỏ  : SỐ LƯỢNG · THỜI GIAN XUẤT · SỐ PO (cả 4 file đều bôi đỏ cột này);
- *   · vàng: nguyên khối BOM/BẢNG VẼ/MẪU (MERXX bôi vàng cả khối).
- * Khai ở `emphasis` của cột nên đổi ý chỉ sửa một chỗ.
+ *   · đỏ ĐẬM: SỐ LƯỢNG · THỜI GIAN XUẤT · SỐ PO (cả 4 file đều bôi đỏ ba cột
+ *     này — sai là hỏng lô hàng nên phải đọc thấy từ xa);
+ *   · vàng  : nguyên khối BOM/BẢNG VẼ/MẪU (nay khối này không in nữa).
+ * Khai ở `emphasis` của cột nên đổi ý chỉ sửa một chỗ. Giá trị ô + tín hiệu
+ * theo GIÁ TRỊ (pending/missing/đủ mẫu) khai chung ở lsx-sheet-cells để phiếu
+ * in và file Excel xuất ra giống nhau từng ô.
  */
 const emphasisCls = (c: LsxSheetColumn, head: boolean) => {
-  if (c.emphasis === 'red') return 'text-red-600'
+  if (c.emphasis === 'red') return 'font-bold text-red-600'
   if (c.emphasis === 'yellow')
     return head
       ? 'bg-yellow-200 print:bg-yellow-200'
@@ -69,80 +75,15 @@ const emphasisCls = (c: LsxSheetColumn, head: boolean) => {
   return ''
 }
 
-const norm = (v: string) => v.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
-
-/**
- * Tô theo GIÁ TRỊ — thứ xưởng cần thấy ngay mà bảng đen trắng nuốt mất:
- *   · thiếu hồ sơ ("Không", "thiếu phụ kiện đóng gói") → chữ đỏ đậm;
- *   · chưa chốt ("xác nhận sau", "Thông báo sau", "chờ ký mẫu", "đợi") → nền cam
- *     nhạt + chữ đỏ, vì đó là ô CHƯA CÓ THÔNG TIN chứ không phải giá trị thật.
- * MERXX bôi đỏ đúng chữ "Không" ở cột MẪU; YOTRIO bôi đỏ "Đợi thông tin
- * shipping mark" — hai quy tắc này gộp lại cho mọi khách.
- */
-/**
- * SP đã đủ mẫu → nền xanh nhạt ở ô Mã SP. MERXX bôi xanh 9 mã trong file, đối
- * chiếu ra đúng các dòng có cột MẪU ghi "Có" trơn (không kèm "thiếu…").
- */
-function readyCls(l: LsxLine): string {
-  const mau = norm(l.checks.mau ?? '')
-  return mau.startsWith('co') && !/thieu|chua/.test(mau)
-    ? 'bg-green-100 print:bg-green-100'
-    : ''
-}
+const readyCls = (l: LsxLine): string =>
+  isReady(l) ? 'bg-green-100 print:bg-green-100' : ''
 
 function valueCls(text: string, isCheck: boolean): string {
-  const t = norm(text)
-  if (!t) return ''
-  if (
-    /(xac nhan sau|thong bao sau|cho ky|cho xac nhan|dang cho|doi thong tin|se gui|sau khi)/.test(
-      t,
-    )
-  )
+  const state = valueState(text, isCheck)
+  if (state === 'pending')
     return 'bg-orange-100 font-semibold text-red-600 print:bg-orange-100'
-  if (isCheck && /(khong|thieu|chua)/.test(t)) return 'font-semibold text-red-600'
+  if (state === 'missing') return 'font-semibold text-red-600'
   return ''
-}
-
-/** Giá trị một ô của DÒNG (cột nhóm xử lý riêng vì phải gộp ô). */
-function lineCell(col: LsxSheetColumn, l: LsxLine): string {
-  const src = col.source
-  switch (src.kind) {
-    case 'image':
-      return '' // ảnh render riêng, không phải text
-    case 'line':
-      switch (src.field) {
-        case 'qty':
-          return fmtN(l.qty)
-        case 'cbm':
-          return l.cbm ? fmtN(l.cbm) : ''
-        case 'ship':
-          return shipText(l)
-        default:
-          return (l[src.field] as string | null) ?? ''
-      }
-    case 'total_cbm':
-      return l.cbm ? fmtN(l.cbm * l.qty) : ''
-    case 'spec':
-      return l.specs[src.key] ?? ''
-    case 'check':
-      return l.checks[src.key] ?? ''
-    case 'extra':
-      return l.extras[src.key] ?? ''
-    default:
-      return ''
-  }
-}
-
-function groupCell(col: LsxSheetColumn, g: LsxSheetGroup): string {
-  if (col.source.kind !== 'group') return ''
-  switch (col.source.field) {
-    case 'ship':
-      return shipText(g)
-    case 'title':
-      return g.title ?? ''
-    default:
-      return (g[col.source.field] as string | null) ?? ''
-  }
 }
 
 export function LsxPrintSheet({
@@ -161,7 +102,10 @@ export function LsxPrintSheet({
   /** vd "BẢN XEM TRƯỚC — LỆNH CHƯA PHÁT". null = bản chính thức. */
   watermark?: string | null
 }) {
-  const cols = template.columns
+  // 06/08/2026: khối "Kiểm tra hồ sơ" (BOM/Bản vẽ/Mẫu/Showroom) KHÔNG in nữa —
+  // nhường chỗ cho ảnh SP và các cột khác. Dữ liệu checks vẫn nhập ở màn soạn
+  // (theo dõi nội bộ + nuôi ô xanh "đủ mẫu" trên Mã SP).
+  const cols = template.columns.filter((c) => c.source.kind !== 'check')
   const lines = groups.flatMap((g) => g.lines)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
   const isRevision = header.revision > 1
@@ -212,7 +156,7 @@ export function LsxPrintSheet({
       <table className="mt-1 w-full border-collapse text-center text-[11px]">
         <thead className="print:table-header-group">
           {/* Tiêu đề hai tầng khi mẫu có cột gộp (YOTRIO). */}
-          <tr className="bg-zinc-100 font-semibold print:bg-zinc-100">
+          <tr className={HEAD_ROW}>
             {cols.map((c, i) => {
               if (!c.band) {
                 return (
@@ -236,7 +180,7 @@ export function LsxPrintSheet({
             })}
           </tr>
           {bands && (
-            <tr className="bg-zinc-100 font-semibold print:bg-zinc-100">
+            <tr className={HEAD_ROW}>
               {cols
                 .filter((c) => c.band)
                 .map((c, i) => (
@@ -258,10 +202,7 @@ export function LsxPrintSheet({
                 {template.group_mode === 'title_row' && g.title && (
                   <tr>
                     <td className={td} />
-                    <td
-                      className={`${td} text-left font-semibold`}
-                      colSpan={cols.length - 1}
-                    >
+                    <td className={`${td} font-semibold`} colSpan={cols.length - 1}>
                       {g.title}
                     </td>
                   </tr>
@@ -272,7 +213,7 @@ export function LsxPrintSheet({
                   return (
                     <tr
                       key={l.id}
-                      className={changed ? 'bg-amber-100 print:bg-amber-100' : undefined}
+                      className={changed ? 'bg-sky-100 print:bg-sky-100' : undefined}
                     >
                       {cols.map((c, ci) => {
                         // Cột NHÓM (gồm cả STT khi đếm theo nhóm): chỉ vẽ ở dòng
@@ -285,7 +226,7 @@ export function LsxPrintSheet({
                           return (
                             <td
                               key={ci}
-                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)} whitespace-pre-wrap`}
+                              className={`${td} ${emphasisCls(c, false)} whitespace-pre-wrap`}
                               rowSpan={span}
                             >
                               {c.source.kind === 'stt' ? gi + 1 : groupCell(c, g)}
@@ -294,10 +235,7 @@ export function LsxPrintSheet({
                         }
                         if (c.source.kind === 'group') {
                           return (
-                            <td
-                              key={ci}
-                              className={`${td} ${alignCls(c)} ${emphasisCls(c, false)}`}
-                            >
+                            <td key={ci} className={`${td} ${emphasisCls(c, false)}`}>
                               {li === 0 ? groupCell(c, g) : ''}
                             </td>
                           )
@@ -306,7 +244,7 @@ export function LsxPrintSheet({
                           return (
                             <td key={ci} className={td}>
                               {changed && (
-                                <span className="font-bold text-amber-700">▲ </span>
+                                <span className="font-bold text-sky-700">▲ </span>
                               )}
                               {li + 1}
                             </td>
@@ -323,7 +261,7 @@ export function LsxPrintSheet({
                                 <img
                                   src={url}
                                   alt={l.name_vi ?? l.product_code}
-                                  className="mx-auto h-12 w-16 object-contain"
+                                  className="mx-auto h-24 w-28 max-w-none object-contain"
                                 />
                               ) : null}
                             </td>
@@ -337,12 +275,8 @@ export function LsxPrintSheet({
                         return (
                           <td
                             key={ci}
-                            className={`${td} ${alignCls(c)} whitespace-pre-wrap ${
+                            className={`${td} whitespace-pre-wrap ${
                               mono ? 'font-mono' : ''
-                            } ${
-                              c.source.kind === 'line' && c.source.field === 'qty'
-                                ? 'font-semibold'
-                                : ''
                             } ${emphasisCls(c, false)} ${valueCls(
                               text,
                               c.source.kind === 'check',
@@ -371,13 +305,13 @@ export function LsxPrintSheet({
                       if (isGroupCol && template.group_mode === 'columns') return null
                       if (ci === qtyIdx)
                         return (
-                          <td key={ci} className={`${td} text-right`}>
+                          <td key={ci} className={td}>
                             Total Cube:
                           </td>
                         )
                       if (ci === cubeIdx)
                         return (
-                          <td key={ci} className={`${td} text-right`}>
+                          <td key={ci} className={td}>
                             {fmtN(gCbm)}
                           </td>
                         )
@@ -395,13 +329,13 @@ export function LsxPrintSheet({
               {cols.map((c, ci) => {
                 if (ci === 1)
                   return (
-                    <td key={ci} className={`${td} text-left`}>
+                    <td key={ci} className={td}>
                       Tổng
                     </td>
                   )
                 if (ci === qtyIdx)
                   return (
-                    <td key={ci} className={`${td} text-right`}>
+                    <td key={ci} className={td}>
                       {fmtN(totalQty)}
                     </td>
                   )
