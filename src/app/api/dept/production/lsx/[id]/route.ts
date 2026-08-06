@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
-import { handle } from '@/server/http'
+import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
+import { lsxHeaderUpdateSchema } from '@/modules/dept/production/production.schema'
 import { filesService } from '@/modules/core/files/files.service'
 
 type Params = { params: Promise<{ id: string }> }
@@ -49,4 +50,15 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
     groups,
     totals: sheet.totals,
   })
+})
+
+/**
+ * Sửa THÔNG TIN ĐẦU LỆNH (0117): số lệnh, ưu tiên, ngày nhận/hạn xuất,
+ * container, ghi chú — xem lsxService.updateHeader.
+ */
+export const PATCH = handle(async (req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  const input = await parseJson(req, lsxHeaderUpdateSchema)
+  return NextResponse.json({ lsx: await lsxService.updateHeader(user, id, input) })
 })

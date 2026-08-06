@@ -102,7 +102,7 @@ function LinePlanBlock({
     try {
       await api(`/api/dept/production/lsx/${lsxId}/plan`, {
         method: 'PUT',
-        body: JSON.stringify({
+        body: {
           order_line_id: line.order_line_id,
           stages: draft.map((s) => ({
             stage: s.stage,
@@ -111,7 +111,7 @@ function LinePlanBlock({
             planned_end: s.planned_end || null,
           })),
           save_as_default: saveDefault,
-        }),
+        },
       })
       toast.success(`Đã lưu kế hoạch ${line.product_code}`)
       setEditing(false)

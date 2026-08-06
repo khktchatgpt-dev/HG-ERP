@@ -71,7 +71,7 @@ export function TeamScreen({
     try {
       await api(`/api/dept/production/jobs/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify(body),
+        body: body,
       })
       toast.success(okMsg)
       setConfirmFor(null)

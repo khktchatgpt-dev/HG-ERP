@@ -272,15 +272,20 @@ export const productsService = {
    * lúc tạo nhanh SP, nên chặn họ điền tiếp cho SP cũ chỉ khiến tờ báo giá in ra
    * trống chỗ quy cách rồi phải chờ Kỹ thuật.
    *
-   * `packing` GỘP vào bản cũ chứ không ghi đè: payload chỉ chứa mấy ô sale vừa
-   * điền, ghi đè cả cục sẽ xoá số Kỹ thuật đã khai. Muốn XOÁ một số thì vào hồ sơ
-   * SP bên Kỹ thuật.
+   * `packing` và `tech_spec` GỘP vào bản cũ chứ không ghi đè: payload chỉ chứa
+   * mấy ô sale vừa điền, ghi đè cả cục sẽ xoá số Kỹ thuật đã khai. Muốn XOÁ một
+   * số thì vào hồ sơ SP bên Kỹ thuật.
+   *
+   * `tech_spec` + `barcode` thêm 08/2026 cho luồng soạn dòng LSX bổ sung ngược
+   * về hồ sơ (lsx-lines.service.fillProductFromLine — chỉ gửi trường hồ sơ
+   * đang TRỐNG).
    */
   async fillSpecs(
     user: User,
     id: string,
     input: {
       packing?: ProductPacking
+      tech_spec?: ProductTechSpec
       description_en?: string | null
       unit?: string
       customer_item_code?: string | null
@@ -288,15 +293,17 @@ export const productsService = {
       hs_code?: string | null
       origin_country?: string | null
       name_foreign?: string | null
+      barcode?: string | null
     },
   ): Promise<Product> {
     await assertAction(user, 'technical.product.fill_specs')
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Sản phẩm không tồn tại')
-    const { packing, ...rest } = input
+    const { packing, tech_spec, ...rest } = input
     return productsRepo.patch(id, {
       ...rest,
       ...(packing ? { packing: { ...(before.packing ?? {}), ...packing } } : {}),
+      ...(tech_spec ? { tech_spec: { ...(before.tech_spec ?? {}), ...tech_spec } } : {}),
     })
   },
 

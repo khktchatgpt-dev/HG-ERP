@@ -9,6 +9,7 @@ import { entriesRepo } from './entries.repo'
 import { componentsRepo } from './components.repo'
 import { lsxLinesService } from './lsx-lines.service'
 import { lsxLinesRepo } from './lsx-lines.repo'
+import { blockingIssues } from './lsx-line-fill'
 import { lsxAudienceIds } from './notify-targets'
 import { ordersRepo, type OrderWithCustomer } from '@/modules/dept/sales/orders.repo'
 import type { OrderStatus } from '@/modules/dept/sales/orders.schema'
@@ -106,8 +107,15 @@ export const lsxService = {
   },
 
   /**
-   * Sales PHÁT LSX từ MỘT HOẶC NHIỀU đơn (FR-SAL-06, BR-02/07): tạo ở trạng
-   * thái chờ GĐ duyệt.
+   * Sales TẠO LSX NHÁP từ MỘT HOẶC NHIỀU đơn (FR-SAL-06, BR-02/07).
+   *
+   * 0117 (chốt 06/08/2026): tạo lệnh KHÔNG gửi GĐ ngay. Luồng cũ vào thẳng
+   * `pending_approval` rồi Sales mới đi soạn dòng — GĐ nhận phiếu lúc nội dung
+   * còn dang dở, mà mỗi lần Sales sửa tiếp lại đẻ thêm một bản chỉnh sửa. Nay
+   * lệnh nằm ở NHÁP: soạn dòng / sửa đầu lệnh thoải mái, bấm `submit` mới tới
+   * bàn duyệt và mới notify. Đơn cũng chỉ chuyển 'lsx_pending' lúc submit —
+   * nhưng đã gắn `production_order_id` ngay từ nháp nên không bị đề xuất phát
+   * lệnh lần hai.
    * - 0113: gộp nhiều đơn cùng khách; mỗi đơn chỉ thuộc một lệnh.
    * - BR-02: LSX dùng chung dòng SP của đơn.
    * - BR-07: KHÔNG chặn khi thiếu BOM — chỉ cảnh báo.
@@ -136,6 +144,7 @@ export const lsxService = {
     const { order: lsx, duplicate } = await productionRepo.insert({
       code: input.code,
       customer_id: orders[0].customer_id,
+      status: 'draft',
       ship_date: input.ship_date ?? null,
       received_date: input.received_date ?? null,
       container_summary: input.container_summary ?? null,
@@ -148,14 +157,48 @@ export const lsxService = {
     }
     await productionRepo.attachOrders(lsx.id, orderIds)
     // Nạp sẵn nhóm + dòng lệnh từ dòng đơn (0114) — Sales tách đợt xuất / sửa
-    // spec sau ở màn soạn lệnh. Lỗi nạp không được chặn việc phát lệnh.
+    // spec sau ở màn soạn lệnh. Lỗi nạp không được chặn việc tạo lệnh.
     try {
       await lsxLinesService.seedFromOrders(lsx.id)
     } catch (err) {
-      console.error('[lsx.issue] nạp dòng lệnh từ đơn lỗi (lệnh vẫn phát):', err)
+      console.error('[lsx.issue] nạp dòng lệnh từ đơn lỗi (lệnh vẫn tạo):', err)
+    }
+    return lsx
+  },
+
+  /**
+   * Sales GỬI GĐ DUYỆT (0117): draft → pending_approval. CHỈ lúc này mới đẩy
+   * đơn sang 'lsx_pending' và notify người duyệt — `lsx.submitted` chuyển từ
+   * `issue()` sang đây.
+   */
+  async submit(user: User, id: string): Promise<ProductionOrder> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await lsxOrThrow(id)
+    if (lsx.status !== 'draft') throw BadRequest('Chỉ lệnh nháp mới gửi duyệt được')
+
+    // Đếm dòng thẳng từ repo (không qua `sheet()` — chỗ này không cần mẫu cột).
+    const lsxLines = await lsxLinesRepo.listLines(id)
+    if (lsxLines.length === 0) {
+      throw BadRequest('Lệnh chưa có dòng sản phẩm nào — soạn dòng rồi hãy gửi duyệt')
+    }
+    // Gate mức A (0117) — dùng CHÍNH luật của màn soạn (`blockingIssues`), chặn
+    // chỉ ở client thì lách được qua API và bug UI sẽ lọt thẳng xuống xưởng.
+    const bad = lsxLines.filter((l) => blockingIssues(l).length > 0)
+    if (bad.length) {
+      const names = bad
+        .slice(0, 3)
+        .map((l) => (l.product_code ?? '').trim() || '(chưa có mã)')
+        .join(', ')
+      throw BadRequest(
+        `${bad.length} dòng thiếu Mã SP / Số lượng / ĐVT (${names}${
+          bad.length > 3 ? '…' : ''
+        }) — bổ sung rồi hãy gửi duyệt`,
+      )
     }
 
-    // Đơn sang trạng thái "đã phát LSX, chờ duyệt".
+    const orders = await findOrdersOrThrow(lsx.order_ids)
+    const updated = await productionRepo.patch(id, { status: 'pending_approval' })
+
     await Promise.all(
       orders.map(async (o) => {
         await ordersRepo.patch(o.id, { status: 'lsx_pending' })
@@ -165,7 +208,7 @@ export const lsxService = {
           change: {
             type: 'lsx_submitted',
             fields: { status: { from: o.status, to: 'lsx_pending' } },
-            lsx_code: input.code,
+            lsx_code: lsx.code,
             order_codes: orders.map((x) => x.code),
           },
           note: null,
@@ -173,18 +216,18 @@ export const lsxService = {
       }),
     )
 
-    const lines = await ordersRepo.listLinesByOrders(orderIds)
+    const lines = await ordersRepo.listLinesByOrders(lsx.order_ids)
     await emit({
       name: 'lsx.submitted',
-      production_order_id: lsx.id,
+      production_order_id: id,
       code: lsx.code,
       order_codes: orders.map((o) => o.code),
-      customer_name: orders[0].customer_name,
+      customer_name: orders[0]?.customer_name ?? lsx.customer_name,
       lines_bom_pending: lines.filter((l) => l.bom_status !== 'done').length,
       submitted_by: user.id,
       approver_ids: await approverIds(user.id),
     })
-    return lsx
+    return updated
   },
 
   /** GĐ DUYỆT LSX: pending_approval → approved; MỌI đơn → lsx_issued; báo các bộ phận. */
@@ -246,6 +289,52 @@ export const lsxService = {
       notify_ids: lsx.issued_by ? [lsx.issued_by] : [],
     })
     return updated
+  },
+
+  /**
+   * SỬA THÔNG TIN ĐẦU LỆNH (0117) — số lệnh, ưu tiên, ngày nhận/hạn xuất,
+   * container, ghi chú. Trước đây chỉ sửa được kèm lúc gửi duyệt lại lệnh bị
+   * từ chối, nên gõ nhầm số lệnh hay khách dời ngày là bó tay.
+   *
+   * Chặn khi lệnh đã kết thúc (completed/cancelled) — lúc đó phiếu đã là hồ sơ.
+   * Đổi số lệnh phải giữ tính duy nhất (DB có unique, đây là chặn sớm cho lỗi
+   * đọc được). Không đụng trạng thái/dòng lệnh, không notify: đây là sửa dữ
+   * liệu đầu phiếu, còn thay đổi ảnh hưởng xưởng nằm ở dòng lệnh (revision).
+   */
+  async updateHeader(
+    user: User,
+    id: string,
+    input: {
+      code?: string
+      priority?: number
+      ship_date?: string | null
+      received_date?: string | null
+      container_summary?: string | null
+      note?: string | null
+    },
+  ): Promise<ProductionOrder> {
+    await assertAction(user, 'production.lsx.issue')
+    const lsx = await lsxOrThrow(id)
+    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
+      throw BadRequest('Lệnh đã kết thúc — không sửa thông tin được')
+    }
+
+    const patch: Partial<ProductionOrder> = {}
+    if (input.code !== undefined && input.code !== lsx.code) {
+      if (await productionRepo.existsByCode(input.code)) {
+        throw Conflict(`Số LSX "${input.code}" đã tồn tại`, 'CODE_TAKEN')
+      }
+      patch.code = input.code
+    }
+    if (input.priority !== undefined) patch.priority = input.priority
+    if (input.ship_date !== undefined) patch.ship_date = input.ship_date
+    if (input.received_date !== undefined) patch.received_date = input.received_date
+    if (input.container_summary !== undefined)
+      patch.container_summary = input.container_summary
+    if (input.note !== undefined) patch.note = input.note
+
+    if (!Object.keys(patch).length) return lsx
+    return productionRepo.patch(id, patch)
   },
 
   /**

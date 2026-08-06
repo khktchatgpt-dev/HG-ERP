@@ -118,7 +118,7 @@ export function LsxOutsourcePanel({
     try {
       await api(`/api/dept/production/lsx/${lsxId}/outsource`, {
         method: 'POST',
-        body: JSON.stringify({
+        body: {
           component_id: form.component_id,
           supplier_id: form.supplier_id,
           direction: form.direction,
@@ -126,7 +126,7 @@ export function LsxOutsourcePanel({
           qty: Number(form.qty),
           defect_qty: form.defect_qty ? Number(form.defect_qty) : 0,
           note: form.note.trim() || null,
-        }),
+        },
       })
       toast.success(form.direction === 'send' ? 'Đã ghi GIAO gia công' : 'Đã ghi NHẬN về')
       setForm((f) => ({ ...f, qty: '', defect_qty: '', note: '' }))
