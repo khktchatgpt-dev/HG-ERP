@@ -92,7 +92,7 @@ export function OverviewScreen({
       if (filter === 'no_plan' && r.jobs_total > 0) return false
       if (
         ql &&
-        !`${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_codes.join(" ")}`
+        !`${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_codes.join(' ')}`
           .toLowerCase()
           .includes(ql)
       )
@@ -106,9 +106,7 @@ export function OverviewScreen({
     try {
       await api(`/api/dept/production/lsx/${row.lsx.id}/complete`, {
         method: 'POST',
-        body: JSON.stringify(
-          override ? { override: true, note: overrideNote } : { note: null },
-        ),
+        body: override ? { override: true, note: overrideNote } : { note: null },
       })
       toast.success(`${row.lsx.code} đã hoàn thành — chờ Sales xác nhận giao hàng`)
       setCompleteFor(null)
@@ -215,8 +213,11 @@ export function OverviewScreen({
                   <Badge tone="gray">Chưa nhận vật tư</Badge>
                 )}
                 <span className="ml-auto text-xs text-zinc-500">
-                  {r.lsx.customer_name} · {r.lsx.order_codes.length > 1 ? `${r.lsx.order_codes.length} đơn` : `Đơn ${r.lsx.order_codes[0] ?? "—"}`} · Xuất:{' '}
-                  <b>{fmtD(r.lsx.ship_date)}</b>
+                  {r.lsx.customer_name} ·{' '}
+                  {r.lsx.order_codes.length > 1
+                    ? `${r.lsx.order_codes.length} đơn`
+                    : `Đơn ${r.lsx.order_codes[0] ?? '—'}`}{' '}
+                  · Xuất: <b>{fmtD(r.lsx.ship_date)}</b>
                 </span>
               </div>
 

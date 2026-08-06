@@ -50,7 +50,9 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
           if (filter === 'plan_overdue' && r.plan_overdue === 0) return false
           if (
             ql &&
-            !`${r.code} ${r.customer_name} ${r.order_codes.join(" ")}`.toLowerCase().includes(ql)
+            !`${r.code} ${r.customer_name} ${r.order_codes.join(' ')}`
+              .toLowerCase()
+              .includes(ql)
           )
             return false
           return true
@@ -70,7 +72,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
     try {
       await api(`/api/dept/production/lsx/${row.id}/priority`, {
         method: 'PATCH',
-        body: JSON.stringify({ priority }),
+        body: { priority },
       })
       toast.success(`${row.code}: ưu tiên = ${priority}`)
       router.refresh()
@@ -101,7 +103,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
       cell: (r) => (
         <span>
           <span className="font-medium">{r.customer_name}</span>{' '}
-          <span className="text-xs text-zinc-500">· {r.order_codes.join(", ")}</span>
+          <span className="text-xs text-zinc-500">· {r.order_codes.join(', ')}</span>
         </span>
       ),
     },
