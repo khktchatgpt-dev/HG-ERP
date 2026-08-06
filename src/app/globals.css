@@ -2,10 +2,20 @@
 @import 'tw-animate-css';
 
 /*
+ * DARK MODE TẮT (chốt 06/08/2026 — chủ dự án: "bỏ chế độ dark mode").
+ *
+ * Không xoá hàng trăm class `dark:` rải khắp code — chỉ đổi ĐIỀU KIỆN kích
+ * hoạt: mặc định Tailwind v4 bám `prefers-color-scheme`, nay buộc phải có class
+ * `.dark` trên cây DOM mới ăn. Không chỗ nào gắn class đó → app luôn nền sáng,
+ * kể cả máy đang để giao diện tối. Muốn bật lại sau thì thêm `.dark` vào <html>.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
  * Design tokens. Base app dùng --background/--foreground; khối token shadcn
  * (--card, --primary, --border, …) map theo palette zinc/slate của ERP kit để
- * 2 hệ (ERP kit + shadcn) nhìn liền mạch. KHÔNG dùng `.dark` class — dark mode
- * bám theo @media (prefers-color-scheme) giống toàn app (xem globals bên dưới).
+ * 2 hệ (ERP kit + shadcn) nhìn liền mạch. Bảng token tối cũng đổi sang selector
+ * `.dark` cho khớp — cùng ngủ đông với các class `dark:`.
  */
 :root {
   --background: #ffffff;
@@ -62,30 +72,101 @@
   --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Bảng token tối — chỉ ăn khi <html> có class `.dark` (hiện không ai gắn). */
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 
-    /* shadcn tokens (dark) */
-    --card: #18181b; /* zinc-900 — trùng thẻ ERP dark */
-    --card-foreground: #ededed;
-    --popover: #09090b; /* zinc-950 */
-    --popover-foreground: #ededed;
-    --primary: #ffffff; /* trùng Button primary dark bespoke */
-    --primary-foreground: #0f172a;
-    --secondary: #27272a; /* zinc-800 */
-    --secondary-foreground: #fafafa;
-    --muted: #27272a;
-    --muted-foreground: #a1a1aa; /* zinc-400 */
-    --accent: #27272a;
-    --accent-foreground: #fafafa;
-    --destructive: #ef4444; /* red-500 */
-    --destructive-foreground: #ffffff;
-    --border: #27272a; /* zinc-800 */
-    --input: #3f3f46; /* zinc-700 */
-    --ring: #f59e0b;
-  }
+  /* shadcn tokens (dark) */
+  --card: #18181b; /* zinc-900 — trùng thẻ ERP dark */
+  --card-foreground: #ededed;
+  --popover: #09090b; /* zinc-950 */
+  --popover-foreground: #ededed;
+  --primary: #ffffff; /* trùng Button primary dark bespoke */
+  --primary-foreground: #0f172a;
+  --secondary: #27272a; /* zinc-800 */
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa; /* zinc-400 */
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #ef4444; /* red-500 */
+  --destructive-foreground: #ffffff;
+  --border: #27272a; /* zinc-800 */
+  --input: #3f3f46; /* zinc-700 */
+  --ring: #f59e0b;
+}
+
+/*
+ * THEME V2 — "phiếu giấy ấm", style mẫu mới (chốt 06/08/2026, thí điểm ở
+ * /sales/lsx). Trung tính stone thay zinc, primary = emerald-700 (hành động
+ * nghiệp vụ), radius mềm hơn. Scoped bằng class để trang cũ không đổi; duyệt
+ * xong style thì dời khối này lên :root.
+ *
+ * LƯU Ý: Radix portal (Dialog/Popover/DropdownMenu/Select) render ra <body>,
+ * NGOÀI wrapper — phải gắn `theme-v2` vào cả className của *Content.
+ */
+.theme-v2 {
+  --background: #fafaf9; /* stone-50 */
+  --foreground: #1c1917; /* stone-900 */
+  --card: #ffffff;
+  --card-foreground: #1c1917;
+  --popover: #ffffff;
+  --popover-foreground: #1c1917;
+  --primary: #047857; /* emerald-700 */
+  --primary-foreground: #ffffff;
+  --secondary: #f5f5f4; /* stone-100 */
+  --secondary-foreground: #292524; /* stone-800 */
+  --muted: #f5f5f4;
+  /* stone-600 chứ KHÔNG phải stone-500: phụ chú trong app toàn cỡ 11–12px, ở
+     stone-500 (#78716c) chữ mờ tới mức khó đọc trên nền trắng ngà. stone-600
+     đạt ~7:1 tương phản mà vẫn lùi sau chữ chính. */
+  --muted-foreground: #57534e; /* stone-600 */
+  /* Placeholder giữ NHẠT riêng (stone-400) — cùng màu với phụ chú thì ô trống
+     trông như đã có dữ liệu. */
+  --placeholder: #a8a29e; /* stone-400 */
+  --accent: #f5f5f4;
+  --accent-foreground: #292524;
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e7e5e4; /* stone-200 */
+  --input: #d6d3d1; /* stone-300 */
+  --ring: #059669; /* emerald-600 — khớp primary */
+  --radius: 0.625rem;
+}
+
+.dark .theme-v2 {
+  --background: #0c0a09; /* stone-950 */
+  --foreground: #e7e5e4; /* stone-200 */
+  --card: #1c1917; /* stone-900 */
+  --card-foreground: #e7e5e4;
+  --popover: #1c1917;
+  --popover-foreground: #e7e5e4;
+  --primary: #10b981; /* emerald-500 — nổi trên nền tối */
+  --primary-foreground: #022c22; /* emerald-950 */
+  --secondary: #292524; /* stone-800 */
+  --secondary-foreground: #fafaf9;
+  --muted: #292524;
+  /* Nền tối thì phải đi ngược: SÁNG hơn (stone-300) mới đọc được cỡ 11px. */
+  --muted-foreground: #d6d3d1; /* stone-300 */
+  --placeholder: #78716c; /* stone-500 */
+  --accent: #292524;
+  --accent-foreground: #fafaf9;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #292524; /* stone-800 */
+  --input: #44403c; /* stone-700 */
+  --ring: #10b981;
+}
+
+/*
+ * Placeholder của theme v2 nhạt hơn phụ chú — shadcn để
+ * `placeholder:text-muted-foreground`, mà muted-foreground nay đã đậm lên cho
+ * dễ đọc, dùng chung sẽ khiến ô trống trông như đã điền.
+ */
+.theme-v2 ::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
 }
 
 /* shadcn cần default border-color = --border (Tailwind v4 mặc định currentColor). */

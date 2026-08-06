@@ -9,8 +9,31 @@ import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { resolveLsxTemplate, type LsxTemplate } from '@/modules/dept/sales/lsx-template'
-import { productsRepo } from '@/modules/dept/technical/technical.repo'
+import {
+  colKey,
+  LSX_FORM,
+  resolveLsxTemplate,
+  specColumnsOf,
+  type LsxTemplate,
+} from '@/modules/dept/sales/lsx-template'
+import {
+  productsRepo,
+  type Product,
+  type ProductPacking,
+  type ProductTechSpec,
+} from '@/modules/dept/technical/technical.repo'
+import { productsService } from '@/modules/dept/technical/technical.service'
+import { valueState } from './lsx-sheet-cells'
+import {
+  GAP_TAB,
+  packingText,
+  parsePacking,
+  SPEC_FROM_PRODUCT,
+  type ProfileGap,
+  type ProfileGapKey,
+  type ProfileMap,
+  type ProfileSnapshot,
+} from './lsx-line-fill'
 import { lsxAudienceIds } from './notify-targets'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -36,13 +59,74 @@ export type LsxSheet = {
   totals: { qty: number; cbm: number; lines: number }
 }
 
-/** Ánh xạ tech_spec cũ (machine/cushion/…) sang khoá spec mới của mẫu chuẩn. */
-const SPEC_FROM_PRODUCT: Record<string, string> = {
-  machine: 'may', // "machine" là tên cũ đặt sai — dữ liệu vốn là MÂY/dây đan
-  cushion: 'nem',
-  paint: 'son',
-  glass: 'kinh',
-  wood: 'go',
+/** Nhãn hiển thị của khoá spec (may → "Mây") — lấy từ form chuẩn, khỏi lệch. */
+const SPEC_LABEL: Record<string, string> = Object.fromEntries(
+  specColumnsOf(LSX_FORM).map((c) => [colKey(c), c.label]),
+)
+
+/**
+ * Giá trị dòng lệnh DÙNG ĐƯỢC để bổ sung hồ sơ: có chữ và không phải placeholder
+ * kiểu "xác nhận sau"/"Thông báo sau" — placeholder mà ghi vào hồ sơ SP là chôn
+ * rác vào nguồn chuẩn.
+ */
+const usable = (v: string | null | undefined): string => {
+  const t = (v ?? '').trim()
+  return t && valueState(t, false) !== 'pending' ? t : ''
+}
+
+const hasCartonDims = (p: Product): boolean =>
+  p.packing?.carton_l_cm != null &&
+  p.packing?.carton_w_cm != null &&
+  p.packing?.carton_h_cm != null
+
+/**
+ * CBM/thùng cho cột soát đóng cont: đo được 3 chiều thì TÍNH, chưa đo thì lấy
+ * số hồ sơ khai trực tiếp (cùng thứ tự ưu tiên với `cartonCbm`).
+ */
+function productCbm(p: Product): number | null {
+  const k = p.packing ?? {}
+  return hasCartonDims(p)
+    ? (k.carton_l_cm! * k.carton_w_cm! * k.carton_h_cm!) / 1_000_000
+    : (k.cbm ?? null)
+}
+
+/**
+ * ẢNH CHỤP HỒ SƠ SP ở đúng dạng dòng lệnh — nguồn cho CẢ HAI đường: nạp dòng
+ * (`draftFromOrders`) và đối chiếu "ô này lấy từ hồ sơ hay Sales tự nhập"
+ * (client). Chung một hàm nên hai bên không thể trôi lệch.
+ */
+export function profileSnapshot(p: Product, unit?: string | null): ProfileSnapshot {
+  const specs: Record<string, string> = {}
+  for (const [prodKey, specKey] of Object.entries(SPEC_FROM_PRODUCT)) {
+    const v = (p.tech_spec?.[prodKey as keyof ProductTechSpec] ?? '').trim()
+    if (v) specs[specKey] = v
+  }
+  return {
+    specs,
+    name_foreign: p.name_foreign ?? null,
+    barcode: p.barcode ?? null,
+    customer_item_code: p.customer_item_code ?? null,
+    packing: packingText(p.packing?.qty_per_carton, unit, p.packing?.pack_unit_label),
+    cbm: productCbm(p),
+    gaps: productGaps(p),
+  }
+}
+
+/** Trường hồ sơ SP đang TRỐNG (theo bộ trường LSX cần) — kèm tab để dẫn đi sửa. */
+function productGaps(p: Product): ProfileGap[] {
+  const gaps: ProfileGap[] = []
+  const add = (key: ProfileGapKey, label: string) =>
+    gaps.push({ key, label, tab: GAP_TAB[key] })
+
+  if (!p.name_foreign?.trim()) add('name_foreign', 'Tên nước ngoài')
+  if (!p.barcode?.trim()) add('barcode', 'Barcode')
+  for (const [prodKey, specKey] of Object.entries(SPEC_FROM_PRODUCT)) {
+    if (!(p.tech_spec?.[prodKey as keyof ProductTechSpec] ?? '').trim())
+      add(specKey as ProfileGapKey, SPEC_LABEL[specKey] ?? specKey)
+  }
+  if (!p.packing?.qty_per_carton) add('packing', 'Đóng gói')
+  if (p.packing?.cbm == null && !hasCartonDims(p)) add('cbm', 'CBM')
+  return gaps
 }
 
 function groupWithLines(
@@ -138,45 +222,25 @@ export const lsxLinesService = {
         .filter((l) => l.order_id === o.id)
         .map((l) => {
           const p = byProduct.get(l.product_id)
-          const spec = (p?.tech_spec ?? {}) as Record<string, string>
-          const specs: Record<string, string> = {}
-          for (const [from, to] of Object.entries(SPEC_FROM_PRODUCT)) {
-            if (spec[from]) specs[to] = spec[from]
-          }
-          const pack = (p?.packing ?? {}) as {
-            qty_per_carton?: number
-            pack_unit_label?: string
-            carton_l_cm?: number
-            carton_w_cm?: number
-            carton_h_cm?: number
-            cbm?: number
-          }
-          // CBM/thùng cho cột soát đóng cont: đo được 3 chiều thì tính, chưa đo
-          // thì lấy số hồ sơ khai trực tiếp (cùng thứ tự ưu tiên với cartonCbm).
-          const cbm =
-            pack.carton_l_cm != null &&
-            pack.carton_w_cm != null &&
-            pack.carton_h_cm != null
-              ? (pack.carton_l_cm * pack.carton_w_cm * pack.carton_h_cm) / 1_000_000
-              : (pack.cbm ?? null)
+          // Dùng CHÍNH ảnh chụp hồ sơ mà màn soạn dòng đối chiếu — nạp và so
+          // phải cùng một khuôn, lệch nhau là mọi ô hiện "khác hồ sơ" sai.
+          const snap = p ? profileSnapshot(p, l.product_unit) : null
           return {
             product_id: l.product_id,
             sales_order_line_id: l.id,
             product_code: l.product_code,
-            customer_item_code: p?.customer_item_code ?? l.customer_item_code ?? null,
-            name_foreign: p?.name_foreign ?? null,
+            customer_item_code: snap?.customer_item_code ?? l.customer_item_code ?? null,
+            name_foreign: snap?.name_foreign ?? null,
             name_vi: l.product_name,
             name_customs: null,
-            barcode: p?.barcode ?? null,
+            barcode: snap?.barcode ?? null,
             unit: l.product_unit,
             qty: l.qty,
-            packing: pack.qty_per_carton
-              ? `${pack.qty_per_carton} ${l.product_unit}/${pack.pack_unit_label ?? 'thùng'}`
-              : null,
-            cbm,
+            packing: snap?.packing ?? null,
+            cbm: snap?.cbm ?? null,
             ship_date: o.due_date,
             ship_label: null,
-            specs,
+            specs: snap?.specs ?? {},
             checks: {},
             extras: {},
             note: l.note,
@@ -278,5 +342,89 @@ export const lsxLinesService = {
       })
     }
     return lsxLinesService.sheet(user, lsxId)
+  },
+
+  /**
+   * Map productId → ẢNH CHỤP hồ sơ SP (kèm danh sách trường đang trống). Màn
+   * soạn dòng cần cả snapshot chứ không chỉ gap: nguồn của từng ô ("lấy từ hồ
+   * sơ" / "khác hồ sơ" / "hồ sơ trống") suy ra bằng cách so dòng với snapshot
+   * này — nên trả cả SP KHÔNG có gap.
+   *
+   * `unitByProduct`: ĐVT của dòng, để dựng chuỗi đóng gói ("4 cái/thùng") đúng
+   * như lúc nạp dòng — thiếu nó thì ô đóng gói luôn bị coi là "khác hồ sơ".
+   */
+  async lineProfiles(
+    productIds: string[],
+    unitByProduct: Record<string, string> = {},
+  ): Promise<ProfileMap> {
+    const ids = [...new Set(productIds.filter(Boolean))]
+    if (!ids.length) return {}
+    const products = await productsRepo.listByIds(ids)
+    const out: ProfileMap = {}
+    for (const p of products) out[p.id] = profileSnapshot(p, unitByProduct[p.id])
+    return out
+  },
+
+  /**
+   * BỔ SUNG hồ sơ SP từ một dòng lệnh (0114) — CHỈ điền trường hồ sơ đang
+   * TRỐNG, không ghi đè giá trị đã khai: hồ sơ SP là nguồn chuẩn của LSX, sửa
+   * ad-hoc trên một lệnh không được lật nguồn. Placeholder ("xác nhận sau"…)
+   * bị bỏ qua. Quyền đi theo `technical.product.fill_specs` (Sales đã có từ
+   * form báo giá) — assert nằm trong productsService.fillSpecs.
+   */
+  async fillProductFromLine(
+    user: User,
+    lsxId: string,
+    lineId: string,
+  ): Promise<{ filled: string[] }> {
+    const lines = await lsxLinesRepo.listLines(lsxId)
+    const line = lines.find((l) => l.id === lineId)
+    if (!line) throw NotFound('Dòng lệnh không tồn tại')
+    if (!line.product_id) throw BadRequest('Dòng chưa gắn hồ sơ SP')
+    const p = await productsRepo.findById(line.product_id)
+    if (!p) throw NotFound('Hồ sơ SP không tồn tại')
+
+    const filled: string[] = []
+    const input: Parameters<typeof productsService.fillSpecs>[2] = {}
+
+    if (!p.name_foreign?.trim() && usable(line.name_foreign)) {
+      input.name_foreign = usable(line.name_foreign)
+      filled.push('Tên nước ngoài')
+    }
+    if (!p.barcode?.trim() && usable(line.barcode)) {
+      input.barcode = usable(line.barcode)
+      filled.push('Barcode')
+    }
+
+    const tech: ProductTechSpec = {}
+    for (const [prodKey, specKey] of Object.entries(SPEC_FROM_PRODUCT)) {
+      const cur = (p.tech_spec?.[prodKey as keyof ProductTechSpec] ?? '').trim()
+      const val = usable(line.specs[specKey])
+      if (!cur && val) {
+        tech[prodKey as keyof ProductTechSpec] = val
+        filled.push(SPEC_LABEL[specKey] ?? specKey)
+      }
+    }
+    if (Object.keys(tech).length) input.tech_spec = tech
+
+    const packing: ProductPacking = {}
+    // "4 cái/ thùng" (định dạng seedFromOrders sinh ra) → qty + nhãn kiện.
+    if (!p.packing?.qty_per_carton && usable(line.packing)) {
+      const parsed = parsePacking(usable(line.packing))
+      if (parsed) {
+        packing.qty_per_carton = parsed.qty
+        packing.pack_unit_label = parsed.label
+        filled.push('Đóng gói')
+      }
+    }
+    if (p.packing?.cbm == null && !hasCartonDims(p) && line.cbm != null) {
+      packing.cbm = line.cbm
+      filled.push('CBM')
+    }
+    if (Object.keys(packing).length) input.packing = packing
+
+    if (!filled.length) return { filled }
+    await productsService.fillSpecs(user, line.product_id, input)
+    return { filled }
   },
 }

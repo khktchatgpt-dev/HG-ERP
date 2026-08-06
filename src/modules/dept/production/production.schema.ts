@@ -1,8 +1,11 @@
 import { z } from 'zod'
 
-// Vòng đời có bước duyệt: Sales phát → GĐ duyệt → SX → hoàn thành.
-// 'cancelled' = đơn hàng huỷ giữa chừng kéo LSX dừng theo (0036, plan P3).
+// Vòng đời: Sales tạo NHÁP → soạn dòng → gửi GĐ duyệt → SX → hoàn thành.
+// 'draft' (0117, chốt 06/08/2026): tạo lệnh không làm phiền GĐ ngay — Sales
+// soạn dòng/sửa đầu lệnh xong mới `submit`. 'cancelled' = đơn hàng huỷ giữa
+// chừng kéo LSX dừng theo (0036, plan P3).
 export const LSX_STATUSES = [
+  'draft',
   'pending_approval',
   'approved',
   'in_progress',
@@ -22,6 +25,23 @@ export const lsxRejectSchema = z.object({
  * thường nằm ở chính các trường này). Field không gửi = giữ nguyên.
  */
 export const lsxResubmitSchema = z.object({
+  ship_date: z.string().date().optional().nullable(),
+  received_date: z.string().date().optional().nullable(),
+  container_summary: z.string().trim().max(100).optional().nullable(),
+  note: z.string().trim().max(2000).optional().nullable(),
+})
+
+/**
+ * SỬA THÔNG TIN ĐẦU LỆNH (0117) — trước đây các trường này chỉ sửa được lúc
+ * gửi duyệt lại lệnh BỊ TỪ CHỐI; gõ nhầm số lệnh hay đổi hạn xuất thì không có
+ * đường sửa. Field không gửi = giữ nguyên.
+ *
+ * KHÔNG cho đổi khách hàng ở đây: mọi đơn trong lệnh phải cùng khách (0113,
+ * trigger DB chặn) — đổi khách = tạo lệnh khác.
+ */
+export const lsxHeaderUpdateSchema = z.object({
+  code: z.string().trim().min(1, 'Nhập số lệnh').max(50).optional(),
+  priority: z.number().int().min(0).max(9).optional(),
   ship_date: z.string().date().optional().nullable(),
   received_date: z.string().date().optional().nullable(),
   container_summary: z.string().trim().max(100).optional().nullable(),

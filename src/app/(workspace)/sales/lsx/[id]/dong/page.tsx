@@ -30,6 +30,19 @@ export default async function LsxLinesPage({
     lsx.status !== 'completed' &&
     lsx.status !== 'cancelled'
 
+  // Ảnh chụp hồ sơ SP của các dòng — editor dùng để chỉ ra ô nào lấy từ hồ sơ,
+  // ô nào Sales tự nhập, và hồ sơ còn thiếu gì. ĐVT lấy theo dòng để chuỗi đóng
+  // gói dựng ra khớp đúng bản đã nạp.
+  const lines = sheet.groups.flatMap((g) => g.lines)
+  const unitByProduct: Record<string, string> = {}
+  for (const l of lines) {
+    if (l.product_id && !unitByProduct[l.product_id]) unitByProduct[l.product_id] = l.unit
+  }
+  const profiles = await lsxLinesService.lineProfiles(
+    lines.map((l) => l.product_id).filter((x): x is string => !!x),
+    unitByProduct,
+  )
+
   return (
     <LsxSheetEditor
       lsxId={lsx.id}
@@ -37,8 +50,10 @@ export default async function LsxLinesPage({
       customerName={lsx.customer_name}
       revision={lsx.revision}
       canEdit={canEdit}
+      isDraft={lsx.status === 'draft'}
       template={sheet.template}
       groups={sheet.groups}
+      profiles={profiles}
       backHref={`/sales/lsx/${lsx.id}`}
     />
   )

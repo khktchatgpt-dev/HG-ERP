@@ -30,11 +30,12 @@ vi.mock('@/modules/dept/technical/technical.repo', () => ({
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
 
-import { lsxLinesService } from './lsx-lines.service'
+import { lsxLinesService, profileSnapshot } from './lsx-lines.service'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { emit } from '@/events/bus'
 import type { User } from '@/modules/core/users/users.repo'
@@ -221,5 +222,74 @@ describe('lsxLinesService.seedFromOrders', () => {
     ] as never)
     await lsxLinesService.seedFromOrders('lsx1')
     expect(lsxLinesRepo.replaceAll).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * 0117 — CHỐNG TRÔI LỆCH: dữ liệu NẠP vào dòng và ẢNH CHỤP hồ sơ mà màn soạn
+ * dùng để đối chiếu phải ra cùng một giá trị. Lệch nhau là mọi ô hiện "khác hồ
+ * sơ SP" trong khi Sales chưa đụng vào gì.
+ */
+describe('profileSnapshot ≡ dữ liệu draftFromOrders nạp vào dòng', () => {
+  const PRODUCT = {
+    id: 'p1',
+    code: 'SP1',
+    name_foreign: 'Alicante Chair',
+    barcode: '893850',
+    customer_item_code: 'RS-889',
+    tech_spec: { machine: 'Dây dù kem', paint: 'PT-7476' },
+    packing: {
+      qty_per_carton: 4,
+      pack_unit_label: 'thùng',
+      carton_l_cm: 120,
+      carton_w_cm: 80,
+      carton_h_cm: 60,
+    },
+  }
+
+  it('packing / cbm / specs của snapshot khớp đúng dòng vừa nạp', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      id: 'o1',
+      code: 'DH-01',
+      customer_po_no: 'PO-1',
+      due_date: '2026-11-20',
+    } as never)
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([
+      {
+        id: 'ol1',
+        order_id: 'o1',
+        product_id: 'p1',
+        product_code: 'SP1',
+        product_name: 'Ghế Alicante',
+        product_unit: 'cái',
+        qty: 10,
+        note: null,
+        image_file_id: null,
+      },
+    ] as never)
+    vi.mocked(productsRepo.listByIds).mockResolvedValue([PRODUCT] as never)
+
+    const [group] = await lsxLinesService.draftFromOrders(['o1'])
+    const line = group.lines[0]
+    const snap = profileSnapshot(PRODUCT as never, 'cái')
+
+    expect(line.packing).toBe(snap.packing)
+    expect(line.cbm).toBe(snap.cbm)
+    expect(line.specs).toEqual(snap.specs)
+    expect(line.name_foreign).toBe(snap.name_foreign)
+    expect(line.barcode).toBe(snap.barcode)
+    expect(line.customer_item_code).toBe(snap.customer_item_code)
+  })
+
+  it('gap mang đúng tab hồ sơ để dẫn Sales tới chỗ sửa', () => {
+    const snap = profileSnapshot(
+      { ...PRODUCT, barcode: null, packing: {} } as never,
+      'cái',
+    )
+    const byKey = Object.fromEntries(snap.gaps.map((g) => [g.key, g.tab]))
+    expect(byKey.barcode).toBe('thong-so')
+    expect(byKey.packing).toBe('dong-goi')
+    expect(byKey.cbm).toBe('dong-goi')
+    expect(byKey.nem).toBe('thong-so')
   })
 })

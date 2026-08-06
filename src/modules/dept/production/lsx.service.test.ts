@@ -169,24 +169,28 @@ describe('lsxService.issue — một lệnh gộp nhiều đơn (0113)', () => {
   beforeEach(() => {
     vi.mocked(productionRepo.existsByCode).mockResolvedValue(false)
     vi.mocked(productionRepo.insert).mockResolvedValue({
-      order: { ...LSX, id: 'lsx9', code: 'LSX-09', status: 'pending_approval' },
+      order: { ...LSX, id: 'lsx9', code: 'LSX-09', status: 'draft' },
       duplicate: false,
     } as never)
     vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([])
     vi.mocked(usersRepo.list).mockResolvedValue([])
   })
 
-  it('nhiều đơn cùng khách → gắn hết vào lệnh + mọi đơn sang lsx_pending', async () => {
+  /**
+   * 0117: tạo lệnh = NHÁP. Đơn được GẮN vào lệnh ngay (khỏi bị đề xuất phát
+   * lệnh lần hai) nhưng CHƯA đổi trạng thái và CHƯA làm phiền GĐ — hai việc đó
+   * thuộc về `submit()`.
+   */
+  it('nhiều đơn cùng khách → lệnh NHÁP, gắn hết đơn, chưa đụng trạng thái đơn', async () => {
     vi.mocked(ordersRepo.findById).mockImplementation(
       async (id) => freeOrder(id, id === 'o1' ? 'DH-01' : 'DH-02') as never,
     )
     await lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1', 'o2'] })
     expect(productionRepo.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ customer_id: 'c1' }),
+      expect.objectContaining({ customer_id: 'c1', status: 'draft' }),
     )
     expect(productionRepo.attachOrders).toHaveBeenCalledWith('lsx9', ['o1', 'o2'])
-    expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'lsx_pending' })
-    expect(ordersRepo.patch).toHaveBeenCalledWith('o2', { status: 'lsx_pending' })
+    expect(ordersRepo.patch).not.toHaveBeenCalled()
   })
 
   it('đơn khác khách → 400, không tạo lệnh', async () => {
@@ -216,6 +220,118 @@ describe('lsxService.issue — một lệnh gộp nhiều đơn (0113)', () => {
     } as never)
     await expect(
       lsxService.issue(quanDoc, { code: 'LSX-09', order_ids: ['o1'] }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+/** 0117: chỉ bước GỬI DUYỆT mới đẩy đơn sang lsx_pending + gọi người duyệt. */
+describe('lsxService.submit — nháp → chờ GĐ duyệt (0117)', () => {
+  beforeEach(() => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+    } as never)
+    vi.mocked(ordersRepo.findById).mockImplementation(
+      async (id) => freeOrder(id, 'DH-01') as never,
+    )
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([])
+    vi.mocked(usersRepo.list).mockResolvedValue([])
+    vi.mocked(lsxLinesRepo.listGroups).mockResolvedValue([
+      { id: 'g1', production_order_id: 'lsx1' },
+    ] as never)
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+      {
+        id: 'l1',
+        group_id: 'g1',
+        product_code: 'SP1',
+        unit: 'cái',
+        qty: 10,
+        cbm: null,
+        specs: {},
+        checks: {},
+        extras: {},
+      },
+    ] as never)
+  })
+
+  it('lệnh nháp có dòng → pending_approval + đơn sang lsx_pending', async () => {
+    const out = await lsxService.submit(quanDoc, 'lsx1')
+    expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', {
+      status: 'pending_approval',
+    })
+    expect(out.status).toBe('pending_approval')
+    expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'lsx_pending' })
+  })
+
+  it('lệnh chưa có dòng nào → 400, không gửi đi', async () => {
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([] as never)
+    await expect(lsxService.submit(quanDoc, 'lsx1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(productionRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('dòng thiếu Mã SP / SL / ĐVT → 400 dù lệnh có dòng (gate mức A ở server)', async () => {
+    vi.mocked(lsxLinesRepo.listLines).mockResolvedValue([
+      { id: 'l1', group_id: 'g1', product_code: 'SP1', unit: 'cái', qty: 0 },
+    ] as never)
+    await expect(lsxService.submit(quanDoc, 'lsx1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(productionRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('lệnh đã gửi rồi → 400 (không gửi hai lần)', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'pending_approval',
+    } as never)
+    await expect(lsxService.submit(quanDoc, 'lsx1')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+})
+
+/** 0117: sửa đầu lệnh mọi lúc trước khi lệnh kết thúc, không cần bị từ chối. */
+describe('lsxService.updateHeader — sửa thông tin đầu lệnh (0117)', () => {
+  beforeEach(() => {
+    vi.mocked(productionRepo.existsByCode).mockResolvedValue(false)
+  })
+
+  it('đổi số lệnh + hạn xuất + ghi chú → patch đúng field', async () => {
+    await lsxService.updateHeader(quanDoc, 'lsx1', {
+      code: 'LSX-01-B',
+      ship_date: '2027-01-11',
+      note: 'Dời hạn theo khách',
+    })
+    expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', {
+      code: 'LSX-01-B',
+      ship_date: '2027-01-11',
+      note: 'Dời hạn theo khách',
+    })
+  })
+
+  it('số lệnh trùng lệnh khác → 409, không ghi', async () => {
+    vi.mocked(productionRepo.existsByCode).mockResolvedValue(true)
+    await expect(
+      lsxService.updateHeader(quanDoc, 'lsx1', { code: 'LSX-TRUNG' }),
+    ).rejects.toMatchObject({ status: 409 })
+    expect(productionRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('giữ nguyên số lệnh cũ → không coi là trùng', async () => {
+    vi.mocked(productionRepo.existsByCode).mockResolvedValue(true)
+    await lsxService.updateHeader(quanDoc, 'lsx1', { code: 'LSX-01', priority: 3 })
+    expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', { priority: 3 })
+  })
+
+  it('lệnh đã hoàn thành → 400 (phiếu đã thành hồ sơ)', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'completed',
+    } as never)
+    await expect(
+      lsxService.updateHeader(quanDoc, 'lsx1', { note: 'x' }),
     ).rejects.toMatchObject({ status: 400 })
   })
 })

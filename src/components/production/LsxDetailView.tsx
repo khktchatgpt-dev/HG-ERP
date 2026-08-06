@@ -1,16 +1,44 @@
 'use client'
 
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Badge } from '@/components/Badge'
-import { Modal } from '@/components/Modal'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { EmptyState } from '@/components/erp/EmptyState'
+import {
+  Check,
+  FileSpreadsheet,
+  Package,
+  Pencil,
+  Printer,
+  RotateCcw,
+  SendHorizontal,
+  X,
+} from 'lucide-react'
+import { Badge } from '@/components/shadcn/badge'
+import { Button } from '@/components/shadcn/button'
+import { Checkbox } from '@/components/shadcn/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shadcn/dialog'
+import { Input } from '@/components/shadcn/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
+import { Textarea } from '@/components/shadcn/textarea'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { StageBar } from './LsxStageBar'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import { LSX_STATUS } from '@/lib/lsx-status'
 import type { Job } from '@/modules/dept/production/jobs.repo'
 import type { ComponentOutputView } from '@/modules/dept/production/entries.service'
 import { LsxOutsourcePanel } from './LsxOutsourcePanel'
@@ -19,6 +47,14 @@ import { LsxOutsourcePanel } from './LsxOutsourcePanel'
  * HỒ SƠ LỆNH (0084) — dùng chung 3 shell (production/exec/planning), quyền
  * theo cờ từ server. Trục chính = KẾ HOẠCH CÔNG ĐOẠN (jobs) per dòng SP;
  * số đọc từ sổ thống kê. Tab: Tổng quan · Chi tiết & số liệu · Gia công.
+ *
+ * Bố cục v2 (06/08/2026, theo trang mẫu /sales/lsx):
+ *   · đầu trang là THẺ HỒ SƠ: mã lệnh + vòng đời + dải số liệu (đơn/dòng/SL/
+ *     ngày) — liếc một phát nắm cả lệnh;
+ *   · tab Tổng quan chia 2 cột: cột chính là BẢNG SẢN PHẨM NHÓM THEO PO (đúng
+ *     cấu trúc tờ lệnh in) + kế hoạch công đoạn; cột phụ là đơn gộp/vật tư/ghi
+ *     chú — metadata không chen giữa nội dung chính;
+ *   · cột spec khách không dùng (rỗng cả bảng) tự ẩn.
  */
 
 export type LsxHeaderData = {
@@ -84,6 +120,12 @@ const JOB_LABEL = { todo: 'Chưa làm', doing: 'Đang làm', done: 'Xong' } as c
 
 type Tab = 'overview' | 'data' | 'outsource'
 
+const sectionCls = 'rounded-xl border bg-card p-4 shadow-xs'
+const sectionLink = 'ml-auto text-xs font-medium text-primary hover:underline'
+// Tiêu đề cột: chữ ĐẬM màu chữ chính — xám nhạt trên nền xám nhạt của hàng
+// header là chỗ khó đọc nhất bảng.
+const thCls = 'text-[11px] font-semibold tracking-wider text-foreground uppercase'
+
 export function LsxDetailView({
   lsx,
   lines,
@@ -144,8 +186,17 @@ export function LsxDetailView({
     container_summary: lsx.container_summary ?? '',
     note: lsx.note ?? '',
   })
+  // Sửa thông tin đầu lệnh (0117) — mở từ nút "Sửa thông tin".
+  const [editOpen, setEditOpen] = useState(false)
+  const [edit, setEdit] = useState({
+    code: lsx.code,
+    priority: String(lsx.priority ?? 0),
+    ship_date: lsx.ship_date ?? '',
+    received_date: lsx.received_date ?? '',
+    container_summary: lsx.container_summary ?? '',
+    note: lsx.note ?? '',
+  })
 
-  const st = LSX_STATUS[lsx.status as keyof typeof LSX_STATUS]
   // Đổi danh sách đơn được tới khi lệnh kết thúc (server chặn lần cuối).
   const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
   const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
@@ -159,10 +210,20 @@ export function LsxDetailView({
     jobsByLine.set(j.production_order_line_id, arr)
   }
 
+  // Dải số liệu đầu trang + bảng SP nhóm theo PO (đúng cấu trúc tờ lệnh).
+  const totalQty = lines.reduce((s, l) => s + l.qty, 0)
+  const lineGroups = [...new Set(lines.map((l) => l.group_title))].map(
+    (t) => [t, lines.filter((l) => l.group_title === t)] as const,
+  )
+  // Cột spec khách không dùng (rỗng cả bảng) thì ẩn — MERXX không có cột Kính rỗng.
+  const specShown = specColumns.filter((c) =>
+    lines.some((l) => (l.spec[c.key] ?? '').trim()),
+  )
+
   async function call(path: string, body: unknown, okMsg: string) {
     setBusy(true)
     try {
-      await api(path, { method: 'POST', body: JSON.stringify(body) })
+      await api(path, { method: 'POST', body: body })
       toast.success(okMsg)
       setRejectOpen(false)
       setResubmitOpen(false)
@@ -174,13 +235,38 @@ export function LsxDetailView({
     }
   }
 
+  /** Lưu thông tin đầu lệnh (0117) — gửi cả cụm, server bỏ field không đổi. */
+  async function saveHeader() {
+    setBusy(true)
+    try {
+      await api(`/api/dept/production/lsx/${lsx.id}`, {
+        method: 'PATCH',
+        body: {
+          code: edit.code.trim(),
+          priority: Number(edit.priority) || 0,
+          ship_date: edit.ship_date || null,
+          received_date: edit.received_date || null,
+          container_summary: edit.container_summary.trim() || null,
+          note: edit.note.trim() || null,
+        },
+      })
+      toast.success('Đã lưu thông tin lệnh', edit.code.trim())
+      setEditOpen(false)
+      router.refresh()
+    } catch (e) {
+      toast.error('Lưu thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   /** Gộp thêm / gỡ đơn của lệnh (0113) — cùng endpoint, khác method. */
   async function changeOrders(method: 'POST' | 'DELETE', ids: string[], okMsg: string) {
     setBusy(true)
     try {
       await api(`/api/dept/production/lsx/${lsx.id}/orders`, {
         method,
-        body: JSON.stringify({ order_ids: ids }),
+        body: { order_ids: ids },
       })
       toast.success(okMsg)
       setAddOpen(false)
@@ -193,35 +279,77 @@ export function LsxDetailView({
     }
   }
 
+  const stat = (label: string, value: React.ReactNode) => (
+    <div>
+      {/* 11px chứ không 10px: nhãn dải số liệu ở 10px + xám là gần như không đọc nổi. */}
+      <div className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+        {label}
+      </div>
+      <div className="mt-0.5 text-sm font-semibold tabular-nums">{value}</div>
+    </div>
+  )
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="theme-v2 text-foreground flex flex-col gap-4">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={breadcrumbs}
-        title={`Lệnh sản xuất ${lsx.code}`}
-        description={`${lsx.customer_name} · ${lsx.orders.length > 1 ? `${lsx.orders.length} đơn: ` : 'Đơn '}${lsx.orders.map((o) => o.code).join(', ')}`}
-        meta={
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={st?.tone ?? 'gray'}>{st?.label ?? lsx.status}</Badge>
-            {lsx.priority > 0 && <Badge tone="purple">Ưu tiên {lsx.priority}</Badge>}
-            {lsx.materials_received_at ? (
-              <Badge tone="green">Đã nhận vật tư {fmtD(lsx.materials_received_at)}</Badge>
-            ) : (
-              (lsx.status === 'approved' || lsx.status === 'in_progress') && (
-                <Badge tone="gray">Chưa nhận vật tư</Badge>
-              )
-            )}
-            <span className="text-xs text-zinc-500">
-              Nhận: <b>{fmtD(lsx.received_date)}</b> · Xuất: <b>{fmtD(lsx.ship_date)}</b>
-              {lsx.container_summary && <> · Cont: {lsx.container_summary}</>}
-            </span>
+
+      {breadcrumbs.length > 0 && (
+        <nav className="text-muted-foreground -mb-2 flex flex-wrap items-center gap-1 text-xs">
+          {breadcrumbs.map((b, i) => (
+            <Fragment key={i}>
+              {i > 0 && <span>/</span>}
+              {b.href ? (
+                <Link href={b.href} className="hover:text-foreground hover:underline">
+                  {b.label}
+                </Link>
+              ) : (
+                <span>{b.label}</span>
+              )}
+            </Fragment>
+          ))}
+        </nav>
+      )}
+
+      {/* ── Thẻ hồ sơ: định danh + vòng đời + dải số liệu ─────────────────── */}
+      <div className="bg-card rounded-xl border shadow-xs">
+        <div className="flex flex-wrap items-start justify-between gap-3 p-4 pb-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <h1 className="text-xl font-semibold tracking-tight">
+                Lệnh sản xuất <span className="font-mono">{lsx.code}</span>
+              </h1>
+              <StageBar status={lsx.status} className="w-[170px]" />
+            </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground text-sm">{lsx.customer_name}</span>
+              {lsx.priority > 0 && (
+                <Badge
+                  variant="outline"
+                  className="border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-900 dark:bg-purple-950/40 dark:text-purple-400"
+                >
+                  Ưu tiên {lsx.priority}
+                </Badge>
+              )}
+              {lsx.materials_received_at ? (
+                <Badge
+                  variant="outline"
+                  className="border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400"
+                >
+                  Đã nhận vật tư {fmtD(lsx.materials_received_at)}
+                </Badge>
+              ) : (
+                (lsx.status === 'approved' || lsx.status === 'in_progress') && (
+                  <Badge variant="secondary" className="text-muted-foreground">
+                    Chưa nhận vật tư
+                  </Badge>
+                )
+              )}
+            </div>
           </div>
-        }
-        actions={
           <div className="flex flex-wrap gap-2">
             {canApprove && lsx.status === 'pending_approval' && (
               <>
-                <button
+                <Button
                   onClick={() =>
                     call(
                       `/api/dept/production/lsx/${lsx.id}/approve`,
@@ -230,23 +358,26 @@ export function LsxDetailView({
                     )
                   }
                   disabled={busy}
-                  className="rounded-lg bg-green-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-green-500 disabled:opacity-50"
                 >
-                  ✓ Duyệt LSX
-                </button>
-                <button
+                  <Check />
+                  Duyệt lệnh
+                </Button>
+                <Button
+                  variant="outline"
                   onClick={() => setRejectOpen(true)}
                   disabled={busy}
-                  className="rounded-lg border border-red-300 px-3 py-1.5 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:hover:bg-red-950"
+                  className="text-destructive hover:text-destructive"
                 >
+                  <X />
                   Từ chối
-                </button>
+                </Button>
               </>
             )}
             {canManage &&
               (lsx.status === 'approved' || lsx.status === 'in_progress') &&
               !lsx.materials_received_at && (
-                <button
+                <Button
+                  variant="outline"
                   onClick={() =>
                     call(
                       `/api/dept/production/lsx/${lsx.id}/materials-received`,
@@ -255,38 +386,77 @@ export function LsxDetailView({
                     )
                   }
                   disabled={busy}
-                  className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
                 >
-                  📦 Nhận vật tư
-                </button>
+                  <Package />
+                  Nhận vật tư
+                </Button>
               )}
+            {/* Sửa đầu lệnh (0117) — Sales sửa số lệnh/ngày/cont/ghi chú mọi lúc
+                trước khi lệnh kết thúc, không phải chờ bị từ chối mới sửa được. */}
+            {canResubmit && ordersEditable && (
+              <Button variant="outline" onClick={() => setEditOpen(true)} disabled={busy}>
+                <Pencil />
+                Sửa thông tin
+              </Button>
+            )}
+            {/* Lệnh nháp (0117): Sales gửi thẳng từ hồ sơ, khỏi quay lại màn soạn. */}
+            {canResubmit && lsx.status === 'draft' && (
+              <Button
+                onClick={() =>
+                  call(
+                    `/api/dept/production/lsx/${lsx.id}/submit`,
+                    {},
+                    `Đã gửi ${lsx.code} cho Giám đốc duyệt`,
+                  )
+                }
+                disabled={busy}
+              >
+                <SendHorizontal />
+                Gửi GĐ duyệt
+              </Button>
+            )}
             {canResubmit && lsx.status === 'rejected' && (
-              <button
+              <Button
                 onClick={() => setResubmitOpen(true)}
                 disabled={busy}
-                className="rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-500 disabled:opacity-50"
+                className="bg-amber-600 text-white hover:bg-amber-500"
               >
-                ↻ Gửi duyệt lại
-              </button>
+                <RotateCcw />
+                Gửi duyệt lại
+              </Button>
             )}
-            <a
-              href={`/print/lsx/${lsx.id}`}
-              target="_blank"
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              🖨 In LSX
-            </a>
+            <Button variant="outline" asChild>
+              <a href={`/print/lsx/${lsx.id}`} target="_blank">
+                <Printer />
+                In phiếu
+              </a>
+            </Button>
+            {/* Tải .xlsx bày giống hệt phiếu in — Sales gửi khách/gia công sửa tiếp. */}
+            <Button variant="outline" asChild>
+              <a href={`/api/dept/production/lsx/${lsx.id}/export`} download>
+                <FileSpreadsheet />
+                Xuất Excel
+              </a>
+            </Button>
           </div>
-        }
-      />
+        </div>
+        <div className="grid grid-cols-3 gap-3 border-t px-4 py-3 sm:grid-cols-6">
+          {stat('Đơn hàng', lsx.orders.length)}
+          {stat('Dòng SP', lines.length)}
+          {stat('Tổng SL', `${fmtN(totalQty)} SP`)}
+          {stat('Ngày nhận', fmtD(lsx.received_date))}
+          {stat('Hạn xuất', fmtD(lsx.ship_date))}
+          {stat('Container', lsx.container_summary || '—')}
+        </div>
+      </div>
 
       {lsx.rejected_reason && lsx.status === 'rejected' && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-300">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
           <b>GĐ từ chối:</b> {lsx.rejected_reason}
         </div>
       )}
       {lsx.status === 'completed' && (
-        <div className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950 dark:text-sky-300">
+        <div className="rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300">
           Xưởng đã hoàn thành {fmtD(lsx.completed_at)} — chờ Sales xác nhận giao hàng để
           khép chuỗi{' '}
           {lsx.orders.length > 1
@@ -297,303 +467,327 @@ export function LsxDetailView({
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
-        {(
-          [
-            ['overview', 'Tổng quan'],
-            ['data', 'Chi tiết & số liệu'],
-            ['outsource', 'Gia công ngoài'],
-          ] as [Tab, string][]
-        ).map(([t, label]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`rounded-t-lg px-4 py-2 text-sm font-medium ${
-              tab === t
-                ? 'border border-b-0 border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="max-w-full">
+        <TabsList className="max-w-full overflow-x-auto">
+          <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+          <TabsTrigger value="data">Chi tiết & số liệu</TabsTrigger>
+          <TabsTrigger value="outsource">Gia công ngoài</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       {tab === 'overview' && (
-        <div className="flex flex-col gap-4">
-          {/* Đơn hàng của lệnh — một lệnh chạy chung cho nhiều đơn (0113) */}
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">
-                Đơn hàng trong lệnh ({lsx.orders.length})
-              </h2>
-              {canEditOrders && ordersEditable && mergeCandidates.length > 0 && (
-                <button
-                  onClick={() => setAddOpen((v) => !v)}
-                  className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
-                >
-                  {addOpen ? 'Đóng' : '+ Gộp thêm đơn'}
-                </button>
-              )}
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {lsx.orders.map((o) => (
-                <span
-                  key={o.id}
-                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs dark:border-zinc-700"
-                >
-                  <Link
-                    href={`/sales/orders/${o.id}`}
-                    className="font-mono hover:underline"
-                  >
-                    {o.code}
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* ── Cột chính: sản phẩm + kế hoạch công đoạn + đồng bộ ─────────── */}
+          <div className="flex min-w-0 flex-col gap-4">
+            {/* Sản phẩm — nhóm theo PO/bộ sưu tập, đúng cấu trúc tờ lệnh in */}
+            <section className={`${sectionCls} overflow-hidden p-0`}>
+              <div className="flex items-center gap-2 px-4 pt-4 pb-3">
+                <h2 className="text-sm font-semibold">Sản phẩm ({lines.length})</h2>
+                {linesHref && (
+                  <Link href={linesHref} className={sectionLink}>
+                    Soạn dòng lệnh →
                   </Link>
-                  {canEditOrders && ordersEditable && lsx.orders.length > 1 && (
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void changeOrders('DELETE', [o.id], `Đã gỡ đơn ${o.code}`)
-                      }
-                      title="Gỡ đơn khỏi lệnh"
-                      className="text-zinc-400 hover:text-red-600 disabled:opacity-50"
-                    >
-                      ✕
-                    </button>
-                  )}
-                </span>
-              ))}
-            </div>
-            {addOpen && (
-              <div className="mt-3 flex flex-col gap-1.5 rounded-lg border border-zinc-200 p-2.5 dark:border-zinc-800">
-                {mergeCandidates.map((c) => (
-                  <label key={c.id} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={addIds.includes(c.id)}
-                      onChange={(e) =>
-                        setAddIds((prev) =>
-                          e.target.checked
-                            ? [...prev, c.id]
-                            : prev.filter((x) => x !== c.id),
-                        )
-                      }
-                    />
-                    <span className="font-mono">{c.code}</span>
-                    <span className="text-xs text-zinc-500">{c.line_count} dòng SP</span>
-                  </label>
-                ))}
-                <button
-                  disabled={busy || !addIds.length}
-                  onClick={() =>
-                    void changeOrders(
-                      'POST',
-                      addIds,
-                      `Đã gộp ${addIds.length} đơn vào ${lsx.code}`,
-                    )
-                  }
-                  className="mt-1 self-start rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-                >
-                  Gộp vào lệnh
-                </button>
+                )}
               </div>
-            )}
-          </section>
-
-          {/* Kế hoạch công đoạn per dòng SP */}
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold">Kế hoạch công đoạn</h2>
-              {planHref && (
-                <Link
-                  href={planHref}
-                  className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
-                >
-                  Sửa kế hoạch →
-                </Link>
-              )}
-            </div>
-            {jobs.length === 0 ? (
-              <p className="mt-2 text-sm text-zinc-500">
-                Chưa lên kế hoạch — Trưởng phòng Kế hoạch lên lộ trình + giao tổ trước khi
-                xưởng chạy.
-              </p>
-            ) : (
-              <div className="mt-3 flex flex-col gap-3">
-                {[...jobsByLine.entries()].map(([lineId, js]) => (
-                  <div key={lineId}>
-                    <div className="mb-1 text-xs font-medium text-zinc-500">
-                      {lineName(lineId)}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {[...js]
-                        .sort((a, b) => a.seq - b.seq)
-                        .map((j, i) => (
-                          <span key={j.id} className="flex items-center gap-1.5">
-                            {i > 0 && <span className="text-zinc-300">→</span>}
-                            <span
-                              className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${
-                                j.status === 'done'
-                                  ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300'
-                                  : j.status === 'doing'
-                                    ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                    : 'border-zinc-200 text-zinc-500 dark:border-zinc-700'
-                              }`}
-                              title={`${JOB_LABEL[j.status]}${j.team_name ? ` · ${j.team_name}` : ''}${j.planned_end ? ` · hạn ${fmtD(j.planned_end)}` : ''}${j.note ? ` · ${j.note}` : ''}`}
-                            >
-                              {labelOf(j.stage)}
-                              {j.team_name && (
-                                <span className="text-[10px] opacity-70">
-                                  {j.team_name}
-                                </span>
-                              )}
-                              {j.status === 'done' ? ' ✓' : ''}
-                            </span>
-                          </span>
-                        ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {/* Đồng bộ bộ SP */}
-          {synced.some((s) => s.has_components) && (
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-              <h2 className="mb-3 text-sm font-semibold">
-                Bộ đồng bộ (qua công đoạn cuối)
-              </h2>
-              <div className="flex flex-col gap-2">
-                {synced
-                  .filter((s) => s.has_components)
-                  .map((s) => {
-                    const pct = s.qty > 0 ? Math.round((s.synced_sets / s.qty) * 100) : 0
-                    return (
-                      <div key={s.order_line_id} className="text-sm">
-                        <div className="mb-0.5 flex justify-between text-xs">
-                          <span>
-                            {s.product_name}{' '}
-                            <span className="text-zinc-400">{s.product_code}</span>
-                          </span>
-                          <b>
-                            {fmtN(s.synced_sets)}/{fmtN(s.qty)} bộ ({pct}%)
-                          </b>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
-                          <div
-                            className={`h-full ${pct >= 100 ? 'bg-green-500' : 'bg-sky-500'}`}
-                            style={{ width: `${Math.min(100, pct)}%` }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })}
-              </div>
-            </section>
-          )}
-
-          {/* Dòng SP + spec in */}
-          <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-semibold">Sản phẩm ({lines.length})</h2>
-              {linesHref && (
-                <Link
-                  href={linesHref}
-                  className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
-                >
-                  Soạn dòng lệnh →
-                </Link>
-              )}
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
-                    <th className="py-1.5 pr-2">SP</th>
-                    <th className="py-1.5 pr-2">Mã</th>
-                    <th className="w-20 py-1.5 pr-2 text-right">SL</th>
-                    <th className="py-1.5 pr-2">Nhóm / đợt xuất</th>
-                    {specColumns.map((c) => (
-                      <th key={c.key} className="py-1.5 pr-2">
+              <Table className="min-w-[560px]">
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className={`${thCls} px-4`}>Sản phẩm</TableHead>
+                    <TableHead className={`${thCls} w-28 text-right`}>SL</TableHead>
+                    <TableHead className={`${thCls} w-28`}>Đợt xuất</TableHead>
+                    {specShown.map((c) => (
+                      <TableHead key={c.key} className={thCls}>
                         {c.label}
-                      </th>
+                      </TableHead>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => (
-                    <tr
-                      key={l.order_line_id}
-                      className="border-b border-zinc-100 dark:border-zinc-900"
-                    >
-                      <td className="py-1.5 pr-2">
-                        <span className="flex items-center gap-2">
-                          {l.image_url && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={l.image_url}
-                              alt=""
-                              className="h-8 w-8 rounded object-cover"
-                            />
-                          )}
-                          <span className="font-medium">{l.name_vi}</span>
-                        </span>
-                      </td>
-                      <td className="py-1.5 pr-2 font-mono text-xs">{l.product_code}</td>
-                      <td className="py-1.5 pr-2 text-right">
-                        {fmtN(l.qty)} {l.unit}
-                      </td>
-                      <td className="py-1.5 pr-2 text-xs text-zinc-500">
-                        {[l.group_title, l.ship_text].filter(Boolean).join(' · ') || '—'}
-                      </td>
-                      {specColumns.map((c) => (
-                        <td key={c.key} className="py-1.5 pr-2 text-xs whitespace-pre-wrap">
-                          {l.spec[c.key] || '—'}
-                        </td>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lineGroups.map(([title, ls]) => (
+                    <Fragment key={title || '(none)'}>
+                      {(title || lineGroups.length > 1) && (
+                        <TableRow className="bg-muted/40 hover:bg-muted/40">
+                          <TableCell
+                            colSpan={3 + specShown.length}
+                            className="px-4 py-1.5 whitespace-normal"
+                          >
+                            <span className="text-xs font-medium">
+                              {title || 'Chưa đặt tên nhóm'}
+                            </span>
+                            <span className="text-muted-foreground ml-2 text-[11px]">
+                              {ls.length} dòng · {fmtN(ls.reduce((s, l) => s + l.qty, 0))}{' '}
+                              SP
+                            </span>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {ls.map((l) => (
+                        <TableRow key={l.order_line_id}>
+                          <TableCell className="px-4 py-2 whitespace-normal">
+                            <span className="flex items-center gap-2.5">
+                              {l.image_url && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={l.image_url}
+                                  alt=""
+                                  className="h-9 w-9 shrink-0 rounded-md border object-cover"
+                                />
+                              )}
+                              <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">
+                                  {l.name_vi}
+                                </span>
+                                {l.product_code !== l.name_vi && (
+                                  <span className="text-muted-foreground block truncate font-mono text-xs">
+                                    {l.product_code}
+                                  </span>
+                                )}
+                              </span>
+                            </span>
+                          </TableCell>
+                          <TableCell className="py-2 text-right text-sm tabular-nums">
+                            <b>{fmtN(l.qty)}</b>{' '}
+                            <span className="text-muted-foreground text-xs">
+                              {l.unit}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground py-2 text-xs">
+                            {l.ship_text || '—'}
+                          </TableCell>
+                          {specShown.map((c) => (
+                            <TableCell
+                              key={c.key}
+                              className="py-2 text-xs whitespace-pre-wrap"
+                            >
+                              {l.spec[c.key] || '—'}
+                            </TableCell>
+                          ))}
+                        </TableRow>
                       ))}
-                    </tr>
+                    </Fragment>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
+                </TableBody>
+              </Table>
+            </section>
 
-          {/* Cung ứng (exec/planning) */}
-          {supply && (
-            <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-              <div className="mb-3 flex items-center gap-2">
-                <h2 className="text-sm font-semibold">Vật tư & cung ứng</h2>
+            {/* Kế hoạch công đoạn per dòng SP */}
+            <section className={sectionCls}>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">Kế hoạch công đoạn</h2>
+                {planHref && (
+                  <Link href={planHref} className={sectionLink}>
+                    Sửa kế hoạch →
+                  </Link>
+                )}
               </div>
-              {!supply.hasBom && (
-                <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠ Chưa có bảng chi tiết — nhu cầu vật tư chưa bóc được.
+              {jobs.length === 0 ? (
+                <p className="text-muted-foreground mt-2 text-sm">
+                  Chưa lên kế hoạch — Trưởng phòng Kế hoạch lên lộ trình + giao tổ trước
+                  khi xưởng chạy.
                 </p>
-              )}
-              {supply.pos.length === 0 ? (
-                <p className="text-sm text-zinc-500">Chưa có đơn đặt vật tư nào.</p>
               ) : (
-                <ul className="flex flex-col gap-1.5 text-sm">
-                  {supply.pos.map((p) => (
-                    <li key={p.id} className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs">{p.code}</span>
-                      <span>{p.supplier_name}</span>
-                      <Badge tone="gray">{p.status}</Badge>
-                      <span className="ml-auto text-xs text-zinc-500">
-                        {p.total.toLocaleString('vi-VN')} {p.currency} · về{' '}
-                        {fmtD(p.expected_at)}
-                      </span>
-                    </li>
+                <div className="mt-3 flex flex-col gap-3">
+                  {[...jobsByLine.entries()].map(([lineId, js]) => (
+                    <div key={lineId}>
+                      <div className="text-muted-foreground mb-1 text-xs font-medium">
+                        {lineName(lineId)}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {[...js]
+                          .sort((a, b) => a.seq - b.seq)
+                          .map((j, i) => (
+                            <span key={j.id} className="flex items-center gap-1.5">
+                              {i > 0 && <span className="text-border">→</span>}
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${
+                                  j.status === 'done'
+                                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                    : j.status === 'doing'
+                                      ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                                      : 'text-muted-foreground'
+                                }`}
+                                title={`${JOB_LABEL[j.status]}${j.team_name ? ` · ${j.team_name}` : ''}${j.planned_end ? ` · hạn ${fmtD(j.planned_end)}` : ''}${j.note ? ` · ${j.note}` : ''}`}
+                              >
+                                {labelOf(j.stage)}
+                                {j.team_name && (
+                                  <span className="text-[10px] opacity-70">
+                                    {j.team_name}
+                                  </span>
+                                )}
+                                {j.status === 'done' ? ' ✓' : ''}
+                              </span>
+                            </span>
+                          ))}
+                      </div>
+                    </div>
                   ))}
-                </ul>
+                </div>
               )}
             </section>
-          )}
 
-          {lsx.note && (
-            <p className="text-sm text-zinc-500">
-              <b>Ghi chú:</b> {lsx.note}
-            </p>
-          )}
+            {/* Đồng bộ bộ SP */}
+            {synced.some((s) => s.has_components) && (
+              <section className={sectionCls}>
+                <h2 className="mb-3 text-sm font-semibold">
+                  Bộ đồng bộ (qua công đoạn cuối)
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {synced
+                    .filter((s) => s.has_components)
+                    .map((s) => {
+                      const pct =
+                        s.qty > 0 ? Math.round((s.synced_sets / s.qty) * 100) : 0
+                      return (
+                        <div key={s.order_line_id} className="text-sm">
+                          <div className="mb-0.5 flex justify-between text-xs">
+                            <span>
+                              {s.product_name}{' '}
+                              <span className="text-muted-foreground">
+                                {s.product_code}
+                              </span>
+                            </span>
+                            <b className="tabular-nums">
+                              {fmtN(s.synced_sets)}/{fmtN(s.qty)} bộ ({pct}%)
+                            </b>
+                          </div>
+                          <div className="bg-muted h-1.5 overflow-hidden rounded-full">
+                            <div
+                              className={`h-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-sky-500'}`}
+                              style={{ width: `${Math.min(100, pct)}%` }}
+                            />
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* ── Cột phụ: đơn gộp + vật tư + ghi chú ────────────────────────── */}
+          <div className="flex min-w-0 flex-col gap-4">
+            <section className={sectionCls}>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold">
+                  Đơn hàng trong lệnh ({lsx.orders.length})
+                </h2>
+                {canEditOrders && ordersEditable && mergeCandidates.length > 0 && (
+                  <button onClick={() => setAddOpen((v) => !v)} className={sectionLink}>
+                    {addOpen ? 'Đóng' : '+ Gộp thêm'}
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {lsx.orders.map((o) => (
+                  <span
+                    key={o.id}
+                    className="bg-background inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs"
+                  >
+                    <Link
+                      href={`/sales/orders/${o.id}`}
+                      className="font-mono hover:underline"
+                    >
+                      {o.code}
+                    </Link>
+                    {canEditOrders && ordersEditable && lsx.orders.length > 1 && (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void changeOrders('DELETE', [o.id], `Đã gỡ đơn ${o.code}`)
+                        }
+                        title="Gỡ đơn khỏi lệnh"
+                        className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              {addOpen && (
+                <div className="bg-muted/30 mt-3 flex flex-col gap-2 rounded-lg border p-3">
+                  {mergeCandidates.map((c) => (
+                    <label
+                      key={c.id}
+                      className="flex cursor-pointer items-center gap-2 text-sm"
+                    >
+                      <Checkbox
+                        checked={addIds.includes(c.id)}
+                        onCheckedChange={(v) =>
+                          setAddIds((prev) =>
+                            v ? [...prev, c.id] : prev.filter((x) => x !== c.id),
+                          )
+                        }
+                      />
+                      <span className="font-mono text-xs">{c.code}</span>
+                      <span className="text-muted-foreground ml-auto text-xs">
+                        {c.line_count} dòng
+                      </span>
+                    </label>
+                  ))}
+                  <Button
+                    size="sm"
+                    className="mt-1 self-start"
+                    disabled={busy || !addIds.length}
+                    onClick={() =>
+                      void changeOrders(
+                        'POST',
+                        addIds,
+                        `Đã gộp ${addIds.length} đơn vào ${lsx.code}`,
+                      )
+                    }
+                  >
+                    Gộp vào lệnh
+                  </Button>
+                </div>
+              )}
+            </section>
+
+            {supply && (
+              <section className={sectionCls}>
+                <h2 className="mb-2 text-sm font-semibold">Vật tư & cung ứng</h2>
+                {!supply.hasBom && (
+                  <p className="mb-2 text-xs text-amber-600 dark:text-amber-400">
+                    ⚠ Chưa có bảng chi tiết — nhu cầu vật tư chưa bóc được.
+                  </p>
+                )}
+                {supply.pos.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Chưa có đơn đặt vật tư nào.
+                  </p>
+                ) : (
+                  <ul className="flex flex-col gap-2 text-sm">
+                    {supply.pos.map((p) => (
+                      <li key={p.id} className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-mono text-xs">{p.code}</span>
+                          <Badge
+                            variant="secondary"
+                            className="text-muted-foreground ml-auto shrink-0"
+                          >
+                            {p.status}
+                          </Badge>
+                        </div>
+                        <div className="text-muted-foreground mt-0.5 truncate text-xs">
+                          {p.supplier_name} · {p.total.toLocaleString('vi-VN')}{' '}
+                          {p.currency} · về {fmtD(p.expected_at)}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            )}
+
+            {lsx.note && (
+              <section className={sectionCls}>
+                <h2 className="mb-1 text-sm font-semibold">Ghi chú lệnh</h2>
+                <p className="text-muted-foreground text-sm whitespace-pre-wrap">
+                  {lsx.note}
+                </p>
+              </section>
+            )}
+          </div>
         </div>
       )}
 
@@ -604,60 +798,57 @@ export function LsxDetailView({
               Chi tiết × công đoạn (số từ sổ thống kê)
             </h2>
             {shapingHref && (
-              <Link
-                href={shapingHref}
-                className="ml-auto text-xs text-sky-600 hover:underline dark:text-sky-400"
-              >
+              <Link href={shapingHref} className={sectionLink}>
                 Sửa bảng chi tiết →
               </Link>
             )}
           </div>
           {components.length === 0 ? (
-            <EmptyState
-              icon="▥"
-              title="Chưa có bảng chi tiết"
-              description="Thống kê định hình từ BOM Kỹ thuật trước khi ghi sổ."
-            />
+            <div className="rounded-xl border border-dashed py-14 text-center">
+              <div className="text-sm font-medium">Chưa có bảng chi tiết</div>
+              <div className="text-muted-foreground mt-1 text-xs">
+                Thống kê định hình từ BOM Kỹ thuật trước khi ghi sổ.
+              </div>
+            </div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
-                    <th className="px-3 py-2">Chi tiết</th>
-                    <th className="w-20 py-2 pr-2 text-right">Cần</th>
-                    <th className="py-2 pr-3">Tiến độ công đoạn</th>
-                    <th className="w-20 py-2 pr-3 text-right">%HT</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <div className="bg-card overflow-hidden rounded-xl border shadow-xs">
+              <Table className="min-w-[720px]">
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className={`${thCls} px-4`}>Chi tiết</TableHead>
+                    <TableHead className={`${thCls} w-24 text-right`}>Cần</TableHead>
+                    <TableHead className={thCls}>Tiến độ công đoạn</TableHead>
+                    <TableHead className={`${thCls} w-20 pr-4 text-right`}>%HT</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {components.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-zinc-100 dark:border-zinc-900"
-                    >
-                      <td className="px-3 py-2">
+                    <TableRow key={c.id}>
+                      <TableCell className="px-4 py-2 whitespace-normal">
                         {c.cluster && (
-                          <span className="text-xs text-zinc-400">{c.cluster} · </span>
+                          <span className="text-muted-foreground text-xs">
+                            {c.cluster} ·{' '}
+                          </span>
                         )}
                         <span className="font-medium">{c.name}</span>
-                        <span className="ml-1 text-xs text-zinc-400">
+                        <span className="text-muted-foreground ml-1 text-xs">
                           ({lineName(c.order_line_id)})
                         </span>
-                      </td>
-                      <td className="py-2 pr-2 text-right tabular-nums">
+                      </TableCell>
+                      <TableCell className="py-2 text-right tabular-nums">
                         {fmtN(c.total_needed)}
-                      </td>
-                      <td className="py-2 pr-3">
+                      </TableCell>
+                      <TableCell className="py-2 whitespace-normal">
                         <div className="flex flex-wrap gap-1">
                           {c.summary.stages.map((s) => (
                             <span
                               key={s.stage}
                               className={`rounded border px-1.5 py-0.5 text-[11px] ${
                                 s.pct >= 1
-                                  ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950 dark:text-green-300'
+                                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
                                   : s.done > 0
-                                    ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300'
-                                    : 'border-zinc-200 text-zinc-400 dark:border-zinc-700'
+                                    ? 'border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                                    : 'text-muted-foreground'
                               }`}
                               title={`${labelOf(s.stage)}: ${fmtN(s.done)} / thiếu ${fmtN(Math.max(0, s.missing))}${s.defect ? ` / phế ${fmtN(s.defect)}` : ''}`}
                             >
@@ -665,14 +856,14 @@ export function LsxDetailView({
                             </span>
                           ))}
                         </div>
-                      </td>
-                      <td className="py-2 pr-3 text-right font-semibold">
+                      </TableCell>
+                      <TableCell className="py-2 pr-4 text-right font-semibold tabular-nums">
                         {Math.round(c.summary.pct_total * 100)}%
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </div>
@@ -680,66 +871,153 @@ export function LsxDetailView({
 
       {tab === 'outsource' && <LsxOutsourcePanel lsxId={lsx.id} canRecord={canManage} />}
 
-      {/* Modal gửi duyệt lại (Sales) — sửa kèm header vì lý do từ chối thường
-          nằm ở chính các trường này */}
-      <Modal
-        open={resubmitOpen}
-        onClose={() => setResubmitOpen(false)}
-        title={`Gửi duyệt lại ${lsx.code}`}
-      >
-        <div className="flex flex-col gap-3 text-sm">
-          <div className="grid grid-cols-2 gap-2">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-zinc-500">Ngày nhận (in LSX)</span>
-              <input
-                type="date"
-                value={resubmit.received_date}
+      {/* Dialog SỬA THÔNG TIN ĐẦU LỆNH (0117) — khách hàng không sửa ở đây:
+          mọi đơn trong lệnh phải cùng khách, đổi khách = tạo lệnh khác. */}
+      <Dialog open={editOpen} onOpenChange={(o) => !o && !busy && setEditOpen(false)}>
+        <DialogContent className="theme-v2">
+          <DialogHeader>
+            <DialogTitle>Sửa thông tin lệnh {lsx.code}</DialogTitle>
+            <DialogDescription>
+              Đầu phiếu lệnh — dòng sản phẩm sửa ở màn “Soạn dòng lệnh”.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Số lệnh
+                <Input
+                  value={edit.code}
+                  onChange={(e) => setEdit((f) => ({ ...f, code: e.target.value }))}
+                  maxLength={50}
+                  className="font-mono"
+                />
+              </label>
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Ưu tiên (0 = thường)
+                <Input
+                  type="number"
+                  min={0}
+                  max={9}
+                  value={edit.priority}
+                  onChange={(e) => setEdit((f) => ({ ...f, priority: e.target.value }))}
+                />
+              </label>
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Ngày nhận đơn (in trên phiếu)
+                <Input
+                  type="date"
+                  value={edit.received_date}
+                  onChange={(e) =>
+                    setEdit((f) => ({ ...f, received_date: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Hạn xuất
+                <Input
+                  type="date"
+                  value={edit.ship_date}
+                  onChange={(e) => setEdit((f) => ({ ...f, ship_date: e.target.value }))}
+                />
+              </label>
+            </div>
+            <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+              Container
+              <Input
+                value={edit.container_summary}
                 onChange={(e) =>
-                  setResubmit((f) => ({ ...f, received_date: e.target.value }))
+                  setEdit((f) => ({ ...f, container_summary: e.target.value }))
                 }
-                className="rounded-lg border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+                placeholder="vd 1 x 40'HC"
               />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-xs text-zinc-500">Ngày xuất</span>
-              <input
-                type="date"
-                value={resubmit.ship_date}
-                onChange={(e) =>
-                  setResubmit((f) => ({ ...f, ship_date: e.target.value }))
-                }
-                className="rounded-lg border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+            <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+              Ghi chú lệnh (in trên phiếu)
+              <Textarea
+                value={edit.note}
+                onChange={(e) => setEdit((f) => ({ ...f, note: e.target.value }))}
+                rows={3}
               />
             </label>
           </div>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Container</span>
-            <input
-              value={resubmit.container_summary}
-              onChange={(e) =>
-                setResubmit((f) => ({ ...f, container_summary: e.target.value }))
-              }
-              placeholder="vd 1 x 40'HC"
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-zinc-500">Ghi chú</span>
-            <textarea
-              value={resubmit.note}
-              onChange={(e) => setResubmit((f) => ({ ...f, note: e.target.value }))}
-              rows={2}
-              className="rounded-lg border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </label>
-          <div className="flex justify-end gap-2">
-            <button
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)} disabled={busy}>
+              Huỷ
+            </Button>
+            <Button
+              onClick={() => void saveHeader()}
+              disabled={busy || !edit.code.trim()}
+            >
+              {busy && <Spinner size={14} />} Lưu thông tin
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog gửi duyệt lại (Sales) — sửa kèm header vì lý do từ chối thường
+          nằm ở chính các trường này */}
+      <Dialog
+        open={resubmitOpen}
+        onOpenChange={(o) => !o && !busy && setResubmitOpen(false)}
+      >
+        <DialogContent className="theme-v2">
+          <DialogHeader>
+            <DialogTitle>Gửi duyệt lại {lsx.code}</DialogTitle>
+            <DialogDescription>
+              Sửa các trường Giám đốc đã chê rồi gửi lại — lệnh quay về hàng chờ duyệt.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Ngày nhận (in LSX)
+                <Input
+                  type="date"
+                  value={resubmit.received_date}
+                  onChange={(e) =>
+                    setResubmit((f) => ({ ...f, received_date: e.target.value }))
+                  }
+                />
+              </label>
+              <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+                Ngày xuất
+                <Input
+                  type="date"
+                  value={resubmit.ship_date}
+                  onChange={(e) =>
+                    setResubmit((f) => ({ ...f, ship_date: e.target.value }))
+                  }
+                />
+              </label>
+            </div>
+            <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+              Container
+              <Input
+                value={resubmit.container_summary}
+                onChange={(e) =>
+                  setResubmit((f) => ({ ...f, container_summary: e.target.value }))
+                }
+                placeholder="vd 1 x 40'HC"
+              />
+            </label>
+            <label className="text-foreground flex flex-col gap-1 text-xs font-medium">
+              Ghi chú
+              <Textarea
+                value={resubmit.note}
+                onChange={(e) => setResubmit((f) => ({ ...f, note: e.target.value }))}
+                rows={2}
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
               onClick={() => setResubmitOpen(false)}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 dark:border-zinc-700"
+              disabled={busy}
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() =>
                 call(
                   `/api/dept/production/lsx/${lsx.id}/resubmit`,
@@ -753,36 +1031,39 @@ export function LsxDetailView({
                 )
               }
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-3 py-1.5 font-semibold text-white disabled:opacity-50"
+              className="bg-amber-600 text-white hover:bg-amber-500"
             >
               {busy && <Spinner size={14} />} Gửi duyệt lại
-            </button>
-          </div>
-        </div>
-      </Modal>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Modal từ chối */}
-      <Modal
-        open={rejectOpen}
-        onClose={() => setRejectOpen(false)}
-        title={`Từ chối ${lsx.code}`}
-      >
-        <div className="flex flex-col gap-3">
-          <textarea
+      {/* Dialog từ chối */}
+      <Dialog open={rejectOpen} onOpenChange={(o) => !o && !busy && setRejectOpen(false)}>
+        <DialogContent className="theme-v2">
+          <DialogHeader>
+            <DialogTitle>Từ chối {lsx.code}</DialogTitle>
+            <DialogDescription>
+              Ghi rõ lý do — Sales sẽ sửa theo đó rồi gửi duyệt lại.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             rows={3}
-            className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            placeholder="Lý do từ chối (bắt buộc) — Sales sẽ sửa rồi gửi duyệt lại"
+            placeholder="Lý do từ chối (bắt buộc)"
           />
-          <div className="flex justify-end gap-2">
-            <button
+          <DialogFooter>
+            <Button
+              variant="outline"
               onClick={() => setRejectOpen(false)}
-              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+              disabled={busy}
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="destructive"
               onClick={() =>
                 call(
                   `/api/dept/production/lsx/${lsx.id}/reject`,
@@ -791,13 +1072,12 @@ export function LsxDetailView({
                 )
               }
               disabled={busy || !rejectReason.trim()}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {busy && <Spinner size={14} />} Từ chối LSX
-            </button>
-          </div>
-        </div>
-      </Modal>
+              {busy && <Spinner size={14} />} Từ chối lệnh
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

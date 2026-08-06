@@ -198,12 +198,14 @@ export const productionRepo = {
   },
 
   /**
-   * Phát LSX. Số lệnh unique ở DB — bắt duplicate ở đây để service trả Conflict
+   * Tạo LSX. Số lệnh unique ở DB — bắt duplicate ở đây để service trả Conflict
    * thay vì 500 (service đã kiểm tra trước, đây là chốt chặn đua).
    */
   async insert(row: {
     code: string
     customer_id: string
+    /** Bỏ trống = theo default DB. Luồng Sales tạo lệnh truyền 'draft' (0117). */
+    status?: LsxStatus
     ship_date?: string | null
     container_summary?: string | null
     issued_by: string

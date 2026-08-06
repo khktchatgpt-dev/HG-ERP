@@ -9,6 +9,7 @@ export type LsxBadgeTone = 'gray' | 'blue' | 'amber' | 'green' | 'red'
  * là đổi đồng bộ mọi nơi.
  */
 export const LSX_STATUS: Record<LsxStatus, { label: string; tone: LsxBadgeTone }> = {
+  draft: { label: 'Nháp', tone: 'gray' },
   pending_approval: { label: 'Chờ GĐ duyệt', tone: 'amber' },
   approved: { label: 'Đã duyệt', tone: 'blue' },
   in_progress: { label: 'Đang sản xuất', tone: 'amber' },
