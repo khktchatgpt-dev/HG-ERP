@@ -3,6 +3,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { LsxWorkbench, type AwaitingOrder, type LsxRow } from './LsxWorkbench'
 
 /**
@@ -23,6 +24,11 @@ export default async function SalesLsxPage() {
   ])
 
   // Số dòng/SL: của LỆNH lấy từ dòng lệnh, của ĐƠN chờ phát lấy từ dòng đơn.
+  // Người LẬP lệnh — một truy vấn cho cả trang (0119).
+  const creatorNames = await usersRepo.displayNamesByIds([
+    ...new Set(lsxRows.map((r) => r.created_by).filter((v) => v !== null)),
+  ])
+
   const [lsxSummary, awaitingLines] = await Promise.all([
     lsxLinesRepo.summaryByLsx(lsxRows.map((r) => r.id)),
     ordersRepo.listLinesByOrders(awaitingOrders.map((o) => o.id)),
@@ -54,6 +60,7 @@ export default async function SalesLsxPage() {
     status: r.status,
     revision: r.revision,
     issued_at: r.issued_at,
+    created_by_name: r.created_by ? (creatorNames.get(r.created_by) ?? null) : null,
     ship_date: r.ship_date,
     lines: lsxSummary.get(r.id)?.lines ?? 0,
     qty: lsxSummary.get(r.id)?.qty ?? 0,

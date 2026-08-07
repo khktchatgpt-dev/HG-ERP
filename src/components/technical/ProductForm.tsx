@@ -116,7 +116,7 @@ export function ProductForm({
         { method: 'POST', body },
       )
       toast.success('Đã thêm sản phẩm', `${body.code} · ${body.name}`)
-      router.push(`/technical/products/${product.id}`)
+      router.push(`/products/${product.id}`)
     } catch (err) {
       // Ai đó vừa lấy mất số này. Xin số mới ngay để người dùng chỉ cần bấm Lưu lại.
       if (err instanceof ApiError && err.code === 'CODE_TAKEN' && !manualCode) {
@@ -134,15 +134,15 @@ export function ProductForm({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kỹ thuật', href: '/technical' },
-          { label: 'Thư viện sản phẩm', href: '/technical/products' },
+          // Khu dùng chung — không dẫn về /technical (gate workspace sẽ đá về '/').
+          { label: 'Thư viện sản phẩm', href: '/products' },
           { label: 'Thêm sản phẩm' },
         ]}
         title="Thêm sản phẩm"
         description="Điền phần nhận diện thôi. Quy cách, thông số và tài liệu bổ sung ở trang chi tiết."
         actions={
           <Link
-            href="/technical/products"
+            href="/products"
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             ← Huỷ
@@ -298,7 +298,7 @@ export function ProductForm({
               Lưu xong sẽ mở trang chi tiết để thêm ảnh, quy cách và tài liệu.
             </p>
             <Link
-              href="/technical/products"
+              href="/products"
               className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               Huỷ

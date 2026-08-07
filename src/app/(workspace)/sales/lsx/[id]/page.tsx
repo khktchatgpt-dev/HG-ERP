@@ -1,10 +1,13 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
+import { canMutateOwned } from '@/lib/record-ownership'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { colKey, specColumnsOf } from '@/modules/dept/sales/lsx-template'
+import { shipText } from '@/modules/dept/production/lsx-sheet-cells'
 import { entriesService } from '@/modules/dept/production/entries.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { filesService } from '@/modules/core/files/files.service'
@@ -43,20 +46,29 @@ export default async function LsxDetailPage({
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
-    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
-      try {
-        imageUrls.set(
-          fid as string,
-          await filesService.getDownloadUrl(user, fid as string),
-        )
-      } catch {
-        /* ignore */
-      }
-    }),
+    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(
+      async (fid) => {
+        try {
+          imageUrls.set(
+            fid as string,
+            await filesService.getDownloadUrl(user, fid as string),
+          )
+        } catch {
+          /* ignore */
+        }
+      },
+    ),
   )
 
   const isMgr = user.role === 'admin' || user.role === 'manager'
+  // Của ai người đó sửa (07/08/2026): sửa đầu lệnh / soạn dòng / gộp-gỡ đơn chỉ
+  // dành cho NGƯỜI LẬP lệnh (quản lý gánh mọi lệnh). Duyệt/từ chối là việc của GĐ,
+  // không đi qua cửa này.
   const isSales = user.role === 'admin' || dept?.name === 'Bán Hàng'
+  const isOwner = isSales && canMutateOwned(user, lsx.created_by)
+
+  // Người LẬP lệnh (0119) — null với lệnh nhập bằng script trước khi có cột này.
+  const creator = lsx.created_by ? await usersRepo.findById(lsx.created_by) : null
 
   // Đơn cùng khách chưa thuộc lệnh nào — Sales gộp thêm vào lệnh này (0113).
   const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
@@ -84,6 +96,7 @@ export default async function LsxDetailPage({
         container_summary: lsx.container_summary,
         note: lsx.note,
         created_at: lsx.created_at,
+        created_by_name: creator?.name ?? null,
       }}
       lines={sheetLines.map((l) => ({
         order_line_id: l.id,
@@ -92,7 +105,9 @@ export default async function LsxDetailPage({
         name_vi: l.name_vi ?? l.product_code,
         unit: l.unit,
         qty: l.qty,
-        ship_text: l.ship_label ?? l.ship_date ?? '',
+        // Đợt xuất là NGÀY (07/08/2026) — dùng chung `shipText` với phiếu in
+        // và file Excel để ba nơi hiện y hệt nhau, không mỗi chỗ một kiểu.
+        ship_text: shipText(l),
         image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
         spec: l.specs,
       }))}
@@ -108,9 +123,9 @@ export default async function LsxDetailPage({
       breadcrumbs={[{ label: 'Bán hàng', href: '/sales' }, { label: `LSX ${lsx.code}` }]}
       canApprove={isMgr}
       canManage={isMgr}
-      canResubmit={isSales}
-      canEditOrders={isSales}
-      linesHref={isSales ? `/sales/lsx/${lsx.id}/dong` : null}
+      canResubmit={isOwner}
+      canEditOrders={isOwner}
+      linesHref={isOwner ? `/sales/lsx/${lsx.id}/dong` : null}
       mergeCandidates={candidates.map((o) => ({
         id: o.id,
         code: o.code,

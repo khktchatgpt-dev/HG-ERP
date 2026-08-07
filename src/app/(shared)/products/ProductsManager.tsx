@@ -124,7 +124,7 @@ export function ProductsManager({
       const qs = next.toString()
       // `replace`: lọc/tìm không phải là "đi tới trang khác", đẩy vào lịch sử chỉ
       // khiến nút Back phải bấm hàng chục lần mới ra khỏi thư viện.
-      router.replace(qs ? `/technical/products?${qs}` : '/technical/products')
+      router.replace(qs ? `/products?${qs}` : '/products')
     },
     [router, sp],
   )
@@ -302,7 +302,7 @@ export function ProductsManager({
       next.delete('clone')
       next.delete('openbom')
       const qs = next.toString()
-      router.replace(qs ? `/technical/products?${qs}` : '/technical/products')
+      router.replace(qs ? `/products?${qs}` : '/products')
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -346,7 +346,7 @@ export function ProductsManager({
     const items: RowMenuItem[] = [
       {
         label: 'Xem chi tiết',
-        onClick: () => router.push(`/technical/products/${p.id}`),
+        onClick: () => router.push(`/products/${p.id}`),
       },
       { label: 'BOM định mức', onClick: () => void openBom(p) },
     ]
@@ -355,7 +355,7 @@ export function ProductsManager({
         // Sửa nằm ngay trong tab Hồ sơ của trang chi tiết — không có route /edit.
         {
           label: 'Sửa hồ sơ',
-          onClick: () => router.push(`/technical/products/${p.id}`),
+          onClick: () => router.push(`/products/${p.id}`),
         },
         { label: 'Nhân bản mẫu', onClick: () => void openClone(p.id) },
         {
@@ -377,11 +377,10 @@ export function ProductsManager({
   return (
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
+      {/* Khu dùng chung: breadcrumb KHÔNG dẫn về /technical — người ngoài phòng
+          Kỹ thuật bấm vào là bị gate workspace đá về '/'. */}
       <PageHeader
-        breadcrumbs={[
-          { label: 'Kỹ thuật', href: '/technical' },
-          { label: 'Thư viện sản phẩm' },
-        ]}
+        breadcrumbs={[{ label: 'Thư viện sản phẩm' }]}
         title="Thư viện sản phẩm"
         description={
           hasFilter
@@ -395,7 +394,7 @@ export function ProductsManager({
             </Button>
             {canEdit && (
               <Button size="sm" className={ACCENT_SOLID} asChild>
-                <Link href="/technical/products/new">
+                <Link href="/products/new">
                   <Plus /> Thêm sản phẩm
                 </Link>
               </Button>
@@ -447,7 +446,7 @@ export function ProductsManager({
               </Button>
             ) : canEdit ? (
               <Button size="sm" className={ACCENT_SOLID} asChild>
-                <Link href="/technical/products/new">
+                <Link href="/products/new">
                   <Plus /> Thêm sản phẩm
                 </Link>
               </Button>

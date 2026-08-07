@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation'
 
 /**
- * Trang cũ — đã chuyển vào workspace Kỹ thuật.
+ * Trang cũ — thư viện SP giờ ở khu DÙNG CHUNG `/products` (mọi phòng xem được).
  * Giữ redirect để link/bookmark cũ vẫn hoạt động.
  */
 export default function LegacyTechProductsPage() {
-  redirect('/technical/products')
+  redirect('/products')
 }

@@ -148,6 +148,14 @@ export const quickProductCreateSchema = z.object({
   origin_country: z.string().trim().max(100).optional().nullable(),
   name_foreign: z.string().trim().max(300).optional().nullable(), // tên theo khách
   shipping_mark: z.string().trim().max(2000).optional().nullable(), // ký mã hiệu (LSX)
+  /*
+   * Hai nhóm dưới thêm 07/08/2026: từ khi màn soạn dòng LSX KHÔNG cho sửa thông
+   * tin SP nữa, thứ gì lệnh cần mà lúc tạo SP không khai thì về sau phải quay lại
+   * hồ sơ SP mới sửa được. `barcode` + `tech_spec` chính là hai chỗ hay thiếu
+   * nhất — xem `lsx-line-fill.ts`, chúng nằm trong danh sách "hồ sơ SP đang thiếu".
+   */
+  barcode: z.string().trim().max(100).optional().nullable(),
+  tech_spec: techSpecSchema.optional(),
 })
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i

@@ -109,6 +109,19 @@ export const PERSONAL_SECTION: NavSection = {
   ],
 } as const
 
+/**
+ * Nav DÙNG CHUNG — trang không thuộc phòng nào, mọi workspace đều thấy (tự thêm
+ * vào cuối sidebar như PERSONAL_SECTION). Đặt ở đây để workspace mới có ngay,
+ * khỏi phải nhớ copy vào từng config.
+ *
+ * `/products` (hồ sơ + thư viện SP) mở cho mọi phòng xem — chỉ Kỹ thuật / Bán
+ * hàng / Giám đốc sửa được (xem `src/app/(shared)` và rbac `actions.ts`).
+ */
+export const SHARED_SECTION: NavSection = {
+  heading: 'Dùng chung',
+  items: [{ href: '/products', label: 'Thư viện sản phẩm', icon: '◇' }],
+} as const
+
 // ── Config từng workspace ─────────────────────────────────────────────────
 
 export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
@@ -216,7 +229,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kỹ thuật',
         items: [
           { href: '/technical', label: 'Trang chủ', icon: '◧' },
-          { href: '/technical/products', label: 'Thư viện sản phẩm', icon: '◇' },
+          // "Thư viện sản phẩm" đã chuyển sang SHARED_SECTION (/products) —
+          // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: '▦' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: '▣' },
         ],
@@ -486,6 +500,7 @@ export function resolveNavSections(
       heading: s.heading,
       items: s.items.filter((i) => itemVisible(i, ctx)),
     })),
+    SHARED_SECTION,
   ].filter((s) => s.items.length > 0)
 }
 

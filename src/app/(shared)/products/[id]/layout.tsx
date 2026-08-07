@@ -53,8 +53,9 @@ export default async function ProductDetailLayout({
     <div className="flex flex-col gap-4 pb-4">
       <PageHeader
         breadcrumbs={[
-          { label: 'Kỹ thuật', href: '/technical' },
-          { label: 'Thư viện sản phẩm', href: '/technical/products' },
+          // Không có crumb 'Kỹ thuật': khu dùng chung, người ngoài phòng KT bấm
+          // vào /technical là bị gate workspace đá về '/'.
+          { label: 'Thư viện sản phẩm', href: '/products' },
           { label: product.code },
         ]}
         title={product.name}
@@ -62,7 +63,7 @@ export default async function ProductDetailLayout({
         actions={
           canEdit ? (
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/technical/products?clone=${product.id}`}>
+              <Link href={`/products?clone=${product.id}`}>
                 <Copy className="size-4" /> Nhân bản
               </Link>
             </Button>

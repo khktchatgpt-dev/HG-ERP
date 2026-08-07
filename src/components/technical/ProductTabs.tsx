@@ -17,7 +17,7 @@ export function ProductTabs({
   partCount: number
 }) {
   const pathname = usePathname()
-  const base = `/technical/products/${productId}`
+  const base = `/products/${productId}`
   const tabs = [
     { href: base, label: 'Hồ sơ' },
     { href: `${base}/dinh-muc`, label: 'Định mức', badge: partCount || undefined },

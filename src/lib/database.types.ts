@@ -1204,6 +1204,7 @@ export type Database = {
           completed_at: string | null
           container_summary: string | null
           created_at: string
+          created_by: string | null
           customer_id: string
           id: string
           issued_at: string | null
@@ -1229,6 +1230,7 @@ export type Database = {
           completed_at?: string | null
           container_summary?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id: string
           id?: string
           issued_at?: string | null
@@ -1254,6 +1256,7 @@ export type Database = {
           completed_at?: string | null
           container_summary?: string | null
           created_at?: string
+          created_by?: string | null
           customer_id?: string
           id?: string
           issued_at?: string | null
@@ -1276,6 +1279,13 @@ export type Database = {
           {
             foreignKeyName: "production_orders_approved_by_fkey"
             columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_orders_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

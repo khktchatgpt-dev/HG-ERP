@@ -14,7 +14,8 @@ import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
-import { BadRequest, Conflict, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { canMutateOwned } from '@/lib/record-ownership'
 
 /** Header fields được phép sửa khi khách thay đổi (FR-SAL-05). */
 const EDITABLE_FIELDS = [
@@ -43,6 +44,18 @@ type OrderUpdateInput = Partial<
 }
 
 /** Đơn ở trạng thái cuối thì bất biến. */
+/**
+ * Của ai người đó sửa (chốt 07/08/2026). `sales.order.manage` mới chỉ hỏi "có
+ * phải người phòng Bán Hàng không" — đây là cửa thứ hai theo CHỦ đơn.
+ */
+function assertOwner(user: User, order: Order): void {
+  if (!canMutateOwned(user, order.created_by)) {
+    throw Forbidden(
+      'Đơn này do người khác tạo — chỉ người tạo hoặc quản lý mới sửa/huỷ được',
+    )
+  }
+}
+
 function assertEditable(order: Order): void {
   if (order.status === 'delivered' || order.status === 'cancelled') {
     throw BadRequest('Đơn đã giao / đã huỷ — không sửa được nữa')
@@ -202,6 +215,7 @@ export const ordersService = {
     await assertAction(user, 'sales.order.manage')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
+    assertOwner(user, before)
     assertEditable(before)
 
     // Diff header
@@ -288,6 +302,7 @@ export const ordersService = {
     await assertAction(user, 'sales.order.manage')
     const before = await ordersRepo.findById(id)
     if (!before) throw NotFound('Đơn hàng không tồn tại')
+    assertOwner(user, before)
     assertEditable(before)
 
     const order = await ordersRepo.patch(id, { status: 'cancelled' })

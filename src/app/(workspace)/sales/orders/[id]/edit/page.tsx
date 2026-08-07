@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation'
+import { canMutateOwned } from '@/lib/record-ownership'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
@@ -20,8 +21,9 @@ export default async function EditOrderPage({
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
-  if (!canEdit) redirect(`/sales/orders/${id}`)
+  if (user.role !== 'admin' && dept?.name !== 'Bán Hàng') {
+    redirect(`/sales/orders/${id}`)
+  }
 
   let data
   try {
@@ -31,6 +33,11 @@ export default async function EditOrderPage({
     throw e
   }
   const { order, lines } = data
+  // Của ai người đó sửa (07/08/2026) — chặn cả đường vào thẳng URL /edit, không
+  // chỉ ẩn nút. Service vẫn là chốt chặn cuối.
+  if (!canMutateOwned(user, order.created_by)) {
+    redirect(`/sales/orders/${id}`)
+  }
   if (order.status === 'delivered' || order.status === 'cancelled') {
     redirect(`/sales/orders/${id}`)
   }

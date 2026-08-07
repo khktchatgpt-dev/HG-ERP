@@ -4,6 +4,7 @@ import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { isTechnicalStaff } from '@/modules/dept/technical/technical.service'
+import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { MAX_SAMPLE_PHOTOS } from '@/modules/dept/technical/samples.schema'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
 import { db } from '@/server/db'
@@ -97,7 +98,15 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     }
     return
   }
-  // customer/invoice/product/none: any signed-in user can attach files for now.
+  if (input.parent.kind === 'product') {
+    // Tài liệu SP (bản vẽ / BOM / hướng dẫn lắp) là một tab của hồ sơ sản phẩm.
+    // Hồ sơ nằm ở khu DÙNG CHUNG `/products` — mọi phòng XEM được, nên nhánh
+    // này phải gác đúng quyền SỬA, không thì ai đăng nhập cũng đính được file
+    // vào SP (UI đã ẩn nút theo `canEdit` nhưng API vẫn hở).
+    await assertAction(user, 'technical.product.attach_file')
+    return
+  }
+  // customer/invoice/none: any signed-in user can attach files for now.
   // Tighten as those modules grow real perms.
 }
 

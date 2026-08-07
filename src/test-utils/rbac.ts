@@ -22,12 +22,18 @@ export const SEED_ROLE_PERMS: Record<string, readonly string[]> = {
     'warehouse.edit',
     'warehouse.material.create',
     'technical.edit',
+    'technical.bom.edit', // 0118 — GĐ sửa được cả định mức trong hồ sơ SP
     'hr.leave.decide',
     'exec.tower.view',
     'exec.approvals.view',
   ],
   head: ['team.dashboard.view'],
-  sales_staff: ['sales.member', 'production.lsx.issue', 'technical.bom.edit'],
+  sales_staff: [
+    'sales.member',
+    'production.lsx.issue',
+    'technical.bom.edit',
+    'technical.edit', // 0118 — Bán hàng sửa được hồ sơ SP dùng chung
+  ],
   planner: ['planner.member', 'production.components.edit'],
   supply_staff: ['supply.member', 'warehouse.material.create'],
   production_staff: [
