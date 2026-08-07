@@ -46,6 +46,8 @@ const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
   customer_id: 'c1',
+  // Người LẬP lệnh = chính `sales` đang thao tác (0119): của ai người đó sửa.
+  created_by: 'u-sales',
   status: 'approved',
   revision: 1,
 }

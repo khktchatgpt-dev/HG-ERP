@@ -16,6 +16,12 @@ export type ProductionOrder = {
   priority: number
   ship_date: string | null
   container_summary: string | null
+  /**
+   * NGƯỜI LẬP lệnh — ghi một lần lúc tạo, không bao giờ đổi (0119).
+   * Khác `issued_by`: đó là người GỬI DUYỆT lần gần nhất, bị ghi đè mỗi lần
+   * `resubmit()` nên không dùng để truy người lập được.
+   */
+  created_by: string | null
   issued_by: string | null
   issued_at: string | null
   received_date: string | null
@@ -77,7 +83,7 @@ export type OrderTracking = {
 }
 
 const COLS =
-  'id, code, customer_id, status, priority, ship_date, container_summary, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, materials_received_at, materials_received_by, revision, revised_at, revised_by, revision_note, note, created_at, updated_at'
+  'id, code, customer_id, status, priority, ship_date, container_summary, created_by, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, materials_received_at, materials_received_by, revision, revised_at, revised_by, revision_note, note, created_at, updated_at'
 
 // Đơn trỏ SANG lệnh (sales_orders.production_order_id) nên embed là chiều ngược
 // → PostgREST trả mảng.
@@ -208,6 +214,8 @@ export const productionRepo = {
     status?: LsxStatus
     ship_date?: string | null
     container_summary?: string | null
+    /** Người LẬP lệnh (0119) — ghi một lần, `resubmit()` không đụng tới. */
+    created_by: string
     issued_by: string
     issued_at: string
     received_date?: string | null

@@ -76,7 +76,7 @@ export function ProductTable({
       sortValue: (p) => p.code,
       cell: (p) => (
         <Link
-          href={`/technical/products/${p.id}`}
+          href={`/products/${p.id}`}
           className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
         >
           <span className="text-muted-foreground font-mono text-xs">

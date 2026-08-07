@@ -17,6 +17,21 @@ import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { canMutateOwned, canRemoveOrdersFromLsx } from '@/lib/record-ownership'
+
+/**
+ * Của ai người đó sửa (chốt 07/08/2026) — cửa thứ hai sau permission
+ * `production.lsx.issue`. Người LẬP lệnh (`created_by`, 0119) mới được sửa;
+ * admin/quản lý gánh được mọi lệnh. GĐ duyệt/từ chối và xưởng ghi số liệu KHÔNG
+ * đi qua cửa này — đó là việc của vai khác trên cùng một lệnh.
+ */
+function assertLsxOwner(user: User, lsx: ProductionOrder): void {
+  if (!canMutateOwned(user, lsx.created_by)) {
+    throw Forbidden(
+      'Lệnh này do người khác lập — chỉ người lập hoặc quản lý mới sửa được',
+    )
+  }
+}
 
 /**
  * VÒNG ĐỜI lệnh sản xuất (0084 giữ luồng giáp ranh đã chạy tốt):
@@ -148,6 +163,10 @@ export const lsxService = {
       ship_date: input.ship_date ?? null,
       received_date: input.received_date ?? null,
       container_summary: input.container_summary ?? null,
+      // created_by = người LẬP lệnh, giữ nguyên suốt vòng đời. issued_by cũng
+      // đặt = người này lúc tạo, nhưng nó sẽ bị `resubmit()` ghi đè khi lệnh bị
+      // từ chối rồi gửi lại — nên đừng dùng issued_by để truy người lập (0119).
+      created_by: user.id,
       issued_by: user.id,
       issued_at: new Date().toISOString(),
       note: input.note ?? null,
@@ -174,6 +193,7 @@ export const lsxService = {
   async submit(user: User, id: string): Promise<ProductionOrder> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
     if (lsx.status !== 'draft') throw BadRequest('Chỉ lệnh nháp mới gửi duyệt được')
 
     // Đếm dòng thẳng từ repo (không qua `sheet()` — chỗ này không cần mẫu cột).
@@ -315,6 +335,7 @@ export const lsxService = {
   ): Promise<ProductionOrder> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
       throw BadRequest('Lệnh đã kết thúc — không sửa thông tin được')
     }
@@ -354,6 +375,7 @@ export const lsxService = {
   ): Promise<ProductionOrder> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
     if (lsx.status !== 'rejected') {
       throw BadRequest('Chỉ gửi duyệt lại được LSX bị từ chối')
     }
@@ -482,6 +504,7 @@ export const lsxService = {
   ): Promise<ProductionOrderWithOrders> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await lsxOrThrow(id)
+    assertLsxOwner(user, lsx)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
       throw BadRequest('Lệnh đã kết thúc — không gộp thêm đơn được')
     }
@@ -537,8 +560,13 @@ export const lsxService = {
   ): Promise<ProductionOrderWithOrders> {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await lsxOrThrow(id)
-    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
-      throw BadRequest('Lệnh đã kết thúc — không gỡ đơn được')
+    assertLsxOwner(user, lsx)
+    // Duyệt rồi thì nội dung lệnh là cam kết với xưởng — chỉ SỬA/CẬP NHẬT, không
+    // gỡ bớt đơn ra nữa (chốt 07/08/2026). Muốn dừng hẳn thì huỷ ĐƠN, lệnh khép theo.
+    if (!canRemoveOrdersFromLsx(lsx.status)) {
+      throw BadRequest(
+        'Lệnh đã được duyệt — không gỡ đơn khỏi lệnh được nữa, chỉ sửa/cập nhật. Muốn dừng thì huỷ đơn.',
+      )
     }
     const orderIds = [...new Set(orderIdsInput)]
     if (!orderIds.length) throw BadRequest('Chọn đơn cần gỡ khỏi lệnh')

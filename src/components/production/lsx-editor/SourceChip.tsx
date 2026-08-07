@@ -70,7 +70,7 @@ export function SourceChip({
           <span className="text-muted-foreground">hồ sơ trống — tự nhập</span>
           {productId && (
             <Link
-              href={`/technical/products/${productId}/${tab}`}
+              href={`/products/${productId}/${tab}`}
               target="_blank"
               rel="noopener"
               className="text-primary inline-flex items-center gap-0.5 hover:underline"

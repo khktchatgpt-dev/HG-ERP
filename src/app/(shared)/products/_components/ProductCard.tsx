@@ -43,7 +43,7 @@ export function ProductCard({
       </div>
 
       <Link
-        href={`/technical/products/${p.id}`}
+        href={`/products/${p.id}`}
         className="focus-visible:ring-ring/50 flex flex-1 flex-col rounded-t-xl focus-visible:ring-[3px] focus-visible:outline-none"
       >
         <div className={`relative aspect-4/3 overflow-hidden border-b ${IMAGE_FRAME_BG}`}>

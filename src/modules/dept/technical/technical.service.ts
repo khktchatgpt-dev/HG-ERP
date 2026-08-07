@@ -63,10 +63,13 @@ async function isTechnicalStaff(user: User): Promise<boolean> {
 }
 
 /**
- * Cờ SỬA cho giao diện Kỹ thuật. Trước đây mỗi trang tự tính
+ * Cờ SỬA cho giao diện hồ sơ sản phẩm. Trước đây mỗi trang tự tính
  * `user.role === 'admin' || 'manager'` — NV phòng Kỹ thuật (role `employee`,
  * vai dẫn xuất `technical_staff`) vào được nhưng KHÔNG thấy nút nào, dù guard
  * server đã cho phép. Đọc thẳng registry thao tác để UI và guard cùng nguồn.
+ *
+ * Hồ sơ SP giờ là khu DÙNG CHUNG (`/products`) nên cờ này chạy cho MỌI phòng:
+ * Kỹ thuật/Bán hàng/Giám đốc → true (thấy nút), phòng khác → false (chỉ xem).
  */
 async function canEditProducts(user: User): Promise<boolean> {
   return canAction(user, 'technical.product.update')
@@ -76,7 +79,7 @@ async function canCreateProducts(user: User): Promise<boolean> {
   return canAction(user, 'technical.product.create')
 }
 
-/** Bóc tách / sửa BOM — luật riêng (`technical.bom.edit` VÀ `technical.edit`). */
+/** Bóc tách / sửa BOM — tầng riêng, gác bằng `technical.bom.edit` (0118). */
 async function canEditBom(user: User): Promise<boolean> {
   return canAction(user, 'technical.bom.save')
 }
@@ -422,6 +425,9 @@ export const productsService = {
       origin_country?: string | null
       name_foreign?: string | null
       shipping_mark?: string | null
+      /* Hai trường LSX cần mà trước đây tạo nhanh không khai được (07/08/2026). */
+      barcode?: string | null
+      tech_spec?: ProductTechSpec
     },
   ): Promise<Product> {
     await assertAction(user, 'technical.product.quick_create')
@@ -450,9 +456,10 @@ export const productsService = {
       origin_country: input.origin_country ?? null,
       name_foreign: input.name_foreign ?? null,
       shipping_mark: input.shipping_mark ?? null,
+      barcode: input.barcode ?? null,
       bom_status: 'none',
       packing: input.packing ?? {},
-      tech_spec: {},
+      tech_spec: input.tech_spec ?? {},
       showroom_sample: false,
     })
   },

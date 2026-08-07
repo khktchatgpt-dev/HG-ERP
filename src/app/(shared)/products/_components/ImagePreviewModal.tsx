@@ -46,9 +46,7 @@ export function ImagePreviewModal({
                 ` · KH ${preview.product.customer_item_code}`}
             </span>
             <Button variant="outline" size="sm" asChild>
-              <Link href={`/technical/products/${preview.product.id}`}>
-                Mở hồ sơ sản phẩm
-              </Link>
+              <Link href={`/products/${preview.product.id}`}>Mở hồ sơ sản phẩm</Link>
             </Button>
           </div>
         </div>

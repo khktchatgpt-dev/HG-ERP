@@ -98,10 +98,12 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 
 ## Frontend & UI conventions (admin/workspace)
 
-- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô. Các mảnh chuẩn: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`. Mẫu tham chiếu: `admin/users/UsersManager.tsx`, `technical/products/ProductsManager.tsx`.
+- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô. Các mảnh chuẩn: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`. Mẫu tham chiếu: `admin/users/UsersManager.tsx`, `(shared)/products/ProductsManager.tsx`.
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
 - **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.
+- **Trang DÙNG CHUNG** (không thuộc phòng nào) đặt ở `src/app/(shared)/*` + thêm vào `SHARED_SECTION` của `workspaces.config.ts` để mọi sidebar đều có. Layout `(shared)` chỉ gác đăng nhập và render `WorkspaceShell` theo workspace NHÀ của người xem — người xem giữ sidebar phòng mình. Quyền SỬA vẫn do service/registry quyết + page truyền cờ `canEdit` xuống để ẩn nút. Hiện có: `/products` (hồ sơ SP — mọi phòng xem, chỉ Kỹ thuật/Bán hàng/Giám đốc sửa).
+- **Đổi chỗ route đã publish**: thêm cặp `[cũ, mới]` vào `MOVED_PREFIXES` ở `src/proxy.ts` (chạy trước gate đăng nhập) thay vì để page stub redirect — stub nằm trong layout cũ nên vẫn bị gác quyền của khu cũ.
 
 ## Cross-module side effects — Event Bus
 

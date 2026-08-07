@@ -20,7 +20,6 @@ import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import {
-  checkColumnsOf,
   colKey,
   hasCbm,
   specColumnsOf,
@@ -46,13 +45,19 @@ import { SheetReadinessBar } from './lsx-editor/SheetReadinessBar'
  * SOẠN DÒNG LỆNH SẢN XUẤT (0114) — màn thay file Excel của Sales.
  *
  * Cấu trúc bám đúng file thật: lệnh → NHÓM (số PO / bộ sưu tập / nơi gia công)
- * → DÒNG. Một mã SP được lặp nhiều dòng, mỗi dòng một số lượng và một đợt xuất
- * ("Tách đợt" nhân đôi dòng để khỏi gõ lại).
+ * → DÒNG. Một mã SP có thể lặp nhiều dòng, mỗi dòng một số lượng và một đợt xuất.
+ *
+ * LỆNH BÁM THEO ĐƠN (chốt 07/08/2026): màn này KHÔNG thêm/xoá dòng và KHÔNG sửa
+ * thông tin sản phẩm — mã SP, tên, ĐVT, số lượng, CBM, mã khách, tên nước ngoài,
+ * barcode, đóng gói đều chỉ đọc. Muốn thêm/bớt mặt hàng thì sửa ĐƠN HÀNG; muốn
+ * đổi thông tin SP thì sửa HỒ SƠ SP (chip nguồn có link mở thẳng tab tương ứng).
+ * Ở đây chỉ còn: đợt xuất, quy cách theo mẫu cột của khách, ghi chú dòng — và
+ * nút đẩy ngược giá trị lên hồ sơ SP khi hồ sơ còn trống.
  *
  * Bố cục v2 (06/08/2026): bản cũ trải ~15 cột nhập trên một bảng cuộn ngang —
- * ô nào cũng bé. Nay bảng CHỈ giữ trường hay sửa (Mã SP · Tên · ĐVT · SL ·
- * CBM · Đợt xuất); vật liệu / đóng gói / ghi chú / kiểm tra hồ sơ nằm trong
- * PHẦN MỞ RỘNG của từng dòng (bấm "Chi tiết") — hết cuộn ngang, ô nhập rộng.
+ * ô nào cũng bé. Nay bảng chỉ bày Ảnh · Mã SP · Tên · ĐVT · SL · CBM · Đợt xuất;
+ * nhận diện / quy cách / đóng gói / ghi chú nằm trong PHẦN MỞ RỘNG của từng dòng
+ * (bấm "Chi tiết") — hết cuộn ngang, ô nhập rộng.
  *
  * NGUỒN + ĐỘ ĐẦY ĐỦ (0117): dòng được nạp sẵn từ hồ sơ SP và dòng đơn, nên mỗi
  * ô mang chú thích nguồn ("từ hồ sơ SP" / "khác hồ sơ SP" / "hồ sơ trống — tự
@@ -79,6 +84,47 @@ const th =
 // nhãn để màu muted nữa là ba sắc trắng-xám chồng nhau, không phân biệt nổi.
 const fieldLabel = 'flex flex-col gap-1 text-xs font-medium text-foreground'
 
+/**
+ * Ô CHỈ ĐỌC cho thông tin sản phẩm cố định (chốt 07/08/2026: "thông tin sản
+ * phẩm có tính cố định không cho sửa trong giao diện LSX").
+ *
+ * Cố tình KHÔNG dùng `<Input disabled>`: ô nhập xám vẫn trông như ô nhập, người
+ * dùng bấm vào rồi mới biết gõ không được. Chữ trơn nói ngay "cái này lấy từ
+ * nơi khác". `bad` = trường trống mà gate gửi duyệt đang chặn.
+ */
+function Fixed({
+  value,
+  mono,
+  right,
+  bad,
+}: {
+  value?: string | null
+  mono?: boolean
+  right?: boolean
+  bad?: boolean
+}) {
+  const v = (value ?? '').trim()
+  return (
+    <div
+      className={`px-2 py-1.5 text-xs ${mono ? 'font-mono' : ''} ${
+        right ? 'text-right tabular-nums' : ''
+      } ${bad ? 'rounded-md ring-1 ring-red-400' : ''} ${
+        v ? '' : 'text-muted-foreground'
+      }`}
+      title={v || undefined}
+    >
+      {v || '—'}
+    </div>
+  )
+}
+
+/** Ảnh SP trong bảng soạn dòng — nhận mặt hàng bằng mắt, khỏi dò mã. */
+function LineImage({ url }: { url?: string }) {
+  if (!url) return <div className="bg-muted size-9 rounded" aria-hidden />
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt="" className="size-9 rounded object-contain" />
+}
+
 export function LsxSheetEditor({
   lsxId,
   lsxCode,
@@ -89,6 +135,7 @@ export function LsxSheetEditor({
   template,
   groups: initial,
   profiles = {},
+  imageUrls = {},
   backHref,
 }: {
   lsxId: string
@@ -102,6 +149,8 @@ export function LsxSheetEditor({
   groups: (LsxGroup & { lines: LsxLine[] })[]
   /** productId → ảnh chụp hồ sơ SP: suy nguồn từng ô + biết hồ sơ thiếu gì. */
   profiles?: ProfileMap
+  /** fileId → URL ảnh SP đã ký (07/08/2026) — cột ảnh nhận diện trong bảng. */
+  imageUrls?: Record<string, string>
   backHref: string
 }) {
   const router = useRouter()
@@ -111,23 +160,24 @@ export function LsxSheetEditor({
   const [groups, setGroups] = useState<EditGroup[]>(
     initial.map((g) => ({ ...g, _key: newKey(), lines: g.lines.map(toEditLine) })),
   )
-  // Dòng đang mở phần chi tiết (vật liệu/đóng gói/kiểm tra hồ sơ).
+  // Dòng đang mở phần chi tiết (nhận diện/quy cách/đóng gói/ghi chú).
   const [openLines, setOpenLines] = useState<Set<string>>(new Set())
   const [onlyIncomplete, setOnlyIncomplete] = useState(false)
   // Ô nhập theo khoá dòng — để nhảy tới đúng ô thiếu khi bấm từ thanh gửi duyệt.
   const inputRefs = useRef(new Map<string, HTMLInputElement>())
 
   const specCols = specColumnsOf(template)
-  const checkCols = checkColumnsOf(template)
   const showCbm = hasCbm(template)
 
   const readinessOpts = useMemo(
     () => ({
       specKeys: specCols.map((c) => ({ key: colKey(c), label: c.label })),
-      checkKeys: checkCols.map((c) => ({ key: colKey(c), label: c.label })),
+      // Khối 'Kiểm tra hồ sơ' đã bỏ khỏi màn soạn (07/08/2026) nên không còn
+      // tính vào độ đầy đủ của dòng — thước đo phải khớp thứ màn hình thật sự hỏi.
+      checkKeys: [],
       needCbm: showCbm,
     }),
-    [specCols, checkCols, showCbm],
+    [specCols, showCbm],
   )
 
   const snapOf = (l: EditLine) => (l.product_id ? profiles[l.product_id] : undefined)
@@ -250,32 +300,6 @@ export function LsxSheetEditor({
     if (field === 'barcode') return patchLine(gKey, l._key, { barcode: snap.barcode })
     if (field === 'customer_item_code')
       return patchLine(gKey, l._key, { customer_item_code: snap.customer_item_code })
-  }
-
-  function addLine(gKey: string, from?: EditLine) {
-    setGroups((gs) =>
-      gs.map((g) =>
-        g._key === gKey
-          ? {
-              ...g,
-              lines: [
-                ...g.lines,
-                // Tách đợt = chép dòng nhưng BỎ id (dòng mới) và bỏ số lượng cũ.
-                from
-                  ? { ...from, id: undefined, _key: newKey(), qty: 0 }
-                  : { _key: newKey(), product_code: '', unit: '', qty: 0 },
-              ],
-            }
-          : g,
-      ),
-    )
-  }
-  function removeLine(gKey: string, lKey: string) {
-    setGroups((gs) =>
-      gs.map((g) =>
-        g._key === gKey ? { ...g, lines: g.lines.filter((l) => l._key !== lKey) } : g,
-      ),
-    )
   }
 
   /** Bản ghi gửi lên API — dùng chung cho "Lưu" và "Gửi GĐ duyệt". */
@@ -441,7 +465,9 @@ export function LsxSheetEditor({
     { label: lsxCode },
   ]
   // 6 cột nhập + # + Chi tiết + thao tác.
-  const colCount = 7 + (showCbm ? 1 : 0) + (canEdit ? 1 : 0)
+  // # · Ảnh · Mã SP · Tên · ĐVT · SL · Đợt xuất · Đủ thông tin (+ CBM nếu mẫu có).
+  // Cột thao tác đã bỏ: LSX bám theo đơn, không thêm/xoá dòng ở đây (07/08/2026).
+  const colCount = 8 + (showCbm ? 1 : 0)
 
   return (
     <div className="theme-v2 text-foreground flex flex-col gap-4">
@@ -579,6 +605,7 @@ export function LsxSheetEditor({
               <thead>
                 <tr className="text-muted-foreground border-b">
                   <th className={`${th} w-8`}>#</th>
+                  <th className={`${th} w-12`}>Ảnh</th>
                   <th className={`${th} w-36`}>Mã SP</th>
                   <th className={th}>Tên tiếng Việt</th>
                   <th className={`${th} w-16`}>ĐVT</th>
@@ -586,7 +613,6 @@ export function LsxSheetEditor({
                   {showCbm && <th className={`${th} w-24`}>CBM</th>}
                   <th className={`${th} w-28`}>Đợt xuất</th>
                   <th className={`${th} w-36`}>Đủ thông tin</th>
-                  {canEdit && <th className={`${th} w-20`} />}
                 </tr>
               </thead>
               <tbody>
@@ -600,8 +626,6 @@ export function LsxSheetEditor({
                     const open = openLines.has(l._key)
                     const origins = lineOrigins(l, snapOf(l))
                     const blocked = new Set(r.blocking.map((b) => b.key))
-                    const badCls = (key: string) =>
-                      blocked.has(key) ? 'ring-1 ring-red-400' : ''
                     return (
                       <Fragment key={l._key}>
                         <tr
@@ -622,83 +646,56 @@ export function LsxSheetEditor({
                               {i + 1}
                             </span>
                           </td>
+                          {/* Ảnh SP — nhận mặt hàng bằng mắt, khỏi dò mã (07/08/2026). */}
                           <td className="py-1.5 pr-2">
-                            <Input
-                              ref={(el) => {
-                                if (el) inputRefs.current.set(l._key, el)
-                                else inputRefs.current.delete(l._key)
-                              }}
-                              value={l.product_code ?? ''}
-                              onChange={(e) =>
-                                patchLine(g._key, l._key, {
-                                  product_code: e.target.value,
-                                })
-                              }
-                              disabled={!canEdit}
-                              placeholder="Thông báo sau"
-                              className={`${cellInput} font-mono ${badCls('product_code')}`}
+                            <LineImage url={imageUrls[l.image_file_id ?? '']} />
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <Fixed
+                              value={l.product_code}
+                              mono
+                              bad={blocked.has('product_code')}
                             />
                           </td>
                           <td className="py-1.5 pr-2">
-                            <Input
-                              value={l.name_vi ?? ''}
-                              onChange={(e) =>
-                                patchLine(g._key, l._key, { name_vi: e.target.value })
-                              }
-                              disabled={!canEdit}
-                              className={cellInput}
-                            />
+                            <Fixed value={l.name_vi} />
                           </td>
                           <td className="py-1.5 pr-2">
-                            <Input
-                              value={l.unit ?? ''}
-                              onChange={(e) =>
-                                patchLine(g._key, l._key, { unit: e.target.value })
-                              }
-                              disabled={!canEdit}
-                              className={`${cellInput} ${badCls('unit')}`}
-                            />
+                            <Fixed value={l.unit} bad={blocked.has('unit')} />
                           </td>
                           <td className="py-1.5 pr-2">
-                            <Input
-                              type="number"
-                              min={0}
-                              value={String(l.qty ?? 0)}
-                              onChange={(e) =>
-                                patchLine(g._key, l._key, { qty: Number(e.target.value) })
-                              }
-                              disabled={!canEdit}
-                              className={`${cellInput} text-right tabular-nums ${badCls('qty')}`}
+                            <Fixed
+                              value={l.qty == null ? null : l.qty.toLocaleString('vi-VN')}
+                              right
+                              bad={blocked.has('qty')}
                             />
                           </td>
                           {showCbm && (
                             <td className="py-1.5 pr-2">
-                              <Input
-                                type="number"
-                                step="0.001"
-                                min={0}
-                                value={l.cbm == null ? '' : String(l.cbm)}
-                                onChange={(e) =>
-                                  patchLine(g._key, l._key, {
-                                    cbm:
-                                      e.target.value === ''
-                                        ? null
-                                        : Number(e.target.value),
-                                  })
-                                }
-                                disabled={!canEdit}
-                                className={`${cellInput} text-right tabular-nums`}
-                              />
+                              <Fixed value={l.cbm == null ? null : String(l.cbm)} right />
                             </td>
                           )}
                           <td className="py-1.5 pr-2">
+                            {/*
+                              Đợt xuất là NGÀY, không phải chữ tự do (chốt
+                              07/08/2026). Ô cũ nhận text nên dữ liệu thật lẫn
+                              lộn: "w37.26" (tuần), "11/01/27" (ngày viết tay,
+                              lại trùng ship_date đã có), và cả một đoạn ghi chú
+                              dài — không lọc/xếp/cảnh báo hạn gì được. Ô nhóm
+                              ("Ngày giao") vốn đã là date; nay dòng theo cho khớp.
+                              Ghi thẳng ship_date và xoá ship_label để hai cột
+                              không còn mâu thuẫn nhau.
+                            */}
                             <Input
-                              value={l.ship_label ?? l.ship_date ?? ''}
+                              type="date"
+                              value={l.ship_date ?? ''}
                               onChange={(e) =>
-                                patchLine(g._key, l._key, { ship_label: e.target.value })
+                                patchLine(g._key, l._key, {
+                                  ship_date: e.target.value || null,
+                                  ship_label: null,
+                                })
                               }
                               disabled={!canEdit}
-                              placeholder="w37.26"
                               className={cellInput}
                             />
                           </td>
@@ -709,7 +706,7 @@ export function LsxSheetEditor({
                               className={`hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-1.5 py-1 transition-colors ${
                                 open ? 'bg-accent' : ''
                               }`}
-                              title="Mở chi tiết: vật liệu · đóng gói · ghi chú · kiểm tra hồ sơ"
+                              title="Mở chi tiết: nhận diện · quy cách · đóng gói · ghi chú"
                             >
                               <LineMeter meters={r.meters} />
                               <ChevronDown
@@ -717,32 +714,16 @@ export function LsxSheetEditor({
                               />
                             </button>
                           </td>
-                          {canEdit && (
-                            <td className="py-1.5 text-right whitespace-nowrap">
-                              <button
-                                onClick={() => addLine(g._key, l)}
-                                title="Tách đợt xuất — chép dòng này thành dòng mới"
-                                className="text-primary px-1 font-medium hover:underline"
-                              >
-                                Tách
-                              </button>
-                              <button
-                                onClick={() => removeLine(g._key, l._key)}
-                                title="Xoá dòng"
-                                className="text-destructive px-1 font-medium hover:underline"
-                              >
-                                Xoá
-                              </button>
-                            </td>
-                          )}
                         </tr>
                         {open && (
                           <tr className="border-b last:border-0">
                             <td colSpan={colCount} className="pt-1 pb-3">
                               <div className="bg-muted/30 rounded-lg border p-3">
-                                {/* Ba ô này IN TRÊN PHIẾU mà trước đây Sales
-                                    không sửa được ở đâu — chúng chính là phần
-                                    "máy lấy sẵn từ hồ sơ SP". */}
+                                {/*
+                                  Nhận diện SP: LẤY TỪ HỒ SƠ SP, chỉ đọc
+                                  (07/08/2026). Sửa thì sửa ở hồ sơ SP rồi lệnh
+                                  lấy lại — chip nguồn có sẵn link "mở hồ sơ".
+                                */}
                                 <div className="mb-3 grid gap-3 border-b pb-3 sm:grid-cols-3">
                                   {(
                                     [
@@ -755,32 +736,16 @@ export function LsxSheetEditor({
                                       ['barcode', 'Số barcode', l.barcode],
                                     ] as const
                                   ).map(([field, label, value]) => (
-                                    <label key={field} className={fieldLabel}>
+                                    <div key={field} className={fieldLabel}>
                                       {label}
-                                      <Input
-                                        value={value ?? ''}
-                                        onChange={(e) =>
-                                          patchLine(g._key, l._key, {
-                                            [field]: e.target.value,
-                                          })
-                                        }
-                                        disabled={!canEdit}
-                                        className={`${cellInput} bg-card ${
-                                          field === 'barcode' ? 'font-mono' : ''
-                                        }`}
-                                      />
+                                      <Fixed value={value} mono={field === 'barcode'} />
                                       <SourceChip
                                         origin={origins[field] as FieldOrigin}
                                         refValue={snapOf(l)?.[field] ?? null}
                                         productId={l.product_id}
                                         tab={gapTabOf(l, field)}
-                                        onRestore={
-                                          canEdit && origins[field] === 'edited'
-                                            ? () => revertField(g._key, l, field)
-                                            : undefined
-                                        }
                                       />
-                                    </label>
+                                    </div>
                                   ))}
                                 </div>
                                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -822,31 +787,17 @@ export function LsxSheetEditor({
                                       />
                                     </label>
                                   ))}
-                                  <label className={fieldLabel}>
+                                  {/* Đóng gói: quy cách của SP → chỉ đọc, sửa ở hồ sơ SP. */}
+                                  <div className={fieldLabel}>
                                     Đóng gói
-                                    <Input
-                                      value={l.packing ?? ''}
-                                      onChange={(e) =>
-                                        patchLine(g._key, l._key, {
-                                          packing: e.target.value,
-                                        })
-                                      }
-                                      disabled={!canEdit}
-                                      placeholder="4 cái/ thùng"
-                                      className={`${cellInput} bg-card`}
-                                    />
+                                    <Fixed value={l.packing} />
                                     <SourceChip
                                       origin={origins.packing ?? null}
                                       refValue={snapOf(l)?.packing ?? null}
                                       productId={l.product_id}
                                       tab="dong-goi"
-                                      onRestore={
-                                        canEdit && origins.packing === 'edited'
-                                          ? () => revertField(g._key, l, 'packing')
-                                          : undefined
-                                      }
                                     />
-                                  </label>
+                                  </div>
                                   <label className={fieldLabel}>
                                     Ghi chú
                                     <Input
@@ -861,34 +812,11 @@ export function LsxSheetEditor({
                                     />
                                   </label>
                                 </div>
-                                {checkCols.length > 0 && (
-                                  <div className="mt-3 border-t pt-2">
-                                    <div className="text-muted-foreground mb-1.5 text-[11px] font-medium tracking-wide uppercase">
-                                      Kiểm tra hồ sơ (nội bộ — không in trên phiếu)
-                                    </div>
-                                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                                      {checkCols.map((c) => (
-                                        <label key={colKey(c)} className={fieldLabel}>
-                                          {c.label}
-                                          <Input
-                                            value={l.checks?.[colKey(c)] ?? ''}
-                                            onChange={(e) =>
-                                              patchLine(g._key, l._key, {
-                                                checks: {
-                                                  ...(l.checks ?? {}),
-                                                  [colKey(c)]: e.target.value,
-                                                },
-                                              })
-                                            }
-                                            disabled={!canEdit}
-                                            placeholder={c.hint ?? 'Có / Không'}
-                                            className={`${cellInput} bg-card`}
-                                          />
-                                        </label>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
+                                {/* Khối "Kiểm tra hồ sơ" (BOM/Bản vẽ/Mẫu/Showroom)
+                                    đã BỎ HẲN khỏi màn soạn (07/08/2026) — nó
+                                    không in trên phiếu, không xuất Excel, và
+                                    trạng thái BOM/mẫu đã có ở hồ sơ SP. Giá trị
+                                    cũ vẫn nằm trong DB, chỉ là không sửa ở đây. */}
                                 {/* Ghi ngược về hồ sơ SP — chỉ hiện khi hồ sơ
                                   còn trường trống; server chỉ điền chỗ trống. */}
                                 {canEdit &&
@@ -907,7 +835,7 @@ export function LsxSheetEditor({
                                         {tabs.map((tab) => (
                                           <Link
                                             key={tab}
-                                            href={`/technical/products/${l.product_id}/${tab}`}
+                                            href={`/products/${l.product_id}/${tab}`}
                                             target="_blank"
                                             rel="noopener"
                                             className="text-primary inline-flex items-center gap-0.5 text-[11px] hover:underline"
@@ -949,17 +877,6 @@ export function LsxSheetEditor({
               </tbody>
             </table>
           </div>
-
-          {canEdit && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-2"
-              onClick={() => addLine(g._key)}
-            >
-              + Thêm dòng
-            </Button>
-          )}
         </section>
       ))}
 

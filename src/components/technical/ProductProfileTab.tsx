@@ -104,7 +104,7 @@ export function ProductProfileTab({
       ? `${pk.carton_l_cm} × ${pk.carton_w_cm} × ${pk.carton_h_cm}`
       : null
   const cbm = cartonCbm(pk)
-  const base = `/technical/products/${product.id}`
+  const base = `/products/${product.id}`
 
   // Chỉ nhận giá trị nguyên thuỷ: `ts`/`dims` là object dựng lại mỗi lần render
   // nên đưa vào deps thì memo không bao giờ trúng.
@@ -153,7 +153,7 @@ export function ProductProfileTab({
     try {
       await api(`/api/dept/technical/products/${product.id}`, { method: 'DELETE' })
       toast.success('Đã xoá', product.name)
-      router.push('/technical/products')
+      router.push('/products')
     } catch (e) {
       toast.error('Xoá thất bại', apiErrorText(e))
       setBusy(false)
@@ -499,7 +499,7 @@ function buildTracks(
   hasCarton: boolean,
   hasLoading: boolean,
 ): Track[] {
-  const base = `/technical/products/${p.id}`
+  const base = `/products/${p.id}`
   const ts = p.tech_spec ?? {}
   return [
     {

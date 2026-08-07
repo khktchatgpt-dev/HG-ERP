@@ -33,6 +33,19 @@ export type QuickProduct = {
   packing: Packing
 }
 
+/**
+ * Năm ô quy cách LSX in ra bảng (Máy · Nệm · Sơn · Kính · Gỗ). Khoá phải khớp
+ * `ProductTechSpec` ở technical.repo — đổi tên khoá là lệnh mất giá trị.
+ */
+type SpecKey = 'machine' | 'cushion' | 'paint' | 'glass' | 'wood'
+const SPEC_FIELDS: [SpecKey, string, string][] = [
+  ['machine', 'Máy', 'vd Dây dù màu kem'],
+  ['cushion', 'Nệm', 'vd Nệm dày 5cm'],
+  ['paint', 'Sơn', 'vd Màu graphit'],
+  ['glass', 'Kính', 'vd Cường lực 8mm'],
+  ['wood', 'Gỗ', 'vd Acacia FSC 100%'],
+]
+
 const PACK_FIELDS: { key: keyof Packing; label: string; int?: boolean }[] = [
   { key: 'l_cm', label: 'Dài SP (cm)' },
   { key: 'w_cm', label: 'Rộng SP (cm)' },
@@ -82,6 +95,15 @@ export function QuickAddProduct({
   const [origin, setOrigin] = useState('')
   const [nameForeign, setNameForeign] = useState('')
   const [shippingMark, setShippingMark] = useState('')
+  // Trường LSX cần (07/08/2026) — xem khối 'Cần cho lệnh sản xuất'.
+  const [barcode, setBarcode] = useState('')
+  const [spec, setSpec] = useState<Record<SpecKey, string>>({
+    machine: '',
+    cushion: '',
+    paint: '',
+    glass: '',
+    wood: '',
+  })
   const [showExport, setShowExport] = useState(false)
 
   const setP = (k: keyof Packing, v: string) => setPack((p) => ({ ...p, [k]: v }))
@@ -109,6 +131,8 @@ export function QuickAddProduct({
     setOrigin('')
     setNameForeign('')
     setShippingMark('')
+    setBarcode('')
+    setSpec({ machine: '', cushion: '', paint: '', glass: '', wood: '' })
     setShowExport(false)
     if (fileRef.current) fileRef.current.value = ''
   }
@@ -155,6 +179,11 @@ export function QuickAddProduct({
             origin_country: origin.trim() || null,
             name_foreign: nameForeign.trim() || null,
             shipping_mark: shippingMark.trim() || null,
+            barcode: barcode.trim() || null,
+            // Chỉ gửi ô đã điền — gửi chuỗi rỗng là ghi đè hồ sơ bằng khoảng trắng.
+            tech_spec: Object.fromEntries(
+              SPEC_FIELDS.map(([k]) => [k, spec[k].trim()]).filter(([, v]) => v),
+            ),
           },
         },
       )
@@ -283,6 +312,38 @@ export function QuickAddProduct({
             </label>
           ))}
         </div>
+      </Section>
+
+      {/*
+        CẦN CHO LỆNH SẢN XUẤT (07/08/2026). Từ khi màn soạn dòng LSX không cho
+        sửa thông tin SP nữa, thứ gì lệnh cần mà đây không khai thì về sau phải
+        quay lại hồ sơ SP mới điền được — nên gom đúng những trường LSX hay báo
+        "hồ sơ SP đang thiếu" (xem `lsx-line-fill.ts`) vào một khối, mở sẵn.
+      */}
+      <Section label="Cần cho lệnh sản xuất">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          <input
+            value={barcode}
+            onChange={(e) => setBarcode(e.target.value)}
+            placeholder="Số barcode"
+            maxLength={100}
+            className={`${cls} col-span-2 font-mono sm:col-span-3`}
+          />
+          {SPEC_FIELDS.map(([key, label, hint]) => (
+            <input
+              key={key}
+              value={spec[key]}
+              onChange={(e) => setSpec((s) => ({ ...s, [key]: e.target.value }))}
+              placeholder={`${label} — ${hint}`}
+              maxLength={300}
+              className={cls}
+            />
+          ))}
+        </div>
+        <p className="mt-1.5 text-xs text-zinc-500">
+          Bỏ trống được — nhưng lệnh sản xuất sẽ báo thiếu, và chỉ sửa được ở hồ sơ SP chứ
+          không sửa trong lệnh.
+        </p>
       </Section>
 
       {/* Xuất khẩu (tuỳ chọn) */}

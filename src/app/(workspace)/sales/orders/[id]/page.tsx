@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { canMutateOwned } from '@/lib/record-ownership'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -36,7 +37,11 @@ export default async function OrderDetailPage({
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null
-  const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
+  // Sửa/huỷ: phải ở phòng Bán Hàng VÀ là người tạo đơn (quản lý gánh mọi đơn).
+  // Ẩn nút cho đúng — không thì bấm vào mới ăn 403 từ service.
+  const canEdit =
+    (user.role === 'admin' || dept?.name === 'Bán Hàng') &&
+    canMutateOwned(user, order.created_by)
   const canIssue = user.role === 'admin' || dept?.name === 'Bán Hàng' // Sales phát LSX
   const lsx = await productionRepo.findByOrder(order.id)
 

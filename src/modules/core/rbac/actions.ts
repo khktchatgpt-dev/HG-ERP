@@ -42,7 +42,24 @@ const anyOf = (...of: Rule[]): Rule => ({ kind: 'anyOf', of })
 const memberEdit = (member: string, edit: string) => allOf(perm(member), perm(edit))
 
 export const ACTIONS: Action[] = [
-  // ── Kỹ thuật (thư viện SP + BOM) ─────────────────────────────────────────
+  /*
+   * ── Kỹ thuật (thư viện SP + BOM) ────────────────────────────────────────
+   *
+   * HỒ SƠ SẢN PHẨM LÀ KHU DÙNG CHUNG (user chốt 07/08/2026): trang ở `/products`
+   * (`src/app/(shared)`), MỌI phòng xem được — hai action `*.view` dưới đây để
+   * PUBLIC là vì thế. Quyền SỬA chỉ ba nhóm: Kỹ thuật, Bán hàng, Giám đốc.
+   *
+   * Cách gác: một permission cho mỗi tầng, KHÔNG kèm `technical.member` nữa.
+   *   `technical.edit`     → sửa hồ sơ SP (mã/tên/thông số/đóng gói/tài liệu)
+   *   `technical.bom.edit` → sửa định mức (BOM)
+   * Trước đây luật là `technical.member AND technical.edit` nên Giám đốc (có
+   * technical.edit, không có technical.member) và Bán hàng (có bom.edit, không
+   * có technical.edit) đều bị chặn — đúng ý cũ "chỉ phòng Kỹ thuật", sai ý mới.
+   * Bỏ `technical.member` KHÔNG mở cửa cho ai khác: chỉ technical_staff,
+   * sales_staff và director được seed hai quyền này (0118), phòng khác chỉ xem.
+   * Riêng showroom (`technical.sample.*`) vẫn giữ `technical.member` — mẫu vật
+   * lý do Kỹ thuật giữ, không nằm trong hồ sơ SP.
+   */
   {
     key: 'technical.product.view',
     label: 'Xem thư viện sản phẩm',
@@ -59,19 +76,21 @@ export const ACTIONS: Action[] = [
     key: 'technical.product.create',
     label: 'Tạo sản phẩm (đầy đủ)',
     domain: 'technical',
-    rule: memberEdit('technical.member', 'technical.edit'),
+    rule: perm('technical.edit'),
   },
   {
     key: 'technical.product.quick_create',
     label: 'Tạo nhanh sản phẩm (từ báo giá/đơn)',
     domain: 'technical',
-    rule: anyOf(perm('sales.member'), memberEdit('technical.member', 'technical.edit')),
+    // `sales.member` giữ lại làm nhánh riêng: sale tạo nhanh SP ngay trong báo
+    // giá/đơn được kể cả khi admin thu hồi `technical.edit` của Bán hàng.
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
   {
     key: 'technical.product.set_image',
     label: 'Đặt ảnh đại diện sản phẩm',
     domain: 'technical',
-    rule: anyOf(perm('sales.member'), memberEdit('technical.member', 'technical.edit')),
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
   {
     key: 'technical.product.fill_specs',
@@ -80,32 +99,41 @@ export const ACTIONS: Action[] = [
     // Cùng tầm với quick_create: sale khai được các trường này lúc tạo nhanh SP,
     // thì cũng phải điền được cho SP cũ còn trống — nếu không tờ báo giá in ra
     // thiếu quy cách và phải chờ Kỹ thuật. KHÔNG bao gồm mã/tên/BOM.
-    rule: anyOf(perm('sales.member'), memberEdit('technical.member', 'technical.edit')),
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
   },
   {
     key: 'technical.product.update',
     label: 'Sửa sản phẩm',
     domain: 'technical',
-    rule: memberEdit('technical.member', 'technical.edit'),
+    rule: perm('technical.edit'),
   },
   {
     key: 'technical.product.clone',
     label: 'Nhân bản sản phẩm',
     domain: 'technical',
-    rule: memberEdit('technical.member', 'technical.edit'),
+    rule: perm('technical.edit'),
   },
   {
     key: 'technical.product.remove',
     label: 'Xoá sản phẩm',
     domain: 'technical',
-    rule: memberEdit('technical.member', 'technical.edit'),
+    rule: perm('technical.edit'),
     rowLevel: 'Chặn nếu SP đang nằm trong báo giá/đơn/mẫu — dùng "Ngừng dùng".',
+  },
+  {
+    key: 'technical.product.attach_file',
+    label: 'Đính tài liệu vào sản phẩm (bản vẽ / BOM / hướng dẫn)',
+    domain: 'technical',
+    // Cùng tầng với sửa hồ sơ. Gác ở `files.service.assertCanWriteParent`
+    // (nhánh parent.kind='product') — trước đây nhánh đó rơi vào mặc định
+    // "any signed-in user", tức ai cũng đính được file vào SP.
+    rule: perm('technical.edit'),
   },
   {
     key: 'technical.bom.save',
     label: 'Bóc tách / sửa BOM',
     domain: 'technical',
-    rule: allOf(perm('technical.bom.edit'), perm('technical.edit')),
+    rule: perm('technical.bom.edit'),
   },
   {
     key: 'technical.sample.manage',

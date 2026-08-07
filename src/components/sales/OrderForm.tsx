@@ -3,10 +3,19 @@
 import { useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/Badge'
+import { Button } from '@/components/shadcn/button'
+// Alias: helper `Card` cục bộ bên dưới (nhận prop `title`) đã được cả trang gọi,
+// nên thẻ shadcn vào đây dưới tên khác thay vì đổi hàng chục chỗ gọi.
+import {
+  Card as UiCard,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/shadcn/card'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 
@@ -54,6 +63,26 @@ export type OrderInitial = {
   transhipment: boolean | null
 }
 
+/**
+ * Năm ô quy cách LSX in ra bảng. Khoá khớp `ProductTechSpec` (technical.repo).
+ */
+type SpecKey = 'machine' | 'cushion' | 'paint' | 'glass' | 'wood'
+/** [khoá, nhãn, ví dụ] — ví dụ lấy từ dữ liệu thật để sale biết gõ kiểu gì. */
+const SPEC_FIELDS: [SpecKey, string, string][] = [
+  ['machine', 'Máy', 'Dây dù màu kem'],
+  ['cushion', 'Nệm', 'Nệm dày 5cm · vải Stormstone'],
+  ['paint', 'Sơn', 'Màu Graphit H-SM-9608'],
+  ['glass', 'Kính', 'Kính cường lực 8mm'],
+  ['wood', 'Gỗ', 'Acacia FSC 100%'],
+]
+const emptySpec = (): Record<SpecKey, string> => ({
+  machine: '',
+  cushion: '',
+  paint: '',
+  glass: '',
+  wood: '',
+})
+
 /** SP mới sale tự điền — chỉ tạo vào thư viện Kỹ thuật KHI submit đơn (không mồ côi). */
 type LineDraft = {
   code: string
@@ -62,6 +91,13 @@ type LineDraft = {
   itemCode: string
   notes: string
   image: File | null
+  /*
+   * Barcode + quy cách: LSX cần mà trước đây tạo nhanh không hỏi, nên SP mới vừa
+   * vào lệnh là đã báo 'hồ sơ SP đang thiếu' — mà từ 07/08/2026 lệnh KHÔNG cho
+   * sửa thông tin SP nữa, phải quay về hồ sơ SP mới điền được. Hỏi ngay tại đây.
+   */
+  barcode: string
+  spec: Record<SpecKey, string>
 }
 type LineRow = {
   key: number
@@ -75,8 +111,41 @@ type LineRow = {
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
 const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
 
+/**
+ * Nhãn + ô nhập của mini-form 'SP mới'. Nhãn là THẬT chứ không mượn placeholder:
+ * placeholder biến mất ngay khi gõ, form 12 ô mà không nhãn thì nhìn lại không
+ * biết ô nào là gì.
+ */
+function NpField({
+  label,
+  required,
+  className = '',
+  children,
+}: {
+  label: string
+  required?: boolean
+  className?: string
+  children: React.ReactNode
+}) {
+  return (
+    <label className={`flex flex-col gap-1 text-xs ${className}`}>
+      <span className="font-medium">
+        {label}
+        {required && <span className="text-destructive"> *</span>}
+      </span>
+      {children}
+    </label>
+  )
+}
+
+/*
+ * Lớp ô nhập DÙNG CHUNG cho mọi input/select/textarea của form. Đổi ở ĐÂY là
+ * đổi cả trang — nên form dùng token `.theme-v2` (stone + emerald) mà không phải
+ * thay từng thẻ sang <Input> của shadcn. Bám sát `components/shadcn/input.tsx`
+ * để hai bên nhìn như một.
+ */
 const cls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
 
 export function OrderForm(props: {
   mode: 'create' | 'edit'
@@ -123,6 +192,8 @@ export function OrderForm(props: {
     price: '',
   })
   const [npNotes, setNpNotes] = useState('')
+  const [npBarcode, setNpBarcode] = useState('')
+  const [npSpec, setNpSpec] = useState<Record<SpecKey, string>>(emptySpec)
   const [npImage, setNpImage] = useState<File | null>(null)
 
   const [files, setFiles] = useState<File[]>([])
@@ -293,6 +364,8 @@ export function OrderForm(props: {
           itemCode: np.itemCode.trim(),
           notes: npNotes.trim(),
           image: npImage,
+          barcode: npBarcode.trim(),
+          spec: npSpec,
         },
         qty: '',
         unitPrice: np.price.trim() ? Number(np.price) : '',
@@ -301,6 +374,8 @@ export function OrderForm(props: {
     ])
     setNp({ code: '', name: '', unit: 'cai', itemCode: '', price: '' })
     setNpNotes('')
+    setNpBarcode('')
+    setNpSpec(emptySpec())
     setNpImage(null)
     setNpOpen(false)
   }
@@ -372,6 +447,13 @@ export function OrderForm(props: {
               customer_item_code: l.draft.itemCode || null,
               notes: l.draft.notes || null,
               reference_price: l.unitPrice === '' ? null : Number(l.unitPrice),
+              barcode: l.draft.barcode || null,
+              // Chỉ gửi ô đã điền — chuỗi rỗng sẽ thành khoảng trắng trong hồ sơ.
+              tech_spec: Object.fromEntries(
+                SPEC_FIELDS.map(([k]) => [k, l.draft!.spec[k].trim()]).filter(
+                  ([, v]) => v,
+                ),
+              ),
             },
           },
         )
@@ -472,36 +554,50 @@ export function OrderForm(props: {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div className="theme-v2 text-foreground flex flex-col gap-5 pb-4">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Kinh doanh', href: '/sales' },
-          { label: 'Đơn hàng', href: '/sales/orders' },
-          { label: mode === 'create' ? 'Tạo đơn' : `Sửa ${order!.code}` },
-        ]}
-        title={mode === 'create' ? 'Tạo đơn hàng' : `Sửa đơn ${order!.code}`}
-        description={
-          mode === 'create'
-            ? 'Từ báo giá đã chốt hoặc trực tiếp. SP mới tạo nhanh sẽ vào thư viện Kỹ thuật khi lưu đơn.'
-            : 'Khách thay đổi — mọi chỉnh sửa được ghi vào lịch sử đơn.'
-        }
-        actions={
-          <Link
-            href={mode === 'edit' ? `/sales/orders/${order!.id}` : '/sales/orders'}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
-            ← Huỷ
-          </Link>
-        }
-      />
 
-      {/* 1. Khách hàng & nguồn */}
-      <Card title="Khách hàng & nguồn đơn">
-        {mode === 'create' ? (
+      {/* Đầu trang v2 — khớp trang danh sách và hồ sơ đơn. Bỏ breadcrumb 3 cấp:
+          form chỉ có một đường về, để nguyên link đó cho gọn. */}
+      <div className="flex flex-col gap-3">
+        <Link
+          href={mode === 'edit' ? `/sales/orders/${order!.id}` : '/sales/orders'}
+          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-xs"
+        >
+          <ArrowLeft className="size-3.5" />
+          {mode === 'edit' ? order!.code : 'Đơn hàng'}
+        </Link>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {mode === 'create' ? 'Tạo đơn hàng' : `Sửa đơn ${order!.code}`}
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            {mode === 'create'
+              ? 'Từ báo giá đã chốt hoặc trực tiếp. SP mới tạo nhanh sẽ vào thư viện Kỹ thuật khi lưu đơn.'
+              : 'Khách thay đổi — mọi chỉnh sửa được ghi vào lịch sử đơn.'}
+          </p>
+          {/* Sửa đơn: khách / tiền tệ / nguồn là DỮ KIỆN CỐ ĐỊNH, không sửa được.
+              Trước đây chúng chiếm nguyên một thẻ ngang hàng với thẻ dòng SP —
+              mắt phải lướt qua một thẻ chỉ-để-đọc rồi mới tới chỗ làm việc thật.
+              Nay nằm ngay dưới tiêu đề, thẻ đầu trang là thẻ đáng sửa. */}
+          {mode === 'edit' && (
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-medium">{order!.customer_name}</span>
+              <Badge>{order!.currency}</Badge>
+              {order!.quote_code && <Badge>Từ BG {order!.quote_code}</Badge>}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 1. Khách hàng & nguồn — chỉ khi TẠO đơn (lúc sửa đã nằm ở đầu trang). */}
+      {mode === 'create' && (
+        <Card title="Khách hàng & nguồn đơn">
           <>
             <label className="mb-3 flex flex-col gap-1 text-sm">
-              Mã đơn hàng <span className="text-red-500">*</span>
+              <span>
+                Mã đơn hàng <span className="text-destructive">*</span>
+              </span>
               <input
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
@@ -520,12 +616,14 @@ export function OrderForm(props: {
             </div>
             {source === 'quote' ? (
               (props.sentQuotes?.length ?? 0) === 0 ? (
-                <p className="text-sm text-zinc-500">
+                <p className="text-muted-foreground text-sm">
                   Chưa có báo giá đã chốt — chuyển “Trực tiếp” hoặc chốt báo giá trước.
                 </p>
               ) : (
                 <label className="flex flex-col gap-1 text-sm">
-                  Báo giá đã chốt <span className="text-red-500">*</span>
+                  <span>
+                    Báo giá đã chốt <span className="text-destructive">*</span>
+                  </span>
                   <select
                     value={quoteId}
                     onChange={(e) => void selectQuote(e.target.value)}
@@ -539,7 +637,7 @@ export function OrderForm(props: {
                       </option>
                     ))}
                   </select>
-                  <span className="text-xs text-zinc-500">
+                  <span className="text-muted-foreground text-xs">
                     {loadingQuote
                       ? 'Đang nạp dòng SP từ báo giá…'
                       : 'SP + đơn giá + điều khoản lấy từ báo giá — bạn chỉ cần nhập số lượng bên dưới.'}
@@ -549,7 +647,9 @@ export function OrderForm(props: {
             ) : (
               <div className="grid gap-3 sm:grid-cols-3">
                 <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                  Khách hàng <span className="text-red-500">*</span>
+                  <span>
+                    Khách hàng <span className="text-destructive">*</span>
+                  </span>
                   <select
                     value={customerId}
                     onChange={(e) => setCustomerId(e.target.value)}
@@ -578,28 +678,25 @@ export function OrderForm(props: {
               </div>
             )}
           </>
-        ) : (
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="font-medium">{order!.customer_name}</span>
-            <Badge>{order!.currency}</Badge>
-            {order!.quote_code && <Badge>Từ BG {order!.quote_code}</Badge>}
-          </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* 2. Dòng sản phẩm */}
       {linesEditable && (
         <Card
           title={`Dòng sản phẩm (${lines.length})`}
           right={
-            <span className="text-sm">
-              Tổng: <b className="text-base">{total.toLocaleString('en-US')}</b>{' '}
+            <span className="text-muted-foreground text-xs">
+              Tổng{' '}
+              <b className="text-foreground text-base tabular-nums">
+                {total.toLocaleString('en-US')}
+              </b>{' '}
               {currency}
             </span>
           }
         >
           {lines.length === 0 ? (
-            <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400 dark:border-zinc-700">
+            <p className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-sm">
               Chưa có dòng nào — bấm <b>“+ Chọn SP có sẵn”</b> hoặc <b>“+ SP mới”</b> bên
               dưới.
             </p>
@@ -609,34 +706,33 @@ export function OrderForm(props: {
                 const p = l.productId ? productById.get(l.productId) : undefined
                 const lineTotal = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0)
                 return (
-                  <div
-                    key={l.key}
-                    className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-                  >
+                  <div key={l.key} className="rounded-lg border p-3">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         {l.draft ? (
                           <div className="flex flex-wrap items-center gap-2">
                             <Badge tone="green">SP mới</Badge>
                             <span className="font-medium">{l.draft.name}</span>
-                            <span className="font-mono text-xs text-zinc-400">
+                            <span className="text-muted-foreground font-mono text-xs">
                               {l.draft.code}
                             </span>
                             {l.draft.image && (
                               <span className="text-xs text-emerald-600">🖼 có ảnh</span>
                             )}
-                            <span className="text-xs text-zinc-400">
+                            <span className="text-muted-foreground text-xs">
                               (tạo vào thư viện khi lưu đơn)
                             </span>
                           </div>
                         ) : (
                           <>
+                            {/* Sản phẩm là TIÊU ĐỀ của dòng — đậm hơn mọi ô còn
+                                lại, trước đây cùng cỡ cùng màu với ô ghi chú. */}
                             <select
                               value={l.productId}
                               onChange={(e) =>
                                 setLine(l.key, { productId: e.target.value })
                               }
-                              className={cls}
+                              className={`${cls} font-medium`}
                             >
                               <option value="">— chọn sản phẩm —</option>
                               {productChoices.own.length > 0 && (
@@ -662,7 +758,7 @@ export function OrderForm(props: {
                               )}
                             </select>
                             {p && (
-                              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                              <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                                 <span className="font-mono">{p.code}</span>
                                 {p.customer_item_code && (
                                   <span>KH: {p.customer_item_code}</span>
@@ -681,16 +777,22 @@ export function OrderForm(props: {
                       <button
                         type="button"
                         onClick={() => removeLine(l.key)}
-                        className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                        className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                         aria-label="Xoá dòng"
                       >
                         ✕
                       </button>
                     </div>
 
-                    {/* SL / Đơn giá / Thành tiền — có nhãn rõ ràng */}
+                    {/*
+                      BẬC ƯU TIÊN trong một dòng, trước đây 4 ô y hệt nhau:
+                        Số lượng  — thứ Sales sửa nhiều nhất → to nhất, đậm nhất
+                        Đơn giá   — cũng phải nhập → to, không đậm
+                        Thành tiền— MÁY TÍNH RA, chỉ để đối chiếu → lùi lại, xám
+                        Ghi chú   — tuỳ chọn → chữ nhỏ, nhãn xám
+                    */}
                     <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <LineField label="Số lượng *">
+                      <LineField label="Số lượng *" strong>
                         <input
                           type="number"
                           step="0.01"
@@ -701,10 +803,10 @@ export function OrderForm(props: {
                               qty: e.target.value === '' ? '' : Number(e.target.value),
                             })
                           }
-                          className={cls}
+                          className={`${cls} h-10 text-base font-semibold tabular-nums`}
                         />
                       </LineField>
-                      <LineField label={`Đơn giá * (${currency})`}>
+                      <LineField label={`Đơn giá * (${currency})`} strong>
                         <input
                           type="number"
                           step="0.01"
@@ -716,11 +818,11 @@ export function OrderForm(props: {
                                 e.target.value === '' ? '' : Number(e.target.value),
                             })
                           }
-                          className={cls}
+                          className={`${cls} h-10 text-base tabular-nums`}
                         />
                       </LineField>
                       <LineField label={`Thành tiền (${currency})`}>
-                        <div className="rounded-md bg-zinc-100 px-3 py-2 text-right text-sm font-semibold tabular-nums dark:bg-zinc-800">
+                        <div className="bg-muted/60 text-muted-foreground flex h-10 items-center justify-end rounded-md px-3 text-sm tabular-nums">
                           {lineTotal.toLocaleString('en-US')}
                         </div>
                       </LineField>
@@ -730,7 +832,7 @@ export function OrderForm(props: {
                           maxLength={500}
                           onChange={(e) => setLine(l.key, { note: e.target.value })}
                           placeholder="tuỳ chọn"
-                          className={cls}
+                          className={`${cls} text-xs`}
                         />
                       </LineField>
                     </div>
@@ -745,7 +847,7 @@ export function OrderForm(props: {
             <button
               type="button"
               onClick={addExistingLine}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium"
             >
               + Chọn SP có sẵn
             </button>
@@ -762,91 +864,156 @@ export function OrderForm(props: {
             </button>
           </div>
 
-          {/* Mini-form SP mới */}
+          {/*
+            Mini-form SP mới. Bản cũ là một mảng ô CHỈ CÓ PLACEHOLDER — gõ vào là
+            mất nhãn, nhìn lại không biết ô nào là gì (ô "cai" chẳng ai đoán ra
+            ĐVT). Nay mỗi ô có nhãn thật, và chia ba nhóm theo việc:
+              1. Nhận diện — thứ bắt buộc để có dòng đơn
+              2. Cần cho lệnh sản xuất — bỏ trống được, nhưng lệnh sẽ báo thiếu
+              3. Ảnh + ghi chú — cho Kỹ thuật bổ sung BOM sau
+            Nền xanh lá cũ cũng bỏ: cả form đã là stone/emerald của theme v2, một
+            mảng xanh giữa trang chỉ làm rối chứ không nói thêm được gì.
+          */}
           {npOpen && (
-            <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50/40 p-3 dark:border-emerald-800 dark:bg-emerald-950/20">
-              <div className="mb-2 text-xs font-semibold text-emerald-700 uppercase dark:text-emerald-400">
-                Sản phẩm mới — chỉ tạo vào thư viện Kỹ thuật khi bạn lưu đơn
+            <div className="bg-muted/30 mt-3 rounded-xl border p-4">
+              <div className="mb-3 flex flex-wrap items-baseline gap-x-2">
+                <span className="text-sm font-semibold">Sản phẩm mới</span>
+                <span className="text-muted-foreground text-xs">
+                  chỉ tạo vào thư viện Kỹ thuật khi bạn lưu đơn
+                </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <input
-                  value={np.code}
-                  onChange={(e) => setNp((p) => ({ ...p, code: e.target.value }))}
-                  placeholder="Mã SP *"
-                  className={`${cls} font-mono`}
-                />
-                <input
-                  value={np.name}
-                  onChange={(e) => setNp((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="Tên SP *"
-                  className={`${cls} col-span-2`}
-                />
-                <input
-                  value={np.unit}
-                  onChange={(e) => setNp((p) => ({ ...p, unit: e.target.value }))}
-                  placeholder="ĐVT"
-                  className={cls}
-                />
-                <input
-                  value={np.itemCode}
-                  onChange={(e) => setNp((p) => ({ ...p, itemCode: e.target.value }))}
-                  placeholder="Mã KH đặt"
-                  className={`${cls} col-span-2 font-mono`}
-                />
-                <input
-                  value={np.price}
-                  onChange={(e) => setNp((p) => ({ ...p, price: e.target.value }))}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="Đơn giá"
-                  className={cls}
-                />
-                <label className="col-span-1 flex cursor-pointer items-center justify-center rounded-md border border-dashed border-zinc-300 px-2 py-2 text-xs text-zinc-500 hover:border-emerald-400 hover:text-emerald-600 dark:border-zinc-700">
-                  {npImage ? '🖼 Đổi ảnh' : '🖼 Ảnh'}
+
+              <div className="grid gap-3 sm:grid-cols-6">
+                <NpField label="Mã SP" required className="sm:col-span-2">
                   <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => setNpImage(e.currentTarget.files?.[0] ?? null)}
+                    value={np.code}
+                    onChange={(e) => setNp((p) => ({ ...p, code: e.target.value }))}
+                    placeholder="HG-MX-001"
+                    className={`${cls} font-mono`}
                   />
-                </label>
+                </NpField>
+                <NpField label="Tên sản phẩm" required className="sm:col-span-4">
+                  <input
+                    value={np.name}
+                    onChange={(e) => setNp((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Ghế 5 bậc nhôm lưới Tilos"
+                    className={cls}
+                  />
+                </NpField>
+                <NpField label="ĐVT" className="sm:col-span-1">
+                  <input
+                    value={np.unit}
+                    onChange={(e) => setNp((p) => ({ ...p, unit: e.target.value }))}
+                    placeholder="cái"
+                    className={cls}
+                  />
+                </NpField>
+                <NpField label="Mã KH đặt" className="sm:col-span-3">
+                  <input
+                    value={np.itemCode}
+                    onChange={(e) => setNp((p) => ({ ...p, itemCode: e.target.value }))}
+                    placeholder="21600-217"
+                    className={`${cls} font-mono`}
+                  />
+                </NpField>
+                <NpField label={`Đơn giá (${currency})`} className="sm:col-span-2">
+                  <input
+                    value={np.price}
+                    onChange={(e) => setNp((p) => ({ ...p, price: e.target.value }))}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0"
+                    className={`${cls} text-right tabular-nums`}
+                  />
+                </NpField>
               </div>
-              <textarea
-                value={npNotes}
-                onChange={(e) => setNpNotes(e.target.value)}
-                rows={2}
-                maxLength={2000}
-                placeholder="Ghi chú đầy đủ (vật liệu, lưu ý SX…) — Kỹ thuật đọc để bổ sung BOM/thông số"
-                className={`${cls} mt-2`}
-              />
-              <div className="mt-2 flex items-center gap-3">
-                {npImage && (
-                  <span className="truncate text-xs text-emerald-700 dark:text-emerald-400">
-                    {npImage.name}
+
+              {/*
+                Nhóm 2: barcode + 5 ô quy cách. Không hỏi ở đây thì SP mới vừa vào
+                lệnh là báo "hồ sơ SP đang thiếu", mà lệnh KHÔNG cho sửa thông tin
+                SP nên phải quay về hồ sơ SP mới điền được.
+              */}
+              <div className="mt-4 border-t pt-3">
+                <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+                  <span className="text-sm font-medium">Cần cho lệnh sản xuất</span>
+                  <span className="text-muted-foreground text-xs">
+                    bỏ trống vẫn tạo đơn được, nhưng lệnh sẽ báo thiếu và chỉ sửa được ở
+                    hồ sơ SP
                   </span>
-                )}
-                <div className="ml-auto flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNpOpen(false)}
-                    className="text-sm text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-                  >
-                    Huỷ
-                  </button>
-                  <button
-                    type="button"
-                    onClick={addDraftLine}
-                    className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
-                    Thêm vào đơn
-                  </button>
                 </div>
+                <div className="grid gap-3 sm:grid-cols-6">
+                  <NpField label="Số barcode" className="sm:col-span-6">
+                    <input
+                      value={npBarcode}
+                      onChange={(e) => setNpBarcode(e.target.value)}
+                      placeholder="4033662216003"
+                      maxLength={100}
+                      className={`${cls} font-mono`}
+                    />
+                  </NpField>
+                  {SPEC_FIELDS.map(([key, label, hint]) => (
+                    <NpField key={key} label={label} className="sm:col-span-2">
+                      <input
+                        value={npSpec[key]}
+                        onChange={(e) =>
+                          setNpSpec((p) => ({ ...p, [key]: e.target.value }))
+                        }
+                        placeholder={hint}
+                        maxLength={300}
+                        className={cls}
+                      />
+                    </NpField>
+                  ))}
+                </div>
+              </div>
+
+              {/* Nhóm 3: ảnh + ghi chú cho Kỹ thuật. */}
+              <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-6">
+                <NpField label="Ảnh sản phẩm" className="sm:col-span-2">
+                  <label className="text-muted-foreground hover:border-primary hover:text-primary flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
+                    {npImage ? (
+                      <span className="text-foreground min-w-0 flex-1 truncate">
+                        {npImage.name}
+                      </span>
+                    ) : (
+                      <span className="flex-1">Chọn ảnh…</span>
+                    )}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => setNpImage(e.currentTarget.files?.[0] ?? null)}
+                    />
+                  </label>
+                </NpField>
+                <NpField label="Ghi chú cho Kỹ thuật" className="sm:col-span-4">
+                  <textarea
+                    value={npNotes}
+                    onChange={(e) => setNpNotes(e.target.value)}
+                    rows={2}
+                    maxLength={2000}
+                    placeholder="Vật liệu, lưu ý sản xuất… — Kỹ thuật đọc để bổ sung BOM / thông số"
+                    className={cls}
+                  />
+                </NpField>
+              </div>
+
+              <div className="mt-4 flex items-center justify-end gap-2 border-t pt-3">
+                <Button variant="ghost" onClick={() => setNpOpen(false)}>
+                  Huỷ
+                </Button>
+                <Button
+                  onClick={addDraftLine}
+                  disabled={!np.code.trim() || !np.name.trim()}
+                >
+                  Thêm vào đơn
+                </Button>
               </div>
             </div>
           )}
 
-          <p className="mt-3 text-xs text-zinc-500">
+          <p className="text-muted-foreground mt-3 text-xs">
             ℹ Dòng “SP mới” chỉ được tạo vào thư viện Kỹ thuật khi bạn bấm{' '}
             <b>{mode === 'create' ? 'Tạo đơn hàng' : 'Lưu thay đổi'}</b> — thêm rồi xoá
             thì không tạo gì bên Kỹ thuật.
@@ -866,7 +1033,10 @@ export function OrderForm(props: {
               className={`${cls} font-mono`}
             />
           </L>
-          <L label="Hạn giao">
+          {/* Hạn giao là trường DUY NHẤT ở khối này kéo theo hệ quả (cảnh báo
+              trễ ở sổ đơn, xếp thứ tự kế hoạch SX) — nhãn đậm để không bị chìm
+              giữa PO/Container. */}
+          <L label="Hạn giao" strong>
             <input
               type="date"
               value={h.due_date}
@@ -904,7 +1074,7 @@ export function OrderForm(props: {
             </L>
           )}
         </div>
-        <p className="mt-3 rounded-md bg-sky-50 p-2 text-xs text-sky-700 dark:bg-sky-950/40 dark:text-sky-300">
+        <p className="bg-muted text-muted-foreground mt-3 rounded-md p-2 text-xs">
           {showTerms ? (
             <>
               ℹ Điều khoản thương mại (giá, thanh toán, cảng, dung sai, chứng từ…) nhập ở{' '}
@@ -927,14 +1097,14 @@ export function OrderForm(props: {
             <button
               type="button"
               onClick={() => setTermsOpen((v) => !v)}
-              className="text-xs font-medium text-sky-600 hover:underline dark:text-sky-400"
+              className="text-primary text-xs font-medium hover:underline"
             >
               {termsOpen ? 'Thu gọn ▲' : 'Mở rộng ▼'}
             </button>
           }
         >
           {!termsOpen ? (
-            <p className="text-sm text-zinc-500">
+            <p className="text-muted-foreground text-sm">
               {hasTerms
                 ? 'Đã có điều khoản — bấm “Mở rộng” để xem/sửa.'
                 : 'Giá (FOB/CIF…), thanh toán, cảng bốc/dỡ, dung sai SL, chứng từ. Bấm “Mở rộng” để nhập.'}
@@ -1047,7 +1217,7 @@ export function OrderForm(props: {
       {/* 4. File liên quan (chỉ create) */}
       {mode === 'create' && (
         <Card title="File liên quan (hợp đồng / chứng từ)">
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-zinc-300 px-3 py-2 text-sm text-zinc-600 hover:border-sky-400 hover:text-sky-600 dark:border-zinc-700 dark:text-zinc-400">
+          <label className="text-muted-foreground hover:border-primary hover:text-primary inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
             📎 Chọn file (PDF, Excel, ảnh…)
             <input
               type="file"
@@ -1060,17 +1230,17 @@ export function OrderForm(props: {
             />
           </label>
           {files.length > 0 && (
-            <ul className="mt-3 flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+            <ul className="divide-border mt-3 flex flex-col divide-y">
               {files.map((f, i) => (
                 <li key={i} className="flex items-center gap-2 py-1.5 text-sm">
                   <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                  <span className="shrink-0 text-xs text-zinc-400">
+                  <span className="text-muted-foreground shrink-0 text-xs">
                     {(f.size / 1024).toFixed(0)} KB
                   </span>
                   <button
                     type="button"
                     onClick={() => setFiles((prev) => prev.filter((_, x) => x !== i))}
-                    className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    className="text-muted-foreground shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                     aria-label="Bỏ file"
                   >
                     ✕
@@ -1079,7 +1249,7 @@ export function OrderForm(props: {
               ))}
             </ul>
           )}
-          <p className="mt-2 text-xs text-zinc-500">
+          <p className="text-muted-foreground mt-2 text-xs">
             File tải lên sau khi bấm “Tạo đơn hàng”. Tối đa 10MB/file. Có thể thêm ở trang
             chi tiết đơn.
           </p>
@@ -1087,11 +1257,15 @@ export function OrderForm(props: {
       )}
 
       {/* Thanh hành động sticky */}
-      <div className="sticky bottom-3 z-10 rounded-lg border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+      <div className="bg-card/95 sticky bottom-3 z-10 rounded-xl border px-4 py-3 shadow-lg backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 text-sm">
-            <span className="text-zinc-500">
-              Tổng đơn: <b>{total.toLocaleString('en-US')}</b> {currency}
+            <span className="text-muted-foreground">
+              Tổng đơn:{' '}
+              <b className="text-foreground tabular-nums">
+                {total.toLocaleString('en-US')}
+              </b>{' '}
+              {currency}
             </span>
             {invalid && (
               <span className="block truncate text-xs text-amber-600 dark:text-amber-400">
@@ -1100,22 +1274,22 @@ export function OrderForm(props: {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href={mode === 'edit' ? `/sales/orders/${order!.id}` : '/sales/orders'}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Huỷ
-            </Link>
-            <button
+            <Button variant="ghost" asChild>
+              <Link
+                href={mode === 'edit' ? `/sales/orders/${order!.id}` : '/sales/orders'}
+              >
+                Huỷ
+              </Link>
+            </Button>
+            <Button
               type="button"
               disabled={busy || invalid}
               title={invalid ? `Còn thiếu: ${missing.join(', ')}` : undefined}
               onClick={() => void submit()}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             >
               {busy && <Spinner size={14} />}
               {mode === 'create' ? 'Tạo đơn hàng' : 'Lưu thay đổi'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1131,6 +1305,7 @@ function opt(p: ProductPick, used: Set<string>, current: string) {
   )
 }
 
+/** Thẻ mục của form — giữ nguyên tên `Card` nên mọi chỗ gọi không phải sửa. */
 function Card({
   title,
   right,
@@ -1141,41 +1316,62 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          {title}
-        </h2>
-        {right}
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
+    <UiCard>
+      <CardHeader>
+        {/* Tiêu đề thẻ là CHỮ THẬT (14px, đậm, màu chữ chính) chứ không phải caps
+            11px xám: cả trang trước đây mọi tiêu đề cùng một sắc xám nhạt nên
+            không thẻ nào nổi lên được. */}
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        {right && (
+          <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
+        )}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </UiCard>
   )
 }
 
+/**
+ * Nhãn trường của form. `strong` = trường Sales phải để mắt (hạn giao, số
+ * lượng…) — nhãn đậm lên để mắt bắt được trước, thay vì mọi nhãn một sắc như cũ.
+ */
 function L({
   label,
   span2,
+  strong,
   children,
 }: {
   label: string
   span2?: boolean
+  strong?: boolean
   children: React.ReactNode
 }) {
   return (
     <label
       className={`flex flex-col gap-1 text-sm ${span2 ? 'sm:col-span-2 lg:col-span-4' : ''}`}
     >
-      {label}
+      <span className={strong ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
       {children}
     </label>
   )
 }
 
-function LineField({ label, children }: { label: string; children: React.ReactNode }) {
+function LineField({
+  label,
+  strong,
+  children,
+}: {
+  label: string
+  strong?: boolean
+  children: React.ReactNode
+}) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-[10px] font-medium tracking-wide text-zinc-400 uppercase">
+      <span
+        className={`text-[10px] font-medium tracking-wide uppercase ${
+          strong ? 'text-foreground' : 'text-muted-foreground'
+        }`}
+      >
         {label}
       </span>
       {children}
@@ -1196,10 +1392,10 @@ function Tab({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
         on
-          ? 'bg-sky-600 text-white'
-          : 'border border-zinc-300 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900'
+          ? 'bg-primary text-primary-foreground'
+          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border'
       }`}
     >
       {children}

@@ -3,22 +3,80 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Badge } from '@/components/Badge'
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  Factory,
+  MoreHorizontal,
+  PenLine,
+  Printer,
+  Trash2,
+} from 'lucide-react'
+import { Badge } from '@/components/shadcn/badge'
+import { Button } from '@/components/shadcn/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card'
+import { Checkbox } from '@/components/shadcn/checkbox'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/shadcn/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
+import { Input } from '@/components/shadcn/input'
+import { Textarea } from '@/components/shadcn/textarea'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableFooter,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
+import { OrderStageBar } from '@/components/sales/OrderStageBar'
+import { StageBar as LsxStageBar } from '@/components/production/LsxStageBar'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { DocumentFiles } from '@/components/DocumentFiles'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
-import { DocumentFiles } from '@/components/DocumentFiles'
+import type { OrderStatus } from '@/lib/order-progress'
 
-type OrderStatus =
-  | 'confirmed'
-  | 'lsx_pending'
-  | 'lsx_issued'
-  | 'in_production'
-  | 'completed'
-  | 'delivered'
-  | 'cancelled'
+/**
+ * HỒ SƠ ĐƠN HÀNG — dựng lại theo style v2 (shadcn + `.theme-v2`), khớp trang danh
+ * sách đơn và trang Lệnh sản xuất.
+ *
+ * Bản ERP kit cũ nói nhiều mà đọc ra ít. Năm bệnh và cách chữa:
+ *   · KHỐI "THÔNG TIN ĐƠN" 9 Ô, một nửa là dấu gạch (đơn thật hiếm khi khai
+ *     thanh toán/cọc/phụ trách) → chỉ hiện ô CÓ dữ liệu, các ô trống gom thành
+ *     một dòng "chưa khai: …" cỡ nhỏ. Thông tin không mất mà hết loang lổ.
+ *   · CỘT ĐƠN GIÁ / THÀNH TIỀN toàn số 0 (đơn gia công nhập không kèm giá) →
+ *     ẩn hẳn hai cột + dòng tổng tiền khi cả đơn không có giá nào. Bảng còn
+ *     đúng phần dùng được.
+ *   · TÊN SP IN HAI LẦN vì `note` của dòng trùng nguyên văn tên SP trong dữ
+ *     liệu import → chỉ in note khi nó khác tên.
+ *   · BADGE TRẠNG THÁI một màu → OrderStageBar (thanh 6 đoạn), cùng ngôn ngữ
+ *     với danh sách đơn; lệnh SX dùng LsxStageBar của nó.
+ *   · NÚT HÀNH ĐỘNG rải ba nơi (đầu trang, giữa thẻ LSX, cuối trang) → gom hết
+ *     lên đầu: việc chính là nút, việc phụ/nguy hiểm nằm trong menu ⋯.
+ *
+ * Thêm dải TÓM TẮT 4 ô ngay dưới tiêu đề (tiến trình · hạn giao · sản phẩm ·
+ * giá trị) để trả lời "đơn này đang sao" mà không phải đọc hết trang.
+ *
+ * Lý do huỷ đơn trước dùng `window.prompt` — hộp thoại trắng của trình duyệt
+ * giữa một trang đã tạo kiểu, lại không cho xem trước hệ quả. Nay là Dialog
+ * riêng: liệt kê hệ quả (LSX/PO bị ảnh hưởng) rồi mới nhận lý do.
+ */
 
 export type OrderView = {
   id: string
@@ -84,24 +142,6 @@ export type ProgressView = {
   created_at: string
 }
 
-const STATUS_LABEL: Record<OrderStatus, string> = {
-  confirmed: 'Đã xác nhận',
-  lsx_pending: 'Chờ duyệt LSX',
-  lsx_issued: 'Đã phát LSX',
-  in_production: 'Đang sản xuất',
-  completed: 'Hoàn thành',
-  delivered: 'Đã giao',
-  cancelled: 'Đã huỷ',
-}
-const STATUS_TONE: Record<OrderStatus, 'gray' | 'blue' | 'amber' | 'green' | 'red'> = {
-  confirmed: 'blue',
-  lsx_pending: 'amber',
-  lsx_issued: 'amber',
-  in_production: 'amber',
-  completed: 'green',
-  delivered: 'green',
-  cancelled: 'red',
-}
 const FIELD_LABEL: Record<string, string> = {
   customer_po_no: 'PO khách',
   due_date: 'Hạn giao',
@@ -120,10 +160,30 @@ const FIELD_LABEL: Record<string, string> = {
   required_docs: 'Chứng từ',
 }
 
+const BOM_LABEL = { none: 'Chưa có', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
+const BOM_TONE = {
+  none: 'bg-muted text-muted-foreground',
+  drawing: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
+  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+} as const
+
+const LSX_LABEL: Record<string, string> = {
+  draft: 'Nháp',
+  pending_approval: 'Chờ GĐ duyệt',
+  approved: 'Đã duyệt',
+  in_progress: 'Đang sản xuất',
+  completed: 'Hoàn thành',
+  cancelled: 'Đã huỷ theo đơn',
+  rejected: 'Bị từ chối',
+}
+
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
 const fmtDT = (d: string) => new Date(d).toLocaleString('vi-VN')
+const fmtN = (n: number) => n.toLocaleString('vi-VN')
+const daysBetween = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
 
-/** Hệ quả khi huỷ đơn — server tính sẵn để confirm dialog nói thật (P3). */
+/** Hệ quả khi huỷ đơn — server tính sẵn để hộp thoại nói thật (P3). */
 export type CancelImpact = {
   lsx_active: boolean
   /** Lệnh còn chạy cho đơn khác → huỷ đơn này chỉ gỡ nó khỏi lệnh (0113). */
@@ -140,7 +200,79 @@ export type MergeCandidate = {
   line_count: number
 }
 
-type Tab = 'overview' | 'timeline' | 'docs'
+/* ── Ô tóm tắt đầu trang ───────────────────────────────────────────────────── */
+function Tile({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0 px-4 py-2.5">
+      <div className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
+        {label}
+      </div>
+      <div className="mt-1">{children}</div>
+    </div>
+  )
+}
+
+/** Một ô thông tin — trả null khi rỗng để khối không bị rỗ dấu gạch. */
+function Info({
+  label,
+  value,
+  wide = false,
+}: {
+  label: string
+  value: string | null
+  wide?: boolean
+}) {
+  if (!value) return null
+  return (
+    <div className={`flex min-w-0 flex-col ${wide ? 'col-span-2' : ''}`}>
+      <span className="text-muted-foreground text-[11px] font-medium tracking-wider uppercase">
+        {label}
+      </span>
+      <span className="text-sm break-words">{value}</span>
+    </div>
+  )
+}
+
+/**
+ * Khối thông tin: chỉ vẽ ô có dữ liệu, tên các ô trống dồn xuống một dòng nhỏ.
+ * Nhận mảng [nhãn, giá trị] để chỗ gọi khai một lần, không lặp hai lần cho hai
+ * nhánh có/không.
+ */
+function InfoBlock({
+  title,
+  fields,
+  footer,
+}: {
+  title: string
+  fields: [string, string | null, boolean?][]
+  footer?: React.ReactNode
+}) {
+  const filled = fields.filter(([, v]) => !!v)
+  const missing = fields.filter(([, v]) => !v).map(([l]) => l)
+  if (!filled.length && !footer) return null
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-4">
+          {filled.map(([label, value, wide]) => (
+            <Info key={label} label={label} value={value} wide={wide} />
+          ))}
+        </div>
+        {missing.length > 0 && (
+          <div className="text-muted-foreground border-t pt-2.5 text-xs">
+            Chưa khai: {missing.join(' · ')}
+          </div>
+        )}
+        {footer}
+      </CardContent>
+    </Card>
+  )
+}
 
 export function OrderDetailView({
   order,
@@ -168,18 +300,29 @@ export function OrderDetailView({
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
-  const [tab, setTab] = useState<Tab>('overview')
   const [busy, setBusy] = useState(false)
   const [issuing, setIssuing] = useState(false)
   const [lsxCode, setLsxCode] = useState('')
   const [shipDate, setShipDate] = useState(order.due_date ?? '')
   const [container, setContainer] = useState(order.container_summary ?? '')
   const [mergeIds, setMergeIds] = useState<string[]>([])
+  const [cancelling, setCancelling] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
+  const today = new Date().toISOString().slice(0, 10)
   const editable = order.status !== 'delivered' && order.status !== 'cancelled'
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
   const bomPending = lines.filter((l) => l.bom_status !== 'done').length
+  /*
+   * Đơn gia công nhập từ file thường KHÔNG kèm giá — mọi unit_price = 0. In ra
+   * hai cột toàn số 0 chỉ làm bảng rối, nên ẩn cả cột lẫn dòng tổng tiền.
+   */
+  const hasPrices = lines.some((l) => l.unit_price > 0)
+  /* PO khách phần lớn trùng hoặc nằm gọn trong mã đơn (`17976 HG-MX` ⊃ `17976`). */
+  const poDistinct =
+    !!order.customer_po_no &&
+    !order.code.toLowerCase().includes(order.customer_po_no.toLowerCase())
 
   // ── Timeline hợp nhất: tạo đơn → sửa → LSX → tiến độ SX → giao/huỷ ────
   const timeline = useMemo(() => {
@@ -337,39 +480,35 @@ export function OrderDetailView({
     }
   }
 
-  async function cancelOrder() {
-    const reason = window.prompt(`Lý do huỷ đơn ${order.code}:`)?.trim()
-    if (!reason) return
-    const impact: string[] = ['Đơn đã huỷ không khôi phục được.']
+  /** Hệ quả huỷ đơn, tính từ dữ liệu server — hiện TRƯỚC khi nhận lý do. */
+  const cancelEffects = useMemo(() => {
+    const out = ['Đơn đã huỷ không khôi phục được.']
     if (cancelImpact?.lsx_shared && lsx) {
-      impact.push(
+      out.push(
         `LSX ${lsx.code} còn chạy cho đơn khác — đơn này chỉ được gỡ khỏi lệnh, lệnh KHÔNG dừng.`,
       )
     } else if (cancelImpact?.lsx_active && lsx) {
-      impact.push(`LSX ${lsx.code} sẽ dừng (Đã huỷ).`)
+      out.push(`LSX ${lsx.code} sẽ dừng (Đã huỷ).`)
     }
     if (cancelImpact?.pos_auto.length) {
-      impact.push(
+      out.push(
         `Tự huỷ ${cancelImpact.pos_auto.length} PO chưa gửi NCC: ${cancelImpact.pos_auto.join(', ')}.`,
       )
     }
     if (cancelImpact?.pos_manual.length) {
-      impact.push(
+      out.push(
         `${cancelImpact.pos_manual.length} PO ĐÃ GỬI NCC không tự huỷ — Cung ứng xử lý tay: ${cancelImpact.pos_manual.join(', ')}.`,
       )
     }
     if (cancelImpact?.lsx_active && !cancelImpact.lsx_shared) {
-      impact.push(
-        'Vật tư đã xuất không tự hoàn kho — Kho lập phiếu nhập lại nếu thu hồi.',
-      )
+      out.push('Vật tư đã xuất không tự hoàn kho — Kho lập phiếu nhập lại nếu thu hồi.')
     }
-    const ok = await confirm({
-      title: `Huỷ đơn ${order.code}?`,
-      description: impact.join(' '),
-      tone: 'danger',
-      confirmLabel: 'Huỷ đơn',
-    })
-    if (!ok) return
+    return out
+  }, [cancelImpact, lsx])
+
+  async function cancelOrder() {
+    const reason = cancelReason.trim()
+    if (!reason) return
     setBusy(true)
     try {
       await api(`/api/dept/sales/orders/${order.id}/cancel`, {
@@ -377,6 +516,8 @@ export function OrderDetailView({
         body: { reason },
       })
       toast.success('Đã huỷ đơn', order.code)
+      setCancelling(false)
+      setCancelReason('')
       router.refresh()
     } catch (e) {
       toast.error('Huỷ thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
@@ -385,496 +526,594 @@ export function OrderDetailView({
     }
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'overview', label: 'Tổng quan' },
-    { id: 'timeline', label: `Timeline (${timeline.length})` },
-    { id: 'docs', label: 'Tài liệu' },
-  ]
+  const dueDays = order.due_date ? daysBetween(today, order.due_date.slice(0, 10)) : null
+  const dueClosed = order.status === 'delivered' || order.status === 'cancelled'
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="theme-v2 text-foreground flex flex-col gap-5">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Kinh doanh', href: '/sales' },
-          { label: 'Đơn hàng', href: '/sales/orders' },
-          { label: order.code },
-        ]}
-        title={order.code}
-        description={order.customer_name}
-        meta={
-          <>
-            <Badge tone={STATUS_TONE[order.status]}>{STATUS_LABEL[order.status]}</Badge>
-            {order.quote_code && <Badge>Từ BG {order.quote_code}</Badge>}
-            {order.customer_po_no && <Badge>PO {order.customer_po_no}</Badge>}
-          </>
-        }
-        actions={
-          canEdit &&
-          editable && (
+
+      {/* ── Đầu trang: nhận diện + MỌI hành động ─────────────────────────── */}
+      <div className="flex flex-col gap-3">
+        <Link
+          href="/sales/orders"
+          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-xs"
+        >
+          <ArrowLeft className="size-3.5" />
+          Đơn hàng
+        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="font-mono text-xl font-semibold tracking-tight">
+                {order.code}
+              </h1>
+              {order.quote_code && (
+                <Badge variant="secondary" className="text-muted-foreground">
+                  Từ BG {order.quote_code}
+                </Badge>
+              )}
+              {poDistinct && (
+                <Badge variant="outline" className="font-mono text-[11px]">
+                  PO {order.customer_po_no}
+                </Badge>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-1 text-sm">{order.customer_name}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {canIssue && order.status === 'confirmed' && !lsx && !issuing && (
+              <Button onClick={() => setIssuing(true)}>
+                <Factory />
+                Phát lệnh sản xuất
+              </Button>
+            )}
+            {canEdit && editable && order.status === 'completed' && (
+              <Button onClick={() => void deliverOrder()} disabled={busy}>
+                <CheckCircle2 />
+                Xác nhận đã giao
+              </Button>
+            )}
+            {canEdit && editable && (
+              <Button variant="outline" asChild>
+                <Link href={`/sales/orders/${order.id}/edit`}>
+                  <PenLine />
+                  Sửa đơn
+                </Link>
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-muted-foreground"
+                  aria-label="Thao tác khác"
+                >
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="theme-v2">
+                <DropdownMenuItem
+                  disabled={!lsx}
+                  onClick={() => router.push(`/sales/lsx/${lsx?.id}`)}
+                >
+                  <Factory />
+                  Mở lệnh sản xuất
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!lsx}
+                  onClick={() => window.open(`/print/lsx/${lsx?.id}`, '_blank')}
+                >
+                  <Printer />
+                  In phiếu lệnh
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!canEdit || !editable}
+                  variant="destructive"
+                  onClick={() => setCancelling(true)}
+                >
+                  <Trash2 />
+                  Huỷ đơn
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Dải tóm tắt: trả lời "đơn này đang sao" trong một lượt mắt ────── */}
+      <div className="bg-card divide-y rounded-xl border shadow-xs sm:grid sm:grid-cols-2 sm:divide-x sm:divide-y-0 lg:grid-cols-4">
+        <Tile label="Tiến trình">
+          <OrderStageBar status={order.status} className="w-full max-w-[190px]" />
+        </Tile>
+        <Tile label="Hạn giao">
+          <div className="text-sm font-medium tabular-nums">{fmtD(order.due_date)}</div>
+          {dueDays !== null && !dueClosed && dueDays < 0 && (
+            <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
+              ⚠ quá {-dueDays} ngày
+            </div>
+          )}
+          {dueDays !== null && !dueClosed && dueDays >= 0 && dueDays <= 7 && (
+            <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              còn {dueDays} ngày
+            </div>
+          )}
+        </Tile>
+        <Tile label="Sản phẩm">
+          <div className="text-sm font-medium tabular-nums">{fmtN(totalQty)}</div>
+          <div className="text-muted-foreground text-[11px]">{lines.length} dòng</div>
+        </Tile>
+        <Tile label={hasPrices ? 'Giá trị đơn' : 'Lệnh sản xuất'}>
+          {hasPrices ? (
+            <>
+              <div className="text-sm font-medium tabular-nums">{fmtN(total)}</div>
+              <div className="text-muted-foreground text-[11px]">{order.currency}</div>
+            </>
+          ) : lsx ? (
             <Link
-              href={`/sales/orders/${order.id}/edit`}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+              href={`/sales/lsx/${lsx.id}`}
+              className="font-mono text-sm hover:underline"
             >
-              Sửa đơn
+              {lsx.code}
             </Link>
-          )
-        }
-      />
+          ) : (
+            <span className="text-muted-foreground text-sm">Chưa phát lệnh</span>
+          )}
+        </Tile>
+      </div>
 
       {bomPending > 0 && (
-        <div className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-          ⚠ {bomPending} dòng SP chưa xong BOM — phát LSX vẫn được (BR-07) nhưng Cung ứng
-          thiếu định mức để đặt vật tư.
+        <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/15 dark:text-amber-300">
+          ⚠ {bomPending}/{lines.length} dòng SP chưa xong BOM — phát LSX vẫn được (BR-07)
+          nhưng Cung ứng thiếu định mức để đặt vật tư.
         </div>
       )}
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={
-              'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
-              (tab === t.id
-                ? 'border-sky-500 text-sky-600 dark:text-sky-400'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200')
-            }
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      {/* ── Hộp phát LSX (chỉ khi đang mở) ───────────────────────────────── */}
+      {canIssue && order.status === 'confirmed' && !lsx && issuing && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Phát lệnh sản xuất</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <p className="text-muted-foreground text-xs">
+              Một đơn chỉ thuộc 1 lệnh; một lệnh gộp được nhiều đơn của cùng khách. Không
+              bắt buộc đủ BOM (BR-07).
+            </p>
 
-      {tab === 'overview' && (
-        <div className="flex flex-col gap-4">
-          {/* Header đơn — 9 trường Sales cần nhất (brief) */}
-          <Card title="Thông tin đơn">
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
-              <Info label="Khách hàng" value={order.customer_name} />
-              <Info label="PO khách" value={order.customer_po_no} />
-              <Info label="Ngày đặt" value={fmtD(order.created_at)} />
-              <Info label="Hạn giao" value={fmtD(order.due_date)} />
-              <Info label="Thanh toán" value={order.payment_terms} />
-              <Info
-                label="Đặt cọc"
-                value={order.deposit_percent != null ? `${order.deposit_percent}%` : null}
-              />
-              <Info label="Người phụ trách" value={order.owner_name} />
-              <Info label="Từ báo giá" value={order.quote_code ?? 'Trực tiếp'} />
-              <Info label="Tiền tệ" value={order.currency} />
-            </div>
-            {order.note && (
-              <div className="mt-3 border-t border-zinc-200 pt-3 text-sm text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
-                <span className="font-medium">Ghi chú: </span>
-                {order.note}
+            {mergeCandidates.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-lg border p-3">
+                <div className="text-sm font-medium">
+                  Gộp thêm đơn của {order.customer_name}
+                  <span className="text-muted-foreground ml-1 text-xs font-normal">
+                    (đã xác nhận, chưa có lệnh)
+                  </span>
+                </div>
+                {mergeCandidates.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={mergeIds.includes(c.id)}
+                      onCheckedChange={(v) =>
+                        setMergeIds((prev) =>
+                          v ? [...prev, c.id] : prev.filter((x) => x !== c.id),
+                        )
+                      }
+                    />
+                    <span className="font-mono text-xs">{c.code}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {c.line_count} dòng SP
+                      {c.due_date ? ` · hạn ${fmtD(c.due_date)}` : ''}
+                    </span>
+                  </label>
+                ))}
               </div>
             )}
-          </Card>
 
-          {/* Logistics — trước đây có data nhưng không hiển thị */}
-          {(order.price_term ||
-            order.port_of_loading ||
-            order.port_of_discharge ||
-            order.container_summary ||
-            order.qty_tolerance_pct != null ||
-            order.partial_shipment != null ||
-            order.transhipment != null ||
-            order.payment_method ||
-            order.required_docs) && (
-            <Card title="Logistics & điều kiện giao">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
-                <Info label="Incoterm / ĐK giá" value={order.price_term} />
-                <Info label="Cảng xếp (POL)" value={order.port_of_loading} />
-                <Info label="Cảng dỡ (POD)" value={order.port_of_discharge} />
-                <Info label="Container" value={order.container_summary} />
-                <Info
-                  label="Dung sai SL"
-                  value={
-                    order.qty_tolerance_pct != null
-                      ? `±${order.qty_tolerance_pct}%`
-                      : null
-                  }
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+                <span>
+                  Số lệnh <span className="text-destructive">*</span>
+                </span>
+                <Input
+                  value={lsxCode}
+                  onChange={(e) => setLsxCode(e.target.value)}
+                  maxLength={50}
+                  placeholder="Tự đặt — vd 27/25-26 (17951+17955HG/MX)"
+                  className="bg-card font-mono"
                 />
-                <Info
-                  label="Giao từng phần"
-                  value={
-                    order.partial_shipment == null
-                      ? null
-                      : order.partial_shipment
-                        ? 'Cho phép'
-                        : 'Không'
-                  }
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Thời gian xuất dự kiến
+                <Input
+                  type="date"
+                  value={shipDate}
+                  onChange={(e) => setShipDate(e.target.value)}
+                  className="bg-card"
                 />
-                <Info
-                  label="Chuyển tải"
-                  value={
-                    order.transhipment == null
-                      ? null
-                      : order.transhipment
-                        ? 'Cho phép'
-                        : 'Không'
-                  }
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Container
+                <Input
+                  value={container}
+                  onChange={(e) => setContainer(e.target.value)}
+                  placeholder="3 x 40'HC"
+                  className="bg-card"
                 />
-                <Info label="Phương thức TT" value={order.payment_method} />
-                <Info
-                  label="Chứng từ yêu cầu"
-                  value={order.required_docs}
-                  className="col-span-2"
-                />
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {/* Xem trước phiếu in với số/ngày đang gõ — bản thử có watermark đỏ. */}
+              <Button variant="outline" size="sm" asChild>
+                <a
+                  href={`/print/lsx/preview/${order.id}?code=${encodeURIComponent(
+                    lsxCode.trim(),
+                  )}&ship_date=${encodeURIComponent(shipDate)}${
+                    mergeIds.length ? `&orders=${mergeIds.join(',')}` : ''
+                  }`}
+                  target="_blank"
+                  rel="noopener"
+                >
+                  <Printer />
+                  Xem trước bản in
+                </a>
+              </Button>
+              <div className="flex gap-2">
+                <Button variant="ghost" onClick={() => setIssuing(false)}>
+                  Huỷ
+                </Button>
+                <Button
+                  disabled={busy || !lsxCode.trim()}
+                  onClick={() => void issueLsx()}
+                >
+                  {busy && <Spinner size={14} />}
+                  Xác nhận phát lệnh
+                </Button>
               </div>
-            </Card>
-          )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Dòng sản phẩm với ảnh */}
-          <Card title={`Sản phẩm (${lines.length})`}>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
-                    <th className="py-2 pr-2">Ảnh</th>
-                    <th className="py-2 pr-2">Sản phẩm</th>
-                    <th className="w-24 py-2 pr-2">BOM</th>
-                    <th className="w-20 py-2 pr-2 text-right">SL</th>
-                    <th className="w-28 py-2 pr-2 text-right">Đơn giá</th>
-                    <th className="w-32 py-2 text-right">Thành tiền</th>
-                  </tr>
-                </thead>
-                <tbody>
+      {/* ── Tabs nội dung ────────────────────────────────────────────────── */}
+      <Tabs defaultValue="overview" className="flex flex-col gap-4">
+        <div className="max-w-full">
+          <TabsList className="h-auto! flex-wrap">
+            <TabsTrigger value="overview">Tổng quan</TabsTrigger>
+            <TabsTrigger value="timeline">
+              Dòng thời gian
+              <span className="text-muted-foreground text-xs tabular-nums">
+                {timeline.length}
+              </span>
+            </TabsTrigger>
+            <TabsTrigger value="docs">Tài liệu</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="overview" className="flex flex-col gap-4">
+          <InfoBlock
+            title="Thông tin đơn"
+            fields={[
+              ['Khách hàng', order.customer_name],
+              /* Giữ nguyên số PO (đây là sổ gốc của đơn, phải tra được), nhưng
+                 chú thích khi nó trùng mã đơn — không thì đọc như in lỗi hai lần. */
+              [
+                'PO khách',
+                order.customer_po_no
+                  ? poDistinct
+                    ? order.customer_po_no
+                    : `${order.customer_po_no} (trùng số đơn)`
+                  : null,
+              ],
+              ['Ngày đặt', fmtD(order.created_at)],
+              ['Hạn giao', order.due_date ? fmtD(order.due_date) : null],
+              ['Thanh toán', order.payment_terms],
+              [
+                'Đặt cọc',
+                order.deposit_percent != null ? `${order.deposit_percent}%` : null,
+              ],
+              ['Người phụ trách', order.owner_name],
+              ['Từ báo giá', order.quote_code],
+              ['Tiền tệ', order.currency],
+            ]}
+            footer={
+              order.note ? (
+                <div className="text-muted-foreground border-t pt-2.5 text-sm">
+                  <span className="text-foreground font-medium">Ghi chú: </span>
+                  {order.note}
+                </div>
+              ) : undefined
+            }
+          />
+
+          <InfoBlock
+            title="Logistics & điều kiện giao"
+            fields={[
+              ['Incoterm / ĐK giá', order.price_term],
+              ['Cảng xếp (POL)', order.port_of_loading],
+              ['Cảng dỡ (POD)', order.port_of_discharge],
+              ['Container', order.container_summary],
+              [
+                'Dung sai SL',
+                order.qty_tolerance_pct != null ? `±${order.qty_tolerance_pct}%` : null,
+              ],
+              [
+                'Giao từng phần',
+                order.partial_shipment == null
+                  ? null
+                  : order.partial_shipment
+                    ? 'Cho phép'
+                    : 'Không',
+              ],
+              [
+                'Chuyển tải',
+                order.transhipment == null
+                  ? null
+                  : order.transhipment
+                    ? 'Cho phép'
+                    : 'Không',
+              ],
+              ['Phương thức TT', order.payment_method],
+              ['Chứng từ yêu cầu', order.required_docs, true],
+            ]}
+          />
+
+          {/* Dòng sản phẩm — hai cột tiền chỉ hiện khi đơn thật sự có giá. */}
+          <Card className="overflow-hidden">
+            <CardHeader>
+              <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                Sản phẩm ({lines.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-0">
+              <Table className="min-w-[620px]">
+                <TableHeader>
+                  <TableRow className="bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="text-foreground w-[70px] px-3 text-[11px] font-semibold tracking-wider uppercase">
+                      Ảnh
+                    </TableHead>
+                    <TableHead className="text-foreground px-3 text-[11px] font-semibold tracking-wider uppercase">
+                      Sản phẩm
+                    </TableHead>
+                    <TableHead className="text-foreground w-[100px] px-3 text-[11px] font-semibold tracking-wider uppercase">
+                      BOM
+                    </TableHead>
+                    <TableHead className="text-foreground w-[110px] px-3 text-right text-[11px] font-semibold tracking-wider uppercase">
+                      SL
+                    </TableHead>
+                    {hasPrices && (
+                      <>
+                        <TableHead className="text-foreground w-[110px] px-3 text-right text-[11px] font-semibold tracking-wider uppercase">
+                          Đơn giá
+                        </TableHead>
+                        <TableHead className="text-foreground w-[130px] px-3 text-right text-[11px] font-semibold tracking-wider uppercase">
+                          Thành tiền
+                        </TableHead>
+                      </>
+                    )}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
                   {lines.map((l, i) => (
-                    <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
-                      <td className="py-1.5 pr-2">
+                    <TableRow key={i}>
+                      <TableCell className="px-3 py-2">
                         {l.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={l.image_url}
                             alt={l.product_name}
-                            className="h-12 w-14 rounded object-contain"
+                            className="h-11 w-14 rounded object-contain"
                           />
                         ) : (
-                          <span className="text-zinc-300">—</span>
+                          <span className="text-muted-foreground">—</span>
                         )}
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <div className="flex flex-col">
-                          <span className="font-mono text-xs text-zinc-400">
-                            {l.product_code}
-                            {l.customer_item_code && ` · KH: ${l.customer_item_code}`}
-                          </span>
-                          <span>{l.product_name}</span>
-                          {l.note && (
-                            <span className="text-xs text-zinc-500">{l.note}</span>
-                          )}
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <div className="text-muted-foreground font-mono text-[11px]">
+                          {l.product_code}
+                          {l.customer_item_code && ` · KH ${l.customer_item_code}`}
                         </div>
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <Badge
-                          tone={
-                            l.bom_status === 'done'
-                              ? 'green'
-                              : l.bom_status === 'drawing'
-                                ? 'amber'
-                                : 'gray'
-                          }
-                        >
-                          {l.bom_status === 'done'
-                            ? 'Đã vẽ'
-                            : l.bom_status === 'drawing'
-                              ? 'Đang vẽ'
-                              : 'Chưa có'}
+                        <div className="text-sm">{l.product_name}</div>
+                        {/* Dữ liệu import có dòng note TRÙNG NGUYÊN VĂN tên SP —
+                            in lại thành ra tên hiện hai lần. */}
+                        {l.note && l.note.trim() !== l.product_name.trim() && (
+                          <div className="text-muted-foreground text-xs">{l.note}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="px-3 py-2">
+                        <Badge className={`border-transparent ${BOM_TONE[l.bom_status]}`}>
+                          {BOM_LABEL[l.bom_status]}
                         </Badge>
-                      </td>
-                      <td className="py-1.5 pr-2 text-right">
-                        {l.qty.toLocaleString('vi-VN')} {l.product_unit}
-                      </td>
-                      <td className="py-1.5 pr-2 text-right">
-                        {l.unit_price.toLocaleString('en-US')}
-                      </td>
-                      <td className="py-1.5 text-right font-medium">
-                        {(l.qty * l.unit_price).toLocaleString('en-US')}
-                      </td>
-                    </tr>
+                      </TableCell>
+                      <TableCell className="px-3 py-2 text-right">
+                        <span className="text-sm font-medium tabular-nums">
+                          {fmtN(l.qty)}
+                        </span>
+                        <span className="text-muted-foreground ml-1 text-[11px]">
+                          {l.product_unit}
+                        </span>
+                      </TableCell>
+                      {hasPrices && (
+                        <>
+                          <TableCell className="px-3 py-2 text-right text-sm tabular-nums">
+                            {fmtN(l.unit_price)}
+                          </TableCell>
+                          <TableCell className="px-3 py-2 text-right text-sm font-medium tabular-nums">
+                            {fmtN(l.qty * l.unit_price)}
+                          </TableCell>
+                        </>
+                      )}
+                    </TableRow>
                   ))}
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colSpan={3} className="py-2 pr-2 text-right font-semibold">
+                </TableBody>
+                <TableFooter>
+                  <TableRow className="hover:bg-muted/50">
+                    <TableCell colSpan={3} className="px-3 py-2 text-right font-medium">
                       Tổng
-                    </td>
-                    <td className="py-2 pr-2 text-right font-semibold">
-                      {totalQty.toLocaleString('vi-VN')}
-                    </td>
-                    <td />
-                    <td className="py-2 text-right font-bold">
-                      {total.toLocaleString('en-US')} {order.currency}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                    </TableCell>
+                    <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">
+                      {fmtN(totalQty)}
+                    </TableCell>
+                    {hasPrices && (
+                      <>
+                        <TableCell />
+                        <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {fmtN(total)} {order.currency}
+                        </TableCell>
+                      </>
+                    )}
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </CardContent>
           </Card>
 
-          {/* LSX đã phát — link sang chi tiết */}
+          {/* Lệnh sản xuất đã phát */}
           {lsx && (
-            <Card title="Lệnh sản xuất">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="font-mono text-sm">{lsx.code}</span>
-                <Badge
-                  tone={
-                    lsx.status === 'pending_approval'
-                      ? 'amber'
-                      : lsx.status === 'rejected'
-                        ? 'red'
-                        : lsx.status === 'completed'
-                          ? 'green'
-                          : lsx.status === 'cancelled'
-                            ? 'gray'
-                            : 'blue'
-                  }
-                >
-                  {lsx.status === 'pending_approval'
-                    ? 'Chờ GĐ duyệt'
-                    : lsx.status === 'approved'
-                      ? 'Đã duyệt'
-                      : lsx.status === 'in_progress'
-                        ? 'Đang sản xuất'
-                        : lsx.status === 'completed'
-                          ? 'Hoàn thành'
-                          : lsx.status === 'cancelled'
-                            ? 'Đã huỷ theo đơn'
-                            : 'Bị từ chối'}
-                </Badge>
-                <a
-                  href={`/print/lsx/${lsx.id}`}
-                  target="_blank"
-                  rel="noopener"
-                  className="ml-auto rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                >
-                  🖨 In LSX
-                </a>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                  Lệnh sản xuất
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3">
                 <Link
                   href={`/sales/lsx/${lsx.id}`}
-                  className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700"
+                  className="font-mono text-sm font-medium hover:underline"
                 >
-                  Xem / thao tác LSX →
+                  {lsx.code}
                 </Link>
-              </div>
-            </Card>
-          )}
-
-          {/* Phát LSX */}
-          {canIssue && order.status === 'confirmed' && !lsx && (
-            <Card title="Phát Lệnh sản xuất (LSX)">
-              {issuing ? (
-                <div className="flex flex-col gap-3">
-                  <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-700 dark:bg-amber-950 dark:text-amber-300">
-                    Một đơn chỉ thuộc 1 lệnh; một lệnh gộp được nhiều đơn của cùng khách.
-                    Không bắt buộc đủ BOM (BR-07).
-                  </p>
-                  {/* Gộp đơn: xưởng chạy chung một lệnh cho nhiều đơn cùng khách. */}
-                  {mergeCandidates.length > 0 && (
-                    <div className="flex flex-col gap-1.5 rounded-md border border-zinc-200 p-2.5 dark:border-zinc-800">
-                      <div className="text-sm font-medium">
-                        Gộp thêm đơn của {order.customer_name}
-                        <span className="ml-1 text-xs font-normal text-zinc-500">
-                          (đã xác nhận, chưa có lệnh)
-                        </span>
-                      </div>
-                      {mergeCandidates.map((c) => (
-                        <label key={c.id} className="flex items-center gap-2 text-sm">
-                          <input
-                            type="checkbox"
-                            checked={mergeIds.includes(c.id)}
-                            onChange={(e) =>
-                              setMergeIds((prev) =>
-                                e.target.checked
-                                  ? [...prev, c.id]
-                                  : prev.filter((x) => x !== c.id),
-                              )
-                            }
-                          />
-                          <span className="font-mono">{c.code}</span>
-                          <span className="text-xs text-zinc-500">
-                            {c.line_count} dòng SP
-                            {c.due_date ? ` · hạn ${c.due_date}` : ''}
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                      Số LSX <span className="text-red-500">*</span>
-                      <input
-                        value={lsxCode}
-                        onChange={(e) => setLsxCode(e.target.value)}
-                        maxLength={50}
-                        placeholder="Tự đặt — vd 27/25-26 (17951+17955HG/MX)"
-                        className="rounded-md border border-zinc-300 px-3 py-2 font-mono text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Thời gian xuất dự kiến
-                      <input
-                        type="date"
-                        value={shipDate}
-                        onChange={(e) => setShipDate(e.target.value)}
-                        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-1 text-sm">
-                      Container
-                      <input
-                        value={container}
-                        onChange={(e) => setContainer(e.target.value)}
-                        placeholder="3 x 40'HC"
-                        className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                      />
-                    </label>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    {/* Xem trước phiếu in (mẫu Hoàng Gia) với số/ngày đang gõ —
-                        dò thông số trước khi phát, bản thử có watermark đỏ. */}
-                    <a
-                      href={`/print/lsx/preview/${order.id}?code=${encodeURIComponent(
-                        lsxCode.trim(),
-                      )}&ship_date=${encodeURIComponent(shipDate)}${
-                        mergeIds.length ? `&orders=${mergeIds.join(',')}` : ''
-                      }`}
-                      target="_blank"
-                      rel="noopener"
-                      className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                    >
-                      🖨 Xem trước bản in
+                <LsxStageBar status={lsx.status} className="w-[150px]" />
+                <span className="text-muted-foreground text-xs">
+                  {LSX_LABEL[lsx.status] ?? lsx.status}
+                  {lsx.issued_at && ` · phát ${fmtD(lsx.issued_at)}`}
+                </span>
+                <div className="ml-auto flex gap-2">
+                  <Button variant="outline" size="sm" asChild>
+                    <a href={`/print/lsx/${lsx.id}`} target="_blank" rel="noopener">
+                      <Printer />
+                      In phiếu
                     </a>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setIssuing(false)}
-                        className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-                      >
-                        Huỷ
-                      </button>
-                      <button
-                        disabled={busy || !lsxCode.trim()}
-                        onClick={() => void issueLsx()}
-                        className="inline-flex items-center gap-2 rounded-md bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        {busy && <Spinner size={14} />}
-                        Xác nhận phát LSX
-                      </button>
-                    </div>
-                  </div>
+                  </Button>
+                  <Button size="sm" asChild>
+                    <Link href={`/sales/lsx/${lsx.id}`}>
+                      Mở lệnh
+                      <ChevronRight />
+                    </Link>
+                  </Button>
                 </div>
-              ) : (
-                <button
-                  onClick={() => setIssuing(true)}
-                  className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  Phát LSX cho đơn này
-                </button>
-              )}
+              </CardContent>
             </Card>
           )}
+        </TabsContent>
 
-          {canEdit && editable && (
-            <div className="flex justify-end gap-2 pb-6">
-              {order.status === 'completed' && (
-                <button
-                  onClick={() => void deliverOrder()}
-                  className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                >
-                  ✓ Xác nhận đã giao
-                </button>
-              )}
-              <button
-                onClick={() => void cancelOrder()}
-                className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950"
-              >
-                Huỷ đơn
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+        <TabsContent value="timeline">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                Dòng thời gian đơn hàng
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ol className="relative ml-1 flex flex-col border-l">
+                {timeline.map((ev, i) => (
+                  <li key={i} className="relative pb-5 pl-5 last:pb-0">
+                    <span
+                      className={
+                        'ring-card absolute top-1 -left-[5px] size-2.5 rounded-full ring-4 ' +
+                        (ev.tone === 'green'
+                          ? 'bg-emerald-500'
+                          : ev.tone === 'red'
+                            ? 'bg-red-500'
+                            : ev.tone === 'amber'
+                              ? 'bg-amber-500'
+                              : ev.tone === 'blue'
+                                ? 'bg-blue-500'
+                                : 'bg-muted-foreground/40')
+                      }
+                    />
+                    <div className="text-muted-foreground text-xs tabular-nums">
+                      {fmtDT(ev.at)}
+                      {ev.who && <span> · {ev.who}</span>}
+                    </div>
+                    <div className="mt-0.5 text-sm font-medium">{ev.title}</div>
+                    {ev.detail && (
+                      <div className="text-muted-foreground mt-0.5 text-xs">
+                        {ev.detail}
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {tab === 'timeline' && (
-        <Card title="Dòng thời gian đơn hàng">
-          <ol className="relative ml-2 flex flex-col gap-0 border-l border-zinc-200 dark:border-zinc-800">
-            {timeline.map((ev, i) => (
-              <li key={i} className="relative pb-5 pl-5 last:pb-0">
-                <span
-                  className={
-                    'absolute top-1 -left-[5px] h-2.5 w-2.5 rounded-full ring-4 ring-white dark:ring-zinc-950 ' +
-                    (ev.tone === 'green'
-                      ? 'bg-green-500'
-                      : ev.tone === 'red'
-                        ? 'bg-red-500'
-                        : ev.tone === 'amber'
-                          ? 'bg-amber-500'
-                          : ev.tone === 'blue'
-                            ? 'bg-sky-500'
-                            : 'bg-zinc-300 dark:bg-zinc-600')
-                  }
-                />
-                <div className="text-xs text-zinc-400 tabular-nums">
-                  {fmtDT(ev.at)}
-                  {ev.who && <span> · {ev.who}</span>}
-                </div>
-                <div className="mt-0.5 text-sm font-medium">{ev.title}</div>
-                {ev.detail && (
-                  <div className="mt-0.5 text-xs text-zinc-500">{ev.detail}</div>
-                )}
-              </li>
+        <TabsContent value="docs">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                Tài liệu đơn hàng
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <p className="text-muted-foreground text-xs">
+                PO khách · Báo giá PDF · Spec / bản vẽ · Packing list · Invoice · B/L ·
+                C/O · C/Q — đính kèm tất cả vào đây để cả chuỗi cùng xem.
+              </p>
+              <DocumentFiles
+                kind="sales_order"
+                id={order.id}
+                canEdit={canEdit}
+                title="File đính kèm"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {/* ── Huỷ đơn: hệ quả TRƯỚC, lý do SAU ─────────────────────────────── */}
+      <Dialog open={cancelling} onOpenChange={(v) => !v && setCancelling(false)}>
+        <DialogContent className="theme-v2">
+          <DialogHeader>
+            <DialogTitle>Huỷ đơn {order.code}?</DialogTitle>
+            <DialogDescription>
+              Xem hệ quả bên dưới rồi ghi lý do — lý do vào dòng thời gian của đơn.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="flex flex-col gap-1.5 rounded-lg border border-red-200/70 bg-red-50/60 p-3 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/15 dark:text-red-300">
+            {cancelEffects.map((e) => (
+              <li key={e}>· {e}</li>
             ))}
-          </ol>
-        </Card>
-      )}
-
-      {tab === 'docs' && (
-        <Card title="Tài liệu đơn hàng">
-          <p className="mb-3 text-xs text-zinc-400">
-            PO khách · Báo giá PDF · Spec / bản vẽ · Packing list · Invoice · B/L · C/O ·
-            C/Q — đính kèm tất cả vào đây để cả chuỗi cùng xem.
-          </p>
-          <DocumentFiles
-            kind="sales_order"
-            id={order.id}
-            canEdit={canEdit}
-            title="File đính kèm"
-          />
-        </Card>
-      )}
-    </div>
-  )
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          {title}
-        </h2>
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
-  )
-}
-
-function Info({
-  label,
-  value,
-  className = '',
-}: {
-  label: string
-  value: string | null
-  className?: string
-}) {
-  return (
-    <div className={`flex flex-col ${className}`}>
-      <span className="text-[10px] font-medium text-zinc-400 uppercase">{label}</span>
-      <span>{value ? value : <span className="text-zinc-400">—</span>}</span>
+          </ul>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span>
+              Lý do huỷ <span className="text-destructive">*</span>
+            </span>
+            <Textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="Vd: khách rút đơn, đổi mẫu, sai điều khoản…"
+              className="bg-card"
+            />
+          </label>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCancelling(false)}>
+              Không huỷ
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={busy || !cancelReason.trim()}
+              onClick={() => void cancelOrder()}
+            >
+              {busy && <Spinner size={14} />}
+              Huỷ đơn
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

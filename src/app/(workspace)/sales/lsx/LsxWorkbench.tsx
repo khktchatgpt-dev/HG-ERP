@@ -78,6 +78,8 @@ export type LsxRow = {
   ship_date: string | null
   lines: number
   qty: number
+  /** Người LẬP lệnh — null với lệnh nhập bằng script trước khi có tính năng. */
+  created_by_name: string | null
 }
 
 const fmtD = (d: string | null) =>
@@ -89,6 +91,13 @@ const fmtD = (d: string | null) =>
       })
     : '—'
 const fmtN = (n: number) => n.toLocaleString('vi-VN')
+
+/**
+ * Tên gọi (chữ cuối) để nhét vừa ô hẹp: "Nguyễn T.Minh Hằng" → "Hằng". Họ tên
+ * đầy đủ trong ô 250px bị cắt cụt, vừa mất chữ vừa không phân biệt được ai —
+ * tên đầy đủ giữ ở tooltip.
+ */
+const shortName = (full: string) => full.trim().split(/\s+/).at(-1) ?? full
 
 /* ── Cột Đơn hàng: mã đầu + chip "+N" mở popover — hàng KHÔNG bao giờ nở cao ── */
 function OrderCodesCell({ codes }: { codes: string[] }) {
@@ -414,8 +423,14 @@ export function LsxWorkbench({
       {/* ── Lọc + bảng lệnh ─────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
+          {/*
+            Tab XUỐNG DÒNG, không cuộn ngang. `overflow-x-auto` (cách cũ) kéo
+            theo `overflow-y: auto` — Windows chừa sẵn 16px gutter nên mọc một
+            thanh cuộn dọc thừa ngay cạnh tab cuối, dù chẳng có gì để cuộn.
+            `h-auto!` phải có `!` mới thắng được `...horizontal:h-9` của TabsList.
+          */}
           <Tabs value={status} onValueChange={setStatus} className="max-w-full">
-            <TabsList className="max-w-full overflow-x-auto">
+            <TabsList className="h-auto! flex-wrap">
               {tabs.map((t) => (
                 <TabsTrigger key={t.value} value={t.value}>
                   {t.label}
@@ -524,8 +539,18 @@ export function LsxWorkbench({
                           </Badge>
                         )}
                       </div>
-                      <div className="text-muted-foreground mt-0.5 truncate text-xs">
+                      {/* Người lập đi kèm tên khách trên dòng phụ sẵn có —
+                          không đẻ thêm cột, bảng đã chật (0119). */}
+                      <div
+                        className="text-muted-foreground mt-0.5 truncate text-xs"
+                        title={
+                          r.created_by_name
+                            ? `${r.customer_name} · lập bởi ${r.created_by_name}`
+                            : r.customer_name
+                        }
+                      >
                         {r.customer_name}
+                        {r.created_by_name && ` · ${shortName(r.created_by_name)}`}
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-2.5">

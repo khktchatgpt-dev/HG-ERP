@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { colKey, specColumnsOf } from '@/modules/dept/sales/lsx-template'
+import { shipText } from '@/modules/dept/production/lsx-sheet-cells'
 import { entriesService } from '@/modules/dept/production/entries.service'
 import {
   isProductionStaff,
@@ -78,16 +80,18 @@ export async function LsxDetailScreen({
 
   const imageUrls = new Map<string, string>()
   await Promise.all(
-    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
-      try {
-        imageUrls.set(
-          fid as string,
-          await filesService.getDownloadUrl(user, fid as string),
-        )
-      } catch {
-        /* ignore */
-      }
-    }),
+    [...new Set(sheetLines.map((l) => l.image_file_id).filter(Boolean))].map(
+      async (fid) => {
+        try {
+          imageUrls.set(
+            fid as string,
+            await filesService.getDownloadUrl(user, fid as string),
+          )
+        } catch {
+          /* ignore */
+        }
+      },
+    ),
   )
 
   // Quyền theo shell — khớp guard service; UI không hứa thứ server sẽ từ chối.
@@ -156,6 +160,9 @@ export async function LsxDetailScreen({
     },
   }[variant]
 
+  // Người LẬP lệnh (0119) — null với lệnh nhập bằng script trước khi có cột này.
+  const creator = lsx.created_by ? await usersRepo.findById(lsx.created_by) : null
+
   return (
     <LsxDetailView
       lsx={{
@@ -174,6 +181,7 @@ export async function LsxDetailScreen({
         container_summary: lsx.container_summary,
         note: lsx.note,
         created_at: lsx.created_at,
+        created_by_name: creator?.name ?? null,
       }}
       lines={sheetLines.map((l) => ({
         order_line_id: l.id,
@@ -182,7 +190,9 @@ export async function LsxDetailScreen({
         name_vi: l.name_vi ?? l.product_code,
         unit: l.unit,
         qty: l.qty,
-        ship_text: l.ship_label ?? l.ship_date ?? '',
+        // Đợt xuất là NGÀY (07/08/2026) — dùng chung `shipText` với phiếu in
+        // và file Excel để ba nơi hiện y hệt nhau, không mỗi chỗ một kiểu.
+        ship_text: shipText(l),
         image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
         spec: l.specs,
       }))}

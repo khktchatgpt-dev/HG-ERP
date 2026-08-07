@@ -51,6 +51,9 @@ export type OrderLine = {
   image_file_id: string | null
 }
 
+/** Số liệu gộp của các dòng trong một đơn — bảng danh sách đọc thẳng. */
+export type OrderLineSummary = { lines: number; qty: number; total: number }
+
 export type OrderLineInput = {
   product_id: string
   qty: number
@@ -132,21 +135,39 @@ export const ordersRepo = {
     return unwrap([data as RawOrder])[0]
   },
 
-  /** Tổng giá trị (Σ qty×unit_price) theo lô đơn — cho KPI dashboard/khách. */
-  async totalsByOrderIds(ids: string[]): Promise<Record<string, number>> {
+  /**
+   * Σ số dòng / số lượng / giá trị theo lô đơn — MỘT truy vấn cho cả trang danh
+   * sách (bảng đơn hàng hiện SL và giá trị từng đơn, đừng gọi N lần).
+   *
+   * NGƯỠNG: Supabase trả tối đa `max-rows` (mặc định 1000) mỗi truy vấn, nên
+   * quá ~1000 dòng đơn thì tổng bị hụt âm thầm. Hiện ~90 dòng nên chưa chạm;
+   * khi tới ngưỡng phải chuyển sang view/RPC cộng ở Postgres.
+   */
+  async lineSummaryByOrderIds(ids: string[]): Promise<Record<string, OrderLineSummary>> {
     if (ids.length === 0) return {}
     const { data } = await db()
       .from('sales_order_lines')
       .select('order_id, qty, unit_price')
       .in('order_id', ids)
-    const totals: Record<string, number> = {}
+    const out: Record<string, OrderLineSummary> = {}
     for (const r of (data ?? []) as {
       order_id: string
       qty: number
       unit_price: number
     }[]) {
-      totals[r.order_id] = (totals[r.order_id] ?? 0) + r.qty * r.unit_price
+      const e = (out[r.order_id] ??= { lines: 0, qty: 0, total: 0 })
+      e.lines += 1
+      e.qty += r.qty
+      e.total += r.qty * r.unit_price
     }
+    return out
+  },
+
+  /** Tổng giá trị (Σ qty×unit_price) theo lô đơn — cho KPI dashboard/khách. */
+  async totalsByOrderIds(ids: string[]): Promise<Record<string, number>> {
+    const summary = await ordersRepo.lineSummaryByOrderIds(ids)
+    const totals: Record<string, number> = {}
+    for (const [id, s] of Object.entries(summary)) totals[id] = s.total
     return totals
   },
 

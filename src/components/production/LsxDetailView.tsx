@@ -38,6 +38,7 @@ import { Textarea } from '@/components/shadcn/textarea'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { StageBar } from './LsxStageBar'
 import { api, ApiError } from '@/lib/api'
+import { canRemoveOrdersFromLsx } from '@/lib/record-ownership'
 import { useToast } from '@/components/ui/Toast'
 import type { Job } from '@/modules/dept/production/jobs.repo'
 import type { ComponentOutputView } from '@/modules/dept/production/entries.service'
@@ -74,6 +75,12 @@ export type LsxHeaderData = {
   container_summary: string | null
   note: string | null
   created_at: string
+  /**
+   * Người LẬP lệnh (0119). Không lấy từ `issued_by` — cột đó bị ghi đè mỗi lần
+   * gửi duyệt lại nên không truy được người lập. null = lệnh nhập bằng script
+   * trước khi có tính năng.
+   */
+  created_by_name: string | null
 }
 
 export type LsxLineData = {
@@ -199,6 +206,9 @@ export function LsxDetailView({
 
   // Đổi danh sách đơn được tới khi lệnh kết thúc (server chặn lần cuối).
   const ordersEditable = lsx.status !== 'completed' && lsx.status !== 'cancelled'
+  // Duyệt rồi thì chỉ SỬA/CẬP NHẬT, không gỡ bớt đơn (chốt 07/08/2026). Gộp THÊM
+  // vẫn cho — đó là bổ sung, không phải xoá.
+  const canRemoveOrders = canRemoveOrdersFromLsx(lsx.status)
   const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
   const lineName = (id: string) =>
     lines.find((l) => l.order_line_id === id)?.name_vi ?? '?'
@@ -322,6 +332,11 @@ export function LsxDetailView({
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <span className="text-muted-foreground text-sm">{lsx.customer_name}</span>
+              {lsx.created_by_name && (
+                <span className="text-muted-foreground text-sm">
+                  · lập bởi <span className="text-foreground">{lsx.created_by_name}</span>
+                </span>
+              )}
               {lsx.priority > 0 && (
                 <Badge
                   variant="outline"
@@ -689,7 +704,7 @@ export function LsxDetailView({
                     >
                       {o.code}
                     </Link>
-                    {canEditOrders && ordersEditable && lsx.orders.length > 1 && (
+                    {canEditOrders && canRemoveOrders && lsx.orders.length > 1 && (
                       <button
                         disabled={busy}
                         onClick={() =>

@@ -15,9 +15,17 @@ export type LsxSheetGroupData = Pick<
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('en-GB') : '')
 export const fmtN = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 3 })
 
-/** Đợt xuất in ra: ưu tiên đúng chữ Sales gõ ("w37.26"), không có thì ngày. */
+/**
+ * Đợt xuất hiển thị: NGÀY là chính (dd/mm/yyyy).
+ *
+ * `ship_label` giữ lại chỉ để đọc dữ liệu cũ — từ 07/08/2026 ô nhập đã là ô
+ * chọn ngày nên không sinh nhãn chữ mới nữa. Trước đó ô nhận text tự do và dữ
+ * liệu thật lẫn lộn tuần ("w37.26"), ngày viết tay ("11/01/27" — lại trùng
+ * `ship_date` đã có), và cả đoạn ghi chú dài; đã quy đổi hết sang ngày bằng
+ * `scripts/ship-label-to-date.mjs`.
+ */
 export const shipText = (x: { ship_label: string | null; ship_date: string | null }) =>
-  x.ship_label?.trim() || (x.ship_date ? fmtD(x.ship_date) : '')
+  x.ship_date ? fmtD(x.ship_date) : (x.ship_label?.trim() ?? '')
 
 /** Giá trị một ô của DÒNG (cột nhóm xử lý riêng vì phải gộp ô). */
 export function lineCell(col: LsxSheetColumn, l: LsxLine): string {

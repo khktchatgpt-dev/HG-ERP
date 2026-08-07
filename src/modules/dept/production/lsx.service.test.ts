@@ -67,6 +67,8 @@ const manager = { id: 'u-mgr', role: 'manager', department_id: null } as unknown
 const LSX = {
   id: 'lsx1',
   code: 'LSX-01',
+  // Người LẬP lệnh = chính quanDoc đang thao tác (0119): của ai người đó sửa.
+  created_by: 'u-qd',
   customer_id: 'c1',
   order_ids: ['o1'],
   order_codes: ['DH-01'],
@@ -359,9 +361,11 @@ describe('lsxService.addOrders / removeOrders (0113)', () => {
     })
   })
 
-  it('gỡ đơn chưa chạy → detach + đơn về confirmed + xoá job/định hình của nó', async () => {
+  it('lệnh CHƯA duyệt: gỡ đơn → detach + đơn về confirmed + xoá job/định hình của nó', async () => {
     vi.mocked(productionRepo.findById).mockResolvedValue({
       ...LSX,
+      // Từ 07/08/2026 chỉ gỡ được khi lệnh chưa qua tay GĐ.
+      status: 'draft',
       order_ids: ['o1', 'o2'],
       order_codes: ['DH-01', 'DH-02'],
     } as never)
@@ -416,12 +420,49 @@ describe('lsxService.addOrders / removeOrders (0113)', () => {
   })
 
   it('gỡ đơn cuối cùng → 400 (lệnh phải còn ít nhất một đơn)', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+    } as never)
     vi.mocked(ordersRepo.listByProductionOrder).mockResolvedValue([
       { id: 'o1', code: 'DH-01' },
     ] as never)
     await expect(lsxService.removeOrders(quanDoc, 'lsx1', ['o1'])).rejects.toMatchObject({
       status: 400,
     })
+  })
+
+  it('lệnh ĐÃ DUYỆT → 400, không gỡ đơn nữa (chỉ sửa/cập nhật)', async () => {
+    // Chốt 07/08/2026: duyệt rồi thì nội dung lệnh là cam kết với xưởng.
+    for (const status of ['approved', 'in_progress']) {
+      vi.mocked(productionRepo.findById).mockResolvedValue({
+        ...LSX,
+        status,
+        order_ids: ['o1', 'o2'],
+        order_codes: ['DH-01', 'DH-02'],
+      } as never)
+      await expect(
+        lsxService.removeOrders(quanDoc, 'lsx1', ['o2']),
+      ).rejects.toMatchObject({ status: 400 })
+    }
+    expect(productionRepo.detachOrders).not.toHaveBeenCalled()
+  })
+
+  it('lệnh của NGƯỜI KHÁC → 403 ở mọi cửa ghi', async () => {
+    // Của ai người đó sửa (07/08/2026): quanDoc là chủ lệnh, nguoiLa thì không.
+    const nguoiLa = { id: 'u-khac', role: 'employee', department_id: 'd-vp' } as never
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      ...LSX,
+      status: 'draft',
+    } as never)
+    for (const call of [
+      () => lsxService.submit(nguoiLa, 'lsx1'),
+      () => lsxService.updateHeader(nguoiLa, 'lsx1', { note: 'x' }),
+      () => lsxService.addOrders(nguoiLa, 'lsx1', ['o2']),
+      () => lsxService.removeOrders(nguoiLa, 'lsx1', ['o2']),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ status: 403 })
+    }
   })
 })
 

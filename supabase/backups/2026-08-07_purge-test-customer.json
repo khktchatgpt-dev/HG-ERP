@@ -1,0 +1,46 @@
+{
+  "note": "Dữ liệu test tầng bán hàng/sản xuất, dump trước khi xoá (07/08/2026). Nạp lại theo thứ tự: sales_customers → production_orders → sales_orders → *_lines/groups/changes.",
+  "scope": {
+    "orders": [],
+    "production_orders": [],
+    "customers": [
+      "Test KH Không Email"
+    ],
+    "kept_on_purpose": {
+      "LSX-2026-0001": "3 đơn mua NCC bám bằng FK RESTRICT — xử PO trước"
+    }
+  },
+  "sales_customers": [
+    {
+      "id": "25e66572-7295-4f6d-b018-1957f54f6ace",
+      "code": null,
+      "name": "Test KH Không Email",
+      "email": null,
+      "phone": null,
+      "address": null,
+      "notes": null,
+      "owner_id": "2c3e16dd-eca2-42fd-942a-963ffc7f2732",
+      "is_active": true,
+      "created_at": "2026-07-15T06:06:02.810385+00:00",
+      "updated_at": "2026-07-15T06:06:02.810385+00:00",
+      "tax_code": null,
+      "country": null,
+      "contact_person": null,
+      "default_currency": null,
+      "default_price_term": null,
+      "default_payment_terms": null,
+      "port_of_discharge": null,
+      "fax": null,
+      "representative_title": null,
+      "fsc_cert": null,
+      "lsx_template": {}
+    }
+  ],
+  "sales_orders": [],
+  "sales_order_lines": [],
+  "sales_order_changes": [],
+  "production_orders": [],
+  "production_order_lines": [],
+  "production_order_groups": [],
+  "files": []
+}

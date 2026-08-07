@@ -37,7 +37,8 @@ import {
 import { lsxAudienceIds } from './notify-targets'
 import { emit } from '@/events/bus'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
-import { BadRequest, NotFound } from '@/server/http'
+import { canMutateOwned } from '@/lib/record-ownership'
+import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -289,6 +290,12 @@ export const lsxLinesService = {
     await assertAction(user, 'production.lsx.issue')
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
+    // Soạn dòng CŨNG LÀ sửa lệnh — của ai người đó sửa (chốt 07/08/2026).
+    if (!canMutateOwned(user, lsx.created_by)) {
+      throw Forbidden(
+        'Lệnh này do người khác lập — chỉ người lập hoặc quản lý mới sửa được',
+      )
+    }
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
       throw BadRequest('Lệnh đã kết thúc — không sửa dòng được')
     }

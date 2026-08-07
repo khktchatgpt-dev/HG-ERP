@@ -64,6 +64,8 @@ const sales = {
 
 const ORDER = {
   id: 'o1',
+  // Người tạo đơn = chính `sales` đang thao tác (0119): của ai người đó sửa.
+  created_by: 'u-sales',
   code: 'DH-2026-0001',
   quote_id: 'q1',
   customer_id: 'c1',
@@ -503,5 +505,40 @@ describe('ordersService.deliver — khép chuỗi (completed → delivered)', ()
     const manager = { id: 'u-gd', role: 'manager' } as never
     const out = await ordersService.deliver(manager, 'o1')
     expect(out.status).toBe('delivered')
+  })
+})
+
+/**
+ * Của ai người đó sửa (chốt 07/08/2026). Trước đây `sales.order.manage` chỉ hỏi
+ * "có ở phòng Bán Hàng không" nên sale nào cũng sửa/huỷ được đơn của nhau.
+ */
+describe('ordersService — chủ đơn mới sửa/huỷ được', () => {
+  const sale2 = { id: 'u-sale2', role: 'employee', department_id: 'd-sales' } as never
+  const truongPhong = { id: 'u-gd', role: 'manager', department_id: 'd-sales' } as never
+
+  it('sale khác → 403 khi sửa và khi huỷ', async () => {
+    await expect(
+      ordersService.update(sale2, 'o1', { note: 'đổi' }),
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(ordersService.cancel(sale2, 'o1', 'lý do')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(ordersRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('trưởng phòng / GĐ sửa được đơn của người khác (gánh việc khi sale nghỉ)', async () => {
+    vi.mocked(ordersRepo.patch).mockResolvedValue({ ...ORDER, note: 'đổi' } as never)
+    await ordersService.update(truongPhong, 'o1', { note: 'đổi' })
+    expect(ordersRepo.patch).toHaveBeenCalled()
+  })
+
+  it('đơn VÔ CHỦ (nhập bằng script) → nhân viên không đụng được', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      created_by: null,
+    } as never)
+    await expect(
+      ordersService.update(sales, 'o1', { note: 'đổi' }),
+    ).rejects.toMatchObject({ status: 403 })
   })
 })

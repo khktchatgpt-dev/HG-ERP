@@ -84,31 +84,69 @@ describe('evalRule', () => {
   })
 })
 
-describe('canDo — Sales xem KT được, sửa không (ví dụ user nêu)', () => {
-  const salesCtx = {
-    role: 'employee' as const,
-    has: has(['sales.member', 'technical.bom.edit']),
-  }
+/**
+ * Hồ sơ sản phẩm = khu DÙNG CHUNG (user chốt 07/08/2026): mọi phòng XEM, chỉ
+ * Kỹ thuật / Bán hàng / Giám đốc SỬA. Bộ test dưới chốt đúng ba nhóm đó — và
+ * chốt cả mặt còn lại: phòng khác (Kho) chỉ xem.
+ */
+describe('canDo — hồ sơ SP: mọi phòng xem, 3 nhóm sửa', () => {
   const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
 
-  it('Sales XEM thư viện SP + BOM → được', () => {
-    expect(canDo(byKey('technical.product.view'), salesCtx)).toBe(true)
-    expect(canDo(byKey('technical.bom.view'), salesCtx)).toBe(true)
+  // Tập quyền đúng như seed 0073 + 0118 cho từng vai.
+  const sales = ctxOf(['sales.member', 'technical.bom.edit', 'technical.edit'])
+  const technical = ctxOf(['technical.member', 'technical.edit', 'technical.bom.edit'])
+  const director = ctxOf(['technical.edit', 'technical.bom.edit'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+
+  const VIEW = ['technical.product.view', 'technical.bom.view']
+  const EDIT = [
+    'technical.product.create',
+    'technical.product.update',
+    'technical.product.clone',
+    'technical.product.remove',
+    'technical.product.attach_file',
+    'technical.bom.save',
+  ]
+
+  it('MỌI vai xem được thư viện SP + BOM (kể cả Kho)', () => {
+    for (const c of [sales, technical, director, warehouse]) {
+      expect(VIEW.every((k) => canDo(byKey(k), c))).toBe(true)
+    }
   })
 
-  it('Sales SỬA sản phẩm / BOM → KHÔNG', () => {
-    expect(canDo(byKey('technical.product.update'), salesCtx)).toBe(false)
-    expect(canDo(byKey('technical.bom.save'), salesCtx)).toBe(false)
+  it('Kỹ thuật / Bán hàng / Giám đốc sửa được cả hồ sơ lẫn định mức', () => {
+    for (const c of [technical, sales, director]) {
+      expect(EDIT.filter((k) => !canDo(byKey(k), c))).toEqual([])
+    }
   })
 
-  it('Sales tạo nhanh SP + đặt ảnh → được (ngoại lệ có chủ ý)', () => {
-    expect(canDo(byKey('technical.product.quick_create'), salesCtx)).toBe(true)
-    expect(canDo(byKey('technical.product.set_image'), salesCtx)).toBe(true)
+  it('phòng khác (Kho) KHÔNG sửa được gì trong hồ sơ SP', () => {
+    expect(EDIT.filter((k) => canDo(byKey(k), warehouse))).toEqual([])
   })
 
-  it('Sales bổ sung quy cách SP thiếu → được, nhưng vẫn KHÔNG sửa được SP', () => {
-    expect(canDo(byKey('technical.product.fill_specs'), salesCtx)).toBe(true)
-    expect(canDo(byKey('technical.product.update'), salesCtx)).toBe(false)
+  it('Giám đốc sửa được dù KHÔNG có technical.member (lỗi luật cũ)', () => {
+    // Luật cũ `technical.member AND technical.edit` chặn đúng ca này.
+    expect(canDo(byKey('technical.product.update'), director)).toBe(true)
+  })
+
+  it('Sales tạo nhanh SP + đặt ảnh + điền quy cách → được', () => {
+    expect(canDo(byKey('technical.product.quick_create'), sales)).toBe(true)
+    expect(canDo(byKey('technical.product.set_image'), sales)).toBe(true)
+    expect(canDo(byKey('technical.product.fill_specs'), sales)).toBe(true)
+  })
+
+  it('sale KHÔNG có technical.edit vẫn tạo nhanh/đặt ảnh được (nhánh sales.member)', () => {
+    const salesOnly = ctxOf(['sales.member'])
+    expect(canDo(byKey('technical.product.quick_create'), salesOnly)).toBe(true)
+    expect(canDo(byKey('technical.product.set_image'), salesOnly)).toBe(true)
+    expect(canDo(byKey('technical.product.update'), salesOnly)).toBe(false)
+  })
+
+  it('showroom vẫn là của phòng Kỹ thuật — Bán hàng/Giám đốc không quản mẫu', () => {
+    expect(canDo(byKey('technical.sample.manage'), technical)).toBe(true)
+    expect(canDo(byKey('technical.sample.manage'), sales)).toBe(false)
+    expect(canDo(byKey('technical.sample.manage'), director)).toBe(false)
   })
 
   it('admin bypass → làm được mọi thao tác', () => {

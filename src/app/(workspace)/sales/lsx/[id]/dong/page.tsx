@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
+import { filesService } from '@/modules/core/files/files.service'
 import { LsxSheetEditor } from '@/components/production/LsxSheetEditor'
 
 /**
@@ -43,8 +44,24 @@ export default async function LsxLinesPage({
     unitByProduct,
   )
 
+  // Ảnh SP cho màn soạn dòng (07/08/2026) — nhận mặt hàng bằng mắt thay vì dò
+  // mã. Ký một lượt cho cả trang; ảnh nào lỗi thì bỏ qua, không chặn màn soạn.
+  const imageUrls: Record<string, string> = {}
+  await Promise.all(
+    [...new Set(lines.map((l) => l.image_file_id).filter((x): x is string => !!x))].map(
+      async (fid) => {
+        try {
+          imageUrls[fid] = await filesService.getDownloadUrl(user, fid)
+        } catch {
+          /* ảnh hỏng/không quyền — bỏ qua */
+        }
+      },
+    ),
+  )
+
   return (
     <LsxSheetEditor
+      imageUrls={imageUrls}
       lsxId={lsx.id}
       lsxCode={lsx.code}
       customerName={lsx.customer_name}

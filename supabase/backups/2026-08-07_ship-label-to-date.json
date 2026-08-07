@@ -1,0 +1,6 @@
+{
+  "note": "Nhãn đợt xuất dạng chữ TRƯỚC khi quy đổi sang ngày (07/08/2026). Khôi phục = ghi lại ship_label/ship_date/note theo id.",
+  "lines": [],
+  "groups": [],
+  "plan": []
+}
