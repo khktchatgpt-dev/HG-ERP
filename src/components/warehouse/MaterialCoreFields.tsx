@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
+import { namesAlike } from '@/lib/material-key'
 import { isSheetLike, kgPerM, rhoFor } from '@/lib/metal-weight'
-import { guessTemplate, resolveTemplate } from '@/lib/po-template-guess'
-import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import { guessTemplate } from '@/lib/po-template-guess'
+import { type PoTemplate } from '@/lib/po-template'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 
 /**
@@ -16,10 +17,15 @@ import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service
  *   · `MaterialForm` (danh mục Kho / Cung ứng) — nhóm GÕ TAY, không có ô nhóm
  *     phụ, không có mẫu đơn, không có kg/m.
  *
- * Hệ quả không nằm ở thẩm mỹ: vật tư khai từ danh mục ra đời KHÔNG có mẫu đơn
- * nên hiện "chưa khai mẫu" ở ô chọn và không tính được tiền ở đơn nhôm/inox,
- * còn ô nhóm gõ tay thì đẻ nhóm thứ 15 đúng như `docs/tao-vat-tu-ke-hoach.md`
- * cảnh báo. Gom về một khối để hai màn không thể lệch nhau lần nữa.
+ * Hệ quả không nằm ở thẩm mỹ: vật tư khai từ danh mục ra đời không có kg/m nên
+ * không tính được tiền ở đơn nhôm/inox, còn ô nhóm gõ tay thì đẻ nhóm thứ 15
+ * đúng như `docs/tao-vat-tu-ke-hoach.md` cảnh báo. Gom về một khối để hai màn
+ * không thể lệch nhau lần nữa.
+ *
+ * KHÔNG còn ô "Mẫu đơn đặt hàng" (bỏ 08/08/2026): mẫu đơn là thuộc tính của
+ * ĐƠN, không gắn theo vật tư — gắn mẫu làm ô tìm của form đặt giấu hàng khác
+ * mẫu (gỗ "biến mất"). Máy vẫn ĐOÁN mẫu ngầm từ tên (`guessTemplate`) nhưng chỉ
+ * để quyết định có hỏi barem kg/m hay không, không lưu vào danh mục.
  */
 
 export type MaterialCore = {
@@ -30,12 +36,15 @@ export type MaterialCore = {
   sub_group: string
   price_unit: string
   unit2_factor: string
-  /** '' = để máy đoán theo tên; có giá trị = người dùng chốt tay. */
-  po_template: string
   kg_per_m: string
   default_bar_length_m: string
   /** kg mỗi đơn vị đặt — dùng cho hàng tấm/cuộn, thứ không có barem theo mét. */
   kg_per_unit: string
+  /** Vật liệu / màu (0124) — tự điền cột "Vật liệu" trên đơn phụ kiện. */
+  material_grade: string
+  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con). */
+  pack_size: string
+  pack_unit: string
 }
 
 export const EMPTY_CORE: MaterialCore = {
@@ -46,10 +55,12 @@ export const EMPTY_CORE: MaterialCore = {
   sub_group: '',
   price_unit: '',
   unit2_factor: '',
-  po_template: '',
   kg_per_m: '',
   default_bar_length_m: '',
   kg_per_unit: '',
+  material_grade: '',
+  pack_size: '',
+  pack_unit: '',
 }
 
 /** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
@@ -57,7 +68,7 @@ function normalizeName(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
     .replace(/\s+/g, ' ')
     .trim()
@@ -80,10 +91,12 @@ export function coreFromMaterial(m: Partial<Record<keyof MaterialCore, unknown>>
     sub_group: str(m.sub_group),
     price_unit: str(m.price_unit),
     unit2_factor: str(m.unit2_factor),
-    po_template: str(m.po_template),
     kg_per_m: str(m.kg_per_m),
     default_bar_length_m: str(m.default_bar_length_m),
     kg_per_unit: str(m.kg_per_unit),
+    material_grade: str(m.material_grade),
+    pack_size: str(m.pack_size),
+    pack_unit: str(m.pack_unit),
   } satisfies MaterialCore
 }
 
@@ -95,6 +108,7 @@ export function useMaterialCore({
   templateHint,
   taxonomy,
   excludeCode,
+  requireGroup = false,
 }: {
   /** Form đang mở — chỉ lúc đó mới nạp danh mục và dò trùng tên. */
   active: boolean
@@ -108,6 +122,12 @@ export function useMaterialCore({
   taxonomy?: MaterialTaxonomy
   /** Mã của chính vật tư đang sửa — không tự cảnh báo trùng với bản thân nó. */
   excludeCode?: string
+  /**
+   * Bắt buộc chọn nhóm (form khai nhanh trong đơn đặt — 0124). Nhóm là phạm vi
+   * chặn trùng tên phía server: vật tư không nhóm rơi vào rọ riêng và lọt lưới
+   * chặn, mà người đang vội soạn đơn lại chính là người hay bỏ trống nhất.
+   */
+  requireGroup?: boolean
 }) {
   const [f, setF] = useState<MaterialCore>({ ...EMPTY_CORE, ...initial })
   const [fetched, setFetched] = useState<MaterialTaxonomy>({ units: [], groups: [] })
@@ -154,7 +174,8 @@ export function useMaterialCore({
       : g
   }, [f.name, f.sub_group, derived, templateHint])
 
-  const template = resolveTemplate(f.po_template || null, guess)
+  // Mẫu chỉ dùng NGẦM (quyết định có hỏi barem kg/m) — không còn ô chọn, không lưu.
+  const template = guess.template
 
   /*
    * Hai mẫu tính tiền theo KHỐI LƯỢNG nên bắt buộc có barem, và `lineReady`
@@ -196,14 +217,33 @@ export function useMaterialCore({
    * Dò trùng tên Ở SERVER. So với danh mục nạp sẵn trong trang là vô dụng: trang
    * chỉ giữ vài chục dòng đang xem trong khi danh mục có 13k — cảnh báo gần như
    * không bao giờ bắn. Debounce 350ms, chỉ hỏi khi tên đủ dài.
+   *
+   * HAI ĐƯỜNG (0124):
+   *   · Đã chọn nhóm → endpoint /materials/similar: so MỜ trong đúng phạm vi
+   *     nhóm mà server sẽ chặn cứng — bắt được "Bộ tip Buri"/"Bộ Típ Bori",
+   *     "7M"/"7 màu", "đen"/"đem"… là các ca ilike-chứa-nhau lọt sạch (sổ thật
+   *     phải ghi tay "Gộp 2 dòng").
+   *   · Chưa chọn nhóm → tìm thô theo tên như cũ, thêm so mờ trên kết quả.
    */
   const nName = normalizeName(f.name)
+  const groupName = f.group_name.trim()
   useEffect(() => {
     const tooShort = !active || nName.length < 4
     const t = setTimeout(
       async () => {
         if (tooShort) return setSimilar([])
         try {
+          if (groupName) {
+            const { materials } = await api<{
+              materials: { code: string; name: string }[]
+            }>(
+              `/api/dept/warehouse/materials/similar?name=${encodeURIComponent(
+                f.name.trim().slice(0, 200),
+              )}&group_name=${encodeURIComponent(groupName)}`,
+            )
+            setSimilar(materials.filter((m) => m.code !== excludeCode).slice(0, 3))
+            return
+          }
           const { materials } = await api<{
             materials: { code: string; name: string }[]
           }>(
@@ -214,7 +254,11 @@ export function useMaterialCore({
               .filter((m) => m.code !== excludeCode)
               .filter((m) => {
                 const other = normalizeName(m.name)
-                return other.includes(nName) || nName.includes(other)
+                return (
+                  other.includes(nName) ||
+                  nName.includes(other) ||
+                  namesAlike(f.name, m.name)
+                )
               })
               .slice(0, 3),
           )
@@ -225,7 +269,9 @@ export function useMaterialCore({
       tooShort ? 0 : 350,
     )
     return () => clearTimeout(t)
-  }, [active, nName, excludeCode])
+    // f.name chỉ vào deps qua nName (đã chuẩn hoá) — đổi hoa/thường không refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, nName, groupName, excludeCode])
 
   /** Số kg/m sẽ ghi: ưu tiên số người gõ, bỏ trống thì lấy số máy đọc được. */
   const kgToSave = f.kg_per_m.trim() ? Number(f.kg_per_m) || null : (derived?.kg ?? null)
@@ -241,7 +287,6 @@ export function useMaterialCore({
       sub_group: f.sub_group.trim() || null,
       price_unit: f.price_unit.trim() || null,
       unit2_factor: dual && f.unit2_factor.trim() ? Number(f.unit2_factor) || null : null,
-      po_template: template,
       // Hàng tấm/cuộn: ghi null cứng. Không chỉ ẩn ô — nếu người dùng gõ số rồi
       // mới đổi tên/ĐVT sang hàng tấm, con số cũ vẫn còn trong state và sẽ đi
       // thẳng vào ô kg/đơn-vị điền sẵn của mọi đơn sau.
@@ -256,6 +301,12 @@ export function useMaterialCore({
         needsWeight && sheetLike && f.kg_per_unit.trim()
           ? Number(f.kg_per_unit) || null
           : null,
+      material_grade: f.material_grade.trim() || null,
+      // Đóng gói mua: chỉ có nghĩa khi đủ CẢ hai — "1 bì = ?" hay "? = 500" đều
+      // không dùng gợi ý được, ghi null cho sạch thay vì lưu nửa thông tin.
+      pack_size:
+        f.pack_size.trim() && f.pack_unit.trim() ? Number(f.pack_size) || null : null,
+      pack_unit: f.pack_size.trim() && f.pack_unit.trim() ? f.pack_unit.trim() : null,
     }
   }
 
@@ -274,12 +325,130 @@ export function useMaterialCore({
     kgMismatch,
     kgOff,
     dual,
-    invalid: !f.name.trim() || !f.unit.trim(),
+    requireGroup,
+    invalid: !f.name.trim() || !f.unit.trim() || (requireGroup && !f.group_name.trim()),
     corePayload,
   }
 }
 
 // ── Mảnh dựng form dùng chung ────────────────────────────────────────────────
+
+/**
+ * Ô gõ tự do + GỢI Ý CÓ KIỂM SOÁT — thay `<datalist>` native.
+ *
+ * Datalist trông gọn trong code nhưng popup là của trình duyệt: 24 đơn vị xổ
+ * nguyên một cột cao hơn cả màn hình, không giới hạn/cuộn/style được (ảnh lỗi
+ * 07/08/2026). Panel tự quản thì: lọc theo ký tự đang gõ, cao tối đa ~7 dòng
+ * rồi cuộn, và vẫn GÕ TỰ DO được — "Lố", "Nhãn", "Thẻ" là ĐVT thật của xưởng,
+ * khoá cứng là không khai được (triết lý gõ-tự-do-thay-FK của dự án).
+ */
+function SuggestInput({
+  value,
+  onChange,
+  options,
+  placeholder,
+  maxLength,
+  className,
+  listId,
+  disabled,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: string[]
+  placeholder?: string
+  maxLength?: number
+  className?: string
+  /** Id ổn định cho listbox (aria) — hai form mở cùng lúc không được trùng. */
+  listId: string
+  disabled?: boolean
+}) {
+  const [open, setOpen] = useState(false)
+  const [hi, setHi] = useState(-1)
+
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
+  const q = norm(value)
+  // Đã gõ trùng khớp một nhãn chuẩn thì thôi gợi ý — panel 1 dòng lặp lại chính
+  // giá trị trong ô chỉ che form.
+  const filtered =
+    q && options.some((o) => norm(o) === q)
+      ? []
+      : options.filter((o) => norm(o).includes(q))
+
+  const pick = (v: string) => {
+    onChange(v)
+    setOpen(false)
+    setHi(-1)
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setOpen(true)
+          setHi(-1)
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => {
+          // Trì hoãn để onMouseDown của option kịp chạy trước khi panel đóng.
+          setTimeout(() => setOpen(false), 100)
+        }}
+        onKeyDown={(e) => {
+          if (!open || filtered.length === 0) return
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHi((i) => (i + 1) % filtered.length)
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHi((i) => (i <= 0 ? filtered.length - 1 : i - 1))
+          } else if (e.key === 'Enter' && hi >= 0) {
+            e.preventDefault()
+            pick(filtered[hi])
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+        maxLength={maxLength}
+        placeholder={placeholder}
+        disabled={disabled}
+        className={className}
+        role="combobox"
+        aria-expanded={open && filtered.length > 0}
+        aria-controls={listId}
+        aria-autocomplete="list"
+      />
+      {open && filtered.length > 0 && (
+        <ul
+          id={listId}
+          role="listbox"
+          className="absolute top-full right-0 left-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {filtered.map((o, i) => (
+            <li
+              key={o}
+              role="option"
+              aria-selected={i === hi}
+              // onMouseDown (không phải onClick) — chạy TRƯỚC blur của input,
+              // không thì panel đóng mất trước khi click kịp nhận.
+              onMouseDown={(e) => {
+                e.preventDefault()
+                pick(o)
+              }}
+              className={`cursor-pointer px-3 py-1.5 ${
+                i === hi
+                  ? 'bg-zinc-100 dark:bg-zinc-800'
+                  : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {o}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 /**
  * Một ô có nhãn.
@@ -383,24 +552,6 @@ export function MaterialCoreFields({
     (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
       setF((v) => ({ ...v, [k]: e.target.value }))
 
-  /*
-   * "Đơn vị tính giá" CHỎI với mẫu đơn.
-   *
-   * Ô đó chỉ là ghi chú, nhưng khai `kg` cho một mẫu tính theo cái là dấu hiệu
-   * người khai đang hiểu nhầm rằng nó đổi cách tính tiền — và hiểu nhầm đó dẫn
-   * thẳng tới việc nhập giá/kg vào ô đơn giá của dòng tính theo cái. Nhắc ngay
-   * lúc khai rẻ hơn nhiều so với dò lại một đơn đã ký.
-   *
-   * Riêng bao bì KHÔNG tính là chỏi: mẫu carton có thể chốt tiền theo m² thật
-   * (`deriveLine` dùng m²/thùng khi chọn cơ sở m²).
-   */
-  const normUnit = (v: string) => v.trim().toLowerCase().replace(/m2/g, 'm²')
-  const tplPriceUnit = poTemplateMeta(s.template).priceUnit
-  const priceUnitConflict =
-    f.price_unit.trim() !== '' &&
-    !(s.template === 'carton' && normUnit(f.price_unit) === 'm²') &&
-    normUnit(f.price_unit) !== normUnit(tplPriceUnit ?? '')
-
   return (
     <>
       <FormSection title="Nhận dạng">
@@ -436,19 +587,15 @@ export function MaterialCoreFields({
             nhưng hàng lạ như "Lố", "Nhãn", "Thẻ" là ĐVT thật của xưởng — khoá
             cứng là không khai được. Server chuẩn hoá hoa/thường + NFC lúc lưu.
           */}
-          <input
+          <SuggestInput
             value={f.unit}
-            onChange={set('unit')}
-            list={unitListId}
+            onChange={(v) => setF((x) => ({ ...x, unit: v }))}
+            options={s.tax.units}
+            listId={unitListId}
             maxLength={30}
             placeholder="Cây / Tấm / Cái…"
             className={inputClass}
           />
-          <datalist id={unitListId}>
-            {s.tax.units.map((u) => (
-              <option key={u} value={u} />
-            ))}
-          </datalist>
         </Field>
         <Field label="Quy cách" hint="Tự điền vào dòng đơn khi chọn vật tư.">
           <input
@@ -459,15 +606,26 @@ export function MaterialCoreFields({
             className={inputClass}
           />
         </Field>
+        {/* Cột "Vật liệu" của đơn phụ kiện/inox (0124) — trước chỉ chép từ lần
+            đặt trước nên vật tư mới khai thì trống, phải gõ ở từng dòng đơn. */}
+        <Field label="Vật liệu / màu" hint="Tự điền cột Vật liệu trên đơn đặt.">
+          <input
+            value={f.material_grade}
+            onChange={set('material_grade')}
+            maxLength={100}
+            placeholder="Nhựa đen · Sắt xi trắng · inox 201…"
+            className={inputClass}
+          />
+        </Field>
       </FormSection>
 
-      <FormSection title="Phân loại" hint="quyết định cột nhập và cách tính tiền của đơn">
+      <FormSection title="Phân loại" hint="để lọc/tìm theo nhóm và chặn khai trùng tên">
         {/*
           NHÓM LÀ DANH SÁCH CHỐT, không gõ tự do: nhóm quyết định phạm vi so
           trùng tên khi server chặn tạo trùng — gõ sai nhóm là chặn hụt. Nhóm
           PHỤ thì ngược lại (106 giá trị, còn đẻ thêm) nên gợi ý mà vẫn cho mới.
         */}
-        <Field label="Nhóm">
+        <Field label="Nhóm" required={s.requireGroup}>
           <select
             value={f.group_name}
             onChange={(e) =>
@@ -484,60 +642,47 @@ export function MaterialCoreFields({
           </select>
         </Field>
         <Field label="Nhóm phụ">
-          <input
+          <SuggestInput
             value={f.sub_group}
-            onChange={set('sub_group')}
-            list={subListId}
+            onChange={(v) => setF((x) => ({ ...x, sub_group: v }))}
+            options={s.subs}
+            listId={subListId}
             maxLength={100}
             disabled={!f.group_name}
             placeholder={f.group_name ? 'chọn hoặc gõ mới…' : 'chọn nhóm chính trước'}
             className={`${inputClass} disabled:opacity-50`}
           />
-          <datalist id={subListId}>
-            {s.subs.map((x) => (
-              <option key={x} value={x} />
-            ))}
-          </datalist>
         </Field>
 
         {/*
-          MẪU ĐƠN: máy ĐỀ XUẤT kèm lý do, người chốt. Đề xuất là một dòng chữ
-          riêng chứ không nhét vào `<option>` đầu — option không phải một giá
-          trị chọn được, để trong danh sách chỉ tổ bấm nhầm.
+          ĐÓNG GÓI KHI MUA (0124) — NCC bán theo bao/bì/bó chứ không bán lẻ.
+          Đơn thật (THP, LSX 01): cần 13.596 con nút bịt, mua theo bì 500 con —
+          nhân viên phải tự chia 27,2 rồi làm tròn 28 bì ngay trong Excel. Khai
+          một lần ở đây thì ô SL đặt của mọi đơn sau tự quy đổi + gợi ý tròn bao.
         */}
+        <Field label="Đóng gói khi mua" hint="Bỏ trống nếu mua lẻ theo ĐVT.">
+          <input
+            value={f.pack_unit}
+            onChange={set('pack_unit')}
+            maxLength={30}
+            placeholder="bì / bó / thùng / bao…"
+            className={inputClass}
+          />
+        </Field>
         <Field
-          label="Mẫu đơn đặt hàng"
-          span
-          hint={
-            f.po_template && f.po_template !== s.guess.template ? (
-              <span className="text-amber-600 dark:text-amber-400">
-                Bạn chọn khác đề xuất ({poTemplateMeta(s.guess.template).label}) — được,
-                chỉ nhắc để khỏi bấm nhầm.
-              </span>
-            ) : undefined
-          }
+          label={`1 ${f.pack_unit.trim() || 'bao gói'} = ? ${f.unit.trim() || 'ĐVT'}`}
+          hint="vd 1 bì = 500 con — form đặt sẽ gợi ý SL tròn bao."
         >
-          <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={f.po_template}
-              onChange={set('po_template')}
-              className={`${inputClass} sm:w-auto sm:min-w-[220px] sm:flex-1`}
-            >
-              <option value="">Theo đề xuất của máy</option>
-              {PO_TEMPLATES.map((t) => (
-                <option key={t} value={t}>
-                  {poTemplateMeta(t).label}
-                </option>
-              ))}
-            </select>
-            <span className="text-xs text-zinc-500">
-              đang dùng{' '}
-              <b className="text-sky-700 dark:text-sky-300">
-                {poTemplateMeta(s.template).label}
-              </b>
-              {!f.po_template && ` — ${s.guess.reason}`}
-            </span>
-          </div>
+          <input
+            value={f.pack_size}
+            onChange={set('pack_size')}
+            type="number"
+            min={0}
+            step="0.01"
+            disabled={!f.pack_unit.trim()}
+            placeholder="vd 500"
+            className={`${inputClass} tabular-nums disabled:opacity-50`}
+          />
         </Field>
 
         {/*
@@ -670,18 +815,7 @@ export function MaterialCoreFields({
           <Field
             label="Đơn vị tính giá"
             span
-            hint={
-              priceUnitConflict ? (
-                <span className="text-amber-600 dark:text-amber-400">
-                  ⚠ Mẫu <b>{poTemplateMeta(s.template).label}</b> tính tiền theo{' '}
-                  <b>{poTemplateMeta(s.template).priceUnit ?? 'ĐVT đặt'}</b>, không theo
-                  &quot;{f.price_unit.trim()}&quot;. Ô này chỉ là ghi chú — muốn đổi cách
-                  tính tiền thì đổi <b>Mẫu đơn</b> ở trên.
-                </span>
-              ) : (
-                'Ghi lại NCC chào giá theo đơn vị nào (vd đặt cây, chào giá theo kg). Chỉ hiện ở danh mục để tra cứu — cách tính tiền của đơn do Mẫu đơn ở trên quyết định.'
-              )
-            }
+            hint="Ghi lại NCC chào giá theo đơn vị nào (vd đặt cây, chào giá theo kg). Chỉ hiện ở danh mục để tra cứu — cách tính tiền của đơn do MẪU ĐƠN chọn lúc soạn đơn quyết định."
           >
             <input
               value={f.price_unit}

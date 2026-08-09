@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  * giao tổ + hạn; đặt ưu tiên ngay trên bảng.
  */
 export default async function PlanPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   // Màn ĐIỀU PHỐI (0086): thành viên xưởng thường không xem — về màn của vai.
   const canEditPlan = await canManagePlan(user)
   if (user.role === 'employee' && !canEditPlan && (await isProductionStaff(user))) {

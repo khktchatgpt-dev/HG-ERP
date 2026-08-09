@@ -7,8 +7,9 @@ import { Segmented } from './Segmented'
 import type { Num } from '../po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
+// appearance reset: giấu nút tăng/giảm của input số — che số, không ai dùng.
 const box =
-  'h-[28px] rounded-md border border-zinc-300 px-2 text-right text-[13px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input bg-card h-[28px] rounded-md border px-2 text-right text-[13px] transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
 /** Các mức VAT NCC hay chào — một cú bấm thay vì gõ vào ô số bé. */
 const VAT_PRESETS = [0, 8, 10] as const
@@ -73,12 +74,12 @@ export function TotalsBar({
   return (
     <div className="sticky bottom-3 z-20 -mx-1 rounded-xl border border-zinc-200 bg-white/90 px-4 py-3 shadow-[0_-6px_24px_rgba(24,24,27,0.1)] backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
-        <span className="text-zinc-400">
+        <span className="text-muted-foreground">
           Tiền hàng{' '}
           <b className="text-zinc-700 tabular-nums dark:text-zinc-200">{num(subtotal)}</b>
         </span>
         {hasDiscount && (
-          <label className="flex items-center gap-1.5 text-zinc-400">
+          <label className="text-muted-foreground flex items-center gap-1.5">
             Chiết khấu
             <input
               type="number"
@@ -96,7 +97,7 @@ export function TotalsBar({
         )}
 
         <span className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+          <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
             VAT
           </span>
           <Segmented
@@ -143,7 +144,7 @@ export function TotalsBar({
             value={inclVat ? 'in' : 'ex'}
             onSelect={(v) => onInclVatChange(v === 'in')}
           />
-          <span className="text-zinc-400">
+          <span className="text-muted-foreground">
             ={' '}
             <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
               {num(vatAmount)}
@@ -167,7 +168,7 @@ export function TotalsBar({
         */}
         <span className="ml-auto flex shrink-0 items-center gap-3">
           <span className="flex flex-col items-end leading-tight">
-            <span className="text-[11px] text-zinc-400">
+            <span className="text-muted-foreground text-[11px]">
               Tổng thanh toán{vat !== '' && Number(vat) > 0 ? ` · VAT ${vat}%` : ''}
             </span>
             <b className="text-xl font-bold tracking-tight tabular-nums">

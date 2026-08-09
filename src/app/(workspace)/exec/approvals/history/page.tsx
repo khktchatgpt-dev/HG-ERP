@@ -7,7 +7,7 @@ import { HistoryManager } from './HistoryManager'
  * lý do gì. Nguồn: bảng approval_events (ghi khi po.decided / lsx.decided).
  */
 export default async function ApprovalHistoryPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const events = await approvalHistoryService.list(user, { limit: 300 })
   return <HistoryManager events={events} />
 }

@@ -35,9 +35,9 @@ export function WorkspaceSwitcher({
   if (list.length === 1) {
     // Chỉ 1 workspace → hiện label không có switcher.
     return (
-      <div className="mx-1 flex items-center gap-2 rounded-md bg-slate-800/60 px-2 py-1.5">
+      <div className="bg-muted mx-1 flex items-center gap-2 rounded-md px-2 py-1.5">
         <span className={`h-2 w-2 rounded-full ${accent.bg}`} />
-        <span className="text-xs font-medium text-slate-200">{currentWs.label}</span>
+        <span className="text-foreground text-xs font-medium">{currentWs.label}</span>
       </div>
     )
   }
@@ -46,16 +46,16 @@ export function WorkspaceSwitcher({
     <div className="relative mx-1">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 rounded-md bg-slate-800/60 px-2 py-1.5 text-left hover:bg-slate-800"
+        className="bg-muted hover:bg-accent flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors"
       >
         <span className={`h-2 w-2 shrink-0 rounded-full ${accent.bg}`} />
-        <span className="flex-1 truncate text-xs font-medium text-slate-200">
+        <span className="text-foreground flex-1 truncate text-xs font-medium">
           {currentWs.label}
         </span>
-        <span className="text-slate-400">▾</span>
+        <span className="text-muted-foreground">▾</span>
       </button>
       {open && (
-        <div className="absolute top-full right-0 left-0 z-20 mt-1 max-h-80 overflow-auto rounded-md border border-slate-700 bg-slate-900 py-1 shadow-lg">
+        <div className="bg-popover absolute top-full right-0 left-0 z-20 mt-1 max-h-80 overflow-auto rounded-md border py-1 shadow-md">
           {list.map(({ id, readonly }) => {
             const ws = WORKSPACES[id]
             const a = ACCENT_CLASSES[ws.accent]
@@ -65,18 +65,18 @@ export function WorkspaceSwitcher({
                 key={ws.id}
                 href={`${ws.route}/`}
                 onClick={() => setOpen(false)}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-slate-800 ${
-                  active ? 'text-white' : 'text-slate-300'
+                className={`hover:bg-accent flex items-center gap-2 px-3 py-1.5 text-xs ${
+                  active ? 'text-foreground font-medium' : 'text-muted-foreground'
                 }`}
               >
                 <span className={`h-2 w-2 rounded-full ${a.bg}`} />
                 <span className="flex-1 truncate">{ws.label}</span>
                 {readonly && (
-                  <span className="rounded bg-slate-700/80 px-1 py-px text-[9px] tracking-wide text-slate-400 uppercase">
+                  <span className="bg-muted text-muted-foreground rounded px-1 py-px text-[9px] tracking-wide uppercase">
                     chỉ xem
                   </span>
                 )}
-                {active && <span className="text-slate-500">•</span>}
+                {active && <span className="text-muted-foreground/60">•</span>}
               </Link>
             )
           })}

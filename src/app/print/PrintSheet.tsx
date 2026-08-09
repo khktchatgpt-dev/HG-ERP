@@ -56,17 +56,20 @@ export function printDateLine(company: PrintCompany, d: Date): string {
 export function PrintPage({
   orientation = 'landscape',
   maxWidth = 'max-w-4xl',
+  exportHref,
   children,
 }: {
   orientation?: 'landscape' | 'portrait'
   maxWidth?: string
+  /** Có = thanh nút thêm "Xuất Excel" tải phiếu dạng .xlsx. */
+  exportHref?: string
   children: React.ReactNode
 }) {
   const margin = orientation === 'portrait' ? '12mm' : '10mm'
   return (
     <div className={`mx-auto ${maxWidth} bg-white p-6 text-[13px] text-black print:p-0`}>
       <style>{`@page { size: A4 ${orientation}; margin: ${margin}; }`}</style>
-      <PrintToolbar />
+      <PrintToolbar exportHref={exportHref} />
       {children}
     </div>
   )
@@ -150,10 +153,16 @@ export function PrintTitle({ vi, en }: { vi: string; en?: string }) {
 export function PrintMeta({
   rows,
   refs,
+  refsBoxed = false,
 }: {
   /** [nhãn, giá trị] — bỏ qua dòng giá trị rỗng. */
   rows: [string, React.ReactNode][]
   refs?: [string, React.ReactNode][]
+  /**
+   * Đóng KHUNG khối số hiệu — đơn ĐH chuẩn 08/2026 kẻ hộp quanh "Số ĐH / LSX"
+   * cho NCC thấy ngay số tham chiếu; các phiếu khác vẫn để chữ chạy thẳng.
+   */
+  refsBoxed?: boolean
 }) {
   return (
     <div className="mt-2 flex items-start justify-between gap-4">
@@ -170,7 +179,13 @@ export function PrintMeta({
         </tbody>
       </table>
       {refs && refs.length > 0 && (
-        <div className="shrink-0 text-[12px]">
+        <div
+          className={`shrink-0 text-[12px] ${
+            refsBoxed
+              ? 'divide-y divide-black border border-black text-center [&>div]:px-3 [&>div]:py-0.5'
+              : ''
+          }`}
+        >
           {refs.map(([label, v]) => (
             <div key={label}>
               {label} {v}

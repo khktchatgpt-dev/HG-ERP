@@ -540,3 +540,60 @@ export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
     qty_remaining: num(r.qty_remaining),
   }))
 }
+
+/**
+ * PHÂN BỔ THEO SẢN PHẨM từ BOM × SL đơn (khoá = MÃ vật tư) — fallback cho lệnh
+ * CHƯA nhập bảng chi tiết, cùng nguồn với nhánh need của v_lsx_material_status
+ * (0113): dòng SP của mọi đơn thuộc lệnh × định mức technical_product_parts.
+ * Nguồn cho ghi chú "300 Bàn 65 gỗ (4c/sp)" trên dòng đơn đặt.
+ */
+export async function bomAllocationByCode(
+  productionOrderId: string,
+): Promise<Map<string, { product: string; qty: number; per_unit: number | null }[]>> {
+  const out = new Map<string, { product: string; qty: number; per_unit: number | null }[]>()
+  const { data: lines } = await db()
+    .from('sales_order_lines')
+    .select('product_id, qty, product:technical_products(name), order:sales_orders!inner(production_order_id)')
+    .eq('order.production_order_id', productionOrderId)
+    .limit(2000)
+  type LineRow = {
+    product_id: string
+    qty: unknown
+    product: { name: string } | { name: string }[] | null
+  }
+  const lineRows = ((lines ?? []) as unknown as LineRow[])
+    .map((r) => {
+      const p = Array.isArray(r.product) ? r.product[0] : r.product
+      return { product_id: r.product_id, qty: num(r.qty), name: p?.name ?? '' }
+    })
+    .filter((r) => r.qty > 0 && r.product_id)
+  if (lineRows.length === 0) return out
+
+  const productIds = [...new Set(lineRows.map((r) => r.product_id))]
+  const { data: parts } = await db()
+    .from('technical_product_parts')
+    .select('product_id, material_code, qty')
+    .in('product_id', productIds)
+    .not('material_code', 'is', null)
+    .limit(10000)
+  // Định mức gộp theo (SP, mã VT): một vật tư dùng cho nhiều chi tiết của cùng
+  // SP thì đm cộng dồn — "chân trước 2c + chân sau 2c" ra 4c/sp như sổ ghi.
+  const perUnit = new Map<string, number>()
+  for (const p of (parts ?? []) as { product_id: string; material_code: string; qty: unknown }[]) {
+    const key = `${p.product_id}::${p.material_code}`
+    perUnit.set(key, (perUnit.get(key) ?? 0) + num(p.qty))
+  }
+  for (const [key, dm] of perUnit) {
+    const [productId, materialCode] = key.split('::')
+    for (const line of lineRows.filter((l) => l.product_id === productId)) {
+      const list = out.get(materialCode) ?? []
+      list.push({
+        product: line.name.trim().split('\n')[0] || '—',
+        qty: line.qty,
+        per_unit: dm > 0 ? dm : null,
+      })
+      out.set(materialCode, list)
+    }
+  }
+  return out
+}

@@ -4,7 +4,7 @@ import { departmentsService } from '@/modules/core/departments/departments.servi
 import { UsersManager } from './UsersManager'
 
 export default async function AdminUsersPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [users, departments] = await Promise.all([
     usersService.list(user, { includeInactive: true, includeDeleted: true }),
     departmentsService.list(),

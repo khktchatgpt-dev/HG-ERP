@@ -46,7 +46,7 @@ type TodoItem = {
 }
 
 export default async function SalesHomePage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const today = new Date().toISOString().slice(0, 10)
   const thisMonth = today.slice(0, 7) // yyyy-mm
 

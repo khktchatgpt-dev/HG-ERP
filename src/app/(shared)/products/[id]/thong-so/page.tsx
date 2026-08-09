@@ -14,7 +14,7 @@ export default async function ProductSpecsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
   const canEdit = await canEditProducts(user)
 

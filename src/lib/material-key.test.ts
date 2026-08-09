@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { prefixForGroup, scopedSureKey, softKey, sureKey } from './material-key'
+import {
+  namesAlike,
+  prefixForGroup,
+  scopedSureKey,
+  softKey,
+  sureKey,
+} from './material-key'
 
 /*
  * Bốn cách viết dưới đây là DỮ LIỆU THẬT — cùng một con long đền đã vào danh mục
@@ -26,6 +32,32 @@ describe('sureKey — mức CHẮC CHẮN, chặn được lúc tạo', () => {
   it('KHÁC MÀU là hai mặt hàng thật — không được cùng khoá', () => {
     // Gộp nhầm chỗ này là đặt nhầm màu, tệ hơn là để trùng.
     expect(sureKey('LĐN 6x16x2 đen')).not.toBe(sureKey('LĐN 6x16x2 xám'))
+  })
+
+  /*
+   * VIẾT TẮT XƯỞNG (0124) — bằng chứng từ chính sổ Cung ứng: sheet "Tổng VT cần
+   * mua" (LSX 04) phải ghi tay "Gộp 3 dòng (4x15 7 màu / 7M)", "Gộp 2 dòng
+   * (xi trắng / XT)" vì hai cách viết đã thành hai mã.
+   */
+  it('7M và "7 màu" là MỘT — cùng khoá, chặn được lúc tạo', () => {
+    expect(sureKey('Vít 4x15, 7M')).toBe(sureKey('Vít 4x15, 7 màu'))
+  })
+
+  it('XT và "xi trắng" là MỘT', () => {
+    expect(sureKey('Eru 10, XT')).toBe(sureKey('Eru 10, xi trắng'))
+    expect(sureKey('Vít 4x20 đầu dù đuôi cá, XT')).toBe(
+      sureKey('Vít 4x20 đầu dù đuôi cá, xi trắng'),
+    )
+  })
+
+  it('ĐBĐC = đầu bằng đuôi cá — nhưng KHÔNG lẫn với đầu dù', () => {
+    expect(sureKey('Vít 4x20 ĐBĐC, XT')).toBe(
+      sureKey('Vít 4x20 đầu bằng đuôi cá, xi trắng'),
+    )
+    // "đầu bằng" và "đầu dù" là hai loại vít thật (sổ ghi chú "Khác 'đầu dù'").
+    expect(sureKey('Vít 4x20 đầu bằng đuôi cá')).not.toBe(
+      sureKey('Vít 4x20 đầu dù đuôi cá'),
+    )
   })
 
   it('khác quy cách thì khác khoá', () => {
@@ -79,6 +111,37 @@ describe('scopedSureKey — không so chéo vật liệu', () => {
     expect(scopedSureKey('Hộp 25x50x1', 'Inox')).toBe(
       scopedSureKey('hộp 25x50x1 li', 'INOX'),
     )
+  })
+})
+
+/*
+ * SO MỜ mức "nghi ngờ" (0124) — các ca ilike-chứa-nhau lọt sạch. "Bộ tip Buri +
+ * Cây xỏ" (LSX 04) và "Bộ Típ Bori + cây xỏ" (BKVT LSX 02) là MỘT món trong sổ
+ * thật: không chứa nhau, không có số để softKey bám.
+ */
+describe('namesAlike — so mờ theo từ, chỉ để cảnh báo', () => {
+  it('Buri/Bori, tip/Típ — một món hai cách viết', () => {
+    expect(namesAlike('Bộ tip Buri + Cây xỏ', 'Bộ Típ Bori + cây xỏ')).toBe(true)
+  })
+
+  it('đen/đem — lỗi gõ thật từ danh mục', () => {
+    expect(namesAlike('LĐN 6x16x2 đen', 'LĐN 6x16x2 , đem')).toBe(true)
+  })
+
+  it('từ mang CHỮ SỐ phải khớp tuyệt đối — 6x16x2 và 6x16x3 là hai cỡ', () => {
+    expect(namesAlike('LĐN 6x16x2 đen', 'LĐN 6x16x3 đen')).toBe(false)
+  })
+
+  it('đen/xám lệch quá 1 ký tự — hai hàng thật, không báo', () => {
+    expect(namesAlike('LĐN 6x16x2 đen', 'LĐN 6x16x2 xám')).toBe(false)
+  })
+
+  it('tên quá ngắn thì bỏ qua, không báo bừa', () => {
+    expect(namesAlike('ốc', 'óc')).toBe(false)
+  })
+
+  it('viết tắt + so mờ chạy chung: "7M" khớp "7 màu" qua đường alike', () => {
+    expect(namesAlike('Vít dù 4x15, 7M', 'Vít dù 4x15, 7 màu')).toBe(true)
   })
 })
 

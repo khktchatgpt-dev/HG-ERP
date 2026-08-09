@@ -18,7 +18,7 @@ export default async function ShapingDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   let data
   try {

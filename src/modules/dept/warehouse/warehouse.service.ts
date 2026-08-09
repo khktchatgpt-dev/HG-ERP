@@ -3,7 +3,13 @@ import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
 import { type PoTemplate } from '@/lib/po-template'
-import { MIN_KEY_LEN, prefixForGroup, sureKey } from '@/lib/material-key'
+import {
+  MIN_KEY_LEN,
+  namesAlike,
+  prefixForGroup,
+  softKey,
+  sureKey,
+} from '@/lib/material-key'
 import { invalidateTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
 
@@ -47,6 +53,11 @@ type CreateInput = {
   /** kg mỗi đơn vị đặt (0112) — hàng tấm/cuộn khai thẳng. */
   kg_per_unit?: number | null
   default_bar_length_m?: number | null
+  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con). */
+  pack_size?: number | null
+  pack_unit?: string | null
+  /** Vật liệu / màu (0124) — tự điền cột "Vật liệu" của đơn phụ kiện. */
+  material_grade?: string | null
   note?: string | null
 }
 
@@ -78,6 +89,10 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'po_template',
   'kg_per_m',
   'default_bar_length_m',
+  // Đóng gói mua + vật liệu (0124) — thông tin phục vụ soạn đơn, việc của Cung ứng.
+  'pack_size',
+  'pack_unit',
+  'material_grade',
 ])
 
 /**
@@ -206,6 +221,9 @@ export const materialsService = {
       kg_per_m: input.kg_per_m ?? null,
       kg_per_unit: input.kg_per_unit ?? null,
       default_bar_length_m: input.default_bar_length_m ?? null,
+      pack_size: input.pack_size ?? null,
+      pack_unit: input.pack_unit?.trim() || null,
+      material_grade: input.material_grade?.trim() || null,
       note: input.note ?? null,
     })
 
@@ -213,6 +231,32 @@ export const materialsService = {
     // thấy ngay, không phải chờ hết 5 phút.
     invalidateTaxonomy()
     return created
+  },
+
+  /**
+   * DÒ TÊN GẦN GIỐNG lúc đang khai vật tư — mức "nghi ngờ", chỉ để cảnh báo.
+   *
+   * Trước đây form dò bằng cách tìm ilike theo CẢ TÊN rồi so "chứa nhau" — lọt
+   * sạch các ca sai chính tả thật trong sổ Cung ứng: "Bộ tip Buri" / "Bộ Típ
+   * Bori" không chứa nhau, và ilike có dấu nên "tip"/"típ" cũng không khớp.
+   * Ở đây so trong CÙNG PHẠM VI NHÓM với chặn cứng (namesInGroup), bằng đủ ba
+   * mức: khoá chắc chắn (đã bung viết tắt 7M/XT), khoá nghi ngờ (chữ đầu + bộ
+   * số — bắt "đen/đem"), và so mờ theo từ (bắt "Buri/Bori").
+   */
+  async similar(
+    user: User,
+    name: string,
+    groupName: string | null,
+  ): Promise<{ code: string; name: string }[]> {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    if (sureKey(name).length < MIN_KEY_LEN) return []
+    const siblings = await materialsRepo.namesInGroup(groupName)
+    const soft = softKey(name)
+    return siblings
+      .filter(
+        (m) => (soft !== null && softKey(m.name) === soft) || namesAlike(name, m.name),
+      )
+      .slice(0, 5)
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {

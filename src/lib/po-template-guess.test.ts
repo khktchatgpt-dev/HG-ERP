@@ -8,8 +8,10 @@ import { guessTemplate, resolveTemplate } from './po-template-guess'
  */
 describe('guessTemplate — chữ "nhôm" trong tên không có nghĩa là mẫu nhôm', () => {
   it.each([
-    ['Cromate nhôm', 'simple'],
-    ['Thụ động nhôm(Al-7130R)', 'simple'],
+    // Cromate/thụ động là HOÁ CHẤT xử lý bề mặt → mẫu chemical (08/08/2026 —
+    // ý test vẫn là "không phải nhôm"; điều khoản Kiệm Tâm khác hẳn sơn).
+    ['Cromate nhôm', 'chemical'],
+    ['Thụ động nhôm(Al-7130R)', 'chemical'],
     ['Dây hàn mig nhôm ER 4043 1.6mm', 'simple'],
     ['Cân treo nhôm 150kg/8', 'simple'],
     ['Chốt Nhôm', 'accessory'],
@@ -48,6 +50,15 @@ describe('guessTemplate — các mẫu còn lại', () => {
     ['Tem made in VietNam', 'accessory'],
     ['Nút nhựa vuông 76', 'accessory'],
     ['Vòng bi 6203', 'simple'],
+    // 4 mẫu 08/08/2026 — tên thật từ đơn Drive Cung ứng.
+    ['Mây dẹp Treviso', 'rattan'],
+    ['Dây rope tròn 6mm', 'rattan'],
+    ['Sơn xám cát ngoài trời', 'paint'],
+    ['Tẩy dầu phun TD-226S (20kg/can)', 'chemical'],
+    ['Nano Phosphat NCP-01.KT (25kg/can)', 'chemical'],
+    ['Mút dai 5mm x 1.05m x 50m', 'foam'],
+    ['DDH VÁN ÉP phủ phim 12mm', 'foam'],
+    ['Xốp nổ 1.4m x 100m', 'foam'],
   ])('%s → %s', (name, tpl) => {
     expect(guessTemplate(name).template).toBe(tpl)
   })

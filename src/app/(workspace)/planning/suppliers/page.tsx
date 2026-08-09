@@ -6,7 +6,7 @@ import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SuppliersManager } from './SuppliersManager'
 
 export default async function PlanningSuppliersPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
 
   const [{ rows: suppliers }, { rows: pos }, { rows: materials }] = await Promise.all([

@@ -674,6 +674,14 @@ export function OrdersManager({
                                 Mở lệnh sản xuất
                               </DropdownMenuItem>
                               <DropdownMenuItem
+                                onClick={() =>
+                                  window.open(`/print/orders/${o.id}`, '_blank')
+                                }
+                              >
+                                <Printer />
+                                In hợp đồng
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
                                 disabled={!o.lsx_id}
                                 onClick={() =>
                                   window.open(`/print/lsx/${o.lsx_id}`, '_blank')

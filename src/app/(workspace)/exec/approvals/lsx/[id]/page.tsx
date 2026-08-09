@@ -12,7 +12,7 @@ export default async function ApprovalLsxDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
   const item = await loadPendingLsxDetail(user, id)
   if (!item) notFound()

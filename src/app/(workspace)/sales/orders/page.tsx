@@ -9,7 +9,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { OrdersManager } from './OrdersManager'
 
 export default async function SalesOrdersPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null

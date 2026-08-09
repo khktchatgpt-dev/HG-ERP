@@ -8,7 +8,7 @@ import { WORKSPACES } from '@/workspaces/workspaces.config'
 const workspace = WORKSPACES.hr
 
 export default async function HRHomePage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isHRStaff(user))
   if (!allowed) redirect('/')
 

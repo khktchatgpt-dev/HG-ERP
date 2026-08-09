@@ -11,6 +11,10 @@ const STORAGE_KEY = 'hg-sidebar-collapsed'
 /**
  * Sidebar desktop có thể thu gọn (đầy đủ ⇄ icon-only). Trạng thái lưu localStorage
  * để nhớ giữa các lần vào. Dữ liệu nav đã lọc quyền từ server (WorkspaceSidebar).
+ *
+ * Bề mặt là TOKEN v2 (bg-card/border) — cùng hệ với nội dung trang, hết cảnh
+ * khối slate đen đứng cạnh trang stone như hai app. Danh tính phòng nằm ở khối
+ * logo màu accent + item nav active (NavLink).
  */
 export function DesktopSidebar({
   workspaceId,
@@ -19,6 +23,8 @@ export function DesktopSidebar({
   logoText,
   accentBg,
   accentShadow,
+  accentSoftBg,
+  accentText,
   sections,
   switchable,
 }: {
@@ -28,6 +34,8 @@ export function DesktopSidebar({
   logoText: string
   accentBg: string
   accentShadow: string
+  accentSoftBg: string
+  accentText: string
   sections: NavSection[]
   switchable: { id: WorkspaceId; readonly: boolean }[]
 }) {
@@ -48,7 +56,7 @@ export function DesktopSidebar({
 
   return (
     <aside
-      className={`hidden shrink-0 flex-col border-r border-slate-800 bg-slate-900 py-4 text-slate-200 transition-[width] duration-200 lg:flex ${
+      className={`bg-card hidden shrink-0 flex-col border-r py-4 transition-[width] duration-200 lg:flex ${
         collapsed ? 'w-16 px-2' : 'w-60 px-3'
       }`}
     >
@@ -64,10 +72,10 @@ export function DesktopSidebar({
         </span>
         {!collapsed && (
           <div className="flex min-w-0 flex-col">
-            <span className="text-sm leading-tight font-semibold text-white">
+            <span className="text-foreground text-sm leading-tight font-semibold">
               Hoàng Gia
             </span>
-            <span className="text-[10px] tracking-wider text-slate-400 uppercase">
+            <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
               {short}
             </span>
           </div>
@@ -80,9 +88,9 @@ export function DesktopSidebar({
         {sections.map((sec) => (
           <div key={sec.heading} className="mb-2">
             {collapsed ? (
-              <div className="mx-2 mb-1 border-t border-slate-800" />
+              <div className="mx-2 mb-1 border-t" />
             ) : (
-              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
+              <div className="text-muted-foreground/70 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
                 {sec.heading}
               </div>
             )}
@@ -93,7 +101,10 @@ export function DesktopSidebar({
                 label={i.label}
                 icon={i.icon}
                 accentShadow={accentShadow}
+                accentSoftBg={accentSoftBg}
+                accentText={accentText}
                 collapsed={collapsed}
+                exact={i.href === route || i.href === `${route}/` || i.href === '/'}
               />
             ))}
           </div>
@@ -105,7 +116,7 @@ export function DesktopSidebar({
         onClick={toggle}
         title={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
         aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-        className={`mt-2 flex items-center gap-2 rounded-md py-1.5 text-xs text-slate-400 transition hover:bg-slate-800/60 hover:text-white ${
+        className={`text-muted-foreground hover:bg-accent hover:text-foreground mt-2 flex items-center gap-2 rounded-md py-1.5 text-xs transition-colors ${
           collapsed ? 'justify-center px-0' : 'px-3'
         }`}
       >

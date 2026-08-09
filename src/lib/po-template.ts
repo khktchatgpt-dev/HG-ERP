@@ -19,6 +19,10 @@ export const PO_TEMPLATES = [
   'aluminium',
   'metal_kg',
   'carton',
+  'rattan',
+  'paint',
+  'chemical',
+  'foam',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
@@ -75,7 +79,9 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
   aluminium: {
     key: 'aluminium',
     label: 'Nhôm định hình',
-    hint: 'Đặt theo cây, tính tiền theo kg — Việt ECO, Tiến Đạt, Cát Tường, Taiwan, Việt Ý',
+    // Cát Tường KHÔNG nằm đây: đơn thật của họ là nhôm TẤM (SL tấm × kg/tấm,
+    // LSX 03/26-27) — đúng công thức mẫu "theo kg", không phải kg/m × dài cây.
+    hint: 'Đặt theo cây, tính tiền theo kg — Việt ECO, Tiến Đạt, Ngô Sơn, Taiwan, Việt Ý',
     priceUnit: 'kg',
     vatRate: 10,
     priceIncludesVat: false,
@@ -92,8 +98,8 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
   },
   metal_kg: {
     key: 'metal_kg',
-    label: 'Inox / sắt theo kg',
-    hint: 'Cây, ống, tấm — cân theo kg/đơn vị. Kim Vĩnh Phú, Hào Tư Hùng, Thông Đạt',
+    label: 'Inox / sắt / tấm theo kg',
+    hint: 'Cây, ống, tấm (kể cả nhôm tấm) — cân theo kg/đơn vị. Kim Vĩnh Phú, Hào Tư Hùng, Thông Đạt, Cát Tường',
     priceUnit: 'kg',
     vatRate: 10,
     priceIncludesVat: true,
@@ -122,6 +128,90 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       payment: 'Công nợ cuối tháng',
       invoice: INVOICE_VAT,
       lead_time: 'Từ 5 đến 7 ngày kể từ ngày nhận đơn',
+    },
+  },
+  /*
+   * 3 mẫu bổ sung 08/08/2026 — rà thư mục "Hợp đồng mua hàng" trên Drive Cung
+   * ứng: mây (7 đơn Vipora/Huy Khánh/Bàn Tay Việt…), sơn (6 đơn Green
+   * Coatings/Dosa…), mút-xốp (4 đơn Hà Bắc/Thanh Liên…). Cả ba đều tính
+   * SL × đơn giá (không quy đổi) — khác nhau ở BỘ ĐIỀU KHOẢN + cột phụ,
+   * trước đây phải gõ tay mỗi lần vì mẫu Đơn giản để trống điều khoản.
+   */
+  rattan: {
+    key: 'rattan',
+    label: 'Dây mây / rope',
+    hint: 'Đặt theo kg, kèm định mức g/5m — Vipora, Huy Khánh, Bàn Tay Việt, Tân Bình Dương',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Dây đúng mẫu đã duyệt — bảo hành 24 tháng, UV 1.500h',
+      delivery_place: DELIVERY_HG,
+      payment: 'Đơn giá chưa gồm vận chuyển',
+      invoice: INVOICE_VAT,
+      // Câu lặp ở HK/BTV/TLH — không phải "theo kế hoạch HG" chung chung.
+      lead_time: 'Giao theo kế hoạch — thông báo qua điện thoại hoặc Zalo',
+    },
+  },
+  paint: {
+    key: 'paint',
+    label: 'Sơn tĩnh điện',
+    hint: 'Đặt theo kg, mã màu NCC — Việt Sapa, Green Coatings, Dosa, Đắc Vinh, Tân Nam Phát',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Đúng mã màu, đạt chuẩn ngoài trời theo mẫu đã duyệt',
+      delivery_place: DELIVERY_HG,
+      // Đơn thật (Dosa, Tân Nam Phát, Nguyễn Hùng) đều TRẢ TRƯỚC; công nợ 30
+      // ngày chỉ là riêng Green Coatings — sửa ở form khi đặt NCC đó.
+      payment: 'Thanh toán trước khi nhận hàng',
+      invoice: INVOICE_VAT,
+      // Câu lặp ở Việt Sapa / Đắc Vinh / Tân Nam Phát.
+      lead_time: 'Chạy sơn theo kế hoạch — báo trước 5-7 ngày',
+    },
+  },
+  // Hoá chất xử lý (Kiệm Tâm) — CÙNG kg × giá với sơn nhưng khác hẳn điều
+  // khoản: công nợ chuyển khoản 30 ngày sau nhận hàng + hoá đơn (sơn trả
+  // trước), vận chuyển bên bán / dỡ hàng bên mua tách bạch, giao 2-3 ngày.
+  chemical: {
+    key: 'chemical',
+    label: 'Hoá chất xử lý',
+    hint: 'Tẩy dầu, phosphat, cromate — đặt theo kg (can/bao). Kiệm Tâm',
+    priceUnit: null,
+    vatRate: 8,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Đúng chủng loại, quy cách can/bao như đơn',
+      delivery_place: DELIVERY_HG,
+      payment:
+        'Chuyển khoản trong vòng 30 ngày kể từ ngày nhận được hàng và hoá đơn GTGT',
+      invoice: INVOICE_VAT,
+      lead_time:
+        'Trong vòng 2-3 ngày kể từ ngày xác nhận đơn — vận chuyển bên bán chịu, dỡ hàng bên mua chịu',
+    },
+  },
+  foam: {
+    key: 'foam',
+    label: 'Mút / xốp / ván ép',
+    hint: 'Mút dai, xốp nổ, foam, ván ép — theo cuộn/tấm. Hà Bắc, Mynh, Thanh Liên',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Đúng quy cách, màu sắc theo mẫu đã duyệt',
+      delivery_place: DELIVERY_HG,
+      payment: 'Công nợ 14 ngày — giá bốc tại kho NCC, chưa gồm vận chuyển',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 3 đến 5 ngày kể từ ngày nhận đơn',
     },
   },
   simple: {

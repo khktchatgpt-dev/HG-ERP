@@ -33,7 +33,18 @@ export const materialCreateSchema = z.object({
   kg_per_m: z.coerce.number().min(0).optional().nullable(),
   kg_per_unit: z.coerce.number().min(0).optional().nullable(),
   default_bar_length_m: z.coerce.number().min(0).optional().nullable(),
+  // Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con) —
+  // form đặt gợi ý SL tròn bao. Vật liệu/màu: cột "Vật liệu" của đơn phụ kiện.
+  pack_size: z.coerce.number().positive().optional().nullable(),
+  pack_unit: z.string().trim().max(30).optional().nullable(),
+  material_grade: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
+})
+
+/** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
+export const materialSimilarQuerySchema = z.object({
+  name: z.string().trim().min(3).max(200),
+  group_name: z.string().trim().max(100).optional(),
 })
 
 export const materialUpdateSchema = materialCreateSchema.partial().extend({

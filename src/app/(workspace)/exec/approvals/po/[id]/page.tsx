@@ -12,7 +12,7 @@ export default async function ApprovalPoDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
   const item = await loadPendingPoDetail(user, id)
   if (!item) notFound()

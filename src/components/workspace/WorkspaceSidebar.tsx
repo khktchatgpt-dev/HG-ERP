@@ -38,6 +38,8 @@ export async function WorkspaceSidebar({ workspace }: { workspace: WorkspaceConf
       logoText={workspace.logoText}
       accentBg={accent.bg}
       accentShadow={accent.bg.replace('bg-', 'shadow-')}
+      accentSoftBg={accent.bgSoft}
+      accentText={accent.text}
       sections={sections}
       switchable={switchable}
     />

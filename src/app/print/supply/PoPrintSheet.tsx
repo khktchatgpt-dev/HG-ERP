@@ -241,11 +241,14 @@ export function PoPrintSheet({
   po,
   supplier,
   lines,
+  exportHref,
 }: {
   company: PrintCompany & { company_name?: string | null }
   po: PoPrintHeader
   supplier: PoPrintSupplier
   lines: PoPrintLine[]
+  /** Đơn ĐÃ LƯU truyền link tải .xlsx — bản xem trước từ nháp thì không có. */
+  exportHref?: string
 }) {
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
@@ -298,7 +301,7 @@ export function PoPrintSheet({
   ]
   const hasTerms = terms.some(([, v]) => v)
   return (
-    <PrintPage>
+    <PrintPage exportHref={exportHref}>
       <PrintLetterhead company={company} date={d} />
       <PrintTitle vi="ĐƠN ĐẶT HÀNG" en="PURCHASE ORDER" />
 
@@ -309,9 +312,14 @@ export function PoPrintSheet({
           ['MST:', supplier?.tax_no],
           ['Người liên hệ:', supplier?.phone],
         ]}
+        refsBoxed
         refs={[
           ['Số ĐH :', <b key="c">{po.code}</b>],
-          ['Theo HD số:', po.contract_no ?? ''],
+          // Trong KHUNG chỉ giữ dòng có giá trị — ô "Theo HD số:" trống mà vẫn
+          // đóng khung thì thành một ngăn rỗng vô nghĩa trên phiếu.
+          ...(po.contract_no
+            ? ([['Theo HD số:', po.contract_no]] as [string, string][])
+            : []),
           ...(po.lsx_code ? ([['LSX', po.lsx_code]] as [string, string][]) : []),
           ...(po.order_code
             ? ([['Đơn hàng:', po.order_code]] as [string, string][])
@@ -323,11 +331,22 @@ export function PoPrintSheet({
         {company.company_name} cần đặt hàng sản phẩm sau:
       </p>
 
-      <table className="mt-1 w-full border-collapse border border-black text-center text-[11px]">
+      {/* `print-color-adjust:exact`: nền vàng/chữ đỏ phải RA GIẤY — trình duyệt
+          mặc định bỏ màu nền khi in, phiếu in ra sẽ trắng trơn khác bản mẫu. */}
+      <table className="mt-1 w-full border-collapse border border-black text-center text-[11px] [print-color-adjust:exact]">
         <thead>
-          <tr className="font-semibold">
+          {/* Hàng tiêu đề NỀN VÀNG, hai cột Đơn giá + Thời gian giao hàng CHỮ ĐỎ
+              — đúng mẫu đơn ĐH chuẩn 08/2026 của phòng Cung ứng. */}
+          <tr className="bg-yellow-200 font-semibold">
             {cols.map((c) => (
-              <td key={c.label} className="border border-black px-1 py-0.5">
+              <td
+                key={c.label}
+                className={`border border-black px-1 py-0.5 ${
+                  c.label.startsWith('Đơn giá') || c.label === 'Thời gian giao hàng'
+                    ? 'text-red-600'
+                    : ''
+                }`}
+              >
                 {c.label}
               </td>
             ))}
@@ -363,7 +382,10 @@ export function PoPrintSheet({
               <td colSpan={qtyTotalIdx} className="border border-black px-2 text-right">
                 {qtyTotalLabel}
               </td>
-              <td className="border border-black px-1 text-right">{fmt(qtyTotal)}</td>
+              {/* Ô số tổng TÔ VÀNG như mẫu chuẩn — con số NCC phải soi đầu tiên. */}
+              <td className="border border-black bg-yellow-200 px-1 text-right">
+                {fmt(qtyTotal)}
+              </td>
               <td
                 colSpan={cols.length - qtyTotalIdx - 1}
                 className="border border-black"
@@ -403,7 +425,15 @@ export function PoPrintSheet({
               <td className="border border-black px-1 text-right whitespace-nowrap">
                 {rateText ?? ''}
               </td>
-              <td className="border border-black px-1 text-right">{fmt(value)}</td>
+              {/* Số 0 in thành "-" như phiếu thật (Chiết khấu: - đ); riêng ô
+                  TỔNG THANH TOÁN tô vàng — mẫu chuẩn làm nổi đúng một con số. */}
+              <td
+                className={`border border-black px-1 text-right ${
+                  label === 'TỔNG THANH TOÁN:' ? 'bg-yellow-200' : ''
+                }`}
+              >
+                {value === 0 && label === 'Chiết khấu:' ? '-' : fmt(value)}
+              </td>
               <td colSpan={cols.length - amountIdx - 1} className="border border-black" />
             </tr>
           ))}

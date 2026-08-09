@@ -15,7 +15,7 @@ export default async function HRLeavePage({
   // hoặc HR. NV thường mở /hr/leave → đưa về "đơn của tôi" cho đúng URL
   // (LeaveScreen vẫn tự lùi 'mine' như lớp phòng thủ nếu qua được đây).
   if (scope !== 'mine') {
-    const user = (await authService.currentUser())!
+    const user = await authService.requirePageUser()
     const canView =
       user.role === 'manager' || user.role === 'admin' || (await isHRStaff(user))
     if (!canView) redirect('/hr/leave/mine')

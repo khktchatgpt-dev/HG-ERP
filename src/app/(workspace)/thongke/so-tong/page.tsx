@@ -28,7 +28,7 @@ function statusEmoji(pct: number): string {
 }
 
 export default async function SoTongPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [active, stages] = await Promise.all([
     productionRepo.listActive(),
     productionRepo.listStages(),

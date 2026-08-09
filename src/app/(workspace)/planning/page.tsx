@@ -8,7 +8,7 @@ import { assessLateRisk, assessPoLate } from '@/lib/late-risk'
 import type { PoStatus } from '@/modules/dept/supply/pos.schema'
 
 export default async function PlanningHomePage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const today = new Date().toISOString().slice(0, 10)
 
   const [pending, approved, suppliers, producing, tracking, allPos, lowStock] =

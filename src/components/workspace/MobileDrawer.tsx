@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { NavSection } from '@/workspaces/workspaces.config'
@@ -15,11 +16,15 @@ export function MobileDrawer({
   sections,
   accentBg,
   accentShadow,
+  accentSoftBg,
+  accentText,
 }: {
   workspace: { route: string; short: string; logoText: string }
   sections: NavSection[]
   accentBg: string
   accentShadow: string
+  accentSoftBg: string
+  accentText: string
 }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -46,7 +51,7 @@ export function MobileDrawer({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Mở menu"
-        className="grid h-9 w-9 place-items-center rounded-md text-zinc-600 hover:bg-zinc-100 lg:hidden dark:text-zinc-300 dark:hover:bg-zinc-800"
+        className="text-muted-foreground hover:bg-accent hover:text-foreground grid h-9 w-9 place-items-center rounded-md lg:hidden"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
           <path
@@ -58,61 +63,79 @@ export function MobileDrawer({
         </svg>
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setOpen(false)}
-            aria-hidden
-          />
-          <aside className="absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col gap-1 overflow-y-auto border-r border-slate-800 bg-slate-900 px-3 py-4 text-slate-200 shadow-xl">
-            <div className="mb-3 flex items-center justify-between px-2">
-              <Link href={`${workspace.route}/`} className="flex items-center gap-2">
-                <span
-                  className={`grid h-9 w-9 place-items-center rounded-md font-bold text-white ${accentBg}`}
-                >
-                  {workspace.logoText}
-                </span>
-                <div className="flex flex-col">
-                  <span className="text-sm leading-tight font-semibold text-white">
-                    Hoàng Gia
+      {/*
+        PORTAL ra document.body — bắt buộc, không phải tối ưu: nút hamburger nằm
+        TRONG topbar, mà topbar có `backdrop-blur`. Phần tử mang backdrop-filter
+        là containing block của mọi con `position: fixed`, nên nếu render tại
+        chỗ thì `fixed inset-0` bị nhốt vào đúng cái hộp header cao 56px —
+        drawer thành ô trắng tí hon, overlay chỉ tô đen thanh topbar.
+        Ra ngoài body thì mất token theme-v2 của shell → gắn lại ngay trên gốc
+        portal để bg-card/muted/accent vẫn đọc đúng.
+      */}
+      {open &&
+        createPortal(
+          <div className="theme-v2 fixed inset-0 z-40 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setOpen(false)}
+              aria-hidden
+            />
+            <aside className="bg-card text-foreground absolute inset-y-0 left-0 flex w-64 max-w-[80%] flex-col gap-1 overflow-y-auto border-r px-3 py-4 shadow-xl">
+              <div className="mb-3 flex items-center justify-between px-2">
+                <Link href={`${workspace.route}/`} className="flex items-center gap-2">
+                  <span
+                    className={`grid h-9 w-9 place-items-center rounded-md font-bold text-white ${accentBg}`}
+                  >
+                    {workspace.logoText}
                   </span>
-                  <span className="text-[10px] tracking-wider text-slate-400 uppercase">
-                    {workspace.short}
-                  </span>
-                </div>
-              </Link>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Đóng menu"
-                className="grid h-8 w-8 place-items-center rounded-md text-slate-400 hover:bg-slate-800 hover:text-white"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              {sections.map((sec) => (
-                <div key={sec.heading} className="mb-2">
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-                    {sec.heading}
+                  <div className="flex flex-col">
+                    <span className="text-foreground text-sm leading-tight font-semibold">
+                      Hoàng Gia
+                    </span>
+                    <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
+                      {workspace.short}
+                    </span>
                   </div>
-                  {sec.items.map((i) => (
-                    <NavLink
-                      key={i.href}
-                      href={i.href}
-                      label={i.label}
-                      icon={i.icon}
-                      accentShadow={accentShadow}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
-          </aside>
-        </div>
-      )}
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="Đóng menu"
+                  className="text-muted-foreground hover:bg-accent hover:text-foreground grid h-8 w-8 place-items-center rounded-md"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {sections.map((sec) => (
+                  <div key={sec.heading} className="mb-2">
+                    <div className="text-muted-foreground/70 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
+                      {sec.heading}
+                    </div>
+                    {sec.items.map((i) => (
+                      <NavLink
+                        key={i.href}
+                        href={i.href}
+                        label={i.label}
+                        icon={i.icon}
+                        accentShadow={accentShadow}
+                        accentSoftBg={accentSoftBg}
+                        accentText={accentText}
+                        exact={
+                          i.href === workspace.route ||
+                          i.href === `${workspace.route}/` ||
+                          i.href === '/'
+                        }
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </aside>
+          </div>,
+          document.body,
+        )}
     </>
   )
 }

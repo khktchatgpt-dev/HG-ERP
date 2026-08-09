@@ -95,11 +95,13 @@ export const ordersService = {
   async detail(_user: User, id: string) {
     const order = await ordersRepo.findById(id)
     if (!order) throw NotFound('Đơn hàng không tồn tại')
-    const [lines, changes] = await Promise.all([
+    const [lines, changes, shipments, shippedByLine] = await Promise.all([
       ordersRepo.listLines(id),
       ordersRepo.listChanges(id),
+      ordersRepo.listShipments(id),
+      ordersRepo.shippedByLine(id),
     ])
-    return { order, lines, changes }
+    return { order, lines, changes, shipments, shippedByLine }
   },
 
   /**
@@ -236,8 +238,17 @@ export const ordersService = {
     let linesChange: { before: unknown; after: unknown } | undefined
     if (input.lines) {
       const beforeLines = await ordersRepo.listLines(id)
-      const norm = (ls: { product_id: string; qty: number; unit_price: number }[]) =>
-        ls.map((l) => `${l.product_id}:${l.qty}:${l.unit_price}`).join('|')
+      const norm = (
+        ls: {
+          product_id: string
+          qty: number
+          unit_price: number
+          ship_date?: string | null
+        }[],
+      ) =>
+        ls
+          .map((l) => `${l.product_id}:${l.qty}:${l.unit_price}:${l.ship_date ?? ''}`)
+          .join('|')
       if (norm(beforeLines) !== norm(input.lines)) {
         linesChange = {
           before: beforeLines.map((l) => ({
@@ -413,6 +424,86 @@ export const ordersService = {
       note: note ?? null,
     })
     return order
+  },
+
+  /**
+   * Ghi một đợt THỰC XUẤT cho một dòng đơn (0120 — cột "ĐÃ XUẤT" của sổ thật).
+   * Chặn xuất quá số CÒN LẠI của dòng — muốn giao nhiều hơn (dung sai +10%)
+   * thì sửa SL dòng đơn trước (có lịch sử), số liệu không bao giờ âm.
+   */
+  async recordShipment(
+    user: User,
+    orderId: string,
+    input: {
+      order_line_id: string
+      qty: number
+      shipped_at?: string | null
+      note?: string | null
+    },
+  ): Promise<void> {
+    await assertAction(user, 'sales.order.manage')
+    const order = await ordersRepo.findById(orderId)
+    if (!order) throw NotFound('Đơn hàng không tồn tại')
+    assertOwner(user, order)
+    assertEditable(order)
+
+    const lines = await ordersRepo.listLines(orderId)
+    const line = lines.find((l) => l.id === input.order_line_id)
+    if (!line) throw NotFound('Dòng sản phẩm không thuộc đơn này')
+    const shipped = (await ordersRepo.shippedByLine(orderId))[line.id] ?? 0
+    const left = line.qty - shipped
+    if (input.qty > left) {
+      throw BadRequest(
+        `Dòng ${line.product_code} chỉ còn ${left} ${line.product_unit || 'sp'} chưa xuất — muốn giao nhiều hơn hãy sửa SL dòng đơn trước`,
+      )
+    }
+
+    await ordersRepo.insertShipment({
+      order_id: orderId,
+      order_line_id: input.order_line_id,
+      qty: input.qty,
+      shipped_at: input.shipped_at ?? null,
+      note: input.note ?? null,
+      created_by: user.id,
+    })
+    await ordersRepo.insertChange({
+      order_id: orderId,
+      changed_by: user.id,
+      change: {
+        type: 'shipment',
+        fields: {
+          [line.product_code]: {
+            from: `đã xuất ${shipped}`,
+            to: `đã xuất ${shipped + input.qty}/${line.qty}`,
+          },
+        },
+      },
+      note: input.note ?? null,
+    })
+  },
+
+  /** Gỡ một đợt xuất ghi nhầm — cùng quyền với ghi, có vết trong lịch sử. */
+  async removeShipment(user: User, orderId: string, shipmentId: string): Promise<void> {
+    await assertAction(user, 'sales.order.manage')
+    const order = await ordersRepo.findById(orderId)
+    if (!order) throw NotFound('Đơn hàng không tồn tại')
+    assertOwner(user, order)
+    assertEditable(order)
+    const shipment = await ordersRepo.findShipment(shipmentId)
+    if (!shipment || shipment.order_id !== orderId)
+      throw NotFound('Đợt xuất không tồn tại')
+    await ordersRepo.deleteShipment(shipmentId)
+    await ordersRepo.insertChange({
+      order_id: orderId,
+      changed_by: user.id,
+      change: {
+        type: 'shipment_removed',
+        fields: {
+          shipment: { from: `${shipment.qty} (${shipment.shipped_at})`, to: null },
+        },
+      },
+      note: null,
+    })
   },
 
   /** Đơn của 1 khách (tab lịch sử đơn — FR-SAL-01). */

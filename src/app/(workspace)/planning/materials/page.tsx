@@ -19,7 +19,7 @@ export default async function PlanningMaterialsPage({
   searchParams: Promise<{ q?: string; group?: string; page?: string }>
 }) {
   const sp = await searchParams
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = await canAction(user, 'warehouse.material.update_purchasing')
 
   const q = sp.q?.trim() || undefined

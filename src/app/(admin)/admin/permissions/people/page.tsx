@@ -10,7 +10,7 @@ export default async function PeoplePage({
 }: {
   searchParams: Promise<{ u?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { u } = await searchParams
 
   const [people, person] = await Promise.all([

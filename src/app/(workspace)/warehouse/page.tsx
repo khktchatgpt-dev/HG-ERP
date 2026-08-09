@@ -5,7 +5,7 @@ import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 
 export default async function WarehouseHome() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { rows, total } = await materialsService.list(user, {
     page: 1,
     page_size: 1000,

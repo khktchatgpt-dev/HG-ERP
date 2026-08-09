@@ -72,6 +72,11 @@ export const poCreateSchema = z.object({
   // Gắn LSX = PO theo lệnh sản xuất; null/bỏ trống = PO ngoài LSX (tiêu hao/dùng
   // chung — 0076 nới BR-06 phần LSX, phần 1-NCC giữ nguyên).
   production_order_id: z.string().uuid().nullable().optional(),
+  /**
+   * LSX PHỤ gộp thêm vào đơn (0125) — đơn thật ghi "LSX 01+2+3/26-27". Chỉ có
+   * nghĩa khi có LSX chính; service chặn khi đơn ngoài LSX mà lại gửi LSX phụ.
+   */
+  extra_lsx_ids: z.array(z.string().uuid()).max(10).optional(),
   supplier_id: z.string().uuid(), // BR-06: đúng 1 NCC
   /** Mẫu đơn theo loại hàng — quyết định cột nhập, công thức tiền và mẫu phiếu in. */
   template: z.enum(PO_TEMPLATES).default('simple'),

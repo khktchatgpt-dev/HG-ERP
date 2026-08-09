@@ -17,7 +17,7 @@ export default async function NewPoPage({
 }: {
   searchParams: Promise<{ supplier?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   if (!canEdit) redirect('/planning/pos')
   const { supplier: defaultSupplierId } = await searchParams

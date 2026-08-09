@@ -24,7 +24,10 @@ export async function WorkspaceShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    // `theme-v2` đặt ở GỐC shell: token stone/emerald phủ cả sidebar + topbar +
+    // nội dung — ba vùng cùng một hệ màu. Trang cũ còn gọi zinc trực tiếp vẫn
+    // đọc được (zinc ~ stone), trang v2 thì khớp tuyệt đối.
+    <div className="theme-v2 bg-background text-foreground flex min-h-screen">
       <WorkspaceSidebar workspace={workspace} />
       <div className="flex min-w-0 flex-1 flex-col">
         <WorkspaceTopbar

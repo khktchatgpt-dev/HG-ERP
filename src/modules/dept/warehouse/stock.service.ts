@@ -10,12 +10,17 @@ import {
   issuedByLsxIds,
   lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
+  bomAllocationByCode,
   stocktakeRepo,
   type LsxNeed,
   type StockRow,
   type DocKind,
 } from './stock.repo'
-import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
+import {
+  componentAllocationByCode,
+  componentMaterialNeeds,
+} from '@/modules/dept/production/components.service'
+import type { MaterialAllocation } from '@/lib/po-allocation'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
@@ -82,17 +87,31 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
 }
 
 /**
+ * PHÂN BỔ THEO SẢN PHẨM của từng vật tư (khoá = MÃ VT) — nguồn ghi chú
+ * "300 Bàn 65 gỗ (4c/sp)" trên dòng đơn. Ưu tiên bảng chi tiết (cùng nguồn với
+ * smartLsxNeeds); lệnh chưa nhập bảng → BOM × SL đơn (cùng nguồn với view).
+ */
+export async function lsxAllocationByCode(
+  productionOrderId: string,
+): Promise<Map<string, MaterialAllocation[]>> {
+  const comp = await componentAllocationByCode(productionOrderId)
+  if (comp.size > 0) return comp
+  return bomAllocationByCode(productionOrderId)
+}
+
+/**
  * Tồn ĐẶT TRƯỚC theo vật tư (bước 2 Kho): Σ nhu cầu còn lại của các LSX đã
  * cam kết (approved|in_progress), tính đúng như smartLsxNeeds nhưng gom bằng
  * 3-4 truy vấn hàng loạt (không lặp N lần theo LSX — chạy được ở hot path
  * màn Tồn kho). Logic gộp thuần nằm ở @/lib/reserved-stock (có test).
  */
 export async function reservedByCommittedLsx(
-  excludeLsxId?: string,
+  excludeLsxIds: string[] = [],
 ): Promise<Map<string, number>> {
-  const ids = (await productionRepo.listCommittedIds()).filter(
-    (id) => id !== excludeLsxId,
-  )
+  // Loại NHIỀU lệnh (0125 — một đơn gộp nhiều LSX): tính khả dụng cho một BỘ
+  // LSX thì mọi lệnh trong bộ đều không được tự giữ chỗ chống lại chính mình.
+  const exclude = new Set(excludeLsxIds)
+  const ids = (await productionRepo.listCommittedIds()).filter((id) => !exclude.has(id))
   if (ids.length === 0) return new Map()
   const compRows = await componentsRepo.listForReserve(ids)
   const compLsxIds = [...new Set(compRows.map((r) => r.production_order_id))]
@@ -110,13 +129,13 @@ export async function reservedByCommittedLsx(
  * vật tư quan tâm (materialIds của LSX đang lập đơn).
  */
 export async function reservedByOtherLsx(
-  excludeLsxId: string,
+  excludeLsxIds: string[],
   materialIds: string[],
 ): Promise<Map<string, number>> {
   const out = new Map<string, number>()
   if (materialIds.length === 0) return out
   const want = new Set(materialIds)
-  const all = await reservedByCommittedLsx(excludeLsxId)
+  const all = await reservedByCommittedLsx(excludeLsxIds)
   for (const [materialId, qty] of all) {
     if (want.has(materialId)) out.set(materialId, qty)
   }
@@ -409,7 +428,9 @@ export const stockService = {
     // Xuất cho LSX X: phần giữ của CHÍNH X không tính là bị chiếm.
     if (!input.override_reserved) {
       const reserved = await reservedByCommittedLsx(
-        input.kind === 'lsx' ? (input.production_order_id ?? undefined) : undefined,
+        input.kind === 'lsx' && input.production_order_id
+          ? [input.production_order_id]
+          : [],
       )
       const clashes: { matId: string; qty: number; avail: number; res: number }[] = []
       for (const [matId, qty] of need) {

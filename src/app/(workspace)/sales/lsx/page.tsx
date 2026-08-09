@@ -12,7 +12,7 @@ import { LsxWorkbench, type AwaitingOrder, type LsxRow } from './LsxWorkbench'
  * cho Kế hoạch (/planning/tracking) và Ban GĐ (/exec/tracking).
  */
 export default async function SalesLsxPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null

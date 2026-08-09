@@ -8,7 +8,7 @@ export default async function RolesPage({
 }: {
   searchParams: Promise<{ r?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { r } = await searchParams
   const data = await rbacService.rolesData(user)
   return <RolesPanel {...data} initialRoleId={r} />

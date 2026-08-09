@@ -3,12 +3,9 @@ import { z } from 'zod'
 import { handle, parseQuery } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { poMaterialsRepo } from '@/modules/dept/supply/po-materials.repo'
-import { PO_TEMPLATES } from '@/lib/po-template'
 
 const querySchema = z.object({
   q: z.string().trim().max(200).optional(),
-  /** Lọc theo mẫu đơn đang soạn — vật tư chưa khai mẫu vẫn hiện. */
-  template: z.enum(PO_TEMPLATES).optional(),
   /** Lọc theo nhóm vật tư — 13.064 dòng thì tìm theo tên thôi không đủ hẹp. */
   group: z.string().trim().max(100).optional(),
   /** Nạp lại vật tư của các dòng có sẵn (mở form sửa đơn). */
@@ -19,7 +16,7 @@ const querySchema = z.object({
 /** Ô chọn vật tư của form soạn đơn — tìm ở server (xem po-materials.repo). */
 export const GET = handle(async (req: Request) => {
   await authService.requireUser()
-  const { q, template, group, ids, limit } = parseQuery(new URL(req.url), querySchema)
+  const { q, group, ids, limit } = parseQuery(new URL(req.url), querySchema)
 
   if (ids) {
     const list = ids
@@ -29,6 +26,6 @@ export const GET = handle(async (req: Request) => {
     return NextResponse.json({ materials: await poMaterialsRepo.byIds(list) })
   }
   return NextResponse.json({
-    materials: await poMaterialsRepo.search({ q, template, group, limit }),
+    materials: await poMaterialsRepo.search({ q, group, limit }),
   })
 })

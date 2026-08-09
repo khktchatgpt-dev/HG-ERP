@@ -8,6 +8,8 @@ import {
   lineProblem,
   lineReady,
   newLine,
+  packCount,
+  roundUpToPack,
 } from './po-line'
 import type { PoLineDto } from './po-line'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
@@ -157,14 +159,17 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     group_name: 'Inox',
     sub_group: null,
     spec: null,
-    po_template: 'metal_kg',
     kg_per_unit: null,
     kg_per_m: 1.5542,
     default_bar_length_m: 6,
     vat_rate: null,
     default_supplier_id: null,
     last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
     on_hand: 0,
+    last_line: null,
   }
 
   it('metal_kg: kg/đơn-vị = kg/m × dài cây, không phải kg/m', () => {
@@ -228,5 +233,175 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     })
     expect(l.weight_per_m).toBe(0.248)
     expect(l.bar_length_m).toBe(5.65)
+  })
+})
+
+/*
+ * MẪU CARTON: quy cách vật tư ("900×605×115 mm") chính là LỌT LÒNG — phải tách
+ * vào ba ô D×R×C, không thì người soạn nhìn quy cách gõ lại từng số (phản hồi
+ * 08/08/2026: "vật tư có quy cách mà không tự điền vào được").
+ */
+describe('newLine carton — tách quy cách vào lọt lòng', () => {
+  const bb: PoMaterial = {
+    id: 'm-bb',
+    code: 'BB-0015',
+    name: 'BB Bàn Samos',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '900×605×115 mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('900×605×115 mm → D/R/C điền sẵn, m² đợi chọn cách mở', () => {
+    const l = newLine('carton', bb)
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([900, 605, 115])
+    // m² chưa tính được vì chưa biết AD hay MR — chọn cách mở mới tính.
+    expect(l.area_m2).toBe('')
+  })
+
+  it('dấu * hay x thường cũng đọc được (sổ Excel gõ đủ kiểu)', () => {
+    const l = newLine('carton', { ...bb, spec: '940*940*90' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([940, 940, 90])
+    const l2 = newLine('carton', { ...bb, spec: 'KT 1125x1125x105 thùng âm dương' })
+    expect([l2.inner_l_mm, l2.inner_w_mm, l2.inner_h_mm]).toEqual([1125, 1125, 105])
+  })
+
+  it('quy cách ống "25×50×1li" KHÔNG phải lọt lòng → không điền', () => {
+    const l = newLine('carton', { ...bb, spec: '25×50×1li' })
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  it('không có quy cách → ba ô trống như cũ', () => {
+    const l = newLine('carton', { ...bb, spec: null })
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  it('mẫu KHÁC carton không đụng tới lọt lòng', () => {
+    const l = newLine('accessory', bb)
+    expect(l.inner_l_mm).toBe('')
+  })
+
+  /*
+   * ĐIỀN SẴN TỪ LẦN ĐẶT GẦN NHẤT (08/08/2026 — "hạn chế nhân viên phải gõ"):
+   * Vật liệu / Màu / Kích thước / Cách mở / Pcs-thùng / Đm-sp của một vật tư
+   * gần như không đổi giữa các đơn — gõ lại mỗi lần chỉ tổ lệch chính tả.
+   */
+  it('carton có lịch sử: cách mở + pcs/thùng điền sẵn, m² tính được NGAY', () => {
+    const l = newLine('carton', {
+      ...bb,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: 1,
+        open_style: 'AD',
+        dm_per_sp: null,
+      },
+    })
+    expect(l.open_style).toBe('AD')
+    expect(l.pcs_per_ctn).toBe(1)
+    // Đủ lọt lòng (từ quy cách) + cách mở (từ đơn trước) → m² không phải đợi.
+    expect(l.area_m2).toBeCloseTo(1.9268, 4)
+  })
+
+  it('phụ kiện/inox có lịch sử: Vật liệu, Màu, Đm/sp điền sẵn', () => {
+    const withLast = {
+      ...bb,
+      spec: null,
+      last_line: {
+        material_grade: 'Sắt xi trắng',
+        dimension_text: 'phi 10 x655mm',
+        finish: 'inox bóng',
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: 4,
+      },
+    }
+    const l = newLine('accessory', withLast)
+    expect(l.material_grade).toBe('Sắt xi trắng')
+    expect(l.dm_per_sp).toBe(4)
+    const l2 = newLine('metal_kg', withLast)
+    expect(l2.finish).toBe('inox bóng')
+    // Danh mục chưa khai quy cách → Kích thước lấy theo đơn trước.
+    expect(l2.dimension_text).toBe('phi 10 x655mm')
+    // Danh mục CÓ quy cách thì quy cách danh mục thắng (nguồn chốt).
+    expect(
+      newLine('metal_kg', { ...withLast, spec: 'Inox hộp 25x50x1.2' }).dimension_text,
+    ).toBe('Inox hộp 25x50x1.2')
+  })
+
+  it('không có lịch sử → các ô để trống như cũ', () => {
+    const l = newLine('carton', bb)
+    expect(l.open_style).toBe('')
+    expect(l.pcs_per_ctn).toBe('')
+    expect(l.material_grade).toBe('')
+  })
+
+  /*
+   * VẬT LIỆU TỪ DANH MỤC (0124): lần đặt gần nhất vẫn là nguồn tươi nhất, nhưng
+   * vật tư CHƯA TỪNG lên đơn thì lấy số khai ở danh mục — trước đây ô này trống
+   * và nhân viên phải gõ tay ở từng dòng.
+   */
+  it('vật liệu: chưa có lịch sử → lấy từ danh mục; có lịch sử → lịch sử thắng', () => {
+    const l = newLine('accessory', { ...bb, material_grade: 'Nhựa đen' })
+    expect(l.material_grade).toBe('Nhựa đen')
+    const l2 = newLine('accessory', {
+      ...bb,
+      material_grade: 'Nhựa đen',
+      last_line: {
+        material_grade: 'Nhựa đỏ',
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: null,
+        open_style: null,
+        dm_per_sp: null,
+      },
+    })
+    expect(l2.material_grade).toBe('Nhựa đỏ')
+  })
+
+  it('đóng gói mua chép từ danh mục vào dòng', () => {
+    const l = newLine('accessory', { ...bb, pack_size: 500, pack_unit: 'bì' })
+    expect(l.pack_size).toBe(500)
+    expect(l.pack_unit).toBe('bì')
+  })
+})
+
+/*
+ * QUY ĐỔI ĐÓNG GÓI (0124) — ca thật từ đơn Tân Hiệp Phát (LSX 01): cần 13.596
+ * con nút bịt, NCC bán bì 500 con. Nhân viên phải tự chia 27,192 trong Excel
+ * rồi làm tròn; giờ form gợi ý thẳng 14.000 con (= 28 bì).
+ */
+describe('packCount / roundUpToPack — quy đổi bao gói', () => {
+  it('13.596 con, bì 500 → 27,19 bì; gợi ý tròn 14.000 con', () => {
+    expect(packCount(13_596, 500)).toBeCloseTo(27.19, 2)
+    expect(roundUpToPack(13_596, 500)).toBe(14_000)
+  })
+
+  it('vừa chẵn bao thì giữ nguyên, không cộng thêm một bao', () => {
+    expect(roundUpToPack(14_000, 500)).toBe(14_000)
+    expect(packCount(14_000, 500)).toBe(28)
+  })
+
+  it('không khai đóng gói → trả nguyên số, không quy đổi', () => {
+    expect(roundUpToPack(700, null)).toBe(700)
+    expect(packCount(700, null)).toBeNull()
+    expect(roundUpToPack(700, 0)).toBe(700)
+  })
+
+  it('SL 0/âm không quy đổi bậy', () => {
+    expect(packCount(0, 500)).toBeNull()
+    expect(roundUpToPack(0, 500)).toBe(0)
   })
 })

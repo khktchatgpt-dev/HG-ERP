@@ -15,6 +15,9 @@ export const orderLineInputSchema = z.object({
   product_id: z.string().uuid(),
   qty: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0),
+  // Ngày giao kế hoạch từng dòng = HẠN CUỐI của tuần giao (0121). Nhãn tuần
+  // 'w37.26' trên sổ/hợp đồng suy từ ngày này (src/lib/ship-week.ts).
+  ship_date: z.string().date().optional().nullable(),
   note: z.string().trim().max(500).optional().nullable(),
 })
 
@@ -104,6 +107,14 @@ export const orderListQuerySchema = z.object({
 
 export const orderCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
+})
+
+/** Ghi một đợt THỰC XUẤT cho một dòng đơn (giao hàng từng phần — 0120). */
+export const shipmentCreateSchema = z.object({
+  order_line_id: z.string().uuid(),
+  qty: z.coerce.number().positive('Số lượng xuất phải > 0'),
+  shipped_at: z.string().date().optional().nullable(),
+  note: z.string().trim().max(500).optional().nullable(), // số cont / booking
 })
 
 export const orderDeliverSchema = z.object({

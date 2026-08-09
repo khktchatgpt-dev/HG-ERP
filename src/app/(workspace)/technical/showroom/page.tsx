@@ -12,7 +12,7 @@ export default async function ShowroomPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   // Xem mở cho mọi NV (Sales tra mẫu rảnh để dẫn khách); ghi sổ thì chỉ Kỹ thuật.
   const canEdit = await isTechnicalStaff(user)
 

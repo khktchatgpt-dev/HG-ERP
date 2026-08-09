@@ -25,7 +25,7 @@ export default async function SalesCustomersPage({
     page?: string
   }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isSalesUser(user))
   if (!allowed) redirect('/')
 

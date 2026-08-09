@@ -35,7 +35,7 @@ export async function LsxDetailScreen({
   id: string
   variant: 'production' | 'exec' | 'planning' | 'team' | 'stat' | 'prodplan'
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   let data
   try {

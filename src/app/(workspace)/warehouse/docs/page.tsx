@@ -8,7 +8,7 @@ import { DocsManager } from './DocsManager'
 
 /** Phiếu kho: lập phiếu nhập (PNK) / xuất (PXK) nhiều dòng + danh sách phiếu. */
 export default async function WarehouseDocsPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const isWh = await isWarehouseUser(user)
   const canEdit = user.role === 'admin' || (user.role === 'manager' && isWh)
 

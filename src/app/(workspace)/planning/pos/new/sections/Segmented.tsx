@@ -35,7 +35,7 @@ export function Segmented<T extends string | number>({
               'rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ' +
               (on
                 ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-950 dark:text-zinc-100'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
+                : 'text-muted-foreground hover:text-zinc-700 dark:hover:text-zinc-300')
             }
           >
             {o.label}

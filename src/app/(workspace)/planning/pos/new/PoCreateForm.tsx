@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -17,6 +17,7 @@ import { PageHeader } from '@/components/erp/PageHeader'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
+import { allocationNote } from '@/lib/po-allocation'
 import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
@@ -65,6 +66,8 @@ export type PoInitial = {
     code: string
     template: PoTemplate
     production_order_id: string | null
+    /** LSX PHỤ gộp vào đơn (0125). */
+    extra_lsx_ids: string[]
     supplier_id: string
     currency: string
     vat_rate: number | null
@@ -79,13 +82,62 @@ export type PoInitial = {
   lines: Line[]
 }
 
+/*
+ * Token theme-v2 thay bộ zinc/violet tự chế (08/08/2026): shell + mọi form khác
+ * đã về một hệ stone/emerald, màn này giữ hệ riêng nên đứng cạnh trông như app
+ * khác — và nhãn zinc-400 ở cỡ 11px chỉ đạt ~2.5:1, đọc rất mệt. Nhãn lên
+ * muted-foreground (stone-600, ~7:1), ô nhập cùng khuôn Input shadcn.
+ */
 const field =
-  'h-9 w-full rounded-lg border border-zinc-300 bg-white px-2.5 text-[13px] shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950'
+  'h-9 w-full rounded-lg border border-input bg-card px-2.5 text-[13px] shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+
+/**
+ * TỰ LƯU BẢN NHÁP vào trình duyệt (bất cập #5, 09/08/2026): đơn 20 dòng gõ dở
+ * mà F5 / mất mạng / lỡ đóng tab là mất sạch — Excel thì Ctrl+S theo phản xạ
+ * nên không ai nghĩ tới chuyện này cho tới khi mất. Form ghi localStorage sau
+ * mỗi nhịp gõ (debounce), mở lại trang thì đề nghị khôi phục. Chỉ ở chế độ
+ * TẠO MỚI — sửa đơn đã có bản gốc trên server, khôi phục đè lên nó dễ nhầm hơn
+ * là gõ lại.
+ */
+const DRAFT_KEY = 'hg-po-draft-new'
+
+type SavedDraft = {
+  at: string
+  template: PoTemplate
+  poType: 'lsx' | 'standalone'
+  lsxId: string
+  extraLsxIds: string[]
+  supplierId: string
+  expectedAt: string
+  contractNo: string
+  currency: string
+  note: string
+  discount: number | ''
+  vat: number | ''
+  inclVat: boolean
+  vatDirty: boolean
+  terms: PoTerms
+  signerRole: string
+  lines: Line[]
+}
+
+function readSavedDraft(): SavedDraft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const d = JSON.parse(raw) as SavedDraft
+    // Nháp rỗng (chưa có dòng nào) không đáng một cái banner.
+    return Array.isArray(d.lines) && d.lines.length > 0 ? d : null
+  } catch {
+    return null
+  }
+}
 /** Nhãn micro trên ô — cùng khuôn với nhãn SL đặt/Đơn giá của dòng hàng. */
-const fieldLabel = 'text-[11px] font-semibold tracking-wide text-zinc-400 uppercase'
+const fieldLabel =
+  'text-muted-foreground text-[11px] font-semibold tracking-wide uppercase'
 /** Icon neo mắt bên trái ô — ô nào có icon thì input thêm `pl-8`. */
 const fieldIcon =
-  'pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400'
+  'text-muted-foreground/70 pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2'
 
 /**
  * SOẠN ĐƠN ĐẶT HÀNG — trục là MẪU ĐƠN THEO LOẠI HÀNG.
@@ -128,6 +180,8 @@ export function PoCreateForm({
     start ? (start.production_order_id ? 'lsx' : 'standalone') : 'lsx',
   )
   const [lsxId, setLsxId] = useState(start?.production_order_id ?? '')
+  // LSX PHỤ gộp vào đơn (0125) — đơn thật ghi "LSX 01+2+3/26-27".
+  const [extraLsxIds, setExtraLsxIds] = useState<string[]>(start?.extra_lsx_ids ?? [])
   const [supplierId, setSupplierId] = useState(
     start?.supplier_id ??
       (defaultSupplierId && suppliers.some((s) => s.id === defaultSupplierId)
@@ -163,12 +217,121 @@ export function PoCreateForm({
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
 
+  // Bản nháp tự lưu tìm thấy lúc mở trang — hiện banner đề nghị khôi phục.
+  // setState qua callback của timer, không gọi thẳng thân effect (lint cascading
+  // render — cùng lý do với effect nạp taxonomy ở MaterialCoreFields).
+  const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
+  useEffect(() => {
+    if (initial) return
+    const t = setTimeout(() => setSavedDraft(readSavedDraft()), 0)
+    return () => clearTimeout(t)
+  }, [initial])
+
+  /*
+   * TỰ LƯU sau mỗi nhịp gõ (debounce 800ms) — chỉ chế độ tạo mới, và chỉ khi
+   * banner khôi phục đã được trả lời (không thì vòng autosave đè mất bản nháp
+   * cũ TRƯỚC khi người dùng kịp bấm "Khôi phục").
+   */
+  useEffect(() => {
+    if (initial || savedDraft) return
+    const t = setTimeout(() => {
+      try {
+        if (lines.length === 0) {
+          localStorage.removeItem(DRAFT_KEY)
+          return
+        }
+        const d: SavedDraft = {
+          at: new Date().toISOString(),
+          template,
+          poType,
+          lsxId,
+          extraLsxIds,
+          supplierId,
+          expectedAt,
+          contractNo,
+          currency,
+          note,
+          discount,
+          vat,
+          inclVat,
+          vatDirty,
+          terms,
+          signerRole,
+          lines,
+        }
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+      } catch {
+        // localStorage đầy/bị chặn — autosave là lưới an toàn, không chặn việc gõ.
+      }
+    }, 800)
+    return () => clearTimeout(t)
+  }, [
+    initial,
+    savedDraft,
+    template,
+    poType,
+    lsxId,
+    extraLsxIds,
+    supplierId,
+    expectedAt,
+    contractNo,
+    currency,
+    note,
+    discount,
+    vat,
+    inclVat,
+    vatDirty,
+    terms,
+    signerRole,
+    lines,
+  ])
+
+  /*
+   * Chế độ SỬA không có autosave (bản gốc nằm trên server) — chặn đóng tab khi
+   * đang có dòng hàng để khỏi mất chỉnh sửa vì một cú F5.
+   */
+  useEffect(() => {
+    if (!isEdit) return
+    const h = (e: BeforeUnloadEvent) => {
+      if (lines.length > 0) e.preventDefault()
+    }
+    window.addEventListener('beforeunload', h)
+    return () => window.removeEventListener('beforeunload', h)
+  }, [isEdit, lines.length])
+
+  /** Người dùng bấm "Khôi phục" trên banner — đổ lại toàn bộ state đã lưu. */
+  function restoreDraft(d: SavedDraft) {
+    setTemplate(d.template)
+    setPoType(d.poType)
+    setLsxId(d.lsxId)
+    setExtraLsxIds(d.extraLsxIds ?? [])
+    setSupplierId(d.supplierId)
+    setExpectedAt(d.expectedAt)
+    setContractNo(d.contractNo)
+    setCurrency(d.currency)
+    setNote(d.note)
+    setDiscount(d.discount)
+    setVat(d.vat)
+    setInclVat(d.inclVat)
+    setVatDirty(d.vatDirty)
+    setTerms(d.terms)
+    setSignerRole(d.signerRole)
+    setLines(d.lines)
+    setSavedDraft(null)
+    if (d.poType === 'lsx' && d.lsxId) void loadNeeds(d.lsxId, d.extraLsxIds ?? [])
+  }
+
   const usedIds = useMemo(() => new Set(lines.map((l) => l.material_id)), [lines])
   const suggestions = useMemo(
     () => new Map(needs.map((n) => [n.material_id, n.suggest])),
     [needs],
   )
   const lsx = lsxs.find((l) => l.id === lsxId)
+  const extraLsxCodes = extraLsxIds.map(
+    (id) => lsxs.find((l) => l.id === id)?.code ?? '?',
+  )
+  /** Nhãn bộ lệnh cho dải bối cảnh + phiếu in — "LSX-04 + LSX-02" như sổ thật. */
+  const lsxJoinedCode = lsx ? [lsx.code, ...extraLsxCodes].join(' + ') : null
   const supplier = suppliers.find((s) => s.id === supplierId)
 
   /**
@@ -186,14 +349,19 @@ export function PoCreateForm({
     setSignerRole(d.signerRole)
   }
 
-  async function selectLsx(id: string) {
-    setLsxId(id)
+  /**
+   * Nạp nhu cầu cho CẢ BỘ lệnh (chính + phụ). Gộp ở SERVER, không cộng từng
+   * lệnh ở client: mỗi lệnh coi lệnh kia là "đã giữ chỗ", cộng suggest từng
+   * lệnh sẽ trừ tồn hai lần.
+   */
+  async function loadNeeds(primary: string, extras: string[]) {
     setNeeds([])
-    if (!id) return
+    if (!primary) return
     setLoadingNeeds(true)
     try {
+      const qs = extras.length > 0 ? `&extra_lsx_ids=${extras.join(',')}` : ''
       const data = await api<{ needs: Need[] }>(
-        `/api/dept/supply/needs?production_order_id=${id}`,
+        `/api/dept/supply/needs?production_order_id=${primary}${qs}`,
       )
       setNeeds(data.needs)
     } catch (e) {
@@ -201,6 +369,22 @@ export function PoCreateForm({
     } finally {
       setLoadingNeeds(false)
     }
+  }
+
+  async function selectLsx(id: string) {
+    setLsxId(id)
+    // LSX vừa thành chính thì rút khỏi danh sách phụ — một lệnh không đứng hai vai.
+    const extras = extraLsxIds.filter((e) => e !== id)
+    setExtraLsxIds(extras)
+    await loadNeeds(id, extras)
+  }
+
+  function toggleExtraLsx(id: string, on: boolean) {
+    const extras = on
+      ? [...extraLsxIds.filter((e) => e !== id), id]
+      : extraLsxIds.filter((e) => e !== id)
+    setExtraLsxIds(extras)
+    void loadNeeds(lsxId, extras)
   }
 
   /**
@@ -251,8 +435,13 @@ export function PoCreateForm({
           const m = byId.get(n.material_id)
           if (!m) continue
           // Nhu cầu BOM đổ vào cột "SL đơn hàng" của mẫu phụ kiện; SL đặt vẫn để
-          // trống, nhân viên bấm nút gợi ý hoặc tự gõ.
-          add.push({ ...newLine(template, m), qty_demand: n.qty_needed })
+          // trống, nhân viên bấm nút gợi ý hoặc tự gõ. Ghi chú đổ sẵn PHÂN BỔ
+          // theo SP ("300 Bàn 65 gỗ (4c/sp)") — thứ sổ tay vẫn phải ghi tay.
+          add.push({
+            ...newLine(template, m),
+            qty_demand: n.qty_needed,
+            note: allocationNote(n.breakdown ?? []).slice(0, 500),
+          })
         }
         return [...ls, ...add]
       })
@@ -273,6 +462,7 @@ export function PoCreateForm({
     template,
     poType,
     lsxId,
+    extraLsxIds,
     supplierId,
     expectedAt,
     contractNo,
@@ -300,6 +490,11 @@ export function PoCreateForm({
           body: buildPoPayload(header, lines),
         },
       )
+      // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
+      // sau không bị hỏi khôi phục đơn đã lưu rồi.
+      try {
+        localStorage.removeItem(DRAFT_KEY)
+      } catch {}
       // 0116: tạo = LƯU NHÁP, chưa tới bàn duyệt của GĐ. Redirect kèm ?view= để
       // danh sách mở ngay chi tiết — người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
       toast.success(
@@ -368,9 +563,43 @@ export function PoCreateForm({
         }
       />
 
+      {/* Bản nháp tự lưu từ phiên trước — hỏi trước khi đè, không tự khôi phục. */}
+      {savedDraft && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] dark:border-amber-900 dark:bg-amber-950/30">
+          <b>Có bản nháp chưa lưu</b>
+          <span className="text-muted-foreground">
+            {savedDraft.lines.length} dòng ·{' '}
+            {new Date(savedDraft.at).toLocaleString('vi-VN')}
+          </span>
+          <div className="ml-auto flex gap-2">
+            <button
+              type="button"
+              onClick={() => restoreDraft(savedDraft)}
+              className="rounded-md border border-amber-300 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 shadow-xs hover:bg-amber-100 dark:border-amber-800 dark:bg-zinc-950 dark:text-amber-300"
+            >
+              Khôi phục
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(DRAFT_KEY)
+                } catch {}
+                setSavedDraft(null)
+              }}
+              className="text-muted-foreground rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950"
+            >
+              Bỏ
+            </button>
+          </div>
+        </div>
+      )}
+
       <ContextStrip
         templateLabel={meta.label}
-        lsxLabel={poType === 'standalone' ? 'ngoài LSX' : (lsx?.code ?? '— chưa chọn —')}
+        lsxLabel={
+          poType === 'standalone' ? 'ngoài LSX' : (lsxJoinedCode ?? '— chưa chọn —')
+        }
         supplierName={supplier?.name ?? null}
         readyLines={readyLines}
         totalLines={lines.length}
@@ -398,6 +627,7 @@ export function PoCreateForm({
                 setPoType(t)
                 if (t === 'standalone') {
                   setLsxId('')
+                  setExtraLsxIds([])
                   setNeeds([])
                 }
               }}
@@ -425,10 +655,56 @@ export function PoCreateForm({
                   ))}
                 </select>
               </span>
-              {lsx && (
-                <span className="text-xs text-zinc-400">
+              {/* LSX cũ (trước 0120) không gắn mã đơn hàng — ẩn hẳn thay vì
+                  hiện chữ "Đơn hàng" với chỗ trống phía sau. */}
+              {lsx && lsx.order_codes.length > 0 && (
+                <span className="text-muted-foreground text-xs">
                   Đơn hàng{' '}
-                  <b className="font-mono text-zinc-500">{lsx.order_codes.join(', ')}</b>
+                  <b className="text-muted-foreground font-mono">
+                    {lsx.order_codes.join(', ')}
+                  </b>
+                </span>
+              )}
+              {/*
+                GỘP THÊM LSX (0125) — đơn thật hay gộp nhu cầu nhiều lệnh
+                ("LSX 01+2+3/26-27") hoặc đặt bổ sung cho lệnh cũ. Chip từng
+                lệnh phụ + ô chọn thêm; nhu cầu bên dưới tự gộp cả bộ.
+              */}
+              {lsxId && (
+                <span className="flex flex-wrap items-center gap-1.5">
+                  {extraLsxIds.map((id) => (
+                    <span
+                      key={id}
+                      className="inline-flex items-center gap-1 rounded-full border border-zinc-300 bg-zinc-50 py-0.5 pr-1 pl-2 font-mono text-[11px] dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      {lsxs.find((l) => l.id === id)?.code ?? '?'}
+                      <button
+                        type="button"
+                        onClick={() => toggleExtraLsx(id, false)}
+                        className="text-muted-foreground grid size-4 place-items-center rounded-full hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                        aria-label={`Bỏ LSX ${lsxs.find((l) => l.id === id)?.code ?? ''} khỏi đơn`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) toggleExtraLsx(e.target.value, true)
+                    }}
+                    className="text-muted-foreground h-6 rounded-md border border-dashed border-zinc-300 bg-transparent px-1.5 text-[11px] dark:border-zinc-700"
+                    aria-label="Gộp thêm LSX vào đơn"
+                  >
+                    <option value="">＋ gộp thêm LSX…</option>
+                    {lsxs
+                      .filter((l) => l.id !== lsxId && !extraLsxIds.includes(l.id))
+                      .map((l) => (
+                        <option key={l.id} value={l.id}>
+                          {l.code} — {l.customer_name}
+                        </option>
+                      ))}
+                  </select>
                 </span>
               )}
             </label>
@@ -453,7 +729,7 @@ export function PoCreateForm({
               />
             </span>
             {supplier && (
-              <span className="text-xs text-zinc-400">
+              <span className="text-muted-foreground text-xs">
                 {[
                   supplier.lead_time_days != null
                     ? `lead ${supplier.lead_time_days} ngày`
@@ -510,8 +786,8 @@ export function PoCreateForm({
             mẫu {meta.label}
           </span>
           {/* Vòng nhập không rời bàn phím — nói bằng phím, không phải một câu dài. */}
-          <span className="ml-auto flex items-center gap-1 text-[11px] text-zinc-400">
-            <kbd className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900">
+          <span className="text-muted-foreground ml-auto flex items-center gap-1 text-[11px]">
+            <kbd className="text-muted-foreground rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium dark:border-zinc-700 dark:bg-zinc-900">
               Enter
             </kbd>
             SL đặt → đơn giá → dòng kế
@@ -562,13 +838,13 @@ export function PoCreateForm({
             ref={pickerRef}
             type="button"
             onClick={() => setPickOpen(true)}
-            className="flex h-[38px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-dashed border-zinc-300 bg-white px-3 text-left text-[13px] text-zinc-400 transition-colors hover:border-violet-400 hover:text-zinc-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-violet-600 dark:hover:text-zinc-300"
+            className="text-muted-foreground flex h-[38px] min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-dashed border-zinc-300 bg-white px-3 text-left text-[13px] transition-colors hover:border-violet-400 hover:text-zinc-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 dark:hover:border-violet-600 dark:hover:text-zinc-300"
           >
             <Search className="size-4 shrink-0" aria-hidden />
             <span className="truncate">
               Tìm và chọn vật tư — mở phiên chọn, tích nhiều món một lượt…
             </span>
-            <kbd className="ml-auto hidden rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-zinc-500 sm:inline dark:border-zinc-700 dark:bg-zinc-900">
+            <kbd className="text-muted-foreground ml-auto hidden rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium sm:inline dark:border-zinc-700 dark:bg-zinc-900">
               Enter
             </kbd>
           </button>
@@ -577,7 +853,7 @@ export function PoCreateForm({
             onCreated={(m) =>
               // NCC chào loại mới ngay lúc đặt — khai vật tư tại chỗ rồi vào thẳng
               // dòng, khỏi chạy sang danh mục Kho khai trước. Lấy ĐÚNG số server
-              // vừa ghi (mẫu đơn, kg/m…) chứ không suy lại ở client: suy lại thì
+              // vừa ghi (kg/m…) chứ không suy lại ở client: suy lại thì
               // dòng vẫn đẹp kể cả khi server ghi hụt, và lệch chỉ lộ ở lần sau.
               addMaterial({
                 id: m.id,
@@ -587,14 +863,20 @@ export function PoCreateForm({
                 group_name: m.group_name,
                 sub_group: m.sub_group,
                 spec: m.spec,
-                po_template: m.po_template,
                 kg_per_m: m.kg_per_m,
                 kg_per_unit: m.kg_per_unit,
                 default_bar_length_m: m.default_bar_length_m,
                 vat_rate: null,
                 default_supplier_id: null,
                 last_purchase_price: null,
-                on_hand: 0,
+                // Đóng gói + vật liệu (0124) vừa khai — dòng đầu tiên dùng ngay.
+                pack_size: m.pack_size,
+                pack_unit: m.pack_unit,
+                material_grade: m.material_grade,
+                // Vừa khai xong thì chưa có sổ kho — null, hiện "kho ?".
+                on_hand: null,
+                // Vật tư vừa khai thì chưa có lịch sử đặt để rót vào ô mô tả.
+                last_line: null,
               })
             }
           />
@@ -637,7 +919,7 @@ export function PoCreateForm({
               // thay vì bịa một mã trông như thật.
               code: isEdit ? initial!.po.code : '(cấp khi lưu)',
               supplierName: supplier?.name ?? '—',
-              lsxCode: poType === 'lsx' ? (lsx?.code ?? null) : null,
+              lsxCode: poType === 'lsx' ? lsxJoinedCode : null,
               orderCode: poType === 'lsx' ? lsx?.order_codes.join(', ') || null : null,
               createdAt: new Date().toISOString(),
             })}

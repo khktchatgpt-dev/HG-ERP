@@ -439,6 +439,22 @@ export const lsxService = {
   },
 
   /**
+   * ĐẶT HẠN VẬT TƯ PHẢI VỀ (0126 — ô "Hạn VT phải về" của sổ Tổng hợp ĐH).
+   * Việc của Kế hoạch-Cung ứng nên gác bằng quyền quản đơn đặt, không phải quyền
+   * xưởng. null = xoá hạn. Không ràng theo trạng thái lệnh: hạn đặt được từ lúc
+   * lệnh còn chờ duyệt (kế hoạch đi trước).
+   */
+  async setMaterialsDue(
+    user: User,
+    id: string,
+    dueAt: string | null,
+  ): Promise<ProductionOrder> {
+    await assertAction(user, 'supply.po.manage')
+    await lsxOrThrow(id)
+    return productionRepo.patch(id, { materials_due_at: dueAt })
+  },
+
+  /**
    * HOÀN THÀNH LSX (quản đốc/GĐ) — GATE: mọi công việc (jobs) đã xong.
    * Chưa xong → chặn; admin/manager ép qua (override) kèm lý do. Sau đó đơn
    * → completed, Sales xác nhận giao hàng (ordersService.deliver) khép chuỗi.

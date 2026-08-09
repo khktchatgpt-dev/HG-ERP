@@ -12,6 +12,7 @@ import {
   PenLine,
   Printer,
   Trash2,
+  Truck,
 } from 'lucide-react'
 import { Badge } from '@/components/shadcn/badge'
 import { Button } from '@/components/shadcn/button'
@@ -50,6 +51,7 @@ import { DocumentFiles } from '@/components/DocumentFiles'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { shipWeekLabel } from '@/lib/ship-week'
 import type { OrderStatus } from '@/lib/order-progress'
 
 /**
@@ -103,15 +105,32 @@ export type OrderView = {
   created_at: string
 }
 export type LineView = {
+  id: string
   product_code: string
   product_name: string
   product_unit: string
   customer_item_code: string | null
+  /** EAN/barcode — cột EAN CODE của sổ đơn thật. */
+  barcode: string | null
   bom_status: 'none' | 'drawing' | 'done'
   qty: number
   unit_price: number
+  /** Ngày giao kế hoạch = hạn cuối tuần giao (0121) — nhãn w47.26 suy từ ngày. */
+  ship_date: string | null
+  /** Σ đã thực xuất của dòng (0120). */
+  shipped: number
   note: string | null
   image_url: string | null
+}
+
+/** Một đợt thực xuất — khối "Giao hàng" + nút gỡ khi ghi nhầm. */
+export type ShipmentView = {
+  id: string
+  order_line_id: string
+  qty: number
+  shipped_at: string
+  note: string | null
+  created_by_name: string | null
 }
 export type ChangeView = {
   id: string
@@ -285,6 +304,7 @@ export function OrderDetailView({
   stageLabels,
   cancelImpact,
   mergeCandidates,
+  shipments,
 }: {
   order: OrderView
   lines: LineView[]
@@ -296,6 +316,7 @@ export function OrderDetailView({
   stageLabels: Record<string, string>
   cancelImpact: CancelImpact | null
   mergeCandidates: MergeCandidate[]
+  shipments: ShipmentView[]
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -308,11 +329,21 @@ export function OrderDetailView({
   const [mergeIds, setMergeIds] = useState<string[]>([])
   const [cancelling, setCancelling] = useState(false)
   const [cancelReason, setCancelReason] = useState('')
+  // Dialog ghi một đợt thực xuất (giao hàng từng phần — 0120).
+  const [shipping, setShipping] = useState(false)
+  const [shipLineId, setShipLineId] = useState('')
+  const [shipQty, setShipQty] = useState('')
+  const [shipDay, setShipDay] = useState(() => new Date().toISOString().slice(0, 10))
+  const [shipNote, setShipNote] = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
   const editable = order.status !== 'delivered' && order.status !== 'cancelled'
   const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
+  const totalShipped = lines.reduce((s, l) => s + l.shipped, 0)
+  const lineById = new Map(lines.map((l) => [l.id, l]))
+  /** Dòng còn hàng chưa xuất — nguồn cho ô chọn trong dialog ghi xuất. */
+  const openLines = lines.filter((l) => l.qty - l.shipped > 0)
   const bomPending = lines.filter((l) => l.bom_status !== 'done').length
   /*
    * Đơn gia công nhập từ file thường KHÔNG kèm giá — mọi unit_price = 0. In ra
@@ -359,6 +390,19 @@ export function OrderDetailView({
           who: c.changed_by_name,
           detail: c.note,
           tone: 'green',
+        })
+      } else if (t === 'shipment' || t === 'shipment_removed') {
+        const fields = c.change.fields
+          ? Object.entries(c.change.fields).map(
+              ([f, v]) => `${f}: ${String(v.from ?? '—')} → ${String(v.to ?? 'gỡ')}`,
+            )
+          : []
+        evs.push({
+          at: c.created_at,
+          title: t === 'shipment' ? 'Ghi xuất hàng' : 'Gỡ đợt xuất (ghi nhầm)',
+          who: c.changed_by_name,
+          detail: [c.note, ...fields].filter(Boolean).join(' · ') || null,
+          tone: t === 'shipment' ? 'green' : 'amber',
         })
       } else {
         const fields = c.change.fields
@@ -526,6 +570,58 @@ export function OrderDetailView({
     }
   }
 
+  /** Ghi một đợt thực xuất — server chặn quá số còn lại của dòng. */
+  async function recordShipment() {
+    const line = lineById.get(shipLineId)
+    const qty = Number(shipQty)
+    if (!line || !qty || qty <= 0) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/sales/orders/${order.id}/shipments`, {
+        method: 'POST',
+        body: {
+          order_line_id: shipLineId,
+          qty,
+          shipped_at: shipDay || null,
+          note: shipNote.trim() || null,
+        },
+      })
+      toast.success('Đã ghi xuất hàng', `${line.product_code} · ${qty}`)
+      setShipping(false)
+      setShipLineId('')
+      setShipQty('')
+      setShipNote('')
+      router.refresh()
+    } catch (e) {
+      toast.error('Ghi xuất thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function removeShipment(s: ShipmentView) {
+    const line = lineById.get(s.order_line_id)
+    const ok = await confirm({
+      title: `Gỡ đợt xuất ${fmtN(s.qty)} × ${line?.product_code ?? '?'}?`,
+      description: 'Dùng khi ghi nhầm — thao tác được lưu vào dòng thời gian.',
+      confirmLabel: 'Gỡ',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/sales/orders/${order.id}/shipments/${s.id}`, {
+        method: 'DELETE',
+      })
+      toast.success('Đã gỡ đợt xuất')
+      router.refresh()
+    } catch (e) {
+      toast.error('Gỡ thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const dueDays = order.due_date ? daysBetween(today, order.due_date.slice(0, 10)) : null
   const dueClosed = order.status === 'delivered' || order.status === 'cancelled'
 
@@ -596,6 +692,12 @@ export function OrderDetailView({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="theme-v2">
                 <DropdownMenuItem
+                  onClick={() => window.open(`/print/orders/${order.id}`, '_blank')}
+                >
+                  <Printer />
+                  In hợp đồng (Sales Contract)
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   disabled={!lsx}
                   onClick={() => router.push(`/sales/lsx/${lsx?.id}`)}
                 >
@@ -643,7 +745,21 @@ export function OrderDetailView({
         </Tile>
         <Tile label="Sản phẩm">
           <div className="text-sm font-medium tabular-nums">{fmtN(totalQty)}</div>
-          <div className="text-muted-foreground text-[11px]">{lines.length} dòng</div>
+          <div className="text-muted-foreground text-[11px]">
+            {lines.length} dòng
+            {totalShipped > 0 && (
+              <span
+                className={
+                  totalShipped >= totalQty
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }
+              >
+                {' '}
+                · đã xuất {fmtN(totalShipped)}
+              </span>
+            )}
+          </div>
         </Tile>
         <Tile label={hasPrices ? 'Giá trị đơn' : 'Lệnh sản xuất'}>
           {hasPrices ? (
@@ -883,6 +999,9 @@ export function OrderDetailView({
                     <TableHead className="text-foreground w-[110px] px-3 text-right text-[11px] font-semibold tracking-wider uppercase">
                       SL
                     </TableHead>
+                    <TableHead className="text-foreground w-[130px] px-3 text-[11px] font-semibold tracking-wider uppercase">
+                      Giao hàng
+                    </TableHead>
                     {hasPrices && (
                       <>
                         <TableHead className="text-foreground w-[110px] px-3 text-right text-[11px] font-semibold tracking-wider uppercase">
@@ -914,6 +1033,7 @@ export function OrderDetailView({
                         <div className="text-muted-foreground font-mono text-[11px]">
                           {l.product_code}
                           {l.customer_item_code && ` · KH ${l.customer_item_code}`}
+                          {l.barcode && ` · EAN ${l.barcode}`}
                         </div>
                         <div className="text-sm">{l.product_name}</div>
                         {/* Dữ liệu import có dòng note TRÙNG NGUYÊN VĂN tên SP —
@@ -934,6 +1054,34 @@ export function OrderDetailView({
                         <span className="text-muted-foreground ml-1 text-[11px]">
                           {l.product_unit}
                         </span>
+                      </TableCell>
+                      {/* Tuần giao kế hoạch + đã xuất/còn — cột SHIPMENT · ĐÃ
+                          XUẤT · LEFT của sổ đơn thật gộp một ô hai tầng. */}
+                      <TableCell className="px-3 py-2">
+                        {l.ship_date && (
+                          <div className="font-mono text-xs">
+                            {shipWeekLabel(l.ship_date)}
+                            <span className="text-muted-foreground">
+                              {' '}
+                              · {fmtD(l.ship_date)}
+                            </span>
+                          </div>
+                        )}
+                        {l.shipped > 0 ? (
+                          <div
+                            className={`text-[11px] font-medium tabular-nums ${
+                              l.shipped >= l.qty
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-amber-600 dark:text-amber-400'
+                            }`}
+                          >
+                            {l.shipped >= l.qty
+                              ? `✓ đã xuất đủ ${fmtN(l.qty)}`
+                              : `đã xuất ${fmtN(l.shipped)} · còn ${fmtN(l.qty - l.shipped)}`}
+                          </div>
+                        ) : (
+                          !l.ship_date && <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                       {hasPrices && (
                         <>
@@ -956,6 +1104,11 @@ export function OrderDetailView({
                     <TableCell className="px-3 py-2 text-right font-semibold tabular-nums">
                       {fmtN(totalQty)}
                     </TableCell>
+                    <TableCell className="px-3 py-2 text-[11px] font-medium tabular-nums">
+                      {totalShipped > 0
+                        ? `đã xuất ${fmtN(totalShipped)} · còn ${fmtN(totalQty - totalShipped)}`
+                        : ''}
+                    </TableCell>
                     {hasPrices && (
                       <>
                         <TableCell />
@@ -969,6 +1122,80 @@ export function OrderDetailView({
               </Table>
             </CardContent>
           </Card>
+
+          {/* Giao hàng từng phần (0120) — thay cột ĐÃ XUẤT/CÒN của sổ Excel. */}
+          {(shipments.length > 0 || (canEdit && editable && openLines.length > 0)) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
+                  Giao hàng ({fmtN(totalShipped)}/{fmtN(totalQty)})
+                </CardTitle>
+                {canEdit && editable && openLines.length > 0 && (
+                  <div className="col-start-2 row-span-2 row-start-1 self-center">
+                    <Button size="sm" onClick={() => setShipping(true)}>
+                      <Truck />
+                      Ghi xuất hàng
+                    </Button>
+                  </div>
+                )}
+              </CardHeader>
+              <CardContent className="flex flex-col gap-1">
+                {shipments.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    Chưa có đợt xuất nào — bấm “Ghi xuất hàng” khi hàng rời xưởng.
+                  </p>
+                ) : (
+                  <ul className="divide-y">
+                    {shipments.map((s) => {
+                      const line = lineById.get(s.order_line_id)
+                      return (
+                        <li
+                          key={s.id}
+                          className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 text-sm"
+                        >
+                          <span className="text-muted-foreground w-20 shrink-0 text-xs tabular-nums">
+                            {fmtD(s.shipped_at)}
+                          </span>
+                          <span className="font-mono text-xs">
+                            {line?.product_code ?? '?'}
+                          </span>
+                          <span className="font-medium tabular-nums">
+                            {fmtN(s.qty)}
+                            <span className="text-muted-foreground ml-1 text-[11px] font-normal">
+                              {line?.product_unit}
+                            </span>
+                          </span>
+                          {s.note && (
+                            <span className="text-muted-foreground min-w-0 truncate text-xs">
+                              {s.note}
+                            </span>
+                          )}
+                          <span className="text-muted-foreground ml-auto text-[11px]">
+                            {s.created_by_name}
+                          </span>
+                          {canEdit && editable && (
+                            <button
+                              onClick={() => void removeShipment(s)}
+                              className="text-muted-foreground rounded p-1 text-xs hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                              aria-label="Gỡ đợt xuất"
+                              title="Gỡ (ghi nhầm)"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {totalShipped >= totalQty && order.status === 'completed' && (
+                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                    ✓ Đã xuất đủ toàn bộ — bấm “Xác nhận đã giao” ở đầu trang để khép đơn.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {/* Lệnh sản xuất đã phát */}
           {lsx && (
@@ -1073,6 +1300,90 @@ export function OrderDetailView({
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* ── Ghi một đợt xuất hàng ────────────────────────────────────────── */}
+      <Dialog open={shipping} onOpenChange={(v) => !v && setShipping(false)}>
+        <DialogContent className="theme-v2">
+          <DialogHeader>
+            <DialogTitle>Ghi xuất hàng — {order.code}</DialogTitle>
+            <DialogDescription>
+              Ghi số lượng THỰC XUẤT của một dòng; xuất nhiều dòng thì ghi từng dòng.
+              Không xuất quá số còn lại.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1.5 text-sm">
+              <span>
+                Dòng sản phẩm <span className="text-destructive">*</span>
+              </span>
+              <select
+                value={shipLineId}
+                onChange={(e) => {
+                  setShipLineId(e.target.value)
+                  const l = lineById.get(e.target.value)
+                  // Gợi ý sẵn = toàn bộ số còn lại — ca phổ biến nhất là xuất nốt.
+                  if (l) setShipQty(String(l.qty - l.shipped))
+                }}
+                className="border-input bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none"
+              >
+                <option value="">— chọn dòng —</option>
+                {openLines.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.product_code} — còn {fmtN(l.qty - l.shipped)}/{fmtN(l.qty)}
+                    {l.ship_date ? ` (${shipWeekLabel(l.ship_date)})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1.5 text-sm">
+                <span>
+                  Số lượng xuất <span className="text-destructive">*</span>
+                </span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={shipQty}
+                  onChange={(e) => setShipQty(e.target.value)}
+                  className="bg-card tabular-nums"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm">
+                Ngày xuất
+                <Input
+                  type="date"
+                  value={shipDay}
+                  onChange={(e) => setShipDay(e.target.value)}
+                  className="bg-card"
+                />
+              </label>
+            </div>
+            <label className="flex flex-col gap-1.5 text-sm">
+              Ghi chú (số cont / booking)
+              <Input
+                value={shipNote}
+                onChange={(e) => setShipNote(e.target.value)}
+                maxLength={500}
+                placeholder="vd cont TCLU1234567 · booking OOLU888"
+                className="bg-card"
+              />
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShipping(false)}>
+              Huỷ
+            </Button>
+            <Button
+              disabled={busy || !shipLineId || !shipQty || Number(shipQty) <= 0}
+              onClick={() => void recordShipment()}
+            >
+              {busy && <Spinner size={14} />}
+              Ghi xuất
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Huỷ đơn: hệ quả TRƯỚC, lý do SAU ─────────────────────────────── */}
       <Dialog open={cancelling} onOpenChange={(v) => !v && setCancelling(false)}>

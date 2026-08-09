@@ -14,10 +14,10 @@ import {
 import type { PoTerms } from '@/lib/po-template'
 
 const field =
-  'h-9 w-full rounded-lg border border-zinc-300 bg-white px-2.5 pl-8 text-[13px] shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950'
-const fieldLabel = 'text-[11px] font-semibold tracking-wide text-zinc-400 uppercase'
+  'border-input bg-card h-9 w-full rounded-lg border px-2.5 pl-8 text-[13px] shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+const fieldLabel = 'text-[11px] font-semibold tracking-wide text-muted-foreground uppercase'
 const fieldIcon =
-  'pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400'
+  'pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground'
 
 /** Icon theo từng điều khoản — neo mắt khi quét, cùng khuôn khối Bối cảnh đơn. */
 const TERM_ROWS: readonly [keyof PoTerms, string, LucideIcon][] = [
@@ -65,12 +65,12 @@ export function TermsSection({
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px]"
       >
         <b>Điều khoản &amp; chữ ký</b>
-        <span className="text-[11px] text-zinc-400">
+        <span className="text-[11px] text-muted-foreground">
           đã điền sẵn theo mẫu {templateLabel.toLowerCase()} — bấm để sửa
         </span>
         <ChevronDown
           aria-hidden
-          className={`ml-auto size-4 text-zinc-400 transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`ml-auto size-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
         />
       </button>
       {open && (

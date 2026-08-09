@@ -19,7 +19,7 @@ export default async function NewQuotePage({
 }: {
   searchParams: Promise<{ customer?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null

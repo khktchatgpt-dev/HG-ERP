@@ -17,7 +17,7 @@ export default async function TeamHomePage({
 }: {
   searchParams: Promise<{ team?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { team } = await searchParams
   const board = await jobsService.teamBoard(user, { team })
 

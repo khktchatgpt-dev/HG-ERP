@@ -4,7 +4,7 @@ import { AuditTable } from '../_components/AuditTable'
 
 /** Nhật ký audit thao tác phân quyền. */
 export default async function AuditPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const entries = await rbacService.audit(user)
   return <AuditTable entries={entries} />
 }

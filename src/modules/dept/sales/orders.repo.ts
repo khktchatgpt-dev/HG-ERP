@@ -41,12 +41,17 @@ export type OrderLine = {
   product_id: string
   qty: number
   unit_price: number
+  ship_date: string | null
   note: string | null
   sort_order: number
   product_code: string
   product_name: string
   product_unit: string
   customer_item_code: string | null
+  /** EAN/barcode của SP — cột EAN CODE trên sổ đơn + hợp đồng. */
+  barcode: string | null
+  /** Mô tả tiếng Anh — DESCRIPTION OF GOODS trên Sales Contract. */
+  description_en: string | null
   bom_status: 'none' | 'drawing' | 'done'
   image_file_id: string | null
 }
@@ -58,7 +63,21 @@ export type OrderLineInput = {
   product_id: string
   qty: number
   unit_price: number
+  ship_date?: string | null
   note?: string | null
+}
+
+/** Một đợt thực xuất của một dòng đơn (0120) — đã xuất = Σ qty theo dòng. */
+export type OrderShipment = {
+  id: string
+  order_id: string
+  order_line_id: string
+  qty: number
+  shipped_at: string
+  note: string | null
+  created_by: string | null
+  created_by_name: string | null
+  created_at: string
 }
 
 export type OrderChange = {
@@ -222,7 +241,7 @@ export const ordersRepo = {
     const { data } = await db()
       .from('sales_order_lines')
       .select(
-        'id, order_id, product_id, qty, unit_price, note, sort_order, product:technical_products(code, name, unit, customer_item_code, bom_status, image_file_id)',
+        'id, order_id, product_id, qty, unit_price, ship_date, note, sort_order, product:technical_products(code, name, unit, customer_item_code, barcode, description_en, bom_status, image_file_id)',
       )
       .in('order_id', orderIds)
       .order('sort_order')
@@ -231,6 +250,8 @@ export const ordersRepo = {
       name: string
       unit: string
       customer_item_code: string | null
+      barcode: string | null
+      description_en: string | null
       bom_status: 'none' | 'drawing' | 'done'
       image_file_id: string | null
     }
@@ -240,6 +261,8 @@ export const ordersRepo = {
       | 'product_name'
       | 'product_unit'
       | 'customer_item_code'
+      | 'barcode'
+      | 'description_en'
       | 'bom_status'
       | 'image_file_id'
     > & { product: P | P[] | null }
@@ -251,12 +274,15 @@ export const ordersRepo = {
         product_id: r.product_id,
         qty: r.qty,
         unit_price: r.unit_price,
+        ship_date: r.ship_date,
         note: r.note,
         sort_order: r.sort_order,
         product_code: p?.code ?? '?',
         product_name: p?.name ?? '?',
         product_unit: p?.unit ?? '',
         customer_item_code: p?.customer_item_code ?? null,
+        barcode: p?.barcode ?? null,
+        description_en: p?.description_en ?? null,
         bom_status: p?.bom_status ?? 'none',
         image_file_id: p?.image_file_id ?? null,
       }
@@ -298,26 +324,69 @@ export const ordersRepo = {
     return order
   },
 
+  /**
+   * Đồng bộ dòng đơn theo danh sách mới — GIỮ NGUYÊN id của dòng còn lại (khớp
+   * theo product_id, mỗi SP một dòng). Bản cũ xoá sạch rồi chèn lại: id dòng đổi
+   * hết → FK cascade nuốt luôn lịch sử xuất hàng (0120) và link công việc SX
+   * (production_jobs.order_line_id) của cả những dòng KHÔNG đổi gì.
+   */
   async replaceLines(orderId: string, lines: OrderLineInput[]): Promise<void> {
-    const { error: delErr } = await db()
+    const { data: existing, error: exErr } = await db()
       .from('sales_order_lines')
-      .delete()
+      .select('id, product_id')
       .eq('order_id', orderId)
-    if (delErr) throw new Error(delErr.message)
-    if (lines.length === 0) return
-    const { error } = await db()
-      .from('sales_order_lines')
-      .insert(
-        lines.map((l, i) => ({
-          order_id: orderId,
-          product_id: l.product_id,
-          qty: l.qty,
-          unit_price: l.unit_price,
-          note: l.note ?? null,
-          sort_order: i,
-        })),
-      )
-    if (error) throw new Error(error.message)
+    if (exErr) throw new Error(exErr.message)
+    const byProduct = new Map(
+      ((existing ?? []) as { id: string; product_id: string }[]).map((r) => [
+        r.product_id,
+        r.id,
+      ]),
+    )
+
+    type LineRow = {
+      order_id: string
+      product_id: string
+      qty: number
+      unit_price: number
+      ship_date: string | null
+      note: string | null
+      sort_order: number
+    }
+    const keepIds: string[] = []
+    const inserts: LineRow[] = []
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i]
+      const row = {
+        qty: l.qty,
+        unit_price: l.unit_price,
+        ship_date: l.ship_date ?? null,
+        note: l.note ?? null,
+        sort_order: i,
+      }
+      const id = byProduct.get(l.product_id)
+      if (id) {
+        const { error } = await db().from('sales_order_lines').update(row).eq('id', id)
+        if (error) throw new Error(error.message)
+        keepIds.push(id)
+      } else {
+        inserts.push({ ...row, order_id: orderId, product_id: l.product_id })
+      }
+    }
+    if (inserts.length > 0) {
+      const { error } = await db().from('sales_order_lines').insert(inserts)
+      if (error) throw new Error(error.message)
+    }
+    // Xoá dòng bị bỏ = dòng CŨ không nằm trong danh sách giữ (không đụng dòng
+    // vừa chèn — chỉ nhắm vào id đã tồn tại trước khi sync).
+    const keep = new Set(keepIds)
+    const removeIds = [...byProduct.values()].filter((id) => !keep.has(id))
+    if (removeIds.length > 0) {
+      const { error: delErr } = await db()
+        .from('sales_order_lines')
+        .delete()
+        .in('id', removeIds)
+      if (delErr) throw new Error(delErr.message)
+    }
   },
 
   async patch(id: string, patch: Partial<Order>): Promise<Order> {
@@ -398,5 +467,101 @@ export const ordersRepo = {
         order_code: o?.code ?? '?',
       }
     })
+  },
+
+  // ── Giao hàng từng phần (0120) ────────────────────────────────────────────
+
+  async listShipments(orderId: string): Promise<OrderShipment[]> {
+    const { data } = await db()
+      .from('sales_order_shipments')
+      .select(
+        'id, order_id, order_line_id, qty, shipped_at, note, created_by, created_at, actor:users(name)',
+      )
+      .eq('order_id', orderId)
+      .order('shipped_at', { ascending: false })
+      .order('created_at', { ascending: false })
+    type Raw = Omit<OrderShipment, 'created_by_name'> & {
+      actor: { name: string | null } | { name: string | null }[] | null
+    }
+    return ((data ?? []) as Raw[]).map((r) => {
+      const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
+      return {
+        id: r.id,
+        order_id: r.order_id,
+        order_line_id: r.order_line_id,
+        qty: r.qty,
+        shipped_at: r.shipped_at,
+        note: r.note,
+        created_by: r.created_by,
+        created_by_name: a?.name ?? null,
+        created_at: r.created_at,
+      }
+    })
+  },
+
+  async findShipment(id: string): Promise<OrderShipment | null> {
+    const { data } = await db()
+      .from('sales_order_shipments')
+      .select(
+        'id, order_id, order_line_id, qty, shipped_at, note, created_by, created_at',
+      )
+      .eq('id', id)
+      .maybeSingle()
+    return data
+      ? { ...(data as Omit<OrderShipment, 'created_by_name'>), created_by_name: null }
+      : null
+  },
+
+  async insertShipment(row: {
+    order_id: string
+    order_line_id: string
+    qty: number
+    shipped_at?: string | null
+    note?: string | null
+    created_by: string
+  }): Promise<void> {
+    const { error } = await db()
+      .from('sales_order_shipments')
+      .insert({
+        order_id: row.order_id,
+        order_line_id: row.order_line_id,
+        qty: row.qty,
+        ...(row.shipped_at ? { shipped_at: row.shipped_at } : {}),
+        note: row.note ?? null,
+        created_by: row.created_by,
+      })
+    if (error) throw new Error(error.message)
+  },
+
+  async deleteShipment(id: string): Promise<void> {
+    const { error } = await db().from('sales_order_shipments').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Σ đã xuất theo từng dòng của MỘT đơn — "ĐÃ XUẤT / CÒN" đọc từ đây. */
+  async shippedByLine(orderId: string): Promise<Record<string, number>> {
+    const { data } = await db()
+      .from('sales_order_shipments')
+      .select('order_line_id, qty')
+      .eq('order_id', orderId)
+    const out: Record<string, number> = {}
+    for (const r of (data ?? []) as { order_line_id: string; qty: number }[]) {
+      out[r.order_line_id] = (out[r.order_line_id] ?? 0) + r.qty
+    }
+    return out
+  },
+
+  /** Σ đã xuất theo LÔ đơn (một query cho cả trang danh sách). */
+  async shippedByOrderIds(ids: string[]): Promise<Record<string, number>> {
+    if (ids.length === 0) return {}
+    const { data } = await db()
+      .from('sales_order_shipments')
+      .select('order_id, qty')
+      .in('order_id', ids)
+    const out: Record<string, number> = {}
+    for (const r of (data ?? []) as { order_id: string; qty: number }[]) {
+      out[r.order_id] = (out[r.order_id] ?? 0) + r.qty
+    }
+    return out
   },
 }

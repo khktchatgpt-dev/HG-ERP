@@ -26,9 +26,9 @@ function po(over: Partial<Po> & { code: string }): Po {
 }
 
 const LSXS: LsxRef[] = [
-  { id: 'l1', code: 'LSX-2026-0001', order_codes: ['DH-01'], customer_name: 'MERXX' },
-  { id: 'l2', code: 'LSX-2026-0002', order_codes: ['DH-02'], customer_name: 'YOTRIO' },
-  { id: 'l3', code: 'LSX-2026-0003', order_codes: ['DH-03'], customer_name: 'VIETECO' },
+  { id: 'l1', code: 'LSX-2026-0001', order_codes: ['DH-01'], customer_name: 'MERXX', materials_due_at: null },
+  { id: 'l2', code: 'LSX-2026-0002', order_codes: ['DH-02'], customer_name: 'YOTRIO', materials_due_at: null },
+  { id: 'l3', code: 'LSX-2026-0003', order_codes: ['DH-03'], customer_name: 'VIETECO', materials_due_at: null },
 ]
 
 describe('groupPosByLsx', () => {

@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic'
  * chi tiết/định mức (kéo từ BOM Kỹ thuật + sửa). Lệnh chưa có bảng nổi lên đầu.
  */
 export default async function ShapingPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [{ rows }, counts, canEdit] = await Promise.all([
     productionRepo.list({ page: 1, page_size: 200 }),
     componentsRepo.countsByLsx(),

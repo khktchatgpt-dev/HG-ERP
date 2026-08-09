@@ -22,7 +22,7 @@ export default async function OrderDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
 
   let data
@@ -32,7 +32,7 @@ export default async function OrderDetailPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { order, lines, changes } = data
+  const { order, lines, changes, shipments, shippedByLine } = data
 
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
@@ -157,15 +157,27 @@ export default async function OrderDetailPage({
         created_at: order.created_at,
       }}
       lines={lines.map((l) => ({
+        id: l.id,
         product_code: l.product_code,
         product_name: l.product_name,
         product_unit: l.product_unit,
         customer_item_code: l.customer_item_code,
+        barcode: l.barcode,
         bom_status: l.bom_status,
         qty: l.qty,
         unit_price: l.unit_price,
+        ship_date: l.ship_date,
+        shipped: shippedByLine[l.id] ?? 0,
         note: l.note,
         image_url: l.image_file_id ? (imageUrls.get(l.image_file_id) ?? null) : null,
+      }))}
+      shipments={shipments.map((s) => ({
+        id: s.id,
+        order_line_id: s.order_line_id,
+        qty: s.qty,
+        shipped_at: s.shipped_at,
+        note: s.note,
+        created_by_name: s.created_by_name,
       }))}
       changes={changes.map((c) => ({
         id: c.id,

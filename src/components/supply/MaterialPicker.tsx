@@ -2,15 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/api'
-import {
-  Boxes,
-  Layers,
-  Ruler,
-  Search as SearchIcon,
-  Target,
-  TriangleAlert,
-  Weight,
-} from 'lucide-react'
+import { Boxes, Layers, Ruler, Search as SearchIcon, Target, Weight } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
@@ -24,18 +16,32 @@ export type PoMaterial = {
   group_name: string | null
   sub_group: string | null
   spec: string | null
-  po_template: PoTemplate | null
   kg_per_m: number | null
   kg_per_unit: number | null
   default_bar_length_m: number | null
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null
-  on_hand: number
+  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT (vd 1 bì = 500 con). */
+  pack_size: number | null
+  pack_unit: string | null
+  /** Vật liệu/màu khai ở danh mục (0124) — dùng khi chưa có lần đặt nào. */
+  material_grade: string | null
+  /** Tồn hiện tại — NULL = chưa có sổ kho (khác "tồn 0 thật"). */
+  on_hand: number | null
+  /** Ô mô tả của lần đặt gần nhất — điền sẵn lên dòng, null = chưa từng đặt. */
+  last_line: {
+    material_grade: string | null
+    dimension_text: string | null
+    finish: string | null
+    pcs_per_ctn: number | null
+    open_style: string | null
+    dm_per_sp: number | null
+  } | null
 }
 
 /**
- * Cache theo (mẫu đơn, từ khoá) — sống theo tab, DÙNG CHUNG mọi dòng của form.
+ * Cache theo (nhóm, từ khoá) — sống theo tab, DÙNG CHUNG mọi dòng của form.
  * Đơn 20 dòng vì thế tốn 1 request cho danh sách mặc định chứ không 20.
  */
 const cache = new Map<string, PoMaterial[]>()
@@ -63,15 +69,11 @@ async function loadGroups(): Promise<string[]> {
   return groupCache
 }
 
-async function search(
-  template: PoTemplate,
-  q: string,
-  group: string,
-): Promise<PoMaterial[]> {
-  const key = `${template}|${group}|${q}`
+async function search(q: string, group: string): Promise<PoMaterial[]> {
+  const key = `${group}|${q}`
   const hit = cache.get(key)
   if (hit) return hit
-  const params = new URLSearchParams({ limit: '25', template })
+  const params = new URLSearchParams({ limit: '25' })
   if (q) params.set('q', q)
   if (group) params.set('group', group)
   const data = await api<{ materials: PoMaterial[] }>(
@@ -127,8 +129,8 @@ function groupTone(name: string | null) {
 }
 
 /**
- * HỘP THOẠI CHỌN VẬT TƯ — tìm ở server, lọc theo mẫu đơn đang soạn, CHỌN NHIỀU
- * MÓN MỘT LƯỢT.
+ * HỘP THOẠI CHỌN VẬT TƯ — tìm ở server, lọc theo nhóm, CHỌN NHIỀU MÓN MỘT LƯỢT.
+ * (KHÔNG lọc theo mẫu đơn — mẫu là thuộc tính của đơn, không gắn theo vật tư.)
  *
  * Vì sao là hộp thoại chứ không phải ô gõ thẳng trên trang: danh mục có 13.064
  * vật tư. Với chừng đó, việc chọn không phải "gõ một chữ rồi bấm" mà là một
@@ -213,7 +215,7 @@ export function MaterialPickDialog({
 
   const run = useCallback(
     async (term: string) => {
-      const cached = cache.get(`${template}|${group}|${term}`)
+      const cached = cache.get(`${group}|${term}`)
       if (cached) {
         setRows(cached)
         setActive(0)
@@ -222,7 +224,7 @@ export function MaterialPickDialog({
       setLoading(true)
       setError(null)
       try {
-        setRows(await search(template, term, group))
+        setRows(await search(term, group))
         setActive(0)
       } catch {
         setRows([])
@@ -231,7 +233,7 @@ export function MaterialPickDialog({
         setLoading(false)
       }
     },
-    [template, group],
+    [group],
   )
 
   /*
@@ -246,10 +248,10 @@ export function MaterialPickDialog({
       const t = setTimeout(() => setRows([]), 0)
       return () => clearTimeout(t)
     }
-    const instant = cache.has(`${template}|${group}|${term}`)
+    const instant = cache.has(`${group}|${term}`)
     const t = setTimeout(() => void run(term), instant ? 0 : 250)
     return () => clearTimeout(t)
-  }, [open, q, template, group, run])
+  }, [open, q, group, run])
 
   const pickedIds = useMemo(() => new Set(picked.map((m) => m.id)), [picked])
 
@@ -455,12 +457,9 @@ export function MaterialPickDialog({
                           {m.kg_per_unit} kg/{m.unit}
                         </span>
                       )}
-                      {m.po_template == null && (
-                        <span className="inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 px-1.5 py-px text-[11px] font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                          <TriangleAlert className="size-3 shrink-0" aria-hidden />
-                          chưa khai mẫu
-                        </span>
-                      )}
+                      {/* Không còn nhãn mẫu ở đây: mẫu đơn là thuộc tính của ĐƠN
+                          (chọn ở đầu form), không gắn theo vật tư (bỏ 08/08/2026
+                          — gắn mẫu cho vật tư làm gỗ "biến mất" khỏi ô tìm). */}
                     </span>
 
                     {/* DÒNG 3 — nhóm và tồn kho, cỡ nhỏ nhưng KHÔNG mờ tới mức
@@ -490,16 +489,26 @@ export function MaterialPickDialog({
                         đặt. Nó không phải chữ phụ. Còn hàng thì xanh lá (tin
                         vui, cân nhắc mua ít lại), hết hàng thì đen bình thường.
                       */}
-                      <span
-                        className={`inline-flex items-center gap-1 font-medium ${
-                          m.on_hand > 0
-                            ? 'text-emerald-700 dark:text-emerald-400'
-                            : 'text-zinc-700 dark:text-zinc-200'
-                        }`}
-                      >
-                        <Boxes className="size-3 shrink-0" aria-hidden />
-                        tồn {num(m.on_hand)} {m.unit}
-                      </span>
+                      {/* NULL = chưa có sổ kho — nói thẳng "kho chưa có số"
+                          thay vì "tồn 0" giả: hiện số 0 sai vài lần là người
+                          mua bỏ qua cột tồn vĩnh viễn (bất cập #2). */}
+                      {m.on_hand == null ? (
+                        <span className="text-muted-foreground inline-flex items-center gap-1">
+                          <Boxes className="size-3 shrink-0" aria-hidden />
+                          kho chưa có số
+                        </span>
+                      ) : (
+                        <span
+                          className={`inline-flex items-center gap-1 font-medium ${
+                            m.on_hand > 0
+                              ? 'text-emerald-700 dark:text-emerald-400'
+                              : 'text-zinc-700 dark:text-zinc-200'
+                          }`}
+                        >
+                          <Boxes className="size-3 shrink-0" aria-hidden />
+                          tồn {num(m.on_hand)} {m.unit}
+                        </span>
+                      )}
                       {needs?.get(m.id) ? (
                         <span className="inline-flex items-center gap-1 font-semibold text-sky-700 dark:text-sky-300">
                           <Target className="size-3 shrink-0" aria-hidden />

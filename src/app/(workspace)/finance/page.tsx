@@ -11,7 +11,7 @@ import { WORKSPACES, ACCENT_CLASSES } from '@/workspaces/workspaces.config'
 const workspace = WORKSPACES.finance
 
 export default async function FinanceHomePage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isAccountingStaff(user))
   if (!allowed) redirect('/')
 

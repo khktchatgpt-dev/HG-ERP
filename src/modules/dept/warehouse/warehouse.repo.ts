@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
+import { searchTokens } from '@/lib/search-text'
 
 export type Material = {
   id: string
@@ -34,6 +35,11 @@ export type Material = {
   /** kg mỗi ĐƠN VỊ ĐẶT (kg/tấm, kg/cuộn) — 0112. */
   kg_per_unit: number | null
   default_bar_length_m: number | null
+  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con). */
+  pack_size: number | null
+  pack_unit: string | null
+  /** Vật liệu / màu (0124) — cột "Vật liệu" của đơn phụ kiện/inox. */
+  material_grade: string | null
   note: string | null
   is_active: boolean
   created_at: string
@@ -41,7 +47,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, note, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -71,6 +77,7 @@ function toMaterial(row: Record<string, unknown>): Material {
     kg_per_unit: row.kg_per_unit == null ? null : Number(row.kg_per_unit),
     default_bar_length_m:
       row.default_bar_length_m == null ? null : Number(row.default_bar_length_m),
+    pack_size: row.pack_size == null ? null : Number(row.pack_size),
   }
 }
 
@@ -83,10 +90,8 @@ export const materialsRepo = {
 
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
-    if (filter.q)
-      q = q.or(
-        `code.ilike.%${filter.q}%,name.ilike.%${filter.q}%,barcode.ilike.%${filter.q}%`,
-      )
+    // Tìm KHÔNG DẤU trên search_text (0127) — AND từng từ, gõ "vit 4x15" vẫn trúng.
+    for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
 
     const from = (filter.page - 1) * filter.page_size
     const to = from + filter.page_size - 1
@@ -113,10 +118,8 @@ export const materialsRepo = {
     const base = () => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
-      if (filter.q)
-        q = q.or(
-          `code.ilike.%${filter.q}%,name.ilike.%${filter.q}%,barcode.ilike.%${filter.q}%`,
-        )
+      // Cùng luật tìm không dấu với list — hai nơi lệch nhau là StatsBar nói dối.
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
     const [all, act, shelf] = await Promise.all([
