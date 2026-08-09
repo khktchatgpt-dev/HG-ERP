@@ -122,6 +122,14 @@ export type OpsTeam = TeamWorkloadRow & {
 
 export type OpsTower = {
   teams: OpsTeam[]
+  /**
+   * Số tổ ĐÃ gán công đoạn (`departments.stage_code`). Sơ đồ xưởng dựng từ
+   * `teams` — vốn gom theo VIỆC (production_jobs), nên khi chưa lệnh nào giao
+   * việc xuống tổ thì `teams` rỗng dù cấu hình tổ đã đúng. Có số này để chỗ
+   * trống nói đúng nguyên nhân, thay vì đổ cho cấu hình và đẩy GĐ đi sửa thứ
+   * vốn không sai.
+   */
+  staged_team_count: number
   wip_strip: {
     from: string
     from_label: string
@@ -383,6 +391,7 @@ export const opsService = {
 
     return {
       teams,
+      staged_team_count: [...stageByDept.values()].filter(Boolean).length,
       wip_strip,
       quality: { last7: defectStats(last7), prev7: defectStats(prev7), by_team },
       supply: {
