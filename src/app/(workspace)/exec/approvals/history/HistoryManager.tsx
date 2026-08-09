@@ -9,16 +9,31 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
 
+type EvAction = 'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
+
 type Ev = {
   id: string
   entity_type: 'po' | 'lsx'
   entity_id: string
   entity_code: string
-  action: 'approved' | 'rejected'
+  action: EvAction
   actor_id: string | null
   actor_name: string | null
   reason: string | null
   created_at: string
+}
+
+// 0128 — ngoài duyệt/từ chối còn các mốc vòng đời PO: gửi duyệt / rút về nháp /
+// bàn giao người phụ trách.
+const ACTION_META: Record<
+  EvAction,
+  { label: string; tone: 'green' | 'red' | 'blue' | 'amber' | 'gray' }
+> = {
+  approved: { label: 'Đã duyệt', tone: 'green' },
+  rejected: { label: 'Từ chối', tone: 'red' },
+  submitted: { label: 'Gửi duyệt', tone: 'blue' },
+  withdrawn: { label: 'Rút về nháp', tone: 'amber' },
+  reassigned: { label: 'Bàn giao', tone: 'gray' },
 }
 
 const fmtDateTime = (d: string) =>
@@ -34,7 +49,7 @@ const TYPE_LABEL = { lsx: 'Lệnh SX', po: 'Đơn vật tư' } as const
 
 export function HistoryManager({ events }: { events: Ev[] }) {
   const [type, setType] = useState<'all' | 'lsx' | 'po'>('all')
-  const [action, setAction] = useState<'all' | 'approved' | 'rejected'>('all')
+  const [action, setAction] = useState<'all' | EvAction>('all')
 
   const rows = useMemo(
     () =>
@@ -95,9 +110,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
       width: '120px',
       sortValue: (e) => e.action,
       cell: (e) => (
-        <Badge tone={e.action === 'approved' ? 'green' : 'red'}>
-          {e.action === 'approved' ? 'Đã duyệt' : 'Từ chối'}
-        </Badge>
+        <Badge tone={ACTION_META[e.action].tone}>{ACTION_META[e.action].label}</Badge>
       ),
     },
     {
@@ -163,8 +176,10 @@ export function HistoryManager({ events }: { events: Ev[] }) {
                 onChange={(v) => setAction(v as typeof action)}
                 options={[
                   { value: 'all', label: 'Mọi quyết định' },
-                  { value: 'approved', label: 'Đã duyệt' },
-                  { value: 'rejected', label: 'Từ chối' },
+                  ...Object.entries(ACTION_META).map(([value, m]) => ({
+                    value,
+                    label: m.label,
+                  })),
                 ]}
               />
             </>

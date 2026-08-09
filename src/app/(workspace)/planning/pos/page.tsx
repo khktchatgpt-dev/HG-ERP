@@ -4,6 +4,9 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { PosManager } from './PosManager'
 
 /**
@@ -14,6 +17,10 @@ import { PosManager } from './PosManager'
  * Có nạp DANH SÁCH LSX ĐANG CHẠY, và chỉ 4 trường nhẹ. Trang xếp đơn theo lệnh
  * nên phải biết cả những lệnh CHƯA có đơn nào — thứ mà bảng đơn không thể suy
  * ra, vì lệnh chưa đặt gì thì đơn giản là không có dòng nào nhắc tới nó.
+ *
+ * Quyền (0128): `canEdit` = là NV cung ứng (điều kiện nền); thao tác trên TỪNG
+ * đơn còn xét người phụ trách — PosManager tính theo `meId`/`canManageAny`,
+ * server enforce lại trong pos.service (assertPoOwner).
  */
 export default async function PlanningPosPage({
   searchParams,
@@ -21,8 +28,12 @@ export default async function PlanningPosPage({
   searchParams: Promise<{ view?: string }>
 }) {
   const user = await authService.requirePageUser()
-  const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
-  const canApprove = user.role === 'admin' || user.role === 'manager'
+  const [supplyStaff, canManageAny, canApprove] = await Promise.all([
+    isSupplyStaff(user),
+    canAction(user, 'supply.po.manage_any'),
+    canAction(user, 'supply.po.approve'),
+  ])
+  const canEdit = user.role === 'admin' || supplyStaff
   // `?view=<id>`: form soạn đơn redirect về đây sau khi LƯU NHÁP (0116) — mở
   // ngay chi tiết đơn vừa tạo để người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
   const { view } = await searchParams
@@ -39,6 +50,21 @@ export default async function PlanningPosPage({
     posRepo.totalsByPoIds(pos.map((p) => p.id)),
     supplyRepo.lineDoneByPoIds(pos.map((p) => p.id)),
   ])
+
+  /*
+   * Danh sách NV cung ứng nhận BÀN GIAO (0128) — chỉ nạp cho người bàn giao được.
+   * Loại tài khoản `admin`: vai admin được seed ĐỦ MỌI permission trong DB (kể cả
+   * supply.member), nên lọc thuần theo quyền sẽ kéo cả IT lẫn Giám đốc vào ô
+   * "chọn nhân viên cung ứng". Họ vốn thao tác được mọi đơn nhờ bypass — không
+   * ai cần bàn giao đơn cho họ.
+   */
+  let staff: { id: string; name: string }[] = []
+  if (canManageAny || canApprove) {
+    const memberIds = new Set(await rbacRepo.userIdsWithPermission('supply.member'))
+    staff = (await usersRepo.list({ active_only: true }))
+      .filter((u) => u.role !== 'admin' && memberIds.has(u.id))
+      .map((u) => ({ id: u.id, name: u.name ?? u.email }))
+  }
 
   return (
     <PosManager
@@ -58,6 +84,9 @@ export default async function PlanningPosPage({
       }))}
       canEdit={!!canEdit}
       canApprove={canApprove}
+      canManageAny={user.role === 'admin' || canManageAny}
+      meId={user.id}
+      staff={staff}
       openId={view ?? null}
     />
   )

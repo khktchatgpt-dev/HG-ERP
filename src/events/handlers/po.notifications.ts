@@ -30,4 +30,28 @@ export function registerPoNotificationHandlers(): void {
       payload: { title: e.code, reason: e.reason },
     })
   })
+
+  // Rút đơn về nháp (0128): báo người duyệt để họ khỏi xử lý bản đã rút.
+  on('po.withdrawn', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.withdrawn_by,
+          type: 'po_withdrawn',
+          payload: { title: e.code },
+        }),
+      ),
+    )
+  })
+
+  // Bàn giao đơn (0128): báo người NHẬN phụ trách.
+  on('po.reassigned', async (e) => {
+    await notificationsService.notify({
+      recipientId: e.to_user_id,
+      actorId: e.reassigned_by,
+      type: 'po_reassigned',
+      payload: { title: e.code },
+    })
+  })
 }

@@ -1,5 +1,6 @@
 import { notFound, redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
@@ -39,10 +40,16 @@ export default async function EditPoPage({
   if (!detail) notFound()
   const { po, lines, extra_lsx } = detail
 
-  // BR: chỉ đơn NHÁP / chờ duyệt mới sửa được (service cũng chặn) — vào thẳng
-  // URL khi đơn đã duyệt thì đẩy về danh sách thay vì để bấm Lưu rồi mới báo lỗi.
-  if (mode === 'edit' && po.status !== 'draft' && po.status !== 'pending_approval') {
-    redirect('/planning/pos')
+  // BR (0128): chỉ đơn NHÁP mới sửa được (chờ duyệt phải rút về nháp trước), và
+  // chỉ NGƯỜI PHỤ TRÁCH / trưởng phòng CƯ / admin — service cũng chặn; đây là
+  // để vào thẳng URL thì đẩy về danh sách thay vì bấm Lưu rồi mới báo lỗi.
+  if (mode === 'edit') {
+    if (po.status !== 'draft') redirect('/planning/pos')
+    const owns =
+      user.role === 'admin' ||
+      (po.assigned_to ?? po.created_by) === user.id ||
+      (await canAction(user, 'supply.po.manage_any'))
+    if (!owns) redirect('/planning/pos')
   }
 
   const [{ rows: suppliers }, { rows: lsxAll }, mats, company] = await Promise.all([

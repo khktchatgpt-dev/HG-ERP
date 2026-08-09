@@ -95,6 +95,21 @@ export const rbacRepo = {
     return [...keys]
   },
 
+  /**
+   * User ID đang giữ 1 permission (qua vai active) — chiều ngược của
+   * `permissionKeysForUser`. Dùng tìm NGƯỜI NHẬN notify theo quyền thật
+   * (vd ai duyệt PO) thay vì suy từ vai toàn cục manager. KHÔNG gồm admin
+   * (bypass không nằm trong role_permissions) — caller tự cộng thêm nếu cần.
+   */
+  async userIdsWithPermission(key: string): Promise<string[]> {
+    const { data } = await db()
+      .from('user_roles')
+      .select('user_id, roles!inner(is_active, role_permissions!inner(permission_key))')
+      .eq('roles.is_active', true)
+      .eq('roles.role_permissions.permission_key', key)
+    return [...new Set(((data ?? []) as { user_id: string }[]).map((r) => r.user_id))]
+  },
+
   /** Tập ROLE KEY của user (kể cả role nhãn không quyền — 0087 tách UI vị trí). */
   async roleKeysForUser(userId: string): Promise<string[]> {
     const { data } = await db()

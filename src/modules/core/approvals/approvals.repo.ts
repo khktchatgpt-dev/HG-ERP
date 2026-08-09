@@ -2,9 +2,12 @@ import { db } from '@/server/db'
 
 /**
  * Lịch sử phê duyệt (audit) — append-only. Ghi bởi event handler khi
- * po.decided / lsx.decided (xem src/events/handlers/approval.audit.ts).
+ * po.decided / lsx.decided, và từ 0128 thêm các mốc vòng đời PO:
+ * submitted (gửi duyệt) / withdrawn (rút về nháp) / reassigned (bàn giao).
+ * Xem src/events/handlers/approval.audit.ts.
  */
-export type ApprovalAction = 'approved' | 'rejected'
+export type ApprovalAction =
+  'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
 export type ApprovalEntityType = 'po' | 'lsx'
 
 export type ApprovalEventInput = {

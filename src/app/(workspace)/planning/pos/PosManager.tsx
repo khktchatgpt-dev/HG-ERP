@@ -52,6 +52,9 @@ export type Po = {
   // Mốc chuyển trạng thái (có ở detail API) — cho stepper. Optional để list row bỏ qua được.
   approved_at?: string | null
   ordered_at?: string | null
+  /** Người PHỤ TRÁCH đơn (0128) — quyền thao tác xét theo đây, không phải cả phòng. */
+  assigned_to?: string | null
+  assignee_name?: string | null
   supplier_name: string
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
@@ -133,6 +136,9 @@ export function PosManager({
   lsxs,
   canEdit,
   canApprove,
+  canManageAny = false,
+  meId = null,
+  staff = [],
   openId = null,
 }: {
   pos: Po[]
@@ -141,9 +147,23 @@ export function PosManager({
   lsxs: LsxRef[]
   canEdit: boolean
   canApprove: boolean
+  /** Trưởng phòng CƯ / admin (0128) — thao tác MỌI đơn + bàn giao. */
+  canManageAny?: boolean
+  /** id người xem (0128) — để khoá thao tác theo người phụ trách từng đơn. */
+  meId?: string | null
+  /** NV cung ứng nhận bàn giao — chỉ nạp khi người xem bàn giao được. */
+  staff?: { id: string; name: string }[]
   /** Mở sẵn chi tiết đơn này (form soạn redirect về sau khi lưu nháp — 0116). */
   openId?: string | null
 }) {
+  /**
+   * Quyền thao tác theo TỪNG ĐƠN (0128): người phụ trách, trưởng phòng CƯ hoặc
+   * admin. `canEdit` (là NV cung ứng) vẫn là điều kiện nền — người ngoài phòng
+   * dù thấy đơn cũng không thao tác. Server enforce lại y hệt (assertPoOwner).
+   */
+  const rowCanEdit = (p: Po) =>
+    canEdit && (canManageAny || (p.assigned_to != null && p.assigned_to === meId))
+  const canReassign = canManageAny || canApprove
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
@@ -159,10 +179,14 @@ export function PosManager({
     date: string
     reason: string
   } | null>(null)
+  /** Đơn đang bàn giao (0128) — chọn NV cung ứng nhận phụ trách. */
+  const [reassigning, setReassigning] = useState<{ po: Po; toId: string } | null>(null)
 
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'late' | PoStatus>('all')
   const [supplierFilter, setSupplierFilter] = useState('all')
+  /** Lọc "đơn của tôi" (0128) — NV đông lên thì mỗi người nhìn phần mình trước. */
+  const [ownerFilter, setOwnerFilter] = useState<'all' | 'mine'>('all')
   // Loại đơn: theo lệnh SX / ngoài LSX (0076).
   const [typeFilter, setTypeFilter] = useState<'all' | 'lsx' | 'standalone'>('all')
   /*
@@ -202,14 +226,17 @@ export function PosManager({
       if (supplierFilter !== 'all' && p.supplier_id !== supplierFilter) return false
       if (typeFilter === 'lsx' && !p.lsx_code) return false
       if (typeFilter === 'standalone' && p.lsx_code) return false
+      if (ownerFilter === 'mine' && p.assigned_to !== meId) return false
       if (
         ql &&
-        !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''}`.toLowerCase().includes(ql)
+        !`${p.code} ${p.supplier_name} ${p.lsx_code ?? ''} ${p.assignee_name ?? ''}`
+          .toLowerCase()
+          .includes(ql)
       )
         return false
       return true
     })
-  }, [pos, q, statusFilter, supplierFilter, typeFilter, today])
+  }, [pos, q, statusFilter, supplierFilter, typeFilter, ownerFilter, meId, today])
 
   // Gom theo lệnh — chạy trên KẾT QUẢ ĐÃ LỌC để bộ lọc trên thanh công cụ có tác
   // dụng ở cả hai kiểu xem.
@@ -381,6 +408,40 @@ export function PosManager({
     }
   }
 
+  /**
+   * RÚT VỀ NHÁP (0128): đơn chờ duyệt không sửa trực tiếp — rút về, sửa, gửi
+   * lại; con số GĐ thấy trong thông báo luôn là bản cuối.
+   */
+  async function withdrawPo(po: Po) {
+    const ok = await confirm({
+      title: `Rút ${po.code} về nháp?`,
+      description:
+        'Đơn rời bàn duyệt của Giám đốc — sửa xong bấm "Gửi GĐ duyệt" lại từ đầu.',
+      confirmLabel: 'Rút về nháp',
+    })
+    if (!ok) return
+    const ok2 = await send(`/api/dept/supply/pos/${po.id}/withdraw`, 'POST')
+    if (ok2) {
+      toast.success('Đã rút về nháp', po.code)
+      setViewing(null)
+    }
+  }
+
+  /** BÀN GIAO (0128): đổi người phụ trách — trưởng phòng CƯ / GĐ / admin. */
+  async function submitReassign() {
+    if (!reassigning || !reassigning.toId) return
+    const { po, toId } = reassigning
+    const ok = await send(`/api/dept/supply/pos/${po.id}/reassign`, 'POST', {
+      user_id: toId,
+    })
+    if (ok) {
+      const name = staff.find((s) => s.id === toId)?.name ?? ''
+      toast.success(`Đã bàn giao ${po.code}`, name)
+      setReassigning(null)
+      setViewing(null)
+    }
+  }
+
   /** Xoá hẳn đơn NHÁP — chưa gửi ai nên xoá là sạch, không cần lý do huỷ. */
   async function deleteDraft(po: Po) {
     const ok = await confirm({
@@ -403,19 +464,27 @@ export function PosManager({
     }
   }
 
-  /** Menu ⋯ của một đơn — dùng chung cho cả bảng phẳng lẫn thẻ theo lệnh. */
+  /**
+   * Menu ⋯ của một đơn — dùng chung cho cả bảng phẳng lẫn thẻ theo lệnh.
+   * Thao tác GHI xét theo TỪNG đơn (0128): người phụ trách / trưởng phòng /
+   * admin — không còn "cả phòng cùng sửa". "Tạo lại từ đơn này" (nhân bản ra
+   * đơn MỚI của chính mình) vẫn mở cho mọi NV cung ứng.
+   */
   function rowMenuFor(p: Po) {
+    const mine = rowCanEdit(p)
     const items: { label: string; onClick: () => void; danger?: boolean }[] = [
       { label: 'Xem chi tiết', onClick: () => void openView(p) },
     ]
-    if (canEdit && (p.status === 'draft' || p.status === 'pending_approval')) {
-      items.push({ label: 'Sửa', onClick: () => void openEdit(p, 'edit') })
-    }
-    if (canEdit && p.status === 'draft') {
+    // Sửa: CHỈ nháp (0128) — đơn chờ duyệt phải rút về nháp trước.
+    if (mine && p.status === 'draft') {
       items.push(
+        { label: 'Sửa', onClick: () => void openEdit(p, 'edit') },
         { label: 'Gửi GĐ duyệt', onClick: () => void submitPo(p) },
         { label: 'Xoá nháp', onClick: () => void deleteDraft(p), danger: true },
       )
+    }
+    if (mine && p.status === 'pending_approval') {
+      items.push({ label: 'Rút về nháp để sửa', onClick: () => void withdrawPo(p) })
     }
     if (canEdit && p.status === 'cancelled') {
       items.push({
@@ -429,7 +498,7 @@ export function PosManager({
         { label: 'Từ chối', onClick: () => void decide(p, 'reject'), danger: true },
       )
     }
-    if (canEdit && canReschedule(p.status).ok) {
+    if (mine && canReschedule(p.status).ok) {
       items.push({
         label: 'Đổi hẹn giao',
         onClick: () =>
@@ -440,17 +509,23 @@ export function PosManager({
           }),
       })
     }
-    if (canEdit && p.status === 'approved') {
+    if (mine && p.status === 'approved') {
       items.push({ label: 'Gửi NCC', onClick: () => void advance(p, 'ordered') })
     }
-    if (canEdit && p.status === 'ordered') {
+    if (mine && p.status === 'ordered') {
       items.push({ label: 'NCC xác nhận', onClick: () => void advance(p, 'confirmed') })
     }
-    if (canEdit && ['ordered', 'confirmed'].includes(p.status)) {
+    if (mine && ['ordered', 'confirmed'].includes(p.status)) {
       items.push({ label: 'Đang giao', onClick: () => void advance(p, 'in_transit') })
     }
+    if (canReassign && !['received', 'cancelled'].includes(p.status)) {
+      items.push({
+        label: 'Bàn giao người phụ trách',
+        onClick: () => setReassigning({ po: p, toId: '' }),
+      })
+    }
     // Nháp không có "Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho đơn đã gửi đi.
-    if (canEdit && !['draft', 'received', 'cancelled'].includes(p.status)) {
+    if (mine && !['draft', 'received', 'cancelled'].includes(p.status)) {
       items.push({ label: 'Huỷ đơn', onClick: () => void cancelPo(p), danger: true })
     }
     return <RowMenu items={items} />
@@ -555,6 +630,21 @@ export function PosManager({
       },
     },
     {
+      key: 'assignee',
+      header: 'Phụ trách',
+      width: '140px',
+      sortValue: (p) => p.assignee_name ?? '',
+      cell: (p) =>
+        p.assignee_name ? (
+          <span className={'truncate' + (p.assigned_to === meId ? ' font-medium' : '')}>
+            {p.assigned_to === meId ? '★ ' : ''}
+            {p.assignee_name}
+          </span>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
+    },
+    {
       key: 'created',
       header: 'Ngày tạo',
       sortValue: (p) => p.created_at,
@@ -648,6 +738,16 @@ export function PosManager({
                   { value: 'standalone' as const, label: 'Ngoài LSX' },
                 ]}
               />
+              {canEdit && meId && (
+                <ToolbarSelect
+                  value={ownerFilter}
+                  onChange={(v) => setOwnerFilter(v)}
+                  options={[
+                    { value: 'all' as const, label: 'Mọi người phụ trách' },
+                    { value: 'mine' as const, label: '★ Đơn của tôi' },
+                  ]}
+                />
+              )}
             </>
           }
           right={
@@ -734,7 +834,8 @@ export function PosManager({
             po={viewing.po}
             lines={viewing.lines}
             statusLines={viewing.statusLines}
-            canEdit={canEdit}
+            canEdit={rowCanEdit(viewing.po)}
+            canUpload={canEdit}
             canApprove={canApprove}
             onDecide={(d) => void decide(viewing.po, d)}
             onAdvance={(to) => void advance(viewing.po, to)}
@@ -742,6 +843,7 @@ export function PosManager({
             onEdit={() => void openEdit(viewing.po, 'edit')}
             onSubmit={() => void submitPo(viewing.po)}
             onDelete={() => void deleteDraft(viewing.po)}
+            onWithdraw={() => void withdrawPo(viewing.po)}
             onReschedule={() =>
               setRescheduling({
                 po: viewing.po,
@@ -750,6 +852,69 @@ export function PosManager({
               })
             }
           />
+        )}
+      </Modal>
+
+      {/* Bàn giao người phụ trách (0128) — trưởng phòng CƯ / GĐ / admin. */}
+      <Modal
+        open={!!reassigning}
+        onClose={() => setReassigning(null)}
+        title={reassigning ? `Bàn giao — ${reassigning.po.code}` : ''}
+        maxWidth="sm:max-w-md"
+      >
+        {reassigning && (
+          <div className="flex flex-col gap-3 text-sm">
+            <p className="rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+              Người nhận sẽ <b>phụ trách</b> đơn này (sửa nháp, gửi duyệt, theo dõi giao
+              hàng). Dùng khi người phụ trách cũ nghỉ phép / nghỉ việc. Việc bàn giao được
+              ghi vào lịch sử phê duyệt.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Đang phụ trách
+              </span>
+              <span className="text-zinc-500">
+                {reassigning.po.assignee_name ?? 'chưa có'}
+              </span>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                Bàn giao cho <span className="text-red-500">*</span>
+              </span>
+              <select
+                value={reassigning.toId}
+                onChange={(e) =>
+                  setReassigning((s) => s && { ...s, toId: e.target.value })
+                }
+                className="h-9 w-full rounded-md border border-zinc-300 px-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              >
+                <option value="">— Chọn nhân viên cung ứng —</option>
+                {staff
+                  .filter((s) => s.id !== reassigning.po.assigned_to)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setReassigning(null)}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                Huỷ
+              </button>
+              <button
+                disabled={busy || !reassigning.toId}
+                onClick={() => void submitReassign()}
+                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              >
+                {busy && <Spinner size={14} />}
+                Bàn giao
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -834,6 +999,7 @@ export function PoDetail({
   lines,
   statusLines,
   canEdit,
+  canUpload,
   canApprove,
   onDecide,
   onAdvance,
@@ -842,16 +1008,20 @@ export function PoDetail({
   onReschedule,
   onSubmit,
   onDelete,
+  onWithdraw,
 }: {
   po: Po
   lines: PoLine[]
   statusLines: StatusLine[]
+  /** Quyền thao tác trên ĐƠN NÀY (0128 — người phụ trách/trưởng phòng/admin). */
   canEdit: boolean
+  /** Đính kèm hồ sơ mua hàng — mở cho mọi NV cung ứng (không khoá theo đơn). */
+  canUpload?: boolean
   canApprove: boolean
   onDecide: (d: 'approve' | 'reject') => void
   onAdvance: (to: 'ordered' | 'confirmed' | 'in_transit') => void
   onCancel: () => void
-  /** Mở form sửa (nháp / chờ duyệt) — không truyền = ẩn nút (màn GĐ read-only). */
+  /** Mở form sửa (chỉ đơn NHÁP — 0128) — không truyền = ẩn nút (màn GĐ read-only). */
   onEdit?: () => void
   /** Đổi hẹn giao của đơn đã duyệt — không truyền = ẩn nút. */
   onReschedule?: () => void
@@ -859,6 +1029,8 @@ export function PoDetail({
   onSubmit?: () => void
   /** Xoá hẳn đơn NHÁP — không truyền = ẩn nút. */
   onDelete?: () => void
+  /** Rút đơn CHỜ DUYỆT về nháp để sửa (0128) — không truyền = ẩn nút. */
+  onWithdraw?: () => void
 }) {
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   // Giá đv kép (0053): dòng unit2 tính qty2 × giá — cùng công thức server.
@@ -891,6 +1063,7 @@ export function PoDetail({
       />
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
+        {po.assignee_name && <Badge>Phụ trách: {po.assignee_name}</Badge>}
         {po.vat_rate != null && (
           <Badge>
             VAT {po.vat_rate}% ({po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})
@@ -1013,7 +1186,7 @@ export function PoDetail({
         <DocumentFiles
           kind="purchase_order"
           id={po.id}
-          canEdit={canEdit || canApprove}
+          canEdit={canEdit || canUpload || canApprove}
           title="Hồ sơ mua hàng (báo giá NCC, hợp đồng, chứng từ)"
         />
       </div>
@@ -1037,12 +1210,21 @@ export function PoDetail({
             Xoá nháp
           </button>
         )}
-        {canEdit && onEdit && ['draft', 'pending_approval'].includes(po.status) && (
+        {canEdit && onEdit && po.status === 'draft' && (
           <button
             onClick={onEdit}
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
           >
             Sửa đơn
+          </button>
+        )}
+        {/* Chờ duyệt (0128): không sửa trực tiếp — rút về nháp rồi sửa. */}
+        {canEdit && onWithdraw && po.status === 'pending_approval' && (
+          <button
+            onClick={onWithdraw}
+            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          >
+            Rút về nháp để sửa
           </button>
         )}
         {canEdit && onSubmit && po.status === 'draft' && (

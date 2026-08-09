@@ -20,6 +20,8 @@ export type NotificationType =
   | 'po_submitted'
   | 'po_approved'
   | 'po_rejected'
+  | 'po_withdrawn'
+  | 'po_reassigned'
   | 'lsx_submitted'
   | 'lsx_approved'
   | 'lsx_rejected'

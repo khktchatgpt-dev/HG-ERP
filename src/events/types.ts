@@ -112,6 +112,24 @@ export type DomainEvent =
       created_by: string | null
       reason?: string
     }
+  // Rút đơn CHỜ DUYỆT về nháp để sửa (0128 — 6.2b): báo người duyệt khỏi
+  // duyệt nhầm bản cũ trong thông báo.
+  | {
+      name: 'po.withdrawn'
+      po_id: string
+      code: string
+      withdrawn_by: string
+      approver_ids: string[]
+    }
+  // Bàn giao đơn giữa nhân viên cung ứng (0128): đổi người phụ trách.
+  | {
+      name: 'po.reassigned'
+      po_id: string
+      code: string
+      from_user_id: string | null
+      to_user_id: string
+      reassigned_by: string
+    }
 
   // ── Lệnh sản xuất (FR-SAL-06 — Sales phát, GĐ duyệt) ─────────────────
   | {

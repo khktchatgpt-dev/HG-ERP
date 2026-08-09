@@ -227,6 +227,14 @@ export const ACTIONS: Action[] = [
     label: 'Tạo / sửa / gửi PO',
     domain: 'supply',
     rule: perm('supply.member'),
+    rowLevel:
+      'Chỉ NGƯỜI PHỤ TRÁCH đơn (assigned_to) sửa/gửi/xoá được — trừ trưởng phòng (supply.lead) và admin. Service enforce.',
+  },
+  {
+    key: 'supply.po.manage_any',
+    label: 'Thao tác mọi PO + bàn giao đơn (trưởng phòng)',
+    domain: 'supply',
+    rule: perm('supply.lead'),
   },
   {
     key: 'supply.po.approve',

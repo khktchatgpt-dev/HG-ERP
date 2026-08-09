@@ -106,7 +106,7 @@ export const poCreateSchema = z.object({
 })
 
 /**
- * Chỉ PO chờ duyệt được sửa (service chặn).
+ * Chỉ PO NHÁP được sửa (service chặn — 0128: đơn chờ duyệt phải rút về nháp).
  *
  * `template` BỎ default: khi tạo, không khai thì là 'simple'; khi sửa, không khai
  * phải là "giữ nguyên mẫu cũ" (service đọc `input.template ?? before.template`).
@@ -129,7 +129,7 @@ export const poListQuerySchema = z.object({
   page_size: z.coerce.number().int().min(1).max(1000).default(100),
 })
 
-/** GĐ duyệt / từ chối (BR-05, FR-ADM-03). Từ chối → cancelled + lý do. */
+/** GĐ duyệt / từ chối (BR-05, FR-ADM-03). Từ chối → VỀ NHÁP + lý do (0128). */
 export const poDecideSchema = z
   .object({
     decision: z.enum(['approve', 'reject']),
@@ -146,6 +146,11 @@ export const poAdvanceSchema = z.object({
 
 export const poCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
+})
+
+/** Bàn giao đơn cho NV cung ứng khác (0128) — trưởng phòng/GĐ/admin. */
+export const poReassignSchema = z.object({
+  user_id: z.string().uuid(),
 })
 
 /**
