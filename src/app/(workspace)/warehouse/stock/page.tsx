@@ -3,7 +3,7 @@ import { stockService } from '@/modules/dept/warehouse/stock.service'
 import { StockManager } from './StockManager'
 
 export default async function StockPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || user.role === 'manager'
   const stock = await stockService.listStock(user, {})
   return <StockManager stock={stock} canEdit={canEdit} />

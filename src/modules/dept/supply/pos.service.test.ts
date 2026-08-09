@@ -8,6 +8,9 @@ vi.mock('./pos.repo', () => ({
     listLines: vi.fn(),
     insert: vi.fn(),
     replaceLines: vi.fn(),
+    // LSX phụ (0125): update luôn gọi replaceExtraLsx, detail gọi listExtraLsx.
+    listExtraLsx: vi.fn(async () => []),
+    replaceExtraLsx: vi.fn(),
     patch: vi.fn(),
     delete: vi.fn(),
   },

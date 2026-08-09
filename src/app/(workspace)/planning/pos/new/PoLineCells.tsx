@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { DiePicker } from '@/components/supply/DiePicker'
 import type { PoField } from '@/lib/po-fields'
-import { recalcCartonArea, type Line } from './po-line'
+import { parseInnerDims, recalcCartonArea, type Line } from './po-line'
 
 /**
  * Ô nhập của DÒNG ĐƠN, dựng theo khai báo trong `@/lib/po-fields`.
@@ -10,14 +11,21 @@ import { recalcCartonArea, type Line } from './po-line'
  * Trước đây mỗi cột là một nhánh `c.key === '…'` trong JSX của bảng — 15 nhánh,
  * và thêm mẫu đơn là thêm nhánh. Nay bảng chỉ map khai báo → 8 kiểu ô ở đây.
  *
- * Quy ước hiển thị giữ nguyên: ô NỀN XÁM là số hệ thống tự tính (tổng kg, thành
- * tiền), không gõ được; ô nền trắng là chỗ nhân viên nhập.
+ * KIỂU Ô: PHẲNG NHƯ BẢNG TÍNH (08/08/2026 — "mỗi thông tin một ô bo tròn nhìn
+ * khá xấu"). Ô nhập không viền không nền, ranh giới do KẺ CỘT của bảng đảm
+ * nhiệm; bấm vào ô mới nổi nền xanh nhạt + ring. Ô NỀN XÁM vẫn là số hệ thống
+ * tự tính (tổng kg), không gõ được.
  */
 
+/*
+ * `appearance` reset: GIẤU NÚT TĂNG/GIẢM của input số (08/08/2026). Spinner vừa
+ * che mất số dài trong ô hẹp, vừa vô dụng — SL đặt 2.060 không ai bấm mũi tên
+ * 2.060 lần, và cuộn-để-đổi-số đã bị chặn từ trước (blurOnWheel).
+ */
 export const cell =
-  'h-[30px] w-full rounded-md border border-zinc-300 px-2 text-[13px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'h-[32px] w-full rounded-none border-0 bg-transparent px-2 text-[13px] outline-none ring-inset transition-colors focus:bg-sky-50/70 focus-visible:ring-2 focus-visible:ring-sky-500/60 dark:focus:bg-sky-950/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 export const calc =
-  'flex h-[30px] items-center justify-end rounded-md bg-zinc-100 px-2 text-[13px] font-medium tabular-nums dark:bg-zinc-800'
+  'bg-muted/50 flex h-[32px] items-center justify-end px-2 text-[13px] font-medium tabular-nums'
 
 /**
  * LĂN CHUỘT KHÔNG ĐƯỢC ĐỔI SỐ.
@@ -93,7 +101,7 @@ export function AutoGrowCell({
         // Mở lại đơn cũ: nội dung có sẵn phải nở NGAY, không đợi người dùng gõ.
         if (el) grow(el, growMax)
       }}
-      className={`${cell} min-h-[30px] resize-none py-1.5 leading-tight break-words ${className}`}
+      className={`${cell} min-h-[32px] resize-none py-1.5 leading-tight break-words ${className}`}
       aria-label={label}
       title={value}
     />
@@ -158,7 +166,7 @@ export function LineCell({
       return (
         <div className={calc} title="Hệ thống tự tính">
           {kgTotal == null ? (
-            <span className="font-normal text-zinc-400">—</span>
+            <span className="text-muted-foreground font-normal">—</span>
           ) : (
             num(kgTotal)
           )}
@@ -204,30 +212,7 @@ export function LineCell({
       )
 
     case 'inner':
-      return (
-        <div className="flex items-center gap-1">
-          {(['inner_l_mm', 'inner_w_mm', 'inner_h_mm'] as const).map((k) => (
-            <input
-              key={k}
-              type="number"
-              min="0"
-              step="1"
-              onWheel={blurOnWheel}
-              value={l[k]}
-              onChange={(e) => {
-                const v = e.target.value === '' ? '' : Number(e.target.value)
-                const next = { ...l, [k]: v } as Line
-                onPatch(index, {
-                  [k]: v,
-                  area_m2: recalcCartonArea(next),
-                } as Partial<Line>)
-              }}
-              className={`${cell} px-1 text-right`}
-              aria-label={`${k === 'inner_l_mm' ? 'Dài' : k === 'inner_w_mm' ? 'Rộng' : 'Cao'} lọt lòng ${l.name}`}
-            />
-          ))}
-        </div>
-      )
+      return <InnerDimsCell line={l} index={index} onPatch={onPatch} />
 
     case 'area':
       return (
@@ -265,6 +250,68 @@ export function LineCell({
   }
 }
 
+/**
+ * LỌT LÒNG D×R×C trong MỘT Ô — gõ "900x605x115" như vẫn gõ trong sổ Excel,
+ * thay vì ba ô số rời (phản hồi 08/08/2026: "gộp lại luôn được không").
+ *
+ * Chuỗi đang gõ giữ ở state riêng vì "900x6" chưa đọc được — đọc được tới đâu
+ * ghi vào dòng tới đó (kèm tính lại m² theo cách mở), chưa đọc được thì ba số
+ * trong dòng về trống để `deriveLine` không tính m² trên số cũ.
+ */
+function InnerDimsCell({
+  line,
+  index,
+  onPatch,
+}: {
+  line: Line
+  index: number
+  onPatch: (i: number, patch: Partial<Line>) => void
+}) {
+  const l = line
+  // Mở đơn cũ: ba số đã lưu ghép lại thành chuỗi ban đầu.
+  const [raw, setRaw] = useState(() =>
+    l.inner_l_mm !== '' && l.inner_w_mm !== '' && l.inner_h_mm !== ''
+      ? `${l.inner_l_mm}×${l.inner_w_mm}×${l.inner_h_mm}`
+      : '',
+  )
+  return (
+    <input
+      value={raw}
+      onChange={(e) => {
+        const v = e.target.value
+        setRaw(v)
+        const dims = parseInnerDims(v)
+        if (dims) {
+          const next = {
+            ...l,
+            inner_l_mm: dims[0],
+            inner_w_mm: dims[1],
+            inner_h_mm: dims[2],
+          } as Line
+          onPatch(index, {
+            inner_l_mm: dims[0],
+            inner_w_mm: dims[1],
+            inner_h_mm: dims[2],
+            area_m2: recalcCartonArea(next),
+          })
+        } else {
+          onPatch(index, {
+            inner_l_mm: '',
+            inner_w_mm: '',
+            inner_h_mm: '',
+            ...(v.trim() === '' ? { area_m2: '' as const } : null),
+          })
+        }
+      }}
+      placeholder="900×605×115"
+      maxLength={30}
+      className={`${cell} tabular-nums`}
+      title="Dài × Rộng × Cao lọt lòng (mm) — gõ 900x605x115"
+      aria-label={`Lọt lòng D×R×C ${l.name}`}
+    />
+  )
+}
+
 // ── Ô cố định cuối hàng, mẫu nào cũng có ────────────────────────────────────
 
 /**
@@ -289,7 +336,9 @@ export function NoteCell({
       label={label}
       placeholder={placeholder}
       maxLength={500}
-      growMax={160}
+      /* KHÔNG đặt trần chiều cao (bỏ 08/08/2026): trần 160px vẫn giấu đuôi ghi
+         chú dài — "nội dung bị che khi nhập nhiều" đúng cái AutoGrowCell sinh ra
+         để sửa. Chặn 500 ký tự nên nở hết cũng không thành hàng khổng lồ. */
     />
   )
 }

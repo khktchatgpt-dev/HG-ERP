@@ -31,6 +31,8 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
       sections={sections}
       accentBg={accent.bg}
       accentShadow={accent.bg.replace('bg-', 'shadow-')}
+      accentSoftBg={accent.bgSoft}
+      accentText={accent.text}
     />
   )
 }

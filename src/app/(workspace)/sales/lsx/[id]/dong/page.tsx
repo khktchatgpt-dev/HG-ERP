@@ -16,7 +16,7 @@ export default async function LsxLinesPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
 
   const lsx = await productionRepo.findById(id)

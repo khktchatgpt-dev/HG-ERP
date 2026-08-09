@@ -9,7 +9,7 @@ import { TrackingManager } from './TrackingManager'
  * đang đứng (mỗi bộ phận một màn riêng, user chốt 07/2026).
  */
 export async function TrackingScreen({ lsxBase }: { lsxBase: string }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canManage = user.role === 'admin' || user.role === 'manager'
 
   const [rows, stages] = await Promise.all([

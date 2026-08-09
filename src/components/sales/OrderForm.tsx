@@ -18,6 +18,7 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
+import { shipWeekLabel } from '@/lib/ship-week'
 
 export type ProductPick = {
   id: string
@@ -105,6 +106,8 @@ type LineRow = {
   draft: LineDraft | null
   qty: number | ''
   unitPrice: number | ''
+  /** Ngày giao dòng = hạn cuối của tuần giao (yyyy-mm-dd) — nhãn w37.26 tự suy. */
+  shipDate: string
   note: string
 }
 
@@ -153,7 +156,13 @@ export function OrderForm(props: {
   products: ProductPick[]
   sentQuotes?: QuoteOption[]
   order?: OrderInitial
-  initialLines?: { product_id: string; qty: number; unit_price: number; note: string }[]
+  initialLines?: {
+    product_id: string
+    qty: number
+    unit_price: number
+    ship_date?: string | null
+    note: string
+  }[]
 }) {
   const { mode, customers, order } = props
   const router = useRouter()
@@ -177,6 +186,7 @@ export function OrderForm(props: {
       draft: null,
       qty: l.qty,
       unitPrice: l.unit_price,
+      shipDate: l.ship_date ?? '',
       note: l.note,
     })),
   )
@@ -281,6 +291,7 @@ export function OrderForm(props: {
           draft: null,
           qty: '' as const,
           unitPrice: l.unit_price,
+          shipDate: '',
           note: l.note ?? '',
         })),
       )
@@ -339,6 +350,7 @@ export function OrderForm(props: {
         draft: null,
         qty: '',
         unitPrice: '',
+        shipDate: '',
         note: '',
       },
     ])
@@ -369,6 +381,7 @@ export function OrderForm(props: {
         },
         qty: '',
         unitPrice: np.price.trim() ? Number(np.price) : '',
+        shipDate: '',
         note: '',
       },
     ])
@@ -428,6 +441,7 @@ export function OrderForm(props: {
       product_id: string
       qty: number
       unit_price: number
+      ship_date: string | null
       note: string | null
     }[] = []
     const updated = [...lines]
@@ -475,6 +489,7 @@ export function OrderForm(props: {
         product_id: pid,
         qty: Number(l.qty),
         unit_price: Number(l.unitPrice),
+        ship_date: l.shipDate || null,
         note: l.note.trim() || null,
       })
     }
@@ -791,7 +806,7 @@ export function OrderForm(props: {
                         Thành tiền— MÁY TÍNH RA, chỉ để đối chiếu → lùi lại, xám
                         Ghi chú   — tuỳ chọn → chữ nhỏ, nhãn xám
                     */}
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
                       <LineField label="Số lượng *" strong>
                         <input
                           type="number"
@@ -825,6 +840,21 @@ export function OrderForm(props: {
                         <div className="bg-muted/60 text-muted-foreground flex h-10 items-center justify-end rounded-md px-3 text-sm tabular-nums">
                           {lineTotal.toLocaleString('en-US')}
                         </div>
+                      </LineField>
+                      {/* Ngày giao KẾ HOẠCH của dòng = hạn cuối tuần giao — nhãn
+                          tuần (w47.26, cột SHIPMENT sổ thật) suy từ ngày. */}
+                      <LineField label="Ngày giao">
+                        <input
+                          type="date"
+                          value={l.shipDate}
+                          onChange={(e) => setLine(l.key, { shipDate: e.target.value })}
+                          className={cls}
+                        />
+                        {l.shipDate && (
+                          <span className="text-muted-foreground font-mono text-[10px]">
+                            = {shipWeekLabel(l.shipDate)}
+                          </span>
+                        )}
                       </LineField>
                       <LineField label="Ghi chú dòng">
                         <input

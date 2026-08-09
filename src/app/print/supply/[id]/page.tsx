@@ -23,18 +23,23 @@ export default async function PoPrintPage({
 
   const po = await posRepo.findById(id)
   if (!po) redirect('/planning/pos')
-  const [lines, supplier, company] = await Promise.all([
+  const [lines, supplier, company, extraLsx] = await Promise.all([
     posRepo.listLines(id),
     suppliersRepo.findById(po.supplier_id),
     settingsService.getAll(),
+    posRepo.listExtraLsx(id),
   ])
+  // Đơn gộp nhiều LSX (0125): phiếu ghi "LSX 04.26.27 + 02.26.27" như sổ thật.
+  const lsxCode =
+    [po.lsx_code, ...extraLsx.map((e) => e.code)].filter(Boolean).join(' + ') || null
 
   return (
     <PoPrintSheet
       company={company}
-      po={{ ...po, template: po.template ?? 'simple' }}
+      po={{ ...po, template: po.template ?? 'simple', lsx_code: lsxCode }}
       supplier={supplier}
       lines={lines}
+      exportHref={`/api/dept/supply/pos/${id}/export`}
     />
   )
 }

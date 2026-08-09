@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Badge } from '@/components/Badge'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { assessPoLate } from '@/lib/late-risk'
+import { assessPoFit } from '@/lib/po-fit'
 import type { Po } from './PosManager'
 import type { LsxRef, PoGroup } from './pos-groups'
 
@@ -32,6 +33,7 @@ export function PosByLsx({
   statusTone,
   onView,
   renderActions,
+  onSetDue,
 }: {
   groups: PoGroup[]
   standalone: PoGroup
@@ -42,6 +44,8 @@ export function PosByLsx({
   statusTone: (p: Po) => 'gray' | 'amber' | 'blue' | 'green' | 'red'
   onView: (p: Po) => void
   renderActions: (p: Po) => React.ReactNode
+  /** Đặt "Hạn VT phải về" của lệnh (0126) — ô của sổ Tổng hợp ĐH. */
+  onSetDue: (lsxId: string, date: string | null) => void
 }) {
   if (groups.length === 0 && standalone.pos.length === 0 && emptyLsxs.length === 0) {
     return (
@@ -65,6 +69,7 @@ export function PosByLsx({
           statusTone={statusTone}
           onView={onView}
           renderActions={renderActions}
+          onSetDue={onSetDue}
         />
       ))}
 
@@ -78,6 +83,7 @@ export function PosByLsx({
           statusTone={statusTone}
           onView={onView}
           renderActions={renderActions}
+          onSetDue={onSetDue}
         />
       )}
 
@@ -95,6 +101,7 @@ function GroupCard({
   statusTone,
   onView,
   renderActions,
+  onSetDue,
 }: {
   g: PoGroup
   today: string
@@ -104,6 +111,7 @@ function GroupCard({
   statusTone: (p: Po) => 'gray' | 'amber' | 'blue' | 'green' | 'red'
   onView: (p: Po) => void
   renderActions: (p: Po) => React.ReactNode
+  onSetDue: (lsxId: string, date: string | null) => void
 }) {
   // Nhóm đã xong hết thì gập sẵn — chỗ trên màn hình để dành cho lệnh đang chạy.
   const settled = g.pending === 0 && g.open === 0 && g.late === 0
@@ -143,6 +151,31 @@ function GroupCard({
           {g.open > 0 && <Badge tone="blue">{g.open} đang mở</Badge>}
           {g.late > 0 && <Badge tone="red">⚠ {g.late} quá hẹn</Badge>}
           {g.received > 0 && <Badge tone="green">{g.received} về đủ</Badge>}
+          {/*
+            HẠN VT PHẢI VỀ (0126) — ô của sổ "Tổng hợp ĐH". Đèn "Kịp SX?" từng
+            đơn bên dưới so với mốc này. Chỉ lệnh còn trong danh sách đang chạy
+            (có lsx_id) mới đặt được.
+          */}
+          {!standalone && g.lsx_id && (
+            <label className="flex items-center gap-1 rounded-md border border-zinc-200 px-1.5 py-0.5 dark:border-zinc-700">
+              <span className="text-zinc-500">Hạn VT về</span>
+              {canEdit ? (
+                <input
+                  type="date"
+                  value={g.materials_due_at ?? ''}
+                  onChange={(e) => onSetDue(g.lsx_id!, e.target.value || null)}
+                  className="bg-transparent text-[11px] outline-none"
+                  aria-label={`Hạn vật tư phải về của ${g.lsx_code}`}
+                />
+              ) : (
+                <b>
+                  {g.materials_due_at
+                    ? new Date(g.materials_due_at).toLocaleDateString('vi-VN')
+                    : '—'}
+                </b>
+              )}
+            </label>
+          )}
           <span className="ml-1 font-semibold tabular-nums">
             {fmtMoney(g.total)} <span className="text-zinc-400">{g.currency}</span>
           </span>
@@ -165,13 +198,16 @@ function GroupCard({
                 <th className="py-1.5 pr-2 pl-3.5">Số đơn / NCC</th>
                 <th className="w-[130px] py-1.5 pr-2 text-right">Giá trị</th>
                 <th className="w-[150px] py-1.5 pr-2">Trạng thái</th>
-                <th className="w-[160px] py-1.5 pr-2">Hẹn giao</th>
+                <th className="w-[90px] py-1.5 pr-2">Về kho</th>
+                <th className="w-[180px] py-1.5 pr-2">Hẹn giao · Kịp SX?</th>
                 <th className="w-[56px] py-1.5 pr-2" />
               </tr>
             </thead>
             <tbody>
               {g.pos.map((p) => {
                 const late = assessPoLate(p, today)
+                // Đèn "Kịp SX?" (cột L của sổ): hẹn giao so với Hạn VT của lệnh.
+                const fit = assessPoFit(p, g.materials_due_at)
                 return (
                   <tr
                     key={p.id}
@@ -197,6 +233,24 @@ function GroupCard({
                     <td className="py-2 pr-2">
                       <Badge tone={statusTone(p)}>{statusLabel(p)}</Badge>
                     </td>
+                    {/* Về kho: đếm theo DÒNG (cộng số lượng chéo đơn vị là vô nghĩa). */}
+                    <td className="py-2 pr-2 text-[12px] tabular-nums">
+                      {p.lines_total ? (
+                        <span
+                          className={
+                            (p.lines_done ?? 0) >= p.lines_total
+                              ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                              : (p.lines_done ?? 0) > 0
+                                ? 'text-amber-600 dark:text-amber-500'
+                                : 'text-zinc-500'
+                          }
+                        >
+                          {p.lines_done ?? 0}/{p.lines_total} dòng
+                        </span>
+                      ) : (
+                        <span className="text-zinc-400">—</span>
+                      )}
+                    </td>
                     <td className="py-2 pr-2">
                       {p.expected_at ? (
                         <span
@@ -213,6 +267,17 @@ function GroupCard({
                         </span>
                       ) : (
                         <span className="text-zinc-400">—</span>
+                      )}
+                      {/* Đèn Kịp SX? — chỉ lên tiếng khi có chuyện (trễ/sát hạn). */}
+                      {fit === 'late' && (
+                        <span className="ml-1.5 inline-flex align-middle">
+                          <Badge tone="red">Trễ SX</Badge>
+                        </span>
+                      )}
+                      {fit === 'tight' && (
+                        <span className="ml-1.5 inline-flex align-middle">
+                          <Badge tone="amber">Sát hạn SX</Badge>
+                        </span>
                       )}
                     </td>
                     <td className="py-2 pr-2 text-right">{renderActions(p)}</td>

@@ -4,20 +4,28 @@ import { useState } from 'react'
 import {
   Box,
   Check,
+  Droplets,
   FileText,
+  FlaskConical,
+  Layers,
   Package,
   Ruler,
+  Waves,
   Weight,
   type LucideIcon,
 } from 'lucide-react'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 
-/** Icon đại diện từng mẫu — neo mắt khi quét năm thẻ, chữ không phải đọc hết. */
+/** Icon đại diện từng mẫu — neo mắt khi quét các thẻ, chữ không phải đọc hết. */
 const TEMPLATE_ICONS: Record<PoTemplate, LucideIcon> = {
   accessory: Package,
   aluminium: Ruler,
   metal_kg: Weight,
   carton: Box,
+  rattan: Waves,
+  paint: Droplets,
+  chemical: FlaskConical,
+  foam: Layers,
   simple: FileText,
 }
 
@@ -51,14 +59,14 @@ export function TemplatePicker({
   if (!open) {
     return (
       <section className="flex flex-wrap items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3.5 py-2.5 dark:border-zinc-800 dark:bg-zinc-900">
-        <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+        <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
           Loại hàng
         </span>
         <b className="inline-flex items-center gap-1.5 text-[13px] text-violet-700 dark:text-violet-300">
           <CurIcon className="size-3.5" aria-hidden />
           {cur.label}
         </b>
-        <span className="min-w-0 flex-1 truncate text-[11px] text-zinc-400">
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-[11px]">
           {cur.hint}
         </span>
         <button
@@ -75,13 +83,13 @@ export function TemplatePicker({
   return (
     <section className="rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-[11px] font-semibold tracking-wide text-zinc-400 uppercase">
+        <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
           Loại hàng / mẫu đơn
         </span>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="ml-auto text-xs text-zinc-400 hover:text-zinc-600"
+          className="text-muted-foreground ml-auto text-xs hover:text-zinc-600"
         >
           Thu gọn ▲
         </button>
@@ -121,7 +129,7 @@ export function TemplatePicker({
                 <Icon className="size-3.5" aria-hidden />
                 {m.label}
               </div>
-              <div className="mt-0.5 text-[11px] text-zinc-400">{m.hint}</div>
+              <div className="text-muted-foreground mt-0.5 text-[11px]">{m.hint}</div>
             </button>
           )
         })}

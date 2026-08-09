@@ -15,7 +15,7 @@ export default async function EditOrderPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
 
   const dept = user.department_id
@@ -78,6 +78,7 @@ export default async function EditOrderPage({
         product_id: l.product_id,
         qty: l.qty,
         unit_price: l.unit_price,
+        ship_date: l.ship_date,
         note: l.note ?? '',
       }))}
     />

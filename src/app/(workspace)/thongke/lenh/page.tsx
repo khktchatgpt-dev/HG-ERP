@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 /** Lệnh đang chạy — bối cảnh cho thống kê (không highlight tổ). */
 export default async function StatLsxInfoPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { rows } = await jobsService.overview(user)
   return (
     <RunningLsxList

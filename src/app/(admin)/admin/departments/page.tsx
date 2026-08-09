@@ -6,7 +6,7 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { DepartmentsManager } from './DepartmentsManager'
 
 export default async function AdminDepartmentsPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [departments, memberCounts, users, stages] = await Promise.all([
     departmentsService.list(),
     departmentsRepo.memberCounts(),

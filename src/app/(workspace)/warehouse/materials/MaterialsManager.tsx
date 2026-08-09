@@ -23,7 +23,6 @@ import {
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import type { PoTemplate } from '@/lib/po-template'
 import { PAGE_SIZE } from './constants'
 
 type Material = {
@@ -38,16 +37,24 @@ type Material = {
   unit2_factor: number | null
   group_name: string | null
   /*
-   * Bốn trường PHÂN LOẠI. Repo đã trả về từ lâu nhưng form danh mục không hỏi,
-   * nên vật tư khai ở đây ra đời thiếu mẫu đơn và barem — không tính được tiền
-   * ở đơn nhôm/inox. Nay khai chung một khối với form trong đơn đặt.
+   * Trường PHÂN LOẠI + barem. Repo đã trả về từ lâu nhưng form danh mục không
+   * hỏi, nên vật tư khai ở đây ra đời thiếu barem — không tính được tiền ở đơn
+   * nhôm/inox. Nay khai chung một khối với form trong đơn đặt. (Mẫu đơn KHÔNG
+   * gắn theo vật tư — bỏ 08/08/2026, mẫu là thuộc tính của đơn.)
    */
   sub_group: string | null
-  po_template: PoTemplate | null
   kg_per_m: number | null
   default_bar_length_m: number | null
   /** kg mỗi đơn vị đặt (0112) — hàng tấm/cuộn khai thẳng, không suy theo mét. */
   kg_per_unit: number | null
+  /*
+   * Đóng gói mua + vật liệu (0124). PHẢI có mặt ở đây: form sửa nạp giá trị qua
+   * `coreFromMaterial(initial)` — thiếu trường thì ô trống, và lượt LƯU kế tiếp
+   * ghi null đè lên số đã khai (mất dữ liệu im lặng).
+   */
+  pack_size: number | null
+  pack_unit: string | null
+  material_grade: string | null
   min_stock: number
   /** Bù tồn (0079): trần tồn + ngưỡng/lô đặt lại — Kho quản. */
   max_stock: number | null

@@ -24,19 +24,20 @@ export type CreatedMaterial = {
   price_unit: string | null
   unit2_factor: number | null
   /*
-   * Ba trường này ĐỌC LẠI TỪ SERVER chứ không suy ở client. Trước đây form gọi
-   * xong là tự gán `po_template = mẫu đang soạn` cho dòng, trong khi service
-   * nuốt mất trường đó nên DB lưu null — màn hình một đằng, danh mục một nẻo,
-   * và chỉ lộ ra ở lần đặt sau. Lấy đúng số server trả về thì lệch là thấy ngay.
+   * Barem ĐỌC LẠI TỪ SERVER chứ không suy ở client — lấy đúng số server vừa ghi
+   * thì server có nuốt trường nào là thấy lệch ngay, không đợi tới lần đặt sau.
    */
-  po_template: PoTemplate | null
   kg_per_m: number | null
   kg_per_unit: number | null
   default_bar_length_m: number | null
+  /** Đóng gói mua + vật liệu (0124) — dòng đơn đọc để quy đổi bao và điền cột. */
+  pack_size: number | null
+  pack_unit: string | null
+  material_grade: string | null
 }
 
 const cls =
-  'w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm shadow-xs focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950'
+  'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
 
 /**
  * Thêm nhanh VẬT TƯ MỚI ngay trong form đặt hàng — hàng phát sinh khi mua (NCC
@@ -64,7 +65,14 @@ export function QuickAddMaterial({
   const toast = useToast()
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
-  const core = useMaterialCore({ active: open, templateHint: soanTheoMau })
+  // Nhóm BẮT BUỘC ở form khai nhanh (0124): nhóm là phạm vi chặn trùng tên của
+  // server — người đang vội soạn đơn hay bỏ trống nhất, và vật tư không nhóm
+  // lọt lưới chặn rồi thành mã trùng thứ n.
+  const core = useMaterialCore({
+    active: open,
+    templateHint: soanTheoMau,
+    requireGroup: true,
+  })
 
   async function handle() {
     if (core.invalid || busy) return
@@ -119,7 +127,7 @@ export function QuickAddMaterial({
               unitListId="qa-dvt"
               subListId="qa-nhom-phu"
             />
-            <p className="text-xs text-zinc-500">
+            <p className="text-muted-foreground text-xs">
               Tồn tối thiểu, vị trí kệ, mã vạch… Kho bổ sung sau ở danh mục vật tư.
             </p>
             <div className="flex justify-end gap-2">

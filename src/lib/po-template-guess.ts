@@ -35,8 +35,29 @@ export function guessTemplate(
   const n = String(name ?? '').toLowerCase()
   const s = String(subGroup ?? '').toLowerCase()
 
-  if (/cromate|thụ động|hoá chất|hóa chất|dung môi|sơn |dầu |nhớt|mỡ |keo /.test(n))
-    return { template: 'simple', reason: 'hoá chất / sơn / dầu mỡ — tính theo SL × giá' }
+  // 4 mẫu 08/08/2026 — xét TRƯỚC ngũ kim/vật liệu vì tên nhóm này đặc trưng rõ.
+  if (/\bmây\b|\brope\b/.test(n))
+    return {
+      template: 'rattan',
+      reason: 'dây mây / rope — đặt theo kg, kèm định mức g/5m',
+    }
+  // Hoá chất TRƯỚC sơn: cùng kg × giá nhưng điều khoản khác hẳn (công nợ CK 30
+  // ngày sau nhận hàng + hoá đơn, vận chuyển bên bán chịu) — đơn thật Kiệm Tâm.
+  if (/cromate|thụ động|hoá chất|hóa chất|dung môi|tẩy dầu|phosphat|nano ph/.test(n))
+    return {
+      template: 'chemical',
+      reason: 'hoá chất xử lý — kg (can/bao), công nợ CK 30 ngày',
+    }
+  if (/sơn |dầu |nhớt|mỡ |keo /.test(n))
+    return {
+      template: 'paint',
+      reason: 'sơn / dầu keo — đặt theo kg, chạy theo kế hoạch sơn',
+    }
+  if (/\bmút\b|\bxốp\b|\bfoam\b|\bgòn\b|ván ép|màng pe\b/.test(n))
+    return {
+      template: 'foam',
+      reason: 'mút / xốp / ván ép — theo cuộn/tấm, công nợ 14 ngày',
+    }
   if (/dây hàn|que hàn|đá cắt|đá mài|béc |chụp khí/.test(n))
     return { template: 'simple', reason: 'vật tư hàn — bán theo cuộn/kg, SL × giá' }
 

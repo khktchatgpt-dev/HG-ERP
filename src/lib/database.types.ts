@@ -1209,6 +1209,7 @@ export type Database = {
           id: string
           issued_at: string | null
           issued_by: string | null
+          materials_due_at: string | null
           materials_received_at: string | null
           materials_received_by: string | null
           note: string | null
@@ -1235,6 +1236,7 @@ export type Database = {
           id?: string
           issued_at?: string | null
           issued_by?: string | null
+          materials_due_at?: string | null
           materials_received_at?: string | null
           materials_received_by?: string | null
           note?: string | null
@@ -1261,6 +1263,7 @@ export type Database = {
           id?: string
           issued_at?: string | null
           issued_by?: string | null
+          materials_due_at?: string | null
           materials_received_at?: string | null
           materials_received_by?: string | null
           note?: string | null
@@ -1737,6 +1740,7 @@ export type Database = {
           order_id: string
           product_id: string
           qty: number
+          ship_date: string | null
           sort_order: number
           unit_price: number
         }
@@ -1746,6 +1750,7 @@ export type Database = {
           order_id: string
           product_id: string
           qty: number
+          ship_date?: string | null
           sort_order?: number
           unit_price?: number
         }
@@ -1755,6 +1760,7 @@ export type Database = {
           order_id?: string
           product_id?: string
           qty?: number
+          ship_date?: string | null
           sort_order?: number
           unit_price?: number
         }
@@ -1778,6 +1784,68 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "technical_products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_order_shipments: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          note: string | null
+          order_id: string
+          order_line_id: string
+          qty: number
+          shipped_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_id: string
+          order_line_id: string
+          qty: number
+          shipped_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          note?: string | null
+          order_id?: string
+          order_line_id?: string
+          qty?: number
+          shipped_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_order_shipments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_shipments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "sales_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_shipments_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_order_shipments_order_line_id_fkey"
+            columns: ["order_line_id"]
+            isOneToOne: false
+            referencedRelation: "sales_order_lines"
             referencedColumns: ["id"]
           },
         ]
@@ -2276,6 +2344,36 @@ export type Database = {
             columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      supply_po_extra_lsx: {
+        Row: {
+          po_id: string
+          production_order_id: string
+        }
+        Insert: {
+          po_id: string
+          production_order_id: string
+        }
+        Update: {
+          po_id?: string
+          production_order_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_extra_lsx_po_id_fkey"
+            columns: ["po_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_extra_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
             referencedColumns: ["id"]
           },
         ]
@@ -4154,14 +4252,18 @@ export type Database = {
           kg_per_m: number | null
           kg_per_unit: number | null
           last_purchase_price: number | null
+          material_grade: string | null
           max_stock: number | null
           min_stock: number
           name: string
           note: string | null
+          pack_size: number | null
+          pack_unit: string | null
           po_template: string | null
           price_unit: string | null
           reorder_point: number | null
           reorder_qty: number | null
+          search_text: string | null
           shelf_location: string | null
           spec: string | null
           sub_group: string | null
@@ -4182,14 +4284,18 @@ export type Database = {
           kg_per_m?: number | null
           kg_per_unit?: number | null
           last_purchase_price?: number | null
+          material_grade?: string | null
           max_stock?: number | null
           min_stock?: number
           name: string
           note?: string | null
+          pack_size?: number | null
+          pack_unit?: string | null
           po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null
           reorder_qty?: number | null
+          search_text?: string | null
           shelf_location?: string | null
           spec?: string | null
           sub_group?: string | null
@@ -4210,14 +4316,18 @@ export type Database = {
           kg_per_m?: number | null
           kg_per_unit?: number | null
           last_purchase_price?: number | null
+          material_grade?: string | null
           max_stock?: number | null
           min_stock?: number
           name?: string
           note?: string | null
+          pack_size?: number | null
+          pack_unit?: string | null
           po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null
           reorder_qty?: number | null
+          search_text?: string | null
           shelf_location?: string | null
           spec?: string | null
           sub_group?: string | null

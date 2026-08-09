@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { PosManager } from './PosManager'
@@ -19,7 +20,7 @@ export default async function PlanningPosPage({
 }: {
   searchParams: Promise<{ view?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   const canApprove = user.role === 'admin' || user.role === 'manager'
   // `?view=<id>`: form soạn đơn redirect về đây sau khi LƯU NHÁP (0116) — mở
@@ -32,18 +33,28 @@ export default async function PlanningPosPage({
     productionRepo.listActive(),
   ])
 
-  // Tổng tiền từng PO (1 truy vấn gộp) — cho cột Giá trị.
-  const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
+  // Tổng tiền + tiến độ về kho theo dòng, mỗi thứ 1 truy vấn gộp — cột Giá trị
+  // và cột "Về kho x/y dòng" (0126).
+  const [totals, lineDone] = await Promise.all([
+    posRepo.totalsByPoIds(pos.map((p) => p.id)),
+    supplyRepo.lineDoneByPoIds(pos.map((p) => p.id)),
+  ])
 
   return (
     <PosManager
-      pos={pos.map((p) => ({ ...p, total: totals[p.id] ?? 0 }))}
+      pos={pos.map((p) => ({
+        ...p,
+        total: totals[p.id] ?? 0,
+        lines_done: lineDone.get(p.id)?.done ?? 0,
+        lines_total: lineDone.get(p.id)?.total ?? 0,
+      }))}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
       lsxs={lsxs.map((l) => ({
         id: l.id,
         code: l.code,
         order_codes: l.order_codes,
         customer_name: l.customer_name,
+        materials_due_at: l.materials_due_at,
       }))}
       canEdit={!!canEdit}
       canApprove={canApprove}

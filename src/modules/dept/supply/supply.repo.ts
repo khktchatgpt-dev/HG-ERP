@@ -41,7 +41,9 @@ export const supplyRepo = {
     const { data } = await db()
       .from('supply_purchase_orders')
       .select(
-        'id, code, status, supplier:supply_suppliers(name), lsx:production_orders(code)',
+        // FK đích danh — 0125 thêm bảng nối supply_po_extra_lsx nên embed
+        // production_orders không hint là mơ hồ, PostgREST trả rỗng.
+        'id, code, status, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code)',
       )
       .in('status', [...RECEIVABLE])
       .order('created_at', { ascending: false })
@@ -57,6 +59,30 @@ export const supplyRepo = {
         lsx_code: (lx as { code?: string } | null)?.code ?? null,
       }
     })
+  },
+
+  /**
+   * Tiến độ VỀ KHO theo DÒNG cho cả trang đơn — 1 truy vấn gộp, không N+1.
+   * Đếm dòng (xong = còn thiếu ≤ 0) chứ không cộng số lượng: 500 con + 3 kg là
+   * con số vô nghĩa. Nuôi cột "Về kho x/y dòng" của màn theo dõi (0126).
+   */
+  async lineDoneByPoIds(
+    ids: string[],
+  ): Promise<Map<string, { done: number; total: number }>> {
+    const out = new Map<string, { done: number; total: number }>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_line_status')
+      .select('po_id, qty_missing')
+      .in('po_id', ids.slice(0, 400))
+      .limit(10000)
+    for (const r of (data ?? []) as { po_id: string; qty_missing: unknown }[]) {
+      const cur = out.get(r.po_id) ?? { done: 0, total: 0 }
+      cur.total++
+      if (Number(r.qty_missing ?? 0) <= 0) cur.done++
+      out.set(r.po_id, cur)
+    }
+    return out
   },
 
   /** Dòng PO + đã nhận/còn thiếu — từ view supply_po_line_status (BR-08). */

@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
  * nhưng vào bằng URL vẫn xem được (không chặn quyền).
  */
 export default async function ProductionEntryPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   const [{ rows, workload, stages }, tracking] = await Promise.all([
     jobsService.overview(user),

@@ -164,7 +164,13 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
   })
 }
 
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders(code, order:sales_orders(code))`
+/*
+ * Embed LSX phải CHỈ ĐÍCH DANH FK: từ 0125 có bảng nối supply_po_extra_lsx nên
+ * giữa đơn đặt và production_orders tồn tại HAI đường quan hệ (FK trực tiếp +
+ * many-to-many qua bảng nối) — để PostgREST tự đoán là nó báo mơ hồ và TRẢ RỖNG,
+ * cả danh sách đơn biến mất (bug thật 09/08/2026, "tạo đơn xong không thấy đâu").
+ */
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code))`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -203,8 +209,23 @@ export const posRepo = {
       .order('created_at', { ascending: false })
     if (filter.status) q = q.eq('status', filter.status)
     if (filter.supplier_id) q = q.eq('supplier_id', filter.supplier_id)
-    if (filter.production_order_id)
-      q = q.eq('production_order_id', filter.production_order_id)
+    if (filter.production_order_id) {
+      /*
+       * Lọc theo LSX phải thấy CẢ đơn gộp (0125): đơn "LSX 2+3" có LSX chính là
+       * 2, nhưng người xem LSX 3 vẫn phải thấy nó — tra bảng LSX phụ trước rồi
+       * OR với cột chính.
+       */
+      const { data: ex } = await db()
+        .from('supply_po_extra_lsx')
+        .select('po_id')
+        .eq('production_order_id', filter.production_order_id)
+      const extraPoIds = ((ex ?? []) as { po_id: string }[]).map((r) => r.po_id)
+      q = extraPoIds.length
+        ? q.or(
+            `production_order_id.eq.${filter.production_order_id},id.in.(${extraPoIds.join(',')})`,
+          )
+        : q.eq('production_order_id', filter.production_order_id)
+    }
     if (filter.scope === 'lsx') q = q.not('production_order_id', 'is', null)
     if (filter.scope === 'standalone') q = q.is('production_order_id', null)
     if (filter.q) q = q.ilike('code', `%${filter.q}%`)
@@ -293,6 +314,33 @@ export const posRepo = {
       .maybeSingle()
     if (!data) return null
     return unwrap([data as Raw])[0]
+  },
+
+  /** LSX PHỤ gộp vào đơn (0125) — kèm mã để hiện lên chi tiết + phiếu in. */
+  async listExtraLsx(poId: string): Promise<{ id: string; code: string }[]> {
+    const { data } = await db()
+      .from('supply_po_extra_lsx')
+      .select('production_order_id, lsx:production_orders(code)')
+      .eq('po_id', poId)
+    type Row = {
+      production_order_id: string
+      lsx: { code: string } | { code: string }[] | null
+    }
+    return ((data ?? []) as Row[]).map((r) => {
+      const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
+      return { id: r.production_order_id, code: lx?.code ?? '?' }
+    })
+  },
+
+  /** Ghi lại bộ LSX phụ của đơn — xoá sạch rồi chèn, như replaceLines. */
+  async replaceExtraLsx(poId: string, lsxIds: string[]): Promise<void> {
+    const { error } = await db().from('supply_po_extra_lsx').delete().eq('po_id', poId)
+    if (error) throw new Error(error.message)
+    if (lsxIds.length === 0) return
+    const { error: e2 } = await db()
+      .from('supply_po_extra_lsx')
+      .insert(lsxIds.map((id) => ({ po_id: poId, production_order_id: id })))
+    if (e2) throw new Error(e2.message)
   },
 
   async listLines(poId: string): Promise<PoLine[]> {

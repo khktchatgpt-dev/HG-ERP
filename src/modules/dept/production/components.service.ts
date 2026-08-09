@@ -11,6 +11,7 @@ import {
   calcComponent,
   type MaterialNeed,
 } from '@/lib/component-needs'
+import type { MaterialAllocation } from '@/lib/po-allocation'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
 
@@ -268,6 +269,38 @@ export async function componentMaterialNeeds(
     material_name: infoByMat.get(a.material_id)?.name ?? '?',
     unit: infoByMat.get(a.material_id)?.unit ?? '',
   }))
+}
+
+/**
+ * PHÂN BỔ THEO SẢN PHẨM của từng vật tư (khoá = MÃ vật tư) — nguồn cho ghi chú
+ * "300 Bàn 65 gỗ (4c/sp)" trên dòng đơn đặt. Chỉ đọc từ bảng chi tiết; lệnh
+ * chưa nhập bảng → Map rỗng, caller fallback BOM (stock.service).
+ *
+ * Cùng một vật tư dùng cho NHIỀU chi tiết của cùng một SP (chân trước 2c + chân
+ * sau 2c) thì định mức cộng dồn thành 4c/sp — đúng con số sổ tay vẫn ghi.
+ */
+export async function componentAllocationByCode(
+  lsxId: string,
+): Promise<Map<string, MaterialAllocation[]>> {
+  const rows = await componentsRepo.listByLsx(lsxId)
+  const out = new Map<string, MaterialAllocation[]>()
+  if (rows.length === 0) return out
+  const orderLines = await lsxLinesRepo.listLines(lsxId)
+  const lineById = new Map(orderLines.map((l) => [l.id, l]))
+  for (const r of rows) {
+    if (!r.material_code) continue
+    const line = lineById.get(r.production_order_line_id)
+    if (!line || !(line.qty > 0)) continue
+    // Tên tiếng Việt hay nhiều dòng ("Bàn CNKG Santorin…\nKhung nhôm…") — ghi
+    // chú chỉ cần dòng đầu; thiếu tên thì dùng mã SP.
+    const label = (line.name_vi ?? '').trim().split('\n')[0] || line.product_code
+    const list = out.get(r.material_code) ?? []
+    const hit = list.find((a) => a.product === label)
+    if (hit) hit.per_unit = (hit.per_unit ?? 0) + r.qty_per_unit
+    else list.push({ product: label, qty: line.qty, per_unit: r.qty_per_unit || null })
+    if (!out.has(r.material_code)) out.set(r.material_code, list)
+  }
+  return out
 }
 
 export type { ComponentRow }

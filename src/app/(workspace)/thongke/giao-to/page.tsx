@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
  * tại tổ = giao − trả − đã làm (kể cả phế), đối chiếu tự tính.
  */
 export default async function TransfersPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [active, stages, allDepts, canRecord] = await Promise.all([
     productionRepo.listActive(),
     productionRepo.listStages(),

@@ -12,6 +12,11 @@ vi.mock('./orders.repo', () => ({
     patch: vi.fn(),
     insertChange: vi.fn(),
     listChanges: vi.fn(),
+    listShipments: vi.fn(),
+    shippedByLine: vi.fn(),
+    insertShipment: vi.fn(),
+    deleteShipment: vi.fn(),
+    findShipment: vi.fn(),
   },
 }))
 vi.mock('./quotes.service', () => ({
@@ -505,6 +510,96 @@ describe('ordersService.deliver — khép chuỗi (completed → delivered)', ()
     const manager = { id: 'u-gd', role: 'manager' } as never
     const out = await ordersService.deliver(manager, 'o1')
     expect(out.status).toBe('delivered')
+  })
+})
+
+/**
+ * Giao hàng từng phần (0120) — cột SHIPMENT/ĐÃ XUẤT/CÒN của sổ đơn thật.
+ */
+describe('ordersService.recordShipment', () => {
+  const LINE = {
+    id: 'line1',
+    product_id: 'p1',
+    product_code: 'SP1',
+    product_unit: 'cái',
+    qty: 100,
+  }
+
+  beforeEach(() => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(ORDER as never)
+    vi.mocked(ordersRepo.listLines).mockResolvedValue([LINE] as never)
+    vi.mocked(ordersRepo.shippedByLine).mockResolvedValue({ line1: 30 })
+  })
+
+  it('ghi trong hạn mức còn lại → insert + lịch sử type shipment', async () => {
+    await ordersService.recordShipment(sales, 'o1', {
+      order_line_id: 'line1',
+      qty: 70,
+      note: 'cont TCLU123',
+    })
+    expect(ordersRepo.insertShipment).toHaveBeenCalledWith(
+      expect.objectContaining({ order_id: 'o1', order_line_id: 'line1', qty: 70 }),
+    )
+    const change = vi.mocked(ordersRepo.insertChange).mock.calls[0][0]
+    expect(change.change).toMatchObject({ type: 'shipment' })
+  })
+
+  it('xuất quá số còn lại (100 − 30 = 70) → 400, không insert', async () => {
+    await expect(
+      ordersService.recordShipment(sales, 'o1', { order_line_id: 'line1', qty: 71 }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(ordersRepo.insertShipment).not.toHaveBeenCalled()
+  })
+
+  it('dòng không thuộc đơn → 404', async () => {
+    await expect(
+      ordersService.recordShipment(sales, 'o1', { order_line_id: 'line-la', qty: 1 }),
+    ).rejects.toMatchObject({ status: 404 })
+  })
+
+  it('đơn đã giao (delivered) bất biến → 400', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      status: 'delivered',
+    } as never)
+    await expect(
+      ordersService.recordShipment(sales, 'o1', { order_line_id: 'line1', qty: 1 }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('sale khác (không phải chủ đơn) → 403', async () => {
+    const sale2 = { id: 'u-sale2', role: 'employee', department_id: 'd-sales' } as never
+    await expect(
+      ordersService.recordShipment(sale2, 'o1', { order_line_id: 'line1', qty: 1 }),
+    ).rejects.toMatchObject({ status: 403 })
+  })
+})
+
+describe('ordersService.removeShipment', () => {
+  it('gỡ đợt xuất của đúng đơn → delete + lịch sử', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(ORDER as never)
+    vi.mocked(ordersRepo.findShipment).mockResolvedValue({
+      id: 's1',
+      order_id: 'o1',
+      qty: 10,
+      shipped_at: '2026-08-07',
+    } as never)
+    await ordersService.removeShipment(sales, 'o1', 's1')
+    expect(ordersRepo.deleteShipment).toHaveBeenCalledWith('s1')
+    const change = vi.mocked(ordersRepo.insertChange).mock.calls[0][0]
+    expect(change.change).toMatchObject({ type: 'shipment_removed' })
+  })
+
+  it('đợt xuất thuộc đơn khác → 404, không xoá', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(ORDER as never)
+    vi.mocked(ordersRepo.findShipment).mockResolvedValue({
+      id: 's1',
+      order_id: 'o-khac',
+    } as never)
+    await expect(ordersService.removeShipment(sales, 'o1', 's1')).rejects.toMatchObject({
+      status: 404,
+    })
+    expect(ordersRepo.deleteShipment).not.toHaveBeenCalled()
   })
 })
 

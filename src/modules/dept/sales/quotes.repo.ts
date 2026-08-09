@@ -215,6 +215,30 @@ export const quotesRepo = {
       .eq('quote_id', quoteId)
     return count ?? 0
   },
+
+  /** Số dòng SP theo từng báo giá — cột "SP" của sổ báo giá (một query cho cả trang). */
+  async lineCountByQuoteIds(ids: string[]): Promise<Map<string, number>> {
+    const m = new Map<string, number>()
+    if (ids.length === 0) return m
+    const { data } = await db()
+      .from('sales_quote_lines')
+      .select('quote_id')
+      .in('quote_id', ids)
+    for (const r of (data ?? []) as { quote_id: string }[]) {
+      m.set(r.quote_id, (m.get(r.quote_id) ?? 0) + 1)
+    }
+    return m
+  },
+
+  /** Tên người lập theo user ids — dòng phụ "tạo … bởi …" của sổ báo giá. */
+  async ownerNamesByIds(ids: string[]): Promise<Map<string, string>> {
+    const m = new Map<string, string>()
+    const uniq = [...new Set(ids)]
+    if (uniq.length === 0) return m
+    const { data } = await db().from('users').select('id, name').in('id', uniq)
+    for (const r of (data ?? []) as { id: string; name: string }[]) m.set(r.id, r.name)
+    return m
+  },
 }
 
 /** Dòng báo giá + đủ thuộc tính SP để in mẫu Quotation (packing, mô tả EN). */

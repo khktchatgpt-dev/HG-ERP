@@ -800,7 +800,12 @@ export function LsxSheetEditor({
                                   </div>
                                   <label className={fieldLabel}>
                                     Ghi chú
-                                    <Input
+                                    {/* Textarea tự giãn (field-sizing-content):
+                                        ghi chú thật hay dài cả đoạn — input 1
+                                        dòng che mất phần sau, nhìn lại tưởng
+                                        ghi chú ngắn. */}
+                                    <Textarea
+                                      rows={1}
                                       value={l.note ?? ''}
                                       onChange={(e) =>
                                         patchLine(g._key, l._key, {
@@ -808,7 +813,7 @@ export function LsxSheetEditor({
                                         })
                                       }
                                       disabled={!canEdit}
-                                      className={`${cellInput} bg-card`}
+                                      className="bg-card min-h-8 px-2 py-1.5 text-xs"
                                     />
                                   </label>
                                 </div>

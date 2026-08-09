@@ -47,7 +47,7 @@ export function hasNoSpec(p: ProductPick): boolean {
 }
 
 const cls =
-  'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-2 py-1.5 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
 /**
  * Bổ sung quy cách cho SP ĐÃ CÓ trong thư viện, ngay tại dòng báo giá.

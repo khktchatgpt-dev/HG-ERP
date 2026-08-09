@@ -98,14 +98,25 @@ export type WorkspaceConfig = {
 }
 
 // ── Nav "Cá nhân" chung, tự thêm ở đầu mỗi workspace ──────────────────────
+// Icon là TÊN trong registry `components/workspace/nav-icons.tsx` (lucide) —
+// chuỗi để serialize được qua ranh giới server→client; tên lạ ra chấm tròn.
+
+/**
+ * TẠM ẨN mục "Cá nhân" cho TOÀN BỘ workspace (yêu cầu 08/08/2026) — các trang
+ * tổng quan/kế hoạch/công việc/nghỉ phép chưa đưa vào dùng, để trên sidebar chỉ
+ * gây tò mò bấm nhầm. Muốn bật lại: đổi về `false` (các route vẫn sống, ai có
+ * link vẫn vào được — chỉ ẩn khỏi điều hướng).
+ */
+export const HIDE_PERSONAL_SECTION_GLOBALLY = true
+
 export const PERSONAL_SECTION: NavSection = {
   heading: 'Cá nhân',
   items: [
-    { href: '/', label: 'Tổng quan', icon: '◧' },
-    { href: '/plan', label: 'Kế hoạch', icon: '☷' },
-    { href: '/tasks', label: 'Công việc', icon: '◐' },
-    { href: '/hr/leave/mine', label: 'Đơn nghỉ phép', icon: '☰' },
-    { href: '/notifications', label: 'Thông báo', icon: '◔' },
+    { href: '/', label: 'Tổng quan', icon: 'home' },
+    { href: '/plan', label: 'Kế hoạch', icon: 'calendar-range' },
+    { href: '/tasks', label: 'Công việc', icon: 'list-todo' },
+    { href: '/hr/leave/mine', label: 'Đơn nghỉ phép', icon: 'calendar-off' },
+    { href: '/notifications', label: 'Thông báo', icon: 'bell' },
   ],
 } as const
 
@@ -119,7 +130,8 @@ export const PERSONAL_SECTION: NavSection = {
  */
 export const SHARED_SECTION: NavSection = {
   heading: 'Dùng chung',
-  items: [{ href: '/products', label: 'Thư viện sản phẩm', icon: '◇' }],
+  // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
+  items: [{ href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' }],
 } as const
 
 // ── Config từng workspace ─────────────────────────────────────────────────
@@ -138,22 +150,22 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Sales',
         items: [
-          { href: '/sales', label: 'Trang chủ', icon: '◧' },
-          { href: '/sales/customers', label: 'Khách hàng', icon: '◍' },
-          { href: '/sales/quotes', label: 'Báo giá', icon: '▤' },
-          { href: '/sales/orders', label: 'Đơn hàng', icon: '◫' },
-          { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: '◎' },
+          { href: '/sales', label: 'Trang chủ', icon: 'home' },
+          { href: '/sales/customers', label: 'Khách hàng', icon: 'users' },
+          { href: '/sales/quotes', label: 'Báo giá', icon: 'file-text' },
+          { href: '/sales/orders', label: 'Đơn hàng', icon: 'clipboard-list' },
+          { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
       },
       {
         heading: 'Quản lý',
         items: [
           // Đội nhóm / Báo cáo dùng chung trang quản lý (chưa có bản riêng cho Sales).
-          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          { href: '/team', label: 'Đội nhóm', icon: 'users-round', requireHead: true },
           {
             href: '/reports/weekly',
             label: 'Báo cáo',
-            icon: '☰',
+            icon: 'chart-column',
             roles: ['manager', 'admin'],
           },
         ],
@@ -174,19 +186,19 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Kế toán',
         items: [
-          { href: '/finance', label: 'Trang chủ', icon: '◧' },
-          { href: '/finance/invoices', label: 'Hoá đơn', icon: '₫' },
+          { href: '/finance', label: 'Trang chủ', icon: 'home' },
+          { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
         ],
       },
       {
         heading: 'Quản lý',
         items: [
           // Dùng chung trang quản lý (chưa có bản riêng cho Finance).
-          { href: '/team', label: 'Đội nhóm', icon: '◑', requireHead: true },
+          { href: '/team', label: 'Đội nhóm', icon: 'users-round', requireHead: true },
           {
             href: '/reports/weekly',
             label: 'Báo cáo',
-            icon: '☰',
+            icon: 'chart-column',
             roles: ['manager', 'admin'],
           },
         ],
@@ -206,11 +218,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Kho',
         items: [
-          { href: '/warehouse', label: 'Trang chủ', icon: '◧' },
-          { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: '▥' },
-          { href: '/warehouse/stock', label: 'Tồn kho', icon: '▦' },
-          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: '▧' },
-          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: '▤' },
+          { href: '/warehouse', label: 'Trang chủ', icon: 'home' },
+          { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: 'receipt-text' },
+          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
+          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: 'clipboard-check' },
+          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
     ],
@@ -228,11 +240,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Kỹ thuật',
         items: [
-          { href: '/technical', label: 'Trang chủ', icon: '◧' },
+          { href: '/technical', label: 'Trang chủ', icon: 'home' },
           // "Thư viện sản phẩm" đã chuyển sang SHARED_SECTION (/products) —
           // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
-          { href: '/technical/showroom', label: 'Mẫu showroom', icon: '▦' },
-          { href: '/technical/load-cont', label: 'Tính load cont', icon: '▣' },
+          { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
+          { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },
         ],
       },
     ],
@@ -252,10 +264,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Thu mua',
         items: [
-          { href: '/planning', label: 'Trang chủ', icon: '◧' },
-          { href: '/planning/pos', label: 'Quản lý đơn đặt hàng', icon: '▩' },
-          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: '▤' },
-          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◒' },
+          { href: '/planning', label: 'Trang chủ', icon: 'home' },
+          { href: '/planning/pos', label: 'Quản lý đơn đặt hàng', icon: 'shopping-cart' },
+          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: 'package' },
+          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: 'truck' },
         ],
       },
       {
@@ -267,8 +279,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         // /production/shaping — 0084): planner chuyển sang ws Sản xuất để lên
         // kế hoạch. Ở đây chỉ giữ view phục vụ mua/đặt vật tư.
         items: [
-          { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: '◎' },
-          { href: '/planning/docs', label: 'Phiếu kho', icon: '▥' },
+          { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: 'route' },
+          { href: '/planning/docs', label: 'Phiếu kho', icon: 'receipt-text' },
         ],
       },
     ],
@@ -285,7 +297,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     sections: [
       {
         heading: 'QC',
-        items: [{ href: '/qc', label: 'Trang chủ', icon: '◧' }],
+        items: [{ href: '/qc', label: 'Trang chủ', icon: 'home' }],
       },
     ],
   },
@@ -304,7 +316,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     sections: [
       {
         heading: 'Điều hành xưởng',
-        items: [{ href: '/production', label: 'Toàn cảnh xưởng', icon: '◧' }],
+        items: [{ href: '/production', label: 'Toàn cảnh xưởng', icon: 'factory' }],
       },
     ],
   },
@@ -322,9 +334,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Tổ của tôi',
         items: [
-          { href: '/to', label: 'Việc của tổ', icon: '▤' },
-          { href: '/to/lenh', label: 'Lệnh đang chạy', icon: '◧' },
-          { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: '☷' },
+          { href: '/to', label: 'Việc của tổ', icon: 'hammer' },
+          { href: '/to/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
+          { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: 'history' },
         ],
       },
     ],
@@ -343,13 +355,17 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Thống kê',
         items: [
-          { href: '/thongke', label: 'Sổ số liệu', icon: '☷' },
-          { href: '/thongke/giao-to', label: 'Giao tổ', icon: '⇥' },
-          { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: '▥' },
-          { href: '/thongke/gia-cong', label: 'Gia công ngoài', icon: '⇄' },
-          { href: '/thongke/so-tong', label: 'Sổ tổng', icon: '▦' },
-          { href: '/thongke/bao-cao', label: 'Báo cáo tháng', icon: '⎙' },
-          { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: '◧' },
+          { href: '/thongke', label: 'Sổ số liệu', icon: 'notebook-pen' },
+          { href: '/thongke/giao-to', label: 'Giao tổ', icon: 'arrow-right-to-line' },
+          { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: 'shapes' },
+          {
+            href: '/thongke/gia-cong',
+            label: 'Gia công ngoài',
+            icon: 'arrow-left-right',
+          },
+          { href: '/thongke/so-tong', label: 'Sổ tổng', icon: 'table' },
+          { href: '/thongke/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
+          { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
         ],
       },
     ],
@@ -368,8 +384,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Kế hoạch',
         items: [
-          { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: '◈' },
-          { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: '◧' },
+          { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: 'calendar-range' },
+          { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
         ],
       },
     ],
@@ -388,8 +404,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Nhân sự',
         items: [
-          { href: '/hr', label: 'Trang chủ', icon: '◧' },
-          { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: '✓' },
+          { href: '/hr', label: 'Trang chủ', icon: 'home' },
+          { href: '/hr/leave', label: 'Duyệt nghỉ phép', icon: 'calendar-check' },
         ],
       },
     ],
@@ -409,15 +425,16 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           // Gỡ "Báo cáo CEO" (07/2026, GĐ chốt) — trang đích /exec redirect sang
           // Tháp điều hành (COO real-time). Route workspace vẫn /exec.
-          { href: '/exec/ops', label: 'Tháp điều hành', icon: '▣' },
+          { href: '/exec/ops', label: 'Tháp điều hành', icon: 'tower-control' },
           // Tiến độ sản xuất của GĐ (07/2026): kanban toàn bộ LSX theo công đoạn
           // dây chuyền — nút thắt/hạn giao/năng suất/chất lượng. Chỉ xem.
-          { href: '/exec/production', label: 'Tiến độ sản xuất', icon: '▦' },
+          { href: '/exec/production', label: 'Tiến độ sản xuất', icon: 'factory' },
           // Quản lý đơn hàng của GĐ (07/2026): sổ đơn theo giá trị/hạn giao +
           // tiến độ SX từng đơn, duyệt LSX tại chỗ. Thay màn "Theo dõi đơn hàng"
           // cũ (chỉ mượn TrackingScreen của Sales) — bản mới bao trùm cả 2 lớp.
-          { href: '/exec/orders', label: 'Quản lý đơn hàng', icon: '◫' },
-          { href: '/exec/approvals', label: 'Phê duyệt', icon: '✓' },
+          { href: '/exec/orders', label: 'Quản lý đơn hàng', icon: 'clipboard-list' },
+          // Stamp = con dấu — phê duyệt của Giám đốc đúng nghĩa đóng dấu.
+          { href: '/exec/approvals', label: 'Phê duyệt', icon: 'stamp' },
         ],
       },
     ],
@@ -436,19 +453,24 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Quản trị',
         items: [
-          { href: '/admin', label: 'Tổng quan', icon: '◧', roles: ['admin'] },
-          { href: '/admin/users', label: 'Người dùng', icon: '◍', roles: ['admin'] },
-          { href: '/admin/departments', label: 'Phòng ban', icon: '◑', roles: ['admin'] },
+          { href: '/admin', label: 'Tổng quan', icon: 'home', roles: ['admin'] },
+          { href: '/admin/users', label: 'Người dùng', icon: 'users', roles: ['admin'] },
+          {
+            href: '/admin/departments',
+            label: 'Phòng ban',
+            icon: 'building-2',
+            roles: ['admin'],
+          },
           {
             href: '/admin/permissions',
             label: 'Phân quyền',
-            icon: '⚷',
+            icon: 'key-round',
             roles: ['admin'],
           },
           {
             href: '/admin/catalogs',
             label: 'Danh mục dùng chung',
-            icon: '▤',
+            icon: 'library',
             roles: ['admin'],
           },
           // "Nguyên nhân lỗi SX" (/admin/defect-codes) đã gỡ khỏi nav: bảng
@@ -457,16 +479,21 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',
-            icon: '☰',
+            icon: 'scroll-text',
             roles: ['admin'],
           },
           {
             href: '/admin/health',
             label: 'Sức khoẻ hệ thống',
-            icon: '♥',
+            icon: 'heart-pulse',
             roles: ['admin'],
           },
-          { href: '/admin/settings', label: 'Cấu hình', icon: '⚙', roles: ['admin'] },
+          {
+            href: '/admin/settings',
+            label: 'Cấu hình',
+            icon: 'settings',
+            roles: ['admin'],
+          },
         ],
       },
     ],
@@ -495,7 +522,9 @@ export function resolveNavSections(
   ctx: { role: string; isHead: boolean; capabilities?: ReadonlySet<string> },
 ): NavSection[] {
   return [
-    ...(workspace.hidePersonalSection ? [] : [PERSONAL_SECTION]),
+    ...(HIDE_PERSONAL_SECTION_GLOBALLY || workspace.hidePersonalSection
+      ? []
+      : [PERSONAL_SECTION]),
     ...workspace.sections.map((s) => ({
       heading: s.heading,
       items: s.items.filter((i) => itemVisible(i, ctx)),
@@ -504,7 +533,11 @@ export function resolveNavSections(
   ].filter((s) => s.items.length > 0)
 }
 
-/** Tailwind class map cho accent — dùng ở Topbar, Sidebar highlight, badge. */
+/**
+ * Tailwind class map cho accent — dùng ở Topbar, Sidebar highlight, badge.
+ * `bgSoft`/`text` kèm dark-variant vì shell dùng chúng trên nền token (bg-card
+ * tự đảo sáng/tối): màu -50 trên nền tối chói như đèn pha, phải lùi về -950/40.
+ */
 export const ACCENT_CLASSES: Record<
   WorkspaceConfig['accent'],
   {
@@ -517,71 +550,71 @@ export const ACCENT_CLASSES: Record<
 > = {
   orange: {
     bg: 'bg-orange-500',
-    bgSoft: 'bg-orange-50',
-    text: 'text-orange-600',
+    bgSoft: 'bg-orange-50 dark:bg-orange-950/40',
+    text: 'text-orange-600 dark:text-orange-400',
     border: 'border-orange-500',
     ring: 'ring-orange-500',
   },
   emerald: {
     bg: 'bg-emerald-500',
-    bgSoft: 'bg-emerald-50',
-    text: 'text-emerald-600',
+    bgSoft: 'bg-emerald-50 dark:bg-emerald-950/40',
+    text: 'text-emerald-600 dark:text-emerald-400',
     border: 'border-emerald-500',
     ring: 'ring-emerald-500',
   },
   amber: {
     bg: 'bg-amber-500',
-    bgSoft: 'bg-amber-50',
-    text: 'text-amber-700',
+    bgSoft: 'bg-amber-50 dark:bg-amber-950/40',
+    text: 'text-amber-700 dark:text-amber-400',
     border: 'border-amber-500',
     ring: 'ring-amber-500',
   },
   sky: {
     bg: 'bg-sky-500',
-    bgSoft: 'bg-sky-50',
-    text: 'text-sky-600',
+    bgSoft: 'bg-sky-50 dark:bg-sky-950/40',
+    text: 'text-sky-600 dark:text-sky-400',
     border: 'border-sky-500',
     ring: 'ring-sky-500',
   },
   violet: {
     bg: 'bg-violet-500',
-    bgSoft: 'bg-violet-50',
-    text: 'text-violet-600',
+    bgSoft: 'bg-violet-50 dark:bg-violet-950/40',
+    text: 'text-violet-600 dark:text-violet-400',
     border: 'border-violet-500',
     ring: 'ring-violet-500',
   },
   slate: {
     bg: 'bg-slate-500',
-    bgSoft: 'bg-slate-100',
-    text: 'text-slate-600',
+    bgSoft: 'bg-slate-100 dark:bg-slate-800/60',
+    text: 'text-slate-600 dark:text-slate-300',
     border: 'border-slate-500',
     ring: 'ring-slate-500',
   },
   red: {
     bg: 'bg-red-600',
-    bgSoft: 'bg-red-50',
-    text: 'text-red-600',
+    bgSoft: 'bg-red-50 dark:bg-red-950/40',
+    text: 'text-red-600 dark:text-red-400',
     border: 'border-red-600',
     ring: 'ring-red-600',
   },
   yellow: {
     bg: 'bg-yellow-500',
-    bgSoft: 'bg-yellow-50',
-    text: 'text-yellow-700',
+    bgSoft: 'bg-yellow-50 dark:bg-yellow-950/40',
+    text: 'text-yellow-700 dark:text-yellow-400',
     border: 'border-yellow-500',
     ring: 'ring-yellow-500',
   },
   zinc: {
     bg: 'bg-zinc-800',
-    bgSoft: 'bg-zinc-100',
-    text: 'text-zinc-800',
+    bgSoft: 'bg-zinc-100 dark:bg-zinc-800/60',
+    text: 'text-zinc-800 dark:text-zinc-300',
     border: 'border-zinc-800',
     ring: 'ring-zinc-800',
   },
   purple: {
     bg: 'bg-purple-600',
-    bgSoft: 'bg-purple-50',
-    text: 'text-purple-600',
+    bgSoft: 'bg-purple-50 dark:bg-purple-950/40',
+    text: 'text-purple-600 dark:text-purple-400',
     border: 'border-purple-600',
     ring: 'ring-purple-600',
   },

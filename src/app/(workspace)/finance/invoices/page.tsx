@@ -20,7 +20,7 @@ export default async function FinanceInvoicesPage({
     page?: string
   }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const allowed = user.role === 'admin' || (await isAccountingStaff(user))
   if (!allowed) redirect('/')
 

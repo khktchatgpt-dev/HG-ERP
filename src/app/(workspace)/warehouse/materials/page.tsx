@@ -20,7 +20,7 @@ export default async function MaterialsPage({
   searchParams: Promise<{ q?: string; group?: string; page?: string }>
 }) {
   const sp = await searchParams
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const isWh = await isWarehouseUser(user)
   const canEdit = user.role === 'admin' || (user.role === 'manager' && isWh)
 

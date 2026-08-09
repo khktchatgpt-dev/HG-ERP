@@ -11,6 +11,11 @@ export type Need = {
   qty_needed: number
   available: number
   suggest: number
+  /**
+   * Phân bổ theo SP (0125) — "300 Bàn 65 gỗ, đm 4c/sp". Đổ sẵn vào ô Ghi chú
+   * của dòng khi thêm từ nhu cầu, đúng lối ghi tay trong sổ Cung ứng.
+   */
+  breakdown?: { product: string; qty: number; per_unit: number | null }[]
 }
 
 const num = (n: number) => n.toLocaleString('vi-VN')
@@ -38,6 +43,9 @@ export function NeedsPanel({
   onToggle: () => void
   onAdd: (list: Need[]) => void
 }) {
+  // LSX không có BOM (0/0) thì panel không nói được gì — một dải "0 vật tư cần
+  // mua / 0 trong BOM" chỉ chiếm chỗ giữa hai vùng đang làm việc thật.
+  if (!loading && needs.length === 0) return null
   return (
     <section className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20">
       <div className="flex items-center gap-2 px-3.5 py-2.5 text-[13px]">
@@ -46,7 +54,7 @@ export function NeedsPanel({
           aria-hidden
         />
         <b>Nhu cầu từ BOM của LSX</b>
-        <span className="text-zinc-500 dark:text-zinc-400">
+        <span className="text-muted-foreground">
           {loading
             ? 'đang tải…'
             : `${pending.length} vật tư cần mua / ${needs.length} trong BOM`}
@@ -79,11 +87,11 @@ export function NeedsPanel({
                 <div className="truncate text-xs font-semibold" title={n.material_name}>
                   {n.material_name}
                 </div>
-                <div className="font-mono text-[10px] text-zinc-400">
+                <div className="text-muted-foreground font-mono text-[10px]">
                   {n.material_code} · cần {num(n.qty_needed)} · KD {num(n.available)}
                 </div>
               </div>
-              <div className="shrink-0 text-right text-[10px] text-zinc-400">
+              <div className="text-muted-foreground shrink-0 text-right text-[10px]">
                 đề xuất
                 <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
                   {num(n.suggest)} {n.unit}
@@ -100,7 +108,7 @@ export function NeedsPanel({
             </div>
           ))}
           {pending.length > 24 && (
-            <p className="col-span-full text-[11px] text-zinc-400">
+            <p className="text-muted-foreground col-span-full text-[11px]">
               … và {pending.length - 24} vật tư nữa — dùng “Thêm tất cả” hoặc gõ tìm ở
               dòng cuối bảng.
             </p>

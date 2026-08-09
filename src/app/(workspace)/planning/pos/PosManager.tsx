@@ -58,6 +58,9 @@ export type Po = {
   order_code: string | null
   // Tổng tiền (Σ dòng) — bơm từ page cho cột Giá trị ở danh sách.
   total?: number
+  /** Tiến độ về kho theo DÒNG (0126) — bơm từ page, cột "Về kho x/y dòng". */
+  lines_done?: number
+  lines_total?: number
 }
 
 export type PoLine = {
@@ -246,6 +249,14 @@ export function PosManager({
     } finally {
       setBusy(false)
     }
+  }
+
+  /** Đặt "Hạn VT phải về" của lệnh (0126) — ô sổ Tổng hợp ĐH, sửa ngay tại đầu nhóm. */
+  async function setMaterialsDue(lsxId: string, date: string | null) {
+    const ok = await send(`/api/dept/production/lsx/${lsxId}/materials-due`, 'PATCH', {
+      materials_due_at: date,
+    })
+    if (ok) toast.success(date ? 'Đã đặt hạn vật tư phải về' : 'Đã xoá hạn vật tư')
   }
 
   async function openView(po: Po) {
@@ -685,6 +696,7 @@ export function PosManager({
             statusTone={(p) => STATUS_TONE[p.status]}
             onView={(p) => void openView(p)}
             renderActions={rowMenuFor}
+            onSetDue={(lsxId, date) => void setMaterialsDue(lsxId, date)}
           />
         ) : (
           <DataTable<Po>

@@ -24,6 +24,8 @@ export type PoHeader = {
   template: PoTemplate
   poType: 'lsx' | 'standalone'
   lsxId: string
+  /** LSX PHỤ gộp thêm vào đơn (0125) — "LSX 01+2+3/26-27". */
+  extraLsxIds: string[]
   supplierId: string
   expectedAt: string
   contractNo: string
@@ -111,6 +113,7 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
   const { discountAmount } = poTotals(header, lines)
   return {
     production_order_id: header.poType === 'lsx' ? header.lsxId : null,
+    extra_lsx_ids: header.poType === 'lsx' ? header.extraLsxIds : [],
     supplier_id: header.supplierId,
     template: header.template,
     currency: header.currency,

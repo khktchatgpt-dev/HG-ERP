@@ -22,6 +22,8 @@ export type LsxRef = {
   /** Mã các đơn của lệnh (0113 — một lệnh gộp nhiều đơn). */
   order_codes: string[]
   customer_name: string
+  /** Hạn VẬT TƯ phải về (0126) — đèn "Kịp SX?" so với mốc này. */
+  materials_due_at: string | null
 }
 
 export type PoGroup = {
@@ -30,6 +32,10 @@ export type PoGroup = {
   lsx_code: string
   order_code: string | null
   customer_name: string | null
+  /** id LSX thật (đặt hạn được) — null với nhóm ngoài LSX / lệnh đã đóng. */
+  lsx_id: string | null
+  /** Hạn VẬT TƯ phải về của lệnh (0126). */
+  materials_due_at: string | null
   pos: Po[]
   /** Cộng sẵn cho đầu nhóm — người dùng khỏi tự nhẩm. */
   total: number
@@ -49,6 +55,8 @@ function emptyGroup(key: string, lsx_code: string): PoGroup {
     lsx_code,
     order_code: null,
     customer_name: null,
+    lsx_id: null,
+    materials_due_at: null,
     pos: [],
     total: 0,
     currency: 'VND',
@@ -105,7 +113,10 @@ export function groupPosByLsx(
     const l = lsxById.get(g.key)
     if (l) {
       g.customer_name = l.customer_name
-      g.order_code = g.order_code ?? (l.order_codes.join(", ") || null)
+      g.order_code = g.order_code ?? (l.order_codes.join(', ') || null)
+      // Hạn VT phải về (0126) — đèn "Kịp SX?" của từng đơn trong nhóm so mốc này.
+      g.lsx_id = l.id
+      g.materials_due_at = l.materials_due_at
     }
   }
 

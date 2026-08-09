@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
  * per-LSX (append-only); phế = số + lý do text tự do.
  */
 export default async function LogbookPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [active, stages, dept, allDepts] = await Promise.all([
     productionRepo.listActive(),
     productionRepo.listStages(),

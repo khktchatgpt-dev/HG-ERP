@@ -9,7 +9,7 @@ import { OrderForm } from '@/components/sales/OrderForm'
 
 /** Trang riêng tạo đơn hàng (thay modal chật) — bố cục rộng, có tạo nhanh SP. */
 export default async function NewOrderPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const dept = user.department_id
     ? await departmentsRepo.findById(user.department_id)
     : null

@@ -8,7 +8,7 @@ import { OpsTower } from './OpsTower'
  * cung ứng, sự cố xử lý tại chỗ. Layout exec đã gate manager/admin.
  */
 export default async function OpsTowerPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const data = await opsService.opsTower(user)
   return <OpsTower data={data} />
 }

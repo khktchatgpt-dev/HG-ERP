@@ -3,10 +3,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft } from 'lucide-react'
 import { Badge } from '@/components/Badge'
+import { Button } from '@/components/shadcn/button'
+import {
+  Card as UiCard,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from '@/components/shadcn/card'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { QuickAddProduct, type QuickProduct } from '@/components/sales/QuickAddProduct'
 import {
@@ -58,8 +65,12 @@ type LineRow = {
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
 const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
 
+/*
+ * Lớp ô nhập dùng chung — CÙNG token với OrderForm (`.theme-v2`, bám
+ * `components/shadcn/input.tsx`) để form báo giá và form đơn nhìn như một.
+ */
 const cls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
 
 /** Giá đã báo cho ĐÚNG khách này, theo SP — dùng để tự điền đơn giá. */
 async function fetchLastPrices(
@@ -293,25 +304,28 @@ export function QuoteForm(props: {
   const backHref = mode === 'edit' ? `/sales/quotes/${initial!.id}` : '/sales/quotes'
 
   return (
-    <div className="flex flex-col gap-5 pb-4">
+    <div className="theme-v2 text-foreground flex flex-col gap-5 pb-4">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Kinh doanh', href: '/sales' },
-          { label: 'Báo giá', href: '/sales/quotes' },
-          { label: mode === 'create' ? 'Lập báo giá' : `Sửa ${initial!.code}` },
-        ]}
-        title={mode === 'create' ? 'Lập báo giá' : `Sửa báo giá ${initial!.code}`}
-        description="Báo giá chào theo đơn giá + quy cách sản phẩm. Số lượng nhập ở bước tạo đơn hàng."
-        actions={
-          <Link
-            href={backHref}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-          >
-            ← Huỷ
-          </Link>
-        }
-      />
+
+      {/* Đầu trang v2 — khớp OrderForm: một đường về + tiêu đề, bỏ breadcrumb 3 cấp. */}
+      <div className="flex flex-col gap-3">
+        <Link
+          href={backHref}
+          className="text-muted-foreground hover:text-foreground inline-flex w-fit items-center gap-1 text-xs"
+        >
+          <ArrowLeft className="size-3.5" />
+          {mode === 'edit' ? initial!.code : 'Báo giá'}
+        </Link>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {mode === 'create' ? 'Lập báo giá' : `Sửa báo giá ${initial!.code}`}
+          </h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Báo giá chào theo đơn giá + quy cách sản phẩm. Số lượng nhập ở bước tạo đơn
+            hàng.
+          </p>
+        </div>
+      </div>
 
       {/* 1. Khách hàng & điều khoản */}
       <Card title="Khách hàng & điều khoản">
@@ -409,7 +423,7 @@ export function QuoteForm(props: {
         }
       >
         {lines.length === 0 ? (
-          <p className="rounded-md border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400 dark:border-zinc-700">
+          <p className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-sm">
             Chưa có dòng nào — bấm <b>“+ Chọn SP có sẵn”</b> bên dưới.
           </p>
         ) : (
@@ -443,10 +457,7 @@ export function QuoteForm(props: {
               const mine = l.productId ? lastPrices.get(l.productId) : undefined
               const market = l.productId ? marketPrices.get(l.productId) : undefined
               return (
-                <div
-                  key={l.key}
-                  className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
-                >
+                <div key={l.key} className="rounded-lg border p-3">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <ProductPicker
@@ -466,7 +477,7 @@ export function QuoteForm(props: {
                         }}
                       />
                       {p && (
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                           <span className="font-mono">{p.code}</span>
                           <Badge tone={BOM_TONE[p.bom_status]}>
                             {BOM_LABEL[p.bom_status]}
@@ -487,7 +498,7 @@ export function QuoteForm(props: {
                     <button
                       type="button"
                       onClick={() => removeLine(l.key)}
-                      className="shrink-0 rounded p-1.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                      className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
                       aria-label="Xoá dòng"
                     >
                       ✕
@@ -496,10 +507,10 @@ export function QuoteForm(props: {
 
                   {/* Quy cách đầy đủ (read-only từ thư viện Kỹ thuật) */}
                   {p && (
-                    <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md bg-zinc-50 p-2.5 text-xs sm:grid-cols-4 dark:bg-zinc-900/50">
+                    <div className="bg-muted/40 mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 rounded-md p-2.5 text-xs sm:grid-cols-4">
                       {specs.map(([label, val]) => (
                         <div key={label} className="flex flex-col">
-                          <span className="text-[10px] font-medium tracking-wide text-zinc-400 uppercase">
+                          <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
                             {label}
                           </span>
                           <span
@@ -563,7 +574,7 @@ export function QuoteForm(props: {
                   </div>
 
                   {(mine || market) && (
-                    <div className="mt-1.5 flex flex-wrap gap-x-3 text-[11px] text-zinc-400">
+                    <div className="text-muted-foreground mt-1.5 flex flex-wrap gap-x-3 text-[11px]">
                       {mine && (
                         <span>
                           Khách này: <b>{mine.unit_price.toLocaleString('en-US')}</b> (
@@ -588,7 +599,7 @@ export function QuoteForm(props: {
           <button
             type="button"
             onClick={addExistingLine}
-            className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium"
           >
             + Chọn SP có sẵn
           </button>
@@ -596,10 +607,10 @@ export function QuoteForm(props: {
         </div>
       </Card>
 
-      {/* Thanh hành động sticky */}
-      <div className="sticky bottom-3 z-10 rounded-lg border border-zinc-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+      {/* Thanh hành động sticky — cùng khối với OrderForm. */}
+      <div className="bg-card/95 sticky bottom-3 z-10 rounded-xl border px-4 py-3 shadow-lg backdrop-blur">
         <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0 text-sm text-zinc-500">
+          <div className="text-muted-foreground min-w-0 text-sm">
             {invalid ? (
               <span className="block truncate text-xs text-amber-600 dark:text-amber-400">
                 Còn thiếu: {missing.join(' · ')}
@@ -611,22 +622,18 @@ export function QuoteForm(props: {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <Link
-              href={backHref}
-              className="rounded-md border border-zinc-300 px-3 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
-              Huỷ
-            </Link>
-            <button
+            <Button variant="ghost" asChild>
+              <Link href={backHref}>Huỷ</Link>
+            </Button>
+            <Button
               type="button"
               disabled={busy || invalid}
               title={invalid ? `Còn thiếu: ${missing.join(', ')}` : undefined}
               onClick={() => void submit()}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             >
               {busy && <Spinner size={14} />}
               {mode === 'create' ? 'Lưu báo giá nháp' : 'Lưu thay đổi'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -634,6 +641,7 @@ export function QuoteForm(props: {
   )
 }
 
+/** Thẻ mục của form — cùng khối shadcn Card với OrderForm (tiêu đề chữ thật). */
 function Card({
   title,
   right,
@@ -644,15 +652,15 @@ function Card({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-between border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          {title}
-        </h2>
-        {right}
-      </div>
-      <div className="p-4">{children}</div>
-    </section>
+    <UiCard>
+      <CardHeader>
+        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        {right && (
+          <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
+        )}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </UiCard>
   )
 }
 
@@ -684,7 +692,7 @@ function LineField({
 }) {
   return (
     <label className={`flex flex-col gap-1 ${span2 ? 'col-span-2' : ''}`}>
-      <span className="text-[10px] font-medium tracking-wide text-zinc-400 uppercase">
+      <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
         {label}
       </span>
       {children}

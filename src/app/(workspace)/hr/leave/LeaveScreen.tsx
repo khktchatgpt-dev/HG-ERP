@@ -13,7 +13,7 @@ type Scope = 'mine' | 'pending' | 'all'
  * Nếu user không đủ quyền xem scope yêu cầu → tự lùi về 'mine'.
  */
 export async function LeaveScreen({ scope }: { scope: Scope }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   let effScope: Scope = scope
   let data

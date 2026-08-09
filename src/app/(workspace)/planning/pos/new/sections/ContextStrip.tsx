@@ -34,11 +34,11 @@ export function ContextStrip({
         <span className="size-1.5 rounded-full bg-violet-500" aria-hidden />
         {templateLabel}
       </span>
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-zinc-400 dark:border-zinc-700">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-muted-foreground dark:border-zinc-700">
         <FileText className="size-3" aria-hidden />
         LSX <b className="font-mono text-zinc-600 dark:text-zinc-300">{lsxLabel}</b>
       </span>
-      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-zinc-400 dark:border-zinc-700">
+      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-muted-foreground dark:border-zinc-700">
         <Building2 className="size-3 shrink-0" aria-hidden />
         NCC{' '}
         <b className="truncate text-zinc-600 dark:text-zinc-300">
@@ -47,7 +47,7 @@ export function ContextStrip({
       </span>
       <span className="ml-auto">
         {totalLines === 0 ? (
-          <span className="text-zinc-400">chưa có dòng nào</span>
+          <span className="text-muted-foreground">chưa có dòng nào</span>
         ) : thieu > 0 ? (
           <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-[11px] font-medium text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
             <TriangleAlert className="size-3" aria-hidden />

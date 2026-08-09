@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
  * tại đây rồi ghi giao/nhận (panel self-fetch theo lsxId), khỏi mở từng hồ sơ.
  */
 export default async function OutsourcePage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [active, canRecord] = await Promise.all([
     productionRepo.listActive(),
     isProductionStaff(user).then(

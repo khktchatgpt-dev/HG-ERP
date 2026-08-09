@@ -27,7 +27,7 @@ export default async function EditPoPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ duplicate?: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   if (!canEdit) redirect('/planning/pos')
 
@@ -37,7 +37,7 @@ export default async function EditPoPage({
 
   const detail = await posService.detail(user, id).catch(() => null)
   if (!detail) notFound()
-  const { po, lines } = detail
+  const { po, lines, extra_lsx } = detail
 
   // BR: chỉ đơn NHÁP / chờ duyệt mới sửa được (service cũng chặn) — vào thẳng
   // URL khi đơn đã duyệt thì đẩy về danh sách thay vì để bấm Lưu rồi mới báo lỗi.
@@ -51,7 +51,7 @@ export default async function EditPoPage({
     poMaterialsRepo.byIds(lines.map((l) => l.material_id)),
     settingsService.getAll(),
   ])
-  const onHand = new Map(mats.map((m) => [m.id, m.on_hand]))
+  const onHand = new Map(mats.map((m) => [m.id, m.on_hand])) // null = chưa có sổ kho
   const meta = poTemplateMeta(po.template)
 
   return (
@@ -82,6 +82,8 @@ export default async function EditPoPage({
           code: po.code,
           template: po.template ?? 'simple',
           production_order_id: po.production_order_id,
+          // LSX phụ gộp vào đơn (0125) — form hiện chip + gộp lại nhu cầu.
+          extra_lsx_ids: extra_lsx.map((e) => e.id),
           supplier_id: po.supplier_id,
           currency: po.currency,
           vat_rate: po.vat_rate,
@@ -102,7 +104,7 @@ export default async function EditPoPage({
             lead_time: po.terms_lead_time ?? meta.terms.lead_time,
           },
         },
-        lines: lines.map((l) => lineFromPo(l, onHand.get(l.material_id) ?? 0)),
+        lines: lines.map((l) => lineFromPo(l, onHand.get(l.material_id) ?? null)),
       }}
     />
   )

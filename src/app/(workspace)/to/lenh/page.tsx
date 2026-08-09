@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic'
  * TÔ VIỀN công đoạn tổ mình để biết chuỗi tới đâu / tổ trước xong chưa.
  */
 export default async function TeamLsxInfoPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const [{ rows }, board] = await Promise.all([
     jobsService.overview(user),
     jobsService.teamBoard(user, {}),

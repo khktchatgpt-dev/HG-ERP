@@ -15,7 +15,7 @@ import { ApprovalsManager } from '../ApprovalsManager'
  * (Dời từ /exec về đây 07/2026 — /exec giờ là Toàn cảnh điều hành.)
  */
 export default async function ExecApprovalsPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   const [{ rows: pendingPos }, { rows: pendingLsx }] = await Promise.all([
     posService.list(user, { status: 'pending_approval', page: 1, page_size: 200 }),

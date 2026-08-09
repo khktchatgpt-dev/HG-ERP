@@ -79,7 +79,7 @@ export async function fetchProductsByIds(ids: string[]): Promise<ProductPick[]> 
 }
 
 const inputCls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px]'
 
 /**
  * Ô chọn sản phẩm cho form báo giá / đơn hàng — TÌM Ở SERVER.
@@ -292,8 +292,8 @@ export function ProductPicker({
                     onMouseEnter={() => setActive(i)}
                     onClick={() => choose(p)}
                     className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm ${
-                      i === active ? 'bg-sky-50 dark:bg-sky-950/40' : ''
-                    } ${used ? 'cursor-not-allowed opacity-40' : 'hover:bg-sky-50 dark:hover:bg-sky-950/40'}`}
+                      i === active ? 'bg-accent' : ''
+                    } ${used ? 'cursor-not-allowed opacity-40' : 'hover:bg-accent'}`}
                   >
                     <span className="flex w-full items-center gap-2">
                       <span className="font-mono text-xs text-zinc-500">{p.code}</span>

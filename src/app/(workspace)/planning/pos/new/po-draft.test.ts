@@ -36,6 +36,8 @@ const line = (over: Partial<Line> = {}): Line => ({
   inner_h_mm: '',
   area_m2: '',
   carton_basis: 'ctn',
+  pack_size: null,
+  pack_unit: '',
   ...over,
 })
 
@@ -43,6 +45,7 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   template: 'accessory',
   poType: 'lsx',
   lsxId: 'lsx-1',
+  extraLsxIds: [],
   supplierId: 'ncc-1',
   expectedAt: '',
   contractNo: '',

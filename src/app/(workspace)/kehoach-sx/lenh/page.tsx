@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 
 /** Lệnh đang chạy — bối cảnh cho Kế hoạch. */
 export default async function PlanLsxInfoPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { rows } = await jobsService.overview(user)
   return (
     <RunningLsxList

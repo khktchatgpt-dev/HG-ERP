@@ -13,7 +13,7 @@ export default async function AdminAuditPage({
     limit?: string
   }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const sp = await searchParams
 
   const limit = Math.min(500, Math.max(20, Number(sp.limit) || 100))

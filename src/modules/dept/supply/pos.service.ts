@@ -12,6 +12,8 @@ import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 type PoInput = {
   /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
   production_order_id?: string | null
+  /** LSX PHỤ gộp thêm (0125) — "LSX 01+2+3/26-27". Chỉ khi có LSX chính. */
+  extra_lsx_ids?: string[]
   supplier_id: string
   template?: PoTemplate
   currency: string
@@ -42,6 +44,30 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
 }
 
+/**
+ * Chuẩn hoá + kiểm tra bộ LSX PHỤ (0125): bỏ trùng, bỏ trùng với LSX chính,
+ * từng lệnh phải tồn tại và đã qua duyệt (cùng luật với LSX chính). Đơn ngoài
+ * LSX mà gửi LSX phụ là dữ liệu mâu thuẫn — chặn thẳng.
+ */
+async function checkedExtraLsxIds(
+  primaryLsxId: string | null,
+  ids: string[] | undefined,
+): Promise<string[]> {
+  const list = [...new Set(ids ?? [])].filter((id) => id !== primaryLsxId)
+  if (list.length === 0) return []
+  if (!primaryLsxId) {
+    throw BadRequest('Đơn ngoài LSX không gộp thêm LSX phụ được — chọn LSX chính trước')
+  }
+  for (const id of list) {
+    const lsx = await productionRepo.findById(id)
+    if (!lsx) throw NotFound('LSX phụ không tồn tại')
+    if (lsx.status === 'pending_approval' || lsx.status === 'rejected') {
+      throw BadRequest(`LSX ${lsx.code} chưa được Giám đốc duyệt — chưa đặt vật tư được`)
+    }
+  }
+  return list
+}
+
 /** Điều khoản/chữ ký bỏ trống → lấy mặc định của mẫu, để phiếu in không rỗng. */
 function withTemplateDefaults(input: PoInput, template: PoTemplate) {
   const meta = poTemplateMeta(template)
@@ -66,11 +92,12 @@ export const posService = {
   async detail(_user: User, id: string) {
     const po = await posRepo.findById(id)
     if (!po) throw NotFound('Đơn đặt không tồn tại')
-    const [lines, status_lines] = await Promise.all([
+    const [lines, status_lines, extra_lsx] = await Promise.all([
       posRepo.listLines(id),
       supplyRepo.lineStatus(id), // đặt / đã nhận / còn thiếu (BR-08, FR-SUP-05)
+      posRepo.listExtraLsx(id), // LSX phụ gộp vào đơn (0125)
     ])
-    return { po, lines, status_lines }
+    return { po, lines, status_lines, extra_lsx }
   },
 
   /**
@@ -96,9 +123,11 @@ export const posService = {
       }
     }
 
+    const extraLsxIds = await checkedExtraLsxIds(lsxId, input.extra_lsx_ids)
+
     const template = input.template ?? 'simple'
     const code = await posRepo.nextCode()
-    return posRepo.insert(
+    const po = await posRepo.insert(
       {
         code,
         production_order_id: lsxId,
@@ -118,6 +147,8 @@ export const posService = {
       },
       withDerived(template, input.lines),
     )
+    if (extraLsxIds.length > 0) await posRepo.replaceExtraLsx(po.id, extraLsxIds)
+    return po
   },
 
   /**
@@ -165,6 +196,12 @@ export const posService = {
     if (before.status !== 'draft' && before.status !== 'pending_approval') {
       throw BadRequest('Chỉ đơn nháp / chờ duyệt mới sửa được')
     }
+    // LSX chính của đơn không đổi khi sửa (patch không đụng production_order_id)
+    // — LSX phụ thì đổi được, kiểm tra theo LSX chính ĐANG có của đơn.
+    const extraLsxIds = await checkedExtraLsxIds(
+      before.production_order_id,
+      input.extra_lsx_ids,
+    )
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
     const template = input.template ?? before.template ?? 'simple'
@@ -182,6 +219,7 @@ export const posService = {
       note: input.note ?? null,
     })
     await posRepo.replaceLines(id, withDerived(template, input.lines))
+    await posRepo.replaceExtraLsx(id, extraLsxIds)
     return po
   },
 

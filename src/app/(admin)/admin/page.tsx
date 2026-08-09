@@ -16,7 +16,7 @@ const ACTION_LABEL: Record<string, string> = {
 }
 
 export default async function AdminOverview() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
 
   const [users, departments, recentAudit] = await Promise.all([
     usersService.list(user, { includeInactive: true, includeDeleted: true }),

@@ -17,7 +17,7 @@ export default async function TechnicalProductsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = await canEditProducts(user)
 
   const spRaw = await searchParams

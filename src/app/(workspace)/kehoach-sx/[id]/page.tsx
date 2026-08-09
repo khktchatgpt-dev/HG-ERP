@@ -14,7 +14,7 @@ export default async function PlanDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   // Màn ĐIỀU PHỐI (0086): thành viên xưởng thường không xem — về màn của vai.
   const canEdit = await canManagePlan(user)
   if (user.role === 'employee' && !canEdit && (await isProductionStaff(user))) {

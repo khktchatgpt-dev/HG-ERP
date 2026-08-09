@@ -31,6 +31,8 @@ export type ProductionOrder = {
   rejected_reason: string | null
   materials_received_at: string | null
   materials_received_by: string | null
+  /** Hạn VẬT TƯ phải về kho để kịp SX (0126) — đèn "Kịp SX?" so với mốc này. */
+  materials_due_at: string | null
   /** Số lần phát lại lệnh (0114) — >1 thì phiếu in là BẢN CHỈNH SỬA. */
   revision: number
   revised_at: string | null
@@ -83,7 +85,7 @@ export type OrderTracking = {
 }
 
 const COLS =
-  'id, code, customer_id, status, priority, ship_date, container_summary, created_by, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, materials_received_at, materials_received_by, revision, revised_at, revised_by, revision_note, note, created_at, updated_at'
+  'id, code, customer_id, status, priority, ship_date, container_summary, created_by, issued_by, issued_at, received_date, completed_at, approved_by, approved_at, rejected_reason, materials_received_at, materials_received_by, materials_due_at, revision, revised_at, revised_by, revision_note, note, created_at, updated_at'
 
 // Đơn trỏ SANG lệnh (sales_orders.production_order_id) nên embed là chiều ngược
 // → PostgREST trả mảng.

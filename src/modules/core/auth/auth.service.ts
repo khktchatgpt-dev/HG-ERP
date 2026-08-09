@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation'
 import { verifyPassword } from '@/modules/core/auth/password'
 import { createSession, destroySession, getSession } from '@/modules/core/auth/session'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -39,6 +40,21 @@ export const authService = {
   async requireUser(): Promise<User> {
     const user = await this.currentUser()
     if (!user) throw Unauthorized()
+    return user
+  },
+
+  /**
+   * Cho PAGE (server component): user null → về /login thay vì 500.
+   *
+   * Proxy chỉ VERIFY CHỮ KÝ cookie, không tra DB — user bị xoá/khoá giữa phiên
+   * thì cookie vẫn hợp lệ, qua được cổng, và `(await currentUser())!` trong 73
+   * trang nổ "Cannot read properties of null" (gặp thật 09/08/2026 sau khi xoá
+   * tài khoản test còn phiên sống). Page dùng hàm này; API vẫn `requireUser`
+   * (401 JSON, không redirect).
+   */
+  async requirePageUser(): Promise<User> {
+    const user = await this.currentUser()
+    if (!user) redirect('/login')
     return user
   },
 }

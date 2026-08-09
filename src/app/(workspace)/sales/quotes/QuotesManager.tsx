@@ -1,23 +1,67 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { Fragment, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Badge } from '@/components/Badge'
+import { useRouter } from 'next/navigation'
+import {
+  FileText,
+  MoreHorizontal,
+  PenLine,
+  Plus,
+  Printer,
+  Search,
+  Send,
+  Trash2,
+} from 'lucide-react'
+import { Badge } from '@/components/shadcn/badge'
+import { Button } from '@/components/shadcn/button'
+import { Input } from '@/components/shadcn/input'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn/select'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { StatsBar } from '@/components/erp/StatsBar'
-import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
-import { DataTable, type Column } from '@/components/erp/DataTable'
-import { EmptyState } from '@/components/erp/EmptyState'
-import { RowMenu } from '@/components/erp/RowMenu'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+
+/**
+ * SỔ BÁO GIÁ của Sales — dựng theo style v2 (shadcn + `.theme-v2`), cùng ngôn
+ * ngữ với sổ Đơn hàng để hai màn cạnh nhau đọc như MỘT hệ thống (trước đây báo
+ * giá còn ở ERP kit zinc/sky đời đầu, cạnh sổ đơn stone/emerald nhìn như hai app).
+ *
+ * Các quyết định kế thừa từ sổ đơn — vì dữ liệu thật giống nhau về cấu trúc:
+ *   · GOM THEO KHÁCH — Drive của Sales xếp báo giá theo khách (Merxx/, Laura/…),
+ *     sổ trên app giữ đúng trục đọc đó; tên khách in MỘT lần một cụm.
+ *   · TAB = TRẠNG THÁI + "HẾT HIỆU LỰC" — hết hiệu lực không phải status trong
+ *     DB mà là bộ lọc suy ra (valid_to < hôm nay, còn nháp thì không tính vì
+ *     chưa gửi ai); chỉ hiện tab khi thật sự có, có mặt là tự nó cảnh báo.
+ *   · CỘT NÓI ĐƯỢC VIỆC — số dòng SP, điều khoản (Incoterm), hiệu lực (kèm nhắc
+ *     sắp hết hạn), trạng thái. Ngày tạo + người lập là dòng phụ dưới mã BG.
+ *   · HÀNH ĐỘNG GOM VỀ MENU ⋯ — mở, sửa, in, chốt & gửi, xoá (nháp).
+ */
 
 type QuoteStatus = 'draft' | 'sent'
 
-type Quote = {
+export type QuoteRow = {
   id: string
   code: string
   customer_id: string
@@ -30,49 +74,103 @@ type Quote = {
   payment_terms: string | null
   note: string | null
   created_at: string
+  line_count: number
+  owner_name: string | null
 }
 
-type CustomerOption = { id: string; name: string }
+const fmtD = (d: string | null) =>
+  d
+    ? new Date(d).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+      })
+    : '—'
 
-const STATUS_LABEL: Record<QuoteStatus, string> = { draft: 'Nháp', sent: 'Đã gửi khách' }
-const STATUS_TONE: Record<QuoteStatus, 'gray' | 'green'> = {
-  draft: 'gray',
-  sent: 'green',
-}
+/** Tên gọi (chữ cuối) cho ô hẹp — tên đủ vẫn ở tooltip (cùng cách với sổ đơn). */
+const shortName = (full: string) => full.trim().split(/\s+/).at(-1) ?? full
+
+const daysBetween = (a: string, b: string) =>
+  Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+
+/** Báo giá ĐÃ GỬI mà quá hạn hiệu lực — giá chào không còn giá trị pháp lý. */
+const isExpired = (q: QuoteRow, today: string) =>
+  q.status === 'sent' && !!q.valid_to && q.valid_to < today
+
+type Group = { id: string; name: string; quotes: QuoteRow[]; newest: string }
 
 export function QuotesManager({
   quotes,
   customers,
   canEdit,
 }: {
-  quotes: Quote[]
-  customers: CustomerOption[]
+  quotes: QuoteRow[]
+  customers: { id: string; name: string }[]
   canEdit: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
-
   const [q, setQ] = useState('')
-  const [customerFilter, setCustomerFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | QuoteStatus>('all')
+  const [customer, setCustomer] = useState('all')
+  const [tab, setTab] = useState('all')
+  const today = new Date().toISOString().slice(0, 10)
+
+  const match = useMemo(
+    () => ({
+      all: () => true,
+      draft: (r: QuoteRow) => r.status === 'draft',
+      sent: (r: QuoteRow) => r.status === 'sent' && !isExpired(r, today),
+      expired: (r: QuoteRow) => isExpired(r, today),
+    }),
+    [today],
+  )
+  const count = (key: keyof typeof match) => quotes.filter(match[key]).length
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    return quotes.filter((it) => {
-      if (customerFilter !== 'all' && it.customer_id !== customerFilter) return false
-      if (statusFilter !== 'all' && it.status !== statusFilter) return false
-      if (ql && !`${it.code} ${it.customer_name}`.toLowerCase().includes(ql)) return false
-      return true
+    return quotes.filter((r) => {
+      if (customer !== 'all' && r.customer_id !== customer) return false
+      if (!match[tab as keyof typeof match](r)) return false
+      if (!ql) return true
+      return `${r.code} ${r.customer_name}`.toLowerCase().includes(ql)
     })
-  }, [quotes, q, customerFilter, statusFilter])
+  }, [quotes, q, customer, tab, match])
 
-  const stats = useMemo(() => {
-    const by: Record<QuoteStatus, number> = { draft: 0, sent: 0 }
-    for (const it of quotes) by[it.status]++
-    return by
-  }, [quotes])
+  /* Gom theo khách — nhóm mới nhất lên đầu, trong nhóm mới tạo trước. */
+  const groups = useMemo<Group[]>(() => {
+    const m = new Map<string, Group>()
+    for (const r of filtered) {
+      const g = m.get(r.customer_id) ?? {
+        id: r.customer_id,
+        name: r.customer_name,
+        quotes: [],
+        newest: r.created_at,
+      }
+      g.quotes.push(r)
+      if (r.created_at > g.newest) g.newest = r.created_at
+      m.set(r.customer_id, g)
+    }
+    const list = [...m.values()]
+    for (const g of list) g.quotes.sort((a, b) => (a.created_at < b.created_at ? 1 : -1))
+    list.sort((a, b) => (a.newest < b.newest ? 1 : -1))
+    return list
+  }, [filtered])
+
+  const customerLabel =
+    customer === 'all'
+      ? 'Mọi khách hàng'
+      : (customers.find((c) => c.id === customer)?.name ?? 'Mọi khách hàng')
+
+  const tabs = [
+    { value: 'all', label: 'Tất cả', count: quotes.length },
+    { value: 'draft', label: 'Nháp', count: count('draft') },
+    { value: 'sent', label: 'Đã gửi khách', count: count('sent') },
+    ...(count('expired')
+      ? [{ value: 'expired', label: 'Hết hiệu lực', count: count('expired') }]
+      : []),
+  ]
 
   async function run(url: string, method: 'POST' | 'DELETE') {
     setBusy(true)
@@ -88,190 +186,329 @@ export function QuotesManager({
     }
   }
 
-  async function sendQuote(it: Quote) {
+  async function sendQuote(r: QuoteRow) {
     const ok = await confirm({
-      title: `Chốt & gửi khách ${it.code}?`,
+      title: `Chốt & gửi khách ${r.code}?`,
       description: 'Sau khi chốt sẽ không sửa được nữa và có thể tạo đơn hàng.',
       confirmLabel: 'Chốt & gửi khách',
     })
     if (!ok) return
-    if (await run(`/api/dept/sales/quotes/${it.id}/send`, 'POST'))
-      toast.success('Đã chốt báo giá', it.code)
+    if (await run(`/api/dept/sales/quotes/${r.id}/send`, 'POST'))
+      toast.success('Đã chốt báo giá', r.code)
   }
 
-  async function deleteQuote(it: Quote) {
+  async function deleteQuote(r: QuoteRow) {
     const ok = await confirm({
-      title: `Xoá báo giá nháp ${it.code}?`,
+      title: `Xoá báo giá nháp ${r.code}?`,
       tone: 'danger',
       confirmLabel: 'Xoá',
     })
     if (!ok) return
-    if (await run(`/api/dept/sales/quotes/${it.id}`, 'DELETE'))
-      toast.success('Đã xoá', it.code)
+    if (await run(`/api/dept/sales/quotes/${r.id}`, 'DELETE'))
+      toast.success('Đã xoá', r.code)
   }
 
-  const columns: Column<Quote>[] = [
-    {
-      key: 'code',
-      header: 'Số BG / Khách hàng',
-      sortValue: (it) => it.code,
-      cell: (it) => (
-        <Link
-          href={`/sales/quotes/${it.id}`}
-          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
-        >
-          <span className="font-mono text-xs text-zinc-400">{it.code}</span>
-          <span className="truncate font-medium">{it.customer_name}</span>
-        </Link>
-      ),
-    },
-    {
-      key: 'status',
-      header: 'Trạng thái',
-      sortValue: (it) => it.status,
-      width: '110px',
-      cell: (it) => (
-        <Badge tone={STATUS_TONE[it.status]}>{STATUS_LABEL[it.status]}</Badge>
-      ),
-    },
-    {
-      key: 'currency',
-      header: 'Tiền tệ',
-      width: '80px',
-      cell: (it) => <span className="font-mono text-xs">{it.currency}</span>,
-    },
-    {
-      key: 'valid',
-      header: 'Hiệu lực đến',
-      sortValue: (it) => it.valid_to ?? '',
-      width: '120px',
-      cell: (it) =>
-        it.valid_to ? (
-          new Date(it.valid_to).toLocaleDateString('vi-VN')
-        ) : (
-          <span className="text-zinc-400">—</span>
-        ),
-    },
-    {
-      key: 'created',
-      header: 'Ngày tạo',
-      sortValue: (it) => it.created_at,
-      width: '110px',
-      cell: (it) => new Date(it.created_at).toLocaleDateString('vi-VN'),
-    },
-    {
-      key: 'actions',
-      header: '',
-      width: '56px',
-      align: 'right',
-      cell: (it) => {
-        const items: { label: string; onClick: () => void; danger?: boolean }[] = [
-          { label: 'Xem chi tiết', onClick: () => router.push(`/sales/quotes/${it.id}`) },
-        ]
-        if (canEdit && it.status === 'draft') {
-          items.push(
-            {
-              label: 'Sửa',
-              onClick: () => router.push(`/sales/quotes/${it.id}/edit`),
-            },
-            { label: 'Chốt & gửi khách', onClick: () => void sendQuote(it) },
-            { label: 'Xoá', onClick: () => void deleteQuote(it), danger: true },
-          )
-        }
-        return <RowMenu items={items} />
-      },
-    },
-  ]
-
-  const btnPrimary =
-    'rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700'
-
   return (
-    <div className="flex flex-col gap-4">
+    <div className="theme-v2 text-foreground flex flex-col gap-5">
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[{ label: 'Kinh doanh', href: '/sales' }, { label: 'Báo giá' }]}
-        title="Báo giá"
-        description={`${filtered.length} / ${quotes.length} báo giá. Nháp → chốt & gửi khách → tạo đơn hàng. Hồ sơ riêng của Sales, không cần duyệt.`}
-        actions={
-          canEdit && (
-            <Link href="/sales/quotes/new" className={btnPrimary}>
-              + Lập báo giá
+
+      {/* ── Đầu trang ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Báo giá</h1>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Hồ sơ riêng của Sales, không cần duyệt: nháp → chốt &amp; gửi khách → tạo đơn
+            hàng. Gom theo khách hàng.
+          </p>
+        </div>
+        {canEdit && (
+          <Button asChild>
+            <Link href="/sales/quotes/new">
+              <Plus />
+              Lập báo giá
             </Link>
-          )
-        }
-      />
+          </Button>
+        )}
+      </div>
 
-      <StatsBar
-        stats={[
-          { label: 'Tổng', value: quotes.length, tone: 'default' },
-          { label: 'Nháp', value: stats.draft, tone: 'gray' },
-          { label: 'Đã gửi khách', value: stats.sent, tone: 'green' },
-        ]}
-      />
-
-      <div>
-        <Toolbar
-          left={
-            <>
-              <ToolbarInput
+      {/* ── Lọc + bảng ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-col gap-2.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Tabs value={tab} onValueChange={setTab} className="max-w-full">
+            <TabsList className="h-auto! flex-wrap">
+              {tabs.map((t) => (
+                <TabsTrigger key={t.value} value={t.value}>
+                  {t.label}
+                  <span className="text-muted-foreground text-xs tabular-nums">
+                    {t.count}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={customer} onValueChange={setCustomer}>
+              <SelectTrigger size="sm" className="bg-card w-44">
+                <SelectValue>{customerLabel}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="theme-v2">
+                <SelectItem value="all">Mọi khách hàng</SelectItem>
+                {customers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="relative">
+              <Search className="text-muted-foreground absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2" />
+              <Input
                 value={q}
-                onChange={setQ}
+                onChange={(e) => setQ(e.target.value)}
                 placeholder="Tìm số BG, khách hàng…"
-                icon="⌕"
-                className="w-64"
+                className="bg-card h-9 w-60 pl-8"
               />
-              <ToolbarSelect
-                value={customerFilter}
-                onChange={setCustomerFilter}
-                options={[
-                  { value: 'all', label: 'Mọi khách hàng' },
-                  ...customers.map((c) => ({ value: c.id, label: c.name })),
-                ]}
-              />
-              <ToolbarSelect
-                value={statusFilter}
-                onChange={(v) => setStatusFilter(v)}
-                options={[
-                  { value: 'all' as const, label: 'Mọi trạng thái' },
-                  { value: 'draft' as const, label: 'Nháp' },
-                  { value: 'sent' as const, label: 'Đã gửi khách' },
-                ]}
-              />
-            </>
-          }
-          right={
-            busy ? (
-              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
-                <Spinner size={12} /> Đang xử lý…
-              </span>
-            ) : undefined
-          }
-        />
+            </div>
+            {busy && <Spinner size={14} />}
+          </div>
+        </div>
 
-        <DataTable<Quote>
-          rows={filtered}
-          columns={columns}
-          storageKey="sales-quotes"
-          emptyState={
-            <EmptyState
-              icon="▤"
-              title={quotes.length === 0 ? 'Chưa có báo giá nào' : 'Không khớp bộ lọc'}
-              description={
-                quotes.length === 0
-                  ? 'Lập báo giá đầu tiên — chọn khách và các sản phẩm từ thư viện Kỹ thuật.'
-                  : 'Thử điều chỉnh bộ lọc.'
-              }
-              action={
-                canEdit && quotes.length === 0 ? (
-                  <Link href="/sales/quotes/new" className={btnPrimary}>
-                    + Lập báo giá
-                  </Link>
-                ) : undefined
-              }
-            />
-          }
-        />
+        <div className="bg-card overflow-hidden rounded-xl border shadow-xs">
+          <Table className="min-w-[820px] table-fixed">
+            <colgroup>
+              <col style={{ width: '200px' }} />
+              <col style={{ width: '80px' }} />
+              <col />
+              <col style={{ width: '150px' }} />
+              <col style={{ width: '130px' }} />
+              <col style={{ width: '48px' }} />
+            </colgroup>
+            <TableHeader>
+              <TableRow className="bg-muted/50 hover:bg-muted/50">
+                {['Số báo giá', 'SP', 'Điều khoản', 'Hiệu lực', 'Trạng thái', ''].map(
+                  (label, i) => (
+                    <TableHead
+                      key={i}
+                      className={`text-foreground px-3 text-[11px] font-semibold tracking-wider uppercase ${
+                        label === 'SP' ? 'text-right' : ''
+                      }`}
+                    >
+                      {label}
+                    </TableHead>
+                  ),
+                )}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-14 text-center whitespace-normal">
+                    <div className="text-sm font-medium">
+                      {quotes.length === 0
+                        ? 'Chưa có báo giá nào'
+                        : 'Không có báo giá nào khớp bộ lọc'}
+                    </div>
+                    <div className="text-muted-foreground mt-1 text-xs">
+                      {quotes.length === 0
+                        ? canEdit
+                          ? 'Bấm "Lập báo giá" ở góc trên — chọn khách và sản phẩm từ thư viện.'
+                          : 'Sales sẽ lập báo giá từ thư viện sản phẩm.'
+                        : 'Đổi tab trạng thái, bỏ lọc khách hàng hoặc xoá từ khoá tìm kiếm.'}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                groups.map((g) => (
+                  <Fragment key={g.id}>
+                    <TableRow className="bg-muted/40 hover:bg-muted/40">
+                      <TableCell colSpan={6} className="px-3 py-1.5">
+                        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                          <Link
+                            href={`/sales/customers/${g.id}`}
+                            className="text-sm font-semibold hover:underline"
+                          >
+                            {g.name}
+                          </Link>
+                          <span className="text-muted-foreground text-xs">
+                            {g.quotes.length} báo giá
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+
+                    {g.quotes.map((r) => {
+                      const expired = isExpired(r, today)
+                      const daysLeft =
+                        r.status === 'sent' && r.valid_to
+                          ? daysBetween(today, r.valid_to.slice(0, 10))
+                          : null
+                      return (
+                        <TableRow key={r.id} className={expired ? 'opacity-70' : ''}>
+                          <TableCell className="px-3 py-2.5">
+                            <Link
+                              href={`/sales/quotes/${r.id}`}
+                              className="block truncate font-mono text-[13px] font-medium hover:underline"
+                            >
+                              {r.code}
+                            </Link>
+                            <div
+                              className="text-muted-foreground mt-0.5 truncate text-[11px]"
+                              title={
+                                r.owner_name
+                                  ? `Lập ${fmtD(r.created_at)} bởi ${r.owner_name}`
+                                  : undefined
+                              }
+                            >
+                              <span className="tabular-nums">
+                                lập {fmtD(r.created_at)}
+                              </span>
+                              {r.owner_name && ` · ${shortName(r.owner_name)}`}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2.5 text-right">
+                            {r.line_count > 0 ? (
+                              <span className="text-sm font-semibold tabular-nums">
+                                {r.line_count}
+                              </span>
+                            ) : (
+                              <span
+                                className="text-amber-600 dark:text-amber-400"
+                                title="Chưa có dòng sản phẩm — chưa chốt được"
+                              >
+                                0
+                              </span>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2.5">
+                            <div className="flex min-w-0 flex-wrap items-center gap-1">
+                              <Badge variant="outline" className="font-mono text-[10px]">
+                                {r.currency}
+                              </Badge>
+                              {r.price_term && (
+                                <Badge
+                                  variant="secondary"
+                                  className="max-w-40 truncate text-[10px]"
+                                  title={r.price_term}
+                                >
+                                  {r.price_term}
+                                </Badge>
+                              )}
+                              {r.payment_terms && (
+                                <span
+                                  className="text-muted-foreground min-w-0 truncate text-[11px]"
+                                  title={r.payment_terms}
+                                >
+                                  {r.payment_terms}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2.5">
+                            {r.valid_to ? (
+                              <div>
+                                <div className="text-sm tabular-nums">
+                                  {fmtD(r.valid_to)}
+                                </div>
+                                {expired ? (
+                                  <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                                    hết hiệu lực
+                                  </div>
+                                ) : daysLeft != null && daysLeft <= 7 ? (
+                                  <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                    còn {daysLeft} ngày
+                                  </div>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="px-3 py-2.5">
+                            {r.status === 'draft' ? (
+                              <Badge variant="secondary">Nháp</Badge>
+                            ) : expired ? (
+                              <Badge
+                                variant="outline"
+                                className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-400"
+                              >
+                                Hết hiệu lực
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-emerald-600 text-white dark:bg-emerald-700">
+                                Đã gửi khách
+                              </Badge>
+                            )}
+                          </TableCell>
+
+                          <TableCell className="px-2 py-2.5">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="text-muted-foreground size-7"
+                                  aria-label={`Thao tác với báo giá ${r.code}`}
+                                >
+                                  <MoreHorizontal />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="theme-v2">
+                                <DropdownMenuItem
+                                  onClick={() => router.push(`/sales/quotes/${r.id}`)}
+                                >
+                                  <FileText />
+                                  Mở báo giá
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    window.open(`/print/quotes/${r.id}`, '_blank')
+                                  }
+                                >
+                                  <Printer />
+                                  In báo giá
+                                </DropdownMenuItem>
+                                {canEdit && r.status === 'draft' && (
+                                  <>
+                                    <DropdownMenuItem
+                                      onClick={() =>
+                                        router.push(`/sales/quotes/${r.id}/edit`)
+                                      }
+                                    >
+                                      <PenLine />
+                                      Sửa
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => void sendQuote(r)}>
+                                      <Send />
+                                      Chốt &amp; gửi khách
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      variant="destructive"
+                                      onClick={() => void deleteQuote(r)}
+                                    >
+                                      <Trash2 />
+                                      Xoá
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </Fragment>
+                ))
+              )}
+            </TableBody>
+          </Table>
+          <div className="bg-muted/30 text-muted-foreground border-t px-3 py-1.5 text-xs">
+            {filtered.length}/{quotes.length} báo giá · {groups.length} khách hàng
+          </div>
+        </div>
       </div>
     </div>
   )

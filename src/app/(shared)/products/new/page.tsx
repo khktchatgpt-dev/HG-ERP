@@ -10,7 +10,7 @@ import { ProductForm } from '@/components/technical/ProductForm'
 
 /** Trang Thêm sản phẩm — chỉ phần nhận diện, phần còn lại điền ở trang chi tiết. */
 export default async function NewProductPage() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   if (!(await canCreateProducts(user))) redirect('/products')
 
   const defaultType = PRODUCT_TYPES[0].code

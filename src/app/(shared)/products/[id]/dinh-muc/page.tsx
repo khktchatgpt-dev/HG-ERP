@@ -10,7 +10,7 @@ export default async function ProductPartsPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const { id } = await params
   // Định mức = BOM → luật riêng (`technical.bom.save`), không dùng cờ SP chung.
   const canEdit = await canEditBom(user)

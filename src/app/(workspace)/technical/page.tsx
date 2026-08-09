@@ -12,7 +12,7 @@ import { PRODUCT_TYPES } from '@/lib/product-code'
 const TYPE_LABEL = new Map<string, string>(PRODUCT_TYPES.map((t) => [t.code, t.label]))
 
 export default async function TechnicalHome() {
-  const user = (await authService.currentUser())!
+  const user = await authService.requirePageUser()
   const canEdit = await canCreateProducts(user)
 
   // Đếm bằng HEAD count + chỉ nạp 6 SP gần đây (không kéo cả thư viện về nữa).
