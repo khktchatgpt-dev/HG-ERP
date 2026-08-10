@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import { parseQuoteExcel, type QuoteExcelRow } from '@/lib/quote-excel'
+import { resolveImportRows, type ResolvedRow } from '@/lib/quote-import-match'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { quotesService } from './quotes.service'
@@ -87,16 +88,8 @@ function readSheet(ws: ExcelJS.Worksheet, wb: ExcelJS.Workbook) {
   return { grid, images }
 }
 
-/** Kết quả khớp một dòng file với thư viện sản phẩm. */
-export type ImportPreviewRow = QuoteExcelRow & {
-  /** 'existing' = đã có trong thư viện · 'new' = sẽ tạo mới · 'blocked' = thiếu dữ liệu. */
-  action: 'existing' | 'new' | 'blocked'
-  matched_product_id: string | null
-  matched_label: string | null
-  /** Khớp được nhiều SP → người dùng phải tự chọn, không đoán bừa. */
-  ambiguous: boolean
-  has_image: boolean
-}
+/** Dòng xem trước = dòng đã khớp (kiểu do `@/lib/quote-import-match` định nghĩa). */
+export type ImportPreviewRow = ResolvedRow
 
 export type ImportPreview = {
   source_file_id: string
@@ -106,14 +99,6 @@ export type ImportPreview = {
   skipped: { row: number; text: string; reason: string }[]
   summary: { total: number; existing: number; new_products: number; blocked: number }
 }
-
-const keyOf = (s: string) =>
-  s
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .replace(/[đĐ]/g, 'd')
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
 
 export const quoteImportService = {
   /**
@@ -151,48 +136,26 @@ export const quoteImportService = {
       )
     }
 
-    // Khớp với thư viện: mã nội bộ → mã khách → tên. Nạp một lần, khớp trong bộ nhớ.
+    /*
+     * Khớp với thư viện. Nạp CẢ SP ngừng dùng: mã là UNIQUE nên SP ngừng dùng
+     * vẫn chiếm chỗ — bỏ qua chúng thì dòng ghi mã đó sẽ đi tạo mới và vỡ ở DB.
+     * Luật khớp + chặn trùng nằm ở `@/lib/quote-import-match` (thuần, có test).
+     */
     const { rows: products } = await productsRepo.list({
       page: 1,
       page_size: 5000,
-      active_only: true,
+      active_only: false,
     })
-    const byCode = new Map<string, typeof products>()
-    const byItem = new Map<string, typeof products>()
-    const byName = new Map<string, typeof products>()
-    const push = (
-      m: Map<string, typeof products>,
-      k: string,
-      p: (typeof products)[0],
-    ) => {
-      if (!k) return
-      const arr = m.get(k) ?? []
-      arr.push(p)
-      m.set(k, arr)
-    }
-    for (const p of products) {
-      push(byCode, keyOf(p.code), p)
-      if (p.customer_item_code) push(byItem, keyOf(p.customer_item_code), p)
-      push(byName, keyOf(p.name), p)
-    }
-
-    const rows: ImportPreviewRow[] = parsed.rows.map((r) => {
-      const hits =
-        (r.code ? byCode.get(keyOf(r.code)) : undefined) ??
-        (r.customer_item_code ? byItem.get(keyOf(r.customer_item_code)) : undefined) ??
-        (r.name ? byName.get(keyOf(r.name)) : undefined) ??
-        []
-      const one = hits.length === 1 ? hits[0] : null
-      const blocked = r.missing.length > 0
-      return {
-        ...r,
-        action: blocked ? 'blocked' : one ? 'existing' : 'new',
-        matched_product_id: one?.id ?? null,
-        matched_label: one ? `${one.code} — ${one.name}` : null,
-        ambiguous: hits.length > 1,
-        has_image: r.image_id != null,
-      }
-    })
+    const rows = resolveImportRows(
+      parsed.rows,
+      products.map((p) => ({
+        id: p.id,
+        code: p.code,
+        name: p.name,
+        customer_item_code: p.customer_item_code,
+        is_active: p.is_active,
+      })),
+    )
 
     // Chỉ ghi MỘT thứ ở nhịp này: file nguồn (nhịp 2 đọc lại để bóc ảnh).
     const source_file_id = await filesService.uploadFromServer(user, {

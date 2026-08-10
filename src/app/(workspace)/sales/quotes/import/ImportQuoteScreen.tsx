@@ -47,6 +47,7 @@ type PreviewRow = {
   matched_label: string | null
   ambiguous: boolean
   has_image: boolean
+  blocked_reason: string | null
 }
 
 type Preview = {
@@ -331,9 +332,9 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
                               ⚠ {w}
                             </span>
                           ))}
-                          {r.missing.length > 0 && (
+                          {r.blocked_reason && (
                             <span className="text-[11px] text-red-600 dark:text-red-400">
-                              Thiếu: {r.missing.join(', ')}
+                              {r.blocked_reason}
                             </span>
                           )}
                         </div>
