@@ -1,6 +1,6 @@
 # Báo giá: upload file Excel + gỡ nút xung đột quy cách
 
-Trạng thái: **§1 đã xong · §2–§3 chờ chốt + chờ file mẫu** (10/08/2026).
+Trạng thái: **ĐÃ LÀM XONG phần upload (10/08/2026)** — còn 2 quyết định về dữ liệu ở §4.
 
 Chủ dự án chốt hai việc: (a) bỏ dán vùng ô, thay bằng **upload file Excel báo giá**
 — vì file báo giá SP mới mang theo cả ảnh lẫn thông số, thứ vùng dán không có;
@@ -103,11 +103,37 @@ phẩm, gắn ảnh vào hồ sơ, dựng dòng báo giá — thay cho gõ tay t
 
 ---
 
-## 4. Đang chờ chủ dự án
+## 4. Trạng thái các câu hỏi
 
-| # | Cần | Vì sao chặn |
+### Đã trả lời được từ CHỨNG TỪ GỐC (10/08/2026)
+
+Tìm được bảng kê quy cách thật của công ty trong `Downloads/All Bom`:
+`BKQC - C0065HG-AL - Hoanggia - Ghế đan mây Rattan.xlsx`. Ô KTTT ghi:
+
+```
+KTTT: 548 x 565 x 876    (L/D x W x H) mm
+```
+
+| # | Câu hỏi | Trả lời |
 |---|---|---|
-| **4.1** | **File Excel báo giá mẫu** (1–2 file thật, có ảnh + SP mới) | Không có thì không viết được bộ đọc: không biết dòng tiêu đề ở đâu, cột nào là gì, ảnh neo theo ô hay theo vùng. Đây là thứ chặn cứng. |
-| **4.2** | Chốt §2: gộp về **một bộ mm**, báo giá tự quy ra cm khi in? | Làm upload trước khi chốt sẽ đẻ ra bộ số thứ ba. |
-| **4.3** | Định nghĩa trục: “Dài” là cạnh nào? SP gập/mở lấy số nào? | 3/4 SP đang lệch chính vì hai phòng hiểu khác nhau. |
-| **4.4** | 3 SP lệch số thật (CH0095, CH0065, ST0076) — số nào đúng? | Máy không quyết thay được; cần người đo/đối chiếu. |
+| **4.1** | File mẫu | ✅ Đã có 2 file thật để đối chiếu (QCBG- GIGA DAYBED = phiếu hỏi giá của khách, ảnh neo theo ô; BKQC- = bảng kê nội bộ). Mẫu mới sinh bằng `scripts/make-quote-template.mjs`. |
+| **4.3** | “Dài” là cạnh nào, đơn vị gì | ✅ **Dài(/Sâu) × Rộng × Cao, đơn vị mm** — đúng nhãn `(L/D x W x H) mm` của bảng kê. File mẫu + bộ đọc đã theo chuẩn này. |
+| **4.4** — ca CH0065 | Số nào đúng | ✅ **Bộ mm đúng**: bảng kê ghi 548×565×876, khớp `length/width/height_mm`; bộ cm (58×60×87,5) là số gõ tay làm tròn sai. |
+
+⇒ Suy ra cho §2: **bộ mm là nguồn đúng**, bộ cm là số nhập tay kém tin cậy.
+
+### Còn chờ chủ dự án
+
+| # | Cần | Vì sao chưa làm được |
+|---|---|---|
+| **4.2** | Chốt gộp về một bộ mm: bỏ hẳn 3 ô `l_cm/w_cm/h_cm`, báo giá tự quy ra cm khi in | Là thao tác XOÁ cột dữ liệu — cần chủ dự án đồng ý, không tự làm. Hiện đã vá tạm ở tầng hiển thị (`lib/packing-dims.ts`): thiếu cm thì lấy mm. |
+| **4.4** — 2 ca còn lại | `CH0095HG-AL` (hoán vị trục: 68×62×99 cm vs 620×680×990 mm) và `ST0076HG-IR` (239,5×239,5×52 cm vs 1520×800×760 mm — nhiều khả năng đo bộ vs đo một món) | Không có bảng kê gốc cho hai mã này; máy không quyết thay được. Cần người đo lại hoặc tra bản vẽ. |
+
+## 5. Đã làm xong (10/08/2026)
+
+* Mẫu `docs/mau/MAU_BAO_GIA_SP_MOI.xlsx` (sinh bằng script, 20 cột).
+* Bộ đọc `lib/quote-excel.ts` + luật khớp `lib/quote-import-match.ts` (32 test).
+* Luồng hai nhịp: xem trước (không ghi gì) → lưu (tạo SP mới kèm ảnh + dựng báo giá).
+* Màn `/sales/quotes/import` + nút “Nhập từ Excel” ở danh sách báo giá + tải file mẫu.
+* Chặn 5 ca hỏng dữ liệu: trùng nhiều SP · SP ngừng dùng · trùng dòng trong file ·
+  số âm/bằng 0 · mã tạm đụng nhau (và danh mục đổi giữa xem trước với lưu).
