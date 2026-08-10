@@ -57,12 +57,12 @@ export function docStates(p: ProductRow): {
   state: DocState
   title: string
 }[] {
-  const k = p.packing ?? {}
-  const hasDim = k.l_cm != null && k.w_cm != null && k.h_cm != null
   const load = p.loading_40hc
+  // Kích thước SP: MỘT nguồn là ba cột mm (0129) — bộ packing.*_cm đã bỏ.
+  const hasDim = p.length_mm != null && p.width_mm != null && p.height_mm != null
 
   const packParts: string[] = []
-  if (hasDim) packParts.push(`${k.l_cm}×${k.w_cm}×${k.h_cm} cm`)
+  if (hasDim) packParts.push(`${p.length_mm}×${p.width_mm}×${p.height_mm} mm`)
   if (load != null) packParts.push(`${load} SP / cont 40HC`)
 
   return [
@@ -165,9 +165,8 @@ export function classLabel(p: ProductRow): string | null {
 
 /** Kích thước SP cho góc thẻ; không có thì lấy tạm số xếp cont. */
 export function sizeLabel(p: ProductRow): string | null {
-  const k = p.packing ?? {}
-  if (k.l_cm != null && k.w_cm != null && k.h_cm != null) {
-    return `${k.l_cm}×${k.w_cm}×${k.h_cm}`
+  if (p.length_mm != null && p.width_mm != null && p.height_mm != null) {
+    return `${p.length_mm}×${p.width_mm}×${p.height_mm}`
   }
   return p.loading_40hc != null ? `40HC ${p.loading_40hc}` : null
 }

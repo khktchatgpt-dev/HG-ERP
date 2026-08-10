@@ -97,7 +97,7 @@ export function ProductProfileTab({
   const categoryLabel = product.category
     ? (categories.find((c) => c.code === product.category)?.label ?? product.category)
     : null
-  const dims = productDims(product, pk)
+  const dims = productDims(product)
   const dimsOpen = productDimsOpen(product)
   const carton =
     pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
@@ -288,11 +288,7 @@ export function ProductProfileTab({
              * 1800→2500, ghế gấp mở ra lại THẤP xuống. Không hiện thành ô riêng
              * vì tuyệt đại đa số SP không gập/mở, thêm ô là thêm một dãy "—".
              */
-            sub: dimsOpen
-              ? `mở: ${dimsOpen.text} ${dimsOpen.unit}`
-              : dims?.source === 'bom'
-                ? 'từ file BOM'
-                : undefined,
+            sub: dimsOpen ? `mở: ${dimsOpen.text} ${dimsOpen.unit}` : undefined,
           },
           {
             /*

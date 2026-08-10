@@ -219,27 +219,6 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'width_open_mm', label: 'Rộng khi MỞ (mm)', kind: 'number', step: '1' },
       { name: 'height_open_mm', label: 'Cao khi MỞ (mm)', kind: 'number', step: '1' },
       {
-        name: 'l_cm',
-        label: 'Dài SP (cm)',
-        kind: 'number',
-        step: '0.1',
-        json: 'packing',
-      },
-      {
-        name: 'w_cm',
-        label: 'Rộng SP (cm)',
-        kind: 'number',
-        step: '0.1',
-        json: 'packing',
-      },
-      {
-        name: 'h_cm',
-        label: 'Cao SP (cm)',
-        kind: 'number',
-        step: '0.1',
-        json: 'packing',
-      },
-      {
         name: 'qty_per_carton',
         label: 'SP / thùng',
         kind: 'number',
@@ -489,27 +468,19 @@ export const dec = (n: number | null | undefined, d: number) =>
     : n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d })
 
 /**
- * Kích thước tổng thể SP. HAI nguồn cùng mô tả một thứ, khác đơn vị:
- * `length_mm…` do import BOM ghi (mm, 292/537 SP có) và `packing.l_cm` do người
- * dùng gõ tay (cm, 12/537 SP có). Ưu tiên bản gõ tay — người đã sửa thì đó là
- * số đúng — rồi mới tới bản import, thay vì bỏ trắng như trước.
+ * Kích thước tổng thể SP — MỘT nguồn duy nhất: ba cột mm, theo quy ước bảng kê
+ * quy cách của công ty `(L/D x W x H) mm`.
+ *
+ * Trước 0129 có thêm bộ `packing.l_cm…` gõ tay và hàm này ưu tiên bản gõ tay.
+ * Hoá ra đó chính là chỗ sinh lệch: 3/4 SP có cả hai thì số khác nhau, và bản
+ * gõ tay là bản sai (đối chiếu bảng kê gốc của CH0065HG-AL). Bộ cm đã bị xoá,
+ * chỗ nào cần cm thì tự quy đổi khi hiển thị (`@/lib/packing-dims`).
  */
 export function productDims(
   p: Pick<ProductView, 'length_mm' | 'width_mm' | 'height_mm'>,
-  pk: Packing,
-): { text: string; unit: string; source: 'manual' | 'bom' } | null {
-  if (pk.l_cm != null && pk.w_cm != null && pk.h_cm != null)
-    return {
-      text: `${pk.l_cm} × ${pk.w_cm} × ${pk.h_cm}`,
-      unit: 'cm',
-      source: 'manual',
-    }
+): { text: string; unit: string } | null {
   if (p.length_mm != null && p.width_mm != null && p.height_mm != null)
-    return {
-      text: `${p.length_mm} × ${p.width_mm} × ${p.height_mm}`,
-      unit: 'mm',
-      source: 'bom',
-    }
+    return { text: `${p.length_mm} × ${p.width_mm} × ${p.height_mm}`, unit: 'mm' }
   return null
 }
 

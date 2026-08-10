@@ -122,12 +122,35 @@ KTTT: 548 x 565 x 876    (L/D x W x H) mm
 
 ⇒ Suy ra cho §2: **bộ mm là nguồn đúng**, bộ cm là số nhập tay kém tin cậy.
 
-### Còn chờ chủ dự án
+### Đã gộp xong (migration 0129 — 10/08/2026)
 
-| # | Cần | Vì sao chưa làm được |
+Bộ `packing.l_cm/w_cm/h_cm` **đã xoá khỏi DB**. Kích thước SP nay chỉ sống ở ba
+cột mm. Sao lưu trước khi xoá: `supabase/backups/2026-08-10_product_dims_cm.json`.
+
+* 8 SP chỉ có cm → chuyển sang mm (×10), **giữ nguyên thứ tự trục** (không tự
+  hoán vị — xem danh sách cần rà bên dưới).
+* 4 SP có cả hai → giữ bộ mm.
+* `ST0076HG-IR` (SET "1 Bank II + 1 Table"): hai bộ số đo HAI VẬT khác nhau —
+  cm là kích thước cả bộ, mm là món bàn. Đã chép kích thước bộ vào `notes`
+  ("2395 x 2395 x 520 mm") để không mất, mm giữ nguyên.
+* Ô nhập cm đã gỡ khỏi: hồ sơ SP (tab Đóng gói), form bổ sung quy cách của Sale,
+  form tạo nhanh SP, và `packingSchema` — không còn đường nào ghi lại bộ cm.
+* Báo giá/bản in **không đổi gì trên mặt giấy**: vẫn in cm, tự quy từ mm
+  (`@/lib/packing-dims`). Đã đối chiếu BG-2026-0001: 212×95×75 y như trước.
+
+### Cần Kỹ thuật rà lại 5 SP (số đã chuyển nguyên xi, không đoán thay)
+
+| Mã | Số hiện tại (D/S × R × C mm) | Ngờ gì |
 |---|---|---|
-| **4.2** | Chốt gộp về một bộ mm: bỏ hẳn 3 ô `l_cm/w_cm/h_cm`, báo giá tự quy ra cm khi in | Là thao tác XOÁ cột dữ liệu — cần chủ dự án đồng ý, không tự làm. Hiện đã vá tạm ở tầng hiển thị (`lib/packing-dims.ts`): thiếu cm thì lấy mm. |
-| **4.4** — 2 ca còn lại | `CH0095HG-AL` (hoán vị trục: 68×62×99 cm vs 620×680×990 mm) và `ST0076HG-IR` (239,5×239,5×52 cm vs 1520×800×760 mm — nhiều khả năng đo bộ vs đo một món) | Không có bảng kê gốc cho hai mã này; máy không quyết thay được. Cần người đo lại hoặc tra bản vẽ. |
+| `RHONE-DT` | 2120 × 950 × 750 | Bàn ăn sâu 2,12m là vô lý ⇒ nhiều khả năng **hoán vị Dài↔Rộng** |
+| `RHONE-BENCH` | 1870 × 360 × 450 | Cùng kiểu; so với `BN0190HG-AL` (360 × 1870 — đúng chuẩn) thì bản này ngược |
+| `21605-217` | 1500 × 900 × 740 | Bàn 150×90: cạnh dài đang nằm ở ô Dài/Sâu |
+| `CH0170HG-AL` | 705 × 595 × **111** | Ghế cao 11,1 cm — có thể là chiều cao khi GẤP, hoặc gõ thiếu số |
+| `26443-228` | 800 × 700 × **—** | Thiếu hẳn chiều cao |
+
+Ba ca đầu đều là kiểu "l = cạnh dài nhất" (lối Sale) thay vì "L/D = sâu" (chuẩn
+bảng kê). Máy không tự đảo vì đoán sai thì hỏng số thật; sửa tay trên hồ sơ SP
+(tab Đóng gói, ô mm) là xong.
 
 ## 5. Đã làm xong (10/08/2026)
 

@@ -3,6 +3,12 @@ import { searchTokens } from '@/lib/search-text'
 import type { BomStatus } from './technical.schema'
 
 export type ProductPacking = {
+  /*
+   * l_cm/w_cm/h_cm KHÔNG CÒN TRONG DB (migration 0129 đã xoá): kích thước SP chỉ
+   * sống ở ba cột `length/width/height_mm`. Ba khoá dưới đây chỉ do tầng hiển
+   * thị BƠM VÀO khi dựng chứng từ dùng cm (báo giá, bản in) — xem
+   * `@/lib/packing-dims`. Không ghi ngược xuống DB.
+   */
   l_cm?: number
   w_cm?: number
   h_cm?: number
@@ -121,7 +127,7 @@ const COLS =
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, image_file_id, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, is_active, created_at'
 
 export type ProductLite = Pick<
   Product,
@@ -139,6 +145,10 @@ export type ProductLite = Pick<
   | 'unit'
   | 'bom_status'
   | 'packing'
+  // Kích thước SP — MỘT nguồn duy nhất là ba cột mm (0129).
+  | 'length_mm'
+  | 'width_mm'
+  | 'height_mm'
   | 'image_file_id'
   | 'is_active'
   | 'created_at'
