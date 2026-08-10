@@ -22,6 +22,14 @@ export type PoMaterial = {
   /** Giá đơn vị kép ở danh mục (0053): giá theo `price_unit`, 1 ĐVT = `unit2_factor`. */
   price_unit: string | null
   unit2_factor: number | null
+  /** Giá của đơn gần nhất có mã này — kèm đơn vị giá để không dùng lại lệch bậc. */
+  last_po: {
+    unit_price: number
+    price_unit: string | null
+    po_code: string
+    supplier_name: string
+    at: string
+  } | null
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null

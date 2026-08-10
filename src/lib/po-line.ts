@@ -75,6 +75,37 @@ export function qtyTotals(
     .map(([u, v]) => ({ label: u ? `Tổng số ${u.toUpperCase()}` : 'Tổng số', value: v }))
 }
 
+const sameUnit = (a: string | null | undefined, b: string | null | undefined) =>
+  (a ?? '').trim().toLowerCase() === (b ?? '').trim().toLowerCase()
+
+/**
+ * ĐƠN GIÁ ĐIỀN SẴN cho dòng mới — và điền sai còn tệ hơn để trống.
+ *
+ * Mỗi con số giá đều đi kèm một ĐƠN VỊ ngầm: mẫu nhôm/inox là đ/kg, mẫu còn lại
+ * là đ/ĐVT mua. Bản trước điền thẳng `last_purchase_price` của danh mục mà không
+ * xét đơn vị — 478 mã đang khai `price_unit = 'kg'`, nên đặt một trong số đó ở
+ * mẫu Đơn giản là chép giá đ/kg vào ô đ/cây, lệch cỡ 6 lần và không cảnh báo gì.
+ *
+ * Thứ tự: giá của ĐƠN GẦN NHẤT (số hai bên đã ký) → giá tham chiếu ở danh mục.
+ * Nguồn nào lệch đơn vị với mẫu đang soạn thì BỎ QUA, để trống cho người mua gõ.
+ */
+export function prefillPrice(
+  templatePriceUnit: string | null,
+  m: {
+    last_po?: { unit_price: number; price_unit: string | null } | null
+    last_purchase_price?: number | null
+    price_unit?: string | null
+  },
+): number | '' {
+  const po = m.last_po
+  if (po && po.unit_price > 0 && sameUnit(po.price_unit, templatePriceUnit)) {
+    return po.unit_price
+  }
+  const cat = Number(m.last_purchase_price)
+  if (cat > 0 && sameUnit(m.price_unit, templatePriceUnit)) return cat
+  return ''
+}
+
 /** Nhãn đơn giá cho UI/in: "Đơn giá/kg" khi tính theo đv2, "Đơn giá" khi thường. */
 export function priceUnitLabel(
   basis: PriceBasis | null | undefined,

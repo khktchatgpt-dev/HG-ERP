@@ -14,7 +14,7 @@ import {
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { TopProgressBar } from '@/components/erp/Spinner'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { allocationNote } from '@/lib/po-allocation'
@@ -35,7 +35,14 @@ import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
-import { newLine, type Line } from './po-line'
+import {
+  CATALOG_WRITEBACK,
+  newLine,
+  pendingCatalogSaves,
+  type CatalogField,
+  type CatalogSave,
+  type Line,
+} from './po-line'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -397,6 +404,7 @@ export function PoCreateForm({
   const [pickOpen, setPickOpen] = useState(false)
   /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [savingCatalog, setSavingCatalog] = useState(false)
 
   function addMaterial(m: PoMaterial) {
     addMaterials([m])
@@ -457,46 +465,83 @@ export function PoCreateForm({
     setLines((ls) => ls.filter((_, idx) => idx !== i))
   }
 
-  /**
+  /*
    * GHI SỐ CÂN VỀ DANH MỤC (0128) — khai một lần, mọi đơn sau tự điền.
    *
    * Người mua cầm phiếu cân của NCC trong tay đúng lúc lập đơn; trước đây con số
-   * đó chỉ sống trong một dòng đơn rồi mất, lần sau lại gõ lại. Chỉ ghi ĐÚNG một
-   * trường, không đụng gì khác của vật tư.
+   * đó chỉ sống trong một dòng đơn rồi mất, lần sau lại gõ lại.
    *
-   * Ghi xong cập nhật luôn `catalog_*` của MỌI dòng cùng vật tư để nút tự biến
-   * mất — đơn có thể có hai dòng cùng mã (khác vị trí lắp), bấm một lần là đủ.
+   * LUÔN QUA HỘP XÁC NHẬN, không ghi thẳng khi bấm. Đây là ghi vào DANH MỤC DÙNG
+   * CHUNG — số này sẽ điền sẵn cho mọi đơn của mọi người sau đó, và không có nút
+   * hoàn tác. Hộp xác nhận bày rõ "đang trống → 9,41" (khai mới) hay "9,32 →
+   * 9,41" (ghi đè) để người bấm thấy mình đang thay cái gì.
    */
-  async function saveToCatalog(
-    materialId: string,
-    field: 'kgm' | 'kgunit',
-    value: number,
-  ) {
-    const col = field === 'kgm' ? 'kg_per_m' : 'kg_per_unit'
-    try {
-      await api(`/api/dept/warehouse/materials/${materialId}`, {
-        method: 'PATCH',
-        body: { [col]: value },
-      })
-      setLines((ls) =>
-        ls.map((l) =>
-          l.material_id === materialId
-            ? {
-                ...l,
-                ...(field === 'kgm'
-                  ? { catalog_kg_m: value }
-                  : { catalog_kg_unit: value }),
-              }
-            : l,
-        ),
-      )
-      toast.success('Đã lưu vào danh mục', `${col} = ${value.toLocaleString('vi-VN')}`)
-    } catch (e) {
-      toast.error(
-        'Không lưu được vào danh mục',
-        e instanceof ApiError ? e.message : 'Có lỗi',
-      )
+  const pendingSaves = pendingCatalogSaves(template, lines)
+  const [confirmSaves, setConfirmSaves] = useState<CatalogSave[] | null>(null)
+
+  function askSaveOne(materialId: string, field: CatalogField) {
+    const hit = pendingSaves.find(
+      (s) => s.material_id === materialId && s.field === field,
+    )
+    if (hit) setConfirmSaves([hit])
+  }
+
+  /**
+   * Ghi tuần tự, KHÔNG song song: mỗi lệnh là một PATCH lên danh mục dùng chung,
+   * bắn 20 request cùng lúc chỉ để tiết kiệm vài giây là đánh đổi sai chỗ. Lỗi
+   * một dòng thì các dòng khác vẫn ghi xong, cuối cùng báo gọn ok/hỏng.
+   */
+  async function runSaves(items: CatalogSave[], undo = false) {
+    setSavingCatalog(true)
+    const done: CatalogSave[] = []
+    const failed: string[] = []
+    for (const s of items) {
+      const spec = CATALOG_WRITEBACK[s.field]
+      try {
+        await api(`/api/dept/warehouse/materials/${s.material_id}`, {
+          method: 'PATCH',
+          body: { [spec.column]: s.to },
+        })
+        done.push(s)
+        setLines((ls) =>
+          ls.map((l) =>
+            l.material_id === s.material_id ? { ...l, [spec.catalogKey]: s.to } : l,
+          ),
+        )
+      } catch (e) {
+        failed.push(`${s.code}: ${e instanceof ApiError ? e.message : 'lỗi'}`)
+      }
     }
+    setSavingCatalog(false)
+    setConfirmSaves(null)
+
+    if (failed.length > 0) {
+      toast.error(`Lưu được ${done.length}/${items.length}`, failed.join(' · '))
+      return
+    }
+    if (undo) {
+      toast.success(`Đã hoàn tác ${done.length} số`, 'Danh mục về lại như trước')
+      return
+    }
+    /*
+     * HOÀN TÁC ngay trong toast. Ghi vào danh mục dùng chung không có màn xác
+     * nhận thứ hai; bấm nhầm mà phải tự đi tìm chỗ sửa lại thì thường là không
+     * ai sửa. Hoàn tác = ghi lại ĐÚNG số cũ (`from`, có thể là null → trả ô về
+     * trống), nên chạy lại chính hàm này với hai vế đảo chỗ.
+     */
+    toast.show({
+      tone: 'success',
+      title: `Đã lưu ${done.length} số vào danh mục`,
+      description: 'Đơn sau sẽ tự điền, khỏi gõ lại',
+      action: {
+        label: 'Hoàn tác',
+        onClick: () =>
+          void runSaves(
+            done.map((s) => ({ ...s, from: s.to, to: s.from as number })),
+            true,
+          ),
+      },
+    })
   }
 
   /** Gom đầu đơn lại để đưa cho các hàm thuần ở `po-draft.ts` (có test riêng). */
@@ -844,7 +889,7 @@ export function PoCreateForm({
           currency={currency}
           onPatch={patchLine}
           onRemove={removeLine}
-          onSaveToCatalog={(id, f, v) => void saveToCatalog(id, f, v)}
+          onSaveToCatalog={(id, f) => askSaveOne(id, f)}
           focusIndex={focusIndex}
           onFocused={() => setFocusIndex(null)}
           onDoneRow={() => pickerRef.current?.focus()}
@@ -863,6 +908,25 @@ export function PoCreateForm({
           nút khai vật tư mới đứng ngay cạnh. Vẫn đặt DƯỚI bảng vì dòng mới nối
           vào cuối — mắt không phải nhảy từ đầu bảng xuống cuối sau mỗi lần thêm.
         */}
+        {/*
+          LƯU GỘP — đơn 20 dòng mà sửa 8 số cân thì bấm từng dòng là 8 lần bấm,
+          8 lần xác nhận. Thanh này gom cả đơn về một lần.
+        */}
+        {pendingSaves.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-amber-200 bg-amber-50/70 px-3 py-2 text-[12px] dark:border-amber-900 dark:bg-amber-950/20">
+            <span className="text-amber-900 dark:text-amber-300">
+              <b>{pendingSaves.length}</b> số cân trên đơn đang khác danh mục.
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfirmSaves(pendingSaves)}
+              className="rounded-md border border-amber-300 bg-white px-2.5 py-1 font-medium text-amber-900 shadow-xs hover:bg-amber-50 dark:border-amber-800 dark:bg-transparent dark:text-amber-300"
+            >
+              Lưu {pendingSaves.length} số về danh mục…
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 border-t border-zinc-100 bg-zinc-50/60 p-3 dark:border-zinc-800 dark:bg-zinc-900/40">
           {/*
             NÚT MỞ HỘP THOẠI, không phải ô gõ tại chỗ.
@@ -911,6 +975,8 @@ export function PoCreateForm({
                 default_bar_length_m: m.default_bar_length_m,
                 price_unit: m.price_unit,
                 unit2_factor: m.unit2_factor,
+                // Vật tư vừa khai thì chưa từng lên đơn nào — không có giá cũ.
+                last_po: null,
                 vat_rate: null,
                 default_supplier_id: null,
                 last_purchase_price: null,
@@ -980,6 +1046,90 @@ export function PoCreateForm({
             }
             lines={previewLinesFromDraft(template, lines)}
           />
+        </div>
+      </Modal>
+
+      {/*
+        XÁC NHẬN GHI VỀ DANH MỤC — bày rõ cũ → mới cho từng mã.
+        Ghi vào danh mục DÙNG CHUNG, không có nút hoàn tác, và số này sẽ điền sẵn
+        cho mọi đơn của mọi người sau đó. Bấm nhầm mà không thấy mình vừa thay số
+        nào là kiểu sai không ai phát hiện ra.
+      */}
+      <Modal
+        open={confirmSaves !== null}
+        onClose={() => !savingCatalog && setConfirmSaves(null)}
+        title="Lưu số cân về danh mục vật tư"
+        maxWidth="sm:max-w-2xl"
+      >
+        <div className="flex flex-col gap-3 text-[13px]">
+          <p className="text-muted-foreground">
+            Số dưới đây sẽ ghi vào <b>danh mục dùng chung</b> — mọi đơn sau tự điền, và{' '}
+            <b>không hoàn tác được</b>. Đơn đang soạn không đổi gì.
+          </p>
+          <div className="max-h-[46vh] overflow-y-auto rounded-lg border">
+            <table className="w-full text-[12.5px]">
+              <thead className="bg-muted/60 text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-1.5 text-left font-semibold">Mã · Tên vật tư</th>
+                  <th className="px-2 py-1.5 text-left font-semibold">Trường</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Đang có</th>
+                  <th className="px-2 py-1.5 text-right font-semibold">Ghi thành</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(confirmSaves ?? []).map((s) => (
+                  <tr key={`${s.material_id}:${s.field}`} className="border-t">
+                    <td className="px-2 py-1.5">
+                      <span className="bg-muted rounded border px-1 font-mono text-[11px]">
+                        {s.code}
+                      </span>{' '}
+                      {s.name}
+                    </td>
+                    <td className="text-muted-foreground px-2 py-1.5">{s.label}</td>
+                    <td className="px-2 py-1.5 text-right">
+                      {s.from == null ? (
+                        <span className="text-emerald-700 dark:text-emerald-400">
+                          đang trống
+                        </span>
+                      ) : (
+                        <span className="text-amber-700 tabular-nums dark:text-amber-500">
+                          {s.from.toLocaleString('vi-VN')}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">
+                      {s.to.toLocaleString('vi-VN')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {(confirmSaves ?? []).some((s) => s.from != null) && (
+            <p className="text-amber-700 dark:text-amber-500">
+              ⚠ Có dòng <b>ghi đè số cũ</b> (nền cam). Chỉ ghi đè khi anh/chị cầm phiếu
+              cân của NCC — số cũ có thể là barem Kho đã đối chiếu.
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={savingCatalog}
+              onClick={() => setConfirmSaves(null)}
+              className="rounded-md border px-3 py-1.5 shadow-xs hover:bg-zinc-50 disabled:opacity-50 dark:hover:bg-zinc-900"
+            >
+              Huỷ
+            </button>
+            <button
+              type="button"
+              disabled={savingCatalog}
+              onClick={() => void runSaves(confirmSaves ?? [])}
+              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            >
+              {savingCatalog && <Spinner size={14} />}
+              Ghi {(confirmSaves ?? []).length} số vào danh mục
+            </button>
+          </div>
         </div>
       </Modal>
 

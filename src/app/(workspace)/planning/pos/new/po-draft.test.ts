@@ -40,6 +40,7 @@ const line = (over: Partial<Line> = {}): Line => ({
   pack_unit: '',
   catalog_kg_m: null,
   catalog_kg_unit: null,
+  catalog_bar_length: null,
   ...over,
 })
 

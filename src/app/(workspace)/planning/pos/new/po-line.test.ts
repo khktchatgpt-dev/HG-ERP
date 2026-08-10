@@ -10,6 +10,7 @@ import {
   lineReady,
   newLine,
   overridesCatalog,
+  pendingCatalogSaves,
 } from './po-line'
 import type { Line, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
@@ -167,6 +168,7 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     default_bar_length_m: 6,
     price_unit: null,
     unit2_factor: null,
+    last_po: null,
     vat_rate: null,
     default_supplier_id: null,
     last_purchase_price: null,
@@ -212,6 +214,7 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     default_bar_length_m: null,
     price_unit: null,
     unit2_factor: null,
+    last_po: null,
     kg_per_unit: 23.94,
   }
 
@@ -239,6 +242,7 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
       default_bar_length_m: 5.65,
       price_unit: null,
       unit2_factor: null,
+      last_po: null,
     })
     expect(l.weight_per_m).toBe(0.248)
     expect(l.bar_length_m).toBe(5.65)
@@ -265,6 +269,7 @@ describe('baremFor — suy kg từ quy cách trong tên vật tư', () => {
       default_bar_length_m: null,
       price_unit: null,
       unit2_factor: null,
+      last_po: null,
       vat_rate: null,
       default_supplier_id: null,
       last_purchase_price: null,
@@ -336,6 +341,83 @@ describe('overridesCatalog — khi nào mời lưu về danh mục', () => {
 })
 
 /*
+ * ĐƠN NHIỀU DÒNG. Gom cả đơn về một lần bấm, và hộp xác nhận phải nói được từng
+ * mã đang đổi từ số nào sang số nào.
+ */
+describe('pendingCatalogSaves — gom cả đơn', () => {
+  const row = (over: Partial<Line>): Line =>
+    ({
+      material_id: 'm1',
+      code: 'IX-1',
+      name: 'Inox hộp 25x50x1',
+      unit: 'Cây',
+      weight_per_unit: '',
+      weight_per_m: '',
+      bar_length_m: '',
+      catalog_kg_m: null,
+      catalog_kg_unit: null,
+      catalog_bar_length: null,
+      ...over,
+    }) as Line
+
+  it('mỗi dòng đang gõ đè là một mục, kèm cũ → mới', () => {
+    const out = pendingCatalogSaves('metal_kg', [
+      row({
+        material_id: 'a',
+        code: 'IX-A',
+        weight_per_unit: 9.41,
+        catalog_kg_unit: 9.32,
+      }),
+      row({ material_id: 'b', code: 'IX-B', weight_per_unit: 23.94 }),
+    ])
+    expect(out).toHaveLength(2)
+    expect(out[0]).toMatchObject({ code: 'IX-A', field: 'kgunit', from: 9.32, to: 9.41 })
+    // Danh mục đang trống → KHAI MỚI, hộp xác nhận hiện "đang trống".
+    expect(out[1]).toMatchObject({ code: 'IX-B', from: null, to: 23.94 })
+    expect(out[0].label).toBe('kg/Cây')
+  })
+
+  it('một vật tư nằm HAI dòng chỉ tính một lần', () => {
+    // Đơn hay có hai dòng cùng mã, khác vị trí lắp — bấm lưu một lần là đủ.
+    const out = pendingCatalogSaves('metal_kg', [
+      row({ weight_per_unit: 9.41 }),
+      row({ weight_per_unit: 9.41, note: 'chân sau' } as Partial<Line>),
+    ])
+    expect(out).toHaveLength(1)
+  })
+
+  it('CHỈ gom cột đang hiện theo mẫu', () => {
+    // Ô của mẫu khác vẫn giữ số trong state khi đổi mẫu qua lại. Gom cả chúng
+    // là ghi về danh mục thứ người dùng không hề nhìn thấy trên màn hình.
+    const l = row({ weight_per_unit: 9.41, weight_per_m: 1.55 })
+    expect(pendingCatalogSaves('metal_kg', [l]).map((s) => s.field)).toEqual(['kgunit'])
+    expect(pendingCatalogSaves('aluminium', [l]).map((s) => s.field)).toEqual(['kgm'])
+    // Mẫu phụ kiện không có cột cân nào → không gom gì.
+    expect(pendingCatalogSaves('accessory', [l])).toEqual([])
+  })
+
+  it('mẫu nhôm gom cả kg/m LẪN dài cây', () => {
+    // Dài cây là nửa còn lại của barem nhôm; danh mục có mã khai sai rõ ràng
+    // ("Sắt hộp 40x80x1li x4m30" ghi 6 m) nên phải sửa về được.
+    const out = pendingCatalogSaves('aluminium', [
+      row({ weight_per_m: 1.88, bar_length_m: 4.3, catalog_bar_length: 6 }),
+    ])
+    expect(out.map((s) => s.field).sort()).toEqual(['barlen', 'kgm'])
+    expect(out.find((s) => s.field === 'barlen')).toMatchObject({ from: 6, to: 4.3 })
+    expect(out.find((s) => s.field === 'barlen')!.label).toBe('dài cây (m)')
+  })
+
+  it('ô trống hoặc đã khớp danh mục thì không vào danh sách', () => {
+    expect(pendingCatalogSaves('metal_kg', [row({ weight_per_unit: '' })])).toEqual([])
+    expect(
+      pendingCatalogSaves('metal_kg', [
+        row({ weight_per_unit: 9.41, catalog_kg_unit: 9.41 }),
+      ]),
+    ).toEqual([])
+  })
+})
+
+/*
  * MẪU CARTON: quy cách vật tư ("900×605×115 mm") chính là LỌT LÒNG — phải tách
  * vào ba ô D×R×C, không thì người soạn nhìn quy cách gõ lại từng số (phản hồi
  * 08/08/2026: "vật tư có quy cách mà không tự điền vào được").
@@ -354,6 +436,7 @@ describe('newLine carton — tách quy cách vào lọt lòng', () => {
     default_bar_length_m: null,
     price_unit: null,
     unit2_factor: null,
+    last_po: null,
     vat_rate: null,
     default_supplier_id: null,
     last_purchase_price: null,

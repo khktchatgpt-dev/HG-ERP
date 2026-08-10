@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { poLineAmount, priceUnitLabel, qtyTotals } from './po-line'
+import { poLineAmount, prefillPrice, priceUnitLabel, qtyTotals } from './po-line'
 
 describe('poLineAmount — giá đơn vị kép (0053)', () => {
   it("basis 'unit' (mặc định): SL đặt × đơn giá — vật tư nhóm A", () => {
@@ -91,6 +91,50 @@ describe('qtyTotals — dòng "Tổng số …" dưới bảng hàng (0128)', ()
 /* `packCount` / `roundUpToPack` đã có bộ test riêng ở
    `app/(workspace)/planning/pos/new/po-line.test.ts` (theo ca thật của đơn Tân
    Hiệp Phát) — hai hàm chỉ DỜI sang đây ở 0128, không đổi hành vi. */
+
+/*
+ * ĐƠN GIÁ ĐIỀN SẴN (10/08/2026). Bản trước chép thẳng `last_purchase_price` của
+ * danh mục mà không xét đơn vị — 478 mã khai giá theo kg, đặt một trong số đó ở
+ * mẫu Đơn giản là chép đ/kg vào ô đ/cây, lệch cỡ 6 lần và im lặng.
+ */
+describe('prefillPrice — chỉ dùng lại giá khi CÙNG đơn vị', () => {
+  const cat = { last_purchase_price: 18_811, price_unit: 'kg' as string | null }
+
+  it('giá đơn gần nhất thắng giá danh mục khi cùng đơn vị', () => {
+    expect(
+      prefillPrice('kg', {
+        ...cat,
+        last_po: { unit_price: 19_500, price_unit: 'kg' },
+      }),
+    ).toBe(19_500)
+  })
+
+  it('mẫu tính theo ĐVT mua KHÔNG lấy giá đ/kg', () => {
+    // Mẫu Đơn giản (priceUnit null) gặp vật tư khai giá/kg → để trống, gõ tay.
+    expect(prefillPrice(null, cat)).toBe('')
+    expect(
+      prefillPrice(null, { ...cat, last_po: { unit_price: 19_500, price_unit: 'kg' } }),
+    ).toBe('')
+  })
+
+  it('mẫu tính theo kg KHÔNG lấy giá theo ĐVT mua', () => {
+    expect(
+      prefillPrice('kg', {
+        last_purchase_price: 320,
+        price_unit: null,
+        last_po: { unit_price: 340, price_unit: null },
+      }),
+    ).toBe('')
+  })
+
+  it('cùng đơn vị "theo ĐVT mua" thì vẫn điền như cũ', () => {
+    expect(prefillPrice(null, { last_purchase_price: 320, price_unit: null })).toBe(320)
+  })
+
+  it('không có nguồn nào → để trống', () => {
+    expect(prefillPrice(null, { last_purchase_price: null, price_unit: null })).toBe('')
+  })
+})
 
 describe('priceUnitLabel', () => {
   it("unit2 + đơn vị → 'Đơn giá/kg'; còn lại 'Đơn giá'", () => {

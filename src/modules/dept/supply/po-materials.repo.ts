@@ -24,6 +24,21 @@ export type PoLastLine = {
   dm_per_sp: number | null
 }
 
+/**
+ * Giá của LẦN ĐẶT GẦN NHẤT — kèm ĐƠN VỊ CỦA GIÁ, thứ bắt buộc phải đi cùng.
+ *
+ * `price_unit` = null nghĩa là giá tính theo ĐVT mua (đ/cây, đ/thùng), 'kg' hay
+ * 'm²' nghĩa là giá theo đơn vị 2. Điền một con số đ/kg vào ô đơn giá của mẫu
+ * tính theo cây là sai cỡ 6 lần — nên giá cũ chỉ được dùng lại khi đơn vị khớp.
+ */
+export type PoLastPrice = {
+  unit_price: number
+  price_unit: string | null
+  po_code: string
+  supplier_name: string
+  at: string
+}
+
 export type PoMaterial = {
   id: string
   code: string
@@ -44,6 +59,15 @@ export type PoMaterial = {
    */
   price_unit: string | null
   unit2_factor: number | null
+  /**
+   * GIÁ CỦA ĐƠN GẦN NHẤT có mã này (10/08/2026) — suy thẳng từ dòng PO thật,
+   * không phải cột `last_purchase_price` khai tay ở danh mục.
+   *
+   * Vì sao không ghi ngược vào cột đó: cột là số THAM CHIẾU của danh mục, còn
+   * đây là số ĐÃ KÝ trên một đơn cụ thể. Đọc thẳng từ đơn thì không có bản sao
+   * nào để lệch, và có tác dụng ngay với mọi đơn đã đặt từ trước.
+   */
+  last_po: PoLastPrice | null
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null
@@ -70,6 +94,7 @@ function toMaterial(
   r: Record<string, unknown>,
   onHand: number | null,
   lastLine: PoLastLine | null,
+  lastPo: PoLastPrice | null,
 ): PoMaterial {
   return {
     id: r.id as string,
@@ -95,6 +120,7 @@ function toMaterial(
     material_grade: (r.material_grade as string | null) ?? null,
     on_hand: onHand,
     last_line: lastLine,
+    last_po: lastPo,
   }
 }
 
@@ -159,6 +185,65 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   return m
 }
 
+/**
+ * GIÁ ĐƠN GẦN NHẤT theo vật tư — nguồn cho ô Đơn giá điền sẵn.
+ *
+ * Tách khỏi `lastLinesMany` vì hai thứ có luật khác nhau: ô mô tả thì lấy lần
+ * đặt gần nhất bất kể đơn ra sao, còn GIÁ thì phải bỏ đơn đã HUỶ — giá trên một
+ * đơn bị huỷ không phải giá hai bên chốt.
+ *
+ * Mang theo `price_basis`/`unit2` để biết con số ấy là đ/kg hay đ/ĐVT mua; thiếu
+ * nó thì không có cách nào dùng lại giá mà không sợ lệch bậc đơn vị.
+ */
+async function lastPricesMany(ids: string[]): Promise<Map<string, PoLastPrice>> {
+  if (ids.length === 0) return new Map()
+  const { data } = await db()
+    .from('supply_purchase_order_lines')
+    .select(
+      'material_id, unit_price, price_basis, unit2, supply_purchase_orders!inner(code, status, created_at, supply_suppliers(name))',
+    )
+    .in('material_id', ids)
+    .not('unit_price', 'is', null)
+    .limit(400)
+  type Row = {
+    material_id: string
+    unit_price: unknown
+    price_basis: 'unit' | 'unit2' | null
+    unit2: string | null
+    supply_purchase_orders: {
+      code: string
+      status: string
+      created_at: string
+      supply_suppliers: { name: string } | { name: string }[] | null
+    }
+  }
+  const rows = ((data ?? []) as unknown as Row[])
+    .filter(
+      (r) => r.supply_purchase_orders && r.supply_purchase_orders.status !== 'cancelled',
+    )
+    .sort((a, b) =>
+      b.supply_purchase_orders.created_at.localeCompare(
+        a.supply_purchase_orders.created_at,
+      ),
+    )
+  const m = new Map<string, PoLastPrice>()
+  for (const r of rows) {
+    if (m.has(r.material_id)) continue
+    const po = r.supply_purchase_orders
+    const sup = Array.isArray(po.supply_suppliers)
+      ? po.supply_suppliers[0]
+      : po.supply_suppliers
+    m.set(r.material_id, {
+      unit_price: Number(r.unit_price),
+      price_unit: r.price_basis === 'unit2' ? (r.unit2 ?? null) : null,
+      po_code: po.code,
+      supplier_name: sup?.name ?? '?',
+      at: po.created_at,
+    })
+  }
+  return m
+}
+
 export const poMaterialsRepo = {
   /**
    * Tìm theo mã / tên / barcode — KHÔNG dính gì tới mẫu đơn.
@@ -201,15 +286,17 @@ export const poMaterialsRepo = {
     }
 
     const rowIds = rows.map((r) => r.id as string)
-    const [onHand, lastLines] = await Promise.all([
+    const [onHand, lastLines, lastPrices] = await Promise.all([
       onHandMany(rowIds),
       lastLinesMany(rowIds),
+      lastPricesMany(rowIds),
     ])
     const mats = rows.map((r) =>
       toMaterial(
         r,
         onHand.get(r.id as string) ?? null, // null = chưa có sổ kho (0127)
         lastLines.get(r.id as string) ?? null,
+        lastPrices.get(r.id as string) ?? null,
       ),
     )
     if (tokens.length === 0) return mats
@@ -242,15 +329,17 @@ export const poMaterialsRepo = {
       .in('id', ids.slice(0, 200))
     const rows = (data as Record<string, unknown>[] | null) ?? []
     const rowIds = rows.map((r) => r.id as string)
-    const [onHand, lastLines] = await Promise.all([
+    const [onHand, lastLines, lastPrices] = await Promise.all([
       onHandMany(rowIds),
       lastLinesMany(rowIds),
+      lastPricesMany(rowIds),
     ])
     return rows.map((r) =>
       toMaterial(
         r,
         onHand.get(r.id as string) ?? null, // null = chưa có sổ kho (0127)
         lastLines.get(r.id as string) ?? null,
+        lastPrices.get(r.id as string) ?? null,
       ),
     )
   },

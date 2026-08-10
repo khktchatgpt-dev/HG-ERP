@@ -5,9 +5,11 @@ import { DiePicker } from '@/components/supply/DiePicker'
 import type { PoField } from '@/lib/po-fields'
 import {
   baremFor,
+  CATALOG_WRITEBACK,
   overridesCatalog,
   parseInnerDims,
   recalcCartonArea,
+  type CatalogField,
   type Line,
 } from './po-line'
 
@@ -130,11 +132,11 @@ function SaveToCatalog({
   onSave: NonNullable<BaremHintProps['onSaveToCatalog']>
 }) {
   const value = Number(get(line, f.field))
-  const label = f.key === 'kgm' ? 'kg/m' : `kg/${line.unit || 'đơn vị'}`
+  const label = CATALOG_WRITEBACK[f.key as CatalogField].label(line)
   return (
     <button
       type="button"
-      onClick={() => onSave(line.material_id, f.key === 'kgm' ? 'kgm' : 'kgunit', value)}
+      onClick={() => onSave(line.material_id, f.key as CatalogField, value)}
       title={`Ghi ${num(value)} ${label} vào danh mục vật tư — lần đặt sau tự điền, khỏi gõ lại`}
       className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
     >
@@ -149,10 +151,19 @@ type BaremHintProps = {
   index: number
   onPatch: (i: number, patch: Partial<Line>) => void
   /** Ghi số vừa gõ về danh mục vật tư — form lo phần gọi API. */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (materialId: string, field: CatalogField, value: number) => void
 }
 
 function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps) {
+  /*
+   * Ô DÀI CÂY không có barem để tra — không suy được chiều dài một cây hàng từ
+   * tên. Chỉ mời ghi về danh mục khi người mua sửa nó.
+   */
+  if (f.key === 'barlen') {
+    return onSaveToCatalog && overridesCatalog(f, line) ? (
+      <SaveToCatalog f={f} line={line} onSave={onSaveToCatalog} />
+    ) : null
+  }
   const { kg, why } = baremFor(f, line)
   const filled = Number(get(line, f.field))
   const saveBtn =
@@ -252,7 +263,7 @@ export function LineCell({
             className={`${cell} text-right`}
             aria-label={label}
           />
-          {(f.key === 'kgm' || f.key === 'kgunit') && (
+          {(f.key === 'kgm' || f.key === 'kgunit' || f.key === 'barlen') && (
             <BaremHint
               f={f}
               line={l}

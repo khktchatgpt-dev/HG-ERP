@@ -5,7 +5,14 @@ import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-templ
 import { PO_FIELDS } from '@/lib/po-fields'
 import { LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
 import { packCount, roundUpToPack } from '@/lib/po-line'
-import { lineAmount, lineProblem, lineQty2, type Line, type Num } from './po-line'
+import {
+  lineAmount,
+  lineProblem,
+  lineQty2,
+  type CatalogField,
+  type Line,
+  type Num,
+} from './po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
@@ -70,7 +77,7 @@ export function PoLineTable({
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
   /** Ghi kg/m · kg/đơn-vị vừa gõ về danh mục vật tư (0128). */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (materialId: string, field: CatalogField, value: number) => void
   /** Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó. */
   focusIndex?: number | null
   /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */

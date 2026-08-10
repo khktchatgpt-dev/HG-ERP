@@ -4,12 +4,23 @@ import { createContext, useCallback, useContext, useEffect, useState } from 'rea
 
 type Tone = 'info' | 'success' | 'error' | 'warning'
 
+/**
+ * `action` — MỘT nút phụ trong toast, dùng cho HOÀN TÁC.
+ *
+ * Có vì một số thao tác ghi thẳng vào dữ liệu dùng chung mà không có màn xác
+ * nhận thứ hai (vd ghi số cân về danh mục vật tư): lối lùi phải nằm ngay trong
+ * thông báo vừa hiện, chứ bắt người dùng tự đi tìm chỗ sửa lại là quá muộn.
+ * Toast có `action` sống lâu hơn (8s) — 4s không đủ để đọc rồi quyết.
+ */
+type ToastAction = { label: string; onClick: () => void }
+
 type Toast = {
   id: number
   tone: Tone
   title: string
   description?: string
   ttl: number
+  action?: ToastAction
 }
 
 type Ctx = {
@@ -18,6 +29,7 @@ type Ctx = {
     title: string
     description?: string
     ttl?: number
+    action?: ToastAction
   }) => void
   success: (title: string, description?: string) => void
   error: (title: string, description?: string) => void
@@ -39,9 +51,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([])
 
   const show: Ctx['show'] = useCallback(
-    ({ tone = 'info', title, description, ttl = 4000 }) => {
+    ({ tone = 'info', title, description, ttl, action }) => {
       const id = ++counter
-      setToasts((ts) => [...ts, { id, tone, title, description, ttl }])
+      setToasts((ts) => [
+        ...ts,
+        { id, tone, title, description, ttl: ttl ?? (action ? 8000 : 4000), action },
+      ])
     },
     [],
   )
@@ -114,6 +129,17 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
           <div className="text-sm font-medium">{toast.title}</div>
           {toast.description && (
             <div className="mt-0.5 text-xs text-zinc-500">{toast.description}</div>
+          )}
+          {toast.action && (
+            <button
+              onClick={() => {
+                toast.action!.onClick()
+                onClose()
+              }}
+              className="mt-1.5 text-xs font-semibold text-sky-700 underline-offset-2 hover:underline dark:text-sky-400"
+            >
+              {toast.action.label}
+            </button>
           )}
         </div>
         <button

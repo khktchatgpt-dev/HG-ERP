@@ -1,7 +1,12 @@
-import { poLineAmount } from '@/lib/po-line'
-import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
+import { poLineAmount, prefillPrice } from '@/lib/po-line'
+import {
+  cartonAreaM2,
+  deriveLine,
+  poTemplateMeta,
+  type PoTemplate,
+} from '@/lib/po-template'
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
-import type { PoField } from '@/lib/po-fields'
+import { PO_FIELDS, type PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -62,6 +67,7 @@ export type Line = {
    */
   catalog_kg_m: number | null
   catalog_kg_unit: number | null
+  catalog_bar_length: number | null
 }
 
 /** Gợi ý từ nhu cầu BOM của LSX — chỉ để hiện, không tự ghi vào ô SL. */
@@ -187,8 +193,9 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     spec: m.spec ?? '',
     note: '',
     qty: '',
-    // Giá mua lần trước là GỢI Ý, điền sẵn để đơn lặp lại hàng tháng khỏi gõ lại.
-    price: m.last_purchase_price ?? '',
+    // Giá GỢI Ý — ưu tiên số đã ký ở đơn gần nhất, và chỉ khi cùng đơn vị giá
+    // với mẫu đang soạn (xem `prefillPrice`).
+    price: prefillPrice(poTemplateMeta(t).priceUnit, m),
     material_grade: grade,
     dm_per_sp: last?.dm_per_sp ?? '',
     qty_demand: '',
@@ -219,6 +226,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     pack_unit: m.pack_unit ?? '',
     catalog_kg_m: m.kg_per_m ?? null,
     catalog_kg_unit: kgPerUnitOf(m).kg,
+    catalog_bar_length: m.default_bar_length_m ?? null,
   }
 }
 
@@ -304,6 +312,7 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     // là việc đúng, không phải việc thừa).
     catalog_kg_m: null,
     catalog_kg_unit: null,
+    catalog_bar_length: null,
   }
 }
 
@@ -346,6 +355,44 @@ export function baremFor(f: PoField, l: Line): { kg: number | null; why: string 
 }
 
 /**
+ * BA TRƯỜNG GHI NGƯỢC ĐƯỢC VỀ DANH MỤC — khai một lần, mọi đơn sau tự điền.
+ *
+ * Chỉ ba: chúng là SỰ THẬT CỦA VẬT TƯ, không đổi theo đơn. Các ô mô tả (Quy
+ * cách, Vật liệu, Màu/bề mặt, Kích thước) cố tình KHÔNG ghi ngược — người mua
+ * hay sửa chúng cho hợp một đơn cụ thể ("inox bóng lần này lấy loại xước"), đẩy
+ * về danh mục là để một đơn lẻ viết lại hồ sơ dùng chung.
+ */
+export const CATALOG_WRITEBACK = {
+  kgm: {
+    catalogKey: 'catalog_kg_m',
+    lineKey: 'weight_per_m',
+    column: 'kg_per_m',
+    label: () => 'kg/m',
+  },
+  kgunit: {
+    catalogKey: 'catalog_kg_unit',
+    lineKey: 'weight_per_unit',
+    column: 'kg_per_unit',
+    label: (l: Line) => `kg/${l.unit || 'đơn vị'}`,
+  },
+  // Dài cây là NỬA CÒN LẠI của barem nhôm (kg/m × dài cây). Danh mục đang có mã
+  // sai rõ ràng — "Sắt hộp 40x80x1li x4m30" khai 6 m — nên người mua cầm cây
+  // hàng thật phải sửa được về danh mục, không thì mỗi đơn lại lệch một lần.
+  barlen: {
+    catalogKey: 'catalog_bar_length',
+    lineKey: 'bar_length_m',
+    column: 'default_bar_length_m',
+    label: () => 'dài cây (m)',
+  },
+} as const
+
+export type CatalogField = keyof typeof CATALOG_WRITEBACK
+
+function isCatalogField(k: string): k is CatalogField {
+  return k in CATALOG_WRITEBACK
+}
+
+/**
  * Số trên ô có KHÁC số danh mục đang giữ không — tức người mua vừa gõ đè, hoặc
  * bấm barem, hoặc đọc phiếu cân NCC. Đó là lúc mời ghi ngược về danh mục (0128)
  * để lần đặt sau khỏi gõ lại.
@@ -355,11 +402,59 @@ export function baremFor(f: PoField, l: Line): { kg: number | null; why: string 
  * ghi đè bằng chính nó thì cũng vô hại.
  */
 export function overridesCatalog(f: PoField, l: Line): boolean {
-  const filled = Number(f.field ? l[f.field as keyof Line] : null)
+  if (!isCatalogField(f.key)) return false
+  const spec = CATALOG_WRITEBACK[f.key]
+  const filled = Number(l[spec.lineKey])
   if (!(filled > 0)) return false
-  const cat = f.key === 'kgm' ? l.catalog_kg_m : l.catalog_kg_unit
+  const cat = l[spec.catalogKey]
   if (cat == null) return true
   return Math.abs(cat - filled) / filled > 0.0001
+}
+
+/** Một số chờ ghi về danh mục — đủ thông tin để hỏi lại người dùng. */
+export type CatalogSave = {
+  material_id: string
+  code: string
+  name: string
+  field: CatalogField
+  /** Nhãn đọc được: "kg/m", "kg/Cây", "dài cây (m)". */
+  label: string
+  /** Số danh mục đang giữ. null = ô trống, tức KHAI MỚI chứ không ghi đè. */
+  from: number | null
+  to: number
+}
+
+/**
+ * Gom mọi số đang khác danh mục trên CẢ ĐƠN — nguồn cho nút "Lưu N số về danh
+ * mục" và cho hộp xác nhận.
+ *
+ * Chỉ xét cột đang HIỆN theo mẫu: đổi mẫu qua lại thì ô của mẫu khác vẫn giữ số
+ * trong state, gom cả chúng vào là ghi về danh mục thứ người dùng không nhìn
+ * thấy. Một vật tư nằm hai dòng thì chỉ lấy một lần.
+ */
+export function pendingCatalogSaves(t: PoTemplate, lines: Line[]): CatalogSave[] {
+  const cols = PO_FIELDS[t].filter((f) => isCatalogField(f.key))
+  const out: CatalogSave[] = []
+  const seen = new Set<string>()
+  for (const l of lines) {
+    for (const f of cols) {
+      if (!overridesCatalog(f, l)) continue
+      const key = `${l.material_id}:${f.key}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const spec = CATALOG_WRITEBACK[f.key as CatalogField]
+      out.push({
+        material_id: l.material_id,
+        code: l.code,
+        name: l.name,
+        field: f.key as CatalogField,
+        label: spec.label(l),
+        from: l[spec.catalogKey],
+        to: Number(l[spec.lineKey]),
+      })
+    }
+  }
+  return out
 }
 
 /** Kích thước lọt lòng đổi → tính lại m²/thùng theo cách mở (AD/MR). */
