@@ -1,4 +1,22 @@
 import { db } from '@/server/db'
+import { packingWithDims } from '@/lib/packing-dims'
+
+/**
+ * Quy cách của dòng báo giá = `packing` gõ tay, THIẾU thì bù từ 3 cột mm của hồ
+ * sơ SP (xem `@/lib/packing-dims`). Không bù thì bản in trống kích thước với 341
+ * SP đã có số đo — chỉ vì số nằm ở bộ cột kia.
+ */
+function withDims(
+  p: {
+    packing?: unknown
+    length_mm: number | null
+    width_mm: number | null
+    height_mm: number | null
+  } | null,
+) {
+  if (!p) return {}
+  return packingWithDims((p.packing ?? {}) as Record<string, number | undefined>, p)
+}
 import type { QuoteStatus } from './quotes.schema'
 import type { ProductPacking } from '@/modules/dept/technical/technical.repo'
 
@@ -101,7 +119,7 @@ export const quotesRepo = {
     const { data } = await db()
       .from('sales_quote_lines')
       .select(
-        'id, quote_id, product_id, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing)',
+        'id, quote_id, product_id, unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, image_file_id, packing, length_mm, width_mm, height_mm)',
       )
       .eq('quote_id', quoteId)
       .order('sort_order')
@@ -113,7 +131,11 @@ export const quotesRepo = {
       description_en: string | null
       image_file_id: string | null
       packing: ProductPacking | null
+      length_mm: number | null
+      width_mm: number | null
+      height_mm: number | null
     }
+
     type RawLine = {
       id: string
       quote_id: string
@@ -140,7 +162,7 @@ export const quotesRepo = {
         customer_item_code: p?.customer_item_code ?? null,
         description_en: p?.description_en ?? null,
         image_file_id: p?.image_file_id ?? null,
-        packing: p?.packing ?? {},
+        packing: withDims(p),
       }
     })
   },
@@ -268,7 +290,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
   const { data } = await db()
     .from('sales_quote_lines')
     .select(
-      'unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id)',
+      'unit_price, discount_pct, note, sort_order, product:technical_products(code, name, unit, customer_item_code, description_en, packing, image_file_id, length_mm, width_mm, height_mm)',
     )
     .eq('quote_id', quoteId)
     .order('sort_order')
@@ -280,6 +302,9 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
     description_en: string | null
     packing: QuotePrintLine['packing'] | null
     image_file_id: string | null
+    length_mm: number | null
+    width_mm: number | null
+    height_mm: number | null
   }
   type Raw = {
     unit_price: number
@@ -299,7 +324,7 @@ export async function listQuoteLinesForPrint(quoteId: string): Promise<QuotePrin
       customer_item_code: p?.customer_item_code ?? null,
       description_en: p?.description_en ?? null,
       image_file_id: p?.image_file_id ?? null,
-      packing: p?.packing ?? {},
+      packing: withDims(p),
     }
   })
 }

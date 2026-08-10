@@ -4,8 +4,7 @@ import type {
   ProductPickRow,
 } from '@/modules/dept/technical/technical.repo'
 
-const mmToCm = (mm: number | null): number | undefined =>
-  mm != null ? Math.round((mm / 10) * 100) / 100 : undefined
+import { dimsText, packingWithDims } from '@/lib/packing-dims'
 
 /** SP như ô chọn của form báo giá/đơn cần — khớp `ProductPick` phía client. */
 export type QuotePickPayload = {
@@ -44,12 +43,7 @@ export function toQuotePickPayload(p: ProductPickRow): QuotePickPayload {
     bom_status: p.bom_status,
     description_en: p.description_en,
     has_image: !!p.image_file_id,
-    packing: {
-      ...pk,
-      l_cm: pk.l_cm ?? mmToCm(p.length_mm),
-      w_cm: pk.w_cm ?? mmToCm(p.width_mm),
-      h_cm: pk.h_cm ?? mmToCm(p.height_mm),
-    },
+    packing: packingWithDims(pk, p),
   }
 }
 
@@ -71,11 +65,14 @@ export type ProductPickData = {
 }
 
 export function toProductPick(p: Product): ProductPickData {
-  const pk = p.packing ?? {}
-  const dims =
-    pk.l_cm != null && pk.w_cm != null && pk.h_cm != null
-      ? `${pk.l_cm}×${pk.w_cm}×${pk.h_cm} cm`
-      : null
+  /*
+   * Bù kích thước từ cột mm y như `toQuotePickPayload` — form ĐƠN HÀNG trước đây
+   * bỏ sót phép bù này nên chip quy cách trống với 341 SP đã có số đo, dù form
+   * báo giá ngay cạnh thì hiện đủ.
+   */
+  const pk = packingWithDims(p.packing ?? {}, p)
+  const dimsPart = dimsText(pk)
+  const dims = dimsPart ? `${dimsPart} cm` : null
   const ts = p.tech_spec ?? {}
   const specParts = [
     ts.paint && `Sơn: ${ts.paint}`,
