@@ -241,10 +241,31 @@ export function parseQuoteExcel(
       warnings: [],
     }
 
-    if (!r.name) r.missing.push('tên sản phẩm')
-    if (r.unit_price == null) r.missing.push('đơn giá')
+    if (!r.name) r.missing.push('thiếu tên sản phẩm')
+    if (r.unit_price == null) r.missing.push('thiếu đơn giá')
     const dims = [r.length_mm, r.width_mm, r.height_mm]
-    if (dims.some((d) => d == null)) r.missing.push('kích thước (D×R×C mm)')
+    if (dims.some((d) => d == null)) r.missing.push('thiếu kích thước (D×R×C mm)')
+
+    /*
+     * SỐ ÂM / BẰNG 0 là dữ liệu sai, không phải "thiếu": ô ghi -650 hay 0 thường
+     * do gõ nhầm dấu hoặc kéo công thức hụt. Chặn ngay ở đây, vì xuống tới DB thì
+     * chỉ `unit_price >= 0` có CHECK, còn kích thước thì lọt tuốt và sinh ra hồ sơ
+     * SP có chiều âm.
+     */
+    if (dims.some((d) => d != null && d <= 0)) r.missing.push('kích thước phải lớn hơn 0')
+    if (r.unit_price != null && r.unit_price < 0) r.missing.push('đơn giá không được âm')
+
+    const nonNegative: [number | null, string][] = [
+      [r.qty_per_carton, 'SL/thùng'],
+      [r.carton_l_cm, 'carton dài'],
+      [r.carton_w_cm, 'carton rộng'],
+      [r.carton_h_cm, 'carton cao'],
+      [r.nw_kg, 'NW'],
+      [r.gw_kg, 'GW'],
+      [r.loading_40hc, "loading 40'HC"],
+    ]
+    const negFields = nonNegative.filter(([v]) => v != null && v < 0).map(([, n]) => n)
+    if (negFields.length > 0) r.missing.push(`số âm ở: ${negFields.join(', ')}`)
 
     // Ngờ vực đơn vị: 3 số đều nhỏ thì gần như chắc đang là cm. Không tự nhân 10.
     if (dims.every((d) => d != null && d > 0 && d < SUSPECT_MM_BELOW))

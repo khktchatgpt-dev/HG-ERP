@@ -165,7 +165,7 @@ describe('ca hiểm 3 — trùng dòng trong chính file', () => {
 
 describe('dòng thiếu dữ liệu', () => {
   it('chặn kèm lý do, không đụng tới việc khớp', () => {
-    const [r] = resolveImportRows([row({ missing: ['đơn giá'] })], CATALOG)
+    const [r] = resolveImportRows([row({ missing: ['thiếu đơn giá'] })], CATALOG)
     expect(r.action).toBe('blocked')
     expect(r.blocked_reason).toBe('thiếu đơn giá')
   })
@@ -173,7 +173,7 @@ describe('dòng thiếu dữ liệu', () => {
   it('dòng bị chặn KHÔNG chiếm chỗ chống trùng của dòng sau', () => {
     const rows = resolveImportRows(
       [
-        row({ row: 4, code: 'CH0065HG-AL', missing: ['đơn giá'] }),
+        row({ row: 4, code: 'CH0065HG-AL', missing: ['thiếu đơn giá'] }),
         row({ row: 5, code: 'CH0065HG-AL' }),
       ],
       CATALOG,

@@ -462,6 +462,20 @@ export const productsRepo = {
     return !!data
   },
 
+  /**
+   * Tra SP theo mã — trả id để DÙNG LẠI thay vì tạo trùng. `code` là UNIQUE nên
+   * chèn đè sẽ vỡ ở DB; chỗ nhập hàng loạt (nhập báo giá từ Excel) phải kiểm
+   * ngay trước khi chèn vì danh mục có thể đổi giữa lúc xem trước và lúc lưu.
+   */
+  async findIdByCode(code: string): Promise<string | null> {
+    const { data } = await db()
+      .from('technical_products')
+      .select('id')
+      .eq('code', code)
+      .maybeSingle()
+    return (data as { id: string } | null)?.id ?? null
+  },
+
   async insert(row: Partial<Product> & Pick<Product, 'code' | 'name'>): Promise<Product> {
     const { data, error } = await db()
       .from('technical_products')

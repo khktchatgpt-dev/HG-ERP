@@ -87,7 +87,7 @@ export function resolveImportRows(
       return {
         ...base,
         action: 'blocked' as const,
-        blocked_reason: `thiếu ${r.missing.join(', ')}`,
+        blocked_reason: r.missing.join(' · '),
       }
     }
 

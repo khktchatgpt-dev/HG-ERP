@@ -140,9 +140,9 @@ describe('parseQuoteExcel — thiếu và ngờ vực', () => {
     ]
     const r = parseQuoteExcel([HEADER, row])
     expect(r.rows).toHaveLength(1)
-    expect(r.rows[0].missing).toContain('tên sản phẩm')
-    expect(r.rows[0].missing).toContain('đơn giá')
-    expect(r.rows[0].missing).toContain('kích thước (D×R×C mm)')
+    expect(r.rows[0].missing).toContain('thiếu tên sản phẩm')
+    expect(r.rows[0].missing).toContain('thiếu đơn giá')
+    expect(r.rows[0].missing).toContain('thiếu kích thước (D×R×C mm)')
   })
 
   it('ba số kích thước đều nhỏ → cảnh báo có thể đang điền cm, KHÔNG tự nhân 10', () => {
@@ -243,5 +243,44 @@ describe('parseQuoteExcel — ảnh neo theo dòng', () => {
   it('ảnh neo lệch dòng thì KHÔNG gắn cho dòng khác', () => {
     const r = parseQuoteExcel([HEADER, rowFull], new Map([[99, 'img-x']]))
     expect(r.rows[0].image_id).toBeNull()
+  })
+})
+
+describe('parseQuoteExcel — số âm và số 0 là dữ liệu SAI, không phải thiếu', () => {
+  const withNums = (over: Record<number, string | number>) => {
+    const r: (string | number)[] = [...rowFull]
+    for (const [i, v] of Object.entries(over)) r[Number(i)] = v
+    return r
+  }
+
+  it('kích thước âm → chặn', () => {
+    const r = parseQuoteExcel([HEADER, withNums({ 5: -548 })])
+    expect(r.rows[0].missing).toContain('kích thước phải lớn hơn 0')
+  })
+
+  it('kích thước bằng 0 → chặn (không coi là hợp lệ)', () => {
+    const r = parseQuoteExcel([HEADER, withNums({ 6: 0 })])
+    expect(r.rows[0].missing).toContain('kích thước phải lớn hơn 0')
+  })
+
+  it('đơn giá âm → chặn', () => {
+    const r = parseQuoteExcel([HEADER, withNums({ 18: -45.9 })])
+    expect(r.rows[0].missing).toContain('đơn giá không được âm')
+  })
+
+  it('đơn giá 0 vẫn HỢP LỆ — hàng tặng / báo giá 0 đồng là có thật', () => {
+    const r = parseQuoteExcel([HEADER, withNums({ 18: 0 })])
+    expect(r.rows[0].missing).toEqual([])
+  })
+
+  it('số âm ở ô đóng gói → chặn, nêu đúng tên ô', () => {
+    const r = parseQuoteExcel([HEADER, withNums({ 10: -2, 14: -12.5 })])
+    expect(r.rows[0].missing.join(' ')).toMatch(/SL\/thùng/)
+    expect(r.rows[0].missing.join(' ')).toMatch(/NW/)
+  })
+
+  it('dòng đủ và dương thì không báo gì', () => {
+    const r = parseQuoteExcel([HEADER, rowFull])
+    expect(r.rows[0].missing).toEqual([])
   })
 })

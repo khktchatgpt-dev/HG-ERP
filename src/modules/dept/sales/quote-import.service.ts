@@ -239,11 +239,26 @@ export const quoteImportService = {
 
     let created = 0
     const lines: { product_id: string; unit_price: number; note?: string | null }[] = []
+    /** Mã đã cấp trong CHÍNH lượt này — chống đụng nhau trước khi kịp ghi DB. */
+    const codesInBatch = new Set<string>()
+    /** Chặn hai dòng cùng trỏ về một SP: báo giá không có ràng buộc chống trùng. */
+    const seenProducts = new Set<string>()
+
     for (const r of input.rows) {
       let productId = r.product_id
+
+      /*
+       * Danh mục có thể ĐỔI giữa lúc xem trước và lúc lưu (người khác vừa tạo SP
+       * cùng mã). Kiểm lại ngay trước khi chèn: có rồi thì DÙNG LẠI, không thì
+       * `code` UNIQUE sẽ ném lỗi DB thô và bỏ dở giữa chừng.
+       */
+      if (!productId && r.code?.trim()) {
+        productId = await productsRepo.findIdByCode(r.code.trim())
+      }
+
       if (!productId) {
         const product = await productsRepo.insert({
-          code: r.code?.trim() || (await nextProductCode()),
+          code: r.code?.trim() || (await nextProductCode(codesInBatch)),
           name: r.name,
           unit: r.unit?.trim() || 'cai',
           customer_item_code: r.customer_item_code,
@@ -278,6 +293,12 @@ export const quoteImportService = {
           await productsRepo.patch(product.id, { image_file_id: fileId })
         }
       }
+      if (seenProducts.has(productId)) {
+        throw BadRequest(
+          `Dòng ${r.row} trỏ về sản phẩm đã có ở dòng trước — báo giá không nhận hai dòng cùng một sản phẩm`,
+        )
+      }
+      seenProducts.add(productId)
       lines.push({ product_id: productId, unit_price: r.unit_price, note: r.note })
     }
 
@@ -290,8 +311,22 @@ export const quoteImportService = {
   },
 }
 
-/** Mã SP tạm cho hàng mới chưa có mã HG — Kỹ thuật đặt lại mã chuẩn sau. */
-async function nextProductCode(): Promise<string> {
+/**
+ * Mã SP tạm cho hàng mới chưa có mã HG — Kỹ thuật đặt lại mã chuẩn sau.
+ *
+ * PHẢI kiểm tồn tại chứ không phó mặc cho ngẫu nhiên: `technical_products.code`
+ * là UNIQUE, mà 4 ký tự random chỉ có ~1,7 triệu tổ hợp — đụng nhau là chèn vỡ
+ * giữa chừng, để lại báo giá dở dang. Thử tối đa 20 lần rồi mới chịu thua bằng
+ * một lỗi nói rõ, thay vì ném lỗi DB thô lên mặt người dùng.
+ */
+async function nextProductCode(usedInBatch: Set<string>): Promise<string> {
   const stamp = new Date().toISOString().slice(2, 10).replace(/-/g, '')
-  return `TMP-${stamp}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+  for (let i = 0; i < 20; i++) {
+    const code = `TMP-${stamp}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+    if (usedInBatch.has(code)) continue
+    if (await productsRepo.existsByCode(code)) continue
+    usedInBatch.add(code)
+    return code
+  }
+  throw BadRequest('Không sinh được mã sản phẩm tạm — thử lại lần nữa')
 }
