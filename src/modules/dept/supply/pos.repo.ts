@@ -30,6 +30,8 @@ export type Po = {
   ordered_at: string | null
   note: string | null
   created_by: string | null
+  /** Người PHỤ TRÁCH đơn (0128) — quyền ghi xét theo cột này, bàn giao được. */
+  assigned_to: string | null
   created_at: string
   updated_at: string
 }
@@ -39,6 +41,8 @@ export type PoWithRefs = Po & {
   /** null = PO ngoài LSX. */
   lsx_code: string | null
   order_code: string | null
+  /** Tên người phụ trách (0128) — cột "Phụ trách" trên danh sách. */
+  assignee_name: string | null
 }
 
 /** Ô nhập riêng của từng mẫu đơn (0106) — mẫu nào dùng ô nấy, còn lại null. */
@@ -114,7 +118,7 @@ const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, note, created_by, created_at, updated_at'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, note, created_by, assigned_to, created_at, updated_at'
 
 /** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
 const NUMERIC_LINE_COLS = [
@@ -147,6 +151,10 @@ type Raw = Po & {
     | { code: string; order: { code: string } | { code: string }[] | null }
     | { code: string; order: { code: string } | { code: string }[] | null }[]
     | null
+  assignee:
+    | { name: string | null; email: string }
+    | { name: string | null; email: string }[]
+    | null
 }
 
 function unwrap(rows: Raw[] | null): PoWithRefs[] {
@@ -154,12 +162,14 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
     const sp = Array.isArray(r.supplier) ? r.supplier[0] : r.supplier
     const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
     const ord = lx ? (Array.isArray(lx.order) ? lx.order[0] : lx.order) : null
+    const asg = Array.isArray(r.assignee) ? r.assignee[0] : r.assignee
     return {
       ...r,
       supplier_name: sp?.name ?? '?',
       // production_order_id null (PO ngoài LSX) → join rỗng → lsx_code null.
       lsx_code: lx?.code ?? null,
       order_code: ord?.code ?? null,
+      assignee_name: asg ? (asg.name ?? asg.email) : null,
     }
   })
 }
@@ -170,7 +180,11 @@ function unwrap(rows: Raw[] | null): PoWithRefs[] {
  * many-to-many qua bảng nối) — để PostgREST tự đoán là nó báo mơ hồ và TRẢ RỖNG,
  * cả danh sách đơn biến mất (bug thật 09/08/2026, "tạo đơn xong không thấy đâu").
  */
-const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code))`
+/*
+ * Embed `users` cũng phải CHỈ ĐÍCH DANH FK: bảng có 3 FK sang users
+ * (created_by / approved_by / assigned_to) — để PostgREST tự đoán là mơ hồ.
+ */
+const SELECT = `${COLS}, supplier:supply_suppliers(name), lsx:production_orders!supply_purchase_orders_production_order_id_fkey(code, order:sales_orders(code)), assignee:users!supply_purchase_orders_assigned_to_fkey(name, email)`
 
 /** Vật tư đã mua từ 1 NCC (gộp) — cho tab phân tích mua ở chi tiết NCC. */
 export type PurchasedMaterial = {
@@ -394,6 +408,8 @@ export const posRepo = {
       signer_role?: string | null
       note?: string | null
       created_by: string
+      /** Người phụ trách (0128) — lúc tạo luôn = created_by. */
+      assigned_to: string
     },
     lines: PoLineInput[],
   ): Promise<Po> {

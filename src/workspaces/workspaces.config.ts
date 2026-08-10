@@ -422,19 +422,21 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     sections: [
       {
         heading: 'Điều hành',
+        /*
+         * 09/08/2026 — chủ dự án chốt: "phần của giám đốc giới hạn ở quản lý các
+         * thông tin quan trọng của phòng Sale và Cung ứng". Đã RÚT khỏi menu hai
+         * màn hướng về xưởng (`/exec/ops` tháp điều hành, `/exec/production` tiến
+         * độ công đoạn) — xưởng chưa lên hệ thống nên cả hai rỗng tuyệt đối.
+         * Route vẫn còn để link cũ không gãy; bật lại chỉ cần thêm dòng vào đây.
+         */
         items: [
-          // Gỡ "Báo cáo CEO" (07/2026, GĐ chốt) — trang đích /exec redirect sang
-          // Tháp điều hành (COO real-time). Route workspace vẫn /exec.
-          { href: '/exec/ops', label: 'Tháp điều hành', icon: 'tower-control' },
-          // Tiến độ sản xuất của GĐ (07/2026): kanban toàn bộ LSX theo công đoạn
-          // dây chuyền — nút thắt/hạn giao/năng suất/chất lượng. Chỉ xem.
-          { href: '/exec/production', label: 'Tiến độ sản xuất', icon: 'factory' },
-          // Quản lý đơn hàng của GĐ (07/2026): sổ đơn theo giá trị/hạn giao +
-          // tiến độ SX từng đơn, duyệt LSX tại chỗ. Thay màn "Theo dõi đơn hàng"
-          // cũ (chỉ mượn TrackingScreen của Sales) — bản mới bao trùm cả 2 lớp.
-          { href: '/exec/orders', label: 'Quản lý đơn hàng', icon: 'clipboard-list' },
+          { href: '/exec', label: 'Bảng tin điều hành', icon: 'home' },
           // Stamp = con dấu — phê duyệt của Giám đốc đúng nghĩa đóng dấu.
           { href: '/exec/approvals', label: 'Phê duyệt', icon: 'stamp' },
+          // Vế BÁN: sổ đơn theo giá trị / hạn giao.
+          { href: '/exec/orders', label: 'Sổ đơn hàng', icon: 'clipboard-list' },
+          // Vế MUA: đơn mua theo trạng thái, quá hẹn, đọng chưa gửi, NCC.
+          { href: '/exec/purchasing', label: 'Mua hàng & NCC', icon: 'shopping-cart' },
         ],
       },
     ],

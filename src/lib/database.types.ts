@@ -2376,6 +2376,13 @@ export type Database = {
             referencedRelation: "production_orders"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "supply_po_extra_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
         ]
       }
       supply_purchase_order_lines: {
@@ -2536,6 +2543,7 @@ export type Database = {
         Row: {
           approved_at: string | null
           approved_by: string | null
+          assigned_to: string | null
           code: string
           contract_no: string | null
           created_at: string
@@ -2567,6 +2575,7 @@ export type Database = {
         Insert: {
           approved_at?: string | null
           approved_by?: string | null
+          assigned_to?: string | null
           code: string
           contract_no?: string | null
           created_at?: string
@@ -2598,6 +2607,7 @@ export type Database = {
         Update: {
           approved_at?: string | null
           approved_by?: string | null
+          assigned_to?: string | null
           code?: string
           contract_no?: string | null
           created_at?: string
@@ -2630,6 +2640,13 @@ export type Database = {
           {
             foreignKeyName: "supply_purchase_orders_approved_by_fkey"
             columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_purchase_orders_assigned_to_fkey"
+            columns: ["assigned_to"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]

@@ -19,10 +19,18 @@ vi.mock('./supply.repo', () => ({ suppliersRepo: { findById: vi.fn() } }))
 vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findById: vi.fn() },
 }))
-vi.mock('@/modules/core/users/users.repo', () => ({ usersRepo: { list: vi.fn() } }))
+vi.mock('@/modules/core/users/users.repo', () => ({
+  usersRepo: { list: vi.fn(), findById: vi.fn() },
+}))
 // on: pos.service nay import '@/events/register' → registerEventHandlers gọi on().
 vi.mock('@/events/bus', () => ({ emit: vi.fn(), on: vi.fn() }))
-vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.service', () => ({
+  assertAction: vi.fn(),
+  canAction: vi.fn(),
+}))
+vi.mock('@/modules/core/rbac/rbac.repo', () => ({
+  rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
+}))
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
@@ -30,12 +38,21 @@ import { suppliersRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
-import { makeFakeAssertAction, type DeptInfo } from '@/test-utils/rbac'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
+import { makeFakeAssertAction, makeFakeCanAction, type DeptInfo } from '@/test-utils/rbac'
 import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 
 const staff = { id: 'u-sup', role: 'employee', department_id: 'd-sup' } as unknown as User
+/** NV Cung ứng KHÁC (0128) — cùng phòng nhưng không phụ trách PO fixture. */
+const staff2 = {
+  id: 'u-sup2',
+  role: 'employee',
+  department_id: 'd-sup',
+} as unknown as User
+/** Trưởng phòng CƯ (0128) — vai supply_lead GÁN TAY, giả lập qua canAction bên dưới. */
+const lead = { id: 'u-lead', role: 'employee', department_id: 'd-sup' } as unknown as User
 // 0086: director = manager THUỘC PHÒNG BGĐ (workspace exec).
 const boss = { id: 'u-boss', role: 'manager', department_id: 'd-bgd' } as unknown as User
 
@@ -51,15 +68,24 @@ const PO = {
   supplier_id: 's1',
   status: 'pending_approval',
   created_by: 'u-sup',
+  assigned_to: 'u-sup',
   note: null,
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(usersRepo.list).mockResolvedValue([])
+  vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue([])
   vi.mocked(assertAction).mockImplementation(
     makeFakeAssertAction((id) => DEPTS[id] ?? null),
   )
+  // supply_lead là vai gán tay (không dẫn-xuất từ phòng) — chồng lên fake:
+  // u-lead có mọi quyền của NV CƯ + supply.po.manage_any.
+  const fakeCan = makeFakeCanAction((id) => DEPTS[id] ?? null)
+  vi.mocked(canAction).mockImplementation(async (u, key) => {
+    if (u.id === 'u-lead' && key === 'supply.po.manage_any') return true
+    return fakeCan(u, key)
+  })
 })
 
 describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
@@ -186,6 +212,9 @@ describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
       ...PO,
       status: 'pending_approval',
     } as never)
+    // 0128: người duyệt lấy theo QUYỀN supply.po.approve thật (∪ admin) — không
+    // còn "mọi manager toàn công ty".
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-boss'])
     vi.mocked(usersRepo.list).mockResolvedValue([
       { id: 'u-boss', role: 'manager' },
       { id: 'u-sup', role: 'employee' },
@@ -257,14 +286,14 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
     expect(evt.name).toBe('po.decided')
   })
 
-  it('reject → cancelled kèm lý do trong note', async () => {
+  it('reject → VỀ NHÁP kèm lý do trong note (0128 — 6.3b, trước là cancelled)', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
-    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'cancelled' } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'draft' } as never)
 
     await posService.decide(boss, 'po1', 'reject', 'Giá cao hơn NCC khác')
 
     const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
-    expect(patch.status).toBe('cancelled')
+    expect(patch.status).toBe('draft')
     expect(String(patch.note)).toContain('Giá cao hơn NCC khác')
   })
 
@@ -312,17 +341,152 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
   })
 })
 
-describe('posService.update — chỉ đơn chờ duyệt sửa được', () => {
-  it.each(['approved', 'ordered', 'received'] as const)('chặn sửa khi %s', async (st) => {
-    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+describe('posService.update — 0128: CHỈ đơn nháp sửa được', () => {
+  // pending_approval cũng bị chặn: phải "rút về nháp" trước (6.2b).
+  it.each(['pending_approval', 'approved', 'ordered', 'received'] as const)(
+    'chặn sửa khi %s',
+    async (st) => {
+      vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+      await expect(
+        posService.update(staff, 'po1', {
+          production_order_id: 'lsx1',
+          supplier_id: 's1',
+          currency: 'VND',
+          price_includes_vat: true,
+          lines: [{ material_id: 'm1', qty_ordered: 1 }],
+        }),
+      ).rejects.toMatchObject({ status: 400 })
+    },
+  )
+})
+
+describe('posService — 0128: khoá theo NGƯỜI PHỤ TRÁCH (assertPoOwner)', () => {
+  const DRAFT = { ...PO, status: 'draft' }
+
+  it('NV CƯ khác không sửa/xoá/gửi được đơn của người khác', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(DRAFT as never)
+    vi.mocked(usersRepo.findById).mockResolvedValue({
+      id: 'u-sup',
+      name: 'NV A',
+    } as never)
+
     await expect(
-      posService.update(staff, 'po1', {
+      posService.update(staff2, 'po1', {
         production_order_id: 'lsx1',
         supplier_id: 's1',
         currency: 'VND',
         price_includes_vat: true,
         lines: [{ material_id: 'm1', qty_ordered: 1 }],
       }),
-    ).rejects.toMatchObject({ status: 400 })
+    ).rejects.toMatchObject({ status: 403 })
+    await expect(posService.remove(staff2, 'po1')).rejects.toMatchObject({ status: 403 })
+    await expect(posService.submit(staff2, 'po1')).rejects.toMatchObject({ status: 403 })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+    expect(posRepo.delete).not.toHaveBeenCalled()
+  })
+
+  it('trưởng phòng CƯ (supply.po.manage_any) thao tác được đơn của NV', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(DRAFT as never)
+    await posService.remove(lead, 'po1')
+    expect(posRepo.delete).toHaveBeenCalledWith('po1')
+  })
+
+  it('đơn cũ chưa backfill assigned_to → rơi về created_by', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...DRAFT,
+      assigned_to: null,
+    } as never)
+    await posService.remove(staff, 'po1')
+    expect(posRepo.delete).toHaveBeenCalledWith('po1')
+  })
+})
+
+describe('posService.withdraw — 0128: rút đơn chờ duyệt về nháp', () => {
+  it('pending_approval → draft + emit po.withdrawn cho người duyệt', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-boss'])
+
+    await posService.withdraw(staff, 'po1')
+
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('draft')
+    const evt = vi.mocked(emit).mock.calls[0][0] as {
+      name: string
+      approver_ids: string[]
+    }
+    expect(evt.name).toBe('po.withdrawn')
+    expect(evt.approver_ids).toEqual(['u-boss'])
+  })
+
+  it('chỉ rút được đơn đang chờ duyệt', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    await expect(posService.withdraw(staff, 'po1')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('NV khác không rút được đơn không phải của mình', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+    vi.mocked(usersRepo.findById).mockResolvedValue({ id: 'u-sup' } as never)
+    await expect(posService.withdraw(staff2, 'po1')).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+})
+
+describe('posService.reassign — 0128: bàn giao người phụ trách', () => {
+  it('NV thường không bàn giao được (kể cả đơn của mình)', async () => {
+    await expect(posService.reassign(staff, 'po1', 'u-sup2')).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+
+  it('trưởng phòng bàn giao cho NV CƯ khác: patch assigned_to + emit', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+    vi.mocked(usersRepo.findById).mockResolvedValue({
+      id: 'u-sup2',
+      role: 'employee',
+      department_id: 'd-sup',
+      is_active: true,
+    } as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({
+      ...PO,
+      assigned_to: 'u-sup2',
+    } as never)
+
+    await posService.reassign(lead, 'po1', 'u-sup2')
+
+    expect(vi.mocked(posRepo.patch).mock.calls[0][1]).toMatchObject({
+      assigned_to: 'u-sup2',
+    })
+    const evt = vi.mocked(emit).mock.calls[0][0] as {
+      name: string
+      from_user_id: string | null
+      to_user_id: string
+    }
+    expect(evt.name).toBe('po.reassigned')
+    expect(evt.from_user_id).toBe('u-sup')
+    expect(evt.to_user_id).toBe('u-sup2')
+  })
+
+  it('không gán được cho người NGOÀI phòng cung ứng', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never)
+    vi.mocked(usersRepo.findById).mockResolvedValue({
+      id: 'u-hr',
+      role: 'employee',
+      department_id: 'd-bgd',
+      is_active: true,
+    } as never)
+    await expect(posService.reassign(lead, 'po1', 'u-hr')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('đơn đã kết thúc (received/cancelled) không bàn giao', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'received' } as never)
+    await expect(posService.reassign(lead, 'po1', 'u-sup2')).rejects.toMatchObject({
+      status: 400,
+    })
   })
 })

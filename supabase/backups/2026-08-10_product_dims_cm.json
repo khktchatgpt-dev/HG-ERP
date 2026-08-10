@@ -1,0 +1,196 @@
+[
+  {
+    "code": "21605-217",
+    "name": "Bàn CNKG Tilos, khung nhôm",
+    "id": "e11f367e-6fa4-4203-b9a4-0d98cb3f6df2",
+    "packing": {
+      "h_cm": 74,
+      "l_cm": 150,
+      "w_cm": 90,
+      "carton_h_cm": 11.6,
+      "carton_l_cm": 154,
+      "carton_w_cm": 154,
+      "loading_40hc": 154,
+      "qty_per_carton": 1,
+      "pack_unit_label": "ctn"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "26443-228",
+    "name": "Bàn kéo giãn nhôm kính",
+    "id": "ecec88ef-745a-4027-8aad-e3a7cf422bd9",
+    "packing": {
+      "l_cm": 80,
+      "w_cm": 70,
+      "carton_l_cm": 120,
+      "qty_per_carton": 1,
+      "pack_unit_label": "ctn"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "BN0190HG-AL",
+    "name": "Picnic Bench",
+    "id": "f3c3b6bf-a169-426c-8d4b-6711034ab64f",
+    "packing": {
+      "h_cm": 45,
+      "l_cm": 36,
+      "w_cm": 187
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "CH0065HG-AL",
+    "name": "Ghế đan mây Rattan",
+    "id": "e1d71586-0510-4d64-a775-23e977a2d463",
+    "packing": {
+      "h_cm": 87.5,
+      "l_cm": 58,
+      "w_cm": 60,
+      "loading_40hc": 1170,
+      "qty_per_carton": 30,
+      "pack_unit_label": "pallet"
+    },
+    "length_mm": 548,
+    "width_mm": 565,
+    "height_mm": 876
+  },
+  {
+    "code": "CH0095HG-AL",
+    "name": "Ghế Dinning",
+    "id": "be280f90-c6c7-447c-8250-ce4de9f2b2ab",
+    "packing": {
+      "h_cm": 99,
+      "l_cm": 68,
+      "w_cm": 62
+    },
+    "length_mm": 620,
+    "width_mm": 680,
+    "height_mm": 990
+  },
+  {
+    "code": "CH0170HG-AL",
+    "name": "Ghế 5 bậc Paxos",
+    "id": "b6a4f71a-46ec-4e19-bd92-8bae4aed885f",
+    "packing": {
+      "h_cm": 11.1,
+      "l_cm": 70.5,
+      "w_cm": 59.5,
+      "gw_kg": 7,
+      "nw_kg": 5.3,
+      "carton_h_cm": 18.5,
+      "carton_l_cm": 94,
+      "carton_w_cm": 60.5,
+      "qty_per_carton": 1,
+      "pack_unit_label": "ctn"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "CH0197HG-AL",
+    "name": "Ghế XC Keros",
+    "id": "814b379d-6f5e-4c81-b87d-66029b8e81b3",
+    "packing": {
+      "h_cm": 93.5,
+      "l_cm": 55.5,
+      "w_cm": 63,
+      "qty_per_carton": 25,
+      "pack_unit_label": "pallet"
+    },
+    "length_mm": 555,
+    "width_mm": 630,
+    "height_mm": 935
+  },
+  {
+    "code": "RHONE-BENCH",
+    "name": "Rhone Aluminium Bench",
+    "id": "e024bfdc-f721-4a93-a93c-f8f0274c057c",
+    "packing": {
+      "h_cm": 45,
+      "l_cm": 187,
+      "w_cm": 36,
+      "carton_h_cm": 11.6,
+      "carton_l_cm": 191,
+      "carton_w_cm": 40,
+      "loading_40hc": 756,
+      "qty_per_carton": 1,
+      "pack_unit_label": "ctn"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "RHONE-CHAIR",
+    "name": "Rhone Aluminium Dining Chair",
+    "id": "eadc84ef-0efd-4be6-b6f0-0d5889d624d2",
+    "packing": {
+      "h_cm": 92.4,
+      "l_cm": 60.2,
+      "w_cm": 58.1,
+      "carton_h_cm": 223,
+      "carton_l_cm": 110,
+      "carton_w_cm": 64,
+      "loading_40hc": 660,
+      "qty_per_carton": 20,
+      "pack_unit_label": "pallet"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "RHONE-DT",
+    "name": "Rhone Aluminium Dining Table",
+    "id": "b37181cc-767b-41e6-92cd-2030658e2960",
+    "packing": {
+      "h_cm": 75,
+      "l_cm": 212,
+      "w_cm": 95,
+      "carton_h_cm": 11.6,
+      "carton_l_cm": 216,
+      "carton_w_cm": 99,
+      "loading_40hc": 270,
+      "qty_per_carton": 1,
+      "pack_unit_label": "ctn"
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  },
+  {
+    "code": "ST0076HG-IR",
+    "name": "Lucas set - Bank II",
+    "id": "f1e1ffa4-acb5-4ea7-b28c-4bf8a4fa22d8",
+    "packing": {
+      "h_cm": 52,
+      "l_cm": 239.5,
+      "w_cm": 239.5
+    },
+    "length_mm": 1520,
+    "width_mm": 800,
+    "height_mm": 760
+  },
+  {
+    "code": "TB0079HG-AL",
+    "name": "Bàn CN yotrio 160x89",
+    "id": "16fad3f6-c647-4d23-9988-b7a8df106f2e",
+    "packing": {
+      "h_cm": 75,
+      "l_cm": 89,
+      "w_cm": 160
+    },
+    "length_mm": null,
+    "width_mm": null,
+    "height_mm": null
+  }
+]

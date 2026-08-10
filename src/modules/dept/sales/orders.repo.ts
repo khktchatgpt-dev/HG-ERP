@@ -182,6 +182,20 @@ export const ordersRepo = {
     return out
   },
 
+  /**
+   * Số dòng đơn CHƯA CÓ ĐƠN GIÁ — bảng tin Giám đốc nêu thẳng lỗ hổng này, vì
+   * dòng giá 0 làm mọi con số doanh số ra 0 mà nhìn vào không biết vì sao.
+   */
+  async countLinesWithoutPrice(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0
+    const { count } = await db()
+      .from('sales_order_lines')
+      .select('id', { count: 'exact', head: true })
+      .in('order_id', ids)
+      .or('unit_price.is.null,unit_price.eq.0')
+    return count ?? 0
+  },
+
   /** Tổng giá trị (Σ qty×unit_price) theo lô đơn — cho KPI dashboard/khách. */
   async totalsByOrderIds(ids: string[]): Promise<Record<string, number>> {
     const summary = await ordersRepo.lineSummaryByOrderIds(ids)

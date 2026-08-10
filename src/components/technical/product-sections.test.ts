@@ -93,33 +93,17 @@ describe('withPackingFallback — bù ô tóm tắt đóng gói trống bằng p
   })
 })
 
-describe('productDims — hai nguồn kích thước, khác đơn vị', () => {
+describe('productDims — MỘT nguồn duy nhất là ba cột mm (0129)', () => {
   const bom = { length_mm: 755, width_mm: 1425, height_mm: 750 }
   const none = { length_mm: null, width_mm: null, height_mm: null }
 
-  it('gõ tay (cm) thắng số import từ BOM (mm)', () => {
-    expect(productDims(bom, { l_cm: 75.5, w_cm: 142.5, h_cm: 75 })).toEqual({
-      text: '75.5 × 142.5 × 75',
-      unit: 'cm',
-      source: 'manual',
-    })
+  it('lấy ba cột mm, nói rõ đơn vị', () => {
+    expect(productDims(bom)).toEqual({ text: '755 × 1425 × 750', unit: 'mm' })
   })
 
-  it('chưa gõ tay → lấy số file BOM và nói rõ đơn vị mm', () => {
-    expect(productDims(bom, {})).toEqual({
-      text: '755 × 1425 × 750',
-      unit: 'mm',
-      source: 'bom',
-    })
-  })
-
-  it('gõ tay thiếu 1 chiều → KHÔNG trộn hai nguồn, rơi về bản BOM', () => {
-    expect(productDims(bom, { l_cm: 75.5, w_cm: 142.5 })?.source).toBe('bom')
-  })
-
-  it('cả hai nguồn đều thiếu → null (băng số tự thu về dòng mời nhập)', () => {
-    expect(productDims(none, {})).toBeNull()
-    expect(productDims({ ...bom, height_mm: null }, {})).toBeNull()
+  it('thiếu bất kỳ chiều nào → null, KHÔNG in nửa vời', () => {
+    expect(productDims(none)).toBeNull()
+    expect(productDims({ ...bom, height_mm: null })).toBeNull()
   })
 })
 

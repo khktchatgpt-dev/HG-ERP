@@ -13,9 +13,6 @@ import {
 type PackKey = keyof Packing
 
 const PACK_FIELDS: { key: PackKey; label: string; int?: boolean }[] = [
-  { key: 'l_cm', label: 'Dài SP (cm)' },
-  { key: 'w_cm', label: 'Rộng SP (cm)' },
-  { key: 'h_cm', label: 'Cao SP (cm)' },
   { key: 'carton_l_cm', label: 'Carton dài (cm)' },
   { key: 'carton_w_cm', label: 'Carton rộng (cm)' },
   { key: 'carton_h_cm', label: 'Carton cao (cm)' },

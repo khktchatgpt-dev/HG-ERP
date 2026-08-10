@@ -16,6 +16,7 @@ import {
 const seedSql = [
   'supabase/migrations/0073_rbac.sql',
   'supabase/migrations/0085_production_v2_perms_receipt.sql',
+  'supabase/migrations/0128_po_owner_and_supply_lead.sql',
 ]
   .map((p) => readFileSync(resolve(process.cwd(), p), 'utf8'))
   .join('\n')

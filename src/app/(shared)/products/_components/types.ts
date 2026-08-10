@@ -6,9 +6,6 @@
  */
 
 export type Packing = {
-  l_cm?: number
-  w_cm?: number
-  h_cm?: number
   carton_l_cm?: number
   carton_w_cm?: number
   carton_h_cm?: number
@@ -45,6 +42,10 @@ export type Product = {
   unit: string
   bom_status: BomStatus
   packing: Packing
+  /** Kích thước SP — MỘT nguồn duy nhất, mm (0129). */
+  length_mm: number | null
+  width_mm: number | null
+  height_mm: number | null
   image_file_id: string | null
   notes: string | null
   name_foreign: string | null
@@ -80,6 +81,9 @@ export type ProductRow = Pick<
   | 'unit'
   | 'bom_status'
   | 'packing'
+  | 'length_mm'
+  | 'width_mm'
+  | 'height_mm'
   | 'image_file_id'
   | 'is_active'
 > & {

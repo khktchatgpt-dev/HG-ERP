@@ -1,12 +1,13 @@
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
 import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { suppliersRepo, supplyRepo } from './supply.repo'
-import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
-import { BadRequest, NotFound } from '@/server/http'
+import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 
 type PoInput = {
@@ -66,6 +67,44 @@ async function checkedExtraLsxIds(
     }
   }
   return list
+}
+
+/**
+ * ROW-LEVEL (0128): thao tác GHI trên đơn chỉ dành cho NGƯỜI PHỤ TRÁCH
+ * (`assigned_to`, đơn cũ chưa backfill thì rơi về `created_by`) — trừ trưởng
+ * phòng Cung ứng (`supply.po.manage_any` ← permission `supply.lead`) và admin.
+ * Gọi SAU `assertAction('supply.po.manage')` — cổng "là nhân sự cung ứng" vẫn
+ * đứng trước, đây là lớp "đúng người" bên trong phòng.
+ */
+async function assertPoOwner(
+  user: User,
+  po: { assigned_to: string | null; created_by: string | null },
+): Promise<void> {
+  if (user.role === 'admin') return
+  if (await canAction(user, 'supply.po.manage_any')) return
+  const ownerId = po.assigned_to ?? po.created_by
+  if (ownerId === user.id) return
+  const owner = ownerId ? await usersRepo.findById(ownerId) : null
+  const label = owner?.name ?? owner?.email ?? 'người khác'
+  throw Forbidden(
+    `Đơn do ${label} phụ trách — chỉ người phụ trách hoặc trưởng phòng Cung ứng thao tác được`,
+  )
+}
+
+/**
+ * Người NHẬN thông báo duyệt PO: ai có quyền `supply.po.approve` thật (vai
+ * director/…) ∪ admin (bypass không nằm trong role_permissions) — thay cho lọc
+ * `role ∈ {admin, manager}` cũ vốn bắn cho mọi manager toàn công ty (G3).
+ */
+async function approverIds(excludeUserId: string): Promise<string[]> {
+  const [withPerm, users] = await Promise.all([
+    rbacRepo.userIdsWithPermission('supply.po.approve'),
+    usersRepo.list(),
+  ])
+  const ids = new Set(withPerm)
+  for (const u of users) if (u.role === 'admin') ids.add(u.id)
+  ids.delete(excludeUserId)
+  return [...ids]
 }
 
 /** Điều khoản/chữ ký bỏ trống → lấy mặc định của mẫu, để phiếu in không rỗng. */
@@ -144,6 +183,7 @@ export const posService = {
         ...withTemplateDefaults(input, template),
         note: input.note ?? null,
         created_by: user.id,
+        assigned_to: user.id,
       },
       withDerived(template, input.lines),
     )
@@ -159,6 +199,7 @@ export const posService = {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
     if (before.status !== 'draft') {
       throw BadRequest('Chỉ đơn nháp mới gửi duyệt được')
     }
@@ -173,9 +214,6 @@ export const posService = {
     ])
     const po = await posRepo.patch(id, { status: 'pending_approval' })
 
-    const approvers = (await usersRepo.list()).filter(
-      (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
-    )
     await emit({
       name: 'po.submitted',
       po_id: po.id,
@@ -183,18 +221,51 @@ export const posService = {
       supplier_name: supplier?.name ?? '—',
       lsx_code: lsx?.code ?? null,
       submitted_by: user.id,
-      approver_ids: approvers.map((a) => a.id),
+      approver_ids: await approverIds(user.id),
     })
     return po
   },
 
-  /** Sửa được khi còn là NHÁP hoặc CHỜ DUYỆT (sau duyệt là cam kết với GĐ/NCC). */
+  /**
+   * RÚT VỀ NHÁP (0128 — 6.2b): đơn CHỜ DUYỆT không sửa trực tiếp nữa; muốn sửa
+   * phải rút về nháp rồi gửi duyệt lại — con số Giám đốc thấy trong thông báo
+   * luôn là con số cuối. Notify người duyệt để họ bỏ qua bản đã rút.
+   */
+  async withdraw(user: User, id: string): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    if (before.status !== 'pending_approval') {
+      throw BadRequest('Chỉ đơn đang chờ duyệt mới rút về nháp được')
+    }
+    const po = await posRepo.patch(id, { status: 'draft' })
+    await emit({
+      name: 'po.withdrawn',
+      po_id: po.id,
+      code: po.code,
+      withdrawn_by: user.id,
+      approver_ids: await approverIds(user.id),
+    })
+    return po
+  },
+
+  /**
+   * Sửa — CHỈ đơn NHÁP (0128 siết từ "nháp hoặc chờ duyệt"): đơn đã gửi duyệt
+   * muốn sửa phải `withdraw` về nháp trước, để nội dung trên bàn GĐ không đổi
+   * sau lưng thông báo. Sau duyệt là cam kết với GĐ/NCC — không sửa.
+   */
   async update(user: User, id: string, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
-    if (before.status !== 'draft' && before.status !== 'pending_approval') {
-      throw BadRequest('Chỉ đơn nháp / chờ duyệt mới sửa được')
+    await assertPoOwner(user, before)
+    if (before.status !== 'draft') {
+      throw BadRequest(
+        before.status === 'pending_approval'
+          ? 'Đơn đang chờ duyệt — bấm "Rút về nháp" rồi mới sửa được'
+          : 'Chỉ đơn nháp mới sửa được',
+      )
     }
     // LSX chính của đơn không đổi khi sửa (patch không đụng production_order_id)
     // — LSX phụ thì đổi được, kiểm tra theo LSX chính ĐANG có của đơn.
@@ -223,7 +294,12 @@ export const posService = {
     return po
   },
 
-  /** GĐ duyệt / từ chối (BR-05 nửa đầu): pending_approval → approved | cancelled. */
+  /**
+   * GĐ duyệt / từ chối (BR-05 nửa đầu): pending_approval → approved | draft.
+   * Từ chối TRẢ VỀ NHÁP (0128 — 6.3b, trước là cancelled): người soạn sửa theo
+   * lý do rồi gửi lại, giữ số PO + lịch sử; người/lý do từ chối nằm ở
+   * approval_events, note chỉ nhắc nhanh trên đơn.
+   */
   async decide(
     user: User,
     id: string,
@@ -244,7 +320,7 @@ export const posService = {
             approved_by: user.id,
             approved_at: new Date().toISOString(),
           }
-        : { status: 'cancelled', note: reason ? `[Từ chối] ${reason}` : before.note },
+        : { status: 'draft', note: reason ? `[Từ chối] ${reason}` : before.note },
     )
     await emit({
       name: 'po.decided',
@@ -271,6 +347,7 @@ export const posService = {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
 
     const allowed: Record<string, string[]> = {
       ordered: ['approved'], // ⭐ BR-05: chỉ từ approved
@@ -307,6 +384,7 @@ export const posService = {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
     const guard = canReschedule(before.status)
     if (!guard.ok) throw BadRequest(guard.reason)
 
@@ -326,6 +404,7 @@ export const posService = {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
     if (before.status === 'received' || before.status === 'cancelled') {
       throw BadRequest('Đơn đã về đủ / đã huỷ — không huỷ được')
     }
@@ -344,9 +423,46 @@ export const posService = {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
     if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
     if (before.status !== 'draft') {
       throw BadRequest('Chỉ đơn nháp mới xoá được — đơn đã gửi duyệt thì dùng Huỷ')
     }
     await posRepo.delete(id)
+  },
+
+  /**
+   * BÀN GIAO đơn (0128): đổi NGƯỜI PHỤ TRÁCH — cho ca NV vắng/nghỉ việc. Chỉ
+   * trưởng phòng CƯ (`supply.po.manage_any`), người duyệt (GĐ) hoặc admin;
+   * người nhận phải là nhân sự cung ứng (đừng gán đơn cho người ngoài phòng).
+   * Đơn đã kết thúc (về đủ / huỷ) thì thôi — không còn gì để phụ trách.
+   */
+  async reassign(user: User, id: string, toUserId: string): Promise<Po> {
+    if (
+      user.role !== 'admin' &&
+      !(await canAction(user, 'supply.po.manage_any')) &&
+      !(await canAction(user, 'supply.po.approve'))
+    ) {
+      throw Forbidden('Chỉ trưởng phòng Cung ứng / Giám đốc bàn giao được đơn')
+    }
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    if (before.status === 'received' || before.status === 'cancelled') {
+      throw BadRequest('Đơn đã về đủ / đã huỷ — không cần bàn giao')
+    }
+    const target = await usersRepo.findById(toUserId)
+    if (!target || !target.is_active) throw NotFound('Người nhận không tồn tại')
+    if (!(await canAction(target, 'supply.po.manage'))) {
+      throw BadRequest('Người nhận phải là nhân sự Cung ứng')
+    }
+    const po = await posRepo.patch(id, { assigned_to: toUserId })
+    await emit({
+      name: 'po.reassigned',
+      po_id: po.id,
+      code: po.code,
+      from_user_id: before.assigned_to ?? before.created_by,
+      to_user_id: toUserId,
+      reassigned_by: user.id,
+    })
+    return po
   },
 }

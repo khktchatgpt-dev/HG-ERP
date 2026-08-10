@@ -57,8 +57,21 @@ export function OpsTower({ data }: { data: OpsTowerData }) {
           Sơ đồ xưởng — 🟢 chạy tốt · 🟡 chậm / ứ BTP
         </h2>
         {data.teams.length === 0 ? (
-          <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-400 dark:border-zinc-800 dark:bg-zinc-900">
-            Chưa tổ nào được gán công đoạn (Quản trị → Phòng ban).
+          /*
+           * Sơ đồ dựng từ VIỆC đang giao cho tổ, không phải từ danh sách tổ —
+           * nên chỗ trống phải phân biệt hai nguyên nhân. Trước đây luôn báo
+           * "chưa gán công đoạn", đẩy GĐ đi sửa cấu hình vốn đã đúng.
+           */
+          <p className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+            {data.staged_team_count === 0 ? (
+              <>Chưa tổ nào được gán công đoạn (Quản trị → Phòng ban).</>
+            ) : (
+              <>
+                {data.staged_team_count} tổ đã gán công đoạn, nhưng{' '}
+                <b>chưa lệnh sản xuất nào giao việc xuống tổ</b> — sơ đồ hiện lên khi lệnh
+                được định hình chi tiết và giao cho tổ.
+              </>
+            )}
           </p>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">

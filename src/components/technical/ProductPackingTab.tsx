@@ -33,9 +33,8 @@ export function ProductPackingTab({
   // ở "Phương án đóng gói" bên dưới, tránh cảnh 2 khối cùng trang mâu thuẫn nhau.
   const pk = withPackingFallback(product.packing ?? {}, packingOptions)
   const cbm = cartonCbm(pk)
-  // Cùng nguồn với băng trên tab Hồ sơ: chưa gõ tay thì lấy kích thước file BOM
-  // ghi (mm), thay vì để trống trong khi hồ sơ bên cạnh lại hiện số.
-  const dims = productDims(product, pk)
+  // Cùng nguồn với băng trên tab Hồ sơ: ba cột mm là nguồn duy nhất (0129).
+  const dims = productDims(product)
 
   return (
     <div className="flex flex-col gap-6 pb-6">

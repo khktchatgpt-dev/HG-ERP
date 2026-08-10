@@ -36,6 +36,8 @@ export const SEED_ROLE_PERMS: Record<string, readonly string[]> = {
   ],
   planner: ['planner.member', 'production.components.edit'],
   supply_staff: ['supply.member', 'warehouse.material.create'],
+  // 0128 — vai GÁN TAY (không dẫn-xuất từ phòng); test tự thêm key khi cần.
+  supply_lead: ['supply.member', 'supply.lead'],
   production_staff: [
     'production.member',
     'production.progress.track',

@@ -1,11 +1,16 @@
 import { z } from 'zod'
 import { FRAME_MATERIAL_CODES, PRODUCT_TYPE_CODES } from '@/lib/product-code'
 
-/** Thông số đóng gói xuất khẩu (in trên báo giá — jsonb `packing`). */
+/**
+ * Thông số ĐÓNG GÓI xuất khẩu (jsonb `packing`).
+ *
+ * KHÔNG còn `l_cm/w_cm/h_cm`: kích thước SẢN PHẨM chỉ sống ở cột
+ * `length/width/height_mm` (mm) — một nguồn duy nhất, theo quy ước bảng kê
+ * quy cách của công ty `(L/D x W x H) mm` (migration 0129). Ở đây chỉ còn số
+ * của THÙNG và tải cont. Báo giá/bản in tự quy mm sang cm khi hiển thị
+ * (`@/lib/packing-dims`), không lưu thêm bản cm nào nữa.
+ */
 export const packingSchema = z.object({
-  l_cm: z.coerce.number().positive().optional(),
-  w_cm: z.coerce.number().positive().optional(),
-  h_cm: z.coerce.number().positive().optional(),
   carton_l_cm: z.coerce.number().positive().optional(),
   carton_w_cm: z.coerce.number().positive().optional(),
   carton_h_cm: z.coerce.number().positive().optional(),

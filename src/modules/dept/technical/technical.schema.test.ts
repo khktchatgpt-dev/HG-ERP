@@ -12,16 +12,12 @@ import {
 describe('packingSchema', () => {
   it('parse OK đầy đủ + ép kiểu số từ chuỗi (form gửi string)', () => {
     const p = packingSchema.parse({
-      l_cm: '75',
-      w_cm: 168,
-      h_cm: 63,
       carton_l_cm: 77,
       carton_w_cm: 169.5,
       carton_h_cm: 46,
       qty_per_carton: '1',
       loading_40hc: '112',
     })
-    expect(p.l_cm).toBe(75)
     expect(p.carton_w_cm).toBe(169.5)
     expect(p.loading_40hc).toBe(112)
   })
@@ -31,7 +27,7 @@ describe('packingSchema', () => {
   })
 
   it('từ chối kích thước âm hoặc 0', () => {
-    expect(() => packingSchema.parse({ l_cm: -1 })).toThrow()
+    expect(() => packingSchema.parse({ carton_l_cm: -1 })).toThrow()
     expect(() => packingSchema.parse({ qty_per_carton: 0 })).toThrow()
   })
 
@@ -83,11 +79,11 @@ describe('productCreateSchema', () => {
       customer_item_code: 'P334',
       description_en: 'FSC eucalyptus wood with powder-coated aluminium frame',
       unit: 'pcs',
-      packing: { l_cm: 75, w_cm: 67, h_cm: 63 },
+      packing: { carton_l_cm: 75, carton_w_cm: 67, carton_h_cm: 63 },
     })
     expect(p.customer_item_code).toBe('P334')
     expect(p.customer_name).toBe('Möbel Hali GmbH')
-    expect(p.packing?.l_cm).toBe(75)
+    expect(p.packing?.carton_l_cm).toBe(75)
   })
 
   it('unit mặc định "cai"; customer_name nullable (mẫu chung)', () => {

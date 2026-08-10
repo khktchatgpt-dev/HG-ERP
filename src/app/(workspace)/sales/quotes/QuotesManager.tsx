@@ -222,12 +222,19 @@ export function QuotesManager({
           </p>
         </div>
         {canEdit && (
-          <Button asChild>
-            <Link href="/sales/quotes/new">
-              <Plus />
-              Lập báo giá
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* Tờ báo giá có SP mới thường đã nằm sẵn trong file Excel kèm ảnh +
+                thông số — nhập thẳng file nhanh hơn gõ lại từng SP. */}
+            <Button asChild variant="outline">
+              <Link href="/sales/quotes/import">⭳ Nhập từ Excel</Link>
+            </Button>
+            <Button asChild>
+              <Link href="/sales/quotes/new">
+                <Plus />
+                Lập báo giá
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
 
