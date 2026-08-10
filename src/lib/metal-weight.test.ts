@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kgPerM, kgPerOrderUnit, rhoFor, RHO } from './metal-weight'
+import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor, RHO } from './metal-weight'
 
 /*
  * Số đối chiếu lấy từ BAREM XƯỞNG đang dùng (sheet `WeightList`,
@@ -58,10 +58,33 @@ describe('kgPerM — THÀ BỎ QUA CÒN HƠN ĐOÁN', () => {
     ['Tole 3li - Inox 304', 'hàng tấm/cuộn — không tính theo mét'],
     ['Lưới B40 khổ 1m8', 'hàng tấm/cuộn — không tính theo mét'],
     ['Bản lề inox 3 tấc', 'không nhận ra hình dạng'],
+    // "tam giác" KHÔNG phải "tấm" — bỏ dấu xong hai chữ trùng nhau, nên trước
+    // 10/08/2026 cái pát này bị báo là hàng tấm/cuộn ngay trên form đặt hàng.
+    ['Pát tam giác inox 304 chân sau Lucca', 'không nhận ra hình dạng'],
   ])('%s → null (%s)', (name, reason) => {
     const r = kgPerM(name, RHO.sat)
     expect(r.kg).toBeNull()
     expect(r.reason).toBe(reason)
+  })
+
+  it.each([
+    // Mác thép đứng TRƯỚC tiết diện trong tên — số đầu tiên không phải cạnh.
+    ['Hộp inox sus 304 25x50x1.2', RHO.inox, 1.3817],
+    ['Inox 201 phi 25x1', RHO.inox, 0.5978],
+    ['La inox 304 40x3', RHO.inox, 0.9516],
+  ])('%s: bỏ qua mác thép, đọc đúng tiết diện', (name, rho, expected) => {
+    // Hồi quy 10/08/2026: "hộp inox sus 304 25x50x1.2" từng ra 6,216 kg/m vì
+    // lấy (304, 25) làm hai cạnh — sai 4,5 lần, và số này nhân với đơn giá/kg
+    // rồi đi thẳng lên bàn duyệt Giám đốc.
+    expect(kgPerM(name, rho).kg).toBeCloseTo(expected, 3)
+  })
+
+  it('vẫn nhận đúng hàng tấm khi tên gõ THIẾU DẤU', () => {
+    // Sót một tấm thật thì `kgPerM` đi tính như thanh đặc và đọc "304" thành
+    // chiều rộng — 7,3 kg/m cho một tấm tole. Nhận nhầm nguy hiểm hơn bỏ sót.
+    expect(kgPerM('Inox tam 304 kho 1220x2440', RHO.inox).reason).toBe(
+      'hàng tấm/cuộn — không tính theo mét',
+    )
   })
 })
 
@@ -98,8 +121,64 @@ describe('kgPerOrderUnit — chỉ quy đổi khi biết chắc', () => {
     expect(kgPerOrderUnit(1.5542, 'cây', null)).toBeNull()
   })
 
+  it('ĐVT KG → 1, dù vật tư có khai kg/m và dài cây', () => {
+    /*
+     * Hồi quy 10/08/2026. "Nhôm la 5x50" (NHO0129) bán theo KG nhưng danh mục
+     * vẫn khai kg/m 0,6773 + dài cây 6m, nên nhánh cũ trả 4,0638: đặt 100 kg
+     * thì thành tiền tính trên 406 kg. SL đặt đã là kg thì không nhân gì nữa.
+     */
+    expect(kgPerOrderUnit(0.6773, 'Kg', 6)).toBe(1)
+    expect(kgPerOrderUnit(0.6773, 'kg', null)).toBe(1)
+  })
+
   it('chưa có barem → null', () => {
     expect(kgPerOrderUnit(null, 'cây', 6)).toBeNull()
     expect(kgPerOrderUnit(0, 'cây', 6)).toBeNull()
+  })
+})
+
+/*
+ * BA NGUỒN kg/ĐƠN-VỊ. Danh mục có sẵn cặp `price_unit` + `unit2_factor` (giá đơn
+ * vị kép, 0053) từ lâu nhưng form đặt hàng không đọc — 82 mã khai đủ ở danh mục
+ * vẫn ra ô trống và người mua gõ lại. Nối vào từ 10/08/2026.
+ */
+describe('kgPerUnitOf — chọn nguồn theo độ tin', () => {
+  const cay = { unit: 'cây', kg_per_m: 1.5542, default_bar_length_m: 6 }
+
+  it('cân thật ở danh mục thắng tất cả', () => {
+    const r = kgPerUnitOf({ ...cay, kg_per_unit: 9.41, price_unit: 'kg', unit2_factor: 8.2 })
+    expect(r.kg).toBe(9.41)
+    expect(r.source).toBe('cân thật')
+    // Vẫn trả barem kèm để form đối chiếu.
+    expect(r.barem).toBeCloseTo(9.3252, 4)
+  })
+
+  it('hệ số giá/kg của danh mục thắng số suy từ barem', () => {
+    // "Sắt hộp 40x80x1li x4m30": khai dài cây 6 m nên barem ra 11,28 kg/cây,
+    // còn hệ số 8,24 mới khớp cây 4,3 m thật. Số người khai đúng hơn số suy ra.
+    const r = kgPerUnitOf({
+      unit: 'cây',
+      kg_per_m: 1.8804,
+      default_bar_length_m: 6,
+      price_unit: 'kg',
+      unit2_factor: 8.24,
+    })
+    expect(r.kg).toBe(8.24)
+    expect(r.source).toBe('danh mục (giá/kg)')
+    expect(r.barem).toBeCloseTo(11.2824, 4)
+  })
+
+  it('hệ số CHỈ dùng khi giá tính theo kg', () => {
+    // price_unit 'm³' thì unit2_factor là m³/tấm, nhét vào ô kg là sai đơn vị.
+    const r = kgPerUnitOf({ ...cay, price_unit: 'm³', unit2_factor: 0.05 })
+    expect(r.kg).toBeCloseTo(9.3252, 4)
+    expect(r.source).toBe('barem')
+  })
+
+  it('không nguồn nào có → null, không đoán', () => {
+    const r = kgPerUnitOf({ unit: 'tấm', kg_per_m: null, default_bar_length_m: null })
+    expect(r.kg).toBeNull()
+    expect(r.source).toBeNull()
+    expect(r.barem).toBeNull()
   })
 })

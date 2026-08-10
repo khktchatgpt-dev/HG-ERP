@@ -66,6 +66,10 @@ export const poLineInputSchema = z.object({
   area_m2: optNum(1e6),
   price_per_m2: optNum(1e12),
   carton_basis: z.enum(['ctn', 'm2']).optional().nullable(),
+  // Đóng gói mua chụp từ danh mục lúc lập đơn (0128) — chỉ để in quy đổi
+  // "(= 28 bì)", KHÔNG tham gia tính tiền. SL đặt vẫn luôn theo ĐVT gốc.
+  pack_size: optNum(1e9),
+  pack_unit: optText(50),
 })
 
 export const poCreateSchema = z.object({

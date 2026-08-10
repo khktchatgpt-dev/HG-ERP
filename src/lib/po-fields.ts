@@ -172,6 +172,20 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
   ],
+  /*
+   * MRO (10/08/2026). KHÔNG có "SL đơn hàng · Tồn kho": hàng bảo trì mua lẻ
+   * theo nhu cầu hỏng hóc, không có định mức/sp để trừ tồn ra số cần đặt.
+   *
+   * Bốn cột riêng dùng lại cột DB sẵn có thay vì thêm cột mới — cùng cách mẫu
+   * sơn mượn `material_grade` làm "Mã màu NCC" và mẫu mây mượn nó làm "Định
+   * mức". Nhãn khác nhau theo mẫu, còn chỗ chứa thì dùng chung.
+   */
+  mro: [
+    t('model', 'Model / Mã hãng', 'w-[130px]', 'material_grade', 'SKF 6204-2RS…'),
+    t('spec', 'Quy cách', 'w-[110px]', 'spec', 'Φ20×47×14…'),
+    t('dungcho', 'Dùng cho máy / vị trí', 'w-[130px]', 'dimension_text', 'Máy dập 8T…'),
+    t('baohanh', 'Bảo hành', 'w-[90px]', 'finish', '12 tháng'),
+  ],
   simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…')],
 }
 
@@ -192,6 +206,10 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
  * gian giao hàng` đúng ảnh chuẩn; các mẫu kỹ thuật nhiều cột không nhét thêm
  * được trong khổ giấy — hai ngày đó vẫn nằm ở đầu phiếu.
  *
+ * ĐVT: mọi mẫu đều có, và luôn đứng NGAY TRƯỚC cột số lượng (10/08/2026 — trước
+ * đó bao bì thiếu hẳn cột này còn phụ kiện in nó sau cột SL). `po-fields.test.ts`
+ * khoá quy tắc lại; đơn vị của hàng là thứ NCC đọc cùng lúc với con số.
+ *
  * Token `@…` là cột cố định do trang in tự dựng (STT, tên hàng, đơn giá, thành
  * tiền…), còn lại là `key` trong `PO_FIELDS` của mẫu đó.
  * Hao hụt đã BỎ HẲN: không phải cột nhập, không in cho NCC, và cũng không còn
@@ -207,8 +225,10 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'spec',
     'demand',
     'onhand',
-    '@qty',
+    // ĐVT đứng TRƯỚC cột số lượng như tám mẫu còn lại (10/08/2026). Trước đây
+    // riêng mẫu này in sau, nên NCC nhận hai kiểu bố cục từ cùng một công ty.
     '@unit',
+    '@qty',
     '@price',
     '@amount',
     '@note',
@@ -255,6 +275,11 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@name',
     'open',
     'pcs',
+    // Bao bì TỪNG là mẫu duy nhất không in ĐVT, với lý do "bao bì luôn là thùng".
+    // Không đúng với danh mục: nhóm bao bì có 24 đơn vị khác nhau (Tấm, Kg, Cuộn,
+    // M², Tờ…) và chỉ 259/942 mã là Thùng — phần lớn đơn in ra không nói đang
+    // đặt theo gì (10/08/2026).
+    '@unit',
     '@qty',
     'inner',
     'area',
@@ -316,6 +341,24 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     '@note',
   ],
+  // MRO: model đứng cạnh tên (NCC dò theo mã hãng), "dùng cho máy" giữ trên
+  // giấy để sau này đối chiếu chi phí bảo trì theo thiết bị; bảo hành là điều
+  // khoản nên đứng sau tiền, giống cách mẫu mây đặt "Định mức".
+  mro: [
+    '@stt',
+    '@lsx',
+    '@code',
+    '@name',
+    'model',
+    'spec',
+    'dungcho',
+    '@unit',
+    '@qty',
+    '@price',
+    '@amount',
+    'baohanh',
+    '@note',
+  ],
   simple: [
     '@stt',
     '@lsx',
@@ -342,6 +385,7 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   paint: 'Số lượng',
   chemical: 'Số lượng',
   foam: 'Số lượng',
+  mro: 'Số lượng',
   simple: 'Số lượng',
 }
 

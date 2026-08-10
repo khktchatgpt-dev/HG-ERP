@@ -1,17 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { poLineAmount } from '@/lib/po-line'
+import { packCount, poLineAmount, roundUpToPack } from '@/lib/po-line'
 import { deriveLine, type PoTemplate } from '@/lib/po-template'
 import {
+  baremFor,
   draftOf,
   lineAmount,
   lineFromPo,
   lineProblem,
   lineReady,
   newLine,
-  packCount,
-  roundUpToPack,
+  overridesCatalog,
 } from './po-line'
-import type { PoLineDto } from './po-line'
+import type { Line, PoLineDto } from './po-line'
+import type { PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -49,6 +50,8 @@ const base: PoLineDto = {
   inner_h_mm: null,
   area_m2: null,
   carton_basis: null,
+  pack_size: null,
+  pack_unit: null,
 }
 
 /** Tiền của dòng ĐÃ LƯU, tính đúng cách server tính. */
@@ -162,6 +165,8 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     kg_per_unit: null,
     kg_per_m: 1.5542,
     default_bar_length_m: 6,
+    price_unit: null,
+    unit2_factor: null,
     vat_rate: null,
     default_supplier_id: null,
     last_purchase_price: null,
@@ -205,6 +210,8 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
     unit: 'tấm',
     kg_per_m: null,
     default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
     kg_per_unit: 23.94,
   }
 
@@ -230,9 +237,101 @@ describe('newLine — tự điền barem, nhưng không đoán', () => {
       ...inox,
       kg_per_m: 0.248,
       default_bar_length_m: 5.65,
+      price_unit: null,
+      unit2_factor: null,
     })
     expect(l.weight_per_m).toBe(0.248)
     expect(l.bar_length_m).toBe(5.65)
+  })
+})
+
+/*
+ * TRA BAREM (0128) — lối thoát ĐÚNG khi vật tư chưa khai kg/m hay kg/đơn-vị.
+ * Danh mục mới có 634/13.168 mã khai kg/m và 5 mã khai kg/đơn-vị, nên nếu không
+ * có nút này thì người soạn bị chặn gửi và gõ đại một số.
+ */
+describe('baremFor — suy kg từ quy cách trong tên vật tư', () => {
+  const line = (over: Partial<Line>): Line => ({
+    ...newLine('metal_kg', {
+      id: 'm1',
+      code: 'IN-9',
+      name: 'Inox hộp 25x50x1',
+      unit: 'cây',
+      group_name: 'Inox',
+      sub_group: null,
+      spec: null,
+      kg_per_unit: null,
+      kg_per_m: null,
+      default_bar_length_m: null,
+      price_unit: null,
+      unit2_factor: null,
+      vat_rate: null,
+      default_supplier_id: null,
+      last_purchase_price: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      on_hand: null,
+      last_line: null,
+    }),
+    ...over,
+  })
+  const F_KGM = { key: 'kgm' } as PoField
+  const F_KGUNIT = { key: 'kgunit' } as PoField
+
+  it('ô kg/m: đọc tiết diện trong tên → barem tính được', () => {
+    const r = baremFor(F_KGM, line({}))
+    // Hộp 25×50 dày 1, tỷ trọng inox: (2(25+50) − 4×1) × 1 = 146 mm².
+    expect(r.kg).toBeCloseTo(1.158, 3)
+    expect(r.why).toBeNull()
+  })
+
+  it('ô kg/đơn-vị: kg/m × dài cây khi đã biết dài cây', () => {
+    const r = baremFor(F_KGUNIT, line({ weight_per_m: 1.5542, bar_length_m: 6 }))
+    expect(r.kg).toBeCloseTo(9.3252, 4)
+  })
+
+  it('chưa khai dài cây → KHÔNG đoán 6m, nói rõ lý do', () => {
+    const r = baremFor(F_KGUNIT, line({ weight_per_m: 1.5542, bar_length_m: '' }))
+    expect(r.kg).toBeNull()
+    expect(r.why).toBe('chưa khai dài cây')
+  })
+
+  it('hàng tấm/cuộn: không có barem theo mét, trả lý do thay vì số bừa', () => {
+    const r = baremFor(F_KGM, line({ name: 'Inox tấm 304 khổ 1220x2440 dày 1.0' }))
+    expect(r.kg).toBeNull()
+    expect(r.why).toBe('hàng tấm/cuộn — không tính theo mét')
+  })
+})
+
+/*
+ * GHI NGƯỢC VỀ DANH MỤC (0128) — chỉ mời khi số trên ô khác số danh mục đang
+ * giữ. Người mua cầm phiếu cân NCC lúc lập đơn; trước đây con số ấy chết theo
+ * dòng đơn và lần sau lại gõ lại.
+ */
+describe('overridesCatalog — khi nào mời lưu về danh mục', () => {
+  const F_KGUNIT = { key: 'kgunit', field: 'weight_per_unit' } as PoField
+  const l = (over: Partial<Line>) =>
+    ({ ...({} as Line), catalog_kg_m: null, catalog_kg_unit: null, ...over }) as Line
+
+  it('gõ đè khác số danh mục → mời lưu', () => {
+    expect(
+      overridesCatalog(F_KGUNIT, l({ weight_per_unit: 9.41, catalog_kg_unit: 9.3252 })),
+    ).toBe(true)
+  })
+
+  it('đúng bằng số danh mục → không mời (khỏi rác màn hình)', () => {
+    expect(
+      overridesCatalog(F_KGUNIT, l({ weight_per_unit: 9.3252, catalog_kg_unit: 9.3252 })),
+    ).toBe(false)
+  })
+
+  it('ô trống → không mời', () => {
+    expect(overridesCatalog(F_KGUNIT, l({ weight_per_unit: '' }))).toBe(false)
+  })
+
+  it('mở từ đơn đã lưu (không biết danh mục để gì) → vẫn mời', () => {
+    expect(overridesCatalog(F_KGUNIT, l({ weight_per_unit: 23.94 }))).toBe(true)
   })
 })
 
@@ -253,6 +352,8 @@ describe('newLine carton — tách quy cách vào lọt lòng', () => {
     kg_per_unit: null,
     kg_per_m: null,
     default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
     vat_rate: null,
     default_supplier_id: null,
     last_purchase_price: null,
@@ -375,6 +476,18 @@ describe('newLine carton — tách quy cách vào lọt lòng', () => {
     const l = newLine('accessory', { ...bb, pack_size: 500, pack_unit: 'bì' })
     expect(l.pack_size).toBe(500)
     expect(l.pack_unit).toBe('bì')
+  })
+
+  it('mở SỬA/NHÂN BẢN giữ đúng đóng gói ĐÃ CHỐT trên đơn (0128)', () => {
+    // Trước 0128 dòng đơn không lưu đóng gói nên mở sửa là mất quy đổi. Giờ đọc
+    // lại từ chính dòng đã lưu — không lấy đóng gói hiện tại của danh mục, vì
+    // NCC có thể đã đổi bì 500 → bì 1.000 sau khi đơn được ký.
+    const l = lineFromPo({ ...base, pack_size: 500, pack_unit: 'bì' })
+    expect(l.pack_size).toBe(500)
+    expect(l.pack_unit).toBe('bì')
+    // Đơn cũ (null) thì quy đổi tự ẩn như trước, không vỡ.
+    expect(lineFromPo(base).pack_size).toBeNull()
+    expect(lineFromPo(base).pack_unit).toBe('')
   })
 })
 

@@ -23,6 +23,7 @@ export const PO_TEMPLATES = [
   'paint',
   'chemical',
   'foam',
+  'mro',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
@@ -212,6 +213,38 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       payment: 'Công nợ 14 ngày — giá bốc tại kho NCC, chưa gồm vận chuyển',
       invoice: INVOICE_VAT,
       lead_time: 'Từ 3 đến 5 ngày kể từ ngày nhận đơn',
+    },
+  },
+  /*
+   * MRO — PHỤ TÙNG / BẢO TRÌ / BẢO HỘ (10/08/2026). Rà cả danh mục 13.168 mã:
+   * 6.892 mã (52%) rơi vào mẫu "Đơn giản", và bóc ra thì hơn 4.300 trong số đó
+   * là một HỌ RIÊNG chứ không phải hàng hỗn tạp — dụng cụ/máy/mài 1.320, điện
+   * 979, ống-van-khí nén 856, cơ khí-vòng bi-khuôn 667, văn phòng-bảo hộ 468.
+   *
+   * Trục nghiệp vụ khác hẳn vật tư sản xuất: mua LẺ ngoài LSX, không có định
+   * mức/sp nên hai cột "SL đơn hàng · Tồn kho" vô nghĩa. Thứ NCC cần để giao
+   * đúng là MODEL/mã hãng, còn thứ phòng cần để đối chiếu về sau là "dùng cho
+   * máy nào" và "bảo hành bao lâu" — ba thứ mẫu Đơn giản không có chỗ để ghi.
+   *
+   * ĐIỀU KHOẢN BÊN DƯỚI LÀ BẢN NHÁP TRUNG TÍNH. Tám mẫu kia chép nguyên văn từ
+   * đơn thật; MRO chưa có đơn nào trong thư mục "Hợp đồng mua hàng" để chép,
+   * nên đây là câu chữ an toàn để phòng sửa dần — đừng coi là đã chốt.
+   */
+  mro: {
+    key: 'mro',
+    label: 'Phụ tùng / bảo trì / bảo hộ',
+    hint: 'Dụng cụ, điện, khí nén, vòng bi, bảo hộ — mua lẻ ngoài LSX, không định mức',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+    terms: {
+      quality: 'Hàng mới 100%, đúng model / mã hãng đã chào',
+      delivery_place: DELIVERY_HG,
+      payment: 'Chuyển khoản sau khi nhận đủ hàng và hoá đơn',
+      invoice: INVOICE_VAT,
+      lead_time: 'Theo thời gian NCC xác nhận trên báo giá',
     },
   },
   simple: {

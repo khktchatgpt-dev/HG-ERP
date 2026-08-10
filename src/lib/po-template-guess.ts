@@ -99,12 +99,34 @@ export function guessTemplate(
   if (/\b(thép|sắt|inox|tôn|kẽm)\b/.test(n) && tietDien)
     return { template: 'metal_kg', reason: 'sắt / inox theo quy cách — tính theo kg' }
 
+  /*
+   * MRO — xét SAU vật tư sản xuất, TRƯỚC khi bỏ cuộc về "Đơn giản".
+   *
+   * Đặt cuối vì tên hàng bảo trì rất tạp; đặt trước fallback vì hơn 4.300 mã
+   * đang rơi hết vào "Đơn giản" — mẫu không có chỗ ghi model, máy nào dùng,
+   * bảo hành bao lâu. Chỉ nhận những từ khoá KHÔNG đụng họ sản xuất: "đá
+   * cắt/đá mài/que hàn" đã về `simple` ở nhánh vật tư hàn phía trên và giữ
+   * nguyên như vậy, không kéo sang đây.
+   */
+  if (
+    /vòng bi|bạc đạn|bearing|mũi khoan|mũi taro|máy khoan|máy mài|máy bơm|mô ?tơ|motor|xy ?lanh|xi ?lanh|van khí|van bi|van một chiều|dây hơi|đầu nối nhanh|rơ ?le|contactor|aptomat|cầu dao|khởi động từ|biến tần|bóng đèn|đèn led|ổ cắm|công tắc|cầu chì|dây điện|cáp điện|găng tay|khẩu trang|kính bảo hộ|giày bảo hộ|nón bảo hộ|nút tai/.test(
+      n,
+    )
+  )
+    return {
+      template: 'mro',
+      reason: 'phụ tùng / bảo trì / bảo hộ — mua lẻ, ghi model + máy dùng',
+    }
   if (/bulon|vít|đinh|lông đền|kẹp|chốt/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
   if (/tem|nhãn|thẻ|logo|mạc/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
   if (/nút nhựa|bánh xe|gót chân|lót ghế|nắp|tay nắm/.test(s))
     return { template: 'accessory', reason: `theo nhóm phụ "${subGroup}"` }
+  // Nhóm phụ MRO xét SAU các nhóm phụ đặc trưng ở trên — "điện" hay "dụng cụ"
+  // là từ rộng, để trước thì nuốt mất mấy nhánh hẹp hơn.
+  if (/dụng cụ|khí nén|thu[ỷy] lực|vòng bi|bảo hộ|điện|văn phòng/.test(s))
+    return { template: 'mro', reason: `phụ tùng / bảo trì theo nhóm phụ "${subGroup}"` }
 
   return { template: 'simple', reason: 'không suy được từ tên — SL × giá' }
 }

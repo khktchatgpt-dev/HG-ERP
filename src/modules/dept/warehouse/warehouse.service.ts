@@ -89,6 +89,13 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'po_template',
   'kg_per_m',
   'default_bar_length_m',
+  // `kg_per_unit` bị bỏ sót khỏi danh sách này cho tới 10/08/2026, dù nó cùng
+  // bản chất và cùng mục đích với hai trường ngay trên: người mua đọc phiếu cân
+  // của NCC rồi ghi lại kg/tấm, kg/cuộn. Thiếu nó thì họ gõ lại con số ấy vào
+  // MỌI đơn sau, vì không có đường nào lưu về danh mục. CẢ HAI phòng sửa được
+  // (chốt 10/08/2026) — Kho vẫn là nơi chuyên sâu, nhưng người cầm phiếu cân
+  // của NCC trong tay lúc lập đơn là Cung ứng.
+  'kg_per_unit',
   // Đóng gói mua + vật liệu (0124) — thông tin phục vụ soạn đơn, việc của Cung ứng.
   'pack_size',
   'pack_unit',

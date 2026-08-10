@@ -49,7 +49,10 @@ describe('guessTemplate — các mẫu còn lại', () => {
     ['Thùng carton 5 lớp KT: 715x660x415', 'carton'],
     ['Tem made in VietNam', 'accessory'],
     ['Nút nhựa vuông 76', 'accessory'],
-    ['Vòng bi 6203', 'simple'],
+    // ĐỔI 10/08/2026: trước ra 'simple' vì chưa có mẫu nào nhận hàng bảo trì.
+    // Vòng bi là ca MRO điển hình — mua lẻ, NCC giao theo mã hãng, cần ghi lắp
+    // vào máy nào. Mẫu Đơn giản không có chỗ cho cả ba thứ đó.
+    ['Vòng bi 6203', 'mro'],
     // 4 mẫu 08/08/2026 — tên thật từ đơn Drive Cung ứng.
     ['Mây dẹp Treviso', 'rattan'],
     ['Dây rope tròn 6mm', 'rattan'],
@@ -61,6 +64,25 @@ describe('guessTemplate — các mẫu còn lại', () => {
     ['Xốp nổ 1.4m x 100m', 'foam'],
   ])('%s → %s', (name, tpl) => {
     expect(guessTemplate(name).template).toBe(tpl)
+  })
+
+  it.each([
+    ['Bạc đạn 6204-2RS', 'mro'],
+    ['Xy lanh khí nén SC 63x100', 'mro'],
+    ['Contactor LS 3P 25A', 'mro'],
+    ['Găng tay len phủ cao su', 'mro'],
+    // KHÔNG kéo vật tư hàn sang MRO — chúng đã có nhánh riêng và giữ 'simple'.
+    ['Đá cắt 105x1.2', 'simple'],
+    ['Que hàn Kim Tín 2.6', 'simple'],
+    // Cũng không nuốt hàng sản xuất chỉ vì tên có chữ "máy".
+    ['Vít máy 4x20 đầu dù', 'accessory'],
+  ])('MRO: %s → %s', (name, tpl) => {
+    expect(guessTemplate(name).template).toBe(tpl)
+  })
+
+  it('nhóm phụ nói phụ tùng/bảo hộ thì về MRO', () => {
+    expect(guessTemplate('Cảo 3 chấu', 'Dụng cụ cầm tay').template).toBe('mro')
+    expect(guessTemplate('Kính trắng', 'Bảo hộ lao động').template).toBe('mro')
   })
 
   it('không suy được từ tên thì dựa nhóm phụ', () => {
