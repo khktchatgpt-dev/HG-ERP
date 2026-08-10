@@ -19,7 +19,6 @@ import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 import { shipWeekLabel } from '@/lib/ship-week'
-import { OrderPasteDialog, type ApplyRow } from '@/components/sales/OrderPasteDialog'
 
 export type ProductPick = {
   id: string
@@ -193,9 +192,6 @@ export function OrderForm(props: {
   )
   const [productList] = useState<ProductPick[]>(props.products)
 
-  // Dán dòng đơn từ Excel (bù giá / thêm dòng hàng loạt).
-  const [pasteOpen, setPasteOpen] = useState(false)
-
   // Mini-form "SP mới" (chưa lưu — thành 1 dòng draft).
   const [npOpen, setNpOpen] = useState(false)
   const [np, setNp] = useState({
@@ -359,46 +355,6 @@ export function OrderForm(props: {
       },
     ])
   }
-  /**
-   * Áp kết quả DÁN TỪ EXCEL vào lưới. Chỉ đụng ô có số trong vùng dán: file chỉ
-   * mang giá thì số lượng đang có trên đơn giữ nguyên, không bị xoá về rỗng.
-   */
-  function applyPaste(rows: ApplyRow[]) {
-    let updated = 0
-    let added = 0
-    setLines((ls) => {
-      const next = [...ls]
-      for (const r of rows) {
-        const i = next.findIndex((l) => l.productId === r.product_id)
-        if (i >= 0) {
-          next[i] = {
-            ...next[i],
-            qty: r.qty != null ? r.qty : next[i].qty,
-            unitPrice: r.unit_price != null ? r.unit_price : next[i].unitPrice,
-            note: r.note ?? next[i].note,
-          }
-          updated++
-        } else {
-          next.push({
-            key: keyRef.current++,
-            productId: r.product_id,
-            draft: null,
-            qty: r.qty ?? '',
-            unitPrice: r.unit_price ?? '',
-            shipDate: '',
-            note: r.note ?? '',
-          })
-          added++
-        }
-      }
-      return next
-    })
-    toast.success(
-      'Đã điền vào lưới',
-      `${updated} dòng cập nhật · ${added} dòng thêm mới — kiểm lại rồi bấm Lưu đơn`,
-    )
-  }
-
   function addDraftLine() {
     if (!np.code.trim() || !np.name.trim()) {
       toast.error('Thiếu thông tin', 'SP mới cần mã và tên')
@@ -936,15 +892,6 @@ export function OrderForm(props: {
             >
               + SP mới
             </button>
-            {/* Dán từ Excel: bù giá hàng loạt cho đơn đã có, hoặc nhập cả bảng
-                dòng SP thay vì chọn từng cái. */}
-            <button
-              type="button"
-              onClick={() => setPasteOpen(true)}
-              className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium"
-            >
-              ⎘ Dán từ Excel
-            </button>
           </div>
 
           {/*
@@ -1101,15 +1048,6 @@ export function OrderForm(props: {
             <b>{mode === 'create' ? 'Tạo đơn hàng' : 'Lưu thay đổi'}</b> — thêm rồi xoá
             thì không tạo gì bên Kỹ thuật.
           </p>
-
-          <OrderPasteDialog
-            open={pasteOpen}
-            onClose={() => setPasteOpen(false)}
-            products={productList}
-            existingIds={new Set(lines.map((l) => l.productId).filter(Boolean))}
-            currency={currency}
-            onApply={applyPaste}
-          />
         </Card>
       )}
 
