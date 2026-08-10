@@ -12,6 +12,7 @@ import {
   Ruler,
   Waves,
   Weight,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
@@ -26,6 +27,7 @@ const TEMPLATE_ICONS: Record<PoTemplate, LucideIcon> = {
   paint: Droplets,
   chemical: FlaskConical,
   foam: Layers,
+  mro: Wrench,
   simple: FileText,
 }
 

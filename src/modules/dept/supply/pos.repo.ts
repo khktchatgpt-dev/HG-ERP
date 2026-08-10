@@ -61,6 +61,13 @@ export type PoLineTemplateFields = {
   area_m2: number | null
   price_per_m2: number | null
   carton_basis: 'ctn' | 'm2' | null
+  /**
+   * ĐÓNG GÓI MUA chụp lúc lập đơn (0128): 1 pack_unit = pack_size ĐVT gốc.
+   * Không đi vào tiền — SL đặt vẫn theo ĐVT gốc — chỉ để phiếu in nói được
+   * "13.596 Con (= 28 bì)" thay vì bắt NCC tự chia.
+   */
+  pack_size: number | null
+  pack_unit: string | null
 }
 
 export type PoLine = PoLineTemplateFields & {
@@ -111,6 +118,8 @@ const TEMPLATE_LINE_COLS = [
   'area_m2',
   'price_per_m2',
   'carton_basis',
+  'pack_size',
+  'pack_unit',
 ] as const
 
 const COLS =
@@ -130,6 +139,7 @@ const NUMERIC_LINE_COLS = [
   'inner_h_mm',
   'area_m2',
   'price_per_m2',
+  'pack_size',
 ] as const
 
 function numericLineFields(row: Record<string, unknown>): Record<string, number | null> {
@@ -350,7 +360,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')

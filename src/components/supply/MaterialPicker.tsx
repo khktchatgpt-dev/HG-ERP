@@ -19,6 +19,9 @@ export type PoMaterial = {
   kg_per_m: number | null
   kg_per_unit: number | null
   default_bar_length_m: number | null
+  /** Giá đơn vị kép ở danh mục (0053): giá theo `price_unit`, 1 ĐVT = `unit2_factor`. */
+  price_unit: string | null
+  unit2_factor: number | null
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null

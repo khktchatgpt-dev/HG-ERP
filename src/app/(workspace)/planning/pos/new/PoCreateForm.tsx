@@ -457,6 +457,48 @@ export function PoCreateForm({
     setLines((ls) => ls.filter((_, idx) => idx !== i))
   }
 
+  /**
+   * GHI SỐ CÂN VỀ DANH MỤC (0128) — khai một lần, mọi đơn sau tự điền.
+   *
+   * Người mua cầm phiếu cân của NCC trong tay đúng lúc lập đơn; trước đây con số
+   * đó chỉ sống trong một dòng đơn rồi mất, lần sau lại gõ lại. Chỉ ghi ĐÚNG một
+   * trường, không đụng gì khác của vật tư.
+   *
+   * Ghi xong cập nhật luôn `catalog_*` của MỌI dòng cùng vật tư để nút tự biến
+   * mất — đơn có thể có hai dòng cùng mã (khác vị trí lắp), bấm một lần là đủ.
+   */
+  async function saveToCatalog(
+    materialId: string,
+    field: 'kgm' | 'kgunit',
+    value: number,
+  ) {
+    const col = field === 'kgm' ? 'kg_per_m' : 'kg_per_unit'
+    try {
+      await api(`/api/dept/warehouse/materials/${materialId}`, {
+        method: 'PATCH',
+        body: { [col]: value },
+      })
+      setLines((ls) =>
+        ls.map((l) =>
+          l.material_id === materialId
+            ? {
+                ...l,
+                ...(field === 'kgm'
+                  ? { catalog_kg_m: value }
+                  : { catalog_kg_unit: value }),
+              }
+            : l,
+        ),
+      )
+      toast.success('Đã lưu vào danh mục', `${col} = ${value.toLocaleString('vi-VN')}`)
+    } catch (e) {
+      toast.error(
+        'Không lưu được vào danh mục',
+        e instanceof ApiError ? e.message : 'Có lỗi',
+      )
+    }
+  }
+
   /** Gom đầu đơn lại để đưa cho các hàm thuần ở `po-draft.ts` (có test riêng). */
   const header: PoHeader = {
     template,
@@ -802,6 +844,7 @@ export function PoCreateForm({
           currency={currency}
           onPatch={patchLine}
           onRemove={removeLine}
+          onSaveToCatalog={(id, f, v) => void saveToCatalog(id, f, v)}
           focusIndex={focusIndex}
           onFocused={() => setFocusIndex(null)}
           onDoneRow={() => pickerRef.current?.focus()}
@@ -866,6 +909,8 @@ export function PoCreateForm({
                 kg_per_m: m.kg_per_m,
                 kg_per_unit: m.kg_per_unit,
                 default_bar_length_m: m.default_bar_length_m,
+                price_unit: m.price_unit,
+                unit2_factor: m.unit2_factor,
                 vat_rate: null,
                 default_supplier_id: null,
                 last_purchase_price: null,

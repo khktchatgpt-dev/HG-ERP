@@ -15,9 +15,12 @@ import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fie
  *
  * Nhãn dưới đây chép từ "FORM ĐẶT HÀNG MỚI" — bộ file đơn thật của phòng Cung
  * ứng (`D:\PO`, 45 sheet). Mọi sheet theo form mới gọi cột tên hàng là "Tên sản
- * phẩm / vật tư" và kèm đơn vị tiền trong ngoặc ở hai cột tiền; ĐVT có mặt ở
- * mọi mẫu trừ bao bì (đơn vị của bao bì luôn là thùng). Nhãn ở đây giả định đơn
- * VND — trang in lấy đúng `po.currency`.
+ * phẩm / vật tư" và kèm đơn vị tiền trong ngoặc ở hai cột tiền. Nhãn ở đây giả
+ * định đơn VND — trang in lấy đúng `po.currency`.
+ *
+ * ĐVT có mặt ở CẢ CHÍN mẫu và luôn đứng ngay trước cột số lượng (10/08/2026).
+ * Bao bì trước đây bị bỏ với lý do "đơn vị của bao bì luôn là thùng" — sai với
+ * danh mục thật: nhóm bao bì có 24 đơn vị, chỉ 259/942 mã là Thùng.
  */
 /**
  * KHUNG CHUẨN 08/2026: mọi mẫu mở đầu `STT · LSX · Mã sản phẩm · Tên SP/vật tư`
@@ -35,8 +38,8 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Quy cách',
     'SL đơn hàng',
     'Tồn kho',
-    'SL đặt',
     'ĐVT',
+    'SL đặt',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
@@ -83,6 +86,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Tên sản phẩm / vật tư',
     'Cách mở',
     'Pcs/thùng',
+    'ĐVT',
     'Số thùng',
     'Lọt lòng D×R×C (mm)',
     'm²/thùng',
@@ -141,6 +145,23 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
+    'Ghi chú',
+  ],
+  // MRO (10/08/2026) — chưa có đơn thật để chép; bộ cột dựng theo nhu cầu đã rà:
+  // NCC giao đúng nhờ MODEL, phòng đối chiếu về sau nhờ "dùng cho máy" + bảo hành.
+  mro: [
+    'STT',
+    'LSX',
+    'Mã sản phẩm',
+    'Tên sản phẩm / vật tư',
+    'Model / Mã hãng',
+    'Quy cách',
+    'Dùng cho máy / vị trí',
+    'ĐVT',
+    'Số lượng',
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Bảo hành',
     'Ghi chú',
   ],
   simple: [
@@ -204,6 +225,19 @@ describe('PO_PRINT_ORDER — bộ cột phiếu in', () => {
     // số lượng ("SL Đặt hàng hh 3%"), không tách cột riêng.
     expect(PO_FIELDS.accessory.some((f) => f.key === 'waste')).toBe(false)
     expect(PO_PRINT_ORDER.accessory).not.toContain('waste')
+  })
+
+  it('ĐVT có ở mọi mẫu và đứng ngay trước cột số lượng', () => {
+    // Đồng bộ 9/9 (10/08/2026): bao bì từng thiếu hẳn cột này, phụ kiện in nó
+    // sau cột SL. Đơn vị phải nằm sát con số thì NCC mới đọc được "540 Con"
+    // thay vì đoán theo tên hàng.
+    for (const t of PO_TEMPLATES) {
+      const cols = PO_PRINT_ORDER[t]
+      expect(cols, `${t} thiếu ĐVT`).toContain('@unit')
+      expect(cols.indexOf('@qty'), `${t}: ĐVT phải sát trước SL`).toBe(
+        cols.indexOf('@unit') + 1,
+      )
+    }
   })
 
   it('cột số lượng nằm GIỮA phần thông số ở mẫu nhôm và bao bì', () => {

@@ -36,6 +36,14 @@ export type PoMaterial = {
   kg_per_m: number | null
   kg_per_unit: number | null
   default_bar_length_m: number | null
+  /**
+   * GIÁ ĐƠN VỊ KÉP khai ở danh mục (0053): `price_unit` = đơn vị của đơn giá
+   * ('kg'…), `unit2_factor` = bao nhiêu đơn-vị-giá trong MỘT ĐVT mua (23,94
+   * kg/tấm). Kho khai một lần, đơn đặt dùng lại — trước 10/08/2026 form không
+   * đọc hai trường này nên người mua vẫn phải gõ lại kg/đơn-vị.
+   */
+  price_unit: string | null
+  unit2_factor: number | null
   vat_rate: number | null
   default_supplier_id: string | null
   last_purchase_price: number | null
@@ -56,7 +64,7 @@ export type PoMaterial = {
 }
 
 const COLS =
-  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade'
+  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, price_unit, unit2_factor, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade'
 
 function toMaterial(
   r: Record<string, unknown>,
@@ -76,6 +84,8 @@ function toMaterial(
     kg_per_unit: r.kg_per_unit == null ? null : Number(r.kg_per_unit),
     default_bar_length_m:
       r.default_bar_length_m == null ? null : Number(r.default_bar_length_m),
+    price_unit: (r.price_unit as string | null) ?? null,
+    unit2_factor: r.unit2_factor == null ? null : Number(r.unit2_factor),
     vat_rate: r.vat_rate == null ? null : Number(r.vat_rate),
     default_supplier_id: (r.default_supplier_id as string | null) ?? null,
     last_purchase_price:

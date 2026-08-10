@@ -4,15 +4,8 @@ import { PackageSearch, Trash2, TriangleAlert, Weight } from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
 import { LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
-import {
-  lineAmount,
-  lineProblem,
-  lineQty2,
-  packCount,
-  roundUpToPack,
-  type Line,
-  type Num,
-} from './po-line'
+import { packCount, roundUpToPack } from '@/lib/po-line'
+import { lineAmount, lineProblem, lineQty2, type Line, type Num } from './po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
@@ -64,6 +57,7 @@ export function PoLineTable({
   currency,
   onPatch,
   onRemove,
+  onSaveToCatalog,
   focusIndex = null,
   onFocused,
   onDoneRow,
@@ -75,6 +69,8 @@ export function PoLineTable({
   currency: string
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
+  /** Ghi kg/m · kg/đơn-vị vừa gõ về danh mục vật tư (0128). */
+  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
   /** Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó. */
   focusIndex?: number | null
   /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */
@@ -108,11 +104,13 @@ export function PoLineTable({
                   {c.label}
                 </th>
               ))}
-              <th className={`${th} text-right`}>SL đặt</th>
               {/* ĐVT là CỘT riêng như sổ Excel (08/08/2026) — trước chỉ là chữ
-                  nhỏ dưới tên, người soạn phản hồi "mẫu không có phần ĐVT". Vị
-                  trí giữa SL đặt và Đơn giá đúng như đơn giấy. */}
+                  nhỏ dưới tên, người soạn phản hồi "mẫu không có phần ĐVT".
+                  Đứng NGAY TRƯỚC cột SL đặt, đúng vị trí trên phiếu in gửi NCC
+                  (`PO_PRINT_ORDER` — 10/08/2026); trước đó form để sau cột SL
+                  nên nhìn form một kiểu, nhận giấy một kiểu khác. */}
               <th className={`${th} text-center`}>ĐVT</th>
+              <th className={`${th} text-right`}>SL đặt</th>
               <th className={`${th} text-right`}>{priceLabel}</th>
               {calcCol && <th className={`${th} text-right`}>{calcCol.label}</th>}
               <th className={`${th} text-right`}>Thành tiền</th>
@@ -149,12 +147,12 @@ export function PoLineTable({
                     </div>
                   </td>
                 ))}
+                <td className={`${td} text-muted-foreground/40 pt-3 text-center`}>ĐVT</td>
                 <td className={td}>
                   <div className="w-[92px]">
                     <div className={`${cell} text-muted-foreground/40 text-right`}>—</div>
                   </div>
                 </td>
-                <td className={`${td} text-muted-foreground/40 pt-3 text-center`}>ĐVT</td>
                 <td className={td}>
                   <div className="w-[108px]">
                     <div className={`${cell} text-muted-foreground/40 text-right`}>—</div>
@@ -247,10 +245,18 @@ export function PoLineTable({
                             index={i}
                             kgTotal={kg}
                             onPatch={onPatch}
+                            onSaveToCatalog={onSaveToCatalog}
                           />
                         </div>
                       </td>
                     ))}
+                    {/* ĐVT theo danh mục — chỉ đọc, đứng NGAY TRƯỚC SL đặt như
+                        phiếu in gửi NCC. */}
+                    <td
+                      className={`${td} pt-3 text-center text-[12.5px] whitespace-nowrap`}
+                    >
+                      {l.unit}
+                    </td>
                     <td className={td}>
                       {/* Bề rộng đặt ở DIV bọc, không đặt trên input: `cell` đã
                           có w-full, hai utility width trên cùng phần tử thì cái
@@ -318,12 +324,6 @@ export function PoLineTable({
                           {l.pack_unit}
                         </div>
                       )}
-                    </td>
-                    {/* ĐVT theo danh mục — chỉ đọc, đứng cạnh SL đặt như đơn giấy. */}
-                    <td
-                      className={`${td} pt-3 text-center text-[12.5px] whitespace-nowrap`}
-                    >
-                      {l.unit}
                     </td>
                     <td className={td}>
                       <div className="w-[108px]">
