@@ -44,6 +44,23 @@ export const storage = {
   },
 
   /**
+   * Đẩy thẳng byte từ SERVER lên Storage — dùng khi file được sinh/bóc ở server
+   * chứ không do trình duyệt PUT (vd ảnh nhúng bóc ra từ file Excel báo giá).
+   * Luồng 3 bước (init → PUT → finalize) không áp được vì không có client PUT.
+   */
+  async uploadBuffer(
+    bucket: FileBucket,
+    path: string,
+    body: Buffer,
+    contentType: string,
+  ): Promise<void> {
+    const { error } = await db()
+      .storage.from(bucket)
+      .upload(path, body, { contentType, upsert: false })
+    if (error) throw new Error(error.message)
+  },
+
+  /**
    * URL ký sẵn để tải file, kèm thời điểm hết hạn. Cache theo (bucket, path) nên
    * các lần render trong cùng vòng đời token trả về **đúng một URL** — xem
    * `signed-url-cache.ts` để biết vì sao điều đó quan trọng với chi phí egress.

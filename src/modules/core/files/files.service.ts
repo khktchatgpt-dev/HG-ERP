@@ -161,6 +161,62 @@ async function assertSamplePhotoQuota(input: InitUploadInput): Promise<void> {
 }
 
 export const filesService = {
+  /**
+   * Lưu file do SERVER cầm sẵn byte (không qua luồng 3 bước của trình duyệt) —
+   * dùng cho ảnh bóc từ file Excel báo giá và cho chính file Excel nguồn.
+   *
+   * Ghi Storage TRƯỚC rồi mới chốt row: nếu đẩy byte hỏng thì row bị xoá mềm,
+   * không để lại bản ghi trỏ vào object không tồn tại.
+   */
+  async uploadFromServer(
+    user: User,
+    input: {
+      buffer: Buffer
+      filename: string
+      mime_type: InitUploadInput['mime_type']
+      bucket: FileBucket
+      parent: InitUploadInput['parent']
+      doc_type?: InitUploadInput['doc_type']
+    },
+  ): Promise<string> {
+    const max = maxBytesFor(input.doc_type)
+    if (input.buffer.byteLength > max) {
+      throw BadRequest(
+        `File ${formatBytes(input.buffer.byteLength)} vượt giới hạn ${formatBytes(max)}`,
+      )
+    }
+    assertBucketAllowed(input.bucket, input.mime_type)
+    const base: InitUploadInput = {
+      bucket: input.bucket,
+      filename: input.filename,
+      mime_type: input.mime_type,
+      size_bytes: input.buffer.byteLength,
+      parent: input.parent,
+      doc_type: input.doc_type ?? null,
+    }
+    await assertCanWriteParent(user, base)
+
+    const path = buildPath(base, user.id)
+    const row = await filesRepo.insert({
+      bucket: input.bucket,
+      path,
+      filename: input.filename,
+      mime_type: input.mime_type,
+      size_bytes: input.buffer.byteLength,
+      owner_id: user.id,
+      doc_type: input.doc_type ?? null,
+      parent: parentColumns(base),
+    })
+    try {
+      await storage.uploadBuffer(input.bucket, path, input.buffer, input.mime_type)
+    } catch (e) {
+      await filesRepo.softDelete(row.id)
+      throw e
+    }
+    await filesRepo.markFinalized(row.id, null, input.buffer.byteLength)
+    return row.id
+  },
+
   async initUpload(
     user: User,
     input: InitUploadInput,
