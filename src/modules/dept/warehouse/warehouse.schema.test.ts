@@ -34,11 +34,17 @@ describe('materialCreateSchema', () => {
     expect(p.unit).toBe('cái')
   })
 
-  it('min_stock mặc định 0 và ép kiểu từ chuỗi', () => {
+  it('min_stock ép kiểu từ chuỗi, KHÔNG mặc định 0', () => {
+    /*
+     * Bỏ `.default(0)` ngày 10/08/2026. Zod sinh khoá cho cả trường không gửi,
+     * nên chốt chặn chủ quyền (min_stock là của Kho) sẽ tưởng Cung ứng đang cố
+     * ghi trường của Kho ở MỌI lần khai vật tư. Không gửi thì để undefined —
+     * service ghi 0 xuống repo, DB cũng default 0, số cuối cùng không đổi.
+     */
     const p = materialCreateSchema.parse({ code: 'X', name: 'Y', min_stock: '5' })
     expect(p.min_stock).toBe(5)
     const p2 = materialCreateSchema.parse({ code: 'X', name: 'Y' })
-    expect(p2.min_stock).toBe(0)
+    expect(p2.min_stock).toBeUndefined()
   })
 
   /*

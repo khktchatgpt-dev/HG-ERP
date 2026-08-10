@@ -40,7 +40,7 @@ type CreateInput = {
   unit2_factor?: number | null
   group_name?: string | null
   sub_group?: string | null
-  min_stock: number
+  min_stock?: number
   max_stock?: number | null
   reorder_point?: number | null
   reorder_qty?: number | null
@@ -103,6 +103,28 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * CHỐT CHẶN CHỦ QUYỀN — dùng chung cho cả TẠO lẫn SỬA.
+ *
+ * Một hàm cho hai đường vì trước đây chúng lệch nhau: `update` chặn, `create`
+ * thì không, nên khai một mã mới rồi gán luôn tồn tối thiểu là đi vòng qua đúng
+ * cái luật `update` đang giữ (10/08/2026).
+ *
+ * Bỏ qua khoá có giá trị `undefined`: zod sinh khoá cho cả trường không gửi, mà
+ * "không gửi" thì không phải là "đang cố ghi".
+ */
+async function assertOwnedFields(user: User, payload: Record<string, unknown>) {
+  if (await canAction(user, 'warehouse.material.update')) return
+  const blocked = Object.keys(payload).filter(
+    (k) => payload[k] !== undefined && !PURCHASING_EDITABLE_FIELDS.has(k),
+  )
+  if (blocked.length > 0) {
+    throw Forbidden(
+      `Trường thuộc quản lý của Kho, Cung ứng không đặt được: ${blocked.join(', ')}`,
+    )
+  }
+}
+
+/**
  * Cấp mã kế tiếp cho nhóm: `NK-0125`.
  *
  * Tiền tố lấy theo ĐA SỐ mã đang dùng trong nhóm; nhóm chưa có mã nào (hoặc mã
@@ -156,6 +178,16 @@ export const materialsService = {
     // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
     // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).
     await assertAction(user, 'warehouse.material.create')
+    /*
+     * CHIA CHỦ QUYỀN ÁP CHO CẢ ĐƯỜNG TẠO (10/08/2026).
+     *
+     * Trước đây chỉ `update` chặn — comment trên form còn ghi "server cũng
+     * chặn", nhưng POST thẳng vào endpoint thì Cung ứng vẫn đặt được min_stock,
+     * vị trí kệ, barcode, ngưỡng bù tồn của vật tư mới. Khoá cửa sổ mà để ngỏ
+     * cửa chính: khai một mã mới rồi gán luôn tồn tối thiểu là qua mặt được
+     * đúng cái luật mà `update` đang giữ.
+     */
+    await assertOwnedFields(user, input as Record<string, unknown>)
 
     const group = input.group_name ?? null
     const siblings = await materialsRepo.namesInGroup(group)
@@ -209,7 +241,7 @@ export const materialsService = {
       unit2_factor: input.unit2_factor ?? null,
       group_name: input.group_name ?? null,
       sub_group: input.sub_group ?? null,
-      min_stock: input.min_stock,
+      min_stock: input.min_stock ?? 0,
       max_stock: input.max_stock ?? null,
       reorder_point: input.reorder_point ?? null,
       reorder_qty: input.reorder_qty ?? null,
@@ -267,16 +299,10 @@ export const materialsService = {
   },
 
   async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
-    // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng — enforce bên dưới).
-    const full = await canAction(user, 'warehouse.material.update')
-    if (!full) {
+    // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng).
+    if (!(await canAction(user, 'warehouse.material.update'))) {
       await assertAction(user, 'warehouse.material.update_purchasing')
-      const blocked = Object.keys(patch).filter((k) => !PURCHASING_EDITABLE_FIELDS.has(k))
-      if (blocked.length > 0) {
-        throw Forbidden(
-          `Trường thuộc quản lý của Kho, Cung ứng không sửa được: ${blocked.join(', ')}`,
-        )
-      }
+      await assertOwnedFields(user, patch as Record<string, unknown>)
     }
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')

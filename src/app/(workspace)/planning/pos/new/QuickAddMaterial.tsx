@@ -78,9 +78,15 @@ export function QuickAddMaterial({
     if (core.invalid || busy) return
     setBusy(true)
     try {
+      /*
+       * KHÔNG gửi `min_stock` — đó là trường của Kho (10/08/2026). Trước đây
+       * form này ép 0, tức Cung ứng đang đặt hộ Kho một ngưỡng tồn; DB vốn đã
+       * default 0 nên gửi cũng thừa. Bỏ đi thì server mới chặn được đúng luật
+       * chủ quyền, và "Kho chưa đặt ngưỡng" không bị ghi thành "ngưỡng = 0".
+       */
       const { material } = await api<{ material: CreatedMaterial }>(
         '/api/dept/warehouse/materials',
-        { method: 'POST', body: { ...core.corePayload(), min_stock: 0 } },
+        { method: 'POST', body: core.corePayload() },
       )
       toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
       // Ô chọn vật tư cache kết quả tìm theo tab — không xoá thì vật tư vừa tạo
