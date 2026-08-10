@@ -6,8 +6,11 @@ import { Avatar } from '@/components/Avatar'
 
 export function UserMenu({
   user,
+  avatarUrl,
 }: {
   user: { name: string | null; email: string; role: string; title: string | null }
+  /** URL ký của ảnh đại diện (server resolve, xem `accountService.avatarUrl`). */
+  avatarUrl?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [loggingOut, setLoggingOut] = useState(false)
@@ -47,7 +50,7 @@ export function UserMenu({
         onClick={() => setOpen((o) => !o)}
         className="flex items-center gap-2 rounded-md p-1 pr-2 hover:bg-zinc-100 dark:hover:bg-zinc-900"
       >
-        <Avatar name={user.name} email={user.email} size="sm" />
+        <Avatar name={user.name} email={user.email} size="sm" src={avatarUrl} />
         <div className="hidden text-left text-xs sm:block">
           <div className="leading-tight font-medium">{user.name ?? user.email}</div>
           <div className="text-zinc-500">{user.title ?? roleLabel}</div>
@@ -64,6 +67,13 @@ export function UserMenu({
               {roleLabel}
             </div>
           </div>
+          <Link
+            href="/tai-khoan"
+            className="block px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
+            onClick={() => setOpen(false)}
+          >
+            Tài khoản của tôi
+          </Link>
           <Link
             href="/notifications"
             className="block px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"

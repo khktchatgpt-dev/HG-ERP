@@ -8,6 +8,14 @@ import { Unauthorized } from '@/server/http'
 // doesn't exist — avoids an email-enumeration side channel on /login.
 const DUMMY_HASH = '$2a$12$CwTycUXWue0Thq9StjUM0uJ8L0v.5h6h7n5xq4Hkz8t9V1iX3W3i.'
 
+/**
+ * Mốc đời mật khẩu đem nhét vào token. Người chưa từng đổi mật khẩu có
+ * `password_changed_at = null` → dùng chuỗi rỗng cho claim luôn là string.
+ */
+export function passwordVersion(passwordChangedAt: string | null): string {
+  return passwordChangedAt ?? ''
+}
+
 // NOTE: there is no self-registration. Accounts are provisioned by an admin via
 // POST /api/users (see modules/users). The first admin is seeded out-of-band
 // (scripts/create-user.ts or an UPDATE on the bootstrap row).
@@ -20,7 +28,11 @@ export const authService = {
     if (!row || !ok || !row.is_active) {
       throw Unauthorized('Email hoặc mật khẩu không đúng')
     }
-    await createSession({ sub: row.id, email: row.email })
+    await createSession({
+      sub: row.id,
+      email: row.email,
+      pv: passwordVersion(row.password_changed_at),
+    })
     void usersRepo.touchLastLogin(row.id)
     const { password_hash, ...user } = row
     return user
@@ -30,10 +42,25 @@ export const authService = {
     await destroySession()
   },
 
+  /**
+   * User của phiên hiện tại, hoặc null nếu phiên KHÔNG CÒN GIÁ TRỊ.
+   *
+   * Cookie hợp lệ về chữ ký chưa đủ: proxy chạy ở Edge nên không tra được DB,
+   * nghĩa là đây là chỗ DUY NHẤT đối chiếu token với trạng thái thật của tài
+   * khoản. Trước 08/2026 hàm này trả thẳng row nên khoá/xoá một người xong họ
+   * vẫn dùng được cả hệ thống tới hết hạn cookie (7 ngày) — `is_active` chỉ
+   * được kiểm lúc login.
+   */
   async currentUser(): Promise<User | null> {
     const session = await getSession()
     if (!session) return null
-    return usersRepo.findById(session.sub)
+    const user = await usersRepo.findById(session.sub)
+    if (!user) return null
+    // Khoá / xoá mềm giữa phiên → cắt ngay ở request kế tiếp.
+    if (!user.is_active || user.deleted_at) return null
+    // Mật khẩu đã đổi kể từ lúc cấp token → token này thuộc "đời" cũ.
+    if (passwordVersion(user.password_changed_at) !== session.pv) return null
+    return user
   },
 
   /** Throws 401 if not signed in. Use at the top of protected routes. */

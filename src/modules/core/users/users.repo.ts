@@ -10,16 +10,19 @@ export type User = {
   role: UserRole
   department_id: string | null
   title: string | null
+  employee_code: string | null
+  phone: string | null
   avatar_url: string | null
   is_active: boolean
   deleted_at: string | null
+  must_change_password: boolean
   password_changed_at: string | null
   last_login_at: string | null
   created_at: string
 }
 
 const SELECT_PUBLIC =
-  'id, email, name, role, department_id, title, avatar_url, is_active, deleted_at, password_changed_at, last_login_at, created_at'
+  'id, email, name, role, department_id, title, employee_code, phone, avatar_url, is_active, deleted_at, must_change_password, password_changed_at, last_login_at, created_at'
 
 export type UserInsert = {
   email: string
@@ -36,6 +39,17 @@ export type UserPatch = Partial<{
   department_id: string | null
   title: string | null
   is_active: boolean
+}>
+
+/**
+ * Những gì CHÍNH CHỦ được sửa. Cố tình tách khỏi `UserPatch`: email/vai
+ * trò/phòng ban/chức danh/mã NV quyết định quyền và thuộc dữ liệu tổ chức, chỉ
+ * admin đổi được (xem `accountService.updateProfile`).
+ */
+export type UserSelfPatch = Partial<{
+  name: string | null
+  phone: string | null
+  avatar_url: string | null
 }>
 
 export type UserListFilter = {
@@ -107,12 +121,51 @@ export const usersRepo = {
     return data as User
   },
 
-  async setPasswordHash(id: string, password_hash: string): Promise<void> {
+  async updateSelf(id: string, patch: UserSelfPatch): Promise<User> {
+    const { data, error } = await db()
+      .from('users')
+      .update(patch)
+      .eq('id', id)
+      .select(SELECT_PUBLIC)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Could not update profile')
+    return data as User
+  },
+
+  /** Hash mật khẩu hiện tại — chỉ để xác minh khi chính chủ đổi mật khẩu. */
+  async getPasswordHash(id: string): Promise<string | null> {
+    const { data } = await db()
+      .from('users')
+      .select('password_hash')
+      .eq('id', id)
+      .maybeSingle()
+    return data?.password_hash ?? null
+  },
+
+  /**
+   * Đặt hash mới. Trả về mốc `password_changed_at` vừa ghi để caller cấp lại
+   * token cho đúng "đời" mật khẩu (xem `passwordVersion` ở auth.service) —
+   * không có nó thì người vừa đổi mật khẩu tự đá văng chính mình.
+   *
+   * `mustChange`: bật khi ADMIN đặt hộ mật khẩu (người đó phải tự đổi ở lần
+   * đăng nhập sau), tắt khi chính chủ vừa đổi — đặt xong là hết nợ.
+   */
+  async setPasswordHash(
+    id: string,
+    password_hash: string,
+    opts: { mustChange?: boolean } = {},
+  ): Promise<string> {
+    const password_changed_at = new Date().toISOString()
     const { error } = await db()
       .from('users')
-      .update({ password_hash, password_changed_at: new Date().toISOString() })
+      .update({
+        password_hash,
+        password_changed_at,
+        must_change_password: opts.mustChange ?? false,
+      })
       .eq('id', id)
     if (error) throw new Error(error.message)
+    return password_changed_at
   },
 
   async softDelete(id: string): Promise<User> {
@@ -180,7 +233,16 @@ export const usersRepo = {
 // -- User audit log ---------------------------------------------------------
 
 export type UserAuditAction =
-  'create' | 'update' | 'password_reset' | 'soft_delete' | 'restore' | 'bulk_import'
+  | 'create'
+  | 'update'
+  | 'password_reset'
+  | 'soft_delete'
+  | 'restore'
+  | 'bulk_import'
+  // Chính chủ tự làm (0130) — mọi giá trị ở đây phải khớp check constraint của
+  // user_audit_log.action, lệch thì insert bị chặn và mất vết trong im lặng.
+  | 'password_change'
+  | 'profile_update'
 
 export type UserAuditEntry = {
   id: string
