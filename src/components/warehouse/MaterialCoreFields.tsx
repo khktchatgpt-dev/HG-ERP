@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { namesAlike } from '@/lib/material-key'
 import { isSheetLike, kgPerM, rhoFor } from '@/lib/metal-weight'
+import { weightPricing } from '@/lib/material-pricing'
 import { guessTemplate } from '@/lib/po-template-guess'
 import { type PoTemplate } from '@/lib/po-template'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
@@ -277,6 +278,24 @@ export function useMaterialCore({
   const kgToSave = f.kg_per_m.trim() ? Number(f.kg_per_m) || null : (derived?.kg ?? null)
   const dual = f.price_unit.trim() !== ''
 
+  /*
+   * ĐẶT THEO CÂY/TẤM/CUỘN NHƯNG GIÁ THEO KG (10/08/2026).
+   *
+   * Trước đây form chỉ hỏi barem khi `guessTemplate` đọc ra nhôm/inox TỪ TÊN —
+   * mà tên phải có tiết diện dạng "25x50" hay "phi 25". "Cuộn inox 304/2B",
+   * "Inox 22122-011" thì không đọc được gì, nên form không hỏi một câu nào, dù
+   * ĐVT đã nói rõ đây là hàng đếm theo cuộn/tấm và NCC thì chào theo kg.
+   *
+   * Đó là lý do danh mục có 961 mã tấm/cuộn mà chỉ 4 mã khai được kg/đơn-vị:
+   * chỗ duy nhất hỏi con số ấy lại gác cửa bằng cách đọc tên.
+   */
+  const {
+    countableUnit,
+    pricedByWeight,
+    likely: weightPricingLikely,
+    missingFactor,
+  } = weightPricing(f)
+
   /** Phần thân chung của payload POST/PATCH — hai màn gửi giống hệt nhau. */
   function corePayload() {
     return {
@@ -325,6 +344,10 @@ export function useMaterialCore({
     kgMismatch,
     kgOff,
     dual,
+    countableUnit,
+    pricedByWeight,
+    weightPricingLikely,
+    missingFactor,
     requireGroup,
     invalid: !f.name.trim() || !f.unit.trim() || (requireGroup && !f.group_name.trim()),
     corePayload,
@@ -795,27 +818,33 @@ export function MaterialCoreFields({
 
       {pricingNote && (
         /*
-        HAI Ô GHI CHÚ, KHÔNG PHẢI HAI Ô TÍNH TIỀN.
+        ĐẶT THEO MỘT ĐƠN VỊ, TRẢ TIỀN THEO ĐƠN VỊ KHÁC.
+        Cây/tấm/cuộn mà NCC chào giá theo kg là ca thường gặp nhất của phòng.
 
-        Lời giải thích cũ hứa "dòng đặt sẽ có ô SL-tính-giá nhập tay". Không có.
-        Truy lại cả đường: `po-materials.repo` KHÔNG select hai cột này, `PoMaterial`
-        không mang chúng, `newLine()` không đọc chúng, và `deriveLine()` suy
-        `price_basis`/`qty2` HOÀN TOÀN từ mẫu đơn (kg/m × dài cây, kg/đơn-vị,
-        m²/thùng). Hai ô này chỉ hiện ở danh mục vật tư và bản xuất CSV.
-
-        Lời hứa sai còn nguy hơn ô trống: người khai tin là đơn sẽ tính theo kg
-        nên nhập GIÁ/KG vào ô Đơn giá của một dòng đang tính theo cái — tiền sai
-        mà không có gì cảnh báo. Nói đúng việc của ô, và cảnh báo khi nó chỏi với
-        mẫu đơn (thứ THẬT SỰ quyết định cách tính tiền).
+        LỜI VĂN CŨ ĐÃ SAI TỪ 10/08/2026. Nó ghi "hai ô ghi chú, không phải hai
+        ô tính tiền" — đúng vào lúc viết, vì `po-materials.repo` chưa select hai
+        cột này. Nay repo có select, `PoMaterial` có mang, và `kgPerUnitOf` đọc
+        `unit2_factor` để ĐIỀN SẴN ô kg/đơn-vị của dòng đơn. Để nguyên câu cũ là
+        dạy người khai bỏ qua đúng hai ô quyết định tiền.
       */
         <FormSection
           title="Cách NCC báo giá"
-          hint="ghi chú tra cứu — không đổi cách tính tiền"
+          hint="đặt theo cây/tấm nhưng trả tiền theo kg thì khai ở đây"
         >
+          {s.weightPricingLikely && (
+            <p className="col-span-full rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[12px] text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+              {/* Dấu phẩy dính ngay sau </b>: JSX nuốt khoảng trắng đứng đầu
+                  đoạn chữ theo sau thẻ, nên "theo <b>kg</b> phải không" render
+                  ra "kgphải không". Không đặt khoảng trắng ở ranh giới thẻ nữa. */}
+              Hàng đếm theo <b>{f.unit}</b>, mà NCC chào giá theo <b>kg</b>? Khai
+              &quot;Đơn vị tính giá = kg&quot; rồi cho biết 1 {f.unit} nặng bao nhiêu kg —
+              đơn đặt sau sẽ tự tính tiền theo kg.
+            </p>
+          )}
           <Field
             label="Đơn vị tính giá"
             span
-            hint="Ghi lại NCC chào giá theo đơn vị nào (vd đặt cây, chào giá theo kg). Chỉ hiện ở danh mục để tra cứu — cách tính tiền của đơn do MẪU ĐƠN chọn lúc soạn đơn quyết định."
+            hint="Bỏ trống = NCC chào theo chính ĐVT mua. Ghi 'kg' khi họ chào theo cân."
           >
             <input
               value={f.price_unit}
@@ -826,9 +855,13 @@ export function MaterialCoreFields({
             />
           </Field>
           <Field
-            label={`Hệ số quy đổi (1 ${f.unit || 'đơn vị'} ≈ ? ${f.price_unit || 'đv giá'})`}
+            label={`1 ${f.unit || 'đơn vị'} ≈ ? ${f.price_unit || 'đv giá'}`}
             span
-            hint="Số tra cứu khi đối chiếu báo giá NCC. Không tự điền vào đơn."
+            hint={
+              s.pricedByWeight
+                ? 'Số này ĐI VÀO ĐƠN: điền sẵn ô kg/đơn-vị để tính (SL × kg/đv) × giá/kg. Bỏ trống thì dòng đơn bị chặn cho tới khi người mua tự gõ.'
+                : 'Hệ số quy đổi giữa ĐVT mua và đơn vị tính giá.'
+            }
           >
             <input
               value={f.unit2_factor}
@@ -838,8 +871,15 @@ export function MaterialCoreFields({
               step="0.0001"
               placeholder="vd 10.1 (kg/cây)"
               disabled={!s.dual}
-              className={`${inputClass} tabular-nums disabled:opacity-50`}
+              className={`${inputClass} tabular-nums disabled:opacity-50 ${
+                s.missingFactor ? 'border-amber-400' : ''
+              }`}
             />
+            {s.missingFactor && (
+              <p className="mt-1 text-[11.5px] text-amber-700 dark:text-amber-500">
+                Chưa có số này thì đơn đặt theo kg sẽ bị chặn ở ô kg/đơn-vị.
+              </p>
+            )}
           </Field>
         </FormSection>
       )}

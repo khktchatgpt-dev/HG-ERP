@@ -127,11 +127,19 @@ export function QuickAddMaterial({
               Quy ước mã là của danh mục, không phải thứ người soạn đơn phải nhớ;
               gõ `NH999` giữa lúc vội là lệch khỏi cả nghìn mã còn lại.
             */}
+            {/*
+              HỎI LUÔN CÁCH NCC BÁO GIÁ (10/08/2026). Trước đây khối này chỉ có
+              ở danh mục Kho, nên người mua khai vật tư ngay giữa lúc lập đơn —
+              đúng lúc đang cầm báo giá trong tay — lại không có chỗ ghi "đặt
+              theo tấm, chào giá theo kg". Khai xong là dòng đơn kế tiếp bị chặn
+              vì thiếu kg/đơn-vị, do chính họ vừa không được hỏi.
+            */}
             <MaterialCoreFields
               s={core}
               inputClass={cls}
               unitListId="qa-dvt"
               subListId="qa-nhom-phu"
+              pricingNote
             />
             <p className="text-muted-foreground text-xs">
               Tồn tối thiểu, vị trí kệ, mã vạch… Kho bổ sung sau ở danh mục vật tư.
