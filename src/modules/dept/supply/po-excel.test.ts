@@ -165,6 +165,49 @@ describe('buildPoExcel — khung giống phiếu in', () => {
     expect(findCell(ws, 38_984_400)).toBeTruthy()
   })
 
+  it('đơn TRỘN ĐVT: mỗi đơn vị một dòng tổng, không mất dòng tổng (0128)', async () => {
+    // Trước 0128 khối tổng bỏ hẳn dòng "Tổng số …" khi các dòng khác đơn vị —
+    // im lặng, và rơi đúng vào mẫu phụ kiện vốn luôn trộn Con/Bộ/Mét.
+    const buf = await buildPoExcel({
+      company: COMPANY,
+      po: header({ template: 'accessory', code: 'PK-01' }),
+      supplier: null,
+      lines: [
+        line({ material_unit: 'Con', qty_ordered: 540, unit_price: 320 }),
+        line({ id: 'l2', material_unit: 'Bộ', qty_ordered: 12, unit_price: 15_000 }),
+        line({ id: 'l3', material_unit: 'Con', qty_ordered: 1_000, unit_price: 290 }),
+      ],
+    })
+    const ws = await load(buf)
+    expect(findCell(ws, 'Tổng số CON')).toBeTruthy()
+    expect(findCell(ws, 'Tổng số BỘ')).toBeTruthy()
+    expect(findCell(ws, 1_540)).toBeTruthy()
+  })
+
+  it('đóng gói mua: ô SL vẫn là SỐ, quy đổi nằm ở định dạng (0128)', async () => {
+    // Ca thật Tân Hiệp Phát: 13.596 con, NCC bán bì 500 con. Nhét chuỗi
+    // "13.596 (= 28 bì)" vào ô thì phòng mất luôn khả năng SUM trên file.
+    const buf = await buildPoExcel({
+      company: COMPANY,
+      po: header({ template: 'accessory', code: 'PK-02' }),
+      supplier: null,
+      lines: [
+        line({
+          material_unit: 'Con',
+          qty_ordered: 14_000,
+          unit_price: 320,
+          pack_size: 500,
+          pack_unit: 'bì',
+        }),
+      ],
+    })
+    const ws = await load(buf)
+    const qty = findCell(ws, 14_000)!
+    expect(qty).toBeTruthy()
+    expect(typeof qty.value).toBe('number')
+    expect(qty.numFmt).toBe('#,##0" (= 28 bì)"')
+  })
+
   it('tên file làm sạch ký tự cấm của Windows', () => {
     expect(poExcelFilename('01/26 HG/MĐ')).toBe('DH 01-26 HG-MĐ.xlsx')
   })

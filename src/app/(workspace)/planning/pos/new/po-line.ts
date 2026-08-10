@@ -1,6 +1,7 @@
 import { poLineAmount } from '@/lib/po-line'
 import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
-import { kgPerOrderUnit } from '@/lib/metal-weight'
+import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
+import type { PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -54,6 +55,13 @@ export type Line = {
    */
   pack_size: number | null
   pack_unit: string
+  /**
+   * Số DANH MỤC đưa ra lúc chọn vật tư, để biết người mua đã gõ đè hay chưa —
+   * gõ đè thì mời lưu ngược về danh mục (0128). null = mở từ đơn đã lưu, không
+   * biết danh mục đang để gì nên cứ mời lưu khi ô có số.
+   */
+  catalog_kg_m: number | null
+  catalog_kg_unit: number | null
 }
 
 /** Gợi ý từ nhu cầu BOM của LSX — chỉ để hiện, không tự ghi vào ô SL. */
@@ -193,23 +201,13 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     dimension_text: m.spec ?? last?.dimension_text ?? '',
     finish: last?.finish ?? '',
     /*
-     * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt. Trước đây LUÔN để trống, kể cả khi vật tư
-     * đã có barem trong danh mục — mà `lineReady` lại CHẶN gửi khi ô này trống,
-     * nên người soạn đơn bị kẹt và gõ đại một số cho qua. Số gõ đại đi thẳng vào
-     * (SL × kg/đv) × giá/kg rồi lên bàn duyệt của Giám đốc, không ai đối chiếu.
-     *
-     * HAI NGUỒN, theo thứ tự tin cậy:
-     *   1. `kg_per_unit` — số CÂN THẬT khai ở danh mục (kg/tấm, kg/cuộn, kg/cây).
-     *      Đúng cho mọi dạng hàng, kể cả tấm/cuộn vốn không có barem theo mét.
-     *   2. `kg_per_m × dài cây` — suy ra, chỉ dùng được cho hàng cây/thanh.
-     *
-     * Không chép thẳng `kg_per_m`: barem theo MÉT còn đơn đặt theo CÂY — inox
-     * Kim Vĩnh Phú là 9,325 kg/cây, tức ~1,55 kg/m. Điền nhầm là đơn hụt 6 lần.
-     * `kgPerOrderUnit` chỉ quy đổi khi biết chắc ĐVT và dài cây, còn lại trả null
-     * → ô vẫn trống, nhân viên nhập theo phiếu cân NCC như cũ.
+     * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt — ba nguồn xếp theo độ tin, xem
+     * `kgPerUnitOf`. Ô này mà trống thì `lineReady` CHẶN gửi, người soạn kẹt và
+     * gõ đại một số cho qua; số gõ đại đi thẳng vào (SL × kg/đv) × giá/kg rồi
+     * lên bàn duyệt Giám đốc, không ai đối chiếu. Không suy được thì vẫn để
+     * trống — nhân viên nhập theo phiếu cân NCC, không đoán hộ.
      */
-    weight_per_unit:
-      m.kg_per_unit ?? kgPerOrderUnit(m.kg_per_m, m.unit, m.default_bar_length_m) ?? '',
+    weight_per_unit: kgPerUnitOf(m).kg ?? '',
     open_style: openStyle,
     pcs_per_ctn: last?.pcs_per_ctn ?? '',
     inner_l_mm: inner?.[0] ?? '',
@@ -219,6 +217,8 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     carton_basis: 'ctn',
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
+    catalog_kg_m: m.kg_per_m ?? null,
+    catalog_kg_unit: kgPerUnitOf(m).kg,
   }
 }
 
@@ -249,6 +249,8 @@ export type PoLineDto = {
   inner_h_mm: number | null
   area_m2: number | null
   carton_basis: 'ctn' | 'm2' | null
+  pack_size: number | null
+  pack_unit: string | null
 }
 
 const n2 = (v: number | null | undefined): Num => (v == null ? '' : Number(v))
@@ -292,26 +294,72 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     inner_h_mm: n2(l.inner_h_mm),
     area_m2: n2(l.area_m2),
     carton_basis: l.carton_basis ?? 'ctn',
-    // Đóng gói không lưu trên dòng đơn — mở SỬA không có, quy đổi tự ẩn.
-    pack_size: null,
-    pack_unit: '',
+    // Đóng gói đã chụp trên dòng đơn (0128) — mở SỬA/NHÂN BẢN giữ đúng con số
+    // hai bên chốt lúc đặt, không lấy lại đóng gói hiện tại của danh mục. Đơn
+    // cũ trước 0128 để null thì quy đổi tự ẩn như trước.
+    pack_size: l.pack_size,
+    pack_unit: s2(l.pack_unit),
+    // Mở đơn đã lưu thì không biết danh mục đang để số gì — để null, nút "lưu
+    // vào danh mục" cứ hiện khi ô có số (ghi đè bằng chính số đã chốt trên đơn
+    // là việc đúng, không phải việc thừa).
+    catalog_kg_m: null,
+    catalog_kg_unit: null,
   }
 }
 
-/**
- * QUY ĐỔI ĐÓNG GÓI cho ô SL đặt (0124). SL luôn theo ĐVT gốc; hai hàm này chỉ
- * phục vụ dòng chữ "≈ 27,2 bì" và nút gợi ý làm tròn lên nguyên bao — đúng phép
- * chia nhân viên vẫn tự bấm trong Excel (13.596 con ÷ 500 → 28 bì = 14.000 con).
+/*
+ * `packCount` / `roundUpToPack` đã dời sang `@/lib/po-line` (0128) — phiếu in
+ * cần đúng phép chia đó, mà trang in không được import từ thư mục form.
  */
-export function packCount(qty: number, packSize: number | null): number | null {
-  if (!packSize || packSize <= 0 || !(qty > 0)) return null
-  return Math.round((qty / packSize) * 100) / 100
+
+/**
+ * TRA BAREM cho hai ô mà thiếu là KHÔNG GỬI ĐƯỢC ĐƠN: kg/m (mẫu nhôm) và
+ * kg/đơn-vị (mẫu inox/sắt) — xem `lineReady`.
+ *
+ * Vì sao cần: danh mục mới có 634/13.168 mã khai kg/m và 5 mã khai kg/đơn-vị.
+ * Gặp mã chưa khai thì form chặn gửi, và lối thoát duy nhất của người soạn là
+ * gõ đại một số — số đó đi thẳng vào (SL × kg/đv) × giá/kg rồi lên bàn duyệt
+ * Giám đốc, không ai đối chiếu. Nới chặn còn tệ hơn: dòng rơi về "SL × giá" và
+ * ra tiền sai mà im lặng.
+ *
+ * Nên giữ nguyên chốt chặn, chỉ mở thêm lối ra ĐÚNG: barem suy từ QUY CÁCH
+ * TRONG TÊN vật tư bằng công thức xưởng (`@/lib/metal-weight` — cùng bản mà
+ * script backfill danh mục dùng). Không tính ra thì trả lý do để hiện thẳng
+ * ("hàng tấm/cuộn — không tính theo mét", "chưa khai dài cây"), tuyệt đối không
+ * gợi ý một con số đoán.
+ */
+export function baremFor(f: PoField, l: Line): { kg: number | null; why: string | null } {
+  const perM = kgPerM(l.name, rhoFor(l.name))
+  if (f.key === 'kgm') return { kg: perM.kg, why: perM.reason ?? null }
+  // kg/ĐƠN-VỊ: ưu tiên kg/m đã có sẵn trên dòng, không có thì suy từ tên.
+  const perMetre = l.weight_per_m === '' ? perM.kg : Number(l.weight_per_m)
+  const kg = kgPerOrderUnit(
+    perMetre,
+    l.unit,
+    l.bar_length_m === '' ? null : Number(l.bar_length_m),
+  )
+  if (kg != null) return { kg, why: null }
+  if (!(Number(perMetre) > 0)) {
+    return { kg: null, why: perM.reason ?? 'chưa có barem kg/m' }
+  }
+  return { kg: null, why: 'chưa khai dài cây' }
 }
 
-/** SL làm tròn LÊN nguyên bao — 0/không đóng gói thì trả nguyên số. */
-export function roundUpToPack(qty: number, packSize: number | null): number {
-  if (!packSize || packSize <= 0 || !(qty > 0)) return qty
-  return Math.ceil(qty / packSize - 1e-9) * packSize
+/**
+ * Số trên ô có KHÁC số danh mục đang giữ không — tức người mua vừa gõ đè, hoặc
+ * bấm barem, hoặc đọc phiếu cân NCC. Đó là lúc mời ghi ngược về danh mục (0128)
+ * để lần đặt sau khỏi gõ lại.
+ *
+ * Dòng mở từ ĐƠN ĐÃ LƯU không biết danh mục đang để gì (`catalog_*` = null) nên
+ * coi như khác: ghi lại đúng con số hai bên đã chốt trên đơn là việc đúng, và
+ * ghi đè bằng chính nó thì cũng vô hại.
+ */
+export function overridesCatalog(f: PoField, l: Line): boolean {
+  const filled = Number(f.field ? l[f.field as keyof Line] : null)
+  if (!(filled > 0)) return false
+  const cat = f.key === 'kgm' ? l.catalog_kg_m : l.catalog_kg_unit
+  if (cat == null) return true
+  return Math.abs(cat - filled) / filled > 0.0001
 }
 
 /** Kích thước lọt lòng đổi → tính lại m²/thùng theo cách mở (AD/MR). */

@@ -155,6 +155,11 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
         area_m2: d.area_m2,
         // Cơ sở tính tiền chỉ có nghĩa ở mẫu bao bì — mẫu khác gửi null cho sạch.
         carton_basis: header.template === 'carton' ? l.carton_basis : null,
+        // Đóng gói mua: CHỤP theo danh mục tại thời điểm lập đơn (0128). Gửi
+        // cả cặp hoặc không gửi gì — thiếu một nửa thì phiếu in ra "= 28"
+        // không có đơn vị, hoặc "= bì" không có số.
+        pack_size: l.pack_size && l.pack_unit ? l.pack_size : null,
+        pack_unit: l.pack_size && l.pack_unit ? l.pack_unit : null,
       }
     }),
   }

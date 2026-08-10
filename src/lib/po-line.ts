@@ -24,6 +24,57 @@ export function poLineAmount(l: PoLineAmountInput): number {
   return l.qty_ordered * price
 }
 
+/**
+ * QUY ĐỔI ĐÓNG GÓI MUA — dùng chung form soạn đơn và phiếu in/xuất Excel (0128).
+ *
+ * SL đặt luôn theo ĐVT gốc; hai hàm này chỉ phục vụ dòng chữ "≈ 27,2 bì" và nút
+ * gợi ý làm tròn lên nguyên bao — đúng phép chia nhân viên vẫn tự bấm trong
+ * Excel (13.596 con ÷ 500 → 28 bì = 14.000 con). Không đụng vào tiền.
+ */
+export function packCount(qty: number, packSize: number | null): number | null {
+  if (!packSize || packSize <= 0 || !(qty > 0)) return null
+  return Math.round((qty / packSize) * 100) / 100
+}
+
+/** SL làm tròn LÊN nguyên bao — 0/không đóng gói thì trả nguyên số. */
+export function roundUpToPack(qty: number, packSize: number | null): number {
+  if (!packSize || packSize <= 0 || !(qty > 0)) return qty
+  return Math.ceil(qty / packSize - 1e-9) * packSize
+}
+
+export type PoQtyTotal = { label: string; value: number }
+
+/**
+ * Dòng "Tổng số …" ngay dưới bảng hàng của phiếu in / file xuất.
+ *
+ * Mẫu tính tiền theo kg (nhôm, inox/sắt) cộng cột tổng kg → đúng một dòng.
+ * Mẫu còn lại cộng SL đặt nhưng TÁCH THEO ĐVT: cộng "10 cây + 5 thùng" ra 15 là
+ * số rác. Bản trước xử lý bằng cách BỎ HẲN dòng tổng khi đơn trộn đơn vị — im
+ * lặng, và rơi đúng vào mẫu phụ kiện vốn gần như luôn trộn Con/Cái/Bộ/Mét. Giờ
+ * in mỗi ĐVT một dòng, thứ tự theo lần xuất hiện đầu tiên trong đơn.
+ */
+export function qtyTotals(
+  kgBased: boolean,
+  lines: readonly {
+    material_unit: string
+    qty_ordered: number
+    qty2?: number | null
+  }[],
+): PoQtyTotal[] {
+  if (kgBased) {
+    const kg = lines.reduce((s, l) => s + (l.qty2 ?? 0), 0)
+    return kg > 0 ? [{ label: 'Tổng số KG', value: kg }] : []
+  }
+  const byUnit = new Map<string, number>()
+  for (const l of lines) {
+    const u = (l.material_unit ?? '').trim()
+    byUnit.set(u, (byUnit.get(u) ?? 0) + (Number(l.qty_ordered) || 0))
+  }
+  return [...byUnit]
+    .filter(([, v]) => v > 0)
+    .map(([u, v]) => ({ label: u ? `Tổng số ${u.toUpperCase()}` : 'Tổng số', value: v }))
+}
+
 /** Nhãn đơn giá cho UI/in: "Đơn giá/kg" khi tính theo đv2, "Đơn giá" khi thường. */
 export function priceUnitLabel(
   basis: PriceBasis | null | undefined,

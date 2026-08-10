@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { DiePicker } from '@/components/supply/DiePicker'
 import type { PoField } from '@/lib/po-fields'
-import { parseInnerDims, recalcCartonArea, type Line } from './po-line'
+import {
+  baremFor,
+  overridesCatalog,
+  parseInnerDims,
+  recalcCartonArea,
+  type Line,
+} from './po-line'
 
 /**
  * Ô nhập của DÒNG ĐƠN, dựng theo khai báo trong `@/lib/po-fields`.
@@ -114,12 +120,96 @@ const get = (l: Line, field?: string) =>
 const patchOf = (field: string, v: unknown) =>
   ({ [field]: v }) as unknown as Partial<Line>
 
+function SaveToCatalog({
+  f,
+  line,
+  onSave,
+}: {
+  f: PoField
+  line: Line
+  onSave: NonNullable<BaremHintProps['onSaveToCatalog']>
+}) {
+  const value = Number(get(line, f.field))
+  const label = f.key === 'kgm' ? 'kg/m' : `kg/${line.unit || 'đơn vị'}`
+  return (
+    <button
+      type="button"
+      onClick={() => onSave(line.material_id, f.key === 'kgm' ? 'kgm' : 'kgunit', value)}
+      title={`Ghi ${num(value)} ${label} vào danh mục vật tư — lần đặt sau tự điền, khỏi gõ lại`}
+      className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+    >
+      lưu vào danh mục ↑
+    </button>
+  )
+}
+
+type BaremHintProps = {
+  f: PoField
+  line: Line
+  index: number
+  onPatch: (i: number, patch: Partial<Line>) => void
+  /** Ghi số vừa gõ về danh mục vật tư — form lo phần gọi API. */
+  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+}
+
+function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps) {
+  const { kg, why } = baremFor(f, line)
+  const filled = Number(get(line, f.field))
+  const saveBtn =
+    onSaveToCatalog && overridesCatalog(f, line) ? (
+      <SaveToCatalog f={f} line={line} onSave={onSaveToCatalog} />
+    ) : null
+
+  /*
+   * Ô ĐÃ CÓ SỐ (điền sẵn từ danh mục) — không mời bấm barem nữa, nhưng LỆCH
+   * NHIỀU thì phải nói. Đối chiếu 110 mã có cả hai nguồn: lệch 7-14% là dung
+   * sai âm bình thường của thép, còn lệch lớn hơn thường là dài cây khai sai —
+   * "Sắt hộp 40x80x1li x4m30" khai 6 m, kg/cây 8,24 mới đúng cây 4,3 m. Người
+   * mua thấy hai số cạnh nhau thì gọi NCC hỏi, chứ không ký nhầm.
+   */
+  if (filled > 0) {
+    const lech = kg == null ? 0 : Math.abs(kg - filled) / filled
+    return (
+      <>
+        {lech >= 0.1 && (
+          <div
+            className="mt-0.5 text-right text-[10.5px] leading-tight text-amber-700 dark:text-amber-500"
+            title={`Số đang dùng ${num(filled)}; barem tính từ quy cách ra ${num(kg!)}. Lệch lớn thường do dài cây khai sai — đối chiếu lại trước khi gửi.`}
+          >
+            barem {num(kg!)} · lệch {Math.round(lech * 100)}%
+          </div>
+        )}
+        {saveBtn}
+      </>
+    )
+  }
+
+  if (kg == null) {
+    return (
+      <div className="text-muted-foreground/70 mt-0.5 text-right text-[10.5px] leading-tight">
+        {why}
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={() => onPatch(index, patchOf(f.field!, kg))}
+      title={`Tính từ quy cách trong tên vật tư theo barem xưởng — bấm để dùng ${num(kg)}`}
+      className="mt-0.5 block w-full text-right text-[11px] font-medium whitespace-nowrap text-sky-700 hover:underline dark:text-sky-400"
+    >
+      barem {num(kg)} ↩
+    </button>
+  )
+}
+
 export function LineCell({
   f,
   line,
   index,
   kgTotal,
   onPatch,
+  onSaveToCatalog,
 }: {
   f: PoField
   line: Line
@@ -127,6 +217,7 @@ export function LineCell({
   /** Tổng kg do `lineQty2` tính — chỉ dùng cho ô kiểu 'calc'. */
   kgTotal: number | null
   onPatch: (i: number, patch: Partial<Line>) => void
+  onSaveToCatalog?: BaremHintProps['onSaveToCatalog']
 }) {
   const l = line
   const label = `${f.label} ${l.name}`
@@ -144,22 +235,33 @@ export function LineCell({
 
     case 'number':
       return (
-        <input
-          type="number"
-          min="0"
-          max={f.max}
-          step={f.step ?? '0.01'}
-          onWheel={blurOnWheel}
-          value={String(get(l, f.field) ?? '')}
-          onChange={(e) =>
-            onPatch(
-              index,
-              patchOf(f.field!, e.target.value === '' ? '' : Number(e.target.value)),
-            )
-          }
-          className={`${cell} text-right`}
-          aria-label={label}
-        />
+        <>
+          <input
+            type="number"
+            min="0"
+            max={f.max}
+            step={f.step ?? '0.01'}
+            onWheel={blurOnWheel}
+            value={String(get(l, f.field) ?? '')}
+            onChange={(e) =>
+              onPatch(
+                index,
+                patchOf(f.field!, e.target.value === '' ? '' : Number(e.target.value)),
+              )
+            }
+            className={`${cell} text-right`}
+            aria-label={label}
+          />
+          {(f.key === 'kgm' || f.key === 'kgunit') && (
+            <BaremHint
+              f={f}
+              line={l}
+              index={index}
+              onPatch={onPatch}
+              onSaveToCatalog={onSaveToCatalog}
+            />
+          )}
+        </>
       )
 
     case 'calc':

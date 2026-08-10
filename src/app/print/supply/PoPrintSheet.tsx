@@ -1,4 +1,4 @@
-import { poLineAmount } from '@/lib/po-line'
+import { packCount, poLineAmount, qtyTotals } from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
   PO_PRINT_ORDER,
@@ -57,6 +57,9 @@ export type PoPrintLine = {
   inner_h_mm: number | null
   area_m2: number | null
   carton_basis: 'ctn' | 'm2' | null
+  /** Đóng gói mua chụp lúc lập đơn (0128) — in quy đổi dưới ô số lượng. */
+  pack_size?: number | null
+  pack_unit?: string | null
 }
 
 /** Đầu đơn ở dạng phiếu in cần. */
@@ -195,7 +198,24 @@ function columnsFor(
     '@qty': {
       label: PO_PRINT_QTY_LABEL[t],
       align: 'right',
-      cell: (l) => fmt(l.qty_ordered),
+      /*
+       * SL đặt + QUY ĐỔI ĐÓNG GÓI ngay dưới (0128). NCC bán theo bì/bó chứ
+       * không theo con: in "13.596" trơ trọi thì họ phải tự chia rồi gọi lại
+       * hỏi cho chắc. Chỉ hiện khi dòng có chụp đóng gói — đơn cũ không có thì
+       * phiếu y như trước.
+       */
+      cell: (l) => {
+        const packs = packCount(l.qty_ordered, l.pack_size ?? null)
+        if (packs == null || !l.pack_unit) return fmt(l.qty_ordered)
+        return (
+          <>
+            {fmt(l.qty_ordered)}
+            <div className="text-[10px] whitespace-nowrap">
+              {Number.isInteger(packs) ? '=' : '≈'} {fmt(packs)} {l.pack_unit}
+            </div>
+          </>
+        )
+      },
     },
     '@price':
       t === 'carton'
@@ -265,18 +285,12 @@ export function PoPrintSheet({
 
   /*
    * DÒNG "TỔNG SỐ KG" — đơn ĐH chuẩn in tổng khối lượng ngay dưới bảng hàng.
-   * Mẫu tính theo kg (nhôm, inox/sắt) cộng cột tổng kg; mẫu còn lại cộng SL đặt
-   * nhưng CHỈ khi mọi dòng cùng ĐVT — cộng "10 cây + 5 thùng" là ra số rác.
+   * Mẫu tính theo kg cộng cột tổng kg (một dòng); mẫu còn lại cộng SL đặt tách
+   * theo từng ĐVT (`qtyTotals` — đơn trộn Con/Bộ/Mét ra nhiều dòng thay vì mất
+   * hẳn dòng tổng như bản trước).
    */
   const kgBased = template === 'aluminium' || template === 'metal_kg'
-  const qtyTotal = kgBased
-    ? lines.reduce((s, l) => s + (l.qty2 ?? 0), 0)
-    : new Set(lines.map((l) => l.material_unit)).size === 1
-      ? lines.reduce((s, l) => s + l.qty_ordered, 0)
-      : null
-  const qtyTotalLabel = kgBased
-    ? 'Tổng số KG'
-    : `Tổng số ${(lines[0]?.material_unit ?? '').toUpperCase()}`
+  const totals = qtyTotals(kgBased, lines)
   // Ô nhận số tổng: cột "Tổng kg" với mẫu kg, cột số lượng với mẫu còn lại.
   const qtyTotalIdx = kgBased
     ? cols.findIndex((c) => c.label === 'Tổng kg')
@@ -377,21 +391,22 @@ export function PoPrintSheet({
             trên đơn ĐH chuẩn. Số nằm thẳng cột tổng kg (mẫu kg) / cột số lượng
             (mẫu còn lại); ĐVT lẫn lộn thì bỏ dòng, không cộng ra số rác.
           */}
-          {qtyTotal != null && qtyTotal > 0 && qtyTotalIdx > 0 && (
-            <tr className="font-semibold">
-              <td colSpan={qtyTotalIdx} className="border border-black px-2 text-right">
-                {qtyTotalLabel}
-              </td>
-              {/* Ô số tổng TÔ VÀNG như mẫu chuẩn — con số NCC phải soi đầu tiên. */}
-              <td className="border border-black bg-yellow-200 px-1 text-right">
-                {fmt(qtyTotal)}
-              </td>
-              <td
-                colSpan={cols.length - qtyTotalIdx - 1}
-                className="border border-black"
-              />
-            </tr>
-          )}
+          {qtyTotalIdx > 0 &&
+            totals.map((t) => (
+              <tr key={t.label} className="font-semibold">
+                <td colSpan={qtyTotalIdx} className="border border-black px-2 text-right">
+                  {t.label}
+                </td>
+                {/* Ô số tổng TÔ VÀNG như mẫu chuẩn — con số NCC phải soi đầu tiên. */}
+                <td className="border border-black bg-yellow-200 px-1 text-right">
+                  {fmt(t.value)}
+                </td>
+                <td
+                  colSpan={cols.length - qtyTotalIdx - 1}
+                  className="border border-black"
+                />
+              </tr>
+            ))}
 
           {/*
             KHỐI TỔNG — bốn dòng, thứ tự và cách gọi tên đúng phiếu đang ký:

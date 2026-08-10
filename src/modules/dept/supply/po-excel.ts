@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { poLineAmount } from '@/lib/po-line'
+import { packCount, poLineAmount, qtyTotals } from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from '@/lib/po-fields'
 import type {
@@ -37,11 +37,32 @@ type XCol = {
   align: 'left' | 'right' | 'center'
   /** Ô số thật — gắn numFmt ngăn cách nghìn. */
   num?: boolean
+  /**
+   * Đè numFmt theo từng dòng. Dùng cho quy đổi đóng gói: ô VẪN là số thật (phòng
+   * còn SUM/sửa) nhưng hiện thêm phần đuôi `13.596 (= 28 bì)` — nhét chuỗi vào
+   * `value` thì mất luôn khả năng cộng.
+   */
+  numFmtFor?: (l: PoPrintLine) => string | undefined
   isAmount?: boolean
   value: (l: PoPrintLine, i: number) => ExcelJS.CellValue
 }
 
 const nOrNull = (v: number | null | undefined) => (v == null ? '' : v)
+
+/**
+ * Định dạng số cho ô SL đặt khi dòng có chụp ĐÓNG GÓI MUA (0128): giữ ô là số
+ * thật, phần quy đổi đi vào phần literal của numFmt — `13.596 (= 28 bì)`.
+ *
+ * Dấu ngoặc kép trong tên đơn vị sẽ làm hỏng chuỗi định dạng nên bỏ hẳn; đơn vị
+ * đóng gói thực tế chỉ là bì/bó/bao/thùng.
+ */
+function packSuffixFormat(l: PoPrintLine): string | undefined {
+  const packs = packCount(l.qty_ordered, l.pack_size ?? null)
+  const unit = (l.pack_unit ?? '').replace(/"/g, '').trim()
+  if (packs == null || !unit) return undefined
+  const eq = Number.isInteger(packs) ? '=' : '≈'
+  return `#,##0" (${eq} ${packs.toLocaleString('vi-VN')} ${unit})"`
+}
 
 /**
  * Bộ cột GIÁ TRỊ THUẦN cho Excel — cùng thứ tự/nhãn với `columnsFor` của phiếu
@@ -94,6 +115,7 @@ function excelColumns(
       align: 'right',
       num: true,
       value: (l) => l.qty_ordered,
+      numFmtFor: (l) => packSuffixFormat(l),
     },
     '@price':
       t === 'carton'
@@ -187,17 +209,10 @@ export async function buildPoExcel(input: {
   const n = cols.length
   const amountIdx = cols.findIndex((c) => c.isAmount) // 0-based
 
-  /* Tổng SL — cùng quy tắc với phiếu in: mẫu kg cộng tổng kg, còn lại chỉ cộng
-     khi mọi dòng cùng ĐVT (cộng "10 cây + 5 thùng" là ra số rác). */
+  /* Tổng SL — cùng quy tắc với phiếu in: mẫu kg cộng tổng kg (một dòng), còn
+     lại cộng SL đặt TÁCH THEO ĐVT (`qtyTotals`). */
   const kgBased = template === 'aluminium' || template === 'metal_kg'
-  const qtyTotal = kgBased
-    ? lines.reduce((s, l) => s + (l.qty2 ?? 0), 0)
-    : new Set(lines.map((l) => l.material_unit)).size === 1
-      ? lines.reduce((s, l) => s + l.qty_ordered, 0)
-      : null
-  const qtyTotalLabel = kgBased
-    ? 'Tổng số KG'
-    : `Tổng số ${(lines[0]?.material_unit ?? '').toUpperCase()}`
+  const qtyTotalRows = qtyTotals(kgBased, lines)
   const qtyTotalIdx = kgBased
     ? cols.findIndex((c) => c.label === 'Tổng kg')
     : cols.findIndex((c) => c.label === PO_PRINT_QTY_LABEL[template])
@@ -354,30 +369,32 @@ export async function buildPoExcel(input: {
         font: { size: 9 },
         alignment: { horizontal: c.align, vertical: 'middle', wrapText: true },
         border: BORDER,
-        ...(c.num ? { numFmt: '#,##0' } : null),
+        ...(c.num ? { numFmt: c.numFmtFor?.(l) ?? '#,##0' } : null),
       })
     })
   })
 
   /* ── Tổng số KG / khối tiền — như phiếu in ──────────────────────────────── */
-  if (qtyTotal != null && qtyTotal > 0 && qtyTotalIdx > 0) {
-    r++
-    ws.mergeCells(r, 1, r, qtyTotalIdx)
-    set(r, 1, qtyTotalLabel, {
-      font: { bold: true, size: 9 },
-      alignment: { horizontal: 'right' },
-      border: BORDER,
-    })
-    set(r, qtyTotalIdx + 1, qtyTotal, {
-      font: { bold: true, size: 9 },
-      alignment: { horizontal: 'right' },
-      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_FILL } },
-      border: BORDER,
-      numFmt: '#,##0',
-    })
-    if (qtyTotalIdx + 2 <= n) {
-      ws.mergeCells(r, qtyTotalIdx + 2, r, n)
-      set(r, qtyTotalIdx + 2, '', { border: BORDER })
+  if (qtyTotalIdx > 0) {
+    for (const t of qtyTotalRows) {
+      r++
+      ws.mergeCells(r, 1, r, qtyTotalIdx)
+      set(r, 1, t.label, {
+        font: { bold: true, size: 9 },
+        alignment: { horizontal: 'right' },
+        border: BORDER,
+      })
+      set(r, qtyTotalIdx + 1, t.value, {
+        font: { bold: true, size: 9 },
+        alignment: { horizontal: 'right' },
+        fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: HEAD_FILL } },
+        border: BORDER,
+        numFmt: '#,##0',
+      })
+      if (qtyTotalIdx + 2 <= n) {
+        ws.mergeCells(r, qtyTotalIdx + 2, r, n)
+        set(r, qtyTotalIdx + 2, '', { border: BORDER })
+      }
     }
   }
 

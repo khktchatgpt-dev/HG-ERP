@@ -49,6 +49,11 @@ export function previewLinesFromDraft(
       inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
       area_m2: draft.area_m2,
       carton_basis: template === 'carton' ? l.carton_basis : null,
+      // Xem trước phải thấy đúng dòng quy đổi sẽ in ra (0128) — cùng điều kiện
+      // "đủ cả cặp" như `buildPoPayload`, không thì bản xem trước và bản lưu
+      // khác nhau ở đúng chỗ người ta soi.
+      pack_size: l.pack_size && l.pack_unit ? l.pack_size : null,
+      pack_unit: l.pack_size && l.pack_unit ? l.pack_unit : null,
     }
   })
 }
