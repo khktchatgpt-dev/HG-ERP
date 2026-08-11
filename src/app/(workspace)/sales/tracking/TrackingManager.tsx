@@ -14,6 +14,13 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { Modal } from '@/components/Modal'
+import {
+  TrackingDetail,
+  type DetailLine,
+  type DetailOrder,
+  type DetailShipment,
+} from './TrackingDetail'
 
 type Row = {
   id: string
@@ -32,7 +39,10 @@ type Row = {
   jobs_done: number
   ship_date: string | null
   lines_bom_pending: number
+  /** PO đã duyệt, chưa về đủ — vật tư đang trên đường (0133). */
   pos_open: number
+  /** PO còn nháp / chờ GĐ duyệt — chưa gửi NCC (0133). */
+  pos_unsent: number
   created_at: string
 }
 
@@ -43,12 +53,23 @@ export function TrackingManager({
   stages,
   canManage,
   lsxBase = '/sales/lsx',
+  home,
 }: {
   rows: Row[]
   stages: Stage[]
   canManage: boolean
   /** Gốc link chi tiết LSX theo shell đang đứng — không nhảy giao diện phòng khác. */
   lsxBase?: string
+  /**
+   * Nút gốc của breadcrumb theo SHELL ĐANG ĐỨNG.
+   *
+   * Trước đây breadcrumb ghi cứng "Kinh doanh → /sales" trong khi màn này sống ở
+   * BA shell — mà `/sales/tracking` thì nay chỉ còn là redirect sang `/sales/lsx`
+   * (04/08/2026). Người ở Kế hoạch mở trang này thấy chữ "Kinh doanh", bấm vào là
+   * bị ném sang workspace của phòng khác. Đã có `lsxBase` đi theo shell thì đường
+   * quay về cũng phải đi theo shell.
+   */
+  home: { label: string; href: string }
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -56,6 +77,31 @@ export function TrackingManager({
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  /** Đơn đang mở xem nhanh — nạp khi bấm, không nạp sẵn cả 500 đơn. */
+  const [viewing, setViewing] = useState<{
+    row: Row
+    order: DetailOrder
+    lines: DetailLine[]
+    shipments: DetailShipment[]
+    shippedByLine: Record<string, number>
+  } | null>(null)
+
+  async function openDetail(r: Row) {
+    setBusy(true)
+    try {
+      const d = await api<{
+        order: DetailOrder
+        lines: DetailLine[]
+        shipments: DetailShipment[]
+        shippedByLine: Record<string, number>
+      }>(`/api/dept/sales/orders/${r.id}`)
+      setViewing({ row: r, ...d })
+    } catch (e) {
+      toast.error('Không mở được đơn', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10)
   // FR-SAL-09: nguy cơ trễ = sát/quá hạn giao + lý do (BOM, vật tư, LSX chưa chạy).
@@ -92,18 +138,20 @@ export function TrackingManager({
   const stats = useMemo(() => {
     let bomPending = 0
     let posOpen = 0
+    let posUnsent = 0
     let late = 0
     let risk = 0
     let inProd = 0
     for (const r of rows) {
       if (r.lines_bom_pending > 0 && r.status !== 'cancelled') bomPending++
       if (r.pos_open > 0) posOpen++
+      if (r.pos_unsent > 0 && r.status !== 'cancelled') posUnsent++
       const rk = riskOf(r)
       if (rk?.level === 'overdue') late++
       else if (rk) risk++
       if (r.status === 'in_production') inProd++
     }
-    return { bomPending, posOpen, late, risk, inProd }
+    return { bomPending, posOpen, posUnsent, late, risk, inProd }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
@@ -134,15 +182,28 @@ export function TrackingManager({
     {
       key: 'code',
       header: 'Đơn / Khách',
+      /*
+       * PHẢI có bề rộng. `DataTable` chạy `table-layout: fixed`: sáu cột còn lại
+       * khai cứng tổng 820px, nên trong khung hẹp hơn thế, cột duy nhất không
+       * khai bề rộng — chính là cột này — bị bóp về ĐÚNG 0px. Mã đơn và tên
+       * khách khi ấy tràn ra đè lên cột Tiến độ, và vì bảng không có bề rộng tối
+       * thiểu nên thanh cuộn ngang cũng không cứu. Cột quan trọng nhất của bảng
+       * biến mất ở mọi khung dưới ~820px (đo được: width = 0).
+       */
+      width: '220px',
       sortValue: (r) => r.code,
       cell: (r) => (
-        <div className="flex min-w-0 flex-col">
+        <button
+          onClick={() => void openDetail(r)}
+          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
+          title="Xem nhanh dòng sản phẩm & tiến độ giao"
+        >
           <span className="font-mono text-xs text-zinc-400">
             {r.code}
             {r.customer_po_no && <span className="ml-1">· PO {r.customer_po_no}</span>}
           </span>
           <span className="truncate font-medium">{r.customer_name}</span>
-        </div>
+        </button>
       ),
     },
     {
@@ -218,15 +279,29 @@ export function TrackingManager({
         ),
     },
     {
+      /*
+       * HAI con số, không phải một (0133).
+       *
+       * Trước đây ô này gộp mọi PO chưa về đủ vào một nhãn "N PO chờ" — kể cả
+       * đơn còn NHÁP và đơn đang nằm bàn duyệt của Giám đốc. Người bán đọc là
+       * "vật tư đang về" rồi yên tâm hẹn ngày với khách, trong khi thật ra chưa
+       * ai gửi đơn cho nhà cung cấp. Nay tách: "chưa gửi NCC" là việc của mình,
+       * "đang về" là việc của NCC — và cái thứ nhất mới là cái đáng gọi tên.
+       */
       key: 'po',
-      header: 'Vật tư (PO mở)',
-      sortValue: (r) => r.pos_open,
-      width: '110px',
+      header: 'Vật tư',
+      sortValue: (r) => r.pos_unsent * 1000 + r.pos_open,
+      width: '150px',
       cell: (r) =>
-        r.pos_open > 0 ? (
-          <Badge tone="amber">{r.pos_open} PO chờ</Badge>
-        ) : (
+        r.pos_unsent === 0 && r.pos_open === 0 ? (
           <span className="text-xs text-zinc-400">—</span>
+        ) : (
+          <div className="flex flex-col items-start gap-1">
+            {r.pos_unsent > 0 && (
+              <Badge tone="red">⚠ {r.pos_unsent} PO chưa gửi NCC</Badge>
+            )}
+            {r.pos_open > 0 && <Badge tone="amber">{r.pos_open} PO đang về</Badge>}
+          </div>
         ),
     },
     {
@@ -284,10 +359,7 @@ export function TrackingManager({
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Kinh doanh', href: '/sales' },
-          { label: 'Theo dõi đơn hàng' },
-        ]}
+        breadcrumbs={[home, { label: 'Theo dõi đơn hàng' }]}
         title="Theo dõi đơn hàng"
         description="Trạng thái tổng hợp để trả lời khách: BOM, vật tư, tiến độ sản xuất, hạn giao (FR-SAL-07)."
       />
@@ -301,8 +373,15 @@ export function TrackingManager({
             value: stats.bomPending,
             tone: stats.bomPending ? 'amber' : 'gray',
           },
+          // "Chưa gửi NCC" đứng TRƯỚC "đang về": nó là việc của chính mình, và
+          // là thứ duy nhất trong hai cái còn kịp làm gì đó hôm nay.
           {
-            label: 'Chờ vật tư',
+            label: 'PO chưa gửi NCC',
+            value: stats.posUnsent,
+            tone: stats.posUnsent ? 'red' : 'gray',
+          },
+          {
+            label: 'Vật tư đang về',
             value: stats.posOpen,
             tone: stats.posOpen ? 'amber' : 'gray',
           },
@@ -364,6 +443,30 @@ export function TrackingManager({
           }
         />
       </div>
+
+      {/* Xem nhanh đơn — đọc, không sửa; thao tác vẫn ở màn Đơn hàng của Sales. */}
+      <Modal
+        open={!!viewing}
+        onClose={() => setViewing(null)}
+        title={viewing ? `${viewing.order.code} — ${viewing.row.customer_name}` : ''}
+        maxWidth="sm:max-w-3xl"
+      >
+        {viewing && (
+          <TrackingDetail
+            order={viewing.order}
+            lines={viewing.lines}
+            shipments={viewing.shipments}
+            shippedByLine={viewing.shippedByLine}
+            customerName={viewing.row.customer_name}
+            lsxCode={viewing.row.lsx_code}
+            lsxHref={
+              viewing.row.production_order_id
+                ? `${lsxBase}/${viewing.row.production_order_id}`
+                : null
+            }
+          />
+        )}
+      </Modal>
     </div>
   )
 }

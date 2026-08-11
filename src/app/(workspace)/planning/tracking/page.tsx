@@ -5,5 +5,10 @@ import { TrackingScreen } from '../../sales/tracking/TrackingScreen'
  * /planning/lsx (không nhảy shell Sales; mỗi bộ phận một màn riêng).
  */
 export default function PlanningTrackingPage() {
-  return <TrackingScreen lsxBase="/planning/lsx" />
+  return (
+    <TrackingScreen
+      lsxBase="/planning/lsx"
+      home={{ label: 'Kế hoạch - Cung ứng', href: '/planning' }}
+    />
+  )
 }

@@ -8,7 +8,14 @@ import { TrackingManager } from './TrackingManager'
  * Kế hoạch - Cung ứng / Ban GĐ). `lsxBase` giữ link chi tiết LSX ở đúng shell
  * đang đứng (mỗi bộ phận một màn riêng, user chốt 07/2026).
  */
-export async function TrackingScreen({ lsxBase }: { lsxBase: string }) {
+export async function TrackingScreen({
+  lsxBase,
+  home,
+}: {
+  lsxBase: string
+  /** Nút gốc breadcrumb theo shell gọi — xem ghi chú ở `TrackingManager`. */
+  home: { label: string; href: string }
+}) {
   const user = await authService.requirePageUser()
   const canManage = user.role === 'admin' || user.role === 'manager'
 
@@ -23,6 +30,7 @@ export async function TrackingScreen({ lsxBase }: { lsxBase: string }) {
       stages={stages}
       canManage={canManage}
       lsxBase={lsxBase}
+      home={home}
     />
   )
 }
