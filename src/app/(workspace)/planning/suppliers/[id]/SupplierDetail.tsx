@@ -11,6 +11,7 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { RefChain } from '@/components/erp/RefChain'
+import { isPoOpen, poStatusLabel, poStatusTone } from '@/lib/po-status'
 import { PricesPanel, type MaterialOption } from '../PricesPanel'
 import { CertsPanel } from '../CertsPanel'
 import { MaterialGroupsPanel, type MaterialGroup } from '../MaterialGroupsPanel'
@@ -42,27 +43,6 @@ type PurchasedMaterial = {
   last_at: string
 }
 
-const PO_STATUS: Record<
-  string,
-  { label: string; tone: 'gray' | 'amber' | 'blue' | 'green' | 'red' }
-> = {
-  pending_approval: { label: 'Chờ duyệt', tone: 'amber' },
-  approved: { label: 'Đã duyệt', tone: 'blue' },
-  ordered: { label: 'Đã gửi NCC', tone: 'blue' },
-  confirmed: { label: 'NCC xác nhận', tone: 'blue' },
-  in_transit: { label: 'Đang giao', tone: 'blue' },
-  partial: { label: 'Về một phần', tone: 'amber' },
-  received: { label: 'Về đủ', tone: 'green' },
-  cancelled: { label: 'Đã huỷ', tone: 'red' },
-}
-const OPEN = [
-  'pending_approval',
-  'approved',
-  'ordered',
-  'confirmed',
-  'in_transit',
-  'partial',
-]
 const money = (n: number) => n.toLocaleString('vi-VN')
 const date = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
 
@@ -111,7 +91,13 @@ export function SupplierDetail({
   const [busy, setBusy] = useState(false)
 
   const stats = useMemo(() => {
-    const open = pos.filter((p) => OPEN.includes(p.status)).length
+    // "Đang mở" ở màn NÀY rộng hơn `PO_OPEN_STATUSES` một bậc: có tính cả đơn
+    // CHỜ DUYỆT. Con số này đi vào cảnh báo trước khi ngừng giao dịch với NCC
+    // ("còn N PO đang mở") — ở đó một đơn đang nằm bàn Giám đốc vẫn là đơn sống,
+    // bỏ nó ra là cảnh báo hụt đúng lúc cần nhất.
+    const open = pos.filter(
+      (p) => isPoOpen(p.status) || p.status === 'pending_approval',
+    ).length
     const spend = pos
       .filter((p) => p.status !== 'cancelled')
       .reduce((s, p) => s + p.total, 0)
@@ -208,10 +194,7 @@ export function SupplierDetail({
       header: 'Trạng thái',
       width: '130px',
       sortValue: (p) => p.status,
-      cell: (p) => {
-        const st = PO_STATUS[p.status] ?? { label: p.status, tone: 'gray' as const }
-        return <Badge tone={st.tone}>{st.label}</Badge>
-      },
+      cell: (p) => <Badge tone={poStatusTone(p.status)}>{poStatusLabel(p.status)}</Badge>,
     },
     { key: '_spacer', header: '', cell: () => null },
     {

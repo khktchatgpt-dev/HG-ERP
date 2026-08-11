@@ -8,41 +8,14 @@
  * vào `status` là đủ cho mức tổng hợp — không cần đối soát từng dòng vật tư ở đây.
  */
 
-export type PoStatus =
-  | 'pending_approval'
-  | 'approved'
-  | 'ordered'
-  | 'confirmed'
-  | 'in_transit'
-  | 'partial'
-  | 'received'
-  | 'cancelled'
+import type { PoStatus as CanonPoStatus } from './po-status'
 
-/** Nhãn/tone PO — GIỮ ĐỒNG BỘ với màn Đơn đặt vật tư (planning/pos/PosManager). */
-export const PO_STATUS_LABEL: Record<PoStatus, string> = {
-  pending_approval: 'Chờ duyệt',
-  approved: 'Đã duyệt',
-  ordered: 'Đã gửi NCC',
-  confirmed: 'NCC xác nhận',
-  in_transit: 'Đang giao',
-  partial: 'Về một phần',
-  received: 'Về đủ',
-  cancelled: 'Đã huỷ',
-}
-
-export const PO_STATUS_TONE: Record<
-  PoStatus,
-  'gray' | 'amber' | 'blue' | 'green' | 'red'
-> = {
-  pending_approval: 'amber',
-  approved: 'blue',
-  ordered: 'blue',
-  confirmed: 'blue',
-  in_transit: 'amber',
-  partial: 'amber',
-  received: 'green',
-  cancelled: 'red',
-}
+/**
+ * Tệp này từng chép lại bảng nhãn/tone PO kèm lời tự dặn "GIỮ ĐỒNG BỘ với
+ * PosManager" — hai bản chép đó không ai dùng mà vẫn kịp lệch nhau. Nhãn và màu
+ * nay ở `@/lib/po-status`; ở đây chỉ còn phép ĐÁNH GIÁ mức sẵn sàng.
+ */
+export type PoStatus = Exclude<CanonPoStatus, 'draft'>
 
 export type SupplyPo = { status: PoStatus; expected_at: string | null }
 
