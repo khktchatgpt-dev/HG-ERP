@@ -2,23 +2,24 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import type { Column } from '@/components/erp/DataTable'
 import { Badge } from '@/components/Badge'
 import { EmptyState } from '@/components/erp/EmptyState'
-import { assessPoLate } from '@/lib/late-risk'
-import { assessPoFit } from '@/lib/po-fit'
-import type { Po } from './PosManager'
+import { PoRowsTable } from './po-columns'
+import type { Po } from './po-types'
 import type { LsxRef, PoGroup } from './pos-groups'
 
 /**
  * KHU ĐƠN ĐẶT HÀNG XẾP THEO LỆNH SẢN XUẤT.
  *
- * Mỗi lệnh là một thẻ: đầu thẻ cộng sẵn (mấy đơn, bao nhiêu tiền, mấy đơn chờ
- * duyệt / quá hẹn), thân thẻ liệt kê đơn của chính lệnh đó. Bảng phẳng cũ trả
- * lời được "đơn này tới đâu"; thẻ này trả lời câu ngược lại mà người làm kế
- * hoạch hỏi mỗi ngày — "lệnh này đã đặt những gì, còn thiếu gì".
+ * Một lệnh có NHIỀU đơn đặt vật tư (mỗi NCC một đơn), nên đây là trục chính:
+ * đầu thẻ cộng sẵn cho cả lệnh — mấy đơn, bao nhiêu tiền, mấy đơn chờ duyệt /
+ * quá hẹn, VÀ hàng đã về bao nhiêu dòng — thân thẻ liệt kê đơn của chính lệnh
+ * đó. Bảng phẳng trả lời được "đơn này tới đâu"; thẻ này trả lời câu ngược lại
+ * mà người làm kế hoạch hỏi mỗi ngày — "lệnh này đã đặt những gì, còn thiếu gì".
  *
- * Khối cuối là LSX ĐANG CHẠY MÀ CHƯA CÓ ĐƠN NÀO — thứ bảng phẳng không bao giờ
- * hiện ra được, vì nó chỉ vẽ cái đã tồn tại.
+ * Thân thẻ dùng CHÍNH bộ cột của bảng phẳng (biến thể `group`) — đổi kiểu xem
+ * là đổi trục nhìn, không phải đổi lấy một bộ thông tin khác.
  */
 
 const fmtMoney = (n: number) => n.toLocaleString('vi-VN')
@@ -27,23 +28,15 @@ export function PosByLsx({
   groups,
   standalone,
   emptyLsxs,
-  today,
   canEdit,
-  statusLabel,
-  statusTone,
-  onView,
-  renderActions,
+  makeColumns,
   onSetDue,
 }: {
   groups: PoGroup[]
   standalone: PoGroup
   emptyLsxs: LsxRef[]
-  today: string
   canEdit: boolean
-  statusLabel: (p: Po) => string
-  statusTone: (p: Po) => 'gray' | 'amber' | 'blue' | 'green' | 'red'
-  onView: (p: Po) => void
-  renderActions: (p: Po) => React.ReactNode
+  makeColumns: (g: PoGroup) => Column<Po>[]
   /** Đặt "Hạn VT phải về" của lệnh (0126) — ô của sổ Tổng hợp ĐH. */
   onSetDue: (lsxId: string, date: string | null) => void
 }) {
@@ -59,16 +52,14 @@ export function PosByLsx({
 
   return (
     <div className="flex flex-col gap-3">
+      {emptyLsxs.length > 0 && <EmptyLsxPanel lsxs={emptyLsxs} canEdit={canEdit} />}
+
       {groups.map((g) => (
         <GroupCard
           key={g.key}
           g={g}
-          today={today}
           canEdit={canEdit}
-          statusLabel={statusLabel}
-          statusTone={statusTone}
-          onView={onView}
-          renderActions={renderActions}
+          makeColumns={makeColumns}
           onSetDue={onSetDue}
         />
       ))}
@@ -76,46 +67,33 @@ export function PosByLsx({
       {standalone.pos.length > 0 && (
         <GroupCard
           g={standalone}
-          today={today}
           canEdit={canEdit}
           standalone
-          statusLabel={statusLabel}
-          statusTone={statusTone}
-          onView={onView}
-          renderActions={renderActions}
+          makeColumns={makeColumns}
           onSetDue={onSetDue}
         />
       )}
-
-      {emptyLsxs.length > 0 && <EmptyLsxPanel lsxs={emptyLsxs} canEdit={canEdit} />}
     </div>
   )
 }
 
 function GroupCard({
   g,
-  today,
   canEdit,
   standalone,
-  statusLabel,
-  statusTone,
-  onView,
-  renderActions,
+  makeColumns,
   onSetDue,
 }: {
   g: PoGroup
-  today: string
   canEdit: boolean
   standalone?: boolean
-  statusLabel: (p: Po) => string
-  statusTone: (p: Po) => 'gray' | 'amber' | 'blue' | 'green' | 'red'
-  onView: (p: Po) => void
-  renderActions: (p: Po) => React.ReactNode
+  makeColumns: (g: PoGroup) => Column<Po>[]
   onSetDue: (lsxId: string, date: string | null) => void
 }) {
   // Nhóm đã xong hết thì gập sẵn — chỗ trên màn hình để dành cho lệnh đang chạy.
   const settled = g.pending === 0 && g.open === 0 && g.late === 0
   const [open, setOpen] = useState(!settled)
+  const allIn = g.linesTotal > 0 && g.linesDone >= g.linesTotal
 
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
@@ -148,9 +126,13 @@ function GroupCard({
             {g.pos.length} đơn
           </span>
           {g.pending > 0 && <Badge tone="amber">{g.pending} chờ duyệt</Badge>}
-          {g.open > 0 && <Badge tone="blue">{g.open} đang mở</Badge>}
           {g.late > 0 && <Badge tone="red">⚠ {g.late} quá hẹn</Badge>}
-          {g.received > 0 && <Badge tone="green">{g.received} về đủ</Badge>}
+          {/* Hàng về tới đâu — câu hỏi thật của người kế hoạch, không phải "mấy đơn". */}
+          {g.linesTotal > 0 && (
+            <Badge tone={allIn ? 'green' : g.linesDone > 0 ? 'amber' : 'gray'}>
+              Về kho {g.linesDone}/{g.linesTotal} dòng
+            </Badge>
+          )}
           {/*
             HẠN VT PHẢI VỀ (0126) — ô của sổ "Tổng hợp ĐH". Đèn "Kịp SX?" từng
             đơn bên dưới so với mốc này. Chỉ lệnh còn trong danh sách đang chạy
@@ -190,113 +172,18 @@ function GroupCard({
         </div>
       </div>
 
-      {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-[13px]">
-            <thead>
-              <tr className="text-left text-[10px] text-zinc-500 uppercase">
-                <th className="py-1.5 pr-2 pl-3.5">Số đơn / NCC</th>
-                <th className="w-[130px] py-1.5 pr-2 text-right">Giá trị</th>
-                <th className="w-[150px] py-1.5 pr-2">Trạng thái</th>
-                <th className="w-[90px] py-1.5 pr-2">Về kho</th>
-                <th className="w-[180px] py-1.5 pr-2">Hẹn giao · Kịp SX?</th>
-                <th className="w-[56px] py-1.5 pr-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {g.pos.map((p) => {
-                const late = assessPoLate(p, today)
-                // Đèn "Kịp SX?" (cột L của sổ): hẹn giao so với Hạn VT của lệnh.
-                const fit = assessPoFit(p, g.materials_due_at)
-                return (
-                  <tr
-                    key={p.id}
-                    className={`border-t border-zinc-100 dark:border-zinc-800/60 ${
-                      p.status === 'cancelled' ? 'opacity-60' : ''
-                    }`}
-                  >
-                    <td className="py-2 pr-2 pl-3.5">
-                      <button
-                        onClick={() => onView(p)}
-                        className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
-                      >
-                        <span className="font-mono text-[11px] text-zinc-400">
-                          {p.code}
-                        </span>
-                        <span className="truncate font-medium">{p.supplier_name}</span>
-                      </button>
-                    </td>
-                    <td className="py-2 pr-2 text-right font-medium tabular-nums">
-                      {fmtMoney(p.total ?? 0)}{' '}
-                      <span className="text-[11px] text-zinc-400">{p.currency}</span>
-                    </td>
-                    <td className="py-2 pr-2">
-                      <Badge tone={statusTone(p)}>{statusLabel(p)}</Badge>
-                    </td>
-                    {/* Về kho: đếm theo DÒNG (cộng số lượng chéo đơn vị là vô nghĩa). */}
-                    <td className="py-2 pr-2 text-[12px] tabular-nums">
-                      {p.lines_total ? (
-                        <span
-                          className={
-                            (p.lines_done ?? 0) >= p.lines_total
-                              ? 'font-medium text-emerald-700 dark:text-emerald-400'
-                              : (p.lines_done ?? 0) > 0
-                                ? 'text-amber-600 dark:text-amber-500'
-                                : 'text-zinc-500'
-                          }
-                        >
-                          {p.lines_done ?? 0}/{p.lines_total} dòng
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-2">
-                      {p.expected_at ? (
-                        <span
-                          className={
-                            late === 'overdue'
-                              ? 'font-medium text-red-600 dark:text-red-400'
-                              : late === 'due_soon'
-                                ? 'text-amber-600 dark:text-amber-500'
-                                : ''
-                          }
-                        >
-                          {new Date(p.expected_at).toLocaleDateString('vi-VN')}
-                          {late === 'overdue' && ' ⚠'}
-                        </span>
-                      ) : (
-                        <span className="text-zinc-400">—</span>
-                      )}
-                      {/* Đèn Kịp SX? — chỉ lên tiếng khi có chuyện (trễ/sát hạn). */}
-                      {fit === 'late' && (
-                        <span className="ml-1.5 inline-flex align-middle">
-                          <Badge tone="red">Trễ SX</Badge>
-                        </span>
-                      )}
-                      {fit === 'tight' && (
-                        <span className="ml-1.5 inline-flex align-middle">
-                          <Badge tone="amber">Sát hạn SX</Badge>
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 pr-2 text-right">{renderActions(p)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {open && <PoRowsTable rows={g.pos} columns={makeColumns(g)} />}
     </section>
   )
 }
 
 /**
- * LỆNH ĐANG CHẠY MÀ CHƯA ĐẶT GÌ.
+ * LỆNH ĐANG CHẠY MÀ CHƯA ĐẶT GÌ — ĐỨNG ĐẦU TRANG.
  *
  * Đây là lý do chính để đổi sang khung theo lệnh: một lệnh không có đơn nào thì
  * ở bảng phẳng nó đơn giản là KHÔNG XUẤT HIỆN, nên không ai nhận ra là đã quên.
+ * Trước đây khối này nằm CUỐI trang — tức thứ đáng lo nhất lại nằm đúng chỗ ít
+ * người cuộn tới nhất.
  */
 function EmptyLsxPanel({ lsxs, canEdit }: { lsxs: LsxRef[]; canEdit: boolean }) {
   const [open, setOpen] = useState(true)

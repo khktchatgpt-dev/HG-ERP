@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { suppliersService } from '@/modules/dept/supply/suppliers.service'
@@ -235,7 +236,7 @@ function Stage({
   hot?: boolean
 }) {
   return (
-    <a
+    <Link
       href="/planning/pos"
       className={`min-w-[104px] flex-1 border-r border-zinc-100 px-4 py-3 last:border-r-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40 ${
         hot ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''
@@ -243,7 +244,7 @@ function Stage({
     >
       <div className={`text-xl font-bold tabular-nums ${STAGE_TONE[tone]}`}>{n}</div>
       <div className="mt-0.5 text-xs font-medium text-zinc-500">{label}</div>
-    </a>
+    </Link>
   )
 }
 

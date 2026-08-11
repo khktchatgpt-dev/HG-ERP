@@ -277,6 +277,40 @@ export const posRepo = {
   },
 
   /**
+   * LSX PHỤ của NHIỀU đơn một lượt (0125) — cho màn danh sách.
+   *
+   * `list()` chỉ trả về lệnh CHÍNH của mỗi đơn, nên một đơn "LSX 01+2+3" chỉ
+   * hiện ở lệnh 01; lệnh 2 và 3 không có đơn nào mang id của mình và bị màn
+   * danh sách xếp vào "lệnh chưa có đơn đặt nào" — giục người mua đặt lại thứ
+   * họ đã đặt rồi. Sai càng lộ khi nhiều lệnh, vì lúc đó không ai kiểm lại nổi
+   * từng cảnh báo.
+   *
+   * Một truy vấn gộp cho cả trang, cùng lối với `totalsByPoIds`.
+   */
+  async extraLsxByPoIds(
+    ids: string[],
+  ): Promise<Map<string, { id: string; code: string }[]>> {
+    const out = new Map<string, { id: string; code: string }[]>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_extra_lsx')
+      .select('po_id, production_order_id, lsx:production_orders(code)')
+      .in('po_id', ids)
+    type Row = {
+      po_id: string
+      production_order_id: string
+      lsx: { code: string } | { code: string }[] | null
+    }
+    for (const r of (data ?? []) as Row[]) {
+      const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
+      const list = out.get(r.po_id) ?? []
+      list.push({ id: r.production_order_id, code: lx?.code ?? '?' })
+      out.set(r.po_id, list)
+    }
+    return out
+  },
+
+  /**
    * Vật tư đã mua từ 1 NCC — gộp theo vật tư: tổng SL đã đặt + GIÁ MUA GẦN NHẤT.
    * Loại đơn đã huỷ. Dùng cho tab "Vật tư đã mua" ở chi tiết NCC (phân tích mua).
    */
