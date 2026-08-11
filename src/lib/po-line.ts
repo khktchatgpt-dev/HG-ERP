@@ -82,3 +82,38 @@ export function priceUnitLabel(
 ): string {
   return (basis ?? 'unit') === 'unit2' && unit2 ? `Đơn giá/${unit2}` : 'Đơn giá'
 }
+
+/**
+ * TIỀN CỦA MỘT ĐƠN — chiết khấu, VAT, tổng thanh toán.
+ *
+ * Tách ra khỏi form soạn đơn (`po-draft.poTotals`) vì trang chi tiết cũng phải
+ * nói ra đúng những con số đó. Trước khi có hàm này, chi tiết đơn chỉ dám hiện
+ * "Tổng cộng = Σ dòng" — tức số TRƯỚC chiết khấu và VAT, lệch hẳn với con số
+ * người ta vừa ký trên phiếu in.
+ *
+ * Làm tròn về đồng NGAY ở tiền hàng: tiền từng dòng lẻ vô hạn (kg × đơn giá),
+ * để trôi xuống thì tổng in ra "44.477.168,4" — không ai ký được.
+ */
+export function poMoney(input: {
+  /** Σ tiền từng dòng, chưa làm tròn. */
+  subtotalRaw: number
+  discount?: number | null
+  vatRate?: number | null
+  /** Đơn giá ĐÃ gồm VAT chưa — quyết định cộng thêm hay tách ngược ra. */
+  priceIncludesVat?: boolean | null
+}) {
+  const subtotal = Math.round(input.subtotalRaw)
+  const discountAmount = Number(input.discount ?? 0) || 0
+  const base = Math.max(0, subtotal - discountAmount)
+  const vatRate = Number(input.vatRate ?? 0) || 0
+  // Giá đã gồm VAT: tách ngược ra khỏi tiền hàng, KHÔNG cộng thêm lần nữa.
+  const vatAmount = input.priceIncludesVat
+    ? Math.round((base * vatRate) / (100 + vatRate))
+    : Math.round((base * vatRate) / 100)
+  return {
+    subtotal,
+    discountAmount,
+    vatAmount,
+    grandTotal: input.priceIncludesVat ? base : base + vatAmount,
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { poLineAmount, priceUnitLabel, qtyTotals } from './po-line'
+import { poLineAmount, poMoney, priceUnitLabel, qtyTotals } from './po-line'
 
 describe('poLineAmount — giá đơn vị kép (0053)', () => {
   it("basis 'unit' (mặc định): SL đặt × đơn giá — vật tư nhóm A", () => {
@@ -98,5 +98,56 @@ describe('priceUnitLabel', () => {
     expect(priceUnitLabel('unit2', null)).toBe('Đơn giá')
     expect(priceUnitLabel('unit', 'kg')).toBe('Đơn giá')
     expect(priceUnitLabel(null, undefined)).toBe('Đơn giá')
+  })
+})
+
+describe('poMoney — chiết khấu, VAT, tổng thanh toán', () => {
+  it('VAT cộng thêm (giá chưa gồm VAT) — mẫu phụ kiện 8%', () => {
+    const m = poMoney({ subtotalRaw: 10_000_000, vatRate: 8, priceIncludesVat: false })
+    expect(m.subtotal).toBe(10_000_000)
+    expect(m.vatAmount).toBe(800_000)
+    expect(m.grandTotal).toBe(10_800_000)
+  })
+
+  it('giá ĐÃ gồm VAT: tách ngược ra, KHÔNG cộng thêm lần nữa', () => {
+    const m = poMoney({ subtotalRaw: 10_800_000, vatRate: 8, priceIncludesVat: true })
+    expect(m.vatAmount).toBe(800_000)
+    // Tổng thanh toán = chính tiền hàng, vì VAT đã nằm trong đó.
+    expect(m.grandTotal).toBe(10_800_000)
+  })
+
+  it('chiết khấu trừ TRƯỚC khi tính VAT', () => {
+    const m = poMoney({
+      subtotalRaw: 10_000_000,
+      discount: 1_000_000,
+      vatRate: 10,
+      priceIncludesVat: false,
+    })
+    expect(m.discountAmount).toBe(1_000_000)
+    expect(m.vatAmount).toBe(900_000)
+    expect(m.grandTotal).toBe(9_900_000)
+  })
+
+  it('chiết khấu lớn hơn tiền hàng không đẩy tổng xuống âm', () => {
+    const m = poMoney({ subtotalRaw: 500_000, discount: 900_000, vatRate: 8 })
+    expect(m.vatAmount).toBe(0)
+    expect(m.grandTotal).toBe(0)
+  })
+
+  it('làm tròn về đồng ngay ở tiền hàng — phiếu in không có số lẻ', () => {
+    // 301,5342 kg × 138.000 = 41.611.719,6 → phải ra số nguyên.
+    const m = poMoney({ subtotalRaw: 41_611_719.6, vatRate: 10 })
+    expect(m.subtotal).toBe(41_611_720)
+    expect(Number.isInteger(m.grandTotal)).toBe(true)
+  })
+
+  it('không VAT / không chiết khấu: tổng = tiền hàng', () => {
+    const m = poMoney({ subtotalRaw: 7_000_000 })
+    expect(m).toEqual({
+      subtotal: 7_000_000,
+      discountAmount: 0,
+      vatAmount: 0,
+      grandTotal: 7_000_000,
+    })
   })
 })

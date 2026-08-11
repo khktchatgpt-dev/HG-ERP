@@ -1,4 +1,5 @@
 import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
+import { poMoney } from '@/lib/po-line'
 import {
   draftOf,
   lineAmount,
@@ -58,22 +59,14 @@ export function templateDefaults(
  * trôi xuống thì tổng thanh toán in ra "44.477.168,4" — không ai ký được.
  */
 export function poTotals(header: PoHeader, lines: Line[]) {
-  const subtotal = Math.round(
-    lines.reduce((s, l) => s + lineAmount(header.template, l), 0),
-  )
-  const discountAmount = header.discount === '' ? 0 : Number(header.discount)
-  const base = Math.max(0, subtotal - discountAmount)
-  const vatRate = header.vat === '' ? 0 : Number(header.vat)
-  // Giá đã gồm VAT: tách ngược ra khỏi tiền hàng, KHÔNG cộng thêm lần nữa.
-  const vatAmount = header.inclVat
-    ? Math.round((base * vatRate) / (100 + vatRate))
-    : Math.round((base * vatRate) / 100)
-  return {
-    subtotal,
-    discountAmount,
-    vatAmount,
-    grandTotal: header.inclVat ? base : base + vatAmount,
-  }
+  // Phép tính nằm ở `@/lib/po-line` để trang CHI TIẾT đơn nói ra đúng con số
+  // này — trước đó chi tiết chỉ hiện Σ dòng, tức số trước chiết khấu và VAT.
+  return poMoney({
+    subtotalRaw: lines.reduce((s, l) => s + lineAmount(header.template, l), 0),
+    discount: header.discount === '' ? 0 : Number(header.discount),
+    vatRate: header.vat === '' ? 0 : Number(header.vat),
+    priceIncludesVat: header.inclVat,
+  })
 }
 
 /**
