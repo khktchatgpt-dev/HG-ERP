@@ -50,7 +50,12 @@ export function EditMaterialDialog({
   const toast = useToast()
   const open = materialId != null
   const [busy, setBusy] = useState(false)
-  const [loaded, setLoaded] = useState<MaterialDetail | null>(null)
+  /*
+   * Bản đã nạp GẮN VỚI ID — đổi vật tư thì bản cũ tự hết giá trị (derive, không
+   * reset bằng setState trong thân effect: lint cấm vì gây cascading render).
+   */
+  const [fetched, setFetched] = useState<{ id: string; m: MaterialDetail } | null>(null)
+  const loaded = fetched && fetched.id === materialId ? fetched.m : null
   const core = useMaterialCore({
     active: open && loaded != null,
     initial: loaded ? coreFromMaterial(loaded) : undefined,
@@ -61,20 +66,19 @@ export function EditMaterialDialog({
   /*
    * Nạp BẢN GỐC từ server khi mở — dòng đơn chỉ chụp một phần vật tư, đổ từ
    * dòng vào form là các trường không hiển thị bị PATCH null đè mất im lặng.
-   * setState trong callback async (không phải thân effect) — tránh cascading
-   * render, cùng lối các effect nạp taxonomy.
+   * setState trong callback của timer (không phải thân effect) — cùng lối các
+   * effect nạp taxonomy.
    */
   useEffect(() => {
     if (!materialId) return
-    setLoaded(null)
     let cancelled = false
-    void (async () => {
+    const t = setTimeout(async () => {
       try {
         const { material } = await api<{ material: MaterialDetail }>(
           `/api/dept/warehouse/materials/${materialId}`,
         )
         if (cancelled) return
-        setLoaded(material)
+        setFetched({ id: materialId, m: material })
         setF(coreFromMaterial(material))
       } catch (e) {
         if (!cancelled) {
@@ -85,9 +89,10 @@ export function EditMaterialDialog({
           onClose()
         }
       }
-    })()
+    }, 0)
     return () => {
       cancelled = true
+      clearTimeout(t)
     }
     // toast/onClose là hàm ổn định theo vòng đời modal — chỉ nạp lại theo id.
     // eslint-disable-next-line react-hooks/exhaustive-deps
