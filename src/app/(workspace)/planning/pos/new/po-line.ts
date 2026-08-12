@@ -15,6 +15,12 @@ import type { PoMaterial } from '@/components/supply/MaterialPicker'
 export type Num = number | ''
 
 export type Line = {
+  /**
+   * DÒNG TỰ DO (0134): `is_free` = true thì material_id chỉ là KHÓA CỤC BỘ của
+   * form (`free-…`), payload gửi material_id null + line_name/line_unit. Đơn
+   * gỗ/gia công đặt theo MÃ SP — tên và ĐVT gõ thẳng trên dòng.
+   */
+  is_free?: boolean
   material_id: string
   code: string
   name: string
@@ -46,7 +52,11 @@ export type Line = {
   inner_w_mm: Num
   inner_h_mm: Num
   area_m2: Num
-  carton_basis: 'ctn' | 'm2'
+  /** Bao bì (0134): giá NCC chào theo m² + phí bản in — nuôi gợi ý giá/thùng. */
+  price_per_m2: Num
+  print_fee: Num
+  /** Cơ sở tính tiền dòng: thùng/SP/tấm · m² · m³ (xốp) · kg (gia công). */
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg'
   /**
    * Đóng gói mua từ danh mục (0124): 1 pack_unit = pack_size ĐVT. Chỉ để hiện
    * quy đổi + làm tròn gợi ý ngay dưới ô SL đặt — không đi vào payload (SL đặt
@@ -77,6 +87,10 @@ export function draftOf(l: Line) {
     bar_length_m: n(l.bar_length_m),
     weight_per_unit: n(l.weight_per_unit),
     area_m2: n(l.area_m2),
+    // Xốp theo m³ (0134): D×R×Dày của mẫu foam đi cùng bộ ô lọt lòng.
+    inner_l_mm: n(l.inner_l_mm),
+    inner_w_mm: n(l.inner_w_mm),
+    inner_h_mm: n(l.inner_h_mm),
     carton_basis: l.carton_basis,
   }
 }
@@ -103,22 +117,13 @@ export function lineAmount(t: PoTemplate, l: Line): number {
  * thiếu thì tiền rơi về "SL × giá" (sai hẳn bậc: cây thay vì kg).
  */
 export function lineReady(t: PoTemplate, l: Line): boolean {
-  if (l.qty === '' || Number(l.qty) <= 0) return false
-  if (l.price === '' || Number(l.price) < 0) return false
-  if (t === 'aluminium') {
-    return (
-      l.weight_per_m !== '' && Number(l.weight_per_m) > 0 && Number(l.bar_length_m) > 0
-    )
-  }
-  if (t === 'metal_kg') return l.weight_per_unit !== '' && Number(l.weight_per_unit) > 0
-  if (t === 'carton' && l.carton_basis === 'm2') {
-    return l.area_m2 !== '' && Number(l.area_m2) > 0
-  }
-  return true
+  return lineProblem(t, l) == null
 }
 
 /** Lý do dòng chưa gửi được — hiện ngay cạnh nút, không bắt người dùng đoán. */
 export function lineProblem(t: PoTemplate, l: Line): string | null {
+  // Dòng tự do (0134): tên hàng là danh tính duy nhất — trống thì phiếu in rỗng.
+  if (l.is_free && !l.name.trim()) return 'thiếu tên hàng'
   if (l.qty === '' || Number(l.qty) <= 0) return 'thiếu SL đặt'
   if (l.price === '') return 'thiếu đơn giá'
   if (t === 'aluminium' && !(Number(l.weight_per_m) > 0)) return 'thiếu kg/m'
@@ -127,7 +132,43 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
   if (t === 'carton' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
     return 'thiếu m²/thùng'
   }
+  // Kính giá theo m² phải có m²/tấm; gỗ luôn cần m³/SP (giá là giá/m³ tinh);
+  // gia công theo kg cần ĐM kg/SP; xốp theo m³ cần đủ quy cách D×R×Dày —
+  // thiếu thì tiền rơi về SL × giá, sai hẳn bậc mà không ai thấy.
+  if (t === 'glass' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
+    return 'thiếu m²/tấm'
+  }
+  if (t === 'wood' && !(Number(l.weight_per_unit) > 0)) return 'thiếu m³/SP'
+  if (
+    t === 'outsourcing' &&
+    l.carton_basis === 'kg' &&
+    !(Number(l.weight_per_unit) > 0)
+  ) {
+    return 'thiếu ĐM kg/SP'
+  }
+  if (
+    t === 'foam' &&
+    l.carton_basis === 'm3' &&
+    !(Number(l.inner_l_mm) > 0 && Number(l.inner_w_mm) > 0 && Number(l.inner_h_mm) > 0)
+  ) {
+    return 'thiếu quy cách D×R×Dày'
+  }
   return null
+}
+
+/**
+ * GỢI Ý ĐƠN GIÁ/THÙNG của bao bì (0134): đơn thật báo giá/m² + "bản in + công"
+ * rồi mới ra giá/thùng = m² × giá/m² + bản in (Hồng Đào Chu Lai: 3,591 × 18.770
+ * + 3.278 = 70.681). Chỉ là gợi ý bấm-để-dùng dưới ô Đơn giá — tính tiền vẫn
+ * SL × đơn giá.
+ */
+export function cartonPriceSuggest(t: PoTemplate, l: Line): number | null {
+  if (t !== 'carton' || l.carton_basis !== 'ctn') return null
+  const area = Number(l.area_m2) || 0
+  const perM2 = Number(l.price_per_m2) || 0
+  if (area <= 0 || perM2 <= 0) return null
+  const fee = Number(l.print_fee) || 0
+  return Math.round((area * perM2 + fee) * 100) / 100
 }
 
 /**
@@ -214,6 +255,8 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     inner_w_mm: inner?.[1] ?? '',
     inner_h_mm: inner?.[2] ?? '',
     area_m2: area ?? '',
+    price_per_m2: '',
+    print_fee: '',
     carton_basis: 'ctn',
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
@@ -222,9 +265,53 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
   }
 }
 
+/**
+ * DÒNG TỰ DO cho mẫu gỗ/gia công (0134): không gắn vật tư kho — tên/ĐVT gõ ngay
+ * trên dòng, material_id chỉ là khóa cục bộ để React/focus/xoá dòng hoạt động.
+ */
+export function newFreeLine(): Line {
+  return {
+    is_free: true,
+    material_id: `free-${crypto.randomUUID()}`,
+    code: '',
+    name: '',
+    unit: 'cái',
+    on_hand: null,
+    spec: '',
+    note: '',
+    qty: '',
+    price: '',
+    material_grade: '',
+    dm_per_sp: '',
+    qty_demand: '',
+    qty_on_hand: '',
+    die_code: '',
+    weight_per_m: '',
+    bar_length_m: '',
+    dimension_text: '',
+    finish: '',
+    weight_per_unit: '',
+    open_style: '',
+    pcs_per_ctn: '',
+    inner_l_mm: '',
+    inner_w_mm: '',
+    inner_h_mm: '',
+    area_m2: '',
+    price_per_m2: '',
+    print_fee: '',
+    carton_basis: 'ctn',
+    pack_size: null,
+    pack_unit: '',
+    catalog_kg_m: null,
+    catalog_kg_unit: null,
+  }
+}
+
 /** Dòng đơn như repo trả về — chỉ những trường form cần. */
 export type PoLineDto = {
-  material_id: string
+  id?: string
+  /** null = dòng tự do (0134) — material_name/unit đã fallback từ line_name. */
+  material_id: string | null
   material_code: string
   material_name: string
   material_unit: string
@@ -248,7 +335,9 @@ export type PoLineDto = {
   inner_w_mm: number | null
   inner_h_mm: number | null
   area_m2: number | null
-  carton_basis: 'ctn' | 'm2' | null
+  price_per_m2: number | null
+  print_fee: number | null
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   pack_size: number | null
   pack_unit: string | null
 }
@@ -267,8 +356,12 @@ const s2 = (v: string | null | undefined): string => v ?? ''
  * chốt lúc lập đơn — hai số khác nghĩa: một là tồn bây giờ, một là ảnh chụp để in.
  */
 export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
+  // Dòng tự do (0134): material_id null trong DB — khóa cục bộ dựng từ id dòng
+  // (mở SỬA/NHÂN BẢN không đổi khóa giữa hai lần render).
+  const isFree = l.material_id == null
   return {
-    material_id: l.material_id,
+    is_free: isFree,
+    material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
     name: l.material_name,
     unit: l.material_unit,
@@ -293,6 +386,8 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     inner_w_mm: n2(l.inner_w_mm),
     inner_h_mm: n2(l.inner_h_mm),
     area_m2: n2(l.area_m2),
+    price_per_m2: n2(l.price_per_m2),
+    print_fee: n2(l.print_fee),
     carton_basis: l.carton_basis ?? 'ctn',
     // Đóng gói đã chụp trên dòng đơn (0128) — mở SỬA/NHÂN BẢN giữ đúng con số
     // hai bên chốt lúc đặt, không lấy lại đóng gói hiện tại của danh mục. Đơn

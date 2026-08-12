@@ -18,7 +18,12 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { allocationNote } from '@/lib/po-allocation'
-import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
+import {
+  FREE_LINE_TEMPLATES,
+  poTemplateMeta,
+  type PoTemplate,
+  type PoTerms,
+} from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import {
@@ -35,7 +40,7 @@ import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
-import { newLine, type Line } from './po-line'
+import { newFreeLine, newLine, type Line } from './po-line'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -46,6 +51,8 @@ type SupplierOption = {
   rating: string | null
   lead_time_days: number | null
   payment_terms: string | null
+  /** Tiền tệ mặc định của NCC — chọn NCC là ô tiền tệ tự chuyển theo. */
+  currency?: string | null
   /** Chỉ dùng cho khối "Kính gửi" của phiếu xem trước. */
   address?: string | null
   tax_no?: string | null
@@ -203,7 +210,18 @@ export function PoCreateForm({
   )
   const [expectedAt, setExpectedAt] = useState(start?.expected_at ?? '')
   const [contractNo, setContractNo] = useState(start?.contract_no ?? '')
-  const [currency, setCurrency] = useState(start?.currency ?? 'VND')
+  const [currency, setCurrency] = useState(
+    start?.currency ??
+      // Vào form với NCC chọn sẵn (?supplier=…) thì tiền tệ theo NCC luôn.
+      suppliers.find((s) => s.id === defaultSupplierId)?.currency?.toUpperCase() ??
+      'VND',
+  )
+  /**
+   * Người dùng ĐÃ TỰ CHỌN tiền tệ chưa — có thì đổi NCC KHÔNG áp lại tiền tệ
+   * mặc định của NCC mới nữa (cùng lối với `vatDirty`). Mở đơn có sẵn coi như
+   * đã chọn: currency là số đã chốt với NCC.
+   */
+  const [currencyDirty, setCurrencyDirty] = useState(!!start)
   const [note, setNote] = useState(start?.note ?? '')
   const [discount, setDiscount] = useState<number | ''>(start?.discount_amount ?? '')
 
@@ -322,6 +340,8 @@ export function PoCreateForm({
     setExpectedAt(d.expectedAt)
     setContractNo(d.contractNo)
     setCurrency(d.currency)
+    // Nháp đã mang tiền tệ người dùng chốt — đổi NCC sau đó không áp đè lại.
+    setCurrencyDirty(true)
     setNote(d.note)
     setDiscount(d.discount)
     setVat(d.vat)
@@ -427,6 +447,12 @@ export function PoCreateForm({
     if (add.length === 0) return
     setFocusIndex(lines.length) // dòng mới nối vào cuối bảng
     setLines((ls) => [...ls, ...add.map((m) => newLine(template, m))])
+  }
+
+  /** Dòng tự do (0134) — đơn gỗ/gia công đặt theo MÃ SP, tên gõ ngay trên dòng. */
+  function addFreeLine() {
+    setFocusIndex(lines.length)
+    setLines((ls) => [...ls, newFreeLine()])
   }
 
   /**
@@ -779,7 +805,17 @@ export function PoCreateForm({
               <Building2 className={fieldIcon} aria-hidden />
               <SupplierPicker
                 value={supplierId}
-                onChange={setSupplierId}
+                onChange={(id) => {
+                  setSupplierId(id)
+                  // Tiền tệ đi theo NCC (gỗ báo USD/m³) — trừ khi người soạn đã
+                  // tự chọn tiền tệ rồi thì tôn trọng lựa chọn đó (như vatDirty).
+                  if (!currencyDirty) {
+                    const cur = suppliers
+                      .find((s) => s.id === id)
+                      ?.currency?.toUpperCase()
+                    if (cur) setCurrency(cur)
+                  }
+                }}
                 suppliers={suppliers}
                 className={`${field} pl-8`}
               />
@@ -905,6 +941,21 @@ export function PoCreateForm({
               Enter
             </kbd>
           </button>
+          {/*
+            DÒNG TỰ DO (0134) — chỉ mẫu gỗ/gia công: đơn thật đặt theo MÃ SẢN
+            PHẨM (bàn/ghế gia công), không phải vật tư kho, nên không bắt người
+            soạn chọn từ danh mục. Tên/ĐVT gõ ngay trên dòng vừa thêm.
+          */}
+          {FREE_LINE_TEMPLATES.includes(template) && (
+            <button
+              type="button"
+              onClick={addFreeLine}
+              className="inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-[13px] font-medium text-zinc-700 transition-colors hover:border-violet-400 hover:text-violet-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-violet-600"
+              title="Thêm dòng không gắn vật tư kho — tên SP/món gia công gõ ngay trên dòng"
+            >
+              ＋ Dòng SP tự gõ
+            </button>
+          )}
           <QuickAddMaterial
             template={template}
             onCreated={(m) =>
@@ -1018,7 +1069,10 @@ export function PoCreateForm({
           setVatDirty(true)
         }}
         onDiscountChange={setDiscount}
-        onCurrencyChange={setCurrency}
+        onCurrencyChange={(v) => {
+          setCurrency(v)
+          setCurrencyDirty(true)
+        }}
         onSubmit={() => void submit()}
       />
     </div>

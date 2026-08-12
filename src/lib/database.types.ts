@@ -2406,8 +2406,10 @@ export type Database = {
           inner_l_mm: number | null
           inner_w_mm: number | null
           kg_per_m: number | null
+          line_name: string | null
+          line_unit: string | null
           material_grade: string | null
-          material_id: string
+          material_id: string | null
           note: string | null
           open_style: string | null
           pack_size: number | null
@@ -2416,6 +2418,7 @@ export type Database = {
           po_id: string
           price_basis: string
           price_per_m2: number | null
+          print_fee: number | null
           product_code: string | null
           qty_basis: string
           qty_demand: number | null
@@ -2451,8 +2454,10 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_name?: string | null
+          line_unit?: string | null
           material_grade?: string | null
-          material_id: string
+          material_id?: string | null
           note?: string | null
           open_style?: string | null
           pack_size?: number | null
@@ -2461,6 +2466,7 @@ export type Database = {
           po_id: string
           price_basis?: string
           price_per_m2?: number | null
+          print_fee?: number | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null
@@ -2496,8 +2502,10 @@ export type Database = {
           inner_l_mm?: number | null
           inner_w_mm?: number | null
           kg_per_m?: number | null
+          line_name?: string | null
+          line_unit?: string | null
           material_grade?: string | null
-          material_id?: string
+          material_id?: string | null
           note?: string | null
           open_style?: string | null
           pack_size?: number | null
@@ -2506,6 +2514,7 @@ export type Database = {
           po_id?: string
           price_basis?: string
           price_per_m2?: number | null
+          print_fee?: number | null
           product_code?: string | null
           qty_basis?: string
           qty_demand?: number | null

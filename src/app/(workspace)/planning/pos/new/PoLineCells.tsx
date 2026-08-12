@@ -306,10 +306,14 @@ export function LineCell({
           }}
           className={cell}
           aria-label={label}
+          // ĐK (Đối khẩu — 0134, đơn Hồng Đào Chu Lai) CHƯA có công thức m²
+          // đã kiểm chứng: chọn ĐK thì m²/thùng nhập tay theo NCC chào.
+          title="AD/MR tự tính m² từ lọt lòng; ĐK (đối khẩu) nhập m² tay theo NCC chào"
         >
           <option value="">—</option>
           <option value="AD">AD</option>
           <option value="MR">MR</option>
+          <option value="ĐK">ĐK</option>
         </select>
       )
 
@@ -336,17 +340,29 @@ export function LineCell({
       )
 
     case 'cartonBasis':
+      // Bộ lựa chọn theo MẪU (khai ở PO_FIELDS): bao bì thùng/m², kính tấm/m²,
+      // xốp tấm/m³, gia công SP/kg — cùng một cột DB `carton_basis`.
       return (
         <select
           value={l.carton_basis}
           onChange={(e) =>
-            onPatch(index, { carton_basis: e.target.value as 'ctn' | 'm2' })
+            onPatch(index, {
+              carton_basis: e.target.value as Line['carton_basis'],
+            })
           }
           className={cell}
           aria-label={label}
         >
-          <option value="ctn">thùng</option>
-          <option value="m2">m²</option>
+          {(
+            f.options ?? [
+              { value: 'ctn', label: 'thùng' },
+              { value: 'm2', label: 'm²' },
+            ]
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       )
   }

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest'
-import { poLineAmount, poMoney, priceUnitLabel, qtyTotals } from './po-line'
+import {
+  currencyDecimals,
+  fmtMoney,
+  poLineAmount,
+  poMoney,
+  priceUnitLabel,
+  qtyTotals,
+  roundMoney,
+} from './po-line'
 
 describe('poLineAmount — giá đơn vị kép (0053)', () => {
   it("basis 'unit' (mặc định): SL đặt × đơn giá — vật tư nhóm A", () => {
@@ -149,5 +157,46 @@ describe('poMoney — chiết khấu, VAT, tổng thanh toán', () => {
       vatAmount: 0,
       grandTotal: 7_000_000,
     })
+  })
+
+  it('USD: tròn về CENT chứ không về đồng — đơn gỗ chốt $700.21 với NCC', () => {
+    // 0.02537 m³ × $1.380/m³ × 20 cái = $700.212 → 700.21, không phải 700.
+    const m = poMoney({ subtotalRaw: 700.212, currency: 'USD' })
+    expect(m.subtotal).toBe(700.21)
+    expect(m.grandTotal).toBe(700.21)
+  })
+
+  it('USD + VAT: từng bậc đều giữ 2 số lẻ', () => {
+    const m = poMoney({ subtotalRaw: 86_743.5, vatRate: 10, currency: 'USD' })
+    expect(m.subtotal).toBe(86_743.5)
+    expect(m.vatAmount).toBe(8_674.35)
+    expect(m.grandTotal).toBe(95_417.85)
+  })
+
+  it('VND (mặc định khi không truyền currency): số cũ không đổi một đồng', () => {
+    const cu = poMoney({ subtotalRaw: 41_611_719.6, vatRate: 10, currency: 'VND' })
+    const khong = poMoney({ subtotalRaw: 41_611_719.6, vatRate: 10 })
+    expect(cu).toEqual(khong)
+  })
+})
+
+describe('currencyDecimals / roundMoney / fmtMoney', () => {
+  it('VND & JPY không có đơn vị lẻ; USD/EUR/CNY 2 số lẻ', () => {
+    expect(currencyDecimals('VND')).toBe(0)
+    expect(currencyDecimals('JPY')).toBe(0)
+    expect(currencyDecimals(null)).toBe(0)
+    expect(currencyDecimals('USD')).toBe(2)
+    expect(currencyDecimals('cny')).toBe(2)
+  })
+
+  it('roundMoney theo tiền tệ', () => {
+    expect(roundMoney(700.212, 'USD')).toBe(700.21)
+    expect(roundMoney(700.215, 'USD')).toBe(700.22)
+    expect(roundMoney(700.212, 'VND')).toBe(700)
+  })
+
+  it('fmtMoney: USD đủ 2 số lẻ để cột tiền thẳng hàng, VND như cũ', () => {
+    expect(fmtMoney(1234.5, 'USD')).toBe('1.234,50')
+    expect(fmtMoney(1_234_567, 'VND')).toBe('1.234.567')
   })
 })

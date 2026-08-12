@@ -12,16 +12,16 @@ import type { PoTemplate } from './po-template'
  * của dòng. Bảng nhập map khai báo → 8 kiểu ô; phiếu in đọc cùng danh sách.
  */
 
-/** Kiểu ô — đúng 8 kiểu phủ hết 5 mẫu đơn. */
+/** Kiểu ô — phủ hết các mẫu đơn. */
 export type PoFieldKind =
   | 'text' // chuỗi tự do: vật liệu, quy cách, kích thước, màu/bề mặt
   | 'number' // số gõ tay: SL đơn hàng, tồn, hao %, kg/m, dài cây…
   | 'calc' // hệ thống tự tính, nền xám, không gõ được: tổng kg
   | 'die' // ô chọn mã khuôn (tra kg/m theo khuôn)
-  | 'openStyle' // cách mở thùng AD/MR — đổi thì tính lại m²
-  | 'inner' // ba ô D×R×C lọt lòng — đổi thì tính lại m²
-  | 'area' // m²/thùng: tự tính từ lọt lòng nhưng SỬA được khi NCC chào khác
-  | 'cartonBasis' // tính tiền theo thùng hay theo m² (chốt từng dòng)
+  | 'openStyle' // cách mở thùng AD/MR/ĐK — đổi thì tính lại m²
+  | 'inner' // ba ô D×R×C trong một ô — carton: lọt lòng; foam: quy cách D×R×Dày
+  | 'area' // m²/thùng·m²/tấm: tự tính (carton) hoặc gõ tay (kính)
+  | 'cartonBasis' // cơ sở tính tiền từng dòng — nhãn lấy từ `options` của mẫu
 
 export type PoField = {
   key: string
@@ -38,6 +38,8 @@ export type PoField = {
   max?: string
   /** Nhãn trên PHIẾU IN khi khác nhãn trong form (giấy in hẹp hơn). */
   printLabel?: string
+  /** Riêng kind 'cartonBasis': bộ lựa chọn của mẫu (thùng/m², tấm/m³, SP/kg…). */
+  options?: { value: 'ctn' | 'm2' | 'm3' | 'kg'; label: string }[]
   /**
    * Có mặt trên PHIẾU IN nhưng KHÔNG bày ô nhập trong form.
    *
@@ -133,12 +135,21 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
       align: 'right',
       step: '0.0001',
     },
+    // Bao bì thật báo giá THEO m² kèm "Bản in + công" rồi mới ra đơn giá/thùng
+    // (= m² × giá/m² + bản in — đơn Hồng Đào Chu Lai, 0134). Hai ô dưới nuôi
+    // gợi ý đơn giá/thùng trên form; tính tiền vẫn SL × đơn giá như cũ.
+    n('giam2', 'Đơn giá/m²', 'w-[92px]', 'price_per_m2', '1'),
+    n('banin', 'Bản in + công', 'w-[88px]', 'print_fee', '1'),
     {
       key: 'basis',
       label: 'Tính theo',
       width: 'w-[92px]',
       kind: 'cartonBasis',
       field: 'carton_basis',
+      options: [
+        { value: 'ctn', label: 'thùng' },
+        { value: 'm2', label: 'm²' },
+      ],
     },
   ],
   /*
@@ -169,8 +180,85 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   ],
   foam: [
     t('spec', 'Quy cách', 'w-[140px]', 'spec', '8mm x 1.05m x 50m…'),
+    // Xốp TẤM theo KHỐI (0134 — DDH Tân Hoàng Long): D×R×Dày → m³/tấm, đơn
+    // giá/m³, chốt "Tính theo m³" từng dòng. Mút cuộn để basis "tấm/cuộn" như cũ.
+    {
+      key: 'dims',
+      label: 'D×R×Dày (mm)',
+      width: 'w-[128px]',
+      kind: 'inner',
+      placeholder: '1520×920×10',
+    },
+    { key: 'm3total', label: 'Tổng m³', width: 'w-[88px]', kind: 'calc', align: 'right' },
+    {
+      key: 'basis',
+      label: 'Tính theo',
+      width: 'w-[96px]',
+      kind: 'cartonBasis',
+      field: 'carton_basis',
+      options: [
+        { value: 'ctn', label: 'tấm/cuộn' },
+        { value: 'm3', label: 'm³' },
+      ],
+    },
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
+  ],
+  // Kính (0134 — DDH Mai Trang): loại kính + quy cách mm + m²/tấm; giá theo TẤM
+  // hoặc theo m², chốt từng dòng như bao bì.
+  glass: [
+    t('loai', 'Loại kính', 'w-[130px]', 'material_grade', 'Kính trắng phun mờ, CL…'),
+    t('quycach', 'Quy cách', 'w-[110px]', 'dimension_text', '605x539x5mm'),
+    {
+      key: 'm2tam',
+      label: 'm² / tấm',
+      printLabel: 'm²/tấm',
+      width: 'w-[84px]',
+      kind: 'area',
+      field: 'area_m2',
+      align: 'right',
+      step: '0.0001',
+    },
+    { key: 'm2total', label: 'Tổng m²', width: 'w-[88px]', kind: 'calc', align: 'right' },
+    {
+      key: 'basis',
+      label: 'Tính theo',
+      width: 'w-[84px]',
+      kind: 'cartonBasis',
+      field: 'carton_basis',
+      options: [
+        { value: 'ctn', label: 'tấm' },
+        { value: 'm2', label: 'm²' },
+      ],
+    },
+  ],
+  // Gỗ theo m³ (0134 — ĐH Minh Đạt/Thành Đạt/Đức Toàn): dòng là MÃ SẢN PHẨM
+  // (dòng tự do), m³/SP × SL × đơn giá/m³ tinh; loại gỗ + màu + kế hoạch giao
+  // THEO TỪNG DÒNG đúng cột đơn thật.
+  wood: [
+    n('m3sp', 'm³ / SP', 'w-[92px]', 'weight_per_unit', '0.00001'),
+    { key: 'm3total', label: 'Tổng m³', width: 'w-[88px]', kind: 'calc', align: 'right' },
+    t('loaigo', 'Loại gỗ', 'w-[120px]', 'material_grade', 'Acacia FSC 100%'),
+    t('maugo', 'Màu gỗ', 'w-[90px]', 'finish', 'Màu 142'),
+    t('kehoach', 'KH giao hàng', 'w-[110px]', 'dimension_text', '20-25/07/26'),
+  ],
+  // Gia công ngoài (0134 — đan mây New ISO, hàn sắt Tiến Phước): công theo SP
+  // hoặc theo kg (ĐM kg/SP × giá/kg), công đoạn ghi rõ để nghiệm thu.
+  outsourcing: [
+    t('congdoan', 'Công đoạn', 'w-[130px]', 'material_grade', 'Hàn, mài / đan mây…'),
+    n('kgsp', 'ĐM SP (kg)', 'w-[88px]', 'weight_per_unit', '0.01'),
+    { key: 'kgtotal', label: 'Tổng kg', width: 'w-[88px]', kind: 'calc', align: 'right' },
+    {
+      key: 'basis',
+      label: 'Tính công theo',
+      width: 'w-[84px]',
+      kind: 'cartonBasis',
+      field: 'carton_basis',
+      options: [
+        { value: 'ctn', label: 'SP' },
+        { value: 'kg', label: 'kg' },
+      ],
+    },
   ],
   /*
    * MRO (10/08/2026). KHÔNG có "SL đơn hàng · Tồn kho": hàng bảo trì mua lẻ
@@ -283,6 +371,10 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@qty',
     'inner',
     'area',
+    // Đơn bao bì thật in CẢ giá/m² + bản in trước đơn giá/thùng (0134 — Hồng
+    // Đào Chu Lai) để NCC đối chiếu được công thức của chính họ.
+    'giam2',
+    'banin',
     '@price',
     '@amount',
     '@note',
@@ -329,14 +421,67 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     '@note',
   ],
+  // Xốp theo form Tân Hoàng Long: quy cách D×R×Dày + tổng khối đứng trước SL.
   foam: [
     '@stt',
     '@lsx',
     '@code',
     '@name',
     'spec',
+    'dims',
     '@unit',
     '@qty',
+    'm3total',
+    '@price',
+    '@amount',
+    '@note',
+  ],
+  // Kính theo form Mai Trang: Loại kính · Quy cách · ĐVT · SL · m²/tấm · Tổng m².
+  glass: [
+    '@stt',
+    '@lsx',
+    '@code',
+    '@name',
+    'loai',
+    'quycach',
+    '@unit',
+    '@qty',
+    'm2tam',
+    'm2total',
+    '@price',
+    '@amount',
+    '@note',
+  ],
+  // Gỗ theo form Minh Đạt: m³/SP (KL gỗ) · giá/m³ · thành tiền · loại gỗ · màu ·
+  // kế hoạch giao từng dòng.
+  wood: [
+    '@stt',
+    '@lsx',
+    '@code',
+    '@name',
+    '@unit',
+    '@qty',
+    'm3sp',
+    'm3total',
+    '@price',
+    '@amount',
+    'loaigo',
+    'maugo',
+    'kehoach',
+    '@note',
+  ],
+  // Gia công theo form Tiến Phước/New ISO: ĐM kg đứng trước giá; công đoạn in
+  // cạnh tên để bên nhận gia công đối chiếu nghiệm thu.
+  outsourcing: [
+    '@stt',
+    '@lsx',
+    '@code',
+    '@name',
+    'congdoan',
+    '@unit',
+    '@qty',
+    'kgsp',
+    'kgtotal',
     '@price',
     '@amount',
     '@note',
@@ -385,9 +530,41 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   paint: 'Số lượng',
   chemical: 'Số lượng',
   foam: 'Số lượng',
+  glass: 'Số lượng',
+  wood: 'Số lượng',
+  outsourcing: 'Số lượng',
   mro: 'Số lượng',
   simple: 'Số lượng',
 }
+
+/**
+ * Hậu tố ĐƠN GIÁ trên phiếu in/Excel cho các mẫu chốt CƠ SỞ TÍNH TIỀN từng dòng
+ * — NCC phải thấy "70.681/thùng" hay "18.770/m²" mới đối chiếu được báo giá của
+ * chính họ. Mẫu tính theo đơn vị cố định (nhôm, inox, gỗ) dùng nhãn cột
+ * "Đơn giá (VND/kg)" sẵn có, không đi qua đây.
+ */
+export function poPriceSuffix(t: PoTemplate, basis: string | null | undefined): string {
+  switch (t) {
+    case 'carton':
+      return basis === 'm2' ? '/m²' : '/thùng'
+    case 'glass':
+      return basis === 'm2' ? '/m²' : '/tấm'
+    case 'foam':
+      return basis === 'm3' ? '/m³' : ''
+    case 'outsourcing':
+      return basis === 'kg' ? '/kg' : '/SP'
+    default:
+      return ''
+  }
+}
+
+/** Mẫu có hậu tố đơn giá theo dòng — phiếu in/Excel rẽ nhánh qua `poPriceSuffix`. */
+export const PO_PRICE_SUFFIX_TEMPLATES: readonly PoTemplate[] = [
+  'carton',
+  'glass',
+  'foam',
+  'outsourcing',
+]
 
 /** Tra khai báo một cột theo key, trong phạm vi mẫu đơn. */
 export function poField(template: PoTemplate, key: string): PoField | undefined {

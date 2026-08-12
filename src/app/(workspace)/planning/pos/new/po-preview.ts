@@ -48,7 +48,12 @@ export function previewLinesFromDraft(
       inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
       inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
       area_m2: draft.area_m2,
-      carton_basis: template === 'carton' ? l.carton_basis : null,
+      price_per_m2: l.price_per_m2 === '' ? null : Number(l.price_per_m2),
+      print_fee: l.print_fee === '' ? null : Number(l.print_fee),
+      // Cùng điều kiện với `buildPoPayload`: basis chỉ ở mẫu chốt theo dòng.
+      carton_basis: ['carton', 'glass', 'foam', 'outsourcing'].includes(template)
+        ? l.carton_basis
+        : null,
       // Xem trước phải thấy đúng dòng quy đổi sẽ in ra (0128) — cùng điều kiện
       // "đủ cả cặp" như `buildPoPayload`, không thì bản xem trước và bản lưu
       // khác nhau ở đúng chỗ người ta soi.

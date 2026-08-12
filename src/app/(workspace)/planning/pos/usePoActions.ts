@@ -199,11 +199,17 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     )
   }
 
-  async function advance(po: PoRef, to: 'ordered' | 'confirmed' | 'in_transit') {
+  async function advance(
+    po: PoRef,
+    to: 'ordered' | 'confirmed' | 'in_transit' | 'received',
+  ) {
     const labels = {
       ordered: 'Gửi NCC',
       confirmed: 'NCC xác nhận',
       in_transit: 'Đang giao',
+      // Chỉ đơn TOÀN dòng tự do (gỗ/gia công — 0134): nghiệm thu ngoài sổ kho
+      // nên không có phiếu nhập nào tự chốt; service chặn đơn có dòng vật tư.
+      received: 'Đã nhận đủ',
     }
     const ok = await confirm({
       title: `${labels[to]} — ${po.code}?`,

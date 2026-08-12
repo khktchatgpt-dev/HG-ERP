@@ -55,7 +55,10 @@ export default async function EditPoPage({
   const [{ rows: suppliers }, { rows: lsxAll }, mats, company] = await Promise.all([
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.list({ page: 1, page_size: 200 }),
-    poMaterialsRepo.byIds(lines.map((l) => l.material_id)),
+    // Dòng tự do (0134) không có vật tư — chỉ tra tồn cho dòng gắn danh mục.
+    poMaterialsRepo.byIds(
+      lines.map((l) => l.material_id).filter((id): id is string => !!id),
+    ),
     settingsService.getAll(),
   ])
   const onHand = new Map(mats.map((m) => [m.id, m.on_hand])) // null = chưa có sổ kho
@@ -111,7 +114,9 @@ export default async function EditPoPage({
             lead_time: po.terms_lead_time ?? meta.terms.lead_time,
           },
         },
-        lines: lines.map((l) => lineFromPo(l, onHand.get(l.material_id) ?? null)),
+        lines: lines.map((l) =>
+          lineFromPo(l, l.material_id ? (onHand.get(l.material_id) ?? null) : null),
+        ),
       }}
     />
   )

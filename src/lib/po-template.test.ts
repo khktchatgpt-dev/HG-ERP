@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { poLineAmount } from './po-line'
 import {
+  FREE_LINE_TEMPLATES,
   cartonAreaM2,
   deriveLine,
+  foamM3PerSheet,
   poTemplateMeta,
   suggestOrderQty,
   type PoTemplate,
@@ -171,5 +173,108 @@ describe('metadata mẫu', () => {
   it('mẫu lạ / null → rơi về simple thay vì nổ', () => {
     expect(poTemplateMeta(null).key).toBe('simple')
     expect(poTemplateMeta('xx' as PoTemplate).key).toBe('simple')
+  })
+})
+
+/*
+ * 4 công thức bổ sung 12/08/2026 — số lấy từ đơn thật trong bàn giao
+ * "E:\NHÂN BÀN GIAO\A NHÂN" (docs/phan-tich-cung-ung-tien-te-va-mau-don-a-nhan.md).
+ */
+describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
+  it('LSX 01 dòng 1: 1.800 ghế × 0,00208 m³ × $1.500/m³ tinh', () => {
+    const d = deriveLine('wood', { qty_ordered: 1800, weight_per_unit: 0.00208 })
+    expect(d).toEqual({ qty2: 3.744, unit2: 'm³', price_basis: 'unit2' })
+    // File ghi $5.623,45 (đơn giá/SP làm tròn từng dòng); trục m³ ra 5.616 —
+    // sai khác chỉ do file nhân qua "Đơn giá/1SP" đã tròn 2 lẻ.
+    expect(poLineAmount({ qty_ordered: 1800, unit_price: 1500, ...d })).toBeCloseTo(
+      5616,
+      0,
+    )
+  })
+
+  it('chưa nhập m³/SP → rơi về SL × giá (sai thấy ngay, không im lặng ra 0)', () => {
+    expect(deriveLine('wood', { qty_ordered: 20 })).toEqual({
+      qty2: null,
+      unit2: null,
+      price_basis: 'unit',
+    })
+  })
+})
+
+describe('deriveLine — gia công ngoài (đan mây New ISO, hàn sắt Tiến Phước)', () => {
+  it('công theo SP (mặc định): 800 ghế × 170.000đ/ghế', () => {
+    const d = deriveLine('outsourcing', { qty_ordered: 800, carton_basis: 'ctn' })
+    expect(d.price_basis).toBe('unit')
+    expect(poLineAmount({ qty_ordered: 800, unit_price: 170_000, ...d })).toBe(
+      136_000_000,
+    )
+  })
+
+  it('công theo kg: 65 bộ × 18,91 kg/bộ × 28.000đ/kg — đúng file A Dung', () => {
+    const d = deriveLine('outsourcing', {
+      qty_ordered: 65,
+      weight_per_unit: 18.91,
+      carton_basis: 'kg',
+    })
+    expect(d).toEqual({ qty2: 1229.15, unit2: 'kg', price_basis: 'unit2' })
+    expect(poLineAmount({ qty_ordered: 65, unit_price: 28_000, ...d })).toBe(34_416_200)
+  })
+
+  it('chọn kg mà chưa có ĐM kg/SP → về unit, không nhân bậy', () => {
+    expect(
+      deriveLine('outsourcing', { qty_ordered: 65, carton_basis: 'kg' }).price_basis,
+    ).toBe('unit')
+  })
+})
+
+describe('deriveLine — kính theo tấm/m² (DDH Mai Trang)', () => {
+  it('giá theo TẤM: 500 tấm × 66.849đ/tấm — basis unit', () => {
+    const d = deriveLine('glass', {
+      qty_ordered: 500,
+      area_m2: 0.33,
+      carton_basis: 'ctn',
+    })
+    expect(d.price_basis).toBe('unit')
+  })
+
+  it('giá theo m²: 500 tấm × 0,33 m²/tấm × 205.000đ/m² (giá gốc chân phiếu)', () => {
+    const d = deriveLine('glass', { qty_ordered: 500, area_m2: 0.33, carton_basis: 'm2' })
+    expect(d).toEqual({ qty2: 165, unit2: 'm²', price_basis: 'unit2' })
+    expect(poLineAmount({ qty_ordered: 500, unit_price: 205_000, ...d })).toBe(33_825_000)
+  })
+})
+
+describe('deriveLine — xốp theo m³ (DDH Tân Hoàng Long, "Xốp Casual")', () => {
+  it('quy cách 1.520×920×10 mm → 0,013984 m³/tấm; 1 tấm × 556.200đ/m³ ≈ 7.778đ', () => {
+    expect(foamM3PerSheet(1520, 920, 10)).toBe(0.013984)
+    const d = deriveLine('foam', {
+      qty_ordered: 1,
+      inner_l_mm: 1520,
+      inner_w_mm: 920,
+      inner_h_mm: 10,
+      carton_basis: 'm3',
+    })
+    expect(d.unit2).toBe('m³')
+    expect(Math.round(poLineAmount({ qty_ordered: 1, unit_price: 556_200, ...d }))).toBe(
+      7778,
+    )
+  })
+
+  it('mút cuộn giữ nguyên SL × giá (basis mặc định)', () => {
+    const d = deriveLine('foam', { qty_ordered: 50, carton_basis: 'ctn' })
+    expect(d.price_basis).toBe('unit')
+    expect(poLineAmount({ qty_ordered: 50, unit_price: 285_000, ...d })).toBe(14_250_000)
+  })
+
+  it('chọn m³ mà thiếu quy cách → về unit, không ra 0 khối im lặng', () => {
+    expect(deriveLine('foam', { qty_ordered: 5, carton_basis: 'm3' }).price_basis).toBe(
+      'unit',
+    )
+  })
+})
+
+describe('dòng tự do (0134)', () => {
+  it('chỉ mẫu gỗ + gia công được dùng dòng không gắn vật tư', () => {
+    expect(FREE_LINE_TEMPLATES).toEqual(['wood', 'outsourcing'])
   })
 })

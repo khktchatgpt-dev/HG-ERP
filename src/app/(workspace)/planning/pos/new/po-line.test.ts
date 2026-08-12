@@ -49,6 +49,8 @@ const base: PoLineDto = {
   inner_w_mm: null,
   inner_h_mm: null,
   area_m2: null,
+  price_per_m2: null,
+  print_fee: null,
   carton_basis: null,
   pack_size: null,
   pack_unit: null,

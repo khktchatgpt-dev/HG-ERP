@@ -66,6 +66,8 @@ export function poTotals(header: PoHeader, lines: Line[]) {
     discount: header.discount === '' ? 0 : Number(header.discount),
     vatRate: header.vat === '' ? 0 : Number(header.vat),
     priceIncludesVat: header.inclVat,
+    // VND tròn đồng, USD/EUR/CNY tròn cent — cùng mốc với chi tiết/in/Excel.
+    currency: header.currency,
   })
 }
 
@@ -125,7 +127,11 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
     lines: lines.map((l) => {
       const d = draftOf(l)
       return {
-        material_id: l.material_id,
+        // Dòng tự do (0134): material_id chỉ là khóa cục bộ của form — DB nhận
+        // null + tên/ĐVT tự gõ (chỉ mẫu gỗ/gia công, service chặn mẫu khác).
+        material_id: l.is_free ? null : l.material_id,
+        line_name: l.is_free ? l.name.trim() || null : null,
+        line_unit: l.is_free ? l.unit.trim() || null : null,
         qty_ordered: d.qty_ordered,
         unit_price: l.price === '' ? null : Number(l.price),
         spec: l.spec.trim() || null,
@@ -146,8 +152,13 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
         inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
         inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
         area_m2: d.area_m2,
-        // Cơ sở tính tiền chỉ có nghĩa ở mẫu bao bì — mẫu khác gửi null cho sạch.
-        carton_basis: header.template === 'carton' ? l.carton_basis : null,
+        price_per_m2: l.price_per_m2 === '' ? null : Number(l.price_per_m2),
+        print_fee: l.print_fee === '' ? null : Number(l.print_fee),
+        // Cơ sở tính tiền chỉ có nghĩa ở mẫu chốt basis từng dòng (bao bì, kính,
+        // xốp, gia công) — mẫu khác gửi null cho sạch.
+        carton_basis: ['carton', 'glass', 'foam', 'outsourcing'].includes(header.template)
+          ? l.carton_basis
+          : null,
         // Đóng gói mua: CHỤP theo danh mục tại thời điểm lập đơn (0128). Gửi
         // cả cặp hoặc không gửi gì — thiếu một nửa thì phiếu in ra "= 28"
         // không có đơn vị, hoặc "= bì" không có số.

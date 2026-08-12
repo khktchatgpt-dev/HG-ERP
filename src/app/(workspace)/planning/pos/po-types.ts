@@ -51,7 +51,8 @@ export type Po = {
 
 export type PoLine = {
   id: string
-  material_id: string
+  /** null = dòng tự do (0134) — material_name/unit đã fallback từ tên tự gõ. */
+  material_id: string | null
   qty_ordered: number
   unit_price: number | null
   price_basis: 'unit' | 'unit2'

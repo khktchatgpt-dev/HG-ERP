@@ -3,10 +3,9 @@
 import { useRef, useState } from 'react'
 import { TriangleAlert } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
+import { PO_CURRENCIES, fmtMoney } from '@/lib/po-line'
 import { Segmented } from './Segmented'
 import type { Num } from '../po-line'
-
-const num = (n: number) => n.toLocaleString('vi-VN')
 // appearance reset: giấu nút tăng/giảm của input số — che số, không ai dùng.
 const box =
   'border-input bg-card h-[28px] rounded-md border px-2 text-right text-[13px] transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
@@ -76,7 +75,9 @@ export function TotalsBar({
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px]">
         <span className="text-muted-foreground">
           Tiền hàng{' '}
-          <b className="text-zinc-700 tabular-nums dark:text-zinc-200">{num(subtotal)}</b>
+          <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
+            {fmtMoney(subtotal, currency)}
+          </b>
         </span>
         {hasDiscount && (
           <label className="text-muted-foreground flex items-center gap-1.5">
@@ -147,19 +148,27 @@ export function TotalsBar({
           <span className="text-muted-foreground">
             ={' '}
             <b className="text-zinc-700 tabular-nums dark:text-zinc-200">
-              {num(vatAmount)}
+              {fmtMoney(vatAmount, currency)}
             </b>
           </span>
         </span>
 
+        {/* Danh sách tiền tệ dùng chung với hồ sơ NCC (PO_CURRENCIES) — gỗ báo
+            giá USD, kính đặt TQ; đơn cũ lỡ mang mã lạ vẫn hiện được. */}
         <select
           value={currency}
           onChange={(e) => onCurrencyChange(e.target.value)}
           className={`${box} px-1 text-[12px]`}
           aria-label="Tiền tệ"
         >
-          <option value="VND">VND</option>
-          <option value="USD">USD</option>
+          {(PO_CURRENCIES as readonly string[]).includes(currency) ? null : (
+            <option value={currency}>{currency}</option>
+          )}
+          {PO_CURRENCIES.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
         </select>
 
         {/*
@@ -172,7 +181,7 @@ export function TotalsBar({
               Tổng thanh toán{vat !== '' && Number(vat) > 0 ? ` · VAT ${vat}%` : ''}
             </span>
             <b className="text-xl font-bold tracking-tight tabular-nums">
-              {num(grandTotal)}
+              {fmtMoney(grandTotal, currency)}
             </b>
           </span>
           <button

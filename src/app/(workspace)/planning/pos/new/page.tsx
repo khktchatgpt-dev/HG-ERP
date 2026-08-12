@@ -40,6 +40,8 @@ export default async function NewPoPage({
         rating: s.rating,
         lead_time_days: s.lead_time_days,
         payment_terms: s.payment_terms,
+        // Tiền tệ mặc định của NCC — chọn NCC là form tự chuyển (gỗ báo USD).
+        currency: s.currency,
         // Địa chỉ / MST / SĐT chỉ dùng cho khối "Kính gửi" của phiếu xem trước.
         address: s.address,
         tax_no: s.tax_no,

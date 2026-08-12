@@ -1,5 +1,10 @@
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
-import { deriveLine, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import {
+  FREE_LINE_TEMPLATES,
+  deriveLine,
+  poTemplateMeta,
+  type PoTemplate,
+} from '@/lib/po-template'
 import { suppliersRepo, supplyRepo } from './supply.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
@@ -43,6 +48,21 @@ type PoInput = {
  */
 function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] {
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+}
+
+/**
+ * DÒNG TỰ DO (0134) chỉ dành cho mẫu gỗ/gia công — các mẫu khác bắt buộc gắn
+ * vật tư danh mục để tồn kho, giá mua gần nhất và sổ nhận hàng có chỗ bám.
+ * Schema đã bắt "null thì phải có tên"; đây là lớp chặn THEO MẪU (schema không
+ * biết template sau khi update fallback về mẫu cũ của đơn).
+ */
+function assertFreeLinesAllowed(template: PoTemplate, lines: PoLineInput[]): void {
+  if (FREE_LINE_TEMPLATES.includes(template)) return
+  if (lines.some((l) => !l.material_id)) {
+    throw BadRequest(
+      'Dòng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³" hoặc "Gia công ngoài"',
+    )
+  }
 }
 
 /**
@@ -165,6 +185,7 @@ export const posService = {
     const extraLsxIds = await checkedExtraLsxIds(lsxId, input.extra_lsx_ids)
 
     const template = input.template ?? 'simple'
+    assertFreeLinesAllowed(template, input.lines)
     const code = await posRepo.nextCode()
     const po = await posRepo.insert(
       {
@@ -205,6 +226,18 @@ export const posService = {
     }
     if ((await posRepo.listLines(id)).length === 0) {
       throw BadRequest('Đơn chưa có dòng vật tư nào — thêm hàng rồi hãy gửi duyệt')
+    }
+    /**
+     * BẮT BUỘC HẸN GIAO. Không có `expected_at` thì `assessPoLate` và
+     * `assessPoFit` đều trả null: đơn không bao giờ đỏ "quá hẹn", không lên đèn
+     * "Trễ SX", không vào ô đếm nào — im lặng tuyệt đối đúng lúc cần kêu nhất.
+     * Chặn ở cửa gửi duyệt (không phải lúc lưu nháp) để người soạn vẫn ghi dở
+     * được, nhưng thứ đặt lên bàn Giám đốc thì luôn có mốc để đối chiếu.
+     */
+    if (!before.expected_at) {
+      throw BadRequest(
+        'Đơn chưa có hẹn giao — điền "Thời gian giao hàng" rồi mới gửi duyệt được (thiếu mốc thì cảnh báo trễ hàng bỏ qua đơn này)',
+      )
     }
     const [supplier, lsx] = await Promise.all([
       suppliersRepo.findById(before.supplier_id),
@@ -276,6 +309,7 @@ export const posService = {
     // Đổi mẫu khi sửa đơn là hợp lệ (chọn nhầm mẫu lúc tạo) — dòng được dẫn xuất
     // lại theo mẫu mới, ô của mẫu cũ bị repo ghi null nên không sót số lạc.
     const template = input.template ?? before.template ?? 'simple'
+    assertFreeLinesAllowed(template, input.lines)
     const po = await posRepo.patch(id, {
       supplier_id: input.supplier_id,
       template,
@@ -328,7 +362,7 @@ export const posService = {
       code: before.code,
       decision: decision === 'approve' ? 'approved' : 'rejected',
       decided_by: user.id,
-      created_by: before.created_by,
+      owner_id: before.assigned_to ?? before.created_by,
       reason,
     })
     return po
@@ -342,7 +376,7 @@ export const posService = {
   async advance(
     user: User,
     id: string,
-    to: 'ordered' | 'confirmed' | 'in_transit',
+    to: 'ordered' | 'confirmed' | 'in_transit' | 'received',
   ): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
@@ -353,6 +387,7 @@ export const posService = {
       ordered: ['approved'], // ⭐ BR-05: chỉ từ approved
       confirmed: ['ordered'],
       in_transit: ['confirmed', 'ordered'],
+      received: ['ordered', 'confirmed', 'in_transit', 'partial'],
     }
     if (!allowed[to].includes(before.status)) {
       throw BadRequest(
@@ -360,6 +395,20 @@ export const posService = {
           ? 'BR-05: đơn phải được Giám đốc duyệt mới gửi được cho NCC'
           : `Không chuyển được từ "${before.status}" sang "${to}"`,
       )
+    }
+    /**
+     * "ĐÃ VỀ ĐỦ" bằng tay CHỈ cho đơn TOÀN DÒNG TỰ DO (gỗ/gia công — 0134):
+     * các dòng này nghiệm thu ngoài sổ kho vật tư nên không có phiếu nhập nào
+     * tự chốt đơn, thiếu lối này thì đơn treo "đang giao" vĩnh viễn. Đơn còn
+     * dòng vật tư kho vẫn do phiếu nhập của Kho quyết định (BR-08).
+     */
+    if (to === 'received') {
+      const lines = await posRepo.listLines(id)
+      if (lines.some((l) => l.material_id != null)) {
+        throw BadRequest(
+          'Đơn có dòng vật tư kho — trạng thái "đã về đủ" do phiếu nhập của Kho quyết định',
+        )
+      }
     }
     return posRepo.patch(id, {
       status: to,

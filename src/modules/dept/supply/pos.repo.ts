@@ -64,7 +64,10 @@ export type PoLineTemplateFields = {
   inner_h_mm: number | null
   area_m2: number | null
   price_per_m2: number | null
-  carton_basis: 'ctn' | 'm2' | null
+  /** Bao bì: phí "bản in + công" cộng vào đơn giá/thùng (0134). */
+  print_fee: number | null
+  /** Cơ sở tính tiền từng dòng: thùng/SP · m² · m³ (xốp khối) · kg (gia công). */
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   /**
    * ĐÓNG GÓI MUA chụp lúc lập đơn (0128): 1 pack_unit = pack_size ĐVT gốc.
    * Không đi vào tiền — SL đặt vẫn theo ĐVT gốc — chỉ để phiếu in nói được
@@ -77,7 +80,8 @@ export type PoLineTemplateFields = {
 export type PoLine = PoLineTemplateFields & {
   id: string
   po_id: string
-  material_id: string
+  /** null = DÒNG TỰ DO (0134): gỗ/gia công đặt theo SP, không phải vật tư kho. */
+  material_id: string | null
   qty_ordered: number
   unit_price: number | null
   price_basis: 'unit' | 'unit2'
@@ -86,13 +90,19 @@ export type PoLine = PoLineTemplateFields & {
   unit2: string | null
   note: string | null
   sort_order: number
+  /** Tên/ĐVT tự gõ của dòng tự do — material_* bên dưới fallback về cặp này. */
+  line_name: string | null
+  line_unit: string | null
   material_code: string
   material_name: string
   material_unit: string
 }
 
 export type PoLineInput = Partial<PoLineTemplateFields> & {
-  material_id: string
+  /** null/bỏ trống + line_name = dòng tự do (chỉ mẫu wood/outsourcing — service chặn). */
+  material_id?: string | null
+  line_name?: string | null
+  line_unit?: string | null
   qty_ordered: number
   unit_price?: number | null
   /** Service tự dẫn xuất từ mẫu đơn (`deriveLine`) — client không gửi. */
@@ -121,6 +131,7 @@ const TEMPLATE_LINE_COLS = [
   'inner_h_mm',
   'area_m2',
   'price_per_m2',
+  'print_fee',
   'carton_basis',
   'pack_size',
   'pack_unit',
@@ -143,6 +154,7 @@ const NUMERIC_LINE_COLS = [
   'inner_h_mm',
   'area_m2',
   'price_per_m2',
+  'print_fee',
   'pack_size',
 ] as const
 
@@ -408,7 +420,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -422,9 +434,11 @@ export const posRepo = {
         ...r,
         ...numericLineFields(r as unknown as Record<string, unknown>),
         material: undefined,
-        material_code: m?.code ?? '?',
-        material_name: m?.name ?? '?',
-        material_unit: m?.unit ?? '',
+        // DÒNG TỰ DO (0134): không có vật tư kho — tên/ĐVT lấy từ cặp tự gõ,
+        // mã để trống (phiếu in không bịa mã cho hàng ngoài danh mục).
+        material_code: m?.code ?? (r.line_name ? '' : '?'),
+        material_name: m?.name ?? r.line_name ?? '?',
+        material_unit: m?.unit ?? r.line_unit ?? '',
       } as PoLine
     })
   },
@@ -485,7 +499,9 @@ export const posRepo = {
           for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
           return {
             po_id: poId,
-            material_id: l.material_id,
+            material_id: l.material_id ?? null,
+            line_name: l.line_name ?? null,
+            line_unit: l.line_unit ?? null,
             qty_ordered: l.qty_ordered,
             unit_price: l.unit_price ?? null,
             price_basis: l.price_basis ?? 'unit',

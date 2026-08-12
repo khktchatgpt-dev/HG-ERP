@@ -23,10 +23,20 @@ export const PO_TEMPLATES = [
   'paint',
   'chemical',
   'foam',
+  'glass',
+  'wood',
+  'outsourcing',
   'mro',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
+
+/**
+ * Mẫu được dùng DÒNG TỰ DO (0134) — dòng không gắn vật tư kho, tên/ĐVT tự gõ.
+ * Đơn gỗ và gia công thật đặt theo MÃ SẢN PHẨM (bàn/ghế), không phải vật tư;
+ * các mẫu khác vẫn bắt buộc chọn từ danh mục để tồn kho/giá có chỗ bám.
+ */
+export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood', 'outsourcing']
 
 export type PoTerms = {
   quality: string
@@ -201,7 +211,10 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
   foam: {
     key: 'foam',
     label: 'Mút / xốp / ván ép',
-    hint: 'Mút dai, xốp nổ, foam, ván ép — theo cuộn/tấm. Hà Bắc, Mynh, Thanh Liên',
+    // Xốp TẤM tính theo KHỐI (0134 — DDH Tân Hoàng Long "Xốp Casual"): quy cách
+    // D×R×Dày → m³, đơn giá/m³, chọn "Tính theo m³" từng dòng. Mút cuộn/ván ép
+    // vẫn SL × giá như cũ.
+    hint: 'Mút dai, xốp nổ, foam, ván ép — theo cuộn/tấm, xốp tấm tính theo m³. Hà Bắc, Mynh, Thanh Liên, Tân Hoàng Long',
     priceUnit: null,
     vatRate: 10,
     priceIncludesVat: false,
@@ -213,6 +226,72 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       payment: 'Công nợ 14 ngày — giá bốc tại kho NCC, chưa gồm vận chuyển',
       invoice: INVOICE_VAT,
       lead_time: 'Từ 3 đến 5 ngày kể từ ngày nhận đơn',
+    },
+  },
+  /*
+   * 3 mẫu bổ sung 12/08/2026 — rà bàn giao "A NHÂN" của phòng Cung ứng
+   * (docs/phan-tich-cung-ung-tien-te-va-mau-don-a-nhan.md). Điều khoản chép
+   * nguyên văn từ đơn thật gần nhất của từng nhóm.
+   */
+  glass: {
+    key: 'glass',
+    // DDH KÍNH MAI TRANG: đặt theo TẤM với quy cách mm + m²/tấm, giá theo tấm
+    // (có chân phiếu ghi giá gốc /m²) — cùng trục unit2 với bao bì.
+    label: 'Kính',
+    hint: 'Đặt theo tấm, quy cách mm + m²/tấm — Mai Trang, Nghi Đạt, Vĩnh Khang; giá theo tấm hoặc m²',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: true,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Làm đúng mẫu đã duyệt — bo góc, mài cạnh theo yêu cầu trên đơn',
+      delivery_place: DELIVERY_HG,
+      payment: 'Công nợ 30 ngày kể từ ngày xuất hóa đơn',
+      invoice: INVOICE_VAT,
+      lead_time: 'Từ 5 đến 7 ngày kể từ ngày đặt hàng',
+    },
+  },
+  wood: {
+    key: 'wood',
+    // ĐH gỗ Minh Đạt/Thành Đạt/Đức Toàn: dòng là MÃ SẢN PHẨM (dòng tự do),
+    // tiền = (m³/SP × SL) × đơn giá/m³ tinh — thường chốt bằng USD. Chọn NCC
+    // có tiền tệ USD là ô tiền tệ của form tự chuyển.
+    label: 'Gỗ chi tiết theo m³',
+    hint: 'Đặt gỗ theo SP — m³/SP × đơn giá/m³ tinh (thường USD) — Minh Đạt, Thành Đạt, Đức Toàn, Tâm Phú',
+    priceUnit: 'm³',
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality: 'Bề mặt gỗ không trám trít, không nứt nẻ',
+      delivery_place: DELIVERY_HG,
+      payment: '',
+      invoice: INVOICE_VAT,
+      // Đơn thật ghi kế hoạch giao THEO TỪNG DÒNG (cột "Kế hoạch giao hàng").
+      lead_time: 'Theo kế hoạch giao hàng ghi ở từng mã trên đơn',
+    },
+  },
+  outsourcing: {
+    key: 'outsourcing',
+    // "ĐƠN ĐẶT HÀNG GIA CÔNG" — hai biến thể trên đơn thật: công theo SP
+    // (đan mây New ISO: 170.000đ/ghế) và công theo kg (hàn sắt Tiến Phước:
+    // ĐM 18,91 kg/bộ × 28.000đ/kg). Chọn "Tính theo SP / kg" từng dòng.
+    label: 'Gia công ngoài',
+    hint: 'Đan mây, hàn/mài sắt-nhôm — công theo SP hoặc theo kg (ĐM kg/SP). New ISO, Tiến Phước, A Dung',
+    priceUnit: null,
+    vatRate: 10,
+    priceIncludesVat: false,
+    hasDiscount: false,
+    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    terms: {
+      quality:
+        'Gia công đúng mẫu đã duyệt — vật tư do Công ty cung cấp; hàng lỗi yêu cầu chỉnh sửa hoặc gia công lại',
+      delivery_place: DELIVERY_HG,
+      payment: 'Thanh toán 10-15 ngày kể từ thời điểm nghiệm thu',
+      invoice: INVOICE_VAT,
+      lead_time: 'Theo kế hoạch Công ty Hoàng Gia',
     },
   },
   /*
@@ -281,11 +360,16 @@ export type PoLineDraft = {
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
-  /** metal_kg */
+  /** metal_kg · outsourcing (ĐM kg/SP) · wood (m³/SP — mượn cùng ô). */
   weight_per_unit?: number | null
-  /** carton */
+  /** carton · glass (m²/tấm) */
   area_m2?: number | null
-  carton_basis?: 'ctn' | 'm2' | null
+  /** foam tính theo m³: quy cách D×R×Dày (mm) — dùng chung bộ ô lọt lòng. */
+  inner_l_mm?: number | null
+  inner_w_mm?: number | null
+  inner_h_mm?: number | null
+  /** Cơ sở tính tiền dòng: thùng/SP/tấm · m² · m³ (xốp) · kg (gia công). */
+  carton_basis?: 'ctn' | 'm2' | 'm3' | 'kg' | null
 }
 
 export type PoLineDerived = {
@@ -320,16 +404,65 @@ export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       if (kg <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
       return { qty2: round4(kg * qty), unit2: 'kg', price_basis: 'unit2' }
     }
-    case 'carton': {
+    case 'carton':
+    // Kính đi cùng công thức bao bì: giá theo TẤM (unit) hoặc theo m²/tấm × SL.
+    case 'glass': {
       const area = Number(l.area_m2) || 0
       if (l.carton_basis !== 'm2' || area <= 0) {
         return { qty2: null, unit2: null, price_basis: 'unit' }
       }
       return { qty2: round4(area * qty), unit2: 'm²', price_basis: 'unit2' }
     }
+    case 'wood': {
+      // weight_per_unit mượn làm m³/SP ("Khối lượng Gỗ" trên đơn thật) —
+      // tiền = (m³/SP × SL) × đơn giá/m³ tinh.
+      const m3 = Number(l.weight_per_unit) || 0
+      if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
+      return { qty2: round4(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
+    }
+    case 'outsourcing': {
+      // Hai biến thể: công theo SP (mặc định, SL × đơn giá) và công theo kg
+      // (ĐM kg/SP × SL × đơn giá/kg) — người soạn chốt từng dòng bằng ô basis.
+      const kg = Number(l.weight_per_unit) || 0
+      if (l.carton_basis !== 'kg' || kg <= 0) {
+        return { qty2: null, unit2: null, price_basis: 'unit' }
+      }
+      return { qty2: round4(kg * qty), unit2: 'kg', price_basis: 'unit2' }
+    }
+    case 'foam': {
+      // Xốp tấm theo KHỐI: D×R×Dày (mm) → m³/tấm × SL tấm × đơn giá/m³.
+      // Tròn 6 lẻ chứ không 4: một tấm xốp mỏng chỉ ~0,014 m³ — tròn 4 lẻ là
+      // đổi 0,013984 thành 0,014, lệch 9đ/tấm × nghìn tấm thành số thấy được.
+      if (l.carton_basis !== 'm3') return { qty2: null, unit2: null, price_basis: 'unit' }
+      const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
+      if (m3 == null) return { qty2: null, unit2: null, price_basis: 'unit' }
+      return {
+        qty2: Math.round(m3 * qty * 1e6) / 1e6,
+        unit2: 'm³',
+        price_basis: 'unit2',
+      }
+    }
     default:
       return { qty2: null, unit2: null, price_basis: 'unit' }
   }
+}
+
+/**
+ * m³ của MỘT TẤM xốp từ quy cách D×R×Dày (mm) — đơn thật (Tân Hoàng Long) ghi
+ * "Quy cách(mm) Dài/Rộng/Dày → TỔNG SỐ KHỐI". Thiếu số nào trả null để dòng rơi
+ * về SL × giá (sai thấy ngay) chứ không im lặng ra 0 khối.
+ */
+export function foamM3PerSheet(
+  l: number | null | undefined,
+  w: number | null | undefined,
+  t: number | null | undefined,
+): number | null {
+  const D = Number(l) || 0
+  const R = Number(w) || 0
+  const T = Number(t) || 0
+  if (D <= 0 || R <= 0 || T <= 0) return null
+  // round6 chứ không round4: tấm xốp mỏng ~0,004 m³ — 4 số lẻ là mất sạch số.
+  return Math.round(((D * R * T) / 1e9) * 1e6) / 1e6
 }
 
 /**

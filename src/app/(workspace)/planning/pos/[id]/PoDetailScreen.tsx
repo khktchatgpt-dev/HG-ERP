@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/erp/PageHeader'
 import { RefChain, type ChainNode } from '@/components/erp/RefChain'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
-import { poLineAmount, poMoney, qtyTotals } from '@/lib/po-line'
+import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { PO_NEXT_HINT, PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/po-status'
@@ -92,12 +92,10 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
     reassigned: 'gray',
   }
 
-const card =
-  'rounded-xl border border-border bg-card'
+const card = 'rounded-xl border border-border bg-card'
 const cardHead =
   'flex flex-wrap items-center gap-2 border-b border-border/70 px-3.5 py-2.5 text-[13px]'
-const btn =
-  'w-full rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted'
+const btn = 'w-full rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted'
 const btnPrimary =
   'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
 const btnGreen =
@@ -147,7 +145,11 @@ export function PoDetailScreen({
     discount: po.discount_amount,
     vatRate: po.vat_rate,
     priceIncludesVat: po.price_includes_vat,
+    currency: po.currency,
   })
+  // Ô TIỀN format theo tiền tệ của đơn (USD đủ 2 số lẻ cent) — `money` ở trên
+  // vẫn dùng cho các ô SỐ LƯỢNG.
+  const cash = (n: number) => fmtMoney(n, po.currency)
   const today = new Date().toISOString().slice(0, 10)
   const late = assessPoLate(po, today)
   const lsxCodes = po.lsx_code
@@ -184,13 +186,13 @@ export function PoDetailScreen({
               href={`/print/supply/${po.id}`}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm shadow-xs hover:bg-muted"
+              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
             >
               <Printer className="size-4" aria-hidden /> In đơn đặt hàng
             </a>
             <Link
               href="/planning/pos"
-              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm shadow-xs hover:bg-muted"
+              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
             >
               <ArrowLeft className="size-4" aria-hidden /> Về danh sách
             </Link>
@@ -227,7 +229,7 @@ export function PoDetailScreen({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase">
+                  <tr className="border-border text-muted-foreground border-b text-left text-xs uppercase">
                     <th className="py-2 pr-2 pl-3.5">Vật tư</th>
                     <th className="w-24 py-2 pr-2">Quy cách</th>
                     <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
@@ -245,20 +247,17 @@ export function PoDetailScreen({
                   {lines.map((l) => {
                     const st = receivedById.get(l.id)
                     return (
-                      <tr
-                        key={l.id}
-                        className="border-b border-border/60"
-                      >
+                      <tr key={l.id} className="border-border/60 border-b">
                         <td className="py-1.5 pr-2 pl-3.5">
                           <div className="flex flex-col">
                             <span>
-                              <span className="font-mono text-xs text-muted-foreground">
+                              <span className="text-muted-foreground font-mono text-xs">
                                 {l.material_code}
                               </span>{' '}
                               {l.material_name}
                             </span>
                             {(l.qty2 != null || l.note) && (
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-muted-foreground text-xs">
                                 {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
                                 {l.qty2 != null && l.note && ' · '}
                                 {l.note}
@@ -270,26 +269,37 @@ export function PoDetailScreen({
                         <td className="py-1.5 pr-2 text-right whitespace-nowrap">
                           {money(l.qty_ordered)} {l.material_unit}
                         </td>
-                        {showReceived && (
-                          <>
-                            <td className="py-1.5 pr-2 text-right">
-                              {money(st?.qty_received ?? 0)}
+                        {showReceived &&
+                          (l.material_id == null ? (
+                            /* Dòng tự do (0134) không đi qua sổ kho vật tư —
+                               "đã về 0 / còn thiếu" là số giả, để trống. */
+                            <td
+                              colSpan={2}
+                              className="text-muted-foreground py-1.5 pr-2 text-right text-xs"
+                              title="Dòng không gắn vật tư kho — nghiệm thu ngoài sổ kho"
+                            >
+                              —
                             </td>
-                            <td className="py-1.5 pr-2 text-right">
-                              {st && st.qty_missing > 0 ? (
-                                <span className="font-medium text-amber-600">
-                                  {money(st.qty_missing)}
-                                </span>
-                              ) : (
-                                <Badge tone="green">Đủ</Badge>
-                              )}
-                            </td>
-                          </>
-                        )}
+                          ) : (
+                            <>
+                              <td className="py-1.5 pr-2 text-right">
+                                {money(st?.qty_received ?? 0)}
+                              </td>
+                              <td className="py-1.5 pr-2 text-right">
+                                {st && st.qty_missing > 0 ? (
+                                  <span className="font-medium text-amber-600">
+                                    {money(st.qty_missing)}
+                                  </span>
+                                ) : (
+                                  <Badge tone="green">Đủ</Badge>
+                                )}
+                              </td>
+                            </>
+                          ))}
                         <td className="py-1.5 pr-2 text-right whitespace-nowrap">
                           {l.unit_price != null ? (
                             <>
-                              {money(l.unit_price)}
+                              {cash(l.unit_price)}
                               {l.price_basis === 'unit2' && l.unit2 && (
                                 <span className="text-xs text-violet-600">
                                   /{l.unit2}
@@ -301,7 +311,9 @@ export function PoDetailScreen({
                           )}
                         </td>
                         <td className="py-1.5 pr-3.5 text-right font-medium">
-                          {l.unit_price != null ? money(poLineAmount(l)) : '—'}
+                          {l.unit_price != null
+                            ? cash(roundMoney(poLineAmount(l), po.currency))
+                            : '—'}
                         </td>
                       </tr>
                     )
@@ -318,10 +330,10 @@ export function PoDetailScreen({
                   lines,
                 ).length > 0 && (
                   <tfoot>
-                    <tr className="border-t border-border">
+                    <tr className="border-border border-t">
                       <td
                         colSpan={showReceived ? 6 : 4}
-                        className="py-2 pr-2 pl-3.5 text-right text-xs text-muted-foreground"
+                        className="text-muted-foreground py-2 pr-2 pl-3.5 text-right text-xs"
                       >
                         {qtyTotals(
                           lines.some((l) => l.price_basis === 'unit2' && l.unit2),
@@ -331,7 +343,7 @@ export function PoDetailScreen({
                           .join('  ·  ')}
                       </td>
                       <td className="py-2 pr-3.5 text-right text-xs font-semibold">
-                        {money(m.subtotal)} {po.currency}
+                        {cash(m.subtotal)} {po.currency}
                       </td>
                     </tr>
                   </tfoot>
@@ -385,7 +397,7 @@ export function PoDetailScreen({
                   {PO_STATUS_LABEL[po.status]}
                 </Badge>
                 {PO_NEXT_HINT[po.status] && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-muted-foreground text-[11px]">
                     → {PO_NEXT_HINT[po.status]}
                   </span>
                 )}
@@ -399,33 +411,29 @@ export function PoDetailScreen({
                     po.expected_at ? (
                       <span
                         className={
-                          late === 'overdue'
-                            ? 'font-medium text-[var(--stop)]'
-                            : ''
+                          late === 'overdue' ? 'font-medium text-[var(--stop)]' : ''
                         }
                       >
                         {day(po.expected_at)}
                         {late === 'overdue' && ' ⚠ quá hẹn'}
                       </span>
                     ) : isMissingEta(po) ? (
-                      <span className="font-medium text-amber-600">
-                        ⚠ chưa hẹn giao
-                      </span>
+                      <span className="font-medium text-amber-600">⚠ chưa hẹn giao</span>
                     ) : (
                       '—'
                     )
                   }
                 />
                 <Row label="Ngày tạo" value={day(po.created_at)} />
-                <div className="mt-1 border-t border-border/70 pt-2">
-                  <Row label="Tiền hàng" value={`${money(m.subtotal)} ${po.currency}`} />
+                <div className="border-border/70 mt-1 border-t pt-2">
+                  <Row label="Tiền hàng" value={`${cash(m.subtotal)} ${po.currency}`} />
                   {m.discountAmount > 0 && (
-                    <Row label="Chiết khấu" value={`− ${money(m.discountAmount)}`} />
+                    <Row label="Chiết khấu" value={`− ${cash(m.discountAmount)}`} />
                   )}
                   {po.vat_rate != null && (
                     <Row
                       label={`VAT ${po.vat_rate}% (${po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})`}
-                      value={money(m.vatAmount)}
+                      value={cash(m.vatAmount)}
                     />
                   )}
                   <div className="mt-1.5 flex items-baseline justify-between gap-2">
@@ -433,8 +441,8 @@ export function PoDetailScreen({
                       Tổng thanh toán
                     </span>
                     <b className="text-base tabular-nums">
-                      {money(m.grandTotal)}{' '}
-                      <span className="text-xs font-normal text-muted-foreground">
+                      {cash(m.grandTotal)}{' '}
+                      <span className="text-muted-foreground text-xs font-normal">
                         {po.currency}
                       </span>
                     </b>
@@ -508,6 +516,22 @@ export function PoDetailScreen({
                     Đang giao
                   </button>
                 )}
+                {/*
+                  "ĐÃ NHẬN ĐỦ" bằng tay — CHỈ đơn toàn dòng tự do (gỗ/gia công,
+                  0134): hàng nghiệm thu ngoài sổ kho vật tư nên không có phiếu
+                  nhập nào tự chốt, thiếu nút này đơn treo "đang giao" mãi.
+                */}
+                {canEdit &&
+                  lines.length > 0 &&
+                  lines.every((l) => l.material_id == null) &&
+                  ['ordered', 'confirmed', 'in_transit'].includes(po.status) && (
+                    <button
+                      className={btnGreen}
+                      onClick={() => void act.advance(po, 'received')}
+                    >
+                      Đã nhận đủ (nghiệm thu)
+                    </button>
+                  )}
                 {canEdit && canReschedule(po.status).ok && (
                   <button
                     className={btn}
@@ -579,13 +603,13 @@ export function PoDetailScreen({
                       <Badge tone={HISTORY_TONE[h.action]}>
                         {HISTORY_LABEL[h.action]}
                       </Badge>
-                      <span className="text-muted-foreground">{h.actor_name ?? 'hệ thống'}</span>
+                      <span className="text-muted-foreground">
+                        {h.actor_name ?? 'hệ thống'}
+                      </span>
                     </span>
                     <span className="text-muted-foreground">{stamp(h.created_at)}</span>
                     {h.reason && (
-                      <span className="text-muted-foreground">
-                        “{h.reason}”
-                      </span>
+                      <span className="text-muted-foreground">“{h.reason}”</span>
                     )}
                   </li>
                 ))}
@@ -673,7 +697,7 @@ function PoTerms({ po }: { po: PoDetailPo }) {
         ))}
       </dl>
       {(po.terms || po.note) && (
-        <div className="flex flex-col gap-1.5 border-t border-border/70 px-3.5 py-3 text-xs text-muted-foreground">
+        <div className="border-border/70 text-muted-foreground flex flex-col gap-1.5 border-t px-3.5 py-3 text-xs">
           {po.terms && <p>{po.terms}</p>}
           {po.note && <p>{po.note}</p>}
         </div>

@@ -35,6 +35,8 @@ const line = (over: Partial<Line> = {}): Line => ({
   inner_w_mm: '',
   inner_h_mm: '',
   area_m2: '',
+  price_per_m2: '',
+  print_fee: '',
   carton_basis: 'ctn',
   pack_size: null,
   pack_unit: '',
