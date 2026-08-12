@@ -51,7 +51,7 @@ export function previewLinesFromDraft(
       price_per_m2: l.price_per_m2 === '' ? null : Number(l.price_per_m2),
       print_fee: l.print_fee === '' ? null : Number(l.print_fee),
       // Cùng điều kiện với `buildPoPayload`: basis chỉ ở mẫu chốt theo dòng.
-      carton_basis: ['carton', 'glass', 'foam', 'outsourcing'].includes(template)
+      carton_basis: ['carton', 'glass', 'foam'].includes(template)
         ? l.carton_basis
         : null,
       // Xem trước phải thấy đúng dòng quy đổi sẽ in ra (0128) — cùng điều kiện

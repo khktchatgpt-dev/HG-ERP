@@ -730,7 +730,8 @@ describe('newLine — recall lần đặt gần nhất (m²/dims/giá m²/basis)
   it("basis KHÔNG hợp mẫu thì về 'ctn' — đơn xốp m³ cũ không rót vào dòng carton", () => {
     expect(recallBasis('carton', 'm3')).toBe('ctn')
     expect(recallBasis('glass', 'kg')).toBe('ctn')
-    expect(recallBasis('outsourcing', 'kg')).toBe('kg')
+    // 'kg' là giá trị chết của mẫu gia công đã gỡ — không mẫu nào nhận lại.
+    expect(recallBasis('foam', 'kg')).toBe('ctn')
     // Mẫu không dùng basis (phụ kiện…) luôn 'ctn'.
     expect(recallBasis('accessory', 'm2')).toBe('ctn')
     // Giá/m² + bản in chỉ thuộc carton — mẫu khác không nhớ.

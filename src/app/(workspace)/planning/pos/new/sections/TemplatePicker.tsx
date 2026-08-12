@@ -7,7 +7,6 @@ import {
   Droplets,
   FileText,
   FlaskConical,
-  Hammer,
   Layers,
   Package,
   Ruler,
@@ -32,7 +31,6 @@ const TEMPLATE_ICONS: Record<PoTemplate, LucideIcon> = {
   foam: Layers,
   glass: Square,
   wood: TreePine,
-  outsourcing: Hammer,
   mro: Wrench,
   simple: FileText,
 }

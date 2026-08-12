@@ -25,18 +25,24 @@ export const PO_TEMPLATES = [
   'foam',
   'glass',
   'wood',
-  'outsourcing',
   'mro',
   'simple',
 ] as const
 export type PoTemplate = (typeof PO_TEMPLATES)[number]
 
+/*
+ * Mẫu 'outsourcing' (gia công ngoài) ĐÃ GỠ 12/08/2026 theo yêu cầu: gia công
+ * trả công theo SP là nghiệp vụ NGOÀI TẦM VẬT TƯ — không thuộc form đặt vật
+ * tư. DB check (0135) vẫn chấp nhận giá trị cũ cho an toàn (lúc gỡ chưa có
+ * đơn nào trong DB); `poTemplateMeta` rơi về 'simple' nếu gặp.
+ */
+
 /**
  * Mẫu được dùng DÒNG TỰ DO (0134) — dòng không gắn vật tư kho, tên/ĐVT tự gõ.
- * Đơn gỗ và gia công thật đặt theo MÃ SẢN PHẨM (bàn/ghế), không phải vật tư;
- * các mẫu khác vẫn bắt buộc chọn từ danh mục để tồn kho/giá có chỗ bám.
+ * Đơn gỗ thật đặt theo MÃ SẢN PHẨM (bàn/ghế), không phải vật tư; các mẫu khác
+ * vẫn bắt buộc chọn từ danh mục để tồn kho/giá có chỗ bám.
  */
-export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood', 'outsourcing']
+export const FREE_LINE_TEMPLATES: readonly PoTemplate[] = ['wood']
 
 export type PoTerms = {
   quality: string
@@ -273,27 +279,6 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
       lead_time: 'Theo kế hoạch giao hàng ghi ở từng mã trên đơn',
     },
   },
-  outsourcing: {
-    key: 'outsourcing',
-    // "ĐƠN ĐẶT HÀNG GIA CÔNG" — hai biến thể trên đơn thật: công theo SP
-    // (đan mây New ISO: 170.000đ/ghế) và công theo kg (hàn sắt Tiến Phước:
-    // ĐM 18,91 kg/bộ × 28.000đ/kg). Chọn "Tính theo SP / kg" từng dòng.
-    label: 'Gia công ngoài',
-    hint: 'Đan mây, hàn/mài sắt-nhôm — công theo SP hoặc theo kg (ĐM kg/SP). New ISO, Tiến Phước, A Dung',
-    priceUnit: null,
-    vatRate: 10,
-    priceIncludesVat: false,
-    hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
-    terms: {
-      quality:
-        'Gia công đúng mẫu đã duyệt — vật tư do Công ty cung cấp; hàng lỗi yêu cầu chỉnh sửa hoặc gia công lại',
-      delivery_place: DELIVERY_HG,
-      payment: 'Thanh toán 10-15 ngày kể từ thời điểm nghiệm thu',
-      invoice: INVOICE_VAT,
-      lead_time: 'Theo kế hoạch Công ty Hoàng Gia',
-    },
-  },
   /*
    * MRO — PHỤ TÙNG / BẢO TRÌ / BẢO HỘ (10/08/2026). Rà cả danh mục 13.168 mã:
    * 6.892 mã (52%) rơi vào mẫu "Đơn giản", và bóc ra thì hơn 4.300 trong số đó
@@ -360,7 +345,7 @@ export type PoLineDraft = {
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
-  /** metal_kg · outsourcing (ĐM kg/SP) · wood (m³/SP — mượn cùng ô). */
+  /** metal_kg (kg/đơn-vị) · wood (m³/SP — mượn cùng ô). */
   weight_per_unit?: number | null
   /** carton · glass (m²/tấm) */
   area_m2?: number | null
@@ -368,7 +353,8 @@ export type PoLineDraft = {
   inner_l_mm?: number | null
   inner_w_mm?: number | null
   inner_h_mm?: number | null
-  /** Cơ sở tính tiền dòng: thùng/SP/tấm · m² · m³ (xốp) · kg (gia công). */
+  /** Cơ sở tính tiền dòng: thùng/tấm · m² · m³ (xốp). 'kg' là giá trị chết
+   *  của mẫu gia công đã gỡ — DB còn nhận (0135) nhưng form không sinh mới. */
   carton_basis?: 'ctn' | 'm2' | 'm3' | 'kg' | null
 }
 
@@ -419,15 +405,6 @@ export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       const m3 = Number(l.weight_per_unit) || 0
       if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
       return { qty2: round4(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
-    }
-    case 'outsourcing': {
-      // Hai biến thể: công theo SP (mặc định, SL × đơn giá) và công theo kg
-      // (ĐM kg/SP × SL × đơn giá/kg) — người soạn chốt từng dòng bằng ô basis.
-      const kg = Number(l.weight_per_unit) || 0
-      if (l.carton_basis !== 'kg' || kg <= 0) {
-        return { qty2: null, unit2: null, price_basis: 'unit' }
-      }
-      return { qty2: round4(kg * qty), unit2: 'kg', price_basis: 'unit2' }
     }
     case 'foam': {
       // Xốp tấm theo KHỐI: D×R×Dày (mm) → m³/tấm × SL tấm × đơn giá/m³.

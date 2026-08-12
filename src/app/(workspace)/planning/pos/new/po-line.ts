@@ -140,13 +140,6 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
   }
   if (t === 'wood' && !(Number(l.weight_per_unit) > 0)) return 'thiếu m³/SP'
   if (
-    t === 'outsourcing' &&
-    l.carton_basis === 'kg' &&
-    !(Number(l.weight_per_unit) > 0)
-  ) {
-    return 'thiếu ĐM kg/SP'
-  }
-  if (
     t === 'foam' &&
     l.carton_basis === 'm3' &&
     !(Number(l.inner_l_mm) > 0 && Number(l.inner_w_mm) > 0 && Number(l.inner_h_mm) > 0)
@@ -214,7 +207,6 @@ const BASIS_DOMAIN: Partial<Record<PoTemplate, string[]>> = {
   carton: ['ctn', 'm2'],
   glass: ['ctn', 'm2'],
   foam: ['ctn', 'm3'],
-  outsourcing: ['ctn', 'kg'],
 }
 export function recallBasis(
   t: PoTemplate,

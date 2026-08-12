@@ -51,17 +51,15 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
 }
 
 /**
- * DÒNG TỰ DO (0134) chỉ dành cho mẫu gỗ/gia công — các mẫu khác bắt buộc gắn
- * vật tư danh mục để tồn kho, giá mua gần nhất và sổ nhận hàng có chỗ bám.
+ * DÒNG TỰ DO (0134) chỉ dành cho mẫu gỗ — các mẫu khác bắt buộc gắn vật tư
+ * danh mục để tồn kho, giá mua gần nhất và sổ nhận hàng có chỗ bám.
  * Schema đã bắt "null thì phải có tên"; đây là lớp chặn THEO MẪU (schema không
  * biết template sau khi update fallback về mẫu cũ của đơn).
  */
 function assertFreeLinesAllowed(template: PoTemplate, lines: PoLineInput[]): void {
   if (FREE_LINE_TEMPLATES.includes(template)) return
   if (lines.some((l) => !l.material_id)) {
-    throw BadRequest(
-      'Dòng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³" hoặc "Gia công ngoài"',
-    )
+    throw BadRequest('Dòng không gắn vật tư chỉ dùng được ở mẫu "Gỗ chi tiết theo m³"')
   }
 }
 

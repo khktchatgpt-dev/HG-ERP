@@ -186,20 +186,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'KH giao hàng',
     'Ghi chú',
   ],
-  outsourcing: [
-    'STT',
-    'LSX',
-    'Mã sản phẩm',
-    'Tên sản phẩm / vật tư',
-    'Công đoạn',
-    'ĐVT',
-    'Số lượng',
-    'ĐM SP (kg)',
-    'Tổng kg',
-    'Đơn giá (VND)',
-    'Thành tiền (VND)',
-    'Ghi chú',
-  ],
+  // Mẫu 'outsourcing' đã gỡ 12/08/2026 — gia công là nghiệp vụ ngoài tầm vật tư.
   // MRO (10/08/2026) — chưa có đơn thật để chép; bộ cột dựng theo nhu cầu đã rà:
   // NCC giao đúng nhờ MODEL, phòng đối chiếu về sau nhờ "dùng cho máy" + bảo hành.
   mro: [

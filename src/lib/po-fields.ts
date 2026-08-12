@@ -242,24 +242,6 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('maugo', 'Màu gỗ', 'w-[90px]', 'finish', 'Màu 142'),
     t('kehoach', 'KH giao hàng', 'w-[110px]', 'dimension_text', '20-25/07/26'),
   ],
-  // Gia công ngoài (0134 — đan mây New ISO, hàn sắt Tiến Phước): công theo SP
-  // hoặc theo kg (ĐM kg/SP × giá/kg), công đoạn ghi rõ để nghiệm thu.
-  outsourcing: [
-    t('congdoan', 'Công đoạn', 'w-[130px]', 'material_grade', 'Hàn, mài / đan mây…'),
-    n('kgsp', 'ĐM SP (kg)', 'w-[88px]', 'weight_per_unit', '0.01'),
-    { key: 'kgtotal', label: 'Tổng kg', width: 'w-[88px]', kind: 'calc', align: 'right' },
-    {
-      key: 'basis',
-      label: 'Tính công theo',
-      width: 'w-[84px]',
-      kind: 'cartonBasis',
-      field: 'carton_basis',
-      options: [
-        { value: 'ctn', label: 'SP' },
-        { value: 'kg', label: 'kg' },
-      ],
-    },
-  ],
   /*
    * MRO (10/08/2026). KHÔNG có "SL đơn hàng · Tồn kho": hàng bảo trì mua lẻ
    * theo nhu cầu hỏng hóc, không có định mức/sp để trừ tồn ra số cần đặt.
@@ -470,22 +452,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'kehoach',
     '@note',
   ],
-  // Gia công theo form Tiến Phước/New ISO: ĐM kg đứng trước giá; công đoạn in
-  // cạnh tên để bên nhận gia công đối chiếu nghiệm thu.
-  outsourcing: [
-    '@stt',
-    '@lsx',
-    '@code',
-    '@name',
-    'congdoan',
-    '@unit',
-    '@qty',
-    'kgsp',
-    'kgtotal',
-    '@price',
-    '@amount',
-    '@note',
-  ],
   // MRO: model đứng cạnh tên (NCC dò theo mã hãng), "dùng cho máy" giữ trên
   // giấy để sau này đối chiếu chi phí bảo trì theo thiết bị; bảo hành là điều
   // khoản nên đứng sau tiền, giống cách mẫu mây đặt "Định mức".
@@ -532,7 +498,6 @@ export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   foam: 'Số lượng',
   glass: 'Số lượng',
   wood: 'Số lượng',
-  outsourcing: 'Số lượng',
   mro: 'Số lượng',
   simple: 'Số lượng',
 }
@@ -551,8 +516,6 @@ export function poPriceSuffix(t: PoTemplate, basis: string | null | undefined): 
       return basis === 'm2' ? '/m²' : '/tấm'
     case 'foam':
       return basis === 'm3' ? '/m³' : ''
-    case 'outsourcing':
-      return basis === 'kg' ? '/kg' : '/SP'
     default:
       return ''
   }
@@ -563,7 +526,6 @@ export const PO_PRICE_SUFFIX_TEMPLATES: readonly PoTemplate[] = [
   'carton',
   'glass',
   'foam',
-  'outsourcing',
 ]
 
 /** Tra khai báo một cột theo key, trong phạm vi mẫu đơn. */

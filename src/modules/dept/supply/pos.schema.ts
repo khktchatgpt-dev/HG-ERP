@@ -31,9 +31,9 @@ const optNum = (max: number) => z.coerce.number().min(0).max(max).optional().nul
  */
 export const poLineInputSchema = z.object({
   /**
-   * null + line_name = DÒNG TỰ DO (0134): đơn gỗ/gia công đặt theo MÃ SẢN PHẨM
-   * chứ không theo vật tư kho. Chỉ mẫu wood/outsourcing được dùng (refine ở
-   * poCreateSchema); dòng tự do không đi vào sổ kho/needs.
+   * null + line_name = DÒNG TỰ DO (0134): đơn gỗ đặt theo MÃ SẢN PHẨM chứ
+   * không theo vật tư kho. Chỉ mẫu wood được dùng (service chặn); dòng tự do
+   * không đi vào sổ kho/needs.
    */
   material_id: z.string().uuid().nullable().optional(),
   line_name: z.string().trim().max(300).optional().nullable(),

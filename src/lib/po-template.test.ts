@@ -201,31 +201,11 @@ describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
   })
 })
 
-describe('deriveLine — gia công ngoài (đan mây New ISO, hàn sắt Tiến Phước)', () => {
-  it('công theo SP (mặc định): 800 ghế × 170.000đ/ghế', () => {
-    const d = deriveLine('outsourcing', { qty_ordered: 800, carton_basis: 'ctn' })
-    expect(d.price_basis).toBe('unit')
-    expect(poLineAmount({ qty_ordered: 800, unit_price: 170_000, ...d })).toBe(
-      136_000_000,
-    )
-  })
-
-  it('công theo kg: 65 bộ × 18,91 kg/bộ × 28.000đ/kg — đúng file A Dung', () => {
-    const d = deriveLine('outsourcing', {
-      qty_ordered: 65,
-      weight_per_unit: 18.91,
-      carton_basis: 'kg',
-    })
-    expect(d).toEqual({ qty2: 1229.15, unit2: 'kg', price_basis: 'unit2' })
-    expect(poLineAmount({ qty_ordered: 65, unit_price: 28_000, ...d })).toBe(34_416_200)
-  })
-
-  it('chọn kg mà chưa có ĐM kg/SP → về unit, không nhân bậy', () => {
-    expect(
-      deriveLine('outsourcing', { qty_ordered: 65, carton_basis: 'kg' }).price_basis,
-    ).toBe('unit')
-  })
-})
+/*
+ * Mẫu 'outsourcing' (gia công ngoài) ĐÃ GỠ 12/08/2026 — trả công theo SP là
+ * nghiệp vụ ngoài tầm vật tư, không thuộc form đặt vật tư. Mẫu lạ rơi về
+ * 'simple' (test "mẫu lạ / null" ở trên đã khoá đường lui này).
+ */
 
 describe('deriveLine — kính theo tấm/m² (DDH Mai Trang)', () => {
   it('giá theo TẤM: 500 tấm × 66.849đ/tấm — basis unit', () => {
@@ -274,7 +254,7 @@ describe('deriveLine — xốp theo m³ (DDH Tân Hoàng Long, "Xốp Casual")',
 })
 
 describe('dòng tự do (0134)', () => {
-  it('chỉ mẫu gỗ + gia công được dùng dòng không gắn vật tư', () => {
-    expect(FREE_LINE_TEMPLATES).toEqual(['wood', 'outsourcing'])
+  it('chỉ mẫu gỗ được dùng dòng không gắn vật tư (gia công đã gỡ 12/08)', () => {
+    expect(FREE_LINE_TEMPLATES).toEqual(['wood'])
   })
 })

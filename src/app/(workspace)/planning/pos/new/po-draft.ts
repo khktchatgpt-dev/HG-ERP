@@ -154,9 +154,9 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
         area_m2: d.area_m2,
         price_per_m2: l.price_per_m2 === '' ? null : Number(l.price_per_m2),
         print_fee: l.print_fee === '' ? null : Number(l.print_fee),
-        // Cơ sở tính tiền chỉ có nghĩa ở mẫu chốt basis từng dòng (bao bì, kính,
-        // xốp, gia công) — mẫu khác gửi null cho sạch.
-        carton_basis: ['carton', 'glass', 'foam', 'outsourcing'].includes(header.template)
+        // Cơ sở tính tiền chỉ có nghĩa ở mẫu chốt basis từng dòng (bao bì,
+        // kính, xốp) — mẫu khác gửi null cho sạch.
+        carton_basis: ['carton', 'glass', 'foam'].includes(header.template)
           ? l.carton_basis
           : null,
         // Đóng gói mua: CHỤP theo danh mục tại thời điểm lập đơn (0128). Gửi

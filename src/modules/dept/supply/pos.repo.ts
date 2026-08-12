@@ -99,7 +99,7 @@ export type PoLine = PoLineTemplateFields & {
 }
 
 export type PoLineInput = Partial<PoLineTemplateFields> & {
-  /** null/bỏ trống + line_name = dòng tự do (chỉ mẫu wood/outsourcing — service chặn). */
+  /** null/bỏ trống + line_name = dòng tự do (chỉ mẫu wood — service chặn). */
   material_id?: string | null
   line_name?: string | null
   line_unit?: string | null
