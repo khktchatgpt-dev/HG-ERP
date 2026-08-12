@@ -7,54 +7,13 @@ import { Spinner } from '@/components/erp/Spinner'
 import { Modal } from '@/components/Modal'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 
-/** Khớp payload `/api/dept/supply/po-materials`. */
-export type PoMaterial = {
-  id: string
-  code: string
-  name: string
-  unit: string
-  group_name: string | null
-  sub_group: string | null
-  spec: string | null
-  kg_per_m: number | null
-  kg_per_unit: number | null
-  default_bar_length_m: number | null
-  /** Giá đơn vị kép ở danh mục (0053): giá theo `price_unit`, 1 ĐVT = `unit2_factor`. */
-  price_unit: string | null
-  unit2_factor: number | null
-  vat_rate: number | null
-  default_supplier_id: string | null
-  last_purchase_price: number | null
-  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT (vd 1 bì = 500 con). */
-  pack_size: number | null
-  pack_unit: string | null
-  /** Vật liệu/màu khai ở danh mục (0124) — dùng khi chưa có lần đặt nào. */
-  material_grade: string | null
-  /** Thông số theo nhóm (0137) — bao bì: cách mở + SP/thùng; kim loại: bề mặt.
-   *  Optional để fixture/chỗ gọi cũ không phải khai; thiếu coi như null. */
-  open_style?: string | null
-  pcs_per_ctn?: number | null
-  finish?: string | null
-  /** Tồn hiện tại — NULL = chưa có sổ kho (khác "tồn 0 thật"). */
-  on_hand: number | null
-  /** Ô mô tả của lần đặt gần nhất — điền sẵn lên dòng, null = chưa từng đặt. */
-  last_line: {
-    material_grade: string | null
-    dimension_text: string | null
-    finish: string | null
-    pcs_per_ctn: number | null
-    open_style: string | null
-    dm_per_sp: number | null
-    /** Bộ ô mẫu tính theo kích thước (0136) — đặt lần 2 chỉ còn gõ SL + giá. */
-    area_m2?: number | null
-    inner_l_mm?: number | null
-    inner_w_mm?: number | null
-    inner_h_mm?: number | null
-    price_per_m2?: number | null
-    print_fee?: number | null
-    carton_basis?: string | null
-  } | null
-}
+/**
+ * Khớp payload `/api/dept/supply/po-materials` — kiểu khai MỘT nơi ở
+ * `@/lib/po-material.types` (đợt 1 cải thiện vật tư 13/08/2026), server repo
+ * dùng cùng định nghĩa. Re-export để 6 chỗ import từ file này không phải đổi.
+ */
+export type { PoMaterial } from '@/lib/po-material.types'
+import type { PoMaterial } from '@/lib/po-material.types'
 
 /**
  * Cache theo (nhóm, từ khoá) — sống theo tab, DÙNG CHUNG mọi dòng của form.

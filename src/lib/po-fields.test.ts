@@ -4,6 +4,7 @@ import {
   PO_FIELDS,
   PO_PRINT_ORDER,
   PO_PRINT_QTY_LABEL,
+  PO_SHARED_FIELD_MEANING,
   poField,
 } from './po-fields'
 
@@ -269,3 +270,36 @@ describe('PO_PRINT_ORDER — bộ cột phiếu in', () => {
   })
 })
 
+describe('PO_SHARED_FIELD_MEANING — bảng tra cột mượn khớp khai báo thật', () => {
+  /*
+   * Bảng tra là tài liệu SỐNG (đợt 1 cải thiện vật tư 13/08/2026): mọi ô nhập
+   * ghi vào một cột mượn phải có mặt trong bảng với đúng nhãn, và ngược lại
+   * bảng không được ghi nghĩa cho mẫu không dùng cột đó. Hai chiều cùng khoá
+   * thì bảng không bao giờ mục.
+   */
+  const SHARED = Object.keys(PO_SHARED_FIELD_MEANING)
+
+  it('mọi ô nhập ghi vào cột mượn đều có trong bảng, đúng nhãn', () => {
+    for (const t of PO_TEMPLATES) {
+      for (const f of PO_FIELDS[t]) {
+        if (!f.field || !SHARED.includes(f.field)) continue
+        expect(
+          PO_SHARED_FIELD_MEANING[f.field][t],
+          `${t}/${f.key} ghi vào cột mượn "${f.field}" nhưng bảng tra chưa có nghĩa`,
+        ).toBe(f.label)
+      }
+    }
+  })
+
+  it('bảng không ghi nghĩa cho mẫu không dùng cột đó', () => {
+    for (const col of SHARED) {
+      for (const [t, label] of Object.entries(PO_SHARED_FIELD_MEANING[col])) {
+        const f = PO_FIELDS[t as PoTemplate].find((x) => x.field === col)
+        expect(
+          f?.label,
+          `bảng tra ghi ${col}@${t} = "${label}" nhưng mẫu không có ô nhập nào ghi vào cột này`,
+        ).toBe(label)
+      }
+    }
+  })
+})

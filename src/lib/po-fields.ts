@@ -479,3 +479,50 @@ export function poField(template: PoTemplate, key: string): PoField | undefined 
   return PO_FIELDS[template].find((f) => f.key === key)
 }
 
+/**
+ * BẢNG TRA "CỘT MƯỢN" — một cột DB của dòng đơn mang nghĩa KHÁC NHAU theo mẫu.
+ *
+ * Đây là nợ thiết kế có chủ đích (thêm cột DB tốn migration nên các đợt
+ * 0122→0137 tái dùng cột trống của mẫu khác) — bảng này là chỗ DUY NHẤT ghi
+ * nghĩa thật của từng cột theo mẫu, để: (a) ai đọc code/viết báo cáo biết
+ * `material_grade` của đơn sơn là mã màu chứ không phải vật liệu; (b) đợt 3 kế
+ * hoạch cải thiện (docs/vat-tu-ke-hoach-cai-thien-thiet-ke.md) biết chỗ nào
+ * phải trả nợ trước.
+ *
+ * `po-fields.test.ts` đối chiếu bảng này với PO_FIELDS — thêm/đổi nghĩa một cột
+ * mượn mà quên cập nhật bảng là test đỏ.
+ *
+ * NGUY HIỂM NHẤT là hai ca SỐ đổi đơn vị theo mẫu (đợt 3 sẽ tách cột riêng):
+ *   · `weight_per_unit`: kg/đơn vị (inox) nhưng m³/SP (gỗ)
+ *   · `finish`: màu/bề mặt (kim loại, gỗ) nhưng BẢO HÀNH (mro)
+ * Từ nay KHÔNG mượn thêm: mẫu mới cần trường mới thì thêm cột DB đúng nghĩa.
+ */
+export const PO_SHARED_FIELD_MEANING: Record<
+  string,
+  Partial<Record<PoTemplate, string>>
+> = {
+  material_grade: {
+    accessory: 'Vật liệu',
+    metal_kg: 'Vật liệu',
+    rattan: 'Định mức',
+    paint: 'Mã màu NCC',
+    glass: 'Loại kính',
+    wood: 'Loại gỗ',
+    mro: 'Model / Mã hãng',
+  },
+  dimension_text: {
+    metal_kg: 'Kích thước',
+    glass: 'Quy cách',
+    wood: 'KH giao hàng',
+    mro: 'Dùng cho máy / vị trí',
+  },
+  finish: {
+    metal_kg: 'Màu / bề mặt',
+    wood: 'Màu gỗ',
+    mro: 'Bảo hành',
+  },
+  weight_per_unit: {
+    metal_kg: 'kg / đơn vị',
+    wood: 'm³ / SP',
+  },
+}
