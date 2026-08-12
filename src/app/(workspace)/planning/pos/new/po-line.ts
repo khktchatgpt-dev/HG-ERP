@@ -207,18 +207,29 @@ export function parseInnerDims(
  */
 export function newLine(t: PoTemplate, m: PoMaterial): Line {
   /*
-   * Mẫu carton: quy cách vật tư chính là LỌT LÒNG — tách vào ba ô số để người
-   * soạn không phải gõ lại. Cách mở lấy theo lần đặt trước; đủ cả lọt lòng lẫn
-   * cách mở thì m² tính được NGAY, không thì đợi chọn AD/MR (`recalcCartonArea`).
+   * Quy cách danh mục TỰ BÓC vào ba ô số cho các mẫu tính theo kích thước —
+   * người soạn không phải nhìn quy cách gõ lại từng số:
+   *   carton: lọt lòng D×R×C ("900x605x115") — có cách mở là ra m² ngay.
+   *   foam  : quy cách tấm D×R×Dày ("1520x920x10") — chọn "tính theo m³" là
+   *           tổng khối tự nhảy (0134).
+   *   glass : "605x539x5mm" — hai số đầu là kích thước tấm → m²/tấm = D×R/10⁶,
+   *           đúng cột "m2/tấm" của đơn kính thật (0134).
    */
-  const inner = t === 'carton' ? parseInnerDims(m.spec) : null
+  const inner = t === 'carton' || t === 'foam' ? parseInnerDims(m.spec) : null
+  const glassDims = t === 'glass' ? parseInnerDims(m.spec) : null
   const last = m.last_line
   const openStyle = t === 'carton' ? (last?.open_style ?? '') : ''
   // Vật liệu: lần đặt gần nhất là nguồn tươi nhất; vật tư CHƯA TỪNG lên đơn thì
   // lấy số khai ở danh mục (0124) — trước đây ô này trống và phải gõ tay.
   const grade = last?.material_grade ?? m.material_grade ?? ''
   const area =
-    inner && openStyle ? cartonAreaM2(openStyle, inner[0], inner[1], inner[2]) : null
+    t === 'glass'
+      ? glassDims
+        ? Math.round(((glassDims[0] * glassDims[1]) / 1e6) * 10000) / 10000
+        : null
+      : inner && openStyle
+        ? cartonAreaM2(openStyle, inner[0], inner[1], inner[2])
+        : null
   return {
     material_id: m.id,
     code: m.code,

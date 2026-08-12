@@ -520,3 +520,58 @@ describe('packCount / roundUpToPack — quy đổi bao gói', () => {
     expect(roundUpToPack(0, 500)).toBe(0)
   })
 })
+
+/*
+ * KÍNH + XỐP (0134): quy cách danh mục tự bóc vào ô kích thước như carton —
+ * "vật tư có quy cách mà không tự điền vào được" là đúng cái lỗi cũ, chỉ khác
+ * mẫu. Kính lấy m²/tấm = D×R/10⁶ (số thứ ba là ĐỘ DÀY, không tham gia); xốp
+ * lấy đủ D×R×Dày cho công thức khối.
+ */
+describe('newLine glass/foam — tự bóc quy cách (0134)', () => {
+  const kinh: PoMaterial = {
+    id: 'm-k',
+    code: 'KI-0001',
+    name: 'Kính trắng phun mờ cường lực',
+    unit: 'Tấm',
+    group_name: 'Kính - mặt đá',
+    sub_group: null,
+    spec: '605x539x5mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('kính "605x539x5mm" → m²/tấm = 0,3261 điền sẵn (đúng đơn Mai Trang ~0,33)', () => {
+    const l = newLine('glass', kinh)
+    expect(l.area_m2).toBeCloseTo(0.3261, 4)
+    // basis mặc định theo TẤM — m² chỉ hiện tổng, không đổi cách tính tiền.
+    expect(l.carton_basis).toBe('ctn')
+  })
+
+  it('kính không quy cách đọc được → m² để trống, nhập tay', () => {
+    expect(newLine('glass', { ...kinh, spec: 'Φ600 dày 5mm' }).area_m2).toBe('')
+    expect(newLine('glass', { ...kinh, spec: null }).area_m2).toBe('')
+  })
+
+  it('xốp "1520x920x10" → D×R×Dày điền sẵn, chọn m³ là tổng khối tự nhảy', () => {
+    const l = newLine('foam', { ...kinh, spec: '1520x920x10' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+    // m² không dính gì tới xốp — chỉ carton/glass dùng.
+    expect(l.area_m2).toBe('')
+  })
+
+  it('mút cuộn "8mm x 1.05m x 150m" KHÔNG bị đọc nhầm thành kích thước tấm', () => {
+    const l = newLine('foam', { ...kinh, spec: '8mm x 1.05m x 150m' })
+    expect(l.inner_l_mm).toBe('')
+  })
+})
