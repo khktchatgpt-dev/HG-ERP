@@ -21,9 +21,15 @@ import {
   MaterialCoreFields,
   coreFromMaterial,
   materialBtnPrimary,
+  materialBtnSecondary,
   materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
+import {
+  MATERIAL_FIELD_LABELS,
+  fieldsClearedByPayload,
+  type ClearedField,
+} from '@/lib/material-group-fields'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { PAGE_SIZE } from './constants'
 
@@ -69,6 +75,8 @@ type Material = {
   note: string | null
   /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — Kho gỡ cờ khi đã chuẩn hoá. */
   needs_review: boolean
+  /** Key trường khai vội cần rà (0138) — chip từng trường cạnh cờ chung. */
+  needs_review_fields: string[]
   is_active: boolean
 }
 
@@ -225,10 +233,18 @@ export function MaterialsManager({
       sortValue: (m) => m.code,
       cell: (m) => (
         <div className="flex min-w-0 flex-col">
-          <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-400">
+          <span className="flex flex-wrap items-center gap-1.5 font-mono text-xs text-zinc-400">
             {m.code}
             {/* Khai nhanh từ form đơn (0136) — Kho rà xong thì gỡ ở menu dòng. */}
             {m.needs_review && <Badge tone="amber">chờ Kho rà</Badge>}
+            {/* 0138: chip TỪNG TRƯỜNG người khai vội bỏ trống — Kho rà đúng chỗ
+                thay vì soi cả bản ghi. Nhãn tra từ MATERIAL_FIELD_LABELS. */}
+            {m.needs_review &&
+              (m.needs_review_fields ?? []).map((k) => (
+                <Badge key={k} tone="amber">
+                  {MATERIAL_FIELD_LABELS[k] ?? k}?
+                </Badge>
+              ))}
           </span>
           <span className="truncate font-medium">{m.name}</span>
         </div>
@@ -635,6 +651,16 @@ function MaterialForm({
 }) {
   const purchasing = scope === 'purchasing'
   const [busy, setBusy] = useState(false)
+  /*
+   * XÁC NHẬN 2 NHỊP khi lưu sẽ NULL ĐÈ dữ liệu đang có (đợt 2 cải thiện vật tư
+   * 13/08/2026): corePayload cố ý ghi null trường ngoài nhóm mới — đúng dữ
+   * liệu, nhưng người lỡ tay đổi nhóm sẽ mất kg/m, cách mở thùng… trong im
+   * lặng. Nhịp 1 lưu → liệt kê trường sắp mất kèm giá trị cũ; nhịp 2 mới lưu.
+   */
+  const [clearWarn, setClearWarn] = useState<{
+    cleared: ClearedField[]
+    body: Record<string, unknown>
+  } | null>(null)
   const core = useMaterialCore({
     active: true,
     initial: initial ? coreFromMaterial(initial) : undefined,
@@ -687,9 +713,26 @@ function MaterialForm({
       body.reorder_qty = numOrNull('reorder_qty')
       body.shelf_location = String(fd.get('shelf_location') ?? '').trim() || null
     }
+    // Sửa bản đã lưu mà payload sắp null đè dữ liệu đang có → dừng ở nhịp 1.
+    if (initial && Object.keys(initial).length > 0) {
+      const cleared = fieldsClearedByPayload(initial as Record<string, unknown>, body)
+      if (cleared.length > 0) {
+        setClearWarn({ cleared, body })
+        return
+      }
+    }
     setBusy(true)
     await onSubmit(body)
     setBusy(false)
+  }
+
+  /** Nhịp 2 — người dùng đã đọc danh sách sắp mất và vẫn muốn lưu. */
+  async function confirmClear() {
+    if (!clearWarn || busy) return
+    setBusy(true)
+    await onSubmit(clearWarn.body)
+    setBusy(false)
+    setClearWarn(null)
   }
 
   return (
@@ -878,6 +921,41 @@ function MaterialForm({
           className={cls}
         />
       </Field>
+
+      {/* NHỊP 2 của xác nhận null-đè: liệt kê từng trường sắp mất kèm giá trị
+          cũ — thường do đổi nhóm (corePayload ghi null trường ngoài nhóm mới). */}
+      {clearWarn && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/40">
+          <p className="font-medium text-red-700 dark:text-red-400">
+            Lưu sẽ XOÁ {clearWarn.cleared.length} thông số đang có (thường do đổi nhóm):
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-red-700 dark:text-red-400">
+            {clearWarn.cleared.map((c) => (
+              <li key={c.field}>
+                {c.label}: <b>{c.oldValue}</b> → trống
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setClearWarn(null)}
+              className={materialBtnSecondary}
+            >
+              Quay lại sửa
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void confirmClear()}
+              className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}
+              Vẫn lưu — xoá {clearWarn.cleared.length} ô
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Nút lưu ghim đáy hộp thoại: form bốn mảng dài hơn một màn, cuộn tới
           cuối mới thấy nút là bắt người khai đi tìm. */}

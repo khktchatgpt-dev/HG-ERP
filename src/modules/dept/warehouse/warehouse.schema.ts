@@ -50,6 +50,12 @@ export const materialCreateSchema = z.object({
    * danh mục không gửi → mặc định false. PATCH {needs_review:false} = đã rà.
    */
   needs_review: z.coerce.boolean().optional(),
+  /**
+   * KEY các trường khai vội cần Kho rà (0138) — form khai nhanh tự chấm bằng
+   * `quickReviewFields`. Chỉ có nghĩa đi kèm needs_review=true; service tự xoá
+   * khi Kho bấm "Đã rà xong".
+   */
+  needs_review_fields: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 })
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */

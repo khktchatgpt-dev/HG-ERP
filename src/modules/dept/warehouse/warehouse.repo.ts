@@ -48,6 +48,8 @@ export type Material = {
   note: string | null
   /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — gỡ cờ khi đã chuẩn hoá. */
   needs_review: boolean
+  /** Key trường khai vội cần rà (0138) — chip từng trường trên màn Kho. */
+  needs_review_fields: string[]
   created_by: string | null
   is_active: boolean
   created_at: string
@@ -55,7 +57,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, created_by, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, needs_review_fields, created_by, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string

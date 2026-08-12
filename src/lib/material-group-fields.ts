@@ -89,3 +89,98 @@ export function groupFieldConfig(groupName: string | null | undefined): GroupFie
   }
   return DEFAULT
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ĐỢT 2 CẢI THIỆN VẬT TƯ (13/08/2026 — docs/vat-tu-ke-hoach-cai-thien-thiet-ke.md)
+ * Hai helper thuần cho form khai: cảnh báo trước khi null đè, và danh sách
+ * trường "khai vội" để Kho rà đúng chỗ.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/** Nhãn tiếng Việt của các trường hay bị null đè / hay khai thiếu. */
+export const MATERIAL_FIELD_LABELS: Record<string, string> = {
+  spec: 'Quy cách',
+  sub_group: 'Nhóm phụ',
+  material_grade: 'Vật liệu / màu',
+  kg_per_m: 'kg/m',
+  default_bar_length_m: 'Dài cây (m)',
+  kg_per_unit: 'kg/đơn vị',
+  open_style: 'Cách mở thùng',
+  pcs_per_ctn: 'SP mỗi thùng',
+  finish: 'Màu / bề mặt',
+  pack_size: 'Đóng gói khi mua',
+  pack_unit: 'Đơn vị đóng gói',
+  unit2_factor: 'Hệ số quy đổi giá',
+}
+
+export type ClearedField = { field: string; label: string; oldValue: string }
+
+/**
+ * NHỮNG TRƯỜNG SẮP BỊ NULL ĐÈ khi lưu — nền của xác nhận 2 nhịp lúc đổi nhóm.
+ *
+ * `corePayload()` cố ý ghi null cho trường ngoài nhóm/diện hiện tại (đổi nhóm
+ * không để sót số cũ — 0137). Đúng về dữ liệu nhưng là XOÁ TRONG IM LẶNG với
+ * người lỡ tay đổi nhóm: mất kg/m, cách mở thùng… không cảnh báo, không hoàn
+ * tác. Hàm này so bản đã lưu với payload sắp gửi và trả danh sách trường đang
+ * có giá trị mà sắp thành null — form liệt kê ra và bắt xác nhận rồi mới lưu.
+ *
+ * Chỉ soi chiều CÓ GIÁ TRỊ → NULL. Đổi giá trị (0.248 → 0.25) là chuyện thường
+ * của việc sửa, không cảnh báo — tránh cảnh báo giả kiểu '0.2480' vs 0.248
+ * (rủi ro ghi ở kế hoạch đợt 2).
+ */
+export function fieldsClearedByPayload(
+  original: Record<string, unknown>,
+  payload: Record<string, unknown>,
+): ClearedField[] {
+  const out: ClearedField[] = []
+  for (const field of Object.keys(MATERIAL_FIELD_LABELS)) {
+    if (!(field in payload) || payload[field] !== null) continue
+    const old = original[field]
+    if (old == null) continue
+    const text = String(old).trim()
+    if (text === '') continue
+    out.push({ field, label: MATERIAL_FIELD_LABELS[field], oldValue: text })
+  }
+  return out
+}
+
+/**
+ * TRƯỜNG "KHAI VỘI" — người soạn đơn khai nhanh vật tư thường bỏ trống gì?
+ *
+ * needs_review một cờ chung (0136) bắt Kho rà CẢ bản ghi mà không biết chỗ nào
+ * đáng ngờ. Hàm này chấm đúng các trường ĐANG TRỐNG mà nhóm/mẫu của vật tư
+ * thật sự cần — lưu vào `needs_review_fields` (0138), màn Kho hiện chip từng
+ * trường. Trả về KEY (ổn định để lưu DB), nhãn tra `MATERIAL_FIELD_LABELS`.
+ */
+export function quickReviewFields(
+  f: {
+    spec: string
+    sub_group: string
+    material_grade: string
+    kg_per_m: string
+    kg_per_unit: string
+    open_style: string
+    pcs_per_ctn: string
+    finish: string
+  },
+  ctx: {
+    groupCfg: GroupFieldConfig
+    /** Mẫu đoán ra cần barem theo mét (nhôm/inox hàng cây). */
+    needsBarWeight: boolean
+    /** Hàng tấm/cuộn thuộc mẫu cân kg — cần kg/đơn vị thay vì kg/m. */
+    needsSheetWeight: boolean
+    /** kg/m máy đọc được từ tên — có thì ô trống không tính là thiếu. */
+    derivedKg: number | null
+  },
+): string[] {
+  const out: string[] = []
+  if (!f.spec.trim()) out.push('spec')
+  if (!f.sub_group.trim()) out.push('sub_group')
+  if (!f.material_grade.trim()) out.push('material_grade')
+  if (ctx.needsBarWeight && !f.kg_per_m.trim() && ctx.derivedKg == null)
+    out.push('kg_per_m')
+  if (ctx.needsSheetWeight && !f.kg_per_unit.trim()) out.push('kg_per_unit')
+  if (ctx.groupCfg.showCarton && !f.open_style.trim()) out.push('open_style')
+  if (ctx.groupCfg.showCarton && !f.pcs_per_ctn.trim()) out.push('pcs_per_ctn')
+  if (ctx.groupCfg.showFinish && !f.finish.trim()) out.push('finish')
+  return out
+}

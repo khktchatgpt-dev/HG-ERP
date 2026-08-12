@@ -65,6 +65,8 @@ type CreateInput = {
   note?: string | null
   /** Khai nhanh từ form đơn đặt gửi true — chờ Kho rà lại (0136). */
   needs_review?: boolean
+  /** Key trường khai vội cần rà (0138) — chỉ có nghĩa kèm needs_review=true. */
+  needs_review_fields?: string[]
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
@@ -263,8 +265,10 @@ export const materialsService = {
       finish: input.finish?.trim() || null,
       note: input.note ?? null,
       // Khai nhanh từ form đơn đặt gửi cờ "chờ Kho rà" (0136); ghi vết người
-      // khai để Kho biết hỏi ai khi tên/quy cách không rõ.
+      // khai để Kho biết hỏi ai khi tên/quy cách không rõ. Kèm danh sách TRƯỜNG
+      // đáng ngờ (0138) — không có cờ thì danh sách vô nghĩa, ghi rỗng.
       needs_review: input.needs_review ?? false,
+      needs_review_fields: input.needs_review ? (input.needs_review_fields ?? []) : [],
       created_by: user.id,
     })
 
@@ -325,6 +329,9 @@ export const materialsService = {
      * chứng từ in ra đang trỏ vào. Gỡ khỏi patch chứ không ghi null xuống.
      */
     const { code, ...rest } = patch
+    // "Đã rà xong" (0138): hạ cờ là xoá luôn danh sách trường đáng ngờ — chip
+    // từng trường trên màn Kho không được sống lâu hơn cái cờ chung.
+    if (rest.needs_review === false) rest.needs_review_fields = []
     return materialsRepo.patch(id, code ? { ...rest, code } : rest)
   },
 

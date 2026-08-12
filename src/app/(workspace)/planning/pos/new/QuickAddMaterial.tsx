@@ -14,6 +14,7 @@ import {
   materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
+import { quickReviewFields } from '@/lib/material-group-fields'
 import type { PoTemplate } from '@/lib/po-template'
 
 export type CreatedMaterial = {
@@ -103,8 +104,19 @@ export function QuickAddMaterial({
         {
           method: 'POST',
           // needs_review (0136): khai giữa lúc soạn đơn — đánh dấu cho Kho rà
-          // lại (đối chiếu trùng, bổ sung barem/kệ) ở danh mục.
-          body: { ...core.corePayload(), min_stock: 0, needs_review: true },
+          // lại (đối chiếu trùng, bổ sung barem/kệ) ở danh mục. Kèm danh sách
+          // TRƯỜNG đang bỏ trống (0138) để Kho rà đúng chỗ thay vì cả bản ghi.
+          body: {
+            ...core.corePayload(),
+            min_stock: 0,
+            needs_review: true,
+            needs_review_fields: quickReviewFields(core.f, {
+              groupCfg: core.groupCfg,
+              needsBarWeight: core.needsBarWeight,
+              needsSheetWeight: core.needsWeight && core.sheetLike,
+              derivedKg: core.derived?.kg ?? null,
+            }),
+          },
         },
       )
       toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')

@@ -4321,6 +4321,7 @@ export type Database = {
           min_stock: number
           name: string
           needs_review: boolean
+          needs_review_fields: string[]
           note: string | null
           open_style: string | null
           pack_size: number | null
@@ -4358,6 +4359,7 @@ export type Database = {
           min_stock?: number
           name: string
           needs_review?: boolean
+          needs_review_fields?: string[]
           note?: string | null
           open_style?: string | null
           pack_size?: number | null
@@ -4395,6 +4397,7 @@ export type Database = {
           min_stock?: number
           name?: string
           needs_review?: boolean
+          needs_review_fields?: string[]
           note?: string | null
           open_style?: string | null
           pack_size?: number | null
