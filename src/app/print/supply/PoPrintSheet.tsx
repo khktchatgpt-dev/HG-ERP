@@ -219,6 +219,10 @@ function columnsFor(
        * phiếu y như trước.
        */
       cell: (l) => {
+        // Bản xem trước từ NHÁP có dòng chưa nhập SL (qty 0) — in trống chứ
+        // không in "0" (quy tắc chung: ô trống trả '', phiếu NCC đọc rối).
+        // Đơn đã lưu không đi qua nhánh này: schema chặn qty ≤ 0.
+        if (!(l.qty_ordered > 0)) return ''
         const packs = packCount(l.qty_ordered, l.pack_size ?? null)
         if (packs == null || !l.pack_unit) return fmt(l.qty_ordered)
         return (

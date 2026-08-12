@@ -395,6 +395,10 @@ export function PoCreateForm({
         `/api/dept/supply/needs?production_order_id=${primary}${qs}`,
       )
       setNeeds(data.needs)
+      // Lệnh lớn (kiểm UI 12/08: LSX 01 có 106 vật tư) mà panel mở sẵn là nó
+      // chiếm cả màn giữa hai vùng làm việc — nhiều hơn một lưới 12 thẻ thì
+      // THU GỌN, header vẫn đếm đủ và một bấm là bung.
+      setShowNeeds(data.needs.length <= 12)
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {

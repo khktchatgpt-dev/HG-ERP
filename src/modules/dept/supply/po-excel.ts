@@ -129,7 +129,8 @@ function excelColumns(
       width: 10,
       align: 'right',
       num: true,
-      value: (l) => l.qty_ordered,
+      // Dòng chưa nhập SL (chỉ có ở bản dựng từ nháp) → ô trống, không ghi 0.
+      value: (l) => (l.qty_ordered > 0 ? l.qty_ordered : ''),
       numFmtFor: (l) => packSuffixFormat(l),
     },
     '@price': PO_PRICE_SUFFIX_TEMPLATES.includes(t)

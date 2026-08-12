@@ -76,6 +76,8 @@ export function AutoGrowCell({
   className = '',
   maxLength = 200,
   growMax,
+  autoFocus,
+  onAutoFocused,
 }: {
   value: string
   onChange: (v: string) => void
@@ -91,6 +93,14 @@ export function AutoGrowCell({
    * chặn 200 ký tự nên nở hết cũng không thành hàng khổng lồ.
    */
   growMax?: number
+  /**
+   * Nhận con trỏ khi vừa render (dòng TỰ DO vừa thêm: ô tên là ô bắt buộc đang
+   * trống — nhảy vào SL đặt như dòng thường là bắt người soạn click ngược lên).
+   * Nhớ gọi `onAutoFocused` để cha xoá cờ — không thì mỗi lần render lại cướp
+   * con trỏ một lần.
+   */
+  autoFocus?: boolean
+  onAutoFocused?: () => void
 }) {
   return (
     <textarea
@@ -106,6 +116,10 @@ export function AutoGrowCell({
       ref={(el) => {
         // Mở lại đơn cũ: nội dung có sẵn phải nở NGAY, không đợi người dùng gõ.
         if (el) grow(el, growMax)
+        if (el && autoFocus) {
+          el.focus()
+          onAutoFocused?.()
+        }
       }}
       className={`${cell} min-h-[32px] resize-none py-1.5 leading-tight break-words ${className}`}
       aria-label={label}

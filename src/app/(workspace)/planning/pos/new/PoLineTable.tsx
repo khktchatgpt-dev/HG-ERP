@@ -228,6 +228,10 @@ export function PoLineTable({
                             onChange={(v) => onPatch(i, { name: v })}
                             label={`Tên hàng dòng ${i + 1}`}
                             className="font-semibold"
+                            /* Dòng tự do vừa thêm: con trỏ vào Ô TÊN (ô bắt
+                               buộc đang trống), không phải SL đặt. */
+                            autoFocus={focusIndex === i}
+                            onAutoFocused={onFocused}
                           />
                           <div className="text-muted-foreground mt-1 text-[11px]">
                             dòng tự gõ — không trừ kho
@@ -326,9 +330,10 @@ export function PoLineTable({
                           step="0.01"
                           data-cell="qty"
                           onWheel={blurOnWheel}
-                          /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột. */
+                          /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột.
+                             Dòng TỰ DO thì nhường con trỏ cho Ô TÊN ở đầu hàng. */
                           ref={(el) => {
-                            if (el && focusIndex === i) {
+                            if (el && focusIndex === i && !l.is_free) {
                               el.focus()
                               el.select()
                               onFocused?.()
