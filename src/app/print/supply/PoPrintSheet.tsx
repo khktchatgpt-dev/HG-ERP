@@ -127,17 +127,14 @@ const colStt: Col = { label: 'STT', cell: (_l, i) => i + 1 }
  * tư" / "Đơn giá" / "Thành tiền", lại thêm "Đơn giá / kg" riêng cho hai mẫu tính
  * theo khối lượng, nên năm mẫu in ra đọc như năm biểu mẫu khác nhau.
  *
- * Mã vật tư ĐÃ TÁCH thành cột "Mã sản phẩm" riêng (khung chuẩn 08/2026) — không
- * còn in nhỏ dưới tên.
+ * Cột "Mã sản phẩm" (mã vật tư danh mục) và cột "LSX" ĐÃ BỎ khỏi bảng kê
+ * (12/08/2026 — form mẫu mới): LSX + Đơn hàng nằm ở khung góc phải đầu phiếu,
+ * mã nội bộ NCC không cần.
  */
 const colName: Col = {
   label: 'Tên sản phẩm / vật tư',
   align: 'left',
   cell: (l) => l.material_name,
-}
-const colCode: Col = {
-  label: 'Mã sản phẩm',
-  cell: (l) => <span className="font-mono">{l.material_code}</span>,
 }
 const colUnit: Col = { label: 'ĐVT', cell: (l) => l.material_unit }
 const colNote: Col = { label: 'Ghi chú', cell: (l) => l.note ?? '', align: 'left' }
@@ -193,15 +190,12 @@ function columnsFor(
   t: PoTemplate,
   currency: string,
   /** Giá trị đầu đơn lặp xuống từng dòng (khung chuẩn 08/2026). */
-  ctx: { lsxCode: string | null; orderDate: Date; expectedAt: string | null },
+  ctx: { orderDate: Date; expectedAt: string | null },
 ): Col[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
   const fixed: Record<string, Col> = {
     '@stt': colStt,
-    // LSX của đầu đơn in lặp từng dòng — đúng đơn ĐH chuẩn (một đơn một LSX).
-    '@lsx': { label: 'LSX', cell: () => ctx.lsxCode ?? '' },
-    '@code': colCode,
     '@name': colName,
     '@unit': colUnit,
     '@orderdate': { label: 'Ngày đặt hàng', cell: () => dmy(ctx.orderDate) },
@@ -293,12 +287,11 @@ export function PoPrintSheet({
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
   // dựng — dùng chung với báo giá, lệnh SX và phiếu kho.
   const d = new Date(po.created_at)
-  // Đơn NGOÀI LSX: bỏ hẳn cột LSX thay vì in một cột rỗng suốt phiếu.
+  // LSX + Đơn hàng KHÔNG là cột bảng kê — chúng ở khung góc phải (PrintMeta).
   const cols = columnsFor(template, po.currency, {
-    lsxCode: po.lsx_code,
     orderDate: d,
     expectedAt: po.expected_at,
-  }).filter((c) => c.label !== 'LSX' || po.lsx_code)
+  })
   const amountIdx = cols.findIndex((c) => c.isAmount)
 
   /*

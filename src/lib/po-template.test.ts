@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { poLineAmount } from './po-line'
 import {
   FREE_LINE_TEMPLATES,
+  PO_TEMPLATES,
   cartonAreaM2,
   deriveLine,
   foamM3PerSheet,
@@ -165,9 +166,8 @@ describe('metadata mẫu', () => {
     expect(poTemplateMeta('aluminium').hasDiscount).toBe(false)
   })
 
-  it('khối chữ ký khác nhau', () => {
-    expect(poTemplateMeta('accessory').signerRole).toBe('TRƯỞNG PHÒNG CUNG ỨNG')
-    expect(poTemplateMeta('aluminium').signerRole).toBe('TRƯỞNG PHÒNG KẾ HOẠCH')
+  it('ô ký giữa của MỌI mẫu là "NGƯỜI LẬP" (form mẫu mới 12/08/2026)', () => {
+    for (const t of PO_TEMPLATES) expect(poTemplateMeta(t).signerRole).toBe('NGƯỜI LẬP')
   })
 
   it('mẫu lạ / null → rơi về simple thay vì nổ', () => {

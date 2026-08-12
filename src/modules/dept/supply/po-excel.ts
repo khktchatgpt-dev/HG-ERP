@@ -84,7 +84,7 @@ function packSuffixFormat(l: PoPrintLine): string | undefined {
 function excelColumns(
   t: PoTemplate,
   currency: string,
-  ctx: { lsxCode: string | null; orderDate: Date; expectedAt: string | null },
+  ctx: { orderDate: Date; expectedAt: string | null },
 ): XCol[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
@@ -92,18 +92,6 @@ function excelColumns(
   const moneyFmt = currencyDecimals(currency) > 0 ? '#,##0.00' : '#,##0'
   const fixed: Record<string, XCol> = {
     '@stt': { label: 'STT', width: 5, align: 'center', value: (_l, i) => i + 1 },
-    '@lsx': {
-      label: 'LSX',
-      width: 13,
-      align: 'center',
-      value: () => ctx.lsxCode ?? '',
-    },
-    '@code': {
-      label: 'Mã sản phẩm',
-      width: 12,
-      align: 'center',
-      value: (l) => l.material_code,
-    },
     '@name': {
       label: 'Tên sản phẩm / vật tư',
       width: 24,
@@ -216,12 +204,11 @@ export async function buildPoExcel(input: {
   const { company, po, supplier, lines } = input
   const template = po.template ?? 'simple'
   const d = new Date(po.created_at)
-  // Đơn NGOÀI LSX: bỏ cột LSX như phiếu in.
+  // LSX + Đơn hàng không là cột bảng kê — nằm ở khối tham chiếu đầu file.
   const cols = excelColumns(template, po.currency, {
-    lsxCode: po.lsx_code,
     orderDate: d,
     expectedAt: po.expected_at,
-  }).filter((c) => c.label !== 'LSX' || po.lsx_code)
+  })
   const n = cols.length
   const amountIdx = cols.findIndex((c) => c.isAmount) // 0-based
 

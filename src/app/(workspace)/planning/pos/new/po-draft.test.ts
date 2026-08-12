@@ -59,23 +59,23 @@ const header = (over: Partial<PoHeader> = {}): PoHeader => ({
   vat: 8,
   inclVat: false,
   terms: poTemplateMeta('accessory').terms,
-  signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+  signerRole: 'NGƯỜI LẬP',
   ...over,
 })
 
 describe('templateDefaults — đổi mẫu kéo theo VAT / điều khoản / chữ ký', () => {
-  it('phụ kiện: VAT 8% chưa gồm, ký "TRƯỞNG PHÒNG CUNG ỨNG"', () => {
+  it('phụ kiện: VAT 8% chưa gồm, ký "NGƯỜI LẬP"', () => {
     const d = templateDefaults('accessory')
     expect(d.vat).toBe(8)
     expect(d.inclVat).toBe(false)
-    expect(d.signerRole).toBe('TRƯỞNG PHÒNG CUNG ỨNG')
+    expect(d.signerRole).toBe('NGƯỜI LẬP')
   })
 
-  it('nhôm: VAT 10% chưa gồm, ký TP KẾ HOẠCH', () => {
+  it('nhôm: VAT 10% chưa gồm — chữ ký giữa cũng là NGƯỜI LẬP (form mới)', () => {
     const d = templateDefaults('aluminium')
     expect(d.vat).toBe(10)
     expect(d.inclVat).toBe(false)
-    expect(d.signerRole).toMatch(/KẾ HOẠCH/i)
+    expect(d.signerRole).toBe('NGƯỜI LẬP')
   })
 
   it('inox/sắt: giá ĐÃ gồm VAT — khác hẳn hai mẫu trên', () => {

@@ -84,7 +84,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: true,
-    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng đúng mẫu, đúng chuẩn loại theo yêu cầu',
       delivery_place: DELIVERY_HG,
@@ -103,7 +103,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality:
         'Nhôm đã nhiệt luyện, bề mặt phẳng đẹp. Độ cứng và dung sai theo tiêu chuẩn đã thống nhất',
@@ -121,7 +121,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: true,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Bề mặt phẳng đẹp, đúng mác. Dung sai độ dày và quy cách +/- 5%',
       delivery_place: DELIVERY_HG,
@@ -138,7 +138,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng định lượng, đúng quy cách, thùng không móp rách',
       delivery_place: DELIVERY_HG,
@@ -162,7 +162,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Dây đúng mẫu đã duyệt — bảo hành 24 tháng, UV 1.500h',
       delivery_place: DELIVERY_HG,
@@ -180,7 +180,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng mã màu, đạt chuẩn ngoài trời theo mẫu đã duyệt',
       delivery_place: DELIVERY_HG,
@@ -203,7 +203,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 8,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng chủng loại, quy cách can/bao như đơn',
       delivery_place: DELIVERY_HG,
@@ -225,7 +225,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Đúng quy cách, màu sắc theo mẫu đã duyệt',
       delivery_place: DELIVERY_HG,
@@ -249,7 +249,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: true,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Làm đúng mẫu đã duyệt — bo góc, mài cạnh theo yêu cầu trên đơn',
       delivery_place: DELIVERY_HG,
@@ -269,7 +269,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG KẾ HOẠCH',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Bề mặt gỗ không trám trít, không nứt nẻ',
       delivery_place: DELIVERY_HG,
@@ -302,7 +302,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: false,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: 'Hàng mới 100%, đúng model / mã hãng đã chào',
       delivery_place: DELIVERY_HG,
@@ -319,7 +319,7 @@ export const PO_TEMPLATE_META: Record<PoTemplate, PoTemplateMeta> = {
     vatRate: 10,
     priceIncludesVat: true,
     hasDiscount: false,
-    signerRole: 'TRƯỞNG PHÒNG CUNG ỨNG',
+    signerRole: 'NGƯỜI LẬP',
     terms: {
       quality: '',
       delivery_place: DELIVERY_HG,

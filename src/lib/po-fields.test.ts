@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from './po-template'
-import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fields'
+import {
+  PO_FIELDS,
+  PO_PRINT_ORDER,
+  PO_PRINT_QTY_LABEL,
+  poField,
+} from './po-fields'
 
 /**
  * Khoá BỘ CỘT PHIẾU IN đúng như bản đang gửi nhà cung cấp.
@@ -23,21 +28,19 @@ import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fie
  * danh mục thật: nhóm bao bì có 24 đơn vị, chỉ 259/942 mã là Thùng.
  */
 /**
- * KHUNG CHUẨN 08/2026: mọi mẫu mở đầu `STT · LSX · Mã sản phẩm · Tên SP/vật tư`
- * (đối chiếu đơn ĐH chuẩn — đơn sơn 01/26 HG/MĐ của phòng Cung ứng). "Mã sản
- * phẩm" là mã vật tư danh mục, luôn có — khác cột "Mã SP" gõ tay đã bỏ ở 0106.
- * Mẫu đơn giản thêm `Ngày đặt hàng · Thời gian giao hàng` đúng ảnh chuẩn.
+ * KHUNG CHUẨN 08/2026, chỉnh 12/08/2026 theo form mẫu mới: mọi mẫu mở đầu
+ * `STT · Tên SP/vật tư`. LSX + Đơn hàng nằm ở KHUNG GÓC PHẢI đầu phiếu chứ
+ * không phải cột bảng kê; cột "Mã sản phẩm" (mã vật tư danh mục) bỏ khỏi mọi
+ * mẫu. Mẫu đơn giản thêm `Ngày đặt hàng · Thời gian giao hàng` đúng ảnh chuẩn.
  */
 const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   accessory: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Quy cách',
     'SL đơn hàng',
-    'Tồn kho',
+    // "Tồn kho" bỏ 12/08/2026 (duyệt cột từng mẫu) — số nội bộ, không in cho NCC.
     'ĐVT',
     'SL đặt',
     'Đơn giá (VND)',
@@ -46,15 +49,13 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     'STT',
-    'LSX',
-    // Không có "Mã sản phẩm" (08/08/2026) — phiếu nhôm nhận diện bằng Mã khuôn,
-    // hai cột mã cạnh nhau chỉ làm NCC rối.
     'Tên sản phẩm / vật tư',
     'Mã khuôn',
     'kg/m',
     'Dài cây (m)',
     'ĐVT',
-    'Số cây',
+    // "Số cây" → "Số lượng" (12/08/2026) — nhãn đồng bộ, đơn vị cây nói ở ĐVT.
+    'Số lượng',
     // "Cây dư" đã bỏ theo yêu cầu phòng Cung ứng — không nhập được thì in ra
     // cũng chỉ là một cột rỗng trên phiếu gửi NCC.
     'Tổng kg',
@@ -65,8 +66,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Kích thước',
@@ -81,13 +80,12 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   carton: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Cách mở',
     'Pcs/thùng',
     'ĐVT',
-    'Số thùng',
+    // "Số thùng" → "Số lượng" (12/08/2026) — ĐVT thật của dòng nói ở cột ĐVT.
+    'Số lượng',
     'Lọt lòng D×R×C (mm)',
     'm²/thùng',
     // Đơn thật in cả giá/m² + bản in trước đơn giá/thùng (0134 — Hồng Đào CL).
@@ -101,8 +99,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // mây theo form Vipora (Định mức đứng sau tiền), sơn theo form Green Coatings.
   rattan: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
@@ -114,22 +110,17 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   paint: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Mã màu NCC',
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Ngày đặt hàng',
-    'Thời gian giao hàng',
+    // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 — đã có ở đầu phiếu.
     'Ghi chú',
   ],
   chemical: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
@@ -140,15 +131,12 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   foam: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
-    // Xốp theo m³ (0134 — Tân Hoàng Long): quy cách tấm + tổng khối lên phiếu.
-    'D×R×Dày (mm)',
+    // "D×R×Dày" + "Tổng m³" bỏ khỏi phiếu in 12/08/2026 — vẫn là ô trên form
+    // để tính m³ và gợi ý giá, không in cho NCC.
     'ĐVT',
     'Số lượng',
-    'Tổng m³',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
@@ -157,23 +145,19 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // New ISO/Tiến Phước).
   glass: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Loại kính',
     'Quy cách',
     'ĐVT',
     'Số lượng',
     'm²/tấm',
-    'Tổng m²',
+    // "Tổng m²" bỏ khỏi phiếu in 12/08/2026 — vẫn tự tính trên form.
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
   ],
   wood: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'ĐVT',
     'Số lượng',
@@ -183,7 +167,7 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Thành tiền (VND)',
     'Loại gỗ',
     'Màu gỗ',
-    'KH giao hàng',
+    // "KH giao hàng" theo dòng bỏ 12/08/2026 — hẹn giao dùng chung đầu phiếu.
     'Ghi chú',
   ],
   // Mẫu 'outsourcing' đã gỡ 12/08/2026 — gia công là nghiệp vụ ngoài tầm vật tư.
@@ -191,8 +175,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // NCC giao đúng nhờ MODEL, phòng đối chiếu về sau nhờ "dùng cho máy" + bảo hành.
   mro: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Model / Mã hãng',
     'Quy cách',
@@ -206,16 +188,13 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   simple: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Ngày đặt hàng',
-    'Thời gian giao hàng',
+    // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 — đã có ở đầu phiếu.
     'Ghi chú',
   ],
 }
@@ -224,8 +203,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
 function nhanCot(t: PoTemplate): string[] {
   const CO_DINH: Record<string, string> = {
     '@stt': 'STT',
-    '@lsx': 'LSX',
-    '@code': 'Mã sản phẩm',
     '@name': 'Tên sản phẩm / vật tư',
     '@unit': 'ĐVT',
     '@price': 'Đơn giá (VND)',
@@ -291,3 +268,4 @@ describe('PO_PRINT_ORDER — bộ cột phiếu in', () => {
     expect(bb.indexOf('@qty')).toBeLessThan(bb.indexOf('inner'))
   })
 })
+

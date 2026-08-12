@@ -90,7 +90,10 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('grade', 'Vật liệu', 'w-[110px]', 'material_grade', 'Sắt xi trắng…'),
     t('spec', 'Quy cách', 'w-[110px]', 'spec', '25×50×1li…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
-    { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
+    // "Tồn kho" bỏ hẳn khỏi phiếu phụ kiện (user chốt 12/08/2026 khi duyệt cột
+    // từng mẫu): tồn là số nội bộ, NCC chỉ cần SL đơn hàng để hiểu con số đặt.
+    // `qty_on_hand` vẫn được chụp lúc chọn vật tư nên gợi ý "đặt = nhu cầu − tồn"
+    // không đổi.
   ],
   aluminium: [
     { key: 'die', label: 'Mã khuôn', width: 'w-[120px]', kind: 'die', field: 'die_code' },
@@ -168,7 +171,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   ],
   paint: [
     // Đơn sơn thật (Dosa/Việt Sapa/Đắc Vinh/TNP) nhận diện hàng bằng MÃ MÀU
-    // của NCC (T67443C (C679-ASA)…) — khác mã vật tư danh mục in ở cột @code.
+    // của NCC (T67443C (C679-ASA)…) — khác mã vật tư trong danh mục kho.
     t('grade', 'Mã màu NCC', 'w-[130px]', 'material_grade', 'T67443C (C679-ASA)…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
@@ -267,11 +270,12 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
  * `… pcs/thùng · SỐ THÙNG · lọt lòng`. Cột kỹ thuật là mẫu NCC đang ký nên giữ
  * nguyên từng vị trí; đảo cột là họ phải dò lại.
  *
- * KHUNG CHUẨN 08/2026 (đối chiếu đơn ĐH chuẩn của phòng Cung ứng, đơn sơn
- * 01/26 HG/MĐ): mọi mẫu mở đầu bằng `STT · LSX · Mã sản phẩm · Tên SP/vật tư`.
- * "Mã sản phẩm" ở đây là MÃ VẬT TƯ trong danh mục (trước in nhỏ dưới tên) —
- * khác cột "Mã SP" tự gõ đã bỏ năm 0106 vì không ai điền. Cột LSX lặp số lệnh
- * của đầu đơn xuống từng dòng; đơn NGOÀI LSX thì trang in tự ẩn cột này.
+ * KHUNG CHUẨN 08/2026, chỉnh 12/08/2026 theo form mẫu mới: mọi mẫu mở đầu bằng
+ * `STT · Tên SP/vật tư`. LSX và Đơn hàng KHÔNG là cột trong bảng kê — chúng nằm
+ * ở KHUNG GÓC PHẢI đầu phiếu (Số ĐH · Theo HD số · LSX · Đơn hàng, xem
+ * `PrintMeta refsBoxed`). Cột "Mã sản phẩm" (mã vật tư danh mục) cũng bỏ khỏi
+ * mọi mẫu — NCC nhận diện hàng bằng tên + cột riêng của mẫu (mã khuôn, mã màu,
+ * quy cách…), mã nội bộ chỉ làm phiếu chật thêm.
  * Riêng mẫu ít cột (đơn giản — sơn/hoá chất dùng) thêm `Ngày đặt hàng · Thời
  * gian giao hàng` đúng ảnh chuẩn; các mẫu kỹ thuật nhiều cột không nhét thêm
  * được trong khổ giấy — hai ngày đó vẫn nằm ở đầu phiếu.
@@ -288,13 +292,10 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
 export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   accessory: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'grade',
     'spec',
     'demand',
-    'onhand',
     // ĐVT đứng TRƯỚC cột số lượng như tám mẫu còn lại (10/08/2026). Trước đây
     // riêng mẫu này in sau, nên NCC nhận hai kiểu bố cục từ cùng một công ty.
     '@unit',
@@ -305,9 +306,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     '@stt',
-    '@lsx',
-    // KHÔNG có "Mã sản phẩm" (bỏ 08/08/2026): phiếu nhôm nhận diện hàng bằng
-    // MÃ KHUÔN — in thêm mã danh mục là hai cột mã cạnh nhau, NCC rối.
     '@name',
     'die',
     'kgm',
@@ -324,8 +322,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'grade',
     'dim',
@@ -340,8 +336,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   carton: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'open',
     'pcs',
@@ -364,8 +358,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   // Mây theo form Vipora: … Mã số · ĐVT · SL · giá · tiền · ĐỊNH MỨC · ghi chú.
   rattan: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'spec',
     '@unit',
@@ -375,71 +367,35 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'dinhmuc',
     '@note',
   ],
-  // Sơn theo form Dosa/Việt Sapa: mã màu NCC đứng cạnh tên; ngày đặt/giao cuối.
-  paint: [
-    '@stt',
-    '@lsx',
-    '@code',
-    '@name',
-    'grade',
-    '@unit',
-    '@qty',
-    '@price',
-    '@amount',
-    '@orderdate',
-    '@delivery',
-    '@note',
-  ],
+  // Sơn theo form Dosa/Việt Sapa: mã màu NCC đứng cạnh tên. Hai cột "Ngày đặt ·
+  // Thời gian giao" BỎ 12/08/2026 (duyệt cột từng mẫu) — hai ngày đã nằm ở đầu
+  // phiếu, lặp xuống từng dòng chỉ tốn bề ngang.
+  paint: ['@stt', '@name', 'grade', '@unit', '@qty', '@price', '@amount', '@note'],
   // Hoá chất theo form Kiệm Tâm: tên vật tư + quy cách can/bao, không màu mè.
-  chemical: [
-    '@stt',
-    '@lsx',
-    '@code',
-    '@name',
-    'spec',
-    '@unit',
-    '@qty',
-    '@price',
-    '@amount',
-    '@note',
-  ],
-  // Xốp theo form Tân Hoàng Long: quy cách D×R×Dày + tổng khối đứng trước SL.
-  foam: [
-    '@stt',
-    '@lsx',
-    '@code',
-    '@name',
-    'spec',
-    'dims',
-    '@unit',
-    '@qty',
-    'm3total',
-    '@price',
-    '@amount',
-    '@note',
-  ],
-  // Kính theo form Mai Trang: Loại kính · Quy cách · ĐVT · SL · m²/tấm · Tổng m².
+  chemical: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+  // Xốp: phiếu in CHỈ giữ Quy cách (user chốt 12/08/2026) — D×R×Dày và Tổng m³
+  // vẫn là ô trên form để tính m³/gợi ý giá, nhưng không in cho NCC.
+  foam: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
+  // Kính theo form Mai Trang: Loại kính · Quy cách · ĐVT · SL · m²/tấm. "Tổng m²"
+  // bỏ khỏi phiếu in 12/08/2026 (duyệt cột từng mẫu) — vẫn tự tính trên form.
   glass: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'loai',
     'quycach',
     '@unit',
     '@qty',
     'm2tam',
-    'm2total',
     '@price',
     '@amount',
     '@note',
   ],
   // Gỗ theo form Minh Đạt: m³/SP (KL gỗ) · giá/m³ · thành tiền · loại gỗ · màu ·
   // kế hoạch giao từng dòng.
+  // "KH giao hàng" theo dòng BỎ 12/08/2026 (duyệt cột từng mẫu) — hẹn giao dùng
+  // chung đầu phiếu; ô nhập `kehoach` vẫn trên form nếu cần ghi chú nội bộ.
   wood: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     '@unit',
     '@qty',
@@ -449,7 +405,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     '@amount',
     'loaigo',
     'maugo',
-    'kehoach',
     '@note',
   ],
   // MRO: model đứng cạnh tên (NCC dò theo mã hãng), "dùng cho máy" giữ trên
@@ -457,8 +412,6 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   // khoản nên đứng sau tiền, giống cách mẫu mây đặt "Định mức".
   mro: [
     '@stt',
-    '@lsx',
-    '@code',
     '@name',
     'model',
     'spec',
@@ -470,28 +423,21 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
     'baohanh',
     '@note',
   ],
-  simple: [
-    '@stt',
-    '@lsx',
-    '@code',
-    '@name',
-    'spec',
-    '@unit',
-    '@qty',
-    '@price',
-    '@amount',
-    '@orderdate',
-    '@delivery',
-    '@note',
-  ],
+  // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 cùng nhịp với mẫu sơn — hai ngày
+  // nằm ở đầu phiếu, 12 mẫu không còn mẫu nào lặp ngày xuống dòng.
+  simple: ['@stt', '@name', 'spec', '@unit', '@qty', '@price', '@amount', '@note'],
 }
 
 /** Nhãn cột số lượng trên phiếu in — mỗi mẫu gọi một kiểu theo đơn vị mua. */
 export const PO_PRINT_QTY_LABEL: Record<PoTemplate, string> = {
   accessory: 'SL đặt',
-  aluminium: 'Số cây',
+  // "Số cây" → "Số lượng" (user chốt 12/08/2026 khi duyệt cột từng mẫu) — đồng
+  // bộ nhãn với các mẫu khác; đơn vị cây đã nói ở cột ĐVT đứng ngay trước.
+  aluminium: 'Số lượng',
   metal_kg: 'Số lượng',
-  carton: 'Số thùng',
+  // "Số thùng" → "Số lượng" (12/08/2026) — bao bì có 24 ĐVT (Tấm/Cuộn/Kg…),
+  // đơn vị thật nói ở cột ĐVT ngay trước.
+  carton: 'Số lượng',
   rattan: 'Số lượng',
   paint: 'Số lượng',
   chemical: 'Số lượng',
@@ -532,3 +478,4 @@ export const PO_PRICE_SUFFIX_TEMPLATES: readonly PoTemplate[] = [
 export function poField(template: PoTemplate, key: string): PoField | undefined {
   return PO_FIELDS[template].find((f) => f.key === key)
 }
+
