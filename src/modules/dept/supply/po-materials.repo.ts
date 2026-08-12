@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { normalizeSearch, searchTokens } from '@/lib/search-text'
+import { namesAlike, sureKey, MIN_KEY_LEN } from '@/lib/material-key'
 
 /**
  * Vật tư như FORM SOẠN ĐƠN cần — TÌM Ở SERVER, không nạp sẵn cả kho.
@@ -259,6 +260,91 @@ export const poMaterialsRepo = {
     return mats
       .sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name, 'vi'))
       .slice(0, opts.limit)
+  },
+
+  /**
+   * KHỚP MÃ CHO VÙNG DÁN TỪ EXCEL (0136) — mỗi dòng sổ (tên, mã nếu có) tìm về
+   * đúng một vật tư danh mục, hoặc danh sách ứng viên để người soạn chọn.
+   *
+   * Ba bậc tin cậy, cùng bộ so với dò-trùng khi khai vật tư (material-key):
+   *   'code'  — sổ có mã và mã tồn tại: khớp thẳng, khỏi so tên.
+   *   'sure'  — sureKey trùng (chỉ lệch dấu câu/khoảng trắng/viết tắt đã bung):
+   *             nghĩa không đổi, tự chọn được.
+   *   'fuzzy' — namesAlike (Buri/Bori, đen/đem…): ĐỀ CỬ chứ không tự chọn —
+   *             UI bắt người soạn xác nhận, sai hàng là sai tiền.
+   * Không bậc nào trúng → match null + ứng viên top đầu để chọn tay.
+   */
+  async matchMany(items: { name: string; code?: string | null }[]): Promise<
+    {
+      match: PoMaterial | null
+      candidates: PoMaterial[]
+      confidence: 'code' | 'sure' | 'fuzzy' | null
+    }[]
+  > {
+    // Mã khớp thẳng — một truy vấn cho cả bộ.
+    const codes = [
+      ...new Set(items.map((i) => i.code?.trim()).filter((c): c is string => !!c)),
+    ]
+    const byCode = new Map<string, PoMaterial>()
+    if (codes.length > 0) {
+      const { data } = await db()
+        .from('warehouse_materials')
+        .select(COLS)
+        .in('code', codes.slice(0, 100))
+      const rows = (data as Record<string, unknown>[] | null) ?? []
+      const rowIds = rows.map((r) => r.id as string)
+      const [onHand, lastLines] = await Promise.all([
+        onHandMany(rowIds),
+        lastLinesMany(rowIds),
+      ])
+      for (const r of rows) {
+        const m = toMaterial(
+          r,
+          onHand.get(r.id as string) ?? null,
+          lastLines.get(r.id as string) ?? null,
+        )
+        byCode.set(m.code, m)
+      }
+    }
+
+    // Tìm theo tên — đi đúng đường search của ô chọn vật tư (không dấu + xếp
+    // hạng mã-đang-dùng). Chạy theo lô 10 để không dội 100 truy vấn cùng lúc.
+    const out: {
+      match: PoMaterial | null
+      candidates: PoMaterial[]
+      confidence: 'code' | 'sure' | 'fuzzy' | null
+    }[] = new Array(items.length)
+    const CHUNK = 10
+    for (let start = 0; start < items.length; start += CHUNK) {
+      const chunk = items.slice(start, start + CHUNK)
+      await Promise.all(
+        chunk.map(async (item, j) => {
+          const i = start + j
+          const coded = item.code?.trim() ? byCode.get(item.code.trim()) : undefined
+          if (coded) {
+            out[i] = { match: coded, candidates: [], confidence: 'code' }
+            return
+          }
+          const candidates = await this.search({ q: item.name, limit: 4 })
+          const key = sureKey(item.name)
+          const sure =
+            key.length >= MIN_KEY_LEN
+              ? candidates.find((c) => sureKey(c.name) === key)
+              : undefined
+          if (sure) {
+            out[i] = { match: sure, candidates, confidence: 'sure' }
+            return
+          }
+          const fuzzy = candidates.find((c) => namesAlike(item.name, c.name))
+          out[i] = {
+            match: fuzzy ?? null,
+            candidates,
+            confidence: fuzzy ? 'fuzzy' : null,
+          }
+        }),
+      )
+    }
+    return out
   },
 
   /** Nạp lại đúng các vật tư đang nằm trên dòng (mở form sửa đơn). */

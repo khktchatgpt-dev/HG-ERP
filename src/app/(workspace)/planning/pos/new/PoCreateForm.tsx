@@ -42,6 +42,7 @@ import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
 import { newFreeLine, newLine, refreshLineFromMaterial, type Line } from './po-line'
 import { EditMaterialDialog } from './EditMaterialDialog'
+import { PasteLinesDialog, type PasteConfirm } from './PasteLinesDialog'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -427,6 +428,8 @@ export function PoCreateForm({
   const [pickOpen, setPickOpen] = useState(false)
   /** Vật tư đang mở modal SỬA TẠI CHỖ (giai đoạn hoàn thiện data) — null = đóng. */
   const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
+  /** Dán từ Excel (0136) — thêm dòng hàng loạt từ bảng trong sổ. */
+  const [pasteOpen, setPasteOpen] = useState(false)
   /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -440,17 +443,70 @@ export function PoCreateForm({
    * Con trỏ nhảy vào SL đặt của dòng ĐẦU TIÊN vừa thêm, không phải dòng cuối:
    * người dùng tích theo thứ tự cần nhập, nên nhập cũng đi theo thứ tự đó.
    */
-  function addMaterials(list: PoMaterial[]) {
-    const add = list.filter((m) => !usedIds.has(m.id))
+  function addMaterials(
+    list: PoMaterial[],
+    /** SL/giá/ghi chú kèm theo (dán từ Excel — 0136) — điền đè sau `newLine`. */
+    extras?: Map<
+      string,
+      { qty?: number | null; price?: number | null; note?: string | null }
+    >,
+  ) {
+    // Bỏ mã đã có trên đơn VÀ mã lặp trong chính danh sách (vùng dán có thể
+    // ghi một món hai dòng) — schema chặn trùng dòng lúc gửi, chặn sớm ở đây.
+    const seen = new Set<string>()
+    const add = list.filter(
+      (m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true),
+    )
     if (add.length === 0) return
     setFocusIndex(lines.length) // dòng mới nối vào cuối bảng
-    setLines((ls) => [...ls, ...add.map((m) => newLine(template, m))])
+    setLines((ls) => [
+      ...ls,
+      ...add.map((m) => {
+        const l = newLine(template, m)
+        const e = extras?.get(m.id)
+        if (!e) return l
+        return {
+          ...l,
+          qty: e.qty ?? l.qty,
+          price: e.price ?? l.price,
+          note: e.note ?? l.note,
+        }
+      }),
+    ])
   }
 
   /** Dòng tự do (0134) — đơn gỗ/gia công đặt theo MÃ SP, tên gõ ngay trên dòng. */
   function addFreeLine() {
     setFocusIndex(lines.length)
     setLines((ls) => [...ls, newFreeLine()])
+  }
+
+  /** Kết quả dán từ Excel (0136): dòng khớp mã + dòng tự gõ, kèm SL/giá của sổ. */
+  function addFromPaste(picked: PasteConfirm) {
+    const extras = new Map(
+      picked.matched.map((p) => [
+        p.material.id,
+        { qty: p.qty, price: p.price, note: p.note },
+      ]),
+    )
+    addMaterials(
+      picked.matched.map((p) => p.material),
+      extras,
+    )
+    if (picked.free.length > 0) {
+      setLines((ls) => [
+        ...ls,
+        ...picked.free.map((f) => ({
+          ...newFreeLine(),
+          name: f.name,
+          qty: (f.qty ?? '') as Line['qty'],
+          price: (f.price ?? '') as Line['price'],
+          note: f.note ?? '',
+        })),
+      ])
+    }
+    const total = picked.matched.length + picked.free.length
+    if (total > 0) toast.success(`Đã thêm ${total} dòng từ vùng dán`)
   }
 
   /**
@@ -922,6 +978,15 @@ export function PoCreateForm({
           }
         />
 
+        {/* Dán từ Excel (0136) — thêm dòng hàng loạt từ bảng trong sổ. */}
+        <PasteLinesDialog
+          open={pasteOpen}
+          template={template}
+          allowFree={FREE_LINE_TEMPLATES.includes(template)}
+          onClose={() => setPasteOpen(false)}
+          onConfirm={addFromPaste}
+        />
+
         {/*
           THANH THÊM DÒNG — NẰM NGOÀI BẢNG.
 
@@ -962,6 +1027,16 @@ export function PoCreateForm({
             <kbd className="text-muted-foreground ml-auto hidden rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 font-mono text-[10px] font-medium sm:inline dark:border-zinc-700 dark:bg-zinc-900">
               Enter
             </kbd>
+          </button>
+          {/* DÁN TỪ EXCEL (0136) — BOM chưa hoàn thiện, SL vẫn tính trong sổ:
+              dán vùng bảng, máy khớp mã, xem lại rồi vào đơn một lượt. */}
+          <button
+            type="button"
+            onClick={() => setPasteOpen(true)}
+            className="inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-[13px] font-medium text-zinc-600 shadow-xs transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            title="Dán vùng bảng (tên/mã · SL · giá) từ sổ Excel — máy khớp mã, thêm dòng hàng loạt"
+          >
+            ⎘ Dán từ Excel
           </button>
           {/*
             DÒNG TỰ DO (0134) — chỉ mẫu gỗ/gia công: đơn thật đặt theo MÃ SẢN
