@@ -39,6 +39,12 @@ export const materialCreateSchema = z.object({
   pack_unit: z.string().trim().max(30).optional().nullable(),
   material_grade: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
+  /**
+   * Cờ "CHỜ KHO RÀ" (0136) — form khai nhanh trong đơn đặt gửi true: người khai
+   * đang vội soạn đơn, Kho rà lại sau (đối chiếu trùng, bổ sung barem/kệ). Form
+   * danh mục không gửi → mặc định false. PATCH {needs_review:false} = đã rà.
+   */
+  needs_review: z.coerce.boolean().optional(),
 })
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
@@ -55,6 +61,8 @@ export const materialListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   group_name: z.string().trim().max(100).optional(),
   active_only: z.coerce.boolean().default(false),
+  /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
+  needs_review: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(500),
 })
@@ -97,12 +105,22 @@ export const receiptDocLineSchema = z.object({
 })
 
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
-export const receiptDocSchema = z.object({
-  po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
-  counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
-  note: z.string().trim().max(2000).optional().nullable(),
-  lines: z.array(receiptDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
-})
+export const receiptDocSchema = z
+  .object({
+    po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
+    counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+    note: z.string().trim().max(2000).optional().nullable(),
+    // Nhận VƯỢT số còn thiếu của đơn: mặc định chặn (409 OVER_RECEIPT). NCC giao
+    // dư là chuyện có thật — người nhận xác nhận thì gửi lại kèm cờ + lý do
+    // (ghi vào ghi chú phiếu). Cùng lối với override_reserved của phiếu xuất.
+    allow_over: z.coerce.boolean().default(false),
+    over_reason: z.string().trim().max(500).optional().nullable(),
+    lines: z.array(receiptDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+  })
+  .refine((d) => !d.allow_over || !!d.over_reason?.trim(), {
+    message: 'Nhận vượt số còn thiếu phải kèm lý do',
+    path: ['over_reason'],
+  })
 
 export const issueDocLineSchema = z.object({
   material_id: z.string().uuid(),

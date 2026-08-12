@@ -17,7 +17,7 @@ import { PAGE_SIZE } from './constants'
 export default async function MaterialsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string; page?: string }>
+  searchParams: Promise<{ q?: string; group?: string; page?: string; review?: string }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -32,6 +32,8 @@ export default async function MaterialsPage({
     materialsService.list(user, {
       q,
       group_name: group,
+      // ?review=1 — chỉ vật tư Cung ứng khai nhanh từ form đơn, chờ Kho rà (0136).
+      needs_review: sp.review === '1' ? true : undefined,
       page,
       page_size: PAGE_SIZE,
       active_only: false,
@@ -49,7 +51,7 @@ export default async function MaterialsPage({
       canEdit={canEdit}
       counts={counts}
       page={page}
-      filters={{ q: sp.q ?? '', group: sp.group ?? '' }}
+      filters={{ q: sp.q ?? '', group: sp.group ?? '', review: sp.review === '1' }}
       taxonomy={tax}
     />
   )

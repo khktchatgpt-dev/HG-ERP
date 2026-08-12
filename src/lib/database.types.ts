@@ -4306,6 +4306,7 @@ export type Database = {
           barcode: string | null
           code: string
           created_at: string
+          created_by: string | null
           default_bar_length_m: number | null
           default_supplier_id: string | null
           group_name: string | null
@@ -4318,6 +4319,7 @@ export type Database = {
           max_stock: number | null
           min_stock: number
           name: string
+          needs_review: boolean
           note: string | null
           pack_size: number | null
           pack_unit: string | null
@@ -4338,6 +4340,7 @@ export type Database = {
           barcode?: string | null
           code: string
           created_at?: string
+          created_by?: string | null
           default_bar_length_m?: number | null
           default_supplier_id?: string | null
           group_name?: string | null
@@ -4350,6 +4353,7 @@ export type Database = {
           max_stock?: number | null
           min_stock?: number
           name: string
+          needs_review?: boolean
           note?: string | null
           pack_size?: number | null
           pack_unit?: string | null
@@ -4370,6 +4374,7 @@ export type Database = {
           barcode?: string | null
           code?: string
           created_at?: string
+          created_by?: string | null
           default_bar_length_m?: number | null
           default_supplier_id?: string | null
           group_name?: string | null
@@ -4382,6 +4387,7 @@ export type Database = {
           max_stock?: number | null
           min_stock?: number
           name?: string
+          needs_review?: boolean
           note?: string | null
           pack_size?: number | null
           pack_unit?: string | null
@@ -4399,6 +4405,13 @@ export type Database = {
           vat_rate?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_materials_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_materials_default_supplier_id_fkey"
             columns: ["default_supplier_id"]

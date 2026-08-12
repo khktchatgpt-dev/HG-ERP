@@ -72,6 +72,9 @@ describe('materialsService.update — chia chủ quyền theo nhóm trường (v
     ['shelf_location', { shelf_location: 'B-01' }],
     ['barcode', { barcode: 'x' }],
     ['is_active', { is_active: false }],
+    // Gỡ cờ "chờ Kho rà" (0136) là việc của KHO — Cung ứng tự gỡ cờ cho vật tư
+    // mình vừa khai vội thì cái cờ vô nghĩa.
+    ['needs_review', { needs_review: false }],
   ])('Cung ứng đụng trường tồn trữ "%s" → 403, không patch', async (_k, patch) => {
     vi.mocked(canAction).mockResolvedValue(false)
     vi.mocked(assertAction).mockResolvedValue(undefined)
@@ -150,6 +153,34 @@ describe('materialsService.create — không được rơi trường nào xuốn
       kg_per_m: null,
       default_bar_length_m: null,
     })
+  })
+
+  /*
+   * CỜ "CHỜ KHO RÀ" (0136): form khai nhanh trong đơn gửi needs_review=true —
+   * người khai đang vội, Kho rà lại sau. Form danh mục không gửi → false.
+   * created_by ghi vết để Kho biết hỏi ai.
+   */
+  it('khai nhanh từ form đơn: needs_review=true + ghi vết người khai', async () => {
+    await materialsService.create(cungUng, {
+      name: 'Kính trắng 605x539x5mm',
+      unit: 'Tấm',
+      min_stock: 0,
+      needs_review: true,
+    })
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ needs_review: true, created_by: cungUng.id }),
+    )
+  })
+
+  it('khai từ danh mục (không gửi cờ) → needs_review=false', async () => {
+    await materialsService.create(cungUng, {
+      name: 'Vít 5x30',
+      unit: 'con',
+      min_stock: 0,
+    })
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ needs_review: false }),
+    )
   })
 
   it('trùng mã → 409, không insert', async () => {

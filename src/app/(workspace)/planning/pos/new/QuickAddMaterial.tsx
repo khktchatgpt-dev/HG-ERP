@@ -73,14 +73,32 @@ export function QuickAddMaterial({
     templateHint: soanTheoMau,
     requireGroup: true,
   })
+  /*
+   * XÁC NHẬN 2 NHỊP khi có tên gần giống (0136): cảnh báo mềm cũ nằm ở hint —
+   * người đang vội lướt qua và bấm Thêm luôn, mã trùng thứ n ra đời (đợt dedupe
+   * từng phải gộp 277 mã). Giờ có cảnh báo là nút Thêm khoá lại cho tới khi
+   * tick "đã đối chiếu" — vẫn khai được hàng thật sự mới, chỉ thêm một nhịp
+   * dừng đúng chỗ cần dừng.
+   */
+  // Tick gắn với ĐÚNG cái tên lúc xác nhận — đổi tên là danh sách gần giống
+  // đổi, tick cũ tự hết giá trị (không cần effect reset).
+  const [confirmedFor, setConfirmedFor] = useState('')
+  const daDoiChieu = confirmedFor === core.f.name
+  const canSimilar = core.similar.length > 0
+  const blocked = core.invalid || (canSimilar && !daDoiChieu)
 
   async function handle() {
-    if (core.invalid || busy) return
+    if (blocked || busy) return
     setBusy(true)
     try {
       const { material } = await api<{ material: CreatedMaterial }>(
         '/api/dept/warehouse/materials',
-        { method: 'POST', body: { ...core.corePayload(), min_stock: 0 } },
+        {
+          method: 'POST',
+          // needs_review (0136): khai giữa lúc soạn đơn — đánh dấu cho Kho rà
+          // lại (đối chiếu trùng, bổ sung barem/kệ) ở danh mục.
+          body: { ...core.corePayload(), min_stock: 0, needs_review: true },
+        },
       )
       toast.success(`Đã thêm ${material.code}`, 'Vật tư vào ngay dòng đặt bên dưới')
       // Ô chọn vật tư cache kết quả tìm theo tab — không xoá thì vật tư vừa tạo
@@ -128,8 +146,24 @@ export function QuickAddMaterial({
               subListId="qa-nhom-phu"
             />
             <p className="text-muted-foreground text-xs">
-              Tồn tối thiểu, vị trí kệ, mã vạch… Kho bổ sung sau ở danh mục vật tư.
+              Vật tư khai ở đây mang cờ <b>chờ Kho rà</b> — Kho đối chiếu trùng và bổ sung
+              tồn tối thiểu, vị trí kệ, mã vạch… sau ở danh mục vật tư.
             </p>
+            {/* Có tên gần giống → nút Thêm khoá tới khi xác nhận đã đối chiếu. */}
+            {canSimilar && (
+              <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+                <input
+                  type="checkbox"
+                  checked={daDoiChieu}
+                  onChange={(e) => setConfirmedFor(e.target.checked ? core.f.name : '')}
+                  className="mt-0.5"
+                />
+                <span>
+                  Tôi đã đối chiếu các mã gần giống ở trên — đây là <b>hàng khác</b>,
+                  không phải cùng một món viết lệch chính tả.
+                </span>
+              </label>
+            )}
             <div className="flex justify-end gap-2">
               <button
                 type="button"
@@ -140,7 +174,12 @@ export function QuickAddMaterial({
               </button>
               <button
                 type="button"
-                disabled={busy || core.invalid}
+                disabled={busy || blocked}
+                title={
+                  canSimilar && !daDoiChieu
+                    ? 'Có tên gần giống — tick xác nhận đã đối chiếu trước'
+                    : undefined
+                }
                 onClick={() => void handle()}
                 className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
               >

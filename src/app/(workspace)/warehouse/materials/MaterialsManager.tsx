@@ -65,6 +65,8 @@ type Material = {
   default_supplier_id: string | null
   last_purchase_price: number | null
   note: string | null
+  /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — Kho gỡ cờ khi đã chuẩn hoá. */
+  needs_review: boolean
   is_active: boolean
 }
 
@@ -86,9 +88,9 @@ export function MaterialsManager({
   suppliers: SupplierOption[]
   canEdit: boolean
   /** Đếm ở DB theo bộ lọc — KHÔNG phải số dòng đang hiện trên trang. */
-  counts: { total: number; active: number; noShelf: number }
+  counts: { total: number; active: number; noShelf: number; needsReview: number }
   page: number
-  filters: { q: string; group: string }
+  filters: { q: string; group: string; review: boolean }
   /**
    * ĐVT + nhóm + nhóm phụ chuẩn, nạp sẵn ở server (trang đã gọi `materialTaxonomy`
    * cho bộ lọc rồi). Đưa cả cụm xuống thì form khai vật tư khỏi gọi lại API.
@@ -221,7 +223,11 @@ export function MaterialsManager({
       sortValue: (m) => m.code,
       cell: (m) => (
         <div className="flex min-w-0 flex-col">
-          <span className="font-mono text-xs text-zinc-400">{m.code}</span>
+          <span className="flex items-center gap-1.5 font-mono text-xs text-zinc-400">
+            {m.code}
+            {/* Khai nhanh từ form đơn (0136) — Kho rà xong thì gỡ ở menu dòng. */}
+            {m.needs_review && <Badge tone="amber">chờ Kho rà</Badge>}
+          </span>
           <span className="truncate font-medium">{m.name}</span>
         </div>
       ),
@@ -314,6 +320,19 @@ export function MaterialsManager({
           <RowMenu
             items={[
               { label: 'Sửa', onClick: () => setEditing(m) },
+              // Vật tư Cung ứng khai vội từ form đơn (0136): Kho đối chiếu
+              // trùng + bổ sung barem/kệ xong thì gỡ cờ tại đây.
+              ...(m.needs_review
+                ? [
+                    {
+                      label: 'Đã rà xong — gỡ cờ',
+                      onClick: () =>
+                        send(`/api/dept/warehouse/materials/${m.id}`, 'PATCH', {
+                          needs_review: false,
+                        }),
+                    },
+                  ]
+                : []),
               {
                 label: m.is_active ? 'Ngừng sử dụng' : 'Kích hoạt lại',
                 onClick: () =>
@@ -386,6 +405,12 @@ export function MaterialsManager({
             value: stats.noShelf,
             tone: stats.noShelf ? 'amber' : 'gray',
           },
+          // Khai nhanh từ form đơn đặt, chờ Kho rà (0136) — lọc bằng nút ở toolbar.
+          {
+            label: 'Chờ Kho rà',
+            value: counts.needsReview,
+            tone: counts.needsReview ? 'amber' : 'gray',
+          },
         ]}
       />
 
@@ -413,12 +438,28 @@ export function MaterialsManager({
                 onChange={(v) => setStatusFilter(v)}
                 options={statusOptions}
               />
-              {(filters.q || filters.group || statusFilter !== 'all') && (
+              {/* Chip lọc "Chờ Kho rà" (0136) — server lọc, không lọc trang. */}
+              <button
+                onClick={() => pushFilter({ review: filters.review ? '' : '1' })}
+                aria-pressed={filters.review}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  filters.review
+                    ? 'border-amber-400 bg-amber-50 font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                    : 'border-zinc-300 text-zinc-500 hover:border-amber-400 hover:text-amber-700 dark:border-zinc-700'
+                }`}
+                title="Vật tư Cung ứng khai nhanh từ form đơn — Kho rà xong gỡ cờ ở menu dòng"
+              >
+                Chờ Kho rà{counts.needsReview ? ` (${counts.needsReview})` : ''}
+              </button>
+              {(filters.q ||
+                filters.group ||
+                filters.review ||
+                statusFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setQ('')
                     setStatusFilter('all')
-                    pushFilter({ q: '', group: '' })
+                    pushFilter({ q: '', group: '', review: '' })
                   }}
                   className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
                 >
@@ -559,18 +600,18 @@ export function MaterialsManager({
 // ── Form ─────────────────────────────────────────────────────────────────
 
 /**
- * KHAI VẬT TƯ Ở DANH MỤC — bốn mảng theo đúng thứ tự người khai nghĩ:
- * vật tư này là gì (Nhận dạng) → xếp vào đâu, tính tiền kiểu nào (Phân loại) →
- * NCC báo giá ra sao → Kho giữ bao nhiêu (Tồn trữ).
- *
- * Ba mảng đầu là `MaterialCoreFields`, DÙNG CHUNG với form thêm nhanh trong đơn
- * đặt. Trước đây hai chỗ hỏi lệch nhau: ở đây nhóm là ô GÕ TAY và không có ô
- * nhóm phụ / mẫu đơn / kg/m, nên vật tư khai từ danh mục ra đời thiếu mẫu và
- * barem — đơn nhôm/inox không tính được tiền cho nó.
- *
- * Cung ứng (`scope='purchasing'`) KHÔNG thấy mảng Tồn trữ và ô mã vạch. Bản cũ
- * vẫn vẽ ra rồi `disabled`: mười ô xám nằm giữa form, kéo dài thêm cái hộp vốn
- * đã cao 1234px trên màn 768px, mà bấm vào cũng không được gì.
+ * KHAI VẬT TƯ Ở DANH MỤC — TÁCH THEO NGHIỆP VỤ (0136):
+ *   · Khối CHUNG (`MaterialCoreFields`): Nhận dạng → Phân loại → barem — phải
+ *     giống hệt giữa mọi chỗ khai, không thì vật tư khai từ một bên thiếu dữ
+ *     liệu bên kia cần (bài học cũ: vật tư khai ở danh mục ra đời thiếu barem,
+ *     đơn nhôm/inox không tính được tiền).
+ *   · Kho (`scope='warehouse'`): + Tồn trữ (min/max, kệ, mã vạch). KHÔNG thấy
+ *     mảng Mua hàng / Cách NCC báo giá — nghiệp vụ của Cung ứng.
+ *   · Cung ứng (`scope='purchasing'`): + Mua hàng (NCC mặc định, VAT, giá tham
+ *     chiếu) + Cách NCC báo giá. KHÔNG thấy Tồn trữ.
+ * Mảng của bên kia là KHÔNG RENDER (không phải disabled) — và payload chỉ gửi
+ * trường có ô nhập, vì ô không render thì FormData trả null và PATCH sẽ ghi
+ * null đè (xoá dữ liệu bên kia im lặng).
  */
 function MaterialForm({
   initial,
@@ -619,13 +660,21 @@ function MaterialForm({
       return v != null && String(v).trim() !== '' ? Number(v) : null
     }
     const body: Record<string, unknown> = {
-      // Nhận dạng + phân loại + cách báo giá — chung với form trong đơn đặt.
+      // Nhận dạng + phân loại + barem — khối CHUNG hai nghiệp vụ (lệch là vật
+      // tư khai từ một bên thiếu dữ liệu bên kia cần, bài học cũ).
       ...core.corePayload(),
       code: String(fd.get('code') ?? '').trim() || null,
-      default_supplier_id: String(fd.get('default_supplier_id') ?? '') || null,
-      vat_rate: numOrNull('vat_rate'),
-      last_purchase_price: numOrNull('last_purchase_price'),
       note: String(fd.get('note') ?? '').trim() || null,
+    }
+    /*
+     * TÁCH THEO NGHIỆP VỤ (0136): trường MUA HÀNG chỉ form Cung ứng có ô nhập —
+     * form Kho không render chúng, mà FormData thiếu ô thì fd.get trả null và
+     * PATCH sẽ ghi null đè (xoá NCC mặc định im lặng). Nên chỉ gửi khi có ô.
+     */
+    if (purchasing) {
+      body.default_supplier_id = String(fd.get('default_supplier_id') ?? '') || null
+      body.vat_rate = numOrNull('vat_rate')
+      body.last_purchase_price = numOrNull('last_purchase_price')
     }
     // Trường tồn trữ là của Kho — Cung ứng không gửi lên (server cũng chặn).
     if (!purchasing) {
@@ -648,66 +697,75 @@ function MaterialForm({
         inputClass={cls}
         unitListId="mat-dvt"
         subListId="mat-nhom-phu"
-        /* Chỉ danh mục mới hỏi "NCC báo giá theo đơn vị nào" — form trong đơn đặt
-           tắt đi, lý do ở khai báo `pricingNote`. */
-        pricingNote
+        /* "Cách NCC báo giá" là việc Cung ứng — tách khỏi form Kho (0136),
+           cùng nhịp với mảng Mua hàng bên dưới. */
+        pricingNote={purchasing}
       />
 
-      <FormSection title="Mua hàng" hint="tự điền lên đơn đặt">
-        <Field label="NCC mặc định">
-          <select
-            name="default_supplier_id"
-            defaultValue={initial?.default_supplier_id ?? ''}
-            className={cls}
-          >
-            <option value="">— không —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="VAT mặc định (%)">
-          <input
-            name="vat_rate"
-            type="number"
-            min={0}
-            max={100}
-            step="0.1"
-            placeholder="VD: 10"
-            defaultValue={initial?.vat_rate ?? ''}
-            className={`${cls} tabular-nums`}
-          />
-        </Field>
-        <Field label="Đơn giá tham chiếu" hint="Prefill đơn giá khi lên đơn đặt.">
-          <input
-            name="last_purchase_price"
-            type="number"
-            min={0}
-            step="1"
-            placeholder={core.dual ? `đ / ${core.f.price_unit}` : 'đ / đơn vị đặt'}
-            defaultValue={initial?.last_purchase_price ?? ''}
-            className={`${cls} tabular-nums`}
-          />
-        </Field>
-        <Field
-          label="Mã vật tư"
-          hint={
-            initial ? undefined : 'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
-          }
-        >
-          {/* Kho vẫn gõ tay được khi cần bám mã cũ; bỏ trống thì server cấp
-              `XX-0000` nối tiếp tiền tố mà nhóm đó đang dùng. */}
-          <input
-            name="code"
-            maxLength={60}
-            defaultValue={initial?.code ?? ''}
-            placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
-            className={`${cls} font-mono`}
-          />
-        </Field>
-      </FormSection>
+      {/* Mã là DANH TÍNH danh mục — cả hai nghiệp vụ đều thấy, không thuộc mảng
+          Mua hàng hay Tồn trữ. */}
+      <Field
+        label="Mã vật tư"
+        hint={
+          initial ? undefined : 'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
+        }
+      >
+        <input
+          name="code"
+          maxLength={60}
+          defaultValue={initial?.code ?? ''}
+          placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
+          className={`${cls} font-mono`}
+        />
+      </Field>
+
+      {/*
+        TÁCH THEO NGHIỆP VỤ (0136): mảng MUA HÀNG chỉ ở màn Cung ứng — đối xứng
+        với mảng Tồn trữ chỉ ở màn Kho. Trước đây Kho vẫn thấy NCC mặc định /
+        VAT / giá tham chiếu dù dòng mô tả trang đã nói "Cung ứng sửa trường
+        mua hàng" — hai màn nói một đằng bày một nẻo.
+      */}
+      {purchasing && (
+        <FormSection title="Mua hàng" hint="tự điền lên đơn đặt">
+          <Field label="NCC mặc định">
+            <select
+              name="default_supplier_id"
+              defaultValue={initial?.default_supplier_id ?? ''}
+              className={cls}
+            >
+              <option value="">— không —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="VAT mặc định (%)">
+            <input
+              name="vat_rate"
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              placeholder="VD: 10"
+              defaultValue={initial?.vat_rate ?? ''}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+          <Field label="Đơn giá tham chiếu" hint="Prefill đơn giá khi lên đơn đặt." span>
+            <input
+              name="last_purchase_price"
+              type="number"
+              min={0}
+              step="1"
+              placeholder={core.dual ? `đ / ${core.f.price_unit}` : 'đ / đơn vị đặt'}
+              defaultValue={initial?.last_purchase_price ?? ''}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+        </FormSection>
+      )}
 
       {purchasing ? (
         <p className="text-xs text-zinc-400">
@@ -801,6 +859,12 @@ function MaterialForm({
             />
           </Field>
         </FormSection>
+      )}
+      {!purchasing && (
+        <p className="text-xs text-zinc-400">
+          NCC mặc định, VAT, giá tham chiếu, cách NCC báo giá — Cung ứng quản ở
+          <b> Kế hoạch › Vật tư &amp; giá mua</b>.
+        </p>
       )}
 
       <Field label="Ghi chú">

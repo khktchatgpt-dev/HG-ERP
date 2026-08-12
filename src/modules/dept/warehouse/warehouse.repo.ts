@@ -41,18 +41,23 @@ export type Material = {
   /** Vật liệu / màu (0124) — cột "Vật liệu" của đơn phụ kiện/inox. */
   material_grade: string | null
   note: string | null
+  /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — gỡ cờ khi đã chuẩn hoá. */
+  needs_review: boolean
+  created_by: string | null
   is_active: boolean
   created_at: string
   updated_at: string
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, note, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, note, needs_review, created_by, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
   group_name?: string
   active_only: boolean
+  /** true = chỉ vật tư "chờ Kho rà" (0136). */
+  needs_review?: boolean
   page: number
   page_size: number
 }
@@ -90,6 +95,7 @@ export const materialsRepo = {
 
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
+    if (filter.needs_review) q = q.eq('needs_review', true)
     // Tìm KHÔNG DẤU trên search_text (0127) — AND từng từ, gõ "vit 4x15" vẫn trúng.
     for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
 
@@ -114,7 +120,7 @@ export const materialsRepo = {
   async counts(filter: {
     q?: string
     group_name?: string
-  }): Promise<{ total: number; active: number; noShelf: number }> {
+  }): Promise<{ total: number; active: number; noShelf: number; needsReview: number }> {
     const base = () => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
@@ -122,12 +128,19 @@ export const materialsRepo = {
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
-    const [all, act, shelf] = await Promise.all([
+    const [all, act, shelf, review] = await Promise.all([
       base(),
       base().eq('is_active', true),
       base().is('shelf_location', null),
+      // Khai nhanh từ form đơn, chờ Kho rà (0136) — ô đếm để Kho khỏi quên.
+      base().eq('needs_review', true),
     ])
-    return { total: all.count ?? 0, active: act.count ?? 0, noShelf: shelf.count ?? 0 }
+    return {
+      total: all.count ?? 0,
+      active: act.count ?? 0,
+      noShelf: shelf.count ?? 0,
+      needsReview: review.count ?? 0,
+    }
   },
 
   async findById(id: string): Promise<Material | null> {

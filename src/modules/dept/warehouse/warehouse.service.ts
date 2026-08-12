@@ -59,6 +59,8 @@ type CreateInput = {
   /** Vật liệu / màu (0124) — tự điền cột "Vật liệu" của đơn phụ kiện. */
   material_grade?: string | null
   note?: string | null
+  /** Khai nhanh từ form đơn đặt gửi true — chờ Kho rà lại (0136). */
+  needs_review?: boolean
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
@@ -132,6 +134,8 @@ export const materialsService = {
       q?: string
       group_name?: string
       active_only?: boolean
+      /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
+      needs_review?: boolean
       page: number
       page_size: number
     },
@@ -141,6 +145,7 @@ export const materialsService = {
       q: opts.q,
       group_name: opts.group_name,
       active_only: opts.active_only ?? false,
+      needs_review: opts.needs_review,
       page: opts.page,
       page_size: opts.page_size,
     })
@@ -232,6 +237,10 @@ export const materialsService = {
       pack_unit: input.pack_unit?.trim() || null,
       material_grade: input.material_grade?.trim() || null,
       note: input.note ?? null,
+      // Khai nhanh từ form đơn đặt gửi cờ "chờ Kho rà" (0136); ghi vết người
+      // khai để Kho biết hỏi ai khi tên/quy cách không rõ.
+      needs_review: input.needs_review ?? false,
+      created_by: user.id,
     })
 
     // Vật tư mới có thể mang nhóm phụ chưa từng có — xoá cache để form kế tiếp
