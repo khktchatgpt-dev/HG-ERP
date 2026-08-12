@@ -201,6 +201,16 @@ for (const p of parts) {
   // danh mục kho là mời gọi gán bừa.
   let hit = matchName(probe)
   let via = probe
+  /*
+   * 'tròn' vs 'phi' (13/08/2026): danh mục kho gọi ống tròn là "phi" — "Nhôm
+   * phi 25x1li" (NH-0003), không phải "nhôm tròn 25x1li" — nên tên dựng bằng
+   * 'tròn' trượt CẢ HỌ ống tròn dù mã có sẵn. Thử biến thể trước khi bó tay.
+   */
+  if (!hit && p.group_code === 'FRAME' && probe.includes('tròn')) {
+    const alt = probe.replace('tròn', 'phi')
+    hit = matchName(alt)
+    if (hit) via = alt
+  }
   if (!hit && SUPPLY_GROUPS.has(p.group_code) && probe !== p.part_name) {
     hit = matchName(p.part_name)
     if (hit) via = p.part_name

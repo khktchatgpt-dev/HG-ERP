@@ -393,3 +393,27 @@ hàng loạt, khoá chống trùng dùng `tên + tên file`, mà sau khi cắt m
 `Bàn NK 65 26441-217` và `Bàn NK 65 26440-219` ra cùng tên "Bàn NK 65" nên bản
 thứ hai bị nuốt. Muốn làm sau thì đưa `code_legacy` vào khoá chống trùng, và cho
 `matchProduct` nhận thêm dạng tên đã ghép khách ("ROSCO 5") để không tạo trùng.
+
+### Đợt 5 — 'tròn' vs 'phi' + phân tích phần còn trống (13/08/2026)
+
+User hỏi "có nên thêm hết định mức vào kho không" → chốt nguyên tắc: **kho chỉ
+chứa thứ MUA VÀO và nhập-xuất-tồn được**. Chi tiết gia công (Chân sau…) không
+bao giờ thành mã kho — chúng map về NGUYÊN LIỆU.
+
+**Mở khóa từ vựng**: máy dựng "nhôm tròn 25x1li" nhưng danh mục gọi "Nhôm **phi**
+25x1li" — thêm biến thể tròn→phi vào `bom-material-match.mjs`, gắn thêm **172
+dòng mức CHẮC** (FRAME 182 hit trong đó 172 chắc; NGU_KIM/PACKAGING/LABEL lẻ tẻ).
+Tổng đã gắn: 648 → **820/3.993**.
+
+**3.173 dòng còn trống chia rổ** (`scripts/dinh-muc-gap-analysis.mjs`, 1.050 tổ hợp):
+
+| Rổ | Tổ hợp / dòng | Xử lý |
+|---|---|---|
+| Nguyên liệu (khung/gỗ/tấm) danh tính ĐỦ nhưng kho không có mã | ~490 / ~1.700 | phần lớn là danh tính THIẾU MẢNH: "nhôm tròn 1li" (94 dòng — thiếu đường kính), "nhôm" (66), "sắt tròn" (48), "tròn 25x1.2li" (33 — thiếu vật liệu), "sắt tròn 19" (44 — thiếu độ dày, kho có nhiều biến thể phi 19) → **Kỹ thuật bổ sung tiết diện trên thẻ sửa** rồi máy chạy lại; phần kho thiếu thật (gỗ bạch đàn 25, gỗ Teck 20…) → **mở vài mã nguyên liệu mới** |
+| Mua rời (ngũ kim/bao bì/tem) không khớp mã nào | 509 / 892 | ứng viên MÃ MỚI — xuất danh sách kèm tần suất cho Kho duyệt hàng loạt, KHÔNG cho máy tự đẻ (bài học materials-dedupe) |
+| Mờ / trùng chéo chờ người chọn | ~37 / ~96 | mat-fuzzy.txt + các ca "Long đền" khớp 2 mã |
+| Không dựng được danh tính | — / 393 | dòng thiếu cả vật liệu lẫn tiết diện trong file gốc |
+| Chờ nghiệp vụ (nệm 42, vải, kính) | 6 / 58 | user chốt: may nội bộ (map mút/vải/gòn) hay đặt ngoài nguyên cái (mở mã) |
+
+Bài học đợt này: trước khi kết luận "kho thiếu mã", soi TỪ VỰNG danh mục — một
+từ lệch ('tròn'/'phi') giấu cả trăm mã có sẵn.
