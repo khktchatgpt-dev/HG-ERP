@@ -109,7 +109,12 @@ export type DomainEvent =
       code: string
       decision: 'approved' | 'rejected'
       decided_by: string
-      created_by: string | null
+      /**
+       * NGƯỜI PHỤ TRÁCH đơn lúc ra quyết định (`assigned_to`, đơn cũ rơi về
+       * `created_by`) — người phải biết kết quả. Trước đây bắn theo `created_by`
+       * nên đơn đã bàn giao (0128) thì người đang cầm đơn không hề hay biết.
+       */
+      owner_id: string | null
       reason?: string
     }
   // Rút đơn CHỜ DUYỆT về nháp để sửa (0128 — 6.2b): báo người duyệt khỏi

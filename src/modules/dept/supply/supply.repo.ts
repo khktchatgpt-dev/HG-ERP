@@ -273,14 +273,30 @@ export const supplyRepo = {
     return (data as { code: string } | null)?.code ?? null
   },
 
-  /** code + status của PO — guard nhập kho theo đơn (chỉ RECEIVABLE). */
-  async poStatus(poId: string): Promise<{ code: string; status: string } | null> {
+  /**
+   * code + status + NGƯỜI PHỤ TRÁCH của PO — guard nhập kho theo đơn (chỉ
+   * RECEIVABLE) và để báo hàng về cho đúng người (0128: chủ đơn là
+   * `assigned_to`, đơn cũ chưa backfill thì rơi về `created_by`).
+   */
+  async poStatus(poId: string): Promise<{
+    code: string
+    status: string
+    assigned_to: string | null
+    created_by: string | null
+  } | null> {
     const { data } = await db()
       .from('supply_purchase_orders')
-      .select('code, status')
+      .select('code, status, assigned_to, created_by')
       .eq('id', poId)
       .maybeSingle()
-    return (data as { code: string; status: string } | null) ?? null
+    return (
+      (data as {
+        code: string
+        status: string
+        assigned_to: string | null
+        created_by: string | null
+      } | null) ?? null
+    )
   },
 }
 

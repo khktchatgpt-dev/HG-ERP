@@ -87,7 +87,12 @@ type Row = {
   qty_rejected: number | ''
   qc_status: '' | 'pass' | 'partial' | 'fail'
   po_line_id: string | null
-  qty_ordered: number | null
+  /**
+   * CÒN THIẾU của dòng PO (không phải SL đặt). Cột trên form vẫn ghi "Còn thiếu"
+   * nhưng trước đây đổ `qty_ordered` — với đơn giao nhiều đợt, người nhận đối
+   * chiếu thực nhập với một con số to hơn thực tế rồi nhập thừa.
+   */
+  qty_missing: number | null
   shelf_location: string
   note: string
 }
@@ -483,7 +488,7 @@ function ReceiptForm({
             qty_rejected: '',
             qc_status: '',
             po_line_id: l.id,
-            qty_ordered: l.qty_ordered,
+            qty_missing: l.qty_missing,
             shelf_location: materialById.get(l.material_id)?.shelf_location ?? '',
             note: '',
           })),
@@ -502,7 +507,7 @@ function ReceiptForm({
         qty_rejected: '',
         qc_status: '',
         po_line_id: null,
-        qty_ordered: null,
+        qty_missing: null,
         shelf_location: m?.shelf_location ?? '',
         note: '',
       },
@@ -512,41 +517,104 @@ function ReceiptForm({
   const invalid =
     rows.length === 0 || rows.some((r) => !r.material_id || r.qty === '' || Number(r.qty) <= 0)
 
-  async function handle(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
+  /**
+   * Nhận vượt số còn thiếu → server trả 409 OVER_RECEIPT. Không chặn cứng: NCC
+   * giao dư vài cây là chuyện có thật — hiện cảnh báo, bắt nhập lý do rồi gửi
+   * lại kèm cờ. Cùng lối với RESERVED_CONFLICT của phiếu xuất.
+   */
+  const [conflict, setConflict] = useState<{
+    message: string
+    body: Record<string, unknown>
+  } | null>(null)
+  const [overReason, setOverReason] = useState('')
+
+  async function post(body: Record<string, unknown>) {
     setBusy(true)
     try {
       const result = await api<{ code: string; po_status: string | null }>(
         '/api/dept/warehouse/docs/receipt',
-        {
-          method: 'POST',
-          body: {
-            po_id: poId || null,
-            counterparty: String(fd.get('counterparty') ?? '').trim() || null,
-            note: String(fd.get('note') ?? '').trim() || null,
-            lines: rows.map((r) => ({
-              material_id: r.material_id,
-              qty: Number(r.qty),
-              qty_rejected: r.qty_rejected === '' ? 0 : Number(r.qty_rejected),
-              qc_status: r.qc_status || undefined,
-              po_line_id: r.po_line_id,
-              shelf_location: r.shelf_location.trim() || null,
-              note: r.note.trim() || null,
-            })),
-          },
-        },
+        { method: 'POST', body },
       )
+      setConflict(null)
       onDone(result.code, result.po_status)
     } catch (err) {
+      if (err instanceof ApiError && err.code === 'OVER_RECEIPT') {
+        setConflict({ message: err.message, body })
+        return
+      }
       toast.error('Lập phiếu thất bại', err instanceof ApiError ? err.message : 'Có lỗi')
     } finally {
       setBusy(false)
     }
   }
 
+  async function handle(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    await post({
+      po_id: poId || null,
+      counterparty: String(fd.get('counterparty') ?? '').trim() || null,
+      note: String(fd.get('note') ?? '').trim() || null,
+      lines: rows.map((r) => ({
+        material_id: r.material_id,
+        qty: Number(r.qty),
+        qty_rejected: r.qty_rejected === '' ? 0 : Number(r.qty_rejected),
+        qc_status: r.qc_status || undefined,
+        po_line_id: r.po_line_id,
+        shelf_location: r.shelf_location.trim() || null,
+        note: r.note.trim() || null,
+      })),
+    })
+  }
+
   return (
     <form onSubmit={handle} className="flex flex-col gap-3">
+      {conflict && (
+        <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/40">
+          <div className="text-sm font-medium text-amber-800 dark:text-amber-300">
+            ⚠ Nhận vượt số còn thiếu của đơn đặt
+          </div>
+          <div className="mt-1 text-xs text-amber-700 dark:text-amber-300/90">
+            {conflict.message}
+          </div>
+          <label className="mt-2 flex flex-col gap-1 text-xs">
+            Lý do vẫn nhập <span className="text-red-500">*</span>
+            <input
+              value={overReason}
+              onChange={(e) => setOverReason(e.target.value)}
+              maxLength={500}
+              placeholder="VD: NCC giao dư theo thoả thuận bù hao"
+              className={inputCls}
+            />
+          </label>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setConflict(null)
+                setOverReason('')
+              }}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-white dark:border-zinc-700 dark:hover:bg-zinc-900"
+            >
+              Sửa lại số lượng
+            </button>
+            <button
+              type="button"
+              disabled={busy || !overReason.trim()}
+              onClick={() =>
+                void post({
+                  ...conflict.body,
+                  allow_over: true,
+                  over_reason: overReason.trim(),
+                })
+              }
+              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}Vẫn nhập
+            </button>
+          </div>
+        </div>
+      )}
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
           Nguồn nhập
@@ -628,8 +696,10 @@ function ReceiptForm({
                     )}
                   </td>
                   {poId && (
-                    <td className="py-1.5 pr-2 text-right text-zinc-500">
-                      {r.qty_ordered != null ? r.qty_ordered : ''}
+                    <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-500">
+                      {r.qty_missing != null
+                        ? `${r.qty_missing.toLocaleString('vi-VN')} ${mat?.unit ?? ''}`
+                        : ''}
                     </td>
                   )}
                   <td className="py-1.5 pr-2">
@@ -805,7 +875,7 @@ function IssueForm({
             qty_rejected: '',
             qc_status: '' as const,
             po_line_id: null,
-            qty_ordered: null,
+            qty_missing: null,
             shelf_location: materialById.get(n.material_id)?.shelf_location ?? '',
             note: '',
           })),
@@ -827,7 +897,7 @@ function IssueForm({
         qty_rejected: '',
         qc_status: '',
         po_line_id: null,
-        qty_ordered: null,
+        qty_missing: null,
         shelf_location: m?.shelf_location ?? '',
         note: '',
       },
