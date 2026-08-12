@@ -29,6 +29,20 @@ import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service
  * để quyết định có hỏi barem kg/m hay không, không lưu vào danh mục.
  */
 
+/**
+ * STYLE CHUẨN CỦA MỌI FORM VẬT TƯ (0137 — "chuẩn hóa form về 1 style"):
+ * trước đây ba chỗ khai (danh mục Kho/Cung ứng, khai nhanh trong đơn, sửa tại
+ * dòng) mỗi nơi một bộ class — viền zinc focus amber ở Kho, viền input-token
+ * focus ring ở đơn. Cùng một khối ô hỏi mà nhìn như ba app. Token shadcn/theme:
+ * ô nhập + nút lấy từ đây, KHÔNG tự chế class ở từng form nữa.
+ */
+export const materialInputClass =
+  'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+export const materialBtnPrimary =
+  'inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+export const materialBtnSecondary =
+  'rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs hover:bg-muted'
+
 export type MaterialCore = {
   name: string
   unit: string

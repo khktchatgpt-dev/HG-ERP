@@ -9,6 +9,9 @@ import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import {
   MaterialCoreFields,
   coreFromMaterial,
+  materialBtnPrimary,
+  materialBtnSecondary,
+  materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
 import type { MaterialRefresh } from './po-line'
@@ -21,8 +24,8 @@ type MaterialDetail = MaterialRefresh & {
   sub_group: string | null
 }
 
-const cls =
-  'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+// Style CHUẨN dùng chung mọi form vật tư (0137).
+const cls = materialInputClass
 
 /**
  * SỬA VẬT TƯ NGAY TRÊN DÒNG ĐƠN — hệ thống đang giai đoạn hoàn thiện data:
@@ -143,18 +146,14 @@ export function EditMaterialDialog({
             đơn sau. Số đã gõ tay trên dòng đơn hiện tại vẫn giữ nguyên.
           </p>
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
-            >
+            <button type="button" onClick={onClose} className={materialBtnSecondary}>
               Huỷ
             </button>
             <button
               type="button"
               disabled={busy || core.invalid}
               onClick={() => void save()}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+              className={materialBtnPrimary}
             >
               {busy && <Spinner size={14} />}
               Lưu vào danh mục

@@ -9,6 +9,9 @@ import { Spinner } from '@/components/erp/Spinner'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import {
   MaterialCoreFields,
+  materialBtnPrimary,
+  materialBtnSecondary,
+  materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
 import type { PoTemplate } from '@/lib/po-template'
@@ -40,8 +43,8 @@ export type CreatedMaterial = {
   finish: string | null
 }
 
-const cls =
-  'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+// Style CHUẨN dùng chung mọi form vật tư (0137).
+const cls = materialInputClass
 
 /**
  * Thêm nhanh VẬT TƯ MỚI ngay trong form đặt hàng — hàng phát sinh khi mua (NCC
@@ -172,7 +175,7 @@ export function QuickAddMaterial({
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className={materialBtnSecondary}
               >
                 Huỷ
               </button>
@@ -185,7 +188,7 @@ export function QuickAddMaterial({
                     : undefined
                 }
                 onClick={() => void handle()}
-                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className={materialBtnPrimary}
               >
                 {busy && <Spinner size={14} />}
                 Thêm &amp; đưa vào đơn

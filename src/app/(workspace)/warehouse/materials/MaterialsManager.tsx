@@ -20,6 +20,8 @@ import {
   FormSection,
   MaterialCoreFields,
   coreFromMaterial,
+  materialBtnPrimary,
+  materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
@@ -647,8 +649,8 @@ function MaterialForm({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
   }, [shelfOptions])
 
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  // Style CHUẨN dùng chung mọi form vật tư (0137) — không tự chế class nữa.
+  const cls = materialInputClass
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -885,10 +887,7 @@ function MaterialForm({
             Cần tên vật tư và ĐVT.
           </span>
         )}
-        <button
-          disabled={busy || core.invalid}
-          className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
+        <button disabled={busy || core.invalid} className={materialBtnPrimary}>
           {busy && <Spinner size={14} />}
           {busy ? 'Đang lưu…' : submitLabel}
         </button>
