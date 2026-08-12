@@ -109,18 +109,14 @@ const field =
  */
 const DRAFT_KEY = 'hg-po-draft-new'
 
-/**
- * TẠM TẮT "đề xuất từ BOM" (11/08/2026, theo yêu cầu).
- *
- * Định mức đang được làm lại nên số nhu cầu/đề xuất chưa đáng tin — thà không
- * hiện còn hơn hiện một con số sai rồi có người đặt theo. Tắt cờ này thì:
- * không gọi `/api/dept/supply/needs`, không hiện panel "Nhu cầu từ BOM của
- * LSX", và hộp chọn vật tư + bảng dòng hàng không còn số "lệnh cần"/gợi ý theo
- * BOM (gợi ý theo ô "SL đơn hàng" gõ tay vẫn giữ nguyên).
- *
- * BẬT LẠI: đổi về `true`, không phải sửa gì thêm.
+/*
+ * "Đề xuất từ BOM" từng TẮT TOÀN CỤC (11/08/2026) vì định mức đang làm lại.
+ * BẬT LẠI CÓ KIỂM SOÁT (12/08/2026, user chốt): needs đọc từ BẢNG CHI TIẾT của
+ * chính lệnh (ưu tiên nhập tay, fallback BOM×SL — xem /api/dept/supply/needs),
+ * lệnh nào Kỹ thuật đã nhập thì số là số thật; lệnh chưa có dữ liệu thì panel
+ * tự ẩn (needs rỗng) — im như hồi tắt. Panel mang nhãn "số nháp — đối chiếu
+ * trước khi dùng", và số vẫn chỉ là gợi ý bấm-để-dùng.
  */
-const BOM_NEEDS_ENABLED: boolean = false
 
 type SavedDraft = {
   at: string
@@ -390,7 +386,6 @@ export function PoCreateForm({
    */
   async function loadNeeds(primary: string, extras: string[]) {
     setNeeds([])
-    if (!BOM_NEEDS_ENABLED) return
     if (!primary) return
     setLoadingNeeds(true)
     try {
@@ -868,8 +863,10 @@ export function PoCreateForm({
         </div>
       </section>
 
-      {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc ── */}
-      {BOM_NEEDS_ENABLED && poType === 'lsx' && lsxId && (
+      {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc. Panel tự ẩn khi
+          lệnh chưa có bảng chi tiết/định mức (needs rỗng) — bật lại có kiểm
+          soát 12/08/2026, số mang nhãn nháp. ── */}
+      {poType === 'lsx' && lsxId && (
         <NeedsPanel
           needs={needs}
           pending={pendingNeeds}
