@@ -101,6 +101,19 @@ const field =
  */
 const DRAFT_KEY = 'hg-po-draft-new'
 
+/**
+ * TẠM TẮT "đề xuất từ BOM" (11/08/2026, theo yêu cầu).
+ *
+ * Định mức đang được làm lại nên số nhu cầu/đề xuất chưa đáng tin — thà không
+ * hiện còn hơn hiện một con số sai rồi có người đặt theo. Tắt cờ này thì:
+ * không gọi `/api/dept/supply/needs`, không hiện panel "Nhu cầu từ BOM của
+ * LSX", và hộp chọn vật tư + bảng dòng hàng không còn số "lệnh cần"/gợi ý theo
+ * BOM (gợi ý theo ô "SL đơn hàng" gõ tay vẫn giữ nguyên).
+ *
+ * BẬT LẠI: đổi về `true`, không phải sửa gì thêm.
+ */
+const BOM_NEEDS_ENABLED: boolean = false
+
 type SavedDraft = {
   at: string
   template: PoTemplate
@@ -356,6 +369,7 @@ export function PoCreateForm({
    */
   async function loadNeeds(primary: string, extras: string[]) {
     setNeeds([])
+    if (!BOM_NEEDS_ENABLED) return
     if (!primary) return
     setLoadingNeeds(true)
     try {
@@ -809,7 +823,7 @@ export function PoCreateForm({
       </section>
 
       {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc ── */}
-      {poType === 'lsx' && lsxId && (
+      {BOM_NEEDS_ENABLED && poType === 'lsx' && lsxId && (
         <NeedsPanel
           needs={needs}
           pending={pendingNeeds}

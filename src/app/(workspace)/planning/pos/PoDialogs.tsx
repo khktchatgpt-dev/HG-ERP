@@ -67,7 +67,7 @@ export function ReasonDialog({
           <p className={hint}>{copy.hint}</p>
           <label className="flex flex-col gap-1">
             <span className={label}>
-              Lý do <span className="text-red-500">*</span>
+              Lý do <span className="text-[var(--stop)]">*</span>
             </span>
             <textarea
               rows={3}
@@ -76,20 +76,20 @@ export function ReasonDialog({
               value={state.reason}
               onChange={(e) => onChange({ ...state, reason: e.target.value })}
               placeholder={copy.placeholder}
-              className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+              className="w-full rounded-md border border-input px-2 py-1.5 text-sm focus:border-ring focus:outline-none"
             />
           </label>
           <div className="flex justify-end gap-2">
             <button
               onClick={() => onChange(null)}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
             >
               Quay lại
             </button>
             <button
               disabled={busy || !state.reason.trim()}
               onClick={() => onSubmit(state)}
-              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--stop)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               {busy && <Spinner size={14} />}
               {copy.confirm}
@@ -108,10 +108,10 @@ export type ReassignState = {
 }
 
 const field =
-  'h-9 w-full rounded-md border border-zinc-300 px-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-const label = 'font-medium text-zinc-700 dark:text-zinc-300'
+  'h-9 w-full rounded-md border border-input px-2 text-sm focus:border-ring focus:outline-none'
+const label = 'font-medium text-foreground'
 const hint =
-  'rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400'
+  'rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground'
 
 export function PoDialogs({
   rescheduling,
@@ -152,13 +152,13 @@ export function PoDialogs({
             </p>
             <label className="flex flex-col gap-1">
               <span className={label}>Đang phụ trách</span>
-              <span className="text-zinc-500">
+              <span className="text-muted-foreground">
                 {reassigning.po.assignee_name ?? 'chưa có'}
               </span>
             </label>
             <label className="flex flex-col gap-1">
               <span className={label}>
-                Bàn giao cho <span className="text-red-500">*</span>
+                Bàn giao cho <span className="text-[var(--stop)]">*</span>
               </span>
               <select
                 value={reassigning.toId}
@@ -180,14 +180,14 @@ export function PoDialogs({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => onReassignChange(null)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
               >
                 Huỷ
               </button>
               <button
                 disabled={busy || !reassigning.toId}
                 onClick={() => onReassignSubmit(reassigning)}
-                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Spinner size={14} />}
                 Bàn giao
@@ -212,7 +212,7 @@ export function PoDialogs({
             </p>
             <label className="flex flex-col gap-1">
               <span className={label}>Hẹn giao hiện tại</span>
-              <span className="text-zinc-500">
+              <span className="text-muted-foreground">
                 {currentExpected
                   ? new Date(currentExpected).toLocaleDateString('vi-VN')
                   : 'chưa hẹn'}
@@ -220,7 +220,7 @@ export function PoDialogs({
             </label>
             <label className="flex flex-col gap-1">
               <span className={label}>
-                Ngày giao mới <span className="text-red-500">*</span>
+                Ngày giao mới <span className="text-[var(--stop)]">*</span>
               </span>
               <input
                 type="date"
@@ -233,7 +233,7 @@ export function PoDialogs({
             </label>
             <label className="flex flex-col gap-1">
               <span className={label}>
-                Lý do <span className="text-red-500">*</span>
+                Lý do <span className="text-[var(--stop)]">*</span>
               </span>
               <textarea
                 rows={2}
@@ -243,20 +243,20 @@ export function PoDialogs({
                   onRescheduleChange({ ...rescheduling, reason: e.target.value })
                 }
                 placeholder="NCC báo trễ tàu · xưởng giục sớm · đổi lịch giao…"
-                className="w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-input px-2 py-1.5 text-sm focus:border-ring focus:outline-none"
               />
             </label>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => onRescheduleChange(null)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
               >
                 Huỷ
               </button>
               <button
                 disabled={busy || !rescheduling.date || !rescheduling.reason.trim()}
                 onClick={() => onRescheduleSubmit(rescheduling)}
-                className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Spinner size={14} />}
                 Lưu hẹn giao mới

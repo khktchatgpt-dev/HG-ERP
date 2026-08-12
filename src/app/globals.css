@@ -135,6 +135,77 @@
   --radius: 0.625rem;
 }
 
+/*
+ * MÀU TÍN HIỆU — chỉ ba, và chỉ để mã hoá trạng thái.
+ *
+ * Trước đây mỗi màn tự chọn: sky 95 chỗ, emerald 25, violet 20, blue 18, indigo
+ * 3, purple 1 — không ai biết màu nào là màu chính, nên màu mất hết nghĩa. Nay
+ * `primary` (emerald) là màu HÀNH ĐỘNG duy nhất, còn ba màu dưới đây là màu
+ * TRẠNG THÁI. Không có màu trang trí.
+ */
+.theme-v2 {
+  --warn: #b45309; /* amber-700 — cần để mắt tới, chưa hỏng */
+  --stop: #b42318; /* red-700  — đã hỏng / quá hẹn */
+  --done: #1f7a4c; /* green-700 — xong, đóng sổ */
+}
+
+/*
+ * THANG CHỮ — 5 bậc, thay cho 391 chỗ đang gõ cỡ pixel tuỳ ý (9/10/11/12/13px
+ * lẫn với text-xs/sm). Cỡ tuỳ ý làm mỗi bảng lệch nhau vài pixel, và mắt đọc ra
+ * là "cẩu thả" dù không chỉ được tên.
+ *
+ * `t-data` là mặt chữ DỮ LIỆU: mã PO, mã LSX, tiền, ngày, số lượng. Chữ số
+ * đẳng khoảng (tnum) nên cột tiền thẳng hàng — trước đây tiền dùng font thường
+ * nên hàng nghìn xô lệch, đọc bảng phải dò từng dòng.
+ */
+.t-display {
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.t-title {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+.t-body {
+  font-size: 13px;
+  line-height: 20px;
+}
+.t-label {
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.t-data {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * VẠCH TRẠNG THÁI — chỗ duy nhất màn này "to tiếng".
+ *
+ * Một vạch 3px ở mép trái mỗi dòng/mỗi thẻ, màu theo vị trí vòng đời. Người
+ * mua quét 60 dòng đọc được tình trạng bằng thị giác ngoại vi, không phải đọc
+ * chữ từng dòng. Mọi thứ còn lại giữ im lặng để vạch này nói.
+ */
+.spine {
+  position: relative;
+}
+.spine::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--spine, transparent);
+}
+
+
 .dark .theme-v2 {
   --background: #0c0a09; /* stone-950 */
   --foreground: #e7e5e4; /* stone-200 */

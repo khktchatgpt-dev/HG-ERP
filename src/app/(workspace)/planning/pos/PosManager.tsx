@@ -213,7 +213,7 @@ export function PosManager({
     : null
 
   const btnPrimary =
-    'rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700'
+    'bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm font-medium hover:opacity-90'
 
   return (
     <div className="flex flex-col gap-4">

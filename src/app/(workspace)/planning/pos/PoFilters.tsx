@@ -20,7 +20,7 @@ import type { SupplierOption } from './po-types'
  * Nay số VÀ lối đi là một: mỗi chip vừa nói có bao nhiêu đơn, vừa là nút lọc.
  *   · Hàng chip trên  — SÁU NHÓM vòng đời, chọn một (đơn chỉ ở một chỗ).
  *   · Hàng chip dưới  — BA CÔNG TẮC nhân thêm: của tôi / quá hẹn / chưa hẹn giao.
- * Nhờ tách hai tầng mới hỏi được "đơn chờ duyệt MÀ quá hẹn" — bản cũ nhét cảnh
+ * Nhờ tách hai tầng mới hỏi được "đơn chờ duyệt MÀ quá hẹn " — bản cũ nhét cảnh
  * báo chung ô với trạng thái nên phải chọn một trong hai.
  *
  * Chip số 0 vẫn hiện nhưng mờ và không bấm được: giấu hẳn thì hàng chip nhảy
@@ -30,20 +30,20 @@ import type { SupplierOption } from './po-types'
 export type PoView = 'lsx' | 'flat'
 
 const chipBase =
-  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors'
+  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors'
 const chipOff =
-  'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+  'border-border bg-card hover:border-foreground/30 text-foreground/75'
 const chipEmpty =
-  'border-zinc-200 bg-white text-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-600 cursor-default'
+  'border-border/60 bg-card text-muted-foreground/40 cursor-default'
 const select =
-  'h-8 rounded-lg border border-zinc-200 bg-white px-2 text-xs text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+  'border-border bg-card text-foreground/85 h-8 rounded-lg border px-2 text-[12px]'
 
 /** Số đứng sau nhãn — nền đậm hơn một bậc để đọc được cả khi chip đang bật. */
 function Count({ n, on }: { n: number; on: boolean }) {
   return (
     <span
       className={`rounded-full px-1.5 text-[11px] tabular-nums ${
-        on ? 'bg-white/25' : 'bg-zinc-100 dark:bg-zinc-800'
+        on ? 'bg-card/25' : 'bg-muted'
       }`}
     >
       {n}
@@ -73,9 +73,9 @@ function Chip({
     )
   }
   const onCls = {
-    sky: 'border-sky-600 bg-sky-600 text-white',
-    amber: 'border-amber-500 bg-amber-500 text-white',
-    red: 'border-red-600 bg-red-600 text-white',
+    sky: 'border-primary bg-primary text-primary-foreground',
+    amber: 'border-[var(--warn)] bg-[var(--warn)] text-white',
+    red: 'border-[var(--stop)] bg-[var(--stop)] text-white',
   }[tone]
   return (
     <button
@@ -103,7 +103,7 @@ export function PoFilters({
   onFilter: (f: PoFilterState) => void
   counts: PoCounts
   suppliers: SupplierOption[]
-  /** Chỉ NV cung ứng đã đăng nhập mới có "đơn của tôi" để lọc. */
+  /** Chỉ NV cung ứng đã đăng nhập mới có"đơn của tôi" để lọc. */
   showMine: boolean
   view: PoView
   onView: (v: PoView) => void
@@ -113,19 +113,19 @@ export function PoFilters({
   const active = isFilterActive(filter)
 
   return (
-    <div className="flex flex-col gap-2.5 rounded-xl border border-zinc-200 bg-white px-3.5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="border-border bg-card flex flex-col gap-2.5 rounded-xl border px-3.5 py-3">
       {/* Hàng 1 — tìm, lọc phụ, đổi kiểu xem */}
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-[220px] flex-1">
           <Search
-            className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-zinc-400"
+            className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
             aria-hidden
           />
           <input
             value={filter.q}
             onChange={(e) => set({ q: e.target.value })}
             placeholder="Tìm số PO, NCC, LSX, mã đơn hàng…"
-            className="h-8 w-full rounded-lg border border-zinc-200 bg-white pr-2 pl-8 text-[13px] outline-none focus:border-sky-500 dark:border-zinc-700 dark:bg-zinc-900"
+            className="border-border bg-card focus:border-ring h-8 w-full rounded-lg border pr-2 pl-8 text-[13px] outline-none"
           />
         </label>
 
@@ -155,13 +155,13 @@ export function PoFilters({
         </select>
 
         {busy && (
-          <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500">
+          <span className="inline-flex items-center gap-1.5 text-muted-foreground text-xs">
             <Spinner size={12} /> Đang xử lý…
           </span>
         )}
 
-        {/* Kiểu xem — "theo lệnh" để nắm việc, "danh sách" để soi một đơn. */}
-        <div className="ml-auto inline-flex rounded-lg border border-zinc-200 p-0.5 text-[12px] dark:border-zinc-700">
+        {/* Kiểu xem —"theo lệnh" để nắm việc,"danh sách" để soi một đơn. */}
+        <div className="border-border ml-auto inline-flex rounded-lg border p-0.5 text-[12px]">
           {(
             [
               ['lsx', 'Theo lệnh SX'],
@@ -175,8 +175,8 @@ export function PoFilters({
               className={
                 'rounded-md px-2.5 py-1 font-medium transition-colors ' +
                 (view === v
-                  ? 'bg-sky-600 text-white'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300')
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:text-foreground')
               }
             >
               {label}
@@ -193,7 +193,7 @@ export function PoFilters({
           on={filter.bucket === 'all'}
           onClick={() => set({ bucket: 'all' })}
         />
-        <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+        <span className="bg-border mx-0.5 h-4 w-px" aria-hidden />
         {PO_BUCKETS.map((b) => (
           <Chip
             key={b.key}
@@ -210,21 +210,21 @@ export function PoFilters({
       <div className="flex flex-wrap items-center gap-1.5">
         {showMine && (
           <Chip
-            label="★ Của tôi"
+            label="Của tôi"
             n={counts.mine}
             on={filter.mine}
             onClick={() => set({ mine: !filter.mine })}
           />
         )}
         <Chip
-          label="⚠ Quá hẹn giao"
+          label="Quá hẹn giao"
           n={counts.late}
           tone="red"
           on={filter.late}
           onClick={() => set({ late: !filter.late })}
         />
         <Chip
-          label="⚠ Chưa hẹn giao"
+          label="Chưa hẹn giao"
           n={counts.noEta}
           tone="amber"
           on={filter.noEta}
@@ -234,7 +234,7 @@ export function PoFilters({
           <button
             type="button"
             onClick={() => onFilter({ ...filter, ...EMPTY })}
-            className="text-muted-foreground ml-1 inline-flex items-center gap-1 text-xs hover:text-zinc-700 dark:hover:text-zinc-300"
+            className="text-muted-foreground ml-1 inline-flex items-center gap-1 text-xs hover:text-foreground"
           >
             <X className="size-3" aria-hidden /> Bỏ lọc
           </button>
@@ -244,7 +244,7 @@ export function PoFilters({
   )
 }
 
-/** Giữ nguyên kiểu xem khi bấm "Bỏ lọc" — kiểu xem không phải bộ lọc. */
+/** Giữ nguyên kiểu xem khi bấm"Bỏ lọc" — kiểu xem không phải bộ lọc. */
 const EMPTY = {
   q: '',
   bucket: 'all',

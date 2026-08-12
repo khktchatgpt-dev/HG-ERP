@@ -6,7 +6,12 @@ import { RowMenu } from '@/components/erp/RowMenu'
 import { RefChain } from '@/components/erp/RefChain'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
-import { PO_NEXT_HINT, PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/po-status'
+import {
+  PO_NEXT_HINT,
+  PO_STATUS_LABEL,
+  PO_STATUS_TONE,
+  poSpineColor,
+} from '@/lib/po-status'
 import type { Po } from './po-types'
 import type { usePoActions } from './usePoActions'
 
@@ -20,7 +25,7 @@ import type { usePoActions } from './usePoActions'
  * khác — đổi xong lại mất thứ vừa đọc được là lỗi, không phải tính năng.
  *
  * Khác nhau giữa hai biến thể còn đúng MỘT cột: trong thẻ của một lệnh thì cột
- * "Chuỗi liên kết" chỉ lặp lại cái tiêu đề thẻ vừa nói, nên bỏ.
+ *"Chuỗi liên kết " chỉ lặp lại cái tiêu đề thẻ vừa nói, nên bỏ.
  */
 
 const money = (n: number) => n.toLocaleString('vi-VN')
@@ -46,7 +51,7 @@ export type PoRowDeps = {
 }
 
 /**
- * Menu ⋯ — CHỈ những thao tác "liếc là bấm".
+ * Menu ⋯ — CHỈ những thao tác "liếc là bấm ".
  *
  * Trước Đợt 2, menu này ôm cả vòng đời (10 mục) vì không còn chỗ nào khác để
  * đặt. Nay chi tiết đơn là trang thật và ôm trọn phần đó, nên ở danh sách chỉ
@@ -81,7 +86,7 @@ export function poRowMenu(p: Po, d: PoRowDeps) {
 export type PoColumnCtx = PoRowDeps & {
   today: string
   meId: string | null
-  /** Hạn VT phải về theo lệnh (0126) — nuôi đèn "Kịp SX?" ở cả hai kiểu xem. */
+  /** Hạn VT phải về theo lệnh (0126) — nuôi đèn"Kịp SX?" ở cả hai kiểu xem. */
   dueByLsx: Map<string, string | null>
   /** `group` = nằm trong thẻ của một lệnh, bỏ cột Chuỗi liên kết cho khỏi lặp. */
   variant: 'flat' | 'group'
@@ -113,7 +118,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
           onChange={() => c.selection!.onToggle(p)}
           onClick={(e) => e.stopPropagation()}
           aria-label={`Chọn ${p.code}`}
-          className="size-4 cursor-pointer accent-sky-600"
+          className="accent-primary size-4 cursor-pointer"
         />
       ),
     })
@@ -131,9 +136,9 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
         <div className="flex min-w-0 flex-col">
           <button
             onClick={() => c.onView(p)}
-            className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
+            className="hover:text-primary flex min-w-0 flex-col text-left"
           >
-            <span className="font-mono text-xs text-zinc-400">{p.code}</span>
+            <span className="t-data text-muted-foreground text-[11px]">{p.code}</span>
             <span className="truncate font-medium">{p.supplier_name}</span>
           </button>
           {/*
@@ -142,13 +147,13 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
             đi tìm tiền của nó ở đầu thẻ mà không thấy (tiền cộng ở lệnh chính).
           */}
           {isBorrowed ? (
-            <span className="mt-0.5 w-fit rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+            <span className="mt-0.5 w-fit rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium">
               mua chung — đơn của lệnh {p.lsx_code}
             </span>
           ) : (
             extra.length > 0 && (
               <span
-                className="mt-0.5 w-fit rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                className="mt-0.5 w-fit rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium"
                 title={`Mua chung cho: ${[p.lsx_code, ...extra.map((e) => e.code)].join(', ')}`}
               >
                 gộp {extra.length + 1} lệnh
@@ -175,7 +180,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
             ]}
           />
         ) : (
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-medium">
             Ngoài LSX
           </span>
         ),
@@ -190,9 +195,9 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       width: '130px',
       sortValue: (p) => p.total ?? 0,
       cell: (p) => (
-        <span className="font-medium tabular-nums">
+        <span className="t-data font-medium">
           {money(p.total ?? 0)}{' '}
-          <span className="text-xs text-zinc-400">{p.currency}</span>
+          <span className="text-muted-foreground text-[11px]">{p.currency}</span>
         </span>
       ),
     },
@@ -205,7 +210,9 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
         <div className="flex flex-col gap-0.5">
           <Badge tone={PO_STATUS_TONE[p.status]}>{PO_STATUS_LABEL[p.status]}</Badge>
           {PO_NEXT_HINT[p.status] && (
-            <span className="text-[11px] text-zinc-400">→ {PO_NEXT_HINT[p.status]}</span>
+            <span className="text-muted-foreground text-[11px]">
+              → {PO_NEXT_HINT[p.status]}
+            </span>
           )}
         </div>
       ),
@@ -220,18 +227,18 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
         p.lines_total ? (
           <span
             className={
-              'text-[12px] tabular-nums ' +
+              't-data ' +
               ((p.lines_done ?? 0) >= p.lines_total
-                ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                ? 'font-medium text-[var(--done)]'
                 : (p.lines_done ?? 0) > 0
-                  ? 'text-amber-600 dark:text-amber-500'
-                  : 'text-zinc-500')
+                  ? 'text-[var(--warn)]'
+                  : 'text-muted-foreground')
             }
           >
             {p.lines_done ?? 0}/{p.lines_total} dòng
           </span>
         ) : (
-          <span className="text-zinc-400">—</span>
+          <span className="text-muted-foreground">—</span>
         ),
     },
     {
@@ -248,11 +255,11 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
         // trễ đều bỏ qua nó, nên đây mới là ô cần gọi tên.
         if (!p.expected_at) {
           return isMissingEta(p) ? (
-            <span className="text-[11px] font-medium text-amber-600 dark:text-amber-500">
-              ⚠ Chưa hẹn giao
+            <span className="text-[11px] font-medium text-[var(--warn)]">
+              Chưa hẹn giao
             </span>
           ) : (
-            <span className="text-zinc-400">—</span>
+            <span className="text-muted-foreground">—</span>
           )
         }
         const late = assessPoLate(p, today)
@@ -261,9 +268,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
           <div className="flex flex-col gap-0.5">
             <span className="flex items-center gap-1.5">
               <span
-                className={
-                  late === 'overdue' ? 'font-medium text-red-600 dark:text-red-400' : ''
-                }
+                className={late === 'overdue' ? 'font-medium text-[var(--stop)]' : ''}
               >
                 {new Date(p.expected_at).toLocaleDateString('vi-VN')}
               </span>
@@ -272,15 +277,15 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
               {fit === 'tight' && <Badge tone="amber">Sát hạn SX</Badge>}
             </span>
             {late === 'overdue' && (
-              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
-                ⚠ Quá hẹn {daysBetween(exp, today)} ngày
+              <span className="text-[11px] font-medium text-[var(--stop)]">
+                Quá hẹn {daysBetween(exp, today)} ngày
               </span>
             )}
             {late === 'due_soon' &&
               (() => {
                 const n = daysBetween(today, exp)
                 return (
-                  <span className="text-[11px] text-amber-600 dark:text-amber-500">
+                  <span className="text-muted-foreground text-[11px]">
                     {n === 0 ? 'Đến hẹn hôm nay' : `Sát hẹn · còn ${n} ngày`}
                   </span>
                 )
@@ -301,7 +306,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
             {p.assignee_name}
           </span>
         ) : (
-          <span className="text-zinc-400">—</span>
+          <span className="text-muted-foreground">—</span>
         ),
     },
   )
@@ -360,18 +365,18 @@ export function PoFlatTable({
 export function PoRowsTable({ rows, columns }: { rows: Po[]; columns: Column<Po>[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[720px] table-fixed text-[13px]">
+      <table className="t-body w-full min-w-[720px] table-fixed">
         <colgroup>
           {columns.map((col) => (
             <col key={col.key} style={col.width ? { width: col.width } : undefined} />
           ))}
         </colgroup>
         <thead>
-          <tr className="text-left text-[10px] text-zinc-500 uppercase">
+          <tr className="t-label text-muted-foreground text-left">
             {columns.map((col, i) => (
               <th
                 key={col.key}
-                className={`py-1.5 pr-2 font-medium ${i === 0 ? 'pl-3.5' : ''} ${
+                className={`py-1.5 pr-2 font-medium ${i === 0 ? 'pl-4' : ''} ${
                   col.align === 'right' ? 'text-right' : ''
                 }`}
               >
@@ -382,11 +387,17 @@ export function PoRowsTable({ rows, columns }: { rows: Po[]; columns: Column<Po>
         </thead>
         <tbody>
           {rows.map((p) => (
+            /*
+             * VẠCH TRẠNG THÁI ở mép trái (xem `.spine` trong globals.css).
+             * Dòng đầu tiên của thẻ không kẻ trên — đã có viền đầu thẻ rồi, kẻ
+             * thêm là hai đường sát nhau.
+             */
             <tr
               key={p.id}
-              className={`border-t border-zinc-100 dark:border-zinc-800/60 ${
-                p.status === 'cancelled' ? 'opacity-60' : ''
+              className={`spine border-border/70 [&:not(:first-child)]:border-t ${
+                p.status === 'cancelled' ? 'opacity-55' : ''
               }`}
+              style={{ '--spine': poSpineColor(p.status) } as React.CSSProperties}
             >
               {columns.map((col, i) => (
                 <td

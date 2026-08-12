@@ -11,7 +11,7 @@ import type { Po } from './po-types'
  * nhóm, không phải quyết tám lần giống hệt nhau.
  *
  * Nút chỉ hiện khi TOÀN BỘ phần đang tích hợp lệ cho thao tác đó, và nhãn nói
- * rõ số lượng — "Duyệt 3 đơn" chứ không phải "Duyệt". Một nút mờ kèm dòng giải
+ * rõ số lượng —"Duyệt 3 đơn " chứ không phải "Duyệt ". Một nút mờ kèm dòng giải
  * thích vì sao mờ vẫn bắt người ta đọc; thà không hiện.
  *
  * Thanh dính ĐÁY màn hình: lựa chọn có thể rải khắp trang sau khi cuộn, mà nút
@@ -42,19 +42,19 @@ export function PoBulkBar({
   const btn = 'rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50'
 
   return (
-    <div className="sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-zinc-300 bg-white px-3.5 py-2.5 shadow-lg dark:border-zinc-600 dark:bg-zinc-900">
+    <div className="sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-input bg-card px-3.5 py-2.5 shadow-lg">
       <span className="text-[13px] font-medium">
         Đã chọn <b className="tabular-nums">{n}</b> đơn
       </span>
       {busy && <Spinner size={14} />}
-      <span className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+      <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
 
       {onSubmitAll && (
         <button
           type="button"
           disabled={busy}
           onClick={onSubmitAll}
-          className={`${btn} bg-sky-600 hover:bg-sky-700`}
+          className={`${btn} bg-primary hover:opacity-90`}
         >
           Gửi GĐ duyệt {n} đơn
         </button>
@@ -64,7 +64,7 @@ export function PoBulkBar({
           type="button"
           disabled={busy}
           onClick={onApproveAll}
-          className={`${btn} bg-green-600 hover:bg-green-700`}
+          className={`${btn} bg-[var(--done)] hover:opacity-90`}
         >
           Duyệt {n} đơn
         </button>
@@ -74,7 +74,7 @@ export function PoBulkBar({
           type="button"
           disabled={busy}
           onClick={onOrderAll}
-          className={`${btn} bg-sky-600 hover:bg-sky-700`}
+          className={`${btn} bg-primary hover:opacity-90`}
         >
           Gửi NCC {n} đơn
         </button>
@@ -88,7 +88,7 @@ export function PoBulkBar({
       <button
         type="button"
         onClick={onClear}
-        className="text-muted-foreground ml-1 rounded-md border border-zinc-300 px-2.5 py-1.5 text-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+        className="text-muted-foreground ml-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"
       >
         Bỏ chọn
       </button>

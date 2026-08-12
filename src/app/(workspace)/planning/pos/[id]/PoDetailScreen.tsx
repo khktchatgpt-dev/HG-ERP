@@ -31,8 +31,8 @@ import type { PoLine, StatusLine } from '../po-types'
  * TRANG CHI TIẾT ĐƠN ĐẶT VẬT TƯ — thay cái modal cũ.
  *
  * Bố cục theo hai câu hỏi khác nhau của cùng một người:
- *   TRÁI  — "đơn này gồm những gì": dòng hàng, điều khoản, hồ sơ đính kèm.
- *   PHẢI  — "giờ tôi phải làm gì": tóm tắt + đúng những nút hợp lệ ở trạng thái
+ *   TRÁI  —"đơn này gồm những gì ": dòng hàng, điều khoản, hồ sơ đính kèm.
+ *   PHẢI  —"giờ tôi phải làm gì ": tóm tắt + đúng những nút hợp lệ ở trạng thái
  *           hiện tại, dính theo cuộn nên đơn 30 dòng vẫn với tới được; dưới đó
  *           là lịch sử để biết đơn đã qua tay ai.
  *
@@ -93,17 +93,17 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
   }
 
 const card =
-  'rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900'
+  'rounded-xl border border-border bg-card'
 const cardHead =
-  'flex flex-wrap items-center gap-2 border-b border-zinc-100 px-3.5 py-2.5 text-[13px] dark:border-zinc-800'
+  'flex flex-wrap items-center gap-2 border-b border-border/70 px-3.5 py-2.5 text-[13px]'
 const btn =
-  'w-full rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900'
+  'w-full rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted'
 const btnPrimary =
-  'w-full rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-700'
+  'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
 const btnGreen =
-  'w-full rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700'
+  'w-full rounded-md bg-[var(--done)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
 const btnDanger =
-  'w-full rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-800 dark:hover:bg-red-950'
+  'w-full rounded-md border border-[var(--stop)]/40 px-3 py-1.5 text-sm text-[var(--stop)] hover:bg-[var(--stop)]/10'
 
 export function PoDetailScreen({
   po,
@@ -138,7 +138,7 @@ export function PoDetailScreen({
   const [reasoning, setReasoning] = useState<ReasonState | null>(null)
 
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
-  // "Đã về / còn thiếu" chỉ có nghĩa từ lúc đơn rời bàn duyệt trở đi.
+  //"Đã về / còn thiếu " chỉ có nghĩa từ lúc đơn rời bàn duyệt trở đi.
   const showReceived = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
     po.status,
   )
@@ -184,13 +184,13 @@ export function PoDetailScreen({
               href={`/print/supply/${po.id}`}
               target="_blank"
               rel="noopener"
-              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm shadow-xs hover:bg-muted"
             >
               <Printer className="size-4" aria-hidden /> In đơn đặt hàng
             </a>
             <Link
               href="/planning/pos"
-              className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="inline-flex items-center gap-1.5 rounded-md border border-input px-3 py-1.5 text-sm shadow-xs hover:bg-muted"
             >
               <ArrowLeft className="size-4" aria-hidden /> Về danh sách
             </Link>
@@ -227,7 +227,7 @@ export function PoDetailScreen({
             <div className="overflow-x-auto">
               <table className="w-full min-w-[640px] text-sm">
                 <thead>
-                  <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
+                  <tr className="border-b border-border text-left text-xs text-muted-foreground uppercase">
                     <th className="py-2 pr-2 pl-3.5">Vật tư</th>
                     <th className="w-24 py-2 pr-2">Quy cách</th>
                     <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
@@ -247,18 +247,18 @@ export function PoDetailScreen({
                     return (
                       <tr
                         key={l.id}
-                        className="border-b border-zinc-100 dark:border-zinc-900"
+                        className="border-b border-border/60"
                       >
                         <td className="py-1.5 pr-2 pl-3.5">
                           <div className="flex flex-col">
                             <span>
-                              <span className="font-mono text-xs text-zinc-400">
+                              <span className="font-mono text-xs text-muted-foreground">
                                 {l.material_code}
                               </span>{' '}
                               {l.material_name}
                             </span>
                             {(l.qty2 != null || l.note) && (
-                              <span className="text-xs text-zinc-500">
+                              <span className="text-xs text-muted-foreground">
                                 {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
                                 {l.qty2 != null && l.note && ' · '}
                                 {l.note}
@@ -291,7 +291,7 @@ export function PoDetailScreen({
                             <>
                               {money(l.unit_price)}
                               {l.price_basis === 'unit2' && l.unit2 && (
-                                <span className="text-xs text-violet-600 dark:text-violet-400">
+                                <span className="text-xs text-violet-600">
                                   /{l.unit2}
                                 </span>
                               )}
@@ -318,10 +318,10 @@ export function PoDetailScreen({
                   lines,
                 ).length > 0 && (
                   <tfoot>
-                    <tr className="border-t border-zinc-200 dark:border-zinc-800">
+                    <tr className="border-t border-border">
                       <td
                         colSpan={showReceived ? 6 : 4}
-                        className="py-2 pr-2 pl-3.5 text-right text-xs text-zinc-500"
+                        className="py-2 pr-2 pl-3.5 text-right text-xs text-muted-foreground"
                       >
                         {qtyTotals(
                           lines.some((l) => l.price_basis === 'unit2' && l.unit2),
@@ -355,7 +355,7 @@ export function PoDetailScreen({
                   .map((l, i) => (
                     <span
                       key={l.id || i}
-                      className="rounded-full bg-violet-50 px-2 py-0.5 font-mono text-[11px] font-medium text-violet-700 dark:bg-violet-950/40 dark:text-violet-300"
+                      className="rounded-full bg-violet-50 px-2 py-0.5 font-mono text-[11px] font-medium text-violet-700"
                     >
                       {l.code}
                       {i === 0 && ' · lệnh chính'}
@@ -385,7 +385,7 @@ export function PoDetailScreen({
                   {PO_STATUS_LABEL[po.status]}
                 </Badge>
                 {PO_NEXT_HINT[po.status] && (
-                  <span className="text-[11px] text-zinc-400">
+                  <span className="text-[11px] text-muted-foreground">
                     → {PO_NEXT_HINT[po.status]}
                   </span>
                 )}
@@ -400,7 +400,7 @@ export function PoDetailScreen({
                       <span
                         className={
                           late === 'overdue'
-                            ? 'font-medium text-red-600 dark:text-red-400'
+                            ? 'font-medium text-[var(--stop)]'
                             : ''
                         }
                       >
@@ -408,7 +408,7 @@ export function PoDetailScreen({
                         {late === 'overdue' && ' ⚠ quá hẹn'}
                       </span>
                     ) : isMissingEta(po) ? (
-                      <span className="font-medium text-amber-600 dark:text-amber-500">
+                      <span className="font-medium text-amber-600">
                         ⚠ chưa hẹn giao
                       </span>
                     ) : (
@@ -417,7 +417,7 @@ export function PoDetailScreen({
                   }
                 />
                 <Row label="Ngày tạo" value={day(po.created_at)} />
-                <div className="mt-1 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                <div className="mt-1 border-t border-border/70 pt-2">
                   <Row label="Tiền hàng" value={`${money(m.subtotal)} ${po.currency}`} />
                   {m.discountAmount > 0 && (
                     <Row label="Chiết khấu" value={`− ${money(m.discountAmount)}`} />
@@ -434,7 +434,7 @@ export function PoDetailScreen({
                     </span>
                     <b className="text-base tabular-nums">
                       {money(m.grandTotal)}{' '}
-                      <span className="text-xs font-normal text-zinc-400">
+                      <span className="text-xs font-normal text-muted-foreground">
                         {po.currency}
                       </span>
                     </b>
@@ -543,7 +543,7 @@ export function PoDetailScreen({
                     {po.status === 'cancelled' ? 'Tạo lại từ đơn này' : 'Nhân bản đơn'}
                   </Link>
                 )}
-                {/* Nháp không có "Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho
+                {/* Nháp không có"Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho
                     đơn đã gửi đi và cần để lại dấu vết. */}
                 {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
                   <button
@@ -579,11 +579,11 @@ export function PoDetailScreen({
                       <Badge tone={HISTORY_TONE[h.action]}>
                         {HISTORY_LABEL[h.action]}
                       </Badge>
-                      <span className="text-zinc-500">{h.actor_name ?? 'hệ thống'}</span>
+                      <span className="text-muted-foreground">{h.actor_name ?? 'hệ thống'}</span>
                     </span>
-                    <span className="text-zinc-400">{stamp(h.created_at)}</span>
+                    <span className="text-muted-foreground">{stamp(h.created_at)}</span>
                     {h.reason && (
-                      <span className="text-zinc-600 dark:text-zinc-400">
+                      <span className="text-muted-foreground">
                         “{h.reason}”
                       </span>
                     )}
@@ -642,7 +642,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
  *
  * Bản trước chỉ hiện mỗi `terms` (dòng gộp) nên năm điều khoản riêng — chất
  * lượng, nơi giao, thanh toán, hoá đơn, thời gian giao — chỉ tồn tại trên phiếu
- * in. Người phụ trách muốn kiểm lại "mình đã hẹn thanh toán bao nhiêu ngày"
+ * in. Người phụ trách muốn kiểm lại "mình đã hẹn thanh toán bao nhiêu ngày "
  * phải mở tab in ra xem, mà tờ in thì lại là thứ NCC đang cầm: sai một chữ ở đó
  * là sai cam kết.
  */
@@ -673,7 +673,7 @@ function PoTerms({ po }: { po: PoDetailPo }) {
         ))}
       </dl>
       {(po.terms || po.note) && (
-        <div className="flex flex-col gap-1.5 border-t border-zinc-100 px-3.5 py-3 text-xs text-zinc-600 dark:border-zinc-800 dark:text-zinc-400">
+        <div className="flex flex-col gap-1.5 border-t border-border/70 px-3.5 py-3 text-xs text-muted-foreground">
           {po.terms && <p>{po.terms}</p>}
           {po.note && <p>{po.note}</p>}
         </div>

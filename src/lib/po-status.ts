@@ -118,3 +118,26 @@ export function isPoOpen(status: string): boolean {
 export function poStatusOptions(): { value: PoStatus; label: string }[] {
   return PO_STATUSES.map((s) => ({ value: s, label: PO_STATUS_LABEL[s] }))
 }
+
+/**
+ * MÀU VẠCH TRẠNG THÁI ở mép trái mỗi dòng (xem `.spine` trong globals.css).
+ *
+ * Không dùng lại `PO_STATUS_TONE`: pill trong dòng phân biệt 9 trạng thái, còn
+ * vạch thì đọc bằng khoé mắt nên chỉ được phép nói BỐN điều — chưa ra khỏi nhà,
+ * đang chờ ai đó, xong, bỏ. Nhiều hơn bốn màu thì vạch thành hoa văn.
+ */
+export function poSpineColor(status: PoStatus): string {
+  switch (status) {
+    case 'draft':
+      return 'var(--muted-foreground)'
+    case 'pending_approval':
+    case 'approved':
+      return 'var(--warn)'
+    case 'received':
+      return 'var(--done)'
+    case 'cancelled':
+      return 'transparent'
+    default:
+      return 'var(--primary)'
+  }
+}
