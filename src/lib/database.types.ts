@@ -4309,6 +4309,7 @@ export type Database = {
           created_by: string | null
           default_bar_length_m: number | null
           default_supplier_id: string | null
+          finish: string | null
           group_name: string | null
           id: string
           is_active: boolean
@@ -4321,8 +4322,10 @@ export type Database = {
           name: string
           needs_review: boolean
           note: string | null
+          open_style: string | null
           pack_size: number | null
           pack_unit: string | null
+          pcs_per_ctn: number | null
           po_template: string | null
           price_unit: string | null
           reorder_point: number | null
@@ -4343,6 +4346,7 @@ export type Database = {
           created_by?: string | null
           default_bar_length_m?: number | null
           default_supplier_id?: string | null
+          finish?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
@@ -4355,8 +4359,10 @@ export type Database = {
           name: string
           needs_review?: boolean
           note?: string | null
+          open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
+          pcs_per_ctn?: number | null
           po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null
@@ -4377,6 +4383,7 @@ export type Database = {
           created_by?: string | null
           default_bar_length_m?: number | null
           default_supplier_id?: string | null
+          finish?: string | null
           group_name?: string | null
           id?: string
           is_active?: boolean
@@ -4389,8 +4396,10 @@ export type Database = {
           name?: string
           needs_review?: boolean
           note?: string | null
+          open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
+          pcs_per_ctn?: number | null
           po_template?: string | null
           price_unit?: string | null
           reorder_point?: number | null

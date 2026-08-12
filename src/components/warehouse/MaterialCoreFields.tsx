@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { namesAlike } from '@/lib/material-key'
+import { groupFieldConfig } from '@/lib/material-group-fields'
 import { isSheetLike, kgPerM, rhoFor } from '@/lib/metal-weight'
 import { guessTemplate } from '@/lib/po-template-guess'
 import { type PoTemplate } from '@/lib/po-template'
@@ -45,6 +46,11 @@ export type MaterialCore = {
   /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con). */
   pack_size: string
   pack_unit: string
+  /** Thông số theo nhóm (0137): bao bì — cách mở AD/MR/ĐK + SP mỗi thùng. */
+  open_style: string
+  pcs_per_ctn: string
+  /** Thông số theo nhóm (0137): kim loại — màu / bề mặt ("inox bóng"). */
+  finish: string
 }
 
 export const EMPTY_CORE: MaterialCore = {
@@ -61,6 +67,9 @@ export const EMPTY_CORE: MaterialCore = {
   material_grade: '',
   pack_size: '',
   pack_unit: '',
+  open_style: '',
+  pcs_per_ctn: '',
+  finish: '',
 }
 
 /** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
@@ -97,6 +106,9 @@ export function coreFromMaterial(m: Partial<Record<keyof MaterialCore, unknown>>
     material_grade: str(m.material_grade),
     pack_size: str(m.pack_size),
     pack_unit: str(m.pack_unit),
+    open_style: str(m.open_style),
+    pcs_per_ctn: str(m.pcs_per_ctn),
+    finish: str(m.finish),
   } satisfies MaterialCore
 }
 
@@ -138,6 +150,9 @@ export function useMaterialCore({
     () => tax.groups.find((g) => g.name === f.group_name)?.subs ?? [],
     [tax, f.group_name],
   )
+
+  /** Bộ ô + placeholder theo NHÓM (0137) — mỗi loại vật tư hỏi đúng bộ của nó. */
+  const groupCfg = useMemo(() => groupFieldConfig(f.group_name), [f.group_name])
 
   /*
    * Nạp ĐVT + nhóm + nhóm phụ MỘT LẦN khi form mở (bỏ qua nếu server đã đưa
@@ -307,6 +322,11 @@ export function useMaterialCore({
       pack_size:
         f.pack_size.trim() && f.pack_unit.trim() ? Number(f.pack_size) || null : null,
       pack_unit: f.pack_size.trim() && f.pack_unit.trim() ? f.pack_unit.trim() : null,
+      // Thông số theo nhóm (0137) — ô chỉ hiện đúng nhóm, nhưng GIÁ TRỊ luôn
+      // gửi: đổi nhóm sau khi đã gõ thì số cũ về null thay vì kẹt lại ngầm.
+      open_style: groupCfg.showCarton ? f.open_style.trim() || null : null,
+      pcs_per_ctn: groupCfg.showCarton ? Number(f.pcs_per_ctn) || null : null,
+      finish: groupCfg.showFinish ? f.finish.trim() || null : null,
     }
   }
 
@@ -325,6 +345,7 @@ export function useMaterialCore({
     kgMismatch,
     kgOff,
     dual,
+    groupCfg,
     requireGroup,
     invalid: !f.name.trim() || !f.unit.trim() || (requireGroup && !f.group_name.trim()),
     corePayload,
@@ -597,12 +618,14 @@ export function MaterialCoreFields({
             className={inputClass}
           />
         </Field>
-        <Field label="Quy cách" hint="Tự điền vào dòng đơn khi chọn vật tư.">
+        {/* Placeholder + hint ĐỔI THEO NHÓM (0137): quy cách đúng dạng thì form
+            đơn TỰ BÓC kích thước (carton lọt lòng, kính m²/tấm, xốp m³). */}
+        <Field label="Quy cách" hint={s.groupCfg.specHint}>
           <input
             value={f.spec}
             onChange={set('spec')}
             maxLength={200}
-            placeholder="25×25×1.2mm (cây 6m) · dày 18mm…"
+            placeholder={s.groupCfg.specPlaceholder}
             className={inputClass}
           />
         </Field>
@@ -613,10 +636,55 @@ export function MaterialCoreFields({
             value={f.material_grade}
             onChange={set('material_grade')}
             maxLength={100}
-            placeholder="Nhựa đen · Sắt xi trắng · inox 201…"
+            placeholder={s.groupCfg.gradePlaceholder}
             className={inputClass}
           />
         </Field>
+        {/* KIM LOẠI: màu / bề mặt (0137) — cột "Màu / bề mặt" của đơn inox/sắt,
+            trước chỉ nhớ từ lần đặt gần nhất. */}
+        {s.groupCfg.showFinish && (
+          <Field label="Màu / bề mặt" hint="Tự điền cột Màu / bề mặt trên đơn inox/sắt.">
+            <input
+              value={f.finish}
+              onChange={set('finish')}
+              maxLength={100}
+              placeholder="inox bóng · xi trắng · sơn đen…"
+              className={inputClass}
+            />
+          </Field>
+        )}
+        {/* BAO BÌ: cách mở + SP/thùng (0137) — cách mở quyết định công thức
+            m²/thùng (AD/MR tự tính, ĐK nhập m² tay ở dòng đơn). */}
+        {s.groupCfg.showCarton && (
+          <>
+            <Field
+              label="Cách mở thùng"
+              hint="AD/MR tự tính m² từ lọt lòng; ĐK nhập m² tay."
+            >
+              <select
+                value={f.open_style}
+                onChange={set('open_style')}
+                className={inputClass}
+              >
+                <option value="">— chưa rõ —</option>
+                <option value="AD">AD (âm dương)</option>
+                <option value="MR">MR (một mảnh)</option>
+                <option value="ĐK">ĐK (đối khẩu)</option>
+              </select>
+            </Field>
+            <Field label="SP mỗi thùng (pcs/thùng)">
+              <input
+                value={f.pcs_per_ctn}
+                onChange={set('pcs_per_ctn')}
+                type="number"
+                min={0}
+                step="1"
+                placeholder="vd 1"
+                className={`${inputClass} tabular-nums`}
+              />
+            </Field>
+          </>
+        )}
       </FormSection>
 
       <FormSection title="Phân loại" hint="để lọc/tìm theo nhóm và chặn khai trùng tên">

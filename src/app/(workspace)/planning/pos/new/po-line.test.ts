@@ -740,3 +740,88 @@ describe('newLine — recall lần đặt gần nhất (m²/dims/giá m²/basis)
     expect(l.print_fee).toBe('')
   })
 })
+
+/*
+ * THÔNG SỐ THEO NHÓM ở DANH MỤC (0137): vật tư CHƯA TỪNG lên đơn giờ vẫn mang
+ * đủ cách mở / pcs / bề mặt nếu đã khai — trước chỉ nhớ từ lần đặt gần nhất.
+ * Lần đặt gần nhất (tươi hơn) vẫn thắng danh mục.
+ */
+describe('newLine — thông số theo nhóm từ danh mục (0137)', () => {
+  const thung: PoMaterial = {
+    id: 'm-th',
+    code: 'CN9999',
+    name: 'Thùng test 0137',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '900x605x115',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    open_style: 'AD',
+    pcs_per_ctn: 2,
+    finish: null,
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('carton chưa từng lên đơn: cách mở + pcs từ danh mục → m² TỰ TÍNH ngay', () => {
+    const l = newLine('carton', thung)
+    expect(l.open_style).toBe('AD')
+    expect(l.pcs_per_ctn).toBe(2)
+    // Đủ lọt lòng (spec) + cách mở (danh mục) → m²/thùng có ngay từ dòng đầu.
+    expect(l.area_m2).toBeCloseTo(1.9268, 4)
+  })
+
+  it('lần đặt gần nhất THẮNG danh mục (nguồn tươi hơn)', () => {
+    const l = newLine('carton', {
+      ...thung,
+      last_line: {
+        material_grade: null,
+        dimension_text: null,
+        finish: null,
+        pcs_per_ctn: 4,
+        open_style: 'MR',
+        dm_per_sp: null,
+      },
+    })
+    expect(l.open_style).toBe('MR')
+    expect(l.pcs_per_ctn).toBe(4)
+  })
+
+  it('kim loại: màu/bề mặt từ danh mục khi chưa có lịch sử đặt', () => {
+    const l = newLine('metal_kg', { ...thung, group_name: 'Sắt thép', finish: 'inox bóng' })
+    expect(l.finish).toBe('inox bóng')
+  })
+
+  it('refreshLineFromMaterial: bổ sung cách mở ở danh mục → m² dòng đang mở tính lại', () => {
+    const before = { ...newLine('carton', { ...thung, open_style: null }), area_m2: '' as const }
+    expect(before.open_style).toBe('')
+    const after = refreshLineFromMaterial('carton', before, {
+      name: thung.name,
+      unit: thung.unit,
+      spec: thung.spec,
+      kg_per_m: null,
+      kg_per_unit: null,
+      default_bar_length_m: null,
+      price_unit: null,
+      unit2_factor: null,
+      pack_size: null,
+      pack_unit: null,
+      material_grade: null,
+      open_style: 'AD',
+      pcs_per_ctn: 2,
+      finish: null,
+    })
+    expect(after.open_style).toBe('AD')
+    expect(after.area_m2).toBeCloseTo(1.9268, 4)
+  })
+})

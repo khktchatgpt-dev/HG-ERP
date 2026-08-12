@@ -58,6 +58,10 @@ type CreateInput = {
   pack_unit?: string | null
   /** Vật liệu / màu (0124) — tự điền cột "Vật liệu" của đơn phụ kiện. */
   material_grade?: string | null
+  /** Thông số theo nhóm (0137): bao bì (cách mở + SP/thùng), kim loại (bề mặt). */
+  open_style?: string | null
+  pcs_per_ctn?: number | null
+  finish?: string | null
   note?: string | null
   /** Khai nhanh từ form đơn đặt gửi true — chờ Kho rà lại (0136). */
   needs_review?: boolean
@@ -102,6 +106,10 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'pack_size',
   'pack_unit',
   'material_grade',
+  // Thông số theo nhóm (0137) — phục vụ soạn đơn, Cung ứng sửa được như barem.
+  'open_style',
+  'pcs_per_ctn',
+  'finish',
 ])
 
 /**
@@ -248,6 +256,11 @@ export const materialsService = {
       pack_size: input.pack_size ?? null,
       pack_unit: input.pack_unit?.trim() || null,
       material_grade: input.material_grade?.trim() || null,
+      // Thông số theo nhóm (0137) — CreateInput thiếu trường là create() nuốt
+      // im lặng (bài học po_template cũ), khai rõ cả ba.
+      open_style: input.open_style?.trim() || null,
+      pcs_per_ctn: input.pcs_per_ctn ?? null,
+      finish: input.finish?.trim() || null,
       note: input.note ?? null,
       // Khai nhanh từ form đơn đặt gửi cờ "chờ Kho rà" (0136); ghi vết người
       // khai để Kho biết hỏi ai khi tên/quy cách không rõ.

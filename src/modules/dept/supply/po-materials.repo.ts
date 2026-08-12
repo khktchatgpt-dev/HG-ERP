@@ -65,6 +65,10 @@ export type PoMaterial = {
   pack_unit: string | null
   /** Vật liệu/màu khai ở danh mục (0124) — nguồn dự phòng khi chưa có lần đặt nào. */
   material_grade: string | null
+  /** Thông số theo nhóm (0137): bao bì — cách mở + SP/thùng; kim loại — bề mặt. */
+  open_style: string | null
+  pcs_per_ctn: number | null
+  finish: string | null
   /**
    * Tồn hiện tại. NULL = vật tư CHƯA CÓ SỔ KHO (chưa từng nhập/xuất/kiểm kê) —
    * khác hẳn "tồn 0 thật". Trước go-live tồn đầu kỳ, gần như cả danh mục là
@@ -77,7 +81,7 @@ export type PoMaterial = {
 }
 
 const COLS =
-  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, price_unit, unit2_factor, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade'
+  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, price_unit, unit2_factor, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish'
 
 function toMaterial(
   r: Record<string, unknown>,
@@ -106,6 +110,10 @@ function toMaterial(
     pack_size: r.pack_size == null ? null : Number(r.pack_size),
     pack_unit: (r.pack_unit as string | null) ?? null,
     material_grade: (r.material_grade as string | null) ?? null,
+    // Thông số theo nhóm (0137) — chọn vật tư là dòng đơn đủ cách mở/pcs/bề mặt.
+    open_style: (r.open_style as string | null) ?? null,
+    pcs_per_ctn: r.pcs_per_ctn == null ? null : Number(r.pcs_per_ctn),
+    finish: (r.finish as string | null) ?? null,
     on_hand: onHand,
     last_line: lastLine,
   }

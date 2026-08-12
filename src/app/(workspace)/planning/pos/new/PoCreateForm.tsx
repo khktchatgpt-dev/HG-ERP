@@ -1084,6 +1084,11 @@ export function PoCreateForm({
                 pack_size: m.pack_size,
                 pack_unit: m.pack_unit,
                 material_grade: m.material_grade,
+                // Thông số theo nhóm (0137) vừa khai — dòng đầu tiên dùng ngay
+                // (cách mở là m²/thùng tự tính, bề mặt điền cột đơn inox).
+                open_style: m.open_style,
+                pcs_per_ctn: m.pcs_per_ctn,
+                finish: m.finish,
                 // Vừa khai xong thì chưa có sổ kho — null, hiện "kho ?".
                 on_hand: null,
                 // Vật tư vừa khai thì chưa có lịch sử đặt để rót vào ô mô tả.

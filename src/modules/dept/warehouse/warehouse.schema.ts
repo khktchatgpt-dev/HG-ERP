@@ -38,6 +38,11 @@ export const materialCreateSchema = z.object({
   pack_size: z.coerce.number().positive().optional().nullable(),
   pack_unit: z.string().trim().max(30).optional().nullable(),
   material_grade: z.string().trim().max(100).optional().nullable(),
+  // Thông số theo nhóm (0137): bao bì (cách mở + SP/thùng) và kim loại (màu/
+  // bề mặt) — trước chỉ nhớ được từ lần đặt gần nhất, vật tư mới thì gõ tay.
+  open_style: z.string().trim().max(20).optional().nullable(),
+  pcs_per_ctn: z.coerce.number().positive().optional().nullable(),
+  finish: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
   /**
    * Cờ "CHỜ KHO RÀ" (0136) — form khai nhanh trong đơn đặt gửi true: người khai

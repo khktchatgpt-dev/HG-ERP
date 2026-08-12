@@ -236,7 +236,9 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
   const inner =
     t === 'carton' || t === 'foam' ? (parseInnerDims(m.spec) ?? lastDims) : null
   const glassDims = t === 'glass' ? parseInnerDims(m.spec) : null
-  const openStyle = t === 'carton' ? (last?.open_style ?? '') : ''
+  // Cách mở: lần đặt gần nhất → danh mục (0137) — vật tư chưa từng lên đơn giờ
+  // vẫn có cách mở nếu Kho/CƯ đã khai, m² tự tính được ngay từ dòng đầu tiên.
+  const openStyle = t === 'carton' ? (last?.open_style ?? m.open_style ?? '') : ''
   // Vật liệu: lần đặt gần nhất là nguồn tươi nhất; vật tư CHƯA TỪNG lên đơn thì
   // lấy số khai ở danh mục (0124) — trước đây ô này trống và phải gõ tay.
   const grade = last?.material_grade ?? m.material_grade ?? ''
@@ -272,7 +274,8 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     bar_length_m: m.default_bar_length_m ?? '',
     // Quy cách danh mục là nguồn CHỐT; chưa khai thì lấy kích thước ghi ở đơn trước.
     dimension_text: m.spec ?? last?.dimension_text ?? '',
-    finish: last?.finish ?? '',
+    // Màu/bề mặt: lần đặt gần nhất → danh mục (0137).
+    finish: last?.finish ?? m.finish ?? '',
     /*
      * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt — ba nguồn xếp theo độ tin, xem
      * `kgPerUnitOf`. Ô này mà trống thì `lineReady` CHẶN gửi, người soạn kẹt và
@@ -282,7 +285,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
      */
     weight_per_unit: kgPerUnitOf(m).kg ?? '',
     open_style: openStyle,
-    pcs_per_ctn: last?.pcs_per_ctn ?? '',
+    pcs_per_ctn: last?.pcs_per_ctn ?? m.pcs_per_ctn ?? '',
     inner_l_mm: inner?.[0] ?? '',
     inner_w_mm: inner?.[1] ?? '',
     inner_h_mm: inner?.[2] ?? '',
@@ -312,6 +315,10 @@ export type MaterialRefresh = {
   pack_size: number | null
   pack_unit: string | null
   material_grade: string | null
+  /** Thông số theo nhóm (0137) — optional cho fixture cũ, thiếu coi như null. */
+  open_style?: string | null
+  pcs_per_ctn?: number | null
+  finish?: string | null
 }
 
 /**
@@ -343,6 +350,10 @@ export function refreshLineFromMaterial(
     bar_length_m: l.bar_length_m === '' ? (m.default_bar_length_m ?? '') : l.bar_length_m,
     weight_per_unit: l.weight_per_unit === '' ? (kgUnit.kg ?? '') : l.weight_per_unit,
     material_grade: l.material_grade === '' ? (m.material_grade ?? '') : l.material_grade,
+    // Thông số theo nhóm (0137) — cùng luật lấp-ô-trống.
+    finish: l.finish === '' ? (m.finish ?? '') : l.finish,
+    open_style: l.open_style === '' ? (m.open_style ?? '') : l.open_style,
+    pcs_per_ctn: l.pcs_per_ctn === '' ? (m.pcs_per_ctn ?? '') : l.pcs_per_ctn,
   }
 
   // Kích thước từ quy cách — cùng luật với newLine, nhưng chỉ lấp ô trống.
@@ -352,10 +363,12 @@ export function refreshLineFromMaterial(
       next.inner_l_mm = dims[0]
       next.inner_w_mm = dims[1]
       next.inner_h_mm = dims[2]
-      if (t === 'carton' && next.area_m2 === '') {
-        next.area_m2 = recalcCartonArea(next)
-      }
     }
+  }
+  // Carton: vừa bổ sung cách mở/quy cách ở danh mục mà m² đang trống → tính
+  // ngay, không đợi người soạn đổi cách mở lần nữa.
+  if (t === 'carton' && next.area_m2 === '' && next.inner_l_mm !== '') {
+    next.area_m2 = recalcCartonArea(next)
   }
   if (t === 'glass' && next.area_m2 === '') {
     const dims = parseInnerDims(m.spec)

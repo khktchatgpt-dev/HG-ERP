@@ -40,6 +40,11 @@ export type Material = {
   pack_unit: string | null
   /** Vật liệu / màu (0124) — cột "Vật liệu" của đơn phụ kiện/inox. */
   material_grade: string | null
+  /** Thông số theo nhóm (0137): bao bì — cách mở AD/MR/ĐK + SP mỗi thùng. */
+  open_style: string | null
+  pcs_per_ctn: number | null
+  /** Thông số theo nhóm (0137): kim loại — màu / bề mặt ("inox bóng"). */
+  finish: string | null
   note: string | null
   /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — gỡ cờ khi đã chuẩn hoá. */
   needs_review: boolean
@@ -50,7 +55,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, note, needs_review, created_by, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, created_by, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -83,6 +88,7 @@ function toMaterial(row: Record<string, unknown>): Material {
     default_bar_length_m:
       row.default_bar_length_m == null ? null : Number(row.default_bar_length_m),
     pack_size: row.pack_size == null ? null : Number(row.pack_size),
+    pcs_per_ctn: row.pcs_per_ctn == null ? null : Number(row.pcs_per_ctn),
   }
 }
 

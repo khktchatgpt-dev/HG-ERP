@@ -30,6 +30,11 @@ export type PoMaterial = {
   pack_unit: string | null
   /** Vật liệu/màu khai ở danh mục (0124) — dùng khi chưa có lần đặt nào. */
   material_grade: string | null
+  /** Thông số theo nhóm (0137) — bao bì: cách mở + SP/thùng; kim loại: bề mặt.
+   *  Optional để fixture/chỗ gọi cũ không phải khai; thiếu coi như null. */
+  open_style?: string | null
+  pcs_per_ctn?: number | null
+  finish?: string | null
   /** Tồn hiện tại — NULL = chưa có sổ kho (khác "tồn 0 thật"). */
   on_hand: number | null
   /** Ô mô tả của lần đặt gần nhất — điền sẵn lên dòng, null = chưa từng đặt. */

@@ -34,6 +34,10 @@ export type CreatedMaterial = {
   pack_size: number | null
   pack_unit: string | null
   material_grade: string | null
+  /** Thông số theo nhóm (0137) — cách mở/pcs (bao bì), bề mặt (kim loại). */
+  open_style: string | null
+  pcs_per_ctn: number | null
+  finish: string | null
 }
 
 const cls =
