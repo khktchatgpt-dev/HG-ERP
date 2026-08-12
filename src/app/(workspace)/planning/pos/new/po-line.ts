@@ -45,6 +45,10 @@ export type Line = {
   dimension_text: string
   finish: string
   weight_per_unit: Num
+  // wood: m³/SP — cột riêng từ 0139 (trước mượn weight_per_unit của inox).
+  m3_per_unit: Num
+  // mro: bảo hành — cột riêng từ 0139 (trước mượn finish).
+  warranty_text: string
   // carton
   open_style: string
   pcs_per_ctn: Num
@@ -86,6 +90,7 @@ export function draftOf(l: Line) {
     weight_per_m: n(l.weight_per_m),
     bar_length_m: n(l.bar_length_m),
     weight_per_unit: n(l.weight_per_unit),
+    m3_per_unit: n(l.m3_per_unit),
     area_m2: n(l.area_m2),
     // Xốp theo m³ (0134): D×R×Dày của mẫu foam đi cùng bộ ô lọt lòng.
     inner_l_mm: n(l.inner_l_mm),
@@ -138,7 +143,7 @@ export function lineProblem(t: PoTemplate, l: Line): string | null {
   if (t === 'glass' && l.carton_basis === 'm2' && !(Number(l.area_m2) > 0)) {
     return 'thiếu m²/tấm'
   }
-  if (t === 'wood' && !(Number(l.weight_per_unit) > 0)) return 'thiếu m³/SP'
+  if (t === 'wood' && !(Number(l.m3_per_unit) > 0)) return 'thiếu m³/SP'
   if (
     t === 'foam' &&
     l.carton_basis === 'm3' &&
@@ -284,6 +289,9 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
      * trống — nhân viên nhập theo phiếu cân NCC, không đoán hộ.
      */
     weight_per_unit: kgPerUnitOf(m).kg ?? '',
+    // Gỗ đặt theo dòng tự do là chính; chọn từ danh mục thì m³/SP vẫn gõ tay.
+    m3_per_unit: '',
+    warranty_text: '',
     open_style: openStyle,
     pcs_per_ctn: last?.pcs_per_ctn ?? m.pcs_per_ctn ?? '',
     inner_l_mm: inner?.[0] ?? '',
@@ -403,6 +411,8 @@ export function newFreeLine(): Line {
     dimension_text: '',
     finish: '',
     weight_per_unit: '',
+    m3_per_unit: '',
+    warranty_text: '',
     open_style: '',
     pcs_per_ctn: '',
     inner_l_mm: '',
@@ -441,6 +451,8 @@ export type PoLineDto = {
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
+  m3_per_unit: number | null
+  warranty_text: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -492,6 +504,8 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     dimension_text: s2(l.dimension_text),
     finish: s2(l.finish),
     weight_per_unit: n2(l.weight_per_unit),
+    m3_per_unit: n2(l.m3_per_unit),
+    warranty_text: s2(l.warranty_text),
     open_style: s2(l.open_style),
     pcs_per_ctn: n2(l.pcs_per_ctn),
     inner_l_mm: n2(l.inner_l_mm),
@@ -512,6 +526,30 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     catalog_kg_m: null,
     catalog_kg_unit: null,
   }
+}
+
+/**
+ * NHÁP localStorage lưu trước 0139: dòng thiếu hai key mới, và gỗ/mro còn ghi
+ * m³/SP vào `weight_per_unit`, bảo hành vào `finish` (thời mượn cột). Khôi phục
+ * nháp phải dọn về cột đúng — không thì dòng gỗ cũ mất m³/SP ("thiếu m³/SP"
+ * chặn gửi) mà người dùng không hiểu vì sao.
+ */
+export function migrateDraftLine(t: PoTemplate, l: Line): Line {
+  // JSON nháp cũ thiếu key mới → `undefined` lọt vào state; ?? '' đưa về ô trống.
+  const next: Line = {
+    ...l,
+    m3_per_unit: l.m3_per_unit ?? '',
+    warranty_text: l.warranty_text ?? '',
+  }
+  if (t === 'wood' && next.m3_per_unit === '' && next.weight_per_unit !== '') {
+    next.m3_per_unit = next.weight_per_unit
+    next.weight_per_unit = ''
+  }
+  if (t === 'mro' && next.warranty_text === '' && next.finish !== '') {
+    next.warranty_text = next.finish
+    next.finish = ''
+  }
+  return next
 }
 
 /*

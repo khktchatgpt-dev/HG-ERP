@@ -64,6 +64,9 @@ export const poLineInputSchema = z.object({
   dimension_text: optText(200),
   finish: optText(100),
   weight_per_unit: optNum(1e6),
+  // 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành.
+  m3_per_unit: optNum(1e4),
+  warranty_text: optText(100),
   // Mẫu carton
   open_style: optText(20),
   pcs_per_ctn: optNum(1e6),

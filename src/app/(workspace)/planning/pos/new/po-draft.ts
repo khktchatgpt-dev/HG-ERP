@@ -146,6 +146,9 @@ export function buildPoPayload(header: PoHeader, lines: Line[]) {
         dimension_text: l.dimension_text.trim() || null,
         finish: l.finish.trim() || null,
         weight_per_unit: d.weight_per_unit,
+        // 0139 — cột riêng: gỗ m³/SP, mro bảo hành (hết mượn weight_per_unit/finish).
+        m3_per_unit: d.m3_per_unit,
+        warranty_text: l.warranty_text.trim() || null,
         open_style: l.open_style || null,
         pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
         inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),

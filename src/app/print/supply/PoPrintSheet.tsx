@@ -59,6 +59,9 @@ export type PoPrintLine = {
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
+  /** 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành. */
+  m3_per_unit: number | null
+  warranty_text: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null

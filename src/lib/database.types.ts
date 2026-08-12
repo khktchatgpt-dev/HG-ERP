@@ -2432,6 +2432,8 @@ export type Database = {
           unit2: string | null
           waste_pct: number | null
           weight_per_m: number | null
+          m3_per_unit: number | null
+          warranty_text: string | null
           weight_per_unit: number | null
         }
         Insert: {
@@ -2480,6 +2482,8 @@ export type Database = {
           unit2?: string | null
           waste_pct?: number | null
           weight_per_m?: number | null
+          m3_per_unit?: number | null
+          warranty_text?: string | null
           weight_per_unit?: number | null
         }
         Update: {
@@ -2528,6 +2532,8 @@ export type Database = {
           unit2?: string | null
           waste_pct?: number | null
           weight_per_m?: number | null
+          m3_per_unit?: number | null
+          warranty_text?: string | null
           weight_per_unit?: number | null
         }
         Relationships: [

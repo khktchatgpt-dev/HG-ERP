@@ -40,7 +40,13 @@ import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
-import { newFreeLine, newLine, refreshLineFromMaterial, type Line } from './po-line'
+import {
+  migrateDraftLine,
+  newFreeLine,
+  newLine,
+  refreshLineFromMaterial,
+  type Line,
+} from './po-line'
 import { EditMaterialDialog } from './EditMaterialDialog'
 import { PasteLinesDialog, type PasteConfirm } from './PasteLinesDialog'
 import { Modal } from '@/components/Modal'
@@ -347,7 +353,9 @@ export function PoCreateForm({
     setVatDirty(d.vatDirty)
     setTerms(d.terms)
     setSignerRole(d.signerRole)
-    setLines(d.lines)
+    // Nháp lưu trước 0139: gỗ ghi m³/SP vào weight_per_unit, mro ghi bảo hành
+    // vào finish — dọn về cột đúng lúc khôi phục.
+    setLines(d.lines.map((l) => migrateDraftLine(d.template, l)))
     setSavedDraft(null)
     if (d.poType === 'lsx' && d.lsxId) void loadNeeds(d.lsxId, d.extraLsxIds ?? [])
   }

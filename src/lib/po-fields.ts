@@ -239,7 +239,9 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   // (dòng tự do), m³/SP × SL × đơn giá/m³ tinh; loại gỗ + màu + kế hoạch giao
   // THEO TỪNG DÒNG đúng cột đơn thật.
   wood: [
-    n('m3sp', 'm³ / SP', 'w-[92px]', 'weight_per_unit', '0.00001'),
+    // m³/SP có CỘT RIÊNG từ 0139 — trước mượn weight_per_unit của mẫu inox
+    // (cùng ô, khác đơn vị: đổi mẫu là m³ bị đọc thành kg).
+    n('m3sp', 'm³ / SP', 'w-[92px]', 'm3_per_unit', '0.00001'),
     { key: 'm3total', label: 'Tổng m³', width: 'w-[88px]', kind: 'calc', align: 'right' },
     t('loaigo', 'Loại gỗ', 'w-[120px]', 'material_grade', 'Acacia FSC 100%'),
     t('maugo', 'Màu gỗ', 'w-[90px]', 'finish', 'Màu 142'),
@@ -257,7 +259,8 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('model', 'Model / Mã hãng', 'w-[130px]', 'material_grade', 'SKF 6204-2RS…'),
     t('spec', 'Quy cách', 'w-[110px]', 'spec', 'Φ20×47×14…'),
     t('dungcho', 'Dùng cho máy / vị trí', 'w-[130px]', 'dimension_text', 'Máy dập 8T…'),
-    t('baohanh', 'Bảo hành', 'w-[90px]', 'finish', '12 tháng'),
+    // Bảo hành có CỘT RIÊNG từ 0139 — trước mượn finish (màu/bề mặt).
+    t('baohanh', 'Bảo hành', 'w-[90px]', 'warranty_text', '12 tháng'),
   ],
   simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…')],
 }
@@ -492,10 +495,11 @@ export function poField(template: PoTemplate, key: string): PoField | undefined 
  * `po-fields.test.ts` đối chiếu bảng này với PO_FIELDS — thêm/đổi nghĩa một cột
  * mượn mà quên cập nhật bảng là test đỏ.
  *
- * NGUY HIỂM NHẤT là hai ca SỐ đổi đơn vị theo mẫu (đợt 3 sẽ tách cột riêng):
- *   · `weight_per_unit`: kg/đơn vị (inox) nhưng m³/SP (gỗ)
- *   · `finish`: màu/bề mặt (kim loại, gỗ) nhưng BẢO HÀNH (mro)
- * Từ nay KHÔNG mượn thêm: mẫu mới cần trường mới thì thêm cột DB đúng nghĩa.
+ * Hai ca SỐ đổi đơn vị theo mẫu ĐÃ TRẢ NỢ ở 0139 (đợt 3): gỗ m³/SP →
+ * `m3_per_unit`, mro bảo hành → `warranty_text` — `weight_per_unit` nay chỉ còn
+ * nghĩa kg/đơn vị, `finish` chỉ còn màu/bề mặt. Các ca text còn lại chấp nhận
+ * mượn tiếp. Từ nay KHÔNG mượn thêm: mẫu mới cần trường mới thì thêm cột DB
+ * đúng nghĩa.
  */
 export const PO_SHARED_FIELD_MEANING: Record<
   string,
@@ -519,10 +523,5 @@ export const PO_SHARED_FIELD_MEANING: Record<
   finish: {
     metal_kg: 'Màu / bề mặt',
     wood: 'Màu gỗ',
-    mro: 'Bảo hành',
-  },
-  weight_per_unit: {
-    metal_kg: 'kg / đơn vị',
-    wood: 'm³ / SP',
   },
 }

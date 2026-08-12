@@ -29,6 +29,8 @@ const line = (over: Partial<Line> = {}): Line => ({
   dimension_text: '',
   finish: '',
   weight_per_unit: '',
+  m3_per_unit: '',
+  warranty_text: '',
   open_style: '',
   pcs_per_ctn: '',
   inner_l_mm: '',

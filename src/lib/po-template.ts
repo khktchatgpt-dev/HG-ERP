@@ -345,8 +345,10 @@ export type PoLineDraft = {
   /** aluminium */
   weight_per_m?: number | null
   bar_length_m?: number | null
-  /** metal_kg (kg/đơn-vị) · wood (m³/SP — mượn cùng ô). */
+  /** metal_kg: kg/đơn-vị (0139 — hết kiêm m³/SP của gỗ). */
   weight_per_unit?: number | null
+  /** wood: m³ mỗi SP — cột riêng từ 0139, trước mượn weight_per_unit. */
+  m3_per_unit?: number | null
   /** carton · glass (m²/tấm) */
   area_m2?: number | null
   /** foam tính theo m³: quy cách D×R×Dày (mm) — dùng chung bộ ô lọt lòng. */
@@ -400,9 +402,9 @@ export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       return { qty2: round4(area * qty), unit2: 'm²', price_basis: 'unit2' }
     }
     case 'wood': {
-      // weight_per_unit mượn làm m³/SP ("Khối lượng Gỗ" trên đơn thật) —
-      // tiền = (m³/SP × SL) × đơn giá/m³ tinh.
-      const m3 = Number(l.weight_per_unit) || 0
+      // m³/SP ("Khối lượng Gỗ" trên đơn thật) — tiền = (m³/SP × SL) × giá/m³
+      // tinh. Cột riêng từ 0139, hết mượn weight_per_unit của mẫu inox.
+      const m3 = Number(l.m3_per_unit) || 0
       if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
       return { qty2: round4(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
     }

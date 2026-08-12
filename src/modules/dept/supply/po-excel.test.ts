@@ -63,6 +63,8 @@ const line = (over: Partial<PoPrintLine> = {}): PoPrintLine => ({
   dimension_text: null,
   finish: null,
   weight_per_unit: null,
+  m3_per_unit: null,
+  warranty_text: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,

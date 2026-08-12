@@ -182,7 +182,8 @@ describe('metadata mẫu', () => {
  */
 describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
   it('LSX 01 dòng 1: 1.800 ghế × 0,00208 m³ × $1.500/m³ tinh', () => {
-    const d = deriveLine('wood', { qty_ordered: 1800, weight_per_unit: 0.00208 })
+    // m³/SP có cột riêng từ 0139 — hết mượn weight_per_unit của mẫu inox.
+    const d = deriveLine('wood', { qty_ordered: 1800, m3_per_unit: 0.00208 })
     expect(d).toEqual({ qty2: 3.744, unit2: 'm³', price_basis: 'unit2' })
     // File ghi $5.623,45 (đơn giá/SP làm tròn từng dòng); trục m³ ra 5.616 —
     // sai khác chỉ do file nhân qua "Đơn giá/1SP" đã tròn 2 lẻ.
