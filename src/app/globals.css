@@ -40,6 +40,18 @@
   --input: #e4e4e7;
   --ring: #f59e0b; /* amber-500 — trùng focus ring bespoke */
   --radius: 0.5rem;
+
+  /*
+   * MÀU TÍN HIỆU — phải khai ở :ROOT, không chỉ trong `.theme-v2`.
+   *
+   * `Badge` dùng ở 45 tệp, có cả màn nằm NGOÀI shell workspace (admin, đăng
+   * nhập, trang in). Ở đó không có `.theme-v2`, nên nếu ba biến này chỉ sống
+   * trong đó thì `color-mix(... var(--warn) ...)` thành giá trị không hợp lệ và
+   * nhãn rụng hết màu — hỏng im lặng, đúng loại lỗi khó lần ra nhất.
+   */
+  --warn: #b45309;
+  --stop: #b42318;
+  --done: #1f7a4c;
 }
 
 @theme inline {
@@ -95,6 +107,11 @@
   --border: #27272a; /* zinc-800 */
   --input: #3f3f46; /* zinc-700 */
   --ring: #f59e0b;
+
+  /* Nền tối phải sáng hơn mới đọc được ở cỡ 11px. */
+  --warn: #f59e0b;
+  --stop: #f87171;
+  --done: #34d399;
 }
 
 /*
@@ -204,7 +221,6 @@
   width: 3px;
   background: var(--spine, transparent);
 }
-
 
 .dark .theme-v2 {
   --background: #0c0a09; /* stone-950 */
