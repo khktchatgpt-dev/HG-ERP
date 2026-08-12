@@ -228,6 +228,23 @@ Bối cảnh: hệ thống đang hoàn thiện data (vật tư thiếu quy cách
    (xanh khớp chắc · vàng đề cử · chọn tay / bỏ qua / dòng tự gõ) → vào đơn
    một lượt kèm SL/giá/ghi chú.
 
+## 8. Điều chỉnh 12/08 chiều-muộn (theo yêu cầu user)
+
+1. **GỠ mẫu "Gia công ngoài"** — gia công trả công theo SP là nghiệp vụ NGOÀI
+   TẦM VẬT TƯ, không thuộc form đặt vật tư. Dòng tự do chỉ còn mẫu Gỗ; basis
+   'kg' thành giá trị chết (DB check 0135 vẫn nhận, form không sinh mới). Lúc
+   gỡ DB chưa có đơn nào. Nghiệp vụ gia công nếu cần sẽ là màn riêng sau.
+2. **0137 — thông số theo nhóm** (ĐÃ apply): vật tư "nghèo nàn" được bổ sung
+   đúng 3 ô mà các mẫu đơn cần nhưng master chưa có chỗ: cách mở thùng
+   (AD/MR/ĐK), SP mỗi thùng, màu/bề mặt kim loại. Form khai hiện bộ ô THEO
+   NHÓM (lib `material-group-fields.ts`, 14 nhóm thật): bao bì hỏi cách mở +
+   pcs; kim loại hỏi bề mặt; kính/xốp đổi placeholder quy cách sang D×R×dày
+   (đúng dạng là form đơn tự bóc). Chọn vật tư giờ đủ thông tin từ dòng đầu
+   tiên — kể cả vật tư chưa từng lên đơn (carton có m²/thùng tự tính ngay).
+3. **Chuẩn hóa 3 form vật tư về một style** — token dùng chung
+   (`materialInputClass`/`materialBtnPrimary`/`materialBtnSecondary` xuất từ
+   MaterialCoreFields), hết cảnh Kho viền amber, form đơn viền sky.
+
 **ĐÃ KIỂM TRÊN UI THẬT** (preview đăng nhập, 12/08 chiều): chọn NCC Thành Đạt →
 tiền tệ tự nhảy USD, tiền hiện 2 số lẻ; mẫu Gỗ đủ cột m³/SP · loại gỗ · màu ·
 KH giao; dán 4 dòng thật → "Mây dẹp cào xước màu nâu đỏ"/"Vít 4x15" khớp chắc
