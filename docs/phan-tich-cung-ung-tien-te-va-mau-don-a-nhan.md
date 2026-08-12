@@ -185,3 +185,22 @@ Cả 6 đợt ở §4 đã code xong, `npm run check` sạch (1.165 test). Chi t
 
 Còn treo: công thức m² phủ bì cho cách mở ĐK (cần thêm file đối chiếu); các
 mục "ngoài phạm vi" ở trên.
+
+## 6. Go-live 12/08/2026 (cùng ngày)
+
+- **0134 + 0135 ĐÃ apply remote** qua MCP. 0135 sửa lỗi tiềm ẩn do smoke test
+  bắt được: check `supply_purchase_orders_template_check` trong DB vẫn chỉ nhận
+  5 mẫu gốc của 0106 — các đợt thêm mẫu 0122/0123/0129 chỉ nới check của
+  `warehouse_materials.po_template` mà quên header đơn, tức **8 mẫu thêm sau
+  (rattan → mro) trước giờ tạo đơn là DB từ chối**; chưa ai vấp vì chưa có đơn
+  thật nào dùng các mẫu đó. Bài học: thêm mẫu = nới CẢ HAI check.
+- **Smoke test trên DB thật 9/9 xanh** (chèn đơn wood USD + dòng tự do → kiểm
+  4 ràng buộc + view lọc + embed left-join → xoá sạch, không sót dấu vết).
+- `database.types.ts` regen bằng sync-types (hết vá tay).
+- **Tiền tệ NCC**: Thành Đạt → USD, Mai Trang → VND (theo đơn thật); khai mới
+  4 NCC gỗ từ header đơn bàn giao, đều USD: **MD** Minh Đạt (MST 4101571494),
+  **TPHU** Tâm Phú (4101431419), **TL** Thành Luân (4100711036), **DTPT** Đức
+  Toàn Phú Tài (MST bỏ trống — số trên file đơn 4101658586 là MST của New
+  ISOLUTION chép nhầm, đã đối chiếu tra cứu công khai).
+- Chưa kiểm tay trên UI (phiên không có tài khoản) — nhân viên chạy 5 kịch bản
+  ở mục 5 khi dùng thật.
