@@ -204,3 +204,33 @@ mục "ngoài phạm vi" ở trên.
   ISOLUTION chép nhầm, đã đối chiếu tra cứu công khai).
 - Chưa kiểm tay trên UI (phiên không có tài khoản) — nhân viên chạy 5 kịch bản
   ở mục 5 khi dùng thật.
+
+## 7. Đợt "giảm nhập tay" 12/08/2026 (chiều) — 4 đợt theo kế hoạch đã duyệt
+
+Bối cảnh: hệ thống đang hoàn thiện data (vật tư thiếu quy cách/barem, BOM chưa
+đủ) — yêu cầu: sửa vật tư ngay tại form đơn + hạn chế gõ tay.
+
+1. **Sửa vật tư tại dòng đơn** (commit e9274bb + a5b1329): nút bút chì cạnh chip
+   mã → modal tái dùng `MaterialCoreFields` (GET bản gốc, PATCH core, không đụng
+   cờ needs_review); lưu xong mọi dòng mang mã đó hút lại số mới qua
+   `refreshLineFromMaterial` (tên/ĐVT/quy cách/đóng gói luôn theo danh mục,
+   barem/vật liệu CHỈ lấp ô trống); "lưu quy cách ↑" khi dòng gõ đủ kích thước
+   mà danh mục trống spec. API mới: GET /api/dept/warehouse/materials/[id].
+2. **Nhớ lần đặt gần nhất đủ bộ ô** (b70a5c9): last_line thêm m²/tấm, D×R×Dày,
+   giá/m², bản in, carton_basis — đặt kính/xốp/carton lần 2 chỉ gõ SL + giá;
+   basis chỉ nhận khi hợp lệ với mẫu (`recallBasis`).
+3. **Bật lại panel nhu cầu LSX có kiểm soát** (2c593d6, user chốt — đảo quyết
+   định tắt 11/08): bỏ cờ toàn cục, panel tự ẩn khi lệnh không có bảng chi
+   tiết/định mức, kèm nhãn amber "số nháp — đối chiếu trước khi dùng".
+4. **Dán từ Excel** (6f96683): `src/lib/po-paste.ts` (parse tiêu đề/đoán cột,
+   số vi lẫn Anh, bỏ dòng tổng có đếm) + POST /api/dept/supply/po-materials/match
+   (khớp 3 bậc code/sure/fuzzy, cùng bộ so với dò-trùng) + dialog xem lại
+   (xanh khớp chắc · vàng đề cử · chọn tay / bỏ qua / dòng tự gõ) → vào đơn
+   một lượt kèm SL/giá/ghi chú.
+
+**ĐÃ KIỂM TRÊN UI THẬT** (preview đăng nhập, 12/08 chiều): chọn NCC Thành Đạt →
+tiền tệ tự nhảy USD, tiền hiện 2 số lẻ; mẫu Gỗ đủ cột m³/SP · loại gỗ · màu ·
+KH giao; dán 4 dòng thật → "Mây dẹp cào xước màu nâu đỏ"/"Vít 4x15" khớp chắc
+(MAY0454/VIT0019), dòng lạ bỏ qua, dòng Tổng bị loại có đếm; thêm 2 dòng vào
+đơn kèm SL/giá, cảnh báo thiếu m³/SP đúng luật. Không lưu đơn test nào; draft
+localStorage đã dọn.
