@@ -22,6 +22,18 @@ export type PoLastLine = {
   pcs_per_ctn: number | null
   open_style: string | null
   dm_per_sp: number | null
+  /**
+   * Bộ ô của các mẫu tính theo kích thước (0136 — đặt lần 2 chỉ còn gõ SL+giá):
+   * m²/tấm (kính/carton), D×R×Dày (xốp), giá/m² + bản in (carton) và cơ sở
+   * tính tiền từng dòng. `newLine` chỉ nhận basis HỢP LỆ với mẫu đang soạn.
+   */
+  area_m2: number | null
+  inner_l_mm: number | null
+  inner_w_mm: number | null
+  inner_h_mm: number | null
+  price_per_m2: number | null
+  print_fee: number | null
+  carton_basis: string | null
 }
 
 export type PoMaterial = {
@@ -125,7 +137,7 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   const { data } = await db()
     .from('supply_purchase_order_lines')
     .select(
-      'material_id, material_grade, dimension_text, finish, pcs_per_ctn, open_style, dm_per_sp, supply_purchase_orders!inner(created_at)',
+      'material_id, material_grade, dimension_text, finish, pcs_per_ctn, open_style, dm_per_sp, area_m2, inner_l_mm, inner_w_mm, inner_h_mm, price_per_m2, print_fee, carton_basis, supply_purchase_orders!inner(created_at)',
     )
     .in('material_id', ids)
     .limit(400)
@@ -137,6 +149,13 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
     pcs_per_ctn: unknown
     open_style: string | null
     dm_per_sp: unknown
+    area_m2: unknown
+    inner_l_mm: unknown
+    inner_w_mm: unknown
+    inner_h_mm: unknown
+    price_per_m2: unknown
+    print_fee: unknown
+    carton_basis: string | null
     supply_purchase_orders: { created_at: string }
   }
   const rows = ((data ?? []) as unknown as Row[]).sort((a, b) =>
@@ -147,13 +166,22 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   const m = new Map<string, PoLastLine>()
   for (const r of rows) {
     if (m.has(r.material_id)) continue
+    // PostgREST trả numeric dạng CHUỖI — ép về number như numericLineFields.
+    const num = (v: unknown) => (v == null ? null : Number(v))
     m.set(r.material_id, {
       material_grade: r.material_grade ?? null,
       dimension_text: r.dimension_text ?? null,
       finish: r.finish ?? null,
-      pcs_per_ctn: r.pcs_per_ctn == null ? null : Number(r.pcs_per_ctn),
+      pcs_per_ctn: num(r.pcs_per_ctn),
       open_style: r.open_style ?? null,
-      dm_per_sp: r.dm_per_sp == null ? null : Number(r.dm_per_sp),
+      dm_per_sp: num(r.dm_per_sp),
+      area_m2: num(r.area_m2),
+      inner_l_mm: num(r.inner_l_mm),
+      inner_w_mm: num(r.inner_w_mm),
+      inner_h_mm: num(r.inner_h_mm),
+      price_per_m2: num(r.price_per_m2),
+      print_fee: num(r.print_fee),
+      carton_basis: r.carton_basis ?? null,
     })
   }
   return m

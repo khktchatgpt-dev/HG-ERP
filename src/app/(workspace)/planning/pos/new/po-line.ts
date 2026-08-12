@@ -205,6 +205,25 @@ export function parseInnerDims(
  * ĐẶT GẦN NHẤT (Vật liệu, Màu/bề mặt, Cách mở, Pcs/thùng, Đm/sp — 08/08/2026).
  * Còn lại nhân viên chỉ gõ SL và đơn giá, đúng như yêu cầu.
  */
+/**
+ * Cơ sở tính tiền TỪ LẦN ĐẶT TRƯỚC chỉ được nhận khi HỢP LỆ với mẫu đang soạn
+ * (0136): đơn xốp cũ basis 'm3' mà rót vào dòng carton là deriveLine trả về
+ * unit nhưng ô chọn hiện giá trị không có trong options — rác lặng lẽ.
+ */
+const BASIS_DOMAIN: Partial<Record<PoTemplate, string[]>> = {
+  carton: ['ctn', 'm2'],
+  glass: ['ctn', 'm2'],
+  foam: ['ctn', 'm3'],
+  outsourcing: ['ctn', 'kg'],
+}
+export function recallBasis(
+  t: PoTemplate,
+  basis: string | null | undefined,
+): Line['carton_basis'] {
+  const ok = BASIS_DOMAIN[t]
+  return ok && basis && ok.includes(basis) ? (basis as Line['carton_basis']) : 'ctn'
+}
+
 export function newLine(t: PoTemplate, m: PoMaterial): Line {
   /*
    * Quy cách danh mục TỰ BÓC vào ba ô số cho các mẫu tính theo kích thước —
@@ -214,22 +233,32 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
    *           tổng khối tự nhảy (0134).
    *   glass : "605x539x5mm" — hai số đầu là kích thước tấm → m²/tấm = D×R/10⁶,
    *           đúng cột "m2/tấm" của đơn kính thật (0134).
+   * QUY CÁCH DANH MỤC THẮNG; danh mục chưa khai thì lấy KÍCH THƯỚC CỦA LẦN ĐẶT
+   * GẦN NHẤT (0136) — đơn lặp lại chỉ còn gõ SL + giá.
    */
-  const inner = t === 'carton' || t === 'foam' ? parseInnerDims(m.spec) : null
-  const glassDims = t === 'glass' ? parseInnerDims(m.spec) : null
   const last = m.last_line
+  const lastDims: [number, number, number] | null =
+    last && last.inner_l_mm && last.inner_w_mm && last.inner_h_mm
+      ? [last.inner_l_mm, last.inner_w_mm, last.inner_h_mm]
+      : null
+  const inner =
+    t === 'carton' || t === 'foam' ? (parseInnerDims(m.spec) ?? lastDims) : null
+  const glassDims = t === 'glass' ? parseInnerDims(m.spec) : null
   const openStyle = t === 'carton' ? (last?.open_style ?? '') : ''
   // Vật liệu: lần đặt gần nhất là nguồn tươi nhất; vật tư CHƯA TỪNG lên đơn thì
   // lấy số khai ở danh mục (0124) — trước đây ô này trống và phải gõ tay.
   const grade = last?.material_grade ?? m.material_grade ?? ''
   const area =
-    t === 'glass'
+    (t === 'glass'
       ? glassDims
         ? Math.round(((glassDims[0] * glassDims[1]) / 1e6) * 10000) / 10000
         : null
       : inner && openStyle
         ? cartonAreaM2(openStyle, inner[0], inner[1], inner[2])
-        : null
+        : null) ??
+    // Công thức không ra (kính không quy cách, carton cách mở lạ/ĐK) → m² đã
+    // chốt ở lần đặt trước, chỉ với mẫu dùng ô này.
+    (t === 'glass' || t === 'carton' ? (last?.area_m2 ?? null) : null)
   return {
     material_id: m.id,
     code: m.code,
@@ -266,9 +295,11 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     inner_w_mm: inner?.[1] ?? '',
     inner_h_mm: inner?.[2] ?? '',
     area_m2: area ?? '',
-    price_per_m2: '',
-    print_fee: '',
-    carton_basis: 'ctn',
+    // Giá/m² + bản in của bao bì gần như không đổi giữa các đơn — nhớ từ lần
+    // đặt trước (0136), chỉ ở mẫu carton (mẫu khác không có ô, gửi lên là rác).
+    price_per_m2: t === 'carton' ? (last?.price_per_m2 ?? '') : '',
+    print_fee: t === 'carton' ? (last?.print_fee ?? '') : '',
+    carton_basis: recallBasis(t, last?.carton_basis),
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
     catalog_kg_m: m.kg_per_m ?? null,

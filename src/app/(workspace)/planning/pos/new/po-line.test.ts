@@ -3,6 +3,7 @@ import { packCount, poLineAmount, roundUpToPack } from '@/lib/po-line'
 import { deriveLine, type PoTemplate } from '@/lib/po-template'
 import {
   baremFor,
+  cartonPriceSuggest,
   draftOf,
   lineAmount,
   lineFromPo,
@@ -11,6 +12,7 @@ import {
   newFreeLine,
   newLine,
   overridesCatalog,
+  recallBasis,
   refreshLineFromMaterial,
 } from './po-line'
 import type { Line, MaterialRefresh, PoLineDto } from './po-line'
@@ -640,5 +642,100 @@ describe('refreshLineFromMaterial — hút lại danh mục, không đè số đ
     })
     expect(l.weight_per_unit).toBe(23.94)
     expect(l.catalog_kg_unit).toBe(23.94)
+  })
+})
+
+/*
+ * NHỚ LẦN ĐẶT GẦN NHẤT cho bộ ô mẫu tính theo kích thước (0136) — đơn lặp lại
+ * chỉ còn gõ SL + giá. Quy cách DANH MỤC vẫn thắng; lần trước chỉ lấp khi danh
+ * mục không nói được gì.
+ */
+describe('newLine — recall lần đặt gần nhất (m²/dims/giá m²/basis)', () => {
+  const goc: PoMaterial = {
+    id: 'm-r',
+    code: 'BB-0099',
+    name: 'Thùng test recall',
+    unit: 'Thùng',
+    group_name: 'Bao bì',
+    sub_group: null,
+    spec: null,
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: null,
+    on_hand: 0,
+    last_line: {
+      material_grade: null,
+      dimension_text: null,
+      finish: null,
+      pcs_per_ctn: null,
+      open_style: null,
+      dm_per_sp: null,
+      area_m2: 3.591,
+      inner_l_mm: 750,
+      inner_w_mm: 625,
+      inner_h_mm: 605,
+      price_per_m2: 18_770,
+      print_fee: 3_278,
+      carton_basis: 'ctn',
+    },
+  }
+
+  it('carton không quy cách danh mục: dims + giá/m² + bản in từ lần trước', () => {
+    const l = newLine('carton', goc)
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([750, 625, 605])
+    expect(l.price_per_m2).toBe(18_770)
+    expect(l.print_fee).toBe(3_278)
+    // Đủ m² + giá/m² + bản in → gợi ý giá/thùng sống lại ngay từ dòng vừa thêm.
+    expect(l.area_m2).toBe(3.591)
+    expect(cartonPriceSuggest('carton', l)).toBeCloseTo(70_681.07, 1)
+  })
+
+  it('quy cách DANH MỤC thắng kích thước lần trước', () => {
+    const l = newLine('carton', { ...goc, spec: '900x605x115' })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([900, 605, 115])
+  })
+
+  it('kính: m²/tấm lần trước lấp khi danh mục không có quy cách', () => {
+    const l = newLine('glass', {
+      ...goc,
+      last_line: { ...goc.last_line!, area_m2: 0.33, carton_basis: 'm2' },
+    })
+    expect(l.area_m2).toBe(0.33)
+    expect(l.carton_basis).toBe('m2')
+  })
+
+  it('xốp: basis m³ lần trước được nhớ; dims từ lần trước', () => {
+    const l = newLine('foam', {
+      ...goc,
+      last_line: {
+        ...goc.last_line!,
+        inner_l_mm: 1520,
+        inner_w_mm: 920,
+        inner_h_mm: 10,
+        carton_basis: 'm3',
+      },
+    })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+    expect(l.carton_basis).toBe('m3')
+  })
+
+  it("basis KHÔNG hợp mẫu thì về 'ctn' — đơn xốp m³ cũ không rót vào dòng carton", () => {
+    expect(recallBasis('carton', 'm3')).toBe('ctn')
+    expect(recallBasis('glass', 'kg')).toBe('ctn')
+    expect(recallBasis('outsourcing', 'kg')).toBe('kg')
+    // Mẫu không dùng basis (phụ kiện…) luôn 'ctn'.
+    expect(recallBasis('accessory', 'm2')).toBe('ctn')
+    // Giá/m² + bản in chỉ thuộc carton — mẫu khác không nhớ.
+    const l = newLine('accessory', goc)
+    expect(l.price_per_m2).toBe('')
+    expect(l.print_fee).toBe('')
   })
 })

@@ -40,6 +40,14 @@ export type PoMaterial = {
     pcs_per_ctn: number | null
     open_style: string | null
     dm_per_sp: number | null
+    /** Bộ ô mẫu tính theo kích thước (0136) — đặt lần 2 chỉ còn gõ SL + giá. */
+    area_m2?: number | null
+    inner_l_mm?: number | null
+    inner_w_mm?: number | null
+    inner_h_mm?: number | null
+    price_per_m2?: number | null
+    print_fee?: number | null
+    carton_basis?: string | null
   } | null
 }
 
