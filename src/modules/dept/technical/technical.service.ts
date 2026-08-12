@@ -580,7 +580,12 @@ export const productsService = {
       partGroupsRepo.list(),
       productProfileRepo.clusters(productId),
     ])
-    return { product, parts, setItems, groups, clusters }
+    // Mã vật tư nào khớp danh mục kho — quyết định dòng đó có vào được đơn đặt
+    // gộp của cung ứng hay không, nên tra ngay khi mở tab.
+    const knownMaterials = await productProfileRepo.knownMaterialNames(
+      parts.map((p) => p.material_code ?? '').filter(Boolean),
+    )
+    return { product, parts, setItems, groups, clusters, knownMaterials }
   },
 
   /**

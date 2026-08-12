@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  barsForQty,
   calcPartDerived,
   crossSectionM2,
   deviation,
+  fabricTotalM,
+  pcsPerBarFrom,
   isCalculable,
   perimeterM,
 } from './bom-calc'
@@ -328,5 +331,75 @@ describe('calcPartDerived — biểu mẫu BOM mới, đối chiếu từng ô',
       qty: 2,
     })
     expect(r.volume_m3).toBeNull()
+  })
+})
+
+/**
+ * QUY ĐỔI ĐƠN VỊ MUA (0132) — số kỳ vọng lấy từ sổ "Tổng hợp nhôm" của Cung ứng
+ * và từ khối vải của `BOM_LAURA - Bộ tinsley.xlsx`, không tự nghĩ ra.
+ */
+describe('barsForQty — số cây phải mua', () => {
+  it('bồn hoa lớn: 1.400 chân sau, 4 khúc/cây 6m → 350 cây (khớp sổ)', () => {
+    expect(barsForQty(1400, 4)).toBe(350)
+  })
+
+  it('bồn hoa lớn: 1.400 chân trước, 15 khúc/cây 5,9m → 94 cây (làm tròn LÊN)', () => {
+    expect(barsForQty(1400, 15)).toBe(94) // 93,33 — mua 94 chứ không mua 93
+  })
+
+  it('gộp cả bộ lệnh: nhân SL trước rồi chia MỘT lần, không cộng số cây đã tròn', () => {
+    // Bồn hoa lớn 700 + nhỏ 350, mỗi SP 2 chân trước, 15 khúc/cây.
+    const gopTruoc = barsForQty((700 + 350) * 2, 15) // 2.100 / 15 = 140
+    const congSauKhiTron = barsForQty(700 * 2, 15)! + barsForQty(350 * 2, 15)! // 94 + 47
+    expect(gopTruoc).toBe(140)
+    expect(congSauKhiTron).toBe(141) // dư 1 cây — đây là lý do phải gộp trước
+  })
+
+  it('thiếu số khúc/cây hoặc SL ≤ 0 → null, không đoán', () => {
+    expect(barsForQty(100, null)).toBeNull()
+    expect(barsForQty(100, 0)).toBeNull()
+    expect(barsForQty(0, 4)).toBeNull()
+  })
+})
+
+describe('fabricTotalM — mét vải phải đặt', () => {
+  it('vải Spun 3,85 m + hao hụt 2% → 3,927 (file ghi 3,93)', () => {
+    expect(fabricTotalM(3.85, 2)).toBeCloseTo(3.927, 3)
+  })
+
+  it('textilene 0,18 m + hao hụt 3% → 0,1854 (file ghi 0,19)', () => {
+    expect(fabricTotalM(0.18, 3)).toBeCloseTo(0.1854, 4)
+  })
+
+  it('bỏ trống hao hụt = 0%, không tự đoán mức nào', () => {
+    expect(fabricTotalM(5, null)).toBe(5)
+  })
+
+  it('chưa có số mét → null', () => {
+    expect(fabricTotalM(null, 2)).toBeNull()
+  })
+})
+
+describe('pcsPerBarFrom — số khúc cắt được trên một cây', () => {
+  it('chân sau 1390 trên cây 6 m → 4 khúc (khớp file bồn hoa lớn)', () => {
+    expect(pcsPerBarFrom(1390, null, 6)).toBe(4)
+  })
+
+  it('chân trước 390 trên cây 5,9 m → 15 khúc (khớp file)', () => {
+    expect(pcsPerBarFrom(390, null, 5.9)).toBe(15)
+  })
+
+  it('phi hao uốn ăn vào phôi nên giảm số khúc', () => {
+    expect(pcsPerBarFrom(475, 0, 6)).toBe(12)
+    expect(pcsPerBarFrom(475, 60, 6)).toBe(11) // 6000 / 535
+  })
+
+  it('chi tiết dài hơn cả cây → null, phải nối chứ không suy được', () => {
+    expect(pcsPerBarFrom(6500, null, 6)).toBeNull()
+  })
+
+  it('thiếu chiều dài cây hoặc chiều dài cắt → null', () => {
+    expect(pcsPerBarFrom(1390, null, null)).toBeNull()
+    expect(pcsPerBarFrom(null, null, 6)).toBeNull()
   })
 })

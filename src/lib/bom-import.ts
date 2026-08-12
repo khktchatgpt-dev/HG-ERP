@@ -132,24 +132,35 @@ export function looksLikeHeader(row: string[]): boolean {
 export type MaterialOpt = { id: string; code: string; name: string }
 
 /**
- * Khớp text vật tư trong file → material_id: ưu tiên trùng MÃ (không dấu,
+ * Khớp text vật tư trong file → vật tư danh mục: ưu tiên trùng MÃ (không dấu,
  * không phân hoa thường), rồi tên chứa/bị chứa. Không khớp → null (dòng vẫn
  * import, người nhập gắn tay).
+ *
+ * `materials` là TẬP ỨNG VIÊN đã tìm sẵn ở server theo từ khoá, không phải cả
+ * danh mục — 13k vật tư không nạp hết ra client được.
  */
-export function matchMaterial(text: string, materials: MaterialOpt[]): string | null {
+export function matchMaterialOpt(
+  text: string,
+  materials: MaterialOpt[],
+): MaterialOpt | null {
   const t = normalize(text)
   if (!t) return null
   const byCode = materials.find((m) => normalize(m.code) === t)
-  if (byCode) return byCode.id
+  if (byCode) return byCode
   const byCodeIn = materials.find(
     (m) => t.includes(normalize(m.code)) && m.code.length >= 4,
   )
-  if (byCodeIn) return byCodeIn.id
+  if (byCodeIn) return byCodeIn
   const byName = materials.find((m) => {
     const n = normalize(m.name)
     return n === t || n.includes(t) || t.includes(n)
   })
-  return byName?.id ?? null
+  return byName ?? null
+}
+
+/** Như `matchMaterialOpt` nhưng chỉ trả id — giữ cho caller cũ. */
+export function matchMaterial(text: string, materials: MaterialOpt[]): string | null {
+  return matchMaterialOpt(text, materials)?.id ?? null
 }
 
 /** Số kiểu Việt trong Excel: "1.234,5" / "1,5" / "12" → number; rác → ''. */
@@ -169,6 +180,9 @@ export type ImportedRow = {
   cluster: string
   name: string
   material_id: string
+  /** Mã/tên vật tư đã khớp — làm nhãn cho ô gắn vật tư ở lưới ('' nếu chưa khớp). */
+  material_code: string
+  material_name: string
   material_text: string
   material_type: string
   spec_thickness_mm: number | ''
@@ -203,14 +217,16 @@ export function buildImportedRows(
     const cluster = get('cluster') || lastCluster
     if (get('cluster')) lastCluster = get('cluster')
     const matText = get('material')
-    const matId = matchMaterial(matText, materials)
-    if (matText && !matId) unmatched++
+    const mat = matchMaterialOpt(matText, materials)
+    if (matText && !mat) unmatched++
     const noteBits = [get('note')]
-    if (matText && !matId) noteBits.push(`VT file: ${matText}`)
+    if (matText && !mat) noteBits.push(`VT file: ${matText}`)
     rows.push({
       cluster,
       name,
-      material_id: matId ?? '',
+      material_id: mat?.id ?? '',
+      material_code: mat?.code ?? '',
+      material_name: mat?.name ?? '',
       material_text: matText,
       material_type: get('material_type'),
       spec_thickness_mm: parseNum(get('spec_thickness_mm')),

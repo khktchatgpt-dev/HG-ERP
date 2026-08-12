@@ -19,6 +19,7 @@ export function ProductPartsTab({
   setItems,
   paintCoverage,
   baseMaterial,
+  knownMaterials,
   canEdit,
 }: {
   productId: string
@@ -26,6 +27,8 @@ export function ProductPartsTab({
   partGroups: PartGroupView[]
   clusters: ClusterView[]
   setItems: SetItemView[]
+  /** mã vật tư → tên trong danh mục kho (server tra sẵn cho các mã đang dùng). */
+  knownMaterials: Record<string, string>
   /** m² sơn phủ được trên 1 kg sơn — biểu mẫu hard-code 5. */
   paintCoverage: number | null
   /** Ô "Nhiên Liệu" của SP ('AL' | 'IR' | 'IN') — mặc định cho khối mới. */
@@ -41,6 +44,7 @@ export function ProductPartsTab({
         clusters={clusters}
         productId={productId}
         baseMaterial={baseMaterial}
+        knownMaterials={knownMaterials}
         canEdit={canEdit}
       />
       <PartsRollupCard parts={parts} paintCoverage={paintCoverage} />

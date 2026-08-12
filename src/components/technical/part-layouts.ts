@@ -20,7 +20,19 @@ import type { PartView } from '@/components/technical/ProductProfileCards'
  * `paint` hiện dùng chung layout `supply` vì hai cột riêng của nó (Màu sơn, NCC)
  * chưa có chỗ trong bảng — chờ 0097 thêm `color`/`supplier_note`.
  */
-export type LayoutKey = 'metal' | 'wood' | 'soft' | 'supply'
+/**
+ * BỔ SUNG 11/08/2026 — quét đủ 187 file (`docs/dinh-muc-nhom-theo-bom-187-file.md`)
+ * cho thấy bốn họ chưa phủ hết:
+ *
+ *  sheet   45 file  "Quy cách Nan Polywood" + 14 file kính/mặt đá/mặt bàn —
+ *                   tính m²/m³ như gỗ nhưng MUA THEO TẤM, cần quy cách tấm
+ *  fabric   7 file  "VẢI"/"VẢI TEXTILEN" — bộ cột không giống nhóm nào:
+ *                   khổ vải · mét tới · % hao hụt (2% vải, 3% textilene)
+ *
+ * và `soft` bị bỏ mất cột m³ trong khi cả ba thứ nó gánh (nệm · mút · gòn) đều
+ * cần: nệm ra m³, mút mua theo TẤM (m³/tấm), gòn mua theo KG.
+ */
+export type LayoutKey = 'metal' | 'wood' | 'sheet' | 'soft' | 'fabric' | 'supply'
 
 /**
  * `material_note` là CHUỖI GHÉP `"<quy cách> · <vật liệu>"` do đợt nạp fs_bom nối
@@ -68,6 +80,31 @@ const COL = {
     label: 'Quy cách',
     has: (p) => !!(p.profile_shape || p.profile_code || p.dim_a_mm != null),
   },
+  /* ── Ba cột tiết diện TÁCH RỜI, đúng như biểu mẫu ────────────────────────
+   * Bảng cũ gộp thành một ô "hộp 30×100" cho gọn, nhưng người nhập đọc ngang
+   * từ tờ Excel sang thì mất dấu: file có bốn cột `Loại · Dày · Rộng · Dài`,
+   * màn hình chỉ có hai. Giữ đúng số cột và đúng nhãn của biểu mẫu.
+   *
+   * Lưu ý nghĩa thật của cột "Dày": KHÔNG phải độ dày vật liệu mà là tiết diện
+   * thứ nhất — Ø với ống tròn (19|19 = Ø19), bề dày với la (2|20), cạnh với
+   * hộp. Độ dày thành nằm ở cột riêng `Dày vật liệu (δ)`. */
+  shape: {
+    key: 'shape',
+    label: 'Loại',
+    has: (p) => !!(p.profile_shape || p.profile_code),
+  },
+  dimA: {
+    key: 'dimA',
+    label: 'Dày',
+    align: 'right',
+    has: (p) => p.dim_a_mm != null,
+  },
+  dimB: {
+    key: 'dimB',
+    label: 'Rộng',
+    align: 'right',
+    has: (p) => p.dim_b_mm != null,
+  },
   dims: {
     key: 'dims',
     label: 'Dày × Rộng (mm)',
@@ -76,7 +113,8 @@ const COL = {
   tenon: { key: 'tenon', label: 'Mộng', has: (p) => !!p.tenon },
   cut: {
     key: 'cut',
-    label: 'Dài cắt (mm)',
+    // Đứng ngay sau Dày · Rộng nên đúng chữ "Dài" của biểu mẫu là đủ nghĩa.
+    label: 'Dài',
     align: 'right',
     has: (p) => p.cut_length_mm != null,
   },
@@ -142,54 +180,166 @@ const COL = {
   },
   code: { key: 'code', label: 'Mã vật tư', has: (p) => !!p.material_code },
   note: { key: 'note', label: 'Ghi chú', has: (p) => !!p.note },
+  /* ── Cột quy đổi ĐƠN VỊ MUA (0132) ───────────────────────────────────────
+   * Cung ứng đặt cây / tấm / mét khổ, không đặt "mét" hay "m³". Thiếu mấy cột
+   * này thì định mức dừng ở nửa đường và người mua phải tự quy đổi tay. */
+  species: { key: 'species', label: 'Loại gỗ', has: (p) => !!p.wood_species },
+  barLen: {
+    key: 'barLen',
+    label: 'Dài cây (m)',
+    align: 'right',
+    has: (p) => p.bar_length_m != null,
+  },
+  pcsBar: {
+    key: 'pcsBar',
+    label: 'CT / cây',
+    align: 'right',
+    has: (p) => p.pcs_per_bar != null,
+  },
+  bars: {
+    key: 'bars',
+    label: 'Số cây',
+    align: 'right',
+    has: (p) => p.pcs_per_bar != null && p.pcs_per_bar > 0,
+  },
+  roll: {
+    key: 'roll',
+    label: 'Khổ (m)',
+    align: 'right',
+    has: (p) => p.roll_width_m != null,
+  },
+  wastePct: {
+    key: 'wastePct',
+    label: 'Hao hụt (%)',
+    align: 'right',
+    has: (p) => p.waste_pct != null,
+  },
+  totalM: {
+    key: 'totalM',
+    label: 'Tổng mét (đã hao hụt)',
+    align: 'right',
+    has: (p) => p.total_length_m != null,
+  },
+  sheetSpec: {
+    key: 'sheetSpec',
+    label: 'Quy cách tấm (mm)',
+    has: (p) => p.sheet_w_mm != null || p.sheet_l_mm != null,
+  },
+  m3Sheet: {
+    key: 'm3Sheet',
+    label: 'm³ / tấm',
+    align: 'right',
+    has: (p) => p.m3_per_sheet != null,
+  },
 } satisfies Record<string, PartColumn>
 
 /** Thứ tự cột của từng họ — giữ đúng trình tự đọc của biểu mẫu gốc. */
 const LAYOUTS: Record<LayoutKey, PartColumn[]> = {
+  /**
+   * THỨ TỰ CỘT BÁM ĐÚNG TỜ EXCEL, rồi mới tới cột riêng của hệ.
+   *
+   * Người nhập đọc ngang từ file BOM sang màn hình. Bản trước xen cột của hệ
+   * (mã VT, ĐVT, màu, dài cây…) vào giữa dãy cột biểu mẫu, nên mắt trượt dòng.
+   * Nay 12 cột đầu của khối khung XẾP ĐÚNG như biểu mẫu:
+   *   Loại · Dày · Rộng · Dài · Phi hao uốn · SL · Tổng dài · KL · DT sơn · δ
+   *   · Ghi chú · ✓ Phôi
+   * mọi cột hệ thêm vào đẩy hết xuống sau — cột nào cả nhóm bỏ trống thì tự ẩn.
+   */
   metal: [
-    COL.spec,
-    COL.mat,
+    COL.shape,
+    COL.dimA,
+    COL.dimB,
     COL.cut,
     COL.waste,
     COL.qty,
-    COL.unit,
     COL.len,
     COL.kg,
     COL.paintM2,
     COL.wall,
-    COL.color,
-    COL.code,
     COL.note,
     COL.blank,
+    // ── hết phần biểu mẫu, dưới đây là cột của hệ ──
+    COL.code,
+    COL.barLen,
+    COL.pcsBar,
+    COL.bars,
+    COL.unit,
+    COL.mat,
+    COL.color,
   ],
+  // Biểu mẫu gỗ: Dày · Rộng · Dài · Mộng · SL · Diện tích (m2) · K.Lượng (m3) · Ghi chú
   wood: [
-    COL.dims,
-    COL.mat,
+    COL.dimA,
+    COL.dimB,
+    COL.cut,
     COL.tenonMm,
+    COL.qty,
+    COL.m2,
+    COL.m3,
+    COL.note,
+    COL.species,
+    COL.code,
+    COL.unit,
+    COL.mat,
     COL.tenon,
+  ],
+  // Polywood / ván ép / kính / mặt đá: tính như gỗ nhưng mua theo TẤM.
+  sheet: [
+    COL.dimA,
+    COL.dimB,
     COL.cut,
     COL.qty,
-    COL.unit,
     COL.m2,
     COL.m3,
-    COL.code,
     COL.note,
-  ],
-  soft: [
-    COL.dims,
+    COL.sheetSpec,
+    COL.code,
+    COL.unit,
     COL.mat,
-    COL.tenonMm,
+  ],
+  // Nệm · mút · gòn: m³ trả lại (mút mua theo tấm nên cần m³/tấm).
+  soft: [
+    COL.dimA,
+    COL.dimB,
     COL.cut,
+    COL.tenonMm,
     COL.qty,
-    COL.unit,
     COL.m2,
     COL.m3,
-    COL.code,
     COL.note,
+    COL.m3Sheet,
+    COL.code,
+    COL.unit,
+    COL.mat,
   ],
-  // Khối ngũ kim / bao bì: KHÔNG có cột tiền nữa (0097 — định mức trả lời "cần
-  // bao nhiêu", giá thuộc bảng giá NCC bên Cung ứng).
-  supply: [COL.qty, COL.unit, COL.mat, COL.color, COL.code, COL.note],
+  // Vải / textilene: đặt theo MÉT của khổ, cộng hao hụt cắt.
+  fabric: [
+    COL.dimA,
+    COL.dimB,
+    COL.cut,
+    COL.qty,
+    COL.m2,
+    COL.note,
+    COL.roll,
+    COL.wastePct,
+    COL.totalM,
+    COL.code,
+    COL.unit,
+    COL.mat,
+  ],
+  // Biểu mẫu ngũ kim / bao bì: Dày · Rộng · Dài · ĐVT · SL/SP · Vật Liệu · Ghi chú.
+  // KHÔNG có cột tiền (0097 — định mức trả lời "cần bao nhiêu", giá ở Cung ứng).
+  supply: [
+    COL.dimA,
+    COL.dimB,
+    COL.cut,
+    COL.unit,
+    COL.qty,
+    COL.mat,
+    COL.note,
+    COL.code,
+    COL.color,
+  ],
 }
 
 /**
@@ -200,7 +350,10 @@ export function layoutOf(groupCode: string): LayoutKey {
   const g = groupCode.toUpperCase()
   if (g === 'FRAME') return 'metal'
   if (g === 'WOOD') return 'wood'
+  if (g === 'POLYWOOD' || g === 'PANEL') return 'sheet'
   if (g === 'CUSHION') return 'soft'
+  if (g === 'FABRIC') return 'fabric'
+  // LABEL · ZIPPER · NGU_KIM · SON_HC · PACKAGING · DAY_DAN · OTHER → đếm theo ĐVT.
   return 'supply'
 }
 
@@ -236,12 +389,27 @@ export type InputKey =
   | 'material_note'
   | 'color'
   | 'note'
+  | 'material_code'
+  | 'profile_code'
+  | 'kg_per_m'
+  | 'wood_species'
+  | 'bar_length_m'
+  | 'pcs_per_bar'
+  | 'roll_width_m'
+  | 'waste_pct'
+  | 'sheet_w_mm'
+  | 'sheet_l_mm'
+  | 'm3_per_sheet'
 
 export type InputCell = {
   key: InputKey
   label: string
-  /** `num` canh phải + bàn phím số; `shape` là select; `cluster` là combobox. */
-  kind: 'text' | 'num' | 'shape' | 'cluster'
+  /**
+   * `num` canh phải + bàn phím số · `shape` là select · `cluster` là combobox ·
+   * `material` là ô tìm danh mục kho · `die` là ô tìm danh mục khuôn (chọn xong
+   * kéo theo kg/m, ĐVT, chiều dài cây — bớt được mấy ô gõ tay).
+   */
+  kind: 'text' | 'num' | 'shape' | 'cluster' | 'material' | 'die'
   /** Lớp bề rộng cột — giữ bảng không nhảy khi gõ. */
   w: string
   placeholder?: string
@@ -276,6 +444,24 @@ const CELL = {
   },
   color: { key: 'color', label: 'Màu', kind: 'text', w: 'w-20' },
   note: { key: 'note', label: 'Ghi chú', kind: 'text', w: 'w-32' },
+  matCode: { key: 'material_code', label: 'Mã VT kho', kind: 'material', w: 'w-40' },
+  die: { key: 'profile_code', label: 'Mã khuôn', kind: 'die', w: 'w-28' },
+  kgm: { key: 'kg_per_m', label: 'kg/m', kind: 'num', w: 'w-16' },
+  /* Ô quy đổi đơn vị mua — chỉ hiện ở đúng họ cần (0132). */
+  species: {
+    key: 'wood_species',
+    label: 'Loại gỗ',
+    kind: 'text',
+    w: 'w-24',
+    placeholder: 'Keo / Teck…',
+  },
+  barLen: { key: 'bar_length_m', label: 'Dài cây', kind: 'num', w: 'w-16' },
+  pcsBar: { key: 'pcs_per_bar', label: 'CT/cây', kind: 'num', w: 'w-14' },
+  roll: { key: 'roll_width_m', label: 'Khổ (m)', kind: 'num', w: 'w-16' },
+  wastePct: { key: 'waste_pct', label: 'Hao %', kind: 'num', w: 'w-14' },
+  sheetW: { key: 'sheet_w_mm', label: 'Tấm R', kind: 'num', w: 'w-16' },
+  sheetL: { key: 'sheet_l_mm', label: 'Tấm D', kind: 'num', w: 'w-16' },
+  m3Sheet: { key: 'm3_per_sheet', label: 'm³/tấm', kind: 'num', w: 'w-16' },
 } satisfies Record<string, InputCell>
 
 /**
@@ -297,12 +483,18 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
     CELL.qty,
     CELL.unit,
     CELL.color,
+    CELL.die,
+    CELL.kgm,
+    CELL.barLen,
+    CELL.pcsBar,
+    CELL.matCode,
     CELL.note,
   ],
   wood: [
     CELL.no,
     CELL.cluster,
     CELL.name,
+    CELL.species,
     CELL.thick,
     CELL.wide,
     CELL.len,
@@ -310,6 +502,22 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
     CELL.qty,
     CELL.unit,
     CELL.mat,
+    CELL.matCode,
+    CELL.note,
+  ],
+  sheet: [
+    CELL.no,
+    CELL.cluster,
+    CELL.name,
+    CELL.thick,
+    CELL.wide,
+    CELL.len,
+    CELL.qty,
+    CELL.unit,
+    CELL.sheetW,
+    CELL.sheetL,
+    CELL.mat,
+    CELL.matCode,
     CELL.note,
   ],
   soft: [
@@ -322,12 +530,37 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
     CELL.tenon,
     CELL.qty,
     CELL.unit,
+    CELL.m3Sheet,
     CELL.mat,
+    CELL.matCode,
+    CELL.note,
+  ],
+  fabric: [
+    CELL.no,
+    CELL.cluster,
+    CELL.name,
+    CELL.roll,
+    CELL.wide,
+    CELL.len,
+    CELL.qty,
+    CELL.unit,
+    CELL.wastePct,
+    CELL.mat,
+    CELL.matCode,
     CELL.note,
   ],
   // Vật tư mua ngoài: KHÔNG kích thước, KHÔNG cụm (không đi công đoạn hàn/sơn).
   // Đổi lại có "Vật liệu" và "Màu" — hai thứ biểu mẫu ghi mà lưới cũ bỏ mất.
-  supply: [CELL.no, CELL.goods, CELL.qty, CELL.unit, CELL.mat, CELL.color, CELL.note],
+  supply: [
+    CELL.no,
+    CELL.goods,
+    CELL.qty,
+    CELL.unit,
+    CELL.mat,
+    CELL.color,
+    CELL.matCode,
+    CELL.note,
+  ],
 }
 
 export function inputCellsFor(groupCode: string): InputCell[] {
@@ -361,4 +594,87 @@ export function derivedPreviewFor(
   if (l === 'metal') return { key: 'weight_kg', label: 'KL (kg)', digits: 3 }
   if (l === 'wood' || l === 'soft') return { key: 'volume_m3', label: 'm³', digits: 6 }
   return null
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * VÙNG — cùng bộ ô của `inputCellsFor`, nhưng GOM THEO NGHĨA và có nhãn.
+ *
+ * Lưới ngang trả đúng ô theo họ khối, nhưng đổ hết lên một hàng: khối khung 18
+ * ô, nhãn nằm tận hàng tiêu đề của bảng, kéo ngang một cái là mất nhãn. Trên
+ * cùng một hàng lại trộn ba thứ khác nghĩa vụ — ô của biểu mẫu BOM (bắt buộc),
+ * ô hệ thêm để Cung ứng mua được, và ô hệ TỰ TÍNH — mà trông y hệt nhau.
+ *
+ * Thẻ sửa dựng theo bảng này: mỗi vùng một nhãn, vùng nào biểu mẫu của nhóm đó
+ * không có thì không hiện. Nguồn ô vẫn là `CELL` — không đẻ định nghĩa thứ hai.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export type PartZone = {
+  /** null = vùng đầu thẻ (STT · Cụm · Tên) — không cần nhãn, tự hiểu. */
+  label: string | null
+  cells: InputCell[]
+}
+
+const ZONES: Record<LayoutKey, PartZone[]> = {
+  metal: [
+    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
+    { label: 'Quy cách tinh (mm)', cells: [CELL.shape, CELL.thick, CELL.wide, CELL.wall] },
+    { label: 'Cắt và số lượng', cells: [CELL.len, CELL.bend, CELL.qty] },
+    {
+      label: 'Để cung ứng mua',
+      cells: [CELL.matCode, CELL.die, CELL.kgm, CELL.barLen, CELL.pcsBar],
+    },
+    { label: 'Khác', cells: [CELL.unit, CELL.color, CELL.note] },
+  ],
+  wood: [
+    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
+    { label: 'Loại gỗ', cells: [CELL.species] },
+    {
+      label: 'Quy cách tinh (mm)',
+      cells: [CELL.thick, CELL.wide, CELL.len, CELL.tenon],
+    },
+    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
+    { label: 'Vật liệu và mã kho', cells: [CELL.mat, CELL.matCode] },
+    { label: 'Khác', cells: [CELL.note] },
+  ],
+  sheet: [
+    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
+    { label: 'Quy cách tinh (mm)', cells: [CELL.thick, CELL.wide, CELL.len] },
+    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
+    { label: 'Quy cách tấm (mm)', cells: [CELL.sheetW, CELL.sheetL] },
+    { label: 'Vật liệu và mã kho', cells: [CELL.mat, CELL.matCode] },
+    { label: 'Khác', cells: [CELL.note] },
+  ],
+  soft: [
+    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
+    {
+      label: 'Quy cách tinh (mm)',
+      cells: [CELL.thick, CELL.wide, CELL.len, CELL.tenon],
+    },
+    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
+    { label: 'Mua theo tấm', cells: [CELL.m3Sheet] },
+    { label: 'Vật liệu và mã kho', cells: [CELL.mat, CELL.matCode] },
+    { label: 'Khác', cells: [CELL.note] },
+  ],
+  fabric: [
+    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
+    { label: 'Loại vải và khổ', cells: [CELL.mat, CELL.roll] },
+    { label: 'Quy cách cắt (mm)', cells: [CELL.wide, CELL.len] },
+    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
+    { label: 'Hao hụt và mã kho', cells: [CELL.wastePct, CELL.matCode] },
+    { label: 'Khác', cells: [CELL.note] },
+  ],
+  // Ngũ kim / bao bì / tem / dây kéo: biểu mẫu KHÔNG có cột cụm và không có
+  // kích thước nào — thẻ vì thế cũng không được bày ra.
+  supply: [
+    { label: null, cells: [CELL.no, CELL.goods] },
+    { label: 'Số lượng', cells: [CELL.unit, CELL.qty] },
+    { label: 'Vật liệu', cells: [CELL.mat, CELL.color] },
+    { label: 'Mã kho', cells: [CELL.matCode] },
+    { label: 'Khác', cells: [CELL.note] },
+  ],
+}
+
+/** Các vùng của thẻ sửa một dòng — theo nhóm hạng mục. */
+export function zonesFor(groupCode: string): PartZone[] {
+  return ZONES[layoutOf(groupCode)]
 }

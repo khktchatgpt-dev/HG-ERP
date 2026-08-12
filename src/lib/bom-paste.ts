@@ -230,6 +230,34 @@ const blank = (): DraftPart => ({
   note: null,
 })
 
+/**
+ * Ô CỤM TRỐNG NGHĨA LÀ GÌ — hai file BOM thật dùng hai quy ước NGƯỢC NHAU:
+ *
+ *  · `BOM_Shelter Home_ ghế 3` — mỗi dòng của cụm đều LẶP LẠI tên ("Cụm khung"
+ *    hai dòng liền), nên ô trống = dòng Rời thật.
+ *  · `BKQC - C0097HG-IR Ghế Hali cao` — Excel GỘP Ô, tên cụm chỉ nằm ở dòng
+ *    đầu ("Cụm Tựa" một lần rồi 3 dòng trống vẫn thuộc cụm đó).
+ *
+ * Nhìn riêng một ô trống thì không phân biệt được. Dấu hiệu tách bạch: file kiểu
+ * lặp có ít nhất một tên cụm xuất hiện ≥2 lần; file gộp ô thì tên nào cũng xuất
+ * hiện đúng một lần. Chỉ kéo tên xuống ở trường hợp thứ hai — đoán sai bên nào
+ * cũng làm hỏng phân cụm, nên thà giữ nguyên còn hơn gom bừa.
+ */
+function fillMergedClusters(rows: DraftPart[]): void {
+  const seen = new Map<string, number>()
+  for (const r of rows) {
+    if (r.cluster_name) seen.set(r.cluster_name, (seen.get(r.cluster_name) ?? 0) + 1)
+  }
+  if (seen.size === 0) return
+  const repeats = [...seen.values()].some((n) => n > 1)
+  if (repeats) return
+  let last: string | null = null
+  for (const r of rows) {
+    if (r.cluster_name) last = r.cluster_name
+    else r.cluster_name = last
+  }
+}
+
 export function parseBomPaste(text: string): PasteResult {
   const lines = String(text ?? '').split(/\r?\n/)
   // Tách theo Tab (Excel) — nếu không có Tab thì thử nhiều khoảng trắng / dấu ;
@@ -312,6 +340,8 @@ export function parseBomPaste(text: string): PasteResult {
     }
     rows.push(row)
   })
+
+  fillMergedClusters(rows)
 
   const mapped = [...finalMap.entries()]
     .filter(([, f]) => f !== 'skip')

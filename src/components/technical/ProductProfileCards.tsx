@@ -36,6 +36,15 @@ export type PartView = {
   bend_waste_mm: number | null
   /** Profile tra bảng kg/m (TD-HG04 = 0.260). */
   kg_per_m: number | null
+  /* Quy đổi sang đơn vị MUA (0132) — xem `part-layouts.ts` để biết nhóm nào dùng. */
+  wood_species: string | null
+  bar_length_m: number | null
+  pcs_per_bar: number | null
+  roll_width_m: number | null
+  waste_pct: number | null
+  sheet_w_mm: number | null
+  sheet_l_mm: number | null
+  m3_per_sheet: number | null
   qty: number
   unit: string | null
   color: string | null

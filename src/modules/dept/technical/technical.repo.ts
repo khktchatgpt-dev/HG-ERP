@@ -599,6 +599,18 @@ export type ProductPart = {
   bend_waste_mm: number | null
   /** Profile tra bảng kg/m (TD-HG04 = 0.260) — thay cho phép tính hình học. */
   kg_per_m: number | null
+  /* ── Quy đổi sang ĐƠN VỊ MUA (0132) ────────────────────────────────────
+   * Định mức ra mét/kg/m³, còn đơn đặt hàng cần cây/tấm/mét khổ. Mỗi nhóm
+   * dùng vài trường: khung → bar_*, gỗ → wood_species, vải → roll/waste,
+   * polywood-kính → sheet_*, mút → m3_per_sheet. */
+  wood_species: string | null
+  bar_length_m: number | null
+  pcs_per_bar: number | null
+  roll_width_m: number | null
+  waste_pct: number | null
+  sheet_w_mm: number | null
+  sheet_l_mm: number | null
+  m3_per_sheet: number | null
   qty: number
   unit: string | null
   /** Màu sơn / màu vật tư — là quy cách, không phải giá. */
@@ -671,7 +683,7 @@ export type PackingOption = {
 // ra trống trơn dù nguồn có số. KHÔNG còn `unit_price`/`amount`: định mức trả lời
 // "cần bao nhiêu", giá thuộc bảng giá NCC bên Cung ứng (0097, quyết định D4).
 const PART_COLS =
-  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
+  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, wood_species, bar_length_m, pcs_per_bar, roll_width_m, waste_pct, sheet_w_mm, sheet_l_mm, m3_per_sheet, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
 
 const CLUSTER_COLS =
   'id, name, qty_per_product, first_stage, final_stage, note, sort_order'
@@ -684,6 +696,27 @@ export const productProfileRepo = {
       .eq('product_id', productId)
       .order('sort_order')
     return (data ?? []) as ProductPart[]
+  },
+
+  /**
+   * Mã vật tư nào trên hồ sơ này CÓ THẬT trong danh mục kho → { mã: tên }.
+   *
+   * `material_code` cố ý để text tự do (0092 — danh mục kho là của phòng khác),
+   * nên phải tra ngược mới biết dòng nào cung ứng gộp mua được. Mã vắng khỏi
+   * map = chưa khớp, UI gắn cờ.
+   */
+  async knownMaterialNames(codes: string[]): Promise<Record<string, string>> {
+    const uniq = [...new Set(codes.filter(Boolean))]
+    if (uniq.length === 0) return {}
+    const { data } = await db()
+      .from('warehouse_materials')
+      .select('code, name')
+      .in('code', uniq)
+    const out: Record<string, string> = {}
+    for (const m of (data ?? []) as { code: string; name: string }[]) {
+      out[m.code] = m.name
+    }
+    return out
   },
 
   /** Đếm dòng định mức — cho nhãn số trên tab, không cần kéo cả bảng. */
