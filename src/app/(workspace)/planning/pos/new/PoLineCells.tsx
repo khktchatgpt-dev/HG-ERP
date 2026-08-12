@@ -149,7 +149,11 @@ type BaremHintProps = {
   index: number
   onPatch: (i: number, patch: Partial<Line>) => void
   /** Ghi số vừa gõ về danh mục vật tư — form lo phần gọi API. */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (
+    materialId: string,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
+  ) => void
 }
 
 function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps) {
@@ -318,25 +322,72 @@ export function LineCell({
       )
 
     case 'inner':
-      return <InnerDimsCell line={l} index={index} onPatch={onPatch} />
+      return (
+        <>
+          <InnerDimsCell line={l} index={index} onPatch={onPatch} />
+          {/* DANH MỤC CHƯA CÓ QUY CÁCH mà dòng vừa gõ đủ kích thước → mời lưu
+              ngược (0136, giai đoạn hoàn thiện data) — lần đặt sau tự bóc,
+              khỏi gõ lại. Cùng lối "lưu vào danh mục ↑" của barem kg/m. */}
+          {onSaveToCatalog &&
+            !l.is_free &&
+            l.spec.trim() === '' &&
+            l.inner_l_mm !== '' &&
+            l.inner_w_mm !== '' &&
+            l.inner_h_mm !== '' && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSaveToCatalog(
+                    l.material_id,
+                    'spec',
+                    `${l.inner_l_mm}x${l.inner_w_mm}x${l.inner_h_mm}`,
+                  )
+                }
+                title="Danh mục chưa có quy cách — lưu để lần đặt sau tự bóc kích thước"
+                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+              >
+                lưu quy cách ↑
+              </button>
+            )}
+        </>
+      )
 
     case 'area':
       return (
-        <input
-          type="number"
-          min="0"
-          step="0.0001"
-          onWheel={blurOnWheel}
-          value={l.area_m2}
-          onChange={(e) =>
-            onPatch(index, {
-              area_m2: e.target.value === '' ? '' : Number(e.target.value),
-            })
-          }
-          className={`${cell} text-right`}
-          title="Tự tính từ lọt lòng theo cách mở — sửa được nếu NCC chào khác barem"
-          aria-label={label}
-        />
+        <>
+          <input
+            type="number"
+            min="0"
+            step="0.0001"
+            onWheel={blurOnWheel}
+            value={l.area_m2}
+            onChange={(e) =>
+              onPatch(index, {
+                area_m2: e.target.value === '' ? '' : Number(e.target.value),
+              })
+            }
+            className={`${cell} text-right`}
+            title="Tự tính từ lọt lòng theo cách mở — sửa được nếu NCC chào khác barem"
+            aria-label={label}
+          />
+          {/* Kính: quy cách gõ ở cột "Quy cách" (dimension_text) — danh mục
+              trống thì mời lưu, lần sau m²/tấm tự tính từ chính chuỗi này. */}
+          {onSaveToCatalog &&
+            !l.is_free &&
+            l.spec.trim() === '' &&
+            parseInnerDims(l.dimension_text) != null && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSaveToCatalog(l.material_id, 'spec', l.dimension_text.trim())
+                }
+                title="Danh mục chưa có quy cách — lưu để lần đặt sau tự tính m²/tấm"
+                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+              >
+                lưu quy cách ↑
+              </button>
+            )}
+        </>
       )
 
     case 'cartonBasis':

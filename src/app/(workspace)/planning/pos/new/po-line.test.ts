@@ -8,10 +8,12 @@ import {
   lineFromPo,
   lineProblem,
   lineReady,
+  newFreeLine,
   newLine,
   overridesCatalog,
+  refreshLineFromMaterial,
 } from './po-line'
-import type { Line, PoLineDto } from './po-line'
+import type { Line, MaterialRefresh, PoLineDto } from './po-line'
 import type { PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
@@ -573,5 +575,70 @@ describe('newLine glass/foam — tự bóc quy cách (0134)', () => {
   it('mút cuộn "8mm x 1.05m x 150m" KHÔNG bị đọc nhầm thành kích thước tấm', () => {
     const l = newLine('foam', { ...kinh, spec: '8mm x 1.05m x 150m' })
     expect(l.inner_l_mm).toBe('')
+  })
+})
+
+/*
+ * SỬA VẬT TƯ TẠI DÒNG ĐƠN (0136 — giai đoạn hoàn thiện data): lưu danh mục
+ * xong, dòng đang mở hút lại số mới. Luật: KHÔNG đè số người dùng đã gõ —
+ * số gõ tay có thể là phiếu cân NCC, danh mục chỉ lấp ô trống.
+ */
+describe('refreshLineFromMaterial — hút lại danh mục, không đè số đã gõ', () => {
+  const refreshed: MaterialRefresh = {
+    name: 'Kính trắng phun mờ CL (đã sửa)',
+    unit: 'Tấm',
+    spec: '605x539x5mm',
+    kg_per_m: null,
+    kg_per_unit: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    pack_size: 10,
+    pack_unit: 'kiện',
+    material_grade: 'Kính cường lực',
+  }
+  const goc = (): Line => ({
+    ...newFreeLine(),
+    is_free: undefined,
+    material_id: 'm-k',
+    code: 'KI-0001',
+    name: 'Kính trắng (tên cũ)',
+    unit: 'tấm',
+  })
+
+  it('tên/ĐVT/quy cách/đóng gói luôn theo danh mục; ô trống được lấp', () => {
+    const l = refreshLineFromMaterial('glass', goc(), refreshed)
+    expect(l.name).toBe('Kính trắng phun mờ CL (đã sửa)')
+    expect(l.pack_size).toBe(10)
+    expect(l.material_grade).toBe('Kính cường lực')
+    // Quy cách vừa bổ sung → m²/tấm tự bóc ngay (605×539/10⁶).
+    expect(l.area_m2).toBeCloseTo(0.3261, 4)
+  })
+
+  it('số đã gõ tay KHÔNG bị đè', () => {
+    const l = refreshLineFromMaterial(
+      'glass',
+      { ...goc(), area_m2: 0.5, material_grade: 'gõ tay' },
+      refreshed,
+    )
+    expect(l.area_m2).toBe(0.5)
+    expect(l.material_grade).toBe('gõ tay')
+  })
+
+  it('foam: quy cách mới bổ sung → D×R×Dày lấp vào ô trống', () => {
+    const l = refreshLineFromMaterial('foam', goc(), {
+      ...refreshed,
+      spec: '1520x920x10',
+    })
+    expect([l.inner_l_mm, l.inner_w_mm, l.inner_h_mm]).toEqual([1520, 920, 10])
+  })
+
+  it('metal_kg: kg/tấm vừa khai lấp vào ô trống, catalog_* cập nhật mốc so lệch', () => {
+    const l = refreshLineFromMaterial('metal_kg', goc(), {
+      ...refreshed,
+      kg_per_unit: 23.94,
+    })
+    expect(l.weight_per_unit).toBe(23.94)
+    expect(l.catalog_kg_unit).toBe(23.94)
   })
 })

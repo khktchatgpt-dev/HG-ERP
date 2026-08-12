@@ -1,6 +1,6 @@
 'use client'
 
-import { PackageSearch, Trash2, TriangleAlert, Weight } from 'lucide-react'
+import { PackageSearch, Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
 import { AutoGrowCell, LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
@@ -65,6 +65,7 @@ export function PoLineTable({
   onPatch,
   onRemove,
   onSaveToCatalog,
+  onEditMaterial,
   focusIndex = null,
   onFocused,
   onDoneRow,
@@ -77,7 +78,13 @@ export function PoLineTable({
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
   /** Ghi kg/m · kg/đơn-vị vừa gõ về danh mục vật tư (0128). */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (
+    materialId: string,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
+  ) => void
+  /** Mở modal SỬA VẬT TƯ tại chỗ — giai đoạn hoàn thiện data, thiếu gì sửa ngay. */
+  onEditMaterial?: (materialId: string) => void
   /** Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó. */
   focusIndex?: number | null
   /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */
@@ -244,6 +251,20 @@ export function PoLineTable({
                             <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
                               {l.code}
                             </span>
+                            {/* SỬA VẬT TƯ tại chỗ (giai đoạn hoàn thiện data):
+                                thiếu quy cách/barem/ĐVT thì bổ sung ngay,
+                                không phải mở màn danh mục ở tab khác. */}
+                            {onEditMaterial && (
+                              <button
+                                type="button"
+                                onClick={() => onEditMaterial(l.material_id)}
+                                className="text-muted-foreground/70 rounded p-0.5 transition-colors hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-400"
+                                title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
+                                aria-label={`Sửa vật tư ${l.name}`}
+                              >
+                                <Pencil className="size-3" aria-hidden />
+                              </button>
+                            )}
                             {/* null = chưa có sổ kho — "kho ?" thay vì tồn 0 giả. */}
                             {l.on_hand == null ? (
                               <span className="text-muted-foreground/70">kho ?</span>

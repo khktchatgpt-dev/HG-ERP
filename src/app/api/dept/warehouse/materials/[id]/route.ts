@@ -6,6 +6,14 @@ import { materialUpdateSchema } from '@/modules/dept/warehouse/warehouse.schema'
 
 type Params = { params: Promise<{ id: string }> }
 
+/** Một vật tư đầy đủ trường — nuôi modal "Sửa vật tư" trên dòng đơn đặt. */
+export const GET = handle(async (_req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  const material = await materialsService.detail(user, id)
+  return NextResponse.json({ material })
+})
+
 export const PATCH = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params

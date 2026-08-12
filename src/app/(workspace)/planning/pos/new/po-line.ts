@@ -276,6 +276,71 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
   }
 }
 
+/** Bản vật tư TỐI THIỂU mà modal "Sửa vật tư" trả về sau khi lưu. */
+export type MaterialRefresh = {
+  name: string
+  unit: string
+  spec: string | null
+  kg_per_m: number | null
+  kg_per_unit: number | null
+  default_bar_length_m: number | null
+  price_unit: string | null
+  unit2_factor: number | null
+  pack_size: number | null
+  pack_unit: string | null
+  material_grade: string | null
+}
+
+/**
+ * SỬA VẬT TƯ NGAY TRÊN DÒNG ĐƠN → dòng hút lại số mới của danh mục.
+ *
+ * Luật cập nhật giữ đúng nguyên tắc "không đè số người dùng đã gõ":
+ *   · LUÔN theo danh mục: tên, ĐVT, quy cách, đóng gói, catalog_* (mốc so lệch).
+ *   · CHỈ KHI Ô TRỐNG: barem (kg/m, dài cây, kg/đơn-vị), vật liệu — người soạn
+ *     đã gõ tay thì số đó thắng (có thể là phiếu cân NCC).
+ *   · Kích thước bóc từ quy cách (carton/foam dims, glass m²/tấm) cũng chỉ khi
+ *     đang trống — cùng đường parse với `newLine`.
+ */
+export function refreshLineFromMaterial(
+  t: PoTemplate,
+  l: Line,
+  m: MaterialRefresh,
+): Line {
+  const kgUnit = kgPerUnitOf(m)
+  const next: Line = {
+    ...l,
+    name: m.name,
+    unit: m.unit,
+    spec: m.spec ?? '',
+    pack_size: m.pack_size ?? null,
+    pack_unit: m.pack_unit ?? '',
+    catalog_kg_m: m.kg_per_m ?? null,
+    catalog_kg_unit: kgUnit.kg,
+    weight_per_m: l.weight_per_m === '' ? (m.kg_per_m ?? '') : l.weight_per_m,
+    bar_length_m: l.bar_length_m === '' ? (m.default_bar_length_m ?? '') : l.bar_length_m,
+    weight_per_unit: l.weight_per_unit === '' ? (kgUnit.kg ?? '') : l.weight_per_unit,
+    material_grade: l.material_grade === '' ? (m.material_grade ?? '') : l.material_grade,
+  }
+
+  // Kích thước từ quy cách — cùng luật với newLine, nhưng chỉ lấp ô trống.
+  if ((t === 'carton' || t === 'foam') && next.inner_l_mm === '') {
+    const dims = parseInnerDims(m.spec)
+    if (dims) {
+      next.inner_l_mm = dims[0]
+      next.inner_w_mm = dims[1]
+      next.inner_h_mm = dims[2]
+      if (t === 'carton' && next.area_m2 === '') {
+        next.area_m2 = recalcCartonArea(next)
+      }
+    }
+  }
+  if (t === 'glass' && next.area_m2 === '') {
+    const dims = parseInnerDims(m.spec)
+    if (dims) next.area_m2 = Math.round(((dims[0] * dims[1]) / 1e6) * 10000) / 10000
+  }
+  return next
+}
+
 /**
  * DÒNG TỰ DO cho mẫu gỗ/gia công (0134): không gắn vật tư kho — tên/ĐVT gõ ngay
  * trên dòng, material_id chỉ là khóa cục bộ để React/focus/xoá dòng hoạt động.

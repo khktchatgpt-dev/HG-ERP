@@ -157,6 +157,18 @@ export const materialsService = {
     return materialsRepo.counts(opts)
   },
 
+  /**
+   * Một vật tư đầy đủ trường — nuôi modal "Sửa vật tư" ngay trên dòng đơn đặt
+   * (dòng đơn chỉ chụp một phần, mở sửa phải lấy bản gốc để không ghi null đè
+   * lên trường mình không hiển thị).
+   */
+  async detail(user: User, id: string): Promise<Material> {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    const m = await materialsRepo.findById(id)
+    if (!m) throw NotFound('Vật tư không tồn tại')
+    return m
+  },
+
   async create(user: User, input: CreateInput): Promise<Material> {
     // Tạo vật tư: permission warehouse.material.create (seed gán Kho + Cung ứng
     // + Ban QL). Cung ứng thêm nhanh hàng mới ngay lúc lên đơn đặt (form PO).

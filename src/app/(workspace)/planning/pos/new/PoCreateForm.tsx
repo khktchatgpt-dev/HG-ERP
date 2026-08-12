@@ -40,7 +40,8 @@ import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
-import { newFreeLine, newLine, type Line } from './po-line'
+import { newFreeLine, newLine, refreshLineFromMaterial, type Line } from './po-line'
+import { EditMaterialDialog } from './EditMaterialDialog'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -429,6 +430,8 @@ export function PoCreateForm({
   const pickerRef = useRef<HTMLButtonElement | null>(null)
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const [pickOpen, setPickOpen] = useState(false)
+  /** Vật tư đang mở modal SỬA TẠI CHỖ (giai đoạn hoàn thiện data) — null = đóng. */
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
   /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -509,10 +512,10 @@ export function PoCreateForm({
    */
   async function saveToCatalog(
     materialId: string,
-    field: 'kgm' | 'kgunit',
-    value: number,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
   ) {
-    const col = field === 'kgm' ? 'kg_per_m' : 'kg_per_unit'
+    const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
     try {
       await api(`/api/dept/warehouse/materials/${materialId}`, {
         method: 'PATCH',
@@ -524,13 +527,20 @@ export function PoCreateForm({
             ? {
                 ...l,
                 ...(field === 'kgm'
-                  ? { catalog_kg_m: value }
-                  : { catalog_kg_unit: value }),
+                  ? { catalog_kg_m: Number(value) }
+                  : field === 'kgunit'
+                    ? { catalog_kg_unit: Number(value) }
+                    : // Quy cách (0136): dòng giữ bản chụp danh mục — cập nhật để
+                      // nút "lưu quy cách" tự ẩn và lần sau tự bóc kích thước.
+                      { spec: String(value) }),
               }
             : l,
         ),
       )
-      toast.success('Đã lưu vào danh mục', `${col} = ${value.toLocaleString('vi-VN')}`)
+      toast.success(
+        'Đã lưu vào danh mục',
+        `${col} = ${typeof value === 'number' ? value.toLocaleString('vi-VN') : value}`,
+      )
     } catch (e) {
       toast.error(
         'Không lưu được vào danh mục',
@@ -895,9 +905,24 @@ export function PoCreateForm({
           onPatch={patchLine}
           onRemove={removeLine}
           onSaveToCatalog={(id, f, v) => void saveToCatalog(id, f, v)}
+          onEditMaterial={setEditingMaterialId}
           focusIndex={focusIndex}
           onFocused={() => setFocusIndex(null)}
           onDoneRow={() => pickerRef.current?.focus()}
+        />
+
+        {/* Sửa vật tư tại chỗ — lưu xong mọi dòng đang mang mã đó hút lại số
+            mới (chỉ lấp ô trống, số đã gõ tay giữ nguyên). */}
+        <EditMaterialDialog
+          materialId={editingMaterialId}
+          onClose={() => setEditingMaterialId(null)}
+          onSaved={(id, m) =>
+            setLines((ls) =>
+              ls.map((l) =>
+                l.material_id === id ? refreshLineFromMaterial(template, l, m) : l,
+              ),
+            )
+          }
         />
 
         {/*
