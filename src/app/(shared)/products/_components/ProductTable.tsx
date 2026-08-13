@@ -2,7 +2,14 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { CircleCheck, CircleSlash, Ellipsis, ImageOff, Maximize2 } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleSlash,
+  Ellipsis,
+  ImageOff,
+  Lock,
+  Maximize2,
+} from 'lucide-react'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { DataTable, type Column } from '@/components/erp/DataTable'
@@ -131,18 +138,31 @@ export function ProductTable({
     {
       key: 'status',
       header: 'Trạng thái',
-      sortValue: (p) => (p.is_active ? 0 : 1),
-      width: '110px',
-      cell: (p) =>
-        p.is_active ? (
-          <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-            <CircleCheck /> Đang dùng
-          </Badge>
-        ) : (
-          <Badge variant="outline" className="text-muted-foreground">
-            <CircleSlash /> Ngừng
-          </Badge>
-        ),
+      // Hồ sơ ĐÃ KHOÁ lên đầu khi sort: đó là các bản đã chốt, dùng được ngay.
+      sortValue: (p) => (p.locked_at ? 0 : p.is_active ? 1 : 2),
+      width: '130px',
+      cell: (p) => (
+        <div className="flex flex-col items-start gap-1">
+          {p.is_active ? (
+            <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+              <CircleCheck /> Đang dùng
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-muted-foreground">
+              <CircleSlash /> Ngừng
+            </Badge>
+          )}
+          {/* 0140 — hồ sơ chốt: bảng phải nói ra như lưới thẻ. */}
+          {p.locked_at && (
+            <Badge
+              title={`Khoá ${new Date(p.locked_at).toLocaleDateString('vi-VN')}`}
+              className="border-transparent bg-emerald-600 text-white"
+            >
+              <Lock /> Đã khoá
+            </Badge>
+          )}
+        </div>
+      ),
     },
     {
       key: 'actions',

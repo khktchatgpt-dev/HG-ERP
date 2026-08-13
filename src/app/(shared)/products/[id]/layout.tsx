@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Copy } from 'lucide-react'
+import { Copy, Lock } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
 import { canEditProducts } from '@/modules/dept/technical/technical.service'
@@ -72,6 +72,17 @@ export default async function ProductDetailLayout({
       />
 
       <div className="flex flex-wrap items-center gap-2">
+        {/* HỒ SƠ ĐÃ KHOÁ đứng ĐẦU hàng nhãn (0140): mở bất kỳ tab nào của hồ sơ
+            cũng thấy ngay — trước đây tin này chỉ có ở tab Tài liệu, nên người
+            vào tab Định mức gõ sửa rồi mới ăn lỗi 409 mà không hiểu vì sao. */}
+        {product.locked_at && (
+          <Badge
+            title={`Khoá ${new Date(product.locked_at).toLocaleString('vi-VN')} — mở khoá ở tab Tài liệu`}
+            className="border-transparent bg-emerald-600 text-white"
+          >
+            <Lock /> Đã khoá
+          </Badge>
+        )}
         <Badge className={`border-transparent ${BOM_TONE[status]}`}>
           {BOM_LABEL[status]}
         </Badge>

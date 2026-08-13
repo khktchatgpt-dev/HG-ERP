@@ -61,6 +61,8 @@ export type Product = {
   max_load_kg: number | null
   assembly: 'assembled' | 'kd' | null
   set_contents: string | null
+  /** Hồ sơ đã khoá (0140) — null = đang mở, còn sửa được. */
+  locked_at: string | null
   is_active: boolean
 }
 
@@ -85,6 +87,8 @@ export type ProductRow = Pick<
   | 'width_mm'
   | 'height_mm'
   | 'image_file_id'
+  /** Hồ sơ đã khoá (0140) — thư viện phải nói ra, đó là bản mọi phòng dùng. */
+  | 'locked_at'
   | 'is_active'
 > & {
   has_drawing: boolean
@@ -103,6 +107,8 @@ export type ProductCounts = {
   bom_drawing: number
   bom_done: number
   no_image: number
+  /** Hồ sơ đã khoá (0140). */
+  locked: number
 }
 
 export type Filters = {
@@ -112,6 +118,8 @@ export type Filters = {
   status: string
   /** 'missing' | 'has' | 'all' — lọc theo có ảnh đại diện hay chưa. */
   image: string
+  /** 'yes' | 'no' | 'all' — hồ sơ đã khoá (0140). */
+  locked: string
   /** Mã loại SP 2 ký tự ('CH', 'TB'…) hoặc 'all'. Server đã kiểm mã hợp lệ. */
   type: string
   /** Mã danh mục SP, `NO_CATEGORY` = chưa phân loại, hoặc 'all'. */
@@ -119,7 +127,7 @@ export type Filters = {
 }
 
 /** Bộ lọc bật/tắt được bằng chip — bấm lại giá trị đang bật thì bỏ lọc đó. */
-export type ToggleFilterKey = 'bom' | 'status' | 'image'
+export type ToggleFilterKey = 'bom' | 'status' | 'image' | 'locked'
 
 /** Nhãn khách/nhóm đã dùng + số SP — đổ vào dropdown lọc & ô gợi ý. */
 export type CustomerNameOption = { name: string; count: number }

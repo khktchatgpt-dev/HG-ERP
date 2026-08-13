@@ -241,6 +241,8 @@ export const productsService = {
       bom_status?: BomStatus
       is_active?: boolean
       has_image?: boolean
+      /** true = chỉ hồ sơ ĐÃ KHOÁ (0140). */
+      locked?: boolean
       product_type?: string
       category?: string
       page: number
@@ -265,6 +267,7 @@ export const productsService = {
             : r.customer_name === opts.customer_name)) &&
         (opts.bom_status == null || r.bom_status === opts.bom_status) &&
         (opts.has_image == null || (r.image_file_id != null) === opts.has_image) &&
+        (opts.locked == null || (r.locked_at != null) === opts.locked) &&
         (opts.product_type == null || r.product_type === opts.product_type) &&
         (opts.category == null ||
           (opts.category === NO_CATEGORY_FILTER

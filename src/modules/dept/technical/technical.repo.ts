@@ -208,6 +208,8 @@ export type ProductCounts = {
   bom_done: number
   /** SP chưa có ảnh đại diện — lỗ hổng hồ sơ thấy được ngay trên thẻ thư viện. */
   no_image: number
+  /** Hồ sơ ĐÃ KHOÁ (0140) — bản đã chốt, mọi phòng dùng được ngay. */
+  locked: number
 }
 
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
@@ -274,6 +276,8 @@ export const productsRepo = {
     is_active?: boolean
     /** false = chỉ SP CHƯA có ảnh; true = chỉ SP đã có; bỏ trống = không lọc. */
     has_image?: boolean
+    /** true = chỉ hồ sơ ĐÃ KHOÁ (0140); bỏ trống = không lọc. */
+    locked?: boolean
     /** Mã loại SP 2 ký tự ('CH', 'TB'…) — xem PRODUCT_TYPES ở lib/product-code. */
     product_type?: string
     /**
@@ -297,6 +301,8 @@ export const productsRepo = {
     else if (filter.category) q = q.eq('category', filter.category)
     if (filter.has_image === false) q = q.is('image_file_id', null)
     else if (filter.has_image === true) q = q.not('image_file_id', 'is', null)
+    if (filter.locked === true) q = q.not('locked_at', 'is', null)
+    else if (filter.locked === false) q = q.is('locked_at', null)
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -366,9 +372,18 @@ export const productsRepo = {
    * `technical_product_counts()` (0069). bigint về dạng string nên Number().
    */
   async counts(): Promise<ProductCounts> {
-    const { data, error } = await db().rpc('technical_product_counts')
-    if (error) throw new Error(error.message)
-    const r = data?.[0]
+    // `locked` đếm riêng bằng head-count thay vì nới function 0069: có partial
+    // index `technical_products_locked_idx` nên chỉ quét đúng phần đã khoá,
+    // rẻ hơn cả việc sửa + chạy lại RPC cho mọi lần đếm.
+    const [rpc, locked] = await Promise.all([
+      db().rpc('technical_product_counts'),
+      db()
+        .from('technical_products')
+        .select('id', { count: 'exact', head: true })
+        .not('locked_at', 'is', null),
+    ])
+    if (rpc.error) throw new Error(rpc.error.message)
+    const r = rpc.data?.[0]
     return {
       total: Number(r?.total ?? 0),
       active: Number(r?.active ?? 0),
@@ -376,6 +391,7 @@ export const productsRepo = {
       bom_drawing: Number(r?.bom_drawing ?? 0),
       bom_done: Number(r?.bom_done ?? 0),
       no_image: Number(r?.no_image ?? 0),
+      locked: locked.count ?? 0,
     }
   },
 
