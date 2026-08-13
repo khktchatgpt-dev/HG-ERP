@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   ArrowLeft,
   Building2,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import {
@@ -115,9 +115,13 @@ const field =
  * TỰ LƯU BẢN NHÁP vào trình duyệt (bất cập #5, 09/08/2026): đơn 20 dòng gõ dở
  * mà F5 / mất mạng / lỡ đóng tab là mất sạch — Excel thì Ctrl+S theo phản xạ
  * nên không ai nghĩ tới chuyện này cho tới khi mất. Form ghi localStorage sau
- * mỗi nhịp gõ (debounce), mở lại trang thì đề nghị khôi phục. Chỉ ở chế độ
- * TẠO MỚI — sửa đơn đã có bản gốc trên server, khôi phục đè lên nó dễ nhầm hơn
- * là gõ lại.
+ * mỗi nhịp gõ (debounce), mở lại trang thì đề nghị khôi phục.
+ *
+ * 13/08/2026: mở rộng cho CẢ CHẾ ĐỘ SỬA (khóa riêng theo đơn,
+ * `hg-po-draft-<id>`) — điều hướng nội bộ SPA không bắn beforeunload nên bấm
+ * nhầm một link sidebar là mất trắng chỉnh sửa; autosave + banner khôi phục
+ * đỡ được mọi kiểu rời trang. Chế độ sửa chỉ ghi khi state KHÁC bản server
+ * (mốc `baselineRef`) để không gắn banner "sửa dở" oan.
  */
 const DRAFT_KEY = 'hg-po-draft-new'
 
@@ -150,9 +154,9 @@ type SavedDraft = {
   lines: Line[]
 }
 
-function readSavedDraft(): SavedDraft | null {
+function readSavedDraft(key: string): SavedDraft | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     const d = JSON.parse(raw) as SavedDraft
     // Nháp rỗng (chưa có dòng nào) không đáng một cái banner.
@@ -198,6 +202,7 @@ export function PoCreateForm({
 }) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
 
   const isEdit = initial?.mode === 'edit'
@@ -257,31 +262,45 @@ export function PoCreateForm({
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
 
+  /*
+   * BẢO VỆ CHUYỂN TRANG ĐỘT NGỘT (13/08/2026 — user: "chưa có cơ chế bảo vệ").
+   * Trước đây autosave CHỈ ở chế độ tạo mới; chế độ SỬA chỉ có beforeunload —
+   * tức bấm một link sidebar là mất trắng 20 dòng chỉnh sửa, không cảnh báo,
+   * không khôi phục (beforeunload không bắn với điều hướng nội bộ SPA).
+   *
+   * Nay autosave CẢ HAI chế độ, khóa nháp tách theo đơn (`hg-po-draft-<id>`
+   * cho sửa, khóa cũ cho tạo mới) — rời trang kiểu gì quay lại cũng có banner
+   * đề nghị khôi phục.
+   */
+  const draftKey = isEdit ? `hg-po-draft-${initial!.po.id}` : DRAFT_KEY
+
   // Bản nháp tự lưu tìm thấy lúc mở trang — hiện banner đề nghị khôi phục.
   // setState qua callback của timer, không gọi thẳng thân effect (lint cascading
   // render — cùng lý do với effect nạp taxonomy ở MaterialCoreFields).
   const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
   useEffect(() => {
-    if (initial) return
-    const t = setTimeout(() => setSavedDraft(readSavedDraft()), 0)
+    // 'duplicate' (nhân bản) không autosave/khôi phục: bản gốc là đơn cũ, mở
+    // lại lúc nào cũng dựng lại được — đừng đẻ thêm một lớp nháp gây rối.
+    if (initial && initial.mode !== 'edit') return
+    const t = setTimeout(() => setSavedDraft(readSavedDraft(draftKey)), 0)
     return () => clearTimeout(t)
-  }, [initial])
+  }, [initial, draftKey])
 
-  /*
-   * TỰ LƯU sau mỗi nhịp gõ (debounce 800ms) — chỉ chế độ tạo mới, và chỉ khi
-   * banner khôi phục đã được trả lời (không thì vòng autosave đè mất bản nháp
-   * cũ TRƯỚC khi người dùng kịp bấm "Khôi phục").
+  /**
+   * MỐC ĐỐI CHIẾU của chế độ sửa: chụp state lúc mở trang (đúng bản server).
+   * Autosave chỉ ghi khi state KHÁC mốc — không thì vừa mở đơn ra xem đã bị
+   * gắn banner "sửa dở" oan; quay về đúng bản gốc thì nháp tự xoá.
    */
+  const baselineRef = useRef<string | null>(null)
+  const dirtyRef = useRef(false)
+
   useEffect(() => {
-    if (initial || savedDraft) return
+    if (initial && initial.mode !== 'edit') return
+    if (savedDraft) return // banner chưa được trả lời — đừng đè bản nháp cũ
     const t = setTimeout(() => {
       try {
-        if (lines.length === 0) {
-          localStorage.removeItem(DRAFT_KEY)
-          return
-        }
         const d: SavedDraft = {
-          at: new Date().toISOString(),
+          at: '', // điền lúc ghi — không tham gia so sánh với mốc
           template,
           poType,
           lsxId,
@@ -299,7 +318,22 @@ export function PoCreateForm({
           signerRole,
           lines,
         }
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+        const body = JSON.stringify(d)
+        if (isEdit && baselineRef.current == null) {
+          // Nhịp autosave đầu tiên sau khi mở đơn sửa = đúng bản server → làm mốc.
+          baselineRef.current = body
+          return
+        }
+        const unchanged = isEdit ? body === baselineRef.current : lines.length === 0
+        dirtyRef.current = !unchanged
+        if (unchanged) {
+          localStorage.removeItem(draftKey)
+          return
+        }
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({ ...d, at: new Date().toISOString() }),
+        )
       } catch {
         // localStorage đầy/bị chặn — autosave là lưới an toàn, không chặn việc gõ.
       }
@@ -307,6 +341,8 @@ export function PoCreateForm({
     return () => clearTimeout(t)
   }, [
     initial,
+    isEdit,
+    draftKey,
     savedDraft,
     template,
     poType,
@@ -327,17 +363,18 @@ export function PoCreateForm({
   ])
 
   /*
-   * Chế độ SỬA không có autosave (bản gốc nằm trên server) — chặn đóng tab khi
-   * đang có dòng hàng để khỏi mất chỉnh sửa vì một cú F5.
+   * Đóng tab / F5: chặn khi ĐÃ SỬA KHÁC bản gốc (chế độ sửa) — autosave đã giữ
+   * nháp nhưng 800ms debounce vẫn hở nhịp gõ cuối; hỏi một câu là rẻ nhất.
+   * Tạo mới không hỏi: autosave + banner khôi phục là đủ, chặn F5 chỉ gây bực.
    */
   useEffect(() => {
     if (!isEdit) return
     const h = (e: BeforeUnloadEvent) => {
-      if (lines.length > 0) e.preventDefault()
+      if (dirtyRef.current) e.preventDefault()
     }
     window.addEventListener('beforeunload', h)
     return () => window.removeEventListener('beforeunload', h)
-  }, [isEdit, lines.length])
+  }, [isEdit])
 
   /** Người dùng bấm "Khôi phục" trên banner — đổ lại toàn bộ state đã lưu. */
   function restoreDraft(d: SavedDraft) {
@@ -698,7 +735,7 @@ export function PoCreateForm({
       // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
       // sau không bị hỏi khôi phục đơn đã lưu rồi.
       try {
-        localStorage.removeItem(DRAFT_KEY)
+        localStorage.removeItem(draftKey)
       } catch {}
       // 0116: tạo = LƯU NHÁP, chưa tới bàn duyệt của GĐ. Redirect kèm ?view= để
       // danh sách mở ngay chi tiết — người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
@@ -763,12 +800,28 @@ export function PoCreateForm({
             >
               <Printer className="size-4" aria-hidden /> Xem trước phiếu in
             </button>
-            <Link
-              href="/planning/pos"
+            {/* Đang SỬA KHÁC bản gốc → hỏi trước khi rời (13/08); nháp vẫn đã
+                tự lưu nên "Rời trang" không mất gì — câu hỏi chỉ để khỏi rời nhầm. */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (
+                  dirtyRef.current &&
+                  !(await confirm({
+                    title: 'Rời trang khi đang sửa dở?',
+                    description:
+                      'Thay đổi chưa bấm Lưu — bản sửa dở đã được giữ tạm trên máy này, quay lại sẽ được đề nghị khôi phục.',
+                    confirmLabel: 'Rời trang',
+                  }))
+                ) {
+                  return
+                }
+                router.push('/planning/pos')
+              }}
               className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               <ArrowLeft className="size-4" aria-hidden /> Về danh sách
-            </Link>
+            </button>
           </div>
         }
       />
@@ -776,7 +829,7 @@ export function PoCreateForm({
       {/* Bản nháp tự lưu từ phiên trước — hỏi trước khi đè, không tự khôi phục. */}
       {savedDraft && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] dark:border-amber-900 dark:bg-amber-950/30">
-          <b>Có bản nháp chưa lưu</b>
+          <b>{isEdit ? 'Có bản sửa dở chưa lưu của đơn này' : 'Có bản nháp chưa lưu'}</b>
           <span className="text-muted-foreground">
             {savedDraft.lines.length} dòng ·{' '}
             {new Date(savedDraft.at).toLocaleString('vi-VN')}
@@ -793,7 +846,7 @@ export function PoCreateForm({
               type="button"
               onClick={() => {
                 try {
-                  localStorage.removeItem(DRAFT_KEY)
+                  localStorage.removeItem(draftKey)
                 } catch {}
                 setSavedDraft(null)
               }}
