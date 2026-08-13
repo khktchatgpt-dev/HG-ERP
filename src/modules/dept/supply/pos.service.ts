@@ -12,6 +12,12 @@ import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
+import {
+  buildCatalogSuggestions,
+  linesByMaterial,
+  type CatalogSuggestion,
+} from '@/lib/po-catalog-backfill'
+import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 
@@ -50,7 +56,7 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
 }
 
-/** Payload mô tả cho event `po.lines_saved` — danh mục tự giàu (13/08/2026). */
+/** Trường mô tả của dòng đơn có thể chảy về danh mục (13/08/2026). */
 function catalogLines(lines: PoLineInput[]) {
   return lines.map((l) => ({
     material_id: l.material_id ?? null,
@@ -158,6 +164,22 @@ export const posService = {
     return posRepo.list(opts)
   },
 
+  /**
+   * ĐỀ XUẤT cập nhật danh mục từ dòng đơn vừa lưu (13/08/2026): người soạn đã
+   * gõ quy cách/vật liệu/cách mở… mà danh mục đang TRỐNG → route trả danh sách
+   * này kèm response, form hiện hộp XÁC NHẬN — user chốt "không tự ghi ngầm";
+   * bấm đồng ý mới ghi (qua /materials/enrich, nơi kiểm fill-empty lần nữa).
+   */
+  async catalogSuggestions(lines: PoLineInput[]): Promise<CatalogSuggestion[]> {
+    const wanted = linesByMaterial(catalogLines(lines))
+    const materials = []
+    for (const id of wanted.keys()) {
+      const m = await materialsRepo.findById(id)
+      if (m) materials.push(m)
+    }
+    return buildCatalogSuggestions(catalogLines(lines), materials)
+  },
+
   async detail(_user: User, id: string) {
     const po = await posRepo.findById(id)
     if (!po) throw NotFound('Đơn đặt không tồn tại')
@@ -219,9 +241,6 @@ export const posService = {
       withDerived(template, input.lines),
     )
     if (extraLsxIds.length > 0) await posRepo.replaceExtraLsx(po.id, extraLsxIds)
-    // Danh mục tự giàu (13/08): handler po.catalog điền Ô TRỐNG mô tả của
-    // vật tư từ số người soạn vừa gõ — side-effect, lỗi không hỏng việc lưu.
-    await emit({ name: 'po.lines_saved', po_id: po.id, lines: catalogLines(input.lines) })
     return po
   },
 
@@ -338,7 +357,6 @@ export const posService = {
     })
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
-    await emit({ name: 'po.lines_saved', po_id: id, lines: catalogLines(input.lines) })
     return po
   },
 

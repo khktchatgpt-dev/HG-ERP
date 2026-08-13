@@ -112,14 +112,12 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
       lines: [{ material_id: 'm1', qty_ordered: 150, unit_price: 77000, unit2: 'kg' }],
     })
 
-    // Nháp: chưa tới bàn duyệt, KHÔNG bắn po.submitted lúc tạo (chuyển sang
-    // submit()). po.lines_saved thì CÓ — danh mục tự giàu từ dòng đơn (13/08),
-    // đó là side-effect làm giàu dữ liệu chứ không phải notify.
+    // Nháp: chưa tới bàn duyệt, KHÔNG bắn event nào lúc tạo — po.submitted
+    // chuyển sang submit(); còn cập nhật danh mục đi qua HỘP XÁC NHẬN
+    // (catalogSuggestions + /materials/enrich), không phải event ngầm (13/08).
     const row = vi.mocked(posRepo.insert).mock.calls[0][0] as { status: string }
     expect(row.status).toBe('draft')
-    const names = vi.mocked(emit).mock.calls.map((c) => (c[0] as { name: string }).name)
-    expect(names).not.toContain('po.submitted')
-    expect(names).toContain('po.lines_saved')
+    expect(emit).not.toHaveBeenCalled()
   })
 
   it('NCC ngừng giao dịch → chặn', async () => {

@@ -14,8 +14,13 @@ import {
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { TopProgressBar } from '@/components/erp/Spinner'
-import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import {
+  MaterialPickDialog,
+  invalidateMaterialPickCache,
+  type PoMaterial,
+} from '@/components/supply/MaterialPicker'
+import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { allocationNote } from '@/lib/po-allocation'
 import {
@@ -633,18 +638,63 @@ export function PoCreateForm({
   const readyLines = readyLineCount(template, lines)
   const problem = draftProblem(header, lines)
 
+  /**
+   * HỘP XÁC NHẬN cập nhật danh mục sau khi lưu đơn (13/08/2026 — user chốt:
+   * không tự ghi ngầm). Server trả danh sách "gõ trên dòng mà danh mục đang
+   * trống"; người soạn duyệt rồi mới ghi. `dest` giữ đường điều hướng — đóng
+   * hộp (đồng ý hay bỏ qua) mới rời trang.
+   */
+  const [enrich, setEnrich] = useState<{
+    items: CatalogSuggestion[]
+    dest: string
+  } | null>(null)
+  const [enrichBusy, setEnrichBusy] = useState(false)
+
+  function leaveTo(dest: string) {
+    router.push(dest)
+    router.refresh()
+  }
+
+  async function confirmEnrich() {
+    if (!enrich || enrichBusy) return
+    setEnrichBusy(true)
+    try {
+      const { updated } = await api<{ updated: number }>(
+        '/api/dept/warehouse/materials/enrich',
+        {
+          method: 'POST',
+          body: {
+            items: enrich.items.map((s) => ({
+              material_id: s.material_id,
+              set: Object.fromEntries(s.fields.map((f) => [f.field, f.value])),
+            })),
+          },
+        },
+      )
+      invalidateMaterialPickCache() // ô tìm vật tư phải thấy bản vừa giàu thêm
+      toast.success(`Đã cập nhật ${updated} vật tư`, 'Lần đặt sau các ô này tự điền sẵn')
+      leaveTo(enrich.dest)
+    } catch (err) {
+      toast.error(
+        'Cập nhật danh mục thất bại',
+        err instanceof ApiError ? err.message : 'Có lỗi — đơn đã lưu, chỉ danh mục chưa',
+      )
+      leaveTo(enrich.dest) // đơn đã lưu xong — không giữ người dùng lại vì phần phụ
+    }
+  }
+
   async function submit() {
     if (problem || busy) return
     setBusy(true)
     try {
-      const { po } = await api<{ po: { id: string; code: string } }>(
-        isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos',
-        {
-          // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
-          method: isEdit ? 'PATCH' : 'POST',
-          body: buildPoPayload(header, lines),
-        },
-      )
+      const { po, catalog_suggestions } = await api<{
+        po: { id: string; code: string }
+        catalog_suggestions?: CatalogSuggestion[]
+      }>(isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos', {
+        // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
+        method: isEdit ? 'PATCH' : 'POST',
+        body: buildPoPayload(header, lines),
+      })
       // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
       // sau không bị hỏi khôi phục đơn đã lưu rồi.
       try {
@@ -658,8 +708,13 @@ export function PoCreateForm({
           ? 'Thay đổi đã ghi vào đơn'
           : 'Kiểm tra lại trong chi tiết rồi bấm "Gửi GĐ duyệt"',
       )
-      router.push(isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`)
-      router.refresh()
+      const dest = isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`
+      // Có thông tin danh mục đang thiếu → hỏi trước khi rời trang; không thì đi luôn.
+      if (catalog_suggestions && catalog_suggestions.length > 0) {
+        setEnrich({ items: catalog_suggestions, dest })
+        return
+      }
+      leaveTo(dest)
     } catch (err) {
       toast.error(
         isEdit ? 'Lưu đơn thất bại' : 'Tạo đơn thất bại',
@@ -1160,6 +1215,63 @@ export function PoCreateForm({
             lines={previewLinesFromDraft(template, lines)}
           />
         </div>
+      </Modal>
+
+      {/* HỘP XÁC NHẬN cập nhật danh mục sau khi lưu đơn (13/08/2026): liệt kê
+          thông tin gõ trên dòng mà danh mục đang TRỐNG — người soạn duyệt rồi
+          mới ghi, không tự ghi ngầm. Đóng hộp (đường nào cũng vậy) mới rời trang. */}
+      <Modal
+        open={enrich != null}
+        onClose={() => enrich && leaveTo(enrich.dest)}
+        title="Cập nhật kho vật tư?"
+        maxWidth="sm:max-w-xl"
+      >
+        {enrich && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              Đơn đã lưu. Có <b>{enrich.items.length}</b> vật tư bạn vừa gõ thông tin mà
+              danh mục đang <b>để trống</b> — lưu vào kho vật tư để lần đặt sau tự điền
+              sẵn?
+            </p>
+            <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto text-sm">
+              {enrich.items.map((s) => (
+                <li
+                  key={s.material_id}
+                  className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-xs text-zinc-400">{s.code}</span>
+                    <span className="truncate font-medium">{s.name}</span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    {s.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground text-xs">
+              Chỉ điền ô đang trống của danh mục — không đè giá trị nào đã có.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => leaveTo(enrich.dest)}
+                className="border-input bg-card hover:bg-muted rounded-md border px-3 py-2 text-sm shadow-xs"
+              >
+                Bỏ qua
+              </button>
+              <button
+                type="button"
+                disabled={enrichBusy}
+                onClick={() => void confirmEnrich()}
+                className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {enrichBusy && <Spinner size={14} />}
+                Cập nhật danh mục ({enrich.items.length})
+              </button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <TotalsBar

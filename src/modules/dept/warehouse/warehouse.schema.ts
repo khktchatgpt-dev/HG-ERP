@@ -58,6 +58,28 @@ export const materialCreateSchema = z.object({
   needs_review_fields: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
 })
 
+/**
+ * Cập nhật danh mục từ HỘP XÁC NHẬN sau khi lưu đơn đặt (13/08/2026) — chỉ các
+ * trường mô tả; server kiểm fill-empty-only lần nữa lúc ghi.
+ */
+export const materialEnrichSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        material_id: z.string().uuid(),
+        set: z.object({
+          spec: z.string().trim().max(200).optional(),
+          material_grade: z.string().trim().max(100).optional(),
+          finish: z.string().trim().max(100).optional(),
+          open_style: z.string().trim().max(20).optional(),
+          pcs_per_ctn: z.coerce.number().positive().optional(),
+        }),
+      }),
+    )
+    .min(1)
+    .max(100),
+})
+
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
 export const materialSimilarQuerySchema = z.object({
   name: z.string().trim().min(3).max(200),

@@ -12,6 +12,7 @@ import {
 } from '@/lib/material-key'
 import { invalidateTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
+import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -340,6 +341,31 @@ export const materialsService = {
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     await materialsRepo.delete(id)
+  },
+
+  /**
+   * CẬP NHẬT DANH MỤC từ hộp xác nhận sau khi lưu đơn đặt (13/08/2026 — user
+   * chốt: không tự ghi ngầm, người soạn duyệt danh sách rồi mới ghi).
+   *
+   * An toàn hai lớp: (1) `catalogFillPatch` kiểm FILL-EMPTY-ONLY trên bản danh
+   * mục MỚI NHẤT — giữa lúc lưu đơn và lúc bấm đồng ý mà ai đó vừa khai giá trị
+   * thì bỏ qua, không đè; (2) đi qua `update()` nên chia-chủ-quyền 0136 vẫn
+   * enforce (mọi trường ở đây thuộc PURCHASING_EDITABLE_FIELDS).
+   */
+  async enrichFromOrder(
+    user: User,
+    items: { material_id: string; set: Record<string, unknown> }[],
+  ): Promise<{ updated: number }> {
+    let updated = 0
+    for (const it of items) {
+      const m = await materialsRepo.findById(it.material_id)
+      if (!m) continue
+      const patch = catalogFillPatch(m, it.set as CatalogLineInfo)
+      if (!patch) continue
+      await materialsService.update(user, it.material_id, patch)
+      updated++
+    }
+    return { updated }
   },
 }
 

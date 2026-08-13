@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildCatalogSuggestions,
   catalogFillPatch,
   lastPriceUpdates,
   linesByMaterial,
@@ -87,5 +88,30 @@ describe('lastPriceUpdates — giá gần nhất khi gửi NCC', () => {
 
   it('đơn USD → không cập nhật gì (cột giá ngầm VND, ghi 700.21 là sai bậc)', () => {
     expect(lastPriceUpdates('USD', lines).size).toBe(0)
+  })
+})
+
+describe('buildCatalogSuggestions — danh sách cho hộp xác nhận sau khi lưu đơn', () => {
+  const mat = { id: 'a', code: 'BAO0062', name: 'Thùng carton 5 lớp', ...EMPTY }
+
+  it('danh mục trống + dòng có cách mở/pcs → một đề xuất kèm nhãn tiếng Việt', () => {
+    const s = buildCatalogSuggestions(
+      [{ material_id: 'a', open_style: 'AD', pcs_per_ctn: 4 }],
+      [mat],
+    )
+    expect(s).toHaveLength(1)
+    expect(s[0]).toMatchObject({ material_id: 'a', code: 'BAO0062' })
+    expect(s[0].fields).toEqual([
+      { field: 'open_style', label: 'Cách mở thùng', value: 'AD' },
+      { field: 'pcs_per_ctn', label: 'SP mỗi thùng', value: 4 },
+    ])
+  })
+
+  it('danh mục đã đủ / dòng không có gì mới → danh sách rỗng, không hiện hộp', () => {
+    const full = { ...mat, open_style: 'MR', pcs_per_ctn: 2 }
+    expect(
+      buildCatalogSuggestions([{ material_id: 'a', open_style: 'AD', pcs_per_ctn: 4 }], [full]),
+    ).toEqual([])
+    expect(buildCatalogSuggestions([{ material_id: 'a' }], [mat])).toEqual([])
   })
 })

@@ -135,23 +135,9 @@ export type DomainEvent =
       to_user_id: string
       reassigned_by: string
     }
-  /**
-   * Dòng đơn vừa lưu (tạo/sửa nháp — 13/08/2026): handler `po.catalog` điền
-   * Ô TRỐNG mô tả của danh mục (quy cách/vật liệu/bề mặt/cách mở/pcs) từ số
-   * người soạn đã gõ — danh mục tự giàu, lần đặt sau khỏi gõ lại.
-   */
-  | {
-      name: 'po.lines_saved'
-      po_id: string
-      lines: {
-        material_id: string | null
-        spec: string | null
-        material_grade: string | null
-        finish: string | null
-        open_style: string | null
-        pcs_per_ctn: number | null
-      }[]
-    }
+  // (po.lines_saved đã GỠ 13/08/2026 — user chốt: mô tả về danh mục phải qua
+  //  hộp XÁC NHẬN sau khi lưu đơn, không tự ghi ngầm. Xem posService.
+  //  catalogSuggestions + /api/dept/warehouse/materials/enrich.)
   /**
    * Đơn GỬI NCC (approved → ordered): giá đã chốt thật — handler cập nhật
    * `last_purchase_price` (chỉ đơn VND, xem po-catalog-backfill).

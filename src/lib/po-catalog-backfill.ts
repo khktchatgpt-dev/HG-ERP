@@ -92,6 +92,55 @@ export function linesByMaterial(lines: CatalogLineInfo[]): Map<string, CatalogLi
 }
 
 /**
+ * MỘT ĐỀ XUẤT cập nhật danh mục — hiện trong hộp xác nhận sau khi lưu đơn
+ * (user chốt 13/08/2026: KHÔNG tự ghi ngầm; người soạn thấy danh sách và bấm
+ * "Cập nhật danh mục" mới ghi).
+ */
+export type CatalogSuggestion = {
+  material_id: string
+  code: string
+  name: string
+  fields: { field: keyof CatalogFields; label: string; value: string | number }[]
+}
+
+/** Nhãn hiện trong hộp xác nhận — khớp MATERIAL_FIELD_LABELS của form khai. */
+const SUGGEST_LABELS: Record<keyof CatalogFields, string> = {
+  spec: 'Quy cách',
+  material_grade: 'Vật liệu / màu',
+  finish: 'Màu / bề mặt',
+  open_style: 'Cách mở thùng',
+  pcs_per_ctn: 'SP mỗi thùng',
+}
+
+/**
+ * Danh sách đề xuất cho hộp xác nhận: dòng đơn có gì mà danh mục đang TRỐNG.
+ * Chỉ đề xuất — việc GHI đi qua endpoint enrich, nơi kiểm lại fill-empty lần
+ * nữa trên bản danh mục mới nhất (chống đè khi có người vừa khai song song).
+ */
+export function buildCatalogSuggestions(
+  lines: CatalogLineInfo[],
+  materials: (CatalogFields & { id: string; code: string; name: string })[],
+): CatalogSuggestion[] {
+  const byId = new Map(materials.map((m) => [m.id, m]))
+  const out: CatalogSuggestion[] = []
+  for (const [materialId, line] of linesByMaterial(lines)) {
+    const m = byId.get(materialId)
+    if (!m) continue
+    const patch = catalogFillPatch(m, line)
+    if (!patch) continue
+    out.push({
+      material_id: materialId,
+      code: m.code,
+      name: m.name,
+      fields: (Object.entries(patch) as [keyof CatalogFields, string | number][]).map(
+        ([field, value]) => ({ field, label: SUGGEST_LABELS[field], value }),
+      ),
+    })
+  }
+  return out
+}
+
+/**
  * Giá cập nhật khi đơn GỬI NCC: chỉ VND, chỉ dòng vật tư kho có giá > 0.
  * Trả map material_id → giá; cùng mã nhiều dòng thì lấy dòng CUỐI (giá chốt
  * sau cùng trên đơn).
