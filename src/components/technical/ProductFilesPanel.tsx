@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -41,14 +42,35 @@ const tabOf = (f: ProductFile): TabType => (f.doc_type as TabType) ?? 'other'
 export function ProductFilesPanel({
   productId,
   canEdit,
+  bomFileId = null,
+  canSetBomFile = false,
 }: {
   productId: string
   canEdit: boolean
+  /** File BOM hồ sơ đang trỏ vào (0140) — hiện nhãn "ĐANG DÙNG". */
+  bomFileId?: string | null
+  /** Cho đổi bản đang dùng — tắt khi hồ sơ đã khoá. */
+  canSetBomFile?: boolean
 }) {
+  const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [files, setFiles] = useState<ProductFile[]>([])
   const [tab, setTab] = useState<TabType>('drawing')
+
+  /** Chỉ đích danh bản BOM đúng — mọi phòng mở hồ sơ đều thấy nhãn này. */
+  async function setAsCurrent(f: ProductFile) {
+    try {
+      await api(`/api/dept/technical/products/${productId}/bom-control`, {
+        method: 'PUT',
+        body: { file_id: f.id },
+      })
+      toast.success('Đã đặt làm bản đang dùng', f.filename)
+      router.refresh()
+    } catch (e) {
+      toast.error('Không đặt được bản đang dùng', apiErrorText(e))
+    }
+  }
 
   const reload = useCallback(async () => {
     try {
@@ -144,30 +166,75 @@ export function ProductFilesPanel({
         </p>
       ) : (
         <ul className="divide-y divide-zinc-100 px-4 dark:divide-zinc-900">
-          {current.map((f) => (
-            <li key={f.id} className="flex items-center gap-2 py-2 text-sm">
-              <button
-                onClick={() => void download(f)}
-                className="min-w-0 flex-1 truncate text-left text-sky-600 hover:underline dark:text-sky-400"
-                title={f.filename}
+          {current.map((f) => {
+            /*
+             * BẢN ĐANG DÙNG NỔI BẬT (0140): tab BOM có thể có nhiều file qua
+             * các lần sửa — file được hồ sơ trỏ vào phải nhìn là thấy ngay,
+             * các file BOM còn lại lùi hẳn về sau (mờ + nhãn "bản cũ").
+             */
+            const isBomTab = tab === 'bom'
+            const isCurrent = isBomTab && f.id === bomFileId
+            const isOld = isBomTab && bomFileId != null && !isCurrent
+            return (
+              <li
+                key={f.id}
+                className={
+                  'flex flex-wrap items-center gap-2 py-2 text-sm ' +
+                  (isCurrent
+                    ? '-mx-2 rounded-lg bg-emerald-50 px-2 dark:bg-emerald-950/30'
+                    : isOld
+                      ? 'opacity-60'
+                      : '')
+                }
               >
-                {f.filename}
-              </button>
-              <span className="shrink-0 text-xs text-zinc-400">
-                {formatBytes(f.size_bytes)} ·{' '}
-                {new Date(f.created_at).toLocaleDateString('vi-VN')}
-              </span>
-              {canEdit && (
+                {isCurrent && (
+                  <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                    ĐANG DÙNG
+                  </span>
+                )}
+                {isOld && (
+                  <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                    bản cũ
+                  </span>
+                )}
                 <button
-                  onClick={() => void remove(f)}
-                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                  aria-label="Xoá file"
+                  onClick={() => void download(f)}
+                  className={
+                    'min-w-0 flex-1 truncate text-left hover:underline ' +
+                    (isCurrent
+                      ? 'font-semibold text-emerald-800 dark:text-emerald-300'
+                      : 'text-sky-600 dark:text-sky-400')
+                  }
+                  title={f.filename}
                 >
-                  ✕
+                  {f.filename}
                 </button>
-              )}
-            </li>
-          ))}
+                <span className="shrink-0 text-xs text-zinc-400">
+                  {formatBytes(f.size_bytes)} ·{' '}
+                  {new Date(f.created_at).toLocaleDateString('vi-VN')}
+                </span>
+                {/* Chỉ tab BOM mới có "Dùng bản này" — đây là chỗ chỉ đích danh
+                    bản đúng cho mọi phòng. */}
+                {isBomTab && canSetBomFile && !isCurrent && (
+                  <button
+                    onClick={() => void setAsCurrent(f)}
+                    className="shrink-0 rounded-md border border-emerald-300 px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                  >
+                    Dùng bản này
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    onClick={() => void remove(f)}
+                    className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    aria-label="Xoá file"
+                  >
+                    ✕
+                  </button>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
     </section>

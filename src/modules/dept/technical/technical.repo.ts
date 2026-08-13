@@ -115,6 +115,21 @@ export type Product = {
   bom_effective_date: string | null
   bom_prepared_by: string | null
   bom_approved_by: string | null
+  /**
+   * KIỂM SOÁT BẢN DÙNG (0140 — 13/08/2026). `bom_file_id` là file BOM ĐANG
+   * DÙNG (UI làm nổi bật, file BOM khác lùi về bản cũ); `bom_checked_*` là dấu
+   * Kỹ thuật tự xác nhận đã rà; `locked_*` khoá TOÀN BỘ hồ sơ, `unlocked_*`
+   * giữ vết lần mở gần nhất.
+   */
+  bom_checked_at: string | null
+  bom_checked_by: string | null
+  bom_file_id: string | null
+  locked_at: string | null
+  locked_by: string | null
+  lock_note: string | null
+  unlocked_at: string | null
+  unlocked_by: string | null
+  unlock_reason: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -122,12 +137,12 @@ export type Product = {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, is_active, created_at'
 
 export type ProductLite = Pick<
   Product,
@@ -150,6 +165,8 @@ export type ProductLite = Pick<
   | 'width_mm'
   | 'height_mm'
   | 'image_file_id'
+  /** Hồ sơ đã khoá (0140) — thư viện gắn badge để ai cũng thấy bản chốt. */
+  | 'locked_at'
   | 'is_active'
   | 'created_at'
 >

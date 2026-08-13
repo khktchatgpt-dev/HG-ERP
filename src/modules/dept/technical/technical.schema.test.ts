@@ -7,6 +7,10 @@ import {
   productListQuerySchema,
   productPickQuerySchema,
   productFillSpecsSchema,
+  productBomCheckSchema,
+  productBomFileSchema,
+  productLockSchema,
+  productUnlockSchema,
 } from './technical.schema'
 
 describe('packingSchema', () => {
@@ -185,5 +189,41 @@ describe('productFillSpecsSchema — Kinh doanh bổ sung quy cách', () => {
 
   it('payload rỗng bị từ chối (không ghi DB vô ích)', () => {
     expect(() => productFillSpecsSchema.parse({})).toThrow()
+  })
+})
+
+/*
+ * KIỂM SOÁT BẢN BOM (0140 — 13/08/2026): Kỹ thuật tự đánh dấu đã kiểm tra,
+ * chọn file đang dùng, khoá/mở khoá hồ sơ.
+ */
+describe('schema kiểm soát bản BOM', () => {
+  it('mở khoá BẮT lý do — gỡ bản cả xưởng đang dùng thì phải nói vì sao', () => {
+    expect(productUnlockSchema.safeParse({ reason: '' }).success).toBe(false)
+    expect(productUnlockSchema.safeParse({ reason: '  ' }).success).toBe(false)
+    expect(productUnlockSchema.safeParse({}).success).toBe(false)
+    expect(
+      productUnlockSchema.parse({ reason: '  Khách đổi quy cách chân bàn  ' }).reason,
+    ).toBe('Khách đổi quy cách chân bàn')
+  })
+
+  it('khoá thì ghi chú là tuỳ chọn — khoá là việc thường, đừng bắt gõ', () => {
+    expect(productLockSchema.safeParse({}).success).toBe(true)
+    expect(productLockSchema.parse({ note: ' chốt bản 13/08 ' }).note).toBe(
+      'chốt bản 13/08',
+    )
+  })
+
+  it('chọn file đang dùng: nhận uuid hoặc null (bỏ chọn), chặn chuỗi rác', () => {
+    expect(productBomFileSchema.safeParse({ file_id: null }).success).toBe(true)
+    expect(
+      productBomFileSchema.safeParse({
+        file_id: '5e80e92a-4fd3-4e06-859d-042d89c0322f',
+      }).success,
+    ).toBe(true)
+    expect(productBomFileSchema.safeParse({ file_id: 'file-1' }).success).toBe(false)
+  })
+
+  it('dấu "đã kiểm tra" ép được từ chuỗi form', () => {
+    expect(productBomCheckSchema.parse({ checked: 'true' }).checked).toBe(true)
   })
 })

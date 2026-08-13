@@ -3694,6 +3694,15 @@ export type Database = {
           barcode: string | null
           base_material: string | null
           bom_approved_by: string | null
+          bom_checked_at: string | null
+          bom_checked_by: string | null
+          bom_file_id: string | null
+          locked_at: string | null
+          locked_by: string | null
+          lock_note: string | null
+          unlocked_at: string | null
+          unlocked_by: string | null
+          unlock_reason: string | null
           bom_effective_date: string | null
           bom_prepared_by: string | null
           bom_rev: number | null
@@ -3753,6 +3762,15 @@ export type Database = {
           barcode?: string | null
           base_material?: string | null
           bom_approved_by?: string | null
+          bom_checked_at?: string | null
+          bom_checked_by?: string | null
+          bom_file_id?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          lock_note?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
           bom_effective_date?: string | null
           bom_prepared_by?: string | null
           bom_rev?: number | null
@@ -3812,6 +3830,15 @@ export type Database = {
           barcode?: string | null
           base_material?: string | null
           bom_approved_by?: string | null
+          bom_checked_at?: string | null
+          bom_checked_by?: string | null
+          bom_file_id?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          lock_note?: string | null
+          unlocked_at?: string | null
+          unlocked_by?: string | null
+          unlock_reason?: string | null
           bom_effective_date?: string | null
           bom_prepared_by?: string | null
           bom_rev?: number | null

@@ -117,6 +117,26 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
 })
 
 /** Xin mã kế tiếp cho form tạo SP — loại + vật liệu khung theo quy tắc đã chốt. */
+/**
+ * KIỂM SOÁT BẢN DÙNG của hồ sơ SP (0140 — 13/08/2026): Kỹ thuật tự đánh dấu đã
+ * kiểm tra, chọn file BOM đang dùng, khoá / mở khoá hồ sơ.
+ */
+export const productBomCheckSchema = z.object({ checked: z.coerce.boolean() })
+
+export const productBomFileSchema = z.object({
+  /** null = bỏ chọn file đang dùng. */
+  file_id: z.string().uuid().nullable(),
+})
+
+export const productLockSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Mở khoá BẮT lý do — gỡ bản cả xưởng đang dùng thì phải nói vì sao. */
+export const productUnlockSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+})
+
 export const productNextCodeQuerySchema = z.object({
   type: z.enum(PRODUCT_TYPE_CODES as unknown as [string, ...string[]]),
   material: z.enum(FRAME_MATERIAL_CODES as unknown as [string, ...string[]]),
