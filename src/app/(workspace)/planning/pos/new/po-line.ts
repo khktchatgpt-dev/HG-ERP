@@ -1,6 +1,7 @@
 import { poLineAmount } from '@/lib/po-line'
 import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
+import { parseInnerDims } from '@/lib/dims'
 import type { PoField } from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
@@ -178,24 +179,9 @@ export function cartonPriceSuggest(t: PoTemplate, l: Line): number | null {
  * "25×50×1li" (ống, li = độ dày) có chữ dính liền số thứ ba nên KHÔNG khớp — và
  * đúng ra là không được khớp, đó không phải lọt lòng thùng.
  */
-export function parseInnerDims(
-  spec: string | null | undefined,
-): [number, number, number] | null {
-  if (!spec) return null
-  const m = spec.match(
-    /(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)\s*[x×*]\s*(\d+(?:[.,]\d+)?)(?![.,\d])/i,
-  )
-  if (!m) return null
-  // "1li"/"5c"…: chữ DÍNH LIỀN số thứ ba nghĩa là đơn vị khác (li = độ dày) chứ
-  // không phải mm lọt lòng — loại. "mm" dính liền, hoặc chữ đứng sau CÓ khoảng
-  // trắng ("…105 thùng âm dương"), thì chỉ là đơn vị/mô tả — vẫn nhận.
-  const after = spec.slice((m.index ?? 0) + m[0].length)
-  if (/^[a-zà-ỹ]/i.test(after) && !/^mm\b/i.test(after)) return null
-  const dims = [m[1], m[2], m[3]].map((s) => Number(s.replace(',', '.')))
-  return dims.every((d) => Number.isFinite(d) && d > 0)
-    ? (dims as [number, number, number])
-    : null
-}
+// Dời về `@/lib/dims` (13/08/2026) để form KHAI VẬT TƯ dùng làm preview sống
+// mà không import ngược vào thư mục form đơn — re-export giữ chỗ gọi cũ.
+export { parseInnerDims }
 
 /**
  * Dựng dòng mới từ vật tư vừa chọn. TỰ ĐIỀN mọi thứ suy được — quy cách, kg/m và

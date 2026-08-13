@@ -30,6 +30,7 @@ import {
   fieldsClearedByPayload,
   type ClearedField,
 } from '@/lib/material-group-fields'
+import { codeWarning } from '@/lib/material-form-guards'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { PAGE_SIZE } from './constants'
 
@@ -651,6 +652,8 @@ function MaterialForm({
 }) {
   const purchasing = scope === 'purchasing'
   const [busy, setBusy] = useState(false)
+  // Mã theo dõi bằng state để cảnh báo lệch quy ước NGAY LÚC GÕ (13/08).
+  const [codeVal, setCodeVal] = useState(initial?.code ?? '')
   /*
    * XÁC NHẬN 2 NHỊP khi lưu sẽ NULL ĐÈ dữ liệu đang có (đợt 2 cải thiện vật tư
    * 13/08/2026): corePayload cố ý ghi null trường ngoài nhóm mới — đúng dữ
@@ -748,17 +751,26 @@ function MaterialForm({
       />
 
       {/* Mã là DANH TÍNH danh mục — cả hai nghiệp vụ đều thấy, không thuộc mảng
-          Mua hàng hay Tồn trữ. */}
+          Mua hàng hay Tồn trữ. Gõ tay lệch quy ước XX-0000 thì cảnh báo tại chỗ
+          (13/08) — server tôn trọng mã người gõ nên đây là chốt duy nhất; mã cũ
+          giữ nguyên thì không nạt. */}
       <Field
         label="Mã vật tư"
         hint={
-          initial ? undefined : 'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
+          codeVal.trim() !== (initial?.code ?? '').trim() && codeWarning(codeVal) ? (
+            <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              ⚠ {codeWarning(codeVal)}
+            </span>
+          ) : initial ? undefined : (
+            'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
+          )
         }
       >
         <input
           name="code"
           maxLength={60}
-          defaultValue={initial?.code ?? ''}
+          value={codeVal}
+          onChange={(e) => setCodeVal(e.target.value)}
           placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
           className={`${cls} font-mono`}
         />
