@@ -100,7 +100,13 @@ export function TemplatePicker({
           Thu gọn ▲
         </button>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+      {/*
+       * RÚT GỌN (13/08/2026, yêu cầu user): thẻ chỉ còn icon + tên trên MỘT
+       * dòng — mô tả dài ("Vít, nút nhựa… — TTL, MT, TN") từng làm 12 thẻ cao
+       * gần nguyên màn đầu. Mô tả chuyển vào tooltip (title) và MỘT dòng dưới
+       * lưới cho mẫu đang chọn — vẫn đọc được khi cần, không choán chỗ.
+       */}
+      <div className="flex flex-wrap gap-1.5">
         {PO_TEMPLATES.map((t) => {
           const m = poTemplateMeta(t)
           const Icon = TEMPLATE_ICONS[t]
@@ -109,39 +115,30 @@ export function TemplatePicker({
             <button
               key={t}
               type="button"
+              title={m.hint}
               onClick={() => {
                 onChange(t)
                 setOpen(false) // chọn xong là gọn lại, trả chỗ cho bảng dòng hàng
               }}
               aria-pressed={on}
               className={
-                'relative rounded-lg border px-3 py-2 text-left transition-colors ' +
+                'inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] transition-colors ' +
                 (on
-                  ? 'border-violet-500 bg-violet-50 ring-1 ring-violet-500 dark:border-violet-600 dark:bg-violet-950/40'
+                  ? 'border-violet-500 bg-violet-50 font-semibold text-violet-700 ring-1 ring-violet-500 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-300'
                   : 'border-zinc-200 hover:border-violet-300 dark:border-zinc-800 dark:hover:border-violet-800')
               }
             >
-              {on && (
-                <span className="absolute top-2 right-2 grid size-4 place-items-center rounded-full bg-violet-600 text-white">
-                  <Check className="size-2.5" strokeWidth={3} aria-hidden />
-                </span>
-              )}
-              <div
-                className={
-                  'inline-flex items-center gap-1.5 text-[13px] font-semibold ' +
-                  (on ? 'text-violet-700 dark:text-violet-300' : '')
-                }
-              >
-                <Icon className="size-3.5" aria-hidden />
-                {m.label}
-              </div>
-              <div className="text-muted-foreground mt-0.5 text-[11px]">{m.hint}</div>
+              <Icon className="size-3.5" aria-hidden />
+              {m.label}
+              {on && <Check className="size-3" strokeWidth={3} aria-hidden />}
             </button>
           )
         })}
       </div>
+      {/* Mô tả của mẫu ĐANG CHỌN — một dòng thay cho 12 đoạn hint trên thẻ. */}
+      <p className="text-muted-foreground mt-2 text-[11px]">{cur.hint}</p>
       {lineCount > 0 && (
-        <p className="mt-2 text-[11px] text-amber-600 dark:text-amber-500">
+        <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500">
           Đổi mẫu giữ nguyên {lineCount} dòng đang có — cột và cách tính tiền đổi theo mẫu
           mới, kiểm lại số trước khi gửi.
         </p>
