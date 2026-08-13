@@ -50,6 +50,18 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
 }
 
+/** Payload mô tả cho event `po.lines_saved` — danh mục tự giàu (13/08/2026). */
+function catalogLines(lines: PoLineInput[]) {
+  return lines.map((l) => ({
+    material_id: l.material_id ?? null,
+    spec: l.spec ?? null,
+    material_grade: l.material_grade ?? null,
+    finish: l.finish ?? null,
+    open_style: l.open_style ?? null,
+    pcs_per_ctn: l.pcs_per_ctn ?? null,
+  }))
+}
+
 /**
  * DÒNG TỰ DO (0134) chỉ dành cho mẫu gỗ — các mẫu khác bắt buộc gắn vật tư
  * danh mục để tồn kho, giá mua gần nhất và sổ nhận hàng có chỗ bám.
@@ -207,6 +219,9 @@ export const posService = {
       withDerived(template, input.lines),
     )
     if (extraLsxIds.length > 0) await posRepo.replaceExtraLsx(po.id, extraLsxIds)
+    // Danh mục tự giàu (13/08): handler po.catalog điền Ô TRỐNG mô tả của
+    // vật tư từ số người soạn vừa gõ — side-effect, lỗi không hỏng việc lưu.
+    await emit({ name: 'po.lines_saved', po_id: po.id, lines: catalogLines(input.lines) })
     return po
   },
 
@@ -323,6 +338,7 @@ export const posService = {
     })
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
+    await emit({ name: 'po.lines_saved', po_id: id, lines: catalogLines(input.lines) })
     return po
   },
 
@@ -408,10 +424,26 @@ export const posService = {
         )
       }
     }
-    return posRepo.patch(id, {
+    const po = await posRepo.patch(id, {
       status: to,
       ...(to === 'ordered' ? { ordered_at: new Date().toISOString() } : {}),
     })
+    // GỬI NCC = giá đã chốt thật → cập nhật "giá mua gần nhất" của danh mục
+    // (handler po.catalog — chỉ đơn VND, xem po-catalog-backfill).
+    if (to === 'ordered') {
+      const lines = await posRepo.listLines(id)
+      await emit({
+        name: 'po.ordered',
+        po_id: id,
+        code: before.code,
+        currency: before.currency ?? 'VND',
+        lines: lines.map((l) => ({
+          material_id: l.material_id,
+          unit_price: l.unit_price,
+        })),
+      })
+    }
+    return po
   },
 
   /**
