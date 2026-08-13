@@ -3,12 +3,16 @@ import Link from 'next/link'
 import { Copy, Lock } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
-import { canEditProducts } from '@/modules/dept/technical/technical.service'
+import {
+  canEditProducts,
+  canLockProducts,
+} from '@/modules/dept/technical/technical.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { Badge } from '@/components/shadcn/badge'
 import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { ProductTabs } from '@/components/technical/ProductTabs'
+import { ProductLockButton } from '@/components/technical/ProductLockButton'
 
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
 const BOM_TONE = {
@@ -30,7 +34,10 @@ export default async function ProductDetailLayout({
 }) {
   const user = await authService.requirePageUser()
   const { id } = await params
-  const canEdit = await canEditProducts(user)
+  const [canEdit, canLock] = await Promise.all([
+    canEditProducts(user),
+    canLockProducts(user),
+  ])
 
   const product = await productsRepo.findById(id)
   if (!product) notFound()
@@ -61,13 +68,23 @@ export default async function ProductDetailLayout({
         title={product.name}
         description={product.code}
         actions={
-          canEdit ? (
-            <Button variant="outline" size="sm" asChild>
-              <Link href={`/products?clone=${product.id}`}>
-                <Copy className="size-4" /> Nhân bản
-              </Link>
-            </Button>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Khoá/mở khoá đứng NGAY ĐÂY (user chốt 13/08/2026): trước đó nút
+                nằm trong tab Tài liệu nên muốn chốt hồ sơ phải đi tìm. */}
+            {canLock && (
+              <ProductLockButton
+                productId={product.id}
+                locked={product.locked_at != null}
+              />
+            )}
+            {canEdit && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/products?clone=${product.id}`}>
+                  <Copy className="size-4" /> Nhân bản
+                </Link>
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -77,7 +94,7 @@ export default async function ProductDetailLayout({
             vào tab Định mức gõ sửa rồi mới ăn lỗi 409 mà không hiểu vì sao. */}
         {product.locked_at && (
           <Badge
-            title={`Khoá ${new Date(product.locked_at).toLocaleString('vi-VN')} — mở khoá ở tab Tài liệu`}
+            title={`Khoá ${new Date(product.locked_at).toLocaleString('vi-VN')}`}
             className="border-transparent bg-emerald-600 text-white"
           >
             <Lock /> Đã khoá

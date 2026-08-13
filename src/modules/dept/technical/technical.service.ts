@@ -515,22 +515,6 @@ export const productsService = {
   },
 
   /**
-   * KỸ THUẬT TỰ XÁC NHẬN "BOM đã qua kiểm tra" (0140 — user chốt 13/08/2026:
-   * không cần bước duyệt của người thứ hai). Chỉ là DẤU RÀ SOÁT, chưa khoá —
-   * khoá là bước riêng, cố ý tách để người ta rà xong vẫn sửa tiếp được.
-   */
-  async markBomChecked(user: User, id: string, checked: boolean): Promise<Product> {
-    await assertAction(user, 'technical.bom.save')
-    const before = await productsRepo.findById(id)
-    if (!before) throw NotFound('Sản phẩm không tồn tại')
-    assertUnlocked(before)
-    return productsRepo.patch(id, {
-      bom_checked_at: checked ? new Date().toISOString() : null,
-      bom_checked_by: checked ? user.id : null,
-    })
-  },
-
-  /**
    * CHỌN FILE BOM ĐANG DÙNG — trả lời đúng câu hỏi "nhiều file BOM thì dùng
    * cái nào": hồ sơ trỏ vào MỘT file, UI làm nổi bật hẳn, các file BOM khác
    * lùi về "bản cũ". Đổi được cả khi hồ sơ đang khoá? KHÔNG — đổi bản dùng là
@@ -552,24 +536,19 @@ export const productsService = {
 
   /**
    * KHOÁ HỒ SƠ (0140): tuyên bố "bản này dùng được, đừng sửa nữa". Khoá TOÀN
-   * BỘ hồ sơ theo yêu cầu user — thuộc tính SP, bảng định mức, file đính kèm.
-   * Kỹ thuật + Giám đốc khoá được (`technical.product.lock`).
+   * BỘ hồ sơ — thuộc tính SP, bảng định mức, file đính kèm. Kỹ thuật + Giám
+   * đốc (`technical.product.lock`).
    *
-   * ĐÒI file BOM đang dùng: khoá mà không chỉ rõ dùng file nào thì cái khoá
-   * chẳng giải quyết được vấn đề ban đầu (nhiều file, không biết bản nào đúng).
-   * SP chưa có file BOM nào thì miễn — hồ sơ vẫn chốt được phần thuộc tính.
+   * KHÔNG đòi chọn file BOM trước (user chốt 13/08/2026 — "không cần phức
+   * tạp"): khoá là thao tác một nhịp ở trang chi tiết. Chỉ rõ bản BOM đang
+   * dùng vẫn làm được ở tab Tài liệu, nhưng là TIỆN ÍCH riêng, không phải
+   * điều kiện — hồ sơ chưa kịp chỉ file vẫn chốt được.
    */
   async lock(user: User, id: string, note?: string | null): Promise<Product> {
     await assertAction(user, 'technical.product.lock')
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Sản phẩm không tồn tại')
     if (before.locked_at) throw BadRequest('Hồ sơ đã khoá rồi')
-    const boms = (await filesRepo.listByProduct(id)).filter((f) => f.doc_type === 'bom')
-    if (boms.length > 0 && !before.bom_file_id) {
-      throw BadRequest(
-        `Hồ sơ có ${boms.length} file BOM — chọn file ĐANG DÙNG trước khi khoá, để mọi người biết bản nào là bản đúng`,
-      )
-    }
     return productsRepo.patch(id, {
       locked_at: new Date().toISOString(),
       locked_by: user.id,

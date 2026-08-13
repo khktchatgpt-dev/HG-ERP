@@ -7,7 +7,6 @@ import {
   productListQuerySchema,
   productPickQuerySchema,
   productFillSpecsSchema,
-  productBomCheckSchema,
   productBomFileSchema,
   productLockSchema,
   productUnlockSchema,
@@ -221,9 +220,5 @@ describe('schema kiểm soát bản BOM', () => {
       }).success,
     ).toBe(true)
     expect(productBomFileSchema.safeParse({ file_id: 'file-1' }).success).toBe(false)
-  })
-
-  it('dấu "đã kiểm tra" ép được từ chuỗi form', () => {
-    expect(productBomCheckSchema.parse({ checked: 'true' }).checked).toBe(true)
   })
 })
