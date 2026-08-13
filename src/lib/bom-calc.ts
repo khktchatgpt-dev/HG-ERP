@@ -233,6 +233,67 @@ export function calcPartDerived(p: PartGeometry): PartDerived {
   }
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+ * QUY ĐỔI SANG ĐƠN VỊ MUA (0132)
+ *
+ * Định mức trả lời "tốn bao nhiêu mét / kg / m³"; đơn đặt hàng cần "mua bao
+ * nhiêu CÂY / MÉT KHỔ". Hai công thức dưới đây là hai chỗ duy nhất trong 187
+ * file BOM có phép quy đổi ghi rõ ràng — chỗ nào file tự tính tay theo sơ đồ
+ * cắt thì KHÔNG bịa công thức, để người nhập gõ số.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Số CÂY cần cho 1 sản phẩm — làm tròn LÊN vì không ai mua nửa cây.
+ *
+ * Đúng phép tính sổ "Tổng hợp nhôm" của Cung ứng: bồn hoa lớn cần 2 chân sau
+ * mỗi SP, cắt được 4 khúc trên một cây 6m ⇒ 700 SP × 2 ÷ 4 = 350 cây.
+ *
+ * CẢNH BÁO khi gộp nhiều SP: phải nhân SL sản phẩm TRƯỚC rồi mới chia cho
+ * `pcs_per_bar` một lần (làm tròn ở bước cuối). Làm tròn từng SP rồi cộng sẽ
+ * dư cây — 2 SP lẻ nửa cây cộng lại vẫn là 1 cây, không phải 2.
+ */
+export function barsForQty(qtyPieces: number, pcsPerBar: number | null): number | null {
+  if (!pos(qtyPieces) || !pos(pcsPerBar)) return null
+  return Math.ceil(qtyPieces / pcsPerBar)
+}
+
+/**
+ * Số CHI TIẾT cắt được trên một cây — suy từ chiều dài, không bắt gõ tay.
+ *
+ * Kiểm trên file `BOM_MERXX Bồn hoa lớn`: chân sau dài 1390 trên cây 6 m →
+ * ⌊6000/1390⌋ = 4, chân trước dài 390 trên cây 5,9 m → ⌊5900/390⌋ = 15. Cả hai
+ * trùng khít số người lập bảng ghi tay.
+ *
+ * Phi hao uốn cộng vào chiều dài phôi nên phải tính luôn — chi tiết uốn ăn phôi
+ * dài hơn thì số khúc trên cây ít đi.
+ */
+export function pcsPerBarFrom(
+  cutLengthMm: number | null,
+  bendWasteMm: number | null,
+  barLengthM: number | null,
+): number | null {
+  if (!pos(barLengthM)) return null
+  const need = (cutLengthMm ?? 0) + (bendWasteMm ?? 0)
+  if (!pos(need)) return null
+  const n = Math.floor((barLengthM * 1000) / need)
+  return n >= 1 ? n : null // chi tiết dài hơn cả cây → phải nối, không suy được
+}
+
+/**
+ * Tổng mét vải phải đặt = mét tới × (1 + hao hụt%).
+ *
+ * File ghi rõ hai mức: vải thường 2% (3.85 → 3.93), textilene 3% (0.18 → 0.19).
+ * Hao hụt để trống = 0, không tự đoán mức nào.
+ */
+export function fabricTotalM(
+  metersNeeded: number | null,
+  wastePct: number | null,
+): number | null {
+  if (metersNeeded == null || !Number.isFinite(metersNeeded)) return null
+  const w = wastePct != null && Number.isFinite(wastePct) ? wastePct : 0
+  return round(metersNeeded * (1 + w / 100), 4)
+}
+
 /**
  * Độ lệch tương đối giữa số người nhập và số tính từ hình học (0.05 = lệch 5%).
  * null = không so được. UI dùng để cảnh báo "số nhập khác hình học".

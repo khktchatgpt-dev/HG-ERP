@@ -69,6 +69,7 @@ const PO = {
   status: 'pending_approval',
   created_by: 'u-sup',
   assigned_to: 'u-sup',
+  expected_at: '2026-08-20', // 0131: gửi duyệt bắt buộc có hẹn giao
   note: null,
 }
 
@@ -111,7 +112,9 @@ describe('posService.create — BR-06: đúng 1 LSX + 1 NCC', () => {
       lines: [{ material_id: 'm1', qty_ordered: 150, unit_price: 77000, unit2: 'kg' }],
     })
 
-    // Nháp: chưa tới bàn duyệt, KHÔNG bắn po.submitted lúc tạo (chuyển sang submit()).
+    // Nháp: chưa tới bàn duyệt, KHÔNG bắn event nào lúc tạo — po.submitted
+    // chuyển sang submit(); còn cập nhật danh mục đi qua HỘP XÁC NHẬN
+    // (catalogSuggestions + /materials/enrich), không phải event ngầm (13/08).
     const row = vi.mocked(posRepo.insert).mock.calls[0][0] as { status: string }
     expect(row.status).toBe('draft')
     expect(emit).not.toHaveBeenCalled()
@@ -245,6 +248,18 @@ describe('posService.submit — 0116: gửi GĐ duyệt mới notify', () => {
     await expect(posService.submit(staff, 'po1')).rejects.toMatchObject({ status: 400 })
     expect(posRepo.patch).not.toHaveBeenCalled()
   })
+
+  // 0131: không có hẹn giao thì assessPoLate/assessPoFit đều im — đơn lọt khỏi
+  // mọi cảnh báo trễ. Chặn ngay ở cửa gửi duyệt.
+  it('nháp chưa có hẹn giao → chặn gửi duyệt', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...DRAFT,
+      expected_at: null,
+    } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([{ id: 'l1' }] as never)
+    await expect(posService.submit(staff, 'po1')).rejects.toMatchObject({ status: 400 })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
 })
 
 describe('posService.remove — chỉ xoá hẳn được NHÁP', () => {
@@ -338,6 +353,90 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
     await expect(posService.advance(staff, 'po1', 'ordered')).rejects.toMatchObject({
       status: 400,
     })
+  })
+
+  /*
+   * "ĐÃ NHẬN ĐỦ" bằng tay (0134): chỉ đơn TOÀN dòng tự do — gỗ/gia công nghiệm
+   * thu ngoài sổ kho vật tư nên không có phiếu nhập nào tự chốt đơn.
+   */
+  it('received bằng tay: đơn toàn dòng tự do thì được', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...PO,
+      status: 'in_transit',
+    } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([
+      { material_id: null, line_name: 'Ghế đan dây mây' } as never,
+    ])
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'received' } as never)
+
+    await posService.advance(staff, 'po1', 'received')
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('received')
+  })
+
+  it('received bằng tay: đơn còn dòng vật tư kho thì CHẶN — Kho quyết định', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...PO,
+      status: 'in_transit',
+    } as never)
+    vi.mocked(posRepo.listLines).mockResolvedValue([
+      { material_id: 'm1' } as never,
+      { material_id: null, line_name: 'Ghế đan' } as never,
+    ])
+    await expect(posService.advance(staff, 'po1', 'received')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+})
+
+describe('posService — dòng tự do (0134) chỉ cho mẫu gỗ/gia công', () => {
+  const freeLine = { material_id: null, line_name: 'Bàn CN Tilos', qty_ordered: 20 }
+
+  it('create mẫu wood nhận dòng tự do', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      is_active: true,
+    } as never)
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      status: 'approved',
+    } as never)
+    vi.mocked(posRepo.nextCode).mockResolvedValue('PO-2026-0002')
+    vi.mocked(posRepo.insert).mockResolvedValue({ ...PO, id: 'po2' } as never)
+
+    await posService.create(staff, {
+      production_order_id: 'lsx1',
+      supplier_id: 's1',
+      template: 'wood',
+      currency: 'USD',
+      price_includes_vat: false,
+      lines: [freeLine as never],
+    })
+    expect(posRepo.insert).toHaveBeenCalled()
+  })
+
+  it('create mẫu khác (accessory) mang dòng tự do là CHẶN', async () => {
+    vi.mocked(suppliersRepo.findById).mockResolvedValue({
+      id: 's1',
+      is_active: true,
+    } as never)
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      status: 'approved',
+    } as never)
+
+    await expect(
+      posService.create(staff, {
+        production_order_id: 'lsx1',
+        supplier_id: 's1',
+        template: 'accessory',
+        currency: 'VND',
+        price_includes_vat: false,
+        lines: [freeLine as never],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(posRepo.insert).not.toHaveBeenCalled()
   })
 })
 

@@ -20,6 +20,7 @@ import type {
 } from './technical.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
+import { filesRepo } from '@/modules/core/files/files.repo'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
@@ -82,6 +83,33 @@ async function canCreateProducts(user: User): Promise<boolean> {
 /** Bóc tách / sửa BOM — tầng riêng, gác bằng `technical.bom.edit` (0118). */
 async function canEditBom(user: User): Promise<boolean> {
   return canAction(user, 'technical.bom.save')
+}
+
+/** Khoá / mở khoá hồ sơ (0140) — Kỹ thuật + Giám đốc. */
+async function canLockProducts(user: User): Promise<boolean> {
+  return canAction(user, 'technical.product.lock')
+}
+
+/**
+ * HỒ SƠ ĐÃ KHOÁ THÌ KHÔNG SỬA (0140 — user chốt "khoá TOÀN BỘ hồ sơ SP").
+ *
+ * Chặn ở SERVICE chứ không chỉ ẩn nút: hồ sơ khoá là bản cả xưởng và Cung ứng
+ * đang dùng để mua/sản xuất — một request thủ công hay một tab mở sẵn từ trước
+ * lúc khoá cũng không được sửa lọt. Muốn sửa: mở khoá (có ghi lý do).
+ */
+function assertUnlocked(p: { locked_at: string | null; code?: string }): void {
+  if (!p.locked_at) return
+  throw Conflict(
+    `Hồ sơ ${p.code ?? ''} đã KHOÁ — mở khoá (kèm lý do) rồi mới sửa được`.trim(),
+    'PRODUCT_LOCKED',
+  )
+}
+
+/** Chặn sửa định mức của hồ sơ đã khoá — cùng luật với sửa thuộc tính SP. */
+async function assertProductUnlocked(productId: string): Promise<void> {
+  const p = await productsRepo.findById(productId)
+  if (!p) throw NotFound('Sản phẩm không tồn tại')
+  assertUnlocked(p)
 }
 
 /** Các trường hình học — đụng bất kỳ trường nào thì phải tính lại số dẫn xuất. */
@@ -213,6 +241,8 @@ export const productsService = {
       bom_status?: BomStatus
       is_active?: boolean
       has_image?: boolean
+      /** true = chỉ hồ sơ ĐÃ KHOÁ (0140). */
+      locked?: boolean
       product_type?: string
       category?: string
       page: number
@@ -237,6 +267,7 @@ export const productsService = {
             : r.customer_name === opts.customer_name)) &&
         (opts.bom_status == null || r.bom_status === opts.bom_status) &&
         (opts.has_image == null || (r.image_file_id != null) === opts.has_image) &&
+        (opts.locked == null || (r.locked_at != null) === opts.locked) &&
         (opts.product_type == null || r.product_type === opts.product_type) &&
         (opts.category == null ||
           (opts.category === NO_CATEGORY_FILTER
@@ -479,7 +510,70 @@ export const productsService = {
     await assertAction(user, 'technical.product.update')
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Sản phẩm không tồn tại')
+    assertUnlocked(before)
     return productsRepo.patch(id, patch)
+  },
+
+  /**
+   * CHỌN FILE BOM ĐANG DÙNG — trả lời đúng câu hỏi "nhiều file BOM thì dùng
+   * cái nào": hồ sơ trỏ vào MỘT file, UI làm nổi bật hẳn, các file BOM khác
+   * lùi về "bản cũ". Đổi được cả khi hồ sơ đang khoá? KHÔNG — đổi bản dùng là
+   * thay đổi nội dung hồ sơ, phải mở khoá như mọi sửa đổi khác.
+   */
+  async setBomFile(user: User, id: string, fileId: string | null): Promise<Product> {
+    await assertAction(user, 'technical.product.attach_file')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Sản phẩm không tồn tại')
+    assertUnlocked(before)
+    if (fileId) {
+      const file = await filesRepo.getById(fileId)
+      if (!file || file.product_id !== id) {
+        throw BadRequest('File không thuộc hồ sơ sản phẩm này')
+      }
+    }
+    return productsRepo.patch(id, { bom_file_id: fileId })
+  },
+
+  /**
+   * KHOÁ HỒ SƠ (0140): tuyên bố "bản này dùng được, đừng sửa nữa". Khoá TOÀN
+   * BỘ hồ sơ — thuộc tính SP, bảng định mức, file đính kèm. Kỹ thuật + Giám
+   * đốc (`technical.product.lock`).
+   *
+   * KHÔNG đòi chọn file BOM trước (user chốt 13/08/2026 — "không cần phức
+   * tạp"): khoá là thao tác một nhịp ở trang chi tiết. Chỉ rõ bản BOM đang
+   * dùng vẫn làm được ở tab Tài liệu, nhưng là TIỆN ÍCH riêng, không phải
+   * điều kiện — hồ sơ chưa kịp chỉ file vẫn chốt được.
+   */
+  async lock(user: User, id: string, note?: string | null): Promise<Product> {
+    await assertAction(user, 'technical.product.lock')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Sản phẩm không tồn tại')
+    if (before.locked_at) throw BadRequest('Hồ sơ đã khoá rồi')
+    return productsRepo.patch(id, {
+      locked_at: new Date().toISOString(),
+      locked_by: user.id,
+      lock_note: note?.trim() || null,
+    })
+  },
+
+  /**
+   * MỞ KHOÁ khi phát sinh (user chốt: khoá rồi vẫn mở lại được). Cùng quyền với
+   * khoá — người khoá được thì cũng chịu trách nhiệm mở. BẮT lý do: mở khoá là
+   * gỡ bản đang được cả xưởng dùng, phải nói vì sao để sau còn truy.
+   */
+  async unlock(user: User, id: string, reason: string): Promise<Product> {
+    await assertAction(user, 'technical.product.lock')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Sản phẩm không tồn tại')
+    if (!before.locked_at) throw BadRequest('Hồ sơ đang không khoá')
+    if (!reason.trim()) throw BadRequest('Nhập lý do mở khoá')
+    return productsRepo.patch(id, {
+      locked_at: null,
+      locked_by: null,
+      unlocked_at: new Date().toISOString(),
+      unlocked_by: user.id,
+      unlock_reason: reason.trim(),
+    })
   },
 
   /**
@@ -580,7 +674,12 @@ export const productsService = {
       partGroupsRepo.list(),
       productProfileRepo.clusters(productId),
     ])
-    return { product, parts, setItems, groups, clusters }
+    // Mã vật tư nào khớp danh mục kho — quyết định dòng đó có vào được đơn đặt
+    // gộp của cung ứng hay không, nên tra ngay khi mở tab.
+    const knownMaterials = await productProfileRepo.knownMaterialNames(
+      parts.map((p) => p.material_code ?? '').filter(Boolean),
+    )
+    return { product, parts, setItems, groups, clusters, knownMaterials }
   },
 
   /**
@@ -614,6 +713,7 @@ export const productsService = {
    */
   async addPart(user: User, productId: string, input: PartInput) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
     const sort_order =
@@ -635,6 +735,7 @@ export const productsService = {
 
   async updatePart(user: User, productId: string, partId: string, patch: PartPatch) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const base = await productProfileRepo.findPart(productId, partId)
     if (!base) throw NotFound('Dòng định mức không tồn tại')
     const row = await resolveLine(productId, patch, base)
@@ -670,6 +771,7 @@ export const productsService = {
     patch: ClusterPatch,
   ) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const cluster = await productProfileRepo.patchCluster(productId, clusterId, patch)
     if (!cluster) throw NotFound('Cụm không tồn tại')
     return cluster
@@ -678,6 +780,7 @@ export const productsService = {
   /** Xoá cụm — các dòng của nó về RỜI (`on delete set null`), không mất dòng nào. */
   async removeCluster(user: User, productId: string, clusterId: string) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const ok = await productProfileRepo.deleteCluster(productId, clusterId)
     if (!ok) throw NotFound('Cụm không tồn tại')
     return { ok: true }
@@ -690,6 +793,7 @@ export const productsService = {
     input: { part_ids: string[]; cluster_id?: string | null; cluster_name?: string },
   ) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
 
@@ -728,6 +832,7 @@ export const productsService = {
 
   async removePart(user: User, productId: string, partId: string) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const ok = await productProfileRepo.deletePart(productId, partId)
     if (!ok) throw NotFound('Dòng định mức không tồn tại')
     const left = await productProfileRepo.parts(productId)
@@ -759,6 +864,7 @@ export const productsService = {
     },
   ) {
     await assertAction(user, 'technical.bom.save')
+    await assertProductUnlocked(productId)
     const product = await productsRepo.findById(productId)
     if (!product) throw NotFound('Sản phẩm không tồn tại')
 
@@ -826,6 +932,8 @@ export const productsService = {
     input: { source_product_id: string; mode: 'append' | 'replace'; groups?: string[] },
   ) {
     await assertAction(user, 'technical.bom.save')
+    // Chép ĐÈ lên hồ sơ đích — hồ sơ đích khoá thì chặn (nguồn khoá không sao).
+    await assertProductUnlocked(targetId)
     if (input.source_product_id === targetId)
       throw BadRequest('Không thể chép định mức từ chính sản phẩm đó')
 
@@ -910,4 +1018,10 @@ export const productsService = {
   },
 }
 
-export { isTechnicalStaff, canEditProducts, canCreateProducts, canEditBom }
+export {
+  isTechnicalStaff,
+  canEditProducts,
+  canCreateProducts,
+  canEditBom,
+  canLockProducts,
+}

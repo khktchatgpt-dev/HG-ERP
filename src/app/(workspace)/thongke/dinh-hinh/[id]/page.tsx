@@ -4,7 +4,6 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { componentsService } from '@/modules/dept/production/components.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { canEditComponents } from '@/modules/dept/production/perms'
-import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { HttpError } from '@/server/http'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { LsxComponentsPanel } from '@/components/production/LsxComponentsPanel'
@@ -27,10 +26,12 @@ export default async function ShapingDetailPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const [lsx, stages, { rows: materials }, canEdit] = await Promise.all([
+  // Vật tư KHÔNG nạp sẵn: danh mục 13k dòng, nạp 1.000 dòng đầu thì danh sách
+  // dừng ở mã "BUL…" — không có mã nhôm/inox nào để gắn. Ô gắn vật tư tự tìm
+  // qua API theo từ khoá (MaterialCombo).
+  const [lsx, stages, canEdit] = await Promise.all([
     productionRepo.findById(id),
     productionRepo.listStages(),
-    materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
     canEditComponents(user),
   ])
   if (!lsx) notFound()
@@ -65,12 +66,6 @@ export default async function ShapingDetailPage({
           product_code: l.product_code,
           product_name: l.product_name,
           qty: l.qty,
-        }))}
-        materials={materials.map((m) => ({
-          id: m.id,
-          code: m.code,
-          name: m.name,
-          unit: m.unit,
         }))}
         stages={stages}
         canEdit={canEdit && !data.locked_by_entries}

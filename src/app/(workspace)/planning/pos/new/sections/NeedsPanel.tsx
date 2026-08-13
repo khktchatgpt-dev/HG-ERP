@@ -59,6 +59,16 @@ export function NeedsPanel({
             ? 'đang tải…'
             : `${pending.length} vật tư cần mua / ${needs.length} trong BOM`}
         </span>
+        {/* Bật lại có kiểm soát 12/08/2026: định mức đang hoàn thiện — nói rõ
+            số là NHÁP để không ai đặt theo mà chưa đối chiếu. */}
+        {!loading && (
+          <span
+            className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+            title="Số lấy từ bảng chi tiết LSX (ưu tiên nhập tay, thiếu mới nhân từ BOM×SL) — định mức đang hoàn thiện, đối chiếu với sổ trước khi đặt theo"
+          >
+            số nháp — đối chiếu trước khi dùng
+          </span>
+        )}
         {pending.length > 0 && (
           <button
             type="button"

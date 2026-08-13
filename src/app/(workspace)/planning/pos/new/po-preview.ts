@@ -42,13 +42,21 @@ export function previewLinesFromDraft(
       dimension_text: l.dimension_text.trim() || null,
       finish: l.finish.trim() || null,
       weight_per_unit: draft.weight_per_unit,
+      // 0139 — cột riêng: gỗ m³/SP, mro bảo hành.
+      m3_per_unit: draft.m3_per_unit,
+      warranty_text: l.warranty_text.trim() || null,
       open_style: l.open_style || null,
       pcs_per_ctn: l.pcs_per_ctn === '' ? null : Number(l.pcs_per_ctn),
       inner_l_mm: l.inner_l_mm === '' ? null : Number(l.inner_l_mm),
       inner_w_mm: l.inner_w_mm === '' ? null : Number(l.inner_w_mm),
       inner_h_mm: l.inner_h_mm === '' ? null : Number(l.inner_h_mm),
       area_m2: draft.area_m2,
-      carton_basis: template === 'carton' ? l.carton_basis : null,
+      price_per_m2: l.price_per_m2 === '' ? null : Number(l.price_per_m2),
+      print_fee: l.print_fee === '' ? null : Number(l.print_fee),
+      // Cùng điều kiện với `buildPoPayload`: basis chỉ ở mẫu chốt theo dòng.
+      carton_basis: ['carton', 'glass', 'foam'].includes(template)
+        ? l.carton_basis
+        : null,
       // Xem trước phải thấy đúng dòng quy đổi sẽ in ra (0128) — cùng điều kiện
       // "đủ cả cặp" như `buildPoPayload`, không thì bản xem trước và bản lưu
       // khác nhau ở đúng chỗ người ta soi.

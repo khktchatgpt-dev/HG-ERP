@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { assessLateRisk, assessPoLate } from './late-risk'
+import { assessLateRisk, assessPoLate, isMissingEta } from './late-risk'
 
 const base = {
   status: 'in_production',
@@ -106,5 +106,29 @@ describe('assessPoLate — PO quá hẹn giao NCC (thu mua)', () => {
     expect(
       assessPoLate({ status: 'ordered', expected_at: '2026-07-17' }, TODAY),
     ).toBeNull()
+  })
+})
+
+describe('isMissingEta — đơn đang mở mà quên hẹn giao (điểm mù cảnh báo)', () => {
+  it('đơn đã gửi đi mà trống hẹn giao → true', () => {
+    for (const status of [
+      'pending_approval',
+      'approved',
+      'ordered',
+      'in_transit',
+      'partial',
+    ]) {
+      expect(isMissingEta({ status, expected_at: null })).toBe(true)
+    }
+  })
+
+  it('có hẹn giao → false', () => {
+    expect(isMissingEta({ status: 'ordered', expected_at: '2026-07-20' })).toBe(false)
+  })
+
+  it('nháp chưa cần ngày; đơn đã đóng thì hỏi cũng vô nghĩa', () => {
+    expect(isMissingEta({ status: 'draft', expected_at: null })).toBe(false)
+    expect(isMissingEta({ status: 'received', expected_at: null })).toBe(false)
+    expect(isMissingEta({ status: 'cancelled', expected_at: null })).toBe(false)
   })
 })

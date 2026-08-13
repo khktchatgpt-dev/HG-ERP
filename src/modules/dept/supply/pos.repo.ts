@@ -57,6 +57,10 @@ export type PoLineTemplateFields = {
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
+  /** 0139 — cột riêng: gỗ m³/SP (trước mượn weight_per_unit). */
+  m3_per_unit: number | null
+  /** 0139 — cột riêng: mro bảo hành (trước mượn finish). */
+  warranty_text: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
@@ -64,7 +68,10 @@ export type PoLineTemplateFields = {
   inner_h_mm: number | null
   area_m2: number | null
   price_per_m2: number | null
-  carton_basis: 'ctn' | 'm2' | null
+  /** Bao bì: phí "bản in + công" cộng vào đơn giá/thùng (0134). */
+  print_fee: number | null
+  /** Cơ sở tính tiền từng dòng: thùng/SP · m² · m³ (xốp khối) · kg (gia công). */
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   /**
    * ĐÓNG GÓI MUA chụp lúc lập đơn (0128): 1 pack_unit = pack_size ĐVT gốc.
    * Không đi vào tiền — SL đặt vẫn theo ĐVT gốc — chỉ để phiếu in nói được
@@ -77,7 +84,8 @@ export type PoLineTemplateFields = {
 export type PoLine = PoLineTemplateFields & {
   id: string
   po_id: string
-  material_id: string
+  /** null = DÒNG TỰ DO (0134): gỗ/gia công đặt theo SP, không phải vật tư kho. */
+  material_id: string | null
   qty_ordered: number
   unit_price: number | null
   price_basis: 'unit' | 'unit2'
@@ -86,13 +94,19 @@ export type PoLine = PoLineTemplateFields & {
   unit2: string | null
   note: string | null
   sort_order: number
+  /** Tên/ĐVT tự gõ của dòng tự do — material_* bên dưới fallback về cặp này. */
+  line_name: string | null
+  line_unit: string | null
   material_code: string
   material_name: string
   material_unit: string
 }
 
 export type PoLineInput = Partial<PoLineTemplateFields> & {
-  material_id: string
+  /** null/bỏ trống + line_name = dòng tự do (chỉ mẫu wood — service chặn). */
+  material_id?: string | null
+  line_name?: string | null
+  line_unit?: string | null
   qty_ordered: number
   unit_price?: number | null
   /** Service tự dẫn xuất từ mẫu đơn (`deriveLine`) — client không gửi. */
@@ -114,6 +128,8 @@ const TEMPLATE_LINE_COLS = [
   'dimension_text',
   'finish',
   'weight_per_unit',
+  'm3_per_unit',
+  'warranty_text',
   'open_style',
   'pcs_per_ctn',
   'inner_l_mm',
@@ -121,6 +137,7 @@ const TEMPLATE_LINE_COLS = [
   'inner_h_mm',
   'area_m2',
   'price_per_m2',
+  'print_fee',
   'carton_basis',
   'pack_size',
   'pack_unit',
@@ -137,12 +154,14 @@ const NUMERIC_LINE_COLS = [
   'weight_per_m',
   'bar_length_m',
   'weight_per_unit',
+  'm3_per_unit',
   'pcs_per_ctn',
   'inner_l_mm',
   'inner_w_mm',
   'inner_h_mm',
   'area_m2',
   'price_per_m2',
+  'print_fee',
   'pack_size',
 ] as const
 
@@ -277,6 +296,40 @@ export const posRepo = {
   },
 
   /**
+   * LSX PHỤ của NHIỀU đơn một lượt (0125) — cho màn danh sách.
+   *
+   * `list()` chỉ trả về lệnh CHÍNH của mỗi đơn, nên một đơn "LSX 01+2+3" chỉ
+   * hiện ở lệnh 01; lệnh 2 và 3 không có đơn nào mang id của mình và bị màn
+   * danh sách xếp vào "lệnh chưa có đơn đặt nào" — giục người mua đặt lại thứ
+   * họ đã đặt rồi. Sai càng lộ khi nhiều lệnh, vì lúc đó không ai kiểm lại nổi
+   * từng cảnh báo.
+   *
+   * Một truy vấn gộp cho cả trang, cùng lối với `totalsByPoIds`.
+   */
+  async extraLsxByPoIds(
+    ids: string[],
+  ): Promise<Map<string, { id: string; code: string }[]>> {
+    const out = new Map<string, { id: string; code: string }[]>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_extra_lsx')
+      .select('po_id, production_order_id, lsx:production_orders(code)')
+      .in('po_id', ids)
+    type Row = {
+      po_id: string
+      production_order_id: string
+      lsx: { code: string } | { code: string }[] | null
+    }
+    for (const r of (data ?? []) as Row[]) {
+      const lx = Array.isArray(r.lsx) ? r.lsx[0] : r.lsx
+      const list = out.get(r.po_id) ?? []
+      list.push({ id: r.production_order_id, code: lx?.code ?? '?' })
+      out.set(r.po_id, list)
+    }
+    return out
+  },
+
+  /**
    * Vật tư đã mua từ 1 NCC — gộp theo vật tư: tổng SL đã đặt + GIÁ MUA GẦN NHẤT.
    * Loại đơn đã huỷ. Dùng cho tab "Vật tư đã mua" ở chi tiết NCC (phân tích mua).
    */
@@ -374,7 +427,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -388,9 +441,11 @@ export const posRepo = {
         ...r,
         ...numericLineFields(r as unknown as Record<string, unknown>),
         material: undefined,
-        material_code: m?.code ?? '?',
-        material_name: m?.name ?? '?',
-        material_unit: m?.unit ?? '',
+        // DÒNG TỰ DO (0134): không có vật tư kho — tên/ĐVT lấy từ cặp tự gõ,
+        // mã để trống (phiếu in không bịa mã cho hàng ngoài danh mục).
+        material_code: m?.code ?? (r.line_name ? '' : '?'),
+        material_name: m?.name ?? r.line_name ?? '?',
+        material_unit: m?.unit ?? r.line_unit ?? '',
       } as PoLine
     })
   },
@@ -451,7 +506,9 @@ export const posRepo = {
           for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
           return {
             po_id: poId,
-            material_id: l.material_id,
+            material_id: l.material_id ?? null,
+            line_name: l.line_name ?? null,
+            line_unit: l.line_unit ?? null,
             qty_ordered: l.qty_ordered,
             unit_price: l.unit_price ?? null,
             price_basis: l.price_basis ?? 'unit',

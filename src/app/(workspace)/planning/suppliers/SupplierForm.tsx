@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Spinner } from '@/components/erp/Spinner'
+import { PO_CURRENCIES } from '@/lib/po-line'
 
 /** Hồ sơ NCC để đổ vào form (Vendor Master M1). Tất cả optional trừ tên. */
 export type SupplierFormInitial = Partial<{
@@ -266,9 +267,10 @@ export function SupplierForm({
           />
         </Field>
         <Field label="Tiền tệ">
+          {/* Cùng danh sách với ô tiền tệ trên form soạn đơn (PO_CURRENCIES). */}
           <select name="currency" defaultValue={initial?.currency ?? ''} className={cls}>
             <option value="">—</option>
-            {['VND', 'USD', 'EUR', 'CNY', 'JPY'].map((c) => (
+            {PO_CURRENCIES.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>

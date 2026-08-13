@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { PartLineEdit } from './PartLineEdit'
+import { PartCardEdit } from './PartCardEdit'
 import { PartsCopyDialog } from './PartsCopyDialog'
 import { PartsBulkEntry } from './PartsBulkEntry'
 import { InlineHead, PartRowInline, PartRowNew, inlineColSpan } from './PartRowInline'
@@ -100,6 +100,17 @@ function cellOf(p: PartView, key: string): ReactNode {
       const dims = [p.dim_a_mm, p.dim_b_mm].filter((x) => x != null)
       return dims.length ? dims.map((x) => n(x, 1)).join(' × ') : '—'
     }
+    // Ba cột tiết diện tách rời — đúng bốn cột `Loại · Dày · Rộng · Dài` của file.
+    case 'shape':
+      return p.profile_code
+        ? p.profile_code
+        : p.profile_shape
+          ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape)
+          : '—'
+    case 'dimA':
+      return n(p.dim_a_mm, 1) ?? '—'
+    case 'dimB':
+      return n(p.dim_b_mm, 1) ?? '—'
     case 'tenon':
       return p.tenon ?? '—'
     case 'tenonMm':
@@ -136,11 +147,58 @@ function cellOf(p: PartView, key: string): ReactNode {
       return splitNote(p.material_note).material ?? '—'
     case 'code':
       return p.material_code ?? '—'
+    /* ── Quy đổi đơn vị mua (0132) ─────────────────────────────────────── */
+    case 'species':
+      return p.wood_species ?? '—'
+    case 'barLen':
+      return n(p.bar_length_m, 2) ?? '—'
+    case 'pcsBar':
+      return n(p.pcs_per_bar, 0) ?? '—'
+    case 'bars':
+      // Số CÂY phải mua cho 1 SP — làm tròn LÊN, không ai mua nửa cây.
+      return p.pcs_per_bar && p.pcs_per_bar > 0
+        ? Math.ceil(p.qty / p.pcs_per_bar).toLocaleString('vi-VN')
+        : '—'
+    case 'roll':
+      return n(p.roll_width_m, 2) ?? '—'
+    case 'wastePct':
+      return p.waste_pct != null ? `${n(p.waste_pct, 1)}%` : '—'
+    case 'totalM':
+      return p.total_length_m != null
+        ? (p.total_length_m * (1 + (p.waste_pct ?? 0) / 100)).toFixed(2)
+        : '—'
+    case 'sheetSpec':
+      return p.sheet_w_mm || p.sheet_l_mm
+        ? `${n(p.sheet_w_mm, 0) ?? '?'} × ${n(p.sheet_l_mm, 0) ?? '?'}`
+        : '—'
+    case 'm3Sheet':
+      return p.m3_per_sheet != null ? p.m3_per_sheet.toFixed(4) : '—'
     case 'note':
       return p.note ?? ''
     default:
       return null
   }
+}
+
+/**
+ * Ô "Mã vật tư" — mã KHÔNG có trong danh mục kho thì gạch chân hổ phách.
+ *
+ * Cung ứng gộp mua bằng cách nối `material_code` với mã kho, nên một mã gõ lệch
+ * là dòng định mức đó biến mất khỏi đơn đặt mà không ai hay. Hiện cờ ngay tại
+ * chỗ nhập rẻ hơn nhiều so với dò lại lúc đã lên đơn.
+ */
+function codeCell(p: PartView, known: Record<string, string>): ReactNode {
+  if (!p.material_code) return '—'
+  const name = known[p.material_code]
+  if (name) return <span title={name}>{p.material_code}</span>
+  return (
+    <span
+      title="Chưa khớp danh mục kho — cung ứng không gộp mua được dòng này"
+      className="text-amber-700 underline decoration-amber-500 decoration-dotted underline-offset-2 dark:text-amber-400"
+    >
+      {p.material_code}
+    </span>
+  )
 }
 
 const haystack = (p: PartView) =>
@@ -411,12 +469,15 @@ export function ProductPartsCard({
   clusters,
   productId,
   baseMaterial,
+  knownMaterials,
   canEdit,
 }: {
   parts: PartView[]
   partGroups: PartGroupView[]
   clusters: ClusterView[]
   productId: string
+  /** mã vật tư → tên trong danh mục kho; mã vắng mặt = chưa khớp (cờ hổ phách). */
+  knownMaterials: Record<string, string>
   /** Ô "Nhiên Liệu" của sản phẩm — mặc định vật liệu cho khối mới. */
   baseMaterial: string | null
   canEdit: boolean
@@ -424,9 +485,13 @@ export function ProductPartsCard({
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
-  const [editing, setEditing] = useState<{ part: PartView | null; group: string } | null>(
-    null,
-  )
+  /**
+   * Dòng đang sửa TẠI CHỖ. Trước đây bút chì mở hộp thoại 20 ô — nhịp "bấm →
+   * chờ → cuộn tìm ô → Lưu → đóng → tìm lại dòng vừa sửa" quá dài cho một bảng
+   * mà người ta sửa vài chục dòng liên tiếp. Nay bút chì biến ĐÚNG dòng đó
+   * thành lưới nhập, còn nút "Nhập tại chỗ" vẫn bật cả bảng khi nhập hàng loạt.
+   */
+  const [editRow, setEditRow] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [copying, setCopying] = useState(false)
@@ -682,30 +747,38 @@ export function ProductPartsCard({
           placeholder="Tiêu đề khối, vd: Quy cách :"
           aria-label="Tiêu đề khối"
         />
-        <select
-          value={newSec.material}
-          onChange={(e) => setNewSec({ ...newSec, material: e.target.value })}
-          className={headInp}
-          aria-label="Vật liệu"
-        >
-          <option value="">Vật liệu —</option>
-          <option value="AL">Nhôm</option>
-          <option value="IR">Sắt</option>
-          <option value="IN">Inox</option>
-          <option value="WD">Gỗ</option>
-          <option value="RA">Mây / nhựa đan</option>
-          <option value="GL">Kính</option>
-        </select>
+        {/* Vật liệu khung (nhôm/sắt/inox) chỉ có nghĩa với khối KHUNG — nó là
+            thứ dùng để suy khối lượng. Bao bì, tem, ngũ kim không dùng bao giờ,
+            bày ra chỉ khiến người tạo khối phân vân phải điền gì. */}
+        {layoutOf(newSec.group) === 'metal' && (
+          <select
+            value={newSec.material}
+            onChange={(e) => setNewSec({ ...newSec, material: e.target.value })}
+            className={headInp}
+            aria-label="Vật liệu"
+          >
+            <option value="">Vật liệu —</option>
+            <option value="AL">Nhôm</option>
+            <option value="IR">Sắt</option>
+            <option value="IN">Inox</option>
+            <option value="WD">Gỗ</option>
+            <option value="RA">Mây / nhựa đan</option>
+            <option value="GL">Kính</option>
+          </select>
+        )}
         {/* Cụm của cả khối mới — gõ tên có sẵn thì gán vào cụm đó, tên mới thì
-            server tạo cụm. Bỏ trống = các dòng thuộc nhóm Rời. */}
-        <input
-          value={newSec.cluster}
-          onChange={(e) => setNewSec({ ...newSec, cluster: e.target.value })}
-          className={`${headInp} w-32`}
-          placeholder="Cụm (Bộ phận)"
-          aria-label="Cụm"
-          list="cluster-names"
-        />
+            server tạo cụm. Bỏ trống = các dòng thuộc nhóm Rời. Biểu mẫu ngũ kim
+            / bao bì KHÔNG có cột cụm nên khối đó cũng không hỏi. */}
+        {layoutOf(newSec.group) !== 'supply' && (
+          <input
+            value={newSec.cluster}
+            onChange={(e) => setNewSec({ ...newSec, cluster: e.target.value })}
+            className={`${headInp} w-32`}
+            placeholder="Cụm (Bộ phận)"
+            aria-label="Cụm"
+            list="cluster-names"
+          />
+        )}
         <input
           value={newSec.unitBasis}
           onChange={(e) => setNewSec({ ...newSec, unitBasis: e.target.value })}
@@ -805,7 +878,10 @@ export function ProductPartsCard({
                     : 'hover:bg-muted text-muted-foreground',
                 )}
               >
-                {inline ? 'Xong' : 'Nhập tại chỗ'}
+                {/* Hai lối sửa cùng tồn tại nên nhãn phải nói rõ việc của từng
+                    cái: bút chì = sửa MỘT dòng (thẻ chia vùng), nút này = gõ
+                    NHIỀU dòng liên tục (lưới ngang kiểu bảng tính). */}
+                {inline ? 'Xong' : 'Gõ nhiều dòng'}
               </button>
             </>
           )}
@@ -1069,8 +1145,32 @@ export function ProductPartsCard({
                                             part={p}
                                             groupCode={g.code}
                                             clusterName={blk.cluster?.name ?? null}
-                                            onDeleted={() => setBusyId(null)}
+                                            onDeleted={() => {
+                                              setBusyId(null)
+                                              setEditRow(null)
+                                            }}
                                           />
+                                        ) : editRow === p.id ? (
+                                          // Thẻ chia vùng bung NGAY DƯỚI vị trí dòng,
+                                          // chiếm trọn bề ngang bảng — không đè lên
+                                          // các dòng khác, vẫn đối chiếu được trên dưới.
+                                          <tr
+                                            key={p.id}
+                                            className="border-b last:border-0"
+                                          >
+                                            <td
+                                              colSpan={inlineColSpan(g.code)}
+                                              className="p-2"
+                                            >
+                                              <PartCardEdit
+                                                productId={productId}
+                                                part={p}
+                                                groupCode={g.code}
+                                                clusterName={blk.cluster?.name ?? null}
+                                                onClose={() => setEditRow(null)}
+                                              />
+                                            </td>
+                                          </tr>
                                         ) : (
                                           <tr
                                             key={p.id}
@@ -1133,7 +1233,9 @@ export function ProductPartsCard({
                                                       : undefined
                                                 }
                                               >
-                                                {cellOf(p, c.key)}
+                                                {c.key === 'code'
+                                                  ? codeCell(p, knownMaterials)
+                                                  : cellOf(p, c.key)}
                                               </td>
                                             ))}
                                             {canEdit && (
@@ -1151,13 +1253,17 @@ export function ProductPartsCard({
                                                   </button>
                                                   <button
                                                     type="button"
-                                                    title="Sửa dòng"
-                                                    onClick={() =>
-                                                      setEditing({
-                                                        part: p,
-                                                        group: g.code,
-                                                      })
-                                                    }
+                                                    title="Sửa ngay trên dòng"
+                                                    onClick={(e) => {
+                                                      // Thẻ nằm trong bảng cuộn
+                                                      // ngang; đang kéo sang phải mà
+                                                      // mở thẻ thì nửa trái thẻ nằm
+                                                      // ngoài màn. Kéo bảng về đầu.
+                                                      e.currentTarget
+                                                        .closest('.overflow-x-auto')
+                                                        ?.scrollTo({ left: 0 })
+                                                      setEditRow(p.id)
+                                                    }}
                                                     className="hover:bg-muted rounded p-1"
                                                   >
                                                     <Pencil className="text-muted-foreground size-3.5" />
@@ -1209,7 +1315,15 @@ export function ProductPartsCard({
                     {canEdit && !hasQuery && !inline && (
                       <button
                         type="button"
-                        onClick={() => setEditing({ part: null, group: g.code })}
+                        onClick={() =>
+                          setNewSec({
+                            group: g.code,
+                            title: defaultSectionTitle(g.code),
+                            unitBasis: '',
+                            cluster: '',
+                            material: baseMaterial ?? '',
+                          })
+                        }
                         className="text-primary mt-2 text-xs font-medium hover:underline"
                       >
                         + Thêm dòng vào “{g.label}”
@@ -1254,17 +1368,6 @@ export function ProductPartsCard({
           productId={productId}
           hasParts={parts.length > 0}
           onClose={() => setCopying(false)}
-        />
-      )}
-
-      {editing && (
-        <PartLineEdit
-          productId={productId}
-          part={editing.part}
-          defaultGroup={editing.group}
-          groups={partGroups}
-          clusters={clusters}
-          onClose={() => setEditing(null)}
         />
       )}
     </Card>

@@ -5,5 +5,7 @@ import { TrackingScreen } from '../../sales/tracking/TrackingScreen'
  * (duyệt được tại chỗ, không nhảy shell Sales).
  */
 export default function ExecTrackingPage() {
-  return <TrackingScreen lsxBase="/exec/lsx" />
+  return (
+    <TrackingScreen lsxBase="/exec/lsx" home={{ label: 'Ban Giám đốc', href: '/exec' }} />
+  )
 }

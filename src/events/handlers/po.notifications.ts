@@ -21,10 +21,12 @@ export function registerPoNotificationHandlers(): void {
     )
   })
 
+  // Báo kết quả cho NGƯỜI PHỤ TRÁCH đơn (0128), không phải người tạo: đơn đã
+  // bàn giao thì người tạo cũ chẳng còn làm gì với nó nữa.
   on('po.decided', async (e) => {
-    if (!e.created_by || e.created_by === e.decided_by) return
+    if (!e.owner_id || e.owner_id === e.decided_by) return
     await notificationsService.notify({
-      recipientId: e.created_by,
+      recipientId: e.owner_id,
       actorId: e.decided_by,
       type: e.decision === 'approved' ? 'po_approved' : 'po_rejected',
       payload: { title: e.code, reason: e.reason },

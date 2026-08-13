@@ -32,6 +32,7 @@ export default async function ProductPartsPage({
       setItems={data.setItems}
       paintCoverage={data.product.paint_coverage_m2_per_kg ?? null}
       baseMaterial={data.product.base_material ?? null}
+      knownMaterials={data.knownMaterials}
       canEdit={canEdit}
     />
   )

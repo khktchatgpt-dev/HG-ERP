@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { CircleSlash, Ellipsis, ImageOff, Maximize2 } from 'lucide-react'
+import { CircleSlash, Ellipsis, ImageOff, Lock, Maximize2 } from 'lucide-react'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { RowMenu, type RowMenuItem } from '@/components/erp/RowMenu'
@@ -75,11 +75,25 @@ export function ProductCard({
               </span>
             </div>
           )}
-          {!p.is_active && (
-            <Badge className="absolute top-1.5 left-1.5 border-transparent bg-zinc-900/80 text-white backdrop-blur-sm">
-              <CircleSlash /> Ngừng dùng
-            </Badge>
-          )}
+          {/* Hai nhãn góc trên trái xếp dọc: "Ngừng dùng" (vòng đời) và "ĐÃ
+              KHOÁ" (0140 — hồ sơ đã chốt, đây là bản mọi phòng dùng). Thư viện
+              là chỗ người ta quét mắt tìm SP, nên tin "bản này chốt rồi" phải
+              đọc được từ đây chứ không phải mở vào tab Tài liệu mới biết. */}
+          <div className="absolute top-1.5 left-1.5 flex flex-col items-start gap-1">
+            {!p.is_active && (
+              <Badge className="border-transparent bg-zinc-900/80 text-white backdrop-blur-sm">
+                <CircleSlash /> Ngừng dùng
+              </Badge>
+            )}
+            {p.locked_at && (
+              <Badge
+                title={`Hồ sơ đã khoá ${new Date(p.locked_at).toLocaleDateString('vi-VN')} — dùng bản này`}
+                className="border-transparent bg-emerald-600/90 text-white backdrop-blur-sm"
+              >
+                <Lock /> Đã khoá
+              </Badge>
+            )}
+          </div>
           {/* Phân loại nằm ĐÈ lên ảnh, góc dưới trái: khối chữ dưới ảnh đã có
               3 dòng (tên / mã / khách), thêm dòng thứ tư là thẻ cao thêm mà
               chẳng dễ đọc hơn. Góc này của ảnh vốn bỏ không. */}

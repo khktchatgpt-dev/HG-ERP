@@ -1,9 +1,18 @@
-import { packCount, poLineAmount, qtyTotals } from '@/lib/po-line'
+import {
+  fmtMoney,
+  packCount,
+  poLineAmount,
+  poMoney,
+  qtyTotals,
+  roundMoney,
+} from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
+  PO_PRICE_SUFFIX_TEMPLATES,
   PO_PRINT_ORDER,
   PO_PRINT_QTY_LABEL,
   poField,
+  poPriceSuffix,
   type PoField,
 } from '@/lib/po-fields'
 import {
@@ -50,13 +59,19 @@ export type PoPrintLine = {
   dimension_text: string | null
   finish: string | null
   weight_per_unit: number | null
+  /** 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành. */
+  m3_per_unit: number | null
+  warranty_text: string | null
   open_style: string | null
   pcs_per_ctn: number | null
   inner_l_mm: number | null
   inner_w_mm: number | null
   inner_h_mm: number | null
   area_m2: number | null
-  carton_basis: 'ctn' | 'm2' | null
+  /** Bao bì (0134): giá NCC chào theo m² + phí bản in — in để NCC đối chiếu. */
+  price_per_m2?: number | null
+  print_fee?: number | null
+  carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   /** Đóng gói mua chụp lúc lập đơn (0128) — in quy đổi dưới ô số lượng. */
   pack_size?: number | null
   pack_unit?: string | null
@@ -115,17 +130,14 @@ const colStt: Col = { label: 'STT', cell: (_l, i) => i + 1 }
  * tư" / "Đơn giá" / "Thành tiền", lại thêm "Đơn giá / kg" riêng cho hai mẫu tính
  * theo khối lượng, nên năm mẫu in ra đọc như năm biểu mẫu khác nhau.
  *
- * Mã vật tư ĐÃ TÁCH thành cột "Mã sản phẩm" riêng (khung chuẩn 08/2026) — không
- * còn in nhỏ dưới tên.
+ * Cột "Mã sản phẩm" (mã vật tư danh mục) và cột "LSX" ĐÃ BỎ khỏi bảng kê
+ * (12/08/2026 — form mẫu mới): LSX + Đơn hàng nằm ở khung góc phải đầu phiếu,
+ * mã nội bộ NCC không cần.
  */
 const colName: Col = {
   label: 'Tên sản phẩm / vật tư',
   align: 'left',
   cell: (l) => l.material_name,
-}
-const colCode: Col = {
-  label: 'Mã sản phẩm',
-  cell: (l) => <span className="font-mono">{l.material_code}</span>,
 }
 const colUnit: Col = { label: 'ĐVT', cell: (l) => l.material_unit }
 const colNote: Col = { label: 'Ghi chú', cell: (l) => l.note ?? '', align: 'left' }
@@ -133,7 +145,9 @@ const amountCol = (currency: string): Col => ({
   label: `Thành tiền (${currency})`,
   align: 'right',
   isAmount: true,
-  cell: (l) => (l.unit_price != null ? fmt(Math.round(poLineAmount(l))) : ''),
+  // Làm tròn theo TIỀN TỆ: VND về đồng, USD về cent — đơn gỗ chốt $700.21.
+  cell: (l) =>
+    l.unit_price != null ? fmtMoney(roundMoney(poLineAmount(l), currency), currency) : '',
 })
 const priceCol = (currency: string, unit: string | null): Col => ({
   // Giữ "/kg" trong ngoặc chứ không bỏ hẳn: mẫu nhôm và inox tính tiền bằng
@@ -141,7 +155,7 @@ const priceCol = (currency: string, unit: string | null): Col => ({
   // báo giá của chính họ. Dạng ngoặc giữ cho nhãn cùng khuôn với các mẫu khác.
   label: unit ? `Đơn giá (${currency}/${unit})` : `Đơn giá (${currency})`,
   align: 'right',
-  cell: (l) => fmt(l.unit_price),
+  cell: (l) => (l.unit_price == null ? '' : fmtMoney(l.unit_price, currency)),
 })
 /** Giá trị in của một cột khai báo — chuyển `kind` thành chữ trên giấy. */
 function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
@@ -179,15 +193,12 @@ function columnsFor(
   t: PoTemplate,
   currency: string,
   /** Giá trị đầu đơn lặp xuống từng dòng (khung chuẩn 08/2026). */
-  ctx: { lsxCode: string | null; orderDate: Date; expectedAt: string | null },
+  ctx: { orderDate: Date; expectedAt: string | null },
 ): Col[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
   const fixed: Record<string, Col> = {
     '@stt': colStt,
-    // LSX của đầu đơn in lặp từng dòng — đúng đơn ĐH chuẩn (một đơn một LSX).
-    '@lsx': { label: 'LSX', cell: () => ctx.lsxCode ?? '' },
-    '@code': colCode,
     '@name': colName,
     '@unit': colUnit,
     '@orderdate': { label: 'Ngày đặt hàng', cell: () => dmy(ctx.orderDate) },
@@ -205,6 +216,10 @@ function columnsFor(
        * phiếu y như trước.
        */
       cell: (l) => {
+        // Bản xem trước từ NHÁP có dòng chưa nhập SL (qty 0) — in trống chứ
+        // không in "0" (quy tắc chung: ô trống trả '', phiếu NCC đọc rối).
+        // Đơn đã lưu không đi qua nhánh này: schema chặn qty ≤ 0.
+        if (!(l.qty_ordered > 0)) return ''
         const packs = packCount(l.qty_ordered, l.pack_size ?? null)
         if (packs == null || !l.pack_unit) return fmt(l.qty_ordered)
         return (
@@ -217,18 +232,18 @@ function columnsFor(
         )
       },
     },
-    '@price':
-      t === 'carton'
-        ? {
-            // Bao bì chốt cơ sở tính tiền TỪNG DÒNG nên đơn giá phải nói rõ kèm đơn vị.
-            label: `Đơn giá (${currency})`,
-            align: 'right',
-            cell: (l) =>
-              l.unit_price != null
-                ? `${fmt(l.unit_price)}${l.carton_basis === 'm2' ? '/m²' : '/thùng'}`
-                : '',
-          }
-        : priceCol(currency, meta.priceUnit),
+    '@price': PO_PRICE_SUFFIX_TEMPLATES.includes(t)
+      ? {
+          // Mẫu chốt CƠ SỞ TÍNH TIỀN từng dòng (bao bì/kính/xốp/gia công):
+          // đơn giá in kèm /thùng, /m², /m³, /kg — NCC đối chiếu được báo giá.
+          label: `Đơn giá (${currency})`,
+          align: 'right',
+          cell: (l) =>
+            l.unit_price != null
+              ? `${fmtMoney(l.unit_price, currency)}${poPriceSuffix(t, l.carton_basis)}`
+              : '',
+        }
+      : priceCol(currency, meta.priceUnit),
     '@amount': amountCol(currency),
     '@note': colNote,
   }
@@ -275,12 +290,11 @@ export function PoPrintSheet({
   // Đầu phiếu (khối công ty, quốc hiệu, dòng ngày kèm địa danh) do `PrintSheet`
   // dựng — dùng chung với báo giá, lệnh SX và phiếu kho.
   const d = new Date(po.created_at)
-  // Đơn NGOÀI LSX: bỏ hẳn cột LSX thay vì in một cột rỗng suốt phiếu.
+  // LSX + Đơn hàng KHÔNG là cột bảng kê — chúng ở khung góc phải (PrintMeta).
   const cols = columnsFor(template, po.currency, {
-    lsxCode: po.lsx_code,
     orderDate: d,
     expectedAt: po.expected_at,
-  }).filter((c) => c.label !== 'LSX' || po.lsx_code)
+  })
   const amountIdx = cols.findIndex((c) => c.isAmount)
 
   /*
@@ -296,15 +310,21 @@ export function PoPrintSheet({
     ? cols.findIndex((c) => c.label === 'Tổng kg')
     : cols.findIndex((c) => c.label === PO_PRINT_QTY_LABEL[template])
   // Cùng thứ tự với phiếu thật: cộng tiền hàng → chiết khấu → thuế GTGT → tổng.
-  // Làm tròn về đồng ngay ở tiền hàng — phiếu gửi NCC không in số lẻ đồng.
-  const subtotal = Math.round(lines.reduce((s, l) => s + poLineAmount(l), 0))
-  const discount = Number(po.discount_amount ?? 0)
-  const base = Math.max(0, subtotal - discount)
+  // Phép tính là `poMoney` — CHUNG với form soạn và trang chi tiết, làm tròn
+  // theo tiền tệ của đơn (VND về đồng, USD về cent).
   const rate = Number(po.vat_rate ?? 0)
-  const vatAmount = po.price_includes_vat
-    ? Math.round((base * rate) / (100 + rate))
-    : Math.round((base * rate) / 100)
-  const grandTotal = po.price_includes_vat ? base : base + vatAmount
+  const {
+    subtotal,
+    discountAmount: discount,
+    vatAmount,
+    grandTotal,
+  } = poMoney({
+    subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
+    discount: po.discount_amount,
+    vatRate: po.vat_rate,
+    priceIncludesVat: po.price_includes_vat,
+    currency: po.currency,
+  })
 
   const terms: [string, string | null][] = [
     ['Tiêu chuẩn chất lượng', po.terms_quality],
@@ -447,7 +467,9 @@ export function PoPrintSheet({
                   label === 'TỔNG THANH TOÁN:' ? 'bg-yellow-200' : ''
                 }`}
               >
-                {value === 0 && label === 'Chiết khấu:' ? '-' : fmt(value)}
+                {value === 0 && label === 'Chiết khấu:'
+                  ? '-'
+                  : fmtMoney(value, po.currency)}
               </td>
               <td colSpan={cols.length - amountIdx - 1} className="border border-black" />
             </tr>

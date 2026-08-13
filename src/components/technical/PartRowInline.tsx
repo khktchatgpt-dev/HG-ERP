@@ -6,13 +6,14 @@ import { Check, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
-import { SHAPE_OPTIONS, calcPartDerived, isCalculable } from '@/lib/bom-calc'
+import { calcPartDerived, isCalculable, pcsPerBarFrom } from '@/lib/bom-calc'
 import {
   derivedPreviewFor,
   inputCellsFor,
   type InputCell,
   type InputKey,
 } from './part-layouts'
+import { PartField } from './PartField'
 import type { PartView } from './ProductProfileCards'
 
 const inp =
@@ -41,6 +42,17 @@ const EMPTY: Draft = {
   material_note: '',
   color: '',
   note: '',
+  material_code: '',
+  profile_code: '',
+  kg_per_m: '',
+  wood_species: '',
+  bar_length_m: '',
+  pcs_per_bar: '',
+  roll_width_m: '',
+  waste_pct: '',
+  sheet_w_mm: '',
+  sheet_l_mm: '',
+  m3_per_sheet: '',
 }
 
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -51,7 +63,7 @@ const nOrNull = (v: string) => {
   return Number.isFinite(x) ? x : null
 }
 
-const fromPart = (p: PartView, clusterName: string | null): Draft => ({
+export const fromPart = (p: PartView, clusterName: string | null): Draft => ({
   part_no: s(p.part_no),
   cluster_name: clusterName ?? '',
   part_name: p.part_name,
@@ -67,10 +79,21 @@ const fromPart = (p: PartView, clusterName: string | null): Draft => ({
   material_note: s(p.material_note),
   color: s(p.color),
   note: s(p.note),
+  material_code: s(p.material_code),
+  profile_code: s(p.profile_code),
+  kg_per_m: s(p.kg_per_m),
+  wood_species: s(p.wood_species),
+  bar_length_m: s(p.bar_length_m),
+  pcs_per_bar: s(p.pcs_per_bar),
+  roll_width_m: s(p.roll_width_m),
+  waste_pct: s(p.waste_pct),
+  sheet_w_mm: s(p.sheet_w_mm),
+  sheet_l_mm: s(p.sheet_l_mm),
+  m3_per_sheet: s(p.m3_per_sheet),
 })
 
 /** Thân yêu cầu gửi lên — dùng chung cho sửa và thêm. */
-const toBody = (d: Draft, materialKind: string | null) => {
+export const toBody = (d: Draft, materialKind: string | null) => {
   const geo = {
     profile_shape: d.profile_shape || null,
     material_kind: materialKind,
@@ -80,9 +103,14 @@ const toBody = (d: Draft, materialKind: string | null) => {
     cut_length_mm: nOrNull(d.cut_length_mm),
     bend_waste_mm: nOrNull(d.bend_waste_mm),
     tenon_mm: nOrNull(d.tenon_mm),
+    kg_per_m: nOrNull(d.kg_per_m),
     qty: nOrNull(d.qty),
   }
   const der = calcPartDerived(geo)
+  // Số khúc trên cây SUY từ chiều dài — người nhập bỏ trống là dùng số suy ra,
+  // gõ số khác thì số của họ thắng (xưởng chừa hao nhiều hơn lý thuyết).
+  const barLen = nOrNull(d.bar_length_m)
+  const pcsAuto = pcsPerBarFrom(geo.cut_length_mm, geo.bend_waste_mm, barLen)
   return {
     ...geo,
     part_no: nOrNull(d.part_no),
@@ -94,6 +122,18 @@ const toBody = (d: Draft, materialKind: string | null) => {
     material_note: d.material_note.trim() || null,
     color: d.color.trim() || null,
     note: d.note.trim() || null,
+    // Quy đổi đơn vị mua (0132) — ô nào không thuộc họ khối đang gõ thì luôn
+    // rỗng, gửi null nên không đụng dữ liệu cũ.
+    material_code: d.material_code.trim() || null,
+    profile_code: d.profile_code.trim() || null,
+    wood_species: d.wood_species.trim() || null,
+    bar_length_m: barLen,
+    pcs_per_bar: nOrNull(d.pcs_per_bar) ?? pcsAuto,
+    roll_width_m: nOrNull(d.roll_width_m),
+    waste_pct: nOrNull(d.waste_pct),
+    sheet_w_mm: nOrNull(d.sheet_w_mm),
+    sheet_l_mm: nOrNull(d.sheet_l_mm),
+    m3_per_sheet: nOrNull(d.m3_per_sheet),
     total_length_m: der.total_length_m,
     paint_area_m2: der.paint_area_m2,
     volume_m3: der.volume_m3,
@@ -106,6 +146,7 @@ function Cells({
   cells,
   draft,
   set,
+  setMany,
   onEnter,
   preview,
   shapeOff,
@@ -114,6 +155,8 @@ function Cells({
   cells: InputCell[]
   draft: Draft
   set: (k: InputKey, v: string) => void
+  /** Chọn từ danh mục điền một lúc nhiều ô — phải gộp vào MỘT lần setState. */
+  setMany: (patch: Partial<Draft>) => void
   onEnter: () => void
   /** Số tự tính hiện ở cuối lưới (KL hoặc m³) — null nếu họ khối không có. */
   preview: { label: string; value: number | null; digits: number } | null
@@ -121,45 +164,19 @@ function Cells({
   /** Ô tên — dòng thêm mới cần giữ để trả con trỏ về sau khi lưu. */
   nameRef?: React.RefObject<HTMLInputElement | null>
 }) {
-  const key = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      onEnter()
-    }
-  }
-
   return (
     <>
       {cells.map((c) => (
         <td key={c.key} className="py-0.5 pr-1">
-          {c.kind === 'shape' ? (
-            <select
-              value={draft.profile_shape}
-              onChange={(e) => set('profile_shape', e.target.value)}
-              className={inp}
-              aria-label={c.label}
-            >
-              <option value="">—</option>
-              {SHAPE_OPTIONS.map((o) => (
-                <option key={o.code} value={o.code}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          ) : (
-            <input
-              ref={c.key === 'part_name' ? nameRef : undefined}
-              value={draft[c.key]}
-              onChange={(e) => set(c.key, e.target.value)}
-              onKeyDown={key}
-              inputMode={c.kind === 'num' ? 'decimal' : undefined}
-              // Ô Cụm gợi ý các cụm đã có của sản phẩm; gõ tên mới thì tạo cụm.
-              list={c.kind === 'cluster' ? 'cluster-names' : undefined}
-              placeholder={c.placeholder}
-              className={cn(inp, c.kind === 'num' && 'text-right')}
-              aria-label={c.label}
-            />
-          )}
+          <PartField
+            cell={c}
+            draft={draft}
+            set={set}
+            setMany={setMany}
+            onEnter={onEnter}
+            className={cn(inp, c.kind === 'num' && 'text-right')}
+            inputRef={c.key === 'part_name' ? nameRef : undefined}
+          />
         </td>
       ))}
       {preview && (
@@ -255,6 +272,7 @@ export function PartRowInline({
   }
 
   const set = (k: InputKey, v: string) => setDraft((d) => ({ ...d, [k]: v }))
+  const setMany = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
   const { body, preview } = usePreview(draft, part.material_kind, groupCode)
   const dirty = serverSnapshot !== JSON.stringify(draft)
 
@@ -308,6 +326,7 @@ export function PartRowInline({
         cells={inputCellsFor(groupCode)}
         draft={draft}
         set={set}
+        setMany={setMany}
         onEnter={() => void save()}
         preview={
           preview && preview.label.startsWith('KL')
@@ -368,6 +387,7 @@ export function PartRowNew({
   const nameRef = useRef<HTMLInputElement>(null)
 
   const set = (k: InputKey, v: string) => setDraft((d) => ({ ...d, [k]: v }))
+  const setMany = (patch: Partial<Draft>) => setDraft((d) => ({ ...d, ...patch }))
   const { body, preview } = usePreview(draft, materialKind, groupCode)
   const ready = !!body.part_name && !!body.qty && body.qty > 0
 
@@ -412,6 +432,7 @@ export function PartRowNew({
         cells={inputCellsFor(groupCode)}
         draft={draft}
         set={set}
+        setMany={setMany}
         onEnter={() => void create()}
         preview={preview}
         shapeOff={!!draft.profile_shape && !isCalculable(draft.profile_shape)}

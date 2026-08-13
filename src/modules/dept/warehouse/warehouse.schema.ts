@@ -38,7 +38,46 @@ export const materialCreateSchema = z.object({
   pack_size: z.coerce.number().positive().optional().nullable(),
   pack_unit: z.string().trim().max(30).optional().nullable(),
   material_grade: z.string().trim().max(100).optional().nullable(),
+  // Thông số theo nhóm (0137): bao bì (cách mở + SP/thùng) và kim loại (màu/
+  // bề mặt) — trước chỉ nhớ được từ lần đặt gần nhất, vật tư mới thì gõ tay.
+  open_style: z.string().trim().max(20).optional().nullable(),
+  pcs_per_ctn: z.coerce.number().positive().optional().nullable(),
+  finish: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
+  /**
+   * Cờ "CHỜ KHO RÀ" (0136) — form khai nhanh trong đơn đặt gửi true: người khai
+   * đang vội soạn đơn, Kho rà lại sau (đối chiếu trùng, bổ sung barem/kệ). Form
+   * danh mục không gửi → mặc định false. PATCH {needs_review:false} = đã rà.
+   */
+  needs_review: z.coerce.boolean().optional(),
+  /**
+   * KEY các trường khai vội cần Kho rà (0138) — form khai nhanh tự chấm bằng
+   * `quickReviewFields`. Chỉ có nghĩa đi kèm needs_review=true; service tự xoá
+   * khi Kho bấm "Đã rà xong".
+   */
+  needs_review_fields: z.array(z.string().trim().min(1).max(40)).max(20).optional(),
+})
+
+/**
+ * Cập nhật danh mục từ HỘP XÁC NHẬN sau khi lưu đơn đặt (13/08/2026) — chỉ các
+ * trường mô tả; server kiểm fill-empty-only lần nữa lúc ghi.
+ */
+export const materialEnrichSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        material_id: z.string().uuid(),
+        set: z.object({
+          spec: z.string().trim().max(200).optional(),
+          material_grade: z.string().trim().max(100).optional(),
+          finish: z.string().trim().max(100).optional(),
+          open_style: z.string().trim().max(20).optional(),
+          pcs_per_ctn: z.coerce.number().positive().optional(),
+        }),
+      }),
+    )
+    .min(1)
+    .max(100),
 })
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
@@ -55,6 +94,8 @@ export const materialListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   group_name: z.string().trim().max(100).optional(),
   active_only: z.coerce.boolean().default(false),
+  /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
+  needs_review: z.coerce.boolean().optional(),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(500),
 })
@@ -97,12 +138,22 @@ export const receiptDocLineSchema = z.object({
 })
 
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
-export const receiptDocSchema = z.object({
-  po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
-  counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
-  note: z.string().trim().max(2000).optional().nullable(),
-  lines: z.array(receiptDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
-})
+export const receiptDocSchema = z
+  .object({
+    po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
+    counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+    note: z.string().trim().max(2000).optional().nullable(),
+    // Nhận VƯỢT số còn thiếu của đơn: mặc định chặn (409 OVER_RECEIPT). NCC giao
+    // dư là chuyện có thật — người nhận xác nhận thì gửi lại kèm cờ + lý do
+    // (ghi vào ghi chú phiếu). Cùng lối với override_reserved của phiếu xuất.
+    allow_over: z.coerce.boolean().default(false),
+    over_reason: z.string().trim().max(500).optional().nullable(),
+    lines: z.array(receiptDocLineSchema).min(1, 'Phiếu phải có ít nhất 1 dòng').max(200),
+  })
+  .refine((d) => !d.allow_over || !!d.over_reason?.trim(), {
+    message: 'Nhận vượt số còn thiếu phải kèm lý do',
+    path: ['over_reason'],
+  })
 
 export const issueDocLineSchema = z.object({
   material_id: z.string().uuid(),

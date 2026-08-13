@@ -1,5 +1,6 @@
 import { assessPoLate } from '@/lib/late-risk'
-import type { Po } from './PosManager'
+import { PO_OPEN_STATUSES } from '@/lib/po-status'
+import type { Po } from './po-types'
 
 /**
  * GOM ĐƠN ĐẶT HÀNG THEO LỆNH SẢN XUẤT.
@@ -45,9 +46,26 @@ export type PoGroup = {
   received: number
   cancelled: number
   late: number
+  /**
+   * TIẾN ĐỘ VỀ KHO CỦA CẢ LỆNH, đếm theo DÒNG đơn đặt (0126).
+   *
+   * Đầu thẻ trước đây chỉ đếm số đơn và cộng tiền — trả lời được "lệnh này đã
+   * đặt mấy đơn", không trả lời được "lệnh này đã có hàng chưa", mà đó mới là
+   * câu người kế hoạch hỏi. Cộng theo dòng chứ không theo số lượng: 500 con vít
+   * cộng với 3 kg nhôm ra một con số vô nghĩa.
+   *
+   * Chỉ cộng đơn CÒN SỐNG — đơn đã huỷ không nợ hàng ai.
+   */
+  linesDone: number
+  linesTotal: number
+  /**
+   * Id các đơn nằm trong nhóm này với tư cách LỆNH PHỤ (0125) — đơn thuộc về
+   * lệnh khác nhưng có mua vật tư cho lệnh này. Giao diện đánh dấu để không ai
+   * tưởng đó là đơn riêng của lệnh, và tiền của chúng KHÔNG cộng vào `total` ở
+   * đây (đã cộng ở lệnh chính rồi — cộng hai lần thì tổng chi phồng lên).
+   */
+  borrowed: Set<string>
 }
-
-const OPEN_STATUSES = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
 
 function emptyGroup(key: string, lsx_code: string): PoGroup {
   return {
@@ -65,19 +83,35 @@ function emptyGroup(key: string, lsx_code: string): PoGroup {
     received: 0,
     cancelled: 0,
     late: 0,
+    linesDone: 0,
+    linesTotal: 0,
+    borrowed: new Set(),
   }
 }
 
-function tally(g: PoGroup, p: Po, today: string): void {
+/**
+ * Xếp một đơn vào nhóm. `borrowed` = đơn của lệnh KHÁC, có mua hộ cho lệnh này.
+ *
+ * Đơn mượn vẫn được đếm vào các con số "còn việc" (chờ duyệt / quá hẹn / về
+ * kho): với lệnh này thì vật tư đó có về hay không vẫn quyết định chạy được hay
+ * không. Chỉ TIỀN là không cộng — tiền đã nằm ở lệnh chính.
+ */
+function tally(g: PoGroup, p: Po, today: string, borrowed = false): void {
   g.pos.push(p)
+  if (borrowed) g.borrowed.add(p.id)
   // Cộng tiền chỉ gộp đơn CÙNG loại tiền với đơn đầu nhóm — cộng thẳng USD vào
   // VND ra một con số vô nghĩa mà nhìn vẫn như thật.
-  if (p.currency === g.currency && p.status !== 'cancelled') g.total += p.total ?? 0
+  if (!borrowed && p.currency === g.currency && p.status !== 'cancelled')
+    g.total += p.total ?? 0
   if (p.status === 'pending_approval') g.pending++
-  if (OPEN_STATUSES.includes(p.status)) g.open++
+  if (PO_OPEN_STATUSES.includes(p.status)) g.open++
   if (p.status === 'received') g.received++
   if (p.status === 'cancelled') g.cancelled++
   if (assessPoLate(p, today) === 'overdue') g.late++
+  if (p.status !== 'cancelled') {
+    g.linesDone += p.lines_done ?? 0
+    g.linesTotal += p.lines_total ?? 0
+  }
 }
 
 export function groupPosByLsx(
@@ -87,6 +121,20 @@ export function groupPosByLsx(
 ): { groups: PoGroup[]; standalone: PoGroup; emptyLsxs: LsxRef[] } {
   const byId = new Map<string, PoGroup>()
   const standalone = emptyGroup('@standalone', 'Ngoài LSX')
+  const lsxCodeById = new Map(lsxs.map((l) => [l.id, l.code]))
+
+  const groupFor = (key: string, code: string, p: Po, borrowed = false) => {
+    let g = byId.get(key)
+    if (!g) {
+      g = emptyGroup(key, code)
+      // Mã ĐƠN HÀNG chỉ lấy từ đơn thuộc CHÍNH lệnh này. Đơn mượn mang mã đơn
+      // hàng của lệnh khác — gán vào đây là dán nhầm tên khách lên thẻ.
+      if (!borrowed) g.order_code = p.order_code
+      g.currency = p.currency
+      byId.set(key, g)
+    }
+    return g
+  }
 
   for (const p of pos) {
     if (!p.lsx_code) {
@@ -97,14 +145,20 @@ export function groupPosByLsx(
     // Khoá theo id khi có; đơn cũ chỉ còn mã LSX thì khoá theo mã — không gộp
     // nhầm hai lệnh khác nhau, và cũng không tách một lệnh làm hai nhóm.
     const key = p.production_order_id ?? `code:${p.lsx_code}`
-    let g = byId.get(key)
-    if (!g) {
-      g = emptyGroup(key, p.lsx_code)
-      g.order_code = p.order_code
-      g.currency = p.currency
-      byId.set(key, g)
+    tally(groupFor(key, p.lsx_code, p), p, today)
+
+    /*
+     * ĐƠN GỘP NHIỀU LỆNH (0125) — hiện ở CẢ lệnh phụ.
+     *
+     * Đơn thật hay ghi "LSX 01+2+3/26-27": một đơn mua vật tư cho ba lệnh. Nếu
+     * chỉ xếp vào lệnh chính thì hai lệnh kia trông như chưa đặt gì — và khối
+     * cảnh báo cuối trang sẽ giục đặt lại thứ đã đặt rồi.
+     */
+    for (const ex of p.extra_lsx ?? []) {
+      if (ex.id === p.production_order_id) continue
+      const code = ex.code || lsxCodeById.get(ex.id) || '?'
+      tally(groupFor(ex.id, code, p, true), p, today, true)
     }
-    tally(g, p, today)
   }
 
   // Tên khách lấy từ danh sách LSX đang chạy — bản thân đơn không mang tên khách.

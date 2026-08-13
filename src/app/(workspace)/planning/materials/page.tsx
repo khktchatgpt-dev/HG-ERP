@@ -16,7 +16,7 @@ import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
 export default async function PlanningMaterialsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string; page?: string }>
+  searchParams: Promise<{ q?: string; group?: string; page?: string; review?: string }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -30,6 +30,7 @@ export default async function PlanningMaterialsPage({
     materialsService.list(user, {
       q,
       group_name: group,
+      needs_review: sp.review === '1' ? true : undefined,
       page,
       page_size: PAGE_SIZE,
       active_only: false,
@@ -47,7 +48,7 @@ export default async function PlanningMaterialsPage({
       scope="purchasing"
       counts={counts}
       page={page}
-      filters={{ q: sp.q ?? '', group: sp.group ?? '' }}
+      filters={{ q: sp.q ?? '', group: sp.group ?? '', review: sp.review === '1' }}
       taxonomy={tax}
     />
   )

@@ -115,6 +115,21 @@ export type Product = {
   bom_effective_date: string | null
   bom_prepared_by: string | null
   bom_approved_by: string | null
+  /**
+   * KIỂM SOÁT BẢN DÙNG (0140 — 13/08/2026). `bom_file_id` là file BOM ĐANG
+   * DÙNG (UI làm nổi bật, file BOM khác lùi về bản cũ); `bom_checked_*` là dấu
+   * Kỹ thuật tự xác nhận đã rà; `locked_*` khoá TOÀN BỘ hồ sơ, `unlocked_*`
+   * giữ vết lần mở gần nhất.
+   */
+  bom_checked_at: string | null
+  bom_checked_by: string | null
+  bom_file_id: string | null
+  locked_at: string | null
+  locked_by: string | null
+  lock_note: string | null
+  unlocked_at: string | null
+  unlocked_by: string | null
+  unlock_reason: string | null
   is_active: boolean
   created_at: string
   updated_at: string
@@ -122,12 +137,12 @@ export type Product = {
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, is_active, created_at'
 
 export type ProductLite = Pick<
   Product,
@@ -150,6 +165,8 @@ export type ProductLite = Pick<
   | 'width_mm'
   | 'height_mm'
   | 'image_file_id'
+  /** Hồ sơ đã khoá (0140) — thư viện gắn badge để ai cũng thấy bản chốt. */
+  | 'locked_at'
   | 'is_active'
   | 'created_at'
 >
@@ -191,6 +208,8 @@ export type ProductCounts = {
   bom_done: number
   /** SP chưa có ảnh đại diện — lỗ hổng hồ sơ thấy được ngay trên thẻ thư viện. */
   no_image: number
+  /** Hồ sơ ĐÃ KHOÁ (0140) — bản đã chốt, mọi phòng dùng được ngay. */
+  locked: number
 }
 
 /** Giá trị lọc đặc biệt = SP chưa gõ nhãn khách nào (nhóm "Mẫu chung"). */
@@ -257,6 +276,8 @@ export const productsRepo = {
     is_active?: boolean
     /** false = chỉ SP CHƯA có ảnh; true = chỉ SP đã có; bỏ trống = không lọc. */
     has_image?: boolean
+    /** true = chỉ hồ sơ ĐÃ KHOÁ (0140); bỏ trống = không lọc. */
+    locked?: boolean
     /** Mã loại SP 2 ký tự ('CH', 'TB'…) — xem PRODUCT_TYPES ở lib/product-code. */
     product_type?: string
     /**
@@ -280,6 +301,8 @@ export const productsRepo = {
     else if (filter.category) q = q.eq('category', filter.category)
     if (filter.has_image === false) q = q.is('image_file_id', null)
     else if (filter.has_image === true) q = q.not('image_file_id', 'is', null)
+    if (filter.locked === true) q = q.not('locked_at', 'is', null)
+    else if (filter.locked === false) q = q.is('locked_at', null)
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -349,9 +372,18 @@ export const productsRepo = {
    * `technical_product_counts()` (0069). bigint về dạng string nên Number().
    */
   async counts(): Promise<ProductCounts> {
-    const { data, error } = await db().rpc('technical_product_counts')
-    if (error) throw new Error(error.message)
-    const r = data?.[0]
+    // `locked` đếm riêng bằng head-count thay vì nới function 0069: có partial
+    // index `technical_products_locked_idx` nên chỉ quét đúng phần đã khoá,
+    // rẻ hơn cả việc sửa + chạy lại RPC cho mọi lần đếm.
+    const [rpc, locked] = await Promise.all([
+      db().rpc('technical_product_counts'),
+      db()
+        .from('technical_products')
+        .select('id', { count: 'exact', head: true })
+        .not('locked_at', 'is', null),
+    ])
+    if (rpc.error) throw new Error(rpc.error.message)
+    const r = rpc.data?.[0]
     return {
       total: Number(r?.total ?? 0),
       active: Number(r?.active ?? 0),
@@ -359,6 +391,7 @@ export const productsRepo = {
       bom_drawing: Number(r?.bom_drawing ?? 0),
       bom_done: Number(r?.bom_done ?? 0),
       no_image: Number(r?.no_image ?? 0),
+      locked: locked.count ?? 0,
     }
   },
 
@@ -599,6 +632,18 @@ export type ProductPart = {
   bend_waste_mm: number | null
   /** Profile tra bảng kg/m (TD-HG04 = 0.260) — thay cho phép tính hình học. */
   kg_per_m: number | null
+  /* ── Quy đổi sang ĐƠN VỊ MUA (0132) ────────────────────────────────────
+   * Định mức ra mét/kg/m³, còn đơn đặt hàng cần cây/tấm/mét khổ. Mỗi nhóm
+   * dùng vài trường: khung → bar_*, gỗ → wood_species, vải → roll/waste,
+   * polywood-kính → sheet_*, mút → m3_per_sheet. */
+  wood_species: string | null
+  bar_length_m: number | null
+  pcs_per_bar: number | null
+  roll_width_m: number | null
+  waste_pct: number | null
+  sheet_w_mm: number | null
+  sheet_l_mm: number | null
+  m3_per_sheet: number | null
   qty: number
   unit: string | null
   /** Màu sơn / màu vật tư — là quy cách, không phải giá. */
@@ -671,7 +716,7 @@ export type PackingOption = {
 // ra trống trơn dù nguồn có số. KHÔNG còn `unit_price`/`amount`: định mức trả lời
 // "cần bao nhiêu", giá thuộc bảng giá NCC bên Cung ứng (0097, quyết định D4).
 const PART_COLS =
-  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
+  'id, group_code, section_title, unit_basis, material_note, tenon, tenon_mm, cluster_id, part_no, part_name, material_code, material_kind, profile_shape, profile_code, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, kg_per_m, wood_species, bar_length_m, pcs_per_bar, roll_width_m, waste_pct, sheet_w_mm, sheet_l_mm, m3_per_sheet, qty, unit, color, weight_kg, total_length_m, paint_area_m2, paint_area_box_m2, volume_m3, blank_confirmed_at, blank_confirmed_by, note, sort_order'
 
 const CLUSTER_COLS =
   'id, name, qty_per_product, first_stage, final_stage, note, sort_order'
@@ -684,6 +729,27 @@ export const productProfileRepo = {
       .eq('product_id', productId)
       .order('sort_order')
     return (data ?? []) as ProductPart[]
+  },
+
+  /**
+   * Mã vật tư nào trên hồ sơ này CÓ THẬT trong danh mục kho → { mã: tên }.
+   *
+   * `material_code` cố ý để text tự do (0092 — danh mục kho là của phòng khác),
+   * nên phải tra ngược mới biết dòng nào cung ứng gộp mua được. Mã vắng khỏi
+   * map = chưa khớp, UI gắn cờ.
+   */
+  async knownMaterialNames(codes: string[]): Promise<Record<string, string>> {
+    const uniq = [...new Set(codes.filter(Boolean))]
+    if (uniq.length === 0) return {}
+    const { data } = await db()
+      .from('warehouse_materials')
+      .select('code, name')
+      .in('code', uniq)
+    const out: Record<string, string> = {}
+    for (const m of (data ?? []) as { code: string; name: string }[]) {
+      out[m.code] = m.name
+    }
+    return out
   },
 
   /** Đếm dòng định mức — cho nhãn số trên tab, không cần kéo cả bảng. */

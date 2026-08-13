@@ -21,6 +21,7 @@ import {
   componentMaterialNeeds,
 } from '@/modules/dept/production/components.service'
 import type { MaterialAllocation } from '@/lib/po-allocation'
+import { checkReceiptAgainstPo, describeOverReceipt } from '@/lib/po-receipt'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
@@ -285,6 +286,9 @@ export const stockService = {
       po_id?: string | null
       counterparty?: string | null
       note?: string | null
+      /** Xác nhận vẫn nhập dù vượt số còn thiếu của đơn (kèm lý do). */
+      allow_over?: boolean
+      over_reason?: string | null
       lines: {
         material_id: string
         qty: number
@@ -306,27 +310,41 @@ export const stockService = {
     if (input.po_id && input.lines.some((l) => !l.po_line_id)) {
       throw BadRequest('Nhập theo đơn đặt: mỗi dòng phải gắn dòng PO tương ứng')
     }
+    // Mua ngoài mà vẫn kèm po_line_id: view đối chiếu sẽ ghi có cho một PO nào
+    // đó, nhưng không ai tính lại trạng thái của PO ấy — sổ lệch trong im lặng.
+    // Chặn thẳng thay vì âm thầm bỏ qua.
+    if (!input.po_id && input.lines.some((l) => l.po_line_id)) {
+      throw BadRequest(
+        'Phiếu mua ngoài không được gắn dòng đơn đặt — chọn PO ở ô "Nguồn nhập"',
+      )
+    }
     // Guard trạng thái PO (vòng đời theo thực tế): UI chỉ liệt kê PO mở, nhưng
     // API phải tự chặn — PO chưa duyệt / đã huỷ / đã về đủ không nhận hàng được.
+    let po: Awaited<ReturnType<typeof supplyRepo.poStatus>> = null
     if (input.po_id) {
-      const po = await supplyRepo.poStatus(input.po_id)
+      po = await supplyRepo.poStatus(input.po_id)
       if (!po) throw NotFound('Đơn đặt (PO) không tồn tại')
       if (!(RECEIVABLE as readonly string[]).includes(po.status)) {
         throw BadRequest(
           `PO ${po.code} không ở trạng thái nhận hàng được (chưa duyệt, đã huỷ hoặc đã về đủ)`,
         )
       }
+      await assertReceiptLinesMatchPo(input.po_id, input.lines, input.allow_over ?? false)
     }
 
     const [code, warehouseId] = await Promise.all([
       docsRepo.nextCode('PNK'),
       warehousesRepo.mainId(),
     ])
+    // Ghi vết khi cố ý nhận vượt số còn thiếu — để hậu kiểm đối chiếu với NCC.
+    const docNote = input.allow_over
+      ? `${input.note ? `${input.note} · ` : ''}[Nhận vượt] ${input.over_reason ?? ''}`.trim()
+      : (input.note ?? null)
     const doc = await docsRepo.insert({
       code,
       kind: 'receipt',
       counterparty: input.counterparty ?? null,
-      note: input.note ?? null,
+      note: docNote,
       created_by: user.id,
     })
     await insertMovements(
@@ -347,22 +365,26 @@ export const stockService = {
     )
 
     let poStatus: string | null = null
-    let poCode: string | null = null
     if (input.po_id) {
       poStatus = await supplyRepo.refreshStatusFromReceipts(input.po_id)
-      poCode = await supplyRepo.findPoCode(input.po_id)
     }
 
+    // Người NHẬN tin hàng về: admin/quản lý + NGƯỜI PHỤ TRÁCH đơn (0128). Trước
+    // đây chỉ bắn cho admin/manager — người đang ngồi đợi đúng lô hàng này lại
+    // là người duy nhất không được báo.
     const managers = (await usersRepo.list()).filter(
       (u) => (u.role === 'admin' || u.role === 'manager') && u.id !== user.id,
     )
+    const notifyIds = new Set(managers.map((m) => m.id))
+    const ownerId = po?.assigned_to ?? po?.created_by ?? null
+    if (ownerId && ownerId !== user.id) notifyIds.add(ownerId)
     await emit({
       name: 'warehouse.receipt.created',
       doc_id: doc.id,
       code: doc.code,
-      po_code: poCode,
+      po_code: po?.code ?? null,
       created_by: user.id,
-      notify_ids: managers.map((m) => m.id),
+      notify_ids: [...notifyIds],
     })
     return { id: doc.id, code: doc.code, po_status: poStatus }
   },
@@ -664,6 +686,40 @@ export const stockService = {
     })
     return { id: doc.id, code: doc.code, po_status: poStatus }
   },
+}
+
+/**
+ * Đối chiếu dòng phiếu nhập với dòng PO — logic thuần + test ở
+ * `@/lib/po-receipt`, ở đây chỉ dịch kết quả ra lỗi HTTP.
+ *
+ * Vượt số còn thiếu là 409 chứ không phải 400: NCC giao dư vài cây là chuyện có
+ * thật, người nhận xác nhận kèm lý do thì vẫn ghi được — cùng lối với
+ * RESERVED_CONFLICT của phiếu xuất, không bắt người dùng đi cửa sau.
+ */
+async function assertReceiptLinesMatchPo(
+  poId: string,
+  lines: {
+    material_id: string
+    qty: number
+    qty_rejected?: number
+    po_line_id?: string | null
+  }[],
+  allowOver: boolean,
+): Promise<void> {
+  const poLines = await supplyRepo.lineStatus(poId)
+  const check = checkReceiptAgainstPo(lines, poLines)
+  if (!check.ok) {
+    throw BadRequest(
+      check.reason === 'unknown_line'
+        ? 'Có dòng không thuộc đơn đặt này — chọn lại nguồn nhập rồi lấy lại dòng hàng'
+        : `Dòng nhập không khớp vật tư của dòng PO ("${check.po_line.material_name}")`,
+    )
+  }
+  if (allowOver || check.over.length === 0) return
+  throw Conflict(
+    `Nhận vượt số còn thiếu của đơn — ${describeOverReceipt(check.over)}`,
+    'OVER_RECEIPT',
+  )
 }
 
 /**

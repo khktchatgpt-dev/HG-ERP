@@ -28,6 +28,8 @@ export default async function TechnicalProductsPage({
   const status = str(spRaw.status) || 'all'
   // 'missing' = chưa có ảnh, 'has' = đã có. Giá trị lạ coi như không lọc.
   const image = str(spRaw.image) || 'all'
+  // Hồ sơ đã khoá (0140) — chip lọc ở thanh Trạng thái.
+  const locked = str(spRaw.locked) || 'all'
   // Mã loại SP 2 ký tự; chỉ nhận mã có thật trong PRODUCT_TYPES để URL bịa ra
   // một mã lạ thì trả về danh sách đầy đủ chứ không phải 0 dòng khó hiểu.
   const typeRaw = str(spRaw.type).toUpperCase()
@@ -44,6 +46,7 @@ export default async function TechnicalProductsPage({
     bom_status: bom === 'all' ? undefined : (bom as BomStatus),
     is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
     has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
+    locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
     product_type: type === 'all' ? undefined : type,
     category: category === 'all' ? undefined : category,
     page,
@@ -97,6 +100,7 @@ export default async function TechnicalProductsPage({
         width_mm: p.width_mm,
         height_mm: p.height_mm,
         image_file_id: p.image_file_id,
+        locked_at: p.locked_at,
         is_active: p.is_active,
         has_drawing: docFlags[p.id]?.drawing ?? false,
         has_bom: docFlags[p.id]?.bom ?? false,
@@ -108,7 +112,7 @@ export default async function TechnicalProductsPage({
       page={page}
       pageSize={PAGE_SIZE}
       counts={stats}
-      filters={{ q: q ?? '', customer, bom, status, image, type, category }}
+      filters={{ q: q ?? '', customer, bom, status, image, locked, type, category }}
       customerNames={customerNames}
       categories={categories}
       imageUrls={imageUrls}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from './po-template'
-import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fields'
+import {
+  PO_FIELDS,
+  PO_PRINT_ORDER,
+  PO_PRINT_QTY_LABEL,
+  PO_SHARED_FIELD_MEANING,
+  poField,
+} from './po-fields'
 
 /**
  * Khoá BỘ CỘT PHIẾU IN đúng như bản đang gửi nhà cung cấp.
@@ -23,21 +29,19 @@ import { PO_FIELDS, PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from './po-fie
  * danh mục thật: nhóm bao bì có 24 đơn vị, chỉ 259/942 mã là Thùng.
  */
 /**
- * KHUNG CHUẨN 08/2026: mọi mẫu mở đầu `STT · LSX · Mã sản phẩm · Tên SP/vật tư`
- * (đối chiếu đơn ĐH chuẩn — đơn sơn 01/26 HG/MĐ của phòng Cung ứng). "Mã sản
- * phẩm" là mã vật tư danh mục, luôn có — khác cột "Mã SP" gõ tay đã bỏ ở 0106.
- * Mẫu đơn giản thêm `Ngày đặt hàng · Thời gian giao hàng` đúng ảnh chuẩn.
+ * KHUNG CHUẨN 08/2026, chỉnh 12/08/2026 theo form mẫu mới: mọi mẫu mở đầu
+ * `STT · Tên SP/vật tư`. LSX + Đơn hàng nằm ở KHUNG GÓC PHẢI đầu phiếu chứ
+ * không phải cột bảng kê; cột "Mã sản phẩm" (mã vật tư danh mục) bỏ khỏi mọi
+ * mẫu. Mẫu đơn giản thêm `Ngày đặt hàng · Thời gian giao hàng` đúng ảnh chuẩn.
  */
 const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   accessory: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Quy cách',
     'SL đơn hàng',
-    'Tồn kho',
+    // "Tồn kho" bỏ 12/08/2026 (duyệt cột từng mẫu) — số nội bộ, không in cho NCC.
     'ĐVT',
     'SL đặt',
     'Đơn giá (VND)',
@@ -46,15 +50,13 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   aluminium: [
     'STT',
-    'LSX',
-    // Không có "Mã sản phẩm" (08/08/2026) — phiếu nhôm nhận diện bằng Mã khuôn,
-    // hai cột mã cạnh nhau chỉ làm NCC rối.
     'Tên sản phẩm / vật tư',
     'Mã khuôn',
     'kg/m',
     'Dài cây (m)',
     'ĐVT',
-    'Số cây',
+    // "Số cây" → "Số lượng" (12/08/2026) — nhãn đồng bộ, đơn vị cây nói ở ĐVT.
+    'Số lượng',
     // "Cây dư" đã bỏ theo yêu cầu phòng Cung ứng — không nhập được thì in ra
     // cũng chỉ là một cột rỗng trên phiếu gửi NCC.
     'Tổng kg',
@@ -65,8 +67,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   metal_kg: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Vật liệu',
     'Kích thước',
@@ -81,15 +81,17 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   carton: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Cách mở',
     'Pcs/thùng',
     'ĐVT',
-    'Số thùng',
+    // "Số thùng" → "Số lượng" (12/08/2026) — ĐVT thật của dòng nói ở cột ĐVT.
+    'Số lượng',
     'Lọt lòng D×R×C (mm)',
     'm²/thùng',
+    // Đơn thật in cả giá/m² + bản in trước đơn giá/thùng (0134 — Hồng Đào CL).
+    'Đơn giá/m²',
+    'Bản in + công',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
@@ -98,8 +100,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   // mây theo form Vipora (Định mức đứng sau tiền), sơn theo form Green Coatings.
   rattan: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
@@ -111,22 +111,17 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   paint: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Mã màu NCC',
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Ngày đặt hàng',
-    'Thời gian giao hàng',
+    // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 — đã có ở đầu phiếu.
     'Ghi chú',
   ],
   chemical: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
@@ -137,22 +132,50 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   foam: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
+    // "D×R×Dày" + "Tổng m³" bỏ khỏi phiếu in 12/08/2026 — vẫn là ô trên form
+    // để tính m³ và gợi ý giá, không in cho NCC.
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
     'Ghi chú',
   ],
+  // 3 mẫu 12/08/2026 — bàn giao A Nhân (kính Mai Trang, gỗ Minh Đạt, gia công
+  // New ISO/Tiến Phước).
+  glass: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'Loại kính',
+    'Quy cách',
+    'ĐVT',
+    'Số lượng',
+    'm²/tấm',
+    // "Tổng m²" bỏ khỏi phiếu in 12/08/2026 — vẫn tự tính trên form.
+    'Đơn giá (VND)',
+    'Thành tiền (VND)',
+    'Ghi chú',
+  ],
+  wood: [
+    'STT',
+    'Tên sản phẩm / vật tư',
+    'ĐVT',
+    'Số lượng',
+    'm³ / SP',
+    'Tổng m³',
+    'Đơn giá (VND/m³)',
+    'Thành tiền (VND)',
+    'Loại gỗ',
+    'Màu gỗ',
+    // "KH giao hàng" theo dòng bỏ 12/08/2026 — hẹn giao dùng chung đầu phiếu.
+    'Ghi chú',
+  ],
+  // Mẫu 'outsourcing' đã gỡ 12/08/2026 — gia công là nghiệp vụ ngoài tầm vật tư.
   // MRO (10/08/2026) — chưa có đơn thật để chép; bộ cột dựng theo nhu cầu đã rà:
   // NCC giao đúng nhờ MODEL, phòng đối chiếu về sau nhờ "dùng cho máy" + bảo hành.
   mro: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Model / Mã hãng',
     'Quy cách',
@@ -166,16 +189,13 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   ],
   simple: [
     'STT',
-    'LSX',
-    'Mã sản phẩm',
     'Tên sản phẩm / vật tư',
     'Quy cách',
     'ĐVT',
     'Số lượng',
     'Đơn giá (VND)',
     'Thành tiền (VND)',
-    'Ngày đặt hàng',
-    'Thời gian giao hàng',
+    // "Ngày đặt · Thời gian giao" bỏ 12/08/2026 — đã có ở đầu phiếu.
     'Ghi chú',
   ],
 }
@@ -184,8 +204,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
 function nhanCot(t: PoTemplate): string[] {
   const CO_DINH: Record<string, string> = {
     '@stt': 'STT',
-    '@lsx': 'LSX',
-    '@code': 'Mã sản phẩm',
     '@name': 'Tên sản phẩm / vật tư',
     '@unit': 'ĐVT',
     '@price': 'Đơn giá (VND)',
@@ -249,5 +267,39 @@ describe('PO_PRINT_ORDER — bộ cột phiếu in', () => {
     const bb = PO_PRINT_ORDER.carton
     expect(bb.indexOf('@qty')).toBeGreaterThan(bb.indexOf('pcs'))
     expect(bb.indexOf('@qty')).toBeLessThan(bb.indexOf('inner'))
+  })
+})
+
+describe('PO_SHARED_FIELD_MEANING — bảng tra cột mượn khớp khai báo thật', () => {
+  /*
+   * Bảng tra là tài liệu SỐNG (đợt 1 cải thiện vật tư 13/08/2026): mọi ô nhập
+   * ghi vào một cột mượn phải có mặt trong bảng với đúng nhãn, và ngược lại
+   * bảng không được ghi nghĩa cho mẫu không dùng cột đó. Hai chiều cùng khoá
+   * thì bảng không bao giờ mục.
+   */
+  const SHARED = Object.keys(PO_SHARED_FIELD_MEANING)
+
+  it('mọi ô nhập ghi vào cột mượn đều có trong bảng, đúng nhãn', () => {
+    for (const t of PO_TEMPLATES) {
+      for (const f of PO_FIELDS[t]) {
+        if (!f.field || !SHARED.includes(f.field)) continue
+        expect(
+          PO_SHARED_FIELD_MEANING[f.field][t],
+          `${t}/${f.key} ghi vào cột mượn "${f.field}" nhưng bảng tra chưa có nghĩa`,
+        ).toBe(f.label)
+      }
+    }
+  })
+
+  it('bảng không ghi nghĩa cho mẫu không dùng cột đó', () => {
+    for (const col of SHARED) {
+      for (const [t, label] of Object.entries(PO_SHARED_FIELD_MEANING[col])) {
+        const f = PO_FIELDS[t as PoTemplate].find((x) => x.field === col)
+        expect(
+          f?.label,
+          `bảng tra ghi ${col}@${t} = "${label}" nhưng mẫu không có ô nhập nào ghi vào cột này`,
+        ).toBe(label)
+      }
+    }
   })
 })

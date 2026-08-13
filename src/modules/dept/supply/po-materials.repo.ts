@@ -1,5 +1,7 @@
 import { db } from '@/server/db'
 import { normalizeSearch, searchTokens } from '@/lib/search-text'
+import { namesAlike, sureKey, MIN_KEY_LEN } from '@/lib/material-key'
+import type { PoLastLine, PoMaterial } from '@/lib/po-material.types'
 
 /**
  * Vật tư như FORM SOẠN ĐƠN cần — TÌM Ở SERVER, không nạp sẵn cả kho.
@@ -9,62 +11,15 @@ import { normalizeSearch, searchTokens } from '@/lib/search-text'
  * những trường quyết định cách dòng được nhập:
  *   · kg_per_m + default_bar_length_m → tự tính tổng kg cho mẫu nhôm
  *   · spec, vat_rate, last_purchase_price → tự điền lên dòng
+ *
+ * Kiểu `PoMaterial`/`PoLastLine` khai MỘT nơi ở `@/lib/po-material.types` (đợt 1
+ * cải thiện vật tư 13/08/2026) — client MaterialPicker đọc cùng định nghĩa,
+ * hết bẫy "thêm trường phải sửa hai chỗ". Re-export để chỗ gọi cũ không đổi.
  */
-/**
- * Ô MÔ TẢ của lần đặt GẦN NHẤT — điền sẵn lên dòng mới (08/08/2026, "hạn chế
- * nhân viên phải gõ"): Vật liệu/Màu/Kích thước/Cách mở… của một vật tư gần như
- * không đổi giữa các đơn, gõ lại mỗi lần chỉ tổ sai chính tả so với phiếu cũ.
- */
-export type PoLastLine = {
-  material_grade: string | null
-  dimension_text: string | null
-  finish: string | null
-  pcs_per_ctn: number | null
-  open_style: string | null
-  dm_per_sp: number | null
-}
-
-export type PoMaterial = {
-  id: string
-  code: string
-  name: string
-  unit: string
-  group_name: string | null
-  /** Nhóm phụ (0111) — hiện trên dòng kết quả để phân biệt hàng cùng tên. */
-  sub_group: string | null
-  spec: string | null
-  kg_per_m: number | null
-  kg_per_unit: number | null
-  default_bar_length_m: number | null
-  /**
-   * GIÁ ĐƠN VỊ KÉP khai ở danh mục (0053): `price_unit` = đơn vị của đơn giá
-   * ('kg'…), `unit2_factor` = bao nhiêu đơn-vị-giá trong MỘT ĐVT mua (23,94
-   * kg/tấm). Kho khai một lần, đơn đặt dùng lại — trước 10/08/2026 form không
-   * đọc hai trường này nên người mua vẫn phải gõ lại kg/đơn-vị.
-   */
-  price_unit: string | null
-  unit2_factor: number | null
-  vat_rate: number | null
-  default_supplier_id: string | null
-  last_purchase_price: number | null
-  /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT (vd 1 bì = 500 con). */
-  pack_size: number | null
-  pack_unit: string | null
-  /** Vật liệu/màu khai ở danh mục (0124) — nguồn dự phòng khi chưa có lần đặt nào. */
-  material_grade: string | null
-  /**
-   * Tồn hiện tại. NULL = vật tư CHƯA CÓ SỔ KHO (chưa từng nhập/xuất/kiểm kê) —
-   * khác hẳn "tồn 0 thật". Trước go-live tồn đầu kỳ, gần như cả danh mục là
-   * null; hiện "tồn 0" cho chúng là dạy người mua bỏ qua cột tồn vĩnh viễn
-   * (bất cập #2, 09/08/2026).
-   */
-  on_hand: number | null
-  /** null = vật tư chưa từng lên đơn nào. */
-  last_line: PoLastLine | null
-}
+export type { PoLastLine, PoMaterial } from '@/lib/po-material.types'
 
 const COLS =
-  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, price_unit, unit2_factor, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade'
+  'id, code, name, unit, group_name, sub_group, spec, kg_per_m, kg_per_unit, default_bar_length_m, price_unit, unit2_factor, vat_rate, default_supplier_id, last_purchase_price, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish'
 
 function toMaterial(
   r: Record<string, unknown>,
@@ -93,6 +48,10 @@ function toMaterial(
     pack_size: r.pack_size == null ? null : Number(r.pack_size),
     pack_unit: (r.pack_unit as string | null) ?? null,
     material_grade: (r.material_grade as string | null) ?? null,
+    // Thông số theo nhóm (0137) — chọn vật tư là dòng đơn đủ cách mở/pcs/bề mặt.
+    open_style: (r.open_style as string | null) ?? null,
+    pcs_per_ctn: r.pcs_per_ctn == null ? null : Number(r.pcs_per_ctn),
+    finish: (r.finish as string | null) ?? null,
     on_hand: onHand,
     last_line: lastLine,
   }
@@ -125,7 +84,7 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   const { data } = await db()
     .from('supply_purchase_order_lines')
     .select(
-      'material_id, material_grade, dimension_text, finish, pcs_per_ctn, open_style, dm_per_sp, supply_purchase_orders!inner(created_at)',
+      'material_id, material_grade, dimension_text, finish, pcs_per_ctn, open_style, dm_per_sp, area_m2, inner_l_mm, inner_w_mm, inner_h_mm, price_per_m2, print_fee, carton_basis, supply_purchase_orders!inner(created_at)',
     )
     .in('material_id', ids)
     .limit(400)
@@ -137,6 +96,13 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
     pcs_per_ctn: unknown
     open_style: string | null
     dm_per_sp: unknown
+    area_m2: unknown
+    inner_l_mm: unknown
+    inner_w_mm: unknown
+    inner_h_mm: unknown
+    price_per_m2: unknown
+    print_fee: unknown
+    carton_basis: string | null
     supply_purchase_orders: { created_at: string }
   }
   const rows = ((data ?? []) as unknown as Row[]).sort((a, b) =>
@@ -147,13 +113,22 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   const m = new Map<string, PoLastLine>()
   for (const r of rows) {
     if (m.has(r.material_id)) continue
+    // PostgREST trả numeric dạng CHUỖI — ép về number như numericLineFields.
+    const num = (v: unknown) => (v == null ? null : Number(v))
     m.set(r.material_id, {
       material_grade: r.material_grade ?? null,
       dimension_text: r.dimension_text ?? null,
       finish: r.finish ?? null,
-      pcs_per_ctn: r.pcs_per_ctn == null ? null : Number(r.pcs_per_ctn),
+      pcs_per_ctn: num(r.pcs_per_ctn),
       open_style: r.open_style ?? null,
-      dm_per_sp: r.dm_per_sp == null ? null : Number(r.dm_per_sp),
+      dm_per_sp: num(r.dm_per_sp),
+      area_m2: num(r.area_m2),
+      inner_l_mm: num(r.inner_l_mm),
+      inner_w_mm: num(r.inner_w_mm),
+      inner_h_mm: num(r.inner_h_mm),
+      price_per_m2: num(r.price_per_m2),
+      print_fee: num(r.print_fee),
+      carton_basis: r.carton_basis ?? null,
     })
   }
   return m
@@ -231,6 +206,91 @@ export const poMaterialsRepo = {
     return mats
       .sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name, 'vi'))
       .slice(0, opts.limit)
+  },
+
+  /**
+   * KHỚP MÃ CHO VÙNG DÁN TỪ EXCEL (0136) — mỗi dòng sổ (tên, mã nếu có) tìm về
+   * đúng một vật tư danh mục, hoặc danh sách ứng viên để người soạn chọn.
+   *
+   * Ba bậc tin cậy, cùng bộ so với dò-trùng khi khai vật tư (material-key):
+   *   'code'  — sổ có mã và mã tồn tại: khớp thẳng, khỏi so tên.
+   *   'sure'  — sureKey trùng (chỉ lệch dấu câu/khoảng trắng/viết tắt đã bung):
+   *             nghĩa không đổi, tự chọn được.
+   *   'fuzzy' — namesAlike (Buri/Bori, đen/đem…): ĐỀ CỬ chứ không tự chọn —
+   *             UI bắt người soạn xác nhận, sai hàng là sai tiền.
+   * Không bậc nào trúng → match null + ứng viên top đầu để chọn tay.
+   */
+  async matchMany(items: { name: string; code?: string | null }[]): Promise<
+    {
+      match: PoMaterial | null
+      candidates: PoMaterial[]
+      confidence: 'code' | 'sure' | 'fuzzy' | null
+    }[]
+  > {
+    // Mã khớp thẳng — một truy vấn cho cả bộ.
+    const codes = [
+      ...new Set(items.map((i) => i.code?.trim()).filter((c): c is string => !!c)),
+    ]
+    const byCode = new Map<string, PoMaterial>()
+    if (codes.length > 0) {
+      const { data } = await db()
+        .from('warehouse_materials')
+        .select(COLS)
+        .in('code', codes.slice(0, 100))
+      const rows = (data as Record<string, unknown>[] | null) ?? []
+      const rowIds = rows.map((r) => r.id as string)
+      const [onHand, lastLines] = await Promise.all([
+        onHandMany(rowIds),
+        lastLinesMany(rowIds),
+      ])
+      for (const r of rows) {
+        const m = toMaterial(
+          r,
+          onHand.get(r.id as string) ?? null,
+          lastLines.get(r.id as string) ?? null,
+        )
+        byCode.set(m.code, m)
+      }
+    }
+
+    // Tìm theo tên — đi đúng đường search của ô chọn vật tư (không dấu + xếp
+    // hạng mã-đang-dùng). Chạy theo lô 10 để không dội 100 truy vấn cùng lúc.
+    const out: {
+      match: PoMaterial | null
+      candidates: PoMaterial[]
+      confidence: 'code' | 'sure' | 'fuzzy' | null
+    }[] = new Array(items.length)
+    const CHUNK = 10
+    for (let start = 0; start < items.length; start += CHUNK) {
+      const chunk = items.slice(start, start + CHUNK)
+      await Promise.all(
+        chunk.map(async (item, j) => {
+          const i = start + j
+          const coded = item.code?.trim() ? byCode.get(item.code.trim()) : undefined
+          if (coded) {
+            out[i] = { match: coded, candidates: [], confidence: 'code' }
+            return
+          }
+          const candidates = await this.search({ q: item.name, limit: 4 })
+          const key = sureKey(item.name)
+          const sure =
+            key.length >= MIN_KEY_LEN
+              ? candidates.find((c) => sureKey(c.name) === key)
+              : undefined
+          if (sure) {
+            out[i] = { match: sure, candidates, confidence: 'sure' }
+            return
+          }
+          const fuzzy = candidates.find((c) => namesAlike(item.name, c.name))
+          out[i] = {
+            match: fuzzy ?? null,
+            candidates,
+            confidence: fuzzy ? 'fuzzy' : null,
+          }
+        }),
+      )
+    }
+    return out
   },
 
   /** Nạp lại đúng các vật tư đang nằm trên dòng (mở form sửa đơn). */

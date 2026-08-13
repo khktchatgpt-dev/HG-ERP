@@ -109,7 +109,12 @@ export type DomainEvent =
       code: string
       decision: 'approved' | 'rejected'
       decided_by: string
-      created_by: string | null
+      /**
+       * NGƯỜI PHỤ TRÁCH đơn lúc ra quyết định (`assigned_to`, đơn cũ rơi về
+       * `created_by`) — người phải biết kết quả. Trước đây bắn theo `created_by`
+       * nên đơn đã bàn giao (0128) thì người đang cầm đơn không hề hay biết.
+       */
+      owner_id: string | null
       reason?: string
     }
   // Rút đơn CHỜ DUYỆT về nháp để sửa (0128 — 6.2b): báo người duyệt khỏi
@@ -129,6 +134,20 @@ export type DomainEvent =
       from_user_id: string | null
       to_user_id: string
       reassigned_by: string
+    }
+  // (po.lines_saved đã GỠ 13/08/2026 — user chốt: mô tả về danh mục phải qua
+  //  hộp XÁC NHẬN sau khi lưu đơn, không tự ghi ngầm. Xem posService.
+  //  catalogSuggestions + /api/dept/warehouse/materials/enrich.)
+  /**
+   * Đơn GỬI NCC (approved → ordered): giá đã chốt thật — handler cập nhật
+   * `last_purchase_price` (chỉ đơn VND, xem po-catalog-backfill).
+   */
+  | {
+      name: 'po.ordered'
+      po_id: string
+      code: string
+      currency: string
+      lines: { material_id: string | null; unit_price: number | null }[]
     }
 
   // ── Lệnh sản xuất (FR-SAL-06 — Sales phát, GĐ duyệt) ─────────────────

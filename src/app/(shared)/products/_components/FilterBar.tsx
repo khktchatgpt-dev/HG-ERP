@@ -9,6 +9,7 @@ import {
   ImageOff,
   LayoutGrid,
   List,
+  Lock,
   PencilRuler,
   Search,
   X,
@@ -312,6 +313,17 @@ export function FilterBar({
           icon={CircleSlash}
           iconClass="text-zinc-400"
           onClick={() => onToggle('status', 'inactive')}
+        />
+
+        {/* 0140 — hồ sơ ĐÃ KHOÁ: bản đã chốt, mọi phòng dùng được ngay. Đứng
+            cạnh "Đang dùng/Ngừng" vì cùng nhóm trạng thái vòng đời hồ sơ. */}
+        <FilterChip
+          active={filters.locked === 'yes'}
+          label="Đã khoá"
+          count={counts.locked}
+          icon={Lock}
+          iconClass="text-emerald-600"
+          onClick={() => onToggle('locked', 'yes')}
         />
 
         <span className="bg-border mx-1.5 h-4 w-px" aria-hidden />

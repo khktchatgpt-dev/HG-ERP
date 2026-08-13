@@ -116,7 +116,10 @@ export const usersService = {
     if (!target) throw NotFound('User not found')
     if (target.deleted_at) throw BadRequest('Cannot reset password on a deleted user')
     const password_hash = await hashPassword(newPassword)
-    await usersRepo.setPasswordHash(id, password_hash)
+    // Mật khẩu do admin đặt hộ → người đó phải tự đổi ở lần đăng nhập sau (cờ
+    // này sẽ được proxy chặn ở lô 3). Đồng thời `password_changed_at` đổi nên
+    // mọi phiên đang mở của họ chết ngay — đúng ý khi phải reset vì lộ mật khẩu.
+    await usersRepo.setPasswordHash(id, password_hash, { mustChange: true })
     await userAuditRepo.insert({
       target_user_id: id,
       actor_id: actor.id,

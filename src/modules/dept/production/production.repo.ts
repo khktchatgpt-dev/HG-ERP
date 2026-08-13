@@ -73,7 +73,10 @@ export type OrderTracking = {
   jobs_total: number
   jobs_done: number
   lines_bom_pending: number
+  /** PO ĐÃ DUYỆT chưa về đủ — vật tư thật sự đang trên đường (0133). */
   pos_open: number
+  /** PO còn NHÁP / CHỜ GĐ DUYỆT — chưa gửi NCC, chưa ai bắt đầu làm gì (0133). */
+  pos_unsent: number
   // Lớp thương mại (v_order_tracking mở rộng, migration 0071) — GĐ nhìn theo tiền.
   deposit_percent: number | null
   payment_method: string | null
@@ -315,6 +318,11 @@ export const productionRepo = {
       ...(r as unknown as OrderTracking),
       jobs_total: Number(r.jobs_total ?? 0),
       jobs_done: Number(r.jobs_done ?? 0),
+      lines_bom_pending: Number(r.lines_bom_pending ?? 0),
+      pos_open: Number(r.pos_open ?? 0),
+      // 0133 — cột mới; đọc phòng thủ để bản chưa apply migration vẫn về 0 thay
+      // vì NaN (NaN > 0 là false nên chỉ mất cảnh báo, không vẽ số bậy).
+      pos_unsent: Number(r.pos_unsent ?? 0),
       lsx_priority: r.lsx_priority == null ? null : Number(r.lsx_priority),
       order_value: Number(r.order_value ?? 0),
       line_count: Number(r.line_count ?? 0),

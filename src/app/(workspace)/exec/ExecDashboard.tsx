@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Badge } from '@/components/Badge'
+import { poStatusLabel } from '@/lib/po-status'
 import type { ExecDashboard as Data } from '@/modules/core/exec/exec.service'
 
 /**
@@ -12,17 +13,6 @@ import type { ExecDashboard as Data } from '@/modules/core/exec/exec.service'
  */
 
 const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN')
-
-const PO_STATUS_LABEL: Record<string, string> = {
-  draft: 'Nháp',
-  pending_approval: 'Chờ duyệt',
-  approved: 'Đã duyệt',
-  ordered: 'Đã gửi NCC',
-  confirmed: 'NCC xác nhận',
-  in_transit: 'Đang giao',
-  partial: 'Về một phần',
-  received: 'Về đủ',
-}
 
 /** Tiền theo nhiều tiền tệ — không cộng chung USD với VND. */
 function Money({ rows }: { rows: { currency: string; value: number }[] }) {
@@ -309,7 +299,7 @@ export function ExecDashboard({ data }: { data: Data }) {
                 {supply.by_status.map((s) => (
                   <li key={s.status}>
                     <Badge tone={s.status === 'pending_approval' ? 'amber' : 'gray'}>
-                      {PO_STATUS_LABEL[s.status] ?? s.status}: {s.count}
+                      {poStatusLabel(s.status)}: {s.count}
                     </Badge>
                   </li>
                 ))}

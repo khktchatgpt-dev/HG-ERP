@@ -8,6 +8,7 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
+import { poStatusLabel, poStatusTone } from '@/lib/po-status'
 import type { ExecPurchasing, ExecPoRow } from '@/modules/core/exec/exec.service'
 
 /**
@@ -18,27 +19,6 @@ import type { ExecPurchasing, ExecPoRow } from '@/modules/core/exec/exec.service
 
 const fmt = (n: number) => Math.round(n).toLocaleString('vi-VN')
 const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: 'Nháp',
-  pending_approval: 'Chờ duyệt',
-  approved: 'Đã duyệt',
-  ordered: 'Đã gửi NCC',
-  confirmed: 'NCC xác nhận',
-  in_transit: 'Đang giao',
-  partial: 'Về một phần',
-  received: 'Về đủ',
-}
-const STATUS_TONE: Record<string, 'gray' | 'amber' | 'blue' | 'green'> = {
-  draft: 'gray',
-  pending_approval: 'amber',
-  approved: 'blue',
-  ordered: 'blue',
-  confirmed: 'blue',
-  in_transit: 'amber',
-  partial: 'amber',
-  received: 'green',
-}
 
 type Filter = 'all' | 'late' | 'stuck' | 'pending_approval'
 
@@ -108,11 +88,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       header: 'Trạng thái',
       width: '130px',
       sortValue: (r) => r.status,
-      cell: (r) => (
-        <Badge tone={STATUS_TONE[r.status] ?? 'gray'}>
-          {STATUS_LABEL[r.status] ?? r.status}
-        </Badge>
-      ),
+      cell: (r) => <Badge tone={poStatusTone(r.status)}>{poStatusLabel(r.status)}</Badge>,
     },
     {
       key: 'expected',

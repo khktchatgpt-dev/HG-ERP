@@ -95,7 +95,24 @@ beforeEach(() => {
   vi.mocked(supplyRepo.poStatus).mockResolvedValue({
     code: 'PO-2026-0001',
     status: 'ordered',
+    assigned_to: 'u-mua',
+    created_by: 'u-mua',
   })
+  // Dòng PO để đối chiếu — mặc định còn thiếu rộng rãi để test cũ không
+  // vướng guard nhận vượt; test guard tự siết lại.
+  vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+    {
+      id: 'pl1',
+      po_id: 'po1',
+      material_id: 'm1',
+      qty_ordered: 1000,
+      qty_received: 0,
+      qty_missing: 1000,
+      material_code: 'VT-001',
+      material_name: 'Nhôm 25x50',
+      material_unit: 'cây',
+    },
+  ])
   vi.mocked(productionRepo.findById).mockResolvedValue({
     id: 'lsx1',
     code: 'LSX-2026-01',
@@ -169,7 +186,12 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
   it.each(['pending_approval', 'cancelled', 'received'])(
     'PO ở trạng thái %s → chặn nhập (vòng đời theo thực tế)',
     async (status) => {
-      vi.mocked(supplyRepo.poStatus).mockResolvedValue({ code: 'PO-X', status })
+      vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+        code: 'PO-X',
+        status,
+        assigned_to: null,
+        created_by: null,
+      })
       await expect(
         stockService.createReceiptDoc(admin, {
           po_id: 'po1',
@@ -179,6 +201,82 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       expect(insertMovements).not.toHaveBeenCalled()
     },
   )
+
+  // ── Đối chiếu dòng phiếu với dòng PO ─────────────────────────────────────
+  // Logic thuần có test riêng ở @/lib/po-receipt; ở đây chỉ chốt là service
+  // gọi nó và dịch ra đúng mã lỗi HTTP.
+
+  it('gắn dòng của PO KHÁC → chặn 400 (trước đây lọt, ghi có cho PO kia)', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl-cua-po-khac' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('nhập vật tư khác vào dòng PO → chặn 400', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm-go', qty: 10, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('mua ngoài mà vẫn kèm po_line_id → chặn 400', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('nhận vượt số còn thiếu → 409 OVER_RECEIPT, chưa ghi gì', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm1', qty: 1500, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toMatchObject({ status: 409, code: 'OVER_RECEIPT' })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('xác nhận allow_over → vẫn ghi, lý do vào ghi chú phiếu', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0009')
+    vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('received')
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      note: 'Giao đợt 2',
+      allow_over: true,
+      over_reason: 'NCC giao dư bù hao',
+      lines: [{ material_id: 'm1', qty: 1500, po_line_id: 'pl1' }],
+    })
+
+    const doc = vi.mocked(docsRepo.insert).mock.calls[0][0]
+    expect(doc.note).toBe('Giao đợt 2 · [Nhận vượt] NCC giao dư bù hao')
+  })
+
+  it('báo hàng về cho NGƯỜI PHỤ TRÁCH đơn, không chỉ admin/quản lý', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0010')
+    vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+    })
+
+    const evt = vi.mocked(emit).mock.calls[0][0] as {
+      name: string
+      notify_ids: string[]
+      po_code: string | null
+    }
+    expect(evt.name).toBe('warehouse.receipt.created')
+    expect(evt.notify_ids).toContain('u-mua')
+    expect(evt.po_code).toBe('PO-2026-0001')
+  })
 
   it('PO không tồn tại → 404', async () => {
     vi.mocked(supplyRepo.poStatus).mockResolvedValue(null)

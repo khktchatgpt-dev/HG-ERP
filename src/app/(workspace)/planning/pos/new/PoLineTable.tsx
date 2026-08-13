@@ -1,11 +1,18 @@
 'use client'
 
-import { PackageSearch, Trash2, TriangleAlert, Weight } from 'lucide-react'
+import { PackageSearch, Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
-import { packCount, roundUpToPack } from '@/lib/po-line'
-import { lineAmount, lineProblem, lineQty2, type Line, type Num } from './po-line'
+import { AutoGrowCell, LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
+import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
+import {
+  cartonPriceSuggest,
+  lineAmount,
+  lineProblem,
+  lineQty2,
+  type Line,
+  type Num,
+} from './po-line'
 
 const num = (n: number) => n.toLocaleString('vi-VN')
 
@@ -58,6 +65,7 @@ export function PoLineTable({
   onPatch,
   onRemove,
   onSaveToCatalog,
+  onEditMaterial,
   focusIndex = null,
   onFocused,
   onDoneRow,
@@ -70,7 +78,13 @@ export function PoLineTable({
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
   /** Ghi kg/m · kg/đơn-vị vừa gõ về danh mục vật tư (0128). */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (
+    materialId: string,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
+  ) => void
+  /** Mở modal SỬA VẬT TƯ tại chỗ — giai đoạn hoàn thiện data, thiếu gì sửa ngay. */
+  onEditMaterial?: (materialId: string) => void
   /** Dòng vừa được thêm — con trỏ nhảy thẳng vào ô SL đặt của nó. */
   focusIndex?: number | null
   /** Đã nhảy tới nơi — xoá cờ để lần render sau không cướp con trỏ lần nữa. */
@@ -204,37 +218,74 @@ export function PoLineTable({
                       {i + 1}
                     </td>
                     <td className={td}>
-                      {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua
-                          phải đọc đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết
-                          đúng hàng. */}
-                      <div
-                        className="text-foreground text-[13px] leading-snug font-semibold break-words"
-                        title={l.name}
-                      >
-                        {l.name}
-                      </div>
-                      {/* Mã nổi thành chip mono: tên trong danh mục trùng nhau
-                          nhiều, mã mới là thứ chốt đúng món khi đọc cho NCC. */}
-                      {/* ĐVT đã có cột riêng cạnh SL đặt — chip chỉ còn mã + tồn. */}
-                      <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
-                        <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
-                          {l.code}
-                        </span>
-                        {/* null = chưa có sổ kho — "kho ?" thay vì tồn 0 giả. */}
-                        {l.on_hand == null ? (
-                          <span className="text-muted-foreground/70">kho ?</span>
-                        ) : (
-                          <span
-                            className={
-                              l.on_hand > 0
-                                ? 'text-emerald-700 dark:text-emerald-400'
-                                : undefined
-                            }
+                      {l.is_free ? (
+                        /* DÒNG TỰ DO (0134): tên hàng GÕ NGAY TẠI ĐÂY — đơn
+                           gỗ/gia công đặt theo SP, không có mã danh mục. */
+                        <>
+                          <AutoGrowCell
+                            value={l.name}
+                            placeholder="Tên SP / món gia công…"
+                            onChange={(v) => onPatch(i, { name: v })}
+                            label={`Tên hàng dòng ${i + 1}`}
+                            className="font-semibold"
+                            /* Dòng tự do vừa thêm: con trỏ vào Ô TÊN (ô bắt
+                               buộc đang trống), không phải SL đặt. */
+                            autoFocus={focusIndex === i}
+                            onAutoFocused={onFocused}
+                          />
+                          <div className="text-muted-foreground mt-1 text-[11px]">
+                            dòng tự gõ — không trừ kho
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          {/* Tên dài thì XUỐNG DÒNG chứ không cắt cụt — người mua
+                              phải đọc đủ "Vít 4x15 đuôi cá tai tròn 8mm" mới biết
+                              đúng hàng. */}
+                          <div
+                            className="text-foreground text-[13px] leading-snug font-semibold break-words"
+                            title={l.name}
                           >
-                            tồn {num(l.on_hand)}
-                          </span>
-                        )}
-                      </div>
+                            {l.name}
+                          </div>
+                          {/* Mã nổi thành chip mono: tên trong danh mục trùng nhau
+                              nhiều, mã mới là thứ chốt đúng món khi đọc cho NCC. */}
+                          {/* ĐVT đã có cột riêng cạnh SL đặt — chip chỉ còn mã + tồn. */}
+                          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                            <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
+                              {l.code}
+                            </span>
+                            {/* SỬA VẬT TƯ tại chỗ (giai đoạn hoàn thiện data):
+                                thiếu quy cách/barem/ĐVT thì bổ sung ngay,
+                                không phải mở màn danh mục ở tab khác. */}
+                            {onEditMaterial && (
+                              <button
+                                type="button"
+                                onClick={() => onEditMaterial(l.material_id)}
+                                className="text-muted-foreground/70 rounded p-0.5 transition-colors hover:bg-sky-50 hover:text-sky-700 dark:hover:bg-sky-950/40 dark:hover:text-sky-400"
+                                title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
+                                aria-label={`Sửa vật tư ${l.name}`}
+                              >
+                                <Pencil className="size-3" aria-hidden />
+                              </button>
+                            )}
+                            {/* null = chưa có sổ kho — "kho ?" thay vì tồn 0 giả. */}
+                            {l.on_hand == null ? (
+                              <span className="text-muted-foreground/70">kho ?</span>
+                            ) : (
+                              <span
+                                className={
+                                  l.on_hand > 0
+                                    ? 'text-emerald-700 dark:text-emerald-400'
+                                    : undefined
+                                }
+                              >
+                                tồn {num(l.on_hand)}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </td>
                     {inputCols.map((c) => (
                       <td key={c.key} className={td}>
@@ -251,11 +302,21 @@ export function PoLineTable({
                       </td>
                     ))}
                     {/* ĐVT theo danh mục — chỉ đọc, đứng NGAY TRƯỚC SL đặt như
-                        phiếu in gửi NCC. */}
+                        phiếu in gửi NCC. Dòng tự do thì ĐVT gõ được (cái/bộ…). */}
                     <td
-                      className={`${td} pt-3 text-center text-[12.5px] whitespace-nowrap`}
+                      className={`${td} pt-1.5 text-center text-[12.5px] whitespace-nowrap`}
                     >
-                      {l.unit}
+                      {l.is_free ? (
+                        <input
+                          value={l.unit}
+                          maxLength={30}
+                          onChange={(e) => onPatch(i, { unit: e.target.value })}
+                          className={`${cell} w-[52px] px-1 text-center`}
+                          aria-label={`ĐVT dòng ${i + 1}`}
+                        />
+                      ) : (
+                        <span className="inline-block pt-1.5">{l.unit}</span>
+                      )}
                     </td>
                     <td className={td}>
                       {/* Bề rộng đặt ở DIV bọc, không đặt trên input: `cell` đã
@@ -269,9 +330,10 @@ export function PoLineTable({
                           step="0.01"
                           data-cell="qty"
                           onWheel={blurOnWheel}
-                          /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột. */
+                          /* Dòng vừa thêm: nhảy vào đây ngay, khỏi với chuột.
+                             Dòng TỰ DO thì nhường con trỏ cho Ô TÊN ở đầu hàng. */
                           ref={(el) => {
-                            if (el && focusIndex === i) {
+                            if (el && focusIndex === i && !l.is_free) {
                               el.focus()
                               el.select()
                               onFocused?.()
@@ -353,6 +415,22 @@ export function PoLineTable({
                           aria-label={`Đơn giá ${l.name}`}
                         />
                       </div>
+                      {/* Bao bì (0134): giá/thùng = m² × giá/m² + bản in — có đủ
+                          hai ô là mời bấm dùng, đúng công thức trên đơn thật. */}
+                      {(() => {
+                        const goiY = cartonPriceSuggest(template, l)
+                        if (goiY == null || l.price === goiY) return null
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => onPatch(i, { price: goiY })}
+                            className="mt-0.5 block w-full text-right text-[11px] font-medium whitespace-nowrap text-sky-700 hover:underline dark:text-sky-400"
+                            title="m²/thùng × đơn giá/m² + bản in — bấm để dùng"
+                          >
+                            = {num(goiY)} ↩
+                          </button>
+                        )
+                      })()}
                     </td>
                     {calcCol && (
                       <td className={td}>
@@ -377,7 +455,7 @@ export function PoLineTable({
                     <td className={`${td} text-right`}>
                       {amount > 0 ? (
                         <div className="pt-1.5 text-[13.5px] font-semibold whitespace-nowrap tabular-nums">
-                          {num(Math.round(amount))}
+                          {fmtMoney(roundMoney(amount, currency), currency)}
                         </div>
                       ) : (
                         <div className="text-muted-foreground/40 pt-1.5 text-[13.5px]">
@@ -435,7 +513,13 @@ export function PoLineTable({
         <div className="text-muted-foreground flex items-baseline justify-end gap-2 px-1 pt-0.5 text-[12px]">
           Cộng tiền hàng ({lines.length} dòng)
           <b className="text-foreground text-[13.5px] font-bold tabular-nums">
-            {num(Math.round(lines.reduce((s, x) => s + lineAmount(template, x), 0)))}
+            {fmtMoney(
+              roundMoney(
+                lines.reduce((s, x) => s + lineAmount(template, x), 0),
+                currency,
+              ),
+              currency,
+            )}
           </b>
           <span className="text-[11px]">{currency}</span>
         </div>

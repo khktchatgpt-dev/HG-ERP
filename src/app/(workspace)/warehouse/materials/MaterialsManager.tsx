@@ -20,8 +20,17 @@ import {
   FormSection,
   MaterialCoreFields,
   coreFromMaterial,
+  materialBtnPrimary,
+  materialBtnSecondary,
+  materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
+import {
+  MATERIAL_FIELD_LABELS,
+  fieldsClearedByPayload,
+  type ClearedField,
+} from '@/lib/material-group-fields'
+import { codeWarning } from '@/lib/material-form-guards'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { PAGE_SIZE } from './constants'
 
@@ -65,6 +74,10 @@ type Material = {
   default_supplier_id: string | null
   last_purchase_price: number | null
   note: string | null
+  /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — Kho gỡ cờ khi đã chuẩn hoá. */
+  needs_review: boolean
+  /** Key trường khai vội cần rà (0138) — chip từng trường cạnh cờ chung. */
+  needs_review_fields: string[]
   is_active: boolean
 }
 
@@ -86,9 +99,9 @@ export function MaterialsManager({
   suppliers: SupplierOption[]
   canEdit: boolean
   /** Đếm ở DB theo bộ lọc — KHÔNG phải số dòng đang hiện trên trang. */
-  counts: { total: number; active: number; noShelf: number }
+  counts: { total: number; active: number; noShelf: number; needsReview: number }
   page: number
-  filters: { q: string; group: string }
+  filters: { q: string; group: string; review: boolean }
   /**
    * ĐVT + nhóm + nhóm phụ chuẩn, nạp sẵn ở server (trang đã gọi `materialTaxonomy`
    * cho bộ lọc rồi). Đưa cả cụm xuống thì form khai vật tư khỏi gọi lại API.
@@ -221,7 +234,19 @@ export function MaterialsManager({
       sortValue: (m) => m.code,
       cell: (m) => (
         <div className="flex min-w-0 flex-col">
-          <span className="font-mono text-xs text-zinc-400">{m.code}</span>
+          <span className="flex flex-wrap items-center gap-1.5 font-mono text-xs text-zinc-400">
+            {m.code}
+            {/* Khai nhanh từ form đơn (0136) — Kho rà xong thì gỡ ở menu dòng. */}
+            {m.needs_review && <Badge tone="amber">chờ Kho rà</Badge>}
+            {/* 0138: chip TỪNG TRƯỜNG người khai vội bỏ trống — Kho rà đúng chỗ
+                thay vì soi cả bản ghi. Nhãn tra từ MATERIAL_FIELD_LABELS. */}
+            {m.needs_review &&
+              (m.needs_review_fields ?? []).map((k) => (
+                <Badge key={k} tone="amber">
+                  {MATERIAL_FIELD_LABELS[k] ?? k}?
+                </Badge>
+              ))}
+          </span>
           <span className="truncate font-medium">{m.name}</span>
         </div>
       ),
@@ -314,6 +339,19 @@ export function MaterialsManager({
           <RowMenu
             items={[
               { label: 'Sửa', onClick: () => setEditing(m) },
+              // Vật tư Cung ứng khai vội từ form đơn (0136): Kho đối chiếu
+              // trùng + bổ sung barem/kệ xong thì gỡ cờ tại đây.
+              ...(m.needs_review
+                ? [
+                    {
+                      label: 'Đã rà xong — gỡ cờ',
+                      onClick: () =>
+                        send(`/api/dept/warehouse/materials/${m.id}`, 'PATCH', {
+                          needs_review: false,
+                        }),
+                    },
+                  ]
+                : []),
               {
                 label: m.is_active ? 'Ngừng sử dụng' : 'Kích hoạt lại',
                 onClick: () =>
@@ -386,6 +424,12 @@ export function MaterialsManager({
             value: stats.noShelf,
             tone: stats.noShelf ? 'amber' : 'gray',
           },
+          // Khai nhanh từ form đơn đặt, chờ Kho rà (0136) — lọc bằng nút ở toolbar.
+          {
+            label: 'Chờ Kho rà',
+            value: counts.needsReview,
+            tone: counts.needsReview ? 'amber' : 'gray',
+          },
         ]}
       />
 
@@ -413,12 +457,28 @@ export function MaterialsManager({
                 onChange={(v) => setStatusFilter(v)}
                 options={statusOptions}
               />
-              {(filters.q || filters.group || statusFilter !== 'all') && (
+              {/* Chip lọc "Chờ Kho rà" (0136) — server lọc, không lọc trang. */}
+              <button
+                onClick={() => pushFilter({ review: filters.review ? '' : '1' })}
+                aria-pressed={filters.review}
+                className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                  filters.review
+                    ? 'border-amber-400 bg-amber-50 font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
+                    : 'border-zinc-300 text-zinc-500 hover:border-amber-400 hover:text-amber-700 dark:border-zinc-700'
+                }`}
+                title="Vật tư Cung ứng khai nhanh từ form đơn — Kho rà xong gỡ cờ ở menu dòng"
+              >
+                Chờ Kho rà{counts.needsReview ? ` (${counts.needsReview})` : ''}
+              </button>
+              {(filters.q ||
+                filters.group ||
+                filters.review ||
+                statusFilter !== 'all') && (
                 <button
                   onClick={() => {
                     setQ('')
                     setStatusFilter('all')
-                    pushFilter({ q: '', group: '' })
+                    pushFilter({ q: '', group: '', review: '' })
                   }}
                   className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
                 >
@@ -559,18 +619,18 @@ export function MaterialsManager({
 // ── Form ─────────────────────────────────────────────────────────────────
 
 /**
- * KHAI VẬT TƯ Ở DANH MỤC — bốn mảng theo đúng thứ tự người khai nghĩ:
- * vật tư này là gì (Nhận dạng) → xếp vào đâu, tính tiền kiểu nào (Phân loại) →
- * NCC báo giá ra sao → Kho giữ bao nhiêu (Tồn trữ).
- *
- * Ba mảng đầu là `MaterialCoreFields`, DÙNG CHUNG với form thêm nhanh trong đơn
- * đặt. Trước đây hai chỗ hỏi lệch nhau: ở đây nhóm là ô GÕ TAY và không có ô
- * nhóm phụ / mẫu đơn / kg/m, nên vật tư khai từ danh mục ra đời thiếu mẫu và
- * barem — đơn nhôm/inox không tính được tiền cho nó.
- *
- * Cung ứng (`scope='purchasing'`) KHÔNG thấy mảng Tồn trữ và ô mã vạch. Bản cũ
- * vẫn vẽ ra rồi `disabled`: mười ô xám nằm giữa form, kéo dài thêm cái hộp vốn
- * đã cao 1234px trên màn 768px, mà bấm vào cũng không được gì.
+ * KHAI VẬT TƯ Ở DANH MỤC — TÁCH THEO NGHIỆP VỤ (0136):
+ *   · Khối CHUNG (`MaterialCoreFields`): Nhận dạng → Phân loại → barem — phải
+ *     giống hệt giữa mọi chỗ khai, không thì vật tư khai từ một bên thiếu dữ
+ *     liệu bên kia cần (bài học cũ: vật tư khai ở danh mục ra đời thiếu barem,
+ *     đơn nhôm/inox không tính được tiền).
+ *   · Kho (`scope='warehouse'`): + Tồn trữ (min/max, kệ, mã vạch). KHÔNG thấy
+ *     mảng Mua hàng / Cách NCC báo giá — nghiệp vụ của Cung ứng.
+ *   · Cung ứng (`scope='purchasing'`): + Mua hàng (NCC mặc định, VAT, giá tham
+ *     chiếu) + Cách NCC báo giá. KHÔNG thấy Tồn trữ.
+ * Mảng của bên kia là KHÔNG RENDER (không phải disabled) — và payload chỉ gửi
+ * trường có ô nhập, vì ô không render thì FormData trả null và PATCH sẽ ghi
+ * null đè (xoá dữ liệu bên kia im lặng).
  */
 function MaterialForm({
   initial,
@@ -592,6 +652,18 @@ function MaterialForm({
 }) {
   const purchasing = scope === 'purchasing'
   const [busy, setBusy] = useState(false)
+  // Mã theo dõi bằng state để cảnh báo lệch quy ước NGAY LÚC GÕ (13/08).
+  const [codeVal, setCodeVal] = useState(initial?.code ?? '')
+  /*
+   * XÁC NHẬN 2 NHỊP khi lưu sẽ NULL ĐÈ dữ liệu đang có (đợt 2 cải thiện vật tư
+   * 13/08/2026): corePayload cố ý ghi null trường ngoài nhóm mới — đúng dữ
+   * liệu, nhưng người lỡ tay đổi nhóm sẽ mất kg/m, cách mở thùng… trong im
+   * lặng. Nhịp 1 lưu → liệt kê trường sắp mất kèm giá trị cũ; nhịp 2 mới lưu.
+   */
+  const [clearWarn, setClearWarn] = useState<{
+    cleared: ClearedField[]
+    body: Record<string, unknown>
+  } | null>(null)
   const core = useMaterialCore({
     active: true,
     initial: initial ? coreFromMaterial(initial) : undefined,
@@ -606,8 +678,8 @@ function MaterialForm({
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
   }, [shelfOptions])
 
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  // Style CHUẨN dùng chung mọi form vật tư (0137) — không tự chế class nữa.
+  const cls = materialInputClass
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -619,13 +691,21 @@ function MaterialForm({
       return v != null && String(v).trim() !== '' ? Number(v) : null
     }
     const body: Record<string, unknown> = {
-      // Nhận dạng + phân loại + cách báo giá — chung với form trong đơn đặt.
+      // Nhận dạng + phân loại + barem — khối CHUNG hai nghiệp vụ (lệch là vật
+      // tư khai từ một bên thiếu dữ liệu bên kia cần, bài học cũ).
       ...core.corePayload(),
       code: String(fd.get('code') ?? '').trim() || null,
-      default_supplier_id: String(fd.get('default_supplier_id') ?? '') || null,
-      vat_rate: numOrNull('vat_rate'),
-      last_purchase_price: numOrNull('last_purchase_price'),
       note: String(fd.get('note') ?? '').trim() || null,
+    }
+    /*
+     * TÁCH THEO NGHIỆP VỤ (0136): trường MUA HÀNG chỉ form Cung ứng có ô nhập —
+     * form Kho không render chúng, mà FormData thiếu ô thì fd.get trả null và
+     * PATCH sẽ ghi null đè (xoá NCC mặc định im lặng). Nên chỉ gửi khi có ô.
+     */
+    if (purchasing) {
+      body.default_supplier_id = String(fd.get('default_supplier_id') ?? '') || null
+      body.vat_rate = numOrNull('vat_rate')
+      body.last_purchase_price = numOrNull('last_purchase_price')
     }
     // Trường tồn trữ là của Kho — Cung ứng không gửi lên (server cũng chặn).
     if (!purchasing) {
@@ -636,9 +716,26 @@ function MaterialForm({
       body.reorder_qty = numOrNull('reorder_qty')
       body.shelf_location = String(fd.get('shelf_location') ?? '').trim() || null
     }
+    // Sửa bản đã lưu mà payload sắp null đè dữ liệu đang có → dừng ở nhịp 1.
+    if (initial && Object.keys(initial).length > 0) {
+      const cleared = fieldsClearedByPayload(initial as Record<string, unknown>, body)
+      if (cleared.length > 0) {
+        setClearWarn({ cleared, body })
+        return
+      }
+    }
     setBusy(true)
     await onSubmit(body)
     setBusy(false)
+  }
+
+  /** Nhịp 2 — người dùng đã đọc danh sách sắp mất và vẫn muốn lưu. */
+  async function confirmClear() {
+    if (!clearWarn || busy) return
+    setBusy(true)
+    await onSubmit(clearWarn.body)
+    setBusy(false)
+    setClearWarn(null)
   }
 
   return (
@@ -648,66 +745,84 @@ function MaterialForm({
         inputClass={cls}
         unitListId="mat-dvt"
         subListId="mat-nhom-phu"
-        /* Chỉ danh mục mới hỏi "NCC báo giá theo đơn vị nào" — form trong đơn đặt
-           tắt đi, lý do ở khai báo `pricingNote`. */
-        pricingNote
+        /* "Cách NCC báo giá" là việc Cung ứng — tách khỏi form Kho (0136),
+           cùng nhịp với mảng Mua hàng bên dưới. */
+        pricingNote={purchasing}
       />
 
-      <FormSection title="Mua hàng" hint="tự điền lên đơn đặt">
-        <Field label="NCC mặc định">
-          <select
-            name="default_supplier_id"
-            defaultValue={initial?.default_supplier_id ?? ''}
-            className={cls}
-          >
-            <option value="">— không —</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="VAT mặc định (%)">
-          <input
-            name="vat_rate"
-            type="number"
-            min={0}
-            max={100}
-            step="0.1"
-            placeholder="VD: 10"
-            defaultValue={initial?.vat_rate ?? ''}
-            className={`${cls} tabular-nums`}
-          />
-        </Field>
-        <Field label="Đơn giá tham chiếu" hint="Prefill đơn giá khi lên đơn đặt.">
-          <input
-            name="last_purchase_price"
-            type="number"
-            min={0}
-            step="1"
-            placeholder={core.dual ? `đ / ${core.f.price_unit}` : 'đ / đơn vị đặt'}
-            defaultValue={initial?.last_purchase_price ?? ''}
-            className={`${cls} tabular-nums`}
-          />
-        </Field>
-        <Field
-          label="Mã vật tư"
-          hint={
-            initial ? undefined : 'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
-          }
-        >
-          {/* Kho vẫn gõ tay được khi cần bám mã cũ; bỏ trống thì server cấp
-              `XX-0000` nối tiếp tiền tố mà nhóm đó đang dùng. */}
-          <input
-            name="code"
-            maxLength={60}
-            defaultValue={initial?.code ?? ''}
-            placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
-            className={`${cls} font-mono`}
-          />
-        </Field>
-      </FormSection>
+      {/* Mã là DANH TÍNH danh mục — cả hai nghiệp vụ đều thấy, không thuộc mảng
+          Mua hàng hay Tồn trữ. Gõ tay lệch quy ước XX-0000 thì cảnh báo tại chỗ
+          (13/08) — server tôn trọng mã người gõ nên đây là chốt duy nhất; mã cũ
+          giữ nguyên thì không nạt. */}
+      <Field
+        label="Mã vật tư"
+        hint={
+          codeVal.trim() !== (initial?.code ?? '').trim() && codeWarning(codeVal) ? (
+            <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              ⚠ {codeWarning(codeVal)}
+            </span>
+          ) : initial ? undefined : (
+            'Bỏ trống là an toàn — server cấp mã nối tiếp của nhóm.'
+          )
+        }
+      >
+        <input
+          name="code"
+          maxLength={60}
+          value={codeVal}
+          onChange={(e) => setCodeVal(e.target.value)}
+          placeholder={initial ? '' : 'để trống → tự cấp theo nhóm'}
+          className={`${cls} font-mono`}
+        />
+      </Field>
+
+      {/*
+        TÁCH THEO NGHIỆP VỤ (0136): mảng MUA HÀNG chỉ ở màn Cung ứng — đối xứng
+        với mảng Tồn trữ chỉ ở màn Kho. Trước đây Kho vẫn thấy NCC mặc định /
+        VAT / giá tham chiếu dù dòng mô tả trang đã nói "Cung ứng sửa trường
+        mua hàng" — hai màn nói một đằng bày một nẻo.
+      */}
+      {purchasing && (
+        <FormSection title="Mua hàng" hint="tự điền lên đơn đặt">
+          <Field label="NCC mặc định">
+            <select
+              name="default_supplier_id"
+              defaultValue={initial?.default_supplier_id ?? ''}
+              className={cls}
+            >
+              <option value="">— không —</option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="VAT mặc định (%)">
+            <input
+              name="vat_rate"
+              type="number"
+              min={0}
+              max={100}
+              step="0.1"
+              placeholder="VD: 10"
+              defaultValue={initial?.vat_rate ?? ''}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+          <Field label="Đơn giá tham chiếu" hint="Prefill đơn giá khi lên đơn đặt." span>
+            <input
+              name="last_purchase_price"
+              type="number"
+              min={0}
+              step="1"
+              placeholder={core.dual ? `đ / ${core.f.price_unit}` : 'đ / đơn vị đặt'}
+              defaultValue={initial?.last_purchase_price ?? ''}
+              className={`${cls} tabular-nums`}
+            />
+          </Field>
+        </FormSection>
+      )}
 
       {purchasing ? (
         <p className="text-xs text-zinc-400">
@@ -802,6 +917,12 @@ function MaterialForm({
           </Field>
         </FormSection>
       )}
+      {!purchasing && (
+        <p className="text-xs text-zinc-400">
+          NCC mặc định, VAT, giá tham chiếu, cách NCC báo giá — Cung ứng quản ở
+          <b> Kế hoạch › Vật tư &amp; giá mua</b>.
+        </p>
+      )}
 
       <Field label="Ghi chú">
         <textarea
@@ -813,6 +934,41 @@ function MaterialForm({
         />
       </Field>
 
+      {/* NHỊP 2 của xác nhận null-đè: liệt kê từng trường sắp mất kèm giá trị
+          cũ — thường do đổi nhóm (corePayload ghi null trường ngoài nhóm mới). */}
+      {clearWarn && (
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/40">
+          <p className="font-medium text-red-700 dark:text-red-400">
+            Lưu sẽ XOÁ {clearWarn.cleared.length} thông số đang có (thường do đổi nhóm):
+          </p>
+          <ul className="mt-1 list-disc pl-5 text-red-700 dark:text-red-400">
+            {clearWarn.cleared.map((c) => (
+              <li key={c.field}>
+                {c.label}: <b>{c.oldValue}</b> → trống
+              </li>
+            ))}
+          </ul>
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setClearWarn(null)}
+              className={materialBtnSecondary}
+            >
+              Quay lại sửa
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void confirmClear()}
+              className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}
+              Vẫn lưu — xoá {clearWarn.cleared.length} ô
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Nút lưu ghim đáy hộp thoại: form bốn mảng dài hơn một màn, cuộn tới
           cuối mới thấy nút là bắt người khai đi tìm. */}
       <div className="sticky bottom-0 -mx-6 -mb-5 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white/95 px-6 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
@@ -821,10 +977,7 @@ function MaterialForm({
             Cần tên vật tư và ĐVT.
           </span>
         )}
-        <button
-          disabled={busy || core.invalid}
-          className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-        >
+        <button disabled={busy || core.invalid} className={materialBtnPrimary}>
           {busy && <Spinner size={14} />}
           {busy ? 'Đang lưu…' : submitLabel}
         </button>

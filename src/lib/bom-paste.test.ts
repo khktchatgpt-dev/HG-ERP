@@ -206,3 +206,39 @@ describe('parseBomPaste — khối gỗ và khối vật tư', () => {
     expect(r.rows[0].dim_a_mm).toBeNull()
   })
 })
+
+/**
+ * Ô CỤM GỘP — đo trên `BKQC - C0097HG-IR GHẾ Hali cao`: khối khung có 2 cụm,
+ * "Cụm Tựa" 4 chi tiết và "Cụm chân" 10, nhưng Excel gộp ô nên chỉ dòng đầu mỗi
+ * cụm mang chữ. Không kéo xuống thì 12/14 dòng rơi về nhóm Rời.
+ */
+describe('parseBomPaste — cụm gộp ô kéo xuống dòng dưới', () => {
+  const paste = [
+    'Stt\tParts/ Bộ phận\tTên chi tiết\tLoại\tDày\tRộng\tDài\tPhi hao\tSố lượng',
+    '1\tCụm Tựa\tTay + tựa\tTròn\t19\t19\t1744\t\t1',
+    '\t\tKhung tựa dưới\tTròn\t19\t19\t1066\t\t1',
+    '\t\tGiằng tựa\tTròn\t6\t6\t273\t\t2',
+    '2\tCụm chân\tKhung mê sau\tTròn\t21\t21\t1066\t\t1',
+    '\t\tChân trước\tTròn\t21\t21\t433\t\t2',
+  ].join('\n')
+
+  it('dòng dưới thừa hưởng cụm của dòng trên, cụm mới thì đổi', () => {
+    const r = parseBomPaste(paste)
+    expect(r.rows.map((x) => x.cluster_name)).toEqual([
+      'Cụm Tựa',
+      'Cụm Tựa',
+      'Cụm Tựa',
+      'Cụm chân',
+      'Cụm chân',
+    ])
+  })
+
+  it('vùng dán KHÔNG có cột cụm thì không tự bịa cụm', () => {
+    const r = parseBomPaste(
+      ['Tên chi tiết\tLoại\tDày\tRộng\tDài\tSố lượng', 'Chân\tHộp\t20\t40\t650\t4'].join(
+        '\n',
+      ),
+    )
+    expect(r.rows[0].cluster_name).toBeNull()
+  })
+})

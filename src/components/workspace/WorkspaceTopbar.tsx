@@ -1,5 +1,6 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { notificationsService } from '@/modules/core/notifications/notifications.service'
+import { accountService } from '@/modules/core/account/account.service'
 import { UserMenu } from '@/components/UserMenu'
 import { NotificationsDropdown } from '@/components/NotificationsDropdown'
 import { hasCrossRole, userHomeWorkspaceId } from '@/workspaces/access'
@@ -19,7 +20,10 @@ export async function WorkspaceTopbar({
 }) {
   const user = await authService.currentUser()
   if (!user) return null
-  const unread = await notificationsService.unreadCount(user)
+  const [unread, avatarUrl] = await Promise.all([
+    notificationsService.unreadCount(user),
+    accountService.avatarUrl(user),
+  ])
   const accent = ACCENT_CLASSES[workspace.accent]
   // Đang xem chéo workspace phòng khác → nhắc "chỉ xem" để khỏi bất ngờ khi
   // không thấy nút sửa (quyền ghi thật vẫn do service quyết theo phòng chủ quản).
@@ -71,6 +75,7 @@ export async function WorkspaceTopbar({
               role: user.role,
               title: user.title,
             }}
+            avatarUrl={avatarUrl}
           />
         </div>
       </div>

@@ -48,6 +48,45 @@ export const approvalEventsRepo = {
     if (error) throw new Error(error.message)
   },
 
+  /**
+   * Lịch sử của MỘT hồ sơ — cho trang chi tiết đơn đặt vật tư.
+   *
+   * `listRecent` lọc được theo loại và theo hành động nhưng không theo id, nên
+   * muốn biết "đơn này đã qua tay ai" thì phải kéo 300 sự kiện gần nhất rồi lọc
+   * ở client — và đơn cũ thì rơi ra ngoài cửa sổ đó, im lặng.
+   *
+   * Xếp XUÔI thời gian: đây là dòng đời của một hồ sơ, đọc từ đầu mới có nghĩa.
+   */
+  async listByEntity(
+    entity_type: ApprovalEntityType,
+    entity_id: string,
+  ): Promise<ApprovalEvent[]> {
+    const { data } = await db()
+      .from('approval_events')
+      .select(
+        'id, entity_type, entity_id, entity_code, action, actor_id, reason, created_at, actor:users(name, email)',
+      )
+      .eq('entity_type', entity_type)
+      .eq('entity_id', entity_id)
+      .order('created_at', { ascending: true })
+
+    type Raw = Omit<ApprovalEvent, 'actor_name'> & { actor: ActorEmbed | ActorEmbed[] }
+    return ((data ?? []) as unknown as Raw[]).map((r) => {
+      const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
+      return {
+        id: r.id,
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        entity_code: r.entity_code,
+        action: r.action,
+        actor_id: r.actor_id,
+        actor_name: a?.name || a?.email || null,
+        reason: r.reason,
+        created_at: r.created_at,
+      }
+    })
+  },
+
   async listRecent(filter: {
     entity_type?: ApprovalEntityType
     action?: ApprovalAction

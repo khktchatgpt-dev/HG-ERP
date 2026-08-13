@@ -12,6 +12,7 @@ import {
 } from '@/lib/material-key'
 import { invalidateTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
+import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -58,7 +59,15 @@ type CreateInput = {
   pack_unit?: string | null
   /** Vật liệu / màu (0124) — tự điền cột "Vật liệu" của đơn phụ kiện. */
   material_grade?: string | null
+  /** Thông số theo nhóm (0137): bao bì (cách mở + SP/thùng), kim loại (bề mặt). */
+  open_style?: string | null
+  pcs_per_ctn?: number | null
+  finish?: string | null
   note?: string | null
+  /** Khai nhanh từ form đơn đặt gửi true — chờ Kho rà lại (0136). */
+  needs_review?: boolean
+  /** Key trường khai vội cần rà (0138) — chỉ có nghĩa kèm needs_review=true. */
+  needs_review_fields?: string[]
 }
 
 type UpdateInput = Partial<CreateInput & { is_active: boolean }>
@@ -100,6 +109,10 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'pack_size',
   'pack_unit',
   'material_grade',
+  // Thông số theo nhóm (0137) — phục vụ soạn đơn, Cung ứng sửa được như barem.
+  'open_style',
+  'pcs_per_ctn',
+  'finish',
 ])
 
 /**
@@ -132,6 +145,8 @@ export const materialsService = {
       q?: string
       group_name?: string
       active_only?: boolean
+      /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
+      needs_review?: boolean
       page: number
       page_size: number
     },
@@ -141,6 +156,7 @@ export const materialsService = {
       q: opts.q,
       group_name: opts.group_name,
       active_only: opts.active_only ?? false,
+      needs_review: opts.needs_review,
       page: opts.page,
       page_size: opts.page_size,
     })
@@ -150,6 +166,18 @@ export const materialsService = {
   async counts(user: User, opts: { q?: string; group_name?: string }) {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     return materialsRepo.counts(opts)
+  },
+
+  /**
+   * Một vật tư đầy đủ trường — nuôi modal "Sửa vật tư" ngay trên dòng đơn đặt
+   * (dòng đơn chỉ chụp một phần, mở sửa phải lấy bản gốc để không ghi null đè
+   * lên trường mình không hiển thị).
+   */
+  async detail(user: User, id: string): Promise<Material> {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    const m = await materialsRepo.findById(id)
+    if (!m) throw NotFound('Vật tư không tồn tại')
+    return m
   },
 
   async create(user: User, input: CreateInput): Promise<Material> {
@@ -231,7 +259,18 @@ export const materialsService = {
       pack_size: input.pack_size ?? null,
       pack_unit: input.pack_unit?.trim() || null,
       material_grade: input.material_grade?.trim() || null,
+      // Thông số theo nhóm (0137) — CreateInput thiếu trường là create() nuốt
+      // im lặng (bài học po_template cũ), khai rõ cả ba.
+      open_style: input.open_style?.trim() || null,
+      pcs_per_ctn: input.pcs_per_ctn ?? null,
+      finish: input.finish?.trim() || null,
       note: input.note ?? null,
+      // Khai nhanh từ form đơn đặt gửi cờ "chờ Kho rà" (0136); ghi vết người
+      // khai để Kho biết hỏi ai khi tên/quy cách không rõ. Kèm danh sách TRƯỜNG
+      // đáng ngờ (0138) — không có cờ thì danh sách vô nghĩa, ghi rỗng.
+      needs_review: input.needs_review ?? false,
+      needs_review_fields: input.needs_review ? (input.needs_review_fields ?? []) : [],
+      created_by: user.id,
     })
 
     // Vật tư mới có thể mang nhóm phụ chưa từng có — xoá cache để form kế tiếp
@@ -291,6 +330,9 @@ export const materialsService = {
      * chứng từ in ra đang trỏ vào. Gỡ khỏi patch chứ không ghi null xuống.
      */
     const { code, ...rest } = patch
+    // "Đã rà xong" (0138): hạ cờ là xoá luôn danh sách trường đáng ngờ — chip
+    // từng trường trên màn Kho không được sống lâu hơn cái cờ chung.
+    if (rest.needs_review === false) rest.needs_review_fields = []
     return materialsRepo.patch(id, code ? { ...rest, code } : rest)
   },
 
@@ -299,6 +341,31 @@ export const materialsService = {
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     await materialsRepo.delete(id)
+  },
+
+  /**
+   * CẬP NHẬT DANH MỤC từ hộp xác nhận sau khi lưu đơn đặt (13/08/2026 — user
+   * chốt: không tự ghi ngầm, người soạn duyệt danh sách rồi mới ghi).
+   *
+   * An toàn hai lớp: (1) `catalogFillPatch` kiểm FILL-EMPTY-ONLY trên bản danh
+   * mục MỚI NHẤT — giữa lúc lưu đơn và lúc bấm đồng ý mà ai đó vừa khai giá trị
+   * thì bỏ qua, không đè; (2) đi qua `update()` nên chia-chủ-quyền 0136 vẫn
+   * enforce (mọi trường ở đây thuộc PURCHASING_EDITABLE_FIELDS).
+   */
+  async enrichFromOrder(
+    user: User,
+    items: { material_id: string; set: Record<string, unknown> }[],
+  ): Promise<{ updated: number }> {
+    let updated = 0
+    for (const it of items) {
+      const m = await materialsRepo.findById(it.material_id)
+      if (!m) continue
+      const patch = catalogFillPatch(m, it.set as CatalogLineInfo)
+      if (!patch) continue
+      await materialsService.update(user, it.material_id, patch)
+      updated++
+    }
+    return { updated }
   },
 }
 

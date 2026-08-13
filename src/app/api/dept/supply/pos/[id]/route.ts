@@ -19,7 +19,9 @@ export const PATCH = handle(async (req: Request, { params }: Params) => {
   const { id } = await params
   const input = await parseJson(req, poUpdateSchema)
   const po = await posService.update(user, id, input)
-  return NextResponse.json({ po })
+  // Cùng nhịp với POST: đề xuất cập nhật danh mục, hộp xác nhận quyết (13/08).
+  const catalog_suggestions = await posService.catalogSuggestions(input.lines)
+  return NextResponse.json({ po, catalog_suggestions })
 })
 
 /** Xoá hẳn — chỉ đơn NHÁP (0116); đơn đã gửi duyệt dùng /cancel. */

@@ -75,6 +75,23 @@ export function assessPoLate(
   return null
 }
 
+/**
+ * ĐƠN ĐANG MỞ MÀ KHÔNG CÓ HẸN GIAO — điểm mù của cả hệ cảnh báo.
+ *
+ * `assessPoLate` và `assessPoFit` đều trả null khi thiếu `expected_at`: không có
+ * mốc thì không có cơ sở nói trễ. Hệ quả là đơn QUÊN điền ngày — đúng loại đơn
+ * dễ rơi nhất — lại là loại duy nhất không bao giờ đỏ. `posService.submit()` nay
+ * bắt buộc có hẹn giao, nhưng đơn cũ đã duyệt/đã gửi vẫn còn trống; hàm này để
+ * UI gọi chúng ra bằng badge riêng thay vì vẽ một dấu "—" vô hại.
+ *
+ * Nháp không tính: đang soạn dở, chưa tới lúc đòi ngày.
+ */
+export function isMissingEta(po: PoLateInput): boolean {
+  if (PO_FINAL_STATUSES.has(po.status)) return false
+  if (po.status === 'draft') return false
+  return !po.expected_at
+}
+
 /** Cộng ngày trên chuỗi yyyy-mm-dd (UTC — tránh lệch múi giờ). */
 function addDays(iso: string, days: number): string {
   const d = new Date(`${iso}T00:00:00Z`)

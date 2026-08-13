@@ -9,6 +9,7 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
 import { ImportBomDialog } from './ImportBomDialog'
+import { MaterialCombo, materialLabel } from '@/components/warehouse/MaterialCombo'
 import type { ImportedRow } from '@/lib/bom-import'
 
 /**
@@ -28,16 +29,17 @@ type OrderLine = {
   qty: number
 }
 
-type MaterialOption = { id: string; code: string; name: string; unit: string }
-
 /** Dòng đang biên tập — số để '' khi trống (input controlled). */
 type EditRow = {
-  order_line_id: string
+  production_order_line_id: string
   /** 'part' = chi tiết (đếm ở phôi); 'assembly' = cụm (đếm từ hàn — 0088). */
   kind: 'part' | 'assembly'
   cluster: string
   name: string
   material_id: string
+  /** Nhãn "mã · tên" của vật tư đang gắn — danh mục 13k dòng nên không nạp sẵn
+   * ra client để tra ngược; nhãn đi kèm dòng (từ API, import, hoặc lúc chọn). */
+  material_label: string
   material_type: string
   spec_thickness_mm: number | ''
   spec_width_mm: number | ''
@@ -58,7 +60,7 @@ type EditRow = {
 }
 
 type ApiRow = {
-  order_line_id: string
+  production_order_line_id: string
   kind?: 'part' | 'assembly'
   cluster: string | null
   name: string
@@ -81,12 +83,16 @@ type ApiRow = {
   material_unit: string | null
 }
 
-const toEdit = (r: Partial<ApiRow> & { order_line_id: string }): EditRow => ({
-  order_line_id: r.order_line_id,
+const toEdit = (r: Partial<ApiRow> & { production_order_line_id: string }): EditRow => ({
+  production_order_line_id: r.production_order_line_id,
   kind: r.kind ?? 'part',
   cluster: r.cluster ?? '',
   name: r.name ?? '',
   material_id: r.material_id ?? '',
+  material_label:
+    r.material_code && r.material_name
+      ? materialLabel(r.material_code, r.material_name)
+      : '',
   material_type: r.material_type ?? '',
   spec_thickness_mm: r.spec_thickness_mm ?? '',
   spec_width_mm: r.spec_width_mm ?? '',
@@ -108,7 +114,6 @@ const inp =
 export function LsxComponentsPanel({
   lsxId,
   orderLines,
-  materials,
   stages,
   canEdit,
   locked,
@@ -116,7 +121,6 @@ export function LsxComponentsPanel({
 }: {
   lsxId: string
   orderLines: OrderLine[]
-  materials: MaterialOption[]
   /** Danh mục công đoạn — chọn "công đoạn cuối" per chi tiết (tuỳ SP). */
   stages: { code: string; label: string }[]
   /** Kế hoạch (KH-CƯ) + GĐ/QL — xưởng và các phòng khác chỉ xem. */
@@ -176,7 +180,7 @@ export function LsxComponentsPanel({
 
   /** Thêm dòng cho ĐÚNG SP của khối đang bấm — không còn chọn SP per dòng. */
   function addRow(lineId: string, kind: 'part' | 'assembly' = 'part') {
-    setRows((rs) => [...rs, toEdit({ order_line_id: lineId, kind })])
+    setRows((rs) => [...rs, toEdit({ production_order_line_id: lineId, kind })])
     setDirty(true)
   }
 
@@ -191,10 +195,12 @@ export function LsxComponentsPanel({
       ...rs,
       ...imported.map((r) =>
         toEdit({
-          order_line_id: lineId,
+          production_order_line_id: lineId,
           cluster: r.cluster || null,
           name: r.name,
           material_id: r.material_id || null,
+          material_code: r.material_code || null,
+          material_name: r.material_name || null,
           material_type: r.material_type || null,
           spec_thickness_mm: r.spec_thickness_mm === '' ? null : r.spec_thickness_mm,
           spec_width_mm: r.spec_width_mm === '' ? null : r.spec_width_mm,
@@ -254,7 +260,7 @@ export function LsxComponentsPanel({
         method: 'PUT',
         body: {
           lines: rows.map((r) => ({
-            order_line_id: r.order_line_id,
+            production_order_line_id: r.production_order_line_id,
             kind: r.kind,
             cluster: r.cluster.trim() || null,
             name: r.name.trim(),
@@ -294,10 +300,10 @@ export function LsxComponentsPanel({
   const indexed = rows.map((r, i) => ({ r, i }))
   // Dòng mồ côi (order_line không còn trong đơn — đơn bị sửa dòng SP): vẫn hiện
   // để không giấu dữ liệu.
-  const orphans = indexed.filter((x) => !qtyByLine.has(x.r.order_line_id))
+  const orphans = indexed.filter((x) => !qtyByLine.has(x.r.production_order_line_id))
 
   function renderRow({ r, i }: { r: EditRow; i: number }) {
-    const orderQty = qtyByLine.get(r.order_line_id) ?? 0
+    const orderQty = qtyByLine.get(r.production_order_line_id) ?? 0
     const calc =
       r.qty_per_unit !== '' && Number(r.qty_per_unit) > 0
         ? calcComponent(
@@ -310,7 +316,6 @@ export function LsxComponentsPanel({
           )
         : null
     if (!editable) {
-      const mat = materials.find((m) => m.id === r.material_id)
       const isAsm = r.kind === 'assembly'
       const stageLabel = (code: string) =>
         stages.find((s) => s.code === code)?.label ?? code
@@ -328,9 +333,7 @@ export function LsxComponentsPanel({
             )}
             {r.name}
           </td>
-          <td className="py-1.5 pr-1">
-            {mat ? `${mat.code} ${mat.name}` : r.material_id ? '…' : '—'}
-          </td>
+          <td className="py-1.5 pr-1">{r.material_label || '—'}</td>
           <td className="py-1.5 pr-1">{r.material_type || '—'}</td>
           <td className="py-1.5 pr-1">{r.spec_thickness_mm || '—'}</td>
           <td className="py-1.5 pr-1">{r.spec_width_mm || '—'}</td>
@@ -393,18 +396,17 @@ export function LsxComponentsPanel({
           </div>
         </td>
         <td className="py-1 pr-1">
-          <select
+          <MaterialCombo
             value={r.material_id}
-            onChange={(e) => setRow(i, { material_id: e.target.value })}
-            className={`${inp} min-w-32 ${!r.material_id ? 'border-amber-400' : ''}`}
-          >
-            <option value="">— chưa gắn —</option>
-            {materials.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.code} · {m.name}
-              </option>
-            ))}
-          </select>
+            label={r.material_label}
+            onPick={(m) =>
+              setRow(i, {
+                material_id: m?.id ?? '',
+                material_label: m ? materialLabel(m.code, m.name) : '',
+              })
+            }
+            className="min-w-40"
+          />
         </td>
         <td className="py-1 pr-1">
           <input
@@ -715,7 +717,9 @@ export function LsxComponentsPanel({
             )}
             {/* Mỗi SP một khối — chi tiết SP nào nằm trong khối SP đó. */}
             {orderLines.map((line) => {
-              const items = indexed.filter((x) => x.r.order_line_id === line.id)
+              const items = indexed.filter(
+                (x) => x.r.production_order_line_id === line.id,
+              )
               if (items.length === 0 && !editable) return null
               // Tổng KG cần của SP = Σ kg_needed các dòng có ĐM (rollup — 0089).
               let blockKg = 0
@@ -833,7 +837,6 @@ export function LsxComponentsPanel({
           product_code: l.product_code,
           product_name: l.product_name,
         }))}
-        materials={materials}
         onApply={applyImport}
       />
     </section>

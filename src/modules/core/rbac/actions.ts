@@ -136,6 +136,22 @@ export const ACTIONS: Action[] = [
     rule: perm('technical.bom.edit'),
   },
   {
+    /*
+     * KHOÁ / MỞ KHOÁ hồ sơ SP (0140 — user chốt 13/08/2026). Khoá là tuyên bố
+     * "bản này dùng được, đừng sửa nữa"; mở khoá là chuyện có thật khi phát
+     * sinh, nên CÙNG một quyền chứ không tách — người khoá được thì cũng chịu
+     * trách nhiệm mở.
+     *
+     * `technical.edit` phủ ĐÚNG hai vai user chốt: phòng Kỹ thuật và Giám đốc
+     * (seed 0073 gán `technical.edit` cho cả role `director`). Không thêm perm
+     * mới cho một thao tác — actions.test khoá đúng chuyện đó lại.
+     */
+    key: 'technical.product.lock',
+    label: 'Khoá / mở khoá hồ sơ sản phẩm',
+    domain: 'technical',
+    rule: perm('technical.edit'),
+  },
+  {
     key: 'technical.sample.manage',
     label: 'Quản lý mẫu showroom',
     domain: 'technical',

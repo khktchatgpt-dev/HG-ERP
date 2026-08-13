@@ -1,7 +1,20 @@
 import ExcelJS from 'exceljs'
-import { packCount, poLineAmount, qtyTotals } from '@/lib/po-line'
+import {
+  currencyDecimals,
+  packCount,
+  poLineAmount,
+  poMoney,
+  qtyTotals,
+  roundMoney,
+} from '@/lib/po-line'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import { PO_PRINT_ORDER, PO_PRINT_QTY_LABEL, poField } from '@/lib/po-fields'
+import {
+  PO_PRICE_SUFFIX_TEMPLATES,
+  PO_PRINT_ORDER,
+  PO_PRINT_QTY_LABEL,
+  poField,
+  poPriceSuffix,
+} from '@/lib/po-fields'
 import type {
   PoPrintHeader,
   PoPrintLine,
@@ -71,24 +84,14 @@ function packSuffixFormat(l: PoPrintLine): string | undefined {
 function excelColumns(
   t: PoTemplate,
   currency: string,
-  ctx: { lsxCode: string | null; orderDate: Date; expectedAt: string | null },
+  ctx: { orderDate: Date; expectedAt: string | null },
 ): XCol[] {
   const meta = poTemplateMeta(t)
   const dmy = (d: Date) => d.toLocaleDateString('vi-VN')
+  // Ô TIỀN theo tiền tệ của đơn: VND "#,##0", USD/EUR/CNY thêm 2 số lẻ cent.
+  const moneyFmt = currencyDecimals(currency) > 0 ? '#,##0.00' : '#,##0'
   const fixed: Record<string, XCol> = {
     '@stt': { label: 'STT', width: 5, align: 'center', value: (_l, i) => i + 1 },
-    '@lsx': {
-      label: 'LSX',
-      width: 13,
-      align: 'center',
-      value: () => ctx.lsxCode ?? '',
-    },
-    '@code': {
-      label: 'Mã sản phẩm',
-      width: 12,
-      align: 'center',
-      value: (l) => l.material_code,
-    },
     '@name': {
       label: 'Tên sản phẩm / vật tư',
       width: 24,
@@ -114,41 +117,42 @@ function excelColumns(
       width: 10,
       align: 'right',
       num: true,
-      value: (l) => l.qty_ordered,
+      // Dòng chưa nhập SL (chỉ có ở bản dựng từ nháp) → ô trống, không ghi 0.
+      value: (l) => (l.qty_ordered > 0 ? l.qty_ordered : ''),
       numFmtFor: (l) => packSuffixFormat(l),
     },
-    '@price':
-      t === 'carton'
-        ? {
-            // Bao bì chốt cơ sở tính tiền TỪNG DÒNG — đơn giá kèm /thùng·/m².
-            label: `Đơn giá (${currency})`,
-            width: 13,
-            red: true,
-            align: 'right',
-            value: (l) =>
-              l.unit_price != null
-                ? `${Number(l.unit_price).toLocaleString('vi-VN')}${
-                    l.carton_basis === 'm2' ? '/m²' : '/thùng'
-                  }`
-                : '',
-          }
-        : {
-            label: meta.priceUnit
-              ? `Đơn giá (${currency}/${meta.priceUnit})`
-              : `Đơn giá (${currency})`,
-            width: 12,
-            red: true,
-            align: 'right',
-            num: true,
-            value: (l) => nOrNull(l.unit_price),
-          },
+    '@price': PO_PRICE_SUFFIX_TEMPLATES.includes(t)
+      ? {
+          // Mẫu chốt cơ sở tính tiền TỪNG DÒNG — đơn giá kèm /thùng·/m²·/m³·/kg.
+          label: `Đơn giá (${currency})`,
+          width: 13,
+          red: true,
+          align: 'right',
+          value: (l) =>
+            l.unit_price != null
+              ? `${Number(l.unit_price).toLocaleString('vi-VN')}${poPriceSuffix(t, l.carton_basis)}`
+              : '',
+        }
+      : {
+          label: meta.priceUnit
+            ? `Đơn giá (${currency}/${meta.priceUnit})`
+            : `Đơn giá (${currency})`,
+          width: 12,
+          red: true,
+          align: 'right',
+          num: true,
+          numFmtFor: () => moneyFmt,
+          value: (l) => nOrNull(l.unit_price),
+        },
     '@amount': {
       label: `Thành tiền (${currency})`,
       width: 14,
       align: 'right',
       num: true,
+      numFmtFor: () => moneyFmt,
       isAmount: true,
-      value: (l) => (l.unit_price != null ? Math.round(poLineAmount(l)) : ''),
+      // Tròn theo tiền tệ — VND về đồng, USD giữ cent ($700.21 phải ra .21).
+      value: (l) => (l.unit_price != null ? roundMoney(poLineAmount(l), currency) : ''),
     },
     '@note': { label: 'Ghi chú', width: 22, align: 'left', value: (l) => l.note ?? '' },
   }
@@ -200,12 +204,11 @@ export async function buildPoExcel(input: {
   const { company, po, supplier, lines } = input
   const template = po.template ?? 'simple'
   const d = new Date(po.created_at)
-  // Đơn NGOÀI LSX: bỏ cột LSX như phiếu in.
+  // LSX + Đơn hàng không là cột bảng kê — nằm ở khối tham chiếu đầu file.
   const cols = excelColumns(template, po.currency, {
-    lsxCode: po.lsx_code,
     orderDate: d,
     expectedAt: po.expected_at,
-  }).filter((c) => c.label !== 'LSX' || po.lsx_code)
+  })
   const n = cols.length
   const amountIdx = cols.findIndex((c) => c.isAmount) // 0-based
 
@@ -217,14 +220,22 @@ export async function buildPoExcel(input: {
     ? cols.findIndex((c) => c.label === 'Tổng kg')
     : cols.findIndex((c) => c.label === PO_PRINT_QTY_LABEL[template])
 
-  const subtotal = Math.round(lines.reduce((s, l) => s + poLineAmount(l), 0))
-  const discount = Number(po.discount_amount ?? 0)
-  const base = Math.max(0, subtotal - discount)
+  // Khối tiền dùng CHUNG `poMoney` với form/chi tiết/phiếu in — tròn theo
+  // tiền tệ của đơn (VND về đồng, USD về cent).
   const rate = Number(po.vat_rate ?? 0)
-  const vatAmount = po.price_includes_vat
-    ? Math.round((base * rate) / (100 + rate))
-    : Math.round((base * rate) / 100)
-  const grandTotal = po.price_includes_vat ? base : base + vatAmount
+  const {
+    subtotal,
+    discountAmount: discount,
+    vatAmount,
+    grandTotal,
+  } = poMoney({
+    subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
+    discount: po.discount_amount,
+    vatRate: po.vat_rate,
+    priceIncludesVat: po.price_includes_vat,
+    currency: po.currency,
+  })
+  const moneyTotalFmt = currencyDecimals(po.currency) > 0 ? '#,##0.00' : '#,##0'
 
   const wb = new ExcelJS.Workbook()
   const ws = wb.addWorksheet('Đơn đặt hàng', {
@@ -426,7 +437,7 @@ export async function buildPoExcel(input: {
       font: { bold: true, size: 9 },
       alignment: { horizontal: 'right' },
       border: BORDER,
-      numFmt: '#,##0',
+      numFmt: moneyTotalFmt,
       ...(isGrand
         ? {
             fill: {

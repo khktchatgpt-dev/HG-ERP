@@ -76,6 +76,8 @@ export function AutoGrowCell({
   className = '',
   maxLength = 200,
   growMax,
+  autoFocus,
+  onAutoFocused,
 }: {
   value: string
   onChange: (v: string) => void
@@ -91,6 +93,14 @@ export function AutoGrowCell({
    * chặn 200 ký tự nên nở hết cũng không thành hàng khổng lồ.
    */
   growMax?: number
+  /**
+   * Nhận con trỏ khi vừa render (dòng TỰ DO vừa thêm: ô tên là ô bắt buộc đang
+   * trống — nhảy vào SL đặt như dòng thường là bắt người soạn click ngược lên).
+   * Nhớ gọi `onAutoFocused` để cha xoá cờ — không thì mỗi lần render lại cướp
+   * con trỏ một lần.
+   */
+  autoFocus?: boolean
+  onAutoFocused?: () => void
 }) {
   return (
     <textarea
@@ -106,6 +116,10 @@ export function AutoGrowCell({
       ref={(el) => {
         // Mở lại đơn cũ: nội dung có sẵn phải nở NGAY, không đợi người dùng gõ.
         if (el) grow(el, growMax)
+        if (el && autoFocus) {
+          el.focus()
+          onAutoFocused?.()
+        }
       }}
       className={`${cell} min-h-[32px] resize-none py-1.5 leading-tight break-words ${className}`}
       aria-label={label}
@@ -149,7 +163,11 @@ type BaremHintProps = {
   index: number
   onPatch: (i: number, patch: Partial<Line>) => void
   /** Ghi số vừa gõ về danh mục vật tư — form lo phần gọi API. */
-  onSaveToCatalog?: (materialId: string, field: 'kgm' | 'kgunit', value: number) => void
+  onSaveToCatalog?: (
+    materialId: string,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
+  ) => void
 }
 
 function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps) {
@@ -306,47 +324,110 @@ export function LineCell({
           }}
           className={cell}
           aria-label={label}
+          // ĐK (Đối khẩu — 0134, đơn Hồng Đào Chu Lai) CHƯA có công thức m²
+          // đã kiểm chứng: chọn ĐK thì m²/thùng nhập tay theo NCC chào.
+          title="AD/MR tự tính m² từ lọt lòng; ĐK (đối khẩu) nhập m² tay theo NCC chào"
         >
           <option value="">—</option>
           <option value="AD">AD</option>
           <option value="MR">MR</option>
+          <option value="ĐK">ĐK</option>
         </select>
       )
 
     case 'inner':
-      return <InnerDimsCell line={l} index={index} onPatch={onPatch} />
+      return (
+        <>
+          <InnerDimsCell line={l} index={index} onPatch={onPatch} />
+          {/* DANH MỤC CHƯA CÓ QUY CÁCH mà dòng vừa gõ đủ kích thước → mời lưu
+              ngược (0136, giai đoạn hoàn thiện data) — lần đặt sau tự bóc,
+              khỏi gõ lại. Cùng lối "lưu vào danh mục ↑" của barem kg/m. */}
+          {onSaveToCatalog &&
+            !l.is_free &&
+            l.spec.trim() === '' &&
+            l.inner_l_mm !== '' &&
+            l.inner_w_mm !== '' &&
+            l.inner_h_mm !== '' && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSaveToCatalog(
+                    l.material_id,
+                    'spec',
+                    `${l.inner_l_mm}x${l.inner_w_mm}x${l.inner_h_mm}`,
+                  )
+                }
+                title="Danh mục chưa có quy cách — lưu để lần đặt sau tự bóc kích thước"
+                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+              >
+                lưu quy cách ↑
+              </button>
+            )}
+        </>
+      )
 
     case 'area':
       return (
-        <input
-          type="number"
-          min="0"
-          step="0.0001"
-          onWheel={blurOnWheel}
-          value={l.area_m2}
-          onChange={(e) =>
-            onPatch(index, {
-              area_m2: e.target.value === '' ? '' : Number(e.target.value),
-            })
-          }
-          className={`${cell} text-right`}
-          title="Tự tính từ lọt lòng theo cách mở — sửa được nếu NCC chào khác barem"
-          aria-label={label}
-        />
+        <>
+          <input
+            type="number"
+            min="0"
+            step="0.0001"
+            onWheel={blurOnWheel}
+            value={l.area_m2}
+            onChange={(e) =>
+              onPatch(index, {
+                area_m2: e.target.value === '' ? '' : Number(e.target.value),
+              })
+            }
+            className={`${cell} text-right`}
+            title="Tự tính từ lọt lòng theo cách mở — sửa được nếu NCC chào khác barem"
+            aria-label={label}
+          />
+          {/* Kính: quy cách gõ ở cột "Quy cách" (dimension_text) — danh mục
+              trống thì mời lưu, lần sau m²/tấm tự tính từ chính chuỗi này. */}
+          {onSaveToCatalog &&
+            !l.is_free &&
+            l.spec.trim() === '' &&
+            parseInnerDims(l.dimension_text) != null && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSaveToCatalog(l.material_id, 'spec', l.dimension_text.trim())
+                }
+                title="Danh mục chưa có quy cách — lưu để lần đặt sau tự tính m²/tấm"
+                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+              >
+                lưu quy cách ↑
+              </button>
+            )}
+        </>
       )
 
     case 'cartonBasis':
+      // Bộ lựa chọn theo MẪU (khai ở PO_FIELDS): bao bì thùng/m², kính tấm/m²,
+      // xốp tấm/m³, gia công SP/kg — cùng một cột DB `carton_basis`.
       return (
         <select
           value={l.carton_basis}
           onChange={(e) =>
-            onPatch(index, { carton_basis: e.target.value as 'ctn' | 'm2' })
+            onPatch(index, {
+              carton_basis: e.target.value as Line['carton_basis'],
+            })
           }
           className={cell}
           aria-label={label}
         >
-          <option value="ctn">thùng</option>
-          <option value="m2">m²</option>
+          {(
+            f.options ?? [
+              { value: 'ctn', label: 'thùng' },
+              { value: 'm2', label: 'm²' },
+            ]
+          ).map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
         </select>
       )
   }

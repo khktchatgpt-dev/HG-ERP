@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import {
   ArrowLeft,
   Building2,
@@ -13,12 +12,23 @@ import {
 } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
+import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
-import { TopProgressBar } from '@/components/erp/Spinner'
-import { MaterialPickDialog, type PoMaterial } from '@/components/supply/MaterialPicker'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import {
+  MaterialPickDialog,
+  invalidateMaterialPickCache,
+  type PoMaterial,
+} from '@/components/supply/MaterialPicker'
+import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { allocationNote } from '@/lib/po-allocation'
-import { poTemplateMeta, type PoTemplate, type PoTerms } from '@/lib/po-template'
+import {
+  FREE_LINE_TEMPLATES,
+  poTemplateMeta,
+  type PoTemplate,
+  type PoTerms,
+} from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import {
@@ -35,7 +45,15 @@ import { TemplatePicker } from './sections/TemplatePicker'
 import { NeedsPanel, type Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { TotalsBar } from './sections/TotalsBar'
-import { newLine, type Line } from './po-line'
+import {
+  migrateDraftLine,
+  newFreeLine,
+  newLine,
+  refreshLineFromMaterial,
+  type Line,
+} from './po-line'
+import { EditMaterialDialog } from './EditMaterialDialog'
+import { PasteLinesDialog, type PasteConfirm } from './PasteLinesDialog'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -46,6 +64,8 @@ type SupplierOption = {
   rating: string | null
   lead_time_days: number | null
   payment_terms: string | null
+  /** Tiền tệ mặc định của NCC — chọn NCC là ô tiền tệ tự chuyển theo. */
+  currency?: string | null
   /** Chỉ dùng cho khối "Kính gửi" của phiếu xem trước. */
   address?: string | null
   tax_no?: string | null
@@ -95,11 +115,24 @@ const field =
  * TỰ LƯU BẢN NHÁP vào trình duyệt (bất cập #5, 09/08/2026): đơn 20 dòng gõ dở
  * mà F5 / mất mạng / lỡ đóng tab là mất sạch — Excel thì Ctrl+S theo phản xạ
  * nên không ai nghĩ tới chuyện này cho tới khi mất. Form ghi localStorage sau
- * mỗi nhịp gõ (debounce), mở lại trang thì đề nghị khôi phục. Chỉ ở chế độ
- * TẠO MỚI — sửa đơn đã có bản gốc trên server, khôi phục đè lên nó dễ nhầm hơn
- * là gõ lại.
+ * mỗi nhịp gõ (debounce), mở lại trang thì đề nghị khôi phục.
+ *
+ * 13/08/2026: mở rộng cho CẢ CHẾ ĐỘ SỬA (khóa riêng theo đơn,
+ * `hg-po-draft-<id>`) — điều hướng nội bộ SPA không bắn beforeunload nên bấm
+ * nhầm một link sidebar là mất trắng chỉnh sửa; autosave + banner khôi phục
+ * đỡ được mọi kiểu rời trang. Chế độ sửa chỉ ghi khi state KHÁC bản server
+ * (mốc `baselineRef`) để không gắn banner "sửa dở" oan.
  */
 const DRAFT_KEY = 'hg-po-draft-new'
+
+/*
+ * "Đề xuất từ BOM" từng TẮT TOÀN CỤC (11/08/2026) vì định mức đang làm lại.
+ * BẬT LẠI CÓ KIỂM SOÁT (12/08/2026, user chốt): needs đọc từ BẢNG CHI TIẾT của
+ * chính lệnh (ưu tiên nhập tay, fallback BOM×SL — xem /api/dept/supply/needs),
+ * lệnh nào Kỹ thuật đã nhập thì số là số thật; lệnh chưa có dữ liệu thì panel
+ * tự ẩn (needs rỗng) — im như hồi tắt. Panel mang nhãn "số nháp — đối chiếu
+ * trước khi dùng", và số vẫn chỉ là gợi ý bấm-để-dùng.
+ */
 
 type SavedDraft = {
   at: string
@@ -121,9 +154,9 @@ type SavedDraft = {
   lines: Line[]
 }
 
-function readSavedDraft(): SavedDraft | null {
+function readSavedDraft(key: string): SavedDraft | null {
   try {
-    const raw = localStorage.getItem(DRAFT_KEY)
+    const raw = localStorage.getItem(key)
     if (!raw) return null
     const d = JSON.parse(raw) as SavedDraft
     // Nháp rỗng (chưa có dòng nào) không đáng một cái banner.
@@ -169,6 +202,7 @@ export function PoCreateForm({
 }) {
   const router = useRouter()
   const toast = useToast()
+  const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
 
   const isEdit = initial?.mode === 'edit'
@@ -190,7 +224,18 @@ export function PoCreateForm({
   )
   const [expectedAt, setExpectedAt] = useState(start?.expected_at ?? '')
   const [contractNo, setContractNo] = useState(start?.contract_no ?? '')
-  const [currency, setCurrency] = useState(start?.currency ?? 'VND')
+  const [currency, setCurrency] = useState(
+    start?.currency ??
+      // Vào form với NCC chọn sẵn (?supplier=…) thì tiền tệ theo NCC luôn.
+      suppliers.find((s) => s.id === defaultSupplierId)?.currency?.toUpperCase() ??
+      'VND',
+  )
+  /**
+   * Người dùng ĐÃ TỰ CHỌN tiền tệ chưa — có thì đổi NCC KHÔNG áp lại tiền tệ
+   * mặc định của NCC mới nữa (cùng lối với `vatDirty`). Mở đơn có sẵn coi như
+   * đã chọn: currency là số đã chốt với NCC.
+   */
+  const [currencyDirty, setCurrencyDirty] = useState(!!start)
   const [note, setNote] = useState(start?.note ?? '')
   const [discount, setDiscount] = useState<number | ''>(start?.discount_amount ?? '')
 
@@ -217,31 +262,45 @@ export function PoCreateForm({
   const [loadingNeeds, setLoadingNeeds] = useState(false)
   const [showNeeds, setShowNeeds] = useState(true)
 
+  /*
+   * BẢO VỆ CHUYỂN TRANG ĐỘT NGỘT (13/08/2026 — user: "chưa có cơ chế bảo vệ").
+   * Trước đây autosave CHỈ ở chế độ tạo mới; chế độ SỬA chỉ có beforeunload —
+   * tức bấm một link sidebar là mất trắng 20 dòng chỉnh sửa, không cảnh báo,
+   * không khôi phục (beforeunload không bắn với điều hướng nội bộ SPA).
+   *
+   * Nay autosave CẢ HAI chế độ, khóa nháp tách theo đơn (`hg-po-draft-<id>`
+   * cho sửa, khóa cũ cho tạo mới) — rời trang kiểu gì quay lại cũng có banner
+   * đề nghị khôi phục.
+   */
+  const draftKey = isEdit ? `hg-po-draft-${initial!.po.id}` : DRAFT_KEY
+
   // Bản nháp tự lưu tìm thấy lúc mở trang — hiện banner đề nghị khôi phục.
   // setState qua callback của timer, không gọi thẳng thân effect (lint cascading
   // render — cùng lý do với effect nạp taxonomy ở MaterialCoreFields).
   const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
   useEffect(() => {
-    if (initial) return
-    const t = setTimeout(() => setSavedDraft(readSavedDraft()), 0)
+    // 'duplicate' (nhân bản) không autosave/khôi phục: bản gốc là đơn cũ, mở
+    // lại lúc nào cũng dựng lại được — đừng đẻ thêm một lớp nháp gây rối.
+    if (initial && initial.mode !== 'edit') return
+    const t = setTimeout(() => setSavedDraft(readSavedDraft(draftKey)), 0)
     return () => clearTimeout(t)
-  }, [initial])
+  }, [initial, draftKey])
 
-  /*
-   * TỰ LƯU sau mỗi nhịp gõ (debounce 800ms) — chỉ chế độ tạo mới, và chỉ khi
-   * banner khôi phục đã được trả lời (không thì vòng autosave đè mất bản nháp
-   * cũ TRƯỚC khi người dùng kịp bấm "Khôi phục").
+  /**
+   * MỐC ĐỐI CHIẾU của chế độ sửa: chụp state lúc mở trang (đúng bản server).
+   * Autosave chỉ ghi khi state KHÁC mốc — không thì vừa mở đơn ra xem đã bị
+   * gắn banner "sửa dở" oan; quay về đúng bản gốc thì nháp tự xoá.
    */
+  const baselineRef = useRef<string | null>(null)
+  const dirtyRef = useRef(false)
+
   useEffect(() => {
-    if (initial || savedDraft) return
+    if (initial && initial.mode !== 'edit') return
+    if (savedDraft) return // banner chưa được trả lời — đừng đè bản nháp cũ
     const t = setTimeout(() => {
       try {
-        if (lines.length === 0) {
-          localStorage.removeItem(DRAFT_KEY)
-          return
-        }
         const d: SavedDraft = {
-          at: new Date().toISOString(),
+          at: '', // điền lúc ghi — không tham gia so sánh với mốc
           template,
           poType,
           lsxId,
@@ -259,7 +318,22 @@ export function PoCreateForm({
           signerRole,
           lines,
         }
-        localStorage.setItem(DRAFT_KEY, JSON.stringify(d))
+        const body = JSON.stringify(d)
+        if (isEdit && baselineRef.current == null) {
+          // Nhịp autosave đầu tiên sau khi mở đơn sửa = đúng bản server → làm mốc.
+          baselineRef.current = body
+          return
+        }
+        const unchanged = isEdit ? body === baselineRef.current : lines.length === 0
+        dirtyRef.current = !unchanged
+        if (unchanged) {
+          localStorage.removeItem(draftKey)
+          return
+        }
+        localStorage.setItem(
+          draftKey,
+          JSON.stringify({ ...d, at: new Date().toISOString() }),
+        )
       } catch {
         // localStorage đầy/bị chặn — autosave là lưới an toàn, không chặn việc gõ.
       }
@@ -267,6 +341,8 @@ export function PoCreateForm({
     return () => clearTimeout(t)
   }, [
     initial,
+    isEdit,
+    draftKey,
     savedDraft,
     template,
     poType,
@@ -287,17 +363,18 @@ export function PoCreateForm({
   ])
 
   /*
-   * Chế độ SỬA không có autosave (bản gốc nằm trên server) — chặn đóng tab khi
-   * đang có dòng hàng để khỏi mất chỉnh sửa vì một cú F5.
+   * Đóng tab / F5: chặn khi ĐÃ SỬA KHÁC bản gốc (chế độ sửa) — autosave đã giữ
+   * nháp nhưng 800ms debounce vẫn hở nhịp gõ cuối; hỏi một câu là rẻ nhất.
+   * Tạo mới không hỏi: autosave + banner khôi phục là đủ, chặn F5 chỉ gây bực.
    */
   useEffect(() => {
     if (!isEdit) return
     const h = (e: BeforeUnloadEvent) => {
-      if (lines.length > 0) e.preventDefault()
+      if (dirtyRef.current) e.preventDefault()
     }
     window.addEventListener('beforeunload', h)
     return () => window.removeEventListener('beforeunload', h)
-  }, [isEdit, lines.length])
+  }, [isEdit])
 
   /** Người dùng bấm "Khôi phục" trên banner — đổ lại toàn bộ state đã lưu. */
   function restoreDraft(d: SavedDraft) {
@@ -309,6 +386,8 @@ export function PoCreateForm({
     setExpectedAt(d.expectedAt)
     setContractNo(d.contractNo)
     setCurrency(d.currency)
+    // Nháp đã mang tiền tệ người dùng chốt — đổi NCC sau đó không áp đè lại.
+    setCurrencyDirty(true)
     setNote(d.note)
     setDiscount(d.discount)
     setVat(d.vat)
@@ -316,7 +395,9 @@ export function PoCreateForm({
     setVatDirty(d.vatDirty)
     setTerms(d.terms)
     setSignerRole(d.signerRole)
-    setLines(d.lines)
+    // Nháp lưu trước 0139: gỗ ghi m³/SP vào weight_per_unit, mro ghi bảo hành
+    // vào finish — dọn về cột đúng lúc khôi phục.
+    setLines(d.lines.map((l) => migrateDraftLine(d.template, l)))
     setSavedDraft(null)
     if (d.poType === 'lsx' && d.lsxId) void loadNeeds(d.lsxId, d.extraLsxIds ?? [])
   }
@@ -364,6 +445,10 @@ export function PoCreateForm({
         `/api/dept/supply/needs?production_order_id=${primary}${qs}`,
       )
       setNeeds(data.needs)
+      // Lệnh lớn (kiểm UI 12/08: LSX 01 có 106 vật tư) mà panel mở sẵn là nó
+      // chiếm cả màn giữa hai vùng làm việc — nhiều hơn một lưới 12 thẻ thì
+      // THU GỌN, header vẫn đếm đủ và một bấm là bung.
+      setShowNeeds(data.needs.length <= 12)
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -395,6 +480,10 @@ export function PoCreateForm({
   const pickerRef = useRef<HTMLButtonElement | null>(null)
   const [focusIndex, setFocusIndex] = useState<number | null>(null)
   const [pickOpen, setPickOpen] = useState(false)
+  /** Vật tư đang mở modal SỬA TẠI CHỖ (giai đoạn hoàn thiện data) — null = đóng. */
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
+  /** Dán từ Excel (0136) — thêm dòng hàng loạt từ bảng trong sổ. */
+  const [pasteOpen, setPasteOpen] = useState(false)
   /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
   const [previewOpen, setPreviewOpen] = useState(false)
 
@@ -408,11 +497,70 @@ export function PoCreateForm({
    * Con trỏ nhảy vào SL đặt của dòng ĐẦU TIÊN vừa thêm, không phải dòng cuối:
    * người dùng tích theo thứ tự cần nhập, nên nhập cũng đi theo thứ tự đó.
    */
-  function addMaterials(list: PoMaterial[]) {
-    const add = list.filter((m) => !usedIds.has(m.id))
+  function addMaterials(
+    list: PoMaterial[],
+    /** SL/giá/ghi chú kèm theo (dán từ Excel — 0136) — điền đè sau `newLine`. */
+    extras?: Map<
+      string,
+      { qty?: number | null; price?: number | null; note?: string | null }
+    >,
+  ) {
+    // Bỏ mã đã có trên đơn VÀ mã lặp trong chính danh sách (vùng dán có thể
+    // ghi một món hai dòng) — schema chặn trùng dòng lúc gửi, chặn sớm ở đây.
+    const seen = new Set<string>()
+    const add = list.filter(
+      (m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true),
+    )
     if (add.length === 0) return
     setFocusIndex(lines.length) // dòng mới nối vào cuối bảng
-    setLines((ls) => [...ls, ...add.map((m) => newLine(template, m))])
+    setLines((ls) => [
+      ...ls,
+      ...add.map((m) => {
+        const l = newLine(template, m)
+        const e = extras?.get(m.id)
+        if (!e) return l
+        return {
+          ...l,
+          qty: e.qty ?? l.qty,
+          price: e.price ?? l.price,
+          note: e.note ?? l.note,
+        }
+      }),
+    ])
+  }
+
+  /** Dòng tự do (0134) — đơn gỗ/gia công đặt theo MÃ SP, tên gõ ngay trên dòng. */
+  function addFreeLine() {
+    setFocusIndex(lines.length)
+    setLines((ls) => [...ls, newFreeLine()])
+  }
+
+  /** Kết quả dán từ Excel (0136): dòng khớp mã + dòng tự gõ, kèm SL/giá của sổ. */
+  function addFromPaste(picked: PasteConfirm) {
+    const extras = new Map(
+      picked.matched.map((p) => [
+        p.material.id,
+        { qty: p.qty, price: p.price, note: p.note },
+      ]),
+    )
+    addMaterials(
+      picked.matched.map((p) => p.material),
+      extras,
+    )
+    if (picked.free.length > 0) {
+      setLines((ls) => [
+        ...ls,
+        ...picked.free.map((f) => ({
+          ...newFreeLine(),
+          name: f.name,
+          qty: (f.qty ?? '') as Line['qty'],
+          price: (f.price ?? '') as Line['price'],
+          note: f.note ?? '',
+        })),
+      ])
+    }
+    const total = picked.matched.length + picked.free.length
+    if (total > 0) toast.success(`Đã thêm ${total} dòng từ vùng dán`)
   }
 
   /**
@@ -469,10 +617,10 @@ export function PoCreateForm({
    */
   async function saveToCatalog(
     materialId: string,
-    field: 'kgm' | 'kgunit',
-    value: number,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
   ) {
-    const col = field === 'kgm' ? 'kg_per_m' : 'kg_per_unit'
+    const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
     try {
       await api(`/api/dept/warehouse/materials/${materialId}`, {
         method: 'PATCH',
@@ -484,13 +632,20 @@ export function PoCreateForm({
             ? {
                 ...l,
                 ...(field === 'kgm'
-                  ? { catalog_kg_m: value }
-                  : { catalog_kg_unit: value }),
+                  ? { catalog_kg_m: Number(value) }
+                  : field === 'kgunit'
+                    ? { catalog_kg_unit: Number(value) }
+                    : // Quy cách (0136): dòng giữ bản chụp danh mục — cập nhật để
+                      // nút "lưu quy cách" tự ẩn và lần sau tự bóc kích thước.
+                      { spec: String(value) }),
               }
             : l,
         ),
       )
-      toast.success('Đã lưu vào danh mục', `${col} = ${value.toLocaleString('vi-VN')}`)
+      toast.success(
+        'Đã lưu vào danh mục',
+        `${col} = ${typeof value === 'number' ? value.toLocaleString('vi-VN') : value}`,
+      )
     } catch (e) {
       toast.error(
         'Không lưu được vào danh mục',
@@ -520,22 +675,67 @@ export function PoCreateForm({
   const readyLines = readyLineCount(template, lines)
   const problem = draftProblem(header, lines)
 
+  /**
+   * HỘP XÁC NHẬN cập nhật danh mục sau khi lưu đơn (13/08/2026 — user chốt:
+   * không tự ghi ngầm). Server trả danh sách "gõ trên dòng mà danh mục đang
+   * trống"; người soạn duyệt rồi mới ghi. `dest` giữ đường điều hướng — đóng
+   * hộp (đồng ý hay bỏ qua) mới rời trang.
+   */
+  const [enrich, setEnrich] = useState<{
+    items: CatalogSuggestion[]
+    dest: string
+  } | null>(null)
+  const [enrichBusy, setEnrichBusy] = useState(false)
+
+  function leaveTo(dest: string) {
+    router.push(dest)
+    router.refresh()
+  }
+
+  async function confirmEnrich() {
+    if (!enrich || enrichBusy) return
+    setEnrichBusy(true)
+    try {
+      const { updated } = await api<{ updated: number }>(
+        '/api/dept/warehouse/materials/enrich',
+        {
+          method: 'POST',
+          body: {
+            items: enrich.items.map((s) => ({
+              material_id: s.material_id,
+              set: Object.fromEntries(s.fields.map((f) => [f.field, f.value])),
+            })),
+          },
+        },
+      )
+      invalidateMaterialPickCache() // ô tìm vật tư phải thấy bản vừa giàu thêm
+      toast.success(`Đã cập nhật ${updated} vật tư`, 'Lần đặt sau các ô này tự điền sẵn')
+      leaveTo(enrich.dest)
+    } catch (err) {
+      toast.error(
+        'Cập nhật danh mục thất bại',
+        err instanceof ApiError ? err.message : 'Có lỗi — đơn đã lưu, chỉ danh mục chưa',
+      )
+      leaveTo(enrich.dest) // đơn đã lưu xong — không giữ người dùng lại vì phần phụ
+    }
+  }
+
   async function submit() {
     if (problem || busy) return
     setBusy(true)
     try {
-      const { po } = await api<{ po: { id: string; code: string } }>(
-        isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos',
-        {
-          // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
-          method: isEdit ? 'PATCH' : 'POST',
-          body: buildPoPayload(header, lines),
-        },
-      )
+      const { po, catalog_suggestions } = await api<{
+        po: { id: string; code: string }
+        catalog_suggestions?: CatalogSuggestion[]
+      }>(isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos', {
+        // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
+        method: isEdit ? 'PATCH' : 'POST',
+        body: buildPoPayload(header, lines),
+      })
       // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
       // sau không bị hỏi khôi phục đơn đã lưu rồi.
       try {
-        localStorage.removeItem(DRAFT_KEY)
+        localStorage.removeItem(draftKey)
       } catch {}
       // 0116: tạo = LƯU NHÁP, chưa tới bàn duyệt của GĐ. Redirect kèm ?view= để
       // danh sách mở ngay chi tiết — người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
@@ -545,8 +745,13 @@ export function PoCreateForm({
           ? 'Thay đổi đã ghi vào đơn'
           : 'Kiểm tra lại trong chi tiết rồi bấm "Gửi GĐ duyệt"',
       )
-      router.push(isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`)
-      router.refresh()
+      const dest = isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`
+      // Có thông tin danh mục đang thiếu → hỏi trước khi rời trang; không thì đi luôn.
+      if (catalog_suggestions && catalog_suggestions.length > 0) {
+        setEnrich({ items: catalog_suggestions, dest })
+        return
+      }
+      leaveTo(dest)
     } catch (err) {
       toast.error(
         isEdit ? 'Lưu đơn thất bại' : 'Tạo đơn thất bại',
@@ -595,12 +800,28 @@ export function PoCreateForm({
             >
               <Printer className="size-4" aria-hidden /> Xem trước phiếu in
             </button>
-            <Link
-              href="/planning/pos"
+            {/* Đang SỬA KHÁC bản gốc → hỏi trước khi rời (13/08); nháp vẫn đã
+                tự lưu nên "Rời trang" không mất gì — câu hỏi chỉ để khỏi rời nhầm. */}
+            <button
+              type="button"
+              onClick={async () => {
+                if (
+                  dirtyRef.current &&
+                  !(await confirm({
+                    title: 'Rời trang khi đang sửa dở?',
+                    description:
+                      'Thay đổi chưa bấm Lưu — bản sửa dở đã được giữ tạm trên máy này, quay lại sẽ được đề nghị khôi phục.',
+                    confirmLabel: 'Rời trang',
+                  }))
+                ) {
+                  return
+                }
+                router.push('/planning/pos')
+              }}
               className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               <ArrowLeft className="size-4" aria-hidden /> Về danh sách
-            </Link>
+            </button>
           </div>
         }
       />
@@ -608,7 +829,7 @@ export function PoCreateForm({
       {/* Bản nháp tự lưu từ phiên trước — hỏi trước khi đè, không tự khôi phục. */}
       {savedDraft && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[13px] dark:border-amber-900 dark:bg-amber-950/30">
-          <b>Có bản nháp chưa lưu</b>
+          <b>{isEdit ? 'Có bản sửa dở chưa lưu của đơn này' : 'Có bản nháp chưa lưu'}</b>
           <span className="text-muted-foreground">
             {savedDraft.lines.length} dòng ·{' '}
             {new Date(savedDraft.at).toLocaleString('vi-VN')}
@@ -625,7 +846,7 @@ export function PoCreateForm({
               type="button"
               onClick={() => {
                 try {
-                  localStorage.removeItem(DRAFT_KEY)
+                  localStorage.removeItem(draftKey)
                 } catch {}
                 setSavedDraft(null)
               }}
@@ -765,7 +986,17 @@ export function PoCreateForm({
               <Building2 className={fieldIcon} aria-hidden />
               <SupplierPicker
                 value={supplierId}
-                onChange={setSupplierId}
+                onChange={(id) => {
+                  setSupplierId(id)
+                  // Tiền tệ đi theo NCC (gỗ báo USD/m³) — trừ khi người soạn đã
+                  // tự chọn tiền tệ rồi thì tôn trọng lựa chọn đó (như vatDirty).
+                  if (!currencyDirty) {
+                    const cur = suppliers
+                      .find((s) => s.id === id)
+                      ?.currency?.toUpperCase()
+                    if (cur) setCurrency(cur)
+                  }
+                }}
                 suppliers={suppliers}
                 className={`${field} pl-8`}
               />
@@ -808,7 +1039,9 @@ export function PoCreateForm({
         </div>
       </section>
 
-      {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc ── */}
+      {/* ── Nhu cầu LSX: đường tắt, không phải cửa bắt buộc. Panel tự ẩn khi
+          lệnh chưa có bảng chi tiết/định mức (needs rỗng) — bật lại có kiểm
+          soát 12/08/2026, số mang nhãn nháp. ── */}
       {poType === 'lsx' && lsxId && (
         <NeedsPanel
           needs={needs}
@@ -845,9 +1078,33 @@ export function PoCreateForm({
           onPatch={patchLine}
           onRemove={removeLine}
           onSaveToCatalog={(id, f, v) => void saveToCatalog(id, f, v)}
+          onEditMaterial={setEditingMaterialId}
           focusIndex={focusIndex}
           onFocused={() => setFocusIndex(null)}
           onDoneRow={() => pickerRef.current?.focus()}
+        />
+
+        {/* Sửa vật tư tại chỗ — lưu xong mọi dòng đang mang mã đó hút lại số
+            mới (chỉ lấp ô trống, số đã gõ tay giữ nguyên). */}
+        <EditMaterialDialog
+          materialId={editingMaterialId}
+          onClose={() => setEditingMaterialId(null)}
+          onSaved={(id, m) =>
+            setLines((ls) =>
+              ls.map((l) =>
+                l.material_id === id ? refreshLineFromMaterial(template, l, m) : l,
+              ),
+            )
+          }
+        />
+
+        {/* Dán từ Excel (0136) — thêm dòng hàng loạt từ bảng trong sổ. */}
+        <PasteLinesDialog
+          open={pasteOpen}
+          template={template}
+          allowFree={FREE_LINE_TEMPLATES.includes(template)}
+          onClose={() => setPasteOpen(false)}
+          onConfirm={addFromPaste}
         />
 
         {/*
@@ -891,6 +1148,31 @@ export function PoCreateForm({
               Enter
             </kbd>
           </button>
+          {/* DÁN TỪ EXCEL (0136) — BOM chưa hoàn thiện, SL vẫn tính trong sổ:
+              dán vùng bảng, máy khớp mã, xem lại rồi vào đơn một lượt. */}
+          <button
+            type="button"
+            onClick={() => setPasteOpen(true)}
+            className="inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-[13px] font-medium text-zinc-600 shadow-xs transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            title="Dán vùng bảng (tên/mã · SL · giá) từ sổ Excel — máy khớp mã, thêm dòng hàng loạt"
+          >
+            ⎘ Dán từ Excel
+          </button>
+          {/*
+            DÒNG TỰ DO (0134) — chỉ mẫu gỗ/gia công: đơn thật đặt theo MÃ SẢN
+            PHẨM (bàn/ghế gia công), không phải vật tư kho, nên không bắt người
+            soạn chọn từ danh mục. Tên/ĐVT gõ ngay trên dòng vừa thêm.
+          */}
+          {FREE_LINE_TEMPLATES.includes(template) && (
+            <button
+              type="button"
+              onClick={addFreeLine}
+              className="inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-[13px] font-medium text-zinc-700 transition-colors hover:border-violet-400 hover:text-violet-700 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:border-violet-600"
+              title="Thêm dòng không gắn vật tư kho — tên SP/món gia công gõ ngay trên dòng"
+            >
+              ＋ Dòng SP tự gõ
+            </button>
+          )}
           <QuickAddMaterial
             template={template}
             onCreated={(m) =>
@@ -918,6 +1200,11 @@ export function PoCreateForm({
                 pack_size: m.pack_size,
                 pack_unit: m.pack_unit,
                 material_grade: m.material_grade,
+                // Thông số theo nhóm (0137) vừa khai — dòng đầu tiên dùng ngay
+                // (cách mở là m²/thùng tự tính, bề mặt điền cột đơn inox).
+                open_style: m.open_style,
+                pcs_per_ctn: m.pcs_per_ctn,
+                finish: m.finish,
                 // Vừa khai xong thì chưa có sổ kho — null, hiện "kho ?".
                 on_hand: null,
                 // Vật tư vừa khai thì chưa có lịch sử đặt để rót vào ô mô tả.
@@ -983,6 +1270,63 @@ export function PoCreateForm({
         </div>
       </Modal>
 
+      {/* HỘP XÁC NHẬN cập nhật danh mục sau khi lưu đơn (13/08/2026): liệt kê
+          thông tin gõ trên dòng mà danh mục đang TRỐNG — người soạn duyệt rồi
+          mới ghi, không tự ghi ngầm. Đóng hộp (đường nào cũng vậy) mới rời trang. */}
+      <Modal
+        open={enrich != null}
+        onClose={() => enrich && leaveTo(enrich.dest)}
+        title="Cập nhật kho vật tư?"
+        maxWidth="sm:max-w-xl"
+      >
+        {enrich && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm">
+              Đơn đã lưu. Có <b>{enrich.items.length}</b> vật tư bạn vừa gõ thông tin mà
+              danh mục đang <b>để trống</b> — lưu vào kho vật tư để lần đặt sau tự điền
+              sẵn?
+            </p>
+            <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto text-sm">
+              {enrich.items.map((s) => (
+                <li
+                  key={s.material_id}
+                  className="rounded-md border border-zinc-200 px-3 py-2 dark:border-zinc-800"
+                >
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-xs text-zinc-400">{s.code}</span>
+                    <span className="truncate font-medium">{s.name}</span>
+                  </div>
+                  <div className="text-muted-foreground mt-0.5">
+                    {s.fields.map((f) => `${f.label}: ${f.value}`).join(' · ')}
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <p className="text-muted-foreground text-xs">
+              Chỉ điền ô đang trống của danh mục — không đè giá trị nào đã có.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => leaveTo(enrich.dest)}
+                className="border-input bg-card hover:bg-muted rounded-md border px-3 py-2 text-sm shadow-xs"
+              >
+                Bỏ qua
+              </button>
+              <button
+                type="button"
+                disabled={enrichBusy}
+                onClick={() => void confirmEnrich()}
+                className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {enrichBusy && <Spinner size={14} />}
+                Cập nhật danh mục ({enrich.items.length})
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <TotalsBar
         subtotal={subtotal}
         vat={vat}
@@ -1004,7 +1348,10 @@ export function PoCreateForm({
           setVatDirty(true)
         }}
         onDiscountChange={setDiscount}
-        onCurrencyChange={setCurrency}
+        onCurrencyChange={(v) => {
+          setCurrency(v)
+          setCurrencyDirty(true)
+        }}
         onSubmit={() => void submit()}
       />
     </div>

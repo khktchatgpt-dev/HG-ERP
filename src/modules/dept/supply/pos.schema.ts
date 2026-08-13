@@ -30,7 +30,14 @@ const optNum = (max: number) => z.coerce.number().min(0).max(max).optional().nul
  * với tổng kg không khớp thông số của chính nó.
  */
 export const poLineInputSchema = z.object({
-  material_id: z.string().uuid(),
+  /**
+   * null + line_name = DÒNG TỰ DO (0134): đơn gỗ đặt theo MÃ SẢN PHẨM chứ
+   * không theo vật tư kho. Chỉ mẫu wood được dùng (service chặn); dòng tự do
+   * không đi vào sổ kho/needs.
+   */
+  material_id: z.string().uuid().nullable().optional(),
+  line_name: z.string().trim().max(300).optional().nullable(),
+  line_unit: z.string().trim().max(30).optional().nullable(),
   /** SL đặt cuối cùng, luôn theo ĐVT mua (cây / con / tấm / thùng) — trục tồn kho. */
   qty_ordered: z.coerce.number().positive(),
   unit_price: z.coerce.number().min(0).optional().nullable(),
@@ -57,6 +64,9 @@ export const poLineInputSchema = z.object({
   dimension_text: optText(200),
   finish: optText(100),
   weight_per_unit: optNum(1e6),
+  // 0139 — cột riêng thay hai ca mượn cột: gỗ m³/SP, mro bảo hành.
+  m3_per_unit: optNum(1e4),
+  warranty_text: optText(100),
   // Mẫu carton
   open_style: optText(20),
   pcs_per_ctn: optNum(1e6),
@@ -65,7 +75,10 @@ export const poLineInputSchema = z.object({
   inner_h_mm: optNum(1e6),
   area_m2: optNum(1e6),
   price_per_m2: optNum(1e12),
-  carton_basis: z.enum(['ctn', 'm2']).optional().nullable(),
+  /** Bao bì: phí "bản in + công" cộng vào đơn giá/thùng (0134). */
+  print_fee: optNum(1e12),
+  /** Cơ sở tính tiền dòng: thùng/SP · m² · m³ (xốp khối) · kg (gia công). */
+  carton_basis: z.enum(['ctn', 'm2', 'm3', 'kg']).optional().nullable(),
   // Đóng gói mua chụp từ danh mục lúc lập đơn (0128) — chỉ để in quy đổi
   // "(= 28 bì)", KHÔNG tham gia tính tiền. SL đặt vẫn luôn theo ĐVT gốc.
   pack_size: optNum(1e9),
@@ -103,9 +116,15 @@ export const poCreateSchema = z.object({
     .array(poLineInputSchema)
     .min(1, 'Đơn đặt phải có ít nhất 1 dòng vật tư')
     .max(200)
+    // Trùng dòng chỉ xét dòng có VẬT TƯ — dòng tự do (material_id null) được
+    // nhiều dòng trong một đơn (mỗi dòng một SP gia công khác nhau).
+    .refine((lines) => {
+      const ids = lines.map((l) => l.material_id).filter((id): id is string => !!id)
+      return new Set(ids).size === ids.length
+    }, 'Vật tư bị trùng dòng')
     .refine(
-      (lines) => new Set(lines.map((l) => l.material_id)).size === lines.length,
-      'Vật tư bị trùng dòng',
+      (lines) => lines.every((l) => l.material_id || l.line_name?.trim()),
+      'Dòng không gắn vật tư phải có tên hàng',
     ),
 })
 
@@ -145,7 +164,10 @@ export const poDecideSchema = z
 
 /** Tiến trạng thái sau duyệt: gửi NCC (BR-05) → NCC xác nhận → đang giao. */
 export const poAdvanceSchema = z.object({
-  to: z.enum(['ordered', 'confirmed', 'in_transit']),
+  // 'received' CHỈ cho đơn toàn dòng tự do (gỗ/gia công — 0134): hàng nghiệm thu
+  // ngoài sổ kho vật tư nên không có phiếu nhập nào tự chốt đơn; service chặn
+  // khi đơn còn dòng vật tư kho.
+  to: z.enum(['ordered', 'confirmed', 'in_transit', 'received']),
 })
 
 export const poCancelSchema = z.object({

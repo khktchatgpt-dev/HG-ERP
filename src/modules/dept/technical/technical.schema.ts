@@ -117,6 +117,24 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
 })
 
 /** Xin mã kế tiếp cho form tạo SP — loại + vật liệu khung theo quy tắc đã chốt. */
+/**
+ * KIỂM SOÁT BẢN DÙNG của hồ sơ SP (0140 — 13/08/2026): chọn file BOM đang
+ * dùng, khoá / mở khoá hồ sơ (nút ở header trang chi tiết).
+ */
+export const productBomFileSchema = z.object({
+  /** null = bỏ chọn file đang dùng. */
+  file_id: z.string().uuid().nullable(),
+})
+
+export const productLockSchema = z.object({
+  note: z.string().trim().max(500).optional().nullable(),
+})
+
+/** Mở khoá BẮT lý do — gỡ bản cả xưởng đang dùng thì phải nói vì sao. */
+export const productUnlockSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+})
+
 export const productNextCodeQuerySchema = z.object({
   type: z.enum(PRODUCT_TYPE_CODES as unknown as [string, ...string[]]),
   material: z.enum(FRAME_MATERIAL_CODES as unknown as [string, ...string[]]),
@@ -250,6 +268,16 @@ export const productPartCreateSchema = z.object({
   cut_length_mm: z.coerce.number().min(0).optional().nullable(),
   bend_waste_mm: z.coerce.number().min(0).optional().nullable(),
   kg_per_m: z.coerce.number().min(0).optional().nullable(),
+  // Quy đổi sang ĐƠN VỊ MUA (0132) — mỗi nhóm chỉ dùng vài trường của mình:
+  // khung cần cây, gỗ cần loại, vải cần khổ + hao hụt, tấm cần quy cách tấm.
+  wood_species: z.string().trim().max(60).optional().nullable(),
+  bar_length_m: z.coerce.number().positive().optional().nullable(),
+  pcs_per_bar: z.coerce.number().positive().optional().nullable(),
+  roll_width_m: z.coerce.number().positive().optional().nullable(),
+  waste_pct: z.coerce.number().min(0).lt(100).optional().nullable(),
+  sheet_w_mm: z.coerce.number().positive().optional().nullable(),
+  sheet_l_mm: z.coerce.number().positive().optional().nullable(),
+  m3_per_sheet: z.coerce.number().positive().optional().nullable(),
   qty: z.coerce.number().positive(),
   unit: z.string().trim().max(30).optional().nullable(),
   color: z.string().trim().max(100).optional().nullable(),
@@ -329,6 +357,14 @@ export const productPartsBulkSchema = z.object({
         cut_length_mm: z.coerce.number().min(0).optional().nullable(),
         bend_waste_mm: z.coerce.number().min(0).optional().nullable(),
         kg_per_m: z.coerce.number().min(0).optional().nullable(),
+        wood_species: z.string().trim().max(60).optional().nullable(),
+        bar_length_m: z.coerce.number().positive().optional().nullable(),
+        pcs_per_bar: z.coerce.number().positive().optional().nullable(),
+        roll_width_m: z.coerce.number().positive().optional().nullable(),
+        waste_pct: z.coerce.number().min(0).lt(100).optional().nullable(),
+        sheet_w_mm: z.coerce.number().positive().optional().nullable(),
+        sheet_l_mm: z.coerce.number().positive().optional().nullable(),
+        m3_per_sheet: z.coerce.number().positive().optional().nullable(),
         qty: z.coerce.number().positive(),
         unit: z.string().trim().max(30).optional().nullable(),
         color: z.string().trim().max(100).optional().nullable(),

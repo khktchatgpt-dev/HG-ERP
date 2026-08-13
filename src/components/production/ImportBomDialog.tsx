@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { searchMaterials } from '@/components/warehouse/MaterialCombo'
 import {
   BOM_FIELD_LABELS,
   buildImportedRows,
@@ -28,17 +29,18 @@ const FIELD_OPTIONS = Object.entries(BOM_FIELD_LABELS) as [BomField, string][]
 const sel =
   'rounded border border-zinc-300 px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900'
 
+/** Tối đa mã vật tư dò một lượt — file BOM thật vài chục dòng, chặn cho chắc. */
+const MAX_LOOKUPS = 60
+
 export function ImportBomDialog({
   open,
   onClose,
   orderLines,
-  materials,
   onApply,
 }: {
   open: boolean
   onClose: () => void
   orderLines: OrderLine[]
-  materials: MaterialOpt[]
   /** Đổ dòng đã map vào lưới (append) cho SP đích — chưa lưu DB. */
   onApply: (orderLineId: string, rows: ImportedRow[]) => void
 }) {
@@ -49,6 +51,9 @@ export function ImportBomDialog({
   const [hadHeader, setHadHeader] = useState(false)
   const [fileName, setFileName] = useState('')
   const [pasteText, setPasteText] = useState('')
+  /** Ứng viên vật tư dò được ở server cho các ô "vật tư" trong file. */
+  const [candidates, setCandidates] = useState<MaterialOpt[]>([])
+  const [looking, setLooking] = useState(false)
 
   function reset() {
     setCells([])
@@ -56,6 +61,7 @@ export function ImportBomDialog({
     setHadHeader(false)
     setFileName('')
     setPasteText('')
+    setCandidates([])
   }
 
   /** Nạp ma trận ô: tách tiêu đề (nếu có) + đoán mapping. */
@@ -106,9 +112,48 @@ export function ImportBomDialog({
     }
   }
 
+  /**
+   * DÒ VẬT TƯ Ở SERVER, không tra trong danh sách nạp sẵn.
+   *
+   * Bản trước nhận sẵn 1.000 vật tư đầu danh mục rồi khớp trong đó — danh mục
+   * 13k dòng nên mọi mã nhôm/inox đều rơi ngoài, file BOM nào cũng ra "không
+   * khớp danh mục". Nay lấy các ô ở cột vật tư, tìm từng cái qua API (tìm không
+   * dấu) rồi mới khớp bằng luật cũ trên tập ứng viên trả về.
+   */
+  useEffect(() => {
+    const col = mapping.indexOf('material')
+    const texts =
+      col < 0
+        ? []
+        : [...new Set(cells.map((r) => (r[col] ?? '').trim()).filter(Boolean))].slice(
+            0,
+            MAX_LOOKUPS,
+          )
+    if (texts.length === 0) return
+    let alive = true
+    // Hoãn một nhịp: đổi mapping liên tục thì chỉ dò theo lần chốt cuối.
+    const timer = setTimeout(() => {
+      setLooking(true)
+      void Promise.all(texts.map((t) => searchMaterials(t, 10).catch(() => [])))
+        .then((lists) => {
+          if (!alive) return
+          const byId = new Map<string, MaterialOpt>()
+          for (const m of lists.flat()) byId.set(m.id, m)
+          setCandidates([...byId.values()])
+        })
+        .finally(() => {
+          if (alive) setLooking(false)
+        })
+    }, 0)
+    return () => {
+      alive = false
+      clearTimeout(timer)
+    }
+  }, [cells, mapping])
+
   const preview = useMemo(
-    () => (cells.length ? buildImportedRows(cells, mapping, materials) : null),
-    [cells, mapping, materials],
+    () => (cells.length ? buildImportedRows(cells, mapping, candidates) : null),
+    [cells, mapping, candidates],
   )
 
   function apply() {
@@ -205,11 +250,15 @@ export function ImportBomDialog({
                   : 'Không thấy tiêu đề — kiểm tra cột'}
               </Badge>
               <Badge tone="gray">{preview.rows.length} dòng hợp lệ</Badge>
-              {preview.unmatched_materials > 0 && (
-                <Badge tone="amber">
-                  {preview.unmatched_materials} dòng vật tư không khớp danh mục (gắn tay
-                  sau)
-                </Badge>
+              {looking ? (
+                <Badge tone="blue">đang dò vật tư trong danh mục…</Badge>
+              ) : (
+                preview.unmatched_materials > 0 && (
+                  <Badge tone="amber">
+                    {preview.unmatched_materials} dòng vật tư không khớp danh mục (gắn tay
+                    sau)
+                  </Badge>
+                )
               )}
               <button
                 onClick={reset}

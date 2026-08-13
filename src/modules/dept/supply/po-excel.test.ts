@@ -63,6 +63,8 @@ const line = (over: Partial<PoPrintLine> = {}): PoPrintLine => ({
   dimension_text: null,
   finish: null,
   weight_per_unit: null,
+  m3_per_unit: null,
+  warranty_text: null,
   open_style: null,
   pcs_per_ctn: null,
   inner_l_mm: null,
@@ -119,9 +121,10 @@ describe('buildPoExcel — khung giống phiếu in', () => {
     expect((head.fill as ExcelJS.FillPattern).fgColor?.argb).toBe('FFFEF08A')
     const price = findCell(ws, 'Đơn giá (VND)')!
     expect(price.font?.color?.argb).toBe('FFDC2626')
-    // Mẫu đơn giản có cột Ngày đặt hàng + Thời gian giao hàng như đơn sơn thật.
-    expect(findCell(ws, 'Ngày đặt hàng')).toBeTruthy()
-    expect(findCell(ws, 'Thời gian giao hàng')).toBeTruthy()
+    // "Ngày đặt · Thời gian giao" bỏ khỏi bảng kê 12/08/2026 (duyệt cột từng
+    // mẫu) — hai ngày chỉ còn ở đầu phiếu, không lặp xuống dòng.
+    expect(findCell(ws, 'Ngày đặt hàng')).toBeNull()
+    expect(findCell(ws, 'Thời gian giao hàng')).toBeNull()
 
     // Tổng số KG (cùng ĐVT) và khối tiền: 180kg · 14.4tr + VAT 8% = 15.552tr.
     expect(findCell(ws, 'Tổng số KG')).toBeTruthy()
@@ -160,7 +163,8 @@ describe('buildPoExcel — khung giống phiếu in', () => {
     })
     const ws = await load(buf)
     expect(findCell(ws, 'kg/m')).toBeTruthy()
-    expect(findCell(ws, 'Số cây')).toBeTruthy()
+    // Nhãn SL của nhôm đổi "Số cây" → "Số lượng" (12/08/2026, duyệt cột từng mẫu).
+    expect(findCell(ws, 'Số lượng')).toBeTruthy()
     // (382,2 kg × 102.000) = 38.984.400 — tiền theo kg, không phải theo cây.
     expect(findCell(ws, 38_984_400)).toBeTruthy()
   })

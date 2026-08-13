@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '@/lib/api'
 import { namesAlike } from '@/lib/material-key'
+import { groupFieldConfig } from '@/lib/material-group-fields'
+import {
+  kgUnitVsBar,
+  packPreview,
+  specFromName,
+  specPreview,
+  unitWarning,
+} from '@/lib/material-form-guards'
 import { isSheetLike, kgPerM, rhoFor } from '@/lib/metal-weight'
 import { guessTemplate } from '@/lib/po-template-guess'
 import { type PoTemplate } from '@/lib/po-template'
@@ -28,6 +36,20 @@ import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service
  * để quyết định có hỏi barem kg/m hay không, không lưu vào danh mục.
  */
 
+/**
+ * STYLE CHUẨN CỦA MỌI FORM VẬT TƯ (0137 — "chuẩn hóa form về 1 style"):
+ * trước đây ba chỗ khai (danh mục Kho/Cung ứng, khai nhanh trong đơn, sửa tại
+ * dòng) mỗi nơi một bộ class — viền zinc focus amber ở Kho, viền input-token
+ * focus ring ở đơn. Cùng một khối ô hỏi mà nhìn như ba app. Token shadcn/theme:
+ * ô nhập + nút lấy từ đây, KHÔNG tự chế class ở từng form nữa.
+ */
+export const materialInputClass =
+  'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+export const materialBtnPrimary =
+  'inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+export const materialBtnSecondary =
+  'rounded-md border border-input bg-card px-3 py-2 text-sm shadow-xs hover:bg-muted'
+
 export type MaterialCore = {
   name: string
   unit: string
@@ -45,6 +67,11 @@ export type MaterialCore = {
   /** Đóng gói mua (0124): 1 pack_unit = pack_size ĐVT gốc (vd 1 bì = 500 con). */
   pack_size: string
   pack_unit: string
+  /** Thông số theo nhóm (0137): bao bì — cách mở AD/MR/ĐK + SP mỗi thùng. */
+  open_style: string
+  pcs_per_ctn: string
+  /** Thông số theo nhóm (0137): kim loại — màu / bề mặt ("inox bóng"). */
+  finish: string
 }
 
 export const EMPTY_CORE: MaterialCore = {
@@ -61,6 +88,9 @@ export const EMPTY_CORE: MaterialCore = {
   material_grade: '',
   pack_size: '',
   pack_unit: '',
+  open_style: '',
+  pcs_per_ctn: '',
+  finish: '',
 }
 
 /** Chuẩn hoá tên để dò trùng gần giống: thường hoá, bỏ dấu, gọn khoảng trắng. */
@@ -97,6 +127,9 @@ export function coreFromMaterial(m: Partial<Record<keyof MaterialCore, unknown>>
     material_grade: str(m.material_grade),
     pack_size: str(m.pack_size),
     pack_unit: str(m.pack_unit),
+    open_style: str(m.open_style),
+    pcs_per_ctn: str(m.pcs_per_ctn),
+    finish: str(m.finish),
   } satisfies MaterialCore
 }
 
@@ -138,6 +171,9 @@ export function useMaterialCore({
     () => tax.groups.find((g) => g.name === f.group_name)?.subs ?? [],
     [tax, f.group_name],
   )
+
+  /** Bộ ô + placeholder theo NHÓM (0137) — mỗi loại vật tư hỏi đúng bộ của nó. */
+  const groupCfg = useMemo(() => groupFieldConfig(f.group_name), [f.group_name])
 
   /*
    * Nạp ĐVT + nhóm + nhóm phụ MỘT LẦN khi form mở (bỏ qua nếu server đã đưa
@@ -277,6 +313,35 @@ export function useMaterialCore({
   const kgToSave = f.kg_per_m.trim() ? Number(f.kg_per_m) || null : (derived?.kg ?? null)
   const dual = f.price_unit.trim() !== ''
 
+  /*
+   * GUARD Ô NHẬP TAY NGUY HIỂM (13/08/2026 — src/lib/material-form-guards.ts):
+   * máy tính song song và HIỆN điều máy hiểu, không khoá gõ tự do.
+   */
+  // ĐVT: sửa bản đã lưu mà GIỮ NGUYÊN ĐVT cũ thì không nạt lại — nhãn đó đang
+  // sống trong DB; chỉ soi khi người dùng ĐỔI.
+  const initialUnit = (initial?.unit ?? '').trim().toLowerCase()
+  const unitWarn = useMemo(() => {
+    if (f.unit.trim().toLowerCase() === initialUnit && initialUnit !== '') return null
+    return unitWarning(f.unit, tax.units)
+  }, [f.unit, tax.units, initialUnit])
+  // Xác nhận GẮN VỚI đúng nhãn lúc bấm — đổi ô là xác nhận cũ hết giá trị
+  // (cùng lối tick trùng-tên của QuickAdd).
+  const [unitOkFor, setUnitOkFor] = useState('')
+  const unitConfirmed = unitOkFor === f.unit
+  const specPrev = useMemo(
+    () => specPreview(f.group_name, f.spec, f.open_style),
+    [f.group_name, f.spec, f.open_style],
+  )
+  const specSuggest = useMemo(
+    () => (f.spec.trim() ? null : specFromName(f.name)),
+    [f.spec, f.name],
+  )
+  const packPrev = useMemo(
+    () => packPreview(f.pack_unit, f.pack_size, f.unit),
+    [f.pack_unit, f.pack_size, f.unit],
+  )
+  const kgUnitOff = kgUnitVsBar(f.kg_per_unit, f.kg_per_m, f.default_bar_length_m)
+
   /** Phần thân chung của payload POST/PATCH — hai màn gửi giống hệt nhau. */
   function corePayload() {
     return {
@@ -307,6 +372,11 @@ export function useMaterialCore({
       pack_size:
         f.pack_size.trim() && f.pack_unit.trim() ? Number(f.pack_size) || null : null,
       pack_unit: f.pack_size.trim() && f.pack_unit.trim() ? f.pack_unit.trim() : null,
+      // Thông số theo nhóm (0137) — ô chỉ hiện đúng nhóm, nhưng GIÁ TRỊ luôn
+      // gửi: đổi nhóm sau khi đã gõ thì số cũ về null thay vì kẹt lại ngầm.
+      open_style: groupCfg.showCarton ? f.open_style.trim() || null : null,
+      pcs_per_ctn: groupCfg.showCarton ? Number(f.pcs_per_ctn) || null : null,
+      finish: groupCfg.showFinish ? f.finish.trim() || null : null,
     }
   }
 
@@ -325,8 +395,22 @@ export function useMaterialCore({
     kgMismatch,
     kgOff,
     dual,
+    groupCfg,
     requireGroup,
-    invalid: !f.name.trim() || !f.unit.trim() || (requireGroup && !f.group_name.trim()),
+    unitWarn,
+    unitConfirmed,
+    confirmUnit: () => setUnitOkFor(f.unit),
+    specPrev,
+    specSuggest,
+    packPrev,
+    kgUnitOff,
+    invalid:
+      !f.name.trim() ||
+      !f.unit.trim() ||
+      (requireGroup && !f.group_name.trim()) ||
+      // ĐVT lạ/nghi gõ nhầm phải xác nhận rồi mới lưu — sai đơn vị là mọi đơn
+      // sau đặt sai, không phải lỗi sửa được bằng mắt thường trên phiếu.
+      (unitWarn != null && !unitConfirmed),
     corePayload,
   }
 }
@@ -580,7 +664,52 @@ export function MaterialCoreFields({
         <Field
           label="ĐVT đặt hàng"
           required
-          hint="Gợi ý từ danh mục chuẩn, vẫn gõ được nhãn lạ của xưởng."
+          hint={
+            s.unitWarn && !s.unitConfirmed ? (
+              <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                {s.unitWarn.kind === 'suggest' ? (
+                  <>
+                    ⚠ &quot;{s.f.unit}&quot; không có trong danh mục — gần giống{' '}
+                    <b>{s.unitWarn.suggest}</b>.{' '}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        s.setF((x) => ({
+                          ...x,
+                          unit: (s.unitWarn as { suggest: string }).suggest,
+                        }))
+                      }
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                    >
+                      Sửa thành {s.unitWarn.suggest}
+                    </button>{' '}
+                    <button
+                      type="button"
+                      onClick={s.confirmUnit}
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                    >
+                      Vẫn dùng &quot;{s.f.unit}&quot;
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    ⚠ ĐVT &quot;{s.f.unit}&quot; không có trong danh mục nhãn chuẩn. Nhãn
+                    lạ của xưởng là thật thì{' '}
+                    <button
+                      type="button"
+                      onClick={s.confirmUnit}
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                    >
+                      xác nhận dùng
+                    </button>{' '}
+                    — chưa xác nhận thì chưa lưu được.
+                  </>
+                )}
+              </span>
+            ) : (
+              'Gợi ý từ danh mục chuẩn, vẫn gõ được nhãn lạ của xưởng.'
+            )
+          }
         >
           {/*
             GỢI Ý TỪ DANH MỤC, vẫn gõ tự do được. Danh mục có 55 nhãn chuẩn,
@@ -597,12 +726,44 @@ export function MaterialCoreFields({
             className={inputClass}
           />
         </Field>
-        <Field label="Quy cách" hint="Tự điền vào dòng đơn khi chọn vật tư.">
+        {/* Placeholder + hint ĐỔI THEO NHÓM (0137); PREVIEW SỐNG (13/08/2026):
+            nhóm nuôi tiền từ quy cách (bao bì/kính/xốp) hiện ngay điều máy hiểu
+            — gõ sai dạng là thấy tại chỗ, không đợi tới lúc lên đơn mới lộ. */}
+        <Field
+          label="Quy cách"
+          hint={
+            s.specPrev ? (
+              s.specPrev.ok ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  {s.specPrev.text}
+                </span>
+              ) : (
+                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                  ⚠ {s.specPrev.warn}
+                </span>
+              )
+            ) : s.specSuggest ? (
+              <span>
+                Tên đang chứa quy cách —{' '}
+                <button
+                  type="button"
+                  onClick={() => s.setF((x) => ({ ...x, spec: s.specSuggest! }))}
+                  className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                >
+                  điền &quot;{s.specSuggest}&quot; từ tên
+                </button>{' '}
+                thay vì gõ lại.
+              </span>
+            ) : (
+              s.groupCfg.specHint
+            )
+          }
+        >
           <input
             value={f.spec}
             onChange={set('spec')}
             maxLength={200}
-            placeholder="25×25×1.2mm (cây 6m) · dày 18mm…"
+            placeholder={s.groupCfg.specPlaceholder}
             className={inputClass}
           />
         </Field>
@@ -613,10 +774,55 @@ export function MaterialCoreFields({
             value={f.material_grade}
             onChange={set('material_grade')}
             maxLength={100}
-            placeholder="Nhựa đen · Sắt xi trắng · inox 201…"
+            placeholder={s.groupCfg.gradePlaceholder}
             className={inputClass}
           />
         </Field>
+        {/* KIM LOẠI: màu / bề mặt (0137) — cột "Màu / bề mặt" của đơn inox/sắt,
+            trước chỉ nhớ từ lần đặt gần nhất. */}
+        {s.groupCfg.showFinish && (
+          <Field label="Màu / bề mặt" hint="Tự điền cột Màu / bề mặt trên đơn inox/sắt.">
+            <input
+              value={f.finish}
+              onChange={set('finish')}
+              maxLength={100}
+              placeholder="inox bóng · xi trắng · sơn đen…"
+              className={inputClass}
+            />
+          </Field>
+        )}
+        {/* BAO BÌ: cách mở + SP/thùng (0137) — cách mở quyết định công thức
+            m²/thùng (AD/MR tự tính, ĐK nhập m² tay ở dòng đơn). */}
+        {s.groupCfg.showCarton && (
+          <>
+            <Field
+              label="Cách mở thùng"
+              hint="AD/MR tự tính m² từ lọt lòng; ĐK nhập m² tay."
+            >
+              <select
+                value={f.open_style}
+                onChange={set('open_style')}
+                className={inputClass}
+              >
+                <option value="">— chưa rõ —</option>
+                <option value="AD">AD (âm dương)</option>
+                <option value="MR">MR (một mảnh)</option>
+                <option value="ĐK">ĐK (đối khẩu)</option>
+              </select>
+            </Field>
+            <Field label="SP mỗi thùng (pcs/thùng)">
+              <input
+                value={f.pcs_per_ctn}
+                onChange={set('pcs_per_ctn')}
+                type="number"
+                min={0}
+                step="1"
+                placeholder="vd 1"
+                className={`${inputClass} tabular-nums`}
+              />
+            </Field>
+          </>
+        )}
       </FormSection>
 
       <FormSection title="Phân loại" hint="để lọc/tìm theo nhóm và chặn khai trùng tên">
@@ -671,7 +877,23 @@ export function MaterialCoreFields({
         </Field>
         <Field
           label={`1 ${f.pack_unit.trim() || 'bao gói'} = ? ${f.unit.trim() || 'ĐVT'}`}
-          hint="vd 1 bì = 500 con — form đặt sẽ gợi ý SL tròn bao."
+          hint={
+            // Quy đổi SỐNG kèm ví dụ (13/08): "1 bì = 50" gõ thiếu số 0 thì ví
+            // dụ nhảy 10 lần — số vô lý lộ ngay lúc gõ, không đợi lên đơn.
+            s.packPrev ? (
+              s.packPrev.warn ? (
+                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                  ⚠ {s.packPrev.warn}
+                </span>
+              ) : (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  {s.packPrev.text}
+                </span>
+              )
+            ) : (
+              'vd 1 bì = 500 con — form đặt sẽ gợi ý SL tròn bao.'
+            )
+          }
         >
           <input
             value={f.pack_size}
@@ -716,6 +938,16 @@ export function MaterialCoreFields({
               <p className="text-xs text-amber-700 dark:text-amber-400">
                 ⚠ Bỏ trống thì mỗi lần đặt phải gõ tay theo phiếu cân NCC — mà dòng đơn bị
                 chặn gửi khi thiếu số này, nên rất dễ gõ đại cho qua.
+              </p>
+            )}
+            {/* Đối chiếu kg/đơn-vị với kg/m × dài cây khi cả hai barem cùng có
+                trong state (13/08) — cùng ngưỡng 5% với ô kg/m. */}
+            {s.kgUnitOff != null && s.kgUnitOff > 0.05 && (
+              <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400">
+                ⚠ Số đang nhập lệch {Math.round(s.kgUnitOff * 100)}% so với kg/m × dài cây
+                đã khai (
+                {(Number(f.kg_per_m) * Number(f.default_bar_length_m)).toFixed(2)} kg).
+                Kiểm lại dấu chấm thập phân — sai chỗ này là sai thẳng tiền đơn.
               </p>
             )}
           </div>

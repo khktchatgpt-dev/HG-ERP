@@ -11,6 +11,41 @@
 
 export type PriceBasis = 'unit' | 'unit2'
 
+/**
+ * TIỀN TỆ CỦA ĐƠN MUA — một danh sách cho cả form soạn đơn lẫn hồ sơ NCC.
+ * VND đứng đầu vì là mặc định; các mã sau theo NCC thật (gỗ báo giá USD/m³,
+ * kính đặt Trung Quốc, NCC khai EUR/JPY trong hồ sơ).
+ */
+export const PO_CURRENCIES = ['VND', 'USD', 'EUR', 'CNY', 'JPY'] as const
+
+/**
+ * Số lẻ của tiền theo currency: VND (và JPY) không có đơn vị lẻ; còn lại 2 số
+ * lẻ (cent). Đơn gỗ thật chốt $700.21 — làm tròn về $700 là lệch với NCC.
+ */
+export function currencyDecimals(currency?: string | null): number {
+  const c = (currency ?? 'VND').toUpperCase()
+  return c === 'VND' || c === 'JPY' ? 0 : 2
+}
+
+/** Làm tròn tiền theo currency — VND về đồng, USD/EUR/CNY về cent. */
+export function roundMoney(n: number, currency?: string | null): number {
+  const f = 10 ** currencyDecimals(currency)
+  return Math.round(n * f) / f
+}
+
+/**
+ * Hiện tiền theo currency: VND "1.234.567", USD "1.234,56" (đủ 2 số lẻ để cột
+ * tiền thẳng hàng và không ai tưởng $3,1 là $3,10 gõ thiếu). Chỉ format CON SỐ —
+ * nhãn tiền tệ do chỗ gọi tự đặt cạnh (cột riêng / hậu tố), như UI hiện hành.
+ */
+export function fmtMoney(n: number, currency?: string | null): string {
+  const d = currencyDecimals(currency)
+  return n.toLocaleString('vi-VN', {
+    minimumFractionDigits: d,
+    maximumFractionDigits: d,
+  })
+}
+
 export type PoLineAmountInput = {
   qty_ordered: number
   unit_price: number | null
@@ -81,4 +116,44 @@ export function priceUnitLabel(
   unit2: string | null | undefined,
 ): string {
   return (basis ?? 'unit') === 'unit2' && unit2 ? `Đơn giá/${unit2}` : 'Đơn giá'
+}
+
+/**
+ * TIỀN CỦA MỘT ĐƠN — chiết khấu, VAT, tổng thanh toán.
+ *
+ * Tách ra khỏi form soạn đơn (`po-draft.poTotals`) vì trang chi tiết cũng phải
+ * nói ra đúng những con số đó. Trước khi có hàm này, chi tiết đơn chỉ dám hiện
+ * "Tổng cộng = Σ dòng" — tức số TRƯỚC chiết khấu và VAT, lệch hẳn với con số
+ * người ta vừa ký trên phiếu in.
+ *
+ * Làm tròn NGAY ở tiền hàng: tiền từng dòng lẻ vô hạn (kg × đơn giá), để trôi
+ * xuống thì tổng in ra "44.477.168,4" — không ai ký được. Mốc làm tròn theo
+ * TIỀN TỆ của đơn (currency): VND về đồng nguyên như trước, USD/EUR/CNY về cent
+ * — đơn gỗ thật chốt $86.743,50 với NCC, tròn về đồng là lệch phiếu.
+ */
+export function poMoney(input: {
+  /** Σ tiền từng dòng, chưa làm tròn. */
+  subtotalRaw: number
+  discount?: number | null
+  vatRate?: number | null
+  /** Đơn giá ĐÃ gồm VAT chưa — quyết định cộng thêm hay tách ngược ra. */
+  priceIncludesVat?: boolean | null
+  /** Tiền tệ của đơn — bỏ trống coi như VND (mọi chỗ gọi cũ giữ nguyên số). */
+  currency?: string | null
+}) {
+  const r = (n: number) => roundMoney(n, input.currency)
+  const subtotal = r(input.subtotalRaw)
+  const discountAmount = Number(input.discount ?? 0) || 0
+  const base = Math.max(0, subtotal - discountAmount)
+  const vatRate = Number(input.vatRate ?? 0) || 0
+  // Giá đã gồm VAT: tách ngược ra khỏi tiền hàng, KHÔNG cộng thêm lần nữa.
+  const vatAmount = input.priceIncludesVat
+    ? r((base * vatRate) / (100 + vatRate))
+    : r((base * vatRate) / 100)
+  return {
+    subtotal,
+    discountAmount,
+    vatAmount,
+    grandTotal: input.priceIncludesVat ? base : r(base + vatAmount),
+  }
 }

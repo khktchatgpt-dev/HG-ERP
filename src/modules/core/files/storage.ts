@@ -53,10 +53,11 @@ export const storage = {
     path: string,
     body: Buffer,
     contentType: string,
+    opts: { upsert?: boolean } = {},
   ): Promise<void> {
     const { error } = await db()
       .storage.from(bucket)
-      .upload(path, body, { contentType, upsert: false })
+      .upload(path, body, { contentType, upsert: opts.upsert ?? false })
     if (error) throw new Error(error.message)
   },
 
