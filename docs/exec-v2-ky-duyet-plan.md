@@ -1,6 +1,13 @@
 # Khu Ban Giám đốc v2 — đập bỏ, xây lại quanh việc KÝ
 
-Trạng thái: **BẢN THẢO chờ chốt** (14/08/2026). Thay thế
+Trạng thái: **ĐÃ BỊ THAY THẾ** bởi
+[exec-v3-approval-center.md](exec-v3-approval-center.md) (15/08/2026) — chủ dự án
+đảo thiết kế: phê duyệt vẫn là trung tâm nhưng khu GĐ tổ chức theo 3 tầng
+Action / Monitoring / Analysis, có lại lớp theo dõi (Đơn hàng / Sản xuất / Mua
+hàng). Các hạng mục chưa làm ở đây (báo giá §5E, uỷ quyền §5G, nhắc ký §5H…)
+vẫn còn giá trị — v3 kế thừa, không huỷ.
+
+Bản gốc (14/08/2026): thay thế
 [exec-gd-sale-cung-ung-plan.md](exec-gd-sale-cung-ung-plan.md) (09/08/2026) — bản
 cũ thiết kế khu GĐ như một *bảng tin nhiều thẻ*; bản này thu về **một việc duy
 nhất: ký phiếu**.

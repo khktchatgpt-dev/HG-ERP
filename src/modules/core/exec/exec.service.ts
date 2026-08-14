@@ -11,14 +11,16 @@ import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 
 /**
- * BẢNG TIN ĐIỀU HÀNH của Ban Giám đốc (/exec) — giới hạn ở thông tin trọng yếu
- * của hai phòng đang thật sự vận hành trên hệ thống: BÁN (Sale) và MUA (Cung ứng).
- * Xem `docs/exec-gd-sale-cung-ung-plan.md`.
+ * Tầng dữ liệu khu Ban Giám đốc (/exec) — thiết kế lại 15/08/2026 theo mô hình
+ * "công việc cần xử lý" (docs/exec-v3-approval-center.md):
+ *   · `dashboard()`  — Tổng quan: chờ phê duyệt (nổi bật nhất) + tình hình
+ *     hoạt động + cần chú ý. Nguyên tắc: quản trị theo NGOẠI LỆ — việc cần
+ *     Giám đốc quyết và thứ đang trục trặc đứng trước mọi con số đẹp.
+ *   · `signBox()`    — Trung tâm phê duyệt (/exec/approvals): mọi phiếu chờ
+ *     chữ ký gom một danh sách, ký được tại chỗ.
+ *   · `purchasing()` — màn theo dõi vế MUA. Chỉ đọc.
  *
- * Nguyên tắc: quản trị theo NGOẠI LỆ — việc cần Giám đốc quyết và thứ đang trục
- * trặc đứng trước mọi con số đẹp. Chỉ đọc, mọi thẻ dẫn về màn tác nghiệp của phòng.
- *
- * Guard: `exec.tower.view` (cùng cổng với khu điều hành cũ) — Giám đốc/quản lý.
+ * Guard: `exec.tower.view` (dashboard/purchasing), `exec.approvals.view` (ký).
  */
 
 const DAY_MS = 86_400_000
@@ -116,6 +118,13 @@ export type ExecSupply = {
   top_suppliers: { name: string; currency: string; value: number; pos: number }[]
 }
 
+/** Nhịp sản xuất cho thẻ "Tình hình hoạt động" — đếm lệnh, không đi vào công đoạn. */
+export type ExecProduction = {
+  /** Lệnh đã duyệt đang chạy (approved | in_progress). */
+  running: number
+  by_status: { status: string; count: number }[]
+}
+
 /**
  * Chỗ dữ liệu còn TRỐNG khiến các thẻ tiền ra 0 — nêu thẳng thay vì để Giám đốc
  * nhìn số 0 rồi tưởng công ty không bán được gì.
@@ -130,6 +139,7 @@ export type ExecDashboard = {
   issues: ExecIssues
   sales: ExecSales
   supply: ExecSupply
+  production: ExecProduction
   gaps: ExecDataGaps
 }
 
@@ -361,10 +371,11 @@ export const execService = {
     await assertAction(user, 'exec.tower.view')
     const today = new Date().toISOString().slice(0, 10)
 
-    const [pendingPos, pendingLsx, allPos, orders, lowStock] = await Promise.all([
+    const [pendingPos, pendingLsx, allPos, allLsx, orders, lowStock] = await Promise.all([
       posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
       lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
       posService.list(user, { page: 1, page_size: 500 }),
+      lsxService.list(user, { page: 1, page_size: 500 }),
       ordersRepo.list({ page: 1, page_size: 500 }),
       stockRepo.list({ low_only: true }),
     ])
@@ -528,6 +539,21 @@ export const execService = {
         .slice(0, 5),
     }
 
+    // ── Nhịp sản xuất ───────────────────────────────────────────────────────
+    const lsxStatusAgg = new Map<string, number>()
+    for (const l of allLsx.rows) {
+      if (l.status === 'cancelled') continue
+      lsxStatusAgg.set(l.status, (lsxStatusAgg.get(l.status) ?? 0) + 1)
+    }
+    const production: ExecProduction = {
+      running: allLsx.rows.filter(
+        (l) => l.status === 'approved' || l.status === 'in_progress',
+      ).length,
+      by_status: [...lsxStatusAgg.entries()]
+        .map(([status, count]) => ({ status, count }))
+        .sort((a, b) => b.count - a.count),
+    }
+
     // ── Lỗ hổng dữ liệu khiến số tiền ra 0 ──────────────────────────────────
     const allIds = orders.rows.map((o) => o.id)
     const [allLines, unpriced] = await Promise.all([
@@ -539,7 +565,7 @@ export const execService = {
       order_lines_without_price: unpriced,
     }
 
-    return { todo, issues, sales, supply, gaps }
+    return { todo, issues, sales, supply, production, gaps }
   },
 
   /**

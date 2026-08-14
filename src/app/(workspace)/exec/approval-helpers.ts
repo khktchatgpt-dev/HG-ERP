@@ -7,7 +7,7 @@
  * master-detail `ApprovalCockpit`, đã xoá cùng lúc Hộp ký (`/exec`) thay chỗ.
  * Việc chúng làm nay nằm ở:
  *   · xếp thứ tự + gom tiền  → `execService.signBox` (server, có test)
- *   · lọc theo loại phiếu    → chip lọc trong `SignBoxScreen`
+ *   · lọc theo loại phiếu    → chip lọc trong `approvals/ApprovalCenterScreen`
  *   · chặn ký nhanh phiếu to → cờ `SignItem.big` (`isBigApprovalIn` — có xét
  *     TIỀN TỆ, khác `isBulkApprovable` cũ vốn so mọi tiền tệ với ngưỡng VND)
  */

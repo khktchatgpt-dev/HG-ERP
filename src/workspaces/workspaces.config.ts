@@ -427,37 +427,48 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'zinc',
     logoText: 'GĐ',
     ready: true,
+    /*
+     * 15/08/2026 — thiết kế lại toàn bộ (docs/exec-v3-approval-center.md): khu
+     * GĐ tổ chức theo VIỆC CẦN QUYẾT ĐỊNH chứ không theo phòng ban, 3 tầng:
+     *   1. Điều hành (action)  — Tổng quan + Chờ tôi phê duyệt (trung tâm).
+     *   2. Theo dõi (monitoring) — Đơn hàng / Sản xuất / Mua hàng, chỉ đọc.
+     *   3. Ký & báo cáo (analysis) — lịch sử ký, luật ký, báo cáo tuần.
+     * Bản trước đó ("việc duy nhất của GĐ là ký" — exec-v2) thu sidebar về mỗi
+     * Hộp ký; chủ dự án đảo lại: phê duyệt vẫn là trung tâm nhưng GĐ cần thêm
+     * lớp theo dõi tổng thể ngay trong khu của mình.
+     */
     sections: [
       {
         heading: 'Điều hành',
-        /*
-         * 09/08/2026 — chủ dự án chốt: "phần của giám đốc giới hạn ở quản lý các
-         * thông tin quan trọng của phòng Sale và Cung ứng".
-         *
-         * 14/08/2026 — chốt tiếp: việc DUY NHẤT của GĐ trên hệ thống là KÝ PHIẾU
-         * (xem docs/exec-v2-ky-duyet-plan.md). Hai màn hướng về xưởng đã bị XOÁ
-         * HẲN ở bước này: `/exec/ops` (tháp điều hành) và `/exec/production`
-         * (tiến độ công đoạn) — rút khỏi menu từ 09/08, xưởng đã có workspace
-         * riêng (/production, /thongke), giữ lại chỉ là mã chết. Cần lại thì lấy
-         * từ git, đừng viết lại từ đầu.
-         *
-         * Ba mục còn lại dưới đây sẽ được thay bằng "Hộp ký" ở bước 3 của kế
-         * hoạch — chưa đổi bây giờ để GĐ không mất đường ký đang dùng.
-         */
         items: [
-          // Stamp = con dấu — trang chủ khu GĐ giờ là HỘP KÝ, không phải bảng tin.
-          { href: '/exec', label: 'Hộp ký', icon: 'stamp' },
-          // Mục "Phê duyệt" (/exec/approvals) đã gỡ khỏi menu 14/08: Hộp ký làm
-          // đúng việc đó ngay ở trang chủ, để hai danh sách cạnh nhau thì không
-          // ai biết chỗ nào là chỗ đúng. Route vẫn sống và vẫn là màn thẩm định
-          // sâu ("Xem kỹ" trỏ vào /exec/approvals/{lsx,po}/[id]) cho tới khi
-          // bước 4 dựng lại — xem docs/exec-v2-ky-duyet-plan.md §5C.
-          { href: '/exec/approvals/history', label: 'Lịch sử ký', icon: 'history' },
-          { href: '/exec/luat-ky', label: 'Luật ký', icon: 'key-round' },
-          // Vế BÁN: sổ đơn theo giá trị / hạn giao.
-          { href: '/exec/orders', label: 'Sổ đơn hàng', icon: 'clipboard-list' },
+          { href: '/exec', label: 'Tổng quan', icon: 'home' },
+          // Stamp = con dấu. Trung tâm phê duyệt: mọi loại phiếu gom một chỗ.
+          { href: '/exec/approvals', label: 'Chờ tôi phê duyệt', icon: 'stamp' },
+        ],
+      },
+      {
+        heading: 'Theo dõi',
+        items: [
+          // Vế BÁN: sổ đơn theo chuỗi KHÁCH → ĐƠN → LSX → VẬT TƯ.
+          { href: '/exec/orders', label: 'Đơn hàng', icon: 'clipboard-list' },
+          // Lệnh sản xuất mọi trạng thái — chỉ đọc, duyệt ở Trung tâm phê duyệt.
+          { href: '/exec/production', label: 'Sản xuất', icon: 'factory' },
           // Vế MUA: đơn mua theo trạng thái, quá hẹn, đọng chưa gửi, NCC.
           { href: '/exec/purchasing', label: 'Mua hàng & NCC', icon: 'shopping-cart' },
+        ],
+      },
+      {
+        heading: 'Ký & báo cáo',
+        items: [
+          { href: '/exec/approvals/history', label: 'Lịch sử ký', icon: 'history' },
+          { href: '/exec/luat-ky', label: 'Luật ký', icon: 'key-round' },
+          // Trang dùng chung khu (manager) — chỉ role manager/admin vào được.
+          {
+            href: '/reports/weekly',
+            label: 'Báo cáo tuần',
+            icon: 'chart-column',
+            roles: ['manager', 'admin'],
+          },
         ],
       },
     ],

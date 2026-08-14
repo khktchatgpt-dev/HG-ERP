@@ -1,16 +1,26 @@
-import { redirect } from 'next/navigation'
+import { authService } from '@/modules/core/auth/auth.service'
+import { execService } from '@/modules/core/exec/exec.service'
+import { ApprovalCenterScreen, type ApprovalKind } from './ApprovalCenterScreen'
 
 /**
- * `/exec/approvals` → Hộp ký.
+ * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — 15/08/2026.
  *
- * Trang này từng là DANH SÁCH phê duyệt + buồng lái master-detail (14/08/2026 đã
- * xoá): nó nạp đủ chi tiết MỌI phiếu chờ ngay từ server — mỗi PO một truy vấn
- * dòng, mỗi LSX bốn, cộng ký URL ảnh từng sản phẩm — rồi dựng lại đúng danh sách
- * mà Hộp ký (`/exec`) giờ đã làm, nhẹ hơn nhiều.
+ * Lịch sử route này: danh sách + buồng lái master-detail → redirect về Hộp ký
+ * (14/08) → bản này. Hộp ký chuyển từ trang chủ về đây; trang chủ /exec thành
+ * Tổng quan. Link cũ trong thông báo (/exec/approvals/*) vẫn đúng chỗ.
  *
- * Giữ route để link cũ trong thông báo/email không gãy. Chi tiết từng phiếu vẫn
- * sống ở `/exec/approvals/{lsx,po}/[id]`.
+ * `?loai=lsx|po` — thẻ "Chờ tôi phê duyệt" ở Tổng quan lọc sẵn loại phiếu.
  */
-export default function ApprovalsRedirect() {
-  redirect('/exec')
+export default async function ApprovalCenterPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ loai?: string }>
+}) {
+  const [user, { loai }] = await Promise.all([
+    authService.requirePageUser(),
+    searchParams,
+  ])
+  const box = await execService.signBox(user)
+  const initialKind: ApprovalKind = loai === 'lsx' || loai === 'po' ? loai : 'all'
+  return <ApprovalCenterScreen box={box} initialKind={initialKind} />
 }
