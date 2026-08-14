@@ -43,6 +43,15 @@ const nextConfig: NextConfig = {
     // cho khỏi phụ thuộc default có thể đổi.
     minimumCacheTTL: 60 * 60 * 4,
   },
+  experimental: {
+    // 14/08/2026 — trần upload ảnh nới 5MB → 50MB (migration 0147), user bắt đầu
+    // đưa thẳng ảnh DSLR ~13MB lên hồ sơ SP. Optimizer phải TẢI TRỌN ảnh gốc từ
+    // Supabase rồi mới resize; timeout mặc định 7s không đủ cho file cỡ đó trên
+    // mạng chậm → /_next/image trả 500 → ô ảnh vỡ ("lỗi không xem được ảnh").
+    // Chỉ nâng timeout, không nâng imgOptMaxInputPixels: 268MP mặc định đã dư
+    // cho ảnh máy ảnh (24–61MP).
+    imgOptTimeoutInSeconds: 30,
+  },
 }
 
 export default nextConfig

@@ -275,11 +275,20 @@ function ImageViewer({
               Chưa có ảnh.{canEdit && ' Bấm “+ Tải ảnh lên” để thêm.'}
             </p>
           ) : url ? (
-            // eslint-disable-next-line @next/next/no-img-element -- xem chi tiết: giữ khổ gốc, không resize
-            <img
+            /*
+             * Đi qua Next Image (resize + cache) chứ KHÔNG tải file gốc: từ khi
+             * trần upload nới lên 50MB (0147), ảnh SP có thể là ảnh DSLR ~13MB —
+             * tải nguyên bản làm modal treo nhiều giây, nhìn như ảnh hỏng, và là
+             * chính cái lỗi "không xem được ảnh" 14/08. 1600px đủ nét cho xem
+             * chi tiết; cần bản gốc thì có link "Mở ảnh gốc" bên dưới.
+             */
+            <Image
               src={url}
               alt={active?.filename ?? productName}
-              className="max-h-[60vh] max-w-full object-contain"
+              width={1600}
+              height={1200}
+              unoptimized={isSvgUrl(url)}
+              className="max-h-[60vh] w-auto max-w-full object-contain"
             />
           ) : (
             <Spinner size={20} />
@@ -296,6 +305,16 @@ function ImageViewer({
               {formatBytes(active.size_bytes)} ·{' '}
               {new Date(active.created_at).toLocaleDateString('vi-VN')}
             </span>
+            {url && (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-sky-600 hover:underline dark:text-sky-400"
+              >
+                Mở ảnh gốc ↗
+              </a>
+            )}
           </div>
         )}
 
