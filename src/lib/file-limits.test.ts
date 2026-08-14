@@ -11,9 +11,10 @@ import {
 const MB = 1024 * 1024
 
 describe('maxBytesFor', () => {
-  it('ảnh SP bị siết chặt hơn bản vẽ', () => {
-    expect(maxBytesFor('image')).toBe(5 * MB)
-    expect(maxBytesFor('drawing')).toBe(20 * MB)
+  it('mọi loại đều 50 MB — trần global của Storage (bỏ giới hạn 14/08/2026)', () => {
+    expect(maxBytesFor('image')).toBe(50 * MB)
+    expect(maxBytesFor('drawing')).toBe(50 * MB)
+    expect(maxBytesFor('bom')).toBe(50 * MB)
   })
 
   it('chưa phân loại → mức mặc định', () => {
@@ -37,8 +38,8 @@ describe('maxBytesFor', () => {
 })
 
 describe('MAX_UPLOAD_BYTES', () => {
-  it('bằng đúng mức cao nhất trong bảng — phải khớp file_size_limit ở migration 0060', () => {
-    expect(MAX_UPLOAD_BYTES).toBe(20 * MB)
+  it('bằng đúng mức cao nhất trong bảng — phải khớp file_size_limit ở migration 0147', () => {
+    expect(MAX_UPLOAD_BYTES).toBe(50 * MB)
     expect(MAX_UPLOAD_BYTES).toBe(
       Math.max(...Object.values(DOC_TYPE_MAX_BYTES), DEFAULT_MAX_BYTES),
     )

@@ -250,8 +250,9 @@ export const filesService = {
    * Chốt file sau khi client PUT xong. Đây là chỗ giới hạn dung lượng thực sự có
    * hiệu lực: `size_bytes` lúc initUpload do client tự khai, client hoàn toàn có
    * thể khai 1 MB rồi PUT 9 MB. `file_size_limit` của bucket cũng không cứu được
-   * vì nó chỉ có MỘT giá trị cho cả bucket (= mức cao nhất, 20 MB), không tách
-   * theo doc_type. Nên phải đo object thật rồi mới chốt.
+   * vì nó chỉ có MỘT giá trị cho cả bucket (= mức cao nhất trong
+   * DOC_TYPE_MAX_BYTES, xem migration 0147), không tách theo doc_type. Nên phải
+   * đo object thật rồi mới chốt.
    */
   async finalize(user: User, fileId: string, checksum?: string): Promise<void> {
     const file = await filesRepo.getById(fileId)

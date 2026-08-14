@@ -19,23 +19,33 @@ export type DocType = (typeof DOC_TYPES)[number]
  * chi tiết không lấy lại được. Chặn file quá khổ từ đầu, còn chi phí egress xử
  * lý ở tầng phân phối (Next Image resize + cache). Xem
  * docs/ke-hoach-toi-uu-file-anh.md.
+ *
+ * 14/08/2026 — user yêu cầu bỏ giới hạn upload trên hồ sơ SP. Mọi loại nâng lên
+ * 50 MB (trần global của Supabase Storage ở gói Free, không nâng thêm được nếu
+ * chưa lên Pro). CƠ CHẾ tách theo loại vẫn giữ nguyên — chỉ số đổi — để sau này
+ * muốn siết lại một loại nào đó thì sửa đúng một dòng, không phải dựng lại
+ * đường kiểm tra ở finalize.
  */
+const HARD_MAX = 50 * MB
+
 export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
-  image: 5 * MB, // ảnh SP — 5 MB đã dư cho ảnh điện thoại
-  drawing: 20 * MB, // bản vẽ scan A3 300dpi / PDF nhiều trang
-  assembly: 20 * MB, // hướng dẫn lắp ráp nhiều hình
-  bom: 10 * MB,
-  cert: 10 * MB,
-  other: 10 * MB,
+  image: HARD_MAX, // trước 5 MB — ảnh SP chụp máy ảnh/scan hay vượt
+  drawing: HARD_MAX, // trước 20 MB — bản vẽ scan A3 300dpi / PDF nhiều trang
+  assembly: HARD_MAX, // trước 20 MB
+  bom: HARD_MAX, // trước 10 MB
+  cert: HARD_MAX, // trước 10 MB
+  other: HARD_MAX, // trước 10 MB
 }
 
 /** Chưa phân loại (doc_type null) → mức mặc định. */
-export const DEFAULT_MAX_BYTES = 10 * MB
+export const DEFAULT_MAX_BYTES = HARD_MAX
 
 /**
  * Trần cứng = mức cao nhất trong bảng. Phải khớp `file_size_limit` của bucket
- * trong migration 0060: bucket chỉ nhận MỘT giá trị, không tách theo loại được,
- * nên phần chênh giữa các loại do `filesService.finalize` đo object thật.
+ * trong migration 0147 (trước đó là 0060): bucket chỉ nhận MỘT giá trị, không
+ * tách theo loại được, nên phần chênh giữa các loại do `filesService.finalize`
+ * đo object thật. Hiện mọi loại bằng nhau nên phần chênh đó = 0, nhưng bước đo
+ * vẫn cần: nó chặn client khai size nhỏ rồi PUT file to.
  */
 export const MAX_UPLOAD_BYTES = Math.max(
   ...Object.values(DOC_TYPE_MAX_BYTES),
