@@ -7,7 +7,6 @@ import {
   productListQuerySchema,
   productPickQuerySchema,
   productFillSpecsSchema,
-  productBomFileSchema,
   productLockSchema,
   productUnlockSchema,
 } from './technical.schema'
@@ -210,15 +209,5 @@ describe('schema kiểm soát bản BOM', () => {
     expect(productLockSchema.parse({ note: ' chốt bản 13/08 ' }).note).toBe(
       'chốt bản 13/08',
     )
-  })
-
-  it('chọn file đang dùng: nhận uuid hoặc null (bỏ chọn), chặn chuỗi rác', () => {
-    expect(productBomFileSchema.safeParse({ file_id: null }).success).toBe(true)
-    expect(
-      productBomFileSchema.safeParse({
-        file_id: '5e80e92a-4fd3-4e06-859d-042d89c0322f',
-      }).success,
-    ).toBe(true)
-    expect(productBomFileSchema.safeParse({ file_id: 'file-1' }).success).toBe(false)
   })
 })

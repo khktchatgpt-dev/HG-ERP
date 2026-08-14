@@ -550,10 +550,15 @@ export async function lsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
 export async function bomAllocationByCode(
   productionOrderId: string,
 ): Promise<Map<string, { product: string; qty: number; per_unit: number | null }[]>> {
-  const out = new Map<string, { product: string; qty: number; per_unit: number | null }[]>()
+  const out = new Map<
+    string,
+    { product: string; qty: number; per_unit: number | null }[]
+  >()
   const { data: lines } = await db()
     .from('sales_order_lines')
-    .select('product_id, qty, product:technical_products(name), order:sales_orders!inner(production_order_id)')
+    .select(
+      'product_id, qty, product:technical_products(name), order:sales_orders!inner(production_order_id)',
+    )
     .eq('order.production_order_id', productionOrderId)
     .limit(2000)
   type LineRow = {
@@ -570,18 +575,43 @@ export async function bomAllocationByCode(
   if (lineRows.length === 0) return out
 
   const productIds = [...new Set(lineRows.map((r) => r.product_id))]
-  const { data: parts } = await db()
-    .from('technical_product_parts')
-    .select('product_id, material_code, qty')
-    .in('product_id', productIds)
-    .not('material_code', 'is', null)
-    .limit(10000)
   // Định mức gộp theo (SP, mã VT): một vật tư dùng cho nhiều chi tiết của cùng
   // SP thì đm cộng dồn — "chân trước 2c + chân sau 2c" ra 4c/sp như sổ ghi.
   const perUnit = new Map<string, number>()
-  for (const p of (parts ?? []) as { product_id: string; material_code: string; qty: unknown }[]) {
-    const key = `${p.product_id}::${p.material_code}`
-    perUnit.set(key, (perUnit.get(key) ?? 0) + num(p.qty))
+
+  /*
+   * ƯU TIÊN ẢNH CHỤP ĐỊNH MỨC CỦA LỆNH (0142) — cùng nguồn với
+   * v_lsx_material_status. Ghi chú phân bổ trên dòng đơn đặt ("4c/sp") mà đọc
+   * định mức sống trong khi số lượng cần đọc bản đã chốt thì hai con số trên
+   * cùng một dòng phiếu sẽ chửi nhau.
+   */
+  const { data: snap } = await db()
+    .from('production_order_boms')
+    .select('product_id, material_code, qty_per_unit')
+    .eq('production_order_id', productionOrderId)
+    .limit(10000)
+  const snapped = new Set<string>()
+  for (const s of snap ?? []) {
+    snapped.add(s.product_id)
+    perUnit.set(`${s.product_id}::${s.material_code}`, num(s.qty_per_unit))
+  }
+
+  const liveIds = productIds.filter((id) => !snapped.has(id))
+  if (liveIds.length) {
+    const { data: parts } = await db()
+      .from('technical_product_parts')
+      .select('product_id, material_code, qty')
+      .in('product_id', liveIds)
+      .not('material_code', 'is', null)
+      .limit(10000)
+    for (const p of (parts ?? []) as {
+      product_id: string
+      material_code: string
+      qty: unknown
+    }[]) {
+      const key = `${p.product_id}::${p.material_code}`
+      perUnit.set(key, (perUnit.get(key) ?? 0) + num(p.qty))
+    }
   }
   for (const [key, dm] of perUnit) {
     const [productId, materialCode] = key.split('::')

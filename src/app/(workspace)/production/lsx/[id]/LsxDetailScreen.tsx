@@ -12,6 +12,7 @@ import {
   canManagePlan,
   canEditComponents,
 } from '@/modules/dept/production/perms'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { filesService } from '@/modules/core/files/files.service'
@@ -64,8 +65,14 @@ export async function LsxDetailScreen({
       page_size: 100,
     })
     const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
+    const [bomSnapshot, canResnapBom] = await Promise.all([
+      lsxService.bomSnapshotInfo(user, id),
+      canAction(user, 'production.lsx.bom_resnap'),
+    ])
     supply = {
       hasBom: (summary?.components.length ?? 0) > 0,
+      bomSnapshot,
+      canResnapBom,
       pos: poRows.map((p) => ({
         id: p.id,
         code: p.code,

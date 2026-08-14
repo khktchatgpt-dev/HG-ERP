@@ -33,6 +33,12 @@ export default async function ProductSpecsPage({
   return (
     <ProductSpecsTab
       product={toProductView(data.product)}
+      // Phương án đóng gói chỉ để BÙ mấy ô CBM/thùng hiện chỉ-đọc ở đây — cùng
+      // nguồn với tab Đóng gói, tránh hai trang nói hai số khác nhau.
+      packingOptions={data.packing}
+      // Số dòng định mức THẬT trong app — thẻ "Số liệu từ định mức" cần, để
+      // phân biệt với `part_count` chép từ file Excel.
+      bomRows={data.bomRows}
       suggestions={suggestions}
       canEdit={canEdit}
     />

@@ -10,6 +10,7 @@ import {
   Lock,
   Maximize2,
 } from 'lucide-react'
+import { LIFECYCLE_LABEL, LIFECYCLE_TONE } from '@/lib/product-lifecycle'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { DataTable, type Column } from '@/components/erp/DataTable'
@@ -159,6 +160,12 @@ export function ProductTable({
               className="border-transparent bg-emerald-600 text-white"
             >
               <Lock /> Đã khoá
+            </Badge>
+          )}
+          {/* TRẠNG THÁI hồ sơ (0145) — như lưới thẻ, chỉ hiện khi đã rời "Nháp". */}
+          {p.lifecycle !== 'draft' && (
+            <Badge className={`border-transparent ${LIFECYCLE_TONE[p.lifecycle]}`}>
+              {LIFECYCLE_LABEL[p.lifecycle]}
             </Badge>
           )}
         </div>

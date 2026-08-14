@@ -1,17 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import {
-  Check,
-  Factory,
-  Package,
-  Receipt,
-  Ruler,
-  ShieldCheck,
-  StickyNote,
-  Tags,
-} from 'lucide-react'
+import { Check, Factory, Package, Receipt, StickyNote } from 'lucide-react'
 import { Button } from '@/components/shadcn/button'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
@@ -22,83 +14,93 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { ProductImagePanel } from '@/components/technical/ProductImagePanel'
+import { PackingEditor } from '@/components/technical/PackingEditor'
 import {
   EYEBROW,
-  NumberBand,
   SectionIcon,
   SpecSection,
-  TONE,
   TextCard,
   type Tone,
 } from '@/components/technical/ProductSpecCards'
 import {
   useSectionEditor,
   type CategoryOption,
+  type OwnerOption,
 } from '@/components/technical/useSectionEditor'
-import type { PackingOptionView } from '@/components/technical/ProductProfileCards'
+import {
+  PackingOptionsCard,
+  type PackingOptionView,
+} from '@/components/technical/ProductProfileCards'
 import {
   SECTION_TAB,
   cartonCbm,
   dec,
   num,
   productDims,
-  productDimsOpen,
   withPackingFallback,
   type ProductView,
 } from '@/components/technical/product-sections'
 
 /**
- * Tab HỒ SƠ — đọc như một tờ PHIẾU THÔNG SỐ sản phẩm, không phải dashboard:
+ * Tab HỒ SƠ — tờ nhận diện sản phẩm cho MỌI phòng đọc:
  *
  *  1. Măng-sét: ảnh lớn + loại SP / vật liệu khung + các mã nhận diện.
  *  2. Dải hoàn thiện: TÁCH hai vế sản xuất và thương mại (xem `TRACKS`).
- *  3. Hai băng số: kích thước–khối lượng (từ BOM) và quy cách xuất khẩu.
- *  4. Tóm tắt đặc tính / thông số SX / mô tả — chỉ đọc, sửa nằm ở tab của nó.
+ *  3. Đóng gói xuất khẩu + các phương án đóng gói (gộp về đây 13/08/2026).
+ *  4. Mô tả & ghi chú.
+ *
+ * KHÔNG có thông số kỹ thuật ở đây (user chốt 13/08/2026: "thông tin của kỹ
+ * thuật nên ở bên kỹ thuật"). Kích thước, khối lượng, vật liệu, màu, đặc tính,
+ * kiểm soát tài liệu ISO — tất cả ở tab Thông số kỹ thuật, MỘT chỗ đọc và MỘT
+ * chỗ sửa. Trước đây tab này bày lại bản tóm tắt của chúng, thành ra hai nơi
+ * cùng nói một chuyện mà người đọc không biết chỗ nào mới sửa được.
  *
  * Mã và tên SP KHÔNG lặp ở đây: `layout.tsx` đã in trên PageHeader + badge.
  */
 export function ProductProfileTab({
   product,
   packingOptions,
-  bomRows,
   imageUrl,
   suggestions,
   categories,
+  owners,
   canEdit,
 }: {
   product: ProductView
   /** Bù các ô "Quy cách xuất khẩu" còn trống bằng phương án đóng gói mặc định. */
   packingOptions: PackingOptionView[]
-  /** Số dòng định mức THẬT trong app — khác `product.part_count` (từ Excel). */
-  bomRows: number
   imageUrl: string | null
   suggestions: Record<string, string[]>
   /** Danh mục SP đang hiệu lực — đổ vào ô "Danh mục" ở phần Nhận diện. */
   categories: CategoryOption[]
+  /** Nhân sự chọn được làm người phụ trách (0144) — cùng phần Nhận diện. */
+  owners: OwnerOption[]
   canEdit: boolean
 }) {
   const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
-  const { editingKey, editHandler, node } = useSectionEditor(
-    product,
-    suggestions,
-    canEdit,
-    categories,
-  )
-
   const pk = useMemo(
     () => withPackingFallback(product.packing ?? {}, packingOptions),
     [product.packing, packingOptions],
   )
-  const ts = product.tech_spec ?? {}
+  const { editingKey, editHandler, node, close } = useSectionEditor(
+    product,
+    suggestions,
+    canEdit,
+    categories,
+    owners,
+    // Ô đóng gói còn trống lấy số của phương án mặc định làm gợi ý xám — thẻ
+    // bên ngoài đang hiện đúng số đó, để trắng thì người dùng gõ lại từ trí nhớ.
+    // `pk` là bản ĐÃ BÙ; hook tự bỏ qua khoá nào hồ sơ đã có giá trị riêng.
+    pk,
+  )
   /** Nhãn danh mục; SP còn mang giá trị ngoài danh mục thì hiện nguyên văn. */
   const categoryLabel = product.category
     ? (categories.find((c) => c.code === product.category)?.label ?? product.category)
     : null
   const dims = productDims(product)
-  const dimsOpen = productDimsOpen(product)
   const carton =
     pk.carton_l_cm != null && pk.carton_w_cm != null && pk.carton_h_cm != null
       ? `${pk.carton_l_cm} × ${pk.carton_w_cm} × ${pk.carton_h_cm}`
@@ -210,7 +212,8 @@ export function ProductProfileTab({
                         </span>
                       )}
                     </p>
-                    <TraitChips product={product} />
+                    {/* Chip "Có nệm / Có kính / Bộ sản phẩm" đã bỏ (13/08/2026):
+                        đó là đặc tính kỹ thuật, đã nằm ở tab Thông số kỹ thuật. */}
                   </div>
                   {canEdit && (
                     <button
@@ -235,7 +238,21 @@ export function ProductProfileTab({
                       // Hiện NHÃN danh mục, không hiện mã: `category` lưu code
                       // (`ban_ghe_ngoai_troi`), người đọc cần "Bàn ghế ngoài trời".
                       ['Danh mục', categoryLabel, false],
+                      // 0144 — người phụ trách hồ sơ. Hiện TÊN, không hiện id.
+                      [
+                        'Người phụ trách',
+                        product.owner_id
+                          ? (owners.find((o) => o.id === product.owner_id)?.name ??
+                            'Người cũ (đã khoá / xoá)')
+                          : null,
+                        false,
+                      ],
                       ['ĐVT bán', product.unit, false],
+                      [
+                        'Ngày tạo hồ sơ',
+                        new Date(product.created_at).toLocaleDateString('vi-VN'),
+                        false,
+                      ],
                       ['Barcode', product.barcode, true],
                       [
                         'Giá tham khảo',
@@ -252,7 +269,7 @@ export function ProductProfileTab({
                         className={cn(
                           'text-sm break-words',
                           mono && value && 'font-mono',
-                          !value && 'text-muted-foreground/50',
+                          !value && 'text-muted-foreground',
                         )}
                       >
                         {value || '—'}
@@ -269,117 +286,63 @@ export function ProductProfileTab({
       {/* ── 2. Dải hoàn thiện — hai vế đọc riêng, mỗi mục thiếu bấm được ── */}
       <ReadinessCard tracks={tracks} onFill={canEdit ? fillGap : null} />
 
-      {/* ── 3a. Băng kích thước & khối lượng — số của chính sản phẩm ── */}
-      <NumberBand
-        icon={Ruler}
-        tone="sky"
-        title="Kích thước & khối lượng"
-        hint="báo giá / kế hoạch phôi"
-        href={`${base}/dinh-muc`}
-        hrefLabel="Xem định mức"
-        emptyText="Chưa có số tổng hợp. Các số này nạp từ file BOM khi import, hoặc suy ra khi nhập định mức chi tiết."
-        cells={[
-          {
-            label: 'Kích thước SP',
-            value: dims?.text ?? null,
-            unit: dims?.unit,
-            /*
-             * SP gập/mở thì nói luôn số lúc MỞ ngay dưới ô: bàn kéo giãn
-             * 1800→2500, ghế gấp mở ra lại THẤP xuống. Không hiện thành ô riêng
-             * vì tuyệt đại đa số SP không gập/mở, thêm ô là thêm một dãy "—".
-             */
-            sub: dimsOpen ? `mở: ${dimsOpen.text} ${dimsOpen.unit}` : undefined,
-          },
-          {
-            /*
-             * App có dòng thật thì đếm dòng thật; chưa có thì mượn con số người
-             * nhập đã tính trong file Excel, NHƯNG phải nói rõ — nếu không thì
-             * ô ghi "103 dòng" mà bấm "Xem định mức" lại ra bảng trắng.
-             */
-            label: 'Số chi tiết',
-            value: num(bomRows > 0 ? bomRows : product.part_count),
-            unit: 'dòng',
-            sub:
-              bomRows === 0 && product.part_count != null
-                ? 'theo file BOM, chưa nhập vào app'
-                : undefined,
-          },
-          { label: 'KL khung', value: dec(product.frame_weight_kg, 2), unit: 'kg' },
-          { label: 'KL tịnh', value: dec(product.net_weight_kg, 2), unit: 'kg' },
-          { label: 'Tổng mét khung', value: dec(product.frame_length_m, 1), unit: 'm' },
-          { label: 'Diện tích sơn', value: dec(product.paint_area_m2, 2), unit: 'm²' },
-        ]}
-      />
+      {/*
+       * Băng "Kích thước & khối lượng" ĐÃ BỎ khỏi tab này (user chốt 13/08/2026:
+       * "thông tin của kỹ thuật nên ở bên kỹ thuật, hiện bên hồ sơ vẫn còn").
+       * Số kích thước / khối lượng / số chi tiết / diện tích sơn nay chỉ có ở
+       * tab Thông số kỹ thuật — một nguồn, một chỗ sửa.
+       */}
 
-      {/* ── 3b. Băng quy cách — mấy con số xếp cont chạy theo ── */}
-      <NumberBand
+      {/*
+       * ── 3. ĐÓNG GÓI — nằm LUÔN ở đây, không còn tab riêng (user chốt
+       * 13/08/2026). Trước đây chỗ này chỉ là băng số chỉ-đọc kèm link sang tab
+       * Đóng gói; nay là thẻ SỬA ĐƯỢC tại chỗ, kèm luôn danh sách phương án
+       * đóng gói bên dưới — mở hồ sơ là thấy hết, không phải nhảy tab.
+       */}
+      <SpecSection
         icon={Package}
         tone="amber"
-        title="Quy cách xuất khẩu"
+        title="Đóng gói xuất khẩu"
         hint="báo giá / xếp cont"
-        href={`${base}/dong-goi`}
-        /*
-         * SP nhiều kiện thì kích thước/khối lượng không gộp về một con số được
-         * (withPackingFallback chỉ bù khi phương án có đúng 1 kiện) — nói thẳng
-         * là dữ liệu NẰM Ở tab Đóng gói, đừng để người đọc tưởng chưa ai nhập.
-         */
-        emptyText={
-          packingOptions.length > 0
-            ? `Đã có ${packingOptions.length} phương án đóng gói nhiều kiện — số từng kiện xem ở tab Đóng gói.`
-            : 'Chưa có quy cách đóng gói. Nhập ở tab Đóng gói, hoặc nạp cùng phương án đóng gói từ file BOM.'
-        }
-        cells={[
-          { label: 'Carton', value: carton, unit: 'cm' },
-          { label: 'SP / thùng', value: num(pk.qty_per_carton) },
-          { label: 'Xếp 40′HC', value: num(pk.loading_40hc), unit: 'thùng' },
-          {
-            label: 'CBM / thùng',
-            value: cbm != null ? cbm.toFixed(3) : null,
-            unit: 'm³',
-          },
-          { label: 'GW / thùng', value: dec(pk.gw_kg, 2), unit: 'kg' },
+        fields={[
+          ['Carton (D × R × C)', carton && `${carton} cm`],
+          ['SP / thùng', num(pk.qty_per_carton)],
+          ['Xếp 40′HC', num(pk.loading_40hc, ' thùng')],
+          ['CBM / thùng', cbm != null ? `${cbm.toFixed(3)} m³` : null],
+          ['NW / thùng', dec(pk.nw_kg, 2) && `${dec(pk.nw_kg, 2)} kg`],
+          ['GW / thùng', dec(pk.gw_kg, 2) && `${dec(pk.gw_kg, 2)} kg`],
+          ['Đơn vị đóng gói', pk.pack_unit_label ?? null],
         ]}
+        onEdit={editHandler('packing')}
+        /* Form đóng gói KHÔNG dùng bản sinh từ `SECTIONS` như các phần khác
+           (user 13/08/2026: "nhập quy cách rất khó hiểu") — xem PackingEditor:
+           carton gộp một dòng D × R × C, CBM tự hiện, nhãn viết tiếng Việt. */
+        editing={
+          editingKey === 'packing' ? (
+            <PackingEditor
+              productId={product.id}
+              packing={product.packing ?? {}}
+              fallback={pk}
+              onClose={close}
+            />
+          ) : null
+        }
       />
 
-      {/* ── 4. Tóm tắt phần còn lại — chỉ đọc, sửa nằm ở tab tương ứng ── */}
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <SpecSection
-          icon={Tags}
-          tone="violet"
-          title="Đặc tính sản phẩm"
-          hint="catalogue / báo giá"
-          fields={[
-            ['Chất liệu chính', product.material],
-            ['Tải trọng tối đa', num(product.max_load_kg, ' kg')],
-            [
-              'Lắp ráp',
-              product.assembly === 'kd'
-                ? 'Tháo rời (KD)'
-                : product.assembly === 'assembled'
-                  ? 'Nguyên chiếc'
-                  : null,
-            ],
-            ['Bộ gồm', product.set_contents],
-          ]}
-          moreHref={`${base}/thong-so`}
-        />
+      {/*
+       * Phương án đóng gói nhiều kiện: SP nhiều kiện thì số không gộp về một
+       * dòng được (`withPackingFallback` chỉ bù khi phương án có đúng 1 kiện),
+       * nên bảng chi tiết phải đứng ngay dưới — trước đây nó nằm ở tab khác,
+       * người đọc thấy thẻ trên trống là tưởng chưa ai nhập.
+       */}
+      <PackingOptionsCard options={packingOptions} />
 
-        <SpecSection
-          icon={Factory}
-          tone="emerald"
-          title="Thông số sản xuất"
-          hint="in trên LSX"
-          fields={[
-            ['Máy', ts.machine],
-            ['Nệm', ts.cushion],
-            ['Sơn', ts.paint],
-            ['Kính', ts.glass],
-            ['Gỗ', ts.wood],
-            ['Mẫu showroom', product.showroom_sample ? 'Có' : 'Không'],
-          ]}
-          moreHref={`${base}/thong-so`}
-        />
-      </div>
+      {/*
+       * Hai thẻ tóm tắt "Vật liệu & màu" + "Đặc tính sản phẩm" ĐÃ BỎ (13/08/2026)
+       * — đó là thông số kỹ thuật, chỗ của nó là tab Thông số kỹ thuật. Để bản
+       * tóm tắt ở đây chỉ tạo ra hai nơi cùng nói một chuyện, và người đọc không
+       * biết chỗ nào mới là chỗ sửa. Một dòng dẫn ở cuối trang là đủ.
+       */}
 
       <TextCard
         icon={StickyNote}
@@ -394,7 +357,18 @@ export function ProductProfileTab({
         editing={node('text')}
       />
 
-      <DocControlLine product={product} />
+      {/*
+       * Dòng kiểm soát tài liệu ISO (Rev. / ngày hiệu lực / người lập / duyệt)
+       * cũng đã BỎ khỏi đây: nó là chữ ký của bảng định mức, sống ở tab Thông số
+       * kỹ thuật cùng thẻ "Kiểm soát tài liệu BOM".
+       */}
+      <p className="text-muted-foreground text-xs">
+        Kích thước, vật liệu, màu hoàn thiện, đặc tính và kiểm soát tài liệu BOM nằm ở{' '}
+        <Link href={`${base}/thong-so`} className="text-primary hover:underline">
+          tab Thông số kỹ thuật
+        </Link>
+        .
+      </p>
 
       {canEdit && (
         <>
@@ -428,36 +402,6 @@ const labelOf = (
   list: readonly { code: string; label: string }[],
   code: string | null,
 ) => (code ? (list.find((x) => x.code === code)?.label ?? null) : null)
-
-/**
- * Đặc tính bật/tắt — quyết định SP đi qua tổ nào, nên hiện ngay dưới dòng dẫn.
- * Màu theo cùng bảng `TONE`: nệm/bọc là việc của tổ may (violet, miền thương
- * phẩm), kính là chi tiết đo–lắp (sky), bộ nhiều món là chuyện đóng gói (amber).
- */
-function TraitChips({ product }: { product: ProductView }) {
-  const traits = (
-    [
-      // Loại 'ST' đã dịch ra "Bộ sản phẩm" ngay dòng trên — không lặp thành chip.
-      [product.is_set && product.product_type !== 'ST', 'Bộ sản phẩm', 'amber'],
-      [product.is_upholstered, 'Có nệm / bọc', 'violet'],
-      [product.has_glass, 'Có kính', 'sky'],
-      // "Ngừng dùng" KHÔNG lặp ở đây — layout.tsx đã in badge trạng thái.
-    ] as [boolean, string, Tone][]
-  ).filter(([on]) => on)
-  if (traits.length === 0) return null
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {traits.map(([, label, tone]) => (
-        <span
-          key={label}
-          className={cn('rounded-full px-2.5 py-0.5 text-[11px] font-medium', TONE[tone])}
-        >
-          {label}
-        </span>
-      ))}
-    </div>
-  )
-}
 
 // ── Hoàn thiện hồ sơ ─────────────────────────────────────────────────────────
 
@@ -510,12 +454,14 @@ function buildTracks(
           done: p.bom_status !== 'none',
           href: `${base}/dinh-muc`,
         },
-        { label: 'Kích thước SP', done: hasDims, section: 'packing' },
-        { label: 'Chất liệu', done: !!p.material, section: 'export' },
+        // Ba mục này nằm ở tab Thông số kỹ thuật (13/08/2026) — khoá section
+        // phải khớp `SECTION_TAB`, sai một chữ là bấm vào không đi đâu cả.
+        { label: 'Kích thước SP', done: hasDims, section: 'dims' },
+        { label: 'Chất liệu', done: !!p.material, section: 'materials' },
         {
-          label: 'Thông số SX',
+          label: 'Vật liệu / thông số SX',
           done: !!(ts.machine || ts.paint || ts.cushion || ts.glass || ts.wood),
-          section: 'techSpec',
+          section: 'materials',
         },
         { label: 'Đóng gói carton', done: hasCarton, section: 'packing' },
         { label: 'Xếp 40′HC', done: hasLoading, section: 'packing' },
@@ -613,7 +559,7 @@ function TrackRow({
             ) : (
               <span
                 key={gap.label}
-                className="text-muted-foreground/70 rounded-full border border-dashed px-2.5 py-0.5 text-xs"
+                className="text-muted-foreground rounded-full border border-dashed px-2.5 py-0.5 text-xs"
               >
                 {gap.label}
               </span>
@@ -621,37 +567,6 @@ function TrackRow({
           )}
         </div>
       )}
-    </div>
-  )
-}
-
-/**
- * Khối kiểm soát tài liệu ISO (HG-QT-07/M02) — chỉ SP đã có BOM ký duyệt mới
- * có, nên ẩn hẳn khi trống thay vì in bốn dấu "—".
- */
-function DocControlLine({ product }: { product: ProductView }) {
-  const items = [
-    product.bom_rev != null && ['Rev.', String(product.bom_rev)],
-    product.bom_effective_date && [
-      'Hiệu lực',
-      new Date(product.bom_effective_date).toLocaleDateString('vi-VN'),
-    ],
-    product.bom_prepared_by && ['Người lập', product.bom_prepared_by],
-    product.bom_approved_by && ['Người duyệt', product.bom_approved_by],
-  ].filter((x): x is [string, string] => Array.isArray(x))
-  if (items.length === 0) return null
-
-  return (
-    <div className="text-muted-foreground flex flex-wrap items-center gap-x-5 gap-y-1 px-1 text-xs">
-      <span className="inline-flex items-center gap-1.5">
-        <ShieldCheck className="size-3.5" />
-        Kiểm soát tài liệu BOM
-      </span>
-      {items.map(([label, value]) => (
-        <span key={label}>
-          {label}: <span className="text-foreground font-medium">{value}</span>
-        </span>
-      ))}
     </div>
   )
 }

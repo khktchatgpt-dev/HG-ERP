@@ -11,6 +11,13 @@ import {
   type ProductPickRow,
   type ProductTechSpec,
 } from './technical.repo'
+import {
+  productRevisionsRepo,
+  snapshotFields,
+  snapshotParts,
+  diffFields,
+  type ProductRevision,
+} from './product-revisions.repo'
 import type {
   BomStatus,
   ProductPartInput as PartInput,
@@ -20,11 +27,17 @@ import type {
 } from './technical.schema'
 import type { User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
-import { filesRepo } from '@/modules/core/files/files.repo'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
 import { calcPartDerived } from '@/lib/bom-calc'
-import { worthFuzzy } from '@/lib/search-text'
+import { normalizeSearch, worthFuzzy } from '@/lib/search-text'
+import { ensureCatalogItem } from '@/modules/core/catalogs/catalogs.service'
+import {
+  LIFECYCLE_LABEL,
+  flagsFor,
+  requiresReason,
+  type Lifecycle,
+} from '@/lib/product-lifecycle'
 import {
   MAX_SERIAL,
   buildProductCode,
@@ -90,6 +103,11 @@ async function canLockProducts(user: User): Promise<boolean> {
   return canAction(user, 'technical.product.lock')
 }
 
+/** Cập nhật trạng thái hồ sơ (0145) — Kỹ thuật + Bán hàng + Giám đốc. */
+async function canSetLifecycle(user: User): Promise<boolean> {
+  return canAction(user, 'technical.product.lifecycle')
+}
+
 /**
  * HỒ SƠ ĐÃ KHOÁ THÌ KHÔNG SỬA (0140 — user chốt "khoá TOÀN BỘ hồ sơ SP").
  *
@@ -103,6 +121,55 @@ function assertUnlocked(p: { locked_at: string | null; code?: string }): void {
     `Hồ sơ ${p.code ?? ''} đã KHOÁ — mở khoá (kèm lý do) rồi mới sửa được`.trim(),
     'PRODUCT_LOCKED',
   )
+}
+
+/**
+ * Ghi một dòng LỊCH SỬ PHIÊN BẢN (0143).
+ *
+ * `lock` → chốt bản mới: số bản +1, chụp thuộc tính + định mức, tính danh sách
+ * trường đổi so với bản chốt gần nhất. `unlock` → ghi vết trên bản đang chốt,
+ * không tăng số, không chụp lại (nội dung y bản đang chốt).
+ *
+ * `p` là hồ sơ ĐỌC TRƯỚC khi patch — đúng nội dung được chốt; mấy cột kiểm soát
+ * (locked_*) không nằm trong ảnh chụp nên chụp trước hay sau đều như nhau.
+ */
+async function writeRevision(
+  user: User,
+  p: Product,
+  action: 'lock' | 'unlock',
+  reason: string | null,
+): Promise<void> {
+  const maxRev = await productRevisionsRepo.maxRev(p.id)
+  if (action === 'unlock') {
+    await productRevisionsRepo.insert({
+      product_id: p.id,
+      rev: Math.max(1, maxRev),
+      action,
+      reason,
+      created_by: user.id,
+    })
+    return
+  }
+
+  const [parts, prev] = await Promise.all([
+    productProfileRepo.parts(p.id),
+    productRevisionsRepo.lastLockSnapshot(p.id),
+  ])
+  const fields = snapshotFields(p)
+  const partsSnap = snapshotParts(parts)
+  const partsChanged = prev
+    ? JSON.stringify(prev.parts) !== JSON.stringify(partsSnap)
+    : false
+  await productRevisionsRepo.insert({
+    product_id: p.id,
+    rev: maxRev + 1,
+    action,
+    reason,
+    changed_fields: diffFields(prev?.fields ?? null, fields, partsChanged),
+    fields_snapshot: fields,
+    parts_snapshot: partsSnap,
+    created_by: user.id,
+  })
 }
 
 /** Chặn sửa định mức của hồ sơ đã khoá — cùng luật với sửa thuộc tính SP. */
@@ -243,6 +310,8 @@ export const productsService = {
       has_image?: boolean
       /** true = chỉ hồ sơ ĐÃ KHOÁ (0140). */
       locked?: boolean
+      /** Lọc theo TRẠNG THÁI hồ sơ (0145). */
+      lifecycle?: Lifecycle
       product_type?: string
       category?: string
       page: number
@@ -268,6 +337,7 @@ export const productsService = {
         (opts.bom_status == null || r.bom_status === opts.bom_status) &&
         (opts.has_image == null || (r.image_file_id != null) === opts.has_image) &&
         (opts.locked == null || (r.locked_at != null) === opts.locked) &&
+        (opts.lifecycle == null || r.lifecycle === opts.lifecycle) &&
         (opts.product_type == null || r.product_type === opts.product_type) &&
         (opts.category == null ||
           (opts.category === NO_CATEGORY_FILTER
@@ -366,6 +436,37 @@ export const productsService = {
       productsRepo.customerNames(),
     ])
     return { ...byField, customer_name: customers.map((c) => c.name) }
+  },
+
+  /**
+   * TẠO DANH MỤC SP NGAY TRONG FORM HỒ SƠ (13/08/2026 — user: "không thể tuỳ
+   * chỉnh loại khách hàng hay tạo khách hàng mới, danh mục cũng vậy").
+   *
+   * `catalogsService.create` đòi ADMIN vì danh mục dùng chung cả hệ thống. Ở
+   * đây mở một cửa HẸP: chỉ loại `product_category`, chỉ người sửa được hồ sơ SP
+   * — họ vốn đã gán danh mục cho SP, bắt đi xin admin thêm một nhãn là lý do
+   * khiến 528/537 SP bỏ trống ô này. Nhãn trùng thì trả về nhãn cũ chứ không
+   * báo lỗi: người dùng đang muốn "có danh mục này", không quan tâm ai tạo trước.
+   */
+  async createCategory(
+    user: User,
+    label: string,
+  ): Promise<{ code: string; label: string }> {
+    await assertAction(user, 'technical.product.update')
+    const clean = label.trim()
+    if (!clean) throw BadRequest('Nhập tên danh mục')
+    if (clean.length > 100) throw BadRequest('Tên danh mục tối đa 100 ký tự')
+
+    // Code là khoá tham chiếu, phải ascii-kebab (catalogCreateSchema) — suy từ
+    // nhãn, bỏ dấu tiếng Việt. Nhãn thuần ký tự lạ thì rơi về mã theo thời gian.
+    const code =
+      normalizeSearch(clean)
+        .replace(/[^a-z0-9]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 50) || `dm_${Date.now().toString(36)}`
+
+    const item = await ensureCatalogItem('product_category', code, clean)
+    return { code: item.code, label: item.label }
   },
 
   /** Đếm cho StatsBar (HEAD count) — không kéo toàn bộ dòng. Thư viện SP là tài
@@ -514,25 +615,12 @@ export const productsService = {
     return productsRepo.patch(id, patch)
   },
 
-  /**
-   * CHỌN FILE BOM ĐANG DÙNG — trả lời đúng câu hỏi "nhiều file BOM thì dùng
-   * cái nào": hồ sơ trỏ vào MỘT file, UI làm nổi bật hẳn, các file BOM khác
-   * lùi về "bản cũ". Đổi được cả khi hồ sơ đang khoá? KHÔNG — đổi bản dùng là
-   * thay đổi nội dung hồ sơ, phải mở khoá như mọi sửa đổi khác.
+  /*
+   * `setBomFile` (chọn file BOM đang dùng, 0140) đã BỎ 13/08/2026 — user bỏ hẳn
+   * phần chốt bản BOM ở tab Tài liệu, nên không còn đường gọi. Cột
+   * `bom_file_id` vẫn nằm trong DB và trong ảnh chụp phiên bản (0143): dữ liệu
+   * cũ giữ nguyên, chỉ là giao diện không đặt/đổi được nữa.
    */
-  async setBomFile(user: User, id: string, fileId: string | null): Promise<Product> {
-    await assertAction(user, 'technical.product.attach_file')
-    const before = await productsRepo.findById(id)
-    if (!before) throw NotFound('Sản phẩm không tồn tại')
-    assertUnlocked(before)
-    if (fileId) {
-      const file = await filesRepo.getById(fileId)
-      if (!file || file.product_id !== id) {
-        throw BadRequest('File không thuộc hồ sơ sản phẩm này')
-      }
-    }
-    return productsRepo.patch(id, { bom_file_id: fileId })
-  },
 
   /**
    * KHOÁ HỒ SƠ (0140): tuyên bố "bản này dùng được, đừng sửa nữa". Khoá TOÀN
@@ -549,11 +637,25 @@ export const productsService = {
     const before = await productsRepo.findById(id)
     if (!before) throw NotFound('Sản phẩm không tồn tại')
     if (before.locked_at) throw BadRequest('Hồ sơ đã khoá rồi')
-    return productsRepo.patch(id, {
+    const locked = await productsRepo.patch(id, {
       locked_at: new Date().toISOString(),
       locked_by: user.id,
       lock_note: note?.trim() || null,
     })
+    /*
+     * KHOÁ = CHỐT MỘT BẢN (0143). Ảnh chụp thuộc tính + định mức tại đúng giây
+     * này, kèm danh sách trường đổi so với bản trước — đó là "revision history"
+     * mà không bắt ai học thao tác mới.
+     *
+     * Lỗi ghi lịch sử KHÔNG làm hỏng nhịp khoá: khoá là thứ chặn sửa, phải
+     * chắc chắn xảy ra; lịch sử là ghi vết, hỏng thì log rồi đi tiếp.
+     */
+    try {
+      await writeRevision(user, before, 'lock', note?.trim() || null)
+    } catch (e) {
+      console.error('[products.lock] ghi lịch sử phiên bản lỗi', id, e)
+    }
+    return locked
   },
 
   /**
@@ -567,13 +669,101 @@ export const productsService = {
     if (!before) throw NotFound('Sản phẩm không tồn tại')
     if (!before.locked_at) throw BadRequest('Hồ sơ đang không khoá')
     if (!reason.trim()) throw BadRequest('Nhập lý do mở khoá')
-    return productsRepo.patch(id, {
+    const opened = await productsRepo.patch(id, {
       locked_at: null,
       locked_by: null,
       unlocked_at: new Date().toISOString(),
       unlocked_by: user.id,
       unlock_reason: reason.trim(),
     })
+    // Mở khoá = một dòng ghi vết trên bản ĐANG chốt (không tăng số bản) — lý do
+    // đã bắt nhập từ 0140, giờ nó nằm trong lịch sử chứ không chỉ đè lên cột cũ.
+    try {
+      await writeRevision(user, before, 'unlock', reason.trim())
+    } catch (e) {
+      console.error('[products.unlock] ghi lịch sử phiên bản lỗi', id, e)
+    }
+    return opened
+  },
+
+  /** Lịch sử phiên bản của hồ sơ (0143) — thư viện SP đọc mở nên không gác quyền. */
+  async revisions(_user: User, id: string): Promise<ProductRevision[]> {
+    return productRevisionsRepo.list(id)
+  },
+
+  /** Số bản chốt hiện tại (0 = chưa chốt lần nào) — cho badge "Bản #N" ở header. */
+  async currentRev(_user: User, id: string): Promise<number> {
+    return productRevisionsRepo.maxRev(id)
+  },
+
+  /**
+   * CẬP NHẬT TRẠNG THÁI HỒ SƠ (0145) — nút "Cập nhật trạng thái" ở trang chi tiết.
+   *
+   *   Nháp → Đang rà soát → Đã duyệt mẫu → Đang sản xuất → Ngừng dùng
+   *
+   * Đi tới tự do; ĐI LÙI bắt ghi lý do (khách bắt sửa lại mẫu, hàng ngừng rồi
+   * đặt lại — có thật, nhưng phải truy được vì sao).
+   *
+   * Một nhịp bấm làm ba việc, nên KHÔNG để ai gọi thẳng repo:
+   *   1. ghi `lifecycle` + vết ai/khi nào,
+   *   2. đồng bộ cờ cũ (`is_active`, `sample_confirmed_*`) — xem `flagsFor`,
+   *   3. ghi một dòng lịch sử để tab Lịch sử truy được.
+   *
+   * KHÔNG `assertUnlocked`: khoá là khoá NỘI DUNG hồ sơ (thuộc tính/định mức/
+   * file). Trạng thái là tiến trình — hồ sơ đang khoá vẫn phải chuyển sang
+   * "đang sản xuất" hay "ngừng dùng" được mà không cần mở khoá ra.
+   */
+  async setLifecycle(
+    user: User,
+    id: string,
+    to: Lifecycle,
+    reason?: string | null,
+  ): Promise<Product> {
+    await assertAction(user, 'technical.product.lifecycle')
+    const before = await productsRepo.findById(id)
+    if (!before) throw NotFound('Sản phẩm không tồn tại')
+    const from = before.lifecycle
+    if (from === to) throw BadRequest(`Hồ sơ đang ở trạng thái "${LIFECYCLE_LABEL[to]}"`)
+    const note = reason?.trim() || null
+    if (requiresReason(from, to) && !note) {
+      throw BadRequest(
+        `Lùi từ "${LIFECYCLE_LABEL[from]}" về "${LIFECYCLE_LABEL[to]}" phải ghi lý do`,
+      )
+    }
+
+    const now = new Date().toISOString()
+    const flags = flagsFor(to)
+    const updated = await productsRepo.setLifecycle(id, {
+      lifecycle: to,
+      lifecycle_at: now,
+      lifecycle_by: user.id,
+      is_active: flags.is_active,
+      // Mốc "chốt mẫu với khách" (0141) nay là hệ quả của trạng thái, không còn
+      // nút riêng. Giữ nguyên mốc cũ nếu đã có để khỏi mất ngày đã chốt.
+      sample_confirmed_at: flags.sample_confirmed
+        ? (before.sample_confirmed_at ?? now)
+        : null,
+      sample_confirmed_by: flags.sample_confirmed
+        ? (before.sample_confirmed_by ?? user.id)
+        : null,
+      sample_note: flags.sample_confirmed ? (before.sample_note ?? note) : null,
+    })
+
+    // Lịch sử: hỏng thì log rồi đi tiếp — trạng thái là thứ phải đổi cho được.
+    try {
+      await productRevisionsRepo.insert({
+        product_id: id,
+        rev: Math.max(1, await productRevisionsRepo.maxRev(id)),
+        action: 'status',
+        reason: note,
+        changed_fields: ['lifecycle'],
+        fields_snapshot: { from, to },
+        created_by: user.id,
+      })
+    } catch (e) {
+      console.error('[products.setLifecycle] ghi lịch sử lỗi', id, e)
+    }
+    return updated
   },
 
   /**
@@ -1024,4 +1214,5 @@ export {
   canCreateProducts,
   canEditBom,
   canLockProducts,
+  canSetLifecycle,
 }

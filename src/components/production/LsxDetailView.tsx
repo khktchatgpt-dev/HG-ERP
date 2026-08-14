@@ -100,6 +100,13 @@ export type LsxLineData = {
 
 export type SupplyPanelData = {
   hasBom: boolean
+  /**
+   * Định mức của lệnh đã CHỐT lúc nào (0142). null = chưa chốt → nhu cầu vật tư
+   * còn đọc định mức sống của hồ sơ SP, Kỹ thuật sửa BOM là số của lệnh đổi theo.
+   */
+  bomSnapshot: { snapped_at: string; products: number } | null
+  /** Được bấm "chốt lại định mức" (`production.lsx.bom_resnap`). */
+  canResnapBom: boolean
   pos: {
     id: string
     code: string
@@ -766,6 +773,40 @@ export function LsxDetailView({
                     ⚠ Chưa có bảng chi tiết — nhu cầu vật tư chưa bóc được.
                   </p>
                 )}
+                {/* ĐỊNH MỨC ĐÃ CHỐT (0142): lệnh mua theo bản nào. Trước đây nhu
+                    cầu đọc định mức SỐNG nên Kỹ thuật sửa BOM là số của lệnh cũ
+                    đổi theo — nay đứng yên, và muốn ăn theo bản mới thì phải
+                    bấm chốt lại (có người chịu trách nhiệm). */}
+                <div className="bg-muted/40 mb-2 rounded-md px-2 py-1.5 text-xs">
+                  {supply.bomSnapshot ? (
+                    <p className="text-muted-foreground">
+                      Định mức đã chốt {fmtD(supply.bomSnapshot.snapped_at)} ·{' '}
+                      {supply.bomSnapshot.products} SP — Kỹ thuật sửa BOM sau mốc này
+                      KHÔNG làm đổi nhu cầu của lệnh.
+                    </p>
+                  ) : (
+                    <p className="text-amber-600 dark:text-amber-400">
+                      Định mức chưa chốt — nhu cầu đang đọc bản hiện hành của hồ sơ SP, Kỹ
+                      thuật sửa BOM là số của lệnh đổi theo. Chốt khi duyệt lệnh.
+                    </p>
+                  )}
+                  {supply.canResnapBom && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void call(
+                          `/api/dept/production/lsx/${lsx.id}/bom-snapshot`,
+                          {},
+                          'Đã chốt lại định mức theo BOM hiện hành',
+                        )
+                      }
+                      className="text-primary mt-1 inline-flex items-center gap-1 font-medium hover:underline disabled:opacity-50"
+                    >
+                      Chốt lại theo BOM mới
+                    </button>
+                  )}
+                </div>
                 {supply.pos.length === 0 ? (
                   <p className="text-muted-foreground text-sm">
                     Chưa có đơn đặt vật tư nào.

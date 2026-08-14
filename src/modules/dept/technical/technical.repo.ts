@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { searchTokens } from '@/lib/search-text'
+import type { Lifecycle } from '@/lib/product-lifecycle'
 import type { BomStatus } from './technical.schema'
 
 export type ProductPacking = {
@@ -103,6 +104,8 @@ export type Product = {
   length_open_mm: number | null
   width_open_mm: number | null
   height_open_mm: number | null
+  /** Độ dày SP (mm, 0146) — mặt bàn / tấm / kính. Khác wall_thickness_mm của dòng ĐM. */
+  thickness_mm: number | null
   // Đầu biểu mẫu "BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN" (0097).
   /** Ô "Nhiên Liệu" — 'AL' | 'IR' | 'IN', nguồn tra tỉ trọng. Mặc định của SP. */
   base_material: string | null
@@ -130,19 +133,46 @@ export type Product = {
   unlocked_at: string | null
   unlocked_by: string | null
   unlock_reason: string | null
+  /**
+   * XÁC NHẬN MẪU (0141) — nhãn tiến trình ĐỘC LẬP với `locked_*`: mẫu đã được
+   * chốt với khách hay chưa. Chưa xác nhận thì hồ sơ còn đang chạy (vẫn sửa
+   * bình thường); xác nhận rồi mới tính chuyện khoá. Không phải `showroom_sample`
+   * (cờ "có mẫu vật lý ở showroom").
+   */
+  sample_confirmed_at: string | null
+  sample_confirmed_by: string | null
+  sample_note: string | null
+  /** Người phụ trách hồ sơ (0144) — người trả lời khi hồ sơ có vấn đề. */
+  owner_id: string | null
+  /**
+   * TRẠNG THÁI hồ sơ (0145) — nguồn DUY NHẤT người dùng chạm vào. Không ghi qua
+   * `patch` (xem `ProductWrite`): mọi đường đổi trạng thái phải đi
+   * `productsService.setLifecycle` để còn đồng bộ cờ cũ + ghi lịch sử.
+   */
+  lifecycle: Lifecycle
+  lifecycle_at: string | null
+  lifecycle_by: string | null
   is_active: boolean
   created_at: string
   updated_at: string
 }
 
+/**
+ * Trường GHI ĐƯỢC qua `patch` thường. `lifecycle` bị loại ra CÓ CHỦ Ý (0145):
+ * đổi trạng thái còn phải đồng bộ `is_active` / `sample_confirmed_*` và ghi một
+ * dòng lịch sử, nên chỉ có `productsRepo.setLifecycle` (gọi từ service) mới
+ * được chạm vào. Loại ở tầng type để quên là hỏng build, không phải hỏng dữ liệu.
+ */
+export type ProductWrite = Partial<Omit<Product, 'lifecycle'>>
+
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
 const LITE_COLS =
-  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, is_active, created_at'
+  'id, code, name, category, product_type, frame_material, customer_id, customer_name, customer_item_code, unit, bom_status, packing, length_mm, width_mm, height_mm, image_file_id, locked_at, lifecycle, is_active, created_at'
 
 export type ProductLite = Pick<
   Product,
@@ -167,6 +197,8 @@ export type ProductLite = Pick<
   | 'image_file_id'
   /** Hồ sơ đã khoá (0140) — thư viện gắn badge để ai cũng thấy bản chốt. */
   | 'locked_at'
+  /** TRẠNG THÁI hồ sơ (0145) — badge trên thẻ/bảng + chip lọc của thư viện. */
+  | 'lifecycle'
   | 'is_active'
   | 'created_at'
 >
@@ -278,6 +310,8 @@ export const productsRepo = {
     has_image?: boolean
     /** true = chỉ hồ sơ ĐÃ KHOÁ (0140); bỏ trống = không lọc. */
     locked?: boolean
+    /** Lọc theo TRẠNG THÁI hồ sơ (0145); bỏ trống = mọi trạng thái. */
+    lifecycle?: Lifecycle
     /** Mã loại SP 2 ký tự ('CH', 'TB'…) — xem PRODUCT_TYPES ở lib/product-code. */
     product_type?: string
     /**
@@ -303,6 +337,7 @@ export const productsRepo = {
     else if (filter.has_image === true) q = q.not('image_file_id', 'is', null)
     if (filter.locked === true) q = q.not('locked_at', 'is', null)
     else if (filter.locked === false) q = q.is('locked_at', null)
+    if (filter.lifecycle) q = q.eq('lifecycle', filter.lifecycle)
     if (filter.q) q = applySearch(q, filter.q)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
@@ -374,7 +409,8 @@ export const productsRepo = {
   async counts(): Promise<ProductCounts> {
     // `locked` đếm riêng bằng head-count thay vì nới function 0069: có partial
     // index `technical_products_locked_idx` nên chỉ quét đúng phần đã khoá,
-    // rẻ hơn cả việc sửa + chạy lại RPC cho mọi lần đếm.
+    // rẻ hơn cả việc sửa + chạy lại RPC cho mọi lần đếm. Trạng thái hồ sơ
+    // (0145) KHÔNG đếm ở đây: bộ lọc của nó là dropdown, không phải chip có số.
     const [rpc, locked] = await Promise.all([
       db().rpc('technical_product_counts'),
       db()
@@ -519,7 +555,7 @@ export const productsRepo = {
     return (data as { id: string } | null)?.id ?? null
   },
 
-  async insert(row: Partial<Product> & Pick<Product, 'code' | 'name'>): Promise<Product> {
+  async insert(row: ProductWrite & Pick<Product, 'code' | 'name'>): Promise<Product> {
     const { data, error } = await db()
       .from('technical_products')
       .insert(row)
@@ -529,7 +565,34 @@ export const productsRepo = {
     return data as Product
   },
 
-  async patch(id: string, patch: Partial<Product>): Promise<Product> {
+  /**
+   * Đổi TRẠNG THÁI + các cờ đi kèm trong MỘT lệnh ghi (0145). Tách khỏi `patch`
+   * để `ProductWrite` chặn được mọi đường ghi lifecycle khác — xem ghi chú ở
+   * `ProductWrite`. Gọi từ `productsService.setLifecycle`, đừng gọi thẳng.
+   */
+  async setLifecycle(
+    id: string,
+    row: {
+      lifecycle: Lifecycle
+      lifecycle_at: string
+      lifecycle_by: string
+      is_active: boolean
+      sample_confirmed_at: string | null
+      sample_confirmed_by: string | null
+      sample_note: string | null
+    },
+  ): Promise<Product> {
+    const { data, error } = await db()
+      .from('technical_products')
+      .update(row)
+      .eq('id', id)
+      .select(COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Update lifecycle failed')
+    return data as Product
+  },
+
+  async patch(id: string, patch: ProductWrite): Promise<Product> {
     const { data, error } = await db()
       .from('technical_products')
       .update(patch)

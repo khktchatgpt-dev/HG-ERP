@@ -9,6 +9,7 @@ import { entriesRepo } from './entries.repo'
 import { componentsRepo } from './components.repo'
 import { lsxLinesService } from './lsx-lines.service'
 import { lsxLinesRepo } from './lsx-lines.repo'
+import { bomSnapshotRepo } from './bom-snapshot.repo'
 import { blockingIssues } from './lsx-line-fill'
 import { lsxAudienceIds } from './notify-targets'
 import { ordersRepo, type OrderWithCustomer } from '@/modules/dept/sales/orders.repo'
@@ -114,6 +115,51 @@ export const lsxService = {
     const lsx = await lsxOrThrow(id)
     const jobs = await jobsRepo.listByLsx(id)
     return { lsx, jobs }
+  },
+
+  /**
+   * ĐỊNH MỨC ĐÃ CHỐT của lệnh (0142) — cho panel "Vật tư & cung ứng" nói ra
+   * lệnh đang mua theo bản nào. null = chưa chốt lần nào (lệnh còn nháp/chờ
+   * duyệt) → nhu cầu vẫn đọc định mức sống của hồ sơ SP.
+   */
+  async bomSnapshotInfo(
+    _user: User,
+    id: string,
+  ): Promise<{ snapped_at: string; products: number } | null> {
+    const rows = await bomSnapshotRepo.listByOrder(id)
+    if (!rows.length) return null
+    return {
+      // Lệnh gộp thêm SP sau khi phát thì mỗi SP có mốc riêng — lấy mốc MỚI
+      // NHẤT, đó là câu trả lời cho "số này chốt từ bao giờ".
+      snapped_at: rows.reduce(
+        (a, r) => (r.snapped_at > a ? r.snapped_at : a),
+        rows[0].snapped_at,
+      ),
+      products: new Set(rows.map((r) => r.product_id)).size,
+    }
+  },
+
+  /**
+   * CHỐT LẠI ĐỊNH MỨC theo BOM hiện hành (0142). Kỹ thuật sửa hồ sơ SP xong mà
+   * lệnh đang chạy muốn mua theo bản mới thì đây là đường duy nhất — mặc định
+   * lệnh đứng yên với bản đã chốt lúc phát.
+   *
+   * Chặn khi lệnh đã kết thúc: lúc đó số liệu là hồ sơ, đổi định mức chỉ làm
+   * lệch phần đã mua/đã lĩnh mà chẳng phục vụ việc gì nữa.
+   */
+  async resnapBom(user: User, id: string): Promise<{ products: number }> {
+    await assertAction(user, 'production.lsx.bom_resnap')
+    const lsx = await lsxOrThrow(id)
+    if (lsx.status === 'completed' || lsx.status === 'cancelled') {
+      throw BadRequest('Lệnh đã kết thúc — không chốt lại định mức được')
+    }
+    const lines = await lsxLinesRepo.listLines(id)
+    const productIds = [
+      ...new Set(lines.map((l) => l.product_id).filter(Boolean) as string[]),
+    ]
+    if (!productIds.length) throw BadRequest('Lệnh chưa có dòng SP nào khớp hồ sơ')
+    const products = await bomSnapshotRepo.snapProducts(id, productIds, user.id)
+    return { products }
   },
 
   /** Bảng theo dõi đơn (FR-SAL-07) — mọi NV đã đăng nhập xem được. */
@@ -268,6 +314,18 @@ export const lsxService = {
       user.id,
       { type: 'lsx_approved', lsx_code: lsx.code },
     )
+    /*
+     * CHỐT ĐỊNH MỨC ngay tại nhịp phát lệnh (0142). Từ giây này nhu cầu vật tư
+     * của lệnh đọc ảnh chụp, nên Kỹ thuật sửa BOM về sau không làm lệch số đã
+     * mua / đã lĩnh kho của lệnh. Không chặn nhịp duyệt nếu chụp lỗi: duyệt
+     * lệnh là việc của Giám đốc, hỏng ảnh chụp thì view rơi về định mức sống
+     * (đúng hành vi cũ) chứ không được làm hỏng cả lượt duyệt.
+     */
+    try {
+      await bomSnapshotRepo.ensureForOrder(id, user.id)
+    } catch (e) {
+      console.error('[lsx.approve] chụp định mức lỗi', id, e)
+    }
     await emit({
       name: 'lsx.decided',
       production_order_id: id,

@@ -7,6 +7,7 @@ import {
 } from './lsx-lines.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
+import { bomSnapshotRepo } from './bom-snapshot.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import {
@@ -327,6 +328,19 @@ export const lsxLinesService = {
 
     // Bản chỉnh sửa: chỉ tính khi lệnh ĐÃ QUA DUYỆT — trước đó Sales còn đang soạn.
     const published = lsx.status === 'approved' || lsx.status === 'in_progress'
+
+    /*
+     * Chụp bù ĐỊNH MỨC cho SP vừa được thêm/gán vào lệnh đã phát (0142) — SP
+     * gộp thêm hay dòng vừa khớp được mã phải đứng yên như phần còn lại của
+     * lệnh. Chỉ điền chỗ THIẾU, không đè ảnh chụp cũ.
+     */
+    if (published) {
+      try {
+        await bomSnapshotRepo.ensureForOrder(lsxId, user.id)
+      } catch (e) {
+        console.error('[lsx.save] chụp bù định mức lỗi', lsxId, e)
+      }
+    }
     const changed = changedLineIds(before, after)
     if (published && changed.length) {
       const revision = lsx.revision + 1

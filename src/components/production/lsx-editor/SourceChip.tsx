@@ -70,7 +70,12 @@ export function SourceChip({
           <span className="text-muted-foreground">hồ sơ trống — tự nhập</span>
           {productId && (
             <Link
-              href={`/products/${productId}/${tab}`}
+              // `ho-so` = route gốc của SP, không có đuôi tab.
+              href={
+                tab === 'ho-so'
+                  ? `/products/${productId}`
+                  : `/products/${productId}/${tab}`
+              }
               target="_blank"
               rel="noopener"
               className="text-primary inline-flex items-center gap-0.5 hover:underline"

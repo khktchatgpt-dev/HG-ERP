@@ -152,6 +152,22 @@ export const ACTIONS: Action[] = [
     rule: perm('technical.edit'),
   },
   {
+    /*
+     * CẬP NHẬT TRẠNG THÁI hồ sơ SP (0145 — Nháp → Rà soát → Duyệt mẫu → Sản
+     * xuất → Ngừng dùng). Thay quyền `confirm_sample` của 0141: mốc "đã duyệt
+     * mẫu" nay là một chặng của trạng thái chứ không còn nút riêng.
+     *
+     * Rộng hơn quyền khoá một bậc — khách duyệt mẫu đi qua Bán hàng, nhưng Kỹ
+     * thuật mới là bên cầm mẫu, nên cả hai đều chuyển được (`sales.member` HOẶC
+     * `technical.edit`, cùng công thức với set_image/fill_specs; Giám đốc có
+     * technical.edit nên cũng vào). Lùi chặng bắt ghi lý do — chặn ở service.
+     */
+    key: 'technical.product.lifecycle',
+    label: 'Cập nhật trạng thái hồ sơ sản phẩm',
+    domain: 'technical',
+    rule: anyOf(perm('sales.member'), perm('technical.edit')),
+  },
+  {
     key: 'technical.sample.manage',
     label: 'Quản lý mẫu showroom',
     domain: 'technical',
@@ -312,6 +328,22 @@ export const ACTIONS: Action[] = [
     label: 'Duyệt / từ chối LSX',
     domain: 'production',
     rule: perm('production.lsx.approve'),
+  },
+  {
+    /*
+     * CHỐT LẠI ĐỊNH MỨC của lệnh (0142). Định mức được chụp tự động lúc duyệt
+     * lệnh và từ đó đứng yên; thao tác này là đường DUY NHẤT để lệnh đang chạy
+     * ăn theo BOM mới sau khi Kỹ thuật sửa hồ sơ — nên phải có người bấm, có
+     * ghi vết, không tự động.
+     *
+     * Gác bằng `production.plan.manage` chứ không phải `lsx.issue`: người quyết
+     * "lệnh này mua theo định mức nào" là Kế hoạch/Cung ứng + Giám đốc, không
+     * phải người soạn tờ lệnh bên Sales.
+     */
+    key: 'production.lsx.bom_resnap',
+    label: 'Chốt lại định mức cho lệnh (theo BOM mới)',
+    domain: 'production',
+    rule: perm('production.plan.manage'),
   },
   {
     key: 'production.plan.manage',
