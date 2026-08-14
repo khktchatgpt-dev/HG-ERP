@@ -21,9 +21,13 @@ export function ProductTabs({
   const tabs = [
     { href: base, label: 'Hồ sơ' },
     { href: `${base}/dinh-muc`, label: 'Định mức', badge: partCount || undefined },
-    { href: `${base}/dong-goi`, label: 'Đóng gói' },
-    { href: `${base}/thong-so`, label: 'Thông số' },
+    // Tab "Đóng gói" BỎ (user chốt 13/08/2026): quy cách đóng gói nằm luôn
+    // trong tab Hồ sơ, không tách riêng. Route cũ giữ lại và tự chuyển hướng
+    // về Hồ sơ cho link/bookmark cũ khỏi 404.
+    { href: `${base}/thong-so`, label: 'Thông số kỹ thuật' },
     { href: `${base}/tai-lieu`, label: 'Tài liệu' },
+    // Lịch sử phiên bản (0143) đứng CUỐI: tra cứu, không phải chỗ làm việc.
+    { href: `${base}/lich-su`, label: 'Lịch sử' },
   ]
 
   return (

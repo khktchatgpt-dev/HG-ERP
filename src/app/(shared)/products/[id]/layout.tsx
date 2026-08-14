@@ -1,11 +1,13 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Copy, Lock } from 'lucide-react'
+import { Copy, History } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
 import {
+  canSetLifecycle,
   canEditProducts,
   canLockProducts,
+  productsService,
 } from '@/modules/dept/technical/technical.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { Badge } from '@/components/shadcn/badge'
@@ -13,13 +15,7 @@ import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { ProductTabs } from '@/components/technical/ProductTabs'
 import { ProductLockButton } from '@/components/technical/ProductLockButton'
-
-const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
-const BOM_TONE = {
-  none: 'bg-muted text-muted-foreground',
-  drawing: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
-} as const
+import { ProductStatusControl } from '@/components/technical/ProductStatusControl'
 
 /**
  * Khung chung của trang chi tiết: nhận diện sản phẩm + điều hướng tab. Nằm ở
@@ -34,9 +30,12 @@ export default async function ProductDetailLayout({
 }) {
   const user = await authService.requirePageUser()
   const { id } = await params
-  const [canEdit, canLock] = await Promise.all([
+  const [canEdit, canLock, canStatus, currentRev] = await Promise.all([
     canEditProducts(user),
     canLockProducts(user),
+    canSetLifecycle(user),
+    // Số bản chốt (0143) — hiện ở hàng nhãn để mọi tab đều thấy đang xem bản mấy.
+    productsService.currentRev(user, id),
   ])
 
   const product = await productsRepo.findById(id)
@@ -54,8 +53,6 @@ export default async function ProductDetailLayout({
       )?.label ?? product.category)
     : null
 
-  const status = (product.bom_status ?? 'none') as keyof typeof BOM_LABEL
-
   return (
     <div className="flex flex-col gap-4 pb-4">
       <PageHeader
@@ -67,8 +64,40 @@ export default async function ProductDetailLayout({
         ]}
         title={product.name}
         description={product.code}
+        /* Nhãn nhận diện về đúng chỗ của nó: NGAY DƯỚI TÊN SP, thay vì đứng
+           thành một hàng riêng phía dưới thanh trạng thái (13/08/2026 — gọn
+           lại). Chúng là thuộc tính của sản phẩm, không phải trạng thái. */
+        meta={
+          <>
+            {categoryLabel && <Badge variant="outline">{categoryLabel}</Badge>}
+            <Badge variant="outline">{product.customer_name ?? 'Mẫu chung'}</Badge>
+            {product.showroom_sample && (
+              <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                Có mẫu showroom
+              </Badge>
+            )}
+            {/* Bản chốt: theo thanh trạng thái cũ mà về đây, để bỏ thanh đi vẫn
+                còn đường vào tab Lịch sử. */}
+            {currentRev > 0 && (
+              <Link href={`/products/${product.id}/lich-su`}>
+                <Badge variant="outline" title="Xem lịch sử phiên bản">
+                  <History /> Bản #{currentRev}
+                </Badge>
+              </Link>
+            )}
+          </>
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {/* TRẠNG THÁI đứng đầu hàng nút (13/08/2026 — "gọn nữa: 1 badge +
+                menu xổ"): một badge, bấm ra lộ trình 5 chặng. Người chỉ xem vẫn
+                thấy badge, chỉ mất menu. */}
+            <ProductStatusControl
+              productId={product.id}
+              current={product.lifecycle}
+              changedAt={product.lifecycle_at}
+              canEdit={canStatus}
+            />
             {/* Khoá/mở khoá đứng NGAY ĐÂY (user chốt 13/08/2026): trước đó nút
                 nằm trong tab Tài liệu nên muốn chốt hồ sơ phải đi tìm. */}
             {canLock && (
@@ -87,38 +116,6 @@ export default async function ProductDetailLayout({
           </div>
         }
       />
-
-      <div className="flex flex-wrap items-center gap-2">
-        {/* HỒ SƠ ĐÃ KHOÁ đứng ĐẦU hàng nhãn (0140): mở bất kỳ tab nào của hồ sơ
-            cũng thấy ngay — trước đây tin này chỉ có ở tab Tài liệu, nên người
-            vào tab Định mức gõ sửa rồi mới ăn lỗi 409 mà không hiểu vì sao. */}
-        {product.locked_at && (
-          <Badge
-            title={`Khoá ${new Date(product.locked_at).toLocaleString('vi-VN')}`}
-            className="border-transparent bg-emerald-600 text-white"
-          >
-            <Lock /> Đã khoá
-          </Badge>
-        )}
-        <Badge className={`border-transparent ${BOM_TONE[status]}`}>
-          {BOM_LABEL[status]}
-        </Badge>
-        <Badge variant={product.is_active ? 'secondary' : 'outline'}>
-          {product.is_active ? 'Đang dùng' : 'Ngừng dùng'}
-        </Badge>
-        {categoryLabel && <Badge variant="outline">{categoryLabel}</Badge>}
-        <Badge
-          variant="outline"
-          className={product.customer_name ? '' : 'text-muted-foreground'}
-        >
-          {product.customer_name ?? 'Mẫu chung'}
-        </Badge>
-        {product.showroom_sample && (
-          <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-            Có mẫu showroom
-          </Badge>
-        )}
-      </div>
 
       <ProductTabs productId={product.id} partCount={partCount} />
       {children}

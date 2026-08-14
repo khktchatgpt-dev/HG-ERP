@@ -164,6 +164,10 @@ export function ProductsManager({
     filters.bom !== 'all' ||
     filters.status !== 'all' ||
     filters.image !== 'all' ||
+    // `locked` bị bỏ sót từ 0140 và `sample` thêm ở 0141: bật một trong hai chip
+    // này mà nút "Xoá lọc" không hiện thì người dùng kẹt với danh sách đã lọc.
+    filters.locked !== 'all' ||
+    filters.lifecycle !== 'all' ||
     filters.type !== 'all' ||
     filters.category !== 'all'
 
@@ -175,6 +179,8 @@ export function ProductsManager({
       bom: undefined,
       status: undefined,
       image: undefined,
+      locked: undefined,
+      lifecycle: undefined,
       type: undefined,
       category: undefined,
     })

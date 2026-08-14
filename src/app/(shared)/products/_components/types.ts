@@ -5,6 +5,8 @@
  * mục `_components` đều kéo từ đây nên nó phải nằm ở đáy chuỗi phụ thuộc.
  */
 
+import type { Lifecycle } from '@/lib/product-lifecycle'
+
 export type Packing = {
   carton_l_cm?: number
   carton_w_cm?: number
@@ -63,6 +65,8 @@ export type Product = {
   set_contents: string | null
   /** Hồ sơ đã khoá (0140) — null = đang mở, còn sửa được. */
   locked_at: string | null
+  /** TRẠNG THÁI hồ sơ (0145) — Nháp → Rà soát → Duyệt mẫu → Sản xuất → Ngừng. */
+  lifecycle: Lifecycle
   is_active: boolean
 }
 
@@ -89,6 +93,8 @@ export type ProductRow = Pick<
   | 'image_file_id'
   /** Hồ sơ đã khoá (0140) — thư viện phải nói ra, đó là bản mọi phòng dùng. */
   | 'locked_at'
+  /** TRẠNG THÁI hồ sơ (0145) — badge trên thẻ/bảng, và bộ lọc ở thanh trên. */
+  | 'lifecycle'
   | 'is_active'
 > & {
   has_drawing: boolean
@@ -120,6 +126,8 @@ export type Filters = {
   image: string
   /** 'yes' | 'no' | 'all' — hồ sơ đã khoá (0140). */
   locked: string
+  /** Trạng thái hồ sơ (0145): một trong LIFECYCLES, hoặc 'all'. */
+  lifecycle: string
   /** Mã loại SP 2 ký tự ('CH', 'TB'…) hoặc 'all'. Server đã kiểm mã hợp lệ. */
   type: string
   /** Mã danh mục SP, `NO_CATEGORY` = chưa phân loại, hoặc 'all'. */

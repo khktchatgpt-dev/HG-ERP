@@ -31,7 +31,16 @@
   --secondary: #f4f4f5; /* zinc-100 */
   --secondary-foreground: #18181b; /* zinc-900 */
   --muted: #f4f4f5;
-  --muted-foreground: #71717a; /* zinc-500 */
+  /*
+   * zinc-600 chứ KHÔNG phải zinc-500 (user chốt 13/08/2026: "đang nền trắng nên
+   * không dùng chữ màu xám, rất khó nhìn"). Trên nền trắng zinc-500 chỉ đạt
+   * 4.6:1 — vừa đủ chuẩn AA cho chữ thường, nhưng phần lớn chữ phụ trong app là
+   * 11–12px nên đọc rất mệt, nhất là màn hình xưởng chói sáng. zinc-600 lên
+   * 7.0:1 (AAA cho chữ lớn, AA thoải mái cho chữ nhỏ) mà vẫn giữ thứ bậc so với
+   * `--foreground`. Sửa ở TOKEN nên cả app đậm lên một nhịp, không phải đi vá
+   * từng màn hình.
+   */
+  --muted-foreground: #52525b; /* zinc-600 */
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
   --destructive: #dc2626; /* red-600 */

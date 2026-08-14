@@ -15,6 +15,14 @@ vi.mock('./jobs.repo', () => ({
   jobsRepo: { listByLsx: vi.fn(), replaceForLine: vi.fn() },
 }))
 vi.mock('./entries.repo', () => ({ entriesRepo: { listByLsx: vi.fn() } }))
+// Chụp định mức lúc duyệt lệnh (0142) — mock để test duyệt không chạm DB.
+vi.mock('./bom-snapshot.repo', () => ({
+  bomSnapshotRepo: {
+    ensureForOrder: vi.fn().mockResolvedValue(0),
+    snapProducts: vi.fn().mockResolvedValue(0),
+    listByOrder: vi.fn().mockResolvedValue([]),
+  },
+}))
 vi.mock('./components.repo', () => ({
   componentsRepo: { listByLsx: vi.fn(), deleteByLines: vi.fn() },
 }))

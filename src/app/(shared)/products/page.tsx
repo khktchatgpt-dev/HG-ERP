@@ -7,6 +7,7 @@ import { filesService } from '@/modules/core/files/files.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
 import { PRODUCT_TYPE_CODES } from '@/lib/product-code'
+import { isLifecycle } from '@/lib/product-lifecycle'
 // (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
 import { ProductsManager } from './ProductsManager'
 
@@ -30,6 +31,9 @@ export default async function TechnicalProductsPage({
   const image = str(spRaw.image) || 'all'
   // Hồ sơ đã khoá (0140) — chip lọc ở thanh Trạng thái.
   const locked = str(spRaw.locked) || 'all'
+  // TRẠNG THÁI hồ sơ (0145) — ô chọn ở thanh lọc. Giá trị lạ coi như không lọc.
+  const lifecycleRaw = str(spRaw.lifecycle)
+  const lifecycle = isLifecycle(lifecycleRaw) ? lifecycleRaw : 'all'
   // Mã loại SP 2 ký tự; chỉ nhận mã có thật trong PRODUCT_TYPES để URL bịa ra
   // một mã lạ thì trả về danh sách đầy đủ chứ không phải 0 dòng khó hiểu.
   const typeRaw = str(spRaw.type).toUpperCase()
@@ -47,6 +51,7 @@ export default async function TechnicalProductsPage({
     is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
     has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
     locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
+    lifecycle: lifecycle === 'all' ? undefined : lifecycle,
     product_type: type === 'all' ? undefined : type,
     category: category === 'all' ? undefined : category,
     page,
@@ -101,6 +106,7 @@ export default async function TechnicalProductsPage({
         height_mm: p.height_mm,
         image_file_id: p.image_file_id,
         locked_at: p.locked_at,
+        lifecycle: p.lifecycle,
         is_active: p.is_active,
         has_drawing: docFlags[p.id]?.drawing ?? false,
         has_bom: docFlags[p.id]?.bom ?? false,
@@ -112,7 +118,17 @@ export default async function TechnicalProductsPage({
       page={page}
       pageSize={PAGE_SIZE}
       counts={stats}
-      filters={{ q: q ?? '', customer, bom, status, image, locked, type, category }}
+      filters={{
+        q: q ?? '',
+        customer,
+        bom,
+        status,
+        image,
+        locked,
+        lifecycle,
+        type,
+        category,
+      }}
       customerNames={customerNames}
       categories={categories}
       imageUrls={imageUrls}

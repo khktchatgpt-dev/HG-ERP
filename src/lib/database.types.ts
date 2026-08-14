@@ -297,6 +297,10 @@ export type Database = {
           invoice_id?: string | null
           mime_type: string
           owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           path: string
           product_id?: string | null
           production_order_id?: string | null
@@ -321,6 +325,10 @@ export type Database = {
           invoice_id?: string | null
           mime_type?: string
           owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           path?: string
           product_id?: string | null
           production_order_id?: string | null
@@ -933,6 +941,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      production_order_boms: {
+        Row: {
+          material_code: string
+          product_id: string
+          product_rev: number | null
+          production_order_id: string
+          qty_per_unit: number
+          snapped_at: string
+          snapped_by: string | null
+        }
+        Insert: {
+          material_code: string
+          product_id: string
+          product_rev?: number | null
+          production_order_id: string
+          qty_per_unit: number
+          snapped_at?: string
+          snapped_by?: string | null
+        }
+        Update: {
+          material_code?: string
+          product_id?: string
+          product_rev?: number | null
+          production_order_id?: string
+          qty_per_unit?: number
+          snapped_at?: string
+          snapped_by?: string | null
+        }
+        Relationships: []
       }
       production_order_groups: {
         Row: {
@@ -1644,6 +1682,10 @@ export type Database = {
           name: string
           notes?: string | null
           owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           phone?: string | null
           port_of_discharge?: string | null
           representative_title?: string | null
@@ -1668,6 +1710,10 @@ export type Database = {
           name?: string
           notes?: string | null
           owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           phone?: string | null
           port_of_discharge?: string | null
           representative_title?: string | null
@@ -3687,6 +3733,45 @@ export type Database = {
           },
         ]
       }
+      technical_product_revisions: {
+        Row: {
+          action: string
+          changed_fields: string[]
+          created_at: string
+          created_by: string | null
+          fields_snapshot: Json
+          id: string
+          parts_snapshot: Json
+          product_id: string
+          reason: string | null
+          rev: number
+        }
+        Insert: {
+          action: string
+          changed_fields?: string[]
+          created_at?: string
+          created_by?: string | null
+          fields_snapshot?: Json
+          id?: string
+          parts_snapshot?: Json
+          product_id: string
+          reason?: string | null
+          rev: number
+        }
+        Update: {
+          action?: string
+          changed_fields?: string[]
+          created_at?: string
+          created_by?: string | null
+          fields_snapshot?: Json
+          id?: string
+          parts_snapshot?: Json
+          product_id?: string
+          reason?: string | null
+          rev?: number
+        }
+        Relationships: []
+      }
       technical_products: {
         Row: {
           actual_weight_kg: number | null
@@ -3703,6 +3788,14 @@ export type Database = {
           unlocked_at: string | null
           unlocked_by: string | null
           unlock_reason: string | null
+          sample_confirmed_at: string | null
+          sample_confirmed_by: string | null
+          sample_note: string | null
+          owner_id: string | null
+          lifecycle: string
+          lifecycle_at: string | null
+          lifecycle_by: string | null
+          thickness_mm: number | null
           bom_effective_date: string | null
           bom_prepared_by: string | null
           bom_rev: number | null
@@ -3771,6 +3864,14 @@ export type Database = {
           unlocked_at?: string | null
           unlocked_by?: string | null
           unlock_reason?: string | null
+          sample_confirmed_at?: string | null
+          sample_confirmed_by?: string | null
+          sample_note?: string | null
+          owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           bom_effective_date?: string | null
           bom_prepared_by?: string | null
           bom_rev?: number | null
@@ -3839,6 +3940,14 @@ export type Database = {
           unlocked_at?: string | null
           unlocked_by?: string | null
           unlock_reason?: string | null
+          sample_confirmed_at?: string | null
+          sample_confirmed_by?: string | null
+          sample_note?: string | null
+          owner_id?: string | null
+          lifecycle?: string
+          lifecycle_at?: string | null
+          lifecycle_by?: string | null
+          thickness_mm?: number | null
           bom_effective_date?: string | null
           bom_prepared_by?: string | null
           bom_rev?: number | null

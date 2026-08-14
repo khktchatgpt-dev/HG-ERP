@@ -16,6 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import { PRODUCT_TYPES } from '@/lib/product-code'
+import { LIFECYCLES, LIFECYCLE_LABEL } from '@/lib/product-lifecycle'
 import { Spinner } from '@/components/erp/Spinner'
 import {
   ACCENT_SOLID,
@@ -213,6 +214,15 @@ export function FilterBar({
     ...categories.map((c) => ({ value: c.code, label: c.label })),
   ]
   const inactiveCount = Math.max(0, counts.total - counts.active)
+  /*
+   * TRẠNG THÁI hồ sơ (0145) là ô CHỌN chứ không phải dãy chip: 5 chặng mà làm
+   * chip thì hàng chip dài gấp đôi, trong khi người ta thường lọc đúng một
+   * chặng. Không kèm số đếm — sẽ tốn 5 head-count cho mỗi lần mở thư viện.
+   */
+  const lifecycleOptions = [
+    { value: 'all', label: 'Mọi trạng thái' },
+    ...LIFECYCLES.map((s) => ({ value: s, label: LIFECYCLE_LABEL[s] })),
+  ]
 
   return (
     <div className="bg-card rounded-lg border shadow-sm">
@@ -244,6 +254,12 @@ export function FilterBar({
           </div>
         </div>
 
+        <FilterSelect
+          value={filters.lifecycle}
+          onChange={(v) => onParamChange({ lifecycle: v })}
+          label="Lọc theo trạng thái hồ sơ"
+          options={lifecycleOptions}
+        />
         <FilterSelect
           value={filters.customer}
           onChange={(v) => onParamChange({ customer: v })}

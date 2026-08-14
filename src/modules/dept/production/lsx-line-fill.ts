@@ -43,8 +43,12 @@ export const SPEC_FROM_PRODUCT: Record<string, string> = {
   wood: 'go',
 }
 
-/** Tab hồ sơ SP chứa trường đang thiếu — để dẫn Sales tới đúng chỗ sửa. */
-export type ProfileTab = 'thong-so' | 'dong-goi'
+/**
+ * Tab hồ sơ SP chứa trường đang thiếu — để dẫn Sales tới đúng chỗ sửa.
+ * `ho-so` là route GỐC của SP (`/products/[id]`), không có đuôi — tab "Đóng gói"
+ * đã gộp vào đó (13/08/2026), xem `SourceChip` dựng href.
+ */
+export type ProfileTab = 'thong-so' | 'ho-so'
 
 export type ProfileGapKey =
   'name_foreign' | 'barcode' | 'may' | 'nem' | 'son' | 'kinh' | 'go' | 'packing' | 'cbm'
@@ -60,13 +64,13 @@ export const GAP_TAB: Record<ProfileGapKey, ProfileTab> = {
   son: 'thong-so',
   kinh: 'thong-so',
   go: 'thong-so',
-  packing: 'dong-goi',
-  cbm: 'dong-goi',
+  packing: 'ho-so',
+  cbm: 'ho-so',
 }
 
 export const TAB_LABEL: Record<ProfileTab, string> = {
-  'thong-so': 'Thông số',
-  'dong-goi': 'Đóng gói',
+  'thong-so': 'Thông số kỹ thuật',
+  'ho-so': 'Hồ sơ',
 }
 
 /**

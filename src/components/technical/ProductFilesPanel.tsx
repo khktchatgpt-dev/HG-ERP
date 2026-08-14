@@ -1,7 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import {
+  Download,
+  FileSpreadsheet,
+  FileText,
+  Image as ImageIcon,
+  Paperclip,
+  Plus,
+  Trash2,
+} from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -9,6 +17,7 @@ import { Spinner } from '@/components/erp/Spinner'
 import { uploadFile } from '@/lib/upload'
 import { formatBytes, maxBytesFor } from '@/lib/file-limits'
 import { DOC_TYPE_LABEL } from '@/modules/core/files/files.schema'
+import { cn } from '@/lib/utils'
 import { isProductImage, type ProductFile } from './product-files'
 
 /**
@@ -34,43 +43,41 @@ const DOC_META: Record<TabType, { hint: string; accept?: string }> = {
 /** File cũ chưa phân loại (doc_type null) gom vào "Khác". */
 const tabOf = (f: ProductFile): TabType => (f.doc_type as TabType) ?? 'other'
 
+const ext = (name: string) => name.split('.').pop()?.toLowerCase() ?? ''
+const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'])
+const SHEET = new Set(['xlsx', 'xls', 'csv'])
+
+/** Icon theo đuôi file — nhận dạng nhanh hơn đọc tên file dài. */
+function FileIcon({ f, className }: { f: ProductFile; className?: string }) {
+  const e = ext(f.filename)
+  const Icon = IMG.has(e) ? ImageIcon : SHEET.has(e) ? FileSpreadsheet : FileText
+  return <Icon className={className} aria-hidden />
+}
+
 /**
- * Hồ sơ tài liệu SP — chia TAB theo loại (bản vẽ / BOM / lắp ráp / chứng chỉ /
- * khác) thay vì một danh sách dài gộp chung. Ảnh SP không nằm ở đây.
- * Dùng chung ở trang Chi tiết và trang Sửa.
+ * HỒ SƠ TÀI LIỆU SP — chia TAB theo loại (bản vẽ / BOM / lắp ráp / chứng chỉ /
+ * khác). Ảnh SP không nằm ở đây.
+ *
+ * XEM TRỰC TIẾP TRONG TRANG: đã dựng (ảnh + PDF nhúng, Excel đọc bằng SheetJS)
+ * rồi user cho TẠM BỎ 13/08/2026. Nên tab này quay về đúng một việc: giữ tài
+ * liệu, tải về, xoá. Muốn bật lại thì dựng lại khung xem bên phải — phần khó
+ * (URL ký, đọc .xlsx phía client) đã làm được, không có rào kỹ thuật nào.
+ *
+ * Phần "chốt bản BOM đang dùng" (0140) cũng đã bỏ theo yêu cầu cùng ngày: nhãn
+ * ĐANG DÙNG / bản cũ / nút "Dùng bản này" không còn. Cột `bom_file_id` vẫn nằm
+ * trong DB, dữ liệu cũ không mất.
  */
 export function ProductFilesPanel({
   productId,
   canEdit,
-  bomFileId = null,
-  canSetBomFile = false,
 }: {
   productId: string
   canEdit: boolean
-  /** File BOM hồ sơ đang trỏ vào (0140) — hiện nhãn "ĐANG DÙNG". */
-  bomFileId?: string | null
-  /** Cho đổi bản đang dùng — tắt khi hồ sơ đã khoá. */
-  canSetBomFile?: boolean
 }) {
-  const router = useRouter()
   const toast = useToast()
   const confirm = useConfirm()
   const [files, setFiles] = useState<ProductFile[]>([])
   const [tab, setTab] = useState<TabType>('drawing')
-
-  /** Chỉ đích danh bản BOM đúng — mọi phòng mở hồ sơ đều thấy nhãn này. */
-  async function setAsCurrent(f: ProductFile) {
-    try {
-      await api(`/api/dept/technical/products/${productId}/bom-control`, {
-        method: 'PUT',
-        body: { file_id: f.id },
-      })
-      toast.success('Đã đặt làm bản đang dùng', f.filename)
-      router.refresh()
-    } catch (e) {
-      toast.error('Không đặt được bản đang dùng', apiErrorText(e))
-    }
-  }
 
   const reload = useCallback(async () => {
     try {
@@ -90,8 +97,8 @@ export function ProductFilesPanel({
 
   async function download(f: ProductFile) {
     try {
-      const { url } = await api<{ url: string }>(`/api/files/${f.id}`)
-      window.open(url, '_blank', 'noopener')
+      const r = await api<{ url: string }>(`/api/files/${f.id}`)
+      window.open(r.url, '_blank', 'noopener')
     } catch (e) {
       toast.error('Không tải được file', apiErrorText(e))
     }
@@ -118,10 +125,12 @@ export function ProductFilesPanel({
   const current = files.filter((f) => tabOf(f) === tab)
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
-        <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
-          Hồ sơ tài liệu ({files.length})
+    <section className="bg-card overflow-hidden rounded-xl border">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
+        <h2 className="flex items-center gap-2 text-sm font-semibold">
+          <Paperclip className="text-muted-foreground size-4" aria-hidden />
+          Hồ sơ tài liệu
+          <span className="text-muted-foreground font-normal">({files.length})</span>
         </h2>
         {canEdit && (
           <UploadMenu productId={productId} onUploaded={reload} onPicked={setTab} />
@@ -132,7 +141,7 @@ export function ProductFilesPanel({
       <div
         role="tablist"
         aria-label="Loại tài liệu"
-        className="flex gap-1 overflow-x-auto border-b border-zinc-200 px-2 pt-2 dark:border-zinc-800"
+        className="flex gap-1 overflow-x-auto border-b px-2 pt-2"
       >
         {TABS.map((t) => {
           const n = countOf(t)
@@ -144,15 +153,21 @@ export function ProductFilesPanel({
               type="button"
               aria-selected={selected}
               onClick={() => setTab(t)}
-              className={`shrink-0 rounded-t-md border-b-2 px-3 py-1.5 text-xs whitespace-nowrap transition ${
+              className={cn(
+                '-mb-px shrink-0 border-b-2 px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
                 selected
-                  ? 'border-sky-500 font-medium text-sky-600 dark:text-sky-400'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-              }`}
+                  ? 'border-primary text-primary font-medium'
+                  : 'text-muted-foreground hover:text-foreground border-transparent',
+              )}
             >
-              {DOC_TYPE_LABEL[t]}{' '}
-              <span className={n === 0 ? 'text-zinc-300 dark:text-zinc-600' : ''}>
-                ({n})
+              {DOC_TYPE_LABEL[t]}
+              <span
+                className={cn(
+                  'ms-1.5 text-xs tabular-nums',
+                  n === 0 && 'text-muted-foreground/60',
+                )}
+              >
+                {n}
               </span>
             </button>
           )
@@ -160,81 +175,54 @@ export function ProductFilesPanel({
       </div>
 
       {current.length === 0 ? (
-        <p className="px-4 py-6 text-center text-xs text-zinc-400">
+        <p className="text-muted-foreground px-4 py-8 text-center text-sm">
           Chưa có {DOC_TYPE_LABEL[tab].toLowerCase()}.
-          {canEdit && ' Bấm “+ Tải lên” rồi chọn loại này.'}
+          {canEdit && ' Bấm “Tải lên” rồi chọn loại này.'}
         </p>
       ) : (
-        <ul className="divide-y divide-zinc-100 px-4 dark:divide-zinc-900">
-          {current.map((f) => {
-            /*
-             * BẢN ĐANG DÙNG NỔI BẬT (0140): tab BOM có thể có nhiều file qua
-             * các lần sửa — file được hồ sơ trỏ vào phải nhìn là thấy ngay,
-             * các file BOM còn lại lùi hẳn về sau (mờ + nhãn "bản cũ").
-             */
-            const isBomTab = tab === 'bom'
-            const isCurrent = isBomTab && f.id === bomFileId
-            const isOld = isBomTab && bomFileId != null && !isCurrent
-            return (
-              <li
-                key={f.id}
-                className={
-                  'flex flex-wrap items-center gap-2 py-2 text-sm ' +
-                  (isCurrent
-                    ? '-mx-2 rounded-lg bg-emerald-50 px-2 dark:bg-emerald-950/30'
-                    : isOld
-                      ? 'opacity-60'
-                      : '')
-                }
+        <ul className="divide-y">
+          {current.map((f) => (
+            <li
+              key={f.id}
+              className="hover:bg-accent/40 flex items-center gap-3 px-4 py-2.5"
+            >
+              <FileIcon f={f} className="text-muted-foreground size-4 shrink-0" />
+              <button
+                type="button"
+                onClick={() => void download(f)}
+                className="min-w-0 flex-1 text-start"
+                title={`Tải về ${f.filename}`}
               >
-                {isCurrent && (
-                  <span className="shrink-0 rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
-                    ĐANG DÙNG
-                  </span>
-                )}
-                {isOld && (
-                  <span className="shrink-0 rounded bg-zinc-200 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                    bản cũ
-                  </span>
-                )}
-                <button
-                  onClick={() => void download(f)}
-                  className={
-                    'min-w-0 flex-1 truncate text-left hover:underline ' +
-                    (isCurrent
-                      ? 'font-semibold text-emerald-800 dark:text-emerald-300'
-                      : 'text-sky-600 dark:text-sky-400')
-                  }
-                  title={f.filename}
-                >
+                <span className="block truncate text-sm hover:underline">
                   {f.filename}
-                </button>
-                <span className="shrink-0 text-xs text-zinc-400">
+                </span>
+                <span className="text-muted-foreground block text-xs">
                   {formatBytes(f.size_bytes)} ·{' '}
                   {new Date(f.created_at).toLocaleDateString('vi-VN')}
                 </span>
-                {/* Chỉ tab BOM mới có "Dùng bản này" — đây là chỗ chỉ đích danh
-                    bản đúng cho mọi phòng. */}
-                {isBomTab && canSetBomFile && !isCurrent && (
-                  <button
-                    onClick={() => void setAsCurrent(f)}
-                    className="shrink-0 rounded-md border border-emerald-300 px-2 py-0.5 text-xs text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
-                  >
-                    Dùng bản này
-                  </button>
-                )}
-                {canEdit && (
-                  <button
-                    onClick={() => void remove(f)}
-                    className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
-                    aria-label="Xoá file"
-                  >
-                    ✕
-                  </button>
-                )}
-              </li>
-            )
-          })}
+              </button>
+              <button
+                type="button"
+                onClick={() => void download(f)}
+                aria-label="Tải về"
+                title="Tải về"
+                className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1"
+              >
+                <Download className="size-4" aria-hidden />
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => void remove(f)}
+                  aria-label="Xoá file"
+                  title="Xoá file"
+                  className="text-muted-foreground shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                >
+                  <Trash2 className="size-4" aria-hidden />
+                </button>
+              )}
+            </li>
+          ))}
         </ul>
       )}
     </section>
@@ -242,7 +230,7 @@ export function ProductFilesPanel({
 }
 
 /**
- * 1 nút "+ Tải lên" → menu chọn loại → mở luôn hộp thoại chọn file với `accept`
+ * 1 nút "Tải lên" → menu chọn loại → mở luôn hộp thoại chọn file với `accept`
  * đúng loại đó. Loại được ghim qua ref (không qua state) để `accept` đã đúng
  * TRƯỚC khi hộp thoại mở.
  */
@@ -318,19 +306,23 @@ function UploadMenu({
         disabled={busy}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+        className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
       >
-        {busy && <Spinner size={12} />}
-        {busy ? 'Đang tải…' : '+ Tải lên'}
-        {!busy && <span className="text-xs text-zinc-400">▾</span>}
+        {busy ? <Spinner size={12} /> : <Plus className="size-4" aria-hidden />}
+        {busy ? 'Đang tải…' : 'Tải lên'}
       </button>
 
       {open && (
         <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <button
+            type="button"
+            aria-label="Đóng"
+            className="fixed inset-0 z-10 cursor-default"
+            onClick={() => setOpen(false)}
+          />
           <div
             role="menu"
-            className="absolute right-0 z-20 mt-1 w-64 overflow-hidden rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+            className="bg-card absolute end-0 z-20 mt-1 w-64 overflow-hidden rounded-lg border py-1 shadow-lg"
           >
             {TABS.map((t) => (
               <button
@@ -338,10 +330,12 @@ function UploadMenu({
                 role="menuitem"
                 type="button"
                 onClick={() => pick(t)}
-                className="block w-full px-3 py-1.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                className="hover:bg-accent/50 block w-full px-3 py-1.5 text-left"
               >
                 <div className="text-sm">{DOC_TYPE_LABEL[t]}</div>
-                <div className="text-[11px] text-zinc-400">{DOC_META[t].hint}</div>
+                <div className="text-muted-foreground text-[11px]">
+                  {DOC_META[t].hint}
+                </div>
               </button>
             ))}
           </div>

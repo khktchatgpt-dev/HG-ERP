@@ -17,8 +17,17 @@ import { cn } from '@/lib/utils'
  * Nhãn nhỏ trên mỗi giá trị. Một token duy nhất cho cả trang chi tiết để các
  * thẻ đọc như một tờ phiếu thông số, không phải mỗi thẻ một cỡ chữ.
  */
+/**
+ * Nhãn nhỏ trên mỗi ô dữ liệu.
+ *
+ * ĐỘ TƯƠNG PHẢN (user 13/08/2026: "nền chữ xám khó nhìn"): trước là 10px +
+ * `text-muted-foreground` (zinc-500 trên nền trắng ≈ 4.6:1) + giãn chữ 0.12em —
+ * cỡ đó, chữ hoa, giãn rộng thì đọc rất mệt, nhất là màn xưởng. Nay 11px,
+ * `font-semibold`, giãn nhẹ hơn và dùng `text-foreground/70` (đậm hơn hẳn
+ * zinc-500, vẫn nhạt hơn giá trị bên dưới nên thứ bậc không mất).
+ */
 export const EYEBROW =
-  'text-muted-foreground text-[10px] font-medium tracking-[0.12em] uppercase'
+  'text-foreground/70 text-[11px] font-semibold tracking-[0.06em] uppercase'
 
 /**
  * Màu chỉ dùng để PHÂN MIỀN, không để trang trí: mỗi sắc = một lĩnh vực, giữ
@@ -138,7 +147,7 @@ export function NumberBand({
                     // Mobile 2 cột: chuỗi "755 × 1425 × 750" ở text-lg tràn ô
                     // và bị cắt — hạ một nấc cho vừa, desktop giữ cỡ lớn.
                     'truncate text-base leading-tight font-semibold tracking-tight tabular-nums sm:text-lg',
-                    !c.value && 'text-muted-foreground/40',
+                    !c.value && 'text-muted-foreground',
                   )}
                   title={c.value ?? undefined}
                 >
@@ -150,7 +159,7 @@ export function NumberBand({
               </div>
               <div className={cn(EYEBROW, 'mt-1')}>{c.label}</div>
               {c.sub && (
-                <div className="text-muted-foreground/70 mt-0.5 text-[10px]">{c.sub}</div>
+                <div className="text-muted-foreground mt-0.5 text-[10px]">{c.sub}</div>
               )}
             </div>
           ))}
@@ -232,7 +241,7 @@ export function SpecSection({
                 className={cn(
                   'text-sm break-words',
                   mono && value && 'font-mono',
-                  !value && 'text-muted-foreground/50',
+                  !value && 'text-muted-foreground',
                 )}
               >
                 {value || '—'}
@@ -295,7 +304,7 @@ export function TextCard({
               <p
                 className={cn(
                   'text-sm leading-relaxed whitespace-pre-wrap',
-                  !text && 'text-muted-foreground/50',
+                  !text && 'text-muted-foreground',
                 )}
               >
                 {text || '—'}

@@ -13,6 +13,10 @@ vi.mock('./lsx-lines.repo', () => ({
   },
 }))
 vi.mock('./jobs.repo', () => ({ jobsRepo: { listByLsx: vi.fn() } }))
+// Chụp bù định mức khi lưu dòng lệnh đã phát (0142) — mock, không chạm DB.
+vi.mock('./bom-snapshot.repo', () => ({
+  bomSnapshotRepo: { ensureForOrder: vi.fn().mockResolvedValue(0) },
+}))
 vi.mock('./notify-targets', () => ({ lsxAudienceIds: vi.fn(async () => []) }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: {
@@ -290,8 +294,9 @@ describe('profileSnapshot ≡ dữ liệu draftFromOrders nạp vào dòng', () 
     )
     const byKey = Object.fromEntries(snap.gaps.map((g) => [g.key, g.tab]))
     expect(byKey.barcode).toBe('thong-so')
-    expect(byKey.packing).toBe('dong-goi')
-    expect(byKey.cbm).toBe('dong-goi')
+    // Đóng gói đã gộp vào tab Hồ sơ (13/08/2026) — chip dẫn về route gốc của SP.
+    expect(byKey.packing).toBe('ho-so')
+    expect(byKey.cbm).toBe('ho-so')
     expect(byKey.nem).toBe('thong-so')
   })
 })

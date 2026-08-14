@@ -795,7 +795,7 @@ export function LsxSheetEditor({
                                       origin={origins.packing ?? null}
                                       refValue={snapOf(l)?.packing ?? null}
                                       productId={l.product_id}
-                                      tab="dong-goi"
+                                      tab="ho-so"
                                     />
                                   </div>
                                   <label className={fieldLabel}>

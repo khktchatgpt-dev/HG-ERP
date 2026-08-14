@@ -6,12 +6,12 @@ import {
 import { ProductFilesPanel } from '@/components/technical/ProductFilesPanel'
 
 /**
- * Tab Tài liệu — bản vẽ / BOM / hướng dẫn lắp ráp.
+ * Tab Tài liệu — bản vẽ / BOM / lắp ráp / chứng chỉ, chia tab và XEM THẲNG
+ * trong trang (13/08/2026).
  *
- * KHOÁ/MỞ KHOÁ hồ sơ KHÔNG còn ở đây (user chốt 13/08/2026: "mọi thứ xử lí ở
- * trang chi tiết chính") — nút nằm ở header, dùng chung cho mọi tab. Tab này
- * chỉ giữ đúng việc của nó: danh sách file, và nút "Dùng bản này" để chỉ rõ
- * bản BOM đang dùng khi có nhiều file (tiện ích, không bắt buộc).
+ * KHOÁ/MỞ KHOÁ hồ sơ không ở đây (nút nằm ở header, dùng chung cho mọi tab).
+ * Phần "chốt bản BOM đang dùng" (0140) cũng đã BỎ theo yêu cầu user — tab này
+ * giờ chỉ làm đúng một việc: giữ và mở tài liệu.
  */
 export default async function ProductFilesPage({
   params,
@@ -24,16 +24,12 @@ export default async function ProductFilesPage({
     canEditProducts(user),
     productsService.get(user, id),
   ])
+  // Hồ sơ đã khoá thì không thêm/xoá tài liệu — vẫn xem và tải về bình thường.
   const unlocked = product.locked_at == null
 
   return (
     <div className="pb-6">
-      <ProductFilesPanel
-        productId={id}
-        canEdit={canEdit && unlocked}
-        bomFileId={product.bom_file_id}
-        canSetBomFile={canEdit && unlocked}
-      />
+      <ProductFilesPanel productId={id} canEdit={canEdit && unlocked} />
     </div>
   )
 }

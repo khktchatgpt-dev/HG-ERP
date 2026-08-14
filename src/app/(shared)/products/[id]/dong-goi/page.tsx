@@ -1,41 +1,19 @@
-import { notFound } from 'next/navigation'
-import { authService } from '@/modules/core/auth/auth.service'
-import {
-  canEditProducts,
-  productsService,
-} from '@/modules/dept/technical/technical.service'
-import { HttpError } from '@/server/http'
-import { ProductPackingTab } from '@/components/technical/ProductPackingTab'
-import { toProductView } from '@/components/technical/product-sections'
+import { redirect } from 'next/navigation'
 
-/** Tab Đóng gói — quy cách carton + các phương án đóng gói, không kéo định mức. */
-export default async function ProductPackingPage({
+/**
+ * Tab "Đóng gói" ĐÃ GỘP vào tab Hồ sơ (user chốt 13/08/2026: "phần đóng gói nên
+ * ở trang hồ sơ sản phẩm luôn, không nên tách riêng").
+ *
+ * Giữ route này làm cầu chuyển hướng thay vì xoá hẳn: link cũ nằm rải trong LSX
+ * (chip "sửa ở hồ sơ SP" của màn soạn dòng), trong ghi chú và bookmark của mọi
+ * người — 404 thì họ tưởng mất dữ liệu đóng gói. Cùng layout `[id]` nên vẫn qua
+ * đúng gate đăng nhập trước khi chuyển.
+ */
+export default async function ProductPackingRedirect({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
-  const user = await authService.requirePageUser()
   const { id } = await params
-  const canEdit = await canEditProducts(user)
-
-  let data
-  let suggestions: Record<string, string[]> = {}
-  try {
-    ;[data, suggestions] = await Promise.all([
-      productsService.getProfileInfo(user, id),
-      productsService.fieldSuggestions(),
-    ])
-  } catch (e) {
-    if (e instanceof HttpError && e.status === 404) notFound()
-    throw e
-  }
-
-  return (
-    <ProductPackingTab
-      product={toProductView(data.product)}
-      packingOptions={data.packing}
-      suggestions={suggestions}
-      canEdit={canEdit}
-    />
-  )
+  redirect(`/products/${id}`)
 }

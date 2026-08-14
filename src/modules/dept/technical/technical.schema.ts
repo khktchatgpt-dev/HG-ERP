@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { FRAME_MATERIAL_CODES, PRODUCT_TYPE_CODES } from '@/lib/product-code'
+import { LIFECYCLES } from '@/lib/product-lifecycle'
 
 /**
  * Thông số ĐÓNG GÓI xuất khẩu (jsonb `packing`).
@@ -97,6 +98,8 @@ export const productCreateSchema = z.object({
   length_open_mm: z.coerce.number().min(0).optional().nullable(),
   width_open_mm: z.coerce.number().min(0).optional().nullable(),
   height_open_mm: z.coerce.number().min(0).optional().nullable(),
+  /** Độ dày SP (0146) — mặt bàn / tấm / kính. */
+  thickness_mm: z.coerce.number().min(0).optional().nullable(),
   // Khối kiểm soát tài liệu ISO (HG-QT-07/M02) — xem `SECTIONS.docControl`.
   bom_rev: z.coerce.number().int().min(0).optional().nullable(),
   // Cột `date` của Postgres — chặn chuỗi rác ngay ở biên, đừng để DB ném 22007.
@@ -108,6 +111,12 @@ export const productCreateSchema = z.object({
     .nullable(),
   bom_prepared_by: z.string().trim().max(200).optional().nullable(),
   bom_approved_by: z.string().trim().max(200).optional().nullable(),
+  /**
+   * Người phụ trách hồ sơ (0144). FK sang `users` — khác hẳn `bom_prepared_by`
+   * / `bom_approved_by` ở ngay trên: hai ô đó là CHỮ KÝ in trên biểu mẫu ISO,
+   * gõ tay, có thể là người đã nghỉ. Ô này là người đang chịu trách nhiệm.
+   */
+  owner_id: z.string().uuid().optional().nullable(),
 })
 
 export const productUpdateSchema = productCreateSchema.partial().extend({
@@ -118,14 +127,13 @@ export const productUpdateSchema = productCreateSchema.partial().extend({
 
 /** Xin mã kế tiếp cho form tạo SP — loại + vật liệu khung theo quy tắc đã chốt. */
 /**
- * KIỂM SOÁT BẢN DÙNG của hồ sơ SP (0140 — 13/08/2026): chọn file BOM đang
- * dùng, khoá / mở khoá hồ sơ (nút ở header trang chi tiết).
+ * KHOÁ / MỞ KHOÁ hồ sơ SP (0140 — nút ở header trang chi tiết).
+ *
+ * `productBomFileSchema` (chọn file BOM đang dùng) đã BỎ 13/08/2026 cùng route
+ * `[id]/bom-control` và `productsService.setBomFile` — user bỏ hẳn phần chốt
+ * bản BOM ở tab Tài liệu. Cột `bom_file_id` giữ nguyên trong DB (không mất dữ
+ * liệu của hồ sơ đã trỏ), chỉ là không còn đường ghi từ giao diện.
  */
-export const productBomFileSchema = z.object({
-  /** null = bỏ chọn file đang dùng. */
-  file_id: z.string().uuid().nullable(),
-})
-
 export const productLockSchema = z.object({
   note: z.string().trim().max(500).optional().nullable(),
 })
@@ -133,6 +141,15 @@ export const productLockSchema = z.object({
 /** Mở khoá BẮT lý do — gỡ bản cả xưởng đang dùng thì phải nói vì sao. */
 export const productUnlockSchema = z.object({
   reason: z.string().trim().min(3).max(500),
+})
+
+/**
+ * CẬP NHẬT TRẠNG THÁI hồ sơ (0145). Lý do TUỲ Ý ở đây — service mới là chỗ bắt
+ * buộc khi đi LÙI chặng (nó biết trạng thái hiện tại, form thì không chắc).
+ */
+export const productLifecycleSchema = z.object({
+  to: z.enum(LIFECYCLES),
+  reason: z.string().trim().max(500).optional().nullable(),
 })
 
 export const productNextCodeQuerySchema = z.object({

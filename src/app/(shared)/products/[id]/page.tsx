@@ -6,6 +6,7 @@ import {
 } from '@/modules/dept/technical/technical.service'
 import { filesService } from '@/modules/core/files/files.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { HttpError } from '@/server/http'
 import { ProductProfileTab } from '@/components/technical/ProductProfileTab'
 import { toProductView } from '@/components/technical/product-sections'
@@ -32,17 +33,23 @@ export default async function ProductProfilePage({
   // Danh mục SP là danh mục dùng chung (admin quản lý ở /admin/catalogs) — đổ vào
   // ô "Danh mục" dạng select thay vì để gõ tự do.
   let categories: { code: string; label: string }[] = []
+  // Nhân sự đang làm việc — đổ vào ô "Người phụ trách" (0144). Không lọc theo
+  // phòng: hồ sơ SP là khu dùng chung, SP của khách nào thì sale bên đó cũng có
+  // thể là người cầm hồ sơ.
+  let owners: { id: string; name: string }[] = []
   try {
-    const [profile, suggest, catalog] = await Promise.all([
+    const [profile, suggest, catalog, staff] = await Promise.all([
       productsService.getProfileInfo(user, id),
       productsService.fieldSuggestions(),
       catalogsService.list(user, 'product_category'),
+      usersRepo.list({ active_only: true }),
     ])
     data = profile
     suggestions = suggest
     categories = catalog
       .filter((c) => c.is_active)
       .map((c) => ({ code: c.code, label: c.label }))
+    owners = staff.map((u) => ({ id: u.id, name: u.name || u.email }))
   } catch (e) {
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
@@ -58,10 +65,10 @@ export default async function ProductProfilePage({
     <ProductProfileTab
       product={toProductView(data.product)}
       packingOptions={data.packing}
-      bomRows={data.bomRows}
       imageUrl={imageUrl}
       suggestions={suggestions}
       categories={categories}
+      owners={owners}
       canEdit={canEdit}
     />
   )

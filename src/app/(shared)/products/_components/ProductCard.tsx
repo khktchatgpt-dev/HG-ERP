@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { CircleSlash, Ellipsis, ImageOff, Lock, Maximize2 } from 'lucide-react'
+import { LIFECYCLE_LABEL, LIFECYCLE_TONE } from '@/lib/product-lifecycle'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { RowMenu, type RowMenuItem } from '@/components/erp/RowMenu'
@@ -91,6 +92,16 @@ export function ProductCard({
                 className="border-transparent bg-emerald-600/90 text-white backdrop-blur-sm"
               >
                 <Lock /> Đã khoá
+              </Badge>
+            )}
+            {/* TRẠNG THÁI hồ sơ (0145) — chỉ hiện khi ĐÃ RỜI chặng "Nháp": thư
+                viện có hàng trăm thẻ, dán nhãn "Nháp" lên gần hết thì thành
+                nhiễu. Lọc theo chặng thì dùng ô chọn trên thanh lọc. */}
+            {p.lifecycle !== 'draft' && (
+              <Badge
+                className={`border-transparent backdrop-blur-sm ${LIFECYCLE_TONE[p.lifecycle]}`}
+              >
+                {LIFECYCLE_LABEL[p.lifecycle]}
               </Badge>
             )}
           </div>

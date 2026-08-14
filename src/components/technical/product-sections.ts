@@ -30,6 +30,11 @@ export type TechSpec = {
   paint?: string
   glass?: string
   wood?: string
+  /* Mục 5 tài liệu (0146): vải, phụ kiện, màu hoàn thiện. Nằm trong jsonb
+     `tech_spec` nên không tốn migration — đây là mô tả tự do, không phải số. */
+  fabric?: string
+  hardware?: string
+  finish?: string
 }
 
 export type BomStatus = 'none' | 'drawing' | 'done'
@@ -85,10 +90,16 @@ export type ProductView = {
   length_open_mm: number | null
   width_open_mm: number | null
   height_open_mm: number | null
+  thickness_mm: number | null
+  actual_weight_kg: number | null
   bom_rev: number | null
   bom_effective_date: string | null
   bom_prepared_by: string | null
   bom_approved_by: string | null
+  /** Người phụ trách hồ sơ (0144) — id; tên tra ở trang, xem `ownerOptions`. */
+  owner_id: string | null
+  /** Ngày tạo hồ sơ — chỉ đọc, không có ô sửa (mục A tài liệu). */
+  created_at: string
 }
 
 /** Cắt hàng SP từ repo xuống đúng những gì các tab cần (dùng ở cả 4 page). */
@@ -136,10 +147,14 @@ export function toProductView(p: Product): ProductView {
     height_open_mm: p.height_open_mm,
     width_mm: p.width_mm,
     height_mm: p.height_mm,
+    thickness_mm: p.thickness_mm,
+    actual_weight_kg: p.actual_weight_kg,
     bom_rev: p.bom_rev,
     bom_effective_date: p.bom_effective_date,
     bom_prepared_by: p.bom_prepared_by,
     bom_approved_by: p.bom_approved_by,
+    owner_id: p.owner_id,
+    created_at: p.created_at,
   }
 }
 
@@ -160,7 +175,17 @@ export const SECTIONS: Record<string, SectionSpec> = {
         maxLength: 300,
         wide: true,
       },
-      { name: 'customer_name', label: 'Khách hàng / nhóm', maxLength: 200 },
+      /* Khách/nhóm là NHÃN TỰ DO (0091) nhưng phải chọn được từ nhãn đã dùng —
+         combo vừa tìm vừa cho gõ nhãn mới, thay ô text + datalist mà người dùng
+         không biết là có danh sách. */
+      {
+        name: 'customer_name',
+        label: 'Khách hàng / nhóm',
+        kind: 'combo',
+        createKind: 'customer',
+        createLabel: 'Dùng nhãn mới',
+        emptyLabel: '— mẫu chung —',
+      },
       { name: 'customer_item_code', label: 'Mã KH đặt', mono: true, maxLength: 100 },
       {
         name: 'code_legacy',
@@ -179,8 +204,29 @@ export const SECTIONS: Record<string, SectionSpec> = {
        * "Khách hàng / nhóm" ngay phía trên. Loại SP (Bàn/Ghế/…) là chuyện khác
        * nữa: nó suy từ mã SP, không nhập ở đây.
        */
-      { name: 'category', label: 'Danh mục', kind: 'select' },
-      { name: 'unit', label: 'ĐVT bán', maxLength: 30, required: true },
+      {
+        name: 'category',
+        label: 'Danh mục',
+        kind: 'combo',
+        createKind: 'category',
+        createLabel: 'Tạo danh mục',
+        emptyLabel: '— chưa phân loại —',
+      },
+      /*
+       * NGƯỜI PHỤ TRÁCH (0144, mục A tài liệu) — chọn từ danh sách nhân sự, KHÔNG
+       * gõ tay: hai ô gõ tay sẵn có (`bom_prepared_by` / `bom_approved_by` ở phần
+       * Kiểm soát tài liệu) là chữ ký in lên biểu mẫu ISO, không tra ngược được
+       * ra người còn làm việc. Options đổ vào lúc render (`ownerOptions`).
+       */
+      { name: 'owner_id', label: 'Người phụ trách', kind: 'combo' },
+      /*
+       * ĐVT bán PHẢI là select (13/08/2026). Hồi còn gõ tay, 737 SP đẻ ra SÁU
+       * cách viết cho hai khái niệm: "cai" 684 · "cái" 45 · "bộ" 6 · "bo" 1 ·
+       * "pcs" 1 · "set" 1. Mọi thứ đếm/gộp theo ĐVT vì thế đều lệch.
+       * `unitOptions` giữ nguyên giá trị cũ của SP trong danh sách nên mở form
+       * ra KHÔNG âm thầm đổi ĐVT của 684 SP đang ghi "cai".
+       */
+      { name: 'unit', label: 'ĐVT bán', kind: 'select', required: true },
       { name: 'barcode', label: 'Barcode', mono: true, maxLength: 50 },
       { name: 'reference_price', label: 'Giá tham khảo', kind: 'number', step: '0.01' },
       {
@@ -195,56 +241,100 @@ export const SECTIONS: Record<string, SectionSpec> = {
       },
     ],
   },
+  /*
+   * KÍCH THƯỚC & KHỐI LƯỢNG CỦA SẢN PHẨM (mục 5 tài liệu) — gom về tab Thông số.
+   *
+   * Trước đây sáu ô mm này nằm trong phần "Đóng gói xuất khẩu" ở tab Đóng gói,
+   * lẫn với số của THÙNG. User: "thông số kỹ thuật hiện tại tôi thấy tách ra,
+   * nên gộp lại trong trang thông số kỹ thuật" — đúng: dài/rộng/cao/dày/khối
+   * lượng là số của SẢN PHẨM, còn carton/xếp cont mới là đóng gói.
+   *
+   * Ô mm mở cho sửa tay vì 5 SP gập/mở có KTSP nhập nhằng, bộ trích từ file BOM
+   * cố ý bỏ trống chờ người khai đúng (0104).
+   */
+  dims: {
+    key: 'dims',
+    title: 'Kích thước & khối lượng',
+    hint: 'số của sản phẩm',
+    fields: [
+      { name: 'length_mm', label: 'Dài SP — gấp', kind: 'number', step: '1', unit: 'mm' },
+      { name: 'width_mm', label: 'Rộng SP — gấp', kind: 'number', step: '1', unit: 'mm' },
+      { name: 'height_mm', label: 'Cao SP — gấp', kind: 'number', step: '1', unit: 'mm' },
+      {
+        name: 'length_open_mm',
+        label: 'Dài khi MỞ',
+        kind: 'number',
+        step: '1',
+        unit: 'mm',
+      },
+      {
+        name: 'width_open_mm',
+        label: 'Rộng khi MỞ',
+        kind: 'number',
+        step: '1',
+        unit: 'mm',
+      },
+      {
+        name: 'height_open_mm',
+        label: 'Cao khi MỞ',
+        kind: 'number',
+        step: '1',
+        unit: 'mm',
+      },
+      // 0146 — độ dày mặt bàn / tấm / kính. KHÁC độ dày thành ống của dòng ĐM.
+      { name: 'thickness_mm', label: 'Độ dày', kind: 'number', step: '0.1', unit: 'mm' },
+      {
+        name: 'net_weight_kg',
+        label: 'Khối lượng tịnh',
+        kind: 'number',
+        step: '0.001',
+        unit: 'kg',
+      },
+      {
+        name: 'actual_weight_kg',
+        label: 'KL cân thực tế',
+        kind: 'number',
+        step: '0.001',
+        unit: 'kg',
+      },
+    ],
+  },
   packing: {
     key: 'packing',
     title: 'Đóng gói xuất khẩu',
     hint: 'in báo giá / xếp cont',
     fields: [
-      // Kích thước mm (từ file BOM) — mở cho sửa tay vì 5 SP gập/mở có KTSP
-      // nhập nhằng, bộ trích cố ý bỏ trống chờ người khai đúng (0104).
-      {
-        name: 'length_mm',
-        label: 'Dài SP (mm) — gấp',
-        kind: 'number',
-        step: '1',
-      },
-      { name: 'width_mm', label: 'Rộng SP (mm) — gấp', kind: 'number', step: '1' },
-      { name: 'height_mm', label: 'Cao SP (mm) — gấp', kind: 'number', step: '1' },
-      {
-        name: 'length_open_mm',
-        label: 'Dài khi MỞ (mm)',
-        kind: 'number',
-        step: '1',
-      },
-      { name: 'width_open_mm', label: 'Rộng khi MỞ (mm)', kind: 'number', step: '1' },
-      { name: 'height_open_mm', label: 'Cao khi MỞ (mm)', kind: 'number', step: '1' },
       {
         name: 'qty_per_carton',
         label: 'SP / thùng',
         kind: 'number',
         step: '1',
         json: 'packing',
+        unit: 'SP',
       },
       {
         name: 'carton_l_cm',
-        label: 'Carton dài (cm)',
+        label: 'Carton dài',
         kind: 'number',
         step: '0.1',
         json: 'packing',
+        unit: 'cm',
       },
       {
         name: 'carton_w_cm',
-        label: 'Carton rộng (cm)',
+        label: 'Carton rộng',
         kind: 'number',
         step: '0.1',
         json: 'packing',
+        unit: 'cm',
       },
       {
         name: 'carton_h_cm',
-        label: 'Carton cao (cm)',
+        label: 'Carton cao',
         kind: 'number',
         step: '0.1',
         json: 'packing',
+        unit: 'cm',
       },
       {
         name: 'loading_40hc',
@@ -252,20 +342,23 @@ export const SECTIONS: Record<string, SectionSpec> = {
         kind: 'number',
         step: '1',
         json: 'packing',
+        unit: 'thùng',
       },
       {
         name: 'nw_kg',
-        label: 'NW / thùng (kg)',
+        label: 'NW / thùng',
         kind: 'number',
         step: '0.01',
         json: 'packing',
+        unit: 'kg',
       },
       {
         name: 'gw_kg',
-        label: 'GW / thùng (kg)',
+        label: 'GW / thùng',
         kind: 'number',
         step: '0.01',
         json: 'packing',
+        unit: 'kg',
       },
       {
         name: 'pack_unit_label',
@@ -286,11 +379,14 @@ export const SECTIONS: Record<string, SectionSpec> = {
     fields: [
       {
         name: 'max_load_kg',
-        label: 'Tải trọng tối đa (kg)',
+        label: 'Tải trọng tối đa',
         kind: 'number',
         step: '0.1',
+        unit: 'kg',
       },
-      { name: 'material', label: 'Chất liệu chính', maxLength: 300, wide: true },
+      // `material` chuyển sang phần "Vật liệu & màu", `net_weight_kg` sang phần
+      // "Kích thước & khối lượng" (0146): mỗi ô chỉ được sửa ở MỘT chỗ, nếu
+      // không hai form cùng trang ghi đè lẫn nhau.
       {
         name: 'assembly',
         label: 'Lắp ráp',
@@ -300,12 +396,6 @@ export const SECTIONS: Record<string, SectionSpec> = {
           { value: 'assembled', label: 'Nguyên chiếc' },
           { value: 'kd', label: 'Tháo rời (KD)' },
         ],
-      },
-      {
-        name: 'net_weight_kg',
-        label: 'Khối lượng tịnh (kg)',
-        kind: 'number',
-        step: '0.001',
       },
       {
         name: 'set_contents',
@@ -318,20 +408,52 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'is_set', label: 'Là bộ nhiều món', kind: 'checkbox' },
     ],
   },
+  /*
+   * VẬT LIỆU & MÀU (mục 5 tài liệu) — gom đúng danh sách tài liệu liệt kê: gỗ,
+   * kim loại, sơn, vải, kính, phụ kiện, màu hoàn thiện.
+   *
+   * Trước đây mấy ô này nằm rải: `material` ở thẻ "Đặc tính sản phẩm", còn
+   * gỗ/sơn/kính/nệm ở thẻ "Thông số sản xuất" — cùng một câu hỏi "SP làm bằng
+   * gì" mà phải mở hai thẻ. LOẠI KIM LOẠI không có ô riêng: nó suy từ mã SP
+   * (`frame_material`), tab Thông số hiện chỉ-đọc cạnh các ô này.
+   */
+  materials: {
+    key: 'materials',
+    title: 'Vật liệu & màu',
+    hint: 'catalogue / LSX',
+    fields: [
+      { name: 'material', label: 'Chất liệu chính', maxLength: 200 },
+      { name: 'wood', label: 'Loại gỗ', maxLength: 200, json: 'tech_spec' },
+      { name: 'paint', label: 'Sơn (mã màu)', maxLength: 200, json: 'tech_spec' },
+      { name: 'fabric', label: 'Vải', maxLength: 200, json: 'tech_spec' },
+      { name: 'glass', label: 'Kính', maxLength: 200, json: 'tech_spec' },
+      { name: 'cushion', label: 'Nệm / mút', maxLength: 200, json: 'tech_spec' },
+      {
+        name: 'hardware',
+        label: 'Phụ kiện (ngũ kim)',
+        maxLength: 200,
+        json: 'tech_spec',
+      },
+      {
+        name: 'finish',
+        label: 'Màu hoàn thiện (finish)',
+        maxLength: 200,
+        json: 'tech_spec',
+        placeholder: 'Natural Oak / Walnut / Black',
+        wide: true,
+      },
+      // Cờ bật/tắt đặt CẠNH ô mô tả tương ứng (Nệm ↔ có nệm, Kính ↔ có kính):
+      // hai thứ luôn phải khớp, để xa nhau thì sửa một mà quên cái kia.
+      { name: 'is_upholstered', label: 'Có nệm / bọc (qua tổ may)', kind: 'checkbox' },
+      { name: 'has_glass', label: 'Có kính', kind: 'checkbox' },
+    ],
+  },
   techSpec: {
     key: 'techSpec',
     title: 'Thông số sản xuất',
     hint: 'in trên LSX',
     fields: [
       { name: 'machine', label: 'Máy', maxLength: 200, json: 'tech_spec' },
-      { name: 'cushion', label: 'Nệm', maxLength: 200, json: 'tech_spec' },
-      { name: 'paint', label: 'Sơn (mã màu)', maxLength: 200, json: 'tech_spec' },
-      { name: 'glass', label: 'Kính', maxLength: 200, json: 'tech_spec' },
-      { name: 'wood', label: 'Gỗ', maxLength: 200, json: 'tech_spec' },
-      // Cờ bật/tắt đặt CẠNH ô mô tả tương ứng (Nệm ↔ có nệm, Kính ↔ có kính):
-      // hai thứ luôn phải khớp, để xa nhau thì sửa một mà quên cái kia.
-      { name: 'is_upholstered', label: 'Có nệm / bọc (qua tổ may)', kind: 'checkbox' },
-      { name: 'has_glass', label: 'Có kính', kind: 'checkbox' },
       { name: 'showroom_sample', label: 'Có mẫu tại showroom', kind: 'checkbox' },
     ],
   },
@@ -387,7 +509,10 @@ export const SECTIONS: Record<string, SectionSpec> = {
 export const SECTION_TAB: Record<string, string> = {
   identity: '',
   text: '',
-  packing: 'dong-goi',
+  // Đóng gói nay nằm ngay tab Hồ sơ (13/08/2026) — không còn tab riêng.
+  packing: '',
+  dims: 'thong-so',
+  materials: 'thong-so',
   export: 'thong-so',
   techSpec: 'thong-so',
   docControl: 'thong-so',
@@ -418,7 +543,7 @@ export function withSuggest(
   return {
     ...section,
     fields: section.fields.map((f) => {
-      if (f.kind === 'select') {
+      if (f.kind === 'select' || f.kind === 'combo') {
         const dyn = dynamicOptions[f.name]
         return dyn && !f.options ? { ...f, options: dyn } : f
       }
@@ -451,6 +576,39 @@ export function categoryOptions(
   ]
   if (current && !categories.some((c) => c.code === current)) {
     opts.push({ value: current, label: `${current} (ngoài danh mục)` })
+  }
+  return opts
+}
+
+/**
+ * Options cho ô "Người phụ trách" (0144). Người đang giữ hồ sơ mà đã nghỉ việc
+ * (không còn trong danh sách) vẫn được thêm vào cuối, kèm dấu — nếu không thì
+ * mở form sửa là ô nhảy về trống và lưu lại sẽ xoá mất người phụ trách.
+ */
+/**
+ * ĐVT bán — danh sách ngắn, cố định. Giá trị SP đang mang mà nằm ngoài danh
+ * sách thì THÊM VÀO ĐẦU chứ không bỏ: mở form sửa tên SP không được phép âm
+ * thầm đổi luôn đơn vị bán của hồ sơ.
+ */
+export function unitOptions(current: string | null): { value: string; label: string }[] {
+  const base = ['cái', 'bộ', 'set', 'pcs']
+  const opts = base.map((u) => ({ value: u, label: u }))
+  if (current && !base.includes(current)) {
+    opts.unshift({ value: current, label: `${current} (đang dùng)` })
+  }
+  return opts
+}
+
+export function ownerOptions(
+  users: { id: string; name: string }[],
+  current: string | null,
+): { value: string; label: string }[] {
+  const opts = [
+    { value: '', label: '— chưa giao —' },
+    ...users.map((u) => ({ value: u.id, label: u.name })),
+  ]
+  if (current && !users.some((u) => u.id === current)) {
+    opts.push({ value: current, label: 'Người cũ (đã khoá / xoá)' })
   }
   return opts
 }

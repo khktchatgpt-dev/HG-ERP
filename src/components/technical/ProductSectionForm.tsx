@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
+import { cn } from '@/lib/utils'
+import { ComboField } from '@/components/technical/ComboField'
 
 /** Một ô nhập trong form sửa từng phần. */
 export type FieldSpec = {
   name: string
   label: string
-  kind?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'date'
+  kind?: 'text' | 'number' | 'textarea' | 'select' | 'checkbox' | 'date' | 'combo'
   /** Trường nằm trong jsonb con thay vì cột phẳng. */
   json?: 'packing' | 'tech_spec'
   options?: { value: string; label: string }[]
@@ -24,6 +26,27 @@ export type FieldSpec = {
   step?: string
   rows?: number
   mono?: boolean
+  /**
+   * ĐƠN VỊ hiện ngay trong ô (mm / cm / kg / thùng…).
+   *
+   * Không phải trang trí: hồ sơ có cả ô mm (kích thước SP) lẫn ô cm (carton),
+   * nhãn thì dài nên người nhập hay đọc lướt rồi gõ nhầm hệ — 1200 mm thành
+   * 120. Đơn vị nằm CẠNH con trỏ lúc gõ mới chặn được nhầm đó; ô mm còn có
+   * cảnh báo mềm khi số nhỏ bất thường (xem `unitWarning`).
+   */
+  unit?: string
+  /**
+  /**
+   * Ô 'combo' cho tạo mới ngay tại chỗ: 'category' gọi API tạo danh mục SP,
+   * 'customer' chỉ nhận chữ vừa gõ làm nhãn (khách/nhóm là text tự do — 0091).
+   */
+  createKind?: 'category' | 'customer'
+  /** Nhãn dòng tạo mới trong combo, vd "Tạo danh mục". */
+  createLabel?: string
+  /** Câu giải thích ngắn dưới nhãn — cho ô mà tên gọi không đủ rõ. */
+  hint?: string
+  /** Nhãn dòng bỏ trống của combo; null = bắt buộc chọn. */
+  emptyLabel?: string | null
   /** Cột NOT NULL (code/name/unit) — chặn xoá trắng ngay ở form. */
   required?: boolean
   wide?: boolean
@@ -38,6 +61,29 @@ export type SectionSpec = {
 
 const cls =
   'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+
+/**
+ * Cảnh báo MỀM khi con số trông như nhập nhầm hệ đơn vị. Không chặn lưu — có SP
+ * thật nhỏ (đệm dày 20 mm, phụ kiện) nên chặn cứng sẽ cản người dùng đúng; chỉ
+ * hỏi lại một câu ngay dưới ô.
+ *
+ * Ngưỡng chọn theo dữ liệu thật: SP nhỏ nhất trong thư viện vẫn trên 100 mm, mà
+ * kích thước gõ nhầm sang cm thì rơi vào khoảng 40–250. Ô "độ dày" KHÔNG áp
+ * luật này (mặt bàn 18–25 mm là bình thường) — xem `noSmallCheck`.
+ */
+const noSmallCheck = new Set(['thickness_mm'])
+
+function unitWarning(f: FieldSpec, raw: string): string | null {
+  const n = Number(raw)
+  if (!raw.trim() || !Number.isFinite(n) || n <= 0) return null
+  if (f.unit === 'mm' && !noSmallCheck.has(f.name) && n < 100) {
+    return `${n} mm chỉ bằng ${(n / 10).toFixed(1)} cm — có phải bạn đang nhập cm?`
+  }
+  if (f.unit === 'cm' && n > 300) {
+    return `${n} cm = ${(n / 100).toFixed(2)} m — có phải bạn đang nhập mm?`
+  }
+  return null
+}
 
 const numOrNull = (v: FormDataEntryValue | null) => {
   const s = String(v ?? '').trim()
@@ -61,6 +107,7 @@ export function ProductSectionForm({
   values,
   currentPacking,
   currentTechSpec,
+  placeholders,
   onClose,
 }: {
   productId: string
@@ -68,11 +115,18 @@ export function ProductSectionForm({
   values: Record<string, string | number | boolean | null | undefined>
   currentPacking: Record<string, unknown>
   currentTechSpec: Record<string, unknown>
+  /**
+   * Gợi ý xám trong ô TRỐNG: con số đang có sẵn ở nguồn khác (phương án đóng
+   * gói mặc định). Để người nhập khỏi gõ lại bằng trí nhớ — gõ lại là lệch.
+   */
+  placeholders?: Record<string, string>
   onClose: () => void
 }) {
   const router = useRouter()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  /** Cảnh báo mềm theo tên ô — chỉ hỏi lại, không chặn lưu. */
+  const [warn, setWarn] = useState<Record<string, string | null>>({})
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -129,9 +183,16 @@ export function ProductSectionForm({
             key={f.name}
             className={`flex flex-col gap-1 text-sm ${f.wide ? 'sm:col-span-2' : ''}`}
           >
-            <span>
-              {f.label}
-              {f.required && <span className="text-red-500"> *</span>}
+            <span className="flex flex-col gap-0.5">
+              <span className="font-medium">
+                {f.label}
+                {f.required && <span className="text-red-500"> *</span>}
+              </span>
+              {f.hint && (
+                <span className="text-foreground/60 text-[11px] leading-tight font-normal">
+                  {f.hint}
+                </span>
+              )}
             </span>
             {f.kind === 'textarea' ? (
               <textarea
@@ -141,6 +202,32 @@ export function ProductSectionForm({
                 defaultValue={(v as string) ?? ''}
                 placeholder={f.placeholder}
                 className={cls}
+              />
+            ) : f.kind === 'combo' ? (
+              <ComboField
+                name={f.name}
+                value={String(v ?? '')}
+                options={f.options ?? []}
+                placeholder={f.placeholder}
+                emptyLabel={f.required ? null : (f.emptyLabel ?? '— chưa chọn —')}
+                createLabel={f.createKind ? (f.createLabel ?? 'Thêm') : undefined}
+                onCreate={
+                  f.createKind === 'category'
+                    ? async (label) => {
+                        const r = await api<{
+                          category: { code: string; label: string }
+                        }>('/api/dept/technical/product-categories', {
+                          method: 'POST',
+                          body: { label },
+                        })
+                        return { value: r.category.code, label: r.category.label }
+                      }
+                    : f.createKind === 'customer'
+                      ? // Khách hàng / nhóm là NHÃN TỰ DO (0091) — "tạo mới" chỉ
+                        // là dùng đúng chữ vừa gõ, không gọi API nào cả.
+                        async (label) => ({ value: label, label })
+                      : undefined
+                }
               />
             ) : f.kind === 'select' ? (
               <select name={f.name} defaultValue={(v as string) ?? ''} className={cls}>
@@ -152,22 +239,50 @@ export function ProductSectionForm({
               </select>
             ) : (
               <>
-                <input
-                  name={f.name}
-                  // `date` cho ra đúng chuỗi YYYY-MM-DD mà cột `date` của
-                  // Postgres và `bom_effective_date` trong schema chờ sẵn.
-                  type={
-                    f.kind === 'number' ? 'number' : f.kind === 'date' ? 'date' : 'text'
-                  }
-                  step={f.step}
-                  min={f.kind === 'number' ? '0' : undefined}
-                  maxLength={f.maxLength}
-                  required={f.required}
-                  list={f.suggest?.length ? `${section.key}-${f.name}` : undefined}
-                  defaultValue={(v as string | number) ?? ''}
-                  placeholder={f.placeholder}
-                  className={f.mono ? `${cls} font-mono` : cls}
-                />
+                <div className="relative">
+                  <input
+                    name={f.name}
+                    // `date` cho ra đúng chuỗi YYYY-MM-DD mà cột `date` của
+                    // Postgres và `bom_effective_date` trong schema chờ sẵn.
+                    type={
+                      f.kind === 'number' ? 'number' : f.kind === 'date' ? 'date' : 'text'
+                    }
+                    // Bàn phím SỐ trên máy tính bảng ở xưởng — gõ số trên bàn
+                    // phím chữ là nguồn sai chính tả kinh điển.
+                    inputMode={f.kind === 'number' ? 'decimal' : undefined}
+                    step={f.step}
+                    min={f.kind === 'number' ? '0' : undefined}
+                    maxLength={f.maxLength}
+                    required={f.required}
+                    list={f.suggest?.length ? `${section.key}-${f.name}` : undefined}
+                    defaultValue={(v as string | number) ?? ''}
+                    placeholder={f.placeholder ?? placeholders?.[f.name]}
+                    onChange={
+                      f.unit
+                        ? (e) =>
+                            setWarn((w) => ({
+                              ...w,
+                              [f.name]: unitWarning(f, e.currentTarget.value),
+                            }))
+                        : undefined
+                    }
+                    className={cn(
+                      f.mono ? `${cls} font-mono` : cls,
+                      f.unit && 'pe-12',
+                      warn[f.name] && 'border-amber-400 dark:border-amber-600',
+                    )}
+                  />
+                  {f.unit && (
+                    <span className="text-muted-foreground pointer-events-none absolute inset-y-0 end-3 flex items-center text-xs font-medium">
+                      {f.unit}
+                    </span>
+                  )}
+                </div>
+                {warn[f.name] && (
+                  <span className="text-[11px] leading-tight text-amber-700 dark:text-amber-500">
+                    ⚠ {warn[f.name]}
+                  </span>
+                )}
                 {!!f.suggest?.length && (
                   <datalist id={`${section.key}-${f.name}`}>
                     {f.suggest.map((s) => (
