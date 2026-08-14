@@ -3,9 +3,9 @@ import { lsxService } from '@/modules/dept/production/lsx.service'
 import { OrdersOverview } from './OrdersOverview'
 
 /**
- * Quản lý đơn hàng — góc nhìn Ban Giám đốc: sổ đơn theo giá trị & hạn giao +
- * tiến độ sản xuất hiện tại từng đơn, duyệt LSX tại chỗ. Đọc từ v_order_tracking
- * (mở rộng lớp thương mại, migration 0071). Gate ở exec/layout.
+ * SỔ ĐƠN HÀNG — góc nhìn Ban Giám đốc, phân tầng theo chuỗi nghiệp vụ
+ * KHÁCH → ĐƠN → LỆNH SX → VẬT TƯ (docs/exec-orders-redesign.md, 14/08/2026).
+ * Đọc từ v_order_tracking; nhóm ở client. Duyệt phiếu ở Hộp ký, không ở đây.
  */
 export default async function ExecOrdersPage() {
   const [rows, stages] = await Promise.all([

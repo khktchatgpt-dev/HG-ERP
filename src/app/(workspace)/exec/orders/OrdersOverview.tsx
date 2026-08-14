@@ -1,46 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
-  ArrowRight,
-  CheckCircle2,
-  CircleDashed,
-  Package,
-  PackageCheck,
-  Play,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  Factory,
   Search,
-  XCircle,
+  ShoppingCart,
+  TriangleAlert,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { api, apiErrorText } from '@/lib/api'
 import { assessLateRisk } from '@/lib/late-risk'
 import { orderProgress, type Stage } from '@/lib/order-progress'
-import { Card, CardContent } from '@/components/shadcn/card'
-import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
-import {
-  Fact,
-  Signal,
-  SectionLabel,
-  LsxProductTable,
-  fmtD,
-  daysUntil,
-  dueBadge,
-  DUE_TEXT,
-} from '../approval-parts'
-import type { ApprovalLsxLine } from '../approval-types'
-import { useApprovalDecision, targetLsx } from '../useApprovalDecision'
-import {
-  KpiCard,
-  LifecycleTimeline,
-  ProgressMeter,
-  StatusBadge,
-  fmtMoney,
-} from './order-parts'
+import { KpiCard, ProgressMeter, StatusBadge, fmtMoney } from './order-parts'
 
+/** 1 dòng v_order_tracking (một ĐƠN) — nguồn duy nhất của sổ. */
 export type OrderRow = {
   id: string
   code: string
@@ -58,7 +36,10 @@ export type OrderRow = {
   jobs_done: number
   ship_date: string | null
   lines_bom_pending: number
+  /** Đơn vật tư ĐÃ DUYỆT chưa về đủ — hàng thật sự đang trên đường (0133). */
   pos_open: number
+  /** Đơn vật tư còn nháp / chờ ký — chưa ai đặt gì với NCC (0133). */
+  pos_unsent: number
   deposit_percent: number | null
   payment_method: string | null
   order_value: number
@@ -80,6 +61,18 @@ function fmtMoneyShort(value: number, currency: string): string {
   return `${value.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ${currency}`
 }
 
+function fmtD(iso: string | null): string {
+  if (!iso) return '—'
+  const [y, m, d] = iso.slice(0, 10).split('-')
+  return `${d}/${m}/${y.slice(2)}`
+}
+
+function sumByCur(rows: OrderRow[]): [string, number][] {
+  const m = new Map<string, number>()
+  for (const r of rows) m.set(r.currency, (m.get(r.currency) ?? 0) + r.order_value)
+  return [...m.entries()].sort((a, b) => b[1] - a[1])
+}
+
 const SEGMENTS = [
   { key: 'all', label: 'Tất cả' },
   { key: 'pending', label: 'Chờ GĐ duyệt' },
@@ -89,38 +82,41 @@ const SEGMENTS = [
 ] as const
 type SegmentKey = (typeof SEGMENTS)[number]['key']
 
-/** Số mục hiện mỗi trang — render tăng dần để không phình DOM khi nhiều đơn. */
-const PAGE = 60
+/** Nhóm LỆNH SX trong một khách — số lệnh lấy từ dòng đầu (view lặp theo đơn). */
+type LsxGroup = {
+  key: string
+  production_order_id: string | null
+  lsx_code: string | null
+  rep: OrderRow
+  orders: OrderRow[]
+}
 
-const SORTS = [
-  { key: 'health', label: 'Ưu tiên (rủi ro)' },
-  { key: 'value', label: 'Giá trị cao' },
-  { key: 'due', label: 'Hạn giao gần' },
-  { key: 'recent', label: 'Mới nhất' },
-] as const
-type SortKey = (typeof SORTS)[number]['key']
+type CustomerGroup = {
+  name: string
+  orders: OrderRow[]
+  lsxGroups: LsxGroup[]
+}
 
+/**
+ * SỔ ĐƠN HÀNG của Giám đốc — phân tầng theo đúng chuỗi nghiệp vụ
+ * KHÁCH → ĐƠN → LỆNH SX → VẬT TƯ (docs/exec-orders-redesign.md).
+ *
+ * Bản trước đổ phẳng 20 thẻ đơn: ROSCO chiếm 13 thẻ gần giống hệt nhau vì 13
+ * đơn cùng vào một lệnh (0113). Đơn vị hiển thị nay là KHÁCH; mỗi khách mở ra
+ * các lệnh, mỗi lệnh liệt kê đơn nó gộp + tiến độ SX + tình hình vật tư.
+ *
+ * Sổ này để XEM và đi sâu — duyệt phiếu là việc của Hộp ký (/exec). Bấm lệnh
+ * mở /exec/lsx/[id] (hồ sơ đầy đủ, duyệt được ở đó).
+ */
 export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Stage[] }) {
-  const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
   const [q, setQ] = useState('')
   const [seg, setSeg] = useState<SegmentKey>('all')
-  const [sort, setSort] = useState<SortKey>('health')
-  const [limit, setLimit] = useState(PAGE)
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const detailRef = useRef<HTMLDivElement>(null)
-
-  // Đổi lọc/tìm/sắp xếp → về trang đầu (reset ngay trong handler, không dùng effect).
-  const resetPage = () => setLimit(PAGE)
-
-  const { busy, askApprove, askReject, dialogs } = useApprovalDecision(() =>
-    router.refresh(),
-  )
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const riskOf = (r: OrderRow) => assessLateRisk(r, today)
-  const progressOf = (r: OrderRow) => orderProgress(r, stages, today)
 
-  // ── KPI ─────────────────────────────────────────────────────────────────
+  // ── KPI toàn sổ (trước lọc — con số tổng không đổi theo chip) ─────────────
   const kpi = useMemo(() => {
     const bookByCur = new Map<string, number>()
     let activeCount = 0
@@ -140,7 +136,9 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
       const risk = riskOf(r)
       if (risk?.level === 'overdue') overdue++
       else if (risk?.level === 'at_risk') atRisk++
-      const d = daysUntil(r.due_date, today)
+      const d = r.due_date
+        ? Math.round((Date.parse(r.due_date) - Date.parse(today)) / 86_400_000)
+        : null
       if (active && d != null && d >= 0 && d <= 7) dueSoon++
     }
     const book =
@@ -152,64 +150,88 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows])
 
-  // ── Lọc + sắp xếp (theo lựa chọn) ─────────────────────────────────────────
-  const filtered = useMemo(() => {
+  // ── Lọc theo ĐƠN, rồi dựng cây Khách → Lệnh → Đơn từ phần còn lại ─────────
+  const customers = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    const rank = (r: OrderRow) => {
-      const risk = riskOf(r)
-      if (risk?.level === 'overdue') return 0
-      if (r.lsx_status === 'pending_approval') return 1
-      if (risk?.level === 'at_risk') return 2
-      return 3
-    }
-    const cmp: Record<SortKey, (a: OrderRow, b: OrderRow) => number> = {
-      health: (a, b) => rank(a) - rank(b) || b.order_value - a.order_value,
-      value: (a, b) => b.order_value - a.order_value,
-      due: (a, b) => (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'),
-      recent: (a, b) => b.created_at.localeCompare(a.created_at),
-    }
-    return rows
-      .filter((r) => {
-        if (seg === 'pending' && r.lsx_status !== 'pending_approval') return false
-        if (seg === 'inprod' && r.status !== 'in_production') return false
-        if (seg === 'risk' && !riskOf(r)) return false
-        if (seg === 'to_deliver' && r.status !== 'completed') return false
-        if (
-          ql &&
-          !`${r.code} ${r.customer_name} ${r.customer_po_no ?? ''} ${r.lsx_code ?? ''}`
-            .toLowerCase()
-            .includes(ql)
-        )
-          return false
-        return true
-      })
-      .sort(cmp[sort])
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, seg, sort])
+    const filtered = rows.filter((r) => {
+      if (seg === 'pending' && r.lsx_status !== 'pending_approval') return false
+      if (seg === 'inprod' && r.status !== 'in_production') return false
+      if (seg === 'risk' && !riskOf(r)) return false
+      if (seg === 'to_deliver' && r.status !== 'completed') return false
+      if (
+        ql &&
+        !`${r.code} ${r.customer_name} ${r.customer_po_no ?? ''} ${r.lsx_code ?? ''}`
+          .toLowerCase()
+          .includes(ql)
+      )
+        return false
+      return true
+    })
 
-  const shown = filtered.slice(0, limit)
-  const selected = filtered.find((r) => r.id === selectedId) ?? null
+    const byCustomer = new Map<string, OrderRow[]>()
+    for (const r of filtered) {
+      const arr = byCustomer.get(r.customer_name)
+      if (arr) arr.push(r)
+      else byCustomer.set(r.customer_name, [r])
+    }
 
-  function selectRow(r: OrderRow) {
-    setSelectedId(r.id)
-    // Mobile: cuộn tới panel chi tiết (nằm dưới danh sách).
-    requestAnimationFrame(() => {
-      if (window.matchMedia('(max-width: 1023px)').matches) {
-        detailRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    const groups: CustomerGroup[] = [...byCustomer.entries()].map(([name, list]) => {
+      const byLsx = new Map<string, OrderRow[]>()
+      for (const r of list) {
+        const key = r.production_order_id ?? '∅'
+        const arr = byLsx.get(key)
+        if (arr) arr.push(r)
+        else byLsx.set(key, [r])
       }
+      const lsxGroups: LsxGroup[] = [...byLsx.entries()]
+        .map(([key, orders]) => ({
+          key,
+          production_order_id: orders[0].production_order_id,
+          lsx_code: orders[0].lsx_code,
+          rep: orders[0],
+          orders: [...orders].sort((a, b) =>
+            (a.due_date ?? '9999').localeCompare(b.due_date ?? '9999'),
+          ),
+        }))
+        // Nhóm "chưa phát lệnh" (∅) nổi lên đầu — việc còn nằm ngoài sản xuất.
+        .sort((a, b) =>
+          a.production_order_id === null
+            ? -1
+            : b.production_order_id === null
+              ? 1
+              : (a.lsx_code ?? '').localeCompare(b.lsx_code ?? ''),
+        )
+      return { name, orders: list, lsxGroups }
+    })
+
+    // Khách nhiều tiền nhất trước; tiền bằng nhau (đang toàn 0) thì nhiều đơn trước.
+    const total = (g: CustomerGroup) => g.orders.reduce((s, r) => s + r.order_value, 0)
+    return groups.sort(
+      (a, b) =>
+        total(b) - total(a) ||
+        b.orders.length - a.orders.length ||
+        a.name.localeCompare(b.name),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, q, seg])
+
+  const shownOrders = customers.reduce((s, c) => s + c.orders.length, 0)
+
+  function toggle(name: string) {
+    setCollapsed((s) => {
+      const next = new Set(s)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
     })
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Ban Giám đốc', href: '/exec' },
-          { label: 'Quản lý đơn hàng' },
-        ]}
-        title="Quản lý đơn hàng"
-        description="Sổ đơn theo giá trị & hạn giao, tiến độ sản xuất hiện tại từng đơn — duyệt LSX tại chỗ."
+        breadcrumbs={[{ label: 'Ban Giám đốc', href: '/exec' }, { label: 'Sổ đơn hàng' }]}
+        title="Sổ đơn hàng"
+        description="Theo từng khách: đơn nào vào lệnh nào, sản xuất tới đâu, vật tư mua tới đâu. Duyệt phiếu ở Hộp ký."
       />
 
       {/* KPI */}
@@ -238,547 +260,211 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
         />
       </div>
 
-      {/* Bộ lọc */}
+      {/* Tìm + chip lọc */}
       <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
-          <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2" />
+        <label className="relative">
+          <Search
+            className="text-muted-foreground pointer-events-none absolute start-2.5 top-1/2 size-4 -translate-y-1/2"
+            aria-hidden
+          />
           <input
             value={q}
-            onChange={(e) => {
-              setQ(e.target.value)
-              resetPage()
-            }}
-            placeholder="Tìm đơn, khách, PO, LSX…"
-            className="bg-card focus-visible:ring-ring/40 h-9 w-64 rounded-lg border border-zinc-200/70 py-1 pr-3 pl-8 text-sm shadow-sm outline-none focus-visible:border-zinc-300 focus-visible:ring-[3px] dark:border-zinc-800"
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm đơn, PO khách, khách, lệnh…"
+            className="bg-card h-9 w-64 rounded-md border ps-8 pe-3 text-sm"
           />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {SEGMENTS.map((s) => (
-            <Button
-              key={s.key}
-              size="sm"
-              variant={seg === s.key ? 'default' : 'outline'}
-              onClick={() => {
-                setSeg(s.key)
-                resetPage()
-              }}
-            >
-              {s.label}
-            </Button>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="text-muted-foreground text-xs tabular-nums">
-            {filtered.length} đơn
-          </span>
-          <select
-            value={sort}
-            onChange={(e) => {
-              setSort(e.target.value as SortKey)
-              resetPage()
-            }}
-            className="bg-card h-9 rounded-lg border border-zinc-200/70 px-2 text-sm shadow-sm outline-none dark:border-zinc-800"
-            aria-label="Sắp xếp"
-          >
-            {SORTS.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Master + Detail */}
-      <div className="lg:grid lg:grid-cols-12 lg:gap-4">
-        {/* Danh sách đơn — hàng gọn, render tăng dần */}
-        <div className="flex flex-col gap-1.5 lg:col-span-5">
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon="◫"
-              title={rows.length === 0 ? 'Chưa có đơn hàng nào' : 'Không khớp bộ lọc'}
-              description="Đơn Sales tạo & phát LSX sẽ hiện ở đây để GĐ theo dõi và duyệt."
-            />
-          ) : (
-            <>
-              {shown.map((r) => {
-                const p = progressOf(r)
-                const risk = riskOf(r)
-                const active = selected?.id === r.id
-                return (
-                  <button
-                    key={r.id}
-                    onClick={() => selectRow(r)}
-                    className={cn(
-                      'group bg-card relative w-full overflow-hidden rounded-lg border py-2 pr-2.5 pl-3.5 text-left shadow-sm transition-all duration-150',
-                      "before:absolute before:inset-y-1.5 before:left-0 before:w-1 before:rounded-full before:transition-colors before:content-['']",
-                      active
-                        ? 'border-zinc-300 bg-zinc-50/80 shadow before:bg-zinc-900 dark:border-zinc-700 dark:bg-zinc-800/40 dark:before:bg-zinc-100'
-                        : 'border-zinc-200/70 before:bg-transparent hover:border-zinc-300 hover:shadow-md hover:before:bg-zinc-200 dark:border-zinc-800 dark:hover:border-zinc-700 dark:hover:before:bg-zinc-700',
-                      r.status === 'cancelled' && 'opacity-60',
-                    )}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-muted-foreground truncate font-mono text-[10px]">
-                        {r.code}
-                        {r.customer_po_no && <span> · PO {r.customer_po_no}</span>}
-                      </span>
-                      <StatusBadge status={r.status} />
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-medium">
-                        {r.customer_name}
-                      </span>
-                      <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        {fmtMoney(r.order_value, r.currency)}
-                      </span>
-                    </div>
-                    <div className="mt-1.5 flex items-center gap-2">
-                      <div className="min-w-0 flex-1">
-                        <ProgressMeter p={p} showLabel={false} />
-                      </div>
-                      <span
-                        className={cn(
-                          'shrink-0 text-[10px] tabular-nums',
-                          risk
-                            ? DUE_TEXT[risk.level === 'overdue' ? 'red' : 'amber']
-                            : 'text-muted-foreground',
-                        )}
-                      >
-                        {r.due_date ? `${fmtD(r.due_date)}${risk ? ' ⚠' : ''}` : '—'}
-                      </span>
-                    </div>
-                  </button>
-                )
-              })}
-              {filtered.length > shown.length && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-1 w-full"
-                  onClick={() => setLimit((n) => n + PAGE)}
-                >
-                  Tải thêm (còn {filtered.length - shown.length})
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Chi tiết */}
-        <div ref={detailRef} className="mt-4 lg:col-span-7 lg:mt-0">
-          <div className="lg:sticky lg:top-4">
-            {selected ? (
-              <OrderDetail
-                r={selected}
-                progress={progressOf(selected)}
-                risk={riskOf(selected)}
-                stages={stages}
-                busy={busy}
-                onApprove={() =>
-                  selected.production_order_id &&
-                  askApprove(
-                    targetLsx({
-                      id: selected.production_order_id,
-                      code: selected.lsx_code ?? selected.code,
-                      customer_name: selected.customer_name,
-                      order_codes: [selected.code],
-                    }),
-                  )
-                }
-                onReject={() =>
-                  selected.production_order_id &&
-                  askReject(
-                    targetLsx({
-                      id: selected.production_order_id,
-                      code: selected.lsx_code ?? selected.code,
-                      customer_name: selected.customer_name,
-                      order_codes: [selected.code],
-                    }),
-                  )
-                }
-              />
-            ) : (
-              <Card className="border-zinc-200/70 shadow-sm dark:border-zinc-800">
-                <CardContent>
-                  <EmptyState
-                    icon="◧"
-                    title="Chọn một đơn để xem chi tiết"
-                    description="Thông tin thương mại, vòng đời, tiến độ sản xuất và hành động duyệt hiện ở đây."
-                  />
-                </CardContent>
-              </Card>
+        </label>
+        {SEGMENTS.map((s) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setSeg(s.key)}
+            className={cn(
+              'h-9 rounded-md border px-3 text-sm',
+              seg === s.key
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'bg-card hover:bg-accent/50',
             )}
-          </div>
-        </div>
+          >
+            {s.label}
+          </button>
+        ))}
+        <span className="text-muted-foreground ms-auto text-sm tabular-nums">
+          {shownOrders} đơn · {customers.length} khách
+        </span>
       </div>
 
-      {dialogs}
+      {customers.length === 0 ? (
+        <EmptyState
+          title="Không có đơn nào khớp"
+          description="Đổi bộ lọc hoặc xoá từ khoá tìm kiếm."
+        />
+      ) : (
+        customers.map((c) => {
+          const open = !collapsed.has(c.name)
+          const value = sumByCur(c.orders)
+          const overdue = c.orders.filter((r) => riskOf(r)?.level === 'overdue').length
+          const pending = c.orders.filter(
+            (r) => r.lsx_status === 'pending_approval',
+          ).length
+          const nLsx = new Set(c.orders.map((r) => r.production_order_id).filter(Boolean))
+            .size
+          return (
+            <section key={c.name} className="bg-card overflow-hidden rounded-xl border">
+              {/* ── Đầu khối KHÁCH ── */}
+              <button
+                type="button"
+                onClick={() => toggle(c.name)}
+                aria-expanded={open}
+                className="hover:bg-accent/40 flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-start"
+              >
+                {open ? (
+                  <ChevronDown className="text-muted-foreground size-4 shrink-0" />
+                ) : (
+                  <ChevronRight className="text-muted-foreground size-4 shrink-0" />
+                )}
+                <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                {overdue > 0 && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                    <TriangleAlert className="size-3" aria-hidden /> {overdue} trễ
+                  </span>
+                )}
+                {pending > 0 && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                    {pending} chờ duyệt
+                  </span>
+                )}
+                <span className="text-muted-foreground text-sm tabular-nums">
+                  {c.orders.length} đơn · {nLsx} lệnh
+                </span>
+                <span className="text-sm font-medium tabular-nums">
+                  {value.length
+                    ? value.map(([cur, v]) => fmtMoneyShort(v, cur)).join(' · ')
+                    : '—'}
+                </span>
+              </button>
+
+              {/* ── Các LỆNH của khách ── */}
+              {open && (
+                <div className="space-y-3 border-t px-4 py-3">
+                  {c.lsxGroups.map((g) => (
+                    <LsxBlock key={g.key} g={g} stages={stages} today={today} />
+                  ))}
+                </div>
+              )}
+            </section>
+          )
+        })
+      )}
     </div>
   )
 }
 
-// ── Panel chi tiết 1 đơn ────────────────────────────────────────────────────
-function OrderDetail({
-  r,
-  progress,
-  risk,
-  stages,
-  busy,
-  onApprove,
-  onReject,
-}: {
-  r: OrderRow
-  progress: ReturnType<typeof orderProgress>
-  risk: ReturnType<typeof assessLateRisk>
-  stages: Stage[]
-  busy: boolean
-  onApprove: () => void
-  onReject: () => void
-}) {
-  const today = new Date().toISOString().slice(0, 10)
-  const due = dueBadge(daysUntil(r.due_date, today))
-  const stageLabel = r.jobs_total > 0 ? `${r.jobs_done}/${r.jobs_total} công đoạn` : null
-  const pendingApproval = r.lsx_status === 'pending_approval'
-  const lsxHref = r.production_order_id ? `/exec/lsx/${r.production_order_id}` : null
+/** Một LỆNH SX (hoặc nhóm "chưa phát lệnh") + các đơn nó gộp. */
+function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: string }) {
+  const rep = g.rep
+  const noLsx = g.production_order_id === null
+  const p = orderProgress(rep, stages, today)
 
   return (
-    <Card className="gap-4 border-zinc-200/70 shadow-sm dark:border-zinc-800">
-      <CardContent className="flex flex-col gap-4">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-3 border-b border-zinc-100 pb-3 dark:border-zinc-800/70">
-          <div className="min-w-0">
-            <div className="text-muted-foreground font-mono text-xs">{r.code}</div>
-            <h2 className="truncate text-lg font-bold">{r.customer_name}</h2>
-          </div>
-          <div className="flex flex-col items-end gap-1">
-            <div className="text-lg font-bold tabular-nums">
-              {fmtMoney(r.order_value, r.currency)}
-            </div>
-            <StatusBadge status={r.status} />
-          </div>
-        </div>
-
-        {/* Vòng đời */}
-        <div className="rounded-lg border border-zinc-100 bg-zinc-50/60 px-3 py-3 dark:border-zinc-800/70 dark:bg-zinc-900/40">
-          <LifecycleTimeline status={r.status} />
-        </div>
-
-        {/* Tiến độ SX */}
-        <div>
-          <SectionLabel>Tiến độ sản xuất</SectionLabel>
-          <div className="mt-2">
-            <ProgressMeter p={progress} />
-          </div>
-        </div>
-
-        {/* Rủi ro */}
-        {risk ? (
-          <Signal tone={risk.level === 'overdue' ? 'alert' : 'warn'}>
-            {risk.level === 'overdue' ? 'Đã trễ hạn giao' : 'Nguy cơ trễ'}
-            {risk.reasons.length > 0 && `: ${risk.reasons.join(' · ')}`}
-          </Signal>
-        ) : (
-          !FINAL.has(r.status) && <Signal tone="ok">Chưa có cảnh báo trễ</Signal>
-        )}
-
-        {/* Thương mại */}
-        <div className="rounded-lg border border-zinc-100 bg-zinc-50/40 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/30">
-          <SectionLabel>Thương mại</SectionLabel>
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-            {r.customer_po_no && <Fact label="PO khách">{r.customer_po_no}</Fact>}
-            <Fact label="Giá trị đơn">{fmtMoney(r.order_value, r.currency)}</Fact>
-            <Fact label="Số dòng SP">{r.line_count}</Fact>
-            {r.deposit_percent != null && (
-              <Fact label="Đặt cọc">{r.deposit_percent}%</Fact>
-            )}
-            {r.payment_method && <Fact label="Phương thức TT">{r.payment_method}</Fact>}
-            <Fact label="Hạn giao" tone={due.tone}>
-              {r.due_date ? `${fmtD(r.due_date)} · ${due.text}` : '—'}
-            </Fact>
-            {r.ship_date && <Fact label="Ngày xuất (dự kiến)">{fmtD(r.ship_date)}</Fact>}
-            {r.quote_code && <Fact label="Từ báo giá">{r.quote_code}</Fact>}
-          </dl>
-        </div>
-
-        {/* Hồ sơ sản xuất */}
-        <div className="rounded-lg border border-zinc-100 bg-zinc-50/40 p-3 dark:border-zinc-800/70 dark:bg-zinc-900/30">
-          <div className="flex items-center justify-between">
-            <SectionLabel>Hồ sơ sản xuất</SectionLabel>
-            {lsxHref && (
-              <a
-                href={lsxHref}
-                className="text-[11px] font-medium text-blue-600 hover:underline dark:text-blue-400"
-              >
-                {r.lsx_code} →
-              </a>
-            )}
-          </div>
-          <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-            <Fact label="Giai đoạn hiện tại">{stageLabel ?? 'Chưa bắt đầu'}</Fact>
-            <Fact label="BOM" tone={r.lines_bom_pending > 0 ? 'amber' : undefined}>
-              {r.lines_bom_pending > 0 ? `Thiếu ${r.lines_bom_pending} SP` : 'Đủ'}
-            </Fact>
-            <Fact label="Vật tư (PO mở)" tone={r.pos_open > 0 ? 'amber' : undefined}>
-              {r.pos_open > 0 ? `${r.pos_open} PO chờ` : '—'}
-            </Fact>
-          </dl>
-
-          {r.production_order_id ? (
-            <ProductionDossier
-              productionOrderId={r.production_order_id}
-              stages={stages}
-            />
-          ) : (
-            <p className="text-muted-foreground mt-3 text-xs">
-              Đơn chưa phát LSX — chưa có hồ sơ sản xuất.
-            </p>
-          )}
-        </div>
-
-        {/* Hành động */}
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {pendingApproval ? (
-            <>
-              <Button disabled={busy} onClick={onApprove}>
-                Duyệt LSX
-              </Button>
-              <Button variant="outline" disabled={busy} onClick={onReject}>
-                Từ chối
-              </Button>
-              {lsxHref && (
-                <Button variant="ghost" asChild>
-                  <a href={lsxHref}>
-                    <Package className="size-4" /> Xem hồ sơ LSX
-                  </a>
-                </Button>
-              )}
-            </>
-          ) : lsxHref ? (
-            <Button variant="outline" asChild>
-              <a href={lsxHref}>
-                Xem chi tiết LSX <ArrowRight className="size-4" />
-              </a>
-            </Button>
-          ) : (
-            <span className="text-muted-foreground text-sm">
-              Đơn chưa phát LSX — chờ Sales phát lệnh.
+    <div
+      className={cn(
+        'rounded-lg border',
+        noLsx &&
+          'border-amber-300 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/20',
+      )}
+    >
+      {/* Đầu lệnh: mã + trạng thái + tiến độ SX + vật tư — nguyên chuỗi một dòng */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-2">
+        <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium">
+          <Factory className="text-muted-foreground size-4 shrink-0" aria-hidden />
+          {noLsx ? (
+            <span className="text-amber-700 dark:text-amber-400">
+              Chưa phát lệnh sản xuất
             </span>
+          ) : (
+            <span className="truncate">Lệnh {g.lsx_code}</span>
           )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-// ── Hồ sơ sản xuất (lazy-load theo đơn được chọn) ───────────────────────────
-type DossierProgress = {
-  id: string
-  stage: string
-  action: string
-  note: string | null
-  by: string | null
-  at: string
-}
-type Dossier = {
-  status: string
-  ship_date: string | null
-  received_date: string | null
-  completed_at: string | null
-  approved_at: string | null
-  issued_at: string | null
-  rejected_reason: string | null
-  note: string | null
-  container_summary: string | null
-  progress: DossierProgress[]
-  lines: ApprovalLsxLine[]
-}
-
-const ACTION_META: Record<string, { label: string; Icon: typeof Play; cls: string }> = {
-  start: { label: 'Bắt đầu', Icon: Play, cls: 'text-sky-600 dark:text-sky-400' },
-  done: {
-    label: 'Hoàn thành',
-    Icon: CheckCircle2,
-    cls: 'text-emerald-600 dark:text-emerald-400',
-  },
-  received: {
-    label: 'Nhận vật tư',
-    Icon: PackageCheck,
-    cls: 'text-violet-600 dark:text-violet-400',
-  },
-  cancelled: { label: 'Huỷ', Icon: XCircle, cls: 'text-red-600 dark:text-red-400' },
-}
-
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
-function ProductionDossier({
-  productionOrderId,
-  stages,
-}: {
-  productionOrderId: string
-  stages: Stage[]
-}) {
-  const [state, setState] = useState<{
-    loading: boolean
-    error: string | null
-    data: Dossier | null
-  }>({ loading: true, error: null, data: null })
-  const cache = useRef<Map<string, Dossier>>(new Map())
-
-  useEffect(() => {
-    let cancelled = false
-    const cached = cache.current.get(productionOrderId)
-    if (cached) {
-      setState({ loading: false, error: null, data: cached })
-      return
-    }
-    setState({ loading: true, error: null, data: null })
-    api<{
-      lsx: Record<string, unknown>
-      progress: Record<string, unknown>[]
-      lines: ApprovalLsxLine[]
-    }>(`/api/dept/production/lsx/${productionOrderId}`)
-      .then((raw) => {
-        if (cancelled) return
-        const l = raw.lsx
-        const data: Dossier = {
-          status: String(l.status ?? ''),
-          ship_date: (l.ship_date as string | null) ?? null,
-          received_date: (l.received_date as string | null) ?? null,
-          completed_at: (l.completed_at as string | null) ?? null,
-          approved_at: (l.approved_at as string | null) ?? null,
-          issued_at: (l.issued_at as string | null) ?? null,
-          rejected_reason: (l.rejected_reason as string | null) ?? null,
-          note: (l.note as string | null) ?? null,
-          container_summary: (l.container_summary as string | null) ?? null,
-          progress: (raw.progress ?? []).map((p) => ({
-            id: String(p.id),
-            stage: String(p.stage ?? ''),
-            action: String(p.action ?? ''),
-            note: (p.note as string | null) ?? null,
-            by: (p.updated_by_name as string | null) ?? null,
-            at: String(p.created_at ?? ''),
-          })),
-          // Endpoint không trả đơn giá bán — bổ sung unit_price=0 cho khớp type
-          // (LsxProductTable không hiển thị cột giá).
-          lines: (raw.lines ?? []).map((ln) => ({ ...ln, unit_price: 0 })),
-        }
-        cache.current.set(productionOrderId, data)
-        setState({ loading: false, error: null, data })
-      })
-      .catch((e) => {
-        if (!cancelled) setState({ loading: false, error: apiErrorText(e), data: null })
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [productionOrderId])
-
-  const stageLabel = (code: string) => stages.find((s) => s.code === code)?.label ?? code
-
-  if (state.loading) {
-    return (
-      <div className="text-muted-foreground mt-3 flex items-center gap-2 text-xs">
-        <Spinner size={12} /> Đang tải hồ sơ sản xuất…
+        </span>
+        {!noLsx && <StatusBadge status={rep.status} />}
+        {!noLsx && (
+          <span className="w-44">
+            <ProgressMeter p={p} />
+          </span>
+        )}
+        {!noLsx && (
+          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
+            <ShoppingCart className="size-3.5" aria-hidden />
+            {rep.pos_open === 0 && rep.pos_unsent === 0 ? (
+              'chưa có đơn vật tư'
+            ) : (
+              <>
+                {rep.pos_open > 0 && `vật tư đang về ${rep.pos_open}`}
+                {rep.pos_open > 0 && rep.pos_unsent > 0 && ' · '}
+                {rep.pos_unsent > 0 && `chưa gửi NCC ${rep.pos_unsent}`}
+              </>
+            )}
+          </span>
+        )}
+        {rep.lines_bom_pending > 0 && (
+          <span className="text-xs text-amber-700 dark:text-amber-400">
+            {rep.lines_bom_pending} SP chưa chốt BOM
+          </span>
+        )}
+        {!noLsx && (
+          <Link
+            href={`/exec/lsx/${g.production_order_id}`}
+            className="text-primary ms-auto inline-flex items-center gap-1 text-xs hover:underline"
+          >
+            Hồ sơ lệnh <ExternalLink className="size-3" aria-hidden />
+          </Link>
+        )}
       </div>
-    )
-  }
-  if (state.error || !state.data) {
-    return (
-      <p className="mt-3 text-xs text-red-600 dark:text-red-400">
-        {state.error ?? 'Không tải được hồ sơ sản xuất.'}
-      </p>
-    )
-  }
 
-  const d = state.data
-  const logistics = [
-    d.issued_at && { label: 'Phát lệnh', value: fmtD(d.issued_at) },
-    d.approved_at && { label: 'GĐ duyệt', value: fmtD(d.approved_at) },
-    d.received_date && { label: 'Nhận vật tư', value: fmtD(d.received_date) },
-    d.ship_date && { label: 'Ngày xuất', value: fmtD(d.ship_date) },
-    d.completed_at && { label: 'Hoàn thành', value: fmtD(d.completed_at) },
-  ].filter((x): x is { label: string; value: string } => !!x)
-
-  // Timeline theo thứ tự thời gian (repo trả mới→cũ, đảo lại cũ→mới).
-  const timeline = [...d.progress].reverse()
-
-  return (
-    <div className="mt-3 flex flex-col gap-3 border-t border-zinc-100 pt-3 dark:border-zinc-800/70">
-      {d.lines.length > 0 && <LsxProductTable lines={d.lines} />}
-
-      {logistics.length > 0 && (
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
-          {logistics.map((f) => (
-            <Fact key={f.label} label={f.label}>
-              {f.value}
-            </Fact>
-          ))}
-        </dl>
-      )}
-
-      {d.container_summary && (
-        <div className="text-xs">
-          <span className="text-muted-foreground">Đóng cont: </span>
-          {d.container_summary}
-        </div>
-      )}
-      {d.rejected_reason && <Signal tone="alert">Từ chối: {d.rejected_reason}</Signal>}
-      {d.note && (
-        <div className="bg-background rounded-md border border-zinc-100 px-2.5 py-2 text-xs dark:border-zinc-800">
-          <span className="text-muted-foreground">Ghi chú: </span>
-          {d.note}
-        </div>
-      )}
-
-      <div>
-        <div className="text-muted-foreground mb-2 text-[11px] font-semibold tracking-wider uppercase">
-          Mốc tiến độ ({timeline.length})
-        </div>
-        {timeline.length === 0 ? (
-          <div className="text-muted-foreground flex items-center gap-2 text-xs">
-            <CircleDashed className="size-3.5" /> Chưa có mốc tiến độ nào.
-          </div>
-        ) : (
-          <ol className="relative ml-1 space-y-3 border-l border-zinc-200 pl-4 dark:border-zinc-700">
-            {timeline.map((p) => {
-              const meta = ACTION_META[p.action]
-              const Icon = meta?.Icon ?? CircleDashed
-              return (
-                <li key={p.id} className="relative">
+      {/* Các đơn trong lệnh */}
+      <ul className="divide-y">
+        {g.orders.map((r) => {
+          const risk = assessLateRisk(r, today)
+          return (
+            <li
+              key={r.id}
+              className="grid grid-cols-2 items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
+            >
+              <span className="min-w-0">
+                <span className="block truncate font-medium">{r.code}</span>
+                {r.customer_po_no && (
+                  <span className="text-muted-foreground block truncate text-xs">
+                    PO khách: {r.customer_po_no}
+                  </span>
+                )}
+              </span>
+              <span className="text-muted-foreground text-xs tabular-nums sm:w-20 sm:text-end">
+                {r.line_count} dòng SP
+              </span>
+              <span className="tabular-nums sm:w-28 sm:text-end">
+                {r.order_value > 0 ? fmtMoney(r.order_value, r.currency) : '—'}
+              </span>
+              <span className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:w-40 sm:justify-end">
+                <span className="text-muted-foreground text-xs">
+                  giao {fmtD(r.due_date)}
+                </span>
+                {risk && (
                   <span
                     className={cn(
-                      'bg-card absolute top-0.5 -left-[22px] flex size-4 items-center justify-center rounded-full ring-4 ring-zinc-50/40 dark:ring-zinc-900/30',
-                      meta?.cls ?? 'text-muted-foreground',
+                      'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
+                      risk.level === 'overdue'
+                        ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
                     )}
                   >
-                    <Icon className="size-3.5" />
+                    {risk.level === 'overdue' ? 'trễ hạn' : 'nguy cơ trễ'}
                   </span>
-                  <div className="text-sm font-medium">
-                    {stageLabel(p.stage)}
-                    <span className={cn('ml-1.5 text-xs', meta?.cls)}>
-                      · {meta?.label ?? p.action}
-                    </span>
-                  </div>
-                  <div className="text-muted-foreground text-[11px]">
-                    {p.by ? `${p.by} · ` : ''}
-                    {fmtDateTime(p.at)}
-                  </div>
-                  {p.note && <div className="mt-0.5 text-xs">{p.note}</div>}
-                </li>
-              )
-            })}
-          </ol>
-        )}
-      </div>
+                )}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }
