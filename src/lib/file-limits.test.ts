@@ -11,8 +11,8 @@ import {
 const MB = 1024 * 1024
 
 describe('maxBytesFor', () => {
-  it('mọi loại đều 50 MB — trần global của Storage (bỏ giới hạn 14/08/2026)', () => {
-    expect(maxBytesFor('image')).toBe(50 * MB)
+  it('ảnh siết 5MB (gốc lưu Drive), tài liệu khác 50MB — chốt 14/08/2026', () => {
+    expect(maxBytesFor('image')).toBe(5 * MB)
     expect(maxBytesFor('drawing')).toBe(50 * MB)
     expect(maxBytesFor('bom')).toBe(50 * MB)
   })

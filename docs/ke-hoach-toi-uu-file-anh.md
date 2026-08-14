@@ -1,6 +1,6 @@
 # Kế hoạch tối ưu ảnh — cho ngày ảnh "rất nhiều"
 
-Chốt hướng: 14/08/2026. (File này được `src/lib/file-limits.ts` trỏ tới từ
+Chốt hướng: 14/08/2026 — **ảnh trần 5MB, gốc lưu Drive** (xem Bước 1). (File này được `src/lib/file-limits.ts` trỏ tới từ
 trước nhưng chưa từng được viết — nay viết thật, nhân vụ ảnh DSLR 12.8MB làm
 vỡ trình xem ảnh ngay ngày đầu nới trần upload 5MB → 50MB.)
 
@@ -33,27 +33,23 @@ Storage (gốc) → signed URL (cache 1h, ổn định TRONG 1h) → Next Image 
 
 ## 2. Ba bước, theo thứ tự đáng làm
 
-### Bước 1 — Thu nhỏ ảnh NGAY LÚC UPLOAD ở client ⭐ đáng làm trước nhất
+### Bước 1 — ✅ CHỐT & LÀM 14/08/2026: ảnh trần 5MB, bản gốc lưu Google Drive
 
-Chỉ áp cho `doc_type='image'` (ảnh chụp SP/mẫu): trước khi PUT, canvas resize về
-tối đa **2560px cạnh dài, JPEG/WebP chất lượng ~0.85** → ảnh DSLR 13MB co còn
-~400–800KB, vẫn dư nét cho màn 4K. Chặn vấn đề TỪ GỐC: mọi tầng sau (egress,
-resize, cache) nhẹ đi 20–30 lần, và không phụ thuộc hạ tầng nào cả.
+Chủ dự án chốt phương án ĐƠN GIẢN HƠN đề xuất ban đầu (tự thu nhỏ lúc upload):
+**siết trần `doc_type='image'` quay về 5MB** — ảnh máy ảnh phải tự thu nhỏ trước
+khi đưa lên; **bản gốc gửi khách nằm ở Google Drive**, ERP không phải kho ảnh
+gốc. Các loại tài liệu khác (bản vẽ/bom/cert/assembly) giữ 50MB — chúng mới là
+dữ liệu gốc.
 
-> **Đây là ĐẢO một quyết định cũ** — file-limits.ts từng ghi "cố ý KHÔNG nén ảnh
-> khi upload, ảnh là dữ liệu gốc". Gốc rễ của quyết định đó là sợ mất chi tiết
-> **BẢN VẼ** — điều đó GIỮ NGUYÊN: drawing/bom/cert/assembly không đụng. Chỉ đổi
-> cho **ảnh chụp**: mục đích của nó là nhìn nhận diện sản phẩm, không phải lưu
-> trữ kỹ thuật. Ai cần ảnh gốc tuyệt đối thì đính vào tab tài liệu (loại "Khác").
->
-> Phương án giữ-cả-hai (upload gốc + bản hiển thị) đã cân nhắc và bỏ: tốn kho
-> gấp đôi, code phức tạp hơn (2 file/1 ảnh, xoá phải xoá cặp), mà chưa ai thật
-> sự cần ảnh gốc 13MB trong ERP.
+Phân vai rõ: Drive = kho ảnh gốc (dung lượng đã trả tiền, chụp xong đổ vào đó
+sẵn) · ERP = bản đủ nét để nhận diện SP. Hết mâu thuẫn "nén thì mất gốc".
 
-Kèm theo: script nén-một-lần 12 ảnh >2MB đang có (tải về, resize, upload đè,
-giữ nguyên file id/path → không đụng DB).
-
-Ước lượng: ~1 buổi (sửa `uploadFile`/`FileUploader` + script + test).
+Còn treo trong bước này:
+- 1 ảnh 13MB đã lọt vào trước khi siết (`_DSC5858.JPG` — CH0271HG-AL) + 11 ảnh
+  >2MB cũ: hiển thị vẫn chạy (đi qua tầng resize), chỉ tốn kho/egress. Nén lại
+  một lần bằng script khi tiện.
+- Tự thu nhỏ lúc upload (canvas 2560px) vẫn là nâng cấp UX đáng làm SAU: thay vì
+  báo lỗi "quá 5MB" bắt user tự resize, app tự co rồi upload. Không gấp.
 
 ### Bước 2 — URL ảnh ổn định + cache bất biến (khi deploy thật / ảnh ×5)
 

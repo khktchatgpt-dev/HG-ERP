@@ -20,21 +20,23 @@ export type DocType = (typeof DOC_TYPES)[number]
  * lý ở tầng phân phối (Next Image resize + cache). Xem
  * docs/ke-hoach-toi-uu-file-anh.md.
  *
- * 14/08/2026 — user yêu cầu bỏ giới hạn upload trên hồ sơ SP. Mọi loại nâng lên
- * 50 MB (trần global của Supabase Storage ở gói Free, không nâng thêm được nếu
- * chưa lên Pro). CƠ CHẾ tách theo loại vẫn giữ nguyên — chỉ số đổi — để sau này
- * muốn siết lại một loại nào đó thì sửa đúng một dòng, không phải dựng lại
- * đường kiểm tra ở finalize.
+ * 14/08/2026 — user yêu cầu bỏ giới hạn upload trên hồ sơ SP: mọi loại lên 50MB
+ * (trần global của Supabase Storage gói Free). NGAY HÔM ĐÓ một ảnh DSLR 12.8MB
+ * làm vỡ trình xem ảnh, và user chốt lại: ẢNH quay về trần 5MB — ảnh gốc gửi
+ * khách lưu ở Google Drive, ERP chỉ cần bản đủ nét để nhận diện SP (xem
+ * docs/ke-hoach-toi-uu-file-anh.md). Các loại tài liệu khác giữ 50MB.
  */
 const HARD_MAX = 50 * MB
 
 export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
-  image: HARD_MAX, // trước 5 MB — ảnh SP chụp máy ảnh/scan hay vượt
-  drawing: HARD_MAX, // trước 20 MB — bản vẽ scan A3 300dpi / PDF nhiều trang
-  assembly: HARD_MAX, // trước 20 MB
-  bom: HARD_MAX, // trước 10 MB
-  cert: HARD_MAX, // trước 10 MB
-  other: HARD_MAX, // trước 10 MB
+  // Ảnh chụp SP/mẫu: 5MB đã dư cho ảnh điện thoại; ảnh máy ảnh phải thu nhỏ
+  // trước khi đưa lên. Bản gốc đầy đủ nằm ở Drive — ERP không phải kho ảnh gốc.
+  image: 5 * MB,
+  drawing: HARD_MAX, // bản vẽ là dữ liệu gốc — không siết
+  assembly: HARD_MAX,
+  bom: HARD_MAX,
+  cert: HARD_MAX,
+  other: HARD_MAX,
 }
 
 /** Chưa phân loại (doc_type null) → mức mặc định. */
