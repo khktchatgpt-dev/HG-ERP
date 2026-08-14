@@ -91,14 +91,23 @@ Giữ nguyên không đụng: `ApprovalDetailScreen` + `approvals/{lsx,po}/[id]`
 luật ký, `/exec/orders` (0148), `/exec/purchasing`, `/exec/tracking`,
 `/exec/lsx/[id]`.
 
-## Còn treo (kế thừa v2, chưa làm đợt này)
+## Đợt 2 (cùng ngày 15/08 — commit `1aaefb8`)
 
-- **Đếm phiếu chờ ngay trên sidebar** ("Chờ tôi phê duyệt 🔴 16") — nav hiện là
-  config tĩnh serialize qua server→client; muốn badge sống phải cho
-  WorkspaceShell nạp số. Tổng quan đã làm việc này ở trong trang.
-- Duyệt **báo giá** (v2 §5E), **uỷ quyền khi GĐ vắng** (§5G), **nhắc ký** ngoài
-  app (§5H), lịch sử ký xuất Excel + giá trị tại thời điểm ký (§5I).
+- ✅ **Badge sidebar** "Chờ tôi phê duyệt · N": `workspaces/nav-badges.ts` đếm
+  3 loại phiếu, gắn qua `withNavBadges`; sidebar nằm trong layout nên số tự
+  đúng lại sau mỗi `router.refresh()` của thao tác ký. Thu gọn → chấm đỏ.
+- ✅ **Luồng duyệt trên màn Xem kỹ**: Timeline → "Luồng duyệt" có tên người
+  từng bước + bước SAU chữ ký (vẽ mờ). Quay về `/exec/approvals`.
+- ✅ **Duyệt báo giá TUỲ CHỌN** (0149, đã áp remote): Sale tự quyết trình;
+  draft → pending_approval → approved → sent, rejected sửa được trình lại;
+  đường draft → sent không qua GĐ giữ nguyên. Permission mới
+  `sales.quote.approve` (đã gán vai director). Báo giá vào Tổng quan / Trung
+  tâm phê duyệt / lịch sử ký; màn Xem kỹ so từng dòng với giá chào lần trước
+  của cùng khách. ⚠ 0025 coi như BỎ — đừng áp sau 0149.
+
+## Còn treo
+
+- **Uỷ quyền khi GĐ vắng** (v2 §5G), **nhắc ký** ngoài app (§5H), lịch sử ký
+  xuất Excel + giá trị tại thời điểm ký (§5I).
 - Gán vai `director` cho tài khoản GĐ thật (v2 §5A) — vẫn **chờ người có quyền
   bấm** trên `/admin/permissions`.
-- Approval Flow hiển thị *ai tạo → ai đã duyệt → đang chờ ai* trên màn Xem kỹ —
-  hiện mới có người lập + lịch sử sự kiện; chưa vẽ thành stepper.
