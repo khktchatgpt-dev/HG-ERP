@@ -50,6 +50,28 @@ export function registerApprovalAuditHandlers(): void {
     })
   })
 
+  // 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết như PO/LSX.
+  on('quote.submitted', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'quote',
+      entity_id: e.quote_id,
+      entity_code: e.code,
+      action: 'submitted',
+      actor_id: e.submitted_by,
+    })
+  })
+
+  on('quote.decided', async (e) => {
+    await approvalEventsRepo.log({
+      entity_type: 'quote',
+      entity_id: e.quote_id,
+      entity_code: e.code,
+      action: e.decision,
+      actor_id: e.decided_by,
+      reason: e.reason,
+    })
+  })
+
   on('lsx.decided', async (e) => {
     await approvalEventsRepo.log({
       entity_type: 'lsx',

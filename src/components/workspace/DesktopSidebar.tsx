@@ -105,6 +105,7 @@ export function DesktopSidebar({
                 accentText={accentText}
                 collapsed={collapsed}
                 exact={i.href === route || i.href === `${route}/` || i.href === '/'}
+                badge={i.badge}
               />
             ))}
           </div>

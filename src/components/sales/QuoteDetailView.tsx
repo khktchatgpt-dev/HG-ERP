@@ -4,7 +4,15 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { ArrowLeft, MoreHorizontal, PenLine, Printer, Send, Trash2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  MoreHorizontal,
+  PenLine,
+  Printer,
+  Send,
+  Stamp,
+  Trash2,
+} from 'lucide-react'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
 import { Button } from '@/components/shadcn/button'
@@ -37,7 +45,8 @@ import type { Packing } from '@/components/sales/ProductPicker'
  * menu ⋯ thay vì nút đỏ lơ lửng cuối trang như bản cũ.
  */
 
-type QuoteStatus = 'draft' | 'sent'
+// Vòng đời 0149: duyệt GĐ tuỳ chọn — draft có 2 đường ra (gửi thẳng / trình GĐ).
+type QuoteStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'sent'
 
 type QuoteView = {
   id: string
@@ -52,6 +61,8 @@ type QuoteView = {
   note: string | null
   owner_name: string | null
   created_at: string
+  /** Lý do GĐ từ chối lần gần nhất — chỉ có khi status = rejected. */
+  rejected_reason?: string | null
 }
 
 type LineView = {
@@ -102,6 +113,11 @@ export function QuoteDetailView({
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const isDraft = quote.status === 'draft'
+  const isRejected = quote.status === 'rejected'
+  const isPending = quote.status === 'pending_approval'
+  const isApproved = quote.status === 'approved'
+  /** Sửa/xoá theo luật service: nháp + bị từ chối sửa được, chỉ nháp xoá được. */
+  const editable = isDraft || isRejected
   const today = new Date().toISOString().slice(0, 10)
   const expired = quote.status === 'sent' && !!quote.valid_to && quote.valid_to < today
 
@@ -125,6 +141,27 @@ export function QuoteDetailView({
       router.refresh()
     } catch (e) {
       toast.error('Không gửi được', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Trình GĐ duyệt (0149 — tuỳ chọn): Sale tự quyết báo giá nào cần chữ ký. */
+  async function submitForApproval() {
+    const ok = await confirm({
+      title: `Trình Giám đốc duyệt ${quote.code}?`,
+      description:
+        'Báo giá sẽ khoá cho tới khi Giám đốc quyết. Được duyệt rồi mới chốt & gửi khách được.',
+      confirmLabel: 'Trình duyệt',
+    })
+    if (!ok) return
+    setBusy(true)
+    try {
+      await api(`/api/dept/sales/quotes/${quote.id}/submit`, { method: 'POST' })
+      toast.success('Đã trình Giám đốc duyệt', quote.code)
+      router.refresh()
+    } catch (e) {
+      toast.error('Không trình được', apiErrorText(e))
     } finally {
       setBusy(false)
     }
@@ -183,10 +220,20 @@ export function QuoteDetailView({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {canEdit && isDraft && (
+            {canEdit && (isDraft || isApproved) && (
               <Button onClick={() => void send()} disabled={busy}>
                 <Send />
                 Chốt &amp; gửi khách
+              </Button>
+            )}
+            {canEdit && (isDraft || isRejected) && (
+              <Button
+                variant={isRejected ? 'default' : 'outline'}
+                onClick={() => void submitForApproval()}
+                disabled={busy}
+              >
+                <Stamp />
+                {isRejected ? 'Trình duyệt lại' : 'Trình GĐ duyệt'}
               </Button>
             )}
             <Button variant="outline" asChild>
@@ -195,7 +242,7 @@ export function QuoteDetailView({
                 In báo giá
               </a>
             </Button>
-            {canEdit && isDraft && (
+            {canEdit && editable && (
               <Button variant="outline" asChild>
                 <Link href={`/sales/quotes/${quote.id}/edit`}>
                   <PenLine />
@@ -232,6 +279,16 @@ export function QuoteDetailView({
         <Tile label="Trạng thái">
           {isDraft ? (
             <Badge variant="secondary">Nháp — sửa/xoá được</Badge>
+          ) : isPending ? (
+            <Badge className="bg-amber-500 text-white dark:bg-amber-600">
+              Chờ GĐ duyệt
+            </Badge>
+          ) : isApproved ? (
+            <Badge className="bg-sky-600 text-white dark:bg-sky-700">
+              GĐ đã duyệt — chưa gửi khách
+            </Badge>
+          ) : isRejected ? (
+            <Badge variant="destructive">GĐ từ chối — sửa rồi trình lại</Badge>
           ) : expired ? (
             <Badge
               variant="outline"
@@ -292,6 +349,12 @@ export function QuoteDetailView({
           )}
         </Tile>
       </div>
+
+      {isRejected && quote.rejected_reason && (
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm dark:border-red-900 dark:bg-red-950/30">
+          <b>Giám đốc từ chối:</b> {quote.rejected_reason}
+        </div>
+      )}
 
       {quote.note && (
         <div className="bg-muted/40 text-muted-foreground rounded-xl border px-4 py-2.5 text-sm">

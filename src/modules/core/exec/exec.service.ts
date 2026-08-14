@@ -2,6 +2,7 @@ import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { assessPoLate } from '@/lib/late-risk'
 import { isBigApprovalWith, type ApprovalThresholds } from '@/lib/exec-ops'
@@ -64,6 +65,9 @@ export type ExecTodo = {
   po_oldest_days: number | null
   /** Tổng tiền đơn mua đang chờ chữ ký, gom theo tiền tệ. */
   po_pending_value: { currency: string; value: number }[]
+  /** Báo giá Sale trình GĐ (0149 — tuỳ chọn, không phải mọi báo giá). */
+  quote_pending: number
+  quote_oldest_days: number | null
 }
 
 export type ExecIssues = {
@@ -180,9 +184,9 @@ function sumByCurrency(rows: { currency: string; value: number }[]) {
     .sort((a, b) => b.value - a.value)
 }
 
-/** Một phiếu đang nằm chờ chữ ký trong Hộp ký (/exec). */
+/** Một phiếu đang nằm chờ chữ ký ở Trung tâm phê duyệt (/exec/approvals). */
 export type SignItem = {
-  kind: 'lsx' | 'po'
+  kind: 'lsx' | 'po' | 'quote'
   id: string
   code: string
   /** Đối tác: khách hàng (LSX) hoặc nhà cung cấp (PO). */
@@ -243,31 +247,42 @@ export const execService = {
     await assertAction(user, 'exec.approvals.view')
     const today = new Date().toISOString().slice(0, 10)
 
-    const [pendingPos, pendingLsx, allPos, allLsx, recentEvents, thresholds] =
-      await Promise.all([
-        posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-        lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-        posService.list(user, { page: 1, page_size: 1 }),
-        lsxService.list(user, { page: 1, page_size: 1 }),
-        approvalEventsRepo.listRecent({ limit: 100 }),
-        settingsService.approvalThresholds(),
-      ])
+    const [
+      pendingPos,
+      pendingLsx,
+      pendingQuotes,
+      allPos,
+      allLsx,
+      recentEvents,
+      thresholds,
+    ] = await Promise.all([
+      posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+      lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+      quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
+      posService.list(user, { page: 1, page_size: 1 }),
+      lsxService.list(user, { page: 1, page_size: 1 }),
+      approvalEventsRepo.listRecent({ limit: 100 }),
+      settingsService.approvalThresholds(),
+    ])
 
     // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
-    const [poTotals, orderLines, orderList, creatorNames] = await Promise.all([
-      posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
-      ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
-      pendingLsx.rows.length
-        ? ordersRepo.list({ page: 1, page_size: 1000 })
-        : Promise.resolve({ rows: [], total: 0 }),
-      usersRepo.displayNamesByIds(
-        [
-          ...pendingPos.rows.map((p) => p.created_by),
-          ...pendingLsx.rows.map((l) => l.issued_by),
-        ].filter((x): x is string => !!x),
-      ),
-    ])
+    const [poTotals, orderLines, orderList, creatorNames, quoteLineCounts] =
+      await Promise.all([
+        posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
+        ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
+        pendingLsx.rows.length
+          ? ordersRepo.list({ page: 1, page_size: 1000 })
+          : Promise.resolve({ rows: [], total: 0 }),
+        usersRepo.displayNamesByIds(
+          [
+            ...pendingPos.rows.map((p) => p.created_by),
+            ...pendingLsx.rows.map((l) => l.issued_by),
+            ...pendingQuotes.rows.map((q) => q.submitted_by),
+          ].filter((x): x is string => !!x),
+        ),
+        quotesRepo.lineCountByQuoteIds(pendingQuotes.rows.map((q) => q.id)),
+      ])
 
     const items: SignItem[] = []
 
@@ -343,6 +358,31 @@ export const execService = {
       })
     }
 
+    for (const q of pendingQuotes.rows) {
+      const lineCount = quoteLineCounts.get(q.id) ?? 0
+      items.push({
+        kind: 'quote',
+        id: q.id,
+        code: q.code,
+        party: q.customer_name,
+        facts: [
+          `${lineCount} sản phẩm`,
+          ...(q.valid_to ? [`hiệu lực đến ${q.valid_to}`] : []),
+        ],
+        currency: q.currency,
+        // Báo giá KHÔNG có số lượng (số lượng thuộc đơn hàng) nên không có tổng
+        // tiền — UI hiện "—". Đừng bịa một con số từ đơn giá đơn thuần.
+        value: 0,
+        waiting_days: daysSince(q.submitted_at ?? q.created_at, today) ?? 0,
+        submitted_at: q.submitted_at ?? q.created_at,
+        submitted_by: q.submitted_by ? (creatorNames.get(q.submitted_by) ?? null) : null,
+        warnings: [],
+        // Không có tiền cam kết chi — không bao giờ mang cờ "giá trị lớn".
+        big: false,
+        href: `/exec/approvals/quote/${q.id}`,
+      })
+    }
+
     items.sort((a, b) => b.waiting_days - a.waiting_days || b.value - a.value)
 
     const mineToday = recentEvents.filter(
@@ -371,14 +411,16 @@ export const execService = {
     await assertAction(user, 'exec.tower.view')
     const today = new Date().toISOString().slice(0, 10)
 
-    const [pendingPos, pendingLsx, allPos, allLsx, orders, lowStock] = await Promise.all([
-      posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      posService.list(user, { page: 1, page_size: 500 }),
-      lsxService.list(user, { page: 1, page_size: 500 }),
-      ordersRepo.list({ page: 1, page_size: 500 }),
-      stockRepo.list({ low_only: true }),
-    ])
+    const [pendingPos, pendingLsx, pendingQuotes, allPos, allLsx, orders, lowStock] =
+      await Promise.all([
+        posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+        lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+        quotesRepo.list({ status: 'pending_approval', page: 1, page_size: 300 }),
+        posService.list(user, { page: 1, page_size: 500 }),
+        lsxService.list(user, { page: 1, page_size: 500 }),
+        ordersRepo.list({ page: 1, page_size: 500 }),
+        stockRepo.list({ low_only: true }),
+      ])
 
     // Tiền của đơn mua: Σ dòng — 1 truy vấn gộp cho mọi đơn đang xét.
     const poIds = [...new Set([...pendingPos.rows, ...allPos.rows].map((p) => p.id))]
@@ -390,6 +432,9 @@ export const execService = {
       .filter((d): d is number => d != null)
     const lsxWaitDays = pendingLsx.rows
       .map((l) => daysSince(l.created_at, today))
+      .filter((d): d is number => d != null)
+    const quoteWaitDays = pendingQuotes.rows
+      .map((q) => daysSince(q.submitted_at ?? q.created_at, today))
       .filter((d): d is number => d != null)
 
     const todo: ExecTodo = {
@@ -403,6 +448,8 @@ export const execService = {
           value: poTotals[p.id] ?? 0,
         })),
       ),
+      quote_pending: pendingQuotes.rows.length,
+      quote_oldest_days: quoteWaitDays.length ? Math.max(...quoteWaitDays) : null,
     }
 
     // ── Đang trục trặc ──────────────────────────────────────────────────────

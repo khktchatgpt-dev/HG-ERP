@@ -150,6 +150,28 @@ export type DomainEvent =
       lines: { material_id: string | null; unit_price: number | null }[]
     }
 
+  // ── Báo giá — duyệt GĐ TUỲ CHỌN (0149, exec v3: Sale tự quyết trình) ──
+  | {
+      name: 'quote.submitted'
+      quote_id: string
+      code: string
+      customer_name: string
+      submitted_by: string
+      approver_ids: string[]
+      // true = trình lại sau khi bị GĐ từ chối.
+      resubmitted?: boolean
+    }
+  | {
+      name: 'quote.decided'
+      quote_id: string
+      code: string
+      decision: 'approved' | 'rejected'
+      decided_by: string
+      /** Người lập báo giá — người phải biết kết quả. */
+      owner_id: string | null
+      reason?: string
+    }
+
   // ── Lệnh sản xuất (FR-SAL-06 — Sales phát, GĐ duyệt) ─────────────────
   | {
       name: 'lsx.submitted'

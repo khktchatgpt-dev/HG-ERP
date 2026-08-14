@@ -1,5 +1,12 @@
 import Link from 'next/link'
-import { AlertTriangle, ArrowRight, Factory, ShoppingCart, Stamp } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowRight,
+  Factory,
+  FileText,
+  ShoppingCart,
+  Stamp,
+} from 'lucide-react'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Badge } from '@/components/Badge'
 import { cn } from '@/lib/utils'
@@ -170,7 +177,7 @@ export function ExecHomeScreen({
   userName: string
 }) {
   const { todo, issues, sales, supply, production, gaps } = data
-  const pendingTotal = todo.lsx_pending + todo.po_pending
+  const pendingTotal = todo.lsx_pending + todo.po_pending + todo.quote_pending
   const issueCount =
     issues.overdue_orders.length +
     issues.late_pos.length +
@@ -208,7 +215,7 @@ export function ExecHomeScreen({
         <h2 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
           Chờ tôi phê duyệt
         </h2>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
           <ApprovalCard
             href="/exec/approvals?loai=lsx"
             icon={Factory}
@@ -223,6 +230,13 @@ export function ExecHomeScreen({
             count={todo.po_pending}
             oldestDays={todo.po_oldest_days}
             value={todo.po_pending_value}
+          />
+          <ApprovalCard
+            href="/exec/approvals?loai=quote"
+            icon={FileText}
+            label="Báo giá"
+            count={todo.quote_pending}
+            oldestDays={todo.quote_oldest_days}
           />
         </div>
         {pendingTotal === 0 && !(poEverExists && lsxEverExists) && (

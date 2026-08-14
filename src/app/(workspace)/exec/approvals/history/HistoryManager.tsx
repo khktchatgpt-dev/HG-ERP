@@ -13,7 +13,7 @@ type EvAction = 'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigne
 
 type Ev = {
   id: string
-  entity_type: 'po' | 'lsx'
+  entity_type: 'po' | 'lsx' | 'quote'
   entity_id: string
   entity_code: string
   action: EvAction
@@ -45,10 +45,15 @@ const fmtDateTime = (d: string) =>
     minute: '2-digit',
   })
 
-const TYPE_LABEL = { lsx: 'Lệnh SX', po: 'Đơn vật tư' } as const
+const TYPE_LABEL = { lsx: 'Lệnh SX', po: 'Đơn vật tư', quote: 'Báo giá' } as const
+const TYPE_TONE = {
+  lsx: 'amber',
+  po: 'blue',
+  quote: 'green',
+} as const satisfies Record<Ev['entity_type'], string>
 
 export function HistoryManager({ events }: { events: Ev[] }) {
-  const [type, setType] = useState<'all' | 'lsx' | 'po'>('all')
+  const [type, setType] = useState<'all' | 'lsx' | 'po' | 'quote'>('all')
   const [action, setAction] = useState<'all' | EvAction>('all')
 
   const rows = useMemo(
@@ -82,9 +87,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
       width: '110px',
       sortValue: (e) => e.entity_type,
       cell: (e) => (
-        <Badge tone={e.entity_type === 'lsx' ? 'amber' : 'blue'}>
-          {TYPE_LABEL[e.entity_type]}
-        </Badge>
+        <Badge tone={TYPE_TONE[e.entity_type]}>{TYPE_LABEL[e.entity_type]}</Badge>
       ),
     },
     {
@@ -171,6 +174,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
                   { value: 'all', label: 'Mọi loại' },
                   { value: 'lsx', label: 'Lệnh SX' },
                   { value: 'po', label: 'Đơn vật tư' },
+                  { value: 'quote', label: 'Báo giá' },
                 ]}
               />
               <ToolbarSelect

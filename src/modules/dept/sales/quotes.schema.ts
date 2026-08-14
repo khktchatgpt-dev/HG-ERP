@@ -1,9 +1,30 @@
 import { z } from 'zod'
 
-// Báo giá là hồ sơ riêng của Sales — KHÔNG qua Giám đốc duyệt.
-// draft: đang soạn (sửa/xoá được) · sent: đã chốt & gửi khách (bất biến, tạo được đơn).
-export const QUOTE_STATUSES = ['draft', 'sent'] as const
+// Vòng đời báo giá (0149 — exec v3): duyệt GĐ là TUỲ CHỌN, Sale tự quyết báo
+// giá nào cần trình.
+//   draft ─"Chốt & gửi khách"────────────────────────► sent
+//   draft ─"Trình GĐ"─► pending_approval ─► approved ─► sent
+//                                  └──────► rejected ─(sửa, trình lại)─► pending_approval
+// draft/rejected: sửa được · pending_approval trở đi: bất biến · sent: tạo được đơn.
+export const QUOTE_STATUSES = [
+  'draft',
+  'pending_approval',
+  'approved',
+  'rejected',
+  'sent',
+] as const
 export type QuoteStatus = (typeof QUOTE_STATUSES)[number]
+
+/** GĐ duyệt / từ chối báo giá — từ chối bắt buộc lý do (giống PO/LSX). */
+export const quoteDecideSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((d) => d.decision === 'approve' || !!d.reason?.trim(), {
+    message: 'Nhập lý do từ chối',
+    path: ['reason'],
+  })
 
 // Báo giá KHÔNG có số lượng — chỉ quy cách SP (từ Kỹ thuật) + đơn giá + CK.
 // Số lượng thuộc về Đơn hàng, nhập ở bước tạo đơn.

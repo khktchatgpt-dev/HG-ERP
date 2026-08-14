@@ -8,7 +8,8 @@ import { db } from '@/server/db'
  */
 export type ApprovalAction =
   'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
-export type ApprovalEntityType = 'po' | 'lsx'
+// 'quote' từ 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết ký.
+export type ApprovalEntityType = 'po' | 'lsx' | 'quote'
 
 export type ApprovalEventInput = {
   entity_type: ApprovalEntityType

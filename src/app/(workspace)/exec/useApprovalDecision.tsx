@@ -24,14 +24,28 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/shadcn/alert-dialog'
-import type { PendingLsx, PendingPo } from './approval-types'
+import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
 
 /**
  * Logic DUYỆT / TỪ CHỐI một phiếu (LSX/PO) + 2 dialog xác nhận — tách ra hook
  * để dùng chung cho buồng lái (ApprovalCockpit) lẫn trang chi tiết đơn duyệt
  * (/exec/approvals/{lsx,po}/[id]). API giữ nguyên.
  */
-export type DecideTarget = { kind: 'lsx' | 'po'; id: string; code: string; label: string }
+export type DecideTarget = {
+  kind: 'lsx' | 'po' | 'quote'
+  id: string
+  code: string
+  label: string
+}
+
+/** Tên loại phiếu trong tiêu đề dialog. */
+const KIND_NOUN = { lsx: 'LSX', po: 'đơn đặt', quote: 'báo giá' } as const
+/** Duyệt xong thì chuyện gì được mở khoá — câu nhắc trong dialog duyệt. */
+const APPROVE_UNLOCKS = {
+  lsx: 'Duyệt xong Cung ứng mới đặt được vật tư.',
+  po: 'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05).',
+  quote: 'Duyệt xong Sale mới chốt & gửi khách được.',
+} as const
 
 export function targetLsx(
   l: Pick<PendingLsx, 'id' | 'code' | 'customer_name' | 'order_codes'>,
@@ -42,6 +56,11 @@ export function targetLsx(
     code: l.code,
     label: `${l.customer_name} · ${l.order_codes.length > 1 ? `${l.order_codes.length} đơn` : `đơn ${l.order_codes[0] ?? '?'}`}`,
   }
+}
+export function targetQuote(
+  q: Pick<PendingQuote, 'id' | 'code' | 'customer_name'>,
+): DecideTarget {
+  return { kind: 'quote', id: q.id, code: q.code, label: q.customer_name }
 }
 export function targetPo(
   p: Pick<PendingPo, 'id' | 'code' | 'supplier_name' | 'lsx_code'>,
@@ -63,6 +82,11 @@ async function callDecide(
     await api(`/api/dept/production/lsx/${t.id}/${decision}`, {
       method: 'POST',
       body: decision === 'reject' ? { reason } : {},
+    })
+  } else if (t.kind === 'quote') {
+    await api(`/api/dept/sales/quotes/${t.id}/decide`, {
+      method: 'POST',
+      body: { decision, reason },
     })
   } else {
     await api(`/api/dept/supply/pos/${t.id}/decide`, {
@@ -149,15 +173,12 @@ export function useApprovalDecision(onSettled?: () => void) {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              Duyệt {approveTarget?.kind === 'lsx' ? 'LSX' : 'đơn đặt'}{' '}
+              Duyệt {approveTarget ? KIND_NOUN[approveTarget.kind] : ''}{' '}
               {approveTarget?.code}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {approveTarget?.label}. Duyệt xong Cung ứng mới{' '}
-              {approveTarget?.kind === 'lsx'
-                ? 'đặt được vật tư'
-                : 'gửi được cho NCC (BR-05)'}
-              .
+              {approveTarget?.label}.{' '}
+              {approveTarget ? APPROVE_UNLOCKS[approveTarget.kind] : ''}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -202,7 +223,7 @@ export function useApprovalDecision(onSettled?: () => void) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Từ chối {rejectTarget?.kind === 'lsx' ? 'LSX' : 'đơn đặt'}{' '}
+              Từ chối {rejectTarget ? KIND_NOUN[rejectTarget.kind] : ''}{' '}
               {rejectTarget?.code}
             </DialogTitle>
             <DialogDescription>

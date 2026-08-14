@@ -15,7 +15,12 @@ import { Button } from '@/components/shadcn/button'
 import { isBigApproval } from '@/lib/exec-ops'
 import { cn } from '@/lib/utils'
 import { waitingDays } from './approval-helpers'
-import { useApprovalDecision, targetLsx, targetPo } from './useApprovalDecision'
+import {
+  useApprovalDecision,
+  targetLsx,
+  targetPo,
+  targetQuote,
+} from './useApprovalDecision'
 import {
   daysUntil,
   dueBadge,
@@ -31,7 +36,7 @@ import {
   Signal,
   type DueTone,
 } from './approval-parts'
-import type { PendingLsx, PendingPo } from './approval-types'
+import type { PendingLsx, PendingPo, PendingQuote } from './approval-types'
 
 /**
  * TRANG CHI TIẾT đơn duyệt — KHÁC buồng lái: bố cục 2 cột, cột phải là thẻ
@@ -42,28 +47,31 @@ import type { PendingLsx, PendingPo } from './approval-types'
 export function ApprovalDetailScreen(
   props:
     | { kind: 'lsx'; item: PendingLsx; nowIso: string }
-    | { kind: 'po'; item: PendingPo; nowIso: string },
+    | { kind: 'po'; item: PendingPo; nowIso: string }
+    | { kind: 'quote'; item: PendingQuote; nowIso: string },
 ) {
   const router = useRouter()
-  // Ký xong quay về HỘP KÝ (/exec) chứ không về danh sách cũ: từ 14/08 hộp ký
-  // là nơi phiếu chờ nằm, danh sách /exec/approvals đã rút khỏi điều hướng.
+  // Ký xong quay về TRUNG TÂM PHÊ DUYỆT (15/08, exec v3) — nơi phiếu chờ nằm;
+  // /exec giờ là trang Tổng quan.
   const dec = useApprovalDecision(() => {
-    router.push('/exec')
+    router.push('/exec/approvals')
     router.refresh()
   })
 
   return (
     <div className="flex flex-col gap-3">
       <Link
-        href="/exec"
+        href="/exec/approvals"
         className="text-muted-foreground hover:text-foreground -ml-1 inline-flex w-fit items-center gap-1 text-sm"
       >
-        <ChevronLeft className="size-4" /> Hộp ký
+        <ChevronLeft className="size-4" /> Chờ tôi phê duyệt
       </Link>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {props.kind === 'lsx' ? (
           <LsxBody l={props.item} nowIso={props.nowIso} dec={dec} />
+        ) : props.kind === 'quote' ? (
+          <QuoteBody q={props.item} nowIso={props.nowIso} dec={dec} />
         ) : (
           <PoBody p={props.item} nowIso={props.nowIso} dec={dec} />
         )}
@@ -95,14 +103,18 @@ function Chain({ nodes }: { nodes: { label: string; value: string }[] }) {
   )
 }
 
+/**
+ * LUỒNG DUYỆT — ai tạo → đang chờ ai → bước kế tiếp là gì. Bước `future` (sau
+ * chữ ký) vẽ mờ + chấm rỗng: Giám đốc thấy chữ ký của mình mở khoá việc gì.
+ */
 function Timeline({
   steps,
 }: {
-  steps: { label: string; date: string; now?: boolean }[]
+  steps: { label: string; date: string; now?: boolean; future?: boolean }[]
 }) {
   return (
     <div>
-      <SectionLabel>Dòng thời gian</SectionLabel>
+      <SectionLabel>Luồng duyệt</SectionLabel>
       <ol className="mt-2.5 space-y-3">
         {steps.map((s, i) => (
           <li key={i} className="flex gap-3">
@@ -112,12 +124,14 @@ function Timeline({
                   'mt-0.5 size-2.5 shrink-0 rounded-full',
                   s.now
                     ? 'bg-amber-500 ring-4 ring-amber-500/20'
-                    : 'bg-muted-foreground/40',
+                    : s.future
+                      ? 'border-muted-foreground/40 border bg-transparent'
+                      : 'bg-muted-foreground/40',
                 )}
               />
               {i < steps.length - 1 && <span className="bg-border/70 mt-1 w-px flex-1" />}
             </div>
-            <div className="-mt-0.5 pb-1">
+            <div className={cn('-mt-0.5 pb-1', s.future && 'opacity-60')}>
               <div className={cn('text-sm', s.now ? 'font-semibold' : 'font-medium')}>
                 {s.label}
               </div>
@@ -145,7 +159,7 @@ function DecisionCard({
   onReject,
   links,
 }: {
-  kind: 'lsx' | 'po'
+  kind: 'lsx' | 'po' | 'quote'
   code: string
   title: string
   metric: string
@@ -163,7 +177,11 @@ function DecisionCard({
       <div className="border-border/60 border-b p-4">
         <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <span className="font-medium tracking-wide uppercase">
-            {kind === 'lsx' ? 'Lệnh sản xuất' : 'Đơn đặt vật tư'}
+            {kind === 'lsx'
+              ? 'Lệnh sản xuất'
+              : kind === 'quote'
+                ? 'Báo giá'
+                : 'Đơn đặt vật tư'}
           </span>
           <span className="font-mono">{code}</span>
         </div>
@@ -307,11 +325,19 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
               ...(l.order
                 ? [{ label: 'Khách đặt đơn', date: fmtD(l.order.order_created_at) }]
                 : []),
-              { label: 'Kinh doanh phát lệnh SX', date: fmtD(l.created_at) },
+              {
+                label: 'Kinh doanh phát lệnh SX',
+                date: [fmtD(l.created_at), l.issued_by_name].filter(Boolean).join(' · '),
+              },
               {
                 label: `Chờ Giám đốc duyệt${days >= 1 ? ` · ${days} ngày` : ''}`,
                 date: 'Hiện tại',
                 now: true,
+              },
+              {
+                label: 'Phát hành lệnh — Cung ứng đặt vật tư, xưởng nhận việc',
+                date: 'Sau khi ký',
+                future: true,
               },
             ]}
           />
@@ -354,6 +380,181 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
               <FileText className="mr-1 inline size-3.5" /> Hồ sơ sản xuất đầy đủ →
             </Link>
           </>
+        }
+      />
+    </>
+  )
+}
+
+// ── Thân BÁO GIÁ (0149 — duyệt tuỳ chọn) ─────────────────────────────────────
+function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: Dec }) {
+  const days = waitingDays(q.submitted_at ?? q.created_at, nowIso)
+  const waitTone: DueTone = days >= 4 ? 'red' : days >= 2 ? 'amber' : 'muted'
+  const fmtPrice = (v: number) =>
+    new Intl.NumberFormat('vi-VN', {
+      maximumFractionDigits: q.currency === 'VND' ? 0 : 2,
+    }).format(v)
+
+  // Dòng chào THẤP HƠN lần trước cho cùng khách — thứ GĐ cần soi nhất khi ký giá.
+  const cheaper = q.lines.filter(
+    (l) => l.last_price && l.unit_price < l.last_price.unit_price,
+  )
+
+  const verdict: { tone: 'ok' | 'warn' | 'alert'; node: React.ReactNode } =
+    cheaper.length > 0
+      ? {
+          tone: 'warn',
+          node: (
+            <span>
+              <b>{cheaper.length} sản phẩm chào thấp hơn lần trước</b> — xem cột “Lần chào
+              trước” trước khi ký.
+            </span>
+          ),
+        }
+      : days >= 2
+        ? { tone: 'warn', node: <span>Đã chờ {days} ngày.</span> }
+        : {
+            tone: 'ok',
+            node: <span>Không dòng nào thấp hơn giá đã chào trước cho khách này.</span>,
+          }
+
+  return (
+    <>
+      <div className="order-2 flex flex-col gap-4 lg:order-1">
+        <Card>
+          <Chain nodes={[{ label: 'Báo giá', value: q.code }]} />
+          <h1 className="mt-2 text-xl font-bold">{q.customer_name}</h1>
+          <div className="text-muted-foreground mt-0.5 text-sm">
+            Báo giá chờ Giám đốc duyệt — duyệt xong Sale mới chốt &amp; gửi khách
+          </div>
+
+          <div className="mt-4 flex flex-col gap-4">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
+              <Fact label="Hiệu lực">
+                {q.valid_from || q.valid_to
+                  ? `${fmtD(q.valid_from)} → ${fmtD(q.valid_to)}`
+                  : '—'}
+              </Fact>
+              <Fact label="Điều kiện giá">{q.price_term ?? '—'}</Fact>
+              <Fact label="Thanh toán">{q.payment_terms ?? '—'}</Fact>
+              <Fact label="Người trình">{q.submitted_by_name ?? '—'}</Fact>
+              <Fact label="Trình ngày">{fmtD(q.submitted_at)}</Fact>
+            </dl>
+
+            <div>
+              <SectionLabel>Bảng giá chào ({q.lines.length} sản phẩm)</SectionLabel>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-muted-foreground border-b text-xs tracking-wide uppercase">
+                    <tr>
+                      <th className="py-1.5 pe-3 text-left">Sản phẩm</th>
+                      <th className="py-1.5 pe-3 text-right">Đơn giá ({q.currency})</th>
+                      <th className="py-1.5 pe-3 text-right">CK %</th>
+                      <th className="py-1.5 text-right">Lần chào trước</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {q.lines.map((l, i) => {
+                      const lower = l.last_price && l.unit_price < l.last_price.unit_price
+                      return (
+                        <tr key={i}>
+                          <td className="py-1.5 pe-3">
+                            <div className="font-medium">{l.product_code}</div>
+                            <div className="text-muted-foreground text-xs">
+                              {l.product_name}
+                              {l.note ? ` · ${l.note}` : ''}
+                            </div>
+                          </td>
+                          <td
+                            className={cn(
+                              'py-1.5 pe-3 text-right font-semibold tabular-nums',
+                              lower && 'text-amber-700 dark:text-amber-400',
+                            )}
+                          >
+                            {fmtPrice(l.unit_price)}
+                          </td>
+                          <td className="text-muted-foreground py-1.5 pe-3 text-right tabular-nums">
+                            {l.discount_pct ?? '—'}
+                          </td>
+                          <td className="text-muted-foreground py-1.5 text-right text-xs tabular-nums">
+                            {l.last_price
+                              ? `${fmtPrice(l.last_price.unit_price)} (${l.last_price.quote_code})`
+                              : 'chưa từng chào'}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {q.note && q.note.trim() && (
+              <div>
+                <SectionLabel>
+                  <span className="inline-flex items-center gap-1">
+                    <StickyNote className="size-3.5" /> Ghi chú
+                  </span>
+                </SectionLabel>
+                <p className="mt-1 text-sm whitespace-pre-wrap">{q.note}</p>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <Timeline
+            steps={[
+              { label: 'Sale lập báo giá', date: fmtD(q.created_at) },
+              {
+                label: 'Trình Giám đốc duyệt',
+                date: [fmtD(q.submitted_at), q.submitted_by_name]
+                  .filter(Boolean)
+                  .join(' · '),
+              },
+              {
+                label: `Chờ Giám đốc duyệt${days >= 1 ? ` · ${days} ngày` : ''}`,
+                date: 'Hiện tại',
+                now: true,
+              },
+              {
+                label: 'Sale chốt & gửi khách',
+                date: 'Sau khi ký',
+                future: true,
+              },
+            ]}
+          />
+        </Card>
+      </div>
+
+      <DecisionCard
+        kind="quote"
+        code={q.code}
+        title={q.customer_name}
+        metric={`${q.lines.length} SP`}
+        metricLabel="Số dòng chào giá"
+        verdict={verdict}
+        stats={[
+          {
+            label: 'Chờ duyệt',
+            value: days >= 1 ? `${days} ngày` : 'mới',
+            tone: waitTone,
+          },
+          { label: 'Tiền tệ', value: q.currency },
+          {
+            label: 'Thấp hơn lần trước',
+            value: cheaper.length > 0 ? `${cheaper.length} dòng` : 'Không',
+            tone: cheaper.length > 0 ? 'amber' : undefined,
+          },
+          { label: 'Hiệu lực đến', value: fmtD(q.valid_to) },
+        ]}
+        busy={dec.busy}
+        onApprove={() => dec.askApprove(targetQuote(q))}
+        onReject={() => dec.askReject(targetQuote(q))}
+        links={
+          <QuickLink href={`/print/quotes/${q.id}`}>
+            <Printer className="mr-1 inline size-3.5" /> Bản in báo giá
+          </QuickLink>
         }
       />
     </>
@@ -441,11 +642,19 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
         <Card>
           <Timeline
             steps={[
-              { label: 'Cung ứng lập đơn đặt', date: fmtD(p.created_at) },
+              {
+                label: 'Cung ứng lập đơn đặt',
+                date: [fmtD(p.created_at), p.created_by_name].filter(Boolean).join(' · '),
+              },
               {
                 label: `Chờ Giám đốc duyệt${days >= 1 ? ` · ${days} ngày` : ''}`,
                 date: 'Hiện tại',
                 now: true,
+              },
+              {
+                label: 'Cung ứng gửi đơn cho NCC (BR-05)',
+                date: 'Sau khi ký',
+                future: true,
               },
             ]}
           />

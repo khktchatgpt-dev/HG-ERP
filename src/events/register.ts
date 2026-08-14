@@ -2,6 +2,7 @@ import { registerTaskNotificationHandlers } from './handlers/task.notifications'
 import { registerWarehouseNotificationHandlers } from './handlers/warehouse.notifications'
 import { registerPoNotificationHandlers } from './handlers/po.notifications'
 import { registerPoCatalogHandlers } from './handlers/po.catalog'
+import { registerQuoteNotificationHandlers } from './handlers/quote.notifications'
 import { registerLsxNotificationHandlers } from './handlers/lsx.notifications'
 import { registerOrderNotificationHandlers } from './handlers/order.notifications'
 import { registerProductionNotificationHandlers } from './handlers/production.notifications'
@@ -21,6 +22,7 @@ export function registerEventHandlers(): void {
   registerWarehouseNotificationHandlers()
   registerPoNotificationHandlers()
   registerPoCatalogHandlers()
+  registerQuoteNotificationHandlers()
   registerLsxNotificationHandlers()
   registerOrderNotificationHandlers()
   registerProductionNotificationHandlers()

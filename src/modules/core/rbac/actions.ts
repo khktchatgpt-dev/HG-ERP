@@ -204,6 +204,12 @@ export const ACTIONS: Action[] = [
   },
   { key: 'sales.quote.view', label: 'Xem báo giá', domain: 'sales', rule: PUBLIC },
   {
+    key: 'sales.quote.approve',
+    label: 'Duyệt / từ chối báo giá',
+    domain: 'sales',
+    rule: perm('sales.quote.approve'),
+  },
+  {
     key: 'sales.quote.manage',
     label: 'Lập / chốt / sửa báo giá',
     domain: 'sales',

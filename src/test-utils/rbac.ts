@@ -19,6 +19,7 @@ export const SEED_ROLE_PERMS: Record<string, readonly string[]> = {
     'production.incident.close',
     'production.team.manage',
     'supply.po.approve',
+    'sales.quote.approve', // 0149 — báo giá trình GĐ (tuỳ chọn)
     'warehouse.edit',
     'warehouse.material.create',
     'technical.edit',

@@ -1,9 +1,11 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveNavCapabilities } from '@/workspaces/access'
+import { resolveNavBadges } from '@/workspaces/nav-badges'
 import {
   ACCENT_CLASSES,
   resolveNavSections,
+  withNavBadges,
   type WorkspaceConfig,
 } from '@/workspaces/workspaces.config'
 import { MobileDrawer } from './MobileDrawer'
@@ -14,11 +16,15 @@ export async function MobileNav({ workspace }: { workspace: WorkspaceConfig }) {
   if (!user) return null
   const head = user.department_id ? await departmentsRepo.findHeadedBy(user.id) : null
   const capabilities = await resolveNavCapabilities(user)
-  const sections = resolveNavSections(workspace, {
-    role: user.role,
-    isHead: !!head,
-    capabilities,
-  })
+  const badges = await resolveNavBadges(user, workspace.id)
+  const sections = withNavBadges(
+    resolveNavSections(workspace, {
+      role: user.role,
+      isHead: !!head,
+      capabilities,
+    }),
+    badges,
+  )
   const accent = ACCENT_CLASSES[workspace.accent]
 
   return (

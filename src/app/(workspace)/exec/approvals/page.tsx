@@ -21,6 +21,7 @@ export default async function ApprovalCenterPage({
     searchParams,
   ])
   const box = await execService.signBox(user)
-  const initialKind: ApprovalKind = loai === 'lsx' || loai === 'po' ? loai : 'all'
+  const initialKind: ApprovalKind =
+    loai === 'lsx' || loai === 'po' || loai === 'quote' ? loai : 'all'
   return <ApprovalCenterScreen box={box} initialKind={initialKind} />
 }

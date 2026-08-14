@@ -59,7 +59,8 @@ import { api, ApiError } from '@/lib/api'
  *   · HÀNH ĐỘNG GOM VỀ MENU ⋯ — mở, sửa, in, chốt & gửi, xoá (nháp).
  */
 
-type QuoteStatus = 'draft' | 'sent'
+// Vòng đời 0149: duyệt GĐ tuỳ chọn — Sale tự quyết báo giá nào cần trình.
+type QuoteStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'sent'
 
 export type QuoteRow = {
   id: string
@@ -121,6 +122,11 @@ export function QuotesManager({
     () => ({
       all: () => true,
       draft: (r: QuoteRow) => r.status === 'draft',
+      // Cả nhánh trình GĐ (0149) gom một tab: đang chờ / đã duyệt chưa gửi / bị trả.
+      approval: (r: QuoteRow) =>
+        r.status === 'pending_approval' ||
+        r.status === 'approved' ||
+        r.status === 'rejected',
       sent: (r: QuoteRow) => r.status === 'sent' && !isExpired(r, today),
       expired: (r: QuoteRow) => isExpired(r, today),
     }),
@@ -166,6 +172,10 @@ export function QuotesManager({
   const tabs = [
     { value: 'all', label: 'Tất cả', count: quotes.length },
     { value: 'draft', label: 'Nháp', count: count('draft') },
+    // Chỉ hiện khi có báo giá đi đường trình GĐ — luồng này là tuỳ chọn.
+    ...(count('approval')
+      ? [{ value: 'approval', label: 'Trình GĐ', count: count('approval') }]
+      : []),
     { value: 'sent', label: 'Đã gửi khách', count: count('sent') },
     ...(count('expired')
       ? [{ value: 'expired', label: 'Hết hiệu lực', count: count('expired') }]
@@ -217,8 +227,9 @@ export function QuotesManager({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Báo giá</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            Hồ sơ riêng của Sales, không cần duyệt: nháp → chốt &amp; gửi khách → tạo đơn
-            hàng. Gom theo khách hàng.
+            Nháp → chốt &amp; gửi khách → tạo đơn hàng. Báo giá cần chữ ký Giám đốc thì
+            bấm &ldquo;Trình GĐ duyệt&rdquo; trong hồ sơ — tuỳ Sales quyết. Gom theo khách
+            hàng.
           </p>
         </div>
         {canEdit && (
@@ -437,6 +448,16 @@ export function QuotesManager({
                           <TableCell className="px-3 py-2.5">
                             {r.status === 'draft' ? (
                               <Badge variant="secondary">Nháp</Badge>
+                            ) : r.status === 'pending_approval' ? (
+                              <Badge className="bg-amber-500 text-white dark:bg-amber-600">
+                                Chờ GĐ duyệt
+                              </Badge>
+                            ) : r.status === 'approved' ? (
+                              <Badge className="bg-sky-600 text-white dark:bg-sky-700">
+                                GĐ đã duyệt
+                              </Badge>
+                            ) : r.status === 'rejected' ? (
+                              <Badge variant="destructive">GĐ từ chối</Badge>
                             ) : expired ? (
                               <Badge
                                 variant="outline"
@@ -478,8 +499,8 @@ export function QuotesManager({
                                   <Printer />
                                   In báo giá
                                 </DropdownMenuItem>
-                                {canEdit && r.status === 'draft' && (
-                                  <>
+                                {canEdit &&
+                                  (r.status === 'draft' || r.status === 'rejected') && (
                                     <DropdownMenuItem
                                       onClick={() =>
                                         router.push(`/sales/quotes/${r.id}/edit`)
@@ -488,18 +509,22 @@ export function QuotesManager({
                                       <PenLine />
                                       Sửa
                                     </DropdownMenuItem>
+                                  )}
+                                {canEdit &&
+                                  (r.status === 'draft' || r.status === 'approved') && (
                                     <DropdownMenuItem onClick={() => void sendQuote(r)}>
                                       <Send />
                                       Chốt &amp; gửi khách
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      variant="destructive"
-                                      onClick={() => void deleteQuote(r)}
-                                    >
-                                      <Trash2 />
-                                      Xoá
-                                    </DropdownMenuItem>
-                                  </>
+                                  )}
+                                {canEdit && r.status === 'draft' && (
+                                  <DropdownMenuItem
+                                    variant="destructive"
+                                    onClick={() => void deleteQuote(r)}
+                                  >
+                                    <Trash2 />
+                                    Xoá
+                                  </DropdownMenuItem>
                                 )}
                               </DropdownMenuContent>
                             </DropdownMenu>

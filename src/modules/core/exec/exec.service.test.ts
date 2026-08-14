@@ -15,6 +15,9 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
     countLinesWithoutPrice: vi.fn(),
   },
 }))
+vi.mock('@/modules/dept/sales/quotes.repo', () => ({
+  quotesRepo: { list: vi.fn(), lineCountByQuoteIds: vi.fn() },
+}))
 vi.mock('@/modules/dept/warehouse/stock.repo', () => ({ stockRepo: { list: vi.fn() } }))
 vi.mock('@/modules/core/approvals/approvals.repo', () => ({
   approvalEventsRepo: { listRecent: vi.fn() },
@@ -28,6 +31,7 @@ vi.mock('@/modules/core/settings/settings.service', () => ({
 }))
 
 import { execService } from './exec.service'
+import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
@@ -83,6 +87,9 @@ const OL = (over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(posRepo.totalsByPoIds).mockResolvedValue({})
+  // 0149 — signBox nạp thêm báo giá chờ duyệt; test cũ chạy với hộp không báo giá.
+  vi.mocked(quotesRepo.list).mockResolvedValue({ rows: [], total: 0 } as never)
+  vi.mocked(quotesRepo.lineCountByQuoteIds).mockResolvedValue(new Map() as never)
   vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([] as never)
   vi.mocked(ordersRepo.list).mockResolvedValue({
     rows: [{ id: 'o1', currency: 'USD' }],

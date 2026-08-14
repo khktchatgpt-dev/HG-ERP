@@ -8,6 +8,7 @@ import {
   Check,
   Clock,
   FileSearch,
+  FileText,
   Inbox,
   ShoppingCart,
   Factory,
@@ -37,11 +38,11 @@ import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
  * phải mở ra đọc; ký nhiều phiếu gọi tuần tự, phiếu lỗi nằm lại trong hộp.
  */
 
-const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua' } as const
-const KIND_TONE = { lsx: 'blue', po: 'amber' } as const
-const KIND_ICON = { lsx: Factory, po: ShoppingCart } as const
+const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá' } as const
+const KIND_TONE = { lsx: 'blue', po: 'amber', quote: 'green' } as const
+const KIND_ICON = { lsx: Factory, po: ShoppingCart, quote: FileText } as const
 
-export type ApprovalKind = 'all' | 'lsx' | 'po'
+export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
 
 function money(value: number, currency: string): string {
   return `${new Intl.NumberFormat('vi-VN', {
@@ -82,6 +83,7 @@ export function ApprovalCenterScreen({
       all: box.items.length,
       lsx: box.items.filter((i) => i.kind === 'lsx').length,
       po: box.items.filter((i) => i.kind === 'po').length,
+      quote: box.items.filter((i) => i.kind === 'quote').length,
     }),
     [box.items],
   )
@@ -249,7 +251,7 @@ export function ApprovalCenterScreen({
 
       {box.stats.total > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {(['all', 'lsx', 'po'] as const).map((k) => (
+          {(['all', 'lsx', 'po', 'quote'] as const).map((k) => (
             <Button
               key={k}
               size="sm"

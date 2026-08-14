@@ -2076,6 +2076,8 @@ export type Database = {
           price_term: string | null
           rejected_reason: string | null
           status: string
+          submitted_at: string | null
+          submitted_by: string | null
           updated_at: string
           valid_from: string | null
           valid_to: string | null
@@ -2094,6 +2096,8 @@ export type Database = {
           price_term?: string | null
           rejected_reason?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           updated_at?: string
           valid_from?: string | null
           valid_to?: string | null
@@ -2112,6 +2116,8 @@ export type Database = {
           price_term?: string | null
           rejected_reason?: string | null
           status?: string
+          submitted_at?: string | null
+          submitted_by?: string | null
           updated_at?: string
           valid_from?: string | null
           valid_to?: string | null

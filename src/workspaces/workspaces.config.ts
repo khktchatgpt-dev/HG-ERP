@@ -38,6 +38,11 @@ export type NavItem = {
   requireHead?: boolean
   /** Chỉ hiện khi user có năng lực này (lọc theo phòng, xem NavCapability). */
   capability?: NavCapability
+  /**
+   * Số đếm SỐNG cạnh nhãn (vd "Chờ tôi phê duyệt · 5"). KHÔNG khai trong config
+   * tĩnh — server gắn lúc render qua `withNavBadges` (xem workspaces/nav-badges).
+   */
+  badge?: number
 }
 
 export type NavSection = {
@@ -565,6 +570,21 @@ export function resolveNavSections(
     })),
     SHARED_SECTION,
   ].filter((s) => s.items.length > 0)
+}
+
+/**
+ * Gắn số đếm sống vào nav item theo href — server tính số (nav-badges.ts) rồi
+ * gọi hàm này trước khi đưa sections xuống client. Thuần, không side effect.
+ */
+export function withNavBadges(
+  sections: NavSection[],
+  badges: Record<string, number>,
+): NavSection[] {
+  if (Object.keys(badges).length === 0) return sections
+  return sections.map((s) => ({
+    heading: s.heading,
+    items: s.items.map((i) => (badges[i.href] ? { ...i, badge: badges[i.href] } : i)),
+  }))
 }
 
 /**

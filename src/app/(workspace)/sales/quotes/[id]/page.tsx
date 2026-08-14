@@ -66,6 +66,7 @@ export default async function QuoteDetailPage({
         note: quote.note,
         owner_name: owner?.name ?? null,
         created_at: quote.created_at,
+        rejected_reason: quote.rejected_reason,
       }}
       lines={lines.map((l) => ({
         product_code: l.product_code,

@@ -77,6 +77,35 @@ export type PendingLsx = {
   lines?: ApprovalLsxLine[]
 }
 
+/** 1 dòng báo giá chờ duyệt — kèm giá chào GẦN NHẤT cho cùng khách để so. */
+export type PendingQuoteLine = {
+  product_code: string
+  product_name: string
+  product_unit: string
+  unit_price: number
+  discount_pct: number | null
+  note: string | null
+  /** Giá lần chào trước cho khách này (khác báo giá đang duyệt) — null nếu chưa từng chào. */
+  last_price: { unit_price: number; quote_code: string } | null
+}
+
+/** Báo giá chờ GĐ duyệt (0149) — dữ liệu cho màn Xem kỹ. */
+export type PendingQuote = {
+  id: string
+  code: string
+  customer_name: string
+  currency: string
+  created_at: string
+  submitted_at: string | null
+  submitted_by_name: string | null
+  valid_from: string | null
+  valid_to: string | null
+  price_term: string | null
+  payment_terms: string | null
+  note: string | null
+  lines: PendingQuoteLine[]
+}
+
 /** Thông tin đơn hàng (thương mại) kèm theo LSX — GĐ xem bối cảnh trước khi duyệt. */
 export type ApprovalOrderInfo = {
   customer_po_no: string | null

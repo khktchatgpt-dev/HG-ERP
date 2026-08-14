@@ -32,6 +32,9 @@ export type Quote = {
   payment_terms: string | null
   note: string | null
   created_by: string | null
+  /** Trình GĐ duyệt lần gần nhất (0149) — null nếu chưa từng trình. */
+  submitted_at: string | null
+  submitted_by: string | null
   approved_by: string | null
   approved_at: string | null
   rejected_reason: string | null
@@ -67,7 +70,7 @@ export type QuoteLineInput = {
 }
 
 const COLS =
-  'id, code, customer_id, status, currency, valid_from, valid_to, price_term, payment_terms, note, created_by, approved_by, approved_at, rejected_reason, created_at, updated_at'
+  'id, code, customer_id, status, currency, valid_from, valid_to, price_term, payment_terms, note, created_by, submitted_at, submitted_by, approved_by, approved_at, rejected_reason, created_at, updated_at'
 
 type RawQuote = Quote & { customer: { name: string } | { name: string }[] | null }
 

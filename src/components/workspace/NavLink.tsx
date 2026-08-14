@@ -24,6 +24,7 @@ export function NavLink({
   accentText,
   collapsed = false,
   exact = false,
+  badge,
 }: {
   href: string
   label: string
@@ -42,6 +43,8 @@ export function NavLink({
    * lúc nào cũng có 2 item active.
    */
   exact?: boolean
+  /** Số đếm sống (vd phiếu chờ ký). Thu gọn thì thành chấm đỏ góc icon. */
+  badge?: number
 }) {
   const pathname = usePathname()
   const active = exact
@@ -61,7 +64,7 @@ export function NavLink({
       }`}
     >
       <span
-        className={`flex w-4 shrink-0 items-center justify-center ${
+        className={`relative flex w-4 shrink-0 items-center justify-center ${
           active ? '' : 'text-muted-foreground/70'
         }`}
       >
@@ -69,8 +72,19 @@ export function NavLink({
           size={13}
           fallback={<NavIcon name={icon} className="size-4" strokeWidth={1.75} />}
         />
+        {collapsed && badge != null && badge > 0 && (
+          <span
+            className="absolute -top-1 -right-1 size-2 rounded-full bg-red-500"
+            aria-label={`${badge} phiếu chờ`}
+          />
+        )}
       </span>
       {!collapsed && <span className="flex-1">{label}</span>}
+      {!collapsed && badge != null && badge > 0 && (
+        <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] leading-none font-semibold text-white tabular-nums">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   )
 }

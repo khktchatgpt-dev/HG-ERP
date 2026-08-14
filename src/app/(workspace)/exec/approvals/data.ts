@@ -2,11 +2,12 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { quotesRepo, lastPricesForCustomer } from '@/modules/dept/sales/quotes.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { poLineAmount } from '@/lib/po-line'
 import type { User } from '@/modules/core/users/users.repo'
-import type { PendingLsx, PendingPo } from '../approval-types'
+import type { PendingLsx, PendingPo, PendingQuote } from '../approval-types'
 
 /**
  * Nạp CHI TIẾT 1 phiếu chờ duyệt (LSX/PO) cho trang riêng
@@ -45,6 +46,58 @@ export async function loadPendingPoDetail(
     lines,
     created_by_name: creatorName,
     note: po.note,
+  }
+}
+
+export async function loadPendingQuoteDetail(
+  _user: User,
+  id: string,
+): Promise<PendingQuote | null> {
+  const quote = await quotesRepo.findById(id)
+  if (!quote || quote.status !== 'pending_approval') return null
+
+  const [lines, lastPrices, submitterName] = await Promise.all([
+    quotesRepo.listLines(id),
+    // Giá chào gần nhất cho CÙNG KHÁCH — bối cảnh chính GĐ cần khi ký giá.
+    lastPricesForCustomer(quote.customer_id).catch(() => []),
+    quote.submitted_by
+      ? usersRepo
+          .displayNamesByIds([quote.submitted_by])
+          .then((m) => m.get(quote.submitted_by!) ?? null)
+      : Promise.resolve(null),
+  ])
+  // Loại chính báo giá đang duyệt khỏi "lần chào trước" — tự so với mình là vô nghĩa.
+  const lastByProduct = new Map(
+    lastPrices.filter((p) => p.quote_code !== quote.code).map((p) => [p.product_id, p]),
+  )
+
+  return {
+    id: quote.id,
+    code: quote.code,
+    customer_name: quote.customer_name,
+    currency: quote.currency,
+    created_at: quote.created_at,
+    submitted_at: quote.submitted_at,
+    submitted_by_name: submitterName,
+    valid_from: quote.valid_from,
+    valid_to: quote.valid_to,
+    price_term: quote.price_term,
+    payment_terms: quote.payment_terms,
+    note: quote.note,
+    lines: lines.map((l) => {
+      const last = lastByProduct.get(l.product_id)
+      return {
+        product_code: l.product_code,
+        product_name: l.product_name,
+        product_unit: l.product_unit,
+        unit_price: l.unit_price,
+        discount_pct: l.discount_pct,
+        note: l.note,
+        last_price: last
+          ? { unit_price: last.unit_price, quote_code: last.quote_code }
+          : null,
+      }
+    }),
   }
 }
 

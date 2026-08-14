@@ -127,6 +127,7 @@ export function MobileDrawer({
                           i.href === `${workspace.route}/` ||
                           i.href === '/'
                         }
+                        badge={i.badge}
                       />
                     ))}
                   </div>
