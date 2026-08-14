@@ -7,6 +7,9 @@ vi.mock('./orders.repo', () => ({
     list: vi.fn(),
     findById: vi.fn(),
     listLines: vi.fn(),
+    listLinesByIds: vi.fn(),
+    listLinesByOrders: vi.fn(),
+    updateLinePrices: vi.fn(),
     insert: vi.fn(),
     replaceLines: vi.fn(),
     patch: vi.fn(),
@@ -635,5 +638,132 @@ describe('ordersService — chủ đơn mới sửa/huỷ được', () => {
     await expect(
       ordersService.update(sales, 'o1', { note: 'đổi' }),
     ).rejects.toMatchObject({ status: 403 })
+  })
+})
+
+describe('ordersService.bulkPrice — điền đơn giá hàng loạt', () => {
+  const truongPhong = { id: 'u-gd', role: 'manager', department_id: 'd-sales' } as never
+  const sale2 = { id: 'u-sale2', role: 'employee', department_id: 'd-sales' } as never
+
+  const L = (id: string, order_id: string, unit_price: number, qty = 10) => ({
+    id,
+    order_id,
+    product_id: `p-${id}`,
+    qty,
+    unit_price,
+    product_code: `SP-${id}`,
+  })
+
+  beforeEach(() => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue(ORDER as never)
+  })
+
+  it('ghi giá + lịch sử, chỉ với dòng THỰC SỰ đổi số', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([
+      L('l1', 'o1', 0),
+      L('l2', 'o1', 12.5), // gửi lên đúng bằng giá cũ → không tính là đổi
+    ] as never)
+
+    const res = await ordersService.bulkPrice(sales, {
+      items: [
+        { line_id: 'l1', unit_price: 9 },
+        { line_id: 'l2', unit_price: 12.5 },
+      ],
+      note: 'theo file khách',
+    })
+
+    expect(res).toEqual({ updated: 1, orders: 1 })
+    expect(ordersRepo.updateLinePrices).toHaveBeenCalledWith([
+      { line_id: 'l1', unit_price: 9 },
+    ])
+    const change = vi.mocked(ordersRepo.insertChange).mock.calls[0][0]
+    expect(change.change).toMatchObject({
+      type: 'price_fill',
+      count: 1,
+      lines: [{ product_code: 'SP-l1', qty: 10, from: 0, to: 9 }],
+    })
+    expect(change.note).toBe('theo file khách')
+  })
+
+  it('không dòng nào đổi → không ghi gì, không đẻ lịch sử rác', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 9)] as never)
+    const res = await ordersService.bulkPrice(sales, {
+      items: [{ line_id: 'l1', unit_price: 9 }],
+    })
+    expect(res).toEqual({ updated: 0, orders: 0 })
+    expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
+    expect(ordersRepo.insertChange).not.toHaveBeenCalled()
+  })
+
+  it('KHÔNG phát order.changed_after_lsx dù đơn đã phát LSX — giá bán không đổi vật tư', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      status: 'lsx_issued',
+    } as never)
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+
+    await ordersService.bulkPrice(sales, { items: [{ line_id: 'l1', unit_price: 9 }] })
+
+    expect(ordersRepo.updateLinePrices).toHaveBeenCalled()
+    expect(emit).not.toHaveBeenCalled()
+  })
+
+  it('đơn của người khác → 403 và KHÔNG ghi dòng nào (chặn trước khi ghi)', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+    await expect(
+      ordersService.bulkPrice(sale2, { items: [{ line_id: 'l1', unit_price: 9 }] }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
+  })
+
+  it('một dòng thuộc đơn người khác → TỪ CHỐI CẢ LÔ, không lưu nửa vời', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([
+      L('l1', 'o1', 0),
+      L('l9', 'o9', 0),
+    ] as never)
+    vi.mocked(ordersRepo.findById).mockImplementation((async (id: string) =>
+      id === 'o1' ? ORDER : { ...ORDER, id: 'o9', created_by: 'u-khac' }) as never)
+
+    await expect(
+      ordersService.bulkPrice(sales, {
+        items: [
+          { line_id: 'l1', unit_price: 9 },
+          { line_id: 'l9', unit_price: 9 },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 403 })
+    expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
+  })
+
+  it('quản lý điền được giá cho đơn của mọi sale', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+    const res = await ordersService.bulkPrice(truongPhong, {
+      items: [{ line_id: 'l1', unit_price: 9 }],
+    })
+    expect(res.updated).toBe(1)
+  })
+
+  it('đơn đã giao/đã huỷ → chặn (bất biến)', async () => {
+    vi.mocked(ordersRepo.findById).mockResolvedValue({
+      ...ORDER,
+      status: 'delivered',
+    } as never)
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+    await expect(
+      ordersService.bulkPrice(sales, { items: [{ line_id: 'l1', unit_price: 9 }] }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('dòng đã bị xoá khỏi đơn (số dòng trả về không khớp) → 404, không ghi', async () => {
+    vi.mocked(ordersRepo.listLinesByIds).mockResolvedValue([L('l1', 'o1', 0)] as never)
+    await expect(
+      ordersService.bulkPrice(sales, {
+        items: [
+          { line_id: 'l1', unit_price: 9 },
+          { line_id: 'l-da-xoa', unit_price: 9 },
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 404 })
+    expect(ordersRepo.updateLinePrices).not.toHaveBeenCalled()
   })
 })

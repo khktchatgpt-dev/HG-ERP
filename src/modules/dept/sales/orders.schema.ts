@@ -97,6 +97,33 @@ export const orderUpdateSchema = z.object({
     .optional(), // không gửi lines = chỉ sửa header
 })
 
+/**
+ * Điền đơn giá HÀNG LOẠT cho nhiều dòng thuộc nhiều đơn (14/08/2026).
+ *
+ * Tách khỏi `orderUpdateSchema` vì đây là thao tác khác về bản chất: chỉ đặt một
+ * cột `unit_price`, không đụng số lượng / ngày giao / điều khoản, và đi qua nhiều
+ * đơn một lần. Dùng `orderUpdateSchema` cho việc này thì phải gửi lại TOÀN BỘ
+ * dòng của từng đơn — mở cửa cho việc ghi đè qty bằng dữ liệu cũ trên màn hình.
+ */
+export const orderBulkPriceSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        line_id: z.string().uuid(),
+        unit_price: z.coerce.number().min(0, 'Đơn giá không được âm'),
+      }),
+    )
+    .min(1, 'Chưa có dòng nào cần lưu')
+    .max(500)
+    .refine(
+      (items) => new Set(items.map((i) => i.line_id)).size === items.length,
+      'Một dòng xuất hiện hai lần trong cùng lần lưu',
+    ),
+  /** Vì sao điền/sửa giá — vào lịch sử đơn, để 6 tháng sau tra lại còn hiểu. */
+  note: z.string().trim().max(1000).optional().nullable(),
+})
+export type OrderBulkPriceInput = z.infer<typeof orderBulkPriceSchema>
+
 export const orderListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   customer_id: z.string().uuid().optional(),

@@ -414,6 +414,41 @@ export const ordersRepo = {
     return data as Order
   },
 
+  /** Dòng đơn theo id — màn điền giá hàng loạt cần biết dòng thuộc đơn nào. */
+  async listLinesByIds(ids: string[]): Promise<OrderLine[]> {
+    if (!ids.length) return []
+    const { data } = await db().from('sales_order_lines').select('order_id').in('id', ids)
+    const orderIds = [
+      ...new Set(((data ?? []) as { order_id: string }[]).map((r) => r.order_id)),
+    ]
+    const wanted = new Set(ids)
+    return (await ordersRepo.listLinesByOrders(orderIds)).filter((l) => wanted.has(l.id))
+  },
+
+  /**
+   * Đặt đơn giá cho từng dòng theo id (điền giá hàng loạt — 14/08/2026).
+   *
+   * CỐ Ý KHÔNG dùng `replaceLines`: hàm đó khớp dòng theo `product_id` và ghi lại
+   * cả qty/ship_date, nên gọi nó để sửa MỘT cột giá là mở cửa cho việc ghi đè
+   * ngày giao / số lượng bằng dữ liệu cũ đang có trên màn hình. Ở đây update
+   * thẳng theo id dòng, không đụng cột nào khác.
+   *
+   * Update từng dòng một: Supabase không có bulk-update theo id khác giá trị.
+   * Vài chục dòng nên chấp nhận được; nếu sau này lên hàng nghìn thì đổi sang
+   * một RPC `update ... from (values ...)`.
+   */
+  async updateLinePrices(
+    items: { line_id: string; unit_price: number }[],
+  ): Promise<void> {
+    for (const it of items) {
+      const { error } = await db()
+        .from('sales_order_lines')
+        .update({ unit_price: it.unit_price })
+        .eq('id', it.line_id)
+      if (error) throw new Error(error.message)
+    }
+  },
+
   /** Lịch sử thay đổi (FR-SAL-05) — append-only. */
   async insertChange(row: {
     order_id: string

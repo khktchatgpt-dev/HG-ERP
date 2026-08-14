@@ -139,6 +139,8 @@ export type ChangeView = {
     type?: string
     fields?: Record<string, { from: unknown; to: unknown }>
     lines?: unknown
+    /** Số dòng được điền giá — chỉ có ở change type 'price_fill'. */
+    count?: number
   }
   note: string | null
   created_at: string
@@ -403,6 +405,17 @@ export function OrderDetailView({
           who: c.changed_by_name,
           detail: [c.note, ...fields].filter(Boolean).join(' · ') || null,
           tone: t === 'shipment' ? 'green' : 'amber',
+        })
+      } else if (t === 'price_fill') {
+        // Điền đơn giá hàng loạt (/sales/orders/gia) — tách riêng khỏi "sửa đơn"
+        // vì nó KHÔNG phải khách đổi yêu cầu, mà là bù dữ liệu còn thiếu.
+        const n = typeof c.change.count === 'number' ? c.change.count : null
+        evs.push({
+          at: c.created_at,
+          title: n ? `Điền đơn giá (${n} dòng)` : 'Điền đơn giá',
+          who: c.changed_by_name,
+          detail: c.note,
+          tone: 'blue',
         })
       } else {
         const fields = c.change.fields

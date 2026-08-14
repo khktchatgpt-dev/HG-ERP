@@ -154,6 +154,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/sales/customers', label: 'Khách hàng', icon: 'users' },
           { href: '/sales/quotes', label: 'Báo giá', icon: 'file-text' },
           { href: '/sales/orders', label: 'Đơn hàng', icon: 'clipboard-list' },
+          // Điền đơn giá hàng loạt (14/08/2026) — 71/71 dòng đơn đang giá 0 nên
+          // mọi số tiền của Sale lẫn bảng tin GĐ ra 0. Bỏ mục này khỏi nav khi
+          // dữ liệu giá đã đầy; trang vẫn sống cho lần nhập đơn lớn sau.
+          {
+            href: '/sales/orders/gia',
+            label: 'Điền đơn giá',
+            icon: 'circle-dollar-sign',
+          },
           { href: '/sales/lsx', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
       },

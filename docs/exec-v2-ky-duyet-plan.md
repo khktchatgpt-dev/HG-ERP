@@ -285,14 +285,51 @@ Bạn đã chốt "vá dữ liệu trước". Cụ thể:
 
 | # | Việc | Loại | Ước lượng |
 |---|---|---|---|
-| G0.1 | **Kéo giá từ báo giá sang đơn hàng** — đơn đã có `quote_code`, khớp dòng theo mã SP, điền `unit_price` | có code | 1 buổi |
-| G0.2 | **Nhập giá hàng loạt** cho 71 dòng còn lại: lưới sửa nhanh hoặc dán từ Excel (đã có sẵn cơ chế dán ở `PasteLinesDialog` bên PO, dùng lại được) | có code | 1 buổi |
+| ~~G0.1~~ | ~~Kéo giá từ báo giá sang đơn hàng~~ — **BỎ, không có gì để kéo** (xem dưới) | — | — |
+| G0.2 | ✅ **XONG 14/08/2026** — Màn **Điền đơn giá** `/sales/orders/gia`: lưới sửa nhanh + dán từ Excel | có code | 1 buổi |
 | G0.3 | **Nạp đơn mua thật** — 6 file đơn Excel đã đối chiếu khớp form (xem [po-forms-6-file-doi-chieu](po-forms-6-file-doi-chieu.md)) nhập lên hệ thống | thao tác, không code | Cung ứng làm |
 | G0.4 | Gán vai `director` (§5A) | thao tác | 15 phút |
 
 **Định nghĩa "vá xong"**: ≥1 đơn mua thật ở trạng thái chờ duyệt, và ≥80% dòng
 đơn hàng đang mở có đơn giá. Chưa đạt thì Hộp ký dựng xong vẫn là hộp rỗng —
 không kiểm chứng được thiết kế.
+
+### Vì sao G0.1 bị bỏ (đo trong DB 14/08/2026)
+
+Bản thảo giả định "đơn đã có `quote_code`, khớp dòng theo mã SP là kéo được giá".
+Sai. Số thật:
+
+- **20/20 đơn có `quote_id = null`** — không đơn nào được tạo từ báo giá, tất cả
+  nhập thẳng. Không có đường nối để kéo giá qua.
+- Cả hệ thống có **6 báo giá / 8 dòng**, thuộc 2 khách, 5/6 còn ở nháp. Kể cả nối
+  được thì cũng chỉ phủ được vài dòng trong số 71.
+
+Nên công cụ kéo giá tự động sẽ chạy đúng 0 dòng. Toàn bộ công dồn vào G0.2 — chỗ
+thật sự điền được 71 dòng.
+
+### G0.2 đã làm gì
+
+`/sales/orders/gia` (mục **Điền đơn giá** trong sidebar Bán hàng):
+
+- Lưới mọi dòng đơn còn sống, mặc định lọc *chỉ dòng thiếu giá*; gõ giá → dải
+  chân màn hiện số dòng sẽ lưu + tổng tiền theo từng tiền tệ → lưu một lần.
+- **Dán từ Excel**: bôi 2 cột (mã SP · giá) hoặc 3 cột (mã đơn · mã SP · giá).
+- Dòng của đồng nghiệp bị **khoá** chứ không ẩn (`canMutateOwned`) — Sale vẫn
+  thấy đơn nào còn thiếu giá để nhắc nhau, nhưng không sửa chéo được.
+- Ghi `sales_order_changes` type `price_fill` (ai điền, lúc nào, từ số nào sang
+  số nào), hiện thành một mốc riêng trên dòng thời gian của đơn.
+
+Hai quyết định đáng nhớ:
+
+1. **Không tự đoán dấu thập phân.** "1.200" là 1200 (Excel vi-VN) hay 1,2 (Excel
+   en-US) — không đoán được từ chuỗi. Người dán chọn dấu một lần cho cả khối,
+   hộp thoại hiện **bảng xem trước** giá cũ → giá mới trước khi điền, và dán
+   **không lưu thẳng** — chỉ điền vào ô, người dùng soát rồi mới bấm Lưu. Toán
+   này nằm ở `src/lib/price-paste.ts` với 22 test.
+2. **Không phát `order.changed_after_lsx`.** Sự kiện đó cảnh báo Cung ứng rằng
+   *vật tư có thể đã đặt theo số cũ* — nó nói về số lượng và hạn giao. Điền giá
+   bán không đổi một gam vật tư nào; phát ra chỉ tạo 20 thông báo rác rồi mọi
+   người học cách bỏ qua thông báo.
 
 G0.3 là **việc của người, không phải của code**. Nếu Cung ứng chưa lập PO trên hệ
 thống thì mọi thứ ở §5 đều không có gì để ký, và đây là rủi ro lớn nhất của cả kế

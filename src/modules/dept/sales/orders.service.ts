@@ -5,6 +5,7 @@ import {
   type OrderWithCustomer,
 } from './orders.repo'
 import { quotesService } from './quotes.service'
+import type { OrderBulkPriceInput } from './orders.schema'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { customersRepo } from './sales.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -41,6 +42,36 @@ type OrderUpdateInput = Partial<
 > & {
   change_note?: string | null
   lines?: OrderLineInput[]
+}
+
+/** Một dòng trên bảng điền đơn giá (/sales/orders/gia). */
+export type PricingLine = {
+  line_id: string
+  order_id: string
+  order_code: string
+  customer_name: string
+  currency: string
+  status: Order['status']
+  due_date: string | null
+  product_code: string
+  product_name: string
+  product_unit: string
+  qty: number
+  unit_price: number
+  /** false = đơn của người khác → UI khoá dòng (xem canMutateOwned). */
+  editable: boolean
+}
+
+export type PricingBoard = {
+  lines: PricingLine[]
+  stats: {
+    lines_total: number
+    unpriced: number
+    /** Trong số dòng thiếu giá, bao nhiêu dòng NGƯỜI NÀY sửa được. */
+    unpriced_mine: number
+    orders_total: number
+    orders_unpriced: number
+  }
 }
 
 /** Đơn ở trạng thái cuối thì bất biến. */
@@ -301,6 +332,143 @@ export const ordersService = {
       }
     }
     return order
+  },
+
+  /**
+   * BẢNG ĐIỀN ĐƠN GIÁ — mọi dòng đơn còn sống, gom một chỗ để điền giá hàng loạt.
+   *
+   * Vì sao cần: 71/71 dòng đơn hàng đang có `unit_price = 0`, nên mọi con số tiền
+   * của phòng Sale và của bảng tin Giám đốc đều ra 0. Sửa bằng màn sửa đơn thì
+   * phải mở 20 form, mỗi form gõ lại từng dòng. Xem
+   * docs/exec-v2-ky-duyet-plan.md §6.
+   *
+   * `editable` tính theo `canMutateOwned`: nhân viên chỉ sửa được đơn mình tạo,
+   * quản lý/admin sửa mọi đơn. Trả về CẢ dòng không sửa được (khoá lại trên UI)
+   * thay vì lọc mất — Sale cần thấy đơn của đồng nghiệp còn thiếu giá để nhắc,
+   * chứ không phải tưởng là đã xong hết.
+   */
+  async pricingBoard(user: User): Promise<PricingBoard> {
+    await assertAction(user, 'sales.order.manage')
+    const { rows: orders } = await ordersRepo.list({ page: 1, page_size: 1000 })
+    // Cùng điều kiện với assertEditable: đơn đã giao / đã huỷ là bất biến, đưa
+    // lên bảng chỉ để người ta gõ xong rồi bị API từ chối.
+    const editableOrders = orders.filter(
+      (o) => o.status !== 'delivered' && o.status !== 'cancelled',
+    )
+    const lines = await ordersRepo.listLinesByOrders(editableOrders.map((o) => o.id))
+    const byOrder = new Map(editableOrders.map((o) => [o.id, o]))
+
+    const rows: PricingLine[] = []
+    for (const l of lines) {
+      const o = byOrder.get(l.order_id)
+      if (!o) continue
+      rows.push({
+        line_id: l.id,
+        order_id: o.id,
+        order_code: o.code,
+        customer_name: o.customer_name,
+        currency: o.currency,
+        status: o.status,
+        due_date: o.due_date,
+        product_code: l.product_code,
+        product_name: l.product_name,
+        product_unit: l.product_unit,
+        qty: l.qty,
+        unit_price: l.unit_price,
+        editable: canMutateOwned(user, o.created_by),
+      })
+    }
+    rows.sort(
+      (a, b) =>
+        a.order_code.localeCompare(b.order_code) ||
+        a.product_code.localeCompare(b.product_code),
+    )
+
+    const unpriced = rows.filter((r) => r.unit_price <= 0)
+    return {
+      lines: rows,
+      stats: {
+        lines_total: rows.length,
+        unpriced: unpriced.length,
+        unpriced_mine: unpriced.filter((r) => r.editable).length,
+        orders_total: editableOrders.length,
+        orders_unpriced: new Set(unpriced.map((r) => r.order_id)).size,
+      },
+    }
+  },
+
+  /**
+   * Điền đơn giá cho nhiều dòng thuộc nhiều đơn trong một lần.
+   *
+   * Kiểm quyền TRƯỚC KHI ghi bất cứ dòng nào: có một đơn không phải của mình thì
+   * từ chối cả lô. Nửa vời (ghi được mấy dòng rồi lỗi) là trạng thái tệ nhất —
+   * người dùng không biết đã lưu tới đâu, mà tiền thì đã lệch.
+   *
+   * KHÔNG phát `order.changed_after_lsx` dù đơn đã phát LSX: sự kiện đó có để
+   * cảnh báo Cung ứng rằng *vật tư có thể đã đặt theo số cũ*, tức nó nói về SỐ
+   * LƯỢNG và HẠN GIAO. Điền đơn giá bán không đổi một gam vật tư nào. Phát ra
+   * chỉ tạo 20 thông báo rác cho Cung ứng + Giám đốc rồi họ học cách bỏ qua
+   * thông báo — đắt hơn nhiều so với việc không phát.
+   *
+   * Vẫn ghi `sales_order_changes` type `price_fill` để có vết: điền giá là đổi
+   * giá trị hợp đồng, phải tra lại được ai điền, lúc nào, từ số nào sang số nào.
+   */
+  async bulkPrice(
+    user: User,
+    input: OrderBulkPriceInput,
+  ): Promise<{ updated: number; orders: number }> {
+    await assertAction(user, 'sales.order.manage')
+
+    const lines = await ordersRepo.listLinesByIds(input.items.map((i) => i.line_id))
+    if (lines.length !== input.items.length) {
+      throw NotFound('Có dòng đơn không còn tồn tại — tải lại trang rồi điền lại')
+    }
+    const byLine = new Map(lines.map((l) => [l.id, l]))
+
+    const orderIds = [...new Set(lines.map((l) => l.order_id))]
+    const orders = await Promise.all(orderIds.map((id) => ordersRepo.findById(id)))
+    for (const o of orders) {
+      if (!o) throw NotFound('Đơn hàng không tồn tại')
+      assertOwner(user, o)
+      assertEditable(o)
+    }
+
+    // Chỉ ghi dòng THỰC SỰ đổi số — gửi cả bảng lên là chuyện thường của UI,
+    // nhưng ghi lịch sử "đổi 5 → 5" thì lịch sử thành rác không đọc được.
+    const changed = input.items.filter(
+      (i) => (byLine.get(i.line_id)?.unit_price ?? 0) !== i.unit_price,
+    )
+    if (changed.length === 0) return { updated: 0, orders: 0 }
+
+    await ordersRepo.updateLinePrices(changed)
+
+    let touchedOrders = 0
+    for (const o of orders) {
+      if (!o) continue
+      const mine = changed.filter((c) => byLine.get(c.line_id)?.order_id === o.id)
+      if (mine.length === 0) continue
+      touchedOrders += 1
+      await ordersRepo.insertChange({
+        order_id: o.id,
+        changed_by: user.id,
+        change: {
+          type: 'price_fill',
+          count: mine.length,
+          lines: mine.map((c) => {
+            const l = byLine.get(c.line_id)
+            return {
+              product_code: l?.product_code ?? '?',
+              qty: l?.qty ?? 0,
+              from: l?.unit_price ?? 0,
+              to: c.unit_price,
+            }
+          }),
+        },
+        note: input.note ?? null,
+      })
+    }
+
+    return { updated: changed.length, orders: touchedOrders }
   },
 
   /**
