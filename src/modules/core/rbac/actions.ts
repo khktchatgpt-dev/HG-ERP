@@ -472,6 +472,16 @@ export const ACTIONS: Action[] = [
     domain: 'exec',
     rule: perm('exec.approvals.view'),
   },
+  {
+    // Ngưỡng "giá trị lớn" quyết định phiếu nào được ký nhanh hàng loạt, phiếu
+    // nào bắt mở ra đọc. Đó là luật của người KÝ, nên gắn theo quyền ký chứ
+    // không nhét vào `system.settings.manage` — Giám đốc không cần (và không
+    // nên có) chìa khoá cấu hình hệ thống để chỉnh ngưỡng của chính mình.
+    key: 'exec.threshold.manage',
+    label: 'Đặt ngưỡng giá trị lớn khi ký',
+    domain: 'exec',
+    rule: perm('exec.approvals.view'),
+  },
 
   // ── Quản trị hệ thống (dùng vai users.role='admin', chưa gắn permission) ──
   {

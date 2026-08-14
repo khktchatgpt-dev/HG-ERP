@@ -4,7 +4,8 @@ import {
   defectByTeam,
   defectStats,
   isBigApproval,
-  isBigApprovalIn,
+  isBigApprovalWith,
+  DEFAULT_APPROVAL_THRESHOLDS,
   orderSyncPct,
   teamStatusColor,
   topDefectReasons,
@@ -22,18 +23,38 @@ describe('isBigApproval — ngưỡng 50 triệu', () => {
   })
 })
 
-describe('isBigApprovalIn — ngưỡng có tiền tệ', () => {
-  it('VND: giữ nguyên biên 50 triệu', () => {
-    expect(isBigApprovalIn(49_999_999, 'VND')).toBe(false)
-    expect(isBigApprovalIn(50_000_000, 'VND')).toBe(true)
+describe('isBigApprovalWith — ngưỡng theo từng tiền tệ', () => {
+  const TH = { VND: 50_000_000, USD: 2_000 }
+
+  it('so đúng ngưỡng của từng tiền tệ', () => {
+    expect(isBigApprovalWith(49_999_999, 'VND', TH)).toBe(false)
+    expect(isBigApprovalWith(50_000_000, 'VND', TH)).toBe(true)
+    expect(isBigApprovalWith(1_999, 'USD', TH)).toBe(false)
+    expect(isBigApprovalWith(2_000, 'USD', TH)).toBe(true)
   })
 
-  it('không phải VND → LUÔN là giá trị lớn, dù số nhỏ', () => {
-    // 3.000 USD ~ 75 triệu đồng: bản cũ so thẳng với 50_000_000 nên coi là đơn
-    // nhỏ và cho ký nhanh hàng loạt. Chưa có tỉ giá thì không được đoán.
-    expect(isBigApprovalIn(3_000, 'USD')).toBe(true)
-    expect(isBigApprovalIn(1, 'USD')).toBe(true)
-    expect(isBigApprovalIn(1, 'EUR')).toBe(true)
+  it('tiền tệ CHƯA đặt ngưỡng → luôn là giá trị lớn, dù số nhỏ', () => {
+    // Không có tỉ giá thì không được đoán. Mặc định an toàn là bắt mở ra đọc.
+    expect(isBigApprovalWith(1, 'EUR', TH)).toBe(true)
+    expect(isBigApprovalWith(1, 'JPY', {})).toBe(true)
+  })
+
+  it('key rác không được thành cửa lách ngưỡng', () => {
+    // Tra thẳng key sẽ đụng prototype chain: thresholds['constructor'] là một
+    // function, `total >= function` luôn false ⇒ mọi đơn lọt như đơn nhỏ.
+    expect(isBigApprovalWith(1, 'constructor', TH)).toBe(true)
+    expect(isBigApprovalWith(1, '__proto__', TH)).toBe(true)
+    expect(isBigApprovalWith(1, 'toString', TH)).toBe(true)
+  })
+
+  it('ngưỡng hỏng trong DB (không phải số) → coi là giá trị lớn', () => {
+    expect(isBigApprovalWith(1, 'USD', { USD: 'nhiều' as unknown as number })).toBe(true)
+    expect(isBigApprovalWith(1, 'USD', { USD: NaN })).toBe(true)
+  })
+
+  it('mặc định của hệ thống chỉ đặt ngưỡng cho VND', () => {
+    expect(DEFAULT_APPROVAL_THRESHOLDS).toEqual({ VND: 50_000_000 })
+    expect(isBigApprovalWith(1, 'USD', DEFAULT_APPROVAL_THRESHOLDS)).toBe(true)
   })
 })
 

@@ -23,6 +23,9 @@ vi.mock('@/modules/core/users/users.repo', () => ({
   usersRepo: { displayNamesByIds: vi.fn() },
 }))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('@/modules/core/settings/settings.service', () => ({
+  settingsService: { approvalThresholds: vi.fn() },
+}))
 
 import { execService } from './exec.service'
 import { posService } from '@/modules/dept/supply/pos.service'
@@ -30,6 +33,7 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { settingsService } from '@/modules/core/settings/settings.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
@@ -85,6 +89,9 @@ beforeEach(() => {
     total: 1,
   } as never)
   vi.mocked(approvalEventsRepo.listRecent).mockResolvedValue([] as never)
+  vi.mocked(settingsService.approvalThresholds).mockResolvedValue({
+    VND: 50_000_000,
+  })
   vi.mocked(usersRepo.displayNamesByIds).mockResolvedValue(
     new Map([
       ['u-cu', 'Lệ Hằng'],
@@ -193,18 +200,44 @@ describe('execService.signBox — cảnh báo trước khi ký', () => {
     expect(box.items[0].currency).toBe('USD') // lấy từ ĐƠN, không phải dòng đơn
   })
 
-  it('ngưỡng "giá trị lớn" bám đúng isBigApproval (50tr)', async () => {
+  it('cờ "giá trị lớn" bám đúng ngưỡng của TIỀN TỆ đó', async () => {
+    vi.mocked(settingsService.approvalThresholds).mockResolvedValue({
+      VND: 50_000_000,
+      USD: 2_000,
+    })
     mockLists({
       pos: [
-        PO({ id: 'a', code: 'PO-A', created_at: daysAgo(2) }),
-        PO({ id: 'b', code: 'PO-B', created_at: daysAgo(1) }),
+        PO({ id: 'a', code: 'PO-A', created_at: daysAgo(4) }),
+        PO({ id: 'b', code: 'PO-B', created_at: daysAgo(3) }),
+        PO({ id: 'c', code: 'PO-USD', currency: 'USD', created_at: daysAgo(2) }),
+        PO({ id: 'd', code: 'PO-EUR', currency: 'EUR', created_at: daysAgo(1) }),
       ],
     })
-    vi.mocked(posRepo.totalsByPoIds).mockResolvedValue({ a: 50_000_000, b: 49_999_999 })
+    vi.mocked(posRepo.totalsByPoIds).mockResolvedValue({
+      a: 50_000_000,
+      b: 49_999_999,
+      c: 1_999,
+      d: 1,
+    })
 
     const box = await execService.signBox(gd)
-    expect(box.items.find((i) => i.code === 'PO-A')?.big).toBe(true)
-    expect(box.items.find((i) => i.code === 'PO-B')?.big).toBe(false)
+    const big = (code: string) => box.items.find((i) => i.code === code)?.big
+    expect(big('PO-A')).toBe(true)
+    expect(big('PO-B')).toBe(false)
+    expect(big('PO-USD')).toBe(false) // dưới ngưỡng USD riêng
+    // EUR chưa đặt ngưỡng → luôn lớn, dù chỉ 1 EUR. Không có tỉ giá thì không đoán.
+    expect(big('PO-EUR')).toBe(true)
+  })
+
+  it('lệnh SX KHÔNG bao giờ mang cờ giá trị lớn — ký lệnh không tiêu tiền', async () => {
+    mockLists({ lsx: [LSX()] })
+    vi.mocked(ordersRepo.listLinesByOrders).mockResolvedValue([
+      OL({ qty: 1000, unit_price: 9_999 }),
+    ] as never)
+
+    const box = await execService.signBox(gd)
+    expect(box.items[0].value).toBe(9_999_000)
+    expect(box.items[0].big).toBe(false)
   })
 })
 

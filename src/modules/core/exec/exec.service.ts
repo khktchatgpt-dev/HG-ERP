@@ -4,7 +4,8 @@ import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { assessPoLate } from '@/lib/late-risk'
-import { isBigApprovalIn } from '@/lib/exec-ops'
+import { isBigApprovalWith, type ApprovalThresholds } from '@/lib/exec-ops'
+import { settingsService } from '@/modules/core/settings/settings.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -204,6 +205,8 @@ export type SignBox = {
   }
   /** Số phiếu CHÍNH NGƯỜI NÀY đã quyết hôm nay — để biết mình vừa làm gì. */
   decided_today: { approved: number; rejected: number }
+  /** Ngưỡng đang áp — hiện ngay trên màn để người ký biết luật mình đang theo. */
+  thresholds: ApprovalThresholds
   /**
    * Vì sao hộp rỗng. Phân biệt hai chuyện khác hẳn nhau mà cùng ra "0 phiếu":
    * đã ký hết (tốt) ↔ chưa ai từng lập phiếu trên hệ thống (dữ liệu chưa lên).
@@ -230,13 +233,15 @@ export const execService = {
     await assertAction(user, 'exec.approvals.view')
     const today = new Date().toISOString().slice(0, 10)
 
-    const [pendingPos, pendingLsx, allPos, allLsx, recentEvents] = await Promise.all([
-      posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
-      posService.list(user, { page: 1, page_size: 1 }),
-      lsxService.list(user, { page: 1, page_size: 1 }),
-      approvalEventsRepo.listRecent({ limit: 100 }),
-    ])
+    const [pendingPos, pendingLsx, allPos, allLsx, recentEvents, thresholds] =
+      await Promise.all([
+        posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+        lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+        posService.list(user, { page: 1, page_size: 1 }),
+        lsxService.list(user, { page: 1, page_size: 1 }),
+        approvalEventsRepo.listRecent({ limit: 100 }),
+        settingsService.approvalThresholds(),
+      ])
 
     // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
     // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
@@ -279,7 +284,7 @@ export const execService = {
         submitted_at: p.created_at,
         submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
         warnings,
-        big: isBigApprovalIn(value, p.currency),
+        big: isBigApprovalWith(value, p.currency, thresholds),
         href: `/exec/approvals/po/${p.id}`,
       })
     }
@@ -347,6 +352,7 @@ export const execService = {
         approved: mineToday.filter((e) => e.action === 'approved').length,
         rejected: mineToday.filter((e) => e.action === 'rejected').length,
       },
+      thresholds,
       emptiness: { pos_total: allPos.total, lsx_total: allLsx.total },
     }
   },

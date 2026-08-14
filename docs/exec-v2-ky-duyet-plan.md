@@ -256,6 +256,22 @@ GĐ muốn ký báo giá thì phải dựng mới:
 
 ### F. Luật ký theo ngưỡng tiền
 
+> **Trạng thái 14/08/2026: XONG phần ngưỡng.** `/exec/luat-ky` — bảng ngưỡng
+> **theo từng tiền tệ**, lưu ở `settings.approval_thresholds`, Giám đốc tự sửa.
+>
+> Gác bằng quyền mới `exec.threshold.manage` (= quyền của người ký), **không**
+> dùng `system.settings.manage`: Giám đốc phải chỉnh được luật ký của chính mình
+> mà không cần chìa khoá cấu hình hệ thống. Ngưỡng cũng KHÔNG nằm trong khối
+> `Settings` — mọi field ở đó là chuỗi và các mẫu in truyền nguyên khối vào
+> `Record<string, string | null>`, nhét một object vào là vỡ trang in.
+>
+> **Tiền tệ không có trong bảng ⇒ luôn coi là giá trị lớn** (phải mở ra ký
+> riêng). Không có tỉ giá thì không đoán; muốn ký nhanh đơn USD thì tự thêm dòng
+> USD — một quyết định tường minh của người ký.
+>
+> Phần **luật "dưới ngưỡng thì trưởng phòng ký"** CHƯA làm: nó đổi luồng duyệt
+> (ai nhận phiếu), không chỉ đổi một con số. Tách ra mục riêng khi cần.
+
 - Ngưỡng "giá trị lớn" hiện **cứng 50 triệu** trong `src/lib/exec-ops.ts:10`.
   Đưa vào `settings` để đổi không cần lập trình viên.
 - Luật: dưới ngưỡng → trưởng phòng ký; trên ngưỡng → GĐ ký. Giảm số phiếu vào

@@ -24,3 +24,19 @@ export const settingsUpdateSchema = z
     fsc_coordinates: z.string().trim().max(2000).or(z.literal('')),
   })
   .partial()
+
+/**
+ * Ngưỡng "giá trị lớn" khi ký, theo từng tiền tệ (§5F).
+ *
+ * Khoá phải là mã tiền tệ 3 chữ HOA — vừa khớp `sales_orders.currency` /
+ * `supply_purchase_orders.currency`, vừa chặn khoá rác kiểu `__proto__` ngay ở
+ * biên (tầng đọc `isBigApprovalWith` cũng đã chặn, đây là lớp thứ hai).
+ * Bỏ trống cả bảng là hợp lệ: nghĩa là MỌI phiếu đều phải mở ra ký riêng.
+ */
+export const approvalThresholdsSchema = z.object({
+  thresholds: z.record(
+    z.string().regex(/^[A-Z]{3}$/, 'Mã tiền tệ phải là 3 chữ in hoa, ví dụ VND / USD'),
+    z.coerce.number().nonnegative('Ngưỡng không được âm').finite('Ngưỡng phải là số'),
+  ),
+})
+export type ApprovalThresholdsInput = z.infer<typeof approvalThresholdsSchema>

@@ -453,6 +453,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // sâu ("Xem kỹ" trỏ vào /exec/approvals/{lsx,po}/[id]) cho tới khi
           // bước 4 dựng lại — xem docs/exec-v2-ky-duyet-plan.md §5C.
           { href: '/exec/approvals/history', label: 'Lịch sử ký', icon: 'history' },
+          { href: '/exec/luat-ky', label: 'Luật ký', icon: 'key-round' },
           // Vế BÁN: sổ đơn theo giá trị / hạn giao.
           { href: '/exec/orders', label: 'Sổ đơn hàng', icon: 'clipboard-list' },
           // Vế MUA: đơn mua theo trạng thái, quá hẹn, đọng chưa gửi, NCC.

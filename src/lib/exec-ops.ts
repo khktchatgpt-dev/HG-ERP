@@ -24,22 +24,42 @@ export function isBigApproval(total: number): boolean {
 }
 
 /**
- * Bản CÓ TIỀN TỆ của `isBigApproval` (14/08/2026).
+ * Ngưỡng "giá trị lớn" THEO TỪNG TIỀN TỆ — Giám đốc tự đặt ở /exec/luat-ky,
+ * lưu trong `settings.approval_thresholds` (§5F).
  *
- * Ngưỡng là 50 triệu ĐỒNG, nhưng đơn mua có cả USD/EUR. Bản cũ so thẳng
- * `total >= 50_000_000` bất kể tiền tệ, nên một đơn 3.000 USD (~75 triệu đồng)
- * lọt qua như đơn nhỏ — đúng loại đơn mà ngưỡng sinh ra để chặn.
- *
- * Chưa có tỉ giá trong hệ thống nên KHÔNG quy đổi. Chọn cách an toàn: tiền tệ
- * khác VND thì luôn coi là "giá trị lớn" — tức phải mở ra xem, không ký nhanh
- * hàng loạt. Thà bắt đọc kỹ một đơn nhỏ còn hơn ký nhầm một đơn to.
- *
- * Thay hẳn khi làm §5F (ngưỡng theo từng tiền tệ, đưa vào Cấu hình) —
- * xem docs/exec-v2-ky-duyet-plan.md.
+ * Vì sao phải tách theo tiền tệ: ngưỡng gốc là 50 triệu ĐỒNG, nhưng đơn mua có
+ * cả USD/EUR. Bản trước so thẳng `total >= 50_000_000` bất kể tiền tệ, nên một
+ * đơn 3.000 USD (~75 triệu đồng) lọt qua như đơn nhỏ và được ký nhanh hàng loạt
+ * — đúng loại đơn mà ngưỡng sinh ra để chặn.
  */
-export function isBigApprovalIn(total: number, currency: string): boolean {
-  if (currency !== 'VND') return true
-  return isBigApproval(total)
+export type ApprovalThresholds = Record<string, number>
+
+export const DEFAULT_APPROVAL_THRESHOLDS: ApprovalThresholds = {
+  VND: BIG_APPROVAL_VND,
+}
+
+/**
+ * TIỀN TỆ CHƯA ĐẶT NGƯỠNG → LUÔN coi là "giá trị lớn".
+ *
+ * Hệ thống không có tỉ giá nên không quy đổi được; mặc định an toàn là bắt mở
+ * ra đọc. Thà bắt đọc kỹ một đơn nhỏ còn hơn ký nhanh nhầm một đơn to. Muốn ký
+ * nhanh đơn USD thì vào /exec/luat-ky đặt ngưỡng USD — một quyết định tường
+ * minh của người ký, không phải thứ hệ thống tự suy.
+ *
+ * Dùng `Object.hasOwn` chứ không phải `?? DEFAULT`: tra thẳng key sẽ đụng
+ * prototype chain, nên `thresholds['constructor']` trả về một function chứ
+ * không phải undefined, và `total >= function` luôn false ⇒ mọi đơn của tiền tệ
+ * rác đều lọt như đơn nhỏ. (Cùng cái bẫy đã vá ở `maxBytesFor` — file-limits.ts.)
+ */
+export function isBigApprovalWith(
+  total: number,
+  currency: string,
+  thresholds: ApprovalThresholds,
+): boolean {
+  if (!Object.hasOwn(thresholds, currency)) return true
+  const limit = thresholds[currency]
+  if (typeof limit !== 'number' || !Number.isFinite(limit)) return true
+  return total >= limit
 }
 
 // ── Dòng sản lượng gọn (khớp cột outputsRepo.listRange) ─────────────────────
