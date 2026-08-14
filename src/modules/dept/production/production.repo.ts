@@ -77,6 +77,10 @@ export type OrderTracking = {
   pos_open: number
   /** PO còn NHÁP / CHỜ GĐ DUYỆT — chưa gửi NCC, chưa ai bắt đầu làm gì (0133). */
   pos_unsent: number
+  /** TỔNG PO của lệnh trừ đơn huỷ (0148) — 0 = chưa ai lập đơn mua nào. */
+  pos_total: number
+  /** Kho xác nhận vật tư của lệnh về đủ (0148) — null = chưa. */
+  materials_received_at: string | null
   // Lớp thương mại (v_order_tracking mở rộng, migration 0071) — GĐ nhìn theo tiền.
   deposit_percent: number | null
   payment_method: string | null
@@ -323,6 +327,10 @@ export const productionRepo = {
       // 0133 — cột mới; đọc phòng thủ để bản chưa apply migration vẫn về 0 thay
       // vì NaN (NaN > 0 là false nên chỉ mất cảnh báo, không vẽ số bậy).
       pos_unsent: Number(r.pos_unsent ?? 0),
+      // 0148 — cùng lối đọc phòng thủ: bản chưa apply migration cho pos_total=0
+      // và materials_received_at=null ⇒ `orderGate` chỉ suy dè dặt hơn, không vỡ.
+      pos_total: Number(r.pos_total ?? 0),
+      materials_received_at: (r.materials_received_at as string | null) ?? null,
       lsx_priority: r.lsx_priority == null ? null : Number(r.lsx_priority),
       order_value: Number(r.order_value ?? 0),
       line_count: Number(r.line_count ?? 0),

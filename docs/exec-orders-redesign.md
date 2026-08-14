@@ -70,6 +70,59 @@ Quyết định thiết kế:
 Dữ liệu: vẫn `v_order_tracking` (đủ mọi cột cần), nhóm ở client — 20 hay 500
 đơn đều nhẹ. Không cần migration, không cần service mới.
 
+## 2b. Vòng 2 (15/08/2026) — "đang tắc ở đâu" thay cho "chạy được bao xa"
+
+Vòng 1 gom đơn theo khách, hết cảnh 13 thẻ ROSCO giống nhau. Nhưng mở ra vẫn
+chưa trả lời được câu quan trọng nhất. Đo lại toàn bộ 20 đơn đang mở:
+
+| Chỉ số | Kết quả |
+|---|---|
+| Nhãn tiến độ | **20/20 đơn** cùng hiện "Chuẩn bị sản xuất 15%" |
+| Dòng SP chưa chốt định mức | **69/71** |
+| Đơn mua vật tư | 0 |
+| Công đoạn SX đã lên lộ trình | 0 |
+| Đơn thiếu hạn giao | **7/20** |
+| Đơn thiếu đơn giá | 20/20 |
+
+`orderProgress` gộp MỌI trạng thái sau khi lệnh được ký vào một nhãn duy nhất
+— tức mù đúng đoạn dài nhất của vòng đời đơn. Màn hình nói được một câu, và câu
+đó vô dụng.
+
+### Bậc tắc (`src/lib/order-gate.ts`) — mỗi đơn đứng ở đúng một bậc, kèm CHỦ
+
+| Bậc | Ai giữ bóng |
+|---|---|
+| Chưa phát lệnh | Kinh doanh |
+| Chờ ký lệnh | Ban Giám đốc |
+| **Chờ chốt định mức** | **Kỹ thuật** |
+| Chưa mua vật tư | Cung ứng |
+| Đơn mua chưa gửi | Cung ứng |
+| Vật tư đang về | Nhà cung cấp |
+| Chờ lên kế hoạch | Kế hoạch SX |
+| Đang sản xuất | Xưởng |
+| Chờ giao | Kho |
+
+Cố ý KHÔNG suy từ `sales_orders.status`: cột đó đứng yên ở `lsx_issued` suốt từ
+lúc ký lệnh tới lúc xong sản xuất. Bậc suy từ tín hiệu thật của từng khâu —
+`lines_bom_pending`, `pos_total`/`pos_unsent`/`pos_open`, `materials_received_at`,
+`jobs_done`/`jobs_total`. Hai tín hiệu cuối do **migration 0148** thêm vào view:
+thiếu `pos_total` thì `pos_open = 0` mang hai nghĩa trái ngược ("chưa lập đơn
+mua" ↔ "đã về đủ") mà đoán nhầm vế nào cũng ra lời khuyên sai.
+
+### Màn hình
+
+1. **Phễu tắc lên đầu** — mỗi bậc một ô: số đơn + tên bậc + phòng đang giữ. Bậc
+   giữ nhiều đơn nhất tô hổ phách, kèm một câu tóm tắt. Bấm ô để lọc.
+   Hôm nay nó nói đúng một câu thật: *"20 đơn cùng đứng ở chờ chốt định mức,
+   Kỹ thuật đang giữ."*
+2. **Khối lỗ hổng dữ liệu** — 20 đơn thiếu giá (kèm link đi điền), 7 đơn thiếu
+   hạn giao. Không có khối này thì màn hình im lặng nói dối: "0 đơn nguy cơ trễ"
+   trong khi 7 đơn không có hạn để mà đo.
+3. Dòng lệnh trong mỗi khách hiện **bậc + phòng giữ** thay cho hai con số PO rời
+   rạc vốn ghi "chưa có đơn vật tư" cho cả lệnh vừa ký lẫn lệnh đã xong định mức.
+4. Bỏ chip lọc theo trạng thái đơn (Chờ duyệt / Đang SX / Chờ giao) — phễu làm
+   việc đó chính xác hơn. Giữ "Nguy cơ trễ", thêm "Thiếu hạn giao".
+
 ## 3. Chưa làm (chờ dữ liệu / chốt)
 
 - **Tiền của từng khối = 0** cho tới khi điền giá ở `/sales/orders/gia` (G0.2).

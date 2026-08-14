@@ -14,6 +14,7 @@ import {
 import { cn } from '@/lib/utils'
 import { assessLateRisk } from '@/lib/late-risk'
 import { orderProgress, type Stage } from '@/lib/order-progress'
+import { orderGate, type Gate, type GateKey } from '@/lib/order-gate'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { KpiCard, ProgressMeter, StatusBadge, fmtMoney } from './order-parts'
@@ -40,6 +41,10 @@ export type OrderRow = {
   pos_open: number
   /** Đơn vật tư còn nháp / chờ ký — chưa ai đặt gì với NCC (0133). */
   pos_unsent: number
+  /** TỔNG đơn mua của lệnh trừ đơn huỷ (0148). */
+  pos_total: number
+  /** Kho xác nhận vật tư về đủ (0148). */
+  materials_received_at: string | null
   deposit_percent: number | null
   payment_method: string | null
   order_value: number
@@ -75,10 +80,8 @@ function sumByCur(rows: OrderRow[]): [string, number][] {
 
 const SEGMENTS = [
   { key: 'all', label: 'Tất cả' },
-  { key: 'pending', label: 'Chờ GĐ duyệt' },
-  { key: 'inprod', label: 'Đang sản xuất' },
   { key: 'risk', label: '⚠ Nguy cơ trễ' },
-  { key: 'to_deliver', label: 'Chờ giao' },
+  { key: 'no_due', label: 'Thiếu hạn giao' },
 ] as const
 type SegmentKey = (typeof SEGMENTS)[number]['key']
 
@@ -112,9 +115,41 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
   const today = new Date().toISOString().slice(0, 10)
   const [q, setQ] = useState('')
   const [seg, setSeg] = useState<SegmentKey>('all')
+  const [gate, setGate] = useState<GateKey | null>(null)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
 
   const riskOf = (r: OrderRow) => assessLateRisk(r, today)
+
+  /**
+   * PHỄU TẮC — đơn đang mở, gom theo bậc đang đứng. Đây là thứ được đặt LÊN
+   * ĐẦU màn: câu hỏi đầu tiên của Giám đốc về sổ đơn không phải "có những đơn
+   * nào" mà là "dòng chảy đang nghẽn ở đâu, ai gỡ".
+   */
+  const funnel = useMemo(() => {
+    const byGate = new Map<GateKey, { gate: Gate; orders: OrderRow[] }>()
+    for (const r of rows) {
+      const g = orderGate(r)
+      if (g.done) continue
+      const cur = byGate.get(g.key)
+      if (cur) cur.orders.push(r)
+      else byGate.set(g.key, { gate: g, orders: [r] })
+    }
+    return [...byGate.values()].sort((a, b) => a.gate.step - b.gate.step)
+  }, [rows])
+
+  const worst = funnel.reduce(
+    (m, f) => (f.orders.length > (m?.orders.length ?? 0) ? f : m),
+    null as (typeof funnel)[number] | null,
+  )
+
+  /** Chỗ dữ liệu còn trống khiến màn này nói dối nếu im lặng. */
+  const gaps = useMemo(() => {
+    const live = rows.filter((r) => !FINAL.has(r.status))
+    return {
+      noDue: live.filter((r) => !r.due_date).length,
+      noPrice: live.filter((r) => r.order_value <= 0).length,
+    }
+  }, [rows])
 
   // ── KPI toàn sổ (trước lọc — con số tổng không đổi theo chip) ─────────────
   const kpi = useMemo(() => {
@@ -154,10 +189,9 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
   const customers = useMemo(() => {
     const ql = q.trim().toLowerCase()
     const filtered = rows.filter((r) => {
-      if (seg === 'pending' && r.lsx_status !== 'pending_approval') return false
-      if (seg === 'inprod' && r.status !== 'in_production') return false
       if (seg === 'risk' && !riskOf(r)) return false
-      if (seg === 'to_deliver' && r.status !== 'completed') return false
+      if (seg === 'no_due' && r.due_date) return false
+      if (gate && orderGate(r).key !== gate) return false
       if (
         ql &&
         !`${r.code} ${r.customer_name} ${r.customer_po_no ?? ''} ${r.lsx_code ?? ''}`
@@ -213,7 +247,7 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
         a.name.localeCompare(b.name),
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, q, seg])
+  }, [rows, q, seg, gate])
 
   const shownOrders = customers.reduce((s, c) => s + c.orders.length, 0)
 
@@ -259,6 +293,102 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
           tone={kpi.overdue ? 'red' : 'default'}
         />
       </div>
+
+      {/* ── PHỄU TẮC: dòng chảy đang nghẽn ở đâu, ai gỡ ── */}
+      {funnel.length > 0 && (
+        <section className="bg-card rounded-xl border p-4">
+          <div className="mb-3 flex flex-wrap items-baseline gap-x-2">
+            <h2 className="text-sm font-semibold">Đơn đang tắc ở đâu</h2>
+            {worst && worst.orders.length > 1 && (
+              <p className="text-muted-foreground text-sm">
+                — <b className="text-foreground">{worst.orders.length}</b> đơn cùng đứng ở{' '}
+                <b className="text-foreground">{worst.gate.label.toLowerCase()}</b>,{' '}
+                {worst.gate.owner} đang giữ.
+              </p>
+            )}
+          </div>
+
+          <ul className="flex flex-wrap gap-2">
+            {funnel.map((f) => {
+              const on = gate === f.gate.key
+              const isWorst = worst?.gate.key === f.gate.key && f.orders.length > 1
+              return (
+                <li key={f.gate.key}>
+                  <button
+                    type="button"
+                    onClick={() => setGate(on ? null : f.gate.key)}
+                    aria-pressed={on}
+                    title={f.gate.detail}
+                    className={cn(
+                      'flex min-w-[8.5rem] flex-col gap-0.5 rounded-lg border px-3 py-2 text-start transition-colors',
+                      on
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : isWorst
+                          ? 'border-amber-400 bg-amber-50 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/30'
+                          : 'hover:bg-accent/50',
+                    )}
+                  >
+                    <span className="text-lg leading-none font-semibold tabular-nums">
+                      {f.orders.length}
+                    </span>
+                    <span className="text-xs leading-tight font-medium">
+                      {f.gate.label}
+                    </span>
+                    <span
+                      className={cn(
+                        'text-[11px] leading-tight',
+                        on ? 'opacity-80' : 'text-muted-foreground',
+                      )}
+                    >
+                      {f.gate.owner}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+
+          {gate && (
+            <p className="text-muted-foreground mt-3 text-xs">
+              Đang lọc theo bậc đã chọn.{' '}
+              <button
+                type="button"
+                onClick={() => setGate(null)}
+                className="text-primary underline"
+              >
+                Bỏ lọc
+              </button>
+            </p>
+          )}
+        </section>
+      )}
+
+      {/* ── Lỗ hổng dữ liệu: nói thẳng chỗ Giám đốc đang bị mù ── */}
+      {(gaps.noDue > 0 || gaps.noPrice > 0) && (
+        <section className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/20">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
+            <TriangleAlert className="size-4" aria-hidden />
+            Sổ đơn còn chỗ trống
+          </h2>
+          <ul className="mt-1.5 space-y-1 text-sm text-amber-900/90 dark:text-amber-200/90">
+            {gaps.noPrice > 0 && (
+              <li>
+                <b>{gaps.noPrice}</b> đơn chưa có đơn giá — mọi con số tiền trên màn này
+                đang là 0.{' '}
+                <Link href="/sales/orders/gia" className="underline">
+                  Điền đơn giá
+                </Link>
+              </li>
+            )}
+            {gaps.noDue > 0 && (
+              <li>
+                <b>{gaps.noDue}</b> đơn chưa có hạn giao — không đo được trễ hay nguy cơ
+                trễ cho những đơn này.
+              </li>
+            )}
+          </ul>
+        </section>
+      )}
 
       {/* Tìm + chip lọc */}
       <div className="flex flex-wrap items-center gap-2">
@@ -365,6 +495,7 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
   const rep = g.rep
   const noLsx = g.production_order_id === null
   const p = orderProgress(rep, stages, today)
+  const gate = orderGate(rep)
 
   return (
     <div
@@ -392,18 +523,16 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
             <ProgressMeter p={p} />
           </span>
         )}
+        {/*
+         * BẬC TẮC thay cho hai con số PO rời rạc: trước đây dòng này ghi "chưa
+         * có đơn vật tư" cho cả lệnh vừa ký lẫn lệnh đã xong định mức — cùng một
+         * chữ cho hai tình huống cần hai người khác nhau xử lý.
+         */}
         {!noLsx && (
-          <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
-            <ShoppingCart className="size-3.5" aria-hidden />
-            {rep.pos_open === 0 && rep.pos_unsent === 0 ? (
-              'chưa có đơn vật tư'
-            ) : (
-              <>
-                {rep.pos_open > 0 && `vật tư đang về ${rep.pos_open}`}
-                {rep.pos_open > 0 && rep.pos_unsent > 0 && ' · '}
-                {rep.pos_unsent > 0 && `chưa gửi NCC ${rep.pos_unsent}`}
-              </>
-            )}
+          <span className="inline-flex items-center gap-1.5 text-xs" title={gate.detail}>
+            <ShoppingCart className="text-muted-foreground size-3.5" aria-hidden />
+            <span className="font-medium">{gate.label}</span>
+            <span className="text-muted-foreground">· {gate.owner}</span>
           </span>
         )}
         {rep.lines_bom_pending > 0 && (
