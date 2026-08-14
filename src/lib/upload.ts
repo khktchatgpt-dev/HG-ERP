@@ -1,5 +1,6 @@
 import { api } from '@/lib/api'
 import { formatBytes, maxBytesFor, type DocType } from '@/lib/file-limits'
+import { downscaleImage } from '@/lib/image-downscale'
 
 /** Parent hợp lệ để đính file (khớp files.schema PARENT_KINDS). */
 export type UploadParent =
@@ -30,6 +31,9 @@ export async function uploadFile(
   bucket: 'private' | 'attachments' | 'public' = 'attachments',
   docType?: UploadDocType | null,
 ): Promise<string> {
+  // Ảnh chụp tự thu nhỏ về ≤2560px trước — đưa ảnh máy ảnh 13MB vào vẫn lọt
+  // trần 5MB thay vì dội lỗi bắt user tự resize. Chỉ ảnh; tài liệu giữ nguyên.
+  if (docType === 'image') file = await downscaleImage(file)
   // Chặn ngay ở client để user biết sớm, khỏi tốn công PUT rồi mới bị finalize
   // từ chối. Ràng buộc thật vẫn nằm ở server (filesService.finalize).
   const max = maxBytesFor(docType)

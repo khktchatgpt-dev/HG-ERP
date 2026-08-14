@@ -44,12 +44,16 @@ dữ liệu gốc.
 Phân vai rõ: Drive = kho ảnh gốc (dung lượng đã trả tiền, chụp xong đổ vào đó
 sẵn) · ERP = bản đủ nét để nhận diện SP. Hết mâu thuẫn "nén thì mất gốc".
 
-Còn treo trong bước này:
-- 1 ảnh 13MB đã lọt vào trước khi siết (`_DSC5858.JPG` — CH0271HG-AL) + 11 ảnh
-  >2MB cũ: hiển thị vẫn chạy (đi qua tầng resize), chỉ tốn kho/egress. Nén lại
-  một lần bằng script khi tiện.
-- Tự thu nhỏ lúc upload (canvas 2560px) vẫn là nâng cấp UX đáng làm SAU: thay vì
-  báo lỗi "quá 5MB" bắt user tự resize, app tự co rồi upload. Không gấp.
+Đã làm nốt trong ngày:
+- ✅ Nén 3 ảnh vượt 5MB đã lọt vào trong khoảng hở
+  (`scripts/images-compress-oversize.mjs`, ghi đè đúng path — tham chiếu giữ
+  nguyên): 2× `_DSC5858.JPG` 12.8MB → 0.1MB, `C0180HG-AL.png` 6.3MB → 0.7MB
+  (png→webp). 9 ảnh 2–5MB còn lại HỢP LỆ theo trần mới — không đụng.
+- ✅ Tự thu nhỏ lúc upload (`src/lib/image-downscale.ts`): ảnh chụp >1.5MB tự co
+  về ≤2560px WebP/JPEG trước khi PUT — đưa ảnh máy ảnh 13MB vào vẫn lọt trần
+  5MB thay vì dội lỗi. Chỉ áp cho doc_type='image' ở cả hai đường upload
+  (`uploadFile` + `FileUploader`); GIF/SVG bỏ qua; mọi nhánh lỗi trả về file
+  gốc — không bao giờ chặn upload vì chính bước thu nhỏ.
 
 ### Bước 2 — URL ảnh ổn định + cache bất biến (khi deploy thật / ảnh ×5)
 

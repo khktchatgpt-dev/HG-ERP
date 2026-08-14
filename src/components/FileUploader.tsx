@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { formatBytes, maxBytesFor, type DocType } from '@/lib/file-limits'
+import { downscaleImage } from '@/lib/image-downscale'
 
 type Parent =
   | { kind: 'task'; id: string }
@@ -59,6 +60,9 @@ export function FileUploader({
   const [progress, setProgress] = useState<string | null>(null)
 
   async function handleFile(file: File) {
+    // Ảnh chụp tự thu nhỏ trước khi so trần (cùng luật với uploadFile bên
+    // @/lib/upload — hai đường upload phải cư xử giống nhau).
+    if (docType === 'image') file = await downscaleImage(file)
     const maxBytes = maxBytesFor(docType)
     if (file.size > maxBytes) {
       toast.error(
