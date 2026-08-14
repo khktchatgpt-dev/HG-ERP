@@ -184,7 +184,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
           <p className="mt-1 text-2xl font-semibold tabular-nums">
             {money(data.pending_value)}
           </p>
-          <Link href="/exec/approvals" className="text-xs text-sky-600 hover:underline">
+          <Link href="/exec" className="text-xs text-sky-600 hover:underline">
             Sang màn phê duyệt →
           </Link>
         </div>

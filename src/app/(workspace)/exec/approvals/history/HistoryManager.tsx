@@ -135,17 +135,19 @@ export function HistoryManager({ events }: { events: Ev[] }) {
     <div className="flex flex-col gap-4">
       <PageHeader
         breadcrumbs={[
-          { label: 'Ban Giám đốc', href: '/exec/approvals' },
-          { label: 'Lịch sử phê duyệt' },
+          // Trỏ thẳng /exec (Hộp ký) — /exec/approvals giờ chỉ là redirect, đi
+          // qua nó là thêm một chặng vô ích.
+          { label: 'Ban Giám đốc', href: '/exec' },
+          { label: 'Lịch sử ký' },
         ]}
-        title="Lịch sử phê duyệt"
+        title="Lịch sử ký"
         description="Nhật ký mọi quyết định duyệt / từ chối Lệnh sản xuất và đơn đặt vật tư — ai quyết, khi nào, lý do gì."
         actions={
           <Link
-            href="/exec/approvals"
+            href="/exec"
             className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
           >
-            ‹ Về phê duyệt
+            ‹ Về hộp ký
           </Link>
         }
       />
