@@ -445,9 +445,14 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
          * hoạch — chưa đổi bây giờ để GĐ không mất đường ký đang dùng.
          */
         items: [
-          { href: '/exec', label: 'Bảng tin điều hành', icon: 'home' },
-          // Stamp = con dấu — phê duyệt của Giám đốc đúng nghĩa đóng dấu.
-          { href: '/exec/approvals', label: 'Phê duyệt', icon: 'stamp' },
+          // Stamp = con dấu — trang chủ khu GĐ giờ là HỘP KÝ, không phải bảng tin.
+          { href: '/exec', label: 'Hộp ký', icon: 'stamp' },
+          // Mục "Phê duyệt" (/exec/approvals) đã gỡ khỏi menu 14/08: Hộp ký làm
+          // đúng việc đó ngay ở trang chủ, để hai danh sách cạnh nhau thì không
+          // ai biết chỗ nào là chỗ đúng. Route vẫn sống và vẫn là màn thẩm định
+          // sâu ("Xem kỹ" trỏ vào /exec/approvals/{lsx,po}/[id]) cho tới khi
+          // bước 4 dựng lại — xem docs/exec-v2-ky-duyet-plan.md §5C.
+          { href: '/exec/approvals/history', label: 'Lịch sử ký', icon: 'history' },
           // Vế BÁN: sổ đơn theo giá trị / hạn giao.
           { href: '/exec/orders', label: 'Sổ đơn hàng', icon: 'clipboard-list' },
           // Vế MUA: đơn mua theo trạng thái, quá hẹn, đọng chưa gửi, NCC.

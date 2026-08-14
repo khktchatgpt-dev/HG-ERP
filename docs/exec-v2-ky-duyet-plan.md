@@ -167,6 +167,16 @@ tay cái ở đáy thẻ, vuốt xuống để tải lại.
 
 ### B. Hộp ký `/exec`
 
+> **Trạng thái 14/08/2026: XONG** (trừ báo giá — chờ §5E). `/exec` giờ là Hộp ký;
+> mục *Phê duyệt* đã rút khỏi menu (Hộp ký làm đúng việc đó ở trang chủ, để hai
+> danh sách cạnh nhau thì không ai biết chỗ nào là chỗ đúng). Route
+> `/exec/approvals/{lsx,po}/[id]` vẫn là màn "Xem kỹ" cho tới bước 4.
+>
+> Màn rỗng phân biệt hai chuyện cùng ra "0 phiếu": **đã ký hết** ↔ **chưa ai từng
+> lập phiếu**. Hôm nay nó hiện đúng vế thứ hai: *"đơn mua chưa có đơn nào trên hệ
+> thống (8 lệnh sản xuất đã có) — phòng Cung ứng còn đang làm ngoài Excel"*.
+> Không có câu đó thì màn hình rỗng nói dối rằng Giám đốc đã ký hết việc.
+
 - Trang chủ mới thay `ExecDashboard`: danh sách phiếu chờ, gộp 3 loại, xếp theo
   *chờ lâu nhất* rồi *giá trị lớn nhất*.
 - Chip lọc theo loại; đếm số ngay trên chip.

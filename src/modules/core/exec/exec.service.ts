@@ -4,8 +4,10 @@ import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { assessPoLate } from '@/lib/late-risk'
+import { isBigApproval } from '@/lib/exec-ops'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
-import type { User } from '@/modules/core/users/users.repo'
+import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
+import { usersRepo, type User } from '@/modules/core/users/users.repo'
 
 /**
  * BẢNG TIN ĐIỀU HÀNH của Ban Giám đốc (/exec) — giới hạn ở thông tin trọng yếu
@@ -167,7 +169,181 @@ function sumByCurrency(rows: { currency: string; value: number }[]) {
     .sort((a, b) => b.value - a.value)
 }
 
+/** Một phiếu đang nằm chờ chữ ký trong Hộp ký (/exec). */
+export type SignItem = {
+  kind: 'lsx' | 'po'
+  id: string
+  code: string
+  /** Đối tác: khách hàng (LSX) hoặc nhà cung cấp (PO). */
+  party: string
+  /** Dòng phụ mô tả phiếu — mỗi mảnh là một mẩu ngữ cảnh, UI nối bằng dấu · */
+  facts: string[]
+  currency: string
+  value: number
+  /** Đã nằm chờ bao nhiêu ngày (0 = gửi hôm nay). */
+  waiting_days: number
+  submitted_at: string
+  submitted_by: string | null
+  /** Cảnh báo cần thấy TRƯỚC khi ký (thiếu BOM, thiếu giá, quá hẹn…). */
+  warnings: string[]
+  /** Vượt ngưỡng "giá trị lớn" — ký kiểu này phải đọc kỹ. */
+  big: boolean
+  /** Trang thẩm định đầy đủ. */
+  href: string
+}
+
+export type SignBox = {
+  items: SignItem[]
+  stats: {
+    total: number
+    oldest_days: number
+    value: { currency: string; value: number }[]
+  }
+  /** Số phiếu CHÍNH NGƯỜI NÀY đã quyết hôm nay — để biết mình vừa làm gì. */
+  decided_today: { approved: number; rejected: number }
+  /**
+   * Vì sao hộp rỗng. Phân biệt hai chuyện khác hẳn nhau mà cùng ra "0 phiếu":
+   * đã ký hết (tốt) ↔ chưa ai từng lập phiếu trên hệ thống (dữ liệu chưa lên).
+   * Không có mấy con số này thì màn hình rỗng nói dối.
+   */
+  emptiness: { pos_total: number; lsx_total: number }
+}
+
 export const execService = {
+  /**
+   * HỘP KÝ (/exec) — mọi phiếu đang chờ chữ ký Giám đốc, gom một danh sách,
+   * xếp theo CHỜ LÂU NHẤT rồi tới GIÁ TRỊ LỚN NHẤT.
+   *
+   * Vì sao xếp theo thời gian chờ chứ không theo tiền: phiếu để quên mới là thứ
+   * làm đứng cả dây chuyền (Cung ứng không đặt được vật tư khi lệnh chưa duyệt).
+   * Phiếu to thì đằng nào cũng có người gọi điện nhắc.
+   *
+   * NẠP NHẸ — cố ý: 5 truy vấn cố định cho cả màn, không phụ thuộc số phiếu.
+   * Bản cũ (/exec/approvals) nạp đủ chi tiết MỌI phiếu ngay từ server: mỗi PO
+   * một truy vấn dòng, mỗi LSX bốn, cộng ký URL ảnh cho từng sản phẩm. Chi tiết
+   * đầy đủ để lại cho trang "Xem kỹ" của từng phiếu.
+   */
+  async signBox(user: User): Promise<SignBox> {
+    await assertAction(user, 'exec.approvals.view')
+    const today = new Date().toISOString().slice(0, 10)
+
+    const [pendingPos, pendingLsx, allPos, allLsx, recentEvents] = await Promise.all([
+      posService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+      lsxService.list(user, { status: 'pending_approval', page: 1, page_size: 300 }),
+      posService.list(user, { page: 1, page_size: 1 }),
+      lsxService.list(user, { page: 1, page_size: 1 }),
+      approvalEventsRepo.listRecent({ limit: 100 }),
+    ])
+
+    // Tiền tệ nằm ở ĐƠN HÀNG, không ở dòng đơn và cũng không ở lệnh — nên phải
+    // tra thêm một lượt. Một truy vấn cho cả màn, không phải một truy vấn/lệnh.
+    const [poTotals, orderLines, orderList, creatorNames] = await Promise.all([
+      posRepo.totalsByPoIds(pendingPos.rows.map((p) => p.id)),
+      ordersRepo.listLinesByOrders(pendingLsx.rows.flatMap((l) => l.order_ids)),
+      pendingLsx.rows.length
+        ? ordersRepo.list({ page: 1, page_size: 1000 })
+        : Promise.resolve({ rows: [], total: 0 }),
+      usersRepo.displayNamesByIds(
+        [
+          ...pendingPos.rows.map((p) => p.created_by),
+          ...pendingLsx.rows.map((l) => l.issued_by),
+        ].filter((x): x is string => !!x),
+      ),
+    ])
+
+    const items: SignItem[] = []
+
+    for (const p of pendingPos.rows) {
+      const value = poTotals[p.id] ?? 0
+      const warnings: string[] = []
+      if (value <= 0) warnings.push('Đơn chưa có tiền — dòng vật tư thiếu đơn giá')
+      const lateDays = daysSince(p.expected_at, today)
+      if (lateDays != null && lateDays > 0) {
+        warnings.push(`Ngày hàng về đã qua ${lateDays} ngày`)
+      }
+      items.push({
+        kind: 'po',
+        id: p.id,
+        code: p.code,
+        party: p.supplier_name,
+        facts: [
+          p.lsx_code ? `lệnh ${p.lsx_code}` : 'ngoài lệnh',
+          p.expected_at ? `hàng về ${p.expected_at}` : 'chưa hẹn ngày về',
+        ],
+        currency: p.currency,
+        value,
+        waiting_days: daysSince(p.created_at, today) ?? 0,
+        submitted_at: p.created_at,
+        submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
+        warnings,
+        big: isBigApproval(value),
+        href: `/exec/approvals/po/${p.id}`,
+      })
+    }
+
+    const currencyByOrder = new Map(orderList.rows.map((o) => [o.id, o.currency]))
+    const linesByOrder = new Map<string, typeof orderLines>()
+    for (const ol of orderLines) {
+      const arr = linesByOrder.get(ol.order_id)
+      if (arr) arr.push(ol)
+      else linesByOrder.set(ol.order_id, [ol])
+    }
+
+    for (const l of pendingLsx.rows) {
+      const lines = l.order_ids.flatMap((id) => linesByOrder.get(id) ?? [])
+      const value = lines.reduce((s, ol) => s + ol.qty * ol.unit_price, 0)
+      const bomPending = lines.filter((ol) => ol.bom_status !== 'done').length
+      const warnings: string[] = []
+      if (bomPending > 0) warnings.push(`${bomPending} sản phẩm chưa chốt BOM`)
+      if (value <= 0) warnings.push('Đơn hàng chưa có đơn giá — không thấy giá trị lệnh')
+      items.push({
+        kind: 'lsx',
+        id: l.id,
+        code: l.code,
+        party: l.customer_name,
+        facts: [
+          l.order_codes.length > 1
+            ? `${l.order_codes.length} đơn`
+            : `đơn ${l.order_codes[0] ?? '?'}`,
+          `${lines.length} sản phẩm`,
+          ...(l.ship_date ? [`giao ${l.ship_date}`] : []),
+        ],
+        // Lệnh gộp nhiều đơn có thể khác tiền tệ; lấy đơn đầu làm đại diện —
+        // hiếm (lệnh gộp luôn cùng khách) và chỉ ảnh hưởng nhãn.
+        currency: currencyByOrder.get(l.order_ids[0] ?? '') ?? 'USD',
+        value,
+        waiting_days: daysSince(l.created_at, today) ?? 0,
+        submitted_at: l.created_at,
+        submitted_by: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
+        warnings,
+        big: isBigApproval(value),
+        href: `/exec/approvals/lsx/${l.id}`,
+      })
+    }
+
+    items.sort((a, b) => b.waiting_days - a.waiting_days || b.value - a.value)
+
+    const mineToday = recentEvents.filter(
+      (e) => e.actor_id === user.id && e.created_at.slice(0, 10) === today,
+    )
+
+    return {
+      items,
+      stats: {
+        total: items.length,
+        oldest_days: items.reduce((m, i) => Math.max(m, i.waiting_days), 0),
+        value: sumByCurrency(
+          items.map((i) => ({ currency: i.currency, value: i.value })),
+        ),
+      },
+      decided_today: {
+        approved: mineToday.filter((e) => e.action === 'approved').length,
+        rejected: mineToday.filter((e) => e.action === 'rejected').length,
+      },
+      emptiness: { pos_total: allPos.total, lsx_total: allLsx.total },
+    }
+  },
+
   async dashboard(user: User): Promise<ExecDashboard> {
     await assertAction(user, 'exec.tower.view')
     const today = new Date().toISOString().slice(0, 10)

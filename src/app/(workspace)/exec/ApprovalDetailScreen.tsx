@@ -45,18 +45,20 @@ export function ApprovalDetailScreen(
     | { kind: 'po'; item: PendingPo; nowIso: string },
 ) {
   const router = useRouter()
+  // Ký xong quay về HỘP KÝ (/exec) chứ không về danh sách cũ: từ 14/08 hộp ký
+  // là nơi phiếu chờ nằm, danh sách /exec/approvals đã rút khỏi điều hướng.
   const dec = useApprovalDecision(() => {
-    router.push('/exec/approvals')
+    router.push('/exec')
     router.refresh()
   })
 
   return (
     <div className="flex flex-col gap-3">
       <Link
-        href="/exec/approvals"
+        href="/exec"
         className="text-muted-foreground hover:text-foreground -ml-1 inline-flex w-fit items-center gap-1 text-sm"
       >
-        <ChevronLeft className="size-4" /> Danh sách phê duyệt
+        <ChevronLeft className="size-4" /> Hộp ký
       </Link>
 
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
