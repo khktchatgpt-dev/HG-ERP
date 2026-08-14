@@ -2,6 +2,16 @@
  * Toán thuần cho khu Ban Giám Đốc (Báo cáo CEO + Tháp điều hành COO) —
  * tách khỏi ops.service để test đơn vị được (cùng triết lý late-risk.ts,
  * production-summary.ts). Caller truyền todayIso để pure/testable.
+ *
+ * 14/08/2026 — CẢNH BÁO NGƯỜI ĐỌC SAU: chỉ `BIG_APPROVAL_VND` / `isBigApproval`
+ * còn nơi gọi (màn phê duyệt của GĐ). Toàn bộ phần dưới — tuần/WIP/phế/màu tổ /
+ * %HT đồng bộ — mất nơi gọi khi `/exec/ops`, `/exec/production` và
+ * `ops.service.ts` bị xoá theo docs/exec-v2-ky-duyet-plan.md §5J.
+ *
+ * CỐ Ý GIỮ LẠI, không xoá theo: đây là toán của XƯỞNG (workspace /production,
+ * /thongke đang dựng), đã có test phủ, và xoá đi thì lúc cần phải viết lại từ
+ * đầu. Nếu tới lúc xưởng lên hệ thống mà vẫn không ai gọi thì hãy xoá hẳn —
+ * đừng để nó nằm đây thêm một vòng nữa.
  */
 
 // ── Ngưỡng phê duyệt "Giá trị lớn — cần Giám đốc" ──────────────────────────

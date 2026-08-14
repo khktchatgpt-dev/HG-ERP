@@ -47,7 +47,7 @@ export function ApprovalsManager({
         }
       />
 
-      {/* KPI — đồng bộ với /exec/orders và /exec/production */}
+      {/* KPI phiếu chờ — sẽ nhập vào "Hộp ký" ở bước 3 (exec-v2-ky-duyet-plan §5B) */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <KpiCard
           label="LSX chờ duyệt"

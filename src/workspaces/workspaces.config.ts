@@ -424,10 +424,17 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Điều hành',
         /*
          * 09/08/2026 — chủ dự án chốt: "phần của giám đốc giới hạn ở quản lý các
-         * thông tin quan trọng của phòng Sale và Cung ứng". Đã RÚT khỏi menu hai
-         * màn hướng về xưởng (`/exec/ops` tháp điều hành, `/exec/production` tiến
-         * độ công đoạn) — xưởng chưa lên hệ thống nên cả hai rỗng tuyệt đối.
-         * Route vẫn còn để link cũ không gãy; bật lại chỉ cần thêm dòng vào đây.
+         * thông tin quan trọng của phòng Sale và Cung ứng".
+         *
+         * 14/08/2026 — chốt tiếp: việc DUY NHẤT của GĐ trên hệ thống là KÝ PHIẾU
+         * (xem docs/exec-v2-ky-duyet-plan.md). Hai màn hướng về xưởng đã bị XOÁ
+         * HẲN ở bước này: `/exec/ops` (tháp điều hành) và `/exec/production`
+         * (tiến độ công đoạn) — rút khỏi menu từ 09/08, xưởng đã có workspace
+         * riêng (/production, /thongke), giữ lại chỉ là mã chết. Cần lại thì lấy
+         * từ git, đừng viết lại từ đầu.
+         *
+         * Ba mục còn lại dưới đây sẽ được thay bằng "Hộp ký" ở bước 3 của kế
+         * hoạch — chưa đổi bây giờ để GĐ không mất đường ký đang dùng.
          */
         items: [
           { href: '/exec', label: 'Bảng tin điều hành', icon: 'home' },
