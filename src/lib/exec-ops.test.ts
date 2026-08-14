@@ -4,6 +4,7 @@ import {
   defectByTeam,
   defectStats,
   isBigApproval,
+  isBigApprovalIn,
   orderSyncPct,
   teamStatusColor,
   topDefectReasons,
@@ -18,6 +19,21 @@ describe('isBigApproval — ngưỡng 50 triệu', () => {
     expect(isBigApproval(49_999_999)).toBe(false)
     expect(isBigApproval(50_000_000)).toBe(true)
     expect(isBigApproval(120_000_000)).toBe(true)
+  })
+})
+
+describe('isBigApprovalIn — ngưỡng có tiền tệ', () => {
+  it('VND: giữ nguyên biên 50 triệu', () => {
+    expect(isBigApprovalIn(49_999_999, 'VND')).toBe(false)
+    expect(isBigApprovalIn(50_000_000, 'VND')).toBe(true)
+  })
+
+  it('không phải VND → LUÔN là giá trị lớn, dù số nhỏ', () => {
+    // 3.000 USD ~ 75 triệu đồng: bản cũ so thẳng với 50_000_000 nên coi là đơn
+    // nhỏ và cho ký nhanh hàng loạt. Chưa có tỉ giá thì không được đoán.
+    expect(isBigApprovalIn(3_000, 'USD')).toBe(true)
+    expect(isBigApprovalIn(1, 'USD')).toBe(true)
+    expect(isBigApprovalIn(1, 'EUR')).toBe(true)
   })
 })
 

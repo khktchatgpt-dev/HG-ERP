@@ -4,7 +4,7 @@ import { lsxService } from '@/modules/dept/production/lsx.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
 import { assessPoLate } from '@/lib/late-risk'
-import { isBigApproval } from '@/lib/exec-ops'
+import { isBigApprovalIn } from '@/lib/exec-ops'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
@@ -186,7 +186,10 @@ export type SignItem = {
   submitted_by: string | null
   /** Cảnh báo cần thấy TRƯỚC khi ký (thiếu BOM, thiếu giá, quá hẹn…). */
   warnings: string[]
-  /** Vượt ngưỡng "giá trị lớn" — ký kiểu này phải đọc kỹ. */
+  /**
+   * Vượt ngưỡng "giá trị lớn" → KHÔNG cho ký hàng loạt, phải mở ra đọc.
+   * Chỉ đơn mua mới có cờ này (xem chỗ gán bên dưới).
+   */
   big: boolean
   /** Trang thẩm định đầy đủ. */
   href: string
@@ -276,7 +279,7 @@ export const execService = {
         submitted_at: p.created_at,
         submitted_by: p.created_by ? (creatorNames.get(p.created_by) ?? null) : null,
         warnings,
-        big: isBigApproval(value),
+        big: isBigApprovalIn(value, p.currency),
         href: `/exec/approvals/po/${p.id}`,
       })
     }
@@ -316,7 +319,11 @@ export const execService = {
         submitted_at: l.created_at,
         submitted_by: l.issued_by ? (creatorNames.get(l.issued_by) ?? null) : null,
         warnings,
-        big: isBigApproval(value),
+        // Lệnh SX KHÔNG bao giờ mang cờ "giá trị lớn" dù số tiền to. Ngưỡng đó
+        // canh CAM KẾT CHI TIỀN (đơn mua): ký là công ty mất tiền. Tiền của lệnh
+        // sản xuất là DOANH THU sắp thu về, ký lệnh không tiêu đồng nào — gắn cờ
+        // vào đây thì mọi lệnh đều đỏ và cái cờ mất nghĩa.
+        big: false,
         href: `/exec/approvals/lsx/${l.id}`,
       })
     }

@@ -78,6 +78,34 @@ export function useApprovalDecision(onSettled?: () => void) {
   const [approveTarget, setApproveTarget] = useState<DecideTarget | null>(null)
   const [rejectTarget, setRejectTarget] = useState<DecideTarget | null>(null)
   const [rejectReason, setRejectReason] = useState('')
+  const [manyTargets, setManyTargets] = useState<DecideTarget[] | null>(null)
+
+  /**
+   * Ký nhiều phiếu một lượt — gọi TUẦN TỰ từng phiếu, không dừng khi một phiếu
+   * lỗi. Cố ý: mỗi phiếu là một quyết định độc lập, phiếu thứ 3 hỏng không có lý
+   * do gì làm mất chữ ký của phiếu 1 và 2. Cuối cùng báo rõ cái nào hỏng vì sao,
+   * phiếu hỏng vẫn nằm lại trong hộp.
+   */
+  async function confirmApproveMany() {
+    const targets = manyTargets
+    if (!targets?.length) return
+    setBusy(true)
+    let ok = 0
+    const fails: string[] = []
+    for (const t of targets) {
+      try {
+        await callDecide(t, 'approve')
+        ok += 1
+      } catch (e) {
+        fails.push(`${t.code} (${apiErrorText(e)})`)
+      }
+    }
+    setBusy(false)
+    setManyTargets(null)
+    if (fails.length === 0) toast.success(`Đã ký ${ok} phiếu`)
+    else toast.warning(`Đã ký ${ok} phiếu, ${fails.length} phiếu lỗi`, fails.join(' · '))
+    onSettled?.()
+  }
 
   async function confirmApprove() {
     if (!approveTarget) return
@@ -141,6 +169,27 @@ export function useApprovalDecision(onSettled?: () => void) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={!!manyTargets} onOpenChange={(o) => !o && setManyTargets(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Ký {manyTargets?.length ?? 0} phiếu một lượt?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {manyTargets?.map((t) => t.code).join(', ')}. Phiếu giá trị lớn không nằm
+              trong danh sách này — loại đó phải mở ra ký riêng.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction disabled={busy} onClick={() => void confirmApproveMany()}>
+              {busy && <Loader2 className="animate-spin" />} Ký {manyTargets?.length ?? 0}{' '}
+              phiếu
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog
         open={!!rejectTarget}
         onOpenChange={(o) => {
@@ -191,5 +240,11 @@ export function useApprovalDecision(onSettled?: () => void) {
     </>
   )
 
-  return { busy, askApprove: setApproveTarget, askReject: setRejectTarget, dialogs }
+  return {
+    busy,
+    askApprove: setApproveTarget,
+    askReject: setRejectTarget,
+    askApproveMany: setManyTargets,
+    dialogs,
+  }
 }

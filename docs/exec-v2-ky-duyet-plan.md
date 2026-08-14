@@ -188,6 +188,30 @@ tay cái ở đáy thẻ, vuốt xuống để tải lại.
 
 ### C. Buồng lái thẩm định — giữ lõi, làm lại tầng nạp
 
+> **Trạng thái 14/08/2026: XONG.** Kết cục khác dự kiến một chút — sau khi Hộp ký
+> nhận vai danh sách, buồng lái master-detail không còn gì để làm, nên **xoá hẳn**
+> thay vì tách file: `ApprovalCockpit.tsx` (1.000 dòng), `ApprovalsManager.tsx`
+> (87), và `approvals/page.tsx` bản nạp nặng (183) — tổng **1.270 dòng**.
+> `/exec/approvals` giờ redirect về `/exec`; chi tiết từng phiếu vẫn ở
+> `/exec/approvals/{lsx,po}/[id]` (`ApprovalDetailScreen`, bố cục 2 cột, không
+> đụng tới).
+>
+> **Ký hàng loạt được CHUYỂN chứ không mất**: chọn nhiều phiếu ngay trên Hộp ký →
+> ký một lượt, gọi tuần tự từng phiếu, phiếu nào lỗi thì báo riêng và nằm lại
+> trong hộp — một phiếu hỏng không xoá chữ ký của những phiếu trước nó.
+>
+> **Vá kèm một lỗi tiền tệ**: ngưỡng "giá trị lớn" là 50 triệu ĐỒNG nhưng bản cũ
+> so thẳng `total >= 50_000_000` bất kể tiền tệ, nên một đơn **3.000 USD (~75
+> triệu đồng) lọt qua như đơn nhỏ và được ký nhanh hàng loạt** — đúng loại đơn mà
+> ngưỡng sinh ra để chặn. Chưa có tỉ giá trong hệ thống nên không quy đổi; chọn
+> cách an toàn: tiền tệ khác VND luôn coi là giá trị lớn, phải mở ra ký riêng
+> (`isBigApprovalIn`). §5F sẽ thay bằng ngưỡng theo từng tiền tệ.
+>
+> Lệnh SX thì **không bao giờ** mang cờ giá trị lớn dù số tiền to: ngưỡng đó canh
+> CAM KẾT CHI TIỀN (đơn mua). Tiền của lệnh sản xuất là doanh thu sắp thu về, ký
+> lệnh không tiêu đồng nào — gắn cờ vào đây thì mọi lệnh đều đỏ và cái cờ mất
+> nghĩa.
+
 `ApprovalCockpit.tsx` (1.000 dòng) là phần tốt nhất của khu GĐ hiện tại: bảng
 phân tích riêng theo loại phiếu, cảnh báo thiếu giá, trạng thái BOM. **Không đập
 phần này** — đập là mất công vô ích. Việc cần làm:

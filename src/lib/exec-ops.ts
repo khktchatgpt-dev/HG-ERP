@@ -23,6 +23,25 @@ export function isBigApproval(total: number): boolean {
   return total >= BIG_APPROVAL_VND
 }
 
+/**
+ * Bản CÓ TIỀN TỆ của `isBigApproval` (14/08/2026).
+ *
+ * Ngưỡng là 50 triệu ĐỒNG, nhưng đơn mua có cả USD/EUR. Bản cũ so thẳng
+ * `total >= 50_000_000` bất kể tiền tệ, nên một đơn 3.000 USD (~75 triệu đồng)
+ * lọt qua như đơn nhỏ — đúng loại đơn mà ngưỡng sinh ra để chặn.
+ *
+ * Chưa có tỉ giá trong hệ thống nên KHÔNG quy đổi. Chọn cách an toàn: tiền tệ
+ * khác VND thì luôn coi là "giá trị lớn" — tức phải mở ra xem, không ký nhanh
+ * hàng loạt. Thà bắt đọc kỹ một đơn nhỏ còn hơn ký nhầm một đơn to.
+ *
+ * Thay hẳn khi làm §5F (ngưỡng theo từng tiền tệ, đưa vào Cấu hình) —
+ * xem docs/exec-v2-ky-duyet-plan.md.
+ */
+export function isBigApprovalIn(total: number, currency: string): boolean {
+  if (currency !== 'VND') return true
+  return isBigApproval(total)
+}
+
 // ── Dòng sản lượng gọn (khớp cột outputsRepo.listRange) ─────────────────────
 export type SlimOutputEntry = {
   production_order_id: string
