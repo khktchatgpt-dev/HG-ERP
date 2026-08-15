@@ -1,6 +1,7 @@
 import { db } from '@/server/db'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
+import { CleanupOrphansButton } from './CleanupOrphansButton'
 
 type CheckStatus = 'ok' | 'warn' | 'fail'
 type Check = { name: string; status: CheckStatus; detail: string }
@@ -73,27 +74,41 @@ async function checkStorageBuckets(): Promise<Check> {
   }
 }
 
-async function checkOrphanedFiles(): Promise<Check> {
+/**
+ * Trả kèm `count` (không chỉ Check) vì trang còn cần con số để bật nút dọn.
+ * KHÔNG dùng biến module-level: server component chạy chung tiến trình cho mọi
+ * request, biến như thế sẽ lẫn số liệu giữa hai người dùng xem cùng lúc.
+ */
+async function checkOrphanedFiles(): Promise<{ check: Check; count: number }> {
   const { count, error } = await db()
     .from('files')
     .select('id', { count: 'exact', head: true })
     .is('finalized_at', null)
     .is('deleted_at', null)
   if (error) {
-    return { name: 'File chưa hoàn tất upload', status: 'fail', detail: error.message }
+    return {
+      check: { name: 'File chưa hoàn tất upload', status: 'fail', detail: error.message },
+      count: 0,
+    }
   }
   const n = count ?? 0
   if (n > 10) {
     return {
-      name: 'File chưa hoàn tất upload',
-      status: 'warn',
-      detail: `${n} file khởi tạo upload nhưng chưa finalize`,
+      check: {
+        name: 'File chưa hoàn tất upload',
+        status: 'warn',
+        detail: `${n} file khởi tạo upload nhưng chưa finalize`,
+      },
+      count: n,
     }
   }
   return {
-    name: 'File chưa hoàn tất upload',
-    status: 'ok',
-    detail: n === 0 ? 'Không có' : `${n} file (chấp nhận được)`,
+    check: {
+      name: 'File chưa hoàn tất upload',
+      status: 'ok',
+      detail: n === 0 ? 'Không có' : `${n} file (chấp nhận được)`,
+    },
+    count: n,
   }
 }
 
@@ -154,7 +169,7 @@ export default async function AdminHealthPage() {
     checkAdminCount(),
   ])
 
-  const allChecks = [rls, ...counts, buckets, orphaned, dead, admins]
+  const allChecks = [rls, ...counts, buckets, orphaned.check, dead, admins]
   const summary = {
     ok: allChecks.filter((c) => c.status === 'ok').length,
     warn: allChecks.filter((c) => c.status === 'warn').length,
@@ -170,6 +185,7 @@ export default async function AdminHealthPage() {
         ]}
         title="Sức khoẻ hệ thống"
         description={`${allChecks.length} kiểm tra tự động. F5 để chạy lại.`}
+        actions={<CleanupOrphansButton count={orphaned.count} />}
       />
 
       <StatsBar

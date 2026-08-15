@@ -131,6 +131,30 @@ export const storage = {
     urlCache.delete(SignedUrlCache.key(bucket, path))
   },
 
+  /**
+   * Đọc N BYTE ĐẦU của object — để soi chữ ký định dạng (magic number) mà không
+   * phải kéo cả file 50MB về server. Dùng HTTP Range trên URL ký; Storage của
+   * Supabase hỗ trợ Range nên chỉ tốn đúng chừng ấy byte.
+   *
+   * null = không đọc được (object chưa có, mạng lỗi, host không trả Range) —
+   * chỗ gọi tự quyết định coi đó là "không kiểm được" chứ không phải "file xấu".
+   */
+  async readHead(
+    bucket: FileBucket,
+    path: string,
+    bytes: number,
+  ): Promise<Uint8Array | null> {
+    try {
+      const { url } = await this.createSignedDownloadUrl(bucket, path)
+      const res = await fetch(url, { headers: { Range: `bytes=0-${bytes - 1}` } })
+      if (!res.ok) return null
+      const buf = await res.arrayBuffer()
+      return new Uint8Array(buf)
+    } catch {
+      return null
+    }
+  },
+
   /** Dung lượng THẬT của object trên Storage (byte), null nếu object chưa tồn tại. */
   async getObjectSize(bucket: FileBucket, path: string): Promise<number | null> {
     const { data, error } = await db().storage.from(bucket).info(path)

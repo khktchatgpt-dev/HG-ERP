@@ -4,6 +4,8 @@ import { useRef, useState } from 'react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { formatBytes, maxBytesFor, type DocType } from '@/lib/file-limits'
+import { extensionIssue } from '@/lib/file-signature'
+import { sha256Hex } from '@/lib/upload'
 import { downscaleImage } from '@/lib/image-downscale'
 
 type Parent =
@@ -27,14 +29,6 @@ type InitResponse = {
   path: string
 }
 
-async function sha256Hex(file: File): Promise<string> {
-  const buf = await file.arrayBuffer()
-  const hash = await crypto.subtle.digest('SHA-256', buf)
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 export function FileUploader({
   parent,
   bucket = 'attachments',
@@ -42,7 +36,6 @@ export function FileUploader({
   docType,
   onUploaded,
   label = 'Tải tệp lên',
-  computeChecksum = false,
 }: {
   parent: Parent
   bucket?: Bucket
@@ -51,8 +44,6 @@ export function FileUploader({
   docType?: DocType
   onUploaded?: (fileId: string) => void
   label?: string
-  /** Compute sha256 client-side and post to finalize. Slows large files. Default off. */
-  computeChecksum?: boolean
 }) {
   const toast = useToast()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -63,6 +54,11 @@ export function FileUploader({
     // Ảnh chụp tự thu nhỏ trước khi so trần (cùng luật với uploadFile bên
     // @/lib/upload — hai đường upload phải cư xử giống nhau).
     if (docType === 'image') file = await downscaleImage(file)
+    const extIssue = extensionIssue(file.name)
+    if (extIssue) {
+      toast.error('Không nhận định dạng này', extIssue)
+      return
+    }
     const maxBytes = maxBytesFor(docType)
     if (file.size > maxBytes) {
       toast.error(
@@ -95,7 +91,7 @@ export function FileUploader({
       if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`)
 
       setProgress('Đang hoàn tất…')
-      const checksum = computeChecksum ? await sha256Hex(file) : undefined
+      const checksum = await sha256Hex(file)
       await api(`/api/files/${init.fileId}/finalize`, {
         method: 'POST',
         body: { checksum },

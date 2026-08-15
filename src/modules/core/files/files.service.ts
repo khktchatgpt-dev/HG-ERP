@@ -1,5 +1,10 @@
 import { randomUUID } from 'crypto'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
+import {
+  SIGNATURE_HEAD_BYTES,
+  extensionIssue,
+  signatureIssue,
+} from '@/lib/file-signature'
 import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
@@ -185,6 +190,10 @@ export const filesService = {
         `File ${formatBytes(input.buffer.byteLength)} vượt giới hạn ${formatBytes(max)}`,
       )
     }
+    // Đường này KHÔNG đi qua `initUploadSchema` (server tự cầm byte) nên phải tự
+    // soát đuôi — không có nhánh này thì nó thành cửa sau của mọi luật ở đó.
+    const extIssue = extensionIssue(input.filename)
+    if (extIssue) throw BadRequest(extIssue)
     assertBucketAllowed(input.bucket, input.mime_type)
     const base: InitUploadInput = {
       bucket: input.bucket,
@@ -263,16 +272,32 @@ export const filesService = {
     const actualSize = await storage.getObjectSize(file.bucket, file.path)
     if (actualSize === null) throw BadRequest('Chưa tải file lên Storage')
 
-    const max = maxBytesFor(file.doc_type)
-    if (actualSize > max) {
-      // Dọn rác: object đã nằm trên Storage rồi, không xoá thì vẫn tính tiền lưu
-      // và vẫn tải về được qua signed URL dù row bị bỏ.
+    /** Bỏ object + row rồi ném lỗi — dùng cho mọi lý do từ chối sau khi đã PUT. */
+    const rejectUploaded = async (reason: string): Promise<never> => {
+      // Object đã nằm trên Storage rồi: không xoá thì vẫn tính tiền lưu và vẫn
+      // tải về được qua signed URL dù row bị bỏ.
       await storage.remove(file.bucket, [file.path])
       storage.invalidateSignedUrl(file.bucket, file.path)
       await filesRepo.softDelete(fileId)
-      throw BadRequest(
+      throw BadRequest(reason)
+    }
+
+    const max = maxBytesFor(file.doc_type)
+    if (actualSize > max) {
+      await rejectUploaded(
         `File thật ${formatBytes(actualSize)}, vượt giới hạn ${formatBytes(max)}`,
       )
+    }
+
+    // Soi CHỮ KÝ ĐỊNH DẠNG của object thật. Đây là lớp duy nhất bắt được trò
+    // đổi đuôi: `mime_type` trong DB là thứ trình duyệt khai lúc init, còn đây
+    // là byte thật đã nằm trên Storage. Đọc được mà không khớp → từ chối; đọc
+    // KHÔNG được (mạng lỗi / host không trả Range) → cho qua, vì chặn dựa trên
+    // một phép đo thất bại sẽ khoá oan file thật của người dùng.
+    const head = await storage.readHead(file.bucket, file.path, SIGNATURE_HEAD_BYTES)
+    if (head && head.byteLength >= 4) {
+      const issue = signatureIssue(file.mime_type, head)
+      if (issue) await rejectUploaded(issue)
     }
 
     // Ghi đè bằng số đo thật — số client khai không đáng tin, mà cột này được
@@ -382,6 +407,49 @@ export const filesService = {
     )
     const expiresIn = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
     return { url, expiresIn }
+  },
+
+  /**
+   * DỌN FILE MỒ CÔI — row đã tạo lúc `initUpload` nhưng client không bao giờ
+   * gọi `finalize` (đóng tab giữa chừng, mất mạng, PUT hỏng).
+   *
+   * Chúng vô hình với mọi màn hình (`listByParent` đòi `finalized_at`) nhưng
+   * object vẫn có thể đã nằm trên Storage và vẫn tính tiền lưu — tức là rác
+   * không ai nhìn thấy để mà dọn. Bảng `files` có sẵn index
+   * `files_unfinalized_idx` từ 0006 dành riêng cho việc này, và trang Sức khoẻ
+   * hệ thống đã đếm & cảnh báo từ lâu; đến bản này mới có nút đi xoá.
+   *
+   * `olderThanHours` để không cắt ngang một lần upload đang chạy dở.
+   */
+  async cleanupOrphans(
+    user: User,
+    olderThanHours = 24,
+  ): Promise<{ removed: number; freedBytes: number }> {
+    if (user.role !== 'admin') throw Forbidden('Chỉ quản trị hệ thống dọn được')
+    const cutoff = new Date(Date.now() - olderThanHours * 3_600_000).toISOString()
+    const { data } = await db()
+      .from('files')
+      .select('id, bucket, path, size_bytes')
+      .is('finalized_at', null)
+      .is('deleted_at', null)
+      .lt('created_at', cutoff)
+      .limit(500)
+
+    const rows = (data ?? []) as Pick<FileRow, 'id' | 'bucket' | 'path' | 'size_bytes'>[]
+    let freedBytes = 0
+    for (const row of rows) {
+      // Object có thể chưa từng tồn tại (client bỏ cuộc trước cả bước PUT) —
+      // xoá lỗi cũng không được chặn việc dọn row, nếu không thì kho rác đứng im.
+      try {
+        await storage.remove(row.bucket, [row.path])
+        storage.invalidateSignedUrl(row.bucket, row.path)
+        freedBytes += row.size_bytes ?? 0
+      } catch {
+        /* object không có sẵn — vẫn dọn row */
+      }
+      await filesRepo.softDelete(row.id)
+    }
+    return { removed: rows.length, freedBytes }
   },
 
   async delete(user: User, fileId: string): Promise<void> {

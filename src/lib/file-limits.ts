@@ -106,12 +106,14 @@ export function maxBytesFor(docType: string | null | undefined): number {
  * files.schema re-export cho zod dùng.
  */
 export const ALLOWED_MIME = [
-  // ảnh
+  // ảnh — KHÔNG có image/svg+xml: SVG là định dạng ảnh duy nhất chạy được
+  // <script>, và signed URL trỏ thẳng host Supabase nên mở tab là script chạy
+  // trong origin đó. Bỏ ngày 15/08/2026 lúc kho có ĐÚNG 0 file SVG, tức không
+  // mất gì. Xem thêm `lib/image.ts` (vì sao SVG không đi qua Next optimizer).
   'image/png',
   'image/jpeg',
   'image/webp',
   'image/gif',
-  'image/svg+xml',
   // tài liệu Office + PDF
   'application/pdf',
   'application/msword',

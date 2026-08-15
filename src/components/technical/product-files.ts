@@ -7,6 +7,8 @@ export type ProductFile = {
   size_bytes: number
   created_at: string
   doc_type: DocType | null
+  /** Tên người tải lên — null nếu tài khoản đã bị xoá (owner_id set null). */
+  owner_name: string | null
 }
 
 /**

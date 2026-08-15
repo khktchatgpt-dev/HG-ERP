@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Download,
+  Eye,
   FileSpreadsheet,
   FileText,
   Image as ImageIcon,
@@ -14,22 +15,18 @@ import {
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
-import { Spinner } from '@/components/erp/Spinner'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn/dropdown-menu'
-import { uploadFile } from '@/lib/upload'
-import {
-  DOC_TYPE_LABEL,
-  formatBytes,
-  isAllowedMime,
-  maxBytesFor,
-} from '@/lib/file-limits'
+import { uploadFileTracked } from '@/lib/upload'
+import { DOC_TYPE_LABEL, formatBytes, maxBytesFor } from '@/lib/file-limits'
 import { cn } from '@/lib/utils'
 import { isProductImage, type ProductFile } from './product-files'
+import { FilePreviewDialog } from './FilePreviewDialog'
+import { UploadQueue, type QueueItem } from './UploadQueue'
 
 /**
  * Loại tài liệu hiện trong hồ sơ. Cố ý KHÔNG có 'image': ảnh SP quản lý ở ô ảnh
@@ -85,6 +82,22 @@ const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'])
 const SHEET = new Set(['xlsx', 'xls', 'csv'])
 const SLIDE = new Set(['pptx', 'ppt'])
 
+/**
+ * Đoán loại tài liệu cho file vừa THẢ vào.
+ *
+ * Quy tắc: đuôi nào chỉ thuộc đúng một ngăn thì theo đuôi; còn lại (PDF, ảnh —
+ * vừa là bản vẽ, vừa là hướng dẫn, vừa là chứng chỉ) thì theo TAB ĐANG MỞ. Nghĩa
+ * là "thả vào ngăn nào thì nằm ngăn đó", trừ khi đuôi file nói ngược lại rõ
+ * ràng. Đoán sai vẫn sửa được ngay trong hàng đợi trước khi lưu.
+ */
+function guessDocType(filename: string, currentTab: TabType): TabType {
+  const e = ext(filename)
+  if (SHEET.has(e)) return 'bom'
+  if (SLIDE.has(e)) return 'packing'
+  if (e === 'dwg' || e === 'dxf') return 'drawing'
+  return currentTab
+}
+
 /** Icon theo đuôi file — nhận dạng nhanh hơn đọc tên file dài. */
 function FileIcon({ f, className }: { f: ProductFile; className?: string }) {
   const e = ext(f.filename)
@@ -102,14 +115,17 @@ function FileIcon({ f, className }: { f: ProductFile; className?: string }) {
  * HỒ SƠ TÀI LIỆU SP — chia TAB theo loại (bản vẽ / BOM / lắp ráp / chứng chỉ /
  * khác). Ảnh SP không nằm ở đây.
  *
- * XEM TRỰC TIẾP TRONG TRANG: đã dựng (ảnh + PDF nhúng, Excel đọc bằng SheetJS)
- * rồi user cho TẠM BỎ 13/08/2026. Nên tab này quay về đúng một việc: giữ tài
- * liệu, tải về, xoá. Muốn bật lại thì dựng lại khung xem bên phải — phần khó
- * (URL ký, đọc .xlsx phía client) đã làm được, không có rào kỹ thuật nào.
+ * XEM TRƯỚC TRONG TRANG (15/08/2026): bật lại phần rẻ và chắc — ảnh + PDF nhúng
+ * bằng thẻ có sẵn của trình duyệt (`FilePreviewDialog`). Bản đọc .xlsx bằng
+ * SheetJS từng dựng rồi bỏ 13/08 thì vẫn để đó; 540 file BOM tên na ná nhau là
+ * lý do đủ để ít nhất không bắt người dùng tải về mới biết mở đúng file chưa.
  *
- * Phần "chốt bản BOM đang dùng" (0140) cũng đã bỏ theo yêu cầu cùng ngày: nhãn
- * ĐANG DÙNG / bản cũ / nút "Dùng bản này" không còn. Cột `bom_file_id` vẫn nằm
- * trong DB, dữ liệu cũ không mất.
+ * TẢI LÊN: kéo-thả nhiều file vào cả panel, có hàng đợi + % thật
+ * (`UploadQueue`). Nút "Tải lên" vẫn giữ cho ai quen bấm.
+ *
+ * Phần "chốt bản BOM đang dùng" (0140) đã bỏ theo yêu cầu 13/08: nhãn ĐANG DÙNG
+ * / bản cũ / nút "Dùng bản này" không còn. Cột `bom_file_id` vẫn nằm trong DB,
+ * dữ liệu cũ không mất.
  */
 export function ProductFilesPanel({
   productId,
@@ -122,6 +138,13 @@ export function ProductFilesPanel({
   const confirm = useConfirm()
   const [files, setFiles] = useState<ProductFile[]>([])
   const [tab, setTab] = useState<TabType>('drawing')
+  const [queue, setQueue] = useState<QueueItem[]>([])
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [preview, setPreview] = useState<ProductFile | null>(null)
+  /** Đếm dragenter/dragleave: kéo qua phần tử con cũng bắn dragleave. */
+  const dragDepth = useRef(0)
+  const seq = useRef(0)
 
   const reload = useCallback(async () => {
     try {
@@ -165,21 +188,126 @@ export function ProductFilesPanel({
     }
   }
 
+  /** Nhận file từ kéo-thả HOẶC từ hộp thoại chọn file → đẩy vào hàng đợi. */
+  const enqueue = useCallback(
+    (list: FileList | File[], forced?: TabType) => {
+      const added: QueueItem[] = [...list].map((file) => ({
+        key: `q${++seq.current}`,
+        file,
+        docType: forced ?? guessDocType(file.name, tab),
+        status: 'cho' as const,
+        percent: 0,
+      }))
+      if (added.length > 0) setQueue((q) => [...q, ...added])
+    },
+    [tab],
+  )
+
+  /**
+   * Tải TUẦN TỰ từng file. Cố ý không chạy song song: đường truyền công ty có
+   * hạn, 10 file cùng lúc thì file nào cũng bò và thanh % nào cũng đứng.
+   * Một file lỗi KHÔNG dừng mẻ — nó ở lại hàng đợi với lý do riêng.
+   */
+  async function startUpload() {
+    setUploading(true)
+    const pending = queue.filter((i) => i.status === 'cho')
+    let ok = 0
+    for (const item of pending) {
+      const patch = (p: Partial<QueueItem>) =>
+        setQueue((q) => q.map((x) => (x.key === item.key ? { ...x, ...p } : x)))
+      patch({ status: 'dang-tai', percent: 0, error: undefined })
+      try {
+        await uploadFileTracked(
+          item.file,
+          { kind: 'product', id: productId },
+          'attachments',
+          item.docType,
+          (percent) => patch({ percent }),
+        )
+        patch({ status: 'xong', percent: 100 })
+        ok += 1
+      } catch (e) {
+        patch({ status: 'loi', error: apiErrorText(e) })
+      }
+    }
+    setUploading(false)
+    if (ok > 0) {
+      toast.success(`Đã tải lên ${ok} file`)
+      // Nhảy sang ngăn của file đầu tiên lưu được, để thấy ngay thứ vừa thêm.
+      // `QueueItem.docType` là DocType đầy đủ (có cả 'image' — ngăn không hiện ở
+      // panel này), nên phải lọc về TabType thay vì ép kiểu.
+      const landed = pending
+        .map((p) => p.docType)
+        .find((t): t is TabType => (TABS as readonly string[]).includes(t))
+      if (landed) setTab(landed)
+      await reload()
+      // Dọn các dòng đã xong, giữ lại dòng lỗi để người dùng còn thấy lý do.
+      setQueue((q) => q.filter((i) => i.status === 'loi'))
+    }
+  }
+
   const countOf = (t: TabType) => files.filter((f) => tabOf(f) === t).length
   const current = files.filter((f) => tabOf(f) === tab)
 
   return (
-    <section className="bg-card overflow-hidden rounded-xl border">
+    <section
+      className={cn(
+        'bg-card relative overflow-hidden rounded-xl border transition-colors',
+        dragOver && 'border-primary bg-primary/5',
+      )}
+      onDragEnter={(e) => {
+        if (!canEdit || !e.dataTransfer.types.includes('Files')) return
+        dragDepth.current += 1
+        setDragOver(true)
+      }}
+      onDragOver={(e) => {
+        if (canEdit && e.dataTransfer.types.includes('Files')) e.preventDefault()
+      }}
+      onDragLeave={() => {
+        dragDepth.current -= 1
+        if (dragDepth.current <= 0) {
+          dragDepth.current = 0
+          setDragOver(false)
+        }
+      }}
+      onDrop={(e) => {
+        if (!canEdit) return
+        e.preventDefault()
+        dragDepth.current = 0
+        setDragOver(false)
+        if (e.dataTransfer.files.length > 0) enqueue(e.dataTransfer.files)
+      }}
+    >
+      {dragOver && (
+        <div className="border-primary bg-primary/10 text-primary pointer-events-none absolute inset-2 z-10 flex items-center justify-center rounded-lg border-2 border-dashed text-sm font-medium">
+          Thả file vào đây — vào ngăn “{DOC_TYPE_LABEL[tab]}” trừ khi đuôi file nói khác
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Paperclip className="text-muted-foreground size-4" aria-hidden />
           Hồ sơ tài liệu
           <span className="text-muted-foreground font-normal">({files.length})</span>
         </h2>
-        {canEdit && (
-          <UploadMenu productId={productId} onUploaded={reload} onPicked={setTab} />
-        )}
+        {canEdit && <UploadMenu onPick={enqueue} busy={uploading} />}
       </div>
+
+      {canEdit && (
+        <UploadQueue
+          items={queue}
+          docTypes={TABS}
+          busy={uploading}
+          onChangeType={(key, t) =>
+            setQueue((q) =>
+              q.map((x) => (x.key === key ? { ...x, docType: t as TabType } : x)),
+            )
+          }
+          onRemove={(key) => setQueue((q) => q.filter((x) => x.key !== key))}
+          onStart={() => void startUpload()}
+          onClear={() => setQueue([])}
+        />
+      )}
 
       {/* Tabs — luôn hiện đủ loại kể cả khi trống, để biết hồ sơ còn thiếu gì. */}
       <div
@@ -222,7 +350,7 @@ export function ProductFilesPanel({
         <div className="px-4 py-8 text-center">
           <p className="text-muted-foreground text-sm">
             Chưa có {DOC_TYPE_LABEL[tab].toLowerCase()}.
-            {canEdit && ' Bấm “Tải lên” rồi chọn loại này.'}
+            {canEdit && ' Kéo file thả vào đây, hoặc bấm “Tải lên”.'}
           </p>
           {canEdit && (
             <p className="text-muted-foreground/80 mt-1 text-xs">
@@ -240,17 +368,29 @@ export function ProductFilesPanel({
               <FileIcon f={f} className="text-muted-foreground size-4 shrink-0" />
               <button
                 type="button"
-                onClick={() => void download(f)}
+                onClick={() => setPreview(f)}
                 className="min-w-0 flex-1 text-start"
-                title={`Tải về ${f.filename}`}
+                title={`Xem trước ${f.filename}`}
               >
                 <span className="block truncate text-sm hover:underline">
                   {f.filename}
                 </span>
                 <span className="text-muted-foreground block text-xs">
-                  {formatBytes(f.size_bytes)} ·{' '}
-                  {new Date(f.created_at).toLocaleDateString('vi-VN')}
+                  {/* Ai tải lên đứng TRƯỚC dung lượng: 6 tháng sau, câu hỏi đầu
+                      tiên về một file lạ luôn là "của ai", không phải "nặng bao nhiêu". */}
+                  {f.owner_name ?? 'không rõ người tải'} ·{' '}
+                  {new Date(f.created_at).toLocaleDateString('vi-VN')} ·{' '}
+                  {formatBytes(f.size_bytes)}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreview(f)}
+                aria-label="Xem trước"
+                title="Xem trước"
+                className="text-muted-foreground hover:text-foreground shrink-0 rounded p-1"
+              >
+                <Eye className="size-4" aria-hidden />
               </button>
               <button
                 type="button"
@@ -282,17 +422,21 @@ export function ProductFilesPanel({
       {canEdit && current.length > 0 && (
         <p className="text-muted-foreground/80 border-t px-4 py-2 text-xs">
           {DOC_TYPE_LABEL[tab]}: nhận {DOC_META[tab].formats} · tối đa{' '}
-          {formatBytes(maxBytesFor(tab))}
+          {formatBytes(maxBytesFor(tab))} · kéo-thả được nhiều file cùng lúc
         </p>
       )}
+
+      <FilePreviewDialog file={preview} onClose={() => setPreview(null)} />
     </section>
   )
 }
 
 /**
- * 1 nút "Tải lên" → menu chọn loại → mở luôn hộp thoại chọn file với `accept`
- * đúng loại đó. Loại được ghim qua ref (không qua state) để `accept` đã đúng
- * TRƯỚC khi hộp thoại mở.
+ * 1 nút "Tải lên" → menu chọn loại → mở hộp thoại chọn file (CHỌN NHIỀU được)
+ * với `accept` đúng loại đó, rồi đẩy thẳng vào hàng đợi.
+ *
+ * Nút này không còn tự upload nữa — mọi file đều đi qua hàng đợi chung với
+ * đường kéo-thả, để chỉ có MỘT chỗ hiện tiến trình và MỘT chỗ báo lỗi.
  *
  * Menu dùng Radix (shadcn) chứ không phải div `absolute` tự viết: bản cũ nằm
  * TRONG `<section overflow-hidden>` nên bị xén mất mấy dòng cuối, và không tự
@@ -300,17 +444,12 @@ export function ProductFilesPanel({
  * Nhớ `theme-v2` trên content — portal nhảy ra ngoài shell nên mất token màu.
  */
 function UploadMenu({
-  productId,
-  onUploaded,
-  onPicked,
+  onPick,
+  busy,
 }: {
-  productId: string
-  onUploaded: () => void
-  /** Nhảy sang tab vừa tải lên, để user thấy ngay file mình vừa thêm. */
-  onPicked: (t: TabType) => void
+  onPick: (files: FileList, forced: TabType) => void
+  busy: boolean
 }) {
-  const toast = useToast()
-  const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<TabType | null>(null)
 
@@ -323,46 +462,18 @@ function UploadMenu({
     el.click()
   }
 
-  async function onFile(file: File) {
-    const t = pendingRef.current
-    if (!t) return
-    const max = maxBytesFor(t)
-    if (file.size > max) {
-      toast.error('Tệp quá lớn', `${formatBytes(file.size)} — tối đa ${formatBytes(max)}`)
-      return
-    }
-    // Máy không cài Office có thể trả MIME rỗng cho .pptx/.xlsx — báo trước một
-    // câu đọc được, thay vì để server dội lỗi enum khó hiểu.
-    if (!isAllowedMime(file.type)) {
-      toast.error(
-        'Định dạng không nhận',
-        `${file.name} — hệ thống nhận PDF, ảnh, Word, Excel, PowerPoint, CSV, ZIP.`,
-      )
-      return
-    }
-    setBusy(true)
-    try {
-      await uploadFile(file, { kind: 'product', id: productId }, 'attachments', t)
-      toast.success(`Đã tải lên — ${DOC_TYPE_LABEL[t]}`, file.name)
-      onPicked(t)
-      onUploaded()
-    } catch (e) {
-      toast.error('Tải lên thất bại', apiErrorText(e))
-    } finally {
-      setBusy(false)
-      pendingRef.current = null
-    }
-  }
-
   return (
     <>
       <input
         ref={inputRef}
         type="file"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const f = e.currentTarget.files?.[0]
-          if (f) void onFile(f)
+          const t = pendingRef.current
+          const list = e.currentTarget.files
+          if (t && list && list.length > 0) onPick(list, t)
+          pendingRef.current = null
         }}
       />
       <DropdownMenu>
@@ -370,8 +481,8 @@ function UploadMenu({
           disabled={busy}
           className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
         >
-          {busy ? <Spinner size={12} /> : <Plus className="size-4" aria-hidden />}
-          {busy ? 'Đang tải…' : 'Tải lên'}
+          <Plus className="size-4" aria-hidden />
+          Tải lên
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="theme-v2 w-72">
           {TABS.map((t) => (

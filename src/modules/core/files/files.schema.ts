@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { extensionIssue } from '@/lib/file-signature'
 import {
   ALLOWED_MIME,
   DOC_TYPES,
@@ -73,6 +74,13 @@ export const initUploadSchema = z
         path: ['size_bytes'],
         message: `${describeDocType(input.doc_type)} tối đa ${formatBytes(max)}`,
       })
+    }
+    // Soát ĐUÔI file, không chỉ MIME: MIME là thứ trình duyệt đoán, còn đuôi là
+    // thứ người dùng nhìn thấy và cũng là thứ Windows dùng để chọn phần mềm mở.
+    // Chặn .xlsm/.exe ngay tại biên API — xem lib/file-signature.
+    const extIssue = extensionIssue(input.filename)
+    if (extIssue) {
+      ctx.addIssue({ code: 'custom', path: ['filename'], message: extIssue })
     }
   })
 export type InitUploadInput = z.infer<typeof initUploadSchema>
