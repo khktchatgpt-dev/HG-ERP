@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import {
+  ALLOWED_MIME,
   DOC_TYPES,
+  DOC_TYPE_LABEL,
   DOC_TYPE_MAX_BYTES,
   DEFAULT_MAX_BYTES,
   MAX_UPLOAD_BYTES,
@@ -9,11 +11,13 @@ import {
   type DocType,
 } from '@/lib/file-limits'
 
-// Bảng giới hạn + DOC_TYPES sống ở @/lib/file-limits để client dùng chung được
-// (Client Component không import được từ src/modules/*). Re-export để các chỗ
-// đang `import … from './files.schema'` không phải đổi.
+// Bảng giới hạn + DOC_TYPES + nhãn sống ở @/lib/file-limits để client dùng chung
+// được (Client Component không import được từ src/modules/*). Re-export để các
+// chỗ đang `import … from './files.schema'` không phải đổi.
 export {
+  ALLOWED_MIME,
   DOC_TYPES,
+  DOC_TYPE_LABEL,
   DOC_TYPE_MAX_BYTES,
   DEFAULT_MAX_BYTES,
   MAX_UPLOAD_BYTES,
@@ -39,42 +43,6 @@ export const PARENT_KINDS = [
   'none',
 ] as const
 export type FileParentKind = (typeof PARENT_KINDS)[number]
-
-/**
- * Nhãn tiếng Việt của loại tài liệu (0059) — để tách mục rõ ràng thay vì 1 rổ
- * phẳng. null (không gửi) = chưa phân loại → UI xếp vào "Khác".
- */
-export const DOC_TYPE_LABEL: Record<DocType, string> = {
-  drawing: 'Bản vẽ kỹ thuật',
-  bom: 'File BOM / định mức',
-  assembly: 'Hướng dẫn lắp ráp',
-  image: 'Ảnh sản phẩm',
-  cert: 'Chứng chỉ / test report',
-  other: 'Khác',
-}
-
-export const ALLOWED_MIME = [
-  // images
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'image/gif',
-  'image/svg+xml',
-  // docs
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  // text
-  'text/plain',
-  'text/csv',
-  'application/json',
-  // archives
-  'application/zip',
-] as const
 
 export const initUploadSchema = z
   .object({

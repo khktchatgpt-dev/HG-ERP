@@ -11,8 +11,36 @@
 
 const MB = 1024 * 1024
 
-export const DOC_TYPES = ['drawing', 'bom', 'assembly', 'image', 'cert', 'other'] as const
+/**
+ * Thứ tự khai = thứ tự tab/menu trong hồ sơ SP.
+ * 'packing' (0150) — quy cách đóng gói + kích thước, thường là PowerPoint mỗi
+ * slide một SP. Trước đó loại này rơi vào "Khác" nên nằm lẫn tài liệu tạp.
+ */
+export const DOC_TYPES = [
+  'drawing',
+  'bom',
+  'packing',
+  'assembly',
+  'image',
+  'cert',
+  'other',
+] as const
 export type DocType = (typeof DOC_TYPES)[number]
+
+/**
+ * Nhãn tiếng Việt của loại tài liệu — ở đây (không ở files.schema) để Client
+ * Component dùng được: CLAUDE.md cấm client import từ `src/modules/*`.
+ * files.schema re-export lại cho các chỗ gọi cũ.
+ */
+export const DOC_TYPE_LABEL: Record<DocType, string> = {
+  drawing: 'Bản vẽ kỹ thuật',
+  bom: 'File BOM / định mức',
+  packing: 'Đóng gói / kích thước',
+  assembly: 'Hướng dẫn lắp ráp',
+  image: 'Ảnh sản phẩm',
+  cert: 'Chứng chỉ / test report',
+  other: 'Khác',
+}
 
 /**
  * Cố ý KHÔNG nén ảnh khi upload — bản vẽ và ảnh SP là dữ liệu gốc, nén là mất
@@ -35,6 +63,8 @@ export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
   drawing: HARD_MAX, // bản vẽ là dữ liệu gốc — không siết
   assembly: HARD_MAX,
   bom: HARD_MAX,
+  // PowerPoint đóng gói nhúng nhiều ảnh xếp thùng — dễ vượt 20MB (0150).
+  packing: HARD_MAX,
   cert: HARD_MAX,
   other: HARD_MAX,
 }
@@ -67,6 +97,44 @@ export function maxBytesFor(docType: string | null | undefined): number {
   if (!docType) return DEFAULT_MAX_BYTES
   if (!Object.hasOwn(DOC_TYPE_MAX_BYTES, docType)) return DEFAULT_MAX_BYTES
   return DOC_TYPE_MAX_BYTES[docType as DocType]
+}
+
+/**
+ * Kiểu MIME được nhận — allowlist DUY NHẤT, server chặn theo đây
+ * (`filesService.assertBucketAllowed`). Đặt cạnh bảng giới hạn dung lượng vì
+ * cùng một câu hỏi: "file này có đưa lên được không, tối đa bao nhiêu?".
+ * files.schema re-export cho zod dùng.
+ */
+export const ALLOWED_MIME = [
+  // ảnh
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+  // tài liệu Office + PDF
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // text
+  'text/plain',
+  'text/csv',
+  'application/json',
+  // nén
+  'application/zip',
+] as const
+
+/**
+ * Trình duyệt đoán MIME từ đuôi file qua registry của máy; máy không cài Office
+ * có thể trả CHUỖI RỖNG cho .pptx/.xlsx. Chặn sớm ở client để báo câu dễ hiểu,
+ * thay vì để zod dội về lỗi enum khó đọc sau khi đã gửi request.
+ */
+export function isAllowedMime(mime: string): boolean {
+  return (ALLOWED_MIME as readonly string[]).includes(mime)
 }
 
 export function formatBytes(bytes: number): string {

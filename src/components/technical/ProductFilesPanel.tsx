@@ -8,15 +8,26 @@ import {
   Image as ImageIcon,
   Paperclip,
   Plus,
+  Presentation,
   Trash2,
 } from 'lucide-react'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner } from '@/components/erp/Spinner'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
 import { uploadFile } from '@/lib/upload'
-import { formatBytes, maxBytesFor } from '@/lib/file-limits'
-import { DOC_TYPE_LABEL } from '@/modules/core/files/files.schema'
+import {
+  DOC_TYPE_LABEL,
+  formatBytes,
+  isAllowedMime,
+  maxBytesFor,
+} from '@/lib/file-limits'
 import { cn } from '@/lib/utils'
 import { isProductImage, type ProductFile } from './product-files'
 
@@ -25,19 +36,45 @@ import { isProductImage, type ProductFile } from './product-files'
  * (ProductImagePanel) — tải lên, đặt đại diện, xoá đều ở đó. Để ảnh ở cả hai nơi
  * thì user không biết chỗ nào là chỗ đúng để đổi ảnh.
  */
-const TABS = ['drawing', 'bom', 'assembly', 'cert', 'other'] as const
+const TABS = ['drawing', 'bom', 'packing', 'assembly', 'cert', 'other'] as const
 type TabType = (typeof TABS)[number]
 
-/** Gợi ý + lọc định dạng cho từng loại — hiện trong menu chọn khi tải lên. */
-const DOC_META: Record<TabType, { hint: string; accept?: string }> = {
+/**
+ * Gợi ý + định dạng nhận + bộ lọc hộp thoại chọn file cho từng loại.
+ * `formats` là chữ cho NGƯỜI đọc (hiện trong menu), `accept` là chữ cho TRÌNH
+ * DUYỆT lọc — hai thứ phải nói cùng một điều, nên khai cạnh nhau.
+ */
+const DOC_META: Record<TabType, { hint: string; formats: string; accept?: string }> = {
   drawing: {
     hint: 'CAD, PDF bản vẽ chi tiết / bản vẽ lắp',
+    formats: 'PDF, DWG, DXF, ảnh',
     accept: '.pdf,.dwg,.dxf,image/*',
   },
-  bom: { hint: 'Excel BOM, bảng định mức vật tư gốc', accept: '.xlsx,.xls,.csv' },
-  assembly: { hint: 'Hướng dẫn lắp ráp cho khách / xưởng', accept: '.pdf,image/*' },
-  cert: { hint: 'FSC, BSCI, test report lý-hoá, tải trọng…', accept: '.pdf,image/*' },
-  other: { hint: 'Tài liệu khác chưa phân loại' },
+  bom: {
+    hint: 'Excel BOM, bảng định mức vật tư gốc',
+    formats: 'Excel, CSV',
+    accept: '.xlsx,.xls,.csv',
+  },
+  // 0150 — Kỹ thuật giữ quy cách đóng gói dạng PowerPoint (mỗi slide một SP).
+  packing: {
+    hint: 'Quy cách đóng gói, kích thước thùng / SP',
+    formats: 'PowerPoint, PDF, ảnh',
+    accept: '.pptx,.ppt,.pdf,image/*',
+  },
+  assembly: {
+    hint: 'Hướng dẫn lắp ráp cho khách / xưởng',
+    formats: 'PDF, ảnh',
+    accept: '.pdf,image/*',
+  },
+  cert: {
+    hint: 'FSC, BSCI, test report lý-hoá, tải trọng…',
+    formats: 'PDF, ảnh',
+    accept: '.pdf,image/*',
+  },
+  other: {
+    hint: 'Tài liệu khác chưa phân loại',
+    formats: 'PDF, Office, ảnh, ZIP',
+  },
 }
 
 /** File cũ chưa phân loại (doc_type null) gom vào "Khác". */
@@ -46,11 +83,18 @@ const tabOf = (f: ProductFile): TabType => (f.doc_type as TabType) ?? 'other'
 const ext = (name: string) => name.split('.').pop()?.toLowerCase() ?? ''
 const IMG = new Set(['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'])
 const SHEET = new Set(['xlsx', 'xls', 'csv'])
+const SLIDE = new Set(['pptx', 'ppt'])
 
 /** Icon theo đuôi file — nhận dạng nhanh hơn đọc tên file dài. */
 function FileIcon({ f, className }: { f: ProductFile; className?: string }) {
   const e = ext(f.filename)
-  const Icon = IMG.has(e) ? ImageIcon : SHEET.has(e) ? FileSpreadsheet : FileText
+  const Icon = IMG.has(e)
+    ? ImageIcon
+    : SHEET.has(e)
+      ? FileSpreadsheet
+      : SLIDE.has(e)
+        ? Presentation
+        : FileText
   return <Icon className={className} aria-hidden />
 }
 
@@ -175,10 +219,17 @@ export function ProductFilesPanel({
       </div>
 
       {current.length === 0 ? (
-        <p className="text-muted-foreground px-4 py-8 text-center text-sm">
-          Chưa có {DOC_TYPE_LABEL[tab].toLowerCase()}.
-          {canEdit && ' Bấm “Tải lên” rồi chọn loại này.'}
-        </p>
+        <div className="px-4 py-8 text-center">
+          <p className="text-muted-foreground text-sm">
+            Chưa có {DOC_TYPE_LABEL[tab].toLowerCase()}.
+            {canEdit && ' Bấm “Tải lên” rồi chọn loại này.'}
+          </p>
+          {canEdit && (
+            <p className="text-muted-foreground/80 mt-1 text-xs">
+              Nhận {DOC_META[tab].formats} · tối đa {formatBytes(maxBytesFor(tab))}
+            </p>
+          )}
+        </div>
       ) : (
         <ul className="divide-y">
           {current.map((f) => (
@@ -225,6 +276,15 @@ export function ProductFilesPanel({
           ))}
         </ul>
       )}
+
+      {/* Hạn mức nói NGAY trên panel, không đợi user mở menu mới biết — trước
+          đây chỉ hiện lúc bị chặn ("Tệp quá lớn"), tức là sau khi đã mất công. */}
+      {canEdit && current.length > 0 && (
+        <p className="text-muted-foreground/80 border-t px-4 py-2 text-xs">
+          {DOC_TYPE_LABEL[tab]}: nhận {DOC_META[tab].formats} · tối đa{' '}
+          {formatBytes(maxBytesFor(tab))}
+        </p>
+      )}
     </section>
   )
 }
@@ -233,6 +293,11 @@ export function ProductFilesPanel({
  * 1 nút "Tải lên" → menu chọn loại → mở luôn hộp thoại chọn file với `accept`
  * đúng loại đó. Loại được ghim qua ref (không qua state) để `accept` đã đúng
  * TRƯỚC khi hộp thoại mở.
+ *
+ * Menu dùng Radix (shadcn) chứ không phải div `absolute` tự viết: bản cũ nằm
+ * TRONG `<section overflow-hidden>` nên bị xén mất mấy dòng cuối, và không tự
+ * lật lên khi panel sát đáy màn hình. Radix render qua portal + tránh va mép.
+ * Nhớ `theme-v2` trên content — portal nhảy ra ngoài shell nên mất token màu.
  */
 function UploadMenu({
   productId,
@@ -245,20 +310,11 @@ function UploadMenu({
   onPicked: (t: TabType) => void
 }) {
   const toast = useToast()
-  const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const pendingRef = useRef<TabType | null>(null)
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open])
-
   function pick(t: TabType) {
-    setOpen(false)
     pendingRef.current = t
     const el = inputRef.current
     if (!el) return
@@ -273,6 +329,15 @@ function UploadMenu({
     const max = maxBytesFor(t)
     if (file.size > max) {
       toast.error('Tệp quá lớn', `${formatBytes(file.size)} — tối đa ${formatBytes(max)}`)
+      return
+    }
+    // Máy không cài Office có thể trả MIME rỗng cho .pptx/.xlsx — báo trước một
+    // câu đọc được, thay vì để server dội lỗi enum khó hiểu.
+    if (!isAllowedMime(file.type)) {
+      toast.error(
+        'Định dạng không nhận',
+        `${file.name} — hệ thống nhận PDF, ảnh, Word, Excel, PowerPoint, CSV, ZIP.`,
+      )
       return
     }
     setBusy(true)
@@ -290,7 +355,7 @@ function UploadMenu({
   }
 
   return (
-    <div className="relative">
+    <>
       <input
         ref={inputRef}
         type="file"
@@ -300,47 +365,32 @@ function UploadMenu({
           if (f) void onFile(f)
         }}
       />
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        disabled={busy}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
-      >
-        {busy ? <Spinner size={12} /> : <Plus className="size-4" aria-hidden />}
-        {busy ? 'Đang tải…' : 'Tải lên'}
-      </button>
-
-      {open && (
-        <>
-          <button
-            type="button"
-            aria-label="Đóng"
-            className="fixed inset-0 z-10 cursor-default"
-            onClick={() => setOpen(false)}
-          />
-          <div
-            role="menu"
-            className="bg-card absolute end-0 z-20 mt-1 w-64 overflow-hidden rounded-lg border py-1 shadow-lg"
-          >
-            {TABS.map((t) => (
-              <button
-                key={t}
-                role="menuitem"
-                type="button"
-                onClick={() => pick(t)}
-                className="hover:bg-accent/50 block w-full px-3 py-1.5 text-left"
-              >
-                <div className="text-sm">{DOC_TYPE_LABEL[t]}</div>
-                <div className="text-muted-foreground text-[11px]">
-                  {DOC_META[t].hint}
-                </div>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-    </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          disabled={busy}
+          className="bg-card inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm hover:opacity-90 disabled:opacity-50"
+        >
+          {busy ? <Spinner size={12} /> : <Plus className="size-4" aria-hidden />}
+          {busy ? 'Đang tải…' : 'Tải lên'}
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="theme-v2 w-72">
+          {TABS.map((t) => (
+            <DropdownMenuItem
+              key={t}
+              onSelect={() => pick(t)}
+              className="flex-col items-start gap-0.5"
+            >
+              <span className="text-sm font-medium">{DOC_TYPE_LABEL[t]}</span>
+              <span className="text-muted-foreground text-[11px]">
+                {DOC_META[t].hint}
+              </span>
+              <span className="text-muted-foreground/80 text-[11px]">
+                {DOC_META[t].formats} · tối đa {formatBytes(maxBytesFor(t))}
+              </span>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </>
   )
 }

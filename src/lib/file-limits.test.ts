@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   DEFAULT_MAX_BYTES,
   DOC_TYPES,
+  DOC_TYPE_LABEL,
   DOC_TYPE_MAX_BYTES,
   MAX_UPLOAD_BYTES,
   formatBytes,
+  isAllowedMime,
   maxBytesFor,
 } from './file-limits'
 
@@ -49,6 +53,47 @@ describe('MAX_UPLOAD_BYTES', () => {
     for (const t of DOC_TYPES) {
       expect(maxBytesFor(t)).toBeLessThanOrEqual(MAX_UPLOAD_BYTES)
     }
+  })
+})
+
+describe('DOC_TYPES ↔ check constraint dưới DB', () => {
+  /**
+   * Lệch nhau thì upload chỉ chết LÚC CHẠY THẬT (insert files vi phạm
+   * files_doc_type_valid), sau khi đã PUT xong file lên storage. Đọc thẳng
+   * migration mới nhất động tới constraint — cùng lối với actions.test.ts.
+   */
+  it('mọi doc_type đều nằm trong files_doc_type_valid (0150)', () => {
+    const sql = readFileSync(
+      resolve(process.cwd(), 'supabase/migrations/0150_files_doc_type_packing.sql'),
+      'utf8',
+    )
+    const inList = sql.match(/doc_type in \(([^)]+)\)/)?.[1] ?? ''
+    const allowed = new Set([...inList.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]))
+    expect([...DOC_TYPES].filter((t) => !allowed.has(t))).toEqual([])
+    expect(allowed.size).toBe(DOC_TYPES.length)
+  })
+
+  it('mọi doc_type đều có nhãn tiếng Việt', () => {
+    for (const t of DOC_TYPES) expect(DOC_TYPE_LABEL[t]).toBeTruthy()
+  })
+})
+
+describe('isAllowedMime', () => {
+  it('nhận PowerPoint — hồ sơ đóng gói của Kỹ thuật là .pptx (0150)', () => {
+    expect(
+      isAllowedMime(
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ),
+    ).toBe(true)
+    expect(isAllowedMime('application/vnd.ms-powerpoint')).toBe(true)
+  })
+
+  it('MIME rỗng (máy không cài Office) bị chặn ở client, không gửi lên server', () => {
+    expect(isAllowedMime('')).toBe(false)
+  })
+
+  it('chặn thứ không nằm trong allowlist', () => {
+    expect(isAllowedMime('application/x-msdownload')).toBe(false)
   })
 })
 
