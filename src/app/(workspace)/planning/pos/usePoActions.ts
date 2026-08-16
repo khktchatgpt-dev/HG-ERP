@@ -199,6 +199,60 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     )
   }
 
+  /**
+   * NCC XÁC NHẬN (0152) — không hỏi useConfirm: bản thân dialog nhập cam kết
+   * đã là bước cân nhắc, hỏi thêm lần nữa là hai cửa cho một quyết định.
+   */
+  async function confirmSupplier(
+    po: PoRef,
+    payload: {
+      confirmed_note?: string | null
+      shipments: {
+        expected_date: string
+        note?: string | null
+        lines: { po_line_id: string; qty: number }[]
+      }[]
+    },
+  ) {
+    return done(
+      await send(`/api/dept/supply/pos/${po.id}/confirm`, 'POST', payload),
+      'Đã ghi nhận NCC xác nhận',
+      `${po.code}${payload.shipments.length ? ` · ${payload.shipments.length} đợt giao` : ''}`,
+    )
+  }
+
+  /** Thêm đợt giao bổ sung (NCC hẹn giao bù). */
+  async function addShipments(
+    po: PoRef,
+    shipments: {
+      expected_date: string
+      note?: string | null
+      lines: { po_line_id: string; qty: number }[]
+    }[],
+  ) {
+    return done(
+      await send(`/api/dept/supply/pos/${po.id}/shipments`, 'POST', { shipments }),
+      'Đã thêm đợt giao',
+      po.code,
+    )
+  }
+
+  /** Thao tác trên MỘT đợt: dời ngày / xe tới / huỷ. */
+  async function shipmentAction(
+    shipmentId: string,
+    input: {
+      action: 'reschedule' | 'arrived' | 'cancel'
+      expected_date?: string
+      reason?: string
+    },
+    successTitle: string,
+  ) {
+    return done(
+      await send(`/api/dept/supply/shipments/${shipmentId}`, 'PATCH', input),
+      successTitle,
+    )
+  }
+
   async function advance(
     po: PoRef,
     to: 'ordered' | 'confirmed' | 'in_transit' | 'received',
@@ -253,6 +307,42 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     )
   }
 
+  /**
+   * CHỐT PHẦN THIẾU (0154): NCC không giao phần còn lại nữa — theo dòng
+   * (lineId) hoặc mọi dòng còn thiếu (bỏ trống). Lý do thu bằng ReasonDialog.
+   */
+  async function closeShort(po: PoRef, reason: string, lineId?: string | null) {
+    if (!reason.trim()) return false
+    return done(
+      await send(`/api/dept/supply/pos/${po.id}/close-short`, 'POST', {
+        action: 'close',
+        line_id: lineId ?? null,
+        reason: reason.trim(),
+      }),
+      'Đã chốt phần thiếu',
+      `${po.code} — phần thiếu không tính là "đang đặt" nữa`,
+    )
+  }
+
+  /** Mở lại dòng đã chốt thiếu (NCC đổi ý giao bù) — đơn quay lại theo sổ. */
+  async function reopenShort(po: PoRef, lineId: string) {
+    const ok = await confirm({
+      title: `Mở lại dòng đã chốt thiếu — ${po.code}?`,
+      description:
+        'Dòng quay lại "chờ NCC giao bù": đơn có thể trở về "Về một phần", phần thiếu lại được tính là đang đặt.',
+      confirmLabel: 'Mở lại',
+    })
+    if (!ok) return false
+    return done(
+      await send(`/api/dept/supply/pos/${po.id}/close-short`, 'POST', {
+        action: 'reopen',
+        line_id: lineId,
+      }),
+      'Đã mở lại dòng',
+      po.code,
+    )
+  }
+
   /** HUỶ — lý do bắt buộc, thu bằng hộp thoại như `reject`. */
   async function cancelPo(po: PoRef, reason: string) {
     if (!reason.trim()) return false
@@ -301,8 +391,13 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     approve,
     reject,
     advance,
+    confirmSupplier,
+    addShipments,
+    shipmentAction,
     reschedule,
     reassign,
+    closeShort,
+    reopenShort,
     cancelPo,
     deleteDraft,
     setMaterialsDue,

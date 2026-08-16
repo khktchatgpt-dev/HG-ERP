@@ -20,6 +20,8 @@ export const materialCreateSchema = z.object({
   min_stock: z.coerce.number().min(0).default(0),
   // Bù tồn (0043, nghiệp vụ ①): trần tồn + ngưỡng/lô đặt lại — Kho quản.
   max_stock: z.coerce.number().min(0).optional().nullable(),
+  // Dung sai nhận vượt % (0156) — trần 20 khớp check constraint DB.
+  over_tolerance_pct: z.coerce.number().min(0).max(20).optional(),
   reorder_point: z.coerce.number().min(0).optional().nullable(),
   reorder_qty: z.coerce.number().min(0).optional().nullable(),
   shelf_location: z.string().trim().max(60).optional().nullable(),
@@ -81,6 +83,28 @@ export const materialEnrichSchema = z.object({
 })
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */
+/** Phiếu ĐẢO (0161/K1) — lý do bắt buộc, ghi thẳng vào reason phiếu đảo. */
+export const docReverseSchema = z.object({
+  reason: z.string().trim().min(1, 'Đảo phiếu phải kèm lý do').max(500),
+})
+
+/** Duyệt / từ chối biên bản kiểm kê (0157) — từ chối bắt lý do. */
+export const stocktakeDecideSchema = z
+  .object({
+    decision: z.enum(['approve', 'reject']),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((d) => d.decision !== 'reject' || (d.reason && d.reason.length > 0), {
+    message: 'Từ chối biên bản phải kèm lý do',
+    path: ['reason'],
+  })
+
+/** Đặt dung sai nhận vượt cho CẢ NHÓM (0156) — bulk từ màn danh mục. */
+export const materialToleranceBulkSchema = z.object({
+  group_name: z.string().trim().min(1).max(100),
+  pct: z.coerce.number().min(0).max(20),
+})
+
 export const materialSimilarQuerySchema = z.object({
   name: z.string().trim().min(3).max(200),
   group_name: z.string().trim().max(100).optional(),
@@ -141,7 +165,15 @@ export const receiptDocLineSchema = z.object({
 export const receiptDocSchema = z
   .object({
     po_id: z.string().uuid().optional().nullable(), // nhập theo đơn đặt (null = mua ngoài)
+    /** Nhận cho ĐỢT GIAO nào (0153) — null = không theo đợt (flow cũ, không ép). */
+    shipment_id: z.string().uuid().optional().nullable(),
+    /** HOÀN KHO từ LSX (K2) — loại trừ với po_id (service enforce). */
+    production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+    /** Số phiếu giao / hoá đơn NCC (K3) — chìa khoá đối chiếu 3 chiều. */
+    supplier_doc_no: z.string().trim().max(60).optional().nullable(),
+    /** Ngày chứng từ (K3) — lùi tối đa 7 ngày, xa hơn là bất thường. */
+    doc_date: z.string().date().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
     // Nhận VƯỢT số còn thiếu của đơn: mặc định chặn (409 OVER_RECEIPT). NCC giao
     // dư là chuyện có thật — người nhận xác nhận thì gửi lại kèm cờ + lý do
@@ -154,6 +186,25 @@ export const receiptDocSchema = z
     message: 'Nhận vượt số còn thiếu phải kèm lý do',
     path: ['over_reason'],
   })
+  .refine((d) => !d.shipment_id || !!d.po_id, {
+    message: 'Nhận theo đợt giao thì phải chọn đơn đặt (PO)',
+    path: ['shipment_id'],
+  })
+  .refine((d) => !(d.po_id && d.production_order_id), {
+    message: 'Một phiếu hoặc nhận từ NCC hoặc hoàn kho từ LSX — không trộn',
+    path: ['production_order_id'],
+  })
+  .refine(
+    (d) => {
+      if (!d.doc_date) return true
+      const diff = Date.now() - new Date(d.doc_date).getTime()
+      return diff >= -86_400_000 && diff <= 7 * 86_400_000
+    },
+    {
+      message: 'Ngày chứng từ chỉ lùi được tối đa 7 ngày (không ghi ngày tương lai)',
+      path: ['doc_date'],
+    },
+  )
 
 export const issueDocLineSchema = z.object({
   material_id: z.string().uuid(),
@@ -169,6 +220,8 @@ export const issueDocSchema = z
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
     reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
+    /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
+    doc_date: z.string().date().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
     // Lấn phần tồn đang GIỮ cho LSX khác: mặc định chặn (409 RESERVED_CONFLICT).
     // Người dùng xác nhận vẫn xuất → gửi lại kèm cờ + lý do (ghi vào ghi chú phiếu).

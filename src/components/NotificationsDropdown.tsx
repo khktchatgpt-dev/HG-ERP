@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { Bell } from 'lucide-react'
 import { Spinner } from '@/components/ui/Spinner'
 
 type Notif = {
@@ -24,6 +25,25 @@ const TYPE_LABEL: Record<string, string> = {
   commented: 'đã bình luận',
   due_soon: 'sắp đến hạn',
   overdue: 'đã quá hạn',
+  quote_submitted: 'gửi báo giá chờ duyệt',
+  quote_approved: 'đã duyệt báo giá',
+  quote_rejected: 'đã từ chối báo giá',
+  po_submitted: 'gửi đơn đặt chờ duyệt',
+  po_approved: 'đã duyệt đơn đặt',
+  po_rejected: 'đã từ chối đơn đặt',
+  // 0155: po_withdrawn/po_reassigned trước đây bị constraint chặn im lặng —
+  // giờ insert được thì phải có nhãn, khỏi hiện chuỗi thô.
+  wh_doc_reversed: 'đã đảo phiếu kho ghi sai',
+  wh_stocktake_pending: 'gửi biên bản kiểm kê chờ duyệt',
+  wh_stocktake_approved: 'đã duyệt biên bản kiểm kê',
+  wh_stocktake_rejected: 'đã từ chối biên bản kiểm kê',
+  po_withdrawn: 'đã rút đơn đặt về nháp',
+  po_reassigned: 'đã bàn giao đơn đặt',
+  po_closed_short: 'đã chốt phần thiếu đơn đặt',
+  po_late: 'đơn đặt quá hẹn giao',
+  wh_receipt: 'hàng về — có phiếu nhập',
+  wh_stock_low: 'tồn kho dưới mức tối thiểu',
+  wh_return: 'trả hàng NCC',
   lsx_submitted: 'gửi LSX chờ duyệt',
   lsx_approved: 'đã duyệt LSX',
   lsx_rejected: 'đã từ chối LSX',
@@ -93,28 +113,29 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
 
   return (
     <div ref={ref} className="relative">
+      {/* Chuông theo thiết kế v3: icon lucide + badge đếm màu --stop (đỏ). */}
       <button
         onClick={toggle}
         aria-label="Thông báo"
         aria-expanded={open}
-        className="relative grid h-9 w-9 place-items-center rounded-md text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground relative grid h-9 w-9 place-items-center rounded-md transition-colors"
       >
-        <span className="text-lg leading-none">🔔</span>
+        <Bell className="size-4.5" strokeWidth={1.8} />
         {unread > 0 && (
-          <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-amber-500 px-1 text-[10px] font-bold text-slate-900">
+          <span className="absolute top-1 right-1 grid h-4 min-w-4 place-items-center rounded-full bg-[var(--stop)] px-1 font-mono text-[9.5px] leading-none font-bold text-white tabular-nums">
             {unread > 9 ? '9+' : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 z-50 mt-1 w-80 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
-          <header className="flex items-center justify-between border-b border-zinc-100 px-3 py-2 dark:border-zinc-900">
+        <div className="bg-popover text-popover-foreground absolute top-full right-0 z-50 mt-1.5 w-80 overflow-hidden rounded-lg border shadow-md">
+          <header className="flex items-center justify-between border-b px-3 py-2">
             <h3 className="text-sm font-semibold">Thông báo</h3>
             {unread > 0 && (
               <button
                 onClick={markAllRead}
-                className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
               >
                 Đánh dấu đã đọc
               </button>
@@ -126,32 +147,32 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
               <Spinner />
             </div>
           ) : items.length === 0 ? (
-            <p className="px-3 py-8 text-center text-xs text-zinc-500">
+            <p className="text-muted-foreground px-3 py-8 text-center text-xs">
               Chưa có thông báo nào.
             </p>
           ) : (
-            <ul className="max-h-96 divide-y divide-zinc-100 overflow-y-auto dark:divide-zinc-900">
+            <ul className="divide-border/60 max-h-96 divide-y overflow-y-auto">
               {items.map((n) => {
                 const title = n.payload?.title
                 return (
                   <li
                     key={n.id}
-                    className={
-                      n.read_at ? 'opacity-60' : 'bg-amber-50/40 dark:bg-amber-950/10'
-                    }
+                    className={n.read_at ? 'opacity-60' : 'bg-[var(--accent)]/40'}
                   >
                     <Link
                       href={n.task_id ? `/tasks/${n.task_id}` : '/notifications'}
                       onClick={() => setOpen(false)}
-                      className="block px-3 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                      className="hover:bg-accent block px-3 py-2 transition-colors"
                     >
                       <div className="text-sm">
                         <span className="font-medium">
                           {TYPE_LABEL[n.type] ?? n.type}
                         </span>
-                        {title && <span className="text-zinc-500"> — {title}</span>}
+                        {title && (
+                          <span className="text-muted-foreground"> — {title}</span>
+                        )}
                       </div>
-                      <time className="text-xs text-zinc-500">
+                      <time className="text-muted-foreground text-xs">
                         {timeAgo(n.created_at)}
                       </time>
                     </Link>
@@ -161,11 +182,11 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
             </ul>
           )}
 
-          <footer className="border-t border-zinc-100 dark:border-zinc-900">
+          <footer className="border-t">
             <Link
               href="/notifications"
               onClick={() => setOpen(false)}
-              className="block px-3 py-2 text-center text-xs text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+              className="text-muted-foreground hover:text-foreground block px-3 py-2 text-center text-xs underline transition-colors"
             >
               Xem tất cả
             </Link>

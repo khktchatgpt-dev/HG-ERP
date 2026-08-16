@@ -19,9 +19,6 @@ export function NavLink({
   href,
   label,
   icon,
-  accentShadow,
-  accentSoftBg,
-  accentText,
   collapsed = false,
   exact = false,
   badge,
@@ -29,12 +26,15 @@ export function NavLink({
   href: string
   label: string
   icon: string
-  /** class shadow-<màu> cho vạch accent bên trái khi active. */
-  accentShadow: string
-  /** class nền accent nhạt (kèm dark-variant) cho item active. */
-  accentSoftBg: string
-  /** class chữ accent (kèm dark-variant) cho item active. */
-  accentText: string
+  /**
+   * Ba prop accent cũ (accentShadow/SoftBg/Text) vẫn nằm trong type để hai
+   * caller (DesktopSidebar, MobileDrawer) không phải sửa, nhưng KHÔNG dùng
+   * nữa: active theo thiết kế v3 là MỘT màu hành động (--accent/--primary)
+   * cho mọi workspace — danh tính phòng nằm ở logo box + vạch topbar.
+   */
+  accentShadow?: string
+  accentSoftBg?: string
+  accentText?: string
   /** Chế độ sidebar thu gọn: chỉ icon, label thành tooltip. */
   collapsed?: boolean
   /**
@@ -59,7 +59,7 @@ export function NavLink({
         collapsed ? 'justify-center px-0' : 'px-3'
       } ${
         active
-          ? `${accentSoftBg} ${accentText} font-medium shadow-[inset_3px_0_0] ${accentShadow}`
+          ? 'bg-[var(--accent)] font-semibold text-[var(--accent-foreground)] shadow-[inset_3px_0_0_var(--primary)]'
           : 'text-muted-foreground hover:bg-accent hover:text-foreground'
       }`}
     >

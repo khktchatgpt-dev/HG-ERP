@@ -11,6 +11,10 @@ export type Need = {
   qty_needed: number
   available: number
   suggest: number
+  /** Cảnh báo mua vượt trần (P3.1): tồn + đã đặt + trần — route needs trả kèm. */
+  on_hand?: number
+  ordered?: number
+  max_stock?: number | null
   /**
    * Phân bổ theo SP (0125) — "300 Bàn 65 gỗ, đm 4c/sp". Đổ sẵn vào ô Ghi chú
    * của dòng khi thêm từ nhu cầu, đúng lối ghi tay trong sổ Cung ứng.

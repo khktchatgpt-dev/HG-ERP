@@ -9,6 +9,7 @@ import { suppliersRepo, supplyRepo } from './supply.repo'
 import { assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
@@ -20,6 +21,13 @@ import {
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
+import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
+import {
+  earliestExpectedDate,
+  nextSeq,
+  validateShipments,
+  type ShipmentInput,
+} from '@/lib/po-shipments'
 
 type PoInput = {
   /** LSX gắn với đơn; null/bỏ trống = PO ngoài LSX (0076). */
@@ -183,12 +191,22 @@ export const posService = {
   async detail(_user: User, id: string) {
     const po = await posRepo.findById(id)
     if (!po) throw NotFound('Đơn đặt không tồn tại')
-    const [lines, status_lines, extra_lsx] = await Promise.all([
+    const [lines, rawStatus, extra_lsx, warehouse_docs] = await Promise.all([
       posRepo.listLines(id),
       supplyRepo.lineStatus(id), // đặt / đã nhận / còn thiếu (BR-08, FR-SUP-05)
       posRepo.listExtraLsx(id), // LSX phụ gộp vào đơn (0125)
+      supplyRepo.docsByPo(id), // PNK/phiếu trả — mốc timeline (GĐ3)
     ])
-    return { po, lines, status_lines, extra_lsx }
+    // Lý do chốt thiếu (0154) — view đối chiếu không mang cột này; chỉ trang
+    // chi tiết cần (tooltip trên badge) nên tra thêm một lượt, đúng các dòng chốt.
+    const reasons = rawStatus.some((l) => l.closed_short_at != null)
+      ? await posRepo.closedShortReasons(id)
+      : new Map<string, string | null>()
+    const status_lines = rawStatus.map((l) => ({
+      ...l,
+      closed_short_reason: reasons.get(l.id) ?? null,
+    }))
+    return { po, lines, status_lines, extra_lsx, warehouse_docs }
   },
 
   /**
@@ -429,16 +447,22 @@ export const posService = {
       )
     }
     /**
-     * "ĐÃ VỀ ĐỦ" bằng tay CHỈ cho đơn TOÀN DÒNG TỰ DO (gỗ/gia công — 0134):
-     * các dòng này nghiệm thu ngoài sổ kho vật tư nên không có phiếu nhập nào
-     * tự chốt đơn, thiếu lối này thì đơn treo "đang giao" vĩnh viễn. Đơn còn
-     * dòng vật tư kho vẫn do phiếu nhập của Kho quyết định (BR-08).
+     * "ĐÃ VỀ ĐỦ" bằng tay — cho đơn có DÒNG TỰ DO (gỗ/gia công 0134): dòng này
+     * nghiệm thu ngoài sổ kho, không có phiếu nhập nào tự chốt, thiếu lối này
+     * đơn treo "đang giao" vĩnh viễn. Luật: mọi DÒNG VẬT TƯ KHO (nếu có) phải
+     * đã về đủ theo sổ — BR-08 giữ nguyên quyền quyết phần kho, con người chỉ
+     * xác nhận phần tự do. Bản cũ chặn tuyệt đối khi "còn dòng vật tư kho" nên
+     * đơn HỖN HỢP kẹt cả hai đường: sổ kho không bao giờ chốt (vì dòng tự do
+     * không có movement), nút tay thì bị cấm.
      */
     if (to === 'received') {
-      const lines = await posRepo.listLines(id)
-      if (lines.some((l) => l.material_id != null)) {
+      // qty_open (0154): dòng đã CHỐT THIẾU coi như xong — đơn hỗn hợp chốt
+      // phần kho rồi thì nghiệm thu phần tự do được.
+      const status = await supplyRepo.lineStatus(id)
+      const missing = status.filter((l) => l.material_id != null && l.qty_open > 1e-6)
+      if (missing.length > 0) {
         throw BadRequest(
-          'Đơn có dòng vật tư kho — trạng thái "đã về đủ" do phiếu nhập của Kho quyết định',
+          `Còn ${missing.length} dòng vật tư kho chưa về đủ — phần đó do phiếu nhập của Kho quyết định (BR-08), hoặc Chốt phần thiếu nếu NCC không giao nữa`,
         )
       }
     }
@@ -462,6 +486,316 @@ export const posService = {
       })
     }
     return po
+  },
+
+  /**
+   * NCC XÁC NHẬN ĐƠN (0152 — plan-po-giao-nhan GĐ1). NCC không đăng nhập: đây
+   * là NV cung ứng ghi lại cam kết (ai hứa, kênh nào, giao mấy đợt, ngày nào).
+   *
+   * Chỉ từ `ordered` — chưa gửi thì chưa có gì để NCC xác nhận. `shipments`
+   * RỖNG được phép (NCC ừ nhưng chưa chốt lịch, hoặc đơn toàn dòng tự do);
+   * có đợt thì validate cứng: dòng phải thuộc đơn, Σ các đợt không vượt SL đặt
+   * (hụt thì CẢNH BÁO ở UI, không chặn — NCC xác nhận thiếu là chuyện thật).
+   *
+   * `expected_at` của đơn đồng bộ = ngày đợt sớm nhất, để toàn bộ cảnh báo trễ
+   * hiện có (assessPoLate, badge, Hàng sắp về) chạy nguyên không sửa dòng nào.
+   */
+  async confirm(
+    user: User,
+    id: string,
+    input: {
+      confirmed_note?: string | null
+      method?: string | null
+      place?: string | null
+      shipments: ShipmentInput[]
+    },
+  ): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    if (before.status !== 'ordered') {
+      throw BadRequest('Chỉ xác nhận được đơn ĐÃ GỬI NCC (đang ở "Đã gửi NCC")')
+    }
+
+    if (input.shipments.length > 0) {
+      const lines = await posRepo.listLines(id)
+      const v = validateShipments(
+        input.shipments,
+        lines.map((l) => ({
+          id: l.id,
+          qty_ordered: l.qty_ordered,
+          name: l.material_name,
+        })),
+      )
+      if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+      await poShipmentsRepo.insertMany(
+        id,
+        input.shipments.map((s, i) => ({
+          seq: i + 1,
+          expected_date: s.expected_date,
+          method: input.method ?? null,
+          place: input.place ?? null,
+          note: s.note ?? null,
+          lines: s.lines,
+        })),
+        user.id,
+      )
+    }
+
+    const minDate = earliestExpectedDate(
+      input.shipments.map((s) => ({ expected_date: s.expected_date, status: 'planned' })),
+    )
+    return posRepo.patch(id, {
+      status: 'confirmed',
+      confirmed_at: new Date().toISOString(),
+      confirmed_note: input.confirmed_note ?? null,
+      // Không có đợt thì giữ nguyên hẹn giao cũ — đừng xoá mốc của đơn.
+      ...(minDate ? { expected_at: minDate } : {}),
+    })
+  },
+
+  /** Kế hoạch giao của đơn — cho trang chi tiết + form nhập kho (GĐ2). */
+  async listShipments(user: User, poId: string): Promise<PoShipment[]> {
+    // Cùng mức lộ với chi tiết đơn: ai đăng nhập cũng xem được (chỉ đọc).
+    void user
+    return poShipmentsRepo.listByPo(poId)
+  },
+
+  /**
+   * THÊM ĐỢT bổ sung sau khi đã xác nhận (NCC hẹn giao bù phần thiếu). Validate
+   * cộng dồn với các đợt còn sống — tổng mọi đợt không vượt SL đặt.
+   */
+  async addShipments(
+    user: User,
+    poId: string,
+    shipments: ShipmentInput[],
+  ): Promise<void> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(poId)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    if (!['confirmed', 'in_transit', 'partial'].includes(before.status)) {
+      throw BadRequest('Chỉ thêm đợt cho đơn đã NCC xác nhận và chưa về đủ')
+    }
+    const [lines, existing, current] = await Promise.all([
+      posRepo.listLines(poId),
+      poShipmentsRepo.qtyByLine(poId),
+      poShipmentsRepo.listByPo(poId),
+    ])
+    const v = validateShipments(
+      shipments,
+      lines.map((l) => ({ id: l.id, qty_ordered: l.qty_ordered, name: l.material_name })),
+      existing,
+    )
+    if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+    const start = nextSeq(current)
+    await poShipmentsRepo.insertMany(
+      poId,
+      shipments.map((s, i) => ({
+        seq: start + i,
+        expected_date: s.expected_date,
+        note: s.note ?? null,
+        lines: s.lines,
+      })),
+      user.id,
+    )
+    await this.syncExpectedAt(poId)
+  },
+
+  /**
+   * Thao tác trên MỘT đợt: dời ngày (bắt lý do — đổi cam kết đã ghi), đánh dấu
+   * xe tới cổng, huỷ đợt (bắt lý do). Sau mỗi thao tác động tới lịch thì đồng
+   * bộ lại `expected_at` của đơn.
+   */
+  async shipmentAction(
+    user: User,
+    shipmentId: string,
+    input: {
+      action: 'reschedule' | 'arrived' | 'cancel'
+      expected_date?: string
+      reason?: string
+    },
+  ): Promise<void> {
+    await assertAction(user, 'supply.po.manage')
+    const shipment = await poShipmentsRepo.findById(shipmentId)
+    if (!shipment) throw NotFound('Đợt giao không tồn tại')
+    const po = await posRepo.findById(shipment.po_id)
+    if (!po) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, po)
+
+    if (input.action === 'arrived') {
+      if (shipment.status !== 'planned') {
+        throw BadRequest('Chỉ đánh dấu "xe tới" cho đợt đang hẹn')
+      }
+      await poShipmentsRepo.patch(shipmentId, { status: 'arrived' })
+      return
+    }
+    if (shipment.status !== 'planned' && shipment.status !== 'arrived') {
+      throw BadRequest('Đợt đã nhận xong / đã huỷ — không sửa được')
+    }
+    if (input.action === 'reschedule') {
+      const dmy = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/')
+      await poShipmentsRepo.patch(shipmentId, {
+        expected_date: input.expected_date!,
+        note: `[Dời ${dmy(shipment.expected_date)}→${dmy(input.expected_date!)}] ${input.reason}${
+          shipment.note ? ` · ${shipment.note}` : ''
+        }`,
+      })
+    } else {
+      await poShipmentsRepo.patch(shipmentId, {
+        status: 'cancelled',
+        note: `[Huỷ đợt] ${input.reason}${shipment.note ? ` · ${shipment.note}` : ''}`,
+      })
+    }
+    await this.syncExpectedAt(shipment.po_id)
+  },
+
+  /** `expected_at` của đơn = ngày đợt CÒN SỐNG sớm nhất; hết đợt sống thì giữ mốc cũ. */
+  async syncExpectedAt(poId: string): Promise<void> {
+    const shipments = await poShipmentsRepo.listByPo(poId)
+    const minDate = earliestExpectedDate(shipments)
+    if (minDate) await posRepo.patch(poId, { expected_at: minDate })
+  },
+
+  /**
+   * CHỐT PHẦN THIẾU (0154 — plan-cung-ung-kho-hoan-thien GĐ A). NCC giao 98/100
+   * rồi báo "hết hàng, không giao nữa": Cung ứng (người phụ trách — luật 0128)
+   * tuyên bố phần còn lại KHÔNG VỀ NỮA trên từng dòng (line_id) hoặc mọi dòng
+   * còn thiếu (line_id bỏ trống), bắt buộc lý do.
+   *
+   * KHÔNG sửa số đã nhận — BR-08 giữ nguyên chủ quyền sổ kho; chỉ ghi
+   * closed_short_* để view tính qty_open = 0. Hệ quả dây chuyền tự chạy:
+   * refreshStatusFromReceipts đọc qty_open → đơn thoát 'partial'; đề xuất mua
+   * hết bị "đã đặt" ảo đè (tự giục mua chỗ khác — đúng ý); đơn rời "Hàng sắp
+   * về" + màn Nhập kho; đợt planned chỉ còn dòng đã chốt tự huỷ.
+   *
+   * `reopen`: mở lại dòng đã chốt (NCC đổi ý giao bù) — đơn 'received' tự quay
+   * 'partial' qua refresh. Đơn chưa nhận được GÌ mà chốt hết phần thiếu = huỷ
+   * đơn trá hình → chặn, chỉ đường sang "Huỷ đơn" (giữ ngữ nghĩa trạng thái:
+   * received nghĩa là CÓ hàng về).
+   */
+  async closeShort(
+    user: User,
+    poId: string,
+    input: { action: 'close' | 'reopen'; line_id?: string | null; reason?: string },
+  ): Promise<void> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(poId)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+
+    const EPS = 1e-6
+    // View đã lọc dòng tự do (0134) — status chỉ gồm dòng vật tư kho.
+    const status = await supplyRepo.lineStatus(poId)
+    const anyReceived = status.some((l) => l.qty_received > EPS)
+
+    if (input.action === 'reopen') {
+      if (before.status === 'cancelled') {
+        throw BadRequest('Đơn đã huỷ — không mở lại dòng được')
+      }
+      const line = status.find((l) => l.id === input.line_id)
+      if (!line) throw NotFound('Dòng không tồn tại trong đơn')
+      if (!line.closed_short_at) throw BadRequest('Dòng này chưa chốt thiếu')
+      await posRepo.patchLineClosedShort(line.id, {
+        closed_short_at: null,
+        closed_short_by: null,
+        closed_short_reason: null,
+      })
+      // Mở lại phần thiếu → đơn 'received' phải quay 'partial'. Chưa có phiếu
+      // nhập nào thì đừng gọi refresh — nó sẽ dựng 'partial' cho đơn chưa về gì.
+      if (anyReceived) await supplyRepo.refreshStatusFromReceipts(poId)
+      return
+    }
+
+    if (!['ordered', 'confirmed', 'in_transit', 'partial'].includes(before.status)) {
+      throw BadRequest(
+        'Chỉ chốt thiếu cho đơn ĐÃ GỬI NCC và chưa kết thúc (đã gửi / NCC xác nhận / đang giao / về một phần)',
+      )
+    }
+    const reason = input.reason?.trim()
+    if (!reason) throw BadRequest('Chốt phần thiếu phải kèm lý do')
+
+    const targets = input.line_id
+      ? status.filter((l) => l.id === input.line_id)
+      : status.filter((l) => l.qty_open > EPS)
+    if (input.line_id) {
+      const line = targets[0]
+      if (!line) throw NotFound('Dòng không tồn tại trong đơn')
+      if (line.closed_short_at) throw BadRequest('Dòng này đã chốt thiếu rồi')
+      if (line.qty_open <= EPS) {
+        throw BadRequest('Dòng này không còn thiếu — không có gì để chốt')
+      }
+    }
+    if (targets.length === 0) {
+      throw BadRequest('Đơn không còn dòng nào thiếu để chốt')
+    }
+    // Chưa nhận được gì + chốt nốt phần thiếu cuối = đơn "về đủ" với 0 hàng.
+    const targetIds = new Set(targets.map((t) => t.id))
+    const stillOpen = status.some((l) => l.qty_open > EPS && !targetIds.has(l.id))
+    if (!anyReceived && !stillOpen) {
+      throw BadRequest(
+        'Đơn chưa nhận được hàng nào — NCC không giao gì nữa thì dùng "Huỷ đơn" (kèm lý do), không chốt thiếu',
+      )
+    }
+
+    const now = new Date().toISOString()
+    for (const t of targets) {
+      await posRepo.patchLineClosedShort(t.id, {
+        closed_short_at: now,
+        closed_short_by: user.id,
+        closed_short_reason: reason,
+      })
+    }
+
+    // Đợt PLANNED chỉ gồm dòng đã chốt → tự huỷ (không còn gì để chờ). Đợt lẫn
+    // dòng còn mở giữ nguyên; đợt 'arrived' (xe đã tới) không tự động đụng.
+    const closedIds = new Set([
+      ...targetIds,
+      ...status.filter((l) => l.closed_short_at != null).map((l) => l.id),
+    ])
+    const shipments = await poShipmentsRepo.listByPo(poId)
+    for (const s of shipments) {
+      if (s.status !== 'planned' || s.lines.length === 0) continue
+      if (s.lines.every((l) => closedIds.has(l.po_line_id))) {
+        await poShipmentsRepo.patch(s.id, {
+          status: 'cancelled',
+          note: `[Chốt thiếu] ${reason}${s.note ? ` · ${s.note}` : ''}`,
+        })
+      }
+    }
+    await this.syncExpectedAt(poId)
+
+    if (anyReceived) await supplyRepo.refreshStatusFromReceipts(poId)
+
+    // Báo Kho (ngừng chờ lô này) + GĐ/QL. Người phụ trách là người bấm — khỏi báo.
+    const [depts, users] = await Promise.all([departmentsRepo.list(), usersRepo.list()])
+    const whDeptIds = new Set(
+      depts.filter((d) => d.workspace_id === 'warehouse').map((d) => d.id),
+    )
+    const notifyIds = users
+      .filter(
+        (u) =>
+          u.id !== user.id &&
+          (u.role === 'admin' ||
+            u.role === 'manager' ||
+            (u.department_id != null && whDeptIds.has(u.department_id))),
+      )
+      .map((u) => u.id)
+    const summary = targets
+      .map((t) =>
+        `${t.material_name}: thiếu ${t.qty_open.toLocaleString('vi-VN')} ${t.material_unit}`.trim(),
+      )
+      .join(' · ')
+    await emit({
+      name: 'po.closed_short',
+      po_id: poId,
+      code: before.code,
+      closed_by: user.id,
+      reason,
+      summary,
+      notify_ids: notifyIds,
+    })
   },
 
   /**

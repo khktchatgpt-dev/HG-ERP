@@ -61,6 +61,7 @@ export function PoLineTable({
   template,
   lines,
   suggestions,
+  capLeft,
   currency,
   onPatch,
   onRemove,
@@ -73,6 +74,8 @@ export function PoLineTable({
   template: PoTemplate
   /** SL đề xuất từ nhu cầu BOM theo material_id — chỉ hiện, không tự điền. */
   suggestions: Map<string, number>
+  /** Còn ĐẶT THÊM được trước khi vượt trần tồn (P3.1) — cảnh báo vàng, không chặn. */
+  capLeft?: Map<string, number>
   lines: Line[]
   currency: string
   onPatch: (i: number, patch: Partial<Line>) => void
@@ -375,6 +378,19 @@ export function PoLineTable({
                           dùng {num(useSuggest)} ↩
                         </button>
                       )}
+                      {/* Trần tồn (P3.1): SL đặt vượt phần "còn đặt thêm được"
+                          (max_stock − tồn − đã đặt) → cảnh báo vàng, không chặn. */}
+                      {(() => {
+                        const cap = capLeft?.get(l.material_id)
+                        return cap != null && l.qty !== '' && Number(l.qty) > cap ? (
+                          <div
+                            className="mt-0.5 text-right text-[11px] whitespace-nowrap text-amber-600 dark:text-amber-500"
+                            title="Trần tồn (max_stock) của vật tư trừ tồn hiện có và lượng đã đặt chưa về. Vượt trần là chủ đích (LSX lớn) thì cứ đặt — chỉ nhắc, không chặn."
+                          >
+                            ⚠ vượt trần tồn — thêm được {num(cap)}
+                          </div>
+                        ) : null
+                      })()}
                       {/* Quy đổi đóng gói (0124): "≈ 27,2 bì" — nhìn là biết
                           gọi NCC bao nhiêu bao, khỏi bấm máy chia. */}
                       {qtyPacks != null && (

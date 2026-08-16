@@ -3,7 +3,8 @@ import Link from 'next/link'
 /**
  * Chuỗi liên kết chứng từ — hiện quan hệ cha→con dạng chip (vd Đơn hàng → LSX → PO).
  * Làm rõ "chứng từ này thuộc về đâu" ngay đầu màn chi tiết & trong bảng.
- * Node cuối (current) là chứng từ đang xem — tô accent.
+ * Node cuối (current) là chứng từ đang xem — tô màu hành động (--primary),
+ * không còn violet riêng: một màu nhấn duy nhất toàn app.
  */
 export type ChainNode = {
   /** Nhãn loại chứng từ, vd 'Đơn hàng', 'Lệnh SX'. */
@@ -40,7 +41,7 @@ export function RefChain({
     <div className="flex flex-wrap items-center gap-2.5">
       {nodes.map((n, i) => (
         <div key={i} className="flex items-center gap-2.5">
-          {i > 0 && <span className="text-base text-zinc-300 dark:text-zinc-600">→</span>}
+          {i > 0 && <span className="text-border text-base">→</span>}
           <Chip node={n} sm={false} />
         </div>
       ))}
@@ -52,8 +53,8 @@ function Chip({ node, sm }: { node: ChainNode; sm: boolean }) {
   if (sm) {
     // Gọn cho bảng: mã mono + tô accent nếu current, link nếu có href.
     const cls = node.current
-      ? 'font-mono text-xs font-semibold text-violet-600 dark:text-violet-400'
-      : 'font-mono text-xs text-zinc-500 dark:text-zinc-400'
+      ? 'font-mono text-xs font-semibold text-[var(--primary)]'
+      : 'font-mono text-xs text-muted-foreground'
     return node.href && !node.current ? (
       <Link href={node.href} className={`${cls} hover:underline`}>
         {node.value}
@@ -66,18 +67,14 @@ function Chip({ node, sm }: { node: ChainNode; sm: boolean }) {
   const base =
     'flex flex-col gap-0.5 rounded-lg border px-3 py-2 min-w-0 transition-colors'
   const tone = node.current
-    ? 'border-violet-400 bg-violet-50 dark:border-violet-500/60 dark:bg-violet-950/40'
-    : 'border-zinc-200 bg-zinc-50 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900/60'
+    ? 'border-[var(--primary)]/40 bg-[var(--accent)]'
+    : 'bg-muted/60 hover:border-[var(--primary)]/30'
   const body = (
     <>
-      <span className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase dark:text-zinc-500">
-        {node.label}
-      </span>
+      <span className="t-label text-muted-foreground">{node.label}</span>
       <span
         className={`font-mono text-[13px] font-semibold ${
-          node.current
-            ? 'text-violet-600 dark:text-violet-400'
-            : 'text-zinc-700 dark:text-zinc-200'
+          node.current ? 'text-[var(--primary)]' : 'text-foreground'
         }`}
       >
         {node.value}

@@ -279,7 +279,7 @@ export function SuppliersManager({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+          { label: 'Cung ứng', href: '/planning' },
           { label: 'Nhà cung cấp' },
         ]}
         title="Nhà cung cấp"

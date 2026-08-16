@@ -21,6 +21,8 @@ export type Material = {
   min_stock: number
   /** Bù tồn (0043, nghiệp vụ ① Cung ứng): trần tồn + ngưỡng/lô đặt lại. */
   max_stock: number | null
+  /** Dung sai NHẬN VƯỢT % trên SL đặt của dòng PO (0156) — 0 = chặn mọi mức vượt. */
+  over_tolerance_pct: number
   reorder_point: number | null
   reorder_qty: number | null
   shelf_location: string | null
@@ -57,7 +59,7 @@ export type Material = {
 }
 
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, needs_review_fields, created_by, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, over_tolerance_pct, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, needs_review_fields, created_by, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -76,6 +78,7 @@ function toMaterial(row: Record<string, unknown>): Material {
     ...(row as Material),
     min_stock: Number(row.min_stock ?? 0),
     max_stock: row.max_stock == null ? null : Number(row.max_stock),
+    over_tolerance_pct: Number(row.over_tolerance_pct ?? 0),
     reorder_point: row.reorder_point == null ? null : Number(row.reorder_point),
     reorder_qty: row.reorder_qty == null ? null : Number(row.reorder_qty),
     unit2_factor: row.unit2_factor == null ? null : Number(row.unit2_factor),
@@ -234,5 +237,37 @@ export const materialsRepo = {
   async delete(id: string): Promise<void> {
     const { error } = await db().from('warehouse_materials').delete().eq('id', id)
     if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Trần tồn theo vật tư (P3.1) — nuôi cảnh báo "mua vượt trần" trên form PO.
+   * View warehouse_stock không mang max_stock nên tra thẳng danh mục.
+   */
+  async maxStockMany(ids: string[]): Promise<Map<string, number | null>> {
+    if (ids.length === 0) return new Map()
+    const { data } = await db()
+      .from('warehouse_materials')
+      .select('id, max_stock')
+      .in('id', ids)
+    return new Map(
+      ((data ?? []) as { id: string; max_stock: unknown }[]).map((r) => [
+        r.id,
+        r.max_stock == null ? null : Number(r.max_stock),
+      ]),
+    )
+  },
+
+  /**
+   * Đặt DUNG SAI NHẬN VƯỢT cho cả một nhóm (0156) — bulk theo group_name, một
+   * câu update thay vì N lượt PATCH (nhóm gỗ/kính hàng trăm mã). Trả số dòng đổi.
+   */
+  async setGroupTolerance(groupName: string, pct: number): Promise<number> {
+    const { data, error } = await db()
+      .from('warehouse_materials')
+      .update({ over_tolerance_pct: pct })
+      .eq('group_name', groupName)
+      .select('id')
+    if (error) throw new Error(error.message)
+    return (data ?? []).length
   },
 }

@@ -2,6 +2,7 @@
 
 import { Badge } from '@/components/Badge'
 import { DataTable, type Column } from '@/components/erp/DataTable'
+import { DocChip } from '@/components/erp/DocChip'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { RefChain } from '@/components/erp/RefChain'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
@@ -136,9 +137,10 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
         <div className="flex min-w-0 flex-col">
           <button
             onClick={() => c.onView(p)}
-            className="hover:text-primary flex min-w-0 flex-col text-left"
+            className="hover:text-primary flex min-w-0 flex-col items-start gap-0.5 text-left"
           >
-            <span className="t-data text-muted-foreground text-[11px]">{p.code}</span>
+            {/* Mã chứng từ = DocChip (chữ ký v3) — nhận ra "một tờ phiếu" từ xa. */}
+            <DocChip className="text-[11px]">{p.code}</DocChip>
             <span className="truncate font-medium">{p.supplier_name}</span>
           </button>
           {/*
@@ -147,13 +149,13 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
             đi tìm tiền của nó ở đầu thẻ mà không thấy (tiền cộng ở lệnh chính).
           */}
           {isBorrowed ? (
-            <span className="mt-0.5 w-fit rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium">
+            <span className="bg-primary/10 text-primary mt-0.5 w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium">
               mua chung — đơn của lệnh {p.lsx_code}
             </span>
           ) : (
             extra.length > 0 && (
               <span
-                className="mt-0.5 w-fit rounded-full bg-primary/10 text-primary px-1.5 py-0.5 text-[10px] font-medium"
+                className="bg-primary/10 text-primary mt-0.5 w-fit rounded-full px-1.5 py-0.5 text-[10px] font-medium"
                 title={`Mua chung cho: ${[p.lsx_code, ...extra.map((e) => e.code)].join(', ')}`}
               >
                 gộp {extra.length + 1} lệnh

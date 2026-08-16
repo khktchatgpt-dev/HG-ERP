@@ -117,7 +117,7 @@ function OrderCodesCell({ codes }: { codes: string[] }) {
               +{rest}
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="theme-v2 w-64 p-0">
+          <PopoverContent align="start" className="theme-v3 w-64 p-0">
             <div className="border-b px-3 py-2 text-xs font-medium">
               {codes.length} đơn trong lệnh
             </div>
@@ -323,7 +323,7 @@ export function LsxWorkbench({
   )
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5">
+    <div className="theme-v3 text-foreground flex flex-col gap-5">
       <TopProgressBar active={busy} />
 
       {/* ── Đầu trang ─────────────────────────────────────────────────────── */}
@@ -592,7 +592,7 @@ export function LsxWorkbench({
                             <MoreHorizontal />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="theme-v2">
+                        <DropdownMenuContent align="end" className="theme-v3">
                           <DropdownMenuItem
                             onClick={() => router.push(`/sales/lsx/${r.id}`)}
                           >

@@ -256,6 +256,57 @@
 }
 
 /*
+ * THEME V3 — "HG Ledger" (sổ chứng từ số), bản đề xuất thay theme-v2.
+ * Thí điểm ở /design-lab; duyệt xong thì dời khối này lên :root (hoặc đổi
+ * class ở WorkspaceShell từ theme-v2 → theme-v3).
+ *
+ * Định hướng: bỏ tông "giấy ấm" stone/emerald — chuyển sang nền xám-XANH lạnh
+ * + mực navy (đọc số liệu dày đỡ mỏi), màu hành động duy nhất là ROYAL COBALT
+ * (Hoàng Gia → royal blue, và tách hẳn khỏi 3 màu trạng thái amber/red/green
+ * nên hành động với trạng thái không bao giờ lẫn nhau).
+ *
+ * Điểm nhận diện: --accent là TINT cobalt (không phải xám) — hover menu, dòng
+ * bảng, tab đang chọn đều ánh xanh nhẹ, cả app "cùng một giọng".
+ *
+ * LƯU Ý (như theme-v2): Radix portal render ra <body>, NGOÀI wrapper — phải
+ * gắn `theme-v3` vào cả className của *Content (Dialog/Popover/Select/Menu).
+ */
+.theme-v3 {
+  --background: #f5f6f8; /* canvas xám-xanh lạnh */
+  --foreground: #101828; /* mực navy */
+  --card: #ffffff;
+  --card-foreground: #101828;
+  --popover: #ffffff;
+  --popover-foreground: #101828;
+  --primary: #2743c4; /* royal cobalt — màu HÀNH ĐỘNG duy nhất */
+  --primary-foreground: #ffffff;
+  --secondary: #eef0f4;
+  --secondary-foreground: #1d2939;
+  --muted: #f2f4f7;
+  /* Cùng nguyên tắc theme-v2: phụ chú 11–12px phải đạt ~7:1 trên nền trắng. */
+  --muted-foreground: #475467;
+  --placeholder: #98a2b3;
+  --accent: #eef1fc; /* tint cobalt — hover/selected có "giọng" thương hiệu */
+  --accent-foreground: #22399f;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --border: #e4e7ec;
+  --input: #cbd2dc;
+  --ring: #2743c4; /* focus = màu hành động (bỏ ring amber — lẫn với --warn) */
+  --radius: 0.625rem;
+
+  /* Màu trạng thái giữ nguyên ngữ nghĩa + độ tương phản đã dò từ theme-v2. */
+  --warn: #b45309;
+  --stop: #b42318;
+  --done: #1f7a4c;
+}
+
+.theme-v3 ::placeholder {
+  color: var(--placeholder);
+  opacity: 1;
+}
+
+/*
  * Placeholder của theme v2 nhạt hơn phụ chú — shadcn để
  * `placeholder:text-muted-foreground`, mà muted-foreground nay đã đậm lên cho
  * dễ đọc, dùng chung sẽ khiến ô trống trông như đã điền.

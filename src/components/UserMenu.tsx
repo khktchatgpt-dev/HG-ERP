@@ -2,8 +2,14 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
+import { Bell, LogOut, UserRound } from 'lucide-react'
 import { Avatar } from '@/components/Avatar'
 
+/**
+ * Menu người dùng trên topbar — theo thiết kế v3 (/design-lab mục 02): nút mở
+ * chỉ là AVATAR TRÒN (tên/vai nằm trong dropdown), không còn cụm tên + caret
+ * chiếm chỗ. Dropdown ăn token nên khớp theme ở mọi shell.
+ */
 export function UserMenu({
   user,
   avatarUrl,
@@ -32,8 +38,15 @@ export function UserMenu({
     const onDocClick = (e: MouseEvent) => {
       if (!ref.current?.contains(e.target as Node)) setOpen(false)
     }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('mousedown', onDocClick)
-    return () => document.removeEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
   }, [open])
 
   const roleLabel =
@@ -44,48 +57,42 @@ export function UserMenu({
       >
     )[user.role] ?? user.role
 
+  const itemCls =
+    'hover:bg-accent hover:text-accent-foreground flex items-center gap-2.5 px-3 py-2 text-[13px] transition-colors'
+
   return (
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-md p-1 pr-2 hover:bg-zinc-100 dark:hover:bg-zinc-900"
+        aria-label={`Tài khoản — ${user.name ?? user.email}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="grid place-items-center rounded-full transition-shadow hover:ring-2 hover:ring-[var(--primary)]/30"
       >
         <Avatar name={user.name} email={user.email} size="sm" src={avatarUrl} />
-        <div className="hidden text-left text-xs sm:block">
-          <div className="leading-tight font-medium">{user.name ?? user.email}</div>
-          <div className="text-zinc-500">{user.title ?? roleLabel}</div>
-        </div>
-        <span className="text-xs text-zinc-500">▾</span>
       </button>
 
       {open && (
-        <div className="absolute top-full right-0 mt-1 w-56 overflow-hidden rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950">
-          <div className="border-b border-zinc-100 px-3 py-2 text-xs dark:border-zinc-900">
-            <div className="font-medium">{user.name ?? '—'}</div>
-            <div className="text-zinc-500">{user.email}</div>
-            <div className="mt-1 inline-block rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] tracking-wide uppercase dark:bg-zinc-800">
-              {roleLabel}
+        <div className="bg-popover text-popover-foreground absolute top-full right-0 z-50 mt-1.5 w-60 overflow-hidden rounded-lg border shadow-md">
+          <div className="border-b px-3 py-2.5">
+            <div className="truncate text-[13px] font-semibold">{user.name ?? '—'}</div>
+            <div className="text-muted-foreground truncate text-xs">{user.email}</div>
+            <div className="text-muted-foreground mt-1.5 inline-block rounded-full bg-[var(--accent)] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[var(--accent-foreground)] uppercase">
+              {user.title ?? roleLabel}
             </div>
           </div>
-          <Link
-            href="/tai-khoan"
-            className="block px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
-            onClick={() => setOpen(false)}
-          >
-            Tài khoản của tôi
+          <Link href="/tai-khoan" className={itemCls} onClick={() => setOpen(false)}>
+            <UserRound className="size-4" strokeWidth={1.8} /> Tài khoản của tôi
           </Link>
-          <Link
-            href="/notifications"
-            className="block px-3 py-2 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-900"
-            onClick={() => setOpen(false)}
-          >
-            Thông báo
+          <Link href="/notifications" className={itemCls} onClick={() => setOpen(false)}>
+            <Bell className="size-4" strokeWidth={1.8} /> Thông báo
           </Link>
           <button
             onClick={handleLogout}
             disabled={loggingOut}
-            className="block w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-60 dark:hover:bg-red-950/30"
+            className="flex w-full items-center gap-2.5 border-t px-3 py-2 text-left text-[13px] text-[var(--stop)] transition-colors hover:bg-[color-mix(in_srgb,var(--stop)_8%,transparent)] disabled:opacity-60"
           >
+            <LogOut className="size-4" strokeWidth={1.8} />
             {loggingOut ? 'Đang đăng xuất…' : 'Đăng xuất'}
           </button>
         </div>

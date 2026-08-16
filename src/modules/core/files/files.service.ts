@@ -91,7 +91,7 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     // Hồ sơ mua hàng (FR-SUP-07): phòng KH-Cung ứng hoặc GĐ/Ban quản lý đính.
     const ok =
       user.role === 'admin' || user.role === 'manager' || (await isSupplyStaff(user))
-    if (!ok) throw Forbidden('Chỉ Kế hoạch - Cung ứng hoặc GĐ/QL đính hồ sơ mua hàng')
+    if (!ok) throw Forbidden('Chỉ Cung ứng hoặc GĐ/QL đính hồ sơ mua hàng')
     return
   }
   if (input.parent.kind === 'sample') {

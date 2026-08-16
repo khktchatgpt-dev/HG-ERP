@@ -1,6 +1,11 @@
+'use client'
+
+import { Input } from '@/components/shadcn/input'
+import { cn } from '@/lib/utils'
+
 /**
  * Filter/action toolbar dense — dùng ngay trên bảng dữ liệu.
- * Style ERP: mỏng, sticky, background trắng, border rõ.
+ * Nay ăn token (bg-card/border) thay vì zinc gõ cứng, để khớp theme đang phủ.
  */
 export function Toolbar({
   left,
@@ -13,9 +18,10 @@ export function Toolbar({
 }) {
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-2 rounded-t-lg border border-b-0 border-zinc-200 bg-zinc-50 px-2 py-1.5 dark:border-zinc-800 dark:bg-zinc-900 ${
-        sticky ? 'sticky top-16 z-[5]' : ''
-      }`}
+      className={cn(
+        'bg-card flex flex-wrap items-center justify-between gap-2 rounded-t-lg border border-b-0 px-2 py-1.5',
+        sticky && 'sticky top-16 z-[5]',
+      )}
     >
       <div className="flex flex-wrap items-center gap-2">{left}</div>
       {right && <div className="flex flex-wrap items-center gap-2">{right}</div>}
@@ -23,7 +29,7 @@ export function Toolbar({
   )
 }
 
-/** Compact filter input dùng trong toolbar */
+/** Compact filter input dùng trong toolbar — lớp mỏng trên shadcn/input. */
 export function ToolbarInput({
   value,
   onChange,
@@ -35,7 +41,8 @@ export function ToolbarInput({
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  icon?: string
+  /** Ký tự ('⌕') hoặc icon component — cả hai đều render được. */
+  icon?: React.ReactNode
   className?: string
   /**
    * Có onEnter = tìm ở SERVER, chỉ chạy khi bấm Enter.
@@ -45,13 +52,13 @@ export function ToolbarInput({
   onEnter?: () => void
 }) {
   return (
-    <div className={`relative ${className}`}>
+    <div className={cn('relative', className)}>
       {icon && (
-        <span className="absolute top-1/2 left-2 -translate-y-1/2 text-xs text-zinc-400">
+        <span className="text-muted-foreground pointer-events-none absolute top-1/2 left-2 flex -translate-y-1/2 items-center text-xs [&_svg]:size-4">
           {icon}
         </span>
       )}
-      <input
+      <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
@@ -61,15 +68,16 @@ export function ToolbarInput({
           }
         }}
         placeholder={placeholder}
-        className={`w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm placeholder:text-zinc-400 focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 ${
-          icon ? 'pl-7' : ''
-        }`}
+        className={cn('h-8 w-full text-sm', icon && 'pl-7')}
       />
     </div>
   )
 }
 
-/** Compact select dùng trong toolbar */
+/**
+ * Compact select dùng trong toolbar. Giữ <select> native (nhẹ, mở nhanh bằng
+ * bàn phím, không portal) nhưng style theo token cho khớp Input bên cạnh.
+ */
 export function ToolbarSelect<T extends string>({
   value,
   onChange,
@@ -85,7 +93,10 @@ export function ToolbarSelect<T extends string>({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
-      className={`rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950 ${className}`}
+      className={cn(
+        'border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm transition-[color,box-shadow] outline-none focus-visible:ring-[3px]',
+        className,
+      )}
     >
       {options.map((o) => (
         <option key={o.value} value={o.value}>

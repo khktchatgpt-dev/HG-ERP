@@ -16,15 +16,13 @@ export async function AppShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex min-h-screen bg-zinc-50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+    // Shell cổ (trang cá nhân /tasks, /team, /reports) — phủ theme-v3 để cùng
+    // bộ mặt với WorkspaceShell (15/08/2026).
+    <div className="theme-v3 bg-background text-foreground flex min-h-screen">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar title={title} subtitle={subtitle} actions={actions} />
-        {subnav && (
-          <div className="border-b border-zinc-200 bg-white px-4 sm:px-6 dark:border-zinc-800 dark:bg-zinc-950">
-            {subnav}
-          </div>
-        )}
+        {subnav && <div className="bg-card border-b px-4 sm:px-6">{subnav}</div>}
         <main className="mx-auto w-full max-w-6xl flex-1 p-4 sm:p-6">{children}</main>
       </div>
     </div>

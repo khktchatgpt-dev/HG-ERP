@@ -307,7 +307,7 @@ export function LsxDetailView({
   )
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-4">
+    <div className="theme-v3 text-foreground flex flex-col gap-4">
       <TopProgressBar active={busy} />
 
       {breadcrumbs.length > 0 && (
@@ -930,7 +930,7 @@ export function LsxDetailView({
       {/* Dialog SỬA THÔNG TIN ĐẦU LỆNH (0117) — khách hàng không sửa ở đây:
           mọi đơn trong lệnh phải cùng khách, đổi khách = tạo lệnh khác. */}
       <Dialog open={editOpen} onOpenChange={(o) => !o && !busy && setEditOpen(false)}>
-        <DialogContent className="theme-v2">
+        <DialogContent className="theme-v3">
           <DialogHeader>
             <DialogTitle>Sửa thông tin lệnh {lsx.code}</DialogTitle>
             <DialogDescription>
@@ -1016,7 +1016,7 @@ export function LsxDetailView({
         open={resubmitOpen}
         onOpenChange={(o) => !o && !busy && setResubmitOpen(false)}
       >
-        <DialogContent className="theme-v2">
+        <DialogContent className="theme-v3">
           <DialogHeader>
             <DialogTitle>Gửi duyệt lại {lsx.code}</DialogTitle>
             <DialogDescription>
@@ -1097,7 +1097,7 @@ export function LsxDetailView({
 
       {/* Dialog từ chối */}
       <Dialog open={rejectOpen} onOpenChange={(o) => !o && !busy && setRejectOpen(false)}>
-        <DialogContent className="theme-v2">
+        <DialogContent className="theme-v3">
           <DialogHeader>
             <DialogTitle>Từ chối {lsx.code}</DialogTitle>
             <DialogDescription>

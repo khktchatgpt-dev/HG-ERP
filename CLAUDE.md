@@ -98,7 +98,19 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 
 ## Frontend & UI conventions (admin/workspace)
 
-- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô. Các mảnh chuẩn: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`. Mẫu tham chiếu: `admin/users/UsersManager.tsx`, `(shared)/products/ProductsManager.tsx`.
+### Theme v3 "HG Ledger" (áp toàn app 15/08/2026)
+
+- **Token là nguồn màu duy nhất** — khối `.theme-v3` trong `src/app/globals.css`, gắn ở gốc `WorkspaceShell`. KHÔNG gõ màu Tailwind cứng (zinc/sky/emerald/violet…) trong màn mới; dùng class token: `bg-background/bg-card/bg-muted`, `text-foreground/text-muted-foreground`, `border`/`border-input`, `text-[var(--primary)]` v.v.
+- **Một màu hành động**: royal cobalt `--primary` (#2743c4) cho nút chính/link/focus/tab đang chọn. Hover/selected dùng tint `--accent` (#eef1fc). **Ba màu trạng thái** `--warn/--stop/--done` chỉ mã hoá vòng đời (nhãn, vạch `spine`), không bao giờ dùng cho nút.
+- **Chữ**: thang 5 bậc `t-display/t-title/t-body/t-label/t-data` (globals.css). Mọi MÃ chứng từ, tiền, số lượng, ngày = `t-data` (JetBrains Mono, tabular-nums); mã phiếu hiển thị qua `DocChip`. KPI lớn: `font-mono tabular-nums`.
+- **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
+- **BẪY Radix portal**: Dialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell → phải gắn `theme-v3` vào className của \*Content (`DialogContent className="theme-v3 bg-card"` — kèm `bg-card` vì mặc định `bg-background` ra hộp xám). Riêng `RowMenu` tự dò theme từ trigger; `Modal` render inline nên tự ăn theme.
+- **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
+- Rollback khẩn: đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` (khối token v2 vẫn giữ trong globals.css).
+
+### Kit & pattern
+
+- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô, KHÔNG import thư viện UI mới (đã chuẩn hoá shadcn + lucide). Kit là lớp mỏng trên shadcn/token, GIỮ API cũ: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `DocChip` (mã chứng từ), `RefChain`, `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`, `MiniBarChart`. Primitives shadcn ở `src/components/shadcn/*`. Mẫu tham chiếu: `(workspace)/planning/pos/` (màn chuẩn v3), `/design-lab` mục 14.
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
 - **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.

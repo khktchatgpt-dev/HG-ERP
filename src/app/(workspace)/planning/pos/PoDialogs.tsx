@@ -24,8 +24,12 @@ import type { PoRef } from './usePoActions'
  */
 export type ReasonState = {
   po: PoRef
-  kind: 'reject' | 'cancel'
+  kind: 'reject' | 'cancel' | 'close_short'
   reason: string
+  /** Chốt thiếu (0154): dòng cụ thể — bỏ trống = mọi dòng còn thiếu. */
+  lineId?: string | null
+  /** Dòng phụ đề trên hộp thoại: "MDF 17mm — thiếu 2 tấm" / "3 dòng còn thiếu". */
+  detail?: string
 }
 
 const REASON_COPY = {
@@ -40,6 +44,13 @@ const REASON_COPY = {
     hint: 'Đơn đã gửi đi nên không xoá được — huỷ và ghi lại lý do. Nếu chỉ cần sửa nội dung thì rút về nháp, đừng huỷ.',
     placeholder: 'NCC báo hết hàng · đổi phương án vật tư · lệnh SX bị huỷ…',
     confirm: 'Huỷ đơn',
+  },
+  // 0154 — NCC không giao phần còn thiếu nữa. Số ĐÃ VỀ giữ nguyên trên sổ.
+  close_short: {
+    title: 'Chốt phần thiếu',
+    hint: 'NCC không giao phần còn thiếu nữa. Số đã về giữ nguyên trên sổ; phần thiếu thôi tính là "đang đặt" nên đề xuất mua sẽ giục mua lại chỗ khác. Kho và Giám đốc nhận thông báo. Mở lại được nếu NCC đổi ý.',
+    placeholder: 'NCC báo hết hàng · ngừng sản xuất mã này · chuyển mua NCC khác…',
+    confirm: 'Chốt phần thiếu',
   },
 } as const
 
@@ -64,6 +75,9 @@ export function ReasonDialog({
     >
       {state && copy && (
         <div className="flex flex-col gap-3 text-sm">
+          {state.detail && (
+            <p className="text-foreground text-[13px] font-medium">{state.detail}</p>
+          )}
           <p className={hint}>{copy.hint}</p>
           <label className="flex flex-col gap-1">
             <span className={label}>
@@ -76,13 +90,13 @@ export function ReasonDialog({
               value={state.reason}
               onChange={(e) => onChange({ ...state, reason: e.target.value })}
               placeholder={copy.placeholder}
-              className="w-full rounded-md border border-input px-2 py-1.5 text-sm focus:border-ring focus:outline-none"
+              className="border-input focus:border-ring w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none"
             />
           </label>
           <div className="flex justify-end gap-2">
             <button
               onClick={() => onChange(null)}
-              className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
+              className="border-input hover:bg-muted rounded-md border px-3 py-1.5 text-sm"
             >
               Quay lại
             </button>
@@ -110,8 +124,7 @@ export type ReassignState = {
 const field =
   'h-9 w-full rounded-md border border-input px-2 text-sm focus:border-ring focus:outline-none'
 const label = 'font-medium text-foreground'
-const hint =
-  'rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground'
+const hint = 'rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground'
 
 export function PoDialogs({
   rescheduling,
@@ -180,14 +193,14 @@ export function PoDialogs({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => onReassignChange(null)}
-                className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
+                className="border-input hover:bg-muted rounded-md border px-3 py-1.5 text-sm"
               >
                 Huỷ
               </button>
               <button
                 disabled={busy || !reassigning.toId}
                 onClick={() => onReassignSubmit(reassigning)}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Spinner size={14} />}
                 Bàn giao
@@ -243,20 +256,20 @@ export function PoDialogs({
                   onRescheduleChange({ ...rescheduling, reason: e.target.value })
                 }
                 placeholder="NCC báo trễ tàu · xưởng giục sớm · đổi lịch giao…"
-                className="w-full rounded-md border border-input px-2 py-1.5 text-sm focus:border-ring focus:outline-none"
+                className="border-input focus:border-ring w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none"
               />
             </label>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => onRescheduleChange(null)}
-                className="rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted"
+                className="border-input hover:bg-muted rounded-md border px-3 py-1.5 text-sm"
               >
                 Huỷ
               </button>
               <button
                 disabled={busy || !rescheduling.date || !rescheduling.reason.trim()}
                 onClick={() => onRescheduleSubmit(rescheduling)}
-                className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {busy && <Spinner size={14} />}
                 Lưu hẹn giao mới

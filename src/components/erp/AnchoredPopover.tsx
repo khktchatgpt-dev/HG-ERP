@@ -64,7 +64,9 @@ export function AnchoredPopover({
       <div
         data-anchored-popover=""
         style={style}
-        className="z-[61] overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        // Token thay zinc gõ cứng. Popover portal ra <body> ngoài wrapper theme,
+        // nhưng --popover/--border ở :root đều là trắng/xám sáng — khớp mọi theme.
+        className="bg-popover text-popover-foreground z-[61] overflow-y-auto rounded-md border shadow-lg"
       >
         {children}
       </div>

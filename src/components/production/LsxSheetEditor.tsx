@@ -470,7 +470,7 @@ export function LsxSheetEditor({
   const colCount = 8 + (showCbm ? 1 : 0)
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-4">
+    <div className="theme-v3 text-foreground flex flex-col gap-4">
       <TopProgressBar active={busy} />
 
       {/* ── Đầu trang ─────────────────────────────────────────────────────── */}

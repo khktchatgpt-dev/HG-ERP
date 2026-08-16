@@ -56,4 +56,18 @@ export function registerPoNotificationHandlers(): void {
       payload: { title: e.code },
     })
   })
+
+  // Chốt PHẦN THIẾU (0154): báo Kho ngừng chờ lô này + GĐ/QL nắm.
+  on('po.closed_short', async (e) => {
+    await Promise.all(
+      e.notify_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.closed_by,
+          type: 'po_closed_short',
+          payload: { title: `${e.code} — ${e.summary}: ${e.reason}` },
+        }),
+      ),
+    )
+  })
 }

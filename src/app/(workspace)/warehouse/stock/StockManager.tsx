@@ -55,7 +55,16 @@ const REF_LABEL: Record<string, string> = {
   transfer: 'Điều chuyển',
 }
 
-export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: boolean }) {
+export function StockManager({
+  stock,
+  canEdit,
+  initialStatus = null,
+}: {
+  stock: Stock[]
+  canEdit: boolean
+  /** Deep-link ?low=1 / ?short=1 (dashboard, thông báo quét sáng) — lọc sẵn. */
+  initialStatus?: StatusFilter | null
+}) {
   const router = useRouter()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -66,7 +75,7 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
   const [q, setQ] = useState('')
   const [groupFilter, setGroupFilter] = useState('all')
   const [shelfFilter, setShelfFilter] = useState('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatus ?? 'all')
 
   const groups = useMemo(() => {
     const set = new Set<string>()
@@ -344,7 +353,12 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
               />
               <ToolbarSelect
                 value={statusFilter}
-                onChange={(v) => setStatusFilter(v)}
+                onChange={(v) => {
+                  setStatusFilter(v)
+                  // "Tồn thấp" lọc Ở SERVER (?low=1 — trang chỉ nạp 1000 mã đầu,
+                  // lọc client là lọt vật tư ngoài trang); các lọc khác giữ client.
+                  router.replace(v === 'low' ? '?low=1' : '?')
+                }}
                 options={statusOptions}
               />
             </>
@@ -360,6 +374,10 @@ export function StockManager({ stock, canEdit }: { stock: Stock[]; canEdit: bool
 
         <DataTable<Stock>
           rows={filtered}
+          /* Dòng tồn không có `id` (khoá là material_id) — thiếu keyFn thì
+             DataTable rơi về String(row) = "[object Object]" cho MỌI dòng:
+             React trùng key, dòng có thể vẽ thiếu/vẽ đúp khi lọc. */
+          keyFn={(s) => s.material_id}
           columns={columns}
           storageKey="warehouse-stock"
           emptyState={
@@ -661,7 +679,11 @@ function MovementHistory({ materialId, unit }: { materialId: string; unit: strin
                 )}
               </td>
               <td className="px-2 py-1.5">
-                {REF_LABEL[m.ref_type] ?? m.ref_type}
+                {/* Xuất gắn PO = TRẢ HÀNG NCC (0080) — "Theo đơn đặt · ↓ Xuất"
+                    đọc như nhập hàng, gây hiểu lầm đúng chỗ nhạy cảm nhất. */}
+                {m.direction === 'out' && m.ref_type === 'po'
+                  ? 'Trả NCC'
+                  : (REF_LABEL[m.ref_type] ?? m.ref_type)}
                 {m.ref_no && <span className="ml-1 text-zinc-400">#{m.ref_no}</span>}
               </td>
               <td className="px-2 py-1.5 text-zinc-500">{m.note ?? '—'}</td>

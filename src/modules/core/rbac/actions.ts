@@ -315,6 +315,16 @@ export const ACTIONS: Action[] = [
     domain: 'warehouse',
     rule: memberEdit('warehouse.member', 'warehouse.edit'),
   },
+  {
+    // Kiểm kê có duyệt (0157): quản lý Kho duyệt chênh lệch mới áp sổ. Rule
+    // trùng stock.write NHƯNG là action riêng — service còn chặn TỰ DUYỆT
+    // biên bản mình lập (trừ admin), và sau này siết người duyệt không phải sửa
+    // chỗ gọi.
+    key: 'warehouse.stocktake.approve',
+    label: 'Duyệt biên bản kiểm kê (áp chênh lệch vào tồn)',
+    domain: 'warehouse',
+    rule: memberEdit('warehouse.member', 'warehouse.edit'),
+  },
 
   // ── Sản xuất (thiết kế lại theo VAI 0084: KH / thống kê / tổ trưởng / QĐ) ─
   {

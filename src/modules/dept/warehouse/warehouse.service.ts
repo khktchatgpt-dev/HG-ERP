@@ -43,6 +43,8 @@ type CreateInput = {
   sub_group?: string | null
   min_stock: number
   max_stock?: number | null
+  /** Dung sai nhận vượt % (0156) — cả Cung ứng lẫn Kho đặt được. */
+  over_tolerance_pct?: number
   reorder_point?: number | null
   reorder_qty?: number | null
   shelf_location?: string | null
@@ -113,6 +115,9 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   'open_style',
   'pcs_per_ctn',
   'finish',
+  // Dung sai nhận vượt (0156): người đàm phán với NCC biết hàng nào hay lệch
+  // cân — Cung ứng đặt được, Kho (chuyên tồn trữ) đương nhiên cũng sửa được.
+  'over_tolerance_pct',
 ])
 
 /**
@@ -239,6 +244,7 @@ export const materialsService = {
       sub_group: input.sub_group ?? null,
       min_stock: input.min_stock,
       max_stock: input.max_stock ?? null,
+      over_tolerance_pct: input.over_tolerance_pct ?? 0,
       reorder_point: input.reorder_point ?? null,
       reorder_qty: input.reorder_qty ?? null,
       shelf_location: input.shelf_location ?? null,
@@ -341,6 +347,21 @@ export const materialsService = {
     const before = await materialsRepo.findById(id)
     if (!before) throw NotFound('Vật tư không tồn tại')
     await materialsRepo.delete(id)
+  },
+
+  /**
+   * Đặt DUNG SAI NHẬN VƯỢT cho cả nhóm (0156) — thao tác bulk của màn danh mục.
+   * Quyền như sửa trường mua hàng: Cung ứng lẫn Kho đều đặt được.
+   */
+  async setGroupTolerance(
+    user: User,
+    groupName: string,
+    pct: number,
+  ): Promise<{ updated: number }> {
+    await assertAction(user, 'warehouse.material.update_purchasing')
+    const updated = await materialsRepo.setGroupTolerance(groupName, pct)
+    if (updated === 0) throw NotFound(`Nhóm "${groupName}" không có vật tư nào`)
+    return { updated }
   },
 
   /**

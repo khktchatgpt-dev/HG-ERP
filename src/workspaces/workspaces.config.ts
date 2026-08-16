@@ -227,14 +227,27 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'amber',
     logoText: 'KH',
     ready: true,
+    // Chia theo NGHIỆP VỤ (plan-kho-redesign GĐ1): nhập / cấp SX là hai luồng
+    // riêng thay vì một màn "Phiếu nhập / xuất" gộp. Sổ chứng từ vẫn giữ —
+    // nơi tra mọi phiếu đã lập + form gốc (các màn nghiệp vụ deep-link vào).
     sections: [
       {
-        heading: 'Kho',
+        heading: 'Nghiệp vụ',
         items: [
-          { href: '/warehouse', label: 'Trang chủ', icon: 'home' },
-          { href: '/warehouse/docs', label: 'Phiếu nhập / xuất', icon: 'receipt-text' },
-          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
+          { href: '/warehouse', label: 'Tổng quan', icon: 'home' },
+          { href: '/warehouse/nhap', label: 'Nhập kho', icon: 'arrow-down-to-line' },
+          // Đơn NCC góc nhìn Kho (16/08): tra tiến độ về hàng theo ĐƠN/LSX +
+          // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
+          { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },
+          { href: '/warehouse/xuat', label: 'Cấp vật tư SX', icon: 'arrow-up-from-line' },
           { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: 'clipboard-check' },
+        ],
+      },
+      {
+        heading: 'Sổ sách',
+        items: [
+          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
+          { href: '/warehouse/docs', label: 'Sổ chứng từ', icon: 'receipt-text' },
           { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
@@ -265,35 +278,48 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
 
   planning: {
     id: 'planning',
-    label: 'Kế hoạch - Cung ứng',
-    short: 'Planning',
+    // Đổi tên 15/08/2026: "Kế hoạch - Cung ứng" → "Cung ứng". Kế hoạch SX đã
+    // tách hẳn sang workspace riêng (prodplan /kehoach-sx — 0084/0087) nên tên
+    // cũ chỉ còn gây hiểu nhầm. Route /planning giữ nguyên (link/bookmark sống).
+    label: 'Cung ứng',
+    short: 'Cung ứng',
     route: '/planning',
     accent: 'violet',
-    logoText: 'KH',
+    logoText: 'CƯ',
     ready: true,
-    // 2 cụm việc của phòng (1 phòng ban, chưa tách quyền — xem docs/plan-supply.md):
-    // Thu mua (PO/NCC) và Kế hoạch SX (tiến độ LSX, theo dõi đơn, phiếu kho).
+    // Bố cục sidebar theo thiết kế v3 (/design-lab mục 02): MỘT nhóm Nghiệp vụ,
+    // bỏ nhóm "Theo dõi" (chốt 15/08/2026). "Kho & tồn" và "Lệnh sản xuất" là
+    // view tái dùng render trong shell Cung ứng (xem /planning/stock, /planning/lsx).
+    // Route /planning/tracking và /planning/docs VẪN SỐNG (link cũ vào được),
+    // chỉ rút khỏi nav.
     sections: [
       {
-        heading: 'Thu mua',
+        heading: 'Nghiệp vụ',
         items: [
-          { href: '/planning', label: 'Trang chủ', icon: 'home' },
-          { href: '/planning/pos', label: 'Quản lý đơn đặt hàng', icon: 'shopping-cart' },
+          { href: '/planning', label: 'Tổng quan', icon: 'home' },
+          { href: '/planning/pos', label: 'Phiếu mua', icon: 'shopping-cart' },
           { href: '/planning/materials', label: 'Vật tư & giá mua', icon: 'package' },
-          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: 'truck' },
+          // building-2 chứ không phải truck: từ vựng icon (/design-lab mục 05)
+          // để truck cho GIAO NHẬN — "Hàng sắp về" bên dưới mới là xe hàng.
+          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: 'building-2' },
+          { href: '/planning/stock', label: 'Kho & tồn', icon: 'boxes' },
+          // "Vật tư theo lệnh", không phải "Lệnh sản xuất": màn này trả lời câu
+          // của người MUA (lệnh nào còn thiếu đồ), không phải tiến độ xưởng.
+          { href: '/planning/lsx', label: 'Vật tư theo lệnh', icon: 'factory' },
         ],
       },
       {
-        // Điều phối sản xuất nằm bên workspace Sản xuất (/production — 0084).
-        // Cung ứng giữ các view cần cho lập kế hoạch mua/đặt. Route /planning/*
-        // re-export view dùng chung → giữ menu Cung ứng, không nhảy shell.
-        heading: 'Kế hoạch sản xuất',
-        // Kế hoạch SX + Định hình thuộc workspace Sản xuất (/production/plan,
-        // /production/shaping — 0084): planner chuyển sang ws Sản xuất để lên
-        // kế hoạch. Ở đây chỉ giữ view phục vụ mua/đặt vật tư.
+        // Hai màn THEO DÕI (15/08/2026) — số đếm sống gắn ở `nav-badges.ts`,
+        // cùng nguồn logic với trang (`lib/supply-watch`) nên badge và nội dung
+        // không bao giờ lệch nhau.
+        heading: 'Theo dõi',
         items: [
-          { href: '/planning/tracking', label: 'Theo dõi đơn hàng', icon: 'route' },
-          { href: '/planning/docs', label: 'Phiếu kho', icon: 'receipt-text' },
+          {
+            href: '/planning/viec-cua-toi',
+            label: 'Chờ tôi xử lý',
+            icon: 'clipboard-check',
+          },
+          { href: '/planning/hang-sap-ve', label: 'Hàng sắp về', icon: 'truck' },
         ],
       },
     ],

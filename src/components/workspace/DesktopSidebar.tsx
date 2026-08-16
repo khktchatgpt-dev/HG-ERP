@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { Settings } from 'lucide-react'
 import type { NavSection, WorkspaceId } from '@/workspaces/workspaces.config'
 import { NavLink } from './NavLink'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
@@ -9,35 +10,28 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 const STORAGE_KEY = 'hg-sidebar-collapsed'
 
 /**
- * Sidebar desktop có thể thu gọn (đầy đủ ⇄ icon-only). Trạng thái lưu localStorage
- * để nhớ giữa các lần vào. Dữ liệu nav đã lọc quyền từ server (WorkspaceSidebar).
- *
- * Bề mặt là TOKEN v2 (bg-card/border) — cùng hệ với nội dung trang, hết cảnh
- * khối slate đen đứng cạnh trang stone như hai app. Danh tính phòng nằm ở khối
- * logo màu accent + item nav active (NavLink).
+ * Sidebar desktop (thiết kế v3 — /design-lab mục 02): header = logo + switcher
+ * gộp một khối, nav chia nhóm có heading, ĐÁY là thẻ người dùng (avatar chữ +
+ * tên + vai, bánh răng mở trang tài khoản). Có thể thu gọn (đầy đủ ⇄ icon-only),
+ * trạng thái lưu localStorage. Dữ liệu nav đã lọc quyền từ server.
  */
 export function DesktopSidebar({
   workspaceId,
   route,
-  short,
-  logoText,
-  accentBg,
-  accentShadow,
-  accentSoftBg,
-  accentText,
   sections,
   switchable,
+  userName,
+  userSub,
 }: {
   workspaceId: WorkspaceId
+  /** Route gốc workspace — để item "Tổng quan" chỉ active khi khớp CHÍNH XÁC. */
   route: string
-  short: string
-  logoText: string
-  accentBg: string
-  accentShadow: string
-  accentSoftBg: string
-  accentText: string
   sections: NavSection[]
   switchable: { id: WorkspaceId; readonly: boolean }[]
+  /** Tên người đăng nhập — thẻ đáy sidebar. */
+  userName: string
+  /** Dòng phụ dưới tên (vd "Cung ứng · supply_lead"). */
+  userSub: string
 }) {
   const [collapsed, setCollapsed] = useState(false)
 
@@ -54,35 +48,24 @@ export function DesktopSidebar({
     })
   }
 
+  const initials = userName
+    .trim()
+    .split(/\s+/)
+    .slice(-2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+
   return (
     <aside
-      className={`bg-card hidden shrink-0 flex-col border-r py-4 transition-[width] duration-200 lg:flex ${
+      className={`bg-card hidden shrink-0 flex-col border-r pt-3 transition-[width] duration-200 lg:flex ${
         collapsed ? 'w-16 px-2' : 'w-60 px-3'
       }`}
     >
-      <Link
-        href={`${route}/`}
-        title={collapsed ? 'Hoàng Gia' : undefined}
-        className={`mb-4 flex items-center gap-2 ${collapsed ? 'justify-center px-0' : 'px-2'}`}
-      >
-        <span
-          className={`grid h-9 w-9 shrink-0 place-items-center rounded-md font-bold text-white ${accentBg}`}
-        >
-          {logoText}
-        </span>
-        {!collapsed && (
-          <div className="flex min-w-0 flex-col">
-            <span className="text-foreground text-sm leading-tight font-semibold">
-              Hoàng Gia
-            </span>
-            <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
-              {short}
-            </span>
-          </div>
-        )}
-      </Link>
-
-      {!collapsed && <WorkspaceSwitcher current={workspaceId} switchable={switchable} />}
+      <WorkspaceSwitcher
+        current={workspaceId}
+        switchable={switchable}
+        collapsed={collapsed}
+      />
 
       <nav className="mt-3 flex flex-1 flex-col gap-1 overflow-y-auto">
         {sections.map((sec) => (
@@ -90,7 +73,7 @@ export function DesktopSidebar({
             {collapsed ? (
               <div className="mx-2 mb-1 border-t" />
             ) : (
-              <div className="text-muted-foreground/70 px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider uppercase">
+              <div className="t-label text-muted-foreground px-3 pt-2 pb-1.5">
                 {sec.heading}
               </div>
             )}
@@ -100,9 +83,6 @@ export function DesktopSidebar({
                 href={i.href}
                 label={i.label}
                 icon={i.icon}
-                accentShadow={accentShadow}
-                accentSoftBg={accentSoftBg}
-                accentText={accentText}
                 collapsed={collapsed}
                 exact={i.href === route || i.href === `${route}/` || i.href === '/'}
                 badge={i.badge}
@@ -117,13 +97,44 @@ export function DesktopSidebar({
         onClick={toggle}
         title={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
         aria-label={collapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
-        className={`text-muted-foreground hover:bg-accent hover:text-foreground mt-2 flex items-center gap-2 rounded-md py-1.5 text-xs transition-colors ${
+        className={`text-muted-foreground hover:bg-accent hover:text-foreground mb-1 flex items-center gap-2 rounded-md py-1.5 text-xs transition-colors ${
           collapsed ? 'justify-center px-0' : 'px-3'
         }`}
       >
         <span className="text-base leading-none">{collapsed ? '»' : '«'}</span>
         {!collapsed && <span>Thu gọn</span>}
       </button>
+
+      {/* Thẻ người dùng — đáy sidebar theo mẫu. Bánh răng → hồ sơ tài khoản. */}
+      <div
+        className={`-mx-3 flex items-center gap-2.5 border-t px-4 py-3 ${
+          collapsed ? 'justify-center px-0' : ''
+        }`}
+      >
+        <span
+          className="grid size-8 shrink-0 place-items-center rounded-full bg-[var(--accent)] text-[12px] font-semibold text-[var(--accent-foreground)]"
+          title={collapsed ? `${userName} — ${userSub}` : undefined}
+        >
+          {initials || '·'}
+        </span>
+        {!collapsed && (
+          <>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-[12.5px] font-medium">{userName}</span>
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {userSub}
+              </span>
+            </span>
+            <Link
+              href="/tai-khoan"
+              aria-label="Tài khoản của tôi"
+              className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+            >
+              <Settings className="size-4" strokeWidth={1.8} />
+            </Link>
+          </>
+        )}
+      </div>
     </aside>
   )
 }

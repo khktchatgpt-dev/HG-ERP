@@ -112,18 +112,22 @@ export async function Sidebar({ current }: { current?: string } = {}) {
       : []
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col gap-1 border-r border-slate-800 bg-slate-900 px-3 py-5 text-slate-200 lg:flex">
-      <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-        <span className="grid h-9 w-9 place-items-center rounded-md bg-amber-500 font-bold text-slate-900">
+    // Sidebar cổ — tokenize theo thiết kế v3 cho cùng bộ mặt với DesktopSidebar
+    // (bỏ slate đen + amber tự chế). Trang dùng nó (tasks/team/reports) ít vào,
+    // không đáng dựng lại cấu trúc, chỉ đổi bề mặt.
+    <aside className="bg-card hidden w-60 shrink-0 flex-col gap-1 border-r px-3 pt-3 pb-5 lg:flex">
+      <Link
+        href="/"
+        className="hover:bg-accent mb-4 flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors"
+      >
+        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[var(--primary)] font-mono text-[13px] font-bold text-white">
           HG
         </span>
-        <div className="flex flex-col">
-          <span className="text-sm leading-tight font-semibold text-white">
-            Hoàng Gia
+        <div className="flex min-w-0 flex-col leading-tight">
+          <span className="text-foreground truncate text-[13px] font-semibold">
+            Hoàng Gia ERP
           </span>
-          <span className="text-[10px] tracking-wider text-slate-400 uppercase">
-            Task Manager
-          </span>
+          <span className="text-muted-foreground truncate text-[11px]">Khu cá nhân</span>
         </div>
       </Link>
 
@@ -171,9 +175,7 @@ function NavSection({
 }) {
   return (
     <div className="mb-2">
-      <div className="px-3 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-slate-500 uppercase">
-        {heading}
-      </div>
+      <div className="t-label text-muted-foreground px-3 pt-2 pb-1.5">{heading}</div>
       {items.map((i) => {
         const active =
           current === i.href || (i.href !== '/' && current?.startsWith(i.href))
@@ -181,13 +183,13 @@ function NavSection({
           <Link
             key={i.href}
             href={i.href}
-            className={`flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition ${
+            className={`flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
               active
-                ? 'bg-slate-800 text-white shadow-[inset_3px_0_0] shadow-amber-500'
-                : 'text-slate-300 hover:bg-slate-800/60 hover:text-white'
+                ? 'bg-[var(--accent)] font-semibold text-[var(--accent-foreground)] shadow-[inset_3px_0_0_var(--primary)]'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
             }`}
           >
-            <span className="w-4 text-center text-slate-400">{i.icon}</span>
+            <span className="text-muted-foreground/70 w-4 text-center">{i.icon}</span>
             {i.label}
           </Link>
         )

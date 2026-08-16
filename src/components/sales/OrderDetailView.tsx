@@ -639,7 +639,7 @@ export function OrderDetailView({
   const dueClosed = order.status === 'delivered' || order.status === 'cancelled'
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5">
+    <div className="theme-v3 text-foreground flex flex-col gap-5">
       <TopProgressBar active={busy} />
 
       {/* ── Đầu trang: nhận diện + MỌI hành động ─────────────────────────── */}
@@ -703,7 +703,7 @@ export function OrderDetailView({
                   <MoreHorizontal />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="theme-v2">
+              <DropdownMenuContent align="end" className="theme-v3">
                 <DropdownMenuItem
                   onClick={() => window.open(`/print/orders/${order.id}`, '_blank')}
                 >
@@ -1316,7 +1316,7 @@ export function OrderDetailView({
 
       {/* ── Ghi một đợt xuất hàng ────────────────────────────────────────── */}
       <Dialog open={shipping} onOpenChange={(v) => !v && setShipping(false)}>
-        <DialogContent className="theme-v2">
+        <DialogContent className="theme-v3">
           <DialogHeader>
             <DialogTitle>Ghi xuất hàng — {order.code}</DialogTitle>
             <DialogDescription>
@@ -1400,7 +1400,7 @@ export function OrderDetailView({
 
       {/* ── Huỷ đơn: hệ quả TRƯỚC, lý do SAU ─────────────────────────────── */}
       <Dialog open={cancelling} onOpenChange={(v) => !v && setCancelling(false)}>
-        <DialogContent className="theme-v2">
+        <DialogContent className="theme-v3">
           <DialogHeader>
             <DialogTitle>Huỷ đơn {order.code}?</DialogTitle>
             <DialogDescription>

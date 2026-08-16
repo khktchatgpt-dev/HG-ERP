@@ -67,10 +67,18 @@ export type PoLine = {
 
 export type StatusLine = {
   id: string
-  material_id: string
+  /** null = DÒNG TỰ DO (0134) — nghiệm thu ngoài sổ kho. */
+  material_id: string | null
   qty_ordered: number
   qty_received: number
+  /** Thiếu THẬT so với đặt — giữ nguyên nghĩa dù đã chốt thiếu (0154). */
   qty_missing: number
+  /** Còn CHỜ VỀ (0154): dòng đã chốt thiếu = 0. */
+  qty_open: number
+  /** Mốc chốt "phần thiếu không giao nữa" — null = dòng còn mở. */
+  closed_short_at: string | null
+  /** Lý do chốt — chỉ trang chi tiết nạp (tooltip badge). */
+  closed_short_reason?: string | null
   material_code: string
   material_name: string
   material_unit: string

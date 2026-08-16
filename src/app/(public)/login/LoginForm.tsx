@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
 import { Spinner } from '@/components/erp/Spinner'
 
@@ -14,7 +13,6 @@ function safeNext(next?: string): string | null {
 }
 
 export function LoginForm({ next }: { next?: string }) {
-  const router = useRouter()
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
@@ -32,9 +30,16 @@ export function LoginForm({ next }: { next?: string }) {
         noAuthRedirect: true,
         body: { email: fd.get('email'), password: fd.get('password') },
       })
-      // Giữ nguyên trạng thái loading trong lúc chuyển trang.
-      router.push(safeNext(next) ?? redirect ?? '/')
-      router.refresh()
+      /*
+       * ĐIỀU HƯỚNG CỨNG sau khi đổi phiên — không dùng router.push.
+       *
+       * Máy ở xưởng dùng chung nhiều người: push là soft-navigation, client
+       * router có thể dùng lại cache RSC (layout = sidebar, tên, badge) của
+       * NGƯỜI ĐĂNG NHẬP TRƯỚC trên cùng trình duyệt. Reload đầy đủ thì mọi thứ
+       * render lại từ server theo cookie phiên MỚI — sạch tuyệt đối. Logout
+       * (UserMenu) cũng hard-nav cùng lý do; hai đầu vào/ra phải đối xứng.
+       */
+      window.location.assign(safeNext(next) ?? redirect ?? '/')
     } catch (err) {
       setLoading(false)
       setError(

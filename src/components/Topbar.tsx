@@ -17,12 +17,12 @@ export async function Topbar({
   const unread = await notificationsService.unreadCount(user)
 
   return (
-    <header className="sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b border-zinc-200 bg-white/80 px-4 backdrop-blur sm:px-6 dark:border-zinc-800 dark:bg-zinc-950/80">
+    <header className="bg-card/85 sticky top-0 z-10 flex h-14 items-center justify-between gap-3 border-b px-4 backdrop-blur sm:px-6">
       <div className="min-w-0">
         {title && (
           <h1 className="truncate text-sm font-semibold sm:text-base">{title}</h1>
         )}
-        {subtitle && <p className="truncate text-xs text-zinc-500">{subtitle}</p>}
+        {subtitle && <p className="text-muted-foreground truncate text-xs">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-2">
         {actions}

@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -32,23 +32,56 @@ const num = (n: number) => n.toLocaleString('vi-VN')
  * từng dòng (chỉ dòng đã nhập mới vào biên bản) → xem chênh lệch → ghi phiếu KK.
  * Dòng lệch sổ được server sinh movement điều chỉnh; tồn sau kiểm = số đếm.
  */
-export function StocktakeScreen({ stock }: { stock: Stock[] }) {
+export function StocktakeScreen({
+  stock,
+  groups,
+  initialQ = '',
+  initialGroup = 'all',
+}: {
+  stock: Stock[]
+  /** Đủ 14 nhóm từ taxonomy — lấy từ trang kết quả thì lọc xong hết đường chuyển nhóm. */
+  groups: string[]
+  initialQ?: string
+  initialGroup?: string
+}) {
   const router = useRouter()
+  const sp = useSearchParams()
+  const [navigating, startTransition] = useTransition()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
 
-  const [q, setQ] = useState('')
-  const [groupFilter, setGroupFilter] = useState('all')
+  const [q, setQ] = useState(initialQ)
+  const [groupFilter, setGroupFilter] = useState(initialGroup)
   const [onlyCounted, setOnlyCounted] = useState<'all' | 'counted' | 'diff'>('all')
   const [reason, setReason] = useState('Kiểm kê định kỳ')
   const [note, setNote] = useState('')
   const [counts, setCounts] = useState<Record<string, Count>>({})
 
-  const groups = useMemo(() => {
-    const set = new Set<string>()
-    for (const s of stock) if (s.group_name) set.add(s.group_name)
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'vi'))
+  /**
+   * MỌI DÒNG ĐÃ THẤY qua các lượt lọc — biên bản + tổng kết đọc từ đây, không
+   * từ trang kết quả hiện tại: đếm nhóm A xong chuyển sang tìm nhóm B thì số
+   * của A phải còn nguyên trong biên bản dù A không còn trên màn.
+   */
+  const [seenRows, setSeenRows] = useState<Map<string, Stock>>(new Map())
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- gom trang kết quả vào bộ nhớ đã-thấy
+    setSeenRows((m) => {
+      const next = new Map(m)
+      for (const s of stock) next.set(s.material_id, s)
+      return next
+    })
   }, [stock])
+
+  /** Đẩy bộ lọc xuống URL → SERVER lọc lại (13k mã, client chỉ thấy ≤1000 dòng/lượt). */
+  function pushFilter(patch: Record<string, string>) {
+    const next = new URLSearchParams(sp.toString())
+    for (const [k, v] of Object.entries(patch)) {
+      if (!v || v === 'all') next.delete(k)
+      else next.set(k, v)
+    }
+    const qs = next.toString()
+    startTransition(() => router.replace(qs ? `?${qs}` : '?'))
+  }
 
   const diffOf = (s: Stock): number | null => {
     const c = counts[s.material_id]
@@ -73,11 +106,12 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stock, q, groupFilter, onlyCounted, counts])
 
+  // Tổng kết trên MỌI dòng đã đếm (kể cả dòng ngoài trang lọc hiện tại).
   const summary = useMemo(() => {
     let counted = 0
     let over = 0
     let short = 0
-    for (const s of stock) {
+    for (const s of seenRows.values()) {
       const d = diffOf(s)
       if (d === null) continue
       counted++
@@ -86,7 +120,7 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
     }
     return { counted, over, short }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stock, counts])
+  }, [seenRows, counts])
 
   function setCount(id: string, patch: Partial<Count>) {
     setCounts((m) => {
@@ -110,7 +144,8 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
   }
 
   async function submit() {
-    const lines = stock
+    // Biên bản = mọi dòng đã đếm qua CÁC lượt lọc — không chỉ trang đang hiện.
+    const lines = [...seenRows.values()]
       .filter((s) => (counts[s.material_id]?.counted ?? '') !== '')
       .map((s) => ({
         material_id: s.material_id,
@@ -127,11 +162,12 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
           body: { reason: reason.trim() || null, note: note.trim() || null, lines },
         },
       )
+      // Vòng duyệt 0157: biên bản chờ quản lý Kho duyệt, tồn CHƯA đổi lúc này.
       toast.success(
-        `Đã ghi phiếu ${r.code}`,
+        `Đã lập biên bản ${r.code} — chờ duyệt`,
         r.diff_count > 0
-          ? `${r.diff_count} dòng lệch sổ đã được điều chỉnh tồn`
-          : 'Tất cả khớp sổ — không cần điều chỉnh',
+          ? `${r.diff_count} dòng lệch sổ; quản lý Kho duyệt thì tồn mới điều chỉnh`
+          : 'Tất cả khớp sổ lúc đếm — vẫn cần duyệt để đóng biên bản',
       )
       setCounts({})
       router.push('/warehouse/docs')
@@ -151,12 +187,18 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
       <PageHeader
         breadcrumbs={[{ label: 'Kho', href: '/warehouse' }, { label: 'Kiểm kê' }]}
         title="Kiểm kê kho"
-        description="Nhập số ĐẾM THỰC TẾ cho từng vật tư (chỉ dòng đã nhập vào biên bản). Ghi phiếu KK: dòng lệch sổ tự sinh điều chỉnh tồn — tồn sau kiểm = số đếm."
+        description="Nhập số ĐẾM THỰC TẾ cho từng vật tư (chỉ dòng đã nhập vào biên bản). Biên bản lập xong CHỜ QUẢN LÝ KHO DUYỆT — duyệt rồi tồn mới điều chỉnh theo số đếm."
       />
 
       <StatsBar
         stats={[
-          { label: 'Vật tư', value: stock.length, tone: 'default' },
+          {
+            // PostgREST trần 1000 dòng/lượt — đúng 1000 nghĩa là còn nữa,
+            // nhắc người kiểm thu hẹp bằng tìm/nhóm (server lọc).
+            label: stock.length >= 1000 ? 'Đang hiện (còn nữa — hãy lọc)' : 'Đang hiện',
+            value: stock.length,
+            tone: 'default',
+          },
           { label: 'Đã đếm', value: summary.counted, tone: 'blue' },
           {
             label: 'Thừa sổ',
@@ -178,18 +220,23 @@ export function StocktakeScreen({ stock }: { stock: Stock[] }) {
               <ToolbarInput
                 value={q}
                 onChange={setQ}
-                placeholder="Tìm theo mã, tên, nhóm…"
+                onEnter={() => pushFilter({ q })}
+                placeholder="Tìm mã, tên… (Enter — tìm cả 13k mã)"
                 icon="⌕"
                 className="w-64"
               />
               <ToolbarSelect
                 value={groupFilter}
-                onChange={setGroupFilter}
+                onChange={(v) => {
+                  setGroupFilter(v)
+                  pushFilter({ group: v })
+                }}
                 options={[
                   { value: 'all', label: 'Mọi nhóm' },
                   ...groups.map((g) => ({ value: g, label: g })),
                 ]}
               />
+              {navigating && <Spinner size={14} />}
               <ToolbarSelect
                 value={onlyCounted}
                 onChange={(v) => setOnlyCounted(v)}
