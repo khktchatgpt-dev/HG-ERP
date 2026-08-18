@@ -44,9 +44,12 @@ export default async function PoDetailPage({
     if (e instanceof HttpError && e.status === 404) notFound()
     throw e
   }
-  const { po, lines, status_lines, extra_lsx } = detail
+  const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const history = await approvalEventsRepo.listByEntity('po', po.id)
+  const [history, shipments] = await Promise.all([
+    approvalEventsRepo.listByEntity('po', po.id),
+    posService.listShipments(user, po.id),
+  ])
 
   /*
    * NV cung ứng nhận BÀN GIAO (0128) — chỉ nạp cho người bàn giao được. Loại
@@ -97,12 +100,16 @@ export default async function PoDetailPage({
         assignee_name: po.assignee_name,
         approved_at: po.approved_at,
         ordered_at: po.ordered_at,
+        confirmed_at: po.confirmed_at,
+        confirmed_note: po.confirmed_note,
         created_at: po.created_at,
       }}
       lines={lines}
       statusLines={status_lines}
       extraLsx={extra_lsx}
+      shipments={shipments}
       history={history}
+      warehouseDocs={warehouse_docs}
       canEdit={canEdit}
       isSupply={isSupply}
       canApprove={canApprove}

@@ -15,19 +15,26 @@ import {
   type LsxNeed,
   type StockRow,
   type DocKind,
+  type StocktakeLine,
 } from './stock.repo'
 import {
   componentAllocationByCode,
   componentMaterialNeeds,
 } from '@/modules/dept/production/components.service'
 import type { MaterialAllocation } from '@/lib/po-allocation'
-import { checkReceiptAgainstPo, describeOverReceipt } from '@/lib/po-receipt'
+import {
+  checkReceiptAgainstPo,
+  describeOverReceipt,
+  withinToleranceNote,
+} from '@/lib/po-receipt'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
+import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -244,12 +251,30 @@ export const stockService = {
     if (!(await canViewWarehouse(user))) throw Forbidden()
     const doc = await docsRepo.findById(id)
     if (!doc) throw NotFound('Phiếu không tồn tại')
-    const [lines, stocktake_lines] = await Promise.all([
+    const [lines, stLines] = await Promise.all([
       docsRepo.listLines(id),
       // Phiếu KK: biên bản đầy đủ (mọi dòng đã đếm) — movements chỉ chứa dòng lệch.
       doc.kind === 'stocktake' ? stocktakeRepo.listByDoc(id) : Promise.resolve([]),
     ])
-    return { doc, lines, stocktake_lines }
+    /*
+     * Biên bản CHỜ DUYỆT (0157): kèm tồn HIỆN TẠI từng dòng — người duyệt phải
+     * thấy "lúc đếm lệch bao nhiêu, giờ lệch bao nhiêu" vì chênh sẽ áp theo tồn
+     * lúc duyệt, không phải snapshot.
+     */
+    let stocktake_lines: (StocktakeLine & { current_qty?: number })[] = stLines
+    if (doc.kind === 'stocktake' && doc.status === 'pending' && stLines.length > 0) {
+      const current = await onHandMany([...new Set(stLines.map((l) => l.material_id))])
+      stocktake_lines = stLines.map((l) => ({
+        ...l,
+        current_qty: current.get(l.material_id) ?? 0,
+      }))
+    }
+    // K1: phiếu này ĐÃ bị đảo chưa — UI ẩn nút đảo + hiện quan hệ hai chiều.
+    const reversed_by =
+      doc.kind === 'receipt' || doc.kind === 'issue'
+        ? await docsRepo.findReversalOf(id)
+        : null
+    return { doc, lines, stocktake_lines, reversed_by }
   },
 
   /** Nhu cầu vật tư còn phải xuất cho 1 LSX (FR-WMS-05 — cần vs đã xuất). */
@@ -276,15 +301,58 @@ export const stockService = {
   },
 
   /**
+   * ĐÃ CẤP còn lại (net) của một LSX — prefill form HOÀN KHO (K2): xưởng trả
+   * thừa thì chỉ trả được thứ đã lĩnh, tối đa bằng phần đã lĩnh chưa hoàn.
+   */
+  async lsxIssuedForReturn(
+    user: User,
+    productionOrderId: string,
+  ): Promise<
+    { material_id: string; code: string; name: string; unit: string; issued: number }[]
+  > {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    const issued = await issuedByLsx(productionOrderId)
+    const out: {
+      material_id: string
+      code: string
+      name: string
+      unit: string
+      issued: number
+    }[] = []
+    for (const [matId, qty] of issued) {
+      if (qty <= 1e-9) continue // đã hoàn hết / chưa từng lĩnh
+      const mat = await materialsRepo.findById(matId)
+      out.push({
+        material_id: matId,
+        code: mat?.code ?? '?',
+        name: mat?.name ?? '?',
+        unit: mat?.unit ?? '',
+        issued: qty,
+      })
+    }
+    return out.sort((a, b) => a.code.localeCompare(b.code, 'vi'))
+  },
+
+  /**
    * Lập PHIẾU NHẬP nhiều dòng (PNK — FR-WMS-02/03/04, BR-08/10).
    * Theo PO: gắn po_line_id từng dòng, sau ghi tính lại trạng thái PO
    * (partial/received) từ view sổ cái. Mua ngoài: ref_type 'external'.
+   * HOÀN KHO TỪ LSX (K2): xưởng dùng không hết trả về — production_order_id
+   * gắn từng movement, ref 'lsx'; issuedByLsx (net) tự trừ "đã cấp".
    */
   async createReceiptDoc(
     user: User,
     input: {
       po_id?: string | null
+      /** Nhận cho ĐỢT GIAO nào (0153) — null = không theo đợt (flow cũ). */
+      shipment_id?: string | null
+      /** HOÀN KHO từ LSX (K2) — loại trừ với po_id. */
+      production_order_id?: string | null
       counterparty?: string | null
+      /** Số phiếu giao / hoá đơn NCC (K3) — đối chiếu 3 chiều. */
+      supplier_doc_no?: string | null
+      /** Ngày chứng từ (K3) — hàng về chiều tối, sáng sau mới nhập máy. */
+      doc_date?: string | null
       note?: string | null
       /** Xác nhận vẫn nhập dù vượt số còn thiếu của đơn (kèm lý do). */
       allow_over?: boolean
@@ -301,6 +369,61 @@ export const stockService = {
     },
   ): Promise<{ id: string; code: string; po_status: string | null }> {
     await assertAction(user, 'warehouse.stock.write')
+    if (input.po_id && input.production_order_id) {
+      throw BadRequest(
+        'Một phiếu hoặc nhận từ NCC (theo PO) hoặc hoàn kho từ LSX — không trộn',
+      )
+    }
+    /*
+     * HOÀN KHO TỪ LSX (K2): xưởng lĩnh 100 dùng 95 trả 5. Guard: LSX phải đã
+     * qua cổng ký (kể cả 'completed' — SX xong mới gom trả thừa là chuyện
+     * thường); mỗi vật tư trả ≤ phần ĐÃ CẤP còn lại (net) — trả thứ chưa từng
+     * lĩnh là nhập nhầm nguồn, chặn từ cửa.
+     */
+    if (input.production_order_id) {
+      const lsx = await productionRepo.findById(input.production_order_id)
+      if (!lsx) throw NotFound('LSX không tồn tại')
+      if (!['approved', 'in_progress', 'completed'].includes(lsx.status)) {
+        throw BadRequest(`LSX ${lsx.code} chưa qua duyệt / đã huỷ — không có gì để hoàn`)
+      }
+      if (input.lines.some((l) => l.po_line_id)) {
+        throw BadRequest('Phiếu hoàn kho không gắn dòng đơn đặt NCC')
+      }
+      if (input.lines.some((l) => (l.qty_rejected ?? 0) > 0)) {
+        throw BadRequest('Hoàn kho không có khái niệm QC loại — hàng lỗi xử ở xưởng')
+      }
+      const issued = await issuedByLsx(input.production_order_id)
+      const back = new Map<string, number>()
+      for (const l of input.lines) {
+        back.set(l.material_id, (back.get(l.material_id) ?? 0) + l.qty)
+      }
+      for (const [matId, qty] of back) {
+        const remain = issued.get(matId) ?? 0
+        if (qty - remain > 1e-6) {
+          const mat = await materialsRepo.findById(matId)
+          throw BadRequest(
+            `"${mat?.name ?? matId}": hoàn ${qty} nhưng lệnh chỉ còn ghi đã cấp ${remain}`,
+          )
+        }
+      }
+    }
+
+    /*
+     * ĐỢT GIAO (0153): đợt phải thuộc đúng PO và còn nhận được. Đợt 'received'
+     * / 'cancelled' không nhận thêm — nhận bù thì Cung ứng khai đợt mới, để mỗi
+     * đợt đối chiếu được trọn vẹn "NCC hứa X, giao Y".
+     */
+    let shipment: Awaited<ReturnType<typeof poShipmentsRepo.findById>> = null
+    if (input.shipment_id) {
+      shipment = await poShipmentsRepo.findById(input.shipment_id)
+      if (!shipment) throw NotFound('Đợt giao không tồn tại')
+      if (shipment.po_id !== input.po_id) {
+        throw BadRequest('Đợt giao không thuộc đơn đặt đang chọn')
+      }
+      if (shipment.status !== 'planned' && shipment.status !== 'arrived') {
+        throw BadRequest('Đợt này đã nhận xong / đã huỷ — chọn đợt khác hoặc bỏ chọn đợt')
+      }
+    }
     const matIds = [...new Set(input.lines.map((l) => l.material_id))]
     for (const id of matIds) {
       const mat = await materialsRepo.findById(id)
@@ -321,6 +444,8 @@ export const stockService = {
     // Guard trạng thái PO (vòng đời theo thực tế): UI chỉ liệt kê PO mở, nhưng
     // API phải tự chặn — PO chưa duyệt / đã huỷ / đã về đủ không nhận hàng được.
     let po: Awaited<ReturnType<typeof supplyRepo.poStatus>> = null
+    /** Dòng vượt-trong-dung-sai (0156): po_line_id → note "[Vượt x%...]". */
+    let toleranceNotes = new Map<string, string>()
     if (input.po_id) {
       po = await supplyRepo.poStatus(input.po_id)
       if (!po) throw NotFound('Đơn đặt (PO) không tồn tại')
@@ -329,7 +454,11 @@ export const stockService = {
           `PO ${po.code} không ở trạng thái nhận hàng được (chưa duyệt, đã huỷ hoặc đã về đủ)`,
         )
       }
-      await assertReceiptLinesMatchPo(input.po_id, input.lines, input.allow_over ?? false)
+      toleranceNotes = await assertReceiptLinesMatchPo(
+        input.po_id,
+        input.lines,
+        input.allow_over ?? false,
+      )
     }
 
     const [code, warehouseId] = await Promise.all([
@@ -345,28 +474,64 @@ export const stockService = {
       kind: 'receipt',
       counterparty: input.counterparty ?? null,
       note: docNote,
+      shipment_id: shipment?.id ?? null,
+      supplier_doc_no: input.supplier_doc_no?.trim() || null,
+      ...(input.doc_date ? { doc_date: input.doc_date } : {}),
       created_by: user.id,
     })
     await insertMovements(
-      input.lines.map((l) => ({
-        material_id: l.material_id,
-        direction: 'in' as const,
-        qty: l.qty,
-        qty_rejected: l.qty_rejected ?? 0,
-        qc_status: l.qc_status ?? null,
-        ref_type: l.po_line_id ? 'po' : 'external',
-        shelf_location: l.shelf_location ?? null,
-        note: l.note ?? null,
-        created_by: user.id,
-        doc_id: doc.id,
-        warehouse_id: warehouseId,
-        po_line_id: l.po_line_id ?? null,
-      })),
+      input.lines.map((l) => {
+        // Vết dung sai (0156) dán vào note dòng — mỗi movement của dòng PO vượt
+        // trong ngưỡng đều mang vết, hậu kiểm không phải cộng tay.
+        const tol = l.po_line_id ? toleranceNotes.get(l.po_line_id) : undefined
+        return {
+          material_id: l.material_id,
+          direction: 'in' as const,
+          qty: l.qty,
+          qty_rejected: l.qty_rejected ?? 0,
+          qc_status: l.qc_status ?? null,
+          // 'lsx' = HOÀN KHO (K2) — issuedByLsx net trừ lại "đã cấp" của lệnh.
+          ref_type: l.po_line_id ? 'po' : input.production_order_id ? 'lsx' : 'external',
+          shelf_location: l.shelf_location ?? null,
+          note: tol ? `${l.note ? `${l.note} · ` : ''}${tol}` : (l.note ?? null),
+          created_by: user.id,
+          doc_id: doc.id,
+          warehouse_id: warehouseId,
+          po_line_id: l.po_line_id ?? null,
+          production_order_id: input.production_order_id ?? null,
+        }
+      }),
     )
 
     let poStatus: string | null = null
     if (input.po_id) {
       poStatus = await supplyRepo.refreshStatusFromReceipts(input.po_id)
+    }
+
+    /*
+     * CHỐT ĐỢT (0153): so THỰC NHẬN của phiếu này với SL đợt theo TỪNG DÒNG —
+     * mọi dòng nhận đủ → 'received'; thiếu dòng nào → 'arrived' (xe đã tới, Kho
+     * đang nhận, phần thiếu chờ NCC giao bù và Cung ứng thấy ngay trên Kế hoạch
+     * giao). "Thực nhận" tính cả hàng QC loại — NCC ĐÃ giao số đó, đạt hay loại
+     * là chuyện giữa mình với chất lượng, không phải NCC chưa giao (cùng cách
+     * đếm với qty_received của supply_po_line_status). Trạng thái PO thì vẫn
+     * 100% do refreshStatusFromReceipts ở trên — BR-08 không đổi một ly.
+     */
+    if (shipment) {
+      const receivedByLine = new Map<string, number>()
+      for (const l of input.lines) {
+        if (!l.po_line_id) continue
+        receivedByLine.set(
+          l.po_line_id,
+          (receivedByLine.get(l.po_line_id) ?? 0) + l.qty + (l.qty_rejected ?? 0),
+        )
+      }
+      const covered = shipment.lines.every(
+        (sl) => (receivedByLine.get(sl.po_line_id) ?? 0) >= sl.qty - 1e-4,
+      )
+      await poShipmentsRepo.patch(shipment.id, {
+        status: covered ? 'received' : 'arrived',
+      })
     }
 
     // Người NHẬN tin hàng về: admin/quản lý + NGƯỜI PHỤ TRÁCH đơn (0128). Trước
@@ -400,6 +565,8 @@ export const stockService = {
       production_order_id?: string | null
       counterparty?: string | null
       reason?: string | null
+      /** Ngày chứng từ (K3) — xuất chiều tối, sáng sau mới nhập máy. */
+      doc_date?: string | null
       note?: string | null
       /** Xác nhận vẫn xuất dù lấn phần đang giữ cho LSX khác (kèm lý do). */
       override_reserved?: boolean
@@ -489,6 +656,7 @@ export const stockService = {
       counterparty: input.counterparty ?? null,
       reason: input.reason ?? null,
       note,
+      ...(input.doc_date ? { doc_date: input.doc_date } : {}),
       created_by: user.id,
     })
     await insertMovements(
@@ -514,9 +682,11 @@ export const stockService = {
   },
 
   /**
-   * Lập PHIẾU KIỂM KÊ (KK — 0077): server đọc lại tồn sổ từng vật tư (không tin
-   * client), lưu biên bản đầy đủ; dòng LỆCH sinh movement 'adjust' (in = thừa,
-   * out = thiếu) → tồn sau kiểm = số đếm thực tế. Trả về tổng kết chênh lệch.
+   * Lập PHIẾU KIỂM KÊ (KK — 0077, vòng duyệt 0157): server đọc lại tồn sổ từng
+   * vật tư (không tin client), lưu biên bản đầy đủ ở trạng thái CHỜ DUYỆT —
+   * tồn CHƯA đổi một gam nào. Quản lý Kho duyệt (`approveStocktake`) mới sinh
+   * movement 'adjust'; từ chối thì biên bản đóng. system_qty trên dòng là
+   * snapshot LÚC ĐẾM — để màn duyệt đối chiếu, không phải số sẽ áp.
    */
   async createStocktakeDoc(
     user: User,
@@ -532,18 +702,16 @@ export const stockService = {
       const mat = await materialsRepo.findById(id)
       if (!mat) throw NotFound('Vật tư không tồn tại')
     }
-    // Tồn sổ tại thời điểm ghi — vật tư chưa từng có movement thì coi là 0.
+    // Tồn sổ tại thời điểm ĐẾM — vật tư chưa từng có movement thì coi là 0.
     const systemQty = await onHandMany(matIds)
 
-    const [code, warehouseId] = await Promise.all([
-      docsRepo.nextCode('KK'),
-      warehousesRepo.mainId(),
-    ])
+    const code = await docsRepo.nextCode('KK')
     const doc = await docsRepo.insert({
       code,
       kind: 'stocktake',
       reason: input.reason ?? null,
       note: input.note ?? null,
+      status: 'pending',
       created_by: user.id,
     })
 
@@ -562,28 +730,103 @@ export const stockService = {
       })),
     )
 
+    // Báo người có quyền duyệt — không notify thì biên bản nằm chờ vô danh.
+    await notifyStocktake(user, doc.code, 'created')
     const diffs = lines.filter((l) => l.diff !== 0)
-    if (diffs.length > 0) {
+    return { id: doc.id, code: doc.code, diff_count: diffs.length }
+  },
+
+  /**
+   * DUYỆT KIỂM KÊ (0157): áp số đếm như SỰ THẬT TUYỆT ĐỐI — chênh áp = số đếm −
+   * tồn HIỆN TẠI (không phải snapshot lúc đếm: tồn có thể đã trôi vì phiếu
+   * nhập/xuất chen giữa; áp theo snapshot là ghi đè các phiếu đó). Chặn TỰ DUYỆT
+   * biên bản mình lập (trừ admin) — hai con dấu là nghĩa của vòng duyệt.
+   */
+  async approveStocktake(
+    user: User,
+    docId: string,
+  ): Promise<{ code: string; applied: number }> {
+    await assertAction(user, 'warehouse.stocktake.approve')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Biên bản không tồn tại')
+    if (doc.kind !== 'stocktake') throw BadRequest('Chỉ biên bản kiểm kê có vòng duyệt')
+    if (doc.status !== 'pending') {
+      throw BadRequest(
+        doc.status === 'posted' ? 'Biên bản đã áp sổ rồi' : 'Biên bản đã bị từ chối',
+      )
+    }
+    if (user.role !== 'admin' && doc.created_by === user.id) {
+      throw Forbidden('Không tự duyệt biên bản mình lập — nhờ quản lý Kho khác')
+    }
+
+    const lines = await stocktakeRepo.listByDoc(docId)
+    const matIds = [...new Set(lines.map((l) => l.material_id))]
+    const [current, warehouseId] = await Promise.all([
+      onHandMany(matIds),
+      warehousesRepo.mainId(),
+    ])
+    const adjusts = lines
+      .map((l) => {
+        const now = current.get(l.material_id) ?? 0
+        return { ...l, now, apply: l.counted_qty - now }
+      })
+      .filter((l) => Math.abs(l.apply) > 1e-9)
+    if (adjusts.length > 0) {
       await insertMovements(
-        diffs.map((l) => ({
+        adjusts.map((l) => ({
           material_id: l.material_id,
-          direction: l.diff > 0 ? ('in' as const) : ('out' as const),
-          qty: Math.abs(l.diff),
+          direction: l.apply > 0 ? ('in' as const) : ('out' as const),
+          qty: Math.abs(l.apply),
           ref_type: 'adjust',
-          note: `Kiểm kê ${doc.code}: sổ ${l.system_qty}, đếm ${l.counted_qty}`,
+          note: `Kiểm kê ${doc.code}: đếm ${l.counted_qty}, sổ lúc duyệt ${l.now}${
+            l.now !== l.system_qty ? ` (lúc đếm ${l.system_qty})` : ''
+          }`,
           created_by: user.id,
           doc_id: doc.id,
           warehouse_id: warehouseId,
         })),
       )
-      // Điều chỉnh GIẢM có thể kéo tồn xuống dưới mức tối thiểu → cảnh báo như xuất kho.
-      const after = await stockInfoMany(diffs.map((l) => l.material_id))
+    }
+    await docsRepo.patchStatus(docId, {
+      status: 'posted',
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+    })
+    // Điều chỉnh GIẢM có thể kéo tồn xuống dưới mức tối thiểu → cảnh báo như xuất kho.
+    if (adjusts.length > 0) {
+      const after = await stockInfoMany(adjusts.map((l) => l.material_id))
       await notifyLowStock(
         user,
         after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0),
       )
     }
-    return { id: doc.id, code: doc.code, diff_count: diffs.length }
+    if (doc.created_by && doc.created_by !== user.id) {
+      await notifyStocktake(user, doc.code, 'approved', doc.created_by)
+    }
+    return { code: doc.code, applied: adjusts.length }
+  },
+
+  /** Từ chối biên bản kiểm kê (0157) — bắt lý do, tồn không đụng. */
+  async rejectStocktake(user: User, docId: string, reason: string): Promise<void> {
+    await assertAction(user, 'warehouse.stocktake.approve')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Biên bản không tồn tại')
+    if (doc.kind !== 'stocktake' || doc.status !== 'pending') {
+      throw BadRequest('Chỉ từ chối được biên bản kiểm kê đang chờ duyệt')
+    }
+    if (user.role !== 'admin' && doc.created_by === user.id) {
+      throw Forbidden('Không tự xử biên bản mình lập — nhờ quản lý Kho khác')
+    }
+    if (!reason.trim()) throw BadRequest('Từ chối phải kèm lý do')
+    await docsRepo.patchStatus(docId, {
+      status: 'rejected',
+      approved_by: user.id,
+      approved_at: new Date().toISOString(),
+      reject_reason: reason.trim(),
+    })
+    if (doc.created_by && doc.created_by !== user.id) {
+      await notifyStocktake(user, doc.code, 'rejected', doc.created_by, reason.trim())
+    }
   },
 
   /**
@@ -686,6 +929,149 @@ export const stockService = {
     })
     return { id: doc.id, code: doc.code, po_status: poStatus }
   },
+
+  /**
+   * PHIẾU ĐẢO (0161 — plan-kho-nhap-xuat-go-live K1): gõ nhầm 1.000 thay vì
+   * 100 thì KHÔNG sửa đè, KHÔNG xoá — lập phiếu ghi NGƯỢC toàn bộ movement của
+   * phiếu gốc, kèm lý do. Đảo PNK sinh phiếu kind 'issue' (mã PXK) và ngược
+   * lại — đúng bản chất sổ, không thêm kind mới. Movement đảo giữ nguyên
+   * po_line_id / production_order_id nên mọi view đối chiếu (tồn,
+   * supply_po_line_status BR-08, issuedByLsx net K2) tự đúng, không sửa view.
+   *
+   * Luật:
+   *  - Chỉ phiếu receipt/issue đã posted; mỗi phiếu đảo MỘT lần; phiếu đảo
+   *    không đảo tiếp (sai nữa thì lập phiếu thường).
+   *  - Phiếu có QC LOẠI (qty_rejected > 0) KHÔNG đảo tự động: phần loại nằm
+   *    trong đối chiếu "NCC đã giao" (BR-08) nhưng chưa từng vào tồn — đảo máy
+   *    móc là lệch một trong hai sổ. Ca hiếm này xử bằng phiếu trả NCC.
+   *  - Đảo PNK mà hàng đã xuất đi (tồn không đủ) → 409 nói rõ thiếu bao nhiêu.
+   *  - PNK theo PO: refresh trạng thái đơn (received quay partial), đợt 0153
+   *    đã 'received' quay 'arrived'. Notify quản lý Kho + owner đơn.
+   */
+  async reverseDoc(
+    user: User,
+    docId: string,
+    reason: string,
+  ): Promise<{ id: string; code: string }> {
+    await assertAction(user, 'warehouse.stock.write')
+    if (!reason.trim()) throw BadRequest('Đảo phiếu phải kèm lý do')
+    const doc = await docsRepo.findById(docId)
+    if (!doc) throw NotFound('Phiếu không tồn tại')
+    if (doc.kind !== 'receipt' && doc.kind !== 'issue') {
+      throw BadRequest(
+        'Chỉ đảo được phiếu nhập / phiếu xuất — kiểm kê có vòng duyệt riêng',
+      )
+    }
+    if (doc.status !== 'posted') throw BadRequest('Phiếu chưa áp sổ — không có gì để đảo')
+    if (doc.reversal_of_doc_id) {
+      throw BadRequest('Đây là phiếu đảo — sai nữa thì lập phiếu nhập/xuất thường')
+    }
+    const existing = await docsRepo.findReversalOf(docId)
+    if (existing) {
+      throw BadRequest(`Phiếu đã được đảo bởi ${existing.code} — không đảo lần hai`)
+    }
+    const lines = await docsRepo.listLines(docId)
+    if (lines.length === 0) throw BadRequest('Phiếu không có dòng nào')
+    if (lines.some((l) => (l.qty_rejected ?? 0) > 0)) {
+      throw BadRequest(
+        'Phiếu có hàng QC loại — không đảo tự động được (phần loại đã vào đối chiếu NCC nhưng chưa vào tồn). Xử bằng phiếu trả NCC.',
+      )
+    }
+
+    // Đảo PNK = xuất hàng ra — hàng phải còn trong kho.
+    if (doc.kind === 'receipt') {
+      const need = new Map<string, number>()
+      for (const l of lines)
+        need.set(l.material_id, (need.get(l.material_id) ?? 0) + l.qty)
+      const onHand = await onHandMany([...need.keys()])
+      const misses: string[] = []
+      for (const [matId, qty] of need) {
+        const have = onHand.get(matId) ?? 0
+        if (qty > have) {
+          const mat = await materialsRepo.findById(matId)
+          misses.push(`"${mat?.name ?? matId}": cần đảo ${qty}, tồn còn ${have}`)
+        }
+      }
+      if (misses.length > 0) {
+        throw Conflict(
+          `Hàng của phiếu này đã xuất đi — thu hồi trước rồi mới đảo được: ${misses.join('; ')}`,
+          'REVERSAL_STOCK_SHORT',
+        )
+      }
+    }
+
+    const reverseKind = doc.kind === 'receipt' ? ('issue' as const) : ('receipt' as const)
+    const [code, warehouseId] = await Promise.all([
+      docsRepo.nextCode(reverseKind === 'receipt' ? 'PNK' : 'PXK'),
+      warehousesRepo.mainId(),
+    ])
+    const rev = await docsRepo.insert({
+      code,
+      kind: reverseKind,
+      reason: `Đảo ${doc.code}: ${reason.trim()}`,
+      reversal_of_doc_id: doc.id,
+      created_by: user.id,
+    })
+    await insertMovements(
+      lines.map((l) => ({
+        material_id: l.material_id,
+        direction: (l.direction === 'in' ? 'out' : 'in') as 'in' | 'out',
+        qty: l.qty,
+        // ref 'adjust': đây là bút toán sửa sổ, không phải nghiệp vụ nhận/cấp mới.
+        ref_type: 'adjust',
+        shelf_location: l.shelf_location ?? null,
+        note: `Đảo ${doc.code}`,
+        created_by: user.id,
+        doc_id: rev.id,
+        warehouse_id: warehouseId,
+        po_line_id: l.po_line_id ?? null,
+        production_order_id: l.production_order_id ?? null,
+      })),
+    )
+
+    // Phiếu gốc dính PO → trạng thái đơn + đợt giao phải lùi theo sự thật mới.
+    const poLineIds = [
+      ...new Set(lines.map((l) => l.po_line_id).filter((x): x is string => x != null)),
+    ]
+    let poOwnerId: string | null = null
+    if (poLineIds.length > 0) {
+      const poIds = await supplyRepo.poIdsByLineIds(poLineIds)
+      for (const poId of poIds) {
+        await supplyRepo.refreshStatusFromReceipts(poId)
+        const po = await supplyRepo.poStatus(poId)
+        poOwnerId = po?.assigned_to ?? po?.created_by ?? poOwnerId
+      }
+    }
+    if (doc.kind === 'receipt') {
+      const shipment = await docsRepo.findShipmentId(docId)
+      if (shipment) {
+        const s = await poShipmentsRepo.findById(shipment)
+        if (s?.status === 'received') {
+          await poShipmentsRepo.patch(s.id, { status: 'arrived' })
+        }
+      }
+    }
+
+    const [users, editIds] = await Promise.all([
+      usersRepo.list(),
+      rbacRepo.userIdsWithPermission('warehouse.edit'),
+    ])
+    const notifyIds = new Set(editIds)
+    for (const u of users) {
+      if (u.role === 'admin' || u.role === 'manager') notifyIds.add(u.id)
+    }
+    if (poOwnerId) notifyIds.add(poOwnerId)
+    notifyIds.delete(user.id)
+    await emit({
+      name: 'warehouse.doc.reversed',
+      original_code: doc.code,
+      reversal_code: rev.code,
+      reason: reason.trim(),
+      reversed_by: user.id,
+      notify_ids: [...notifyIds],
+    })
+    return rev
+  },
 }
 
 /**
@@ -705,9 +1091,17 @@ async function assertReceiptLinesMatchPo(
     po_line_id?: string | null
   }[],
   allowOver: boolean,
-): Promise<void> {
+): Promise<Map<string, string>> {
   const poLines = await supplyRepo.lineStatus(poId)
-  const check = checkReceiptAgainstPo(lines, poLines)
+  /*
+   * Chỉ đối chiếu với DÒNG VẬT TƯ KHO. Dòng tự do (material_id null — 0134)
+   * nghiệm thu ngoài sổ, không nhận qua PNK: phiếu trỏ vào dòng tự do sẽ rơi
+   * vào 'unknown_line' — đúng ý, chặn từ cửa.
+   */
+  const stockLines = poLines.filter(
+    (l): l is (typeof poLines)[number] & { material_id: string } => l.material_id != null,
+  )
+  const check = checkReceiptAgainstPo(lines, stockLines)
   if (!check.ok) {
     throw BadRequest(
       check.reason === 'unknown_line'
@@ -715,11 +1109,57 @@ async function assertReceiptLinesMatchPo(
         : `Dòng nhập không khớp vật tư của dòng PO ("${check.po_line.material_name}")`,
     )
   }
-  if (allowOver || check.over.length === 0) return
-  throw Conflict(
-    `Nhận vượt số còn thiếu của đơn — ${describeOverReceipt(check.over)}`,
-    'OVER_RECEIPT',
-  )
+  if (!allowOver && check.over.length > 0) {
+    throw Conflict(
+      `Nhận vượt số còn thiếu của đơn — ${describeOverReceipt(check.over)}`,
+      'OVER_RECEIPT',
+    )
+  }
+  // Vượt TRONG DUNG SAI (0156): cho qua nhưng ghi vết vào note từng dòng —
+  // caller dán vào movement để hậu kiểm biết lệch bao nhiêu mà không cần hỏi ai.
+  return new Map(check.within.map((w) => [w.po_line_id, withinToleranceNote(w)]))
+}
+
+/**
+ * Vòng duyệt kiểm kê (0157): lập → báo người có quyền duyệt (admin/quản lý +
+ * người Kho có quyền edit — cùng tập với rule của action approve); duyệt/từ
+ * chối → báo đích danh người lập.
+ */
+async function notifyStocktake(
+  actor: User,
+  code: string,
+  event: 'created' | 'approved' | 'rejected',
+  recipientId?: string,
+  reason?: string,
+): Promise<void> {
+  if (event === 'created') {
+    const [users, editIds] = await Promise.all([
+      usersRepo.list(),
+      rbacRepo.userIdsWithPermission('warehouse.edit'),
+    ])
+    const ids = new Set(editIds)
+    for (const u of users) {
+      if (u.role === 'admin' || u.role === 'manager') ids.add(u.id)
+    }
+    ids.delete(actor.id) // người lập không cần được báo về chính mình
+    if (ids.size === 0) return
+    await emit({
+      name: 'warehouse.stocktake.pending',
+      code,
+      created_by: actor.id,
+      notify_ids: [...ids],
+    })
+    return
+  }
+  if (!recipientId) return
+  await emit({
+    name: 'warehouse.stocktake.decided',
+    code,
+    decision: event,
+    decided_by: actor.id,
+    recipient_id: recipientId,
+    reason,
+  })
 }
 
 /**

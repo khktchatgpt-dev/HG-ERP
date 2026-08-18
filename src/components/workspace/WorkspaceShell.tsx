@@ -24,10 +24,11 @@ export async function WorkspaceShell({
   children: React.ReactNode
 }) {
   return (
-    // `theme-v2` đặt ở GỐC shell: token stone/emerald phủ cả sidebar + topbar +
-    // nội dung — ba vùng cùng một hệ màu. Trang cũ còn gọi zinc trực tiếp vẫn
-    // đọc được (zinc ~ stone), trang v2 thì khớp tuyệt đối.
-    <div className="theme-v2 bg-background text-foreground flex min-h-screen">
+    // `theme-v3` "HG Ledger" đặt ở GỐC shell (duyệt 15/08/2026, thay theme-v2
+    // stone/emerald): token xám-xanh + royal cobalt phủ cả sidebar + topbar +
+    // nội dung. Kit dùng chung đã ăn token nên mọi màn tự khớp; trang cũ còn
+    // gọi zinc trực tiếp vẫn đọc được (zinc ~ xám-xanh v3).
+    <div className="theme-v3 bg-background text-foreground flex min-h-screen">
       <WorkspaceSidebar workspace={workspace} />
       <div className="flex min-w-0 flex-1 flex-col">
         <WorkspaceTopbar

@@ -3,7 +3,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft, ChevronRight, Download, PackageSearch, Plus, X } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  PackageSearch,
+  Plus,
+  Sparkles,
+  X,
+} from 'lucide-react'
+import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { Button } from '@/components/shadcn/button'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
@@ -77,6 +86,8 @@ export function ProductsManager({
   const toast = useToast()
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
+  /** Modal "Tạo từ file BOM" — đọc hồ sơ + định mức từ một file, không gõ tay. */
+  const [fromBom, setFromBom] = useState(false)
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [cloning, setCloning] = useState<Product | null>(null)
   /**
@@ -399,6 +410,11 @@ export function ProductsManager({
               <Download /> Xuất CSV
             </Button>
             {canEdit && (
+              <Button variant="outline" size="sm" onClick={() => setFromBom(true)}>
+                <Sparkles /> Tạo từ file BOM
+              </Button>
+            )}
+            {canEdit && (
               <Button size="sm" className={ACCENT_SOLID} asChild>
                 <Link href="/products/new">
                   <Plus /> Thêm sản phẩm
@@ -408,6 +424,8 @@ export function ProductsManager({
           </>
         }
       />
+
+      {fromBom && <BomAiNewProduct onClose={() => setFromBom(false)} />}
 
       <FilterBar
         filters={filters}

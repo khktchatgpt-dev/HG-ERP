@@ -74,7 +74,7 @@ export function MobileDrawer({
       */}
       {open &&
         createPortal(
-          <div className="theme-v2 fixed inset-0 z-40 lg:hidden">
+          <div className="theme-v3 fixed inset-0 z-40 lg:hidden">
             <div
               className="absolute inset-0 bg-black/50"
               onClick={() => setOpen(false)}

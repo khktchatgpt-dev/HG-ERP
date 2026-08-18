@@ -67,6 +67,8 @@ type Material = {
   min_stock: number
   /** Bù tồn (0079): trần tồn + ngưỡng/lô đặt lại — Kho quản. */
   max_stock: number | null
+  /** Dung sai nhận vượt % (0156) — cả Cung ứng lẫn Kho đặt được. */
+  over_tolerance_pct: number
   reorder_point: number | null
   reorder_qty: number | null
   shelf_location: string | null
@@ -122,6 +124,8 @@ export function MaterialsManager({
   const [busy, setBusy] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
   const [editing, setEditing] = useState<Material | null>(null)
+  /** Dung sai nhóm (0156): null = đóng; chuỗi = giá trị % đang gõ trong modal. */
+  const [groupTol, setGroupTol] = useState<string | null>(null)
 
   const sp = useSearchParams()
   const [navigating, startTransition] = useTransition()
@@ -388,10 +392,7 @@ export function MaterialsManager({
       <PageHeader
         breadcrumbs={
           purchasing
-            ? [
-                { label: 'Kế hoạch - Cung ứng', href: '/planning' },
-                { label: 'Vật tư & giá mua' },
-              ]
+            ? [{ label: 'Cung ứng', href: '/planning' }, { label: 'Vật tư & giá mua' }]
             : [{ label: 'Kho', href: '/warehouse' }, { label: 'Danh mục vật tư' }]
         }
         title={purchasing ? 'Vật tư & giá mua' : 'Danh mục vật tư'}
@@ -470,6 +471,17 @@ export function MaterialsManager({
               >
                 Chờ Kho rà{counts.needsReview ? ` (${counts.needsReview})` : ''}
               </button>
+              {/* Dung sai nhận vượt CẢ NHÓM (0156) — chỉ hiện khi đang lọc đúng
+                  một nhóm; đặt lẻ từng mã thì sửa trong form vật tư. */}
+              {canEdit && filters.group && (
+                <button
+                  onClick={() => setGroupTol('')}
+                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:border-sky-400 hover:text-sky-700 dark:border-zinc-700"
+                  title={`Đặt dung sai nhận vượt chung cho mọi vật tư nhóm "${filters.group}"`}
+                >
+                  Dung sai nhóm…
+                </button>
+              )}
               {(filters.q ||
                 filters.group ||
                 filters.review ||
@@ -612,6 +624,73 @@ export function MaterialsManager({
           />
         )}
       </Modal>
+
+      {/* Dung sai nhận vượt CẢ NHÓM (0156) — một câu update cho mọi mã trong
+          nhóm đang lọc; đặt lẻ thì sửa từng vật tư. */}
+      <Modal
+        open={groupTol !== null}
+        onClose={() => setGroupTol(null)}
+        title={`Dung sai nhận vượt — nhóm "${filters.group}"`}
+        maxWidth="sm:max-w-md"
+      >
+        {groupTol !== null && (
+          <form
+            className="flex flex-col gap-3 text-sm"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const pct = Number(groupTol) || 0
+              const ok = await send(
+                '/api/dept/warehouse/materials/tolerance-bulk',
+                'POST',
+                {
+                  group_name: filters.group,
+                  pct,
+                },
+              )
+              if (ok) {
+                setGroupTol(null)
+                toast.success(
+                  `Đã đặt dung sai ${pct.toLocaleString('vi-VN')}%`,
+                  `Toàn bộ vật tư nhóm "${filters.group}"`,
+                )
+              }
+            }}
+          >
+            <p className="text-xs text-zinc-500">
+              Áp cho MỌI vật tư của nhóm (kể cả mã ngoài trang đang xem). Phiếu nhập vượt
+              SL đặt dưới ngưỡng này sẽ không bắt lý do — tự ghi vết &quot;[Vượt x% trong
+              dung sai]&quot; vào dòng phiếu. 0 = chặn mọi mức vượt như cũ.
+            </p>
+            <label className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={20}
+                step="0.5"
+                autoFocus
+                required
+                value={groupTol}
+                onChange={(e) => setGroupTol(e.target.value)}
+                placeholder="VD: 5"
+                className={`${materialInputClass} w-28 tabular-nums`}
+              />
+              <span>% trên SL đặt của dòng đơn</span>
+            </label>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setGroupTol(null)}
+                className={materialBtnSecondary}
+              >
+                Thôi
+              </button>
+              <button type="submit" disabled={busy} className={materialBtnPrimary}>
+                {busy && <Spinner size={14} />} Áp cho cả nhóm
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   )
 }
@@ -707,6 +786,9 @@ function MaterialForm({
       body.vat_rate = numOrNull('vat_rate')
       body.last_purchase_price = numOrNull('last_purchase_price')
     }
+    // Dung sai nhận vượt (0156): CẢ HAI nghiệp vụ sửa được (như kg_per_unit) —
+    // ô luôn render nên gửi luôn; rỗng = 0 (chặt như cũ).
+    body.over_tolerance_pct = Number(fd.get('over_tolerance_pct') ?? 0) || 0
     // Trường tồn trữ là của Kho — Cung ứng không gửi lên (server cũng chặn).
     if (!purchasing) {
       body.barcode = String(fd.get('barcode') ?? '').trim() || null
@@ -823,6 +905,24 @@ function MaterialForm({
           </Field>
         </FormSection>
       )}
+
+      {/* Dung sai NHẬN VƯỢT (0156) — cả hai nghiệp vụ sửa được: người đàm phán
+          với NCC biết hàng nào hay lệch cân, Kho là người đối chiếu lúc nhận. */}
+      <Field
+        label="Dung sai nhận vượt (%)"
+        hint="Gỗ/kính/tôn lệch cân vài % là thường — dưới ngưỡng này phiếu nhập vượt SL đặt sẽ KHÔNG bắt lý do (tự ghi vết vào dòng phiếu). 0 = chặn mọi mức vượt."
+      >
+        <input
+          name="over_tolerance_pct"
+          type="number"
+          min={0}
+          max={20}
+          step="0.5"
+          placeholder="0"
+          defaultValue={initial?.over_tolerance_pct || ''}
+          className={`${cls} tabular-nums`}
+        />
+      </Field>
 
       {purchasing ? (
         <p className="text-xs text-zinc-400">

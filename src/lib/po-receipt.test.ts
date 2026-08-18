@@ -20,7 +20,7 @@ describe('checkReceiptAgainstPo', () => {
       [{ material_id: 'M1', qty: 100, po_line_id: 'L1' }],
       [line()],
     )
-    expect(r).toEqual({ ok: true, over: [] })
+    expect(r).toEqual({ ok: true, over: [], within: [] })
   })
 
   it('nhận thiếu vẫn hợp lệ (giao nhiều đợt)', () => {
@@ -125,6 +125,85 @@ describe('checkReceiptAgainstPo', () => {
       ],
     )
     expect(r.ok && r.over.map((o) => o.po_line_id)).toEqual(['L2'])
+  })
+})
+
+/*
+ * DUNG SAI NHẬN VƯỢT (0156 — GĐ B): pct đặt trên vật tư, ngưỡng tính trên SL
+ * đặt CỘNG DỒN. pct=0/thiếu trường = hành vi cũ nguyên vẹn (regression).
+ */
+describe('checkReceiptAgainstPo — dung sai (0156)', () => {
+  const tolLine = (over: Partial<ReceiptPoLine> = {}) =>
+    line({ qty_ordered: 1000, qty_missing: 1000, over_tolerance_pct: 5, ...over })
+
+  it('pct=0 (mặc định): vượt 0.5 đơn vị vẫn chặn — hành vi cũ nguyên vẹn', () => {
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 100.5, po_line_id: 'L1' }],
+      [line({ qty_ordered: 100 })], // không khai pct
+    )
+    expect(r.ok && r.over).toHaveLength(1)
+    expect(r.ok && r.within).toEqual([])
+  })
+
+  it('vượt TRONG dung sai: cho qua, báo within kèm % vượt', () => {
+    // Đặt 1000, pct 5% → trần 1050. Nhận 1018 → vượt 1,8%, trong ngưỡng.
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 1018, po_line_id: 'L1' }],
+      [tolLine()],
+    )
+    expect(r.ok && r.over).toEqual([])
+    expect(r.ok && r.within).toHaveLength(1)
+    expect(r.ok && r.within[0].over_pct).toBeCloseTo(1.8, 5)
+  })
+
+  it('đúng biên ngưỡng (1050/1000, 5%) vẫn trong dung sai', () => {
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 1050, po_line_id: 'L1' }],
+      [tolLine()],
+    )
+    expect(r.ok && r.over).toEqual([])
+    expect(r.ok && r.within[0]?.over_pct).toBeCloseTo(5, 5)
+  })
+
+  it('quá ngưỡng 1 đơn vị → chặn như cũ', () => {
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 1051, po_line_id: 'L1' }],
+      [tolLine()],
+    )
+    expect(r.ok && r.over).toHaveLength(1)
+    expect(r.ok && r.within).toEqual([])
+  })
+
+  it('dung sai tính CỘNG DỒN — đợt trước đã ăn gần hết ngưỡng thì đợt sau không được thêm suất mới', () => {
+    // Đặt 1000, đã về 1040 (missing = -40), trần 1050: chỉ còn nhận thêm 10.
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 11, po_line_id: 'L1' }],
+      [tolLine({ qty_missing: -40 })],
+    )
+    expect(r.ok && r.over).toHaveLength(1)
+    const r2 = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 10, po_line_id: 'L1' }],
+      [tolLine({ qty_missing: -40 })],
+    )
+    expect(r2.ok && r2.over).toEqual([])
+    expect(r2.ok && r2.within[0]?.over_pct).toBeCloseTo(5, 5)
+  })
+
+  it('QC loại tính vào tổng nhận khi so dung sai (cùng công thức BR-08)', () => {
+    // 1030 đạt + 25 loại = 1055 > trần 1050 → chặn.
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 1030, qty_rejected: 25, po_line_id: 'L1' }],
+      [tolLine()],
+    )
+    expect(r.ok && r.over).toHaveLength(1)
+  })
+
+  it('trong định mức thì không dính within (không ghi note oan)', () => {
+    const r = checkReceiptAgainstPo(
+      [{ material_id: 'M1', qty: 990, po_line_id: 'L1' }],
+      [tolLine()],
+    )
+    expect(r.ok && r.within).toEqual([])
   })
 })
 

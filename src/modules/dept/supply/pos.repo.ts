@@ -28,6 +28,10 @@ export type Po = {
   approved_by: string | null
   approved_at: string | null
   ordered_at: string | null
+  /** Mốc NV cung ứng ghi nhận NCC xác nhận đơn (0152) — NCC không đăng nhập. */
+  confirmed_at: string | null
+  /** "Chị Hoa bên Nam Kim xác nhận qua Zalo 15/08" — ai hứa, kênh nào. */
+  confirmed_note: string | null
   note: string | null
   created_by: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền ghi xét theo cột này, bàn giao được. */
@@ -144,7 +148,7 @@ const TEMPLATE_LINE_COLS = [
 ] as const
 
 const COLS =
-  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, note, created_by, assigned_to, created_at, updated_at'
+  'id, code, production_order_id, supplier_id, status, template, currency, vat_rate, price_includes_vat, discount_amount, contract_no, expected_at, terms, terms_quality, terms_delivery_place, terms_payment, terms_invoice, terms_lead_time, signer_role, approved_by, approved_at, ordered_at, confirmed_at, confirmed_note, note, created_by, assigned_to, created_at, updated_at'
 
 /** Cột `numeric` của dòng — PostgREST trả về CHUỖI ("0.2480"), ép lại về number. */
 const NUMERIC_LINE_COLS = [
@@ -276,6 +280,29 @@ export const posRepo = {
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
     return { rows: unwrap(data as Raw[] | null), total: count ?? 0 }
+  },
+
+  /**
+   * BỐN CỘT NHẸ để đếm badge sidebar (`workspaces/nav-badges`) — không join
+   * NCC / LSX / người phụ trách như `list()`.
+   *
+   * Badge chạy trên MỌI lần mở trang của khu Cung ứng, mà ba cú join kia chỉ
+   * phục vụ hiển thị. Bỏ luôn đơn đã đóng sổ ngay ở DB: `received`/`cancelled`
+   * không bao giờ đếm vào việc phải làm hay lịch hàng về.
+   */
+  async listWatchFields(): Promise<
+    { status: PoStatus; expected_at: string | null; assigned_to: string | null }[]
+  > {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('status, expected_at, assigned_to')
+      .not('status', 'in', '("received","cancelled")')
+      .limit(2000)
+    return (data ?? []) as {
+      status: PoStatus
+      expected_at: string | null
+      assigned_to: string | null
+    }[]
   },
 
   /**
@@ -521,6 +548,40 @@ export const posRepo = {
           }
         }),
       )
+    if (error) throw new Error(error.message)
+  },
+
+  /** Lý do chốt thiếu theo dòng (0154) — cho tooltip trang chi tiết. */
+  async closedShortReasons(poId: string): Promise<Map<string, string | null>> {
+    const { data } = await db()
+      .from('supply_purchase_order_lines')
+      .select('id, closed_short_reason')
+      .eq('po_id', poId)
+      .not('closed_short_at', 'is', null)
+    return new Map(
+      ((data ?? []) as { id: string; closed_short_reason: string | null }[]).map((r) => [
+        r.id,
+        r.closed_short_reason,
+      ]),
+    )
+  },
+
+  /**
+   * Chốt / mở lại PHẦN THIẾU của một dòng (0154) — chỉ 3 cột closed_short_*,
+   * không đụng số lượng/giá (đơn đã duyệt là cam kết, BR-08 giữ nguyên).
+   */
+  async patchLineClosedShort(
+    lineId: string,
+    patch: {
+      closed_short_at: string | null
+      closed_short_by: string | null
+      closed_short_reason: string | null
+    },
+  ): Promise<void> {
+    const { error } = await db()
+      .from('supply_purchase_order_lines')
+      .update(patch)
+      .eq('id', lineId)
     if (error) throw new Error(error.message)
   },
 

@@ -25,6 +25,7 @@ import {
   type RescheduleState,
 } from '../PoDialogs'
 import { usePoActions } from '../usePoActions'
+import { PoConfirmDialog, PoShipmentsCard, type ShipmentView } from './PoShipmentsPanel'
 import type { PoLine, StatusLine } from '../po-types'
 
 /**
@@ -68,6 +69,9 @@ export type PoDetailPo = {
   assignee_name: string | null
   approved_at: string | null
   ordered_at: string | null
+  /** NCC xác nhận (0152) — NV cung ứng ghi lại cam kết. */
+  confirmed_at: string | null
+  confirmed_note: string | null
   created_at: string
 }
 
@@ -108,7 +112,9 @@ export function PoDetailScreen({
   lines,
   statusLines,
   extraLsx,
+  shipments,
   history,
+  warehouseDocs,
   canEdit,
   isSupply,
   canApprove,
@@ -120,7 +126,17 @@ export function PoDetailScreen({
   statusLines: StatusLine[]
   /** LSX PHỤ gộp vào đơn (0125). */
   extraLsx: { id: string; code: string }[]
+  /** Kế hoạch giao theo đợt (0152). */
+  shipments: ShipmentView[]
   history: ApprovalEvent[]
+  /** PNK / phiếu trả gắn dòng đơn — mốc timeline (GĐ3). */
+  warehouseDocs: {
+    doc_id: string
+    code: string
+    kind: 'receipt' | 'return'
+    qty_total: number
+    at: string
+  }[]
   /** Quyền GHI trên ĐƠN NÀY (0128) — người phụ trách / trưởng phòng / admin. */
   canEdit: boolean
   /** Là NV cung ứng — đính kèm hồ sơ, nhân bản đơn đã huỷ. */
@@ -134,11 +150,41 @@ export function PoDetailScreen({
   const [rescheduling, setRescheduling] = useState<RescheduleState | null>(null)
   const [reassigning, setReassigning] = useState<ReassignState | null>(null)
   const [reasoning, setReasoning] = useState<ReasonState | null>(null)
+  /** Dialog xác nhận NCC / thêm đợt giao (0152). */
+  const [confirming, setConfirming] = useState<'confirm' | 'add' | null>(null)
+
+  // Dòng đơn cho dialog + thẻ đợt giao — chỉ dòng VẬT TƯ KHO (dòng tự do gỗ/gia
+  // công nghiệm thu ngoài sổ, không đi theo đợt).
+  const shipmentLines = lines
+    .filter((l) => l.material_id != null)
+    .map((l) => ({
+      id: l.id,
+      name: l.material_name,
+      unit: l.material_unit,
+      qty_ordered: l.qty_ordered,
+    }))
+  const shipmentLinesById = new Map(shipmentLines.map((l) => [l.id, l]))
+  /** SL đã nằm ở các đợt còn sống — validate cộng dồn khi thêm đợt. */
+  const shippedByLine = new Map<string, number>()
+  for (const s of shipments) {
+    if (s.status === 'cancelled') continue
+    for (const l of s.lines) {
+      shippedByLine.set(l.po_line_id, (shippedByLine.get(l.po_line_id) ?? 0) + l.qty)
+    }
+  }
 
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   //"Đã về / còn thiếu " chỉ có nghĩa từ lúc đơn rời bàn duyệt trở đi.
   const showReceived = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
     po.status,
+  )
+  // Chốt thiếu (0154): đơn đã gửi NCC và chưa kết thúc. Server enforce lại.
+  const canCloseShort = ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
+    po.status,
+  )
+  /** Dòng vật tư kho còn CHỜ VỀ — nuôi nút "Chốt phần thiếu" cả đơn. */
+  const openStockLines = statusLines.filter(
+    (l) => l.material_id != null && l.qty_open > 0,
   )
   const m = poMoney({
     subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
@@ -162,6 +208,94 @@ export function PoDetailScreen({
     { label: 'Đơn đặt vật tư', value: po.code, current: true },
   ]
 
+  /*
+   * TIMELINE ĐỦ MỐC (GĐ3 plan-po-giao-nhan): khối "Lịch sử" trước đây chỉ có
+   * các mốc DUYỆT — nửa sau vòng đời (gửi NCC → xác nhận → từng đợt → từng
+   * phiếu nhập/trả → chốt thiếu) phải đi lục ba màn khác. Gộp về một dòng thời
+   * gian; dữ liệu đều có sẵn trên trang, không thêm trạng thái nào.
+   */
+  type Mark = {
+    key: string
+    at: string
+    label: string
+    tone: 'gray' | 'amber' | 'green' | 'red' | 'blue'
+    actor?: string | null
+    detail?: string | null
+  }
+  const marks: Mark[] = [
+    ...history.map((h) => ({
+      key: `h-${h.id}`,
+      at: h.created_at,
+      label: HISTORY_LABEL[h.action],
+      tone: HISTORY_TONE[h.action],
+      actor: h.actor_name ?? 'hệ thống',
+      detail: h.reason ? `“${h.reason}”` : null,
+    })),
+    ...(po.ordered_at
+      ? [{ key: 'ordered', at: po.ordered_at, label: 'Gửi NCC', tone: 'blue' as const }]
+      : []),
+    ...(po.confirmed_at
+      ? [
+          {
+            key: 'confirmed',
+            at: po.confirmed_at,
+            label: 'NCC xác nhận',
+            tone: 'blue' as const,
+            detail: po.confirmed_note,
+          },
+        ]
+      : []),
+    // Mỗi đợt một mốc tại lúc KHAI đợt; trạng thái hiện tại đọc kèm — đợt không
+    // lưu timestamp từng bước chuyển, đừng bịa mốc "xe tới lúc…".
+    ...shipments.map((s) => ({
+      key: `sh-${s.id}`,
+      at: s.created_at,
+      label: `Khai đợt ${s.seq} — hẹn ${day(s.expected_date)}`,
+      tone:
+        s.status === 'cancelled'
+          ? ('gray' as const)
+          : s.status === 'received'
+            ? ('green' as const)
+            : ('amber' as const),
+      detail:
+        s.status === 'received'
+          ? 'đã nhận đủ'
+          : s.status === 'cancelled'
+            ? `đã huỷ${s.note ? ` — ${s.note}` : ''}`
+            : s.status === 'arrived'
+              ? 'xe đã tới, đang nhận'
+              : null,
+    })),
+    ...warehouseDocs.map((d) => ({
+      key: `doc-${d.doc_id}`,
+      at: d.at,
+      label:
+        d.kind === 'receipt'
+          ? `${d.code} — nhận ${money(d.qty_total)}`
+          : `${d.code} — trả NCC ${money(d.qty_total)}`,
+      tone: d.kind === 'receipt' ? ('green' as const) : ('red' as const),
+    })),
+    // Chốt thiếu (0154): các dòng chốt cùng một lượt chung một mốc.
+    ...[
+      ...new Map(
+        statusLines
+          .filter((l) => l.closed_short_at != null)
+          .map((l) => [l.closed_short_at as string, l]),
+      ).entries(),
+    ].map(([at, sample]) => {
+      const batch = statusLines.filter((l) => l.closed_short_at === at)
+      return {
+        key: `cs-${at}`,
+        at,
+        label: 'Chốt phần thiếu — NCC không giao nữa',
+        tone: 'gray' as const,
+        detail: `${batch.map((l) => `${l.material_name} (${money(l.qty_missing)} ${l.material_unit})`).join(', ')}${
+          sample.closed_short_reason ? ` — “${sample.closed_short_reason}”` : ''
+        }`,
+      }
+    }),
+  ].sort((a, b) => b.at.localeCompare(a.at))
+
   /** Xoá nháp xong thì đơn không còn — ở lại trang này là ở lại một trang 404. */
   async function removeDraft() {
     if (await act.deleteDraft(po)) router.push('/planning/pos')
@@ -172,7 +306,7 @@ export function PoDetailScreen({
       <TopProgressBar active={act.busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+          { label: 'Cung ứng', href: '/planning' },
           { label: 'Đơn đặt vật tư', href: '/planning/pos' },
           { label: po.code },
         ]}
@@ -221,6 +355,34 @@ export function PoDetailScreen({
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── TRÁI: đơn này gồm những gì ─────────────────────────────────── */}
         <div className="flex min-w-0 flex-col gap-4">
+          {(shipments.length > 0 || po.confirmed_note) && (
+            <PoShipmentsCard
+              shipments={shipments}
+              linesById={shipmentLinesById}
+              confirmedNote={po.confirmed_note}
+              canEdit={canEdit}
+              canAddMore={
+                shipmentLines.length > 0 &&
+                ['confirmed', 'in_transit', 'partial'].includes(po.status)
+              }
+              busy={act.busy}
+              today={today}
+              onArrived={(id) =>
+                void act.shipmentAction(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')
+              }
+              onReschedule={(id, date, reason) =>
+                act.shipmentAction(
+                  id,
+                  { action: 'reschedule', expected_date: date, reason },
+                  'Đã dời ngày đợt giao',
+                )
+              }
+              onCancel={(id, reason) =>
+                act.shipmentAction(id, { action: 'cancel', reason }, 'Đã huỷ đợt giao')
+              }
+              onAdd={() => setConfirming('add')}
+            />
+          )}
           <section className={`${card} min-w-0`}>
             <div className={cardHead}>
               <b>Dòng hàng</b>
@@ -286,9 +448,47 @@ export function PoDetailScreen({
                                 {money(st?.qty_received ?? 0)}
                               </td>
                               <td className="py-1.5 pr-2 text-right">
-                                {st && st.qty_missing > 0 ? (
-                                  <span className="font-medium text-amber-600">
-                                    {money(st.qty_missing)}
+                                {st?.closed_short_at ? (
+                                  /* 0154: NCC không giao phần này nữa — số thiếu
+                                     THẬT vẫn hiện (đối chiếu), kèm dấu đã chốt. */
+                                  <span
+                                    className="inline-flex flex-col items-end gap-0.5"
+                                    title={`Chốt thiếu ${day(st.closed_short_at)}${st.closed_short_reason ? ` — ${st.closed_short_reason}` : ''}`}
+                                  >
+                                    <Badge tone="gray">
+                                      Chốt thiếu {money(st.qty_missing)}
+                                    </Badge>
+                                    {canEdit && po.status !== 'cancelled' && (
+                                      <button
+                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
+                                        onClick={() => void act.reopenShort(po, st.id)}
+                                      >
+                                        Mở lại
+                                      </button>
+                                    )}
+                                  </span>
+                                ) : st && st.qty_missing > 0 ? (
+                                  <span className="inline-flex flex-col items-end gap-0.5">
+                                    <span className="font-medium text-amber-600">
+                                      {money(st.qty_missing)}
+                                    </span>
+                                    {canEdit && canCloseShort && st.qty_open > 0 && (
+                                      <button
+                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
+                                        title="NCC không giao phần thiếu của dòng này nữa"
+                                        onClick={() =>
+                                          setReasoning({
+                                            po,
+                                            kind: 'close_short',
+                                            reason: '',
+                                            lineId: st.id,
+                                            detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
+                                          })
+                                        }
+                                      >
+                                        Chốt thiếu
+                                      </button>
+                                    )}
                                   </span>
                                 ) : (
                                   <Badge tone="green">Đủ</Badge>
@@ -500,10 +700,20 @@ export function PoDetailScreen({
                     Gửi NCC
                   </button>
                 )}
+                {/*
+                  NCC XÁC NHẬN (0152): mở form ghi cam kết + đợt giao thay vì
+                  lật cờ trần. Đơn TOÀN dòng tự do không có đợt theo dòng —
+                  vẫn qua dialog nhưng chỉ ghi chú (shipmentLines rỗng thì
+                  service nhận shipments rỗng, chỉ đóng dấu confirmed).
+                */}
                 {canEdit && po.status === 'ordered' && (
                   <button
                     className={btn}
-                    onClick={() => void act.advance(po, 'confirmed')}
+                    onClick={() =>
+                      shipmentLines.length > 0
+                        ? setConfirming('confirm')
+                        : void act.advance(po, 'confirmed')
+                    }
                   >
                     NCC xác nhận
                   </button>
@@ -517,14 +727,21 @@ export function PoDetailScreen({
                   </button>
                 )}
                 {/*
-                  "ĐÃ NHẬN ĐỦ" bằng tay — CHỈ đơn toàn dòng tự do (gỗ/gia công,
-                  0134): hàng nghiệm thu ngoài sổ kho vật tư nên không có phiếu
-                  nhập nào tự chốt, thiếu nút này đơn treo "đang giao" mãi.
+                  "ĐÃ NHẬN ĐỦ" bằng tay — cho đơn CÓ DÒNG TỰ DO (gỗ/gia công,
+                  0134): hàng nghiệm thu ngoài sổ kho nên không có phiếu nhập
+                  nào tự chốt. Chỉ hiện khi mọi DÒNG VẬT TƯ KHO (nếu có) đã về
+                  đủ theo sổ — đơn hỗn hợp trước đây kẹt vĩnh viễn vì sổ kho
+                  không chốt nổi (dòng tự do không có movement) mà nút tay lại
+                  bị cấm. Server enforce lại đúng luật này (BR-08 giữ phần kho).
                 */}
                 {canEdit &&
                   lines.length > 0 &&
-                  lines.every((l) => l.material_id == null) &&
-                  ['ordered', 'confirmed', 'in_transit'].includes(po.status) && (
+                  lines.some((l) => l.material_id == null) &&
+                  // qty_open (0154): dòng kho đã chốt thiếu không chặn nghiệm thu
+                  statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
+                  ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
+                    po.status,
+                  ) && (
                     <button
                       className={btnGreen}
                       onClick={() => void act.advance(po, 'received')}
@@ -532,6 +749,30 @@ export function PoDetailScreen({
                       Đã nhận đủ (nghiệm thu)
                     </button>
                   )}
+                {/*
+                  CHỐT PHẦN THIẾU cả đơn (0154) — đơn VỀ MỘT PHẦN mà NCC báo
+                  không giao nữa: một phát cho mọi dòng còn thiếu. Từng dòng lẻ
+                  có nút riêng ngay trong bảng.
+                */}
+                {canEdit && po.status === 'partial' && openStockLines.length > 0 && (
+                  <button
+                    className={btn}
+                    onClick={() =>
+                      setReasoning({
+                        po,
+                        kind: 'close_short',
+                        reason: '',
+                        lineId: null,
+                        detail:
+                          openStockLines.length === 1
+                            ? `${openStockLines[0].material_name} — thiếu ${money(openStockLines[0].qty_missing)} ${openStockLines[0].material_unit}`
+                            : `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
+                      })
+                    }
+                  >
+                    Chốt phần thiếu (NCC không giao nữa)
+                  </button>
+                )}
                 {canEdit && canReschedule(po.status).ok && (
                   <button
                     className={btn}
@@ -588,28 +829,26 @@ export function PoDetailScreen({
 
           <section className={card}>
             <div className={cardHead}>
-              <b>Lịch sử</b>
-              <span className="text-muted-foreground">{history.length} mốc</span>
+              <b>Dòng thời gian</b>
+              <span className="text-muted-foreground">{marks.length} mốc</span>
             </div>
-            {history.length === 0 ? (
+            {marks.length === 0 ? (
               <p className="text-muted-foreground px-3.5 py-3 text-xs">
                 Chưa có mốc nào — đơn còn nằm ở người soạn.
               </p>
             ) : (
               <ol className="flex flex-col gap-2.5 px-3.5 py-3">
-                {history.map((h) => (
-                  <li key={h.id} className="flex flex-col gap-0.5 text-xs">
+                {marks.map((m) => (
+                  <li key={m.key} className="flex flex-col gap-0.5 text-xs">
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={HISTORY_TONE[h.action]}>
-                        {HISTORY_LABEL[h.action]}
-                      </Badge>
-                      <span className="text-muted-foreground">
-                        {h.actor_name ?? 'hệ thống'}
-                      </span>
+                      <Badge tone={m.tone}>{m.label}</Badge>
+                      {m.actor && (
+                        <span className="text-muted-foreground">{m.actor}</span>
+                      )}
                     </span>
-                    <span className="text-muted-foreground">{stamp(h.created_at)}</span>
-                    {h.reason && (
-                      <span className="text-muted-foreground">“{h.reason}”</span>
+                    <span className="text-muted-foreground">{stamp(m.at)}</span>
+                    {m.detail && (
+                      <span className="text-muted-foreground">{m.detail}</span>
                     )}
                   </li>
                 ))}
@@ -618,6 +857,22 @@ export function PoDetailScreen({
           </section>
         </div>
       </div>
+
+      <PoConfirmDialog
+        open={confirming !== null}
+        mode={confirming ?? 'confirm'}
+        poCode={po.code}
+        defaultDate={po.expected_at?.slice(0, 10) ?? today}
+        lines={shipmentLines}
+        existing={confirming === 'add' ? shippedByLine : new Map()}
+        busy={act.busy}
+        onClose={() => setConfirming(null)}
+        onSubmit={async (ships, note) =>
+          confirming === 'add'
+            ? act.addShipments(po, ships)
+            : act.confirmSupplier(po, { confirmed_note: note || null, shipments: ships })
+        }
+      />
 
       <PoDialogs
         rescheduling={rescheduling}
@@ -643,7 +898,9 @@ export function PoDetailScreen({
           const ok =
             st.kind === 'reject'
               ? await act.reject(st.po, st.reason)
-              : await act.cancelPo(st.po, st.reason)
+              : st.kind === 'close_short'
+                ? await act.closeShort(st.po, st.reason, st.lineId)
+                : await act.cancelPo(st.po, st.reason)
           if (ok) setReasoning(null)
         }}
         busy={act.busy}

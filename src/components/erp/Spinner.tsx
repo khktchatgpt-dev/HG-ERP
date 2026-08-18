@@ -38,7 +38,8 @@ export function TopProgressBar({ active }: { active: boolean }) {
   if (!active) return null
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-50 h-0.5 overflow-hidden">
-      <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] bg-purple-500" />
+      {/* Màu hành động của theme — không gõ cứng purple như bản cũ. */}
+      <div className="h-full w-1/3 animate-[slide_1.2s_ease-in-out_infinite] bg-[var(--primary)]" />
       <style>{`
         @keyframes slide {
           0% { transform: translateX(-100%); }

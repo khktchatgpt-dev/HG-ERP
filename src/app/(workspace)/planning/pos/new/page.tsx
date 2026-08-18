@@ -15,12 +15,13 @@ import { PoCreateForm } from './PoCreateForm'
 export default async function NewPoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier?: string }>
+  searchParams: Promise<{ supplier?: string; lsx?: string }>
 }) {
   const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
   if (!canEdit) redirect('/planning/pos')
-  const { supplier: defaultSupplierId } = await searchParams
+  // `?lsx=` — vào thẳng từ màn "Vật tư theo lệnh" với lệnh chọn sẵn.
+  const { supplier: defaultSupplierId, lsx: defaultLsxId } = await searchParams
 
   // `company` cho nút "Xem trước phiếu in" — dựng đúng tờ phiếu sẽ gửi NCC ngay
   // lúc còn đang soạn. Settings có cache trong process nên gần như không tốn gì.
@@ -33,6 +34,7 @@ export default async function NewPoPage({
   return (
     <PoCreateForm
       defaultSupplierId={defaultSupplierId}
+      defaultLsxId={defaultLsxId}
       company={company}
       suppliers={suppliers.map((s) => ({
         id: s.id,

@@ -67,6 +67,18 @@ const TYPES = ['Nguyên vật liệu', 'Bao bì', 'Máy móc', 'Dịch vụ', 'L
 
 type Tab = 'profile' | 'eval' | 'purchased' | 'prices' | 'certs' | 'history'
 
+/** KPI giao hàng tự tính từ lịch sử (P5.2) — đếm đơn/dòng, không cộng SL chéo ĐVT. */
+export type SupplierKpis = {
+  po_total: number
+  po_received: number
+  po_with_expected: number
+  po_on_time: number
+  po_returned: number
+  lines_total: number
+  lines_rejected: number
+  lines_closed_short: number
+}
+
 export function SupplierDetail({
   supplier,
   pos,
@@ -74,6 +86,7 @@ export function SupplierDetail({
   materials,
   allGroups,
   groupIds,
+  kpis,
   canEdit,
 }: {
   supplier: Supplier
@@ -82,6 +95,7 @@ export function SupplierDetail({
   materials: MaterialOption[]
   allGroups: MaterialGroup[]
   groupIds: string[]
+  kpis: SupplierKpis
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -226,7 +240,7 @@ export function SupplierDetail({
       <div>
         <nav className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
           <Link href="/planning" className="hover:text-zinc-600 dark:hover:text-zinc-300">
-            Kế hoạch - Cung ứng
+            Cung ứng
           </Link>
           <span>/</span>
           <Link
@@ -509,7 +523,9 @@ export function SupplierDetail({
             </div>
           )}
 
-          {tab === 'eval' && <EvalTab supplier={S} pos={pos} canEdit={canEdit} />}
+          {tab === 'eval' && (
+            <EvalTab supplier={S} pos={pos} kpis={kpis} canEdit={canEdit} />
+          )}
 
           {tab === 'purchased' &&
             (purchased.length === 0 ? (
@@ -959,10 +975,12 @@ function Stars({
 function EvalTab({
   supplier,
   pos,
+  kpis,
   canEdit,
 }: {
   supplier: Supplier
   pos: PoRow[]
+  kpis: SupplierKpis
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -1025,9 +1043,47 @@ function EvalTab({
           <Kpi label="Đang trễ hẹn" value={kpi.late} tone={kpi.late ? 'red' : 'gray'} />
           <Kpi label="Tỷ lệ hoàn tất" value={`${kpi.rate}%`} tone="blue" />
         </div>
+        {/* P5.2 — KPI TỰ TÍNH từ sổ nhận hàng (0080/0152/0154): đếm đơn/dòng,
+            không cộng số lượng chéo ĐVT. Mẫu số hiện cạnh từng con số để người
+            đọc tự cân "94% của 3 đơn" khác "94% của 300 đơn". */}
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Kpi
+            label="Giao đúng hẹn (ngày nhận thật)"
+            value={
+              kpis.po_with_expected > 0
+                ? `${Math.round((kpis.po_on_time / kpis.po_with_expected) * 100)}% / ${kpis.po_with_expected} đơn`
+                : 'chưa đủ dữ liệu'
+            }
+            tone={
+              kpis.po_with_expected > 0 && kpis.po_on_time / kpis.po_with_expected < 0.8
+                ? 'red'
+                : 'blue'
+            }
+          />
+          <Kpi
+            label="Dòng có hàng QC loại"
+            value={
+              kpis.lines_total > 0
+                ? `${kpis.lines_rejected} / ${kpis.lines_total} dòng`
+                : '—'
+            }
+            tone={kpis.lines_rejected > 0 ? 'red' : 'gray'}
+          />
+          <Kpi
+            label="Đơn phải trả hàng"
+            value={kpis.po_returned}
+            tone={kpis.po_returned > 0 ? 'red' : 'gray'}
+          />
+          <Kpi
+            label="Dòng NCC bỏ (chốt thiếu)"
+            value={kpis.lines_closed_short}
+            tone={kpis.lines_closed_short > 0 ? 'red' : 'gray'}
+          />
+        </div>
         <p className="mt-2 text-xs text-zinc-400">
-          “Đang trễ hẹn” = PO quá hẹn giao mà chưa về đủ. Tỷ lệ giao-đúng-hẹn chuẩn cần
-          mốc ngày nhận (bổ sung sau).
+          “Đang trễ hẹn” = PO quá hẹn giao mà chưa về đủ. “Giao đúng hẹn” tính trên đơn ĐÃ
+          về đủ có hẹn giao: ngày nhận cuối theo sổ kho ≤ hẹn. Các số tự tính từ phiếu
+          nhập/trả/chốt thiếu — không sửa tay được.
         </p>
       </section>
 

@@ -35,7 +35,7 @@ export type Movement = {
 }
 
 const STOCK_COLS =
-  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand'
+  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low'
 
 const MV_COLS =
   'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, ref_no, shelf_location, note, created_by, created_at'
@@ -58,6 +58,9 @@ export const stockRepo = {
 
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
     if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+    // is_low (0160) lọc Ở SQL: PostgREST trần 1000 dòng/lượt — lọc client thì
+    // vật tư dưới min ngoài 1000 mã đầu không bao giờ về tới nơi.
+    if (filter.low_only) q = q.eq('is_low', true)
 
     const { data } = await q
     const rows = ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
@@ -73,10 +76,12 @@ export const stockRepo = {
         shelf_location: (r.shelf_location as string | null) ?? null,
         is_active: r.is_active as boolean,
         on_hand,
-        is_low: on_hand < min_stock,
+        // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với
+        // sweep quét sáng + notifyLowStock, và là cột SQL đã lọc ở trên.
+        is_low: Boolean(r.is_low),
       } satisfies StockRow
     })
-    return filter.low_only ? rows.filter((r) => r.is_low) : rows
+    return rows
   },
 
   /** Tồn hiện tại của 1 vật tư (để kiểm khi xuất). */
@@ -170,6 +175,20 @@ export type WarehouseDoc = {
   counterparty: string | null
   reason: string | null
   note: string | null
+  /**
+   * Vòng duyệt kiểm kê (0157): 'pending' chờ quản lý Kho duyệt (tồn CHƯA đổi),
+   * 'posted' đã áp sổ (mặc định — mọi phiếu nhập/xuất và phiếu cũ), 'rejected'.
+   */
+  status: 'pending' | 'posted' | 'rejected'
+  approved_by: string | null
+  approved_by_name: string | null
+  approved_at: string | null
+  reject_reason: string | null
+  /** Phiếu ĐẢO (0161): trỏ phiếu gốc bị đảo — null = phiếu thường. */
+  reversal_of_doc_id: string | null
+  reversal_of_code: string | null
+  /** Số phiếu giao hàng / hoá đơn của NCC (0161) — đối chiếu 3 chiều. */
+  supplier_doc_no: string | null
   created_by: string | null
   created_by_name: string | null
   created_at: string
@@ -182,7 +201,80 @@ export type DocLine = Movement & {
   qty_ordered: number | null // SL theo chứng từ (dòng PO) — mẫu 01-VT
 }
 
+const DOC_COLS =
+  'id, code, kind, doc_date, counterparty, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
+/*
+ * warehouse_docs nay có HAI FK sang users (created_by + approved_by 0157) —
+ * embed `users(name)` trần là mơ hồ, PostgREST trả lỗi. Hint đích danh.
+ * BẪY: `reversal_of` (0161) là SELF-JOIN — embed kiểu !fkey trên bảng tự trỏ
+ * mình mơ hồ HAI CHIỀU (cha hay con?) làm cả findById trả rỗng. Mã phiếu gốc
+ * tra bằng truy vấn phụ (fillReversalCodes), không embed.
+ */
+const DOC_JOINS =
+  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name)'
+
+/** Điền reversal_of_code cho các phiếu đảo trong danh sách — 1 truy vấn phụ. */
+async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> {
+  const ids = [
+    ...new Set(
+      rows.map((r) => r.reversal_of_doc_id).filter((x): x is string => x != null),
+    ),
+  ]
+  if (ids.length === 0) return rows
+  const { data } = await db().from('warehouse_docs').select('id, code').in('id', ids)
+  const codeById = new Map(
+    ((data ?? []) as { id: string; code: string }[]).map((r) => [r.id, r.code]),
+  )
+  for (const r of rows) {
+    if (r.reversal_of_doc_id) {
+      r.reversal_of_code = codeById.get(r.reversal_of_doc_id) ?? null
+    }
+  }
+  return rows
+}
+
+function toDoc(r: Record<string, unknown>): WarehouseDoc {
+  const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
+  const ap = Array.isArray(r.approver) ? r.approver[0] : r.approver
+  const rev = null as { code?: string } | null
+  return {
+    id: r.id,
+    code: r.code,
+    kind: r.kind,
+    doc_date: r.doc_date,
+    counterparty: r.counterparty ?? null,
+    reason: r.reason ?? null,
+    note: r.note ?? null,
+    status: (r.status as WarehouseDoc['status']) ?? 'posted',
+    approved_by: r.approved_by ?? null,
+    approved_by_name: (ap as { name?: string } | null)?.name ?? null,
+    approved_at: (r.approved_at as string | null) ?? null,
+    reject_reason: (r.reject_reason as string | null) ?? null,
+    reversal_of_doc_id: (r.reversal_of_doc_id as string | null) ?? null,
+    reversal_of_code: (rev as { code?: string } | null)?.code ?? null,
+    supplier_doc_no: (r.supplier_doc_no as string | null) ?? null,
+    created_by: r.created_by ?? null,
+    created_by_name: (a as { name?: string } | null)?.name ?? null,
+    created_at: r.created_at,
+  } as WarehouseDoc
+}
+
 export const docsRepo = {
+  /** Số phiếu lập HÔM NAY theo loại — nuôi ô "Nhập/Xuất hôm nay" của dashboard. */
+  async countTodayByKind(): Promise<Record<string, number>> {
+    const today = new Date().toISOString().slice(0, 10)
+    const { data } = await db()
+      .from('warehouse_docs')
+      .select('kind')
+      .gte('created_at', `${today}T00:00:00Z`)
+      .limit(500)
+    const out: Record<string, number> = {}
+    for (const r of (data ?? []) as { kind: string }[]) {
+      out[r.kind] = (out[r.kind] ?? 0) + 1
+    }
+    return out
+  },
+
   async nextCode(kind: 'PNK' | 'PXK' | 'DCK' | 'KK'): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: kind })
     if (error || !data) throw new Error(error?.message ?? 'next_doc_code failed')
@@ -195,6 +287,16 @@ export const docsRepo = {
     counterparty?: string | null
     reason?: string | null
     note?: string | null
+    /** PNK nhận cho đợt giao nào (0153) — null = không theo đợt. */
+    shipment_id?: string | null
+    /** Vòng duyệt kiểm kê (0157) — bỏ trống = 'posted' (áp sổ ngay, flow cũ). */
+    status?: 'pending' | 'posted'
+    /** Ngày chứng từ (K3) — bỏ trống = hôm nay (default DB). */
+    doc_date?: string
+    /** Số phiếu giao / hoá đơn NCC (K3). */
+    supplier_doc_no?: string | null
+    /** Phiếu ĐẢO (K1) — trỏ phiếu gốc. */
+    reversal_of_doc_id?: string
     created_by: string
   }): Promise<{ id: string; code: string }> {
     const { data, error } = await db()
@@ -206,6 +308,62 @@ export const docsRepo = {
     return data as { id: string; code: string }
   },
 
+  /** Duyệt / từ chối kiểm kê (0157) — chỉ 4 cột vòng duyệt. */
+  async patchStatus(
+    id: string,
+    patch: {
+      status: 'posted' | 'rejected'
+      approved_by: string
+      approved_at: string
+      reject_reason?: string | null
+    },
+  ): Promise<void> {
+    const { error } = await db().from('warehouse_docs').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** shipment_id của phiếu (0153) — không nằm trong DOC_COLS, chỉ K1 cần khi đảo. */
+  async findShipmentId(docId: string): Promise<string | null> {
+    const { data } = await db()
+      .from('warehouse_docs')
+      .select('shipment_id')
+      .eq('id', docId)
+      .maybeSingle()
+    return (
+      ((data as { shipment_id: string | null } | null)?.shipment_id as string) ?? null
+    )
+  },
+
+  /** Phiếu ĐẢO của một phiếu (K1) — null = chưa bị đảo. Mỗi phiếu tối đa một. */
+  async findReversalOf(docId: string): Promise<{ id: string; code: string } | null> {
+    const { data } = await db()
+      .from('warehouse_docs')
+      .select('id, code')
+      .eq('reversal_of_doc_id', docId)
+      .maybeSingle()
+    return (data as { id: string; code: string } | null) ?? null
+  },
+
+  /** Đếm phiếu theo loại trên TOÀN SỔ — stats của Sổ chứng từ khi đã phân trang. */
+  async countByKind(): Promise<{ total: number; receipt: number; issue: number }> {
+    const head = (kind?: DocKind) => {
+      let q = db().from('warehouse_docs').select('id', { count: 'exact', head: true })
+      if (kind) q = q.eq('kind', kind)
+      return q
+    }
+    const [t, r, i] = await Promise.all([head(), head('receipt'), head('issue')])
+    return { total: t.count ?? 0, receipt: r.count ?? 0, issue: i.count ?? 0 }
+  },
+
+  /** Biên bản kiểm kê CHỜ DUYỆT — nuôi màn duyệt + ô dashboard. */
+  async countPending(): Promise<number> {
+    const { count } = await db()
+      .from('warehouse_docs')
+      .select('id', { count: 'exact', head: true })
+      .eq('status', 'pending')
+    return count ?? 0
+  },
+
   async list(filter: {
     kind?: DocKind
     page: number
@@ -213,56 +371,27 @@ export const docsRepo = {
   }): Promise<{ rows: WarehouseDoc[]; total: number }> {
     let q = db()
       .from('warehouse_docs')
-      .select(
-        'id, code, kind, doc_date, counterparty, reason, note, created_by, created_at, actor:users(name)',
-        { count: 'exact' },
-      )
+      .select(`${DOC_COLS}, ${DOC_JOINS}`, { count: 'exact' })
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
-    const rows = ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
-      const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
-      return {
-        id: r.id,
-        code: r.code,
-        kind: r.kind,
-        doc_date: r.doc_date,
-        counterparty: r.counterparty ?? null,
-        reason: r.reason ?? null,
-        note: r.note ?? null,
-        created_by: r.created_by ?? null,
-        created_by_name: (a as { name?: string } | null)?.name ?? null,
-        created_at: r.created_at,
-      } as WarehouseDoc
-    })
+    const rows = await fillReversalCodes(
+      ((data as Record<string, unknown>[] | null) ?? []).map(toDoc),
+    )
     return { rows, total: count ?? 0 }
   },
 
   async findById(id: string): Promise<WarehouseDoc | null> {
     const { data } = await db()
       .from('warehouse_docs')
-      .select(
-        'id, code, kind, doc_date, counterparty, reason, note, created_by, created_at, actor:users(name)',
-      )
+      .select(`${DOC_COLS}, ${DOC_JOINS}`)
       .eq('id', id)
       .maybeSingle()
     if (!data) return null
-    const r = data as Record<string, unknown>
-    const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
-    return {
-      id: r.id,
-      code: r.code,
-      kind: r.kind,
-      doc_date: r.doc_date,
-      counterparty: r.counterparty ?? null,
-      reason: r.reason ?? null,
-      note: r.note ?? null,
-      created_by: r.created_by ?? null,
-      created_by_name: (a as { name?: string } | null)?.name ?? null,
-      created_at: r.created_at,
-    } as WarehouseDoc
+    const [doc] = await fillReversalCodes([toDoc(data as Record<string, unknown>)])
+    return doc
   },
 
   /** Dòng của 1 phiếu + SL đặt trên dòng PO (in "theo chứng từ" của mẫu 01-VT). */
@@ -464,40 +593,56 @@ export type LsxNeed = {
 }
 
 /** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */
+/**
+ * Đã cấp cho LSX = NET Σ xuất − Σ nhập cùng lệnh (K2 go-live): xưởng dùng
+ * không hết trả về kho (PNK "Hoàn kho từ LSX") hay phiếu xuất bị ĐẢO (K1)
+ * đều là movement `in` gắn production_order_id — không trừ lại thì "đã cấp"
+ * phồng, nhu cầu còn lại của lệnh âm sai.
+ */
 export async function issuedByLsx(
   productionOrderId: string,
 ): Promise<Map<string, number>> {
   const { data } = await db()
     .from('warehouse_movements')
-    .select('material_id, qty')
+    .select('material_id, direction, qty')
     .eq('production_order_id', productionOrderId)
-    .eq('direction', 'out')
     .limit(5000)
   const map = new Map<string, number>()
-  for (const r of (data ?? []) as { material_id: string; qty: number }[]) {
-    map.set(r.material_id, (map.get(r.material_id) ?? 0) + Number(r.qty))
+  for (const r of (data ?? []) as {
+    material_id: string
+    direction: 'in' | 'out'
+    qty: number
+  }[]) {
+    const signed = r.direction === 'out' ? Number(r.qty) : -Number(r.qty)
+    map.set(r.material_id, (map.get(r.material_id) ?? 0) + signed)
   }
   return map
 }
 
 /** Đã xuất theo NHIỀU LSX (gộp dòng) — nguồn tính tồn đặt trước (bước 2 Kho). */
+/** Bản nhiều lệnh của issuedByLsx — cùng luật NET xuất − nhập (K2). */
 export async function issuedByLsxIds(
   productionOrderIds: string[],
 ): Promise<{ production_order_id: string; material_id: string; qty: number }[]> {
   if (productionOrderIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_movements')
-    .select('production_order_id, material_id, qty')
+    .select('production_order_id, material_id, direction, qty')
     .in('production_order_id', productionOrderIds)
-    .eq('direction', 'out')
     .limit(10000)
   return (
     (data as
-      { production_order_id: string; material_id: string; qty: unknown }[] | null) ?? []
+      | {
+          production_order_id: string
+          material_id: string
+          direction: 'in' | 'out'
+          qty: unknown
+        }[]
+      | null) ?? []
   ).map((r) => ({
     production_order_id: r.production_order_id,
     material_id: r.material_id,
-    qty: num(r.qty),
+    qty: r.direction === 'out' ? num(r.qty) : -num(r.qty),
   }))
 }
 

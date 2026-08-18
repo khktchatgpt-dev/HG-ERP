@@ -295,7 +295,7 @@ export function OrdersManager({
   ]
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5">
+    <div className="theme-v3 text-foreground flex flex-col gap-5">
       {/* ── Đầu trang ─────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -427,7 +427,7 @@ export function OrdersManager({
               <SelectTrigger size="sm" className="bg-card w-44">
                 <SelectValue>{customerLabel}</SelectValue>
               </SelectTrigger>
-              <SelectContent className="theme-v2">
+              <SelectContent className="theme-v3">
                 <SelectItem value="all">Mọi khách hàng</SelectItem>
                 {customers.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
@@ -440,7 +440,7 @@ export function OrdersManager({
               <SelectTrigger size="sm" className="bg-card w-44">
                 <SelectValue>{SORT_LABEL[sort]}</SelectValue>
               </SelectTrigger>
-              <SelectContent className="theme-v2">
+              <SelectContent className="theme-v3">
                 {(Object.keys(SORT_LABEL) as SortKey[]).map((k) => (
                   <SelectItem key={k} value={k}>
                     {SORT_LABEL[k]}
@@ -652,7 +652,7 @@ export function OrdersManager({
                                 <MoreHorizontal />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="theme-v2">
+                            <DropdownMenuContent align="end" className="theme-v3">
                               <DropdownMenuItem
                                 onClick={() => router.push(`/sales/orders/${o.id}`)}
                               >

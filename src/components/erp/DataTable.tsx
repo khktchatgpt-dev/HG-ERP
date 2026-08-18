@@ -1,7 +1,15 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsUpDown,
+  ChevronUp,
+} from 'lucide-react'
 import { EmptyState } from './EmptyState'
+import { cn } from '@/lib/utils'
 
 export type Column<T> = {
   key: string
@@ -126,8 +134,11 @@ export function DataTable<T>({
   const someSelected =
     selection && pageRows.some((r) => selectedKeys.has(keyFn(r))) && !allSelected
 
+  // Checkbox native (giữ indeterminate qua ref) nhưng ăn màu hành động của theme.
+  const checkboxCls = 'size-4 rounded border-[var(--input)] accent-[var(--primary)]'
+
   return (
-    <div className="rounded-b-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="bg-card rounded-b-lg border">
       <div className="overflow-x-auto">
         <table className="w-full table-fixed text-left text-sm">
           <colgroup>
@@ -136,7 +147,7 @@ export function DataTable<T>({
               <col key={c.key} style={c.width ? { width: c.width } : undefined} />
             ))}
           </colgroup>
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-xs tracking-wider text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+          <thead className="t-label text-muted-foreground bg-muted/50 border-b">
             <tr>
               {selection && (
                 <th className={headPad}>
@@ -149,7 +160,7 @@ export function DataTable<T>({
                     onChange={(e) =>
                       selection.onChange(e.target.checked ? [...pageRows] : [])
                     }
-                    className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                    className={checkboxCls}
                   />
                 </th>
               )}
@@ -165,17 +176,26 @@ export function DataTable<T>({
                 return (
                   <th
                     key={c.key}
-                    className={`${headPad} ${align} ${c.headerClassName ?? ''}`}
+                    className={`${headPad} ${align} font-medium ${c.headerClassName ?? ''}`}
                   >
                     {sortable ? (
                       <button
                         onClick={() => toggleSort(c.key)}
-                        className="inline-flex items-center gap-1 hover:text-zinc-900 dark:hover:text-white"
+                        className={cn(
+                          'hover:text-foreground inline-flex items-center gap-1 transition-colors',
+                          isSorted && 'text-foreground',
+                        )}
                       >
                         {c.header}
-                        <span className="text-zinc-400">
-                          {isSorted ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
-                        </span>
+                        {isSorted ? (
+                          sortDir === 'asc' ? (
+                            <ChevronUp className="size-3.5 text-[var(--primary)]" />
+                          ) : (
+                            <ChevronDown className="size-3.5 text-[var(--primary)]" />
+                          )
+                        ) : (
+                          <ChevronsUpDown className="size-3 opacity-60" />
+                        )}
                       </button>
                     ) : (
                       c.header
@@ -185,7 +205,7 @@ export function DataTable<T>({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+          <tbody className="divide-border/60 divide-y">
             {pageRows.length === 0 ? (
               <tr>
                 <td colSpan={columns.length + (selection ? 1 : 0)}>
@@ -205,11 +225,11 @@ export function DataTable<T>({
                 return (
                   <tr
                     key={key}
-                    className={`${
-                      selected
-                        ? 'bg-blue-50 dark:bg-blue-950/20'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/40'
-                    } ${extra ?? ''}`}
+                    className={cn(
+                      'transition-colors',
+                      selected ? 'bg-[var(--accent)]' : 'hover:bg-[var(--accent)]/50',
+                      extra,
+                    )}
                   >
                     {selection && (
                       <td className={cellPad}>
@@ -222,7 +242,7 @@ export function DataTable<T>({
                             )
                             selection.onChange(e.target.checked ? [...rest, row] : rest)
                           }}
-                          className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                          className={checkboxCls}
                         />
                       </td>
                     )}
@@ -253,18 +273,18 @@ export function DataTable<T>({
       </div>
 
       {pagination && total > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+        <div className="text-muted-foreground bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-xs">
           <div className="flex items-center gap-2">
-            <span>
-              {from}–{to} / <b>{total}</b>
+            <span className="t-data text-[12px]">
+              {from}–{to} / <b className="text-foreground">{total}</b>
             </span>
-            <span className="text-zinc-300 dark:text-zinc-700">|</span>
+            <span className="text-border">|</span>
             <label className="flex items-center gap-1">
               Hiển thị
               <select
                 value={pageSize}
                 onChange={(e) => changePageSize(Number(e.target.value))}
-                className="rounded border border-zinc-300 bg-white px-1 py-0.5 dark:border-zinc-700 dark:bg-zinc-950"
+                className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 rounded-md border px-1.5 py-0.5 outline-none focus-visible:ring-[3px]"
               >
                 {pageSizeOptions.map((n) => (
                   <option key={n} value={n}>
@@ -277,40 +297,63 @@ export function DataTable<T>({
           </div>
 
           <div className="flex items-center gap-1">
-            <button
+            <PagerButton
               onClick={() => setPage(0)}
               disabled={safePage === 0}
-              className="rounded border border-zinc-300 bg-white px-2 py-0.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              label="Trang đầu"
             >
               «
-            </button>
-            <button
+            </PagerButton>
+            <PagerButton
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={safePage === 0}
-              className="rounded border border-zinc-300 bg-white px-2 py-0.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              label="Trang trước"
             >
-              ‹
-            </button>
-            <span className="px-2">
+              <ChevronLeft className="size-3.5" />
+            </PagerButton>
+            <span className="t-data px-2 text-[12px]">
               {safePage + 1} / {totalPages}
             </span>
-            <button
+            <PagerButton
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={safePage >= totalPages - 1}
-              className="rounded border border-zinc-300 bg-white px-2 py-0.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              label="Trang sau"
             >
-              ›
-            </button>
-            <button
+              <ChevronRight className="size-3.5" />
+            </PagerButton>
+            <PagerButton
               onClick={() => setPage(totalPages - 1)}
               disabled={safePage >= totalPages - 1}
-              className="rounded border border-zinc-300 bg-white px-2 py-0.5 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+              label="Trang cuối"
             >
               »
-            </button>
+            </PagerButton>
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function PagerButton({
+  onClick,
+  disabled,
+  label,
+  children,
+}: {
+  onClick: () => void
+  disabled: boolean
+  label: string
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      className="border-input bg-card hover:bg-accent hover:text-accent-foreground grid h-6.5 min-w-6.5 place-items-center rounded-md border px-1 transition-colors disabled:pointer-events-none disabled:opacity-40"
+    >
+      {children}
+    </button>
   )
 }

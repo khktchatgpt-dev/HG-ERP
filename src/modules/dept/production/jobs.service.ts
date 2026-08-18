@@ -1,9 +1,6 @@
 import { jobsRepo, type Job } from './jobs.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
-import {
-  productionRepo,
-  type ProductionOrderWithOrders,
-} from './production.repo'
+import { productionRepo, type ProductionOrderWithOrders } from './production.repo'
 import { componentsRepo } from './components.repo'
 import { entriesRepo } from './entries.repo'
 import '@/events/register' // Đăng ký handler event ở lần import đầu tiên.
@@ -423,7 +420,9 @@ export const jobsService = {
       job.production_order_id,
     ])
     const lineStages =
-      lineStagesOf(jobs).get(`${job.production_order_id}|${job.production_order_line_id}`) ?? []
+      lineStagesOf(jobs).get(
+        `${job.production_order_id}|${job.production_order_line_id}`,
+      ) ?? []
     const progress = assessJobProgress(job, lineStages, components, doneByCompStage)
 
     if (!progress.ready) {
@@ -464,7 +463,9 @@ export const jobsService = {
     const next = jobs
       .filter(
         (j) =>
-          j.production_order_line_id === job.production_order_line_id && j.seq > job.seq && j.status !== 'done',
+          j.production_order_line_id === job.production_order_line_id &&
+          j.seq > job.seq &&
+          j.status !== 'done',
       )
       .sort((a, b) => a.seq - b.seq)[0]
     let notifyNext: string[] = []

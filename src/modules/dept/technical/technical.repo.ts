@@ -897,6 +897,42 @@ export const productProfileRepo = {
     return (data ?? []).length
   },
 
+  /**
+   * Đếm dòng định mức theo nhóm — để màn đọc file BOM nói được "hồ sơ đã có 19
+   * dòng nhóm Khung" TRƯỚC khi người dùng bấm lưu. Không có con số này thì đọc
+   * lại một file đã nạp rồi bấm Lưu là âm thầm nhân đôi.
+   */
+  async countPartsByGroup(productId: string): Promise<Record<string, number>> {
+    const { data, error } = await db()
+      .from('technical_product_parts')
+      .select('group_code')
+      .eq('product_id', productId)
+    if (error) throw new Error(error.message)
+    const out: Record<string, number> = {}
+    for (const r of data ?? []) {
+      const g = (r as { group_code: string }).group_code
+      out[g] = (out[g] ?? 0) + 1
+    }
+    return out
+  },
+
+  /**
+   * Xoá định mức của MỘT SỐ NHÓM. Khác `deleteAllParts`: đọc lại file BOM chỉ
+   * nên thay phần file đó nói tới. File chỉ có khối khung mà xoá sạch cả hồ sơ
+   * là mất luôn mấy dòng bao bì ai đó đã nhập tay.
+   */
+  async deletePartsByGroups(productId: string, groups: string[]): Promise<number> {
+    if (groups.length === 0) return 0
+    const { data, error } = await db()
+      .from('technical_product_parts')
+      .delete()
+      .eq('product_id', productId)
+      .in('group_code', groups)
+      .select('id')
+    if (error) throw new Error(error.message)
+    return (data ?? []).length
+  },
+
   async deletePart(productId: string, partId: string): Promise<boolean> {
     const { data, error } = await db()
       .from('technical_product_parts')

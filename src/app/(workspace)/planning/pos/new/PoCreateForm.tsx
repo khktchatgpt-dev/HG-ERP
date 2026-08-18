@@ -190,6 +190,7 @@ export function PoCreateForm({
   lsxs,
   company,
   defaultSupplierId,
+  defaultLsxId,
   initial,
 }: {
   suppliers: SupplierOption[]
@@ -197,6 +198,8 @@ export function PoCreateForm({
   /** Đầu phiếu (tên cty, MST, địa danh) cho bản xem trước — từ Cài đặt. */
   company: Record<string, string | null>
   defaultSupplierId?: string
+  /** `?lsx=` — mở form từ màn "Vật tư theo lệnh", chọn sẵn lệnh + nạp nhu cầu. */
+  defaultLsxId?: string
   /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
   initial?: PoInitial
 }) {
@@ -213,7 +216,10 @@ export function PoCreateForm({
   const [poType, setPoType] = useState<'lsx' | 'standalone'>(
     start ? (start.production_order_id ? 'lsx' : 'standalone') : 'lsx',
   )
-  const [lsxId, setLsxId] = useState(start?.production_order_id ?? '')
+  const [lsxId, setLsxId] = useState(
+    start?.production_order_id ??
+      (defaultLsxId && lsxs.some((l) => l.id === defaultLsxId) ? defaultLsxId : ''),
+  )
   // LSX PHỤ gộp vào đơn (0125) — đơn thật ghi "LSX 01+2+3/26-27".
   const [extraLsxIds, setExtraLsxIds] = useState<string[]>(start?.extra_lsx_ids ?? [])
   const [supplierId, setSupplierId] = useState(
@@ -376,6 +382,19 @@ export function PoCreateForm({
     return () => window.removeEventListener('beforeunload', h)
   }, [isEdit])
 
+  /*
+   * Mở form kèm `?lsx=` (từ màn "Vật tư theo lệnh") — nạp luôn nhu cầu vật tư
+   * của lệnh, đúng như khi người dùng tự chọn lệnh trong ô. Không nạp thì người
+   * bấm "Đặt vật tư cho lệnh này" phải chọn lại đúng cái lệnh vừa bấm.
+   */
+  const needsBootRef = useRef(false)
+  useEffect(() => {
+    if (needsBootRef.current || start || !lsxId) return
+    needsBootRef.current = true
+    void loadNeeds(lsxId, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chạy đúng một lần lúc mở form
+  }, [])
+
   /** Người dùng bấm "Khôi phục" trên banner — đổ lại toàn bộ state đã lưu. */
   function restoreDraft(d: SavedDraft) {
     setTemplate(d.template)
@@ -405,6 +424,22 @@ export function PoCreateForm({
   const usedIds = useMemo(() => new Set(lines.map((l) => l.material_id)), [lines])
   const suggestions = useMemo(
     () => new Map(needs.map((n) => [n.material_id, n.suggest])),
+    [needs],
+  )
+  /**
+   * Trần tồn (P3.1): còn ĐẶT THÊM được = max_stock − tồn − đã đặt. Chỉ cảnh báo
+   * vàng (không chặn) — có LSX lớn thì vượt trần là chủ đích, người mua tự cân.
+   */
+  const capLeft = useMemo(
+    () =>
+      new Map(
+        needs
+          .filter((n) => n.max_stock != null && n.max_stock > 0)
+          .map((n) => [
+            n.material_id,
+            Math.max((n.max_stock ?? 0) - (n.on_hand ?? 0) - (n.ordered ?? 0), 0),
+          ]),
+      ),
     [needs],
   )
   const lsx = lsxs.find((l) => l.id === lsxId)
@@ -768,7 +803,7 @@ export function PoCreateForm({
       <TopProgressBar active={busy} />
       <PageHeader
         breadcrumbs={[
-          { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+          { label: 'Cung ứng', href: '/planning' },
           { label: 'Đơn đặt vật tư', href: '/planning/pos' },
           {
             label: isEdit
@@ -1074,6 +1109,7 @@ export function PoCreateForm({
           template={template}
           lines={lines}
           suggestions={suggestions}
+          capLeft={capLeft}
           currency={currency}
           onPatch={patchLine}
           onRemove={removeLine}

@@ -9,6 +9,7 @@ import {
   lsxAllocationByCode,
 } from '@/modules/dept/warehouse/stock.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { suggestForMaterial } from '@/lib/po-suggestion'
 import { mergeAllocations, type MaterialAllocation } from '@/lib/po-allocation'
 
@@ -76,23 +77,20 @@ export const GET = handle(async (req: Request) => {
   const needs = [...merged.values()]
   const matIds = needs.map((n) => n.material_id)
 
-  const [stock, reserved, orderedLists, allocLists] = await Promise.all([
+  /*
+   * "Đã đặt" tính MỘT LẦN cho cả bộ lệnh (orderedPendingByLsxSet) chứ không gọi
+   * từng lệnh rồi cộng: đơn gộp A+B mà cộng theo lệnh là đếm hai lần, và đơn
+   * mua chung của lệnh NGOÀI bộ (mua hộ lệnh trong bộ) trước đây bị bỏ sót —
+   * cả hai đều làm số "đã đặt" sai và đề xuất mua sai theo.
+   */
+  const [stock, reserved, orderedPending, allocLists, maxStocks] = await Promise.all([
     stockInfoMany(matIds),
     reservedByOtherLsx(lsxIds, matIds),
-    Promise.all(lsxIds.map((id) => supplyRepo.orderedPendingByLsx(id, exclude_po_id))),
+    supplyRepo.orderedPendingByLsxSet(lsxIds, exclude_po_id),
     Promise.all(lsxIds.map((id) => lsxAllocationByCode(id))),
+    materialsRepo.maxStockMany(matIds), // trần tồn — cảnh báo mua vượt (P3.1)
   ])
   const onHand = new Map(stock.map((s) => [s.material_id, s.on_hand]))
-
-  const orderedPending = new Map<string, { ordered: number; pending: number }>()
-  for (const list of orderedLists) {
-    for (const [materialId, op] of list) {
-      const cur = orderedPending.get(materialId) ?? { ordered: 0, pending: 0 }
-      cur.ordered += op.ordered
-      cur.pending += op.pending
-      orderedPending.set(materialId, cur)
-    }
-  }
 
   // Phân bổ theo SP, gộp cả bộ lệnh (cùng SP + cùng đm thì cộng SL).
   const alloc = new Map<string, MaterialAllocation[]>()
@@ -123,6 +121,7 @@ export const GET = handle(async (req: Request) => {
         suggest: s.suggest,
         enough: s.enough,
         has_pending: s.has_pending,
+        max_stock: maxStocks.get(n.material_id) ?? null,
         breakdown: alloc.get(n.material_code) ?? [],
       }
     }),

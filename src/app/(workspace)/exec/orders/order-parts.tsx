@@ -22,17 +22,17 @@ export function fmtMoney(value: number, currency: string): string {
 // ── Badge trạng thái đơn — chip nền mềm (soft-fill), viền cùng tông ───────────
 const STATUS_CLS: Record<string, string> = {
   confirmed:
-    'border-sky-200/70 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-300',
+    'border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]',
   lsx_pending:
-    'border-amber-200/70 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300',
+    'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] text-[var(--warn)]',
   lsx_issued:
-    'border-indigo-200/70 bg-indigo-50 text-indigo-700 dark:border-indigo-900 dark:bg-indigo-950/40 dark:text-indigo-300',
+    'border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]',
   in_production:
-    'border-violet-200/70 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-300',
+    'border-[color-mix(in_srgb,var(--primary)_35%,transparent)] bg-[color-mix(in_srgb,var(--primary)_12%,transparent)] text-[var(--primary)]',
   completed:
-    'border-emerald-200/70 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300',
+    'border-[color-mix(in_srgb,var(--done)_35%,transparent)] bg-[color-mix(in_srgb,var(--done)_12%,transparent)] text-[var(--done)]',
   delivered:
-    'border-green-200/70 bg-green-50 text-green-700 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300',
+    'border-[color-mix(in_srgb,var(--done)_35%,transparent)] bg-[color-mix(in_srgb,var(--done)_12%,transparent)] text-[var(--done)]',
   cancelled: 'border-transparent bg-muted text-muted-foreground line-through',
 }
 
@@ -64,7 +64,7 @@ export function ProgressMeter({
         </span>
       )}
       <span className="flex items-center gap-1.5">
-        <span className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+        <span className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
           <span
             className={cn('block h-full rounded-full', p.tone)}
             style={{ width: `${p.pct}%` }}
@@ -97,14 +97,18 @@ export function LifecycleTimeline({ status }: { status: string }) {
               <span
                 className={cn(
                   'h-0.5 flex-1',
-                  i === 0 ? 'opacity-0' : done || active ? 'bg-emerald-500' : 'bg-border',
+                  i === 0
+                    ? 'opacity-0'
+                    : done || active
+                      ? 'bg-[var(--done)]'
+                      : 'bg-border',
                 )}
               />
               <span
                 className={cn(
                   'flex size-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold',
                   done
-                    ? 'border-emerald-500 bg-emerald-500 text-white'
+                    ? 'border-[color-mix(in_srgb,var(--done)_35%,transparent)] bg-[var(--done)] text-white'
                     : active
                       ? 'border-primary text-primary ring-primary/30 ring-2'
                       : 'border-border text-muted-foreground',
@@ -118,7 +122,7 @@ export function LifecycleTimeline({ status }: { status: string }) {
                   i === LIFECYCLE_STEPS.length - 1
                     ? 'opacity-0'
                     : done
-                      ? 'bg-emerald-500'
+                      ? 'bg-[var(--done)]'
                       : 'bg-border',
                 )}
               />
@@ -145,26 +149,27 @@ export function LifecycleTimeline({ status }: { status: string }) {
 // ── Thẻ KPI ─────────────────────────────────────────────────────────────────
 export type KpiTone = 'default' | 'amber' | 'red' | 'emerald'
 
-const KPI_TONE: Record<KpiTone, { value: string; dot: string; rail: string }> = {
-  default: {
-    value: 'text-foreground',
-    dot: 'bg-zinc-300 dark:bg-zinc-600',
-    rail: 'before:bg-zinc-200 dark:before:bg-zinc-700',
-  },
+/**
+ * Vạch sống bên trái dùng tiện ích `.spine` của chủ đề (globals.css) thay cho
+ * `before:` gõ tay — cùng một vệt 3px với thẻ phiếu ở /design-lab, đổi bề dày
+ * một chỗ là cả app theo.
+ */
+const KPI_TONE: Record<KpiTone, { value: string; dot: string; spine: string }> = {
+  default: { value: 'text-foreground', dot: 'bg-muted', spine: 'var(--border)' },
   amber: {
-    value: 'text-amber-600 dark:text-amber-400',
-    dot: 'bg-amber-500',
-    rail: 'before:bg-amber-400/70',
+    value: 'text-[var(--warn)]',
+    dot: 'bg-[var(--warn)]',
+    spine: 'var(--warn)',
   },
   red: {
-    value: 'text-red-600 dark:text-red-400',
-    dot: 'bg-red-500',
-    rail: 'before:bg-red-400/70',
+    value: 'text-[var(--stop)]',
+    dot: 'bg-[var(--stop)]',
+    spine: 'var(--stop)',
   },
   emerald: {
-    value: 'text-emerald-600 dark:text-emerald-400',
-    dot: 'bg-emerald-500',
-    rail: 'before:bg-emerald-400/70',
+    value: 'text-[var(--done)]',
+    dot: 'bg-[var(--done)]',
+    spine: 'var(--done)',
   },
 }
 
@@ -182,20 +187,26 @@ export function KpiCard({
   const t = KPI_TONE[tone]
   return (
     <div
-      className={cn(
-        'bg-card relative overflow-hidden rounded-xl border border-zinc-200/70 px-4 py-3.5 shadow-sm dark:border-zinc-800',
-        // Rail màu mảnh bên trái — chỉ báo mức độ, thay cho viền đậm.
-        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:content-['']",
-        t.rail,
-      )}
+      className="spine bg-card relative overflow-hidden rounded-xl border px-4 py-3.5 shadow-xs"
+      style={{ '--spine': t.spine } as React.CSSProperties}
     >
-      <div className="text-muted-foreground flex items-center gap-1.5 text-[11px] font-medium tracking-wide uppercase">
+      <div className="t-label text-muted-foreground flex items-center gap-1.5">
         <span className={cn('size-1.5 shrink-0 rounded-full', t.dot)} />
         {label}
       </div>
-      <div className={cn('mt-1.5 text-2xl leading-none font-bold tabular-nums', t.value)}>
+      {/* Số KPI dùng mặt chữ DỮ LIỆU (JetBrains Mono, tabular) — chuẩn v3:
+          mọi mã, tiền, số lượng, ngày đều đi mặt chữ này để cột số thẳng hàng
+          giữa các thẻ, không so le theo bề rộng chữ số. */}
+      <div
+        className={cn(
+          'mt-1.5 font-mono text-2xl leading-none font-bold tabular-nums',
+          t.value,
+        )}
+      >
         {value}
       </div>
+      {/* Chú thích KHÔNG dùng `t-label`: lớp đó ép viết hoa (đúng cho nhãn cột),
+          còn đây là câu chữ thường — "23 đơn mở", không phải "23 ĐƠN MỞ". */}
       {hint && <div className="text-muted-foreground mt-1 text-[11px]">{hint}</div>}
     </div>
   )

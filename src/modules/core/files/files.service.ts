@@ -91,7 +91,7 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     // Hồ sơ mua hàng (FR-SUP-07): phòng KH-Cung ứng hoặc GĐ/Ban quản lý đính.
     const ok =
       user.role === 'admin' || user.role === 'manager' || (await isSupplyStaff(user))
-    if (!ok) throw Forbidden('Chỉ Kế hoạch - Cung ứng hoặc GĐ/QL đính hồ sơ mua hàng')
+    if (!ok) throw Forbidden('Chỉ Cung ứng hoặc GĐ/QL đính hồ sơ mua hàng')
     return
   }
   if (input.parent.kind === 'sample') {
@@ -397,6 +397,12 @@ export const filesService = {
   async getDownloadTarget(
     user: User,
     fileId: string,
+    /**
+     * `true` = ép trình duyệt TẢI VỀ với đúng tên gốc (kể cả dấu tiếng Việt).
+     * Mặc định `false` để ảnh/PDF còn xem trực tiếp được — cùng endpoint này
+     * phục vụ cả `<img src>` lẫn nút Tải về.
+     */
+    asAttachment = false,
   ): Promise<{ url: string; expiresIn: number }> {
     const file = await filesRepo.getById(fileId)
     if (!file) throw NotFound('File not found')
@@ -404,6 +410,8 @@ export const filesService = {
     const { url, expiresAt } = await storage.createSignedDownloadUrl(
       file.bucket,
       file.path,
+      undefined,
+      asAttachment ? file.filename : undefined,
     )
     const expiresIn = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
     return { url, expiresIn }

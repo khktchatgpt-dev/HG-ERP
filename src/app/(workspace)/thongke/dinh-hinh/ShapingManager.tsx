@@ -43,7 +43,9 @@ export function ShapingManager({
         if (filter === 'need' && i.comps > 0) return false
         if (
           ql &&
-          !`${i.code} ${i.customer_name} ${i.order_codes.join(" ")}`.toLowerCase().includes(ql)
+          !`${i.code} ${i.customer_name} ${i.order_codes.join(' ')}`
+            .toLowerCase()
+            .includes(ql)
         )
           return false
         return true
@@ -71,7 +73,7 @@ export function ShapingManager({
       cell: (r) => (
         <span>
           <span className="font-medium">{r.customer_name}</span>{' '}
-          <span className="text-xs text-zinc-500">· {r.order_codes.join(", ")}</span>
+          <span className="text-xs text-zinc-500">· {r.order_codes.join(', ')}</span>
         </span>
       ),
     },

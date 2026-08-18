@@ -187,7 +187,7 @@ export function QuoteDetailView({
   }
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5 pb-4">
+    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-4">
       <TopProgressBar active={busy} />
 
       {/* ── Đầu trang: nhận diện + mọi hành động ──────────────────────────── */}
@@ -262,7 +262,7 @@ export function QuoteDetailView({
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="theme-v2">
+                <DropdownMenuContent align="end" className="theme-v3">
                   <DropdownMenuItem variant="destructive" onClick={() => void remove()}>
                     <Trash2 />
                     Xoá báo giá nháp

@@ -161,7 +161,7 @@ export async function LsxDetailScreen({
       planHref: canPlan ? `/kehoach-sx/${id}` : null,
       shapingHref: canShape ? `/thongke/dinh-hinh/${id}` : null,
       breadcrumbs: [
-        { label: 'Kế hoạch - Cung ứng', href: '/planning' },
+        { label: 'Cung ứng', href: '/planning' },
         { label: `LSX ${lsx.code}` },
       ],
     },

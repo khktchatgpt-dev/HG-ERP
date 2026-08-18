@@ -174,10 +174,75 @@ export const poCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
 })
 
+/**
+ * NCC XÁC NHẬN ĐƠN (0152) — NV cung ứng ghi lại cam kết sau cuộc gọi/Zalo.
+ *
+ * `shipments` RỖNG được phép: NCC chỉ ừ một tiếng chưa chốt lịch, hoặc đơn toàn
+ * dòng tự do (gỗ/gia công — nghiệm thu ngoài sổ kho, không cần đợt theo dòng).
+ * Có đợt thì service validate bằng `validateShipments` (lib/po-shipments).
+ */
+export const poShipmentInputSchema = z.object({
+  expected_date: z.string().date('Đợt giao phải có ngày'),
+  note: optText(500),
+  lines: z
+    .array(
+      z.object({
+        po_line_id: z.string().uuid(),
+        qty: z.coerce.number().positive(),
+      }),
+    )
+    .min(1, 'Đợt giao phải có ít nhất 1 dòng hàng')
+    .max(200),
+})
+
+export const poConfirmSchema = z.object({
+  confirmed_note: optText(500),
+  method: optText(100), // 'NCC giao' | 'Mình lấy' | tự do
+  place: optText(200), // mặc định "Kho nguyên vật liệu"
+  shipments: z.array(poShipmentInputSchema).max(20).default([]),
+})
+
+/** Thao tác trên MỘT đợt giao: dời ngày (bắt lý do) / xe tới / huỷ (bắt lý do). */
+export const poShipmentActionSchema = z
+  .object({
+    action: z.enum(['reschedule', 'arrived', 'cancel']),
+    expected_date: z.string().date().optional(),
+    reason: z.string().trim().max(1000).optional(),
+  })
+  .refine((d) => d.action !== 'reschedule' || !!d.expected_date, {
+    message: 'Dời đợt giao phải chọn ngày mới',
+  })
+  .refine(
+    (d) =>
+      (d.action !== 'reschedule' && d.action !== 'cancel') ||
+      (d.reason && d.reason.length > 0),
+    { message: 'Dời / huỷ đợt giao phải kèm lý do' },
+  )
+
 /** Bàn giao đơn cho NV cung ứng khác (0128) — trưởng phòng/GĐ/admin. */
 export const poReassignSchema = z.object({
   user_id: z.string().uuid(),
 })
+
+/**
+ * Chốt / mở lại PHẦN THIẾU (0154): `close` trên một dòng (line_id) hoặc mọi
+ * dòng còn thiếu (bỏ trống) — bắt lý do; `reopen` từng dòng, không cần lý do
+ * (mở lại là quay về hiện trạng thật).
+ */
+export const poCloseShortSchema = z
+  .object({
+    action: z.enum(['close', 'reopen']),
+    line_id: z.string().uuid().optional().nullable(),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.action !== 'close' || (d.reason && d.reason.length > 0), {
+    message: 'Chốt phần thiếu phải kèm lý do',
+    path: ['reason'],
+  })
+  .refine((d) => d.action !== 'reopen' || !!d.line_id, {
+    message: 'Mở lại phải chỉ rõ dòng',
+    path: ['line_id'],
+  })
 
 /**
  * Dời hẹn giao của đơn ĐÃ GỬI — chỉ ngày và lý do, không đụng tiền/dòng hàng.

@@ -348,6 +348,42 @@ export const productionRepo = {
  * được nó phục vụ (những) sản phẩm nào. Gõ tay mã SP là sai chính tả và không
  * đối chiếu lại được — chọn từ đúng lệnh mới chắc.
  */
+/**
+ * Như `listLsxProducts` nhưng cho NHIỀU lệnh một lượt — giữ `order_id` để caller
+ * gom về từng lệnh. Màn "Vật tư theo lệnh" cần SP của mọi lệnh đang chạy; gọi
+ * hàm dưới theo từng lệnh là 30 truy vấn cho một lần mở trang.
+ */
+export async function listOrderLineProducts(
+  salesOrderIds: string[],
+): Promise<{ order_id: string; code: string; name: string; qty: number }[]> {
+  if (!salesOrderIds.length) return []
+  const { data } = await db()
+    .from('sales_order_lines')
+    .select('order_id, qty, sort_order, product:technical_products(code, name)')
+    .in('order_id', salesOrderIds.slice(0, 500))
+    .order('sort_order')
+    .limit(3000)
+
+  type P = { code: string; name: string }
+  type Row = { order_id: string; qty: unknown; product: P | P[] | null }
+  const out: { order_id: string; code: string; name: string; qty: number }[] = []
+  for (const r of (data as Row[] | null) ?? []) {
+    const p = Array.isArray(r.product) ? r.product[0] : r.product
+    if (!p?.code) continue
+    // Cùng mã SP nằm 2 dòng của CÙNG đơn (giao 2 đợt) — cộng dồn.
+    const hit = out.find((x) => x.order_id === r.order_id && x.code === p.code)
+    if (hit) hit.qty += Number(r.qty ?? 0)
+    else
+      out.push({
+        order_id: r.order_id,
+        code: p.code,
+        name: p.name,
+        qty: Number(r.qty ?? 0),
+      })
+  }
+  return out
+}
+
 export async function listLsxProducts(
   salesOrderIds: string[],
 ): Promise<{ code: string; name: string; qty: number }[]> {

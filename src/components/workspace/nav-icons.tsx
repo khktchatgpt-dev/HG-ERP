@@ -1,7 +1,9 @@
 import type { LucideIcon } from 'lucide-react'
 import {
+  ArrowDownToLine,
   ArrowLeftRight,
   ArrowRightToLine,
+  ArrowUpFromLine,
   Armchair,
   Bell,
   Boxes,
@@ -81,6 +83,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   'notebook-pen': NotebookPen,
   'arrow-right-to-line': ArrowRightToLine,
   'arrow-left-right': ArrowLeftRight,
+  'arrow-down-to-line': ArrowDownToLine,
+  'arrow-up-from-line': ArrowUpFromLine,
   shapes: Shapes,
   table: Table,
   'tower-control': TowerControl,

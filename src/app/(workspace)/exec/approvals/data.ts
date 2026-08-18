@@ -5,7 +5,9 @@ import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { quotesRepo, lastPricesForCustomer } from '@/modules/dept/sales/quotes.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { settingsService } from '@/modules/core/settings/settings.service'
 import { poLineAmount } from '@/lib/po-line'
+import { isBigApprovalWith } from '@/lib/exec-ops'
 import type { User } from '@/modules/core/users/users.repo'
 import type { PendingLsx, PendingPo, PendingQuote } from '../approval-types'
 
@@ -23,14 +25,16 @@ export async function loadPendingPoDetail(
   const po = await posRepo.findById(id)
   if (!po || po.status !== 'pending_approval') return null
 
-  const [lines, creatorName] = await Promise.all([
+  const [lines, creatorName, thresholds] = await Promise.all([
     posRepo.listLines(id),
     po.created_by
       ? usersRepo
           .displayNamesByIds([po.created_by])
           .then((m) => m.get(po.created_by!) ?? null)
       : Promise.resolve(null),
+    settingsService.approvalThresholds(),
   ])
+  const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
 
   return {
     id: po.id,
@@ -41,11 +45,13 @@ export async function loadPendingPoDetail(
     expected_at: po.expected_at,
     created_at: po.created_at,
     currency: po.currency,
-    total: lines.reduce((s, l) => s + poLineAmount(l), 0),
+    total,
     lines_count: lines.length,
     lines,
     created_by_name: creatorName,
     note: po.note,
+    big: isBigApprovalWith(total, po.currency, thresholds),
+    threshold: Object.hasOwn(thresholds, po.currency) ? thresholds[po.currency] : null,
   }
 }
 

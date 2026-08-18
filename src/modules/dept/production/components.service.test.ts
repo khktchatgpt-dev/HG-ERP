@@ -42,9 +42,14 @@ import type { User } from '@/modules/core/users/users.repo'
 
 const thongKe = { id: 'u-tk', role: 'employee' } as unknown as User
 
-const LSX = { id: 'lsx1', code: 'LSX-01', customer_id: 'c1',
+const LSX = {
+  id: 'lsx1',
+  code: 'LSX-01',
+  customer_id: 'c1',
   order_ids: ['o1'],
-  order_codes: ['DH-01'], status: 'in_progress' }
+  order_codes: ['DH-01'],
+  status: 'in_progress',
+}
 const LINE = {
   id: 'line1',
   group_id: 'g1',

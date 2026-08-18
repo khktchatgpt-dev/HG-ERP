@@ -12,10 +12,22 @@ vi.mock('./pos.repo', () => ({
     listExtraLsx: vi.fn(async () => []),
     replaceExtraLsx: vi.fn(),
     patch: vi.fn(),
+    patchLineClosedShort: vi.fn(),
     delete: vi.fn(),
   },
 }))
-vi.mock('./supply.repo', () => ({ suppliersRepo: { findById: vi.fn() } }))
+vi.mock('./supply.repo', () => ({
+  suppliersRepo: { findById: vi.fn() },
+  // advance('received') nay đọc sổ đối chiếu (lineStatus) thay vì listLines.
+  supplyRepo: { lineStatus: vi.fn(async () => []), refreshStatusFromReceipts: vi.fn() },
+}))
+// Chốt thiếu (0154) đụng đợt giao + danh bạ phòng (notify Kho).
+vi.mock('./po-shipments.repo', () => ({
+  poShipmentsRepo: { listByPo: vi.fn(async () => []), patch: vi.fn() },
+}))
+vi.mock('@/modules/core/departments/departments.repo', () => ({
+  departmentsRepo: { list: vi.fn(async () => []) },
+}))
 vi.mock('@/modules/dept/production/production.repo', () => ({
   productionRepo: { findById: vi.fn() },
 }))
@@ -34,7 +46,7 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
 
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
-import { suppliersRepo } from './supply.repo'
+import { suppliersRepo, supplyRepo } from './supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
@@ -356,16 +368,16 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
   })
 
   /*
-   * "ĐÃ NHẬN ĐỦ" bằng tay (0134): chỉ đơn TOÀN dòng tự do — gỗ/gia công nghiệm
-   * thu ngoài sổ kho vật tư nên không có phiếu nhập nào tự chốt đơn.
+   * "ĐÃ NHẬN ĐỦ" bằng tay (0134): luật là mọi DÒNG VẬT TƯ KHO phải về đủ theo
+   * sổ (BR-08 giữ phần kho) — dòng tự do nghiệm thu ngoài sổ do người xác nhận.
    */
   it('received bằng tay: đơn toàn dòng tự do thì được', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue({
       ...PO,
       status: 'in_transit',
     } as never)
-    vi.mocked(posRepo.listLines).mockResolvedValue([
-      { material_id: null, line_name: 'Ghế đan dây mây' } as never,
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { material_id: null, qty_missing: 20 } as never,
     ])
     vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'received' } as never)
 
@@ -374,19 +386,37 @@ describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC đư�
     expect(patch.status).toBe('received')
   })
 
-  it('received bằng tay: đơn còn dòng vật tư kho thì CHẶN — Kho quyết định', async () => {
+  it('received bằng tay: dòng vật tư kho CÒN THIẾU thì CHẶN — Kho quyết định', async () => {
     vi.mocked(posRepo.findById).mockResolvedValue({
       ...PO,
       status: 'in_transit',
     } as never)
-    vi.mocked(posRepo.listLines).mockResolvedValue([
-      { material_id: 'm1' } as never,
-      { material_id: null, line_name: 'Ghế đan' } as never,
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { material_id: 'm1', qty_missing: 5, qty_open: 5 } as never,
+      { material_id: null, qty_missing: 20, qty_open: 20 } as never,
     ])
     await expect(posService.advance(staff, 'po1', 'received')).rejects.toMatchObject({
       status: 400,
     })
     expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('received bằng tay: đơn HỖN HỢP mà dòng kho đã về đủ thì ĐƯỢC (hết kẹt hai đường)', async () => {
+    // Trước fix: sổ kho không bao giờ chốt (dòng tự do không có movement) mà
+    // nút tay bị cấm vì "còn dòng vật tư kho" — đơn treo 'partial' vĩnh viễn.
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...PO,
+      status: 'partial',
+    } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { material_id: 'm1', qty_missing: 0, qty_open: 0 } as never,
+      { material_id: null, qty_missing: 20, qty_open: 20 } as never,
+    ])
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'received' } as never)
+
+    await posService.advance(staff, 'po1', 'received')
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('received')
   })
 })
 
@@ -587,5 +617,150 @@ describe('posService.reassign — 0128: bàn giao người phụ trách', () => 
     await expect(posService.reassign(lead, 'po1', 'u-sup2')).rejects.toMatchObject({
       status: 400,
     })
+  })
+})
+
+/*
+ * CHỐT PHẦN THIẾU (0154 — GĐ A plan-cung-ung-kho-hoan-thien): Cung ứng tuyên bố
+ * "phần còn lại không về nữa"; sổ kho không đổi, chỉ qty_open đổi cách tính.
+ */
+describe('posService.closeShort — chốt phần thiếu (0154)', () => {
+  const stockLine = (over: Record<string, unknown>) =>
+    ({
+      id: 'pl1',
+      po_id: 'po1',
+      material_id: 'm1',
+      qty_ordered: 100,
+      qty_received: 98,
+      qty_missing: 2,
+      qty_open: 2,
+      closed_short_at: null,
+      material_code: 'VT-001',
+      material_name: 'MDF 17mm',
+      material_unit: 'tấm',
+      ...over,
+    }) as never
+
+  beforeEach(() => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'partial' } as never)
+  })
+
+  it('chốt 1 dòng: ghi closed_short_* kèm lý do, tính lại trạng thái, bắn event', async () => {
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([stockLine({})])
+
+    await posService.closeShort(staff, 'po1', {
+      action: 'close',
+      line_id: 'pl1',
+      reason: 'NCC hết hàng, mua chỗ khác',
+    })
+
+    const [lineId, patch] = vi.mocked(posRepo.patchLineClosedShort).mock.calls[0]
+    expect(lineId).toBe('pl1')
+    expect(patch.closed_short_by).toBe('u-sup')
+    expect(patch.closed_short_reason).toBe('NCC hết hàng, mua chỗ khác')
+    expect(patch.closed_short_at).toBeTruthy()
+    // Đơn ĐÃ có hàng về → sổ đối chiếu tính lại (partial → received do qty_open=0)
+    expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'po.closed_short', code: 'PO-2026-0001' }),
+    )
+  })
+
+  it('thiếu lý do thì CHẶN', async () => {
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([stockLine({})])
+    await expect(
+      posService.closeShort(staff, 'po1', { action: 'close', line_id: 'pl1' }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(posRepo.patchLineClosedShort).not.toHaveBeenCalled()
+  })
+
+  it('đơn CHƯA nhận gì mà chốt hết phần thiếu = huỷ trá hình → chặn, chỉ sang Huỷ đơn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'ordered' } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      stockLine({ qty_received: 0, qty_missing: 100, qty_open: 100 }),
+    ])
+    await expect(
+      posService.closeShort(staff, 'po1', { action: 'close', reason: 'NCC bỏ đơn' }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(posRepo.patchLineClosedShort).not.toHaveBeenCalled()
+    // Trạng thái không bị đụng — refresh không được gọi khi chưa có phiếu nhập
+    expect(supplyRepo.refreshStatusFromReceipts).not.toHaveBeenCalled()
+  })
+
+  it('chốt CẢ ĐƠN (không line_id): chỉ đụng dòng còn thiếu, dòng đủ để yên', async () => {
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      stockLine({}),
+      stockLine({ id: 'pl2', qty_received: 50, qty_missing: 0, qty_open: 0 }),
+    ])
+    await posService.closeShort(staff, 'po1', { action: 'close', reason: 'NCC chốt sổ' })
+    const ids = vi.mocked(posRepo.patchLineClosedShort).mock.calls.map((c) => c[0])
+    expect(ids).toEqual(['pl1'])
+  })
+
+  it('đợt PLANNED chỉ gồm dòng đã chốt → tự huỷ kèm vết; đợt lẫn dòng mở giữ nguyên', async () => {
+    const { poShipmentsRepo } = await import('./po-shipments.repo')
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      stockLine({}),
+      stockLine({ id: 'pl2', qty_received: 10, qty_missing: 90, qty_open: 90 }),
+    ])
+    vi.mocked(poShipmentsRepo.listByPo).mockResolvedValue([
+      {
+        id: 'sh1',
+        status: 'planned',
+        note: null,
+        lines: [{ po_line_id: 'pl1', qty: 2 }],
+      },
+      {
+        id: 'sh2',
+        status: 'planned',
+        note: null,
+        lines: [
+          { po_line_id: 'pl1', qty: 1 },
+          { po_line_id: 'pl2', qty: 30 },
+        ],
+      },
+    ] as never)
+
+    await posService.closeShort(staff, 'po1', {
+      action: 'close',
+      line_id: 'pl1',
+      reason: 'NCC hết hàng',
+    })
+
+    const patches = vi.mocked(poShipmentsRepo.patch).mock.calls
+    expect(patches).toHaveLength(1)
+    expect(patches[0][0]).toBe('sh1')
+    expect(patches[0][1]).toMatchObject({ status: 'cancelled' })
+    expect((patches[0][1] as { note?: string }).note).toContain('[Chốt thiếu]')
+  })
+
+  it('reopen: xoá closed_short_*, đơn received quay lại theo sổ (refresh)', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'received' } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      stockLine({ closed_short_at: '2026-08-16T00:00:00Z', qty_open: 0 }),
+    ])
+    await posService.closeShort(staff, 'po1', { action: 'reopen', line_id: 'pl1' })
+    const [, patch] = vi.mocked(posRepo.patchLineClosedShort).mock.calls[0]
+    expect(patch).toEqual({
+      closed_short_at: null,
+      closed_short_by: null,
+      closed_short_reason: null,
+    })
+    expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+  })
+
+  it('người KHÔNG phụ trách bị chặn (luật 0128)', async () => {
+    vi.mocked(usersRepo.findById).mockResolvedValue({
+      id: 'u-sup',
+      name: 'NV Mua',
+    } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([stockLine({})])
+    await expect(
+      posService.closeShort(staff2, 'po1', {
+        action: 'close',
+        line_id: 'pl1',
+        reason: 'x',
+      }),
+    ).rejects.toMatchObject({ status: 403 })
   })
 })

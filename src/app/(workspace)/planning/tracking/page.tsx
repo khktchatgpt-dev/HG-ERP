@@ -8,7 +8,7 @@ export default function PlanningTrackingPage() {
   return (
     <TrackingScreen
       lsxBase="/planning/lsx"
-      home={{ label: 'Kế hoạch - Cung ứng', href: '/planning' }}
+      home={{ label: 'Cung ứng', href: '/planning' }}
     />
   )
 }

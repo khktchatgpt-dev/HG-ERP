@@ -79,15 +79,15 @@ describe('fieldsClearedByPayload — cảnh báo trước khi null đè', () => 
   })
 
   it('đổi GIÁ TRỊ không cảnh báo — chỉ soi chiều có-giá-trị → null', () => {
-    expect(
-      fieldsClearedByPayload(saved, { kg_per_m: 0.25, finish: 'xi trắng' }),
-    ).toEqual([])
+    expect(fieldsClearedByPayload(saved, { kg_per_m: 0.25, finish: 'xi trắng' })).toEqual(
+      [],
+    )
   })
 
   it('trường vốn đã trống thì null đè không tính là mất', () => {
-    expect(fieldsClearedByPayload(saved, { open_style: null, pcs_per_ctn: null })).toEqual(
-      [],
-    )
+    expect(
+      fieldsClearedByPayload(saved, { open_style: null, pcs_per_ctn: null }),
+    ).toEqual([])
   })
 
   it('trường ngoài danh sách nhãn (name, unit…) không bao giờ vào cảnh báo', () => {

@@ -86,8 +86,19 @@ export function CommandPalette() {
         setOpen(false)
       }
     }
+    // Ô tìm trên topbar (TopbarSearch) mở palette qua event này — nút bấm
+    // không giả lập được phím tắt Ctrl/⌘K một cách tử tế.
+    function onOpen() {
+      setOpen(true)
+      setQ('')
+      setIdx(0)
+    }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('hg:open-command-palette', onOpen)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('hg:open-command-palette', onOpen)
+    }
   }, [open])
 
   const commands: Cmd[] = useMemo(

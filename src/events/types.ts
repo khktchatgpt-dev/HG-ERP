@@ -93,6 +93,34 @@ export type DomainEvent =
       notify_ids: string[]
     }
 
+  // ── Kho — phiếu đảo (0161/K1) ────────────────────────────────────────
+  | {
+      name: 'warehouse.doc.reversed'
+      /** Mã phiếu GỐC bị đảo + mã phiếu đảo mới sinh. */
+      original_code: string
+      reversal_code: string
+      reason: string
+      reversed_by: string
+      notify_ids: string[]
+    }
+
+  // ── Kho — vòng duyệt kiểm kê (0157) ──────────────────────────────────
+  | {
+      name: 'warehouse.stocktake.pending'
+      code: string
+      created_by: string
+      notify_ids: string[]
+    }
+  | {
+      name: 'warehouse.stocktake.decided'
+      code: string
+      decision: 'approved' | 'rejected'
+      decided_by: string
+      /** Người lập biên bản — người cần biết kết quả. */
+      recipient_id: string
+      reason?: string
+    }
+
   // ── Cung ứng — đơn đặt vật tư (BR-05, FR-ADM-03) ─────────────────────
   | {
       name: 'po.submitted'
@@ -148,6 +176,20 @@ export type DomainEvent =
       code: string
       currency: string
       lines: { material_id: string | null; unit_price: number | null }[]
+    }
+  /**
+   * CHỐT PHẦN THIẾU (0154): Cung ứng tuyên bố "phần còn lại không về nữa" —
+   * báo Kho ngừng chờ lô này + GĐ/QL nắm (đơn có thể nhảy 'received' dù thiếu).
+   */
+  | {
+      name: 'po.closed_short'
+      po_id: string
+      code: string
+      closed_by: string
+      reason: string
+      /** Tóm tắt phần chốt cho thông báo: "MDF: 2 tấm · Bản lề: 5 cái". */
+      summary: string
+      notify_ids: string[]
     }
 
   // ── Báo giá — duyệt GĐ TUỲ CHỌN (0149, exec v3: Sale tự quyết trình) ──

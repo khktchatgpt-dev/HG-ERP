@@ -19,7 +19,9 @@ export function MiniBarChart({
   unit?: string
 }) {
   if (data.length === 0) {
-    return <p className="py-6 text-center text-xs text-zinc-400">Chưa có dữ liệu.</p>
+    return (
+      <p className="text-muted-foreground py-6 text-center text-xs">Chưa có dữ liệu.</p>
+    )
   }
 
   const BAR_W = 34
@@ -46,7 +48,7 @@ export function MiniBarChart({
         y1={VALUE_H + plotH + 0.5}
         x2={width}
         y2={VALUE_H + plotH + 0.5}
-        className="stroke-zinc-200 dark:stroke-zinc-800"
+        stroke="var(--border)"
         strokeWidth={1}
       />
       {data.map((d, i) => {
@@ -73,7 +75,7 @@ export function MiniBarChart({
                 width={BAR_W}
                 height={Math.max(h, 2)}
                 rx={2}
-                fill="#0284c7"
+                fill="var(--primary)"
               />
             ) : (
               // cột 0: vệt mảnh để tuần trống vẫn hiện diện trên trục
@@ -83,7 +85,7 @@ export function MiniBarChart({
                 width={BAR_W}
                 height={2}
                 rx={1}
-                className="fill-zinc-200 dark:fill-zinc-800"
+                fill="var(--border)"
               />
             )}
             {showValue && (
@@ -91,7 +93,8 @@ export function MiniBarChart({
                 x={x + BAR_W / 2}
                 y={y - 4}
                 textAnchor="middle"
-                className="fill-zinc-500 text-[10px] font-medium tabular-nums dark:fill-zinc-400"
+                fill="var(--muted-foreground)"
+                className="text-[10px] font-medium tabular-nums"
               >
                 {fmt(d.value)}
               </text>
@@ -100,7 +103,8 @@ export function MiniBarChart({
               x={x + BAR_W / 2}
               y={height - 4}
               textAnchor="middle"
-              className="fill-zinc-400 text-[9px] dark:fill-zinc-500"
+              fill="var(--muted-foreground)"
+              className="text-[9px] opacity-80"
             >
               {d.label}
             </text>

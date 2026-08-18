@@ -153,7 +153,7 @@ export function IssueLsxDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && !busy && onClose()}>
-      <DialogContent className="theme-v2 max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
+      <DialogContent className="theme-v3 max-h-[85dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {current ? `Tạo lệnh — ${current.name}` : 'Tạo lệnh sản xuất'}

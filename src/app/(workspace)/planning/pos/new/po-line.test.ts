@@ -800,12 +800,19 @@ describe('newLine — thông số theo nhóm từ danh mục (0137)', () => {
   })
 
   it('kim loại: màu/bề mặt từ danh mục khi chưa có lịch sử đặt', () => {
-    const l = newLine('metal_kg', { ...thung, group_name: 'Sắt thép', finish: 'inox bóng' })
+    const l = newLine('metal_kg', {
+      ...thung,
+      group_name: 'Sắt thép',
+      finish: 'inox bóng',
+    })
     expect(l.finish).toBe('inox bóng')
   })
 
   it('refreshLineFromMaterial: bổ sung cách mở ở danh mục → m² dòng đang mở tính lại', () => {
-    const before = { ...newLine('carton', { ...thung, open_style: null }), area_m2: '' as const }
+    const before = {
+      ...newLine('carton', { ...thung, open_style: null }),
+      area_m2: '' as const,
+    }
     expect(before.open_style).toBe('')
     const after = refreshLineFromMaterial('carton', before, {
       name: thung.name,

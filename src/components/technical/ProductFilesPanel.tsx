@@ -164,7 +164,7 @@ export function ProductFilesPanel({
 
   async function download(f: ProductFile) {
     try {
-      const r = await api<{ url: string }>(`/api/files/${f.id}`)
+      const r = await api<{ url: string }>(`/api/files/${f.id}?download=1`)
       window.open(r.url, '_blank', 'noopener')
     } catch (e) {
       toast.error('Không tải được file', apiErrorText(e))
@@ -484,7 +484,7 @@ function UploadMenu({
           <Plus className="size-4" aria-hidden />
           Tải lên
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="theme-v2 w-72">
+        <DropdownMenuContent align="end" className="theme-v3 w-72">
           {TABS.map((t) => (
             <DropdownMenuItem
               key={t}

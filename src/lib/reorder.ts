@@ -24,7 +24,7 @@ export type ReorderInput = {
   reorder_qty: number | null
   /** on_hand − giữ chỗ LSX cam kết (âm = đang thiếu cho LSX). */
   available: number
-  /** Đã đặt còn phải về (PO đã duyệt, qty_missing). */
+  /** Đã đặt còn phải về (PO đã duyệt, qty_open — 0154: dòng chốt thiếu không đếm). */
   ordered: number
   /** Đang chờ GĐ duyệt (chỉ cảnh báo). */
   pending: number

@@ -24,6 +24,15 @@ export type PendingPo = {
   note?: string | null
   /** Dòng đơn (nạp sẵn server-side) — panel phân tích khỏi round-trip. */
   lines?: PoLine[]
+  /**
+   * "Giá trị lớn — đọc kỹ trước khi ký", tính THEO TIỀN TỆ của đơn
+   * (`isBigApprovalWith` + ngưỡng ở /exec/luat-ky). Phải tính ở server như danh
+   * sách phê duyệt: trang này từng gọi `isBigApproval(total)` — so mọi tiền tệ
+   * với ngưỡng VND, nên đơn 3.000 USD (~75tr) hiện ra như đơn nhỏ.
+   */
+  big?: boolean
+  /** Ngưỡng đang áp cho tiền tệ này; null = chưa đặt (⇒ luôn coi là lớn). */
+  threshold?: number | null
 }
 
 /** 1 dòng sản phẩm của LSX (từ đơn hàng) — dữ liệu GĐ cần để thẩm định. */

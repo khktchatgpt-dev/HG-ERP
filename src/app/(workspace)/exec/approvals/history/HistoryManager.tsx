@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { ChevronLeft } from 'lucide-react'
+import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -99,7 +101,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
         e.entity_type === 'lsx' ? (
           <Link
             href={`/exec/lsx/${e.entity_id}`}
-            className="font-mono text-xs text-sky-600 hover:underline dark:text-sky-400"
+            className="font-mono text-xs text-[var(--primary)] hover:underline"
           >
             {e.entity_code}
           </Link>
@@ -127,9 +129,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
       key: 'reason',
       header: 'Lý do (nếu từ chối)',
       cell: (e) => (
-        <span className="text-zinc-600 dark:text-zinc-400">
-          {e.reason?.trim() || '—'}
-        </span>
+        <span className="text-muted-foreground">{e.reason?.trim() || '—'}</span>
       ),
     },
   ]
@@ -138,20 +138,22 @@ export function HistoryManager({ events }: { events: Ev[] }) {
     <div className="flex flex-col gap-4">
       <PageHeader
         breadcrumbs={[
-          // Trỏ thẳng /exec (Hộp ký) — /exec/approvals giờ chỉ là redirect, đi
-          // qua nó là thêm một chặng vô ích.
+          // 15/08/2026 (exec v3): /exec là TỔNG QUAN, hộp ký dời sang
+          // /exec/approvals. Bản cũ ghi "Hộp ký" cho /exec và nút quay lại cũng
+          // trỏ về đó — bấm xong lạc sang Tổng quan chứ không về chỗ phiếu chờ.
           { label: 'Ban Giám đốc', href: '/exec' },
+          { label: 'Chờ tôi phê duyệt', href: '/exec/approvals' },
           { label: 'Lịch sử ký' },
         ]}
         title="Lịch sử ký"
         description="Nhật ký mọi quyết định duyệt / từ chối Lệnh sản xuất và đơn đặt vật tư — ai quyết, khi nào, lý do gì."
         actions={
-          <Link
-            href="/exec"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
-          >
-            ‹ Về hộp ký
-          </Link>
+          <Button asChild variant="outline" size="sm">
+            <Link href="/exec/approvals">
+              <ChevronLeft />
+              Về phiếu chờ duyệt
+            </Link>
+          </Button>
         }
       />
 

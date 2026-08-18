@@ -10,7 +10,7 @@ import { PosByLsx } from './PosByLsx'
 import { buildPoColumns, PoFlatTable, type PoRowDeps } from './po-columns'
 import { groupPosByLsx, type LsxRef } from './pos-groups'
 import { usePoActions } from './usePoActions'
- import { ReasonDialog, type ReasonState } from './PoDialogs'
+import { ReasonDialog, type ReasonState } from './PoDialogs'
 import { PoFilters, type PoView } from './PoFilters'
 import { PoBulkBar } from './PoBulkBar'
 import { countPos, poMatches, EMPTY_FILTER, type PoFilterState } from './po-filter'
@@ -216,14 +216,13 @@ export function PosManager({
     'bg-primary text-primary-foreground rounded-md px-3 py-1.5 text-sm font-medium hover:opacity-90'
 
   return (
+    // Từng là màn thí điểm theme-v3 (scoped tại đây); nay v3 đã lên gốc
+    // WorkspaceShell (15/08/2026) nên class scoped được gỡ — token đến từ shell.
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
       <PageHeader
-        breadcrumbs={[
-          { label: 'Kế hoạch - Cung ứng', href: '/planning' },
-          { label: 'Quản lý đơn đặt hàng' },
-        ]}
-        title="Quản lý đơn đặt hàng"
+        breadcrumbs={[{ label: 'Cung ứng', href: '/planning' }, { label: 'Phiếu mua' }]}
+        title="Theo dõi phiếu mua"
         description="Xếp theo lệnh sản xuất: mỗi lệnh gom đủ đơn của nó, kèm lệnh chưa đặt gì. Mỗi đơn = 1 NCC; GĐ duyệt xong mới gửi NCC (BR-05), về hàng do Kho ghi nhận."
         actions={
           canEdit && (
@@ -236,7 +235,7 @@ export function PosManager({
 
       {/* Chạm trần khi nạp — nói ra, đừng cắt im lặng như bản cũ. */}
       {truncatedAt != null && (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300">
+        <p className="rounded-lg border border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3.5 py-2 text-xs text-[var(--warn)]">
           Đang hiển thị <b>{truncatedAt}</b> đơn mới nhất — còn đơn cũ hơn chưa nạp. Thu
           hẹp bằng ô tìm hoặc lọc theo nhà cung cấp để chắc chắn không sót.
         </p>

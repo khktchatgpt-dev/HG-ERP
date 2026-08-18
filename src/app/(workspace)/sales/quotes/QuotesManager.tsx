@@ -219,7 +219,7 @@ export function QuotesManager({
   }
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5">
+    <div className="theme-v3 text-foreground flex flex-col gap-5">
       <TopProgressBar active={busy} />
 
       {/* ── Đầu trang ─────────────────────────────────────────────────────── */}
@@ -269,7 +269,7 @@ export function QuotesManager({
               <SelectTrigger size="sm" className="bg-card w-44">
                 <SelectValue>{customerLabel}</SelectValue>
               </SelectTrigger>
-              <SelectContent className="theme-v2">
+              <SelectContent className="theme-v3">
                 <SelectItem value="all">Mọi khách hàng</SelectItem>
                 {customers.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
@@ -484,7 +484,7 @@ export function QuotesManager({
                                   <MoreHorizontal />
                                 </Button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="theme-v2">
+                              <DropdownMenuContent align="end" className="theme-v3">
                                 <DropdownMenuItem
                                   onClick={() => router.push(`/sales/quotes/${r.id}`)}
                                 >

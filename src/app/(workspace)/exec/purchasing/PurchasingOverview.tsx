@@ -54,7 +54,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       sortValue: (r) => r.code,
       cell: (r) => (
         <div className="flex min-w-0 flex-col">
-          <span className="font-mono text-xs text-zinc-400">{r.code}</span>
+          <span className="text-muted-foreground font-mono text-xs">{r.code}</span>
           <span className="truncate font-medium">{r.supplier_name}</span>
         </div>
       ),
@@ -68,7 +68,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
         r.lsx_code ? (
           <span className="font-mono text-xs">{r.lsx_code}</span>
         ) : (
-          <span className="text-xs text-zinc-400">Ngoài lệnh</span>
+          <span className="text-muted-foreground text-xs">Ngoài lệnh</span>
         ),
     },
     {
@@ -79,7 +79,8 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       sortValue: (r) => r.total,
       cell: (r) => (
         <span className="font-medium tabular-nums">
-          {fmt(r.total)} <span className="text-xs text-zinc-400">{r.currency}</span>
+          {fmt(r.total)}{' '}
+          <span className="text-muted-foreground text-xs">{r.currency}</span>
         </span>
       ),
     },
@@ -99,12 +100,12 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
         <div className="flex flex-col">
           <span>{fmtDate(r.expected_at)}</span>
           {r.days_late > 0 && (
-            <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+            <span className="text-[11px] font-medium text-[var(--stop)]">
               ⚠ quá hẹn {r.days_late} ngày
             </span>
           )}
           {r.days_idle > 0 && (
-            <span className="text-[11px] font-medium text-amber-600 dark:text-amber-500">
+            <span className="text-[11px] font-medium text-[var(--warn)]">
               duyệt {r.days_idle} ngày, chưa gửi NCC
             </span>
           )}
@@ -118,7 +119,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       sortValue: (r) => r.assignee_name ?? '',
       cell: (r) => (
         <span className="truncate">
-          {r.assignee_name ?? <span className="text-zinc-400">—</span>}
+          {r.assignee_name ?? <span className="text-muted-foreground">—</span>}
         </span>
       ),
     },
@@ -136,7 +137,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
         actions={
           <Link
             href="/planning/pos"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+            className="border-border hover:bg-muted dark:border-border dark:bg-card dark:hover:bg-card rounded-md border bg-white px-3 py-1.5 text-sm"
           >
             Mở màn Cung ứng →
           </Link>
@@ -166,25 +167,25 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Giá trị đơn đang chạy
           </h3>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
             {money(data.open_value)}
           </p>
-          <p className="text-[11px] text-zinc-400">
+          <p className="text-muted-foreground text-[11px]">
             Đã duyệt trở đi, chưa về đủ — tiền đã cam kết với nhà cung cấp.
           </p>
         </div>
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Đang chờ chữ ký của bạn
           </h3>
           <p className="mt-1 text-2xl font-semibold tabular-nums">
             {money(data.pending_value)}
           </p>
-          <Link href="/exec" className="text-xs text-sky-600 hover:underline">
+          <Link href="/exec" className="text-xs text-[var(--primary)] hover:underline">
             Sang màn phê duyệt →
           </Link>
         </div>
@@ -238,8 +239,8 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       </div>
 
       {data.suppliers.length > 0 && (
-        <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
+        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+          <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
             Nhà cung cấp theo giá trị đang chạy
           </h3>
           <ul className="flex flex-col gap-1 text-sm">
@@ -251,7 +252,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
                 <span className="truncate">{s.name}</span>
                 <span className="whitespace-nowrap tabular-nums">
                   {fmt(s.value)}{' '}
-                  <span className="text-xs text-zinc-400">
+                  <span className="text-muted-foreground text-xs">
                     {s.currency} · {s.pos} đơn
                   </span>
                 </span>

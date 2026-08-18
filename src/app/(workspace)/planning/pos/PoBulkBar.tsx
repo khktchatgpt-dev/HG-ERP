@@ -42,12 +42,12 @@ export function PoBulkBar({
   const btn = 'rounded-md px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50'
 
   return (
-    <div className="sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border border-input bg-card px-3.5 py-2.5 shadow-lg">
+    <div className="border-input bg-card sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2.5 shadow-lg">
       <span className="text-[13px] font-medium">
         Đã chọn <b className="tabular-nums">{n}</b> đơn
       </span>
       {busy && <Spinner size={14} />}
-      <span className="mx-1 h-5 w-px bg-zinc-200" aria-hidden />
+      <span className="bg-border mx-1 h-5 w-px" aria-hidden />
 
       {onSubmitAll && (
         <button
@@ -88,7 +88,7 @@ export function PoBulkBar({
       <button
         type="button"
         onClick={onClear}
-        className="text-muted-foreground ml-1 rounded-md border border-input px-2.5 py-1.5 text-xs hover:bg-muted"
+        className="text-muted-foreground border-input hover:bg-muted ml-1 rounded-md border px-2.5 py-1.5 text-xs"
       >
         Bỏ chọn
       </button>

@@ -63,7 +63,7 @@ function ApprovalCard({
       className={cn(
         'bg-card group flex flex-col gap-1 rounded-xl border p-4 transition-colors',
         count > 0
-          ? 'border-amber-300 hover:border-amber-400 dark:border-amber-800 dark:hover:border-amber-700'
+          ? 'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] hover:border-[color-mix(in_srgb,var(--warn)_35%,transparent)] dark:hover:border-[color-mix(in_srgb,var(--warn)_35%,transparent)]'
           : 'hover:bg-accent/50',
       )}
     >
@@ -75,7 +75,7 @@ function ApprovalCard({
         <span
           className={cn(
             'text-4xl font-semibold tabular-nums',
-            count > 0 && 'text-amber-700 dark:text-amber-400',
+            count > 0 && 'text-[var(--warn)]',
           )}
         >
           {count}
@@ -150,9 +150,7 @@ function IssueRow({
       <span
         className={cn(
           'w-10 text-right text-xl font-semibold tabular-nums',
-          tone === 'red'
-            ? 'text-red-600 dark:text-red-400'
-            : 'text-amber-600 dark:text-amber-500',
+          tone === 'red' ? 'text-[var(--stop)]' : 'text-[var(--warn)]',
         )}
       >
         {count}
@@ -184,7 +182,7 @@ export function ExecHomeScreen({
     issues.stuck_pos.length +
     issues.low_stock.length
   /* "0 phiếu chờ" có hai nghĩa trái ngược: đã duyệt hết ↔ chưa ai từng lập
-     phiếu. by_status đếm MỌI trạng thái nên phân biệt được hai chuyện đó. */
+ phiếu. by_status đếm MỌI trạng thái nên phân biệt được hai chuyện đó. */
   const poEverExists = supply.by_status.length > 0
   const lsxEverExists = production.by_status.length > 0
 
@@ -368,7 +366,7 @@ export function ExecHomeScreen({
 
       {/* ── 5. Nói thẳng vì sao số tiền đang thiếu ───────────────────────── */}
       {gaps.order_lines_without_price > 0 && (
-        <section className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-amber-800 dark:bg-amber-950/30">
+        <section className="rounded-xl border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] px-4 py-3 text-sm">
           <b>Số liệu doanh số chưa dùng được:</b> {gaps.order_lines_without_price}/
           {gaps.order_lines_total} dòng đơn hàng chưa có đơn giá, nên mọi con số tiền ở
           trên đang tính thiếu. Cần phòng Bán hàng nhập giá cho các đơn đang mở.{' '}

@@ -569,7 +569,7 @@ export function OrderForm(props: {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5 pb-4">
+    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-4">
       <TopProgressBar active={busy} />
 
       {/* Đầu trang v2 — khớp trang danh sách và hồ sơ đơn. Bỏ breadcrumb 3 cấp:

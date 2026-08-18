@@ -9,6 +9,10 @@ vi.mock('./stock.repo', () => ({
     list: vi.fn(),
     findById: vi.fn(),
     listLines: vi.fn(),
+    findReversalOf: vi.fn(async () => null),
+    findShipmentId: vi.fn(async () => null),
+    patchStatus: vi.fn(),
+    countPending: vi.fn(),
   },
   warehousesRepo: { mainId: vi.fn() },
   stocktakeRepo: { insertLines: vi.fn(), listByDoc: vi.fn() },
@@ -31,6 +35,7 @@ vi.mock('./warehouse.service', () => ({ isWarehouseUser: vi.fn() }))
 vi.mock('@/modules/dept/supply/supply.repo', () => ({
   RECEIVABLE: ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'],
   supplyRepo: {
+    poIdsByLineIds: vi.fn(async () => []),
     listOpenPos: vi.fn(),
     lineStatus: vi.fn(),
     refreshStatusFromReceipts: vi.fn(),
@@ -50,6 +55,11 @@ vi.mock('@/modules/dept/supply/suppliers.service', () => ({
 }))
 vi.mock('@/lib/reserved-stock', () => ({ computeReservedByMaterial: vi.fn() }))
 vi.mock('@/events/bus', () => ({ emit: vi.fn() }))
+// 0157: notifyStocktake tra người có quyền duyệt; test không cần RBAC thật.
+vi.mock('@/modules/core/rbac/rbac.service', () => ({ assertAction: vi.fn() }))
+vi.mock('@/modules/core/rbac/rbac.repo', () => ({
+  rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
+}))
 
 import { stockService, smartLsxNeeds } from './stock.service'
 import {
@@ -70,6 +80,7 @@ import { componentMaterialNeeds } from '@/modules/dept/production/components.ser
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
@@ -107,7 +118,11 @@ beforeEach(() => {
       material_id: 'm1',
       qty_ordered: 1000,
       qty_received: 0,
+      qty_rejected: 0,
       qty_missing: 1000,
+      qty_open: 1000,
+      closed_short_at: null,
+      over_tolerance_pct: 0,
       material_code: 'VT-001',
       material_name: 'Nhôm 25x50',
       material_unit: 'cây',
@@ -496,14 +511,18 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
   })
 })
 
-describe('createStocktakeDoc — phiếu kiểm kê (0077)', () => {
+/*
+ * KIỂM KÊ CÓ DUYỆT (0077 + vòng duyệt 0157): lập biên bản KHÔNG đụng tồn;
+ * quản lý Kho duyệt mới áp — chênh tính theo tồn LÚC DUYỆT, chặn tự duyệt.
+ */
+describe('createStocktakeDoc — lập biên bản (0157: pending, tồn CHƯA đổi)', () => {
   beforeEach(() => {
     vi.mocked(docsRepo.nextCode).mockResolvedValue('KK-2026-0001')
     vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc-kk', code: 'KK-2026-0001' })
   })
 
-  it('tồn sổ đọc server-side; biên bản đủ mọi dòng; movement adjust CHỈ dòng lệch', async () => {
-    // m1: sổ 10 đếm 7 (thiếu 3 → out); m2: sổ 5 đếm 8 (thừa 3 → in); m3: khớp 20.
+  it('biên bản đủ mọi dòng (snapshot tồn lúc đếm), status=pending, KHÔNG movement', async () => {
+    // m1: sổ 10 đếm 7 (thiếu 3); m2: sổ 5 đếm 8 (thừa 3); m3: khớp 20.
     vi.mocked(onHandMany).mockResolvedValue(
       new Map([
         ['m1', 10],
@@ -522,6 +541,8 @@ describe('createStocktakeDoc — phiếu kiểm kê (0077)', () => {
     })
 
     expect(r).toMatchObject({ code: 'KK-2026-0001', diff_count: 2 })
+    const doc = vi.mocked(docsRepo.insert).mock.calls[0][0] as Record<string, unknown>
+    expect(doc.status).toBe('pending')
 
     // Biên bản: đủ 3 dòng, kể cả dòng khớp — diff lưu thẳng.
     const bienBan = vi.mocked(stocktakeRepo.insertLines).mock.calls[0][0]
@@ -529,37 +550,118 @@ describe('createStocktakeDoc — phiếu kiểm kê (0077)', () => {
     expect(bienBan[0]).toMatchObject({ system_qty: 10, counted_qty: 7, diff: -3 })
     expect(bienBan[2]).toMatchObject({ system_qty: 20, counted_qty: 20, diff: 0 })
 
-    // Sổ cái: chỉ 2 movement điều chỉnh — out cho thiếu, in cho thừa.
+    // 0157: LẬP không đụng sổ cái — duyệt mới áp.
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('lập xong báo người có quyền duyệt (trừ chính người lập)', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 10]]))
+    vi.mocked(rbacRepo.userIdsWithPermission).mockResolvedValue(['u-qlkho', admin.id])
+    await stockService.createStocktakeDoc(admin, {
+      lines: [{ material_id: 'm1', counted_qty: 7 }],
+    })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'warehouse.stocktake.pending',
+        notify_ids: ['u-qlkho'],
+      }),
+    )
+  })
+})
+
+describe('approveStocktake / rejectStocktake — duyệt kiểm kê (0157)', () => {
+  const manager = { id: 'u-qlkho', role: 'manager', department_id: 'd-kho' } as never
+  const PENDING_DOC = {
+    id: 'doc-kk',
+    code: 'KK-2026-0001',
+    kind: 'stocktake',
+    status: 'pending',
+    created_by: 'u-staff',
+  }
+
+  beforeEach(() => {
+    vi.mocked(docsRepo.findById).mockResolvedValue(PENDING_DOC as never)
+    vi.mocked(stocktakeRepo.listByDoc).mockResolvedValue([
+      // Lúc đếm: sổ 10, đếm 7. Từ đó tới lúc duyệt có phiếu xuất 1 → tồn hiện tại 9.
+      { id: 'st1', material_id: 'm1', system_qty: 10, counted_qty: 7, diff: -3 },
+    ] as never)
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 9]]))
+  })
+
+  it('duyệt: áp SỐ ĐẾM theo tồn LÚC DUYỆT (9→7 = out 2, không phải -3 lúc đếm)', async () => {
+    const r = await stockService.approveStocktake(manager, 'doc-kk')
+    expect(r.applied).toBe(1)
+
     const rows = vi.mocked(insertMovements).mock.calls[0][0]
-    expect(rows).toHaveLength(2)
     expect(rows[0]).toMatchObject({
       material_id: 'm1',
       direction: 'out',
-      qty: 3,
+      qty: 2, // đếm 7 − tồn lúc duyệt 9
       ref_type: 'adjust',
       doc_id: 'doc-kk',
     })
-    expect(rows[1]).toMatchObject({ material_id: 'm2', direction: 'in', qty: 3 })
+    expect(String(rows[0].note)).toContain('lúc đếm 10')
+    const patch = vi.mocked(docsRepo.patchStatus).mock.calls[0]
+    expect(patch[0]).toBe('doc-kk')
+    expect(patch[1]).toMatchObject({ status: 'posted', approved_by: 'u-qlkho' })
+    // Người lập được báo kết quả.
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'warehouse.stocktake.decided',
+        decision: 'approved',
+        recipient_id: 'u-staff',
+      }),
+    )
   })
 
-  it('tất cả khớp sổ → không sinh movement, diff_count = 0', async () => {
-    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 10]]))
-    const r = await stockService.createStocktakeDoc(admin, {
-      lines: [{ material_id: 'm1', counted_qty: 10 }],
-    })
-    expect(r.diff_count).toBe(0)
+  it('tồn lúc duyệt ĐÃ ĐÚNG số đếm → posted nhưng không sinh movement thừa', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 7]]))
+    const r = await stockService.approveStocktake(manager, 'doc-kk')
+    expect(r.applied).toBe(0)
     expect(insertMovements).not.toHaveBeenCalled()
-    expect(stocktakeRepo.insertLines).toHaveBeenCalled() // biên bản vẫn ghi
+    expect(docsRepo.patchStatus).toHaveBeenCalled()
   })
 
-  it('vật tư chưa từng có movement → tồn sổ coi là 0 (đếm = thừa toàn bộ)', async () => {
-    vi.mocked(onHandMany).mockResolvedValue(new Map())
-    const r = await stockService.createStocktakeDoc(admin, {
-      lines: [{ material_id: 'm1', counted_qty: 4 }],
+  it('TỰ DUYỆT biên bản mình lập → 403 (trừ admin)', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      ...PENDING_DOC,
+      created_by: 'u-qlkho',
+    } as never)
+    await expect(stockService.approveStocktake(manager, 'doc-kk')).rejects.toMatchObject({
+      status: 403,
     })
-    expect(r.diff_count).toBe(1)
-    const rows = vi.mocked(insertMovements).mock.calls[0][0]
-    expect(rows[0]).toMatchObject({ direction: 'in', qty: 4 })
+    expect(insertMovements).not.toHaveBeenCalled()
+
+    // admin thì được — cty nhỏ có ngày chỉ một người có quyền.
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      ...PENDING_DOC,
+      created_by: admin.id,
+    } as never)
+    await expect(stockService.approveStocktake(admin, 'doc-kk')).resolves.toBeTruthy()
+  })
+
+  it('biên bản đã posted / rejected → 400, không áp lại lần hai', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      ...PENDING_DOC,
+      status: 'posted',
+    } as never)
+    await expect(stockService.approveStocktake(manager, 'doc-kk')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('từ chối: bắt lý do, KHÔNG đụng tồn, báo người lập', async () => {
+    await expect(
+      stockService.rejectStocktake(manager, 'doc-kk', '  '),
+    ).rejects.toMatchObject({ status: 400 })
+
+    await stockService.rejectStocktake(manager, 'doc-kk', 'Đếm sai khu B')
+    expect(insertMovements).not.toHaveBeenCalled()
+    const patch = vi.mocked(docsRepo.patchStatus).mock.calls[0][1]
+    expect(patch).toMatchObject({ status: 'rejected', reject_reason: 'Đếm sai khu B' })
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: 'rejected', recipient_id: 'u-staff' }),
+    )
   })
 })
 
@@ -632,5 +734,302 @@ describe('createIssueDoc — guard TỒN KHẢ DỤNG (đã giữ cho LSX khác)
     })
 
     expect(insertMovements).toHaveBeenCalled()
+  })
+})
+
+/*
+ * PHIẾU TRẢ HÀNG NCC (⑤, 0080) — nợ test từ backlog 23/07: guard trả ≤ đã về,
+ * ≤ tồn, PO phải có hàng về; movement out + po_line_id để view 0080 trừ "đã về".
+ */
+describe('createReturnDoc — trả hàng NCC (0080)', () => {
+  const RETURN_INPUT = {
+    po_id: 'po1',
+    reason: 'Kính trầy mặt, NCC nhận lại',
+    lines: [{ material_id: 'm1', po_line_id: 'pl1', qty: 4 }],
+  }
+
+  beforeEach(() => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0009')
+    vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc9', code: 'PXK-2026-0009' })
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+      code: 'PO-2026-0001',
+      status: 'partial',
+      assigned_to: 'u-mua',
+      created_by: 'u-mua',
+    })
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      {
+        id: 'pl1',
+        po_id: 'po1',
+        material_id: 'm1',
+        qty_ordered: 100,
+        qty_received: 10,
+        qty_rejected: 0,
+        qty_missing: 90,
+        qty_open: 90,
+        closed_short_at: null,
+        over_tolerance_pct: 0,
+        material_code: 'VT-001',
+        material_name: 'Kính 5mm',
+        material_unit: 'tấm',
+      },
+    ])
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 50]]))
+    vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
+  })
+
+  it('trả hợp lệ: phiếu XUẤT kind=issue, movement out ref=po gắn po_line_id, tính lại PO, notify', async () => {
+    const out = await stockService.createReturnDoc(admin, RETURN_INPUT)
+
+    expect(out.code).toBe('PXK-2026-0009')
+    const doc = vi.mocked(docsRepo.insert).mock.calls[0][0] as Record<string, unknown>
+    expect(doc.kind).toBe('issue')
+    expect(String(doc.reason)).toContain('Trả hàng NCC — PO-2026-0001')
+
+    const mv = (
+      vi.mocked(insertMovements).mock.calls[0][0] as Record<string, unknown>[]
+    )[0]
+    expect(mv).toMatchObject({
+      direction: 'out',
+      ref_type: 'po',
+      po_line_id: 'pl1',
+      qty: 4,
+    })
+    expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'warehouse.return.created' }),
+    )
+  })
+
+  it('trả VƯỢT số đã về → 400 (view 0080 đã trừ các lần trả trước)', async () => {
+    await expect(
+      stockService.createReturnDoc(admin, {
+        ...RETURN_INPUT,
+        lines: [{ material_id: 'm1', po_line_id: 'pl1', qty: 11 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('trả VƯỢT tồn hiện có → 400 (hàng đã xuất cho SX thì không còn để trả)', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 2]]))
+    await expect(stockService.createReturnDoc(admin, RETURN_INPUT)).rejects.toMatchObject(
+      { status: 400 },
+    )
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('PO chưa có hàng về (ordered) → 400, không có gì để trả', async () => {
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+      code: 'PO-2026-0001',
+      status: 'ordered',
+      assigned_to: 'u-mua',
+      created_by: 'u-mua',
+    })
+    await expect(stockService.createReturnDoc(admin, RETURN_INPUT)).rejects.toMatchObject(
+      { status: 400 },
+    )
+  })
+
+  it('dòng trả không thuộc PO / lệch vật tư → 400', async () => {
+    await expect(
+      stockService.createReturnDoc(admin, {
+        ...RETURN_INPUT,
+        lines: [{ material_id: 'm1', po_line_id: 'pl-la', qty: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    await expect(
+      stockService.createReturnDoc(admin, {
+        ...RETURN_INPUT,
+        lines: [{ material_id: 'm-khac', po_line_id: 'pl1', qty: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+})
+
+/*
+ * PHIẾU ĐẢO (0161 — K1 go-live): ghi ngược movement phiếu sai, có vết; không
+ * sửa đè. HOÀN KHO TỪ LSX (K2): xưởng trả vật tư thừa, issuedByLsx net tự trừ.
+ */
+describe('reverseDoc — phiếu đảo (K1)', () => {
+  const RECEIPT_DOC = {
+    id: 'doc-g',
+    code: 'PNK-2026-0009',
+    kind: 'receipt',
+    status: 'posted',
+    reversal_of_doc_id: null,
+    created_by: 'u-kho',
+  }
+  const LINES = [
+    {
+      id: 'mv1',
+      material_id: 'm1',
+      direction: 'in',
+      qty: 100,
+      qty_rejected: 0,
+      po_line_id: 'pl1',
+      production_order_id: null,
+      shelf_location: 'A-01',
+    },
+  ]
+
+  beforeEach(() => {
+    vi.mocked(docsRepo.findById).mockResolvedValue(RECEIPT_DOC as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue(LINES as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0022')
+    vi.mocked(docsRepo.insert).mockResolvedValue({ id: 'doc-rev', code: 'PXK-2026-0022' })
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue(['po1'])
+  })
+
+  it('đảo PNK: sinh phiếu XUẤT ref adjust, giữ po_line_id, refresh PO, notify', async () => {
+    const out = await stockService.reverseDoc(admin, 'doc-g', 'Gõ nhầm 100 thay vì 10')
+    expect(out.code).toBe('PXK-2026-0022')
+
+    const doc = vi.mocked(docsRepo.insert).mock.calls[0][0] as Record<string, unknown>
+    expect(doc.kind).toBe('issue')
+    expect(doc.reversal_of_doc_id).toBe('doc-g')
+    expect(String(doc.reason)).toContain('Đảo PNK-2026-0009')
+
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({
+      material_id: 'm1',
+      direction: 'out', // ngược chiều gốc
+      qty: 100,
+      ref_type: 'adjust',
+      po_line_id: 'pl1', // giữ để view đối chiếu BR-08 tự trừ
+      doc_id: 'doc-rev',
+    })
+    expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+    expect(emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'warehouse.doc.reversed',
+        original_code: 'PNK-2026-0009',
+        reversal_code: 'PXK-2026-0022',
+      }),
+    )
+  })
+
+  it('đảo PXK theo LSX: movement IN giữ production_order_id (issuedByLsx net tự trừ)', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      ...RECEIPT_DOC,
+      kind: 'issue',
+      code: 'PXK-2026-0003',
+    } as never)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      {
+        ...LINES[0],
+        direction: 'out',
+        po_line_id: null,
+        production_order_id: 'lsx1',
+      },
+    ] as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0033')
+
+    await stockService.reverseDoc(admin, 'doc-g', 'Xuất nhầm lệnh')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({
+      direction: 'in',
+      production_order_id: 'lsx1',
+      ref_type: 'adjust',
+    })
+    // Đảo phiếu xuất không cần guard tồn (hàng quay VỀ kho)
+    expect(supplyRepo.refreshStatusFromReceipts).not.toHaveBeenCalled()
+  })
+
+  it('phiếu đã bị đảo → 400, không đảo lần hai', async () => {
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue({
+      id: 'x',
+      code: 'PXK-2026-0021',
+    })
+    await expect(
+      stockService.reverseDoc(admin, 'doc-g', 'thử lần 2'),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('phiếu đảo không đảo tiếp (chống chuỗi vô hạn)', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      ...RECEIPT_DOC,
+      reversal_of_doc_id: 'doc-truoc',
+    } as never)
+    await expect(stockService.reverseDoc(admin, 'doc-g', 'x')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('phiếu có QC loại → 400 (phần loại trong đối chiếu NCC nhưng chưa vào tồn)', async () => {
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      { ...LINES[0], qty_rejected: 5 },
+    ] as never)
+    await expect(stockService.reverseDoc(admin, 'doc-g', 'x')).rejects.toMatchObject({
+      status: 400,
+    })
+  })
+
+  it('đảo PNK mà hàng đã xuất đi (tồn thiếu) → 409 REVERSAL_STOCK_SHORT', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 30]]))
+    await expect(
+      stockService.reverseDoc(admin, 'doc-g', 'gõ nhầm'),
+    ).rejects.toMatchObject({ status: 409, code: 'REVERSAL_STOCK_SHORT' })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+})
+
+describe('createReceiptDoc — HOÀN KHO từ LSX (K2)', () => {
+  beforeEach(() => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0044')
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map([['m1', 100]]))
+  })
+
+  it('hoàn hợp lệ: movement IN ref=lsx gắn production_order_id, không đụng PO', async () => {
+    await stockService.createReceiptDoc(admin, {
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({
+      direction: 'in',
+      qty: 5,
+      ref_type: 'lsx',
+      production_order_id: 'lsx1',
+    })
+    expect(supplyRepo.refreshStatusFromReceipts).not.toHaveBeenCalled()
+  })
+
+  it('hoàn VƯỢT phần đã cấp còn lại → 400 (trả thứ chưa lĩnh là nhầm nguồn)', async () => {
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map([['m1', 3]]))
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 5 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('trộn po_id + production_order_id → 400', async () => {
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 5, po_line_id: 'pl1' }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('LSX chưa duyệt → 400', async () => {
+    vi.mocked(productionRepo.findById).mockResolvedValue({
+      id: 'lsx1',
+      code: 'LSX-2026-01',
+      status: 'pending_approval',
+    } as never)
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        production_order_id: 'lsx1',
+        lines: [{ material_id: 'm1', qty: 1 }],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
   })
 })

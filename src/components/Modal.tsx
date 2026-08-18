@@ -3,6 +3,11 @@
 import { useEffect } from 'react'
 import { X } from 'lucide-react'
 
+/**
+ * Hộp thoại điều khiển bằng prop `open` — GIỮ render inline (không portal):
+ * nằm trong cây DOM của trang nên tự ăn token theme đang phủ (`theme-v2/v3`),
+ * không dính bẫy Radix portal văng ra <body> mất theme. Style lấy từ token.
+ */
 export function Modal({
   open,
   onClose,
@@ -46,14 +51,14 @@ export function Modal({
       */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`flex max-h-[calc(100dvh-2rem)] w-full ${maxWidth} flex-col rounded-t-xl bg-white shadow-xl sm:rounded-xl dark:bg-zinc-950`}
+        className={`bg-card text-card-foreground flex max-h-[calc(100dvh-2rem)] w-full ${maxWidth} flex-col rounded-t-xl border shadow-lg sm:rounded-xl`}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-100 px-6 py-4 dark:border-zinc-800">
-          <h2 className="text-lg font-semibold">{title}</h2>
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b px-6 py-4">
+          <h2 className="t-title">{title}</h2>
           <button
             onClick={onClose}
             aria-label="Đóng"
-            className="rounded p-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800 dark:hover:text-white"
+            className="text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded-md p-1 transition-colors"
           >
             <X className="size-4" />
           </button>

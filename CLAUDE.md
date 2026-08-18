@@ -98,7 +98,19 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 
 ## Frontend & UI conventions (admin/workspace)
 
-- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô. Các mảnh chuẩn: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`. Mẫu tham chiếu: `admin/users/UsersManager.tsx`, `(shared)/products/ProductsManager.tsx`.
+### Theme v3 "HG Ledger" (áp toàn app 15/08/2026)
+
+- **Token là nguồn màu duy nhất** — khối `.theme-v3` trong `src/app/globals.css`, gắn ở gốc `WorkspaceShell`. KHÔNG gõ màu Tailwind cứng (zinc/sky/emerald/violet…) trong màn mới; dùng class token: `bg-background/bg-card/bg-muted`, `text-foreground/text-muted-foreground`, `border`/`border-input`, `text-[var(--primary)]` v.v.
+- **Một màu hành động**: royal cobalt `--primary` (#2743c4) cho nút chính/link/focus/tab đang chọn. Hover/selected dùng tint `--accent` (#eef1fc). **Ba màu trạng thái** `--warn/--stop/--done` chỉ mã hoá vòng đời (nhãn, vạch `spine`), không bao giờ dùng cho nút.
+- **Chữ**: thang 5 bậc `t-display/t-title/t-body/t-label/t-data` (globals.css). Mọi MÃ chứng từ, tiền, số lượng, ngày = `t-data` (JetBrains Mono, tabular-nums); mã phiếu hiển thị qua `DocChip`. KPI lớn: `font-mono tabular-nums`.
+- **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
+- **BẪY Radix portal**: Dialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell → phải gắn `theme-v3` vào className của \*Content (`DialogContent className="theme-v3 bg-card"` — kèm `bg-card` vì mặc định `bg-background` ra hộp xám). Riêng `RowMenu` tự dò theme từ trigger; `Modal` render inline nên tự ăn theme.
+- **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
+- Rollback khẩn: đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` (khối token v2 vẫn giữ trong globals.css).
+
+### Kit & pattern
+
+- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô, KHÔNG import thư viện UI mới (đã chuẩn hoá shadcn + lucide). Kit là lớp mỏng trên shadcn/token, GIỮ API cũ: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `DocChip` (mã chứng từ), `RefChain`, `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`, `MiniBarChart`. Primitives shadcn ở `src/components/shadcn/*`. Mẫu tham chiếu: `(workspace)/planning/pos/` (màn chuẩn v3), `/design-lab` mục 14.
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
 - **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.
@@ -139,6 +151,75 @@ Copy `.env.local.example` → `.env.local`. Required:
 - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (unused right now but kept for future client-side queries)
 - `SUPABASE_SECRET_KEY` — server-only, bypasses RLS (new format: `sb_secret_*`)
 - `SESSION_SECRET` — ≥32 chars. Generate: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
+
+Optional (bật tính năng đọc file BOM bằng AI): `ANTHROPIC_API_KEY` **hoặc**
+`GEMINI_API_KEY`, cộng `BOM_AI_PROVIDER` / `BOM_AI_MODEL` để chọn bên và tầng
+model. Thiếu cả hai key thì route trả lỗi cấu hình, phần còn lại của app không
+ảnh hưởng.
+
+## Đọc file BOM bằng AI (`bom-ai.*`)
+
+Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** cho hồ sơ SP.
+
+- **Không mở đường ghi mới.** Service chỉ trả draft; UI (`BomAiImport.tsx`) cho
+  người dùng soi rồi lưu qua đúng route `parts/bulk` mà lưới gõ tay đang dùng —
+  vẫn qua `productPartsBulkSchema` + `calcPartDerived`.
+- **Mô hình chỉ TRÍCH, không TÍNH.** Khối lượng / tổng dài / diện tích / m³ do
+  `bom-calc.ts` tính lại. Đừng nhận số học của mô hình cho thứ đi vào giá thành.
+- **Seam đổi nhà cung cấp**: `bom-ai.provider.ts` giữ interface `BomExtractor` +
+  prompt + cách chọn adapter; `bom-ai.anthropic.ts` / `bom-ai.gemini.ts` chỉ còn
+  việc gọi HTTP. Cả hai dùng CHUNG một JSON Schema, nên chấm điểm hai bên là đổi
+  một biến env. Chọn xong thì xoá adapter kia + gỡ dependency của nó.
+- **BẪY**: đừng sinh JSON Schema bằng `z.toJSONSchema(productPartsBulkSchema)` —
+  structured outputs (cả hai bên) không nhận `minimum`/`maxLength`/`pattern`.
+  `buildExtractJsonSchema()` viết tay schema "gầy", zod kiểm lại ở server. Có
+  test canh chính điều này trong `bom-ai.schema.test.ts`.
+- **`.xlsx` đi đường lưới ô** (`lib/bom-grid.ts`) chứ không phải vision: rẻ hơn
+  nhiều lần, chính xác hơn, và là đường duy nhất lấy được `source_ref` (địa chỉ
+  ô nguồn) cho người kiểm. File `.xls` đời cũ exceljs không đọc được — báo người
+  dùng lưu lại thành .xlsx.
+- **Gemini: ghim model, đừng dùng alias.** `gemini-flash-latest` trả 503
+  UNAVAILABLE liên tục (đo 17/08/2026). Mặc định là `gemini-3.5-flash`. Kèm
+  `withRetry` giãn cách vì `@google/genai` KHÔNG tự retry 5xx — request nhỏ đi
+  lọt trong khi request thật (prompt + lưới + schema) 503 trên cùng model, tức
+  là lỗi công suất theo kích thước. SDK Anthropic tự retry nên không cần.
+- Lỗi nhà cung cấp được DỊCH sang câu người dùng đọc được (`translateGeminiError`
+  / `translateAnthropicError`) — quá tải thì bảo chờ, cấu hình sai thì bảo đi
+  sửa. Không dịch thì mọi thứ rơi ra "Internal server error".
+- **Ghi bản nháp đi qua `parts/ai-apply`** (cả bản nháp một lượt), KHÔNG lặp
+  `parts/bulk` từng khối: chế độ `replace` phải xoá xong mọi nhóm liên quan rồi
+  mới ghi, chia nhỏ là khối sau cắn vào khối trước. `replace` chỉ xoá các NHÓM có
+  trong bản nháp (`deletePartsByGroups`) — file chỉ nói về khung thì đừng xoá bao
+  bì ai đó nhập tay. Màn duyệt luôn bày số dòng đang có (`meta.existing`) vì rất
+  nhiều hồ sơ đã được `bom-import-all.mjs` nạp sẵn từ chính file đó.
+- **Tạo SP mới từ file BOM**: `/products` → "Tạo từ file BOM"
+  (`BomAiNewProduct.tsx` → `products/from-bom`). Bật `withProduct` để đọc thêm
+  khối thông tin chung ở đầu file (TÊN SP, MÃ K.HÀNG, KTSP, Nhiên Liệu, KTBB,
+  NW/GW). KTSP dạng `590x720/1060x1100/840` = W × D(mở) × H(mở) → `*_open_mm`.
+  Mã HG trùng thì service bỏ trống để người dùng xin mã mới, không để họ ăn lỗi
+  CODE_TAKEN sau khi đã duyệt xong cả form.
+- **Mã SP theo đúng quy tắc đánh số**, không gõ tay: file không ghi mã HG thì xin
+  `/next-code?type=&material=`; đổi Loại / Vật liệu khung là cấp lại (hai thứ đó
+  nằm ngay trong mã); `CODE_TAKEN` thì xin số mới rồi bảo bấm lại — cùng cách
+  `ProductForm.tsx` làm. Còn ô "gõ tay" cho SP mã cũ không theo quy tắc.
+- Khối thuộc tính đọc thêm `customer_name` (thường CHỈ nằm trong TÊN FILE:
+  `BOM_MERXX_…` → MERXX, nên `filename` được truyền vào prompt), `unit`, và
+  **thông số in LSX** → `tech_spec` (Sơn/Gỗ/Kính/Nệm — đọc từ tiêu đề khối, BOM
+  không ghi thì trống). CỐ Ý KHÔNG đọc: khối ISO (người tạo = `owner_id` theo
+  phiên đăng nhập + `created_at`, không chép chữ ký giấy), kích thước mở, và ô
+  "Khối lượng" (là tổng tính từ định mức — app tự tính, tránh hai nguồn một số).
+
+## Tải file có dấu tiếng Việt
+
+`GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
+trả URL xem trực tiếp (cùng endpoint phục vụ `<img>`/`<iframe>` của
+`FilePreviewDialog`). Đường dẫn trên Storage đã bị `sanitizeFilename` lột dấu nên
+mở thẳng URL sẽ lưu ra `BOM_Gh_5_b_c….xlsx`.
+
+**BẪY**: đừng dùng option `{ download }` của supabase-js — nó mã hoá tên bằng
+`URLSearchParams` rồi bọc cả URL trong `encodeURI()`, ra `%25E1%25BA%25BF` (mã
+hoá hai lần). `storage.createSignedDownloadUrl` tự nối `&download=` + một lần
+`encodeURIComponent`. Có test canh trong `storage.test.ts`.
 
 ## MCP (Supabase) — HTTP transport
 

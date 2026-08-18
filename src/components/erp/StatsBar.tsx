@@ -1,7 +1,13 @@
 /**
  * Bar KPI dense — dùng dưới PageHeader để show 4-8 số liệu inline.
  * Ưu điểm ERP: nhìn 1 phát ra ngay tình trạng, không tốn vertical space.
+ *
+ * Chấm màu lấy từ TOKEN trạng thái: blue/purple → --primary (màu hành động),
+ * green → --done, amber → --warn, red → --stop. Con số dùng mặt chữ dữ liệu
+ * (mono, tabular) theo chuẩn v3 — cột số thẳng hàng giữa các ô.
  */
+import { cn } from '@/lib/utils'
+
 export type Stat = {
   label: string
   value: number | string
@@ -10,28 +16,52 @@ export type Stat = {
 }
 
 const DOT: Record<NonNullable<Stat['tone']>, string> = {
-  default: 'bg-zinc-400',
-  purple: 'bg-purple-500',
-  blue: 'bg-blue-500',
-  green: 'bg-green-500',
-  amber: 'bg-amber-500',
-  red: 'bg-red-500',
-  gray: 'bg-zinc-300',
+  default: 'var(--muted-foreground)',
+  purple: 'var(--primary)',
+  blue: 'var(--primary)',
+  green: 'var(--done)',
+  amber: 'var(--warn)',
+  red: 'var(--stop)',
+  gray: 'var(--border)',
+}
+
+/**
+ * Số cột ở lg BÁM theo số ô, không cố định 6. Bản cũ luôn `lg:grid-cols-6` nên
+ * màn 3 ô (Lịch sử ký của Ban GĐ) vẽ 3 ô hẹp dồn bên trái và bỏ trống nửa
+ * thanh — nhìn như bảng lỗi. Class phải viết ĐỦ CHỮ để Tailwind quét ra, không
+ * ghép chuỗi `lg:grid-cols-${n}`.
+ */
+const LG_COLS: Record<number, string> = {
+  1: 'lg:grid-cols-1',
+  2: 'lg:grid-cols-2',
+  3: 'lg:grid-cols-3',
+  4: 'lg:grid-cols-4',
+  5: 'lg:grid-cols-5',
+  6: 'lg:grid-cols-6',
 }
 
 export function StatsBar({ stats }: { stats: Stat[] }) {
+  const lg = LG_COLS[Math.min(Math.max(stats.length, 1), 6)] ?? 'lg:grid-cols-6'
   return (
-    <div className="grid grid-cols-2 divide-x divide-zinc-200 rounded-lg border border-zinc-200 bg-white sm:grid-cols-3 lg:grid-cols-6 dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+    <div
+      className={cn(
+        'divide-border bg-card grid grid-cols-2 divide-x rounded-lg border sm:grid-cols-3',
+        lg,
+      )}
+    >
       {stats.map((s, i) => (
         <div key={i} className="px-4 py-3">
           <div className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${DOT[s.tone ?? 'default']}`} />
-            <span className="text-[10px] font-medium tracking-wider text-zinc-500 uppercase">
-              {s.label}
-            </span>
+            <span
+              className="h-1.5 w-1.5 shrink-0 rounded-full"
+              style={{ background: DOT[s.tone ?? 'default'] }}
+            />
+            <span className="t-label text-muted-foreground truncate">{s.label}</span>
           </div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums">{s.value}</div>
-          {s.hint && <div className="mt-0.5 text-xs text-zinc-400">{s.hint}</div>}
+          <div className="mt-1 font-mono text-2xl font-semibold tracking-tight tabular-nums">
+            {s.value}
+          </div>
+          {s.hint && <div className="text-muted-foreground mt-0.5 text-xs">{s.hint}</div>}
         </div>
       ))}
     </div>

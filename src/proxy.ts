@@ -1,7 +1,17 @@
 ﻿import { NextResponse, type NextRequest } from 'next/server'
 import { verifySessionToken } from '@/modules/core/auth/session'
 
-const PUBLIC_PATHS = ['/login', '/register', '/api/login', '/api/register', '/api/logout']
+// `/design-lab`: trang styleguide TĨNH (dữ liệu giả, không gọi API) để duyệt
+// bộ UI mới — mở public cho dễ xem/chia sẻ nội bộ; xoá khỏi danh sách nếu muốn
+// bắt đăng nhập.
+const PUBLIC_PATHS = [
+  '/login',
+  '/register',
+  '/api/login',
+  '/api/register',
+  '/api/logout',
+  '/design-lab',
+]
 
 /**
  * Trang đã DỌN CHỖ — giữ link/bookmark cũ sống. Đổi ở đây (proxy) thay vì bằng

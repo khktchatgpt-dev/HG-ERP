@@ -304,7 +304,7 @@ export function QuoteForm(props: {
   const backHref = mode === 'edit' ? `/sales/quotes/${initial!.id}` : '/sales/quotes'
 
   return (
-    <div className="theme-v2 text-foreground flex flex-col gap-5 pb-4">
+    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-4">
       <TopProgressBar active={busy} />
 
       {/* Đầu trang v2 — khớp OrderForm: một đường về + tiêu đề, bỏ breadcrumb 3 cấp. */}
