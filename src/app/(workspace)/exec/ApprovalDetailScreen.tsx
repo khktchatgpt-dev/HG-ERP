@@ -12,9 +12,8 @@ import {
   Truck,
 } from 'lucide-react'
 import { Button } from '@/components/shadcn/button'
-import { isBigApproval } from '@/lib/exec-ops'
 import { cn } from '@/lib/utils'
-import { waitingDays } from './approval-helpers'
+import { money, moneyByCurrency, waitingDays } from './approval-helpers'
 import {
   useApprovalDecision,
   targetLsx,
@@ -27,8 +26,6 @@ import {
   DUE_TEXT,
   Fact,
   fmtD,
-  fmtTr,
-  fmtVnd,
   LsxProductTable,
   OrderInfo,
   PoLineTable,
@@ -67,7 +64,16 @@ export function ApprovalDetailScreen(
         <ChevronLeft className="size-4" /> Chờ tôi phê duyệt
       </Link>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {/*
+        Chặn bề rộng ở 1600px: đây là màn ĐỌC ĐỂ KÝ, trải hết màn 1900px thì mắt
+ phải quét ngang cả gang tay giữa tên sản phẩm và cột quy cách.
+
+        Tách 2 cột từ 1280px chứ không phải 1024px: dưới ngưỡng đó thẻ quyết định
+        ăn mất 340px, cột hồ sơ chỉ còn ~640px và bảng sản phẩm bị bóp nát. Xếp
+ chồng thì thẻ quyết định nằm TRÊN (order-1) — mở phiếu là thấy ngay số
+ tiền, cảnh báo và hai nút ký, không phải cuộn xuống đáy tìm.
+      */}
+      <div className="mx-auto grid w-full max-w-[1600px] items-start gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         {props.kind === 'lsx' ? (
           <LsxBody l={props.item} nowIso={props.nowIso} dec={dec} />
         ) : props.kind === 'quote' ? (
@@ -123,7 +129,7 @@ function Timeline({
                 className={cn(
                   'mt-0.5 size-2.5 shrink-0 rounded-full',
                   s.now
-                    ? 'bg-amber-500 ring-4 ring-amber-500/20'
+                    ? 'bg-[var(--warn)] ring-4 ring-[color-mix(in_srgb,var(--warn)_25%,transparent)]'
                     : s.future
                       ? 'border-muted-foreground/40 border bg-transparent'
                       : 'bg-muted-foreground/40',
@@ -173,57 +179,93 @@ function DecisionCard({
   links: React.ReactNode
 }) {
   return (
-    <aside className="bg-card order-1 rounded-xl border lg:sticky lg:top-4 lg:order-2">
-      <div className="border-border/60 border-b p-4">
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-          <span className="font-medium tracking-wide uppercase">
-            {kind === 'lsx'
-              ? 'Lệnh sản xuất'
-              : kind === 'quote'
-                ? 'Báo giá'
-                : 'Đơn đặt vật tư'}
-          </span>
-          <span className="font-mono">{code}</span>
-        </div>
-        <div className="mt-0.5 truncate font-semibold">{title}</div>
-        <div
-          className={cn(
-            'mt-3 text-2xl font-bold tabular-nums',
-            metricTone === 'red' && 'text-red-600 dark:text-red-400',
-          )}
-        >
-          {metric}
-        </div>
-        <div className="text-muted-foreground text-[11px]">{metricLabel}</div>
-      </div>
+    // @container: thẻ này sống ở hai bề rộng rất khác nhau — 340px khi làm cột
+    // phải, gần 1200px khi xếp chồng ở cửa sổ hẹp. Số liệu và nút bám theo bề
+    // rộng THỰC của thẻ, khỏi kéo dài thượt một cột khi nằm ngang.
+    <aside className="bg-card @container order-1 rounded-xl border xl:sticky xl:top-4 xl:order-2">
+      {/*
+        MỘT bộ đánh dấu, HAI hình dạng theo bề rộng thật của thẻ:
 
-      <div className="flex flex-col gap-3 p-4">
-        <Signal tone={verdict.tone}>{verdict.node}</Signal>
-
-        <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-          {stats.map((s, i) => (
-            <div key={i} className="min-w-0">
-              <dt className="text-muted-foreground text-[11px]">{s.label}</dt>
-              <dd
-                className={cn('mt-0.5 text-sm font-semibold', s.tone && DUE_TEXT[s.tone])}
-              >
-                {s.value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-
-        <div className="flex flex-col gap-2 pt-1">
-          <Button className="w-full" disabled={busy} onClick={onApprove}>
-            <ShieldCheck /> Phê duyệt
-          </Button>
-          <Button variant="outline" className="w-full" disabled={busy} onClick={onReject}>
-            Từ chối
-          </Button>
+        · cột phải 340px → xếp dọc như cũ (danh tính → tiền → cảnh báo → số liệu
+          → nút → link), vì bề ngang không đủ cho gì khác;
+        · xếp chồng ~1150px → gom thành 3 hàng ngang: [danh tính + tiền | nút] /
+ [cảnh báo] / [số liệu · link]. Bản trước giữ nguyên kiểu cột dọc ở mọi
+ bề rộng nên nằm ngang là cao lêu nghêu, ăn hết màn hình đầu tiên mà
+ chữ thì thưa thớt — mở phiếu ra chưa thấy sản phẩm đâu.
+      */}
+      <div className="@xl:grid @xl:grid-cols-[minmax(0,1fr)_auto] @xl:items-start @xl:gap-x-5 @xl:gap-y-3 @xl:p-4">
+        <div className="border-border/60 border-b p-4 @xl:col-start-1 @xl:row-start-1 @xl:border-b-0 @xl:p-0">
+          <div className="text-muted-foreground flex flex-wrap items-center gap-x-2 text-xs">
+            <span className="font-medium tracking-wide uppercase">
+              {kind === 'lsx'
+                ? 'Lệnh sản xuất'
+                : kind === 'quote'
+                  ? 'Báo giá'
+                  : 'Đơn đặt vật tư'}
+            </span>
+            <span className="font-mono">{code}</span>
+            <span className="text-foreground truncate font-semibold @xl:before:mx-1 @xl:before:content-['·']">
+              {title}
+            </span>
+          </div>
+          {/* Nằm ngang thì tiền và nhãn của nó về CÙNG một dòng — hai dòng chỉ
+              để dành cho cột dọc, nơi bề ngang không cho phép. */}
+          <div className="mt-2 flex flex-col @xl:mt-1 @xl:flex-row @xl:items-baseline @xl:gap-2">
+            <span
+              className={cn(
+                'text-2xl font-bold tabular-nums',
+                metricTone === 'red' && 'text-[var(--stop)]',
+              )}
+            >
+              {metric}
+            </span>
+            <span className="text-muted-foreground text-[11px]">{metricLabel}</span>
+          </div>
         </div>
 
-        <div className="border-border/60 flex flex-col gap-1.5 border-t pt-3 text-sm">
-          {links}
+        <div className="flex flex-col gap-3 p-4 @xl:contents">
+          <div className="@xl:col-span-2 @xl:row-start-2">
+            <Signal tone={verdict.tone}>{verdict.node}</Signal>
+          </div>
+
+          {/* Số liệu: cột dọc xếp lưới 2 cột; nằm ngang thì rải thành một hàng
+              "nhãn giá-trị · nhãn giá-trị" — thấp hơn hẳn mà đọc vẫn rõ. */}
+          <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 @xl:col-start-1 @xl:row-start-3 @xl:flex @xl:flex-wrap @xl:items-baseline @xl:gap-x-5 @xl:gap-y-1.5">
+            {stats.map((s, i) => (
+              <div key={i} className="min-w-0 @xl:flex @xl:items-baseline @xl:gap-1.5">
+                <dt className="text-muted-foreground text-[11px]">{s.label}</dt>
+                <dd
+                  className={cn(
+                    'mt-0.5 text-sm font-semibold @xl:mt-0',
+                    s.tone && DUE_TEXT[s.tone],
+                  )}
+                >
+                  {s.value}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          {/* Thứ tự khi xếp DỌC phải là … số liệu → NÚT → link (nút là việc
+ chính, link là lối rẽ). Nằm ngang thì lưới xếp lại: nút lên hàng 1
+ cạnh số tiền, link xuống hàng 3 cùng dòng với số liệu. */}
+          <div className="flex flex-col gap-2 pt-1 @xl:col-start-2 @xl:row-start-1 @xl:flex-row-reverse @xl:justify-self-end @xl:pt-0">
+            <Button className="w-full @xl:w-36" disabled={busy} onClick={onApprove}>
+              <ShieldCheck /> Phê duyệt
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full @xl:w-28"
+              disabled={busy}
+              onClick={onReject}
+            >
+              Từ chối
+            </Button>
+          </div>
+
+          <div className="border-border/60 flex flex-col gap-1.5 border-t pt-3 text-sm @xl:col-start-2 @xl:row-start-3 @xl:flex-row @xl:justify-end @xl:gap-4 @xl:border-t-0 @xl:pt-0">
+            {links}
+          </div>
         </div>
       </div>
     </aside>
@@ -236,7 +278,7 @@ function QuickLink({ href, children }: { href: string; children: React.ReactNode
       href={href}
       target="_blank"
       rel="noopener"
-      className="text-sky-600 hover:underline dark:text-sky-400"
+      className="text-[var(--primary)] hover:underline"
     >
       {children}
     </a>
@@ -249,6 +291,13 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
   const due = dueBadge(daysUntil(l.ship_date, nowIso))
   const bomPending = l.bom_pending ?? 0
   const waitTone: DueTone = days >= 4 ? 'red' : days >= 2 ? 'amber' : 'muted'
+  // Giá trị lệnh theo TIỀN TỆ của từng đơn (lệnh gộp có thể lẫn USD/VND —
+  // 0113). Không còn quy ra "tr" đồng như bản cũ: đơn MERXX là USD.
+  const orderValue = l.orders?.length
+    ? moneyByCurrency(l.orders)
+    : l.order_value && l.order
+      ? money(l.order_value, l.order.currency)
+      : '—'
 
   const verdict: { tone: 'ok' | 'warn' | 'alert'; node: React.ReactNode } =
     bomPending > 0
@@ -269,7 +318,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
 
   return (
     <>
-      <div className="order-2 flex flex-col gap-4 lg:order-1">
+      <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
           <Chain
             nodes={[
@@ -286,15 +335,24 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
           </div>
 
           <div className="mt-4 flex flex-col gap-4">
+            {/* Ô rỗng thì KHÔNG in "—" chiếm chỗ: màn duyệt nào cũng chỉ nên
+ bày thứ có thật để mắt bám ngay vào hạn giao. */}
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-              <Fact label="Hạn giao khách" tone={due.tone}>
-                <span className="inline-flex items-center gap-1">
-                  <Truck className="size-3.5" />
-                  {fmtD(l.ship_date)} · {due.text}
+              {/* `wrap`: mặc định Fact cắt cụt bằng `truncate`, mà "29/11/2026 ·
+ còn 104 ngày" là thứ KHÔNG được phép cụt trên màn ký. */}
+              <Fact label="Hạn giao khách" tone={due.tone} wrap>
+                {/* Ngày và "còn N ngày" tách hai dòng: gộp một dòng thì ở cột
+ hẹp nó ngắt bừa giữa cụm, bỏ icon lại trơ một mình. */}
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <Truck className="size-3.5 shrink-0" />
+                  {fmtD(l.ship_date)}
                 </span>
+                <span className="block text-xs font-normal">{due.text}</span>
               </Fact>
-              <Fact label="Ngày nhận">{fmtD(l.received_date)}</Fact>
-              <Fact label="Người phát lệnh">{l.issued_by_name ?? '—'}</Fact>
+              {l.received_date && <Fact label="Ngày nhận">{fmtD(l.received_date)}</Fact>}
+              {l.issued_by_name && (
+                <Fact label="Người phát lệnh">{l.issued_by_name}</Fact>
+              )}
             </dl>
 
             {l.order && <OrderInfo o={l.order} />}
@@ -348,7 +406,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
         kind="lsx"
         code={l.code}
         title={l.customer_name}
-        metric={l.order_value ? fmtTr(l.order_value) : '—'}
+        metric={orderValue}
         metricLabel="Giá trị đơn hàng"
         verdict={verdict}
         stats={[
@@ -375,7 +433,7 @@ function LsxBody({ l, nowIso, dec }: { l: PendingLsx; nowIso: string; dec: Dec }
             </QuickLink>
             <Link
               href={`/exec/lsx/${l.id}`}
-              className="text-sky-600 hover:underline dark:text-sky-400"
+              className="text-[var(--primary)] hover:underline"
             >
               <FileText className="mr-1 inline size-3.5" /> Hồ sơ sản xuất đầy đủ →
             </Link>
@@ -420,7 +478,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
 
   return (
     <>
-      <div className="order-2 flex flex-col gap-4 lg:order-1">
+      <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
           <Chain nodes={[{ label: 'Báo giá', value: q.code }]} />
           <h1 className="mt-2 text-xl font-bold">{q.customer_name}</h1>
@@ -468,7 +526,7 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
                           <td
                             className={cn(
                               'py-1.5 pe-3 text-right font-semibold tabular-nums',
-                              lower && 'text-amber-700 dark:text-amber-400',
+                              lower && 'text-[var(--warn)]',
                             )}
                           >
                             {fmtPrice(l.unit_price)}
@@ -563,7 +621,12 @@ function QuoteBody({ q, nowIso, dec }: { q: PendingQuote; nowIso: string; dec: D
 
 // ── Thân PO ──────────────────────────────────────────────────────────────────
 function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) {
-  const big = isBigApproval(p.total)
+  // `big` tính ở server theo TIỀN TỆ của đơn (approvals/data.ts). Trước
+  // 17/08/2026 chỗ này gọi isBigApproval(p.total) — so mọi tiền tệ với ngưỡng
+  // 50tr VND, nên đơn 3.000 USD hiện ra "sẵn sàng ký" đúng như bẫy mà ngưỡng
+  // sinh ra để chặn. Danh sách phê duyệt đã đúng từ trước; chỉ trang này sót.
+  const big = p.big ?? false
+  const noThreshold = p.threshold == null
   const days = waitingDays(p.created_at, nowIso)
   const due = dueBadge(daysUntil(p.expected_at, nowIso))
   const lines = p.lines ?? []
@@ -573,9 +636,15 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
   const verdict: { tone: 'ok' | 'warn' | 'alert'; node: React.ReactNode } = big
     ? {
         tone: 'alert',
-        node: (
+        node: noThreshold ? (
           <span>
-            <b>Giá trị lớn (≥50tr).</b> Cần xem kỹ từng dòng trước khi duyệt chi.
+            <b>Chưa đặt ngưỡng cho {p.currency}.</b> Mặc định coi là đơn lớn — đặt ngưỡng
+            ở Luật ký nếu muốn ký nhanh.
+          </span>
+        ) : (
+          <span>
+            <b>Giá trị lớn (≥ {money(p.threshold!, p.currency)}).</b> Cần xem kỹ từng dòng
+            trước khi duyệt chi.
           </span>
         ),
       }
@@ -598,7 +667,7 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
 
   return (
     <>
-      <div className="order-2 flex flex-col gap-4 lg:order-1">
+      <div className="order-2 flex flex-col gap-4 xl:order-1">
         <Card>
           <Chain
             nodes={[
@@ -614,17 +683,18 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
 
           <div className="mt-4 flex flex-col gap-4">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 sm:grid-cols-3">
-              <Fact label="Hàng hẹn về" tone={due.tone}>
-                <span className="inline-flex items-center gap-1">
-                  <Truck className="size-3.5" />
-                  {fmtD(p.expected_at)} · {due.text}
+              <Fact label="Hàng hẹn về" tone={due.tone} wrap>
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <Truck className="size-3.5 shrink-0" />
+                  {fmtD(p.expected_at)}
                 </span>
+                <span className="block text-xs font-normal">{due.text}</span>
               </Fact>
               <Fact label="Người lập đơn">{p.created_by_name ?? '—'}</Fact>
               <Fact label="Lập ngày">{fmtD(p.created_at)}</Fact>
             </dl>
 
-            <PoLineTable lines={lines} total={p.total} />
+            <PoLineTable lines={lines} total={p.total} currency={p.currency} />
 
             {p.note && p.note.trim() && (
               <div>
@@ -665,7 +735,7 @@ function PoBody({ p, nowIso, dec }: { p: PendingPo; nowIso: string; dec: Dec }) 
         kind="po"
         code={p.code}
         title={p.supplier_name}
-        metric={`${fmtVnd(p.total)} ₫`}
+        metric={money(p.total, p.currency)}
         metricLabel="Tổng cam kết chi"
         metricTone={big ? 'red' : undefined}
         verdict={verdict}

@@ -110,7 +110,10 @@ describe('buildCatalogSuggestions — danh sách cho hộp xác nhận sau khi l
   it('danh mục đã đủ / dòng không có gì mới → danh sách rỗng, không hiện hộp', () => {
     const full = { ...mat, open_style: 'MR', pcs_per_ctn: 2 }
     expect(
-      buildCatalogSuggestions([{ material_id: 'a', open_style: 'AD', pcs_per_ctn: 4 }], [full]),
+      buildCatalogSuggestions(
+        [{ material_id: 'a', open_style: 'AD', pcs_per_ctn: 4 }],
+        [full],
+      ),
     ).toEqual([])
     expect(buildCatalogSuggestions([{ material_id: 'a' }], [mat])).toEqual([])
   })

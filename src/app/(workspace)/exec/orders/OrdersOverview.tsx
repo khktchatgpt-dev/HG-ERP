@@ -324,7 +324,7 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
                       on
                         ? 'border-primary bg-primary text-primary-foreground'
                         : isWorst
-                          ? 'border-amber-400 bg-amber-50 hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/30'
+                          ? 'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] hover:bg-[color-mix(in_srgb,var(--warn)_16%,transparent)]'
                           : 'hover:bg-accent/50',
                     )}
                   >
@@ -365,12 +365,12 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
 
       {/* ── Lỗ hổng dữ liệu: nói thẳng chỗ Giám đốc đang bị mù ── */}
       {(gaps.noDue > 0 || gaps.noPrice > 0) && (
-        <section className="rounded-xl border border-amber-300 bg-amber-50/60 px-4 py-3 dark:border-amber-800 dark:bg-amber-950/20">
-          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-amber-900 dark:text-amber-200">
+        <section className="rounded-xl border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_7%,transparent)] px-4 py-3">
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold text-[var(--warn)]">
             <TriangleAlert className="size-4" aria-hidden />
             Sổ đơn còn chỗ trống
           </h2>
-          <ul className="mt-1.5 space-y-1 text-sm text-amber-900/90 dark:text-amber-200/90">
+          <ul className="mt-1.5 space-y-1 text-sm text-[var(--warn)]">
             {gaps.noPrice > 0 && (
               <li>
                 <b>{gaps.noPrice}</b> đơn chưa có đơn giá — mọi con số tiền trên màn này
@@ -453,21 +453,26 @@ export function OrdersOverview({ rows, stages }: { rows: OrderRow[]; stages: Sta
                 ) : (
                   <ChevronRight className="text-muted-foreground size-4 shrink-0" />
                 )}
-                <span className="min-w-0 flex-1 truncate font-semibold">{c.name}</span>
+                <span className="t-title min-w-0 flex-1 truncate">{c.name}</span>
                 {overdue > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-950/40 dark:text-red-300">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[color-mix(in_srgb,var(--stop)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--stop)]">
                     <TriangleAlert className="size-3" aria-hidden /> {overdue} trễ
                   </span>
                 )}
                 {pending > 0 && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                  <span className="rounded-full bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--warn)]">
                     {pending} chờ duyệt
                   </span>
                 )}
-                <span className="text-muted-foreground text-sm tabular-nums">
-                  {c.orders.length} đơn · {nLsx} lệnh
+                {/* Chỉ CON SỐ đi mặt chữ dữ liệu; chữ "đơn"/"lệnh" giữ mặt chữ
+                    thường — cả cụm mono đọc như dòng lệnh máy tính. */}
+                <span className="text-muted-foreground text-xs">
+                  <span className="t-data text-xs">{c.orders.length}</span> đơn ·{' '}
+                  <span className="t-data text-xs">{nLsx}</span> lệnh
                 </span>
-                <span className="text-sm font-medium tabular-nums">
+                {/* Tiền = mặt chữ dữ liệu, để cột tiền của các khách thẳng hàng
+                    khi cuộn dọc danh sách. */}
+                <span className="t-data font-semibold">
                   {value.length
                     ? value.map(([cur, v]) => fmtMoneyShort(v, cur)).join(' · ')
                     : '—'}
@@ -502,7 +507,7 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
       className={cn(
         'rounded-lg border',
         noLsx &&
-          'border-amber-300 bg-amber-50/40 dark:border-amber-800 dark:bg-amber-950/20',
+          'border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_5%,transparent)]',
       )}
     >
       {/* Đầu lệnh: mã + trạng thái + tiến độ SX + vật tư — nguyên chuỗi một dòng */}
@@ -510,11 +515,11 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
         <span className="inline-flex min-w-0 items-center gap-1.5 text-sm font-medium">
           <Factory className="text-muted-foreground size-4 shrink-0" aria-hidden />
           {noLsx ? (
-            <span className="text-amber-700 dark:text-amber-400">
-              Chưa phát lệnh sản xuất
-            </span>
+            <span className="text-[var(--warn)]">Chưa phát lệnh sản xuất</span>
           ) : (
-            <span className="truncate">Lệnh {g.lsx_code}</span>
+            <span className="truncate">
+              Lệnh <span className="t-data">{g.lsx_code}</span>
+            </span>
           )}
         </span>
         {!noLsx && <StatusBadge status={rep.status} />}
@@ -536,7 +541,7 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
           </span>
         )}
         {rep.lines_bom_pending > 0 && (
-          <span className="text-xs text-amber-700 dark:text-amber-400">
+          <span className="text-xs text-[var(--warn)]">
             {rep.lines_bom_pending} SP chưa chốt BOM
           </span>
         )}
@@ -560,30 +565,31 @@ function LsxBlock({ g, stages, today }: { g: LsxGroup; stages: Stage[]; today: s
               className="grid grid-cols-2 items-center gap-x-3 gap-y-0.5 px-3 py-2 text-sm sm:grid-cols-[minmax(0,1fr)_auto_auto_auto]"
             >
               <span className="min-w-0">
-                <span className="block truncate font-medium">{r.code}</span>
+                {/* Mã đơn và số PO của khách là MÃ CHỨNG TỪ → mặt chữ dữ liệu. */}
+                <span className="t-data block truncate font-medium">{r.code}</span>
                 {r.customer_po_no && (
                   <span className="text-muted-foreground block truncate text-xs">
-                    PO khách: {r.customer_po_no}
+                    PO khách: <span className="t-data text-xs">{r.customer_po_no}</span>
                   </span>
                 )}
               </span>
-              <span className="text-muted-foreground text-xs tabular-nums sm:w-20 sm:text-end">
-                {r.line_count} dòng SP
+              <span className="text-muted-foreground text-xs sm:w-20 sm:text-end">
+                <span className="t-data text-xs">{r.line_count}</span> dòng SP
               </span>
-              <span className="tabular-nums sm:w-28 sm:text-end">
+              <span className="t-data sm:w-28 sm:text-end">
                 {r.order_value > 0 ? fmtMoney(r.order_value, r.currency) : '—'}
               </span>
               <span className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:w-40 sm:justify-end">
                 <span className="text-muted-foreground text-xs">
-                  giao {fmtD(r.due_date)}
+                  giao <span className="t-data text-xs">{fmtD(r.due_date)}</span>
                 </span>
                 {risk && (
                   <span
                     className={cn(
                       'rounded-full px-1.5 py-0.5 text-[11px] font-medium',
                       risk.level === 'overdue'
-                        ? 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-                        : 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+                        ? 'bg-[color-mix(in_srgb,var(--stop)_12%,transparent)] text-[var(--stop)]'
+                        : 'bg-[color-mix(in_srgb,var(--warn)_12%,transparent)] text-[var(--warn)]',
                     )}
                   >
                     {risk.level === 'overdue' ? 'trễ hạn' : 'nguy cơ trễ'}

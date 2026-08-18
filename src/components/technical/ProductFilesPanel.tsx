@@ -164,7 +164,7 @@ export function ProductFilesPanel({
 
   async function download(f: ProductFile) {
     try {
-      const r = await api<{ url: string }>(`/api/files/${f.id}`)
+      const r = await api<{ url: string }>(`/api/files/${f.id}?download=1`)
       window.open(r.url, '_blank', 'noopener')
     } catch (e) {
       toast.error('Không tải được file', apiErrorText(e))

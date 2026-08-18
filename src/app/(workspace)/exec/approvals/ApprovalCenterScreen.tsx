@@ -21,6 +21,8 @@ import { Button } from '@/components/shadcn/button'
 import { Checkbox } from '@/components/shadcn/checkbox'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { cn } from '@/lib/utils'
+// `money` dùng CHUNG với trang chi tiết duyệt — hai màn nói cùng một con số.
+import { money } from '../approval-helpers'
 import { useApprovalDecision, type DecideTarget } from '../useApprovalDecision'
 import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
 
@@ -43,12 +45,6 @@ const KIND_TONE = { lsx: 'blue', po: 'amber', quote: 'green' } as const
 const KIND_ICON = { lsx: Factory, po: ShoppingCart, quote: FileText } as const
 
 export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
-
-function money(value: number, currency: string): string {
-  return `${new Intl.NumberFormat('vi-VN', {
-    maximumFractionDigits: currency === 'VND' ? 0 : 2,
-  }).format(value)} ${currency}`
-}
 
 function waitLabel(days: number): string {
   return days <= 0 ? 'hôm nay' : `${days} ngày`
@@ -105,7 +101,7 @@ export function ApprovalCenterScreen({
     {
       key: 'kind',
       header: 'Loại',
-      width: '110px',
+      width: '100px',
       cell: (i) => {
         const Icon = KIND_ICON[i.kind]
         return (
@@ -120,9 +116,14 @@ export function ApprovalCenterScreen({
     {
       key: 'code',
       header: 'Mã',
-      width: '130px',
+      width: '150px',
       cell: (i) => (
-        <Link href={i.href} className="font-semibold hover:underline">
+        // `whitespace-nowrap`: mã chứng từ KHÔNG được gãy dòng — "PO-TEST-SHIP4"
+        // xuống hàng thành "PO-TEST-" / "SHIP4" đọc ra một mã không tồn tại.
+        <Link
+          href={i.href}
+          className="font-mono font-semibold whitespace-nowrap hover:underline"
+        >
           {i.code}
         </Link>
       ),
@@ -142,7 +143,7 @@ export function ApprovalCenterScreen({
           {i.warnings.map((w) => (
             <div
               key={w}
-              className="mt-0.5 flex items-start gap-1 text-xs text-amber-700 dark:text-amber-400"
+              className="mt-0.5 flex items-start gap-1 text-xs text-[var(--warn)]"
             >
               <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden />
               {w}
@@ -154,7 +155,7 @@ export function ApprovalCenterScreen({
     {
       key: 'value',
       header: 'Giá trị',
-      width: '150px',
+      width: '132px',
       align: 'right',
       cell: (i) => (
         <div>
@@ -173,14 +174,14 @@ export function ApprovalCenterScreen({
     {
       key: 'wait',
       header: 'Chờ',
-      width: '90px',
+      width: '100px',
       align: 'right',
       cell: (i) => (
         <span
           className={cn(
-            'inline-flex items-center gap-1 text-xs tabular-nums',
+            'inline-flex items-center gap-1 text-xs whitespace-nowrap tabular-nums',
             i.waiting_days >= 3
-              ? 'font-medium text-amber-700 dark:text-amber-400'
+              ? 'font-medium text-[var(--warn)]'
               : 'text-muted-foreground',
           )}
         >
@@ -193,14 +194,20 @@ export function ApprovalCenterScreen({
     {
       key: 'actions',
       header: '',
-      width: '240px',
+      // Đủ chỗ cho trạng thái RỘNG NHẤT (≥1536px, nút "Xem kỹ" có chữ). Khai
+      // hụt thì ô thao tác tràn sang trái, đè lên cột "Chờ" — cột width là số
+      // cố định, bảng `table-fixed` không tự nới.
+      width: '244px',
       align: 'right',
       cell: (i) => (
-        <div className="flex justify-end gap-1.5">
+        <div className="flex justify-end gap-1.5 whitespace-nowrap">
+          {/* Dưới 1536px chỉ còn ICON: ba nút có chữ ăn 240px, ép cột "Nội dung"
+ xuống còn một mẩu và đè cả sang cột "Chờ". Mã phiếu vẫn là link
+ tới đúng trang này nên bỏ chữ không mất lối vào. */}
           <Button variant="ghost" size="sm" asChild>
-            <Link href={i.href}>
+            <Link href={i.href} aria-label={`Xem kỹ ${i.code}`} title="Xem kỹ">
               <FileSearch className="size-4" aria-hidden />
-              Xem kỹ
+              <span className="hidden 2xl:inline">Xem kỹ</span>
             </Link>
           </Button>
           <Button
@@ -262,8 +269,10 @@ export function ApprovalCenterScreen({
               <span className="ms-1.5 tabular-nums opacity-70">{counts[k]}</span>
             </Button>
           ))}
+          {/* Ký nhanh nhiều phiếu chỉ có ở BẢNG (chọn theo dòng) — thẻ không có
+              ô tick, nên nhãn này đi cùng ngưỡng hiển thị của bảng. */}
           {bulkable.length > 1 && (
-            <label className="text-muted-foreground ms-auto hidden cursor-pointer items-center gap-2 text-sm md:flex">
+            <label className="text-muted-foreground ms-auto hidden cursor-pointer items-center gap-2 text-sm xl:flex">
               <Checkbox
                 checked={
                   bulkable.length > 0 && bulkable.every((i) => pickedKeys.has(key(i)))
@@ -280,8 +289,14 @@ export function ApprovalCenterScreen({
         <EmptyCenter box={box} filtered={kind !== 'all' && box.stats.total > 0} />
       ) : (
         <>
-          {/* Máy tính: bảng gộp mọi loại phiếu. Chỉ phiếu thường chọn được. */}
-          <div className="hidden md:block">
+          {/*
+            Bảng chỉ bày từ 1280px trở lên (trước là 768px). Sáu cột — loại · mã
+            · nội dung · giá trị · chờ · ba nút — cần ~700px chỉ riêng phần cột
+ cố định; ở khung 900px cột "Nội dung" bị bóp còn một mẩu, tên khách
+ cụt thành "MERXX HANDEL…" và mã phiếu gãy đôi. Dưới ngưỡng này dùng
+            THẺ: cùng nội dung mà đọc trọn, hợp cả cửa sổ chia đôi màn hình.
+          */}
+          <div className="hidden xl:block">
             <DataTable
               rows={items}
               columns={columns}
@@ -293,21 +308,28 @@ export function ApprovalCenterScreen({
                 keyFn: key,
               }}
               rowClassName={(i) =>
-                i.waiting_days >= 3 ? 'bg-amber-50/40 dark:bg-amber-950/10' : undefined
+                i.waiting_days >= 3
+                  ? 'bg-[color-mix(in_srgb,var(--warn)_5%,transparent)]'
+                  : undefined
               }
             />
           </div>
 
-          {/* Điện thoại: thẻ dọc, nút Ký dưới cùng trong tầm ngón cái. */}
-          <ul className="space-y-3 md:hidden">
+          {/* Điện thoại + cửa sổ hẹp: thẻ dọc, nút Ký trong tầm ngón cái. */}
+          <ul className="space-y-3 xl:hidden">
             {items.map((i) => {
               const Icon = KIND_ICON[i.kind]
               return (
                 <li
                   key={key(i)}
                   className={cn(
-                    'bg-card rounded-xl border p-4',
-                    i.waiting_days >= 3 && 'border-amber-400 dark:border-amber-700',
+                    // @container: thẻ này chạy từ điện thoại 375px tới cửa sổ
+                    // 1200px. Ba nút TRÀN NGANG là đúng cho ngón cái ở 375px,
+                    // nhưng ở 1200px thì ăn 150px chiều cao mỗi thẻ cho ba dải
+                    // xanh dài ngoẵng — nên từ 30rem trở lên gom về một hàng.
+                    'bg-card @container rounded-xl border p-4',
+                    i.waiting_days >= 3 &&
+                      'border-[color-mix(in_srgb,var(--warn)_35%,transparent)]',
                   )}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -327,7 +349,10 @@ export function ApprovalCenterScreen({
                           .join(' · ')}
                       </div>
                     </div>
-                    <div className="text-end">
+                    {/* Tiền và "chờ N ngày" KHÔNG được ngắt dòng: ở 375px
+                        "12.500 USD" gãy làm hai và cái đồng hồ bị bỏ lại một
+ mình trên dòng trống. */}
+                    <div className="shrink-0 text-end whitespace-nowrap">
                       <div className="font-semibold tabular-nums">
                         {i.value > 0 ? money(i.value, i.currency) : '—'}
                       </div>
@@ -335,7 +360,7 @@ export function ApprovalCenterScreen({
                         className={cn(
                           'mt-0.5 inline-flex items-center gap-1 text-xs',
                           i.waiting_days >= 3
-                            ? 'text-amber-700 dark:text-amber-400'
+                            ? 'text-[var(--warn)]'
                             : 'text-muted-foreground',
                         )}
                       >
@@ -352,7 +377,7 @@ export function ApprovalCenterScreen({
                       {i.warnings.map((w) => (
                         <li
                           key={w}
-                          className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400"
+                          className="flex items-start gap-1.5 text-xs text-[var(--warn)]"
                         >
                           <AlertTriangle
                             className="mt-0.5 size-3.5 shrink-0"
@@ -364,8 +389,20 @@ export function ApprovalCenterScreen({
                     </ul>
                   )}
 
-                  <div className="mt-3 flex flex-col-reverse gap-2 border-t pt-3">
-                    <Button variant="ghost" size="sm" asChild>
+                  {/*
+                    Thứ tự DOM là Xem kỹ → Trả lại → Ký duyệt, nên:
+                    · hẹp  — `flex-col-reverse` lật lại: Ký duyệt nằm trên cùng,
+ trong tầm ngón cái (luật /design-lab mục 12);
+                    · rộng — `flex-row` giữ nguyên trình tự đọc trái→phải, Xem
+ kỹ đẩy về mép trái, hai nút quyết định dồn bên phải.
+                  */}
+                  <div className="mt-3 flex flex-col-reverse gap-2 border-t pt-3 @[30rem]:flex-row @[30rem]:items-center @[30rem]:justify-end">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      asChild
+                      className="@[30rem]:me-auto @[30rem]:w-auto"
+                    >
                       <Link href={i.href}>
                         <FileSearch className="size-4" aria-hidden />
                         Xem kỹ
@@ -375,6 +412,7 @@ export function ApprovalCenterScreen({
                       variant="outline"
                       size="sm"
                       disabled={busy}
+                      className="@[30rem]:w-28"
                       onClick={() => askReject(target(i))}
                     >
                       <X className="size-4" aria-hidden />
@@ -383,6 +421,7 @@ export function ApprovalCenterScreen({
                     <Button
                       size="sm"
                       disabled={busy}
+                      className="@[30rem]:w-32"
                       onClick={() => askApprove(target(i))}
                     >
                       <Check className="size-4" aria-hidden />

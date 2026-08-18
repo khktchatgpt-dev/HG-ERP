@@ -106,12 +106,13 @@ function GroupCard({
           aria-expanded={open}
         >
           <span className="text-muted-foreground w-3 shrink-0">
-            <ChevronDown className={`size-3.5 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
+            <ChevronDown
+              className={`size-3.5 transition-transform ${open ? '' : '-rotate-90'}`}
+              aria-hidden
+            />
           </span>
           <span className="min-w-0">
-            <span className="t-data block font-semibold">
-              {g.lsx_code}
-            </span>
+            <span className="t-data block font-semibold">{g.lsx_code}</span>
             <span className="text-muted-foreground block truncate text-[11px]">
               {standalone
                 ? 'Mua bù tồn · vật tư tiêu hao · dùng chung'
@@ -160,7 +161,8 @@ function GroupCard({
             </label>
           )}
           <span className="t-data ml-1 font-semibold">
-            {fmtMoney(g.total)} <span className="text-muted-foreground">{g.currency}</span>
+            {fmtMoney(g.total)}{' '}
+            <span className="text-muted-foreground">{g.currency}</span>
           </span>
           {canEdit && !standalone && (
             <Link
@@ -197,7 +199,10 @@ function EmptyLsxPanel({ lsxs, canEdit }: { lsxs: LsxRef[]; canEdit: boolean }) 
         aria-expanded={open}
       >
         <span className="w-3 text-[10px] text-[var(--warn)]">
-          <ChevronDown className={`size-3.5 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden />
+          <ChevronDown
+            className={`size-3.5 transition-transform ${open ? '' : '-rotate-90'}`}
+            aria-hidden
+          />
         </span>
         <b className="text-[13px] text-[var(--warn)]">
           {lsxs.length} lệnh sản xuất chưa có đơn đặt nào
@@ -211,11 +216,11 @@ function EmptyLsxPanel({ lsxs, canEdit }: { lsxs: LsxRef[]; canEdit: boolean }) 
           {lsxs.map((l) => (
             <div
               key={l.id}
-              className="flex items-center gap-2 rounded-lg border border-[var(--warn)]/30 bg-card px-2.5 py-1.5"
+              className="bg-card flex items-center gap-2 rounded-lg border border-[var(--warn)]/30 px-2.5 py-1.5"
             >
               <div className="min-w-0 flex-1">
                 <div className="font-mono text-[12px] font-semibold">{l.code}</div>
-                <div className="truncate text-[11px] text-muted-foreground">
+                <div className="text-muted-foreground truncate text-[11px]">
                   {[l.customer_name, l.order_codes.join(', ')]
                     .filter(Boolean)
                     .join(' · ')}

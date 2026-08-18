@@ -3,9 +3,7 @@
   "scope": {
     "orders": [],
     "production_orders": [],
-    "customers": [
-      "Test KH Không Email"
-    ],
+    "customers": ["Test KH Không Email"],
     "kept_on_purpose": {
       "LSX-2026-0001": "3 đơn mua NCC bám bằng FK RESTRICT — xử PO trước"
     }

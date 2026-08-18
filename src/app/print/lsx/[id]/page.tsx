@@ -20,7 +20,7 @@ export default async function LsxPrintPage({
   const { id } = await params
 
   const lsx = await productionRepo.findById(id)
-  if (!lsx) redirect("/sales/lsx")
+  if (!lsx) redirect('/sales/lsx')
 
   const [sheet, company] = await Promise.all([
     lsxLinesService.sheet(user, id),

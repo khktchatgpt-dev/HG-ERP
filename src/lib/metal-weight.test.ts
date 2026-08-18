@@ -146,7 +146,12 @@ describe('kgPerUnitOf — chọn nguồn theo độ tin', () => {
   const cay = { unit: 'cây', kg_per_m: 1.5542, default_bar_length_m: 6 }
 
   it('cân thật ở danh mục thắng tất cả', () => {
-    const r = kgPerUnitOf({ ...cay, kg_per_unit: 9.41, price_unit: 'kg', unit2_factor: 8.2 })
+    const r = kgPerUnitOf({
+      ...cay,
+      kg_per_unit: 9.41,
+      price_unit: 'kg',
+      unit2_factor: 8.2,
+    })
     expect(r.kg).toBe(9.41)
     expect(r.source).toBe('cân thật')
     // Vẫn trả barem kèm để form đối chiếu.

@@ -617,7 +617,10 @@ export type PartZone = {
 const ZONES: Record<LayoutKey, PartZone[]> = {
   metal: [
     { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    { label: 'Quy cách tinh (mm)', cells: [CELL.shape, CELL.thick, CELL.wide, CELL.wall] },
+    {
+      label: 'Quy cách tinh (mm)',
+      cells: [CELL.shape, CELL.thick, CELL.wide, CELL.wall],
+    },
     { label: 'Cắt và số lượng', cells: [CELL.len, CELL.bend, CELL.qty] },
     {
       label: 'Để cung ứng mua',

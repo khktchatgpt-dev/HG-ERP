@@ -163,7 +163,7 @@ export function ThresholdsScreen({
         )}
 
         {(problems.length > 0 || dup) && (
-          <ul className="space-y-1 text-xs text-red-600 dark:text-red-400">
+          <ul className="space-y-1 text-xs text-[var(--stop)]">
             {dup && <li>Một mã tiền tệ xuất hiện hai lần</li>}
             {problems.map((p) => (
               <li key={p}>{p}</li>

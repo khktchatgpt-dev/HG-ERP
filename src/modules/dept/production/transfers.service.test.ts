@@ -50,9 +50,14 @@ const thongKe = {
   department_id: 'd-tk',
 } as unknown as User
 
-const LSX = { id: 'lsx1', code: 'LSX-01', customer_id: 'c1',
+const LSX = {
+  id: 'lsx1',
+  code: 'LSX-01',
+  customer_id: 'c1',
   order_ids: ['o1'],
-  order_codes: ['DH-01'], status: 'in_progress' }
+  order_codes: ['DH-01'],
+  status: 'in_progress',
+}
 const COMP = { id: 'c1', production_order_line_id: 'line1', name: 'TAY+TỰA' }
 const JOB_HAN = { id: 'j1', production_order_line_id: 'line1', stage: 'han', seq: 0 }
 

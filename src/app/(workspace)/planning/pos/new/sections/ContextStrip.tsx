@@ -34,11 +34,11 @@ export function ContextStrip({
         <span className="size-1.5 rounded-full bg-violet-500" aria-hidden />
         {templateLabel}
       </span>
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-muted-foreground dark:border-zinc-700">
+      <span className="text-muted-foreground inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 dark:border-zinc-700">
         <FileText className="size-3" aria-hidden />
         LSX <b className="font-mono text-zinc-600 dark:text-zinc-300">{lsxLabel}</b>
       </span>
-      <span className="inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 text-muted-foreground dark:border-zinc-700">
+      <span className="text-muted-foreground inline-flex min-w-0 items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-0.5 dark:border-zinc-700">
         <Building2 className="size-3 shrink-0" aria-hidden />
         NCC{' '}
         <b className="truncate text-zinc-600 dark:text-zinc-300">

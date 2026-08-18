@@ -292,8 +292,14 @@ export const entriesService = {
    * một payload cho màn hồ sơ lệnh/bảng tổng. Đọc: mọi NV đã đăng nhập.
    */
   async summary(_user: User, lsxId: string) {
-    const { components, orderLines, orderIdByGroup, jobs, totalByComponent, routeByLine } =
-      await loadLsxContext(lsxId)
+    const {
+      components,
+      orderLines,
+      orderIdByGroup,
+      jobs,
+      totalByComponent,
+      routeByLine,
+    } = await loadLsxContext(lsxId)
     const [entries, stages] = await Promise.all([
       entriesRepo.listByLsx(lsxId),
       productionRepo.listStages(),
