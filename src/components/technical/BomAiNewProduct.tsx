@@ -249,7 +249,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="Tạo sản phẩm từ file BOM"
+      title="AI tạo sản phẩm từ file BOM"
       maxWidth="sm:max-w-3xl"
     >
       <TopProgressBar active={busy !== null} />

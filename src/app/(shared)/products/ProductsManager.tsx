@@ -411,7 +411,7 @@ export function ProductsManager({
             </Button>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setFromBom(true)}>
-                <Sparkles /> Tạo từ file BOM
+                <Sparkles /> Tạo bằng AI
               </Button>
             )}
             {canEdit && (

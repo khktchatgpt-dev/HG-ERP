@@ -873,7 +873,7 @@ export function ProductPartsCard({
                 className="text-primary inline-flex shrink-0 items-center gap-1 text-xs font-medium hover:underline"
               >
                 <Sparkles className="size-3.5" />
-                Đọc file BOM
+                Nhập bằng AI
               </button>
               <button
                 type="button"

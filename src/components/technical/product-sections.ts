@@ -257,32 +257,12 @@ export const SECTIONS: Record<string, SectionSpec> = {
     title: 'Kích thước & khối lượng',
     hint: 'số của sản phẩm',
     fields: [
-      { name: 'length_mm', label: 'Dài SP — gấp', kind: 'number', step: '1', unit: 'mm' },
-      { name: 'width_mm', label: 'Rộng SP — gấp', kind: 'number', step: '1', unit: 'mm' },
-      { name: 'height_mm', label: 'Cao SP — gấp', kind: 'number', step: '1', unit: 'mm' },
-      {
-        name: 'length_open_mm',
-        label: 'Dài khi MỞ',
-        kind: 'number',
-        step: '1',
-        unit: 'mm',
-      },
-      {
-        name: 'width_open_mm',
-        label: 'Rộng khi MỞ',
-        kind: 'number',
-        step: '1',
-        unit: 'mm',
-      },
-      {
-        name: 'height_open_mm',
-        label: 'Cao khi MỞ',
-        kind: 'number',
-        step: '1',
-        unit: 'mm',
-      },
-      // 0146 — độ dày mặt bàn / tấm / kính. KHÁC độ dày thành ống của dòng ĐM.
-      { name: 'thickness_mm', label: 'Độ dày', kind: 'number', step: '0.1', unit: 'mm' },
+      // Bộ MỞ (`*_open_mm`) + độ dày (`thickness_mm`) ĐÃ BỎ khỏi form
+      // 18/08/2026 theo yêu cầu user — cột DB giữ nguyên, dữ liệu cũ không mất,
+      // chỉ là UI không bày/nhập nữa.
+      { name: 'length_mm', label: 'Dài SP', kind: 'number', step: '1', unit: 'mm' },
+      { name: 'width_mm', label: 'Rộng SP', kind: 'number', step: '1', unit: 'mm' },
+      { name: 'height_mm', label: 'Cao SP', kind: 'number', step: '1', unit: 'mm' },
       {
         name: 'net_weight_kg',
         label: 'Khối lượng tịnh',
@@ -457,22 +437,9 @@ export const SECTIONS: Record<string, SectionSpec> = {
       { name: 'showroom_sample', label: 'Có mẫu tại showroom', kind: 'checkbox' },
     ],
   },
-  /**
-   * Khối kiểm soát tài liệu ISO (HG-QT-07/M02) của bảng định mức. Tách riêng
-   * khỏi "Thông số sản xuất" vì đây là chữ ký/phiên bản chứng từ, không phải
-   * thông số làm hàng — và chỉ người duyệt BOM mới đụng tới.
-   */
-  docControl: {
-    key: 'docControl',
-    title: 'Kiểm soát tài liệu BOM',
-    hint: 'HG-QT-07/M02',
-    fields: [
-      { name: 'bom_rev', label: 'Lần sửa đổi (Rev.)', kind: 'number', step: '1' },
-      { name: 'bom_effective_date', label: 'Ngày hiệu lực', kind: 'date' },
-      { name: 'bom_prepared_by', label: 'Người lập', maxLength: 200 },
-      { name: 'bom_approved_by', label: 'Người duyệt', maxLength: 200 },
-    ],
-  },
+  // Khối `docControl` (ISO HG-QT-07/M02 — Rev./hiệu lực/chữ ký) ĐÃ BỎ
+  // 18/08/2026: app ghi nhận người phụ trách theo phiên đăng nhập + ngày tạo,
+  // không chép chữ ký giấy. Cột bom_* trong DB giữ nguyên cho dữ liệu cũ.
   text: {
     key: 'text',
     title: 'Mô tả & ghi chú',
@@ -515,7 +482,6 @@ export const SECTION_TAB: Record<string, string> = {
   materials: 'thong-so',
   export: 'thong-so',
   techSpec: 'thong-so',
-  docControl: 'thong-so',
 }
 
 /**

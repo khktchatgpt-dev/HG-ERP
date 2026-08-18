@@ -1,6 +1,6 @@
 'use client'
 
-import { Boxes, Factory, Layers, Palette, Ruler, ShieldCheck, Tags } from 'lucide-react'
+import { Factory, Layers, Palette, Ruler, ShieldCheck, Tags } from 'lucide-react'
 import Link from 'next/link'
 import { SpecSection } from '@/components/technical/ProductSpecCards'
 import { useSectionEditor } from '@/components/technical/useSectionEditor'
@@ -34,14 +34,14 @@ import { FRAME_MATERIALS } from '@/lib/product-code'
 export function ProductSpecsTab({
   product,
   packingOptions,
-  bomRows,
+  ownerName,
   suggestions,
   canEdit,
 }: {
   product: ProductView
   packingOptions: PackingOptionView[]
-  /** Số dòng định mức THẬT trong app — khác `product.part_count` (từ file Excel). */
-  bomRows: number
+  /** Tên người phụ trách hồ sơ — cho khối "Hồ sơ" thay khối ISO đã bỏ. */
+  ownerName: string | null
   suggestions: Record<string, string[]>
   canEdit: boolean
 }) {
@@ -66,19 +66,12 @@ export function ProductSpecsTab({
         title="Kích thước & khối lượng"
         hint="số của sản phẩm — mm / kg"
         fields={[
+          // Bộ MỞ + độ dày ĐÃ BỎ (user chốt 18/08/2026) — KTSP chỉ còn một bộ
+          // số gấp; khối "Số liệu từ định mức" cũng bỏ, xem thẳng ở tab Định mức.
           [
             'Kích thước (D × R × C)',
             dimText(product.length_mm, product.width_mm, product.height_mm),
           ],
-          [
-            'Khi MỞ (D × R × C)',
-            dimText(
-              product.length_open_mm,
-              product.width_open_mm,
-              product.height_open_mm,
-            ),
-          ],
-          ['Độ dày', num(product.thickness_mm, ' mm')],
           [
             'Khối lượng tịnh',
             dec(product.net_weight_kg, 3) && `${dec(product.net_weight_kg, 3)} kg`,
@@ -90,41 +83,6 @@ export function ProductSpecsTab({
         ]}
         onEdit={editHandler('dims')}
         editing={node('dims')}
-      />
-
-      {/*
-       * Số SUY RA TỪ ĐỊNH MỨC — chỉ đọc, không có ô sửa: nạp từ file BOM lúc
-       * import hoặc tính lại khi nhập định mức chi tiết. Trước 13/08/2026 chúng
-       * nằm trên băng ở tab Hồ sơ; nay theo về đây cùng các số kỹ thuật khác.
-       */}
-      <SpecSection
-        icon={Boxes}
-        tone="slate"
-        title="Số liệu từ định mức"
-        hint="tính từ BOM, không nhập tay"
-        fields={[
-          [
-            'Số chi tiết',
-            bomRows > 0
-              ? `${bomRows} dòng`
-              : product.part_count != null
-                ? `${product.part_count} dòng (theo file BOM, chưa nhập vào app)`
-                : null,
-          ],
-          [
-            'KL khung',
-            dec(product.frame_weight_kg, 2) && `${dec(product.frame_weight_kg, 2)} kg`,
-          ],
-          [
-            'Tổng mét khung',
-            dec(product.frame_length_m, 1) && `${dec(product.frame_length_m, 1)} m`,
-          ],
-          [
-            'Diện tích sơn',
-            dec(product.paint_area_m2, 2) && `${dec(product.paint_area_m2, 2)} m²`,
-          ],
-        ]}
-        moreHref={`${base}/dinh-muc`}
       />
 
       {/* CBM & thùng — dẫn xuất từ đóng gói, để đây cho đủ mục 5 nhưng chỉ đọc. */}
@@ -219,31 +177,19 @@ export function ProductSpecsTab({
       </p>
 
       {/*
-       * Khối ISO nằm dưới, chiếm trọn hàng: chỉ 2/537 SP có số, nhưng phải LUÔN
-       * hiện thì mới có lối điền lần đầu — thẻ ẩn khi rỗng là thẻ không ai mở
-       * được. Bản chỉ-đọc ở tab Hồ sơ vẫn ẩn khi trống.
+       * Khối ISO (Rev./hiệu lực/chữ ký) ĐÃ BỎ 18/08/2026 theo yêu cầu user —
+       * app không chép chữ ký giấy; hồ sơ chỉ ghi nhận NGƯỜI PHỤ TRÁCH (đặt theo
+       * phiên đăng nhập lúc tạo, sửa được ở tab Hồ sơ) và ngày tạo hệ thống.
        */}
       <SpecSection
         icon={ShieldCheck}
         tone="slate"
-        title="Kiểm soát tài liệu BOM"
-        hint="HG-QT-07/M02"
+        title="Hồ sơ"
+        hint="hệ thống tự ghi nhận"
         fields={[
-          [
-            'Lần sửa đổi (Rev.)',
-            product.bom_rev != null ? String(product.bom_rev) : null,
-          ],
-          [
-            'Ngày hiệu lực',
-            product.bom_effective_date
-              ? new Date(product.bom_effective_date).toLocaleDateString('vi-VN')
-              : null,
-          ],
-          ['Người lập', product.bom_prepared_by],
-          ['Người duyệt', product.bom_approved_by],
+          ['Người phụ trách', ownerName],
+          ['Ngày tạo', new Date(product.created_at).toLocaleDateString('vi-VN')],
         ]}
-        onEdit={editHandler('docControl')}
-        editing={node('docControl')}
       />
     </div>
   )

@@ -25,7 +25,7 @@ import type {
   ProductClusterInput as ClusterInput,
   ProductClusterPatch as ClusterPatch,
 } from './technical.schema'
-import type { User } from '@/modules/core/users/users.repo'
+import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import { buildCopiedParts } from '@/lib/bom-copy'
@@ -851,7 +851,13 @@ export const productsService = {
       productProfileRepo.partsCount(productId),
     ])
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    return { product, packing, bomRows }
+    // Tên người phụ trách cho khối "Hồ sơ" của tab Thông số (thay khối ISO đã
+    // bỏ 18/08/2026 — chỉ ghi nhận người tạo theo phiên đăng nhập + ngày tạo).
+    const ownerName = product.owner_id
+      ? ((await usersRepo.displayNamesByIds([product.owner_id])).get(product.owner_id) ??
+        null)
+      : null
+    return { product, packing, bomRows, ownerName }
   },
 
   /** Tab Định mức: định mức + món trong bộ + danh mục nhóm. */
