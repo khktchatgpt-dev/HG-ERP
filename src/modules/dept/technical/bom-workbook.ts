@@ -45,3 +45,48 @@ export async function readWorkbookGrid(buffer: Buffer): Promise<SheetGrid[]> {
     return { name: ws.name, rows }
   })
 }
+
+/** Ảnh nhúng đã bóc khỏi workbook. */
+export type EmbeddedImage = {
+  buffer: Buffer
+  /** 'png' | 'jpeg' | … theo exceljs. */
+  extension: string
+  mime: string
+}
+
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+}
+
+/**
+ * ẢNH SẢN PHẨM nhúng trong file BOM — biểu mẫu có sẵn ô "Hình ảnh" gộp ở đầu
+ * trang, người lập dán ảnh SP vào đó.
+ *
+ * Lấy ảnh LỚN NHẤT chứ không phải ảnh đầu tiên: nhiều file còn kèm logo công ty
+ * ở header, mà logo bao giờ cũng nhẹ hơn ảnh chụp sản phẩm vài chục lần. Lấy
+ * theo thứ tự xuất hiện thì có ngày ảnh đại diện của SP hoá ra cái logo.
+ *
+ * Bỏ qua định dạng lạ (emf/wmf — ảnh vector Office dán từ clipboard): trình
+ * duyệt không hiển thị được, lưu vào chỉ tổ có ô ảnh vỡ.
+ */
+export async function readWorkbookImages(buffer: Buffer): Promise<EmbeddedImage | null> {
+  const wb = new ExcelJS.Workbook()
+  await wb.xlsx.load(buffer as unknown as ArrayBuffer)
+
+  let best: EmbeddedImage | null = null
+  for (const media of wb.model.media ?? []) {
+    const m = media as unknown as { buffer?: Buffer; extension?: string }
+    if (!m.buffer) continue
+    const ext = (m.extension ?? '').toLowerCase()
+    const mime = IMAGE_MIME[ext]
+    if (!mime) continue
+    if (!best || m.buffer.byteLength > best.buffer.byteLength) {
+      best = { buffer: Buffer.from(m.buffer), extension: ext, mime }
+    }
+  }
+  return best
+}

@@ -2,7 +2,7 @@ import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Conflict, NotFound } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 import { buildGridText } from '@/lib/bom-grid'
-import { readWorkbookGrid } from './bom-workbook'
+import { readWorkbookGrid, readWorkbookImages } from './bom-workbook'
 import { filesRepo } from '@/modules/core/files/files.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import { partGroupsRepo, productProfileRepo, productsRepo } from './technical.repo'
@@ -68,7 +68,10 @@ export type BomAiDraft = {
 export type BomAiNewDraft = {
   product: BomDraftProduct
   sections: BomDraftSection[]
-  meta: Omit<BomAiDraft['meta'], 'existing'>
+  meta: Omit<BomAiDraft['meta'], 'existing'> & {
+    /** Dung lượng ảnh SP nhúng trong file, null nếu file không có ảnh. */
+    embeddedImageBytes: number | null
+  }
 }
 
 const XLSX_MIMES = new Set<string>([
@@ -340,6 +343,11 @@ export const bomAiService = {
       new Set(groups.map((g) => g.code)),
     )
 
+    // Ảnh SP nhúng sẵn trong file (ô "Hình ảnh" của biểu mẫu) — chỉ BÁO có hay
+    // không, byte thì lấy lại từ file client gửi kèm lúc bấm Tạo. Lỗi đọc ảnh
+    // không được làm hỏng cả lần đọc định mức.
+    const embedded = await readWorkbookImages(buffer).catch(() => null)
+
     // Mã đã có người dùng rồi thì bỏ đi, để người dùng xin mã mới — thà trống
     // còn hơn để họ bấm Tạo rồi ăn lỗi trùng mã.
     let product = parsed.data.product
@@ -359,6 +367,7 @@ export const bomAiService = {
         truncated,
         dropped,
         lines: sections.reduce((n, s) => n + s.lines.length, 0),
+        embeddedImageBytes: embedded?.buffer.byteLength ?? null,
       },
     }
   },
@@ -373,7 +382,13 @@ export const bomAiService = {
   async createFromBom(
     user: User,
     input: BomAiCreateInput,
-  ): Promise<{ product_id: string; code: string; added: number }> {
+  ): Promise<{
+    product_id: string
+    code: string
+    added: number
+    saved_file: boolean
+    saved_image: boolean
+  }> {
     await assertAction(user, 'technical.product.create')
 
     // Validate HẾT các khối TRƯỚC khi tạo SP: một khối hỏng phát hiện sau khi
@@ -401,7 +416,64 @@ export const bomAiService = {
       const r = await productsService.addParts(user, product.id, s)
       added += r.added
     }
-    return { product_id: product.id, code: product.code, added }
+
+    /*
+     * Đính file nguồn + ảnh SP — làm SAU CÙNG và nuốt lỗi có chủ ý.
+     *
+     * Hồ sơ và định mức mới là thứ người dùng cần; hỏng ở khâu lưu file mà ném
+     * lỗi ra thì họ tưởng cả lượt Tạo thất bại và bấm lại, đẻ thêm SP trùng.
+     * Thà báo "đã tạo, chưa đính được file" qua cờ trả về.
+     */
+    let savedFile = false
+    let savedImage = false
+    const src = input.source_file
+    if (src) {
+      const buffer = Buffer.from(src.data_base64, 'base64')
+
+      if (src.save_file) {
+        try {
+          await filesService.uploadFromServer(user, {
+            buffer,
+            filename: src.filename,
+            mime_type: src.mime as never,
+            bucket: 'attachments',
+            parent: { kind: 'product', id: product.id },
+            doc_type: 'bom',
+          })
+          savedFile = true
+        } catch {
+          /* hồ sơ vẫn đứng — người dùng đính tay ở tab Tài liệu */
+        }
+      }
+
+      if (src.save_image) {
+        try {
+          const img = await readWorkbookImages(buffer)
+          if (img) {
+            const fileId = await filesService.uploadFromServer(user, {
+              buffer: img.buffer,
+              filename: `${product.code}.${img.extension}`,
+              mime_type: img.mime as never,
+              bucket: 'attachments',
+              parent: { kind: 'product', id: product.id },
+              doc_type: 'image',
+            })
+            await productsService.setMainImage(user, product.id, fileId)
+            savedImage = true
+          }
+        } catch {
+          /* không có ảnh hoặc ảnh hỏng — bỏ qua, upload tay sau */
+        }
+      }
+    }
+
+    return {
+      product_id: product.id,
+      code: product.code,
+      added,
+      saved_file: savedFile,
+      saved_image: savedImage,
+    }
   },
 
   /**

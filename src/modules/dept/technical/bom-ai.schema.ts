@@ -545,6 +545,33 @@ export type BomAiNewExtractInput = z.infer<typeof bomAiNewExtractSchema>
 export const bomAiCreateSchema = z.object({
   product: productCreateSchema,
   sections: bomAiApplySchema.shape.sections.min(0),
+  /**
+   * File BOM gốc gửi LẠI để đính vào hồ sơ + bóc ảnh SP nhúng trong đó.
+   *
+   * Gửi lại chứ không giữ ở server giữa hai nhịp: giữ thì phải đẻ ra file mồ côi
+   * trên Storage cho mọi lần người dùng đọc xong rồi bỏ ngang. Client vốn đã cầm
+   * sẵn file trong bộ nhớ, gửi thêm một lần lúc bấm Tạo là rẻ nhất.
+   */
+  source_file: z
+    .object({
+      filename: z.string().trim().min(1).max(255),
+      mime: z.enum([
+        BOM_AI_MIMES.xlsx,
+        BOM_AI_MIMES.pdf,
+        BOM_AI_MIMES.png,
+        BOM_AI_MIMES.jpeg,
+        BOM_AI_MIMES.webp,
+      ]),
+      data_base64: z
+        .string()
+        .min(1)
+        .max(Math.ceil((BOM_AI_MAX_BYTES * 4) / 3) + 1024),
+      /** Đính chính file BOM vào tab Tài liệu của hồ sơ. */
+      save_file: z.boolean(),
+      /** Bóc ảnh nhúng trong file làm ảnh đại diện SP. */
+      save_image: z.boolean(),
+    })
+    .optional(),
 })
 
 export type BomAiCreateInput = z.infer<typeof bomAiCreateSchema>

@@ -69,6 +69,7 @@ type Draft = {
     truncated: string[]
     dropped: number
     lines: number
+    embeddedImageBytes: number | null
   }
 }
 
@@ -82,6 +83,8 @@ const nOrNull = (v: string) => {
   return Number.isFinite(x) ? x : null
 }
 const show = (v: number | null) => (v == null ? '' : String(v))
+/** Ảnh vài trăm byte mà làm tròn về "0 KB" thì trông như hỏng — dưới 1 KB ghi byte. */
+const fileSize = (b: number) => (b < 1024 ? `${b} byte` : `${(b / 1024).toFixed(0)} KB`)
 /** mm → cm cho bộ `packing.*_cm`; biểu mẫu BOM ghi KTBB bằng mm. */
 const mmToCm = (v: number | null) => (v == null ? undefined : Math.round(v) / 10)
 
@@ -102,6 +105,9 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
   const router = useRouter()
   const toast = useToast()
   const [picked, setPicked] = useState<File | null>(null)
+  /** Mặc định BẬT cả hai: đã có sẵn trong file thì lưu luôn, đỡ một vòng thao tác. */
+  const [saveFile, setSaveFile] = useState(true)
+  const [saveImage, setSaveImage] = useState(true)
   const [busy, setBusy] = useState<'read' | 'create' | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [p, setP] = useState<DraftProduct | null>(null)
@@ -185,43 +191,63 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
     }
     setBusy('create')
     try {
-      const r = await api<{ product_id: string; code: string; added: number }>(
-        '/api/dept/technical/products/from-bom?create=1',
-        {
-          method: 'POST',
-          body: {
-            product: {
-              code: p.code.trim(),
-              name: p.name.trim(),
-              customer_item_code: p.customer_item_code,
-              customer_name: p.customer_name,
-              unit: p.unit || 'cai',
-              product_type: p.product_type,
-              frame_material: p.frame_material,
-              tech_spec: {
-                paint: p.spec_paint ?? undefined,
-                wood: p.spec_wood ?? undefined,
-                glass: p.spec_glass ?? undefined,
-                cushion: p.spec_cushion ?? undefined,
-              },
-              length_mm: p.length_mm,
-              width_mm: p.width_mm,
-              height_mm: p.height_mm,
-              packing: {
-                carton_l_cm: mmToCm(p.carton_l_mm),
-                carton_w_cm: mmToCm(p.carton_w_mm),
-                carton_h_cm: mmToCm(p.carton_h_mm),
-                qty_per_carton: p.qty_per_carton ?? undefined,
-                loading_40hc: p.loading_40hc ?? undefined,
-                nw_kg: p.nw_kg ?? undefined,
-                gw_kg: p.gw_kg ?? undefined,
-              },
+      const r = await api<{
+        product_id: string
+        code: string
+        added: number
+        saved_file: boolean
+        saved_image: boolean
+      }>('/api/dept/technical/products/from-bom?create=1', {
+        method: 'POST',
+        body: {
+          product: {
+            code: p.code.trim(),
+            name: p.name.trim(),
+            customer_item_code: p.customer_item_code,
+            customer_name: p.customer_name,
+            unit: p.unit || 'cai',
+            product_type: p.product_type,
+            frame_material: p.frame_material,
+            tech_spec: {
+              paint: p.spec_paint ?? undefined,
+              wood: p.spec_wood ?? undefined,
+              glass: p.spec_glass ?? undefined,
+              cushion: p.spec_cushion ?? undefined,
             },
-            sections: draft.sections,
+            length_mm: p.length_mm,
+            width_mm: p.width_mm,
+            height_mm: p.height_mm,
+            packing: {
+              carton_l_cm: mmToCm(p.carton_l_mm),
+              carton_w_cm: mmToCm(p.carton_w_mm),
+              carton_h_cm: mmToCm(p.carton_h_mm),
+              qty_per_carton: p.qty_per_carton ?? undefined,
+              loading_40hc: p.loading_40hc ?? undefined,
+              nw_kg: p.nw_kg ?? undefined,
+              gw_kg: p.gw_kg ?? undefined,
+            },
           },
+          sections: draft.sections,
+          // Gửi lại file để đính vào hồ sơ + bóc ảnh nhúng. `picked` vẫn còn
+          // trong bộ nhớ trình duyệt nên không phải đọc lại từ đĩa.
+          source_file:
+            picked && (saveFile || saveImage)
+              ? {
+                  filename: picked.name,
+                  mime: picked.type,
+                  data_base64: await toBase64(picked),
+                  save_file: saveFile,
+                  save_image: saveImage,
+                }
+              : undefined,
         },
-      )
-      toast.success(`Đã tạo ${r.code}`, `Kèm ${r.added} dòng định mức`)
+      })
+      const extras = [
+        `${r.added} dòng định mức`,
+        r.saved_file && 'đã đính file BOM',
+        r.saved_image && 'đã lấy ảnh SP',
+      ].filter(Boolean)
+      toast.success(`Đã tạo ${r.code}`, `Kèm ${extras.join(' · ')}`)
       router.push(`/products/${r.product_id}/dinh-muc`)
       onClose()
     } catch (e) {
@@ -322,7 +348,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 {draft.meta.provider} · {draft.meta.model}
               </span>
             </div>
-
             {(lowConfidence || draft.meta.truncated.length > 0) && (
               <div className="flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] p-2.5 text-xs text-[var(--warn)]">
                 <TriangleAlert className="mt-px size-3.5 shrink-0" />
@@ -339,7 +364,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
-
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="flex flex-col gap-1 text-sm">
                 Mã sản phẩm *
@@ -439,7 +463,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 />
               </label>
             </div>
-
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium">Kích thước sản phẩm (mm)</span>
               <div className="grid grid-cols-3 gap-2">
@@ -465,7 +488,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
-
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium">Đóng gói</span>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -495,7 +517,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
-
             {/* Thông số hỗ trợ in trên LSX (`tech_spec`) — BOM không ghi thì
                 trống, LSX in ô trống. Người tạo + ngày tạo hệ thống tự ghi
                 theo phiên đăng nhập, không có khối ISO ở đây. */}
@@ -525,7 +546,6 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
             </div>
-
             {draft.sections.length > 0 && (
               <div className="rounded-md border p-2.5 text-xs">
                 <div className="mb-1 font-medium">Định mức sẽ ghi kèm</div>
@@ -542,6 +562,41 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+            {/* Lưu kèm — cả hai thứ này đã nằm sẵn trong file, không lưu thì
+                người dùng phải tự upload lại đúng file vừa đọc. */}
+            <div className="flex flex-col gap-1.5 rounded-md border p-2.5 text-xs">
+              <div className="font-medium">Lưu kèm vào hồ sơ</div>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={saveFile}
+                  onChange={(e) => setSaveFile(e.target.checked)}
+                />
+                <span>
+                  Đính file <b>{draft.meta.filename}</b> vào tab Tài liệu
+                </span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={saveImage}
+                  disabled={draft.meta.embeddedImageBytes == null}
+                  onChange={(e) => setSaveImage(e.target.checked)}
+                />
+                <span
+                  className={draft.meta.embeddedImageBytes == null ? 'opacity-60' : ''}
+                >
+                  {draft.meta.embeddedImageBytes != null ? (
+                    <>
+                      Lấy <b>ảnh sản phẩm</b> nhúng trong file (
+                      {fileSize(draft.meta.embeddedImageBytes)}) làm ảnh đại diện
+                    </>
+                  ) : (
+                    'File không có ảnh nhúng — tải ảnh lên sau ở hồ sơ'
+                  )}
+                </span>
+              </label>
+            </div>
 
             <div className="flex items-center justify-between gap-2">
               <button

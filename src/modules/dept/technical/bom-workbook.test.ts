@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import ExcelJS from 'exceljs'
 import { buildGridText } from '@/lib/bom-grid'
-import { readWorkbookGrid } from './bom-workbook'
+import { readWorkbookGrid, readWorkbookImages } from './bom-workbook'
 
 /**
  * Vòng tròn thật: dựng .xlsx bằng exceljs → đọc lại bằng đúng đường code sản
@@ -60,5 +60,52 @@ describe('readWorkbookGrid + buildGridText', () => {
 
   it('ném lỗi khi buffer không phải .xlsx (vd .xls đời cũ)', async () => {
     await expect(readWorkbookGrid(Buffer.from('khong-phai-xlsx'))).rejects.toThrow()
+  })
+})
+
+/**
+ * Ảnh nhúng — dựng workbook có HAI ảnh: một "logo" bé và một "ảnh SP" to hơn.
+ * Đúng hình dạng file thật: biểu mẫu hay có logo công ty ở header.
+ */
+async function workbookWithImages(): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('BOM')
+  ws.getCell('A1').value = 'x'
+
+  const logo = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFElEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC',
+    'base64',
+  )
+  const photo = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAXklEQVR4nO3QMQEAAAgDoC251a3gLzhQwM1KAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIECBAgAABAgQIvAaOZQABmn1PxwAAAABJRU5ErkJggg==',
+    'base64',
+  )
+  ws.addImage(wb.addImage({ buffer: logo as never, extension: 'png' }), {
+    tl: { col: 0, row: 0 },
+    ext: { width: 40, height: 20 },
+  })
+  ws.addImage(wb.addImage({ buffer: photo as never, extension: 'png' }), {
+    tl: { col: 1, row: 7 },
+    ext: { width: 220, height: 220 },
+  })
+  return Buffer.from(await wb.xlsx.writeBuffer())
+}
+
+describe('readWorkbookImages', () => {
+  /**
+   * Canh luật "lấy ảnh LỚN NHẤT". Lấy ảnh ĐẦU TIÊN thì trúng logo công ty, và
+   * ảnh đại diện của mọi SP nhập từ BOM sẽ là cái logo — hỏng mà rất khó nhận ra
+   * vì trông vẫn "có ảnh".
+   */
+  it('bỏ qua logo, lấy ảnh sản phẩm to hơn', async () => {
+    const img = await readWorkbookImages(await workbookWithImages())
+    expect(img).not.toBeNull()
+    expect(img!.mime).toBe('image/png')
+    expect(img!.extension).toBe('png')
+    expect(img!.buffer.byteLength).toBe(151)
+  })
+
+  it('file không nhúng ảnh nào thì trả null', async () => {
+    expect(await readWorkbookImages(await sampleWorkbook())).toBeNull()
   })
 })
