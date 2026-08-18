@@ -198,6 +198,22 @@ Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** 
   NW/GW). KTSP dạng `590x720/1060x1100/840` = W × D(mở) × H(mở) → `*_open_mm`.
   Mã HG trùng thì service bỏ trống để người dùng xin mã mới, không để họ ăn lỗi
   CODE_TAKEN sau khi đã duyệt xong cả form.
+- **Lấy kèm ảnh + file khi tạo SP**:  bóc ảnh nhúng
+  (lấy ảnh LỚN NHẤT — biểu mẫu hay có logo ở header, lấy ảnh đầu là dính logo);
+   đính file BOM (doc_type ) + ảnh () qua
+   rồi set . Hai việc này làm SAU CÙNG và
+  NUỐT LỖI: hỏng khâu đính file mà ném ra thì người dùng tưởng lượt Tạo thất bại
+  và bấm lại → SP trùng. Client gửi LẠI file lúc bấm Tạo (không giữ ở server
+  giữa hai nhịp, tránh file mồ côi khi người dùng bỏ ngang).
+- **Lấy kèm ảnh + file khi tạo SP**: `readWorkbookImages` bóc ảnh nhúng — lấy
+  ảnh LỚN NHẤT chứ không phải ảnh đầu tiên (biểu mẫu hay có logo ở header, lấy
+  ảnh đầu là mọi SP đều mang ảnh logo). `createFromBom` đính file BOM
+  (`doc_type: bom`) + ảnh (`image`) qua `uploadFromServer` rồi set
+  `image_file_id`. Hai việc này làm SAU CÙNG và NUỐT LỖI có chủ ý: hỏng khâu
+  đính file mà ném ra thì người dùng tưởng lượt Tạo thất bại và bấm lại → SP
+  trùng; trả cờ `saved_file`/`saved_image` để toast nói thật. Client gửi LẠI
+  file lúc bấm Tạo, không giữ ở server giữa hai nhịp (tránh file mồ côi khi
+  người dùng đọc xong rồi bỏ ngang).
 - **Mã SP theo đúng quy tắc đánh số**, không gõ tay: file không ghi mã HG thì xin
   `/next-code?type=&material=`; đổi Loại / Vật liệu khung là cấp lại (hai thứ đó
   nằm ngay trong mã); `CODE_TAKEN` thì xin số mới rồi bảo bấm lại — cùng cách
