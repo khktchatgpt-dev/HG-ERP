@@ -7,19 +7,14 @@ import { Modal } from '@/components/Modal'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
-import { SHAPE_OPTIONS, calcPartDerived, isCalculable } from '@/lib/bom-calc'
+import {
+  MATERIAL_KIND_OPTIONS,
+  SHAPE_OPTIONS,
+  calcPartDerived,
+  isCalculable,
+} from '@/lib/bom-calc'
 import { parseBomPaste, type DraftPart } from '@/lib/bom-paste'
 import type { PartGroupView } from './ProductProfileCards'
-
-const MATERIALS = [
-  ['', '—'],
-  ['AL', 'Nhôm'],
-  ['IR', 'Sắt'],
-  ['IN', 'Inox'],
-  ['WD', 'Gỗ'],
-  ['RA', 'Mây / nhựa đan'],
-  ['GL', 'Kính'],
-] as const
 
 const inp =
   'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
@@ -224,9 +219,10 @@ export function PartsBulkEntry({
               onChange={(e) => setMaterial(e.target.value)}
               className={head}
             >
-              {MATERIALS.map(([v, l]) => (
-                <option key={v} value={v}>
-                  {l}
+              <option value="">—</option>
+              {MATERIAL_KIND_OPTIONS.map((m) => (
+                <option key={m.code} value={m.code}>
+                  {m.label}
                 </option>
               ))}
             </select>

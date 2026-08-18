@@ -397,6 +397,12 @@ export const filesService = {
   async getDownloadTarget(
     user: User,
     fileId: string,
+    /**
+     * `true` = ép trình duyệt TẢI VỀ với đúng tên gốc (kể cả dấu tiếng Việt).
+     * Mặc định `false` để ảnh/PDF còn xem trực tiếp được — cùng endpoint này
+     * phục vụ cả `<img src>` lẫn nút Tải về.
+     */
+    asAttachment = false,
   ): Promise<{ url: string; expiresIn: number }> {
     const file = await filesRepo.getById(fileId)
     if (!file) throw NotFound('File not found')
@@ -404,6 +410,8 @@ export const filesService = {
     const { url, expiresAt } = await storage.createSignedDownloadUrl(
       file.bucket,
       file.path,
+      undefined,
+      asAttachment ? file.filename : undefined,
     )
     const expiresIn = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000))
     return { url, expiresIn }

@@ -67,6 +67,44 @@ describe('storage.createSignedDownloadUrl', () => {
     expect(expiresAt - before).toBeGreaterThanOrEqual(3600 * 1000 - 1000)
   })
 
+  /**
+   * Canh lỗi MÃ HOÁ HAI LẦN: option `{ download }` của supabase-js chạy
+   * `URLSearchParams` rồi `encodeURI()` chồng lên, ra `%25E1%25BA%25BF` và
+   * trình duyệt lưu file thành "Gh%E1%BA%BF 5 b%E1%BA%ADc…". Ta tự nối nên phải
+   * đúng một lần mã hoá — giải mã lại ra được tên gốc.
+   */
+  it('downloadAs nối vào URL và chỉ mã hoá MỘT lần', async () => {
+    const name = 'BOM Ghế 5 bậc Ferrara.xlsx'
+    const { url } = await storage.createSignedDownloadUrl(
+      'attachments',
+      'product/x/uuid-BOM_Gh_5_b_c.xlsx',
+      3600,
+      name,
+    )
+    // Không đi qua option của SDK — lời gọi vẫn là 2 tham số như đường xem ảnh.
+    expect(createSignedUrl).toHaveBeenCalledWith('product/x/uuid-BOM_Gh_5_b_c.xlsx', 3600)
+    const got = new URL(url, 'https://x.test').searchParams.get('download')
+    expect(got).toBe(name)
+    expect(url).not.toContain('%25')
+  })
+
+  /**
+   * Cùng object nhưng một bên xem trực tiếp, một bên ép tải về là HAI url. Gộp
+   * cache là ảnh trong hồ sơ biến thành file tải về (hoặc ngược lại) tuỳ ai bấm
+   * trước — lỗi rất khó lần ra vì phụ thuộc thứ tự thao tác.
+   */
+  it('URL xem trực tiếp và URL tải về không dùng chung ô cache', async () => {
+    const inline = await storage.createSignedDownloadUrl('attachments', 'a.png')
+    const attach = await storage.createSignedDownloadUrl(
+      'attachments',
+      'a.png',
+      3600,
+      'Ảnh sản phẩm.png',
+    )
+    expect(attach.url).not.toBe(inline.url)
+    expect(createSignedUrl).toHaveBeenCalledTimes(2)
+  })
+
   it('hết hạn thì ký lại URL mới', async () => {
     vi.useFakeTimers()
     const a = await storage.createSignedDownloadUrl('attachments', 'exp.png')

@@ -66,13 +66,25 @@ export const storage = {
    * các lần render trong cùng vòng đời token trả về **đúng một URL** — xem
    * `signed-url-cache.ts` để biết vì sao điều đó quan trọng với chi phí egress.
    */
+  /**
+   * `downloadAs` đặt `Content-Disposition: attachment; filename="…"` trên URL ký.
+   *
+   * Cần vì ĐƯỜNG DẪN trên Storage đã bị `sanitizeFilename` lột sạch dấu tiếng
+   * Việt (đúng — tránh rắc rối mã hoá ở tầng lưu trữ), nên nếu mở thẳng URL thì
+   * trình duyệt lấy tên từ đường dẫn và lưu ra "BOM_MERXX_Gh_5_b_c_Ferrara.xlsx".
+   * Tên đẹp vẫn nằm nguyên ở cột `files.filename` — trả nó lại qua header này.
+   *
+   * CHỈ dùng cho nút tải xuống. Ảnh và PDF xem trực tiếp phải để trống, không
+   * thì `<img>` / `<iframe>` biến thành tải file.
+   */
   async createSignedDownloadUrl(
     bucket: FileBucket,
     path: string,
     ttlSeconds = SIGNED_GET_TTL_SECONDS,
+    downloadAs?: string,
   ): Promise<{ url: string; expiresAt: number }> {
     const now = Date.now()
-    const key = SignedUrlCache.key(bucket, path)
+    const key = SignedUrlCache.key(bucket, path, downloadAs)
     const hit = urlCache.get(key, now)
     if (hit) return { url: hit.url, expiresAt: hit.expiresAt }
 
@@ -81,9 +93,23 @@ export const storage = {
       .createSignedUrl(path, ttlSeconds)
     if (error || !data) throw new Error(error?.message ?? 'signed url failed')
 
-    const expiresAt = signedUrlExpiryMs(data.signedUrl, now + ttlSeconds * 1000)
-    urlCache.set(key, data.signedUrl, expiresAt, now)
-    return { url: data.signedUrl, expiresAt }
+    /**
+     * Tự nối `download` thay vì dùng option `{ download }` của supabase-js.
+     *
+     * KHÔNG phải sở thích: `createSignedUrl` của SDK mã hoá tên file bằng
+     * `URLSearchParams` (ra `Gh%E1%BA%BF`) rồi bọc TOÀN BỘ url trong
+     * `encodeURI()`, khiến mọi dấu `%` bị mã hoá lần nữa thành `%25E1%25BA%25BF`.
+     * Kết quả là trình duyệt lưu ra tên "Gh%E1%BA%BF 5 b%E1%BA%ADc…" — hỏng
+     * đúng cái ta đang đi sửa. Nối tay thì chỉ mã hoá một lần, và cũng không
+     * còn phụ thuộc vào việc SDK bao giờ vá lỗi đó.
+     */
+    const signedUrl = downloadAs
+      ? `${data.signedUrl}&download=${encodeURIComponent(downloadAs)}`
+      : data.signedUrl
+
+    const expiresAt = signedUrlExpiryMs(signedUrl, now + ttlSeconds * 1000)
+    urlCache.set(key, signedUrl, expiresAt, now)
+    return { url: signedUrl, expiresAt }
   },
 
   /**

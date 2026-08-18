@@ -19,6 +19,20 @@ export const MATERIAL_DENSITY: Record<string, number> = {
 }
 
 /**
+ * HỆ VẬT LIỆU của một dòng định mức (`material_kind`). Rộng hơn
+ * `MATERIAL_DENSITY`: gỗ / mây / kính không có khối lượng riêng cố định nên
+ * không tính được kg, nhưng vẫn cần phân loại để lọc và để mua hàng.
+ */
+export const MATERIAL_KIND_OPTIONS: { code: string; label: string }[] = [
+  { code: 'AL', label: 'Nhôm' },
+  { code: 'IR', label: 'Sắt' },
+  { code: 'IN', label: 'Inox' },
+  { code: 'WD', label: 'Gỗ' },
+  { code: 'RA', label: 'Mây / nhựa đan' },
+  { code: 'GL', label: 'Kính' },
+]
+
+/**
  * Dạng profile tính được tiết diện. OVAN cố ý KHÔNG có: coi ovan là hình chữ
  * nhật chỉ khớp 1/13 dòng thực tế, thà để trống còn hơn đưa số sai. Mã khuôn ép
  * (PF) có tiết diện tuỳ ý nên cũng không tính được.

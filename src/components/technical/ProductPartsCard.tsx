@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Copy, Layers, Pencil, Search } from 'lucide-react'
+import { ChevronRight, Copy, Layers, Pencil, Search, Sparkles } from 'lucide-react'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
 import { cn } from '@/lib/utils'
@@ -12,6 +12,7 @@ import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PartCardEdit } from './PartCardEdit'
 import { PartsCopyDialog } from './PartsCopyDialog'
 import { PartsBulkEntry } from './PartsBulkEntry'
+import { BomAiImport } from './BomAiImport'
 import { InlineHead, PartRowInline, PartRowNew, inlineColSpan } from './PartRowInline'
 import type { ClusterView, PartGroupView, PartView } from './ProductProfileCards'
 import {
@@ -496,6 +497,7 @@ export function ProductPartsCard({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [copying, setCopying] = useState(false)
   const [bulk, setBulk] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [inline, setInline] = useState(false)
   /** Dòng đang tick để gom cụm hàng loạt. */
   const [picked, setPicked] = useState<string[]>([])
@@ -864,6 +866,14 @@ export function ProductPartsCard({
                 className="text-primary shrink-0 text-xs font-medium hover:underline"
               >
                 Dán từ Excel
+              </button>
+              <button
+                type="button"
+                onClick={() => setAiOpen(true)}
+                className="text-primary inline-flex shrink-0 items-center gap-1 text-xs font-medium hover:underline"
+              >
+                <Sparkles className="size-3.5" />
+                Đọc file BOM
               </button>
               <button
                 type="button"
@@ -1360,6 +1370,14 @@ export function ProductPartsCard({
           groups={partGroups}
           defaultGroup={firstGroup}
           onClose={() => setBulk(false)}
+        />
+      )}
+
+      {aiOpen && (
+        <BomAiImport
+          productId={productId}
+          groups={partGroups}
+          onClose={() => setAiOpen(false)}
         />
       )}
 

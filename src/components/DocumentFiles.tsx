@@ -73,7 +73,7 @@ export function DocumentFiles({
 
   async function download(f: DocFile) {
     try {
-      const { url } = await api<{ url: string }>(`/api/files/${f.id}`)
+      const { url } = await api<{ url: string }>(`/api/files/${f.id}?download=1`)
       window.open(url, '_blank', 'noopener')
     } catch (e) {
       toast.error('Không tải được file', e instanceof ApiError ? e.message : 'Có lỗi')

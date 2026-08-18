@@ -152,6 +152,75 @@ Copy `.env.local.example` → `.env.local`. Required:
 - `SUPABASE_SECRET_KEY` — server-only, bypasses RLS (new format: `sb_secret_*`)
 - `SESSION_SECRET` — ≥32 chars. Generate: `node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"`
 
+Optional (bật tính năng đọc file BOM bằng AI): `ANTHROPIC_API_KEY` **hoặc**
+`GEMINI_API_KEY`, cộng `BOM_AI_PROVIDER` / `BOM_AI_MODEL` để chọn bên và tầng
+model. Thiếu cả hai key thì route trả lỗi cấu hình, phần còn lại của app không
+ảnh hưởng.
+
+## Đọc file BOM bằng AI (`bom-ai.*`)
+
+Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** cho hồ sơ SP.
+
+- **Không mở đường ghi mới.** Service chỉ trả draft; UI (`BomAiImport.tsx`) cho
+  người dùng soi rồi lưu qua đúng route `parts/bulk` mà lưới gõ tay đang dùng —
+  vẫn qua `productPartsBulkSchema` + `calcPartDerived`.
+- **Mô hình chỉ TRÍCH, không TÍNH.** Khối lượng / tổng dài / diện tích / m³ do
+  `bom-calc.ts` tính lại. Đừng nhận số học của mô hình cho thứ đi vào giá thành.
+- **Seam đổi nhà cung cấp**: `bom-ai.provider.ts` giữ interface `BomExtractor` +
+  prompt + cách chọn adapter; `bom-ai.anthropic.ts` / `bom-ai.gemini.ts` chỉ còn
+  việc gọi HTTP. Cả hai dùng CHUNG một JSON Schema, nên chấm điểm hai bên là đổi
+  một biến env. Chọn xong thì xoá adapter kia + gỡ dependency của nó.
+- **BẪY**: đừng sinh JSON Schema bằng `z.toJSONSchema(productPartsBulkSchema)` —
+  structured outputs (cả hai bên) không nhận `minimum`/`maxLength`/`pattern`.
+  `buildExtractJsonSchema()` viết tay schema "gầy", zod kiểm lại ở server. Có
+  test canh chính điều này trong `bom-ai.schema.test.ts`.
+- **`.xlsx` đi đường lưới ô** (`lib/bom-grid.ts`) chứ không phải vision: rẻ hơn
+  nhiều lần, chính xác hơn, và là đường duy nhất lấy được `source_ref` (địa chỉ
+  ô nguồn) cho người kiểm. File `.xls` đời cũ exceljs không đọc được — báo người
+  dùng lưu lại thành .xlsx.
+- **Gemini: ghim model, đừng dùng alias.** `gemini-flash-latest` trả 503
+  UNAVAILABLE liên tục (đo 17/08/2026). Mặc định là `gemini-3.5-flash`. Kèm
+  `withRetry` giãn cách vì `@google/genai` KHÔNG tự retry 5xx — request nhỏ đi
+  lọt trong khi request thật (prompt + lưới + schema) 503 trên cùng model, tức
+  là lỗi công suất theo kích thước. SDK Anthropic tự retry nên không cần.
+- Lỗi nhà cung cấp được DỊCH sang câu người dùng đọc được (`translateGeminiError`
+  / `translateAnthropicError`) — quá tải thì bảo chờ, cấu hình sai thì bảo đi
+  sửa. Không dịch thì mọi thứ rơi ra "Internal server error".
+- **Ghi bản nháp đi qua `parts/ai-apply`** (cả bản nháp một lượt), KHÔNG lặp
+  `parts/bulk` từng khối: chế độ `replace` phải xoá xong mọi nhóm liên quan rồi
+  mới ghi, chia nhỏ là khối sau cắn vào khối trước. `replace` chỉ xoá các NHÓM có
+  trong bản nháp (`deletePartsByGroups`) — file chỉ nói về khung thì đừng xoá bao
+  bì ai đó nhập tay. Màn duyệt luôn bày số dòng đang có (`meta.existing`) vì rất
+  nhiều hồ sơ đã được `bom-import-all.mjs` nạp sẵn từ chính file đó.
+- **Tạo SP mới từ file BOM**: `/products` → "Tạo từ file BOM"
+  (`BomAiNewProduct.tsx` → `products/from-bom`). Bật `withProduct` để đọc thêm
+  khối thông tin chung ở đầu file (TÊN SP, MÃ K.HÀNG, KTSP, Nhiên Liệu, KTBB,
+  NW/GW). KTSP dạng `590x720/1060x1100/840` = W × D(mở) × H(mở) → `*_open_mm`.
+  Mã HG trùng thì service bỏ trống để người dùng xin mã mới, không để họ ăn lỗi
+  CODE_TAKEN sau khi đã duyệt xong cả form.
+- **Mã SP theo đúng quy tắc đánh số**, không gõ tay: file không ghi mã HG thì xin
+  `/next-code?type=&material=`; đổi Loại / Vật liệu khung là cấp lại (hai thứ đó
+  nằm ngay trong mã); `CODE_TAKEN` thì xin số mới rồi bảo bấm lại — cùng cách
+  `ProductForm.tsx` làm. Còn ô "gõ tay" cho SP mã cũ không theo quy tắc.
+- Khối thuộc tính đọc thêm `customer_name` (thường CHỈ nằm trong TÊN FILE:
+  `BOM_MERXX_…` → MERXX, nên `filename` được truyền vào prompt), `unit`, và
+  **thông số in LSX** → `tech_spec` (Sơn/Gỗ/Kính/Nệm — đọc từ tiêu đề khối, BOM
+  không ghi thì trống). CỐ Ý KHÔNG đọc: khối ISO (người tạo = `owner_id` theo
+  phiên đăng nhập + `created_at`, không chép chữ ký giấy), kích thước mở, và ô
+  "Khối lượng" (là tổng tính từ định mức — app tự tính, tránh hai nguồn một số).
+
+## Tải file có dấu tiếng Việt
+
+`GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
+trả URL xem trực tiếp (cùng endpoint phục vụ `<img>`/`<iframe>` của
+`FilePreviewDialog`). Đường dẫn trên Storage đã bị `sanitizeFilename` lột dấu nên
+mở thẳng URL sẽ lưu ra `BOM_Gh_5_b_c….xlsx`.
+
+**BẪY**: đừng dùng option `{ download }` của supabase-js — nó mã hoá tên bằng
+`URLSearchParams` rồi bọc cả URL trong `encodeURI()`, ra `%25E1%25BA%25BF` (mã
+hoá hai lần). `storage.createSignedDownloadUrl` tự nối `&download=` + một lần
+`encodeURIComponent`. Có test canh trong `storage.test.ts`.
+
 ## MCP (Supabase) — HTTP transport
 
 Copy the exact command from Supabase dashboard → **Connect → MCP → Claude Code**:
