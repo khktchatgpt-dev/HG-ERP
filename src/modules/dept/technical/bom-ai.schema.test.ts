@@ -13,6 +13,7 @@ const line = (over: Record<string, unknown> = {}) => ({
   part_name: 'Chân trước',
   cluster_name: 'Cụm khung',
   profile_shape: 'HOP',
+  profile_code: null,
   material_kind: 'AL',
   dim_a_mm: 18,
   dim_b_mm: 70,
@@ -149,10 +150,34 @@ describe('bomDraftLineSchema', () => {
     expect(r.note).toBeNull()
   })
 
-  it('từ chối dòng không có tên hoặc số lượng ≤ 0', () => {
+  it('từ chối dòng không có TÊN — thứ duy nhất khiến dòng vô nghĩa', () => {
     expect(bomDraftLineSchema.safeParse(line({ part_name: '  ' })).success).toBe(false)
-    expect(bomDraftLineSchema.safeParse(line({ qty: 0 })).success).toBe(false)
-    expect(bomDraftLineSchema.safeParse(line({ qty: -3 })).success).toBe(false)
+  })
+
+  /**
+   * File BOM bỏ trống hẳn cột Số lượng là chuyện thường (đo trên "Ghế XC Tilos":
+   * trống cả 11 dòng). Trước đây `qty` bắt buộc nên prompt phải dặn "ô trống
+   * hiểu là 1" — tức là BẢO mô hình bịa số đi thẳng vào giá thành. Giờ để null
+   * và người dùng điền ở màn duyệt.
+   */
+  it('SL trống / 0 / âm đều về null chứ không loại dòng, không bịa thành 1', () => {
+    expect(bomDraftLineSchema.parse(line({ qty: null })).qty).toBeNull()
+    expect(bomDraftLineSchema.parse(line({ qty: 0 })).qty).toBeNull()
+    expect(bomDraftLineSchema.parse(line({ qty: -3 })).qty).toBeNull()
+    expect(bomDraftLineSchema.parse(line({ qty: 4 })).qty).toBe(4)
+  })
+
+  /**
+   * Cột "Loại" của biểu mẫu chứa MÃ KHUÔN chứ không phải hình dạng ở rất nhiều
+   * file (TD-B768, td-hg04, DT-BD-02). Trước đây không có chỗ chứa nên mã bị
+   * mất trắng hoặc bị ép thành một hình dạng sai.
+   */
+  it('giữ nguyên mã khuôn ở profile_code, không ép thành hình dạng', () => {
+    const r = bomDraftLineSchema.parse(
+      line({ profile_shape: null, profile_code: 'td-hg04' }),
+    )
+    expect(r.profile_code).toBe('td-hg04')
+    expect(r.profile_shape).toBeNull()
   })
 
   it('part_no lẻ (1.5) về null chứ không làm tròn', () => {

@@ -98,6 +98,15 @@ Tiêu đề không rơi rõ vào nhóm nào thì chọn nhóm gần nghĩa nhấ
 - Mọi kích thước tính bằng MILIMÉT, giữ nguyên như file ghi, không quy đổi.
 - Ô trống để null, đừng đoán thay.
 
+# KHÔNG ĐIỀN THAY — luật quan trọng nhất
+Ô nào file BỎ TRỐNG thì trả null. Không suy, không đoán, không lấy giá trị dòng trên, không đặt mặc định, không đếm hộ.
+
+Áp cho MỌI trường, đặc biệt hai chỗ hay bị điền bừa:
+- qty (Số lượng): rất nhiều file BOM bỏ trống hẳn cột này. Trống thì để null — KHÔNG điền 1.
+- part_no (Stt): cột Stt trống thì để null — KHÔNG tự đánh số 1, 2, 3.
+
+Một bản trích THIẾU ô mà trung thực thì người dùng nhìn là biết phải bổ sung. Một bản trích ĐẦY ĐỦ mà có số bịa thì họ tin và mang đi mua hàng, tính giá thành. Thiếu luôn tốt hơn sai.
+
 # Không tự tính
 Chỉ TRÍCH những gì file ghi. Không suy ra khối lượng, tổng chiều dài, diện tích hay thể tích — phần mềm tính lại từ hình học. \`weight_kg\` chỉ điền khi file ghi sẵn một cột khối lượng.
 

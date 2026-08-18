@@ -68,7 +68,12 @@ export const BOM_LINE_FIELDS: FieldSpec[] = [
     name: 'profile_shape',
     type: 'string',
     enum: SHAPE_CODES,
-    desc: 'Cột "Loại" / kiểu profile: Hộp→HOP, Tròn→TRON, Tròn đặc→TRONDAC, Vuông→VUONG, La→LA, Ovan→OVAN, Tấm/Tole→TAM, Lưới→LUOI. Không rõ thì null.',
+    desc: 'HÌNH DẠNG tiết diện, CHỈ khi cột "Loại" ghi đúng tên hình: Hộp→HOP, Tròn→TRON, Tròn đặc→TRONDAC, Vuông→VUONG, La→LA, Ovan→OVAN, Tấm/Tole→TAM, Lưới→LUOI. Cột "Loại" ghi MÃ KHUÔN (TD-B768, td-hg04, HG04, DT-BD-02…) thì để null và bỏ mã đó vào profile_code — KHÔNG đoán hình dạng từ mã.',
+  },
+  {
+    name: 'profile_code',
+    type: 'string',
+    desc: 'MÃ KHUÔN / mã profile chép NGUYÊN VĂN từ cột "Loại" khi ô đó là mã chứ không phải tên hình dạng (vd "TD-B768", "td-hg04", "DT-BD-02"). Giữ đúng hoa/thường như file ghi. Ô ghi tên hình dạng thì để null.',
   },
   {
     name: 'material_kind',
@@ -101,8 +106,7 @@ export const BOM_LINE_FIELDS: FieldSpec[] = [
   {
     name: 'qty',
     type: 'number',
-    required: true,
-    desc: 'Cột "Số lượng" / "SL" trên một sản phẩm. Bắt buộc > 0; ô trống thì hiểu là 1.',
+    desc: 'Cột "Số lượng" / "SL" trên một sản phẩm. Ô TRỐNG thì để null — TUYỆT ĐỐI không điền 1 hay đếm hộ. Rất nhiều file BOM bỏ trống cột này; người dùng sẽ tự điền.',
   },
   { name: 'unit', type: 'string', desc: 'Cột "ĐVT" (cây, m, kg, bộ, cái…).' },
   {
@@ -367,6 +371,7 @@ export const bomDraftLineSchema = z.object({
   part_name: z.string().trim().min(1).max(300),
   cluster_name: text(120),
   profile_shape: code(SHAPE_CODES),
+  profile_code: text(30),
   material_kind: code(MATERIAL_CODES),
   dim_a_mm: posNum,
   dim_b_mm: posNum,
@@ -375,10 +380,16 @@ export const bomDraftLineSchema = z.object({
   bend_waste_mm: posNum,
   tenon_mm: posNum,
   /**
-   * Trường DUY NHẤT còn nghiêm ngặt cùng `part_name`: không có số lượng thì
-   * dòng định mức vô nghĩa, thà loại còn hơn đoán bừa thành 1.
+   * CHO PHÉP NULL — nhiều file BOM bỏ trống hẳn cột Số lượng (đo trên file
+   * "Ghế XC Tilos": trống cả 11 dòng). Trước đây trường này bắt buộc nên mô
+   * hình buộc phải bịa; giờ để trống và người dùng điền ở màn duyệt.
+   *
+   * Số ≤ 0 cũng về null: "0 cái" không phải một định mức.
    */
-  qty: z.coerce.number().positive(),
+  qty: z.unknown().transform((v) => {
+    const n = asNumber(v)
+    return n != null && n > 0 ? n : null
+  }),
   unit: text(30),
   material_note: text(200),
   weight_kg: posNum,

@@ -69,6 +69,7 @@ type Draft = {
     truncated: string[]
     dropped: number
     lines: number
+    missingQty: number
     embeddedImageBytes: number | null
   }
 }
@@ -110,6 +111,14 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
   const [saveImage, setSaveImage] = useState(true)
   const [busy, setBusy] = useState<'read' | 'create' | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
+  /**
+   * SL người dùng gõ cho các dòng file BỎ TRỐNG. Khoá "khối:dòng".
+   *
+   * Màn này cố ý không có lưới sửa đầy đủ, nhưng SL thì buộc phải có ô nhập:
+   * DB đòi `qty > 0`, mà bỏ luôn các dòng đó thì mất sạch quy cách vừa đọc và
+   * người dùng phải gõ lại tay từ đầu ở tab Định mức.
+   */
+  const [qtyFix, setQtyFix] = useState<Record<string, number | null>>({})
   const [p, setP] = useState<DraftProduct | null>(null)
 
   /**
@@ -167,6 +176,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
       })
       setDraft(d)
       setP(d.product)
+      setQtyFix({})
       setManualCode(false)
       // File không ghi mã (hoặc mã đã có SP dùng, service đã bỏ) → cấp mã theo
       // đúng quy tắc ngay, đừng bắt người dùng tự nghĩ ra số thứ tự.
@@ -227,7 +237,12 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
               gw_kg: p.gw_kg ?? undefined,
             },
           },
-          sections: draft.sections,
+          sections: draft.sections.map((s, si) => ({
+            ...s,
+            lines: s.lines.map((l, li) =>
+              l.qty == null ? { ...l, qty: qtyFix[`${si}:${li}`] ?? null } : l,
+            ),
+          })),
           // Gửi lại file để đính vào hồ sơ + bóc ảnh nhúng. `picked` vẫn còn
           // trong bộ nhớ trình duyệt nên không phải đọc lại từ đĩa.
           source_file:
@@ -268,6 +283,30 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
       toast.error('Tạo sản phẩm thất bại', apiErrorText(e))
     }
   }
+
+  /**
+   * Các dòng file bỏ trống SL, phẳng hoá kèm nhãn quy cách để người dùng biết
+   * đang điền cho chi tiết nào (chỉ có tên thì "Đố sau" nào cũng như nhau).
+   */
+  const missingRows = (draft?.sections ?? []).flatMap((s, si) =>
+    s.lines
+      .map((l, li) => ({ l, li }))
+      .filter(({ l }) => l.qty == null)
+      .map(({ l, li }) => {
+        const dims = [l.dim_a_mm, l.dim_b_mm, l.cut_length_mm]
+          .filter((v) => v != null)
+          .join('×')
+        return {
+          key: `${si}:${li}`,
+          name: String(l.part_name ?? '?'),
+          spec: [l.profile_code ?? l.profile_shape, dims].filter(Boolean).join(' · '),
+        }
+      }),
+  )
+  /** Dòng sẽ THẬT SỰ được ghi — dòng thiếu SL mà không điền thì server bỏ. */
+  const willSave =
+    (draft?.meta.lines ?? 0) -
+    missingRows.filter((r) => (qtyFix[r.key] ?? null) == null).length
 
   const lowConfidence = p != null && p.confidence < 0.8
 
@@ -562,6 +601,48 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             )}
+            {/* File BỎ TRỐNG cột Số lượng → bắt điền tại chỗ. Không tự điền 1
+                (mô hình đã bị cấm đoán) và cũng không vứt dòng đi. */}
+            {missingRows.length > 0 && (
+              <div className="flex flex-col gap-2 rounded-md border border-[color-mix(in_srgb,var(--stop)_35%,transparent)] bg-[color-mix(in_srgb,var(--stop)_8%,transparent)] p-2.5 text-xs">
+                <div className="flex items-start gap-2 text-[var(--stop)]">
+                  <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                  <span>
+                    File không ghi <b>Số lượng</b> cho {missingRows.length} dòng. Điền SL
+                    ở đây, hoặc để trống thì dòng đó KHÔNG được ghi.
+                  </span>
+                </div>
+                <div className="max-h-52 overflow-auto">
+                  <table className="w-full">
+                    <tbody>
+                      {missingRows.map((r) => (
+                        <tr key={r.key} className="border-b last:border-0">
+                          <td className="py-1 pr-2">{r.name}</td>
+                          <td className="text-muted-foreground py-1 pr-2 whitespace-nowrap">
+                            {r.spec}
+                          </td>
+                          <td className="w-20 py-1">
+                            <input
+                              value={show(qtyFix[r.key] ?? null)}
+                              onChange={(e) =>
+                                setQtyFix((m) => ({
+                                  ...m,
+                                  [r.key]: nOrNull(e.target.value),
+                                }))
+                              }
+                              className={`${head} py-1 text-right`}
+                              inputMode="decimal"
+                              placeholder="SL"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Lưu kèm — cả hai thứ này đã nằm sẵn trong file, không lưu thì
                 người dùng phải tự upload lại đúng file vừa đọc. */}
             <div className="flex flex-col gap-1.5 rounded-md border p-2.5 text-xs">
@@ -624,9 +705,7 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                   className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white shadow disabled:opacity-50"
                 >
                   {busy === 'create' && <Spinner size={14} />}
-                  {busy === 'create'
-                    ? 'Đang tạo…'
-                    : `Tạo sản phẩm + ${draft.meta.lines} dòng`}
+                  {busy === 'create' ? 'Đang tạo…' : `Tạo sản phẩm + ${willSave} dòng`}
                 </button>
               </div>
             </div>

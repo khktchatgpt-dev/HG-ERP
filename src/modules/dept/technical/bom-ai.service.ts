@@ -52,9 +52,15 @@ export type BomAiDraft = {
     sheets: { name: string; emitted: number }[]
     /** Phần KHÔNG đưa vào cho mô hình đọc — luôn bày ra, không nuốt im lặng. */
     truncated: string[]
-    /** Dòng mô hình trả về nhưng không qua được kiểm (thiếu tên, SL ≤ 0…). */
+    /** Dòng mô hình trả về nhưng không có TÊN — thứ duy nhất khiến dòng vô nghĩa. */
     dropped: number
     lines: number
+    /**
+     * Dòng đọc được nhưng file BỎ TRỐNG cột Số lượng. Giữ nguyên trong bản nháp
+     * để không mất quy cách; người dùng phải điền trước khi lưu vì DB có ràng
+     * buộc `qty not null check (qty > 0)`.
+     */
+    missingQty: number
     /**
      * Định mức ĐANG CÓ trong hồ sơ, đếm theo nhóm. Để màn duyệt cảnh báo trước
      * khi ghi — nhiều hồ sơ đã được script nạp sẵn từ chính file BOM đó, đọc
@@ -142,7 +148,7 @@ async function loadSource(
 function validateDraft(
   raw: unknown,
   allowedGroups: Set<string>,
-): { sections: BomDraftSection[]; dropped: number } {
+): { sections: BomDraftSection[]; dropped: number; missingQty: number } {
   const parsed = bomDraftSchema.safeParse(raw)
   if (!parsed.success) {
     // Cả gói hỏng hình dạng là lỗi hệ thống chứ không phải lỗi người dùng —
@@ -151,6 +157,7 @@ function validateDraft(
   }
 
   let dropped = 0
+  let missingQty = 0
   const sections: BomDraftSection[] = []
   for (const section of parsed.data.sections) {
     if (!allowedGroups.has(section.group_code)) {
@@ -159,15 +166,19 @@ function validateDraft(
     }
     const lines: BomDraftLine[] = []
     for (const line of section.lines) {
-      if (!line.part_name || line.qty <= 0) {
+      // Chỉ TÊN mới là điều kiện sống của một dòng. Dòng thiếu SỐ LƯỢNG vẫn
+      // GIỮ LẠI (đếm riêng): file BOM bỏ trống cột SL là chuyện thường, loại đi
+      // là mất luôn quy cách đã đọc được và người dùng phải gõ lại từ đầu.
+      if (!line.part_name) {
         dropped++
         continue
       }
+      if (line.qty == null) missingQty++
       lines.push(line)
     }
     if (lines.length > 0) sections.push({ ...section, lines })
   }
-  return { sections, dropped }
+  return { sections, dropped, missingQty }
 }
 
 /**
@@ -184,6 +195,22 @@ function parseBulkSection(s: {
   unit_basis?: string | null
   lines: Record<string, unknown>[]
 }) {
+  // Chốt chặn cuối cho dòng THIẾU SỐ LƯỢNG: DB có `qty not null check (qty > 0)`
+  // nên zod bên dưới sẽ ném một lỗi khó hiểu. Nói thẳng tên dòng để người dùng
+  // biết phải điền ô nào — giao diện đã chặn rồi, đây chỉ là lưới an toàn.
+  const noQty = s.lines.filter((l) => {
+    const q = l.qty
+    return q == null || q === '' || !(Number(q) > 0)
+  })
+  if (noQty.length > 0) {
+    const names = noQty
+      .slice(0, 3)
+      .map((l) => String(l.part_name ?? '?'))
+      .join(', ')
+    throw BadRequest(
+      `${noQty.length} dòng chưa có số lượng (${names}${noQty.length > 3 ? '…' : ''}) — điền SL rồi lưu lại`,
+    )
+  }
   return productPartsBulkSchema.parse({
     group_code: s.group_code,
     section_title: s.section_title ?? null,
@@ -276,7 +303,7 @@ export const bomAiService = {
       { productHint: [product.code, product.name].filter(Boolean).join(' — ') },
     )
 
-    const { sections, dropped } = validateDraft(
+    const { sections, dropped, missingQty } = validateDraft(
       result.raw,
       new Set(groups.map((g) => g.code)),
     )
@@ -293,6 +320,7 @@ export const bomAiService = {
         truncated,
         dropped,
         lines: sections.reduce((n, s) => n + s.lines.length, 0),
+        missingQty,
         existing: {
           total: Object.values(byGroup).reduce((a, b) => a + b, 0),
           byGroup,
@@ -338,7 +366,7 @@ export const bomAiService = {
     if (!parsed.success) {
       throw BadRequest('Mô hình trả về dữ liệu không đúng cấu trúc, thử lại')
     }
-    const { sections, dropped } = validateDraft(
+    const { sections, dropped, missingQty } = validateDraft(
       result.raw,
       new Set(groups.map((g) => g.code)),
     )
@@ -367,6 +395,7 @@ export const bomAiService = {
         truncated,
         dropped,
         lines: sections.reduce((n, s) => n + s.lines.length, 0),
+        missingQty,
         embeddedImageBytes: embedded?.buffer.byteLength ?? null,
       },
     }
@@ -391,11 +420,24 @@ export const bomAiService = {
   }> {
     await assertAction(user, 'technical.product.create')
 
+    /*
+     * Dòng người dùng CỐ Ý để trống SL thì bỏ, không ném lỗi: màn tạo có bảng
+     * điền SL cho các dòng file thiếu và nói rõ "để trống thì dòng đó không
+     * được ghi". Khác luồng `apply` (hồ sơ có sẵn) — ở đó lưới chặn hẳn nút Lưu
+     * nên còn dòng thiếu SL là lỗi lập trình, phải ném.
+     */
+    const withQty = input.sections
+      .map((s) => ({
+        ...s,
+        lines: s.lines.filter((l) => l.qty != null && Number(l.qty) > 0),
+      }))
+      .filter((s) => s.lines.length > 0)
+
     // Validate HẾT các khối TRƯỚC khi tạo SP: một khối hỏng phát hiện sau khi
     // đã insert là để lại hồ sơ mồ côi không định mức (đã dính một lần —
     // client gửi kèm trường duyệt `confidence`, DB không có cột đó, nổ ở khối
     // đầu tiên sau khi SP đã nằm trong bảng).
-    const sections = input.sections.map((s) => parseBulkSection(s))
+    const sections = withQty.map((s) => parseBulkSection(s))
 
     const product = await productsService.create(user, input.product)
 

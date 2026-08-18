@@ -48,7 +48,8 @@ type ApiLine = {
   cut_length_mm: number | null
   bend_waste_mm: number | null
   tenon_mm: number | null
-  qty: number
+  qty: number | null
+  profile_code: string | null
   unit: string | null
   material_note: string | null
   weight_kg: number | null
@@ -281,6 +282,16 @@ export function BomAiImport({
       return [...acc, { code: s.group_code, label, n }]
     }, [])
   const clashTotal = clash.reduce((n, c) => n + c.n, 0)
+  /**
+   * Dòng ĐỌC ĐƯỢC nhưng file bỏ trống cột Số lượng. Không tự điền 1 (mô hình đã
+   * bị cấm làm thế) và cũng không loại bỏ — người dùng gõ SL ngay trên lưới.
+   * DB có `qty not null check (qty > 0)` nên chưa điền thì chưa lưu được.
+   */
+  const noQtyCount = sections.reduce(
+    (n, s) => n + (s.include ? s.lines.filter((l) => l.qty == null).length : 0),
+    0,
+  )
+
   const lowCount = sections.reduce(
     (n, s) =>
       n + (s.include ? s.lines.filter((l) => l.confidence < LOW_CONFIDENCE).length : 0),
@@ -466,6 +477,12 @@ export function BomAiImport({
                     <b className="text-[var(--warn)]">{lowCount} dòng cần soi</b>
                   </>
                 )}
+                {noQtyCount > 0 && (
+                  <>
+                    {' · '}
+                    <b className="text-[var(--stop)]">{noQtyCount} dòng thiếu SL</b>
+                  </>
+                )}
               </span>
               {lowCount > 0 && (
                 <label className="flex items-center gap-1.5">
@@ -570,9 +587,11 @@ export function BomAiImport({
                               <tr
                                 key={l.key}
                                 className={`border-b last:border-0 ${
-                                  low
-                                    ? 'bg-[color-mix(in_srgb,var(--warn)_8%,transparent)]'
-                                    : ''
+                                  l.qty == null
+                                    ? 'bg-[color-mix(in_srgb,var(--stop)_10%,transparent)]'
+                                    : low
+                                      ? 'bg-[color-mix(in_srgb,var(--warn)_8%,transparent)]'
+                                      : ''
                                 }`}
                               >
                                 <td className="py-1 pl-2.5">
@@ -728,16 +747,23 @@ export function BomAiImport({
                 </button>
                 <button
                   type="button"
-                  disabled={busy !== null || totalLines === 0}
+                  disabled={busy !== null || totalLines === 0 || noQtyCount > 0}
+                  title={
+                    noQtyCount > 0
+                      ? `Còn ${noQtyCount} dòng chưa có số lượng — điền ô SL (dòng tô đỏ) rồi mới lưu được`
+                      : undefined
+                  }
                   onClick={() => void save()}
                   className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white shadow disabled:opacity-50"
                 >
                   {busy === 'save' && <Spinner size={14} />}
                   {busy === 'save'
                     ? 'Đang lưu…'
-                    : mode === 'replace' && clashTotal > 0
-                      ? `Thay ${clashTotal} dòng bằng ${totalLines} dòng`
-                      : `Lưu ${totalLines} dòng`}
+                    : noQtyCount > 0
+                      ? `Điền SL cho ${noQtyCount} dòng còn thiếu`
+                      : mode === 'replace' && clashTotal > 0
+                        ? `Thay ${clashTotal} dòng bằng ${totalLines} dòng`
+                        : `Lưu ${totalLines} dòng`}
                 </button>
               </div>
             </div>

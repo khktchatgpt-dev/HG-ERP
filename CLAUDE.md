@@ -198,10 +198,10 @@ Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** 
   NW/GW). KTSP dạng `590x720/1060x1100/840` = W × D(mở) × H(mở) → `*_open_mm`.
   Mã HG trùng thì service bỏ trống để người dùng xin mã mới, không để họ ăn lỗi
   CODE_TAKEN sau khi đã duyệt xong cả form.
-- **Lấy kèm ảnh + file khi tạo SP**:  bóc ảnh nhúng
+- **Lấy kèm ảnh + file khi tạo SP**: bóc ảnh nhúng
   (lấy ảnh LỚN NHẤT — biểu mẫu hay có logo ở header, lấy ảnh đầu là dính logo);
-   đính file BOM (doc_type ) + ảnh () qua
-   rồi set . Hai việc này làm SAU CÙNG và
+  đính file BOM (doc_type ) + ảnh () qua
+  rồi set . Hai việc này làm SAU CÙNG và
   NUỐT LỖI: hỏng khâu đính file mà ném ra thì người dùng tưởng lượt Tạo thất bại
   và bấm lại → SP trùng. Client gửi LẠI file lúc bấm Tạo (không giữ ở server
   giữa hai nhịp, tránh file mồ côi khi người dùng bỏ ngang).
