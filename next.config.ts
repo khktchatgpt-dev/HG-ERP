@@ -38,10 +38,20 @@ const nextConfig: NextConfig = {
   turbopack: { root: process.cwd() },
   images: {
     remotePatterns: supabaseImagePatterns(),
-    // Ảnh SP hầu như không đổi (đổi ảnh = file mới, path mới), nên cache bản đã
-    // tối ưu càng lâu càng đỡ egress. Next 16 mặc định đã là 4h; ghi rõ ra đây
-    // cho khỏi phụ thuộc default có thể đổi.
-    minimumCacheTTL: 60 * 60 * 4,
+    /*
+     * 31 NGÀY — không phải để tiết kiệm egress mà để tiết kiệm TIỀN: Vercel tính
+     * phí mỗi lần tối ưu, và hết hạn cache là lần xem kế tiếp bị tính lại. Mặc
+     * định 4h của Next 16 nghĩa là cùng một tấm ảnh bị tính 6 lần/ngày nếu có
+     * người xem đều.
+     *
+     * An toàn vì ảnh BẤT BIẾN theo id: đổi ảnh SP = upload file mới = id mới =
+     * `src` mới (xem `@/server/file-image`), không có chuyện nội dung sau một id
+     * bị thay mà cache còn giữ bản cũ.
+     */
+    minimumCacheTTL: 60 * 60 * 24 * 31,
+    // Chỉ cho tối ưu ảnh đi từ đường dẫn ảnh của app — chặn ai đó mượn
+    // `/_next/image?url=` làm proxy resize cho ảnh bất kỳ.
+    localPatterns: [{ pathname: '/api/files/**' }],
   },
   experimental: {
     // 14/08/2026 — trần upload ảnh nới 5MB → 50MB (migration 0147), user bắt đầu

@@ -8,7 +8,8 @@ import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import type { BomStatus } from '@/modules/dept/technical/technical.schema'
 import { PRODUCT_TYPE_CODES } from '@/lib/product-code'
 import { isLifecycle } from '@/lib/product-lifecycle'
-// (filesService dùng cho cả signed URL ảnh lẫn cờ tài liệu)
+import { fileImageSrc } from '@/server/file-image'
+// (filesService giờ chỉ dùng cho cờ tài liệu — ảnh đi đường dẫn cố định)
 import { ProductsManager } from './ProductsManager'
 
 const PAGE_SIZE = 24
@@ -76,15 +77,17 @@ export default async function TechnicalProductsPage({
     .filter((c) => c.is_active)
     .map((c) => ({ code: c.code, label: c.label }))
 
-  // Ảnh SP của TRANG hiện tại — batch 1 query files + 1 lần ký/bucket (thay N lần).
-  const urlByFileId = await filesService.getDownloadUrls(
-    user,
-    rows.filter((p) => p.image_file_id).map((p) => p.image_file_id!),
-  )
+  /*
+   * Ảnh SP đi qua ĐƯỜNG DẪN CỐ ĐỊNH `/api/files/<id>/img`, KHÔNG phải URL ký.
+   *
+   * URL ký mang `?token=` đổi mỗi lần ký, mà Vercel tính phí tối ưu ảnh theo
+   * từng URL nguồn duy nhất — 24 thẻ ảnh mỗi trang, mỗi lượt xem lại là 24
+   * transformation mới. Đường dẫn tất định ở đây khiến mỗi ảnh chỉ tối ưu một
+   * lần. Không còn phải ký gì ở đây nên cũng bớt một vòng gọi Storage.
+   */
   const imageUrls: Record<string, string> = {}
   for (const p of rows) {
-    const url = p.image_file_id ? urlByFileId[p.image_file_id] : undefined
-    if (url) imageUrls[p.id] = url
+    if (p.image_file_id) imageUrls[p.id] = fileImageSrc(p.image_file_id)
   }
 
   return (

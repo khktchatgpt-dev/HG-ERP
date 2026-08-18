@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation'
+import { fileImageSrc } from '@/server/file-image'
 import { authService } from '@/modules/core/auth/auth.service'
 import {
   canEditProducts,
   productsService,
 } from '@/modules/dept/technical/technical.service'
-import { filesService } from '@/modules/core/files/files.service'
 import { catalogsService } from '@/modules/core/catalogs/catalogs.service'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { HttpError } from '@/server/http'
@@ -55,10 +55,10 @@ export default async function ProductProfilePage({
     throw e
   }
 
+  // Đường dẫn cố định thay URL ký — xem `@/server/file-image` (chuyện phí tối
+  // ưu ảnh của Vercel).
   const imageUrl = data.product.image_file_id
-    ? await filesService
-        .getDownloadUrl(user, data.product.image_file_id)
-        .catch(() => null)
+    ? fileImageSrc(data.product.image_file_id)
     : null
 
   return (

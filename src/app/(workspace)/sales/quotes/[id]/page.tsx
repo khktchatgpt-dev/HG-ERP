@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation'
+import { fileImageSrc } from '@/server/file-image'
 import { authService } from '@/modules/core/auth/auth.service'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { quotesService } from '@/modules/dept/sales/quotes.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
-import { filesService } from '@/modules/core/files/files.service'
 import { HttpError } from '@/server/http'
 import { QuoteDetailView } from '@/components/sales/QuoteDetailView'
 
@@ -36,20 +36,11 @@ export default async function QuoteDetailPage({
     quote.created_by ? usersRepo.findById(quote.created_by) : null,
   ])
 
-  // Ảnh SP (signed URL ngắn hạn) — lỗi thì bỏ ảnh, không chặn xem báo giá.
+  // Ảnh SP qua đường dẫn cố định — xem `@/server/file-image`.
   const imageUrls = new Map<string, string>()
-  await Promise.all(
-    [...new Set(lines.map((l) => l.image_file_id).filter(Boolean))].map(async (fid) => {
-      try {
-        imageUrls.set(
-          fid as string,
-          await filesService.getDownloadUrl(user, fid as string),
-        )
-      } catch {
-        /* ignore */
-      }
-    }),
-  )
+  for (const fid of new Set(lines.map((l) => l.image_file_id).filter(Boolean))) {
+    imageUrls.set(fid as string, fileImageSrc(fid as string))
+  }
 
   return (
     <QuoteDetailView

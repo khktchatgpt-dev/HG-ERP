@@ -1,8 +1,8 @@
+import { fileImageSrc } from '@/server/file-image'
 import { authService } from '@/modules/core/auth/auth.service'
 import { samplesService } from '@/modules/dept/technical/samples.service'
 import { isTechnicalStaff } from '@/modules/dept/technical/technical.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
-import { filesService } from '@/modules/core/files/files.service'
 import { SamplesManager } from './SamplesManager'
 
 const PAGE_SIZE = 24
@@ -38,21 +38,11 @@ export default async function ShowroomPage({
 
   // Ảnh mẫu dùng luôn ảnh của SP — mẫu chưa có ảnh riêng thì vẫn nhận ra được
   // đó là cái gì. Ảnh 4 góc riêng của mẫu nằm ở trang chi tiết.
+  // Đường dẫn cố định thay URL ký — xem `@/server/file-image`.
   const imageUrls: Record<string, string> = {}
-  await Promise.all(
-    rows
-      .filter((s) => s.product_image_file_id)
-      .map(async (s) => {
-        try {
-          imageUrls[s.id] = await filesService.getDownloadUrl(
-            user,
-            s.product_image_file_id!,
-          )
-        } catch {
-          /* bỏ ảnh */
-        }
-      }),
-  )
+  for (const s of rows) {
+    if (s.product_image_file_id) imageUrls[s.id] = fileImageSrc(s.product_image_file_id)
+  }
 
   const { rows: products } = await productsService.listLite(user, {
     is_active: true,

@@ -14,6 +14,19 @@ const PUBLIC_PATHS = [
 ]
 
 /**
+ * ẢNH `/api/files/<id>/img` — ra khỏi gác phiên, tự gác bằng CHỮ KÝ trong URL.
+ *
+ * BẮT BUỘC phải vậy: trình tối ưu ảnh của Next gọi URL này từ SERVER
+ * (`/_next/image?url=…`) nên KHÔNG mang cookie phiên — để proxy gác thì mọi ảnh
+ * đều 401 và vỡ hết. Route tự kiểm HMAC (`@/server/file-image`) và chỉ phục vụ
+ * file có mime `image/*`; tài liệu vẫn đi `/api/files/<id>` có gác phiên.
+ *
+ * Không nới lỏng gì thêm: bản ảnh đã tối ưu mà Vercel phát ra vốn đã nằm trên
+ * CDN công khai.
+ */
+const IMAGE_PATH = /^\/api\/files\/[0-9a-f-]{36}\/img$/i
+
+/**
  * Trang đã DỌN CHỖ — giữ link/bookmark cũ sống. Đổi ở đây (proxy) thay vì bằng
  * page stub vì stub nằm trong layout workspace cũ nên vẫn bị gác quyền vào
  * workspace đó; proxy chạy trước layout nên ai cũng đi tới đích được.
@@ -32,6 +45,7 @@ export async function proxy(request: NextRequest) {
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next()
   }
+  if (IMAGE_PATH.test(pathname)) return NextResponse.next()
 
   // Đổi chỗ TRƯỚC khi gác đăng nhập, để người chưa đăng nhập bấm link cũ thì
   // `?next=` đã là URL mới (khỏi phải nhảy hai lần sau khi đăng nhập).
