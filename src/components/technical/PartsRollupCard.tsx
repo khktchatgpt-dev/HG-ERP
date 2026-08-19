@@ -72,7 +72,13 @@ export function PartsRollupCard({
       (s, p) => s + (layoutOf(p.group_code) === 'metal' ? (p.paint_area_m2 ?? 0) : 0),
       0,
     )
-    if (paintM2 > 0)
+    /**
+     * Dòng sơn TỰ TÍNH chỉ dùng khi hồ sơ CHƯA có khối "Sơn & hoá chất" nhập
+     * tay. Có cả hai thì cùng một lượng sơn hiện hai lần ở hai chỗ, người mua
+     * cộng nhầm — số người nhập thắng, y như luật của các ô dẫn xuất.
+     */
+    const hasPaintBlock = parts.some((p) => layoutOf(p.group_code) === 'paint')
+    if (paintM2 > 0 && !hasPaintBlock)
       out.push({
         name: 'Sơn',
         unit: 'kg',
@@ -81,31 +87,50 @@ export function PartsRollupCard({
         from: `${fmt(paintM2, 4)} m² bề mặt khung ÷ ${coverage} m²/kg`,
       })
 
-    const softM2 = parts.reduce(
-      (s, p) => s + (layoutOf(p.group_code) === 'metal' ? 0 : (p.paint_area_m2 ?? 0)),
-      0,
-    )
-    if (softM2 > 0)
-      out.push({
-        name: 'Vải / bề mặt bọc',
-        unit: 'm²',
-        qty: softM2,
-        digits: 4,
-        from: 'Σ diện tích các dòng gỗ, nệm, vải',
-      })
+    /**
+     * DIỆN TÍCH và THỂ TÍCH gộp THEO TỪNG HỌ, không dồn một dòng.
+     *
+     * Bản trước gộp mọi thứ không phải khung vào một dòng tên "Vải / bề mặt
+     * bọc" — sản phẩm chỉ có nan gỗ, không sợi vải nào, vẫn hiện "Vải 4,6097
+     * m²". Người mua đọc bảng này để đi đặt hàng, gọi sai tên vật liệu là đặt
+     * sai thứ. Nay mỗi họ một dòng, mang đúng tên của họ đó.
+     */
+    /**
+     * Mỗi họ khai ĐƠN VỊ MUA của chính nó, không bày mọi số tính được.
+     *
+     * Vải là ca rõ nhất: `calcPartDerived` vẫn ra m³ cho dòng vải (nó nhận
+     * "khối đặc" bằng việc không khai ô Loại), nhưng thể tích của tấm vải dày
+     * 2mm là số vô nghĩa — không ai đặt vải theo mét khối. Bày ra là mời người
+     * mua đọc nhầm.
+     */
+    const FAMILIES: { fam: string; label: string; units: ('m3' | 'm2')[] }[] = [
+      { fam: 'wood', label: 'Gỗ tự nhiên', units: ['m3'] },
+      { fam: 'sheet', label: 'Polywood / ván ép / mặt bàn', units: ['m2', 'm3'] },
+      { fam: 'soft', label: 'Nệm / mút / gòn', units: ['m3'] },
+      { fam: 'fabric', label: 'Vải / textilene', units: ['m2'] },
+    ]
+    for (const { fam, label, units } of FAMILIES) {
+      const rows = parts.filter((p) => layoutOf(p.group_code) === fam)
+      if (rows.length === 0) continue
 
-    const m3 = parts.reduce(
-      (s, p) => s + (layoutOf(p.group_code) === 'metal' ? 0 : (p.volume_m3 ?? 0)),
-      0,
-    )
-    if (m3 > 0)
-      out.push({
-        name: 'Gỗ / vật liệu khối',
-        unit: 'm³',
-        qty: m3,
-        digits: 6,
-        from: 'Σ khối lượng các dòng gỗ, nệm',
-      })
+      for (const u of units) {
+        const qty = rows.reduce(
+          (s, p) => s + ((u === 'm3' ? p.volume_m3 : p.paint_area_m2) ?? 0),
+          0,
+        )
+        if (qty <= 0) continue
+        out.push({
+          name: label,
+          unit: u === 'm3' ? 'm³' : 'm²',
+          qty,
+          digits: u === 'm3' ? 6 : 4,
+          from:
+            u === 'm3'
+              ? `Σ K. Lượng (m³) của ${rows.length} dòng`
+              : `Σ Diện tích (m²) của ${rows.length} dòng`,
+        })
+      }
+    }
 
     return out
   }, [parts, coverage])

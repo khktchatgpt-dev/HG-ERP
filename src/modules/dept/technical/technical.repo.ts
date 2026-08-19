@@ -542,6 +542,24 @@ export const productsRepo = {
   },
 
   /**
+   * Hồ sơ đang giữ mã này — trả về CẢ TÊN chứ không chỉ true/false.
+   *
+   * Luồng "Tạo SP từ file BOM" cần biết mình đang đụng vào SP nào để nói với
+   * người dùng, thay vì lặng lẽ cấp một mã khác rồi đẻ hồ sơ thứ hai cho cùng
+   * một sản phẩm (0163 — user chốt 19/08/2026).
+   */
+  async findByCodeLite(
+    code: string,
+  ): Promise<{ id: string; code: string; name: string } | null> {
+    const { data } = await db()
+      .from('technical_products')
+      .select('id, code, name')
+      .eq('code', code)
+      .maybeSingle()
+    return data ?? null
+  },
+
+  /**
    * Tra SP theo mã — trả id để DÙNG LẠI thay vì tạo trùng. `code` là UNIQUE nên
    * chèn đè sẽ vỡ ở DB; chỗ nhập hàng loạt (nhập báo giá từ Excel) phải kiểm
    * ngay trước khi chèn vì danh mục có thể đổi giữa lúc xem trước và lúc lưu.
@@ -707,7 +725,8 @@ export type ProductPart = {
   sheet_w_mm: number | null
   sheet_l_mm: number | null
   m3_per_sheet: number | null
-  qty: number
+  /** NULL = file BOM chưa ghi SL, người dùng điền sau (0163). */
+  qty: number | null
   unit: string | null
   /** Màu sơn / màu vật tư — là quy cách, không phải giá. */
   color: string | null
@@ -792,27 +811,6 @@ export const productProfileRepo = {
       .eq('product_id', productId)
       .order('sort_order')
     return (data ?? []) as ProductPart[]
-  },
-
-  /**
-   * Mã vật tư nào trên hồ sơ này CÓ THẬT trong danh mục kho → { mã: tên }.
-   *
-   * `material_code` cố ý để text tự do (0092 — danh mục kho là của phòng khác),
-   * nên phải tra ngược mới biết dòng nào cung ứng gộp mua được. Mã vắng khỏi
-   * map = chưa khớp, UI gắn cờ.
-   */
-  async knownMaterialNames(codes: string[]): Promise<Record<string, string>> {
-    const uniq = [...new Set(codes.filter(Boolean))]
-    if (uniq.length === 0) return {}
-    const { data } = await db()
-      .from('warehouse_materials')
-      .select('code, name')
-      .in('code', uniq)
-    const out: Record<string, string> = {}
-    for (const m of (data ?? []) as { code: string; name: string }[]) {
-      out[m.code] = m.name
-    }
-    return out
   },
 
   /** Đếm dòng định mức — cho nhãn số trên tab, không cần kéo cả bảng. */

@@ -27,11 +27,11 @@ import type { PartView } from './ProductProfileCards'
  */
 
 const inp =
-  'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input bg-background focus:border-[var(--primary)] w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none'
 
 /** Ô nào rộng bao nhiêu trong thẻ — số thì hẹp, tên/mã thì rộng. */
 const widthOf = (key: InputKey): string => {
-  if (key === 'part_name' || key === 'material_code') return 'w-64'
+  if (key === 'part_name') return 'w-64'
   if (key === 'note' || key === 'material_note') return 'w-56'
   if (key === 'cluster_name' || key === 'profile_code' || key === 'wood_species')
     return 'w-40'

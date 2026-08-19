@@ -71,6 +71,8 @@ type Draft = {
     lines: number
     missingQty: number
     embeddedImageBytes: number | null
+    /** Hồ sơ đang giữ mã ghi trong file — có nghĩa SP này đã có, đừng tạo lại. */
+    existingProduct: { id: string; code: string; name: string } | null
   }
 }
 
@@ -178,8 +180,10 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
       setP(d.product)
       setQtyFix({})
       setManualCode(false)
-      // File không ghi mã (hoặc mã đã có SP dùng, service đã bỏ) → cấp mã theo
-      // đúng quy tắc ngay, đừng bắt người dùng tự nghĩ ra số thứ tự.
+      // File KHÔNG ghi mã → cấp mã theo quy tắc ngay, đừng bắt người dùng tự
+      // nghĩ ra số thứ tự. File CÓ ghi mã thì giữ nguyên, kể cả khi mã đó đã có
+      // hồ sơ — lúc đó bày cảnh báo trùng để người dùng chọn, chứ không lặng lẽ
+      // cấp số khác rồi đẻ SP thứ hai (user chốt 19/08/2026).
       if (!d.product.code && d.product.product_type && d.product.frame_material) {
         void fetchCode(d.product.product_type, d.product.frame_material)
       }
@@ -303,10 +307,17 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
         }
       }),
   )
-  /** Dòng sẽ THẬT SỰ được ghi — dòng thiếu SL mà không điền thì server bỏ. */
-  const willSave =
-    (draft?.meta.lines ?? 0) -
-    missingRows.filter((r) => (qtyFix[r.key] ?? null) == null).length
+  /**
+   * Từ 0163 MỌI dòng đọc được đều ghi — kể cả dòng chưa có SL (ô để trống, tab
+   * Định mức bày "cần SL"). Trước đây server vứt chúng đi nên con số này phải
+   * trừ ra; nay không.
+   */
+  const willSave = draft?.meta.lines ?? 0
+
+  /** Mã đang gõ vẫn đúng bằng mã hồ sơ đã có → tạo là chắc chắn lỗi trùng. */
+  const codeTaken =
+    !!draft?.meta.existingProduct &&
+    p?.code?.trim().toUpperCase() === draft.meta.existingProduct.code.toUpperCase()
 
   const lowConfidence = p != null && p.confidence < 0.8
 
@@ -400,6 +411,42 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                   {draft.meta.truncated.map((t) => (
                     <div key={t}>{t}</div>
                   ))}
+                </div>
+              </div>
+            )}
+            {/* MÃ TRONG FILE ĐÃ CÓ HỒ SƠ — chặn ngay ở đây thay vì để người dùng
+                bấm Tạo rồi ăn lỗi trùng mã, và cũng không lặng lẽ cấp mã khác
+                (làm vậy là đẻ hồ sơ thứ hai cho cùng một sản phẩm). */}
+            {draft.meta.existingProduct && (
+              <div className="flex flex-col gap-2 rounded-md border border-[color-mix(in_srgb,var(--stop)_35%,transparent)] bg-[color-mix(in_srgb,var(--stop)_8%,transparent)] p-2.5 text-xs">
+                <div className="flex items-start gap-2 text-[var(--stop)]">
+                  <TriangleAlert className="mt-px size-3.5 shrink-0" />
+                  <span>
+                    Mã <b className="font-mono">{draft.meta.existingProduct.code}</b> ghi
+                    trong file đã có hồ sơ: <b>{draft.meta.existingProduct.name}</b>. Sản
+                    phẩm này không cần tạo lại — mở hồ sơ đó rồi dùng{' '}
+                    <b>Nạp định mức → Nhập bằng AI</b> với chính file này.
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <a
+                    href={`/products/${draft.meta.existingProduct.id}/dinh-muc`}
+                    className="font-medium text-[var(--primary)] hover:underline"
+                  >
+                    Mở hồ sơ {draft.meta.existingProduct.code} →
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setManualCode(false)
+                      patch({ code: null })
+                      if (p.product_type && p.frame_material)
+                        void fetchCode(p.product_type, p.frame_material)
+                    }}
+                    className="text-muted-foreground hover:underline"
+                  >
+                    Vẫn tạo sản phẩm mới (xin mã khác)
+                  </button>
                 </div>
               </div>
             )}
@@ -609,7 +656,8 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                   <TriangleAlert className="mt-px size-3.5 shrink-0" />
                   <span>
                     File không ghi <b>Số lượng</b> cho {missingRows.length} dòng. Điền SL
-                    ở đây, hoặc để trống thì dòng đó KHÔNG được ghi.
+                    ở đây, hoặc để trống — dòng vẫn được ghi, ô SL bỏ trống để điền sau ở
+                    tab Định mức. Dòng chưa có SL KHÔNG vào nhu cầu vật tư của Cung ứng.
                   </span>
                 </div>
                 <div className="max-h-52 overflow-auto">
@@ -700,7 +748,15 @@ export function BomAiNewProduct({ onClose }: { onClose: () => void }) {
                 </button>
                 <button
                   type="button"
-                  disabled={busy !== null}
+                  // Mã còn trùng hồ sơ cũ thì KHOÁ hẳn nút: cảnh báo suông vẫn
+                  // bấm nhầm được, mà bấm là ăn lỗi CODE_TAKEN sau khi đã soi
+                  // xong cả form.
+                  disabled={busy !== null || codeTaken}
+                  title={
+                    codeTaken
+                      ? `Mã ${p.code} đã thuộc hồ sơ khác — mở hồ sơ đó, hoặc xin mã mới`
+                      : undefined
+                  }
                   onClick={() => void create()}
                   className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-medium text-white shadow disabled:opacity-50"
                 >

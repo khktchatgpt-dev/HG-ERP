@@ -3672,7 +3672,7 @@ export type Database = {
           product_id: string
           profile_code: string | null
           profile_shape: string | null
-          qty: number
+          qty: number | null
           roll_width_m: number | null
           section_title: string | null
           sheet_l_mm: number | null
@@ -3718,7 +3718,7 @@ export type Database = {
           product_id: string
           profile_code?: string | null
           profile_shape?: string | null
-          qty: number
+          qty: number | null
           roll_width_m?: number | null
           section_title?: string | null
           sheet_l_mm?: number | null
@@ -3764,7 +3764,7 @@ export type Database = {
           product_id?: string
           profile_code?: string | null
           profile_shape?: string | null
-          qty?: number
+          qty?: number | null
           roll_width_m?: number | null
           section_title?: string | null
           sheet_l_mm?: number | null

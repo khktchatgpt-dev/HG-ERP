@@ -870,12 +870,10 @@ export const productsService = {
       partGroupsRepo.list(),
       productProfileRepo.clusters(productId),
     ])
-    // Mã vật tư nào khớp danh mục kho — quyết định dòng đó có vào được đơn đặt
-    // gộp của cung ứng hay không, nên tra ngay khi mở tab.
-    const knownMaterials = await productProfileRepo.knownMaterialNames(
-      parts.map((p) => p.material_code ?? '').filter(Boolean),
-    )
-    return { product, parts, setItems, groups, clusters, knownMaterials }
+    // KHÔNG còn tra `knownMaterialNames`: ô "Mã VT kho" đã gỡ khỏi màn định mức
+    // (19/08/2026) nên không có gì để gắn cờ, mà mỗi lần mở tab lại bắn thêm một
+    // truy vấn sang danh mục kho.
+    return { product, parts, setItems, groups, clusters }
   },
 
   /**
@@ -918,7 +916,9 @@ export const productsService = {
     const part = await productProfileRepo.insertPart(productId, {
       ...(row as Partial<ProductPart>),
       part_name: input.part_name,
-      qty: input.qty,
+      // `undefined` (client không gửi ô SL) và null (gửi ô rỗng) cùng nghĩa "chưa
+      // có SL" từ 0163 — nắn về null để khớp kiểu cột.
+      qty: input.qty ?? null,
       group_code: input.group_code,
       sort_order,
       updated_by: user.id,

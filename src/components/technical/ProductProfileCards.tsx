@@ -45,7 +45,8 @@ export type PartView = {
   sheet_w_mm: number | null
   sheet_l_mm: number | null
   m3_per_sheet: number | null
-  qty: number
+  /** NULL = file BOM chưa ghi SL, người dùng điền sau (0163). */
+  qty: number | null
   unit: string | null
   color: string | null
   weight_kg: number | null

@@ -17,12 +17,14 @@ import { PartField } from './PartField'
 import type { PartView } from './ProductProfileCards'
 
 const inp =
-  'w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs hover:border-zinc-300 focus:border-sky-500 focus:bg-background focus:outline-none dark:hover:border-zinc-700'
+  'hover:border-input focus:border-[var(--primary)] focus:bg-background w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs focus:outline-none'
 
 /**
  * Bản nháp một dòng đang gõ. Chứa MỌI trường của mọi họ khối; ô nào thật sự hiện
- * do `inputCellsFor(group)` quyết định — xem `part-layouts.ts`. Các cột dẫn xuất
- * (tổng dài, khối lượng, diện tích, m³) không nằm ở đây vì chúng tự tính.
+ * do `inputCellsFor(group)` quyết định — xem `part-layouts.ts`. Bốn số dẫn xuất
+ * (tổng dài · khối lượng · diện tích · m³) NAY CŨNG LÀ Ô NHẬP: biểu mẫu giấy có
+ * đủ bốn cột và xưởng vẫn ghi tay (bảng cân NCC, profile gân không suy từ hình
+ * học được). Bỏ trống thì `calcPartDerived` điền hộ.
  */
 type Draft = Record<InputKey, string>
 
@@ -42,7 +44,6 @@ const EMPTY: Draft = {
   material_note: '',
   color: '',
   note: '',
-  material_code: '',
   profile_code: '',
   kg_per_m: '',
   wood_species: '',
@@ -53,6 +54,10 @@ const EMPTY: Draft = {
   sheet_w_mm: '',
   sheet_l_mm: '',
   m3_per_sheet: '',
+  total_length_m: '',
+  weight_kg: '',
+  paint_area_m2: '',
+  volume_m3: '',
 }
 
 const s = (v: unknown) => (v == null ? '' : String(v))
@@ -79,7 +84,6 @@ export const fromPart = (p: PartView, clusterName: string | null): Draft => ({
   material_note: s(p.material_note),
   color: s(p.color),
   note: s(p.note),
-  material_code: s(p.material_code),
   profile_code: s(p.profile_code),
   kg_per_m: s(p.kg_per_m),
   wood_species: s(p.wood_species),
@@ -90,6 +94,10 @@ export const fromPart = (p: PartView, clusterName: string | null): Draft => ({
   sheet_w_mm: s(p.sheet_w_mm),
   sheet_l_mm: s(p.sheet_l_mm),
   m3_per_sheet: s(p.m3_per_sheet),
+  total_length_m: s(p.total_length_m),
+  weight_kg: s(p.weight_kg),
+  paint_area_m2: s(p.paint_area_m2),
+  volume_m3: s(p.volume_m3),
 })
 
 /** Thân yêu cầu gửi lên — dùng chung cho sửa và thêm. */
@@ -124,7 +132,6 @@ export const toBody = (d: Draft, materialKind: string | null) => {
     note: d.note.trim() || null,
     // Quy đổi đơn vị mua (0132) — ô nào không thuộc họ khối đang gõ thì luôn
     // rỗng, gửi null nên không đụng dữ liệu cũ.
-    material_code: d.material_code.trim() || null,
     profile_code: d.profile_code.trim() || null,
     wood_species: d.wood_species.trim() || null,
     bar_length_m: barLen,
@@ -134,9 +141,12 @@ export const toBody = (d: Draft, materialKind: string | null) => {
     sheet_w_mm: nOrNull(d.sheet_w_mm),
     sheet_l_mm: nOrNull(d.sheet_l_mm),
     m3_per_sheet: nOrNull(d.m3_per_sheet),
-    total_length_m: der.total_length_m,
-    paint_area_m2: der.paint_area_m2,
-    volume_m3: der.volume_m3,
+    // Số NGƯỜI NHẬP thắng, hệ chỉ điền vào ô còn trống — cùng luật với
+    // `technical.service.ts`, để hai đường ghi không cho ra hai kết quả.
+    total_length_m: nOrNull(d.total_length_m) ?? der.total_length_m,
+    weight_kg: nOrNull(d.weight_kg) ?? der.weight_kg,
+    paint_area_m2: nOrNull(d.paint_area_m2) ?? der.paint_area_m2,
+    volume_m3: nOrNull(d.volume_m3) ?? der.volume_m3,
     _derived: der,
   }
 }
@@ -339,9 +349,7 @@ export function PartRowInline({
         <div className="flex items-center justify-end gap-1">
           {saved && <Check className="size-3.5 text-emerald-600" />}
           {dirty && !saved && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400">
-              chưa lưu
-            </span>
+            <span className="text-[10px] text-[var(--warn)]">chưa lưu</span>
           )}
           <button
             type="button"

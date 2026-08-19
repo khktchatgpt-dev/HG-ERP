@@ -48,8 +48,13 @@ type FieldSpec = {
  * Schema gửi đi lẫn phần mô tả cột trong prompt đều dựng từ đây, nên không thể
  * lệch nhau.
  *
- * Cột TÍNH SẴN trong file (Tổng chiều dài, Diện tích, Đơn giá, Thành tiền) cố
- * tình vắng mặt: app tính lại, đọc vào chỉ tổ mâu thuẫn số liệu.
+ * ĐỔI LUẬT 19/08/2026: cột TÍNH SẴN (Tổng chiều dài · Diện tích · K. Lượng m³)
+ * trước đây cố tình vắng mặt vì "app tính lại". Nay người dùng sửa được chúng
+ * ngay trên màn hình và tờ giấy xưởng đang ký mới là bản gốc, nên phải CHÉP về.
+ * Ranh giới vẫn nguyên: mô hình chỉ được chép ô có sẵn, không nhân chia hộ.
+ *
+ * Cột TIỀN (Đơn giá · Thành tiền · NCC · Tiêu hao VNĐ/kg · NVL phụ %) vẫn KHÔNG
+ * đọc — định mức chỉ ghi nhận định mức, giá là dữ liệu của Cung ứng.
  */
 export const BOM_LINE_FIELDS: FieldSpec[] = [
   { name: 'part_no', type: 'integer', desc: 'Cột Stt / TT. Không có thì null.' },
@@ -114,10 +119,52 @@ export const BOM_LINE_FIELDS: FieldSpec[] = [
     type: 'string',
     desc: 'Cột "Vật liệu" / "Chất liệu" ghi bằng chữ (vd "Nhựa", "7 màu"). Chép nguyên văn.',
   },
+  { name: 'color', type: 'string', desc: 'Cột "Màu" / "Màu sơn" (vd "Graphit").' },
+  /* ── Cột riêng của khối VẢI ─────────────────────────────────────────────── */
+  {
+    name: 'waste_pct',
+    type: 'number',
+    desc: 'Cột "hao hụt vải …%" — chỉ lấy CON SỐ PHẦN TRĂM (2, 3, 10). KHÔNG lấy cột "NVL phụ %" (đó là hệ số tiền).',
+  },
+  {
+    name: 'roll_width_m',
+    type: 'number',
+    desc: 'KHỔ vải, đơn vị MÉT. File hay ghi trong tên ("Vải Textilen 1 lớp (Khổ 1m6)") → 1.6.',
+  },
+  {
+    name: 'm3_per_sheet',
+    type: 'number',
+    desc: 'Cột "m3/tấm" của khối mút — thể tích một tấm.',
+  },
+  {
+    name: 'wood_species',
+    type: 'string',
+    desc: 'LOẠI GỖ, thường nằm ở TIÊU ĐỀ khối chứ không phải cột ("Quy cách Gỗ: Gỗ Teck" → "Gỗ Teck"). Tiêu đề không ghi rõ loại thì null.',
+  },
+  /* ── Số DẪN XUẤT: file ghi sẵn thì CHÉP LẠI ─────────────────────────────
+   * Trước đây bốn cột này bị bỏ qua vì "app tự tính lại". Nay người dùng sửa
+   * được chúng trên màn hình, và tờ giấy xưởng đang ký mới là bản gốc — có
+   * dòng lấy theo bảng cân NCC, có profile gân không suy từ hình học được.
+   * Vẫn giữ luật cũ: KHÔNG được tự nhân chia, chỉ chép ô đã có sẵn. */
   {
     name: 'weight_kg',
     type: 'number',
-    desc: 'CHỈ điền khi file ghi sẵn khối lượng theo bảng cân NCC. TUYỆT ĐỐI không tự tính.',
+    desc: 'Cột "Trọng lượng (kg)". CHỈ chép ô có sẵn, TUYỆT ĐỐI không tự tính. BẪY: cột tên "K. Lượng (m3)" hay "Khối lượng (m3)" KHÔNG phải khối lượng — đơn vị m3 nghĩa là THỂ TÍCH, phải bỏ vào volume_m3.',
+  },
+  {
+    name: 'total_length_m',
+    type: 'number',
+    desc: 'Cột "Tổng chiều dài (m)" hoặc "Đơn vị (m)" — hai tên của cùng một cột. Chép ô có sẵn, không tự nhân.',
+  },
+  {
+    name: 'paint_area_m2',
+    type: 'number',
+    desc: 'Cột "Diện tích sơn (M²)" của khối khung, hoặc "Diện Tích (m2)" / "M2" của khối gỗ, nệm, vải. Chép ô có sẵn.',
+  },
+  {
+    name: 'volume_m3',
+    type: 'number',
+    desc: 'Cột "K. Lượng (m3)" / "Khối lượng (m3)" / "Tổng m3" — đơn vị MÉT KHỐI. Chép ô có sẵn.',
   },
   { name: 'note', type: 'string', desc: 'Cột "Ghi chú".' },
   {
@@ -392,7 +439,15 @@ export const bomDraftLineSchema = z.object({
   }),
   unit: text(30),
   material_note: text(200),
+  color: text(100),
+  waste_pct: posNum,
+  roll_width_m: posNum,
+  m3_per_sheet: posNum,
+  wood_species: text(60),
   weight_kg: posNum,
+  total_length_m: posNum,
+  paint_area_m2: posNum,
+  volume_m3: posNum,
   note: text(500),
   /**
    * Ngoài miền 0..1 thì kẹp về biên; đọc không ra số thì coi như 0 — mặc định

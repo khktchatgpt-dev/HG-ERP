@@ -78,9 +78,25 @@ ${PRODUCT_GUIDE}`
   return `Bạn đọc BẢNG ĐỊNH MỨC (BOM) của một xưởng nội thất ngoài trời Việt Nam và trích ra dữ liệu có cấu trúc.${productBlock}
 
 # Cấu trúc một file BOM
-File chia thành nhiều KHỐI. Mỗi khối mở đầu bằng một dòng tiêu đề (thường gộp ô, in đậm) như "Quy cách : Nhôm", "QUY CÁCH VẢI TEXTILEN", "NGŨ KIM", "BAO BÌ ĐÓNG GÓI"; bên dưới là các dòng chi tiết, thường có một dòng tiêu đề cột riêng cho khối đó. Các khối KHÔNG dùng chung bộ cột: khối khung có "Loại / Dày / Rộng / Dài", khối gỗ bỏ "Loại" nhưng thêm "Mộng", khối ngũ kim chỉ có "ĐVT" và "Vật Liệu".
+File chia thành nhiều KHỐI. Mỗi khối mở đầu bằng một dòng tiêu đề (thường gộp ô, in đậm) như "Quy cách : Nhôm", "QUY CÁCH VẢI TEXTILEN", "NGŨ KIM", "BAO BÌ ĐÓNG GÓI"; bên dưới là các dòng chi tiết, thường có một dòng tiêu đề cột riêng cho khối đó.
+
+Các khối KHÔNG dùng chung bộ cột — đây là bảy dạng bảng đếm được trên 246 file thật:
+- KHUNG: Loại · Dày · Rộng · Dài · Phi hao · SL · Tổng chiều dài (m) · Trọng lượng (kg) · Diện tích sơn (M²) · Dày vật liệu (δ)
+- GỖ / POLYWOOD / MẶT BÀN: bỏ "Loại", thêm "Mộng"; ra Diện Tích (m2) và K. Lượng (m3)
+- NỆM / MÚT / GÒN: như gỗ; mút có thêm "m3/tấm"
+- VẢI: LOẠI VẢI · quy cách dài/rộng/dày · M2 · TỔNG VẢI M2 · hao hụt vải …% (và "Mét tới" với textilene)
+- NGŨ KIM / BAO BÌ / TEM / DÂY KÉO: KHÔNG có kích thước nào — chỉ TÊN HÀNG HÓA · ĐVT · SL/SP · Vật Liệu
+- SƠN & HOÁ CHẤT: STT · Mã hàng · Màu sơn · ĐVT · **Định mức** · NCC (khối hoá chất thì cột lượng tên là "Số kg / ghế")
+- MÂY / DÂY ĐAN / DÂY DÙ: STT · Tên SP · Mã số · ĐVT · **Số lượng kg / 1 cái**
+
+Ở hai dạng cuối, cột lượng KHÔNG tên là "Số lượng" nhưng vẫn là \`qty\`.
 
 Mỗi khối trong file thành một phần tử của \`sections\`. Đọc HẾT các khối, kể cả khối chỉ có một dòng.
+
+## NỆM và VẢI là HAI khối riêng, kể cả khi nằm chung một tiêu đề
+Rất nhiều file đề "Quy cách Nệm:" hay "Quy cách Nệm + vải:" rồi kê HAI bảng khác nhau bên dưới: một bảng quy cách nệm (Dày/Rộng/Dài/Mộng/m³) và một bảng vải (LOẠI VẢI/M2/TỔNG VẢI M2/hao hụt). Đo trên 246 file: 64% khối mang tiêu đề "nệm" thật ra là bảng VẢI.
+
+Tách thành HAI phần tử \`sections\`: bảng nào có cột "LOẠI VẢI" hoặc "TỔNG VẢI" thì vào nhóm vải, bảng còn lại vào nhóm nệm. Nhìn BỘ CỘT để quyết, đừng nhìn chữ trong tiêu đề.
 
 # Nhóm hạng mục hợp lệ
 Gán \`group_code\` cho từng khối dựa vào tiêu đề khối:
@@ -91,7 +107,7 @@ Tiêu đề không rơi rõ vào nhóm nào thì chọn nhóm gần nghĩa nhấ
 # Bỏ qua
 - Dòng tiêu đề cột, dòng "Tổng", "Tổng cộng", "Cộng".
 - Khối "KTBB", "KT SP", "OPTION" — đó là kích thước bao bì / sản phẩm, không phải định mức.
-- Cột tính sẵn: "Tổng chiều dài", "Diện tích", "Đơn giá", "Thành tiền". Phần mềm tự tính lại, đọc vào chỉ gây lệch số.
+- Mọi cột TIỀN: "Đơn giá", "Thành tiền", "TT", "ĐGIÁ", "NCC", "Tiêu hao VNĐ/kg nhôm", "TỔNG TIỀN VẢI", "NVL phụ …%", "Công may, cắt". Định mức chỉ ghi nhận ĐỊNH MỨC — giá là dữ liệu của bộ phận Cung ứng, đọc vào là hai nơi giữ hai con số khác nhau.
 
 # Đọc số
 - Dấu phẩy là dấu THẬP PHÂN (1,4 = 1.4); dấu chấm phân nhóm nghìn (1.200 = 1200).
@@ -107,8 +123,11 @@ Tiêu đề không rơi rõ vào nhóm nào thì chọn nhóm gần nghĩa nhấ
 
 Một bản trích THIẾU ô mà trung thực thì người dùng nhìn là biết phải bổ sung. Một bản trích ĐẦY ĐỦ mà có số bịa thì họ tin và mang đi mua hàng, tính giá thành. Thiếu luôn tốt hơn sai.
 
-# Không tự tính
-Chỉ TRÍCH những gì file ghi. Không suy ra khối lượng, tổng chiều dài, diện tích hay thể tích — phần mềm tính lại từ hình học. \`weight_kg\` chỉ điền khi file ghi sẵn một cột khối lượng.
+# Chép, đừng tính
+Ranh giới: được CHÉP ô file đã ghi, KHÔNG được tự nhân chia ra số mới.
+
+- File CÓ cột "Tổng chiều dài (m)" / "Đơn vị (m)" / "Trọng lượng (kg)" / "Diện tích (M²)" / "K. Lượng (m3)" → chép nguyên số vào \`total_length_m\` / \`weight_kg\` / \`paint_area_m2\` / \`volume_m3\`. Đây là số người lập bảng đã chốt — có dòng lấy theo bảng cân của nhà cung cấp, có profile gân không suy từ hình học ra được.
+- File KHÔNG có cột đó → để null. TUYỆT ĐỐI không tự lấy dài × rộng × số lượng rồi điền vào. Phần mềm tự tính cho ô còn trống.
 
 # Các trường của một dòng
 ${COLUMN_GUIDE}
