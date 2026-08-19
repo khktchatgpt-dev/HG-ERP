@@ -747,10 +747,10 @@ export function BomAiImport({
                 </button>
                 <button
                   type="button"
-                  disabled={busy !== null || totalLines === 0 || noQtyCount > 0}
+                  disabled={busy !== null || totalLines === 0}
                   title={
                     noQtyCount > 0
-                      ? `Còn ${noQtyCount} dòng chưa có số lượng — điền ô SL (dòng tô đỏ) rồi mới lưu được`
+                      ? `${noQtyCount} dòng chưa có SL — vẫn lưu được, ô SL để trống và điền sau ở tab Định mức`
                       : undefined
                   }
                   onClick={() => void save()}

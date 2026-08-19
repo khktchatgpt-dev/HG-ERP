@@ -2,13 +2,14 @@
 
 import { Fragment, useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { ChevronRight, Copy, Layers, Pencil, Search, Sparkles } from 'lucide-react'
+import { ChevronRight, Copy, Layers, Pencil, Search, Upload } from 'lucide-react'
 import { Card } from '@/components/shadcn/card'
 import { Separator } from '@/components/shadcn/separator'
 import { cn } from '@/lib/utils'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
+import { RowMenu } from '@/components/erp/RowMenu'
 import { PartCardEdit } from './PartCardEdit'
 import { PartsCopyDialog } from './PartsCopyDialog'
 import { PartsBulkEntry } from './PartsBulkEntry'
@@ -26,6 +27,36 @@ import {
 
 const n = (v: number | null | undefined, d = 0) =>
   v == null ? null : v.toLocaleString('en-US', { maximumFractionDigits: d })
+
+/**
+ * ĐÓNG BĂNG BA CỘT ĐẦU khi bảng cuộn ngang.
+ *
+ * Khối khung hiện trung vị 11 cột, tối đa 16 (đo trên 212 hồ sơ có định mức) —
+ * kéo sang xem "Diện tích sơn" là tên chi tiết trôi khỏi màn, còn lại một dãy số
+ * không biết của dòng nào. Ba cột giữ lại đúng phần ĐỊNH DANH: tick chọn · STT ·
+ * tên.
+ *
+ * Toạ độ `left` phải khớp bề rộng cột trước nó (1.75rem + 2rem), nên có hai bộ:
+ * có cột tick (quyền sửa) và không.
+ *
+ * BẮT BUỘC `min-w-*`, KHÔNG được dùng `w-*`. Đo trên màn 708px: bảng
+ * `table-layout: auto` co cột tick từ `w-7` (28px) xuống 17px cho vừa bề ngang,
+ * mốc `left` thì vẫn 1.75rem ⇒ ô tên bị đẩy sang phải 13px và ĐÈ LÊN cột "Loại"
+ * — trên màn hiện ra "AI" thay vì "LOẠI", "p" thay vì "hộp" (chữ bị cắt từ bên
+ * TRÁI, đó là dấu hiệu nhận ra kiểu lỗi này). `width` trong bảng auto chỉ là gợi
+ * ý và bị bỏ khi chật; `min-width` thì luôn được tôn trọng.
+ *
+ * Nền phải ĐẶC (`bg-card`) — nền trong suốt thì chữ cột sau trôi qua dưới. Vạch
+ * mép vẽ bằng `shadow` chứ không `border-r`, vì border cộng thêm 1px vào bề rộng
+ * làm lệch `left` của cột kế tiếp.
+ */
+const FREEZE = {
+  pick: 'bg-card sticky left-0 z-10 min-w-7',
+  no: 'bg-card sticky left-0 z-10 min-w-8',
+  noWithPick: 'bg-card sticky left-[1.75rem] z-10 min-w-8',
+  name: 'bg-card sticky left-[2rem] z-10 shadow-[1px_0_0_var(--border)]',
+  nameWithPick: 'bg-card sticky left-[3.75rem] z-10 shadow-[1px_0_0_var(--border)]',
+} as const
 
 const SHAPE_LABEL: Record<string, string> = {
   HOP: 'hộp',
@@ -131,7 +162,19 @@ function cellOf(p: PartView, key: string): ReactNode {
         <span className="text-muted-foreground/40">○</span>
       )
     case 'qty':
-      return n(p.qty, 4)
+      // SL để trống (0163) — bày dấu nhắc VIỆC CẦN LÀM chứ không phải gạch ngang
+      // như ô dữ liệu vắng mặt bình thường: thiếu ô này thì cả dòng không vào
+      // được nhu cầu vật tư của Cung ứng.
+      return p.qty == null ? (
+        <span
+          title="File BOM không ghi số lượng — điền vào thì dòng này mới vào nhu cầu vật tư"
+          className="text-[var(--stop)]"
+        >
+          cần SL
+        </span>
+      ) : (
+        n(p.qty, 4)
+      )
     case 'unit':
       return p.unit ?? '—'
     case 'len':
@@ -146,8 +189,6 @@ function cellOf(p: PartView, key: string): ReactNode {
       return n(p.wall_thickness_mm, 2) ?? '—'
     case 'mat':
       return splitNote(p.material_note).material ?? '—'
-    case 'code':
-      return p.material_code ?? '—'
     /* ── Quy đổi đơn vị mua (0132) ─────────────────────────────────────── */
     case 'species':
       return p.wood_species ?? '—'
@@ -157,7 +198,7 @@ function cellOf(p: PartView, key: string): ReactNode {
       return n(p.pcs_per_bar, 0) ?? '—'
     case 'bars':
       // Số CÂY phải mua cho 1 SP — làm tròn LÊN, không ai mua nửa cây.
-      return p.pcs_per_bar && p.pcs_per_bar > 0
+      return p.pcs_per_bar && p.pcs_per_bar > 0 && p.qty != null
         ? Math.ceil(p.qty / p.pcs_per_bar).toLocaleString('vi-VN')
         : '—'
     case 'roll':
@@ -167,6 +208,11 @@ function cellOf(p: PartView, key: string): ReactNode {
     case 'totalM':
       return p.total_length_m != null
         ? (p.total_length_m * (1 + (p.waste_pct ?? 0) / 100)).toFixed(2)
+        : '—'
+    // "TỔNG VẢI M2" = M² tinh × (1 + hao hụt%) — con số đem đi đặt vải.
+    case 'totalM2':
+      return p.paint_area_m2 != null
+        ? (p.paint_area_m2 * (1 + (p.waste_pct ?? 0) / 100)).toFixed(4)
         : '—'
     case 'sheetSpec':
       return p.sheet_w_mm || p.sheet_l_mm
@@ -181,27 +227,6 @@ function cellOf(p: PartView, key: string): ReactNode {
   }
 }
 
-/**
- * Ô "Mã vật tư" — mã KHÔNG có trong danh mục kho thì gạch chân hổ phách.
- *
- * Cung ứng gộp mua bằng cách nối `material_code` với mã kho, nên một mã gõ lệch
- * là dòng định mức đó biến mất khỏi đơn đặt mà không ai hay. Hiện cờ ngay tại
- * chỗ nhập rẻ hơn nhiều so với dò lại lúc đã lên đơn.
- */
-function codeCell(p: PartView, known: Record<string, string>): ReactNode {
-  if (!p.material_code) return '—'
-  const name = known[p.material_code]
-  if (name) return <span title={name}>{p.material_code}</span>
-  return (
-    <span
-      title="Chưa khớp danh mục kho — cung ứng không gộp mua được dòng này"
-      className="text-amber-700 underline decoration-amber-500 decoration-dotted underline-offset-2 dark:text-amber-400"
-    >
-      {p.material_code}
-    </span>
-  )
-}
-
 const haystack = (p: PartView) =>
   [
     p.part_name,
@@ -209,7 +234,6 @@ const haystack = (p: PartView) =>
     p.material_note,
     p.tenon,
     p.color,
-    p.material_code,
     p.profile_code,
     specOf(p),
     p.note,
@@ -287,6 +311,24 @@ function toSections(rows: PartView[], clusters: ClusterView[]): Section[] {
   return out
 }
 
+/**
+ * SỐ THỨ TỰ hiện trên cột STT — KHÔNG tin `part_no` khi nó vô lý.
+ *
+ * Bộ nạp cũ đọc lệch cột ở khối vật tư: 137 dòng đang mang ĐƠN GIÁ trong ô STT
+ * (Bulong M6×25 → 1760, Tem bảo hành → 2000, Gót chân Ø25 → 3200). Một khối BOM
+ * không bao giờ dài tới đó, nên số nào vượt xa số dòng của khối là chắc chắn
+ * không phải số thứ tự.
+ *
+ * Xét theo CẢ KHỐI chứ không từng dòng: lẫn lộn "1 · 2 · 1760" khó đọc hơn là
+ * đánh lại toàn khối theo vị trí. Khối nào part_no lành lặn thì vẫn giữ nguyên
+ * số của tờ giấy — người đối chiếu với bản in cần đúng số đó.
+ */
+function seqLabels(rows: PartView[]): (string | number)[] {
+  const max = Math.max(...rows.map((r) => r.part_no ?? 0))
+  const plausible = max <= rows.length + 20
+  return rows.map((r, i) => (plausible ? (r.part_no ?? i + 1) : i + 1))
+}
+
 /** Cụm theo thứ tự danh mục, nhóm RỜI xuống cuối. */
 function toClusterBlocks(rows: PartView[], clusters: ClusterView[]): ClusterBlock[] {
   const byCluster = new Map<string, PartView[]>()
@@ -335,7 +377,7 @@ function ClusterHead({
   const c = block.cluster
   const route = [c?.first_stage, c?.final_stage].filter(Boolean).join(' → ')
   return (
-    <tr className={cn('border-b', c ? 'bg-sky-50/60 dark:bg-sky-950/20' : 'bg-muted/20')}>
+    <tr className={cn('border-b', c ? 'bg-accent/60' : 'bg-muted/20')}>
       <td colSpan={colSpan} className="px-1 py-1.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {canEdit && (
@@ -360,7 +402,7 @@ function ClusterHead({
                 if (e.key === 'Enter') e.currentTarget.blur()
                 if (e.key === 'Escape') onStartRename(null)
               }}
-              className="w-40 rounded border border-sky-400 px-1.5 py-0.5 text-xs font-semibold dark:bg-zinc-900"
+              className="border-input bg-background w-40 rounded border px-1.5 py-0.5 text-xs font-semibold focus:border-[var(--primary)] focus:outline-none"
             />
           ) : (
             <span
@@ -378,12 +420,12 @@ function ClusterHead({
             {block.totals.m3 > 0 && ` · ${block.totals.m3.toFixed(4)} m³`}
           </span>
           {route && (
-            <span className="rounded bg-zinc-200 px-1.5 py-px text-[10px] font-medium dark:bg-zinc-800">
+            <span className="bg-muted rounded px-1.5 py-px text-[10px] font-medium">
               {route}
             </span>
           )}
           {c?.qty_per_product != null && (
-            <span className="rounded bg-zinc-200 px-1.5 py-px text-[10px] font-medium tabular-nums dark:bg-zinc-800">
+            <span className="bg-muted rounded px-1.5 py-px text-[10px] font-medium tabular-nums">
               {c.qty_per_product} cụm/SP
             </span>
           )}
@@ -470,15 +512,12 @@ export function ProductPartsCard({
   clusters,
   productId,
   baseMaterial,
-  knownMaterials,
   canEdit,
 }: {
   parts: PartView[]
   partGroups: PartGroupView[]
   clusters: ClusterView[]
   productId: string
-  /** mã vật tư → tên trong danh mục kho; mã vắng mặt = chưa khớp (cờ hổ phách). */
-  knownMaterials: Record<string, string>
   /** Ô "Nhiên Liệu" của sản phẩm — mặc định vật liệu cho khối mới. */
   baseMaterial: string | null
   canEdit: boolean
@@ -585,7 +624,6 @@ export function ProductPartsCard({
           unit_basis: p.unit_basis,
           part_name: `${p.part_name} (bản sao)`,
           cluster_id: p.cluster_id,
-          material_code: p.material_code,
           material_kind: p.material_kind,
           material_note: p.material_note,
           tenon: p.tenon,
@@ -723,11 +761,11 @@ export function ProductPartsCard({
     )
 
   const headInp =
-    'rounded border border-zinc-300 px-2 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'border-input bg-background focus:border-[var(--primary)] rounded border px-2 py-1 text-xs focus:outline-none'
 
   /** Khối mới: khai tiêu đề rồi gõ dòng ngay bên dưới. */
   const newSectionBlock = newSec && (
-    <div className="mt-3 rounded-md border border-sky-300 bg-sky-50/50 p-3 dark:border-sky-800 dark:bg-sky-950/20">
+    <div className="bg-accent/50 mt-3 rounded-md border border-[var(--primary)]/30 p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <span className="text-xs font-semibold">Khối mới</span>
         <select
@@ -847,34 +885,35 @@ export function ProductPartsCard({
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Tìm chi tiết, quy cách, mã…"
-                className="w-44 rounded-md border border-zinc-300 py-1 pr-2 pl-7 text-xs focus:border-sky-500 focus:outline-none sm:w-56 dark:border-zinc-700 dark:bg-zinc-900"
+                className="border-input bg-background w-44 rounded-md border py-1 pr-2 pl-7 text-xs focus:border-[var(--primary)] focus:outline-none sm:w-56"
               />
             </div>
           )}
           {canEdit && (
             <>
-              <button
-                type="button"
-                onClick={() => setCopying(true)}
-                className="text-primary shrink-0 text-xs font-medium hover:underline"
-              >
-                Chép từ SP khác
-              </button>
-              <button
-                type="button"
-                onClick={() => setBulk(true)}
-                className="text-primary shrink-0 text-xs font-medium hover:underline"
-              >
-                Dán từ Excel
-              </button>
-              <button
-                type="button"
-                onClick={() => setAiOpen(true)}
-                className="text-primary inline-flex shrink-0 items-center gap-1 text-xs font-medium hover:underline"
-              >
-                <Sparkles className="size-3.5" />
-                Nhập bằng AI
-              </button>
+              {/* BA LỐI NẠP GOM VÀO MỘT MENU. Trước đây là ba link chữ 12px xếp
+                  cạnh nút "Gõ nhiều dòng" — bốn thứ trông y hệt nhau, trong khi
+                  ba cái đầu là "đổ dữ liệu vào từ ngoài" (mở hộp thoại, làm một
+                  lần) còn cái thứ tư đổi CHẾ ĐỘ của bảng đang xem. Gom lại thì
+                  còn đúng hai nút, mỗi nút một việc. */}
+              <RowMenu
+                trigger={
+                  <span className="inline-flex items-center gap-1">
+                    <Upload className="size-3.5" />
+                    Nạp định mức
+                  </span>
+                }
+                ariaLabel="Nạp định mức"
+                triggerClassName="border-input hover:bg-accent inline-flex shrink-0 items-center rounded-md border px-2 py-1 text-xs font-medium"
+                items={[
+                  {
+                    label: 'Nhập bằng AI (đọc file BOM)',
+                    onClick: () => setAiOpen(true),
+                  },
+                  { label: 'Dán từ Excel', onClick: () => setBulk(true) },
+                  { label: 'Chép từ SP khác', onClick: () => setCopying(true) },
+                ]}
+              />
               <button
                 type="button"
                 onClick={() => {
@@ -882,15 +921,16 @@ export function ProductPartsCard({
                   setQ('')
                 }}
                 className={cn(
-                  'shrink-0 rounded-md border px-2 py-1 text-xs font-medium',
+                  'inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium',
                   inline
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'hover:bg-muted text-muted-foreground',
+                    ? 'border-[var(--primary)] bg-[var(--primary)]/10 text-[var(--primary)]'
+                    : 'border-input hover:bg-accent text-muted-foreground',
                 )}
               >
                 {/* Hai lối sửa cùng tồn tại nên nhãn phải nói rõ việc của từng
                     cái: bút chì = sửa MỘT dòng (thẻ chia vùng), nút này = gõ
                     NHIỀU dòng liên tục (lưới ngang kiểu bảng tính). */}
+                <Pencil className="size-3.5" />
                 {inline ? 'Xong' : 'Gõ nhiều dòng'}
               </button>
             </>
@@ -901,7 +941,7 @@ export function ProductPartsCard({
       {/* Thanh gom cụm — chỉ nổi lên khi đã tick dòng, để bảng lúc bình thường
           không cõng thêm một hàng nút. */}
       {canEdit && picked.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 border-y bg-sky-100/70 px-5 py-2 text-xs dark:bg-sky-950/40">
+        <div className="bg-accent flex flex-wrap items-center gap-2 border-y px-5 py-2 text-xs">
           <span className="font-medium">Đã chọn {picked.length} dòng</span>
           <input
             value={newCluster}
@@ -915,13 +955,13 @@ export function ProductPartsCard({
             placeholder="Tên cụm, vd: Cụm khung"
             aria-label="Tên cụm mới"
             list="cluster-names"
-            className="w-44 rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+            className="border-input bg-background w-44 rounded border px-2 py-1 focus:border-[var(--primary)] focus:outline-none"
           />
           <button
             type="button"
             disabled={grouping || !newCluster.trim()}
             onClick={() => void assignPicked({ name: newCluster.trim() })}
-            className="rounded-md bg-sky-600 px-2.5 py-1 font-medium text-white hover:bg-sky-700 disabled:opacity-50"
+            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-2.5 py-1 font-medium disabled:opacity-50"
           >
             Gom thành cụm
           </button>
@@ -932,7 +972,7 @@ export function ProductPartsCard({
               onChange={(e) => {
                 if (e.target.value) void assignPicked({ cluster_id: e.target.value })
               }}
-              className="rounded border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+              className="border-input bg-background rounded border px-2 py-1"
               aria-label="Chuyển sang cụm có sẵn"
             >
               <option value="">Chuyển sang cụm…</option>
@@ -962,7 +1002,7 @@ export function ProductPartsCard({
       )}
 
       {inline && (
-        <p className="text-muted-foreground border-y bg-sky-50/60 px-5 py-2 text-xs dark:bg-sky-950/30">
+        <p className="text-muted-foreground bg-accent/50 border-y px-5 py-2 text-xs">
           Sửa thẳng trong ô, rời khỏi dòng hoặc bấm Enter là lưu. Dòng trống cuối mỗi khối
           để gõ thêm — Enter xong con trỏ tự về ô tên để nhập tiếp. Khối lượng, tổng dài
           và diện tích sơn tự tính.
@@ -1066,7 +1106,23 @@ export function ProductPartsCard({
                     {
                       <div>
                         <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
+                          {/* Chế độ NHẬP phải `w-max`, chế độ XEM thì `w-full`.
+                              Lưới nhập của khối khung có 20 cột: để `w-full` thì
+                              bảng auto-layout nén cho vừa bề ngang và bóp mọi ô
+                              xuống 24–60px bất kể `w-*` khai trong part-layouts
+                              (đo thật: ô "Tên chi tiết" khai `w-48` = 192px, ra
+                              còn 69px) — gõ vào ô rộng 24px là không gõ được.
+                              `w-max` cho bảng nở đúng nhu cầu rồi để khung ngoài
+                              cuộn ngang; `min-w-full` giữ bảng vẫn phủ hết bề
+                              ngang khi ít cột. Chế độ xem KHÔNG dùng `w-max` vì
+                              tiêu đề xuống dòng được, ép ra một dòng chỉ tổ đẻ
+                              thanh cuộn ở màn rộng. */}
+                          <table
+                            className={cn(
+                              'text-sm',
+                              inline ? 'w-max min-w-full' : 'w-full',
+                            )}
+                          >
                             <thead>
                               {inline ? (
                                 // Ô nhập theo ĐÚNG họ khối — ngũ kim không có ô
@@ -1075,14 +1131,26 @@ export function ProductPartsCard({
                                 <InlineHead groupCode={g.code} />
                               ) : (
                                 <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
-                                  {canEdit && <th className="w-7 py-1.5" />}
-                                  <th className="w-8 py-1.5 pr-2 text-right font-medium">
+                                  {canEdit && (
+                                    <th className={cn('w-7 py-1.5', FREEZE.pick)} />
+                                  )}
+                                  <th
+                                    className={cn(
+                                      'w-8 py-1.5 pr-2 text-right font-medium',
+                                      canEdit ? FREEZE.noWithPick : FREEZE.no,
+                                    )}
+                                  >
                                     STT
                                   </th>
                                   {/* "TÊN HÀNG HÓA" cho khối vật tư/ngũ kim,
                                       "Tên chi tiết" cho khối gia công — đúng
                                       chữ dùng trong biểu mẫu BOM gốc. */}
-                                  <th className="py-1.5 pr-3 font-medium">
+                                  <th
+                                    className={cn(
+                                      'py-1.5 pr-3 font-medium',
+                                      canEdit ? FREEZE.nameWithPick : FREEZE.name,
+                                    )}
+                                  >
                                     {layoutOf(g.code) === 'supply'
                                       ? 'Tên hàng hoá'
                                       : 'Tên chi tiết'}
@@ -1115,7 +1183,7 @@ export function ProductPartsCard({
                                           {sec.title}
                                         </span>
                                         {sec.unitBasis && (
-                                          <span className="ml-2 rounded bg-amber-100 px-1.5 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                          <span className="ml-2 rounded bg-[var(--warn)]/10 px-1.5 py-px text-[10px] font-medium text-[var(--warn)]">
                                             định mức tính cho {sec.unitBasis}, không phải
                                             1 sản phẩm
                                           </span>
@@ -1147,8 +1215,9 @@ export function ProductPartsCard({
                                         onDrop={dropCluster}
                                       />
 
-                                      {blk.rows.map((p, pi) =>
-                                        inline ? (
+                                      {seqLabels(blk.rows).map((seq, pi) => {
+                                        const p = blk.rows[pi]
+                                        return inline ? (
                                           <PartRowInline
                                             key={p.id}
                                             productId={productId}
@@ -1191,7 +1260,7 @@ export function ProductPartsCard({
                                             )}
                                           >
                                             {canEdit && (
-                                              <td className="py-1.5">
+                                              <td className={cn('py-1.5', FREEZE.pick)}>
                                                 <input
                                                   type="checkbox"
                                                   className="size-3.5 align-middle"
@@ -1209,10 +1278,22 @@ export function ProductPartsCard({
                                             )}
                                             {/* Dòng nạp từ nguồn cũ không có part_no —
                                             đánh số theo vị trí, không để cột trống */}
-                                            <td className="text-muted-foreground py-1.5 pr-2 text-right text-xs tabular-nums">
-                                              {p.part_no ?? pi + 1}
+                                            <td
+                                              className={cn(
+                                                'text-muted-foreground py-1.5 pr-2 text-right text-xs tabular-nums',
+                                                canEdit ? FREEZE.noWithPick : FREEZE.no,
+                                              )}
+                                            >
+                                              {seq}
                                             </td>
-                                            <td className="py-1.5 pr-3">
+                                            <td
+                                              className={cn(
+                                                'py-1.5 pr-3',
+                                                canEdit
+                                                  ? FREEZE.nameWithPick
+                                                  : FREEZE.name,
+                                              )}
+                                            >
                                               {nameOf(p, layoutOf(g.code))}
                                             </td>
                                             {(colsByGroup.get(g.code) ?? []).map((c) => (
@@ -1229,8 +1310,6 @@ export function ProductPartsCard({
                                                     c.key === 'note' ||
                                                     c.key === 'mat') &&
                                                     'text-xs',
-                                                  c.key === 'code' &&
-                                                    'font-mono text-[11px]',
                                                   c.key === 'note' && 'max-w-40 truncate',
                                                 )}
                                                 title={
@@ -1243,15 +1322,13 @@ export function ProductPartsCard({
                                                       : undefined
                                                 }
                                               >
-                                                {c.key === 'code'
-                                                  ? codeCell(p, knownMaterials)
-                                                  : cellOf(p, c.key)}
+                                                {cellOf(p, c.key)}
                                               </td>
                                             ))}
                                             {canEdit && (
                                               <td className="py-1.5">
                                                 {/* Hiện khi rê chuột / focus bàn phím */}
-                                                <div className="flex justify-end gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+                                                <div className="flex justify-end gap-0.5 opacity-100 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 sm:opacity-0">
                                                   <button
                                                     type="button"
                                                     title="Nhân bản dòng"
@@ -1282,8 +1359,8 @@ export function ProductPartsCard({
                                               </td>
                                             )}
                                           </tr>
-                                        ),
-                                      )}
+                                        )
+                                      })}
 
                                       {/* Tổng của cụm — luôn TÍNH, không nhập.
                                           Dòng "Tổng cộng" của file Excel bỏ sót

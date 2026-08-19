@@ -1,6 +1,5 @@
 'use client'
 
-import { MaterialCombo } from '@/components/warehouse/MaterialCombo'
 import { DiePicker } from '@/components/supply/DiePicker'
 import { SHAPE_OPTIONS, pcsPerBarFrom } from '@/lib/bom-calc'
 import type { InputCell, InputKey } from './part-layouts'
@@ -30,28 +29,6 @@ export const autoPcsOf = (d: PartDraft): number | null =>
     nOrNull(d.bend_waste_mm),
     nOrNull(d.bar_length_m),
   )
-
-export type PickedMaterial = {
-  code: string
-  name: string
-  unit: string
-  default_bar_length_m?: number | null
-} | null
-
-/**
- * Chọn vật tư kho thì điền hộ ĐVT và chiều dài cây — hai ô người nhập khỏi gõ.
- * Chỉ điền khi ô đang TRỐNG: đã khai tay rồi thì danh mục không được đè lên.
- */
-export function materialPatch(d: PartDraft, m: PickedMaterial): Partial<PartDraft> {
-  if (!m) return { material_code: '' }
-  return {
-    material_code: m.code,
-    unit: d.unit || m.unit || '',
-    bar_length_m:
-      d.bar_length_m ||
-      (m.default_bar_length_m != null ? String(m.default_bar_length_m) : ''),
-  }
-}
 
 /** Chọn khuôn thì kéo theo kg/m — tiết diện có gân không suy từ hình học được. */
 export function diePatch(
@@ -89,18 +66,6 @@ export function PartField({
     }
   }
   const autoPcs = autoPcsOf(draft)
-
-  if (cell.kind === 'material') {
-    return (
-      <MaterialCombo
-        value={draft.material_code}
-        label={draft.material_code}
-        placeholder="— tìm mã kho —"
-        onPick={(m) => setMany(materialPatch(draft, m))}
-        onFreeText={(t) => set('material_code', t)}
-      />
-    )
-  }
 
   if (cell.kind === 'die') {
     return (

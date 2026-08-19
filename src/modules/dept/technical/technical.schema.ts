@@ -295,7 +295,8 @@ export const productPartCreateSchema = z.object({
   sheet_w_mm: z.coerce.number().positive().optional().nullable(),
   sheet_l_mm: z.coerce.number().positive().optional().nullable(),
   m3_per_sheet: z.coerce.number().positive().optional().nullable(),
-  qty: z.coerce.number().positive(),
+  /** NULL = file BOM chưa ghi SL (0163) — dòng giữ lại, điền sau. */
+  qty: z.coerce.number().positive().optional().nullable(),
   unit: z.string().trim().max(30).optional().nullable(),
   color: z.string().trim().max(100).optional().nullable(),
   // Đại lượng dẫn xuất: app tính từ hình học (src/lib/bom-calc.ts), người dùng
@@ -382,11 +383,21 @@ export const productPartsBulkSchema = z.object({
         sheet_w_mm: z.coerce.number().positive().optional().nullable(),
         sheet_l_mm: z.coerce.number().positive().optional().nullable(),
         m3_per_sheet: z.coerce.number().positive().optional().nullable(),
-        qty: z.coerce.number().positive(),
+        qty: z.coerce.number().positive().optional().nullable(),
         unit: z.string().trim().max(30).optional().nullable(),
         color: z.string().trim().max(100).optional().nullable(),
-        weight_kg: z.coerce.number().min(0).optional().nullable(),
         note: z.string().trim().max(500).optional().nullable(),
+        /* ── Số DẪN XUẤT — nhận từ người gửi (19/08/2026) ────────────────────
+         * Trước đây lối nhập hàng loạt (dán Excel / bản nháp AI) chỉ nhận
+         * `weight_kg`; ba trường còn lại bị zod LỘT im lặng, nên con số tờ giấy
+         * ghi sẵn không bao giờ vào được DB — app luôn tính lại.
+         *
+         * User chốt "không tự tính, để điền": số của file phải đi lọt. Tầng ghi
+         * vẫn dùng `x ?? calc(x)` nên bỏ trống thì hệ vẫn tính hộ. */
+        weight_kg: z.coerce.number().min(0).optional().nullable(),
+        total_length_m: z.coerce.number().min(0).optional().nullable(),
+        paint_area_m2: z.coerce.number().min(0).optional().nullable(),
+        volume_m3: z.coerce.number().min(0).optional().nullable(),
       }),
     )
     .min(1)

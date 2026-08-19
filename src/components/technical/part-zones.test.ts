@@ -47,11 +47,19 @@ describe('zonesFor — vùng của thẻ sửa', () => {
   it('khung có đủ vùng "Để cung ứng mua"', () => {
     const zone = zonesFor('FRAME').find((z) => z.label === 'Để cung ứng mua')
     expect(zone?.cells.map((c) => c.key)).toEqual([
-      'material_code',
       'profile_code',
       'kg_per_m',
       'bar_length_m',
       'pcs_per_bar',
     ])
+  })
+
+  // Ô "Mã VT kho" gỡ khỏi màn định mức 19/08/2026 — mã thuộc danh mục của phòng
+  // khác, bắt Kỹ thuật gõ là sai chỗ. Test canh để không ai vô tình gắn lại.
+  it('không nhóm nào còn ô mã vật tư kho', () => {
+    for (const g of ['FRAME', 'WOOD', 'POLYWOOD', 'CUSHION', 'FABRIC', 'NGU_KIM']) {
+      const keys = zonesFor(g).flatMap((z) => z.cells.map((c) => c.key))
+      expect(keys).not.toContain('material_code')
+    }
   })
 })

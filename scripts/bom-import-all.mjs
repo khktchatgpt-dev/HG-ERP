@@ -62,8 +62,12 @@ function groupOf(title) {
   if (/^[a-z]*-?[a-z]?\d+[a-z]* ?\/ ?[\d.,]+$/.test(t)) return null
   if (/polywood|van ep/.test(t)) return 'POLYWOOD'
   if (/^quy cach *:? *go|^quy cach go|^go /.test(t)) return 'WOOD'
-  if (/nem|goi\b|mousse|mouse|^mous|gon /.test(t)) return 'CUSHION'
+  // VẢI xét TRƯỚC NỆM. Quét 246 file: khối đề "Quy cách Nệm:" thì 64% thật ra là
+  // bảng VẢI (LOẠI VẢI · M2 · TỔNG VẢI M2 · hao hụt), chỉ 30% là bảng quy cách
+  // nệm. Xét nệm trước thì tiêu đề "Quy cách Nệm + vải:" nuốt luôn phần vải vào
+  // nhóm nệm — hai bảng không chung cột nào ngoài kích thước, trộn là mất số.
   if (/vai|textilen/.test(t)) return 'FABRIC'
+  if (/nem|goi\b|mousse|mouse|^mous|gon /.test(t)) return 'CUSHION'
   if (/kinh|mat da|mat ban|mat nhom/.test(t)) return 'PANEL'
   if (/ngu kim/.test(t)) return 'NGU_KIM'
   if (/bao bi|dong goi/.test(t)) return 'PACKAGING'
@@ -86,6 +90,12 @@ const HEADER_RULES = [
   [/tong chieu dai|tong dai/, 'skip'],
   [/dien tich|^dt/, 'skip'],
   [/thanh tien|^tt$|don gia|^dgia$/, 'skip'],
+  // BẪY ĐÃ CẮN MỘT LẦN (đo 19/08/2026): biểu mẫu GỖ đặt tên cột là
+  // "K. Lượng (m3)" — luật `k. ?luong` bên dưới bắt trúng và ném m³ vào ô kg.
+  // Layout `wood` KHÔNG có cột kg nên 232 con số nằm đó vô hình, còn cột
+  // "K. Lượng (m³)" thì trống. Đơn vị trong ngoặc phải được đọc TRƯỚC tên cột.
+  // App tự tính m³ từ hình học nên bỏ qua là đủ, không cần ghi lại.
+  [/\(m ?3\)|\(m³\)|m3\b/, 'skip'],
   [/trong luong|^kl|k\. ?luong|khoi luong/, 'weight_kg'],
   [/day vat lieu|^d$|^δ$/, 'wall_thickness_mm'],
   [/phi hao|hao chi tiet|^hao$/, 'bend_waste_mm'],

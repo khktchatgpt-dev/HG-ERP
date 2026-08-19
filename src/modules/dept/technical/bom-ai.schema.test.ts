@@ -24,7 +24,15 @@ const line = (over: Record<string, unknown> = {}) => ({
   qty: 4,
   unit: 'cây',
   material_note: null,
+  color: null,
+  waste_pct: null,
+  roll_width_m: null,
+  m3_per_sheet: null,
+  wood_species: null,
   weight_kg: null,
+  total_length_m: null,
+  paint_area_m2: null,
+  volume_m3: null,
   note: null,
   confidence: 1,
   source_ref: 'BOM!C14',
@@ -203,5 +211,44 @@ describe('bomAiExtractSchema', () => {
       },
     })
     expect(r.success).toBe(false)
+  })
+})
+
+/**
+ * Hai luật ĐỔI CHIỀU ngày 19/08/2026 — canh để đợt sửa prompt sau không lỡ tay
+ * quay về nếp cũ.
+ */
+describe('luật trích 19/08/2026', () => {
+  it('CÓ trích số dẫn xuất file ghi sẵn (trước đây cố tình bỏ)', () => {
+    const names = BOM_LINE_FIELDS.map((f) => f.name)
+    for (const k of ['total_length_m', 'paint_area_m2', 'volume_m3', 'weight_kg'])
+      expect(names).toContain(k)
+
+    const r = bomDraftLineSchema.parse(
+      line({ total_length_m: 2.99, paint_area_m2: 0.6283, volume_m3: 0.002763 }),
+    )
+    expect(r.total_length_m).toBe(2.99)
+    expect(r.paint_area_m2).toBe(0.6283)
+    expect(r.volume_m3).toBe(0.002763)
+  })
+
+  it('KHÔNG có trường tiền nào — định mức chỉ ghi nhận định mức', () => {
+    const names = BOM_LINE_FIELDS.map((f) => f.name).join(' ')
+    for (const k of ['price', 'gia', 'amount', 'cost', 'supplier', 'ncc'])
+      expect(names.toLowerCase()).not.toContain(k)
+  })
+
+  it('cảnh báo bẫy "K. Lượng (m3)" nằm ngay trong mô tả weight_kg', () => {
+    // Chính luật này đã cắn bom-import-all.mjs: 232 dòng m³ chui vào ô kg.
+    const w = BOM_LINE_FIELDS.find((f) => f.name === 'weight_kg')!
+    expect(w.desc).toMatch(/m3/i)
+    expect(w.desc).toMatch(/volume_m3/)
+  })
+
+  it('có đủ cột đặc trưng của nhóm sơn và nhóm vải', () => {
+    const names = BOM_LINE_FIELDS.map((f) => f.name)
+    expect(names).toContain('color') // Màu sơn
+    expect(names).toContain('waste_pct') // hao hụt vải %
+    expect(names).toContain('roll_width_m') // khổ vải
   })
 })

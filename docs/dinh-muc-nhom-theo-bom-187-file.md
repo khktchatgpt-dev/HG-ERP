@@ -417,3 +417,65 @@ Tổng đã gắn: 648 → **820/3.993**.
 
 Bài học đợt này: trước khi kết luận "kho thiếu mã", soi TỪ VỰNG danh mục — một
 từ lệch ('tròn'/'phi') giấu cả trăm mã có sẵn.
+
+---
+
+## Rà lại số dẫn xuất — 19/08/2026
+
+Câu hỏi ban đầu là "giao diện định mức xấu, có hợp mọi loại SP không". Đo trên
+DB thật (4.028 dòng / 212 SP có định mức) thì phần lớn cái "xấu" là **bảng
+không có số**, không phải màu mè: `columnsFor()` tự ẩn cột mà cả nhóm bỏ trống,
+nên khối gỗ chỉ còn bốn cột kích thước.
+
+### Ba lỗi tìm được
+
+| # | Lỗi | Bằng chứng |
+|---|---|---|
+| 1 | **m³ của gỗ nằm trong ô kg.** `bom-import-all.mjs` có luật tiêu đề `k. ?luong` → `weight_kg`, mà biểu mẫu gỗ đặt tên cột là "K. Lượng (m3)". Layout `wood` không có cột kg ⇒ 232 con số vô hình, cột m³ trống. | "Viền ngang ngoài 25×65×850 ×2" ghi `weight_kg = 0,002763` = đúng `0,025×0,065×0,85×2` m³ |
+| 2 | **`material_kind` chỉ điền 3%** vì script nạp ghi thẳng bảng, không qua `technical.service.ts` (chỗ duy nhất gọi `calcPartDerived`). ⇒ thẻ "Tổng hợp vật tư" RỖNG ở **204/212 SP** — đúng cái bảng dựng ra cho Cung ứng đọc. | `PartsRollupCard` cộng kg theo hệ vật liệu |
+| 3 | **`num()` của `bom-paste.ts` đọc `0.525` thành `525`** — luật bỏ dấu chấm phân nhóm nghìn không chừa phần nguyên là một số 0. Sai 1.000 lần mà cột vẫn hiện số. | test mới trong `bom-paste.test.ts` |
+
+### Bẫy phải biết khi tính lại
+
+**`crossSectionM2` coi ống KHÔNG khai δ là ĐẶC.** Hộp 25×50 dài 675 ×2: đặc ra
+4,556 kg, δ=1 ra 0,532 kg — đúng số 0,525 file ghi. Tức số hình học sai ~8,6
+lần chứ không phải số người nhập sai. **350 dòng (9%) đang ở tình trạng này** —
+không tính hộ được, Kỹ thuật phải bổ sung δ hoặc gắn mã khuôn để lấy kg/m.
+
+**`calcPartDerived` nhận diện "khối đặc" bằng `!profile_shape`**, mà dòng KHUNG
+dùng mã khuôn (TD-B629, Oval B570) cũng bỏ trống ô Loại ⇒ nếu không chặn theo
+họ khối thì thanh nhôm định hình bị tính m³ như khối gỗ chữ nhật.
+
+### Việc đã làm
+
+- `scripts/bom-derived-fix.mjs` — dò khô mặc định. Suy `material_kind` bằng cách
+  **giải ngược khối lượng riêng** từ `weight_kg` đang có (kg ÷ tiết diện ÷ tổng
+  dài → 2700/7850/7930); không giải được mới đọc tiêu đề khối, rồi mới tới
+  "Nhiên Liệu" của hồ sơ. Chỉ điền ô đang NULL — số người nhập luôn thắng.
+- Luật tiêu đề `(m3)` → `skip` ở **cả hai** `bom-import-all.mjs` và
+  `src/lib/bom-paste.ts` (đơn vị trong ngoặc đọc trước tên cột).
+- UI: bỏ 26 chỗ gõ màu cứng `sky/zinc/amber` → token `theme-v3`; gom ba lối nạp
+  (AI · dán Excel · chép SP) vào một menu; **đóng băng ba cột đầu** khi cuộn
+  ngang (khối khung trung vị 11 cột, tối đa 16); nút sửa/nhân bản hiện sẵn trên
+  màn hẹp thay vì chỉ khi rê chuột.
+
+### Kết quả dò khô
+
+```
+sẽ sửa 2.811/4.028 dòng
+  material_kind suy được 2.376 (giải ngược KLR 833 · tiêu đề 1.137 · hồ sơ 406)
+  chuyển m³ khỏi ô kg     232
+  điền total_length_m   2.718 · paint_area_m2 1.986 · weight_kg 74 · volume_m3 67
+Thẻ "Tổng hợp vật tư" rỗng: 204/212 SP → 21/212 SP
+```
+
+### Còn treo
+
+- **Chạy `--apply`** (đã backup `supabase/backups/2026-08-19_technical_product_parts.json`).
+- 350 dòng thiếu δ · 223 dòng kg lệch hình học >15% — cần Kỹ thuật rà, script cố
+  ý KHÔNG đoán hộ.
+- ĐVT vẫn bẩn (`con`/`Con`/`Cái`/`cái`, rác `1244040.96`, `còn`, `8`) và 32 tiêu
+  đề khối gõ tự do, trong đó 4 cặp trùng nghĩa khác chữ.
+- Sáu họ cột của `part-layouts.ts` **chưa phân biệt được trên thực tế**: các
+  trường 0132 (khổ vải, hao hụt, quy cách tấm, m³/tấm, dài cây, CT/cây, loại gỗ)
+  điền **0%** ⇒ `sheet · soft · fabric` render y hệt `wood`.

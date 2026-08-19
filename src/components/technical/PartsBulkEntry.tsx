@@ -17,9 +17,9 @@ import { parseBomPaste, type DraftPart } from '@/lib/bom-paste'
 import type { PartGroupView } from './ProductProfileCards'
 
 const inp =
-  'w-full rounded border border-zinc-300 px-1.5 py-1 text-xs focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input bg-background focus:border-[var(--primary)] w-full rounded border px-1.5 py-1 text-xs focus:outline-none'
 const head =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input bg-background focus:border-[var(--primary)] w-full rounded-md border px-3 py-2 text-sm focus:outline-none'
 
 type Row = DraftPart & { key: number; material_kind: string | null }
 
@@ -262,7 +262,7 @@ export function PartsBulkEntry({
         </div>
 
         {pasteOpen && (
-          <div className="flex flex-col gap-2 rounded-md border border-sky-200 bg-sky-50/60 p-3 dark:border-sky-900 dark:bg-sky-950/30">
+          <div className="bg-accent/50 flex flex-col gap-2 rounded-md border border-[var(--primary)]/25 p-3">
             <p className="text-muted-foreground text-xs">
               Copy vùng dòng chi tiết trong file BOM rồi dán vào đây. Nhận cả{' '}
               <b>biểu mẫu BOM đầy đủ</b> (Stt · Tên · Loại · Dày · Rộng · Dài · … · Dày
@@ -281,7 +281,7 @@ export function PartsBulkEntry({
                 type="button"
                 onClick={applyPaste}
                 disabled={!pasteText.trim()}
-                className="rounded-md bg-sky-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-3 py-1.5 text-xs font-medium disabled:opacity-50"
               >
                 Đọc vào lưới
               </button>
@@ -295,10 +295,7 @@ export function PartsBulkEntry({
           <div className="text-muted-foreground flex flex-wrap items-center gap-1 rounded-md border p-2.5 text-xs">
             <span className="font-medium">Cột đã nhận:</span>
             {mapped.map((m) => (
-              <span
-                key={m.index}
-                className="rounded bg-zinc-100 px-1.5 py-px tabular-nums dark:bg-zinc-800"
-              >
+              <span key={m.index} className="bg-muted rounded px-1.5 py-px tabular-nums">
                 {m.index + 1}. {m.label}
               </span>
             ))}
@@ -306,7 +303,7 @@ export function PartsBulkEntry({
         )}
 
         {skipped.length > 0 && (
-          <div className="rounded-md bg-amber-50 p-2.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          <div className="rounded-md bg-[var(--warn)]/10 p-2.5 text-xs text-[var(--warn)]">
             Đã bỏ {skipped.length} dòng khi đọc:{' '}
             {skipped
               .slice(0, 4)
@@ -439,7 +436,7 @@ export function PartsBulkEntry({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="border-input hover:bg-accent rounded-md border px-4 py-2 text-sm"
             >
               Huỷ
             </button>
@@ -447,7 +444,7 @@ export function PartsBulkEntry({
               type="button"
               disabled={busy || valid.length === 0}
               onClick={() => void save()}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white shadow hover:bg-sky-700 disabled:opacity-50"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-5 py-2 text-sm font-medium shadow disabled:opacity-50"
             >
               {busy && <Spinner size={14} />}
               {busy ? 'Đang lưu…' : `Lưu ${valid.length} dòng`}

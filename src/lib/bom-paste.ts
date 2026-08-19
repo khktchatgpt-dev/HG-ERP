@@ -49,9 +49,14 @@ export type PasteResult = {
 const num = (v: string | undefined): number | null => {
   if (v == null) return null
   // Excel VN hay dùng dấu phẩy thập phân và dấu chấm phân nhóm nghìn.
+  //
+  // NGOẠI LỆ `0.xxx`: phần nguyên chỉ có một số 0 thì dấu chấm KHÔNG thể là dấu
+  // phân nhóm nghìn — không ai viết "không nghìn năm trăm". Không chừa ra thì
+  // "0.525" (kg của một chân ghế nhôm) đọc thành 525 kg, sai 1.000 lần mà cột
+  // vẫn hiện số nên không ai nghi. Dạng "1.234" thì vẫn giữ luật cũ (nghìn).
   const s = v
     .replace(/\s/g, '')
-    .replace(/\.(?=\d{3}\b)/g, '')
+    .replace(/(?<!^-?0)\.(?=\d{3}\b)/g, '')
     .replace(',', '.')
   const cleaned = s.replace(/[^\d.-]/g, '')
   if (!cleaned) return null
@@ -81,6 +86,10 @@ const HEADER_RULES: [RegExp, Field][] = [
   [/dien tich|^dt/, 'skip'],
   [/thanh tien|^tt$|don gia|^dgia$/, 'skip'],
   [/xac nhan/, 'skip'],
+  // Đơn vị trong ngoặc đọc TRƯỚC tên cột: biểu mẫu gỗ ghi "K. Lượng (m3)" —
+  // cùng chữ "khối lượng" nhưng là THỂ TÍCH. Không chặn ở đây thì m³ rơi vào ô
+  // kg (đúng lỗi `bom-import-all.mjs` đã mắc, 232 dòng). m³ app tự tính lại.
+  [/\(m ?3\)|\(m³\)/, 'skip'],
   [/trong luong|khoi luong|^kl|\bkg\b/, 'weight_kg'],
   [/day vat lieu|do day|^δ$|^d$/, 'wall_thickness_mm'],
   [/phi ?hao|phe lieu|hao uon/, 'bend_waste_mm'],

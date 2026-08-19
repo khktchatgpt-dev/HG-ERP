@@ -77,6 +77,11 @@ export type BomAiNewDraft = {
   meta: Omit<BomAiDraft['meta'], 'existing'> & {
     /** Dung lượng ảnh SP nhúng trong file, null nếu file không có ảnh. */
     embeddedImageBytes: number | null
+    /**
+     * Hồ sơ ĐANG GIỮ mã ghi trong file, null nếu mã còn trống chỗ. Có giá trị =
+     * sản phẩm này đã nằm trong thư viện, đừng tạo bản thứ hai.
+     */
+    existingProduct: { id: string; code: string; name: string } | null
   }
 }
 
@@ -195,27 +200,20 @@ function parseBulkSection(s: {
   unit_basis?: string | null
   lines: Record<string, unknown>[]
 }) {
-  // Chốt chặn cuối cho dòng THIẾU SỐ LƯỢNG: DB có `qty not null check (qty > 0)`
-  // nên zod bên dưới sẽ ném một lỗi khó hiểu. Nói thẳng tên dòng để người dùng
-  // biết phải điền ô nào — giao diện đã chặn rồi, đây chỉ là lưới an toàn.
-  const noQty = s.lines.filter((l) => {
-    const q = l.qty
-    return q == null || q === '' || !(Number(q) > 0)
-  })
-  if (noQty.length > 0) {
-    const names = noQty
-      .slice(0, 3)
-      .map((l) => String(l.part_name ?? '?'))
-      .join(', ')
-    throw BadRequest(
-      `${noQty.length} dòng chưa có số lượng (${names}${noQty.length > 3 ? '…' : ''}) — điền SL rồi lưu lại`,
-    )
-  }
+  /*
+   * BỎ chốt chặn "thiếu số lượng" (0163). DB nay cho `qty` null nên dòng thiếu
+   * SL ghi được, và giữ lại một dòng đọc đúng nhưng khuyết một ô vẫn hơn là vứt.
+   *
+   * Ô rỗng dạng CHUỖI vẫn phải nắn về null — client gửi `""` khi người dùng xoá
+   * ô, mà `z.coerce.number()` biến `""` thành 0 rồi vướng `check (qty > 0)` của
+   * DB, ném ra một lỗi Postgres không ai đọc hiểu.
+   */
+  const lines = s.lines.map((l) => (l.qty === '' ? { ...l, qty: null } : l))
   return productPartsBulkSchema.parse({
     group_code: s.group_code,
     section_title: s.section_title ?? null,
     unit_basis: s.unit_basis ?? null,
-    lines: s.lines,
+    lines,
   })
 }
 
@@ -376,12 +374,21 @@ export const bomAiService = {
     // không được làm hỏng cả lần đọc định mức.
     const embedded = await readWorkbookImages(buffer).catch(() => null)
 
-    // Mã đã có người dùng rồi thì bỏ đi, để người dùng xin mã mới — thà trống
-    // còn hơn để họ bấm Tạo rồi ăn lỗi trùng mã.
-    let product = parsed.data.product
-    if (product.code && (await productsRepo.existsByCode(product.code))) {
-      product = { ...product, code: null }
-    }
+    /*
+     * MÃ TRONG FILE ĐÃ CÓ HỒ SƠ → nói ra, đừng lặng lẽ cấp mã khác.
+     *
+     * Bản trước xoá mã đi để người dùng xin số mới. Nhưng mã HG trong file có
+     * nghĩa "đây LÀ sản phẩm đó" — cấp mã khác là đẻ hồ sơ thứ hai cho cùng một
+     * thứ, đúng thứ thư viện đang phải dọn. Nay giữ nguyên mã và trả kèm hồ sơ
+     * đang giữ nó; màn duyệt bày ra để người dùng chọn: mở hồ sơ cũ, nạp định
+     * mức vào đó, hay thật sự muốn tạo bản mới thì tự xin mã.
+     *
+     * Mã KHÔNG trùng thì dùng luôn của file — không cần xin mã mới.
+     */
+    const product = parsed.data.product
+    const existingProduct = product.code
+      ? await productsRepo.findByCodeLite(product.code)
+      : null
 
     return {
       product,
@@ -397,6 +404,7 @@ export const bomAiService = {
         lines: sections.reduce((n, s) => n + s.lines.length, 0),
         missingQty,
         embeddedImageBytes: embedded?.buffer.byteLength ?? null,
+        existingProduct,
       },
     }
   },
@@ -421,17 +429,18 @@ export const bomAiService = {
     await assertAction(user, 'technical.product.create')
 
     /*
-     * Dòng người dùng CỐ Ý để trống SL thì bỏ, không ném lỗi: màn tạo có bảng
-     * điền SL cho các dòng file thiếu và nói rõ "để trống thì dòng đó không
-     * được ghi". Khác luồng `apply` (hồ sơ có sẵn) — ở đó lưới chặn hẳn nút Lưu
-     * nên còn dòng thiếu SL là lỗi lập trình, phải ném.
+     * GIỮ LẠI dòng thiếu SL (0163 — user chốt 19/08/2026).
+     *
+     * Bản trước LỌC BỎ chúng, nên file nào bỏ trống cột Số lượng là hồ sơ tạo ra
+     * rỗng định mức: `BOM_MERXX_Ghế Xếp Chồng Tilos.xlsx` trống cả 11/11 dòng
+     * khung, mất sạch tên chi tiết · mã khuôn · ba kích thước mà máy đã đọc đúng
+     * — chỉ vì thiếu một ô.
+     *
+     * Nay ghi hết, ô SL để null; tab Định mức bày "cần SL" bằng màu chặn để
+     * người dùng điền nốt. Dòng chưa có SL KHÔNG vào nhu cầu vật tư của Cung ứng
+     * — mệnh đề `pp.qty is not null` trong migration 0163 lo phần đó.
      */
-    const withQty = input.sections
-      .map((s) => ({
-        ...s,
-        lines: s.lines.filter((l) => l.qty != null && Number(l.qty) > 0),
-      }))
-      .filter((s) => s.lines.length > 0)
+    const withQty = input.sections.filter((s) => s.lines.length > 0)
 
     // Validate HẾT các khối TRƯỚC khi tạo SP: một khối hỏng phát hiện sau khi
     // đã insert là để lại hồ sơ mồ côi không định mức (đã dính một lần —
@@ -453,10 +462,32 @@ export const bomAiService = {
       owner_id: user.id,
     })
 
+    /*
+     * GHI ĐỊNH MỨC HỎNG → XOÁ LUÔN HỒ SƠ VỪA TẠO rồi mới ném lỗi.
+     *
+     * `parseBulkSection` ở trên đã chặn mọi lỗi HÌNH DẠNG trước khi tạo SP,
+     * nhưng không chặn được lỗi phát sinh ở tầng DB. Đo thật 19/08/2026: ràng
+     * buộc `qty not null` (migration 0163 chưa áp) làm insert nổ SAU khi SP đã
+     * nằm trong bảng — người dùng thấy 500, bấm lại thì ăn 409 CODE_TAKEN vì
+     * chính hồ sơ mồ côi của lượt trước đang giữ mã.
+     *
+     * Xoá là an toàn: hồ sơ vừa tạo xong trong cùng một request, chưa ai kịp
+     * đính gì vào (file/ảnh làm ở dưới), nên không có dữ liệu của người khác để
+     * mất. Lỗi xoá thì nuốt — ném ra sẽ che mất nguyên nhân thật.
+     */
     let added = 0
-    for (const s of sections) {
-      const r = await productsService.addParts(user, product.id, s)
-      added += r.added
+    try {
+      for (const s of sections) {
+        const r = await productsService.addParts(user, product.id, s)
+        added += r.added
+      }
+    } catch (e) {
+      await productsRepo.delete(product.id).catch(() => {})
+      throw BadRequest(
+        `Ghi định mức thất bại nên đã huỷ hồ sơ ${product.code} — không để lại mã treo. ${
+          e instanceof Error ? e.message : ''
+        }`.trim(),
+      )
     }
 
     /*

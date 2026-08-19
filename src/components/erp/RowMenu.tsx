@@ -33,12 +33,16 @@ export function RowMenu({
   items,
   trigger,
   triggerClassName,
+  ariaLabel,
 }: {
   items: RowMenuItem[]
   /** Nội dung nút mở menu. Mặc định '⋯' — thẻ/card truyền icon riêng. */
   trigger?: React.ReactNode
   /** Thay class nút mở menu (không cộng dồn) — dùng khi nút nằm đè lên ảnh. */
   triggerClassName?: string
+  /** Nhãn cho trình đọc màn hình. Trigger CÓ CHỮ thì phải truyền nhãn trùng chữ
+   *  đó, không thì aria-label "Actions" đè lên và người dùng NVDA nghe sai nút. */
+  ariaLabel?: string
 }) {
   const btnRef = useRef<HTMLButtonElement>(null)
   const [themeClass, setThemeClass] = useState<string | undefined>(undefined)
@@ -60,7 +64,7 @@ export function RowMenu({
       <DropdownMenuTrigger asChild>
         <button
           ref={btnRef}
-          aria-label="Actions"
+          aria-label={ariaLabel ?? 'Actions'}
           className={
             triggerClassName ??
             'border-input hover:bg-accent hover:text-accent-foreground rounded-md border px-2 py-0.5 text-sm transition-colors'
