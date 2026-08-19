@@ -242,3 +242,47 @@ describe('parseBomPaste — cụm gộp ô kéo xuống dòng dưới', () => {
     expect(r.rows[0].cluster_name).toBeNull()
   })
 })
+
+describe('cột "K. Lượng (m3)" của biểu mẫu gỗ', () => {
+  it('KHÔNG rơi vào weight_kg — đơn vị trong ngoặc thắng tên cột', () => {
+    const r = parseBomPaste(
+      [
+        'Stt\tTên chi tiết\tDày\tRộng\tDài\tSL\tK. Lượng (m3)',
+        '1\tNan bàn\t25\t40\t653\t4\t0.002772',
+      ].join('\n'),
+    )
+    expect(r.source).toBe('header')
+    expect(r.rows[0].weight_kg).toBeNull()
+    expect(r.rows[0].dim_a_mm).toBe(25)
+    expect(r.rows[0].qty).toBe(4)
+  })
+
+  it('vẫn nhận cột kg thật của biểu mẫu khung', () => {
+    const r = parseBomPaste(
+      [
+        'Stt\tTên chi tiết\tDày\tRộng\tDài\tSL\tTrọng lượng (kg)',
+        '1\tChân sau\t25\t50\t675\t2\t0.525',
+      ].join('\n'),
+    )
+    expect(r.rows[0].weight_kg).toBe(0.525)
+  })
+})
+
+describe('số thập phân bắt đầu bằng 0', () => {
+  it('"0.525" là 0,525 kg chứ không phải 525 kg', () => {
+    const r = parseBomPaste(
+      [
+        'Stt\tTên chi tiết\tDày\tRộng\tDài\tSL\tTrọng lượng (kg)',
+        '1\tChân sau\t25\t50\t675\t2\t0.525',
+      ].join('\n'),
+    )
+    expect(r.rows[0].weight_kg).toBe(0.525)
+  })
+
+  it('"1.234" vẫn là 1234 — dấu chấm phân nhóm nghìn kiểu Excel VN', () => {
+    const r = parseBomPaste(
+      ['Stt\tTên chi tiết\tDày\tRộng\tDài\tSL', '1\tNan\t25\t40\t1.234\t2'].join('\n'),
+    )
+    expect(r.rows[0].cut_length_mm).toBe(1234)
+  })
+})
