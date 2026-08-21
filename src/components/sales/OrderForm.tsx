@@ -1,10 +1,12 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Paperclip, PackagePlus, Plus, Search } from 'lucide-react'
 import { Badge } from '@/components/Badge'
+import { type ProductPick } from '@/components/sales/ProductPicker'
+import { ProductSearchDialog } from '@/components/sales/ProductSearchDialog'
 import { Button } from '@/components/shadcn/button'
 // Alias: helper `Card` cục bộ bên dưới (nhận prop `title`) đã được cả trang gọi,
 // nên thẻ shadcn vào đây dưới tên khác thay vì đổi hàng chục chỗ gọi.
@@ -20,18 +22,6 @@ import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 import { shipWeekLabel } from '@/lib/ship-week'
 
-export type ProductPick = {
-  id: string
-  code: string
-  name: string
-  unit: string
-  customer_id: string | null
-  customer_item_code: string | null
-  bom_status: 'none' | 'drawing' | 'done'
-  dims: string | null
-  spec: string | null
-  has_image: boolean
-}
 export type QuoteOption = {
   id: string
   code: string
@@ -111,6 +101,12 @@ type LineRow = {
   note: string
 }
 
+/** "68×62×99 cm" từ quy cách đóng gói — thiếu chiều nào thì thôi không in. */
+function dimsOf(p: ProductPick): string | null {
+  const k = p.packing ?? {}
+  return k.l_cm && k.w_cm && k.h_cm ? `${k.l_cm}×${k.w_cm}×${k.h_cm} cm` : null
+}
+
 const BOM_LABEL = { none: 'Chưa có BOM', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
 const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
 
@@ -131,8 +127,8 @@ function NpField({
   children: React.ReactNode
 }) {
   return (
-    <label className={`flex flex-col gap-1 text-xs ${className}`}>
-      <span className="font-medium">
+    <label className={`grid gap-1.5 ${className}`}>
+      <span className="t-label text-muted-foreground">
         {label}
         {required && <span className="text-destructive"> *</span>}
       </span>
@@ -143,17 +139,36 @@ function NpField({
 
 /*
  * Lớp ô nhập DÙNG CHUNG cho mọi input/select/textarea của form. Đổi ở ĐÂY là
- * đổi cả trang — nên form dùng token `.theme-v2` (stone + emerald) mà không phải
- * thay từng thẻ sang <Input> của shadcn. Bám sát `components/shadcn/input.tsx`
- * để hai bên nhìn như một.
+ * đổi cả trang. Vì sao không thay hết bằng <Input>/<Select> của shadcn: form có
+ * <select> kèm <optgroup> (nhóm SP theo khách) mà Radix Select không dựng được,
+ * nên giữ thẻ gốc và khoác đúng lớp da của Input — bám sát
+ * `components/shadcn/input.tsx` để hai bên nhìn như một, và mọi màu ở đây đều là
+ * token v3 (border-input / ring / bg-card), không có màu Tailwind cứng.
  */
 const cls =
   'border-input focus-visible:border-ring focus-visible:ring-ring/50 bg-card w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50'
 
+/**
+ * Lưới một DÒNG SẢN PHẨM. Dưới xl là thẻ 2 cột (điện thoại/laptop hẹp), từ xl
+ * thành HÀNG
+ * BẢNG: sản phẩm co giãn, các ô số cố định bề ngang để cột số thẳng hàng suốt
+ * bảng — đơn 26 dòng mà mỗi dòng tự căn một kiểu thì không đối chiếu được.
+ *
+ * Vì sao xl chứ không phải lg: khung nội dung của shell là max-w-1600 nhưng ở
+ * màn 1100px thẻ chỉ còn ~750px — 4 cột số cố định ăn 470px, ô chọn SP còn
+ * đúng 100px, không đọc nổi tên hàng. Đo trên máy trước khi chốt mốc.
+ */
+const LINE_GRID =
+  'grid grid-cols-2 gap-3 xl:grid-cols-[minmax(0,2fr)_6rem_7rem_7rem_8.5rem_minmax(5rem,1fr)] xl:gap-2'
+
 export function OrderForm(props: {
   mode: 'create' | 'edit'
   customers: CustomerOption[]
-  products: ProductPick[]
+  /**
+   * CHỈ các SP đang nằm trên dòng của đơn đang sửa — không phải cả thư viện.
+   * Ô chọn SP tự tìm ở server khi Sales mở nó (xem `ProductPicker`).
+   */
+  lineProducts: ProductPick[]
   sentQuotes?: QuoteOption[]
   order?: OrderInitial
   initialLines?: {
@@ -190,7 +205,16 @@ export function OrderForm(props: {
       note: l.note,
     })),
   )
-  const [productList] = useState<ProductPick[]>(props.products)
+  /*
+   * SP đã BIẾT = SP đang nằm trên dòng + SP vừa chọn/vừa tạo. KHÔNG còn "cả thư
+   * viện" nữa: ô chọn tìm ở server (`ProductPicker`, y như form báo giá). Trước
+   * đây trang nạp sẵn 1.000 SP vào một <select> — vừa tốn egress mỗi lần mở
+   * trang, vừa bắt Sales lướt danh sách nghìn dòng để tìm một mã.
+   */
+  const [known, setKnown] = useState<Map<string, ProductPick>>(
+    () => new Map(props.lineProducts.map((p) => [p.id, p])),
+  )
+  const rememberProduct = (p: ProductPick) => setKnown((m) => new Map(m).set(p.id, p))
 
   // Mini-form "SP mới" (chưa lưu — thành 1 dòng draft).
   const [npOpen, setNpOpen] = useState(false)
@@ -243,11 +267,7 @@ export function OrderForm(props: {
   const hasTerms = Object.values(terms).some((v) => v !== '')
   const [termsOpen, setTermsOpen] = useState(mode === 'edit' && hasTerms)
 
-  const productById = useMemo(() => {
-    const m = new Map<string, ProductPick>()
-    for (const p of productList) m.set(p.id, p)
-    return m
-  }, [productList])
+  const productById = known
 
   const activeCustomerId =
     mode === 'edit'
@@ -255,15 +275,6 @@ export function OrderForm(props: {
       : source === 'quote'
         ? quoteCustomerId
         : customerId
-
-  const productChoices = useMemo(() => {
-    const cid = activeCustomerId
-    return {
-      own: productList.filter((p) => p.customer_id === cid),
-      common: productList.filter((p) => !p.customer_id),
-      others: productList.filter((p) => p.customer_id && p.customer_id !== cid),
-    }
-  }, [productList, activeCustomerId])
 
   /**
    * Chọn báo giá đã chốt → nạp SP + đơn giá + tiền tệ từ báo giá vào dòng để Sale
@@ -303,6 +314,13 @@ export function OrderForm(props: {
   }
 
   const usedIds = new Set(lines.filter((l) => l.productId).map((l) => l.productId))
+  /**
+   * Hộp thoại tìm SP: `null` = đóng, `'add'` = thêm nhiều dòng, còn lại là key
+   * của dòng đang ĐỔI sản phẩm (chọn một).
+   */
+  const [pickFor, setPickFor] = useState<'add' | number | null>(null)
+  const pickOpen = pickFor !== null
+  const setPickOpen = (v: boolean) => setPickFor(v ? 'add' : null)
   const linesEditable =
     mode === 'edit' || source === 'direct' || (source === 'quote' && !!quoteId)
   const currency = mode === 'edit' ? order!.currency : h.currency
@@ -341,19 +359,27 @@ export function OrderForm(props: {
   function removeLine(key: number) {
     setLines((ls) => ls.filter((l) => l.key !== key))
   }
-  function addExistingLine() {
+  /**
+   * Thêm dòng từ hộp thoại tìm SP — MỖI SP MỘT DÒNG, thêm cả loạt một lượt.
+   * Bản cũ đẻ một dòng RỖNG rồi bắt đi tìm trong ô hẹp của chính dòng đó; đơn 26
+   * mặt hàng là 26 lần lặp lại thao tác ấy.
+   */
+  function addPickedLines(products: ProductPick[]) {
+    products.forEach(rememberProduct)
     setLines((ls) => [
       ...ls,
-      {
+      ...products.map((p) => ({
         key: keyRef.current++,
-        productId: '',
+        productId: p.id,
         draft: null,
-        qty: '',
-        unitPrice: '',
-        shipDate: '',
+        qty: '' as const,
+        unitPrice: '' as const,
+        // Ngày giao mặc định theo hạn giao của đơn — sửa lại từng dòng nếu tách đợt.
+        shipDate: h.due_date || '',
         note: '',
-      },
+      })),
     ])
+    setPickOpen(false)
   }
   function addDraftLine() {
     if (!np.code.trim() || !np.name.trim()) {
@@ -569,7 +595,7 @@ export function OrderForm(props: {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-4">
+    <div className="theme-v3 text-foreground mx-auto flex w-full max-w-[1180px] flex-col gap-4 pb-4">
       <TopProgressBar active={busy} />
 
       {/* Đầu trang v2 — khớp trang danh sách và hồ sơ đơn. Bỏ breadcrumb 3 cấp:
@@ -583,7 +609,7 @@ export function OrderForm(props: {
           {mode === 'edit' ? order!.code : 'Đơn hàng'}
         </Link>
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="t-display">
             {mode === 'create' ? 'Tạo đơn hàng' : `Sửa đơn ${order!.code}`}
           </h1>
           <p className="text-muted-foreground mt-1 text-sm">
@@ -605,96 +631,152 @@ export function OrderForm(props: {
         </div>
       </div>
 
-      {/* 1. Khách hàng & nguồn — chỉ khi TẠO đơn (lúc sửa đã nằm ở đầu trang). */}
-      {mode === 'create' && (
-        <Card title="Khách hàng & nguồn đơn">
-          <>
-            <label className="mb-3 flex flex-col gap-1 text-sm">
-              <span>
-                Mã đơn hàng <span className="text-destructive">*</span>
-              </span>
-              <input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                maxLength={50}
-                placeholder="Sale tự đặt mã — vd HG-MX-001"
-                className={`${cls} font-mono sm:max-w-xs`}
-              />
-            </label>
-            <div className="mb-3 flex gap-2">
+      {/*
+       * ĐẦU PHIẾU — một dải ô NẰM NGANG, gộp "khách & nguồn" với "thông tin đơn"
+       * làm một khối (trước là hai thẻ riêng, mỗi thẻ vài ô nép trái).
+       *
+       * Đọc như đầu tờ đơn hàng thật: mã đơn · nguồn · khách · tiền tệ trên một
+       * hàng, rồi PO khách · hạn giao · container; ghi chú trải hết bề ngang.
+       * Nguồn đơn (từ báo giá / trực tiếp) nằm ở góc phải tiêu đề vì nó quyết
+       * định cả khối bên dưới hiện ô gì.
+       */}
+      <Card
+        title="Đơn hàng"
+        right={
+          mode === 'create' ? (
+            <div className="bg-muted/60 flex w-fit items-center rounded-md p-0.5">
               <Tab on={source === 'quote'} onClick={() => setSource('quote')}>
-                Từ báo giá đã chốt
+                Từ báo giá
               </Tab>
               <Tab on={source === 'direct'} onClick={() => setSource('direct')}>
-                Trực tiếp (không báo giá)
+                Trực tiếp
               </Tab>
             </div>
-            {source === 'quote' ? (
-              (props.sentQuotes?.length ?? 0) === 0 ? (
-                <p className="text-muted-foreground text-sm">
-                  Chưa có báo giá đã chốt — chuyển “Trực tiếp” hoặc chốt báo giá trước.
-                </p>
+          ) : undefined
+        }
+      >
+        <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+          {mode === 'create' && (
+            <>
+              <L label="Mã đơn hàng *" strong>
+                <input
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  maxLength={50}
+                  placeholder="vd HG-MX-001"
+                  className={`${cls} t-data`}
+                />
+              </L>
+              {source === 'quote' ? (
+                (props.sentQuotes?.length ?? 0) === 0 ? (
+                  <p className="text-muted-foreground self-end text-sm sm:col-span-1 lg:col-span-3">
+                    Chưa có báo giá đã chốt — chuyển “Trực tiếp” hoặc chốt báo giá trước.
+                  </p>
+                ) : (
+                  <L label="Báo giá đã chốt *" strong span2>
+                    <select
+                      value={quoteId}
+                      onChange={(e) => void selectQuote(e.target.value)}
+                      disabled={loadingQuote}
+                      className={cls}
+                    >
+                      <option value="">— chọn báo giá —</option>
+                      {props.sentQuotes!.map((qt) => (
+                        <option key={qt.id} value={qt.id}>
+                          {qt.code} — {qt.customer_name} ({qt.currency})
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-muted-foreground text-[11px]">
+                      {loadingQuote
+                        ? 'Đang nạp dòng SP từ báo giá…'
+                        : 'SP + đơn giá + điều khoản lấy từ báo giá — chỉ cần nhập số lượng.'}
+                    </span>
+                  </L>
+                )
               ) : (
-                <label className="flex flex-col gap-1 text-sm">
-                  <span>
-                    Báo giá đã chốt <span className="text-destructive">*</span>
-                  </span>
-                  <select
-                    value={quoteId}
-                    onChange={(e) => void selectQuote(e.target.value)}
-                    disabled={loadingQuote}
-                    className={cls}
-                  >
-                    <option value="">— chọn báo giá —</option>
-                    {props.sentQuotes!.map((qt) => (
-                      <option key={qt.id} value={qt.id}>
-                        {qt.code} — {qt.customer_name} ({qt.currency})
-                      </option>
-                    ))}
-                  </select>
-                  <span className="text-muted-foreground text-xs">
-                    {loadingQuote
-                      ? 'Đang nạp dòng SP từ báo giá…'
-                      : 'SP + đơn giá + điều khoản lấy từ báo giá — bạn chỉ cần nhập số lượng bên dưới.'}
-                  </span>
-                </label>
-              )
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-3">
-                <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-                  <span>
-                    Khách hàng <span className="text-destructive">*</span>
-                  </span>
-                  <select
-                    value={customerId}
-                    onChange={(e) => setCustomerId(e.target.value)}
-                    className={cls}
-                  >
-                    <option value="">— chọn khách —</option>
-                    {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="flex flex-col gap-1 text-sm">
-                  Tiền tệ
-                  <select
-                    value={h.currency}
-                    onChange={(e) => set('currency', e.target.value)}
-                    className={cls}
-                  >
-                    <option value="USD">USD</option>
-                    <option value="VND">VND</option>
-                    <option value="EUR">EUR</option>
-                  </select>
-                </label>
-              </div>
-            )}
-          </>
-        </Card>
-      )}
+                <>
+                  <L label="Khách hàng *" strong>
+                    <select
+                      value={customerId}
+                      onChange={(e) => setCustomerId(e.target.value)}
+                      className={cls}
+                    >
+                      <option value="">— chọn khách —</option>
+                      {customers.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </L>
+                  <L label="Tiền tệ">
+                    <select
+                      value={h.currency}
+                      onChange={(e) => set('currency', e.target.value)}
+                      className={cls}
+                    >
+                      <option value="USD">USD</option>
+                      <option value="VND">VND</option>
+                      <option value="EUR">EUR</option>
+                    </select>
+                  </L>
+                </>
+              )}
+            </>
+          )}
+
+          <L label="Số PO của khách">
+            <input
+              value={h.customer_po_no}
+              onChange={(e) => set('customer_po_no', e.target.value)}
+              maxLength={100}
+              placeholder="HG-MX"
+              className={`${cls} t-data`}
+            />
+          </L>
+          {/* Hạn giao là trường DUY NHẤT ở khối này kéo theo hệ quả (cảnh báo trễ
+              ở sổ đơn, thứ tự kế hoạch SX, ngày giao điền sẵn cho dòng mới) —
+              nhãn đậm để không chìm giữa PO/Container. */}
+          <L label="Hạn giao" strong>
+            <input
+              type="date"
+              value={h.due_date}
+              onChange={(e) => set('due_date', e.target.value)}
+              className={cls}
+            />
+          </L>
+          <L label="Container">
+            <input
+              value={h.container_summary}
+              onChange={(e) => set('container_summary', e.target.value)}
+              maxLength={100}
+              placeholder="3 x 40'HC"
+              className={cls}
+            />
+          </L>
+          <L label="Ghi chú đơn" span2>
+            <textarea
+              value={h.note}
+              onChange={(e) => set('note', e.target.value)}
+              rows={2}
+              maxLength={2000}
+              className={cls}
+            />
+          </L>
+          {mode === 'edit' && (
+            <L label="Lý do thay đổi (ghi lịch sử)" span2>
+              <input
+                value={h.change_note}
+                onChange={(e) => set('change_note', e.target.value)}
+                maxLength={1000}
+                placeholder="vd: khách tăng SL ghế 48 → 60, đổi màu nệm"
+                className={cls}
+              />
+            </L>
+          )}
+        </div>
+      </Card>
 
       {/* 2. Dòng sản phẩm */}
       {linesEditable && (
@@ -702,27 +784,46 @@ export function OrderForm(props: {
           title={`Dòng sản phẩm (${lines.length})`}
           right={
             <span className="text-muted-foreground text-xs">
-              Tổng{' '}
-              <b className="text-foreground text-base tabular-nums">
-                {total.toLocaleString('en-US')}
-              </b>{' '}
-              {currency}
+              {lines.length > 0 ? `${lines.length} dòng` : 'chưa có dòng'}
             </span>
           }
         >
           {lines.length === 0 ? (
             <p className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-sm">
-              Chưa có dòng nào — bấm <b>“+ Chọn SP có sẵn”</b> hoặc <b>“+ SP mới”</b> bên
-              dưới.
+              Phiếu chưa có dòng nào — bấm <b>“Thêm sản phẩm”</b> bên dưới để tìm và chọn
+              (chọn được nhiều mã một lượt), hoặc <b>“SP mới”</b> nếu hàng chưa có trong
+              thư viện.
             </p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-3 xl:gap-0 xl:rounded-lg xl:border">
+              {/*
+               * HÀNG TIÊU ĐỀ CỘT — chỉ ở khổ rộng, thay cho bộ 5 nhãn lặp trên
+               * MỖI dòng. Đơn thật của MERXX có 26 dòng: bản cũ in 130 lần các
+               * chữ "SỐ LƯỢNG / ĐƠN GIÁ / THÀNH TIỀN / NGÀY GIAO / GHI CHÚ" và
+               * mỗi dòng cao ~95px, tức phải cuộn ~2.500px mới hết phần nhập
+               * liệu. Dạng bảng đưa xuống còn ~45px/dòng.
+               * Dưới lg vẫn là THẺ xếp dọc (nhãn hiện lại) — 7 ô một hàng không
+               * thể đọc trên điện thoại.
+               */}
+              <div
+                className={`${LINE_GRID} t-label text-muted-foreground bg-muted/40 hidden rounded-t-lg border-b px-2 py-1.5 xl:grid`}
+              >
+                <span>Sản phẩm</span>
+                <span className="text-right">Số lượng</span>
+                <span className="text-right">Đơn giá ({currency})</span>
+                <span className="text-right">Thành tiền</span>
+                <span>Ngày giao</span>
+                <span>Ghi chú</span>
+              </div>
               {lines.map((l) => {
                 const p = l.productId ? productById.get(l.productId) : undefined
                 const lineTotal = (Number(l.qty) || 0) * (Number(l.unitPrice) || 0)
                 return (
-                  <div key={l.key} className="rounded-lg border p-3">
-                    <div className="flex items-start gap-2">
+                  <div
+                    key={l.key}
+                    className={`${LINE_GRID} rounded-lg border p-3 xl:items-start xl:rounded-none xl:border-x-0 xl:border-t xl:border-b-0 xl:px-2 xl:py-2`}
+                  >
+                    <div className="col-span-2 flex items-start gap-2 xl:col-span-1">
                       <div className="min-w-0 flex-1">
                         {l.draft ? (
                           <div className="flex flex-wrap items-center gap-2">
@@ -732,7 +833,7 @@ export function OrderForm(props: {
                               {l.draft.code}
                             </span>
                             {l.draft.image && (
-                              <span className="text-xs text-emerald-600">🖼 có ảnh</span>
+                              <span className="text-xs text-[var(--done)]">🖼 có ảnh</span>
                             )}
                             <span className="text-muted-foreground text-xs">
                               (tạo vào thư viện khi lưu đơn)
@@ -740,50 +841,71 @@ export function OrderForm(props: {
                           </div>
                         ) : (
                           <>
-                            {/* Sản phẩm là TIÊU ĐỀ của dòng — đậm hơn mọi ô còn
-                                lại, trước đây cùng cỡ cùng màu với ô ghi chú. */}
-                            <select
-                              value={l.productId}
-                              onChange={(e) =>
-                                setLine(l.key, { productId: e.target.value })
-                              }
-                              className={`${cls} font-medium`}
-                            >
-                              <option value="">— chọn sản phẩm —</option>
-                              {productChoices.own.length > 0 && (
-                                <optgroup label="SP của khách này">
-                                  {productChoices.own.map((o) =>
-                                    opt(o, usedIds, l.productId),
-                                  )}
-                                </optgroup>
-                              )}
-                              {productChoices.common.length > 0 && (
-                                <optgroup label="Mẫu chung">
-                                  {productChoices.common.map((o) =>
-                                    opt(o, usedIds, l.productId),
-                                  )}
-                                </optgroup>
-                              )}
-                              {productChoices.others.length > 0 && (
-                                <optgroup label="SP khách khác">
-                                  {productChoices.others.map((o) =>
-                                    opt(o, usedIds, l.productId),
-                                  )}
-                                </optgroup>
-                              )}
-                            </select>
+                            {/*
+                             * Dòng chỉ HIỂN THỊ sản phẩm đã chọn — việc tìm nằm
+                             * ở hộp thoại riêng (`ProductSearchDialog`). Nhét ô
+                             * tìm vào ô rộng ~290px của dòng thì không đọc nổi
+                             * mã khách đặt / BOM / kích thước, mà panel kết quả
+                             * lại đè lên các dòng dưới.
+                             */}
+                            {p ? (
+                              <span className="flex items-baseline gap-2">
+                                <span className="min-w-0 text-sm font-medium">
+                                  {p.name}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setPickFor(l.key)}
+                                  className="text-primary shrink-0 text-xs hover:underline"
+                                >
+                                  Đổi
+                                </button>
+                              </span>
+                            ) : (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setPickFor(l.key)}
+                              >
+                                <Search /> Chọn sản phẩm
+                              </Button>
+                            )}
                             {p && (
-                              <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                                <span className="font-mono">{p.code}</span>
+                              /*
+                               * Dòng lý lịch SP: ở khổ rộng ép về MỘT dòng cắt
+                               * đuôi (đủ chữ ở tooltip). Để nó tự xuống dòng
+                               * trong cột hẹp thì mỗi dòng đơn cao 120–156px —
+                               * đơn 26 dòng lại thành 3.400px cuộn, đúng cái
+                               * bệnh vừa chữa. Mã + tình trạng BOM là thứ phải
+                               * thấy ngay nên đứng đầu, không bao giờ bị cắt.
+                               */
+                              <div
+                                className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs xl:flex-nowrap xl:overflow-hidden"
+                                title={[
+                                  p.code,
+                                  p.customer_item_code && `KH: ${p.customer_item_code}`,
+                                  BOM_LABEL[p.bom_status],
+                                  dimsOf(p),
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              >
+                                <span className="font-mono xl:shrink-0">{p.code}</span>
                                 {p.customer_item_code && (
-                                  <span>KH: {p.customer_item_code}</span>
+                                  <span className="xl:shrink-0">
+                                    KH: {p.customer_item_code}
+                                  </span>
                                 )}
-                                <Badge tone={BOM_TONE[p.bom_status]}>
-                                  {BOM_LABEL[p.bom_status]}
-                                </Badge>
-                                {p.dims && <span>📐 {p.dims}</span>}
-                                {p.spec && <span>🛠 {p.spec}</span>}
-                                {p.has_image && <span>🖼 ảnh</span>}
+                                <span className="xl:shrink-0">
+                                  <Badge tone={BOM_TONE[p.bom_status]}>
+                                    {BOM_LABEL[p.bom_status]}
+                                  </Badge>
+                                </span>
+                                {dimsOf(p) && (
+                                  <span className="xl:truncate">📐 {dimsOf(p)}</span>
+                                )}
+                                {p.has_image && <span className="xl:hidden">🖼 ảnh</span>}
                               </div>
                             )}
                           </>
@@ -792,7 +914,7 @@ export function OrderForm(props: {
                       <button
                         type="button"
                         onClick={() => removeLine(l.key)}
-                        className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 rounded p-1.5"
                         aria-label="Xoá dòng"
                       >
                         ✕
@@ -800,110 +922,118 @@ export function OrderForm(props: {
                     </div>
 
                     {/*
-                      BẬC ƯU TIÊN trong một dòng, trước đây 4 ô y hệt nhau:
-                        Số lượng  — thứ Sales sửa nhiều nhất → to nhất, đậm nhất
-                        Đơn giá   — cũng phải nhập → to, không đậm
-                        Thành tiền— MÁY TÍNH RA, chỉ để đối chiếu → lùi lại, xám
-                        Ghi chú   — tuỳ chọn → chữ nhỏ, nhãn xám
-                    */}
-                    <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-5">
-                      <LineField label="Số lượng *" strong>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={l.qty}
-                          onChange={(e) =>
-                            setLine(l.key, {
-                              qty: e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
-                          className={`${cls} h-10 text-base font-semibold tabular-nums`}
-                        />
-                      </LineField>
-                      <LineField label={`Đơn giá * (${currency})`} strong>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={l.unitPrice}
-                          onChange={(e) =>
-                            setLine(l.key, {
-                              unitPrice:
-                                e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
-                          className={`${cls} h-10 text-base tabular-nums`}
-                        />
-                      </LineField>
-                      <LineField label={`Thành tiền (${currency})`}>
-                        <div className="bg-muted/60 text-muted-foreground flex h-10 items-center justify-end rounded-md px-3 text-sm tabular-nums">
-                          {lineTotal.toLocaleString('en-US')}
-                        </div>
-                      </LineField>
-                      {/* Ngày giao KẾ HOẠCH của dòng = hạn cuối tuần giao — nhãn
-                          tuần (w47.26, cột SHIPMENT sổ thật) suy từ ngày. */}
-                      <LineField label="Ngày giao">
-                        <input
-                          type="date"
-                          value={l.shipDate}
-                          onChange={(e) => setLine(l.key, { shipDate: e.target.value })}
-                          className={cls}
-                        />
-                        {l.shipDate && (
-                          <span className="text-muted-foreground font-mono text-[10px]">
-                            = {shipWeekLabel(l.shipDate)}
-                          </span>
-                        )}
-                      </LineField>
-                      <LineField label="Ghi chú dòng">
-                        <input
-                          value={l.note}
-                          maxLength={500}
-                          onChange={(e) => setLine(l.key, { note: e.target.value })}
-                          placeholder="tuỳ chọn"
-                          className={`${cls} text-xs`}
-                        />
-                      </LineField>
-                    </div>
+                    BẬC ƯU TIÊN trong một dòng, trước đây 4 ô y hệt nhau:
+                      Số lượng  — thứ Sales sửa nhiều nhất → to nhất, đậm nhất
+                      Đơn giá   — cũng phải nhập → to, không đậm
+                      Thành tiền— MÁY TÍNH RA, chỉ để đối chiếu → lùi lại, xám
+                      Ghi chú   — tuỳ chọn → chữ nhỏ, nhãn xám
+                  */}
+                    <LineField label="Số lượng *" strong>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={l.qty}
+                        onChange={(e) =>
+                          setLine(l.key, {
+                            qty: e.target.value === '' ? '' : Number(e.target.value),
+                          })
+                        }
+                        className={`${cls} t-data text-right font-semibold`}
+                      />
+                    </LineField>
+                    <LineField label={`Đơn giá * (${currency})`} strong>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={l.unitPrice}
+                        onChange={(e) =>
+                          setLine(l.key, {
+                            unitPrice:
+                              e.target.value === '' ? '' : Number(e.target.value),
+                          })
+                        }
+                        className={`${cls} t-data text-right`}
+                      />
+                    </LineField>
+                    <LineField label={`Thành tiền (${currency})`}>
+                      <div className="bg-muted/60 text-muted-foreground t-data flex h-9 items-center justify-end rounded-md px-3">
+                        {lineTotal.toLocaleString('en-US')}
+                      </div>
+                    </LineField>
+                    {/* Ngày giao KẾ HOẠCH của dòng = hạn cuối tuần giao — nhãn
+                        tuần (w47.26, cột SHIPMENT sổ thật) suy từ ngày. */}
+                    <LineField label="Ngày giao">
+                      <input
+                        type="date"
+                        value={l.shipDate}
+                        onChange={(e) => setLine(l.key, { shipDate: e.target.value })}
+                        className={cls}
+                      />
+                      {l.shipDate && (
+                        <span className="text-muted-foreground font-mono text-[10px]">
+                          = {shipWeekLabel(l.shipDate)}
+                        </span>
+                      )}
+                    </LineField>
+                    <LineField label="Ghi chú dòng">
+                      <input
+                        value={l.note}
+                        maxLength={500}
+                        onChange={(e) => setLine(l.key, { note: e.target.value })}
+                        placeholder="tuỳ chọn"
+                        className={`${cls} text-xs`}
+                      />
+                    </LineField>
                   </div>
                 )
               })}
             </div>
           )}
 
+          {/* Chân bảng: tổng nằm GÓC DƯỚI PHẢI như tờ đơn giấy — mắt đi hết bảng
+              rồi mới gặp con số, không phải ngước lên tiêu đề thẻ. */}
+          {lines.length > 0 && (
+            <div className="mt-2 flex items-baseline justify-end gap-2 border-t pt-2">
+              <span className="text-muted-foreground t-label">Tổng cộng</span>
+              <span className="t-data text-base font-semibold">
+                {total.toLocaleString('en-US')}
+              </span>
+              <span className="text-muted-foreground text-xs">{currency}</span>
+            </div>
+          )}
+
           {/* Nút thêm dòng */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
+            <Button
               type="button"
-              onClick={addExistingLine}
-              className="hover:bg-accent rounded-md border px-3 py-1.5 text-sm font-medium"
+              variant="outline"
+              size="sm"
+              onClick={() => setPickFor('add')}
             >
-              + Chọn SP có sẵn
-            </button>
-            <button
+              <Plus /> Thêm sản phẩm
+            </Button>
+            <Button
               type="button"
+              variant={npOpen ? 'secondary' : 'outline'}
+              size="sm"
               onClick={() => setNpOpen((v) => !v)}
-              className={`rounded-md border px-3 py-1.5 text-sm font-medium ${
-                npOpen
-                  ? 'border-emerald-400 bg-emerald-50 text-emerald-700 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                  : 'border-dashed border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/30'
-              }`}
             >
-              + SP mới
-            </button>
+              <PackagePlus /> SP mới
+            </Button>
           </div>
 
           {/*
-            Mini-form SP mới. Bản cũ là một mảng ô CHỈ CÓ PLACEHOLDER — gõ vào là
-            mất nhãn, nhìn lại không biết ô nào là gì (ô "cai" chẳng ai đoán ra
-            ĐVT). Nay mỗi ô có nhãn thật, và chia ba nhóm theo việc:
-              1. Nhận diện — thứ bắt buộc để có dòng đơn
-              2. Cần cho lệnh sản xuất — bỏ trống được, nhưng lệnh sẽ báo thiếu
-              3. Ảnh + ghi chú — cho Kỹ thuật bổ sung BOM sau
-            Nền xanh lá cũ cũng bỏ: cả form đã là stone/emerald của theme v2, một
-            mảng xanh giữa trang chỉ làm rối chứ không nói thêm được gì.
-          */}
+          Mini-form SP mới. Bản cũ là một mảng ô CHỈ CÓ PLACEHOLDER — gõ vào là
+          mất nhãn, nhìn lại không biết ô nào là gì (ô "cai" chẳng ai đoán ra
+          ĐVT). Nay mỗi ô có nhãn thật, và chia ba nhóm theo việc:
+            1. Nhận diện — thứ bắt buộc để có dòng đơn
+            2. Cần cho lệnh sản xuất — bỏ trống được, nhưng lệnh sẽ báo thiếu
+            3. Ảnh + ghi chú — cho Kỹ thuật bổ sung BOM sau
+          Nền xanh lá cũ cũng bỏ: theme v3 chỉ có MỘT màu hành động (cobalt),
+          một mảng xanh giữa trang vừa lạc hệ màu vừa không nói thêm được gì.
+        */}
           {npOpen && (
             <div className="bg-muted/30 mt-3 rounded-xl border p-4">
               <div className="mb-3 flex flex-wrap items-baseline gap-x-2">
@@ -960,10 +1090,10 @@ export function OrderForm(props: {
               </div>
 
               {/*
-                Nhóm 2: barcode + 5 ô quy cách. Không hỏi ở đây thì SP mới vừa vào
-                lệnh là báo "hồ sơ SP đang thiếu", mà lệnh KHÔNG cho sửa thông tin
-                SP nên phải quay về hồ sơ SP mới điền được.
-              */}
+              Nhóm 2: barcode + 5 ô quy cách. Không hỏi ở đây thì SP mới vừa vào
+              lệnh là báo "hồ sơ SP đang thiếu", mà lệnh KHÔNG cho sửa thông tin
+              SP nên phải quay về hồ sơ SP mới điền được.
+            */}
               <div className="mt-4 border-t pt-3">
                 <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
                   <span className="text-sm font-medium">Cần cho lệnh sản xuất</span>
@@ -1050,74 +1180,6 @@ export function OrderForm(props: {
           </p>
         </Card>
       )}
-
-      {/* 3. Thông tin đơn (tối giản) */}
-      <Card title="Thông tin đơn">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <L label="Số PO của khách">
-            <input
-              value={h.customer_po_no}
-              onChange={(e) => set('customer_po_no', e.target.value)}
-              maxLength={100}
-              placeholder="HG-MX"
-              className={`${cls} font-mono`}
-            />
-          </L>
-          {/* Hạn giao là trường DUY NHẤT ở khối này kéo theo hệ quả (cảnh báo
-              trễ ở sổ đơn, xếp thứ tự kế hoạch SX) — nhãn đậm để không bị chìm
-              giữa PO/Container. */}
-          <L label="Hạn giao" strong>
-            <input
-              type="date"
-              value={h.due_date}
-              onChange={(e) => set('due_date', e.target.value)}
-              className={cls}
-            />
-          </L>
-          <L label="Container">
-            <input
-              value={h.container_summary}
-              onChange={(e) => set('container_summary', e.target.value)}
-              maxLength={100}
-              placeholder="3 x 40'HC"
-              className={cls}
-            />
-          </L>
-          <L label="Ghi chú đơn" span2>
-            <textarea
-              value={h.note}
-              onChange={(e) => set('note', e.target.value)}
-              rows={2}
-              maxLength={2000}
-              className={cls}
-            />
-          </L>
-          {mode === 'edit' && (
-            <L label="Lý do thay đổi (ghi lịch sử)" span2>
-              <input
-                value={h.change_note}
-                onChange={(e) => set('change_note', e.target.value)}
-                maxLength={1000}
-                placeholder="vd: khách tăng SL ghế 48 → 60, đổi màu nệm"
-                className={cls}
-              />
-            </L>
-          )}
-        </div>
-        <p className="bg-muted text-muted-foreground mt-3 rounded-md p-2 text-xs">
-          {showTerms ? (
-            <>
-              ℹ Điều khoản thương mại (giá, thanh toán, cảng, dung sai, chứng từ…) nhập ở{' '}
-              <b>mục dưới</b> — hoặc để trong <b>file hợp đồng</b> đính kèm.
-            </>
-          ) : (
-            <>
-              ℹ Đơn từ báo giá đã snapshot điều khoản từ báo giá — sửa sau ở màn{' '}
-              <b>Sửa đơn</b> nếu khách đổi.
-            </>
-          )}
-        </p>
-      </Card>
 
       {/* 3b. Điều khoản thương mại (tuỳ chọn, gập được) */}
       {showTerms && (
@@ -1243,12 +1305,11 @@ export function OrderForm(props: {
           )}
         </Card>
       )}
-
       {/* 4. File liên quan (chỉ create) */}
       {mode === 'create' && (
         <Card title="File liên quan (hợp đồng / chứng từ)">
           <label className="text-muted-foreground hover:border-primary hover:text-primary inline-flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm">
-            📎 Chọn file (PDF, Excel, ảnh…)
+            <Paperclip className="size-4" /> Chọn file (PDF, Excel, ảnh…)
             <input
               type="file"
               multiple
@@ -1270,7 +1331,7 @@ export function OrderForm(props: {
                   <button
                     type="button"
                     onClick={() => setFiles((prev) => prev.filter((_, x) => x !== i))}
-                    className="text-muted-foreground shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                    className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0 rounded p-1"
                     aria-label="Bỏ file"
                   >
                     ✕
@@ -1298,7 +1359,7 @@ export function OrderForm(props: {
               {currency}
             </span>
             {invalid && (
-              <span className="block truncate text-xs text-amber-600 dark:text-amber-400">
+              <span className="block truncate text-xs text-[var(--warn)]">
                 Còn thiếu: {missing.join(' · ')}
               </span>
             )}
@@ -1323,15 +1384,35 @@ export function OrderForm(props: {
           </div>
         </div>
       </div>
-    </div>
-  )
-}
 
-function opt(p: ProductPick, used: Set<string>, current: string) {
-  return (
-    <option key={p.id} value={p.id} disabled={used.has(p.id) && p.id !== current}>
-      {p.code} — {p.name}
-    </option>
+      {/* Hộp thoại tìm SP — dùng chung cho THÊM nhiều dòng và ĐỔI một dòng. */}
+      <ProductSearchDialog
+        open={pickOpen}
+        onOpenChange={(v) => !v && setPickFor(null)}
+        customerId={activeCustomerId || null}
+        // Đang ĐỔI dòng nào thì SP của chính dòng đó không tính là "đã dùng".
+        usedIds={
+          typeof pickFor === 'number'
+            ? new Set(
+                lines
+                  .filter((l) => l.key !== pickFor && l.productId)
+                  .map((l) => l.productId),
+              )
+            : usedIds
+        }
+        multi={pickFor === 'add'}
+        title={pickFor === 'add' ? 'Thêm sản phẩm vào đơn' : 'Đổi sản phẩm của dòng'}
+        onConfirm={(picked) => {
+          if (pickFor === 'add') return addPickedLines(picked)
+          const p = picked[0]
+          if (p && typeof pickFor === 'number') {
+            rememberProduct(p)
+            setLine(pickFor, { productId: p.id })
+          }
+          setPickFor(null)
+        }}
+      />
+    </div>
   )
 }
 
@@ -1351,7 +1432,7 @@ function Card({
         {/* Tiêu đề thẻ là CHỮ THẬT (14px, đậm, màu chữ chính) chứ không phải caps
             11px xám: cả trang trước đây mọi tiêu đề cùng một sắc xám nhạt nên
             không thẻ nào nổi lên được. */}
-        <CardTitle className="text-sm font-semibold">{title}</CardTitle>
+        <CardTitle className="t-title">{title}</CardTitle>
         {right && (
           <div className="col-start-2 row-span-2 row-start-1 self-center">{right}</div>
         )}
@@ -1378,9 +1459,14 @@ function L({
 }) {
   return (
     <label
-      className={`flex flex-col gap-1 text-sm ${span2 ? 'sm:col-span-2 lg:col-span-4' : ''}`}
+      className={`grid gap-1.5 ${span2 ? 'sm:col-span-2 lg:col-span-4 xl:col-span-1' : ''}`}
     >
-      <span className={strong ? 'font-medium' : 'text-muted-foreground'}>{label}</span>
+      {/* Bậc `t-label` của thang chữ v3 — 11px hoa, giãn chữ 0.04em. Trước là
+          14px thường nên nhãn và giá trị cùng một cỡ, mắt không tách được đâu
+          là câu hỏi đâu là câu trả lời. */}
+      <span className={`t-label ${strong ? 'text-foreground' : 'text-muted-foreground'}`}>
+        {label}
+      </span>
       {children}
     </label>
   )
@@ -1397,10 +1483,10 @@ function LineField({
 }) {
   return (
     <label className="flex flex-col gap-1">
+      {/* Ở khổ rộng nhãn nằm ở hàng tiêu đề cột, in lại trên từng dòng là thừa —
+          nhưng vẫn giữ trong DOM cho trình đọc màn hình (`sr-only`). */}
       <span
-        className={`text-[10px] font-medium tracking-wide uppercase ${
-          strong ? 'text-foreground' : 'text-muted-foreground'
-        }`}
+        className={`t-label xl:sr-only ${strong ? 'text-foreground' : 'text-muted-foreground'}`}
       >
         {label}
       </span>
@@ -1422,10 +1508,10 @@ function Tab({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+      className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
         on
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground border'
+          ? 'bg-card text-foreground shadow-xs'
+          : 'text-muted-foreground hover:text-foreground'
       }`}
     >
       {children}
