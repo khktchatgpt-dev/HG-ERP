@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { Copy, History } from 'lucide-react'
+import { Copy, History, Sheet } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productProfileRepo, productsRepo } from '@/modules/dept/technical/technical.repo'
 import {
@@ -106,6 +106,13 @@ export default async function ProductDetailLayout({
                 locked={product.locked_at != null}
               />
             )}
+            {/* Xuất Excel: AI ĐỌC ĐƯỢC hồ sơ thì tải được — không gác theo
+                quyền sửa, vì đây là việc của cả Cung ứng/Sản xuất/Bán hàng. */}
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/api/dept/technical/products/${product.id}/export`}>
+                <Sheet className="size-4" /> Xuất Excel
+              </a>
+            </Button>
             {canEdit && (
               <Button variant="outline" size="sm" asChild>
                 <Link href={`/products?clone=${product.id}`}>

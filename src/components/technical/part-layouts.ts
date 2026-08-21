@@ -813,3 +813,169 @@ const ZONES: Record<LayoutKey, PartZone[]> = {
 export function zonesFor(groupCode: string): PartZone[] {
   return ZONES[layoutOf(groupCode)]
 }
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * GIÁ TRỊ CỦA MỘT Ô — nguồn dùng chung cho MÀN HÌNH và FILE EXCEL.
+ *
+ * Trước đây phần này nằm trong `ProductPartsCard.tsx` và trả về ReactNode, nên
+ * bản xuất Excel muốn dùng lại thì phải chép luật một lần nữa — hai bản lệch
+ * nhau là chuyện sớm muộn (đúng bài học của `lsx-sheet-cells`).
+ *
+ * `cellRaw` trả SỐ để nguyên, không định dạng: Excel cần số thật để còn SUM và
+ * lọc được, còn màn hình thì tự bọc `toFixed` theo `cellDigits`.
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+export const SHAPE_LABEL: Record<string, string> = {
+  HOP: 'hộp',
+  TRON: 'tròn',
+  TRONDAC: 'tròn đặc',
+  VUONG: 'vuông',
+  LA: 'la',
+  OVAN: 'ovan',
+  OVANXR: 'ovan xẻ rãnh',
+  TAM: 'tấm',
+  LUOI: 'lưới',
+  V: 'V',
+  C: 'C',
+  L: 'L',
+  PF: 'profile',
+}
+
+const num1 = (v: number | null | undefined) => (v == null ? null : v)
+
+/**
+ * Quy cách gọn: "hộp 20×40 dày 1" · "tròn Ø27 dày 0.8" · "vuông 20 dày 0.8".
+ * Tròn/vuông tiết diện đều nên chỉ nêu một chiều — ghi "27×27" là thừa.
+ */
+export function specOf(p: PartView, opts?: { withWall?: boolean }): string | null {
+  if (p.profile_code) return p.profile_code
+  const shape = p.profile_shape ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape) : null
+  const { dim_a_mm: a, dim_b_mm: b } = p
+  let core: string | null = null
+  if (p.profile_shape === 'TRON' || p.profile_shape === 'TRONDAC')
+    core = a != null ? `Ø${a}` : null
+  else if (p.profile_shape === 'VUONG') core = a != null ? String(a) : null
+  else {
+    const dims = [a, b].filter((x) => x != null)
+    core = dims.length ? dims.join('×') : null
+  }
+  // Bảng khung có CỘT RIÊNG "Dày vật liệu (δ)" — nhét độ dày vào cả chuỗi quy
+  // cách nữa thì cùng một số hiện hai lần trên một dòng, đọc như số liệu vênh.
+  const wall =
+    opts?.withWall !== false &&
+    p.wall_thickness_mm != null &&
+    p.profile_shape !== 'TRONDAC' &&
+    p.profile_shape !== 'LA'
+      ? `dày ${p.wall_thickness_mm}`
+      : null
+  return [shape, core, wall].filter(Boolean).join(' ') || null
+}
+
+/**
+ * Tên hiển thị. Khối VẬT TƯ trong biểu mẫu BOM có một cột "TÊN HÀNG HÓA" duy
+ * nhất ("Vít bắn gỗ M4x25"), nhưng web cũ tách thành tên + quy cách nên nếu chỉ
+ * lấy `part_name` thì ra "Vít" — một sản phẩm có 3 dòng cùng tên "Nút", 2 dòng
+ * "Đế". Ghép lại cho khối vật tư; khối gia công thì quy cách đã có cột riêng.
+ */
+export function nameOf(p: PartView, layout: LayoutKey): string {
+  if (layout !== 'supply') return p.part_name
+  const { spec } = splitNote(p.material_note)
+  if (!spec) return p.part_name
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  // Quy cách đã chứa sẵn tên (hoặc ngược lại) thì không ghép, tránh "Vít Vít 4x15".
+  if (norm(spec).includes(norm(p.part_name))) return spec
+  return `${p.part_name} ${spec}`.replace(/\s+/g, ' ')
+}
+
+/** Số chữ số thập phân của cột — bám đúng biểu mẫu BOM gốc. */
+export function cellDigits(key: string): number {
+  if (key === 'len' || key === 'totalM') return 2
+  if (key === 'kg') return 3
+  if (key === 'm2' || key === 'totalM2' || key === 'm3Sheet' || key === 'qty') return 4
+  if (key === 'm3') return 6
+  if (key === 'wall') return 2
+  return 1
+}
+
+/**
+ * Giá trị THÔ của một ô. `null` = không có gì để hiện (màn hình vẽ "—").
+ * Cột `blank` (✓ Phôi) không nằm ở đây: nó là dấu tick, không phải dữ liệu.
+ */
+export function cellRaw(p: PartView, key: string): string | number | null {
+  switch (key) {
+    case 'spec':
+      return specOf(p, { withWall: false }) ?? splitNote(p.material_note).spec
+    case 'dims': {
+      const dims = [p.dim_a_mm, p.dim_b_mm].filter((x) => x != null)
+      return dims.length ? dims.join(' × ') : null
+    }
+    case 'shape':
+      return (
+        p.profile_code ??
+        (p.profile_shape ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape) : null)
+      )
+    case 'dimA':
+      return num1(p.dim_a_mm)
+    case 'dimB':
+      return num1(p.dim_b_mm)
+    case 'tenon':
+      return p.tenon
+    case 'tenonMm':
+      return num1(p.tenon_mm)
+    case 'cut':
+      return num1(p.cut_length_mm)
+    case 'waste':
+      return p.bend_waste_mm ? p.bend_waste_mm : null
+    case 'color':
+      return p.color
+    case 'qty':
+      return num1(p.qty)
+    case 'unit':
+      return p.unit
+    case 'len':
+      return num1(p.total_length_m)
+    case 'kg':
+      return num1(p.weight_kg)
+    case 'm2':
+      return num1(p.paint_area_m2)
+    case 'm3':
+      return num1(p.volume_m3)
+    case 'wall':
+      return num1(p.wall_thickness_mm)
+    case 'mat':
+      return splitNote(p.material_note).material
+    case 'species':
+      return p.wood_species
+    case 'barLen':
+      return num1(p.bar_length_m)
+    case 'pcsBar':
+      return num1(p.pcs_per_bar)
+    case 'bars':
+      // Số CÂY phải mua cho 1 SP — làm tròn LÊN, không ai mua nửa cây.
+      return p.pcs_per_bar && p.pcs_per_bar > 0 && p.qty != null
+        ? Math.ceil(p.qty / p.pcs_per_bar)
+        : null
+    case 'roll':
+      return num1(p.roll_width_m)
+    case 'wastePct':
+      return num1(p.waste_pct)
+    case 'totalM':
+      return p.total_length_m != null
+        ? p.total_length_m * (1 + (p.waste_pct ?? 0) / 100)
+        : null
+    case 'totalM2':
+      return p.paint_area_m2 != null
+        ? p.paint_area_m2 * (1 + (p.waste_pct ?? 0) / 100)
+        : null
+    case 'sheetSpec':
+      return p.sheet_w_mm || p.sheet_l_mm
+        ? `${p.sheet_w_mm ?? '?'} × ${p.sheet_l_mm ?? '?'}`
+        : null
+    case 'm3Sheet':
+      return num1(p.m3_per_sheet)
+    case 'note':
+      return p.note
+    default:
+      return null
+  }
+}
