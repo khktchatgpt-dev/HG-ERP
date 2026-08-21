@@ -996,9 +996,24 @@ export function OrderDetailView({
                 Sản phẩm ({lines.length})
               </CardTitle>
             </CardHeader>
-            <CardContent className="px-0">
+            {/*
+             * Đơn dài (MERXX 26 dòng) thì bảng SP cho vào KHUNG CUỘN riêng với
+             * hàng tiêu đề + hàng tổng dính hai đầu — không thì phải cuộn hết
+             * bảng mới thấy được khối Giao hàng / Lịch sử bên dưới, và cuộn tới
+             * dòng 20 là quên mất cột nào là cột nào.
+             * BẪY: `Table` của shadcn tự bọc mình trong div `overflow-x-auto`;
+             * khung cuộn thật là div ĐÓ, nên max-height phải nhắm vào
+             * `[data-slot=table-container]`.
+             */}
+            <CardContent
+              className={`px-0 ${
+                lines.length > 12
+                  ? '[&>[data-slot=table-container]]:max-h-[60vh] [&>[data-slot=table-container]]:overflow-auto'
+                  : ''
+              }`}
+            >
               <Table className="min-w-[620px]">
-                <TableHeader>
+                <TableHeader className="bg-card sticky top-0 z-10">
                   <TableRow className="bg-muted/50 hover:bg-muted/50">
                     <TableHead className="text-foreground w-[70px] px-3 text-[11px] font-semibold tracking-wider uppercase">
                       Ảnh
@@ -1109,7 +1124,7 @@ export function OrderDetailView({
                     </TableRow>
                   ))}
                 </TableBody>
-                <TableFooter>
+                <TableFooter className="bg-card sticky bottom-0 z-10">
                   <TableRow className="hover:bg-muted/50">
                     <TableCell colSpan={3} className="px-3 py-2 text-right font-medium">
                       Tổng

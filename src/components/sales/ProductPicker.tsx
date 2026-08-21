@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/Badge'
+import { ChevronDown } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
 
 /** Quy cách đóng gói (từ Kỹ thuật) — mọi field optional, thiếu = chưa khai. */
@@ -45,12 +46,18 @@ const BOM_TONE = { none: 'gray', drawing: 'amber', done: 'green' } as const
 const cache = new Map<string, { rows: ProductPick[]; fuzzy: boolean }>()
 const CACHE_MAX = 60
 
+/** Có sẵn trong cache chưa? Hộp thoại dùng để khỏi nháy "Đang tìm…" vô ích. */
+export const hasCached = (customerId: string | null, q: string) =>
+  cache.has(`${customerId ?? ''}|${q}`)
+
 /** Xoá cache khi vừa tạo/sửa SP — danh sách cũ đã lạc hậu. */
 export function invalidateProductPickCache(): void {
   cache.clear()
 }
 
-async function search(
+/** Tìm SP ở server, có cache theo (khách, từ khoá) — dùng chung ô chọn inline
+ * và hộp thoại tìm kiếm (`ProductSearchDialog`). */
+export async function searchProducts(
   customerId: string | null,
   q: string,
 ): Promise<{ rows: ProductPick[]; fuzzy: boolean }> {
@@ -141,7 +148,7 @@ export function ProductPicker({
       setLoading(true)
       setError(null)
       try {
-        const out = await search(customerId, term)
+        const out = await searchProducts(customerId, term)
         setRows(out.rows)
         setFuzzy(out.fuzzy)
         setActive(0)
@@ -227,9 +234,9 @@ export function ProductPicker({
             <span className="font-mono text-xs">{selected.code}</span> — {selected.name}
           </span>
         ) : (
-          <span className="text-zinc-400">— chọn sản phẩm —</span>
+          <span className="text-muted-foreground">— chọn sản phẩm —</span>
         )}
-        <span className="shrink-0 text-xs text-zinc-400">▾</span>
+        <ChevronDown className="text-muted-foreground size-4 shrink-0" />
       </button>
     )
   }
@@ -251,32 +258,32 @@ export function ProductPicker({
       <div
         id={listId}
         role="listbox"
-        className="absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+        className="bg-popover absolute z-30 mt-1 max-h-80 w-full overflow-y-auto rounded-md border shadow-lg"
       >
         {loading && (
-          <div className="flex items-center gap-2 px-3 py-3 text-sm text-zinc-500">
+          <div className="text-muted-foreground flex items-center gap-2 px-3 py-3 text-sm">
             <Spinner size={14} /> Đang tìm…
           </div>
         )}
         {!loading && error && (
-          <div className="px-3 py-3 text-sm text-red-600 dark:text-red-400">{error}</div>
+          <div className="text-destructive px-3 py-3 text-sm">{error}</div>
         )}
         {!loading && !error && flat.length === 0 && (
-          <div className="px-3 py-3 text-sm text-zinc-500">
+          <div className="text-muted-foreground px-3 py-3 text-sm">
             {q.trim()
               ? `Không tìm thấy SP nào khớp “${q.trim()}” — thử mã cũ, hoặc tạo SP mới bên dưới.`
               : 'Thư viện chưa có SP nào.'}
           </div>
         )}
         {!loading && fuzzy && flat.length > 0 && (
-          <div className="border-b border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-500">
+          <div className="bg-muted/60 border-b px-3 py-1.5 text-[11px] text-[var(--warn)]">
             Không khớp chính xác — đây là các SP gần giống nhất.
           </div>
         )}
         {!loading &&
           groups.map((g) => (
             <div key={g.label}>
-              <div className="sticky top-0 bg-zinc-50 px-3 py-1 text-[10px] font-semibold tracking-wider text-zinc-500 uppercase dark:bg-zinc-800">
+              <div className="t-label text-muted-foreground bg-muted/60 sticky top-0 px-3 py-1">
                 {g.label}
               </div>
               {g.items.map((p) => {
@@ -296,11 +303,11 @@ export function ProductPicker({
                     } ${used ? 'cursor-not-allowed opacity-40' : 'hover:bg-accent'}`}
                   >
                     <span className="flex w-full items-center gap-2">
-                      <span className="font-mono text-xs text-zinc-500">{p.code}</span>
+                      <span className="text-muted-foreground font-mono text-xs">{p.code}</span>
                       <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                      {used && <span className="text-[10px] text-zinc-400">đã dùng</span>}
+                      {used && <span className="text-muted-foreground text-[10px]">đã dùng</span>}
                     </span>
-                    <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-zinc-400">
+                    <span className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]">
                       <Badge tone={BOM_TONE[p.bom_status]}>
                         {BOM_LABEL[p.bom_status]}
                       </Badge>
@@ -308,7 +315,7 @@ export function ProductPicker({
                         <span className="font-mono">KH: {p.customer_item_code}</span>
                       )}
                       {!p.has_image && (
-                        <span className="text-amber-600 dark:text-amber-500">
+                        <span className="text-[var(--warn)]">
                           chưa có ảnh
                         </span>
                       )}

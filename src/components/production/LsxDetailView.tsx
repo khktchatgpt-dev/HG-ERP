@@ -56,6 +56,17 @@ import { LsxOutsourcePanel } from './LsxOutsourcePanel'
  *     cấu trúc tờ lệnh in) + kế hoạch công đoạn; cột phụ là đơn gộp/vật tư/ghi
  *     chú — metadata không chen giữa nội dung chính;
  *   · cột spec khách không dùng (rỗng cả bảng) tự ẩn.
+ *
+ * Chỉnh v3 (20/08/2026) — bản v2 chỉ đẹp với lệnh vài dòng, lệnh thật thì vỡ
+ * (đo trên `01/26-27 - ROSCO`: 13 đơn / 37 dòng, và `06/26-27 - MX`: 26 dòng):
+ *   · 5 cột quy cách gộp làm MỘT (`SpecCell`) — xem lý do tại chỗ dùng;
+ *   · bảng có khung cuộn riêng + header dính, thay vì kéo dài vô tận đẩy mọi
+ *     thứ khác xuống đáy trang;
+ *   · ô tìm mã/tên + lọc theo đơn, hiện khi lệnh dài hoặc gộp nhiều đơn;
+ *   · cột "Đợt xuất" và dải nhóm PO chỉ hiện khi CÓ khác biệt — lệnh một đơn,
+ *     một đợt xuất thì hai thứ đó chỉ lặp lại số đã nằm ở dải đầu trang;
+ *   · cột phụ đẩy xuống dưới ở <xl (trước là <lg): dưới 1280px nó ăn mất phần
+ *     bề ngang mà bảng cần, trong khi nội dung của nó chỉ là metadata.
  */
 
 export type LsxHeaderData = {
@@ -140,6 +151,35 @@ const sectionLink = 'ml-auto text-xs font-medium text-primary hover:underline'
 // header là chỗ khó đọc nhất bảng.
 const thCls = 'text-[11px] font-semibold tracking-wider text-foreground uppercase'
 
+/**
+ * Quy cách của một dòng lệnh gói trong MỘT ô: mỗi mục là `nhãn — giá trị`, chỉ
+ * in mục có giá trị. Thay cho 5 cột riêng (Mây/Nệm/Sơn/Kính/Gỗ) vì dữ liệu thưa
+ * — dàn thành cột thì 3/5 cột rỗng mà vẫn ăn hết bề ngang, dồn cột còn giá trị
+ * xuống ~15px. Giá trị giữ nguyên xuống dòng của Sales ("Màu Graphit ⏎ H-SM-9608").
+ */
+function SpecCell({
+  line,
+  cols,
+}: {
+  line: LsxLineData
+  cols: { key: string; label: string }[]
+}) {
+  const items = cols
+    .map((c) => [c.label, (line.spec[c.key] ?? '').trim()] as const)
+    .filter(([, v]) => v)
+  if (!items.length) return <span className="text-muted-foreground text-xs">—</span>
+  return (
+    <span className="flex flex-col gap-1">
+      {items.map(([label, value]) => (
+        <span key={label} className="flex gap-2 text-xs leading-snug">
+          <span className="text-muted-foreground w-9 shrink-0">{label}</span>
+          <span className="whitespace-pre-wrap">{value}</span>
+        </span>
+      ))}
+    </span>
+  )
+}
+
 export function LsxDetailView({
   lsx,
   lines,
@@ -194,6 +234,10 @@ export function LsxDetailView({
   const [resubmitOpen, setResubmitOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
   const [addIds, setAddIds] = useState<string[]>([])
+  // Lọc bảng sản phẩm — lệnh gộp nhiều đơn có tới vài chục dòng, cuộn tay tìm
+  // một mã là việc người ta phải làm mỗi ngày.
+  const [q, setQ] = useState('')
+  const [groupFilter, setGroupFilter] = useState('')
   const [resubmit, setResubmit] = useState({
     ship_date: lsx.ship_date ?? '',
     received_date: lsx.received_date ?? '',
@@ -236,6 +280,41 @@ export function LsxDetailView({
   const specShown = specColumns.filter((c) =>
     lines.some((l) => (l.spec[c.key] ?? '').trim()),
   )
+
+  /**
+   * Bảng sản phẩm lọc theo ô tìm + nhóm (PO). Chỉ hiện bộ lọc khi lệnh đủ dài để
+   * cần — lệnh 3 dòng mà bày ô tìm là thêm đồ trang trí.
+   */
+  const needFilter = lines.length > 12 || lineGroups.length > 1
+  const qq = q.trim().toLowerCase()
+  const shownGroups = lineGroups
+    .filter(([title]) => !groupFilter || title === groupFilter)
+    .map(
+      ([title, ls]) =>
+        [
+          title,
+          qq
+            ? ls.filter((l) =>
+                `${l.product_code} ${l.name_vi}`.toLowerCase().includes(qq),
+              )
+            : ls,
+        ] as const,
+    )
+    .filter(([, ls]) => ls.length > 0)
+  const shownLines = shownGroups.flatMap(([, ls]) => ls)
+  const shownQty = shownLines.reduce((s, l) => s + l.qty, 0)
+  /** Số thứ tự chạy suốt phiếu (không reset theo nhóm) — để gọi "dòng 12". */
+  const seqOf = new Map(lines.map((l, i) => [l.order_line_id, i + 1]))
+  /**
+   * Cả lệnh chung MỘT đợt xuất thì bỏ cột "Đợt xuất": in cùng một ngày 26 lần
+   * chỉ để lặp lại con số đã nằm ở ô HẠN XUẤT đầu trang. Chỉ lệnh có TÁCH đợt
+   * mới cần cột này — lúc đó nó là thông tin thật.
+   */
+  const shipVaries = new Set(lines.map((l) => l.ship_text || '')).size > 1
+  /** Nhóm PO chỉ có nghĩa khi lệnh gộp NHIỀU đơn; một đơn thì dải nhóm là nhiễu. */
+  const showGroupBands = lineGroups.length > 1
+  /** #, Sản phẩm, SL + hai cột bật/tắt — dùng cho colSpan của dải nhóm. */
+  const colCount = 3 + (shipVaries ? 1 : 0) + (specShown.length > 0 ? 1 : 0)
 
   async function call(path: string, body: unknown, okMsg: string) {
     setBusy(true)
@@ -498,98 +577,181 @@ export function LsxDetailView({
       </Tabs>
 
       {tab === 'overview' && (
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           {/* ── Cột chính: sản phẩm + kế hoạch công đoạn + đồng bộ ─────────── */}
           <div className="flex min-w-0 flex-col gap-4">
-            {/* Sản phẩm — nhóm theo PO/bộ sưu tập, đúng cấu trúc tờ lệnh in */}
+            {/*
+             * Sản phẩm — nhóm theo PO/bộ sưu tập, đúng cấu trúc tờ lệnh in.
+             *
+             * Bố cục v3 (20/08/2026) vì lệnh thật có tới vài chục dòng và nhiều
+             * đơn, bản cũ vỡ hẳn ở ba chỗ:
+             *   · 5 cột quy cách (Mây/Nệm/Sơn/Kính/Gỗ) chia nhau phần thừa của
+             *     bảng → mỗi ô còn ~15px, chữ rớt xuống MỖI DÒNG MỘT KÝ TỰ. Giờ
+             *     gộp làm MỘT cột "Quy cách", chỉ in mục có giá trị. Dữ liệu vốn
+             *     thưa (mây 5/26 dòng, kính 8/26) nên gộp lại còn dễ đọc hơn.
+             *   · bảng không có khung cuộn → co chữ thay vì cho cuộn ngang.
+             *   · không có cách tìm một mã giữa 26 dòng.
+             * Cột phụ 320px cũng đẩy xuống dưới ở <xl: dưới 1280px nó ăn mất
+             * phần bảng cần nhất, trong khi nội dung của nó chỉ là metadata.
+             */}
             <section className={`${sectionCls} overflow-hidden p-0`}>
-              <div className="flex items-center gap-2 px-4 pt-4 pb-3">
-                <h2 className="text-sm font-semibold">Sản phẩm ({lines.length})</h2>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pt-4 pb-3">
+                <h2 className="text-sm font-semibold">
+                  Sản phẩm ({lines.length})
+                  <span className="text-muted-foreground ml-2 font-normal tabular-nums">
+                    {fmtN(totalQty)} SP
+                  </span>
+                </h2>
+                {needFilter && (
+                  <>
+                    <Input
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                      placeholder="Tìm mã / tên sản phẩm…"
+                      className="h-8 w-full max-w-56 text-sm"
+                    />
+                    {lineGroups.length > 1 && (
+                      <select
+                        value={groupFilter}
+                        onChange={(e) => setGroupFilter(e.target.value)}
+                        className="border-input bg-background h-8 rounded-md border px-2 text-sm"
+                      >
+                        <option value="">Tất cả đơn ({lineGroups.length})</option>
+                        {lineGroups.map(([t, ls]) => (
+                          <option key={t || '(none)'} value={t}>
+                            {t || 'Chưa đặt tên nhóm'} ({ls.length})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </>
+                )}
                 {linesHref && (
                   <Link href={linesHref} className={sectionLink}>
                     Soạn dòng lệnh →
                   </Link>
                 )}
               </div>
-              <Table className="min-w-[560px]">
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className={`${thCls} px-4`}>Sản phẩm</TableHead>
-                    <TableHead className={`${thCls} w-28 text-right`}>SL</TableHead>
-                    <TableHead className={`${thCls} w-28`}>Đợt xuất</TableHead>
-                    {specShown.map((c) => (
-                      <TableHead key={c.key} className={thCls}>
-                        {c.label}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lineGroups.map(([title, ls]) => (
-                    <Fragment key={title || '(none)'}>
-                      {(title || lineGroups.length > 1) && (
-                        <TableRow className="bg-muted/40 hover:bg-muted/40">
-                          <TableCell
-                            colSpan={3 + specShown.length}
-                            className="px-4 py-1.5 whitespace-normal"
-                          >
-                            <span className="text-xs font-medium">
-                              {title || 'Chưa đặt tên nhóm'}
-                            </span>
-                            <span className="text-muted-foreground ml-2 text-[11px]">
-                              {ls.length} dòng · {fmtN(ls.reduce((s, l) => s + l.qty, 0))}{' '}
-                              SP
-                            </span>
-                          </TableCell>
-                        </TableRow>
+              {/*
+               * Khung cuộn: dọc để bảng dài không đẩy mọi thứ khác xuống đáy
+               * trang, ngang để cột quy cách không bị bóp.
+               * BẪY: `Table` của shadcn TỰ bọc mình trong một div
+               * `overflow-x-auto` — đặt max-height lên div ngoài là vô hiệu (div
+               * trong mới là khung cuộn thật, và `sticky` của thead bám theo nó).
+               * Nên phải với vào đúng `[data-slot=table-container]`.
+               */}
+              <div className="border-t [&>[data-slot=table-container]]:max-h-[68vh] [&>[data-slot=table-container]]:overflow-auto">
+                <Table className="min-w-[720px]">
+                  <TableHeader className="bg-card sticky top-0 z-10">
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead className={`${thCls} w-10 pl-4`}>#</TableHead>
+                      <TableHead className={thCls}>Sản phẩm</TableHead>
+                      <TableHead className={`${thCls} w-24 text-right`}>SL</TableHead>
+                      {shipVaries && (
+                        <TableHead className={`${thCls} w-24`}>Đợt xuất</TableHead>
                       )}
-                      {ls.map((l) => (
-                        <TableRow key={l.order_line_id}>
-                          <TableCell className="px-4 py-2 whitespace-normal">
-                            <span className="flex items-center gap-2.5">
-                              {l.image_url && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={l.image_url}
-                                  alt=""
-                                  className="h-9 w-9 shrink-0 rounded-md border object-cover"
-                                />
-                              )}
-                              <span className="min-w-0">
-                                <span className="block truncate text-sm font-medium">
-                                  {l.name_vi}
-                                </span>
-                                {l.product_code !== l.name_vi && (
-                                  <span className="text-muted-foreground block truncate font-mono text-xs">
-                                    {l.product_code}
+                      {specShown.length > 0 && (
+                        <TableHead className={`${thCls} w-[30%] pr-4`}>
+                          Quy cách
+                        </TableHead>
+                      )}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {shownGroups.map(([title, ls]) => (
+                      <Fragment key={title || '(none)'}>
+                        {showGroupBands && (
+                          <TableRow className="bg-muted/50 hover:bg-muted/50">
+                            <TableCell
+                              colSpan={colCount}
+                              className="px-4 py-1.5 whitespace-normal"
+                            >
+                              <span className="text-xs font-semibold">
+                                {title || 'Chưa đặt tên nhóm'}
+                              </span>
+                              <span className="text-muted-foreground ml-2 text-[11px] tabular-nums">
+                                {ls.length} dòng ·{' '}
+                                {fmtN(ls.reduce((s, l) => s + l.qty, 0))} SP
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {ls.map((l) => (
+                          <TableRow key={l.order_line_id} className="align-top">
+                            <TableCell className="text-muted-foreground py-2.5 pl-4 text-xs tabular-nums">
+                              {seqOf.get(l.order_line_id)}
+                            </TableCell>
+                            <TableCell className="py-2.5 whitespace-normal">
+                              <span className="flex items-start gap-2.5">
+                                {l.image_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={l.image_url}
+                                    alt=""
+                                    className="h-10 w-10 shrink-0 rounded-md border object-cover"
+                                  />
+                                ) : (
+                                  <span className="bg-muted/60 text-muted-foreground flex h-10 w-10 shrink-0 items-center justify-center rounded-md border text-[10px]">
+                                    —
                                   </span>
                                 )}
+                                <span className="min-w-0">
+                                  <span className="block text-sm leading-snug font-medium">
+                                    {l.name_vi}
+                                  </span>
+                                  {l.product_code !== l.name_vi && (
+                                    <span className="text-muted-foreground block font-mono text-xs">
+                                      {l.product_code}
+                                    </span>
+                                  )}
+                                </span>
                               </span>
-                            </span>
-                          </TableCell>
-                          <TableCell className="py-2 text-right text-sm tabular-nums">
-                            <b>{fmtN(l.qty)}</b>{' '}
-                            <span className="text-muted-foreground text-xs">
-                              {l.unit}
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-muted-foreground py-2 text-xs">
-                            {l.ship_text || '—'}
-                          </TableCell>
-                          {specShown.map((c) => (
-                            <TableCell
-                              key={c.key}
-                              className="py-2 text-xs whitespace-pre-wrap"
-                            >
-                              {l.spec[c.key] || '—'}
                             </TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </Fragment>
-                  ))}
-                </TableBody>
-              </Table>
+                            <TableCell className="py-2.5 text-right text-sm tabular-nums">
+                              <b>{fmtN(l.qty)}</b>{' '}
+                              <span className="text-muted-foreground text-xs">
+                                {l.unit}
+                              </span>
+                            </TableCell>
+                            {shipVaries && (
+                              <TableCell className="text-muted-foreground py-2.5 text-xs">
+                                {l.ship_text || '—'}
+                              </TableCell>
+                            )}
+                            {specShown.length > 0 && (
+                              <TableCell className="py-2.5 pr-4 whitespace-normal">
+                                <SpecCell line={l} cols={specShown} />
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </Fragment>
+                    ))}
+                    {shownLines.length === 0 && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell
+                          colSpan={colCount}
+                          className="text-muted-foreground px-4 py-8 text-center text-sm"
+                        >
+                          Không có dòng nào khớp bộ lọc.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              {shownLines.length > 0 && (
+                <div className="text-muted-foreground flex items-center justify-between border-t px-4 py-2 text-xs">
+                  <span>
+                    {shownLines.length === lines.length
+                      ? `${lines.length} dòng`
+                      : `${shownLines.length}/${lines.length} dòng`}
+                  </span>
+                  <span className="text-foreground font-semibold tabular-nums">
+                    Tổng {fmtN(shownQty)} SP
+                  </span>
+                </div>
+              )}
             </section>
 
             {/* Kế hoạch công đoạn per dòng SP */}
@@ -608,10 +770,17 @@ export function LsxDetailView({
                   khi xưởng chạy.
                 </p>
               ) : (
-                <div className="mt-3 flex flex-col gap-3">
+                /* Mỗi dòng SP một HÀNG (tên trái · lộ trình phải) thay vì hai
+                   tầng chồng lên nhau: lệnh 26 dòng thì bản cũ dài gấp đôi mà
+                   vẫn không so ngang được tiến độ giữa các dòng. */
+                <div className="mt-3 flex max-h-[46vh] flex-col divide-y overflow-auto">
                   {[...jobsByLine.entries()].map(([lineId, js]) => (
-                    <div key={lineId}>
-                      <div className="text-muted-foreground mb-1 text-xs font-medium">
+                    <div
+                      key={lineId}
+                      className="flex flex-col gap-1 py-2 first:pt-0 sm:flex-row sm:items-center sm:gap-3"
+                    >
+                      <div className="text-muted-foreground shrink-0 text-xs font-medium sm:w-56 sm:truncate">
+                        <span className="tabular-nums">{seqOf.get(lineId)}.</span>{' '}
                         {lineName(lineId)}
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5">

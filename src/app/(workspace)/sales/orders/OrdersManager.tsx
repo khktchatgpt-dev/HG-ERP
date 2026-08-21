@@ -88,6 +88,10 @@ export type OrderRow = {
   lsx_code: string | null
   /** Người tạo đơn — null với đơn nhập bằng script trước khi có tính năng. */
   created_by_name: string | null
+  /** id người tạo — để lọc "đơn của tôi" (tên có thể trùng). */
+  created_by: string | null
+  /** Người phụ trách KHÁCH của đơn (sales_customers.owner_id). */
+  customer_owner_id: string | null
   /** Người đang xem có sửa được ĐƠN NÀY không (chủ đơn / quản lý). */
   can_edit: boolean
 }
@@ -124,6 +128,21 @@ const isLate = (o: OrderRow, today: string) =>
  */
 const poIsDistinct = (o: OrderRow) =>
   !!o.customer_po_no && !o.code.toLowerCase().includes(o.customer_po_no.toLowerCase())
+
+/**
+ * Cả cụm khách này chạy CHUNG một lệnh sản xuất? Sổ thật rất hay như vậy —
+ * ROSCO 13 đơn cùng nằm trong lệnh `01/26-27 - ROSCO`, và bản cũ in lại đúng
+ * chuỗi đó 13 lần trên 180px mỗi dòng. Chung lệnh thì nói MỘT lần ở dải khách,
+ * ô của từng dòng để trống. Cụm một đơn không tính (không có gì để gộp).
+ */
+function sharedLsx(g: Group): { id: string; code: string } | null {
+  if (g.orders.length < 2) return null
+  const first = g.orders[0]
+  if (!first.lsx_id || !first.lsx_code) return null
+  return g.orders.every((o) => o.lsx_id === first.lsx_id)
+    ? { id: first.lsx_id, code: first.lsx_code }
+    : null
+}
 
 /** Σ giá trị theo từng loại tiền → "1.250.000 USD · 300.000.000 VND". */
 function sumByCurrency(orders: OrderRow[]): string {
@@ -171,19 +190,57 @@ type Group = {
   newest: string
 }
 
+/**
+ * "ĐƠN CỦA TÔI" = đơn TÔI TẠO **hoặc** đơn của KHÁCH TÔI PHỤ TRÁCH.
+ *
+ * Phải là hoặc, không phải chỉ người tạo: đơn nạp từ file LSX do script/đồng
+ * nghiệp tạo hộ vẫn là đơn của người ôm khách đó, và ngược lại tạo hộ đơn cho
+ * khách người khác thì mình vẫn phải thấy để theo.
+ */
+const isMine = (o: OrderRow, meId: string) =>
+  o.created_by === meId || o.customer_owner_id === meId
+
+/** Số đơn mỗi cụm khách hiện trước khi phải bấm "xem thêm". */
+const ORDERS_PER_GROUP = 8
+/** Số cụm khách hiện mỗi lượt. */
+const GROUP_PAGE = 12
+
 export function OrdersManager({
   orders,
   customers,
   canEdit,
+  me,
+  total,
 }: {
   orders: OrderRow[]
   customers: { id: string; name: string }[]
   canEdit: boolean
+  /** Người đang xem — để lọc "đơn của tôi". */
+  me: { id: string; name: string; ownsCustomers: boolean }
+  /** Tổng đơn trong sổ (kể cả phần chưa tải) — cảnh báo khi chạm trần. */
+  total: number
 }) {
   const router = useRouter()
   const [q, setQ] = useState('')
   const [customer, setCustomer] = useState('all')
   const [tab, setTab] = useState('all')
+  /*
+   * SỔ CHUNG, KHÔNG PHẢI SỔ RIÊNG — mặc định mở ở "của tôi" cho gọn, một cú bấm
+   * là thấy hết.
+   *
+   * Cố ý KHÔNG lọc cứng theo người đăng nhập: Kế hoạch, Cung ứng, Kho và Giám
+   * đốc đều mở sổ này để biết hàng nào sắp giao — lọc cứng là họ thấy sổ rỗng.
+   * Hai bạn Sales cũng gánh việc cho nhau khi nghỉ. Quyền SỬA đã khoá theo
+   * người ở `can_edit` (menu ⋯ tự mờ) — đó mới là chỗ phân quyền, không phải
+   * chỗ hiển thị. Ai không có đơn nào của mình (Kế hoạch/GĐ) thì mở thẳng ở
+   * "tất cả", khỏi phải bấm — tiêu chí là CÓ ÔM KHÁCH hay không, chứ không
+   * phải có đơn hay không: admin lỡ tạo một đơn thử mà mở sổ ở "của tôi" là
+   * thấy đúng một dòng, tưởng mất sổ.
+   */
+  const [mineOnly, setMineOnly] = useState(me.ownsCustomers)
+  /** Số đơn hiện trong một cụm khách trước khi phải bấm "xem thêm". */
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [groupLimit, setGroupLimit] = useState(GROUP_PAGE)
   const [sort, setSort] = useState<SortKey>('due')
   const [showAllAttention, setShowAllAttention] = useState(false)
   const today = new Date().toISOString().slice(0, 10)
@@ -206,11 +263,21 @@ export function OrdersManager({
     [today],
   )
 
-  const count = (key: keyof typeof match) => orders.filter(match[key]).length
+  /* Bộ đếm trên tab phải đếm ĐÚNG SỔ ĐANG XEM — mở ở 'của tôi' mà tab ghi số
+     của cả công ty thì bấm vào tab lại ra ít hơn con số vừa đọc. */
+  const scope = useMemo(
+    () => (mineOnly ? orders.filter((o) => isMine(o, me.id)) : orders),
+    [orders, mineOnly, me.id],
+  )
+  const mineCount = useMemo(
+    () => orders.filter((o) => isMine(o, me.id)).length,
+    [orders, me.id],
+  )
+  const count = (key: keyof typeof match) => scope.filter(match[key]).length
 
   const filtered = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    return orders.filter((o) => {
+    return scope.filter((o) => {
       if (customer !== 'all' && o.customer_id !== customer) return false
       if (!match[tab as keyof typeof match](o)) return false
       if (!ql) return true
@@ -218,7 +285,7 @@ export function OrdersManager({
         .toLowerCase()
         .includes(ql)
     })
-  }, [orders, q, customer, tab, match])
+  }, [scope, q, customer, tab, match])
 
   /*
    * Gom theo khách: cùng một thứ tự áp cho CẢ nhóm lẫn đơn trong nhóm, để đổi
@@ -264,6 +331,23 @@ export function OrdersManager({
     return list
   }, [filtered, sort])
 
+  /*
+   * CỘT NÀO KHÔNG MANG THÔNG TIN THÌ KHÔNG BÀY (chỉnh 20/08/2026).
+   *
+   * Đo trên sổ thật: sổ ROSCO 13 đơn thì cột "PO khách" in 13 lần chữ "như số
+   * đơn" (khách đặt PO trùng số đơn) và cột "Giá trị" in 13 dấu "—" (đơn nạp
+   * từ file LSX chưa có giá). Hai cột đó ăn 275/1135px bề ngang mà không nói
+   * thêm điều gì, trong khi số đơn và lệnh SX bị bóp lại phải cắt chữ.
+   *
+   * Ẩn theo KẾT QUẢ ĐANG LỌC chứ không theo toàn sổ: lọc sang khách có khai PO
+   * thì cột hiện lại ngay.
+   */
+  const shownOrders = useMemo(() => groups.flatMap((g) => g.orders), [groups])
+  const showPo = shownOrders.some((o) => poIsDistinct(o))
+  const showValue = shownOrders.some((o) => o.total > 0)
+  /** Số đơn · [PO] · Tiến trình · SL · [Giá trị] · Hạn giao · LSX · menu. */
+  const colCount = 6 + (showPo ? 1 : 0) + (showValue ? 1 : 0)
+
   /* Việc cần để mắt: đơn đã quá hạn hoặc tới hạn trong 7 ngày, gấp nhất lên đầu. */
   const attention = useMemo(
     () =>
@@ -283,7 +367,7 @@ export function OrdersManager({
       : (customers.find((c) => c.id === customer)?.name ?? 'Mọi khách hàng')
 
   const tabs = [
-    { value: 'all', label: 'Tất cả', count: orders.length },
+    { value: 'all', label: 'Tất cả', count: scope.length },
     { value: 'todo', label: 'Chờ lệnh SX', count: count('todo') },
     { value: 'running', label: 'Đang sản xuất', count: count('running') },
     { value: 'done', label: 'Hoàn thành', count: count('done') },
@@ -423,6 +507,30 @@ export function OrdersManager({
               nhãn từ danh sách item — mà item nằm trong portal, chỉ mount khi mở
               — nên lần vẽ đầu (SSR + trước hydrate) hai ô lọc hiện RỖNG.
             */}
+            {/* Sổ chung: mở ở "của tôi" cho gọn, một cú bấm là thấy cả sổ. */}
+            {mineCount > 0 && (
+              <div className="bg-muted/60 flex items-center rounded-md p-0.5 text-xs font-medium">
+                {(
+                  [
+                    [true, `Của tôi ${mineCount}`],
+                    [false, `Tất cả ${orders.length}`],
+                  ] as const
+                ).map(([v, label]) => (
+                  <button
+                    key={String(v)}
+                    type="button"
+                    onClick={() => setMineOnly(v)}
+                    className={`rounded px-2.5 py-1 transition-colors ${
+                      mineOnly === v
+                        ? 'bg-card text-foreground shadow-xs'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
             <Select value={customer} onValueChange={setCustomer}>
               <SelectTrigger size="sm" className="bg-card w-44">
                 <SelectValue>{customerLabel}</SelectValue>
@@ -461,44 +569,49 @@ export function OrdersManager({
         </div>
 
         <div className="bg-card overflow-hidden rounded-xl border shadow-xs">
-          <Table className="min-w-[950px] table-fixed">
+          <Table className="min-w-[820px] table-fixed">
             <colgroup>
-              <col style={{ width: '190px' }} />
-              <col style={{ width: '140px' }} />
+              <col />
+              {showPo && <col style={{ width: '140px' }} />}
               <col style={{ width: '165px' }} />
               <col style={{ width: '90px' }} />
-              <col style={{ width: '135px' }} />
+              {showValue && <col style={{ width: '135px' }} />}
               <col style={{ width: '115px' }} />
-              <col />
+              <col style={{ width: '180px' }} />
               <col style={{ width: '48px' }} />
             </colgroup>
             <TableHeader>
               <TableRow className="bg-muted/50 hover:bg-muted/50">
                 {[
                   'Số đơn',
-                  'PO khách',
+                  showPo ? 'PO khách' : null,
                   'Tiến trình',
                   'SL',
-                  'Giá trị',
+                  showValue ? 'Giá trị' : null,
                   'Hạn giao',
                   'Lệnh sản xuất',
                   '',
-                ].map((label, i) => (
-                  <TableHead
-                    key={i}
-                    className={`text-foreground px-3 text-[11px] font-semibold tracking-wider uppercase ${
-                      label === 'SL' || label === 'Giá trị' ? 'text-right' : ''
-                    }`}
-                  >
-                    {label}
-                  </TableHead>
-                ))}
+                ]
+                  .filter((l) => l !== null)
+                  .map((label, i) => (
+                    <TableHead
+                      key={i}
+                      className={`text-foreground px-3 text-[11px] font-semibold tracking-wider uppercase ${
+                        label === 'SL' || label === 'Giá trị' ? 'text-right' : ''
+                      }`}
+                    >
+                      {label}
+                    </TableHead>
+                  ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {groups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-14 text-center whitespace-normal">
+                  <TableCell
+                    colSpan={colCount}
+                    className="py-14 text-center whitespace-normal"
+                  >
                     <div className="text-sm font-medium">
                       {orders.length === 0
                         ? 'Chưa có đơn hàng nào'
@@ -514,11 +627,11 @@ export function OrdersManager({
                   </TableCell>
                 </TableRow>
               ) : (
-                groups.map((g) => (
+                groups.slice(0, groupLimit).map((g) => (
                   <Fragment key={g.id}>
                     {/* Dải khách hàng: tên xuất hiện MỘT lần cho cả cụm + số cộng dồn. */}
                     <TableRow className="bg-muted/40 hover:bg-muted/40">
-                      <TableCell colSpan={8} className="px-3 py-1.5">
+                      <TableCell colSpan={colCount} className="px-3 py-1.5">
                         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                           <Link
                             href={`/sales/customers/${g.id}`}
@@ -530,6 +643,15 @@ export function OrdersManager({
                             {g.orders.length} đơn ·{' '}
                             {fmtN(g.orders.reduce((s, o) => s + o.qty, 0))} SP
                           </span>
+                          {/* Cả cụm chạy chung MỘT lệnh thì nói ở đây, một lần. */}
+                          {sharedLsx(g) && (
+                            <Link
+                              href={`/sales/lsx/${sharedLsx(g)!.id}`}
+                              className="text-muted-foreground hover:text-primary font-mono text-xs hover:underline"
+                            >
+                              ⇢ {sharedLsx(g)!.code}
+                            </Link>
+                          )}
                           <span className="ml-auto text-xs font-medium tabular-nums">
                             {sumByCurrency(g.orders)}
                           </span>
@@ -537,7 +659,10 @@ export function OrdersManager({
                       </TableCell>
                     </TableRow>
 
-                    {g.orders.map((o) => (
+                    {(expanded[g.id]
+                      ? g.orders
+                      : g.orders.slice(0, ORDERS_PER_GROUP)
+                    ).map((o) => (
                       <TableRow
                         key={o.id}
                         className={o.status === 'cancelled' ? 'opacity-60' : ''}
@@ -575,19 +700,21 @@ export function OrdersManager({
                           </div>
                         </TableCell>
 
-                        <TableCell className="px-3 py-2.5">
-                          {poIsDistinct(o) ? (
-                            <span className="block truncate font-mono text-xs">
-                              {o.customer_po_no}
-                            </span>
-                          ) : o.customer_po_no ? (
-                            <span className="text-muted-foreground text-[11px]">
-                              như số đơn
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                        {showPo && (
+                          <TableCell className="px-3 py-2.5">
+                            {poIsDistinct(o) ? (
+                              <span className="block truncate font-mono text-xs">
+                                {o.customer_po_no}
+                              </span>
+                            ) : o.customer_po_no ? (
+                              <span className="text-muted-foreground text-[11px]">
+                                như số đơn
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
 
                         <TableCell className="px-3 py-2.5">
                           <OrderStageBar status={o.status} />
@@ -608,25 +735,29 @@ export function OrdersManager({
                           )}
                         </TableCell>
 
-                        <TableCell className="px-3 py-2.5 text-right">
-                          {o.total > 0 ? (
-                            <>
-                              <div className="text-sm tabular-nums">{fmtN(o.total)}</div>
-                              <div className="text-muted-foreground text-[11px]">
-                                {o.currency}
-                              </div>
-                            </>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                        {showValue && (
+                          <TableCell className="px-3 py-2.5 text-right">
+                            {o.total > 0 ? (
+                              <>
+                                <div className="text-sm tabular-nums">
+                                  {fmtN(o.total)}
+                                </div>
+                                <div className="text-muted-foreground text-[11px]">
+                                  {o.currency}
+                                </div>
+                              </>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        )}
 
                         <TableCell className="px-3 py-2.5">
                           <DueCell o={o} today={today} />
                         </TableCell>
 
                         <TableCell className="px-3 py-2.5">
-                          {o.lsx_id && o.lsx_code ? (
+                          {sharedLsx(g) ? null : o.lsx_id && o.lsx_code ? (
                             <Link
                               href={`/sales/lsx/${o.lsx_id}`}
                               className="block truncate font-mono text-xs hover:underline"
@@ -695,13 +826,45 @@ export function OrdersManager({
                         </TableCell>
                       </TableRow>
                     ))}
+                    {/* Khách ruột có hàng chục đơn — cắt bớt, mở khi cần. */}
+                    {!expanded[g.id] && g.orders.length > ORDERS_PER_GROUP && (
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={colCount} className="px-3 py-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setExpanded((m) => ({ ...m, [g.id]: true }))}
+                            className="text-primary text-xs font-medium hover:underline"
+                          >
+                            Xem thêm {g.orders.length - ORDERS_PER_GROUP} đơn của {g.name}
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    )}
                   </Fragment>
                 ))
               )}
             </TableBody>
           </Table>
+          {groups.length > groupLimit && (
+            <div className="border-t px-3 py-2 text-center">
+              <button
+                type="button"
+                onClick={() => setGroupLimit((n) => n + GROUP_PAGE)}
+                className="text-primary text-xs font-medium hover:underline"
+              >
+                Xem thêm khách hàng ({groups.length - groupLimit} còn lại)
+              </button>
+            </div>
+          )}
           <div className="bg-muted/30 text-muted-foreground border-t px-3 py-1.5 text-xs">
-            {filtered.length}/{orders.length} đơn · {groups.length} khách hàng
+            {filtered.length}/{scope.length} đơn · {groups.length} khách hàng
+            {mineOnly && ` · đang xem đơn của ${me.name}`}
+            {total > orders.length && (
+              <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">
+                ⚠ sổ có {fmtN(total)} đơn, trang này mới tải {fmtN(orders.length)} đơn mới
+                nhất
+              </span>
+            )}
           </div>
         </div>
       </div>

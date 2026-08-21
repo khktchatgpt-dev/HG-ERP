@@ -8,6 +8,14 @@ import { canMutateOwned } from '@/lib/record-ownership'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { OrdersManager } from './OrdersManager'
 
+/**
+ * Trần tải một lượt. Sổ đang 24 đơn (tất cả trong tháng 8/2026 — hệ vừa chạy
+ * thật), tức ~300 đơn/năm: bốc cả sổ vẫn nhẹ trong vài năm tới, và bốc hết mới
+ * gom-theo-khách + lọc phía client được. Chạm trần thì màn nói ra chứ không cắt
+ * ngầm — lúc đó mới đáng chuyển sang phân trang phía máy chủ.
+ */
+const PAGE_CAP = 500
+
 export default async function SalesOrdersPage() {
   const user = await authService.requirePageUser()
   const dept = user.department_id
@@ -15,10 +23,12 @@ export default async function SalesOrdersPage() {
     : null
   const canEdit = user.role === 'admin' || dept?.name === 'Bán Hàng'
 
-  const [{ rows: orders }, { rows: customers }] = await Promise.all([
-    ordersService.list(user, { page: 1, page_size: 500 }),
+  // `total` để màn báo thật khi sổ vượt trần tải một lượt, thay vì lặng lẽ cắt.
+  const [{ rows: orders, total }, { rows: customers }] = await Promise.all([
+    ordersService.list(user, { page: 1, page_size: PAGE_CAP }),
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
   ])
+  const ownerByCustomer = new Map(customers.map((c) => [c.id, c.owner_id]))
 
   /*
    * Hai lô phụ, mỗi lô một truy vấn cho CẢ trang (đừng gọi theo từng đơn):
@@ -58,6 +68,8 @@ export default async function SalesOrdersPage() {
           total: s?.total ?? 0,
           lsx_id: o.production_order_id,
           created_by_name: o.created_by ? (creatorNames.get(o.created_by) ?? null) : null,
+          created_by: o.created_by,
+          customer_owner_id: ownerByCustomer.get(o.customer_id) ?? null,
           // Của ai người đó sửa (07/08/2026) — tính từng dòng để menu ⋯ ẩn đúng chỗ.
           can_edit: canEdit && canMutateOwned(user, o.created_by),
           lsx_code: o.production_order_id
@@ -67,6 +79,13 @@ export default async function SalesOrdersPage() {
       })}
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}
       canEdit={canEdit}
+      me={{
+        id: user.id,
+        name: user.name ?? user.email,
+        // Có ôm khách nào không — quyết định sổ mở sẵn ở "của tôi" hay "tất cả".
+        ownsCustomers: customers.some((c) => c.owner_id === user.id),
+      }}
+      total={total}
     />
   )
 }

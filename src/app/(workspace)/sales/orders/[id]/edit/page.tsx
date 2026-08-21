@@ -5,7 +5,7 @@ import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { ordersService } from '@/modules/dept/sales/orders.service'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
-import { toProductPick } from '@/modules/dept/sales/orders.view'
+import { toQuotePickPayload } from '@/modules/dept/sales/orders.view'
 import { HttpError } from '@/server/http'
 import { OrderForm } from '@/components/sales/OrderForm'
 
@@ -42,16 +42,17 @@ export default async function EditOrderPage({
     redirect(`/sales/orders/${id}`)
   }
 
-  const [{ rows: customers }, { rows: products }] = await Promise.all([
+  // CHỈ các SP đang nằm trên dòng — ô chọn tự tìm ở server (xem ProductPicker).
+  const [{ rows: customers }, lineProducts] = await Promise.all([
     customersRepo.list({ status: 'active', page: 1, page_size: 1000 }),
-    productsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+    productsRepo.listPickByIds(lines.map((l) => l.product_id)),
   ])
 
   return (
     <OrderForm
       mode="edit"
       customers={customers.map((c) => ({ id: c.id, name: c.name }))}
-      products={products.map(toProductPick)}
+      lineProducts={lineProducts.map(toQuotePickPayload)}
       order={{
         id: order.id,
         code: order.code,

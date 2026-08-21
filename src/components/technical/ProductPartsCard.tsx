@@ -17,11 +17,13 @@ import { BomAiImport } from './BomAiImport'
 import { InlineHead, PartRowInline, PartRowNew, inlineColSpan } from './PartRowInline'
 import type { ClusterView, PartGroupView, PartView } from './ProductProfileCards'
 import {
+  cellDigits,
+  cellRaw,
   columnsFor,
   defaultSectionTitle,
   layoutOf,
-  splitNote,
-  type LayoutKey,
+  nameOf,
+  specOf,
   type PartColumn,
 } from './part-layouts'
 
@@ -58,173 +60,49 @@ const FREEZE = {
   nameWithPick: 'bg-card sticky left-[3.75rem] z-10 shadow-[1px_0_0_var(--border)]',
 } as const
 
-const SHAPE_LABEL: Record<string, string> = {
-  HOP: 'hộp',
-  TRON: 'tròn',
-  TRONDAC: 'tròn đặc',
-  VUONG: 'vuông',
-  LA: 'la',
-  OVAN: 'ovan',
-  OVANXR: 'ovan xẻ rãnh',
-  TAM: 'tấm',
-  LUOI: 'lưới',
-  V: 'V',
-  C: 'C',
-  L: 'L',
-  PF: 'profile',
-}
-
 /**
- * Quy cách gọn: "hộp 20×40 dày 1" · "tròn Ø27 dày 0.8" · "vuông 20 dày 0.8".
- * Tròn/vuông tiết diện đều nên chỉ nêu một chiều — ghi "27×27" là thừa.
- */
-export function specOf(p: PartView, opts?: { withWall?: boolean }): string | null {
-  if (p.profile_code) return p.profile_code
-  const shape = p.profile_shape ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape) : null
-  const { dim_a_mm: a, dim_b_mm: b } = p
-  let core: string | null = null
-  if (p.profile_shape === 'TRON' || p.profile_shape === 'TRONDAC')
-    core = a != null ? `Ø${n(a, 1)}` : null
-  else if (p.profile_shape === 'VUONG') core = n(a, 1)
-  else {
-    const dims = [a, b].filter((x) => x != null)
-    core = dims.length ? dims.map((x) => n(x, 1)).join('×') : null
-  }
-  // Bảng khung có CỘT RIÊNG "Dày vật liệu (δ)" — nhét độ dày vào cả chuỗi quy
-  // cách nữa thì cùng một số hiện hai lần trên một dòng, đọc như số liệu vênh.
-  const wall =
-    opts?.withWall !== false &&
-    p.wall_thickness_mm != null &&
-    p.profile_shape !== 'TRONDAC' &&
-    p.profile_shape !== 'LA'
-      ? `dày ${n(p.wall_thickness_mm, 2)}`
-      : null
-  return [shape, core, wall].filter(Boolean).join(' ') || null
-}
-
-/**
- * Tên hiển thị. Khối VẬT TƯ trong biểu mẫu BOM có một cột "TÊN HÀNG HÓA" duy
- * nhất ("Vít bắn gỗ M4x25"), nhưng web cũ tách thành tên + quy cách nên nếu chỉ
- * lấy `part_name` thì ra "Vít" — một sản phẩm có 3 dòng cùng tên "Nút", 2 dòng
- * "Đế". Ghép lại cho khối vật tư; khối gia công thì quy cách đã có cột riêng.
- */
-function nameOf(p: PartView, layout: LayoutKey): string {
-  if (layout !== 'supply') return p.part_name
-  const { spec } = splitNote(p.material_note)
-  if (!spec) return p.part_name
-  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
-  // Quy cách đã chứa sẵn tên (hoặc ngược lại) thì không ghép, tránh "Vít Vít 4x15".
-  if (norm(spec).includes(norm(p.part_name))) return spec
-  return `${p.part_name} ${spec}`.replace(/\s+/g, ' ')
-}
-
-/**
- * Nội dung một ô theo mã cột (`part-layouts.ts`). Đơn vị và số chữ số thập phân
- * bám theo biểu mẫu BOM gốc: dài (mm) 1 số lẻ, tổng dài (m) 2, kg 3, m² 4, m³ 6.
+ * Nội dung một ô trên MÀN HÌNH — bọc `cellRaw` (nguồn dùng chung với bản xuất
+ * Excel) bằng định dạng, cộng hai ô đặc biệt chỉ màn hình mới có.
+ *
+ * Không tự đọc `p.*` nữa: bản xuất Excel cần đúng những giá trị này, mà chép
+ * luật sang một file thứ hai thì sớm muộn hai bên lệch nhau.
  */
 function cellOf(p: PartView, key: string): ReactNode {
-  switch (key) {
-    case 'spec':
-      // Quy cách đã tách sẵn ra cột δ nên bỏ độ dày khỏi chuỗi. Không parse được
-      // thì mới rơi về phần quy cách thô của `material_note`.
-      return specOf(p, { withWall: false }) ?? splitNote(p.material_note).spec ?? '—'
-    case 'dims': {
-      const dims = [p.dim_a_mm, p.dim_b_mm].filter((x) => x != null)
-      return dims.length ? dims.map((x) => n(x, 1)).join(' × ') : '—'
-    }
-    // Ba cột tiết diện tách rời — đúng bốn cột `Loại · Dày · Rộng · Dài` của file.
-    case 'shape':
-      return p.profile_code
-        ? p.profile_code
-        : p.profile_shape
-          ? (SHAPE_LABEL[p.profile_shape] ?? p.profile_shape)
-          : '—'
-    case 'dimA':
-      return n(p.dim_a_mm, 1) ?? '—'
-    case 'dimB':
-      return n(p.dim_b_mm, 1) ?? '—'
-    case 'tenon':
-      return p.tenon ?? '—'
-    case 'tenonMm':
-      return n(p.tenon_mm, 1) ?? '—'
-    case 'cut':
-      return n(p.cut_length_mm, 1) ?? '—'
-    case 'waste':
-      return p.bend_waste_mm ? n(p.bend_waste_mm, 1) : '—'
-    case 'color':
-      return p.color ?? '—'
-    case 'blank':
-      // "Xác nhận Phôi" — xưởng phôi tick. Chưa tick thì để vòng tròn rỗng chứ
-      // không để trống, vì cột này là việc CẦN LÀM chứ không phải ô dữ liệu.
-      return p.blank_confirmed_at ? (
-        <span title={`Đã xác nhận phôi ${p.blank_confirmed_at.slice(0, 10)}`}>✓</span>
-      ) : (
-        <span className="text-muted-foreground/40">○</span>
-      )
-    case 'qty':
-      // SL để trống (0163) — bày dấu nhắc VIỆC CẦN LÀM chứ không phải gạch ngang
-      // như ô dữ liệu vắng mặt bình thường: thiếu ô này thì cả dòng không vào
-      // được nhu cầu vật tư của Cung ứng.
-      return p.qty == null ? (
-        <span
-          title="File BOM không ghi số lượng — điền vào thì dòng này mới vào nhu cầu vật tư"
-          className="text-[var(--stop)]"
-        >
-          cần SL
-        </span>
-      ) : (
-        n(p.qty, 4)
-      )
-    case 'unit':
-      return p.unit ?? '—'
-    case 'len':
-      return p.total_length_m != null ? p.total_length_m.toFixed(2) : '—'
-    case 'kg':
-      return p.weight_kg != null ? p.weight_kg.toFixed(3) : '—'
-    case 'm2':
-      return p.paint_area_m2 != null ? p.paint_area_m2.toFixed(4) : '—'
-    case 'm3':
-      return p.volume_m3 != null ? p.volume_m3.toFixed(6) : '—'
-    case 'wall':
-      return n(p.wall_thickness_mm, 2) ?? '—'
-    case 'mat':
-      return splitNote(p.material_note).material ?? '—'
-    /* ── Quy đổi đơn vị mua (0132) ─────────────────────────────────────── */
-    case 'species':
-      return p.wood_species ?? '—'
-    case 'barLen':
-      return n(p.bar_length_m, 2) ?? '—'
-    case 'pcsBar':
-      return n(p.pcs_per_bar, 0) ?? '—'
-    case 'bars':
-      // Số CÂY phải mua cho 1 SP — làm tròn LÊN, không ai mua nửa cây.
-      return p.pcs_per_bar && p.pcs_per_bar > 0 && p.qty != null
-        ? Math.ceil(p.qty / p.pcs_per_bar).toLocaleString('vi-VN')
-        : '—'
-    case 'roll':
-      return n(p.roll_width_m, 2) ?? '—'
-    case 'wastePct':
-      return p.waste_pct != null ? `${n(p.waste_pct, 1)}%` : '—'
-    case 'totalM':
-      return p.total_length_m != null
-        ? (p.total_length_m * (1 + (p.waste_pct ?? 0) / 100)).toFixed(2)
-        : '—'
-    // "TỔNG VẢI M2" = M² tinh × (1 + hao hụt%) — con số đem đi đặt vải.
-    case 'totalM2':
-      return p.paint_area_m2 != null
-        ? (p.paint_area_m2 * (1 + (p.waste_pct ?? 0) / 100)).toFixed(4)
-        : '—'
-    case 'sheetSpec':
-      return p.sheet_w_mm || p.sheet_l_mm
-        ? `${n(p.sheet_w_mm, 0) ?? '?'} × ${n(p.sheet_l_mm, 0) ?? '?'}`
-        : '—'
-    case 'm3Sheet':
-      return p.m3_per_sheet != null ? p.m3_per_sheet.toFixed(4) : '—'
-    case 'note':
-      return p.note ?? ''
-    default:
-      return null
+  // "Xác nhận Phôi" — xưởng phôi tick. Chưa tick thì để vòng tròn rỗng chứ không
+  // để trống, vì cột này là việc CẦN LÀM chứ không phải ô dữ liệu.
+  if (key === 'blank')
+    return p.blank_confirmed_at ? (
+      <span title={`Đã xác nhận phôi ${p.blank_confirmed_at.slice(0, 10)}`}>✓</span>
+    ) : (
+      <span className="text-muted-foreground/40">○</span>
+    )
+
+  // SL để trống (0163) — dấu nhắc VIỆC CẦN LÀM chứ không phải gạch ngang như ô
+  // dữ liệu vắng mặt bình thường: thiếu ô này thì cả dòng không vào được nhu cầu
+  // vật tư của Cung ứng.
+  if (key === 'qty' && p.qty == null)
+    return (
+      <span
+        title="File BOM không ghi số lượng — điền vào thì dòng này mới vào nhu cầu vật tư"
+        className="text-[var(--stop)]"
+      >
+        cần SL
+      </span>
+    )
+
+  const v = cellRaw(p, key)
+  if (v == null) return key === 'note' ? '' : '—'
+  if (typeof v === 'number') {
+    const d = cellDigits(key)
+    // Kích thước và SL viết như người ta gõ (25 chứ không 25.0); số dẫn xuất thì
+    // giữ đủ chữ số thập phân của biểu mẫu để đối chiếu với bản in.
+    const fixed = key === 'len' || key === 'kg' || key === 'm2' || key === 'm3'
+    return v.toLocaleString('en-US', {
+      minimumFractionDigits: fixed ? d : 0,
+      maximumFractionDigits: d,
+    })
   }
+  return key === 'wastePct' ? `${v}%` : v
 }
 
 const haystack = (p: PartView) =>
