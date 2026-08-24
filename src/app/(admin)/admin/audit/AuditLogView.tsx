@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useState, useTransition } from 'react'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Toolbar, ToolbarSelect } from '@/components/erp/Toolbar'
-import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { TopProgressBar } from '@/components/erp/Spinner'
 import { downloadCsv } from '@/lib/csv'
 import { useToast } from '@/components/ui/Toast'
 

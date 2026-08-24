@@ -137,10 +137,24 @@ export function DataTable<T>({
   // Checkbox native (giữ indeterminate qua ref) nhưng ăn màu hành động của theme.
   const checkboxCls = 'size-4 rounded border-[var(--input)] accent-[var(--primary)]'
 
+  // table-fixed + w-full: khung hẹp hơn tổng width cứng thì cột KHÔNG khai
+  // width bị bóp về 0px và cột sau đè lên (bug 0133). Đặt sàn min-width = tổng
+  // px đã khai + 160px/cột co giãn để overflow-x-auto cuộn ngang thay vì đè.
+  const FLEX_COL_MIN = 160
+  const tableMinWidth =
+    (selection ? 36 : 0) +
+    columns.reduce((sum, c) => {
+      const px = c.width ? /^(\d+(?:\.\d+)?)px$/.exec(c.width) : null
+      return sum + (px ? Number(px[1]) : FLEX_COL_MIN)
+    }, 0)
+
   return (
     <div className="bg-card rounded-b-lg border">
       <div className="overflow-x-auto">
-        <table className="w-full table-fixed text-left text-sm">
+        <table
+          className="w-full table-fixed text-left text-sm"
+          style={{ minWidth: tableMinWidth }}
+        >
           <colgroup>
             {selection && <col style={{ width: '36px' }} />}
             {columns.map((c) => (

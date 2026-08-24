@@ -39,12 +39,6 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: 'Quản lý',
   employee: 'Nhân viên',
 }
-const ROLE_TONE: Record<Role, 'purple' | 'blue' | 'green'> = {
-  admin: 'purple',
-  manager: 'blue',
-  employee: 'green',
-}
-
 type StatusFilter = 'all' | 'active' | 'inactive' | 'deleted'
 type RoleFilter = 'all' | Role
 type DeptFilter = string // 'all' hoặc '' hoặc dept id
