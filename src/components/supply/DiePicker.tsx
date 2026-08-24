@@ -42,6 +42,8 @@ export function DiePicker({
   onPick,
   onTextChange,
   ariaLabel,
+  inputClassName,
+  placeholder = 'TD-B768…',
 }: {
   value: string
   /** Chọn từ danh mục — form tự điền kg/m và quy cách. */
@@ -49,6 +51,10 @@ export function DiePicker({
   /** Gõ tay — chỉ đổi mã, kg/m giữ nguyên. */
   onTextChange: (code: string) => void
   ariaLabel?: string
+  /** Đè kiểu ô nhập — lưới định mức truyền kiểu ô bảng tính vào đây. */
+  inputClassName?: string
+  /** Đè placeholder — null = không hiện (dòng đã có dữ liệu, placeholder là nhiễu). */
+  placeholder?: string | null
 }) {
   const [open, setOpen] = useState(false)
   const [anchor, setAnchor] = useState<DOMRect | null>(null)
@@ -135,9 +141,12 @@ export function DiePicker({
             choose(rows[active])
           }
         }}
-        placeholder="TD-B768…"
+        placeholder={placeholder ?? undefined}
         aria-label={ariaLabel}
-        className="h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900"
+        className={
+          inputClassName ??
+          'h-[30px] w-full rounded-md border border-zinc-300 px-2 font-mono text-[12px] focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+        }
       />
       {open && anchor && rows.length > 0 && (
         <AnchoredPopover

@@ -1119,6 +1119,101 @@ export const productsService = {
   },
 
   /**
+   * KHỞI TẠO định mức từ bảng ĐỊNH HÌNH xưởng — user chốt 23/08/2026: SP chưa
+   * có BOM thì thống kê được nhập ngược bản định hình lên hồ sơ SP, khỏi chờ
+   * Kỹ thuật vẽ từ đầu. KHÁC `saveAsBom` (đã bỏ ở 0096) một điểm sống còn:
+   * CHỈ chạy khi hồ sơ đang RỖNG — không bao giờ đè công trình của Kỹ thuật;
+   * hồ sơ khoá cũng chặn. `bom_status` đặt 'drawing' chứ KHÔNG 'done' — số từ
+   * xưởng là bản khởi tạo, Kỹ thuật rà xong mới tự nâng.
+   *
+   * KHÔNG assertAction ở đây — caller (componentsService.save, gác
+   * `production.shaping.manage`) chịu trách nhiệm; trust internal callers.
+   */
+  async seedPartsFromShaping(
+    actorId: string,
+    productId: string,
+    sourceLabel: string,
+    lines: {
+      cluster_name: string | null
+      part_name: string
+      material_kind: string | null
+      dim_a_mm: number | null
+      dim_b_mm: number | null
+      wall_thickness_mm: number | null
+      cut_length_mm: number | null
+      unit: string | null
+      qty: number
+      weight_kg: number | null
+    }[],
+  ): Promise<{ added: number } | { skipped: 'has_parts' | 'locked' | 'not_found' }> {
+    const product = await productsRepo.findById(productId)
+    if (!product) return { skipped: 'not_found' }
+    try {
+      await assertProductUnlocked(productId)
+    } catch {
+      return { skipped: 'locked' }
+    }
+    const existing = await productProfileRepo.parts(productId)
+    if (existing.length > 0) return { skipped: 'has_parts' }
+    if (lines.length === 0) return { added: 0 }
+
+    const names = [
+      ...new Set(lines.map((l) => (l.cluster_name ?? '').trim()).filter(Boolean)),
+    ]
+    const clusterIds = new Map<string, string>()
+    for (const name of names) {
+      clusterIds.set(name, (await productProfileRepo.ensureCluster(productId, name)).id)
+    }
+    let order = await productProfileRepo.nextSortOrder(productId)
+    const rows = lines.map((l) => {
+      // Cùng pipeline số dẫn xuất với lưới Kỹ thuật — không lặp lại bug
+      // bom-import-all ghi thẳng bảng bỏ qua calcPartDerived.
+      const d = calcPartDerived({
+        profile_shape: null,
+        material_kind: l.material_kind,
+        dim_a_mm: l.dim_a_mm,
+        dim_b_mm: l.dim_b_mm,
+        wall_thickness_mm: l.wall_thickness_mm,
+        cut_length_mm: l.cut_length_mm,
+        bend_waste_mm: null,
+        tenon_mm: null,
+        kg_per_m: null,
+        qty: l.qty,
+      })
+      return {
+        product_id: productId,
+        group_code: 'FRAME',
+        section_title: `Khởi tạo từ định hình ${sourceLabel} (thống kê xưởng)`,
+        unit_basis: null,
+        cluster_id: l.cluster_name
+          ? (clusterIds.get(l.cluster_name.trim()) ?? null)
+          : null,
+        part_name: l.part_name,
+        material_kind: l.material_kind,
+        dim_a_mm: l.dim_a_mm,
+        dim_b_mm: l.dim_b_mm,
+        wall_thickness_mm: l.wall_thickness_mm,
+        cut_length_mm: l.cut_length_mm,
+        unit: l.unit,
+        qty: l.qty,
+        // kg xưởng nhập thắng; trống thì lấy hình học (ống thiếu δ → null, không đoán).
+        weight_kg: l.weight_kg ?? d.weight_kg,
+        total_length_m: d.total_length_m,
+        paint_area_m2: d.paint_area_m2,
+        paint_area_box_m2: d.paint_area_box_m2,
+        volume_m3: d.volume_m3,
+        updated_by: actorId,
+        sort_order: order++,
+      }
+    })
+    const added = await productProfileRepo.insertParts(rows)
+    if (added > 0 && product.bom_status === 'none') {
+      await productsRepo.patch(productId, { bom_status: 'drawing' })
+    }
+    return { added }
+  },
+
+  /**
    * Chép định mức từ sản phẩm khác — lối dựng định mức mới hay dùng nhất (ghế
    * biến thể chỉ khác vài dòng). 'replace' xoá sạch định mức đích trước khi chép.
    */

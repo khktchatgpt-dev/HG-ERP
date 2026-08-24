@@ -1,8 +1,10 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { docsRepo, stocktakeRepo } from '@/modules/dept/warehouse/stock.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
+import { resolveSignatures } from '@/lib/doc-templates'
 import {
   PrintLetterhead,
   PrintMeta,
@@ -28,9 +30,11 @@ export default async function WarehouseDocPrintPage({
   const doc = await docsRepo.findById(id)
   if (!doc) redirect('/warehouse/docs')
   if (doc.kind === 'stocktake') {
-    const [stLines, company] = await Promise.all([
+    const [stLines, company, tpl] = await Promise.all([
       stocktakeRepo.listByDoc(id),
       settingsService.getAll(),
+      // Mẫu in (0164): tiêu đề, mẫu số TT200, các cột ký — sửa ở /admin/doc-templates.
+      docTemplatesService.get('KK'),
     ])
     // Biên bản đầy đủ mọi dòng đã đếm; tên/ĐVT tra danh mục (dòng KK chỉ giữ id).
     const mats = new Map(
@@ -50,9 +54,9 @@ export default async function WarehouseDocPrintPage({
         <PrintLetterhead
           company={company}
           date={d}
-          nationalHeading={false}
+          nationalHeading={tpl.national_heading}
           formNo={{
-            code: '05-VT',
+            code: tpl.form_no ?? '05-VT',
             note: (
               <>
                 Ban hành theo Thông tư số 200/2014/TT-BTC
@@ -62,7 +66,7 @@ export default async function WarehouseDocPrintPage({
             ),
           }}
         />
-        <PrintTitle vi="BIÊN BẢN KIỂM KÊ VẬT TƯ" />
+        <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
         <div className="mb-3 text-center text-[12px]">
           Số: <b className="font-mono">{doc.code}</b>
           {doc.status === 'pending' && <b> — CHỜ DUYỆT (chưa áp sổ)</b>}
@@ -127,32 +131,27 @@ export default async function WarehouseDocPrintPage({
         )}
         <PrintSignatures
           space="mt-8"
-          cols={[
-            {
-              role: 'Người kiểm kê (lập biên bản)',
-              hint: 'Ký, ghi rõ họ tên',
-              name: doc.created_by_name ?? '',
+          cols={resolveSignatures(tpl.signatures, {
+            names: {
+              creator: doc.created_by_name,
+              approver: doc.approved_by_name,
             },
-            { role: 'Thủ kho', hint: 'Ký, ghi rõ họ tên' },
-            {
-              role: 'Quản lý Kho (duyệt)',
-              hint: 'Ký, ghi rõ họ tên',
-              name: doc.approved_by_name ?? '',
-            },
-            { role: 'Kế toán trưởng', hint: 'Ký, ghi rõ họ tên' },
-          ]}
+          })}
         />
       </PrintPage>
     )
   }
-  const [lines, company] = await Promise.all([
+  const [lines, company, tpl] = await Promise.all([
     docsRepo.listLines(id),
     settingsService.getAll(),
+    docTemplatesService.get(doc.kind === 'receipt' ? 'PNK' : 'PXK'),
   ])
 
   const isReceipt = doc.kind === 'receipt'
-  const title = isReceipt ? 'PHIẾU NHẬP KHO' : 'PHIẾU XUẤT KHO'
-  const form = isReceipt ? '01-VT' : '02-VT'
+  // Tiêu đề + mẫu số TT200 lấy từ mẫu chứng từ (0164), mặc định trong code là
+  // đúng giá trị cũ nên không có bảng cấu hình vẫn in ra y hệt.
+  const title = tpl.title_vi
+  const form = tpl.form_no ?? (isReceipt ? '01-VT' : '02-VT')
   const d = new Date(doc.created_at)
   const totalQty = lines.reduce((s, l) => s + l.qty, 0)
   const totalDoc = lines.reduce(
@@ -168,7 +167,7 @@ export default async function WarehouseDocPrintPage({
       <PrintLetterhead
         company={company}
         date={d}
-        nationalHeading={false}
+        nationalHeading={tpl.national_heading}
         formNo={{
           code: form,
           note: (
@@ -180,7 +179,7 @@ export default async function WarehouseDocPrintPage({
           ),
         }}
       />
-      <PrintTitle vi={title} />
+      <PrintTitle vi={title} en={tpl.title_en ?? undefined} />
       <div className="mb-3 text-center text-[12px]">
         Số: <b className="font-mono">{doc.code}</b>
       </div>
@@ -282,20 +281,9 @@ export default async function WarehouseDocPrintPage({
 
       <PrintSignatures
         space="mt-8"
-        cols={[
-          {
-            role: 'Người lập phiếu',
-            hint: 'Ký, ghi rõ họ tên',
-            name: doc.created_by_name ?? '',
-          },
-          {
-            role: `Người ${isReceipt ? 'giao hàng' : 'nhận hàng'}`,
-            hint: 'Ký, ghi rõ họ tên',
-            name: doc.counterparty ?? '',
-          },
-          { role: 'Thủ kho', hint: 'Ký, ghi rõ họ tên' },
-          { role: 'Kế toán trưởng', hint: 'Ký, ghi rõ họ tên' },
-        ]}
+        cols={resolveSignatures(tpl.signatures, {
+          names: { creator: doc.created_by_name, counterparty: doc.counterparty },
+        })}
       />
     </PrintPage>
   )

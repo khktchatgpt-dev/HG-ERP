@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { PoCreateForm } from './PoCreateForm'
 
 /**
@@ -25,10 +26,11 @@ export default async function NewPoPage({
 
   // `company` cho nút "Xem trước phiếu in" — dựng đúng tờ phiếu sẽ gửi NCC ngay
   // lúc còn đang soạn. Settings có cache trong process nên gần như không tốn gì.
-  const [{ rows: suppliers }, { rows: lsxAll }, company] = await Promise.all([
+  const [{ rows: suppliers }, { rows: lsxAll }, company, tpl] = await Promise.all([
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.list({ page: 1, page_size: 200 }),
     settingsService.getAll(),
+    docTemplatesService.get('PO'),
   ])
 
   return (
@@ -36,6 +38,7 @@ export default async function NewPoPage({
       defaultSupplierId={defaultSupplierId}
       defaultLsxId={defaultLsxId}
       company={company}
+      tpl={tpl}
       suppliers={suppliers.map((s) => ({
         id: s.id,
         name: s.name,

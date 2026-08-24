@@ -200,6 +200,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế toán',
         items: [
           { href: '/finance', label: 'Trang chủ', icon: 'home' },
+          {
+            href: '/finance/cong-no-ncc',
+            label: 'Công nợ NCC',
+            icon: 'circle-dollar-sign',
+          },
           { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
         ],
       },
@@ -424,6 +429,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế hoạch',
         items: [
           { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: 'calendar-range' },
+          { href: '/kehoach-sx/tuan', label: 'Kế hoạch tuần', icon: 'calendar-check' },
+          { href: '/kehoach-sx/tien-do', label: 'Tiến độ', icon: 'chart-gantt' },
+          { href: '/kehoach-sx/chi-tieu', label: 'Chỉ tiêu ngày', icon: 'list-todo' },
+          { href: '/kehoach-sx/theo-to', label: 'Theo tổ', icon: 'users-round' },
           { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
         ],
       },
@@ -541,6 +550,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // "Nguyên nhân lỗi SX" (/admin/defect-codes) đã gỡ khỏi nav: bảng
           // production_defect_codes (0067) có sẵn nhưng TRANG QUẢN LÝ CHƯA DỰNG
           // → bấm vào là 404. Thêm lại item này khi có màn thật.
+          {
+            href: '/admin/doc-templates',
+            label: 'Mẫu chứng từ',
+            icon: 'file-text',
+            roles: ['admin'],
+          },
           {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',

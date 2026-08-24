@@ -84,7 +84,8 @@ describe('productCreateSchema', () => {
       packing: { carton_l_cm: 75, carton_w_cm: 67, carton_h_cm: 63 },
     })
     expect(p.customer_item_code).toBe('P334')
-    expect(p.customer_name).toBe('Möbel Hali GmbH')
+    // Nhãn khách VIẾT HOA ngay tại biên — xem `normalizeCustomerLabel`.
+    expect(p.customer_name).toBe('MÖBEL HALI GMBH')
     expect(p.packing?.carton_l_cm).toBe(75)
   })
 
@@ -99,9 +100,16 @@ describe('productCreateSchema', () => {
     const p = productCreateSchema.parse({
       code: 'X',
       name: 'Y',
-      customer_name: '  Khách lẻ Đà Nẵng  ',
+      customer_name: '  Khách lẻ  Đà Nẵng  ',
     })
-    expect(p.customer_name).toBe('Khách lẻ Đà Nẵng')
+    // Gọt khoảng trắng thừa + viết hoa: "Laura" và "LAURA" từng là hai nhóm
+    // khác nhau trên màn lọc, chia đôi danh sách của người tìm.
+    expect(p.customer_name).toBe('KHÁCH LẺ ĐÀ NẴNG')
+  })
+
+  it('nhãn khách chỉ toàn khoảng trắng = mẫu chung (null)', () => {
+    const p = productCreateSchema.parse({ code: 'X', name: 'Y', customer_name: '   ' })
+    expect(p.customer_name).toBeNull()
   })
 
   it('KHÔNG nhận bom_status khi tạo (mặc định none từ DB)', () => {
@@ -138,9 +146,18 @@ describe('productListQuerySchema', () => {
       customer_name: 'Möbel Hali GmbH',
       bom_status: 'none',
     })
-    expect(p.customer_name).toBe('Möbel Hali GmbH')
+    // Ô lọc chuẩn hoá y như ô ghi — link cũ '?customer_name=Laura' vẫn ra đúng
+    // rổ sau đợt gộp nhãn 21/08/2026.
+    expect(p.customer_name).toBe('MÖBEL HALI GMBH')
     expect(p.bom_status).toBe('none')
     expect(p.page).toBe(1)
+  })
+
+  it('lọc "mẫu chung" không bị viết hoa thành nhãn khách', () => {
+    // '__common' là mã sentinel, không phải tên khách — chuẩn hoá nó là hỏng lọc.
+    expect(productListQuerySchema.parse({ customer_name: '__common' }).customer_name).toBe(
+      '__common',
+    )
   })
 
   it('từ chối bom_status lạ', () => {

@@ -18,6 +18,7 @@ export function ProductPartsTab({
   clusters,
   setItems,
   paintCoverage,
+  actualWeightKg,
   baseMaterial,
   canEdit,
 }: {
@@ -28,6 +29,8 @@ export function ProductPartsTab({
   setItems: SetItemView[]
   /** m² sơn phủ được trên 1 kg sơn — biểu mẫu hard-code 5. */
   paintCoverage: number | null
+  /** KL thực tế / bảng kê — thẻ tổng hợp bày cạnh Σ KL tính để đối chiếu. */
+  actualWeightKg: number | null
   /** Ô "Nhiên Liệu" của SP ('AL' | 'IR' | 'IN') — mặc định cho khối mới. */
   baseMaterial: string | null
   canEdit: boolean
@@ -43,7 +46,12 @@ export function ProductPartsTab({
         baseMaterial={baseMaterial}
         canEdit={canEdit}
       />
-      <PartsRollupCard parts={parts} paintCoverage={paintCoverage} />
+      <PartsRollupCard
+        parts={parts}
+        paintCoverage={paintCoverage}
+        actualWeightKg={actualWeightKg}
+        groups={partGroups}
+      />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { customerLabelFrom } from '@/lib/customer-label'
 import { searchTokens } from '@/lib/search-text'
 import type { Lifecycle } from '@/lib/product-lifecycle'
 import type { BomStatus } from './technical.schema'
@@ -486,17 +487,20 @@ export const productsRepo = {
   },
 
   /**
-   * Tên khách bên Kinh doanh — dùng khi Sales tạo nhanh SP (có customer_id) để
-   * điền luôn nhãn `customer_name` cho thư viện. Query thẳng bảng ngoài domain
-   * để tránh import chéo module (cùng lý do referenceCounts).
+   * Nhãn khách cho SP do Kinh doanh tạo nhanh (có customer_id). Query thẳng bảng
+   * ngoài domain để tránh import chéo module (cùng lý do referenceCounts).
+   *
+   * Lấy MÃ khách chứ không tên pháp nhân — xem `customerLabelFrom`: thư viện SP
+   * gọi khách bằng mã ngắn (MERXX), lấy `name` là đẻ lại nhãn
+   * "MERXX HANDELS GMBH" vừa gộp xong.
    */
   async customerNameById(customerId: string): Promise<string | null> {
     const { data } = await db()
       .from('sales_customers')
-      .select('name')
+      .select('name, code')
       .eq('id', customerId)
       .maybeSingle()
-    return data?.name ?? null
+    return data ? customerLabelFrom(data) : null
   },
 
   async findById(id: string): Promise<Product | null> {

@@ -96,6 +96,17 @@ const input = (parts: PartView[]) => ({
   exportedAt: new Date('2026-08-19T10:00:00.000Z'),
 })
 
+/** Mọi ô CHỮ của một sheet — bố cục đổi chỗ thì phép thử không vỡ theo. */
+function texts(ws: ExcelJS.Worksheet): string[] {
+  const out: string[] = []
+  ws.eachRow((row) =>
+    row.eachCell((c) => {
+      if (typeof c.value === 'string') out.push(c.value)
+    }),
+  )
+  return out
+}
+
 async function open(buf: Buffer) {
   const wb = new ExcelJS.Workbook()
   await wb.xlsx.load(buf as never)
@@ -110,7 +121,8 @@ describe('buildProductExcel', () => {
       'Thông số kỹ thuật',
       'Đóng gói',
     ])
-    expect(wb.getWorksheet('Định mức')!.getCell(1, 1).value).toBe(
+    // Tiêu đề nằm DƯỚI đầu thư công ty + khối ISO, không còn ở A1.
+    expect(texts(wb.getWorksheet('Định mức')!)).toContain(
       'BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN',
     )
   })
@@ -134,13 +146,7 @@ describe('buildProductExcel', () => {
     // Ô trống trong Excel đọc như "bằng 0" — file gửi đi phải nói rõ chỗ thiếu.
     const wb = await open(await buildProductExcel(input([part({ qty: null })]) as never))
     const ws = wb.getWorksheet('Định mức')!
-    const texts: string[] = []
-    ws.eachRow((row) =>
-      row.eachCell((c) => {
-        if (typeof c.value === 'string') texts.push(c.value)
-      }),
-    )
-    expect(texts).toContain('cần SL')
+    expect(texts(ws)).toContain('cần SL')
   })
 
   it('khối khung giữ ĐỦ cột biểu mẫu kể cả khi cả nhóm còn trống', async () => {
@@ -153,12 +159,7 @@ describe('buildProductExcel', () => {
     })
     const wb = await open(await buildProductExcel(input([bare]) as never))
     const ws = wb.getWorksheet('Định mức')!
-    const heads: string[] = []
-    ws.eachRow((row) =>
-      row.eachCell((c) => {
-        if (typeof c.value === 'string') heads.push(c.value)
-      }),
-    )
+    const heads = texts(ws)
     for (const h of [
       'Trọng lượng (kg)',
       'Tổng chiều dài (m)',
@@ -166,6 +167,51 @@ describe('buildProductExcel', () => {
       'Dày vật liệu (δ)',
     ])
       expect(heads).toContain(h)
+  })
+
+  it('SL viết như người gõ (2) chứ không phải 2.0000 hay 2,', async () => {
+    // Số DẪN XUẤT giữ đủ số lẻ của biểu mẫu, số người GÕ thì không độn số 0.
+    const wb = await open(await buildProductExcel(input([part({})]) as never))
+    const ws = wb.getWorksheet('Định mức')!
+    const fmt = new Map<number, string>()
+    ws.eachRow((row) =>
+      row.eachCell((c) => {
+        if (typeof c.value === 'number' && c.numFmt) fmt.set(c.value, c.numFmt)
+      }),
+    )
+    // BẪY Excel: '#,##0.####' vẫn in dấu thập phân cho số nguyên → "2,".
+    expect(fmt.get(2)).toBe('#,##0')
+    expect(fmt.get(1.2)).toBe('#,##0.##')
+    expect(fmt.get(0.532)).toBe('#,##0.000')
+  })
+
+  it('có đầu thư công ty và khối chữ ký để bản in ký được', async () => {
+    const wb = await open(
+      await buildProductExcel({
+        ...input([part({})]),
+        company: { company_name: 'CÔNG TY TNHH SX-TM HOÀNG GIA' },
+      } as never),
+    )
+    const t = texts(wb.getWorksheet('Định mức')!)
+    expect(t).toContain('CÔNG TY TNHH SX-TM HOÀNG GIA')
+    expect(t).toContain('Biểu mẫu: HG-QT-07/M02')
+    expect(t).toContain('NGƯỜI LẬP BIỂU')
+    expect(t).toContain('GIÁM ĐỐC')
+  })
+
+  it('ô không có số liệu ghi "—" chứ không để trắng', async () => {
+    // Ô trắng trên giấy đọc như "quên điền"; gạch ngang là "không có".
+    const wb = await open(await buildProductExcel(input([part({})]) as never))
+    expect(texts(wb.getWorksheet('Thông số kỹ thuật')!)).toContain('—')
+  })
+
+  it('hồ sơ CHƯA có dòng định mức nào vẫn xuất được', async () => {
+    // Rất nhiều hồ sơ mới lập chỉ có thông tin chung — không được ném lỗi, và
+    // khối tổng hợp phải nói thẳng là chưa đủ số liệu thay vì bày khung rỗng.
+    const wb = await open(await buildProductExcel(input([]) as never))
+    const t = texts(wb.getWorksheet('Định mức')!)
+    expect(t).toContain('BẢNG ĐỊNH MỨC NGUYÊN - PHỤ KIỆN')
+    expect(t.some((x) => x.startsWith('Chưa đủ số liệu để tổng hợp'))).toBe(true)
   })
 
   it('tên file bỏ dấu tiếng Việt — nó đi vào content-disposition', () => {

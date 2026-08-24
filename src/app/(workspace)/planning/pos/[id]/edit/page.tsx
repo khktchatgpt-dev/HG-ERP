@@ -5,6 +5,7 @@ import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { poMaterialsRepo } from '@/modules/dept/supply/po-materials.repo'
 import { poTemplateMeta } from '@/lib/po-template'
 import { PoCreateForm } from '../../new/PoCreateForm'
@@ -52,7 +53,7 @@ export default async function EditPoPage({
     if (!owns) redirect('/planning/pos')
   }
 
-  const [{ rows: suppliers }, { rows: lsxAll }, mats, company] = await Promise.all([
+  const [{ rows: suppliers }, { rows: lsxAll }, mats, company, tpl] = await Promise.all([
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     productionRepo.list({ page: 1, page_size: 200 }),
     // Dòng tự do (0134) không có vật tư — chỉ tra tồn cho dòng gắn danh mục.
@@ -60,6 +61,7 @@ export default async function EditPoPage({
       lines.map((l) => l.material_id).filter((id): id is string => !!id),
     ),
     settingsService.getAll(),
+    docTemplatesService.get('PO'),
   ])
   const onHand = new Map(mats.map((m) => [m.id, m.on_hand])) // null = chưa có sổ kho
   const meta = poTemplateMeta(po.template)
@@ -67,6 +69,7 @@ export default async function EditPoPage({
   return (
     <PoCreateForm
       company={company}
+      tpl={tpl}
       suppliers={suppliers.map((s) => ({
         id: s.id,
         name: s.name,

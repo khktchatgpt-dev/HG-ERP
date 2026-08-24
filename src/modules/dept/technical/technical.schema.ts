@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeCustomerLabel } from '@/lib/customer-label'
 import { FRAME_MATERIAL_CODES, PRODUCT_TYPE_CODES } from '@/lib/product-code'
 import { LIFECYCLES } from '@/lib/product-lifecycle'
 
@@ -57,8 +58,14 @@ export const productCreateSchema = z.object({
     .optional()
     .nullable(),
   // Nhãn khách/nhóm gõ tự do (0091) — Kỹ thuật KHÔNG chọn từ danh mục khách của
-  // Kinh doanh nữa. null/rỗng = mẫu chung.
-  customer_name: z.string().trim().max(200).optional().nullable(),
+  // Kinh doanh nữa. null/rỗng = mẫu chung. Chuẩn hoá NGAY TẠI BIÊN (viết hoa,
+  // gộp khoảng trắng) để "Laura" và "LAURA" không còn là hai nhóm khác nhau.
+  customer_name: z
+    .string()
+    .max(200)
+    .optional()
+    .nullable()
+    .transform((v) => normalizeCustomerLabel(v)),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
   description_en: z.string().trim().max(2000).optional().nullable(),
   unit: z.string().trim().min(1).max(30).default('cai'),
@@ -160,8 +167,18 @@ export const productNextCodeQuerySchema = z.object({
 export const productListQuerySchema = z.object({
   q: z.string().trim().max(200).optional(),
   category: z.string().trim().optional(),
-  /** Nhãn khách gõ tự do; '__common' = chưa gắn nhãn nào. */
-  customer_name: z.string().trim().max(200).optional(),
+  /**
+   * Nhãn khách gõ tự do; '__common' = chưa gắn nhãn nào. Chuẩn hoá luôn để link
+   * cũ (`?customer_name=Laura`) vẫn ra đúng rổ sau đợt gộp nhãn.
+   */
+  customer_name: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) =>
+      v === undefined || v === '__common' ? v : (normalizeCustomerLabel(v) ?? undefined),
+    ),
   bom_status: z.enum(BOM_STATUSES).optional(),
   active_only: z.coerce.boolean().default(true),
   page: z.coerce.number().int().positive().default(1),
@@ -422,6 +439,11 @@ export const productPartsCopySchema = z.object({
 export const productCloneSchema = z.object({
   code: z.string().trim().min(1).max(100),
   name: z.string().trim().min(1).max(200).optional(), // mặc định giữ tên gốc
-  customer_name: z.string().trim().max(200).optional().nullable(),
+  customer_name: z
+    .string()
+    .max(200)
+    .optional()
+    .nullable()
+    .transform((v) => normalizeCustomerLabel(v)),
   customer_item_code: z.string().trim().max(100).optional().nullable(),
 })

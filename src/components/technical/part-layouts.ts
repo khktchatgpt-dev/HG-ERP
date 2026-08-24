@@ -546,12 +546,16 @@ const CELL = {
  * Thứ tự ô nhập của từng họ — bám thứ tự đọc của biểu mẫu gốc để người đã quen
  * gõ trên Excel không phải học lại: khung đi theo `Loại · Dày · Rộng · Dài`,
  * còn gỗ/nệm không có cột "Loại" nên vào thẳng ba kích thước.
+ *
+ * TÊN đứng NGAY SAU STT (trước Cụm) — hai ô đầu được ĐÓNG BĂNG khi lưới cuộn
+ * ngang (khối khung 20 cột), kéo sang gõ SL mà không biết đang ở dòng nào là
+ * lỗi chính làm lưới cũ "rất xấu khó dùng". Cùng thứ tự với bảng xem.
  */
 const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
   metal: [
     CELL.no,
-    CELL.cluster,
     CELL.name,
+    CELL.cluster,
     CELL.shape,
     CELL.thick,
     CELL.wide,
@@ -573,8 +577,8 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
   ],
   wood: [
     CELL.no,
-    CELL.cluster,
     CELL.name,
+    CELL.cluster,
     CELL.species,
     CELL.thick,
     CELL.wide,
@@ -589,8 +593,8 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
   ],
   sheet: [
     CELL.no,
-    CELL.cluster,
     CELL.name,
+    CELL.cluster,
     CELL.thick,
     CELL.wide,
     CELL.len,
@@ -605,8 +609,8 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
   ],
   soft: [
     CELL.no,
-    CELL.cluster,
     CELL.name,
+    CELL.cluster,
     CELL.thick,
     CELL.wide,
     CELL.len,
@@ -623,8 +627,8 @@ const INPUT_LAYOUTS: Record<LayoutKey, InputCell[]> = {
   // cách cắt, rồi hao hụt. Không có ô tiền (xem chú thích ở LAYOUTS.fabric).
   fabric: [
     CELL.no,
-    CELL.cluster,
     CELL.name,
+    CELL.cluster,
     CELL.fabricType,
     CELL.len,
     CELL.wide,
@@ -689,129 +693,8 @@ export const defaultSectionTitle = (groupCode: string): string =>
 export function derivedPreviewFor(
   _groupCode: string,
 ): { key: 'weight_kg' | 'volume_m3'; label: string; digits: number } | null {
+  void _groupCode // giữ chữ ký cho 3 chỗ gọi — cột xem-trước đã bỏ hẳn
   return null
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
- * VÙNG — cùng bộ ô của `inputCellsFor`, nhưng GOM THEO NGHĨA và có nhãn.
- *
- * Lưới ngang trả đúng ô theo họ khối, nhưng đổ hết lên một hàng: khối khung 18
- * ô, nhãn nằm tận hàng tiêu đề của bảng, kéo ngang một cái là mất nhãn. Trên
- * cùng một hàng lại trộn ba thứ khác nghĩa vụ — ô của biểu mẫu BOM (bắt buộc),
- * ô hệ thêm để Cung ứng mua được, và ô hệ TỰ TÍNH — mà trông y hệt nhau.
- *
- * Thẻ sửa dựng theo bảng này: mỗi vùng một nhãn, vùng nào biểu mẫu của nhóm đó
- * không có thì không hiện. Nguồn ô vẫn là `CELL` — không đẻ định nghĩa thứ hai.
- * ──────────────────────────────────────────────────────────────────────────── */
-
-export type PartZone = {
-  /** null = vùng đầu thẻ (STT · Cụm · Tên) — không cần nhãn, tự hiểu. */
-  label: string | null
-  cells: InputCell[]
-}
-
-const ZONES: Record<LayoutKey, PartZone[]> = {
-  metal: [
-    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    {
-      label: 'Quy cách tinh (mm)',
-      cells: [CELL.shape, CELL.thick, CELL.wide, CELL.wall],
-    },
-    { label: 'Cắt và số lượng', cells: [CELL.len, CELL.bend, CELL.qty] },
-    {
-      label: 'Để cung ứng mua',
-      cells: [CELL.die, CELL.kgm, CELL.barLen, CELL.pcsBar],
-    },
-    {
-      label: 'Số tự tính — sửa được nếu bảng cân khác',
-      cells: [CELL.totalLen, CELL.weight, CELL.area],
-    },
-
-    { label: 'Khác', cells: [CELL.unit, CELL.color, CELL.note] },
-  ],
-  wood: [
-    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    { label: 'Loại gỗ', cells: [CELL.species] },
-    {
-      label: 'Quy cách tinh (mm)',
-      cells: [CELL.thick, CELL.wide, CELL.len, CELL.tenon],
-    },
-    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
-    {
-      label: 'Số tự tính — sửa được nếu bảng cân khác',
-      cells: [CELL.area, CELL.volume],
-    },
-    { label: 'Vật liệu', cells: [CELL.mat] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  sheet: [
-    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    { label: 'Quy cách tinh (mm)', cells: [CELL.thick, CELL.wide, CELL.len] },
-    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
-    { label: 'Quy cách tấm (mm)', cells: [CELL.sheetW, CELL.sheetL] },
-    {
-      label: 'Số tự tính — sửa được nếu bảng cân khác',
-      cells: [CELL.area, CELL.volume],
-    },
-    { label: 'Vật liệu', cells: [CELL.mat] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  soft: [
-    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    {
-      label: 'Quy cách tinh (mm)',
-      cells: [CELL.thick, CELL.wide, CELL.len, CELL.tenon],
-    },
-    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
-    { label: 'Mua theo tấm', cells: [CELL.m3Sheet] },
-    {
-      label: 'Số tự tính — sửa được nếu bảng cân khác',
-      cells: [CELL.area, CELL.volume],
-    },
-    { label: 'Vật liệu', cells: [CELL.mat] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  fabric: [
-    { label: null, cells: [CELL.no, CELL.cluster, CELL.name] },
-    { label: 'Loại vải và khổ', cells: [CELL.fabricType, CELL.roll] },
-    { label: 'Quy cách cắt (mm)', cells: [CELL.len, CELL.wide, CELL.thick] },
-    { label: 'Số lượng', cells: [CELL.qty, CELL.unit] },
-    { label: 'Hao hụt vải (%)', cells: [CELL.wastePct] },
-    {
-      label: 'Số tự tính — sửa được nếu bảng cân khác',
-      cells: [CELL.area, CELL.totalLen],
-    },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  // Ngũ kim / bao bì / tem / dây kéo: biểu mẫu KHÔNG có cột cụm và không có
-  // kích thước nào — thẻ vì thế cũng không được bày ra.
-  supply: [
-    { label: null, cells: [CELL.no, CELL.goods] },
-    { label: 'Số lượng', cells: [CELL.unit, CELL.qty] },
-    { label: 'Vật liệu', cells: [CELL.mat, CELL.color] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  // Mây / dây dù / dây đan — biểu mẫu ghi "Số lượng kg / 1 cái", nên nhãn vùng
-  // phải nói rõ đơn vị, không để trống là "Số lượng" như ngũ kim đếm cái.
-  rope: [
-    { label: null, cells: [CELL.no, CELL.goods] },
-    { label: 'Định mức (kg / 1 sản phẩm)', cells: [CELL.qty, CELL.unit] },
-    { label: 'Loại dây / mã số', cells: [CELL.mat, CELL.color] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-  // Sơn & hoá chất — biểu mẫu gọi lượng dùng là "Định mức", ĐVT luôn Kg.
-  paint: [
-    { label: null, cells: [CELL.no, CELL.goods] },
-    { label: 'Màu sơn', cells: [CELL.color] },
-    { label: 'Định mức', cells: [CELL.qty, CELL.unit] },
-    { label: 'Loại sơn / hoá chất', cells: [CELL.mat] },
-    { label: 'Khác', cells: [CELL.note] },
-  ],
-}
-
-/** Các vùng của thẻ sửa một dòng — theo nhóm hạng mục. */
-export function zonesFor(groupCode: string): PartZone[] {
-  return ZONES[layoutOf(groupCode)]
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
