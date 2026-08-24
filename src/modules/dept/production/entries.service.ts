@@ -123,6 +123,9 @@ export const entriesService = {
         throw BadRequest('Có dòng sổ gắn chi tiết không thuộc lệnh này')
       }
     }
+    // Cảnh báo hiện TÊN công đoạn cho người đọc — mã code chỉ dân dev hiểu.
+    const stagesCat = await productionRepo.listStages()
+    const stageLabel = (c: string) => stagesCat.find((s) => s.code === c)?.label ?? c
 
     // Chốt sổ: tổ đã chốt ngày này → cấm ghi thêm, quản lý mở khoá trước.
     const team = input.team_department_id ?? user.department_id ?? null
@@ -170,7 +173,7 @@ export const entriesService = {
       if (!comp) continue
       const w = overrunWarning(
         comp.name,
-        input.stage,
+        stageLabel(input.stage),
         doneByCompStage.get(`${e.component_id}|${input.stage}`) ?? 0,
         e.qty,
         totalByComponent.get(e.component_id) ?? 0,
@@ -198,8 +201,8 @@ export const entriesService = {
       const prev = route[idx - 1]
       const w = stageChainWarning(
         comp.name,
-        input.stage,
-        prev,
+        stageLabel(input.stage),
+        stageLabel(prev),
         doneByCompStage.get(`${compId}|${prev}`) ?? 0,
         doneByCompStage.get(`${compId}|${input.stage}`) ?? 0,
         adding,
@@ -253,7 +256,7 @@ export const entriesService = {
         const wip = summarizeTeamWip(same, usedByTriple.get(k) ?? 0)
         const w = teamWipShortageWarning(
           byId.get(compId)!.name,
-          input.stage,
+          stageLabel(input.stage),
           wip,
           addingQty + addingDefect,
         )

@@ -148,3 +148,40 @@ entriesService.summary (cùng payload Hồ sơ lệnh) + jobs từ planService.g
 Nghẽn WIP/thiếu VT cố ý KHÔNG kéo vào (cần transfers) — chú thích trỏ Toàn
 cảnh. Verify trên LSX-TEST-UI: Phôi 100/100·100%, Hàn 30/100·phế 7, Nguội
 0/100·1 việc quá hạn — khớp sổ seed.
+
+## Tài liệu tư vấn THỨ NĂM (24/08 — "Thống kê sản xuất") — đối chiếu
+
+Lần này nói về THỐNG KÊ (không phải kế hoạch) và **điểm cốt lõi của nó trùng
+đúng thiết kế đang chạy**: "đừng lấy sản phẩm cuối làm đơn vị thống kê — lấy
+BTP/chi tiết + công đoạn + lần thống kê" = chính `production_entries`
+(component_id × stage × entry_date × team, append-only) từ 0090. Các mục
+khác cũng đã có: một lần ghi NHIỀU đầu ra (§5 = lưới nhập nhiều chi tiết,
+Ctrl+Enter ghi cả lô); bộ hoàn chỉnh = MIN theo chi tiết (§6 = `syncedSets`);
+đạt/lỗi + lý do (§4 = qty/defect_qty/defect_reason); đầu vào per tổ (§4/§8 =
+`production_transfers` issue/return + `summarizeTeamWip`); lịch sử (§7 = bảng
+Sổ ngày + hàng phụ "đã ghi N ngày" mới thêm); tiến độ per công đoạn (§11 =
+`/kehoach-sx` bảng Tiến độ + `/theo-to`).
+
+TỪ CHỐI, kèm lý do (đừng đề xuất lại):
+- **Mã "CV-001" cho từng công việc** — cùng họ với KH-001 đã từ chối 4 lần;
+  (dòng SP × công đoạn) đã định danh duy nhất, thêm mã là thêm số phải nhập.
+- **"Chuyển tiếp" thành trường nhập riêng** — là DẪN XUẤT (đạt ở X = sẵn sàng
+  cho X+1); lưu cứng sẽ thành nguồn thứ hai lệch với sổ.
+- **Tổ trưởng xác nhận yêu cầu điều chỉnh (§10)** — tổ trưởng KHÔNG lên hệ
+  thống ([[production-org-roles]]), không có người thực hiện vai này. Cơ chế
+  tương đương đang chạy: append-only + `created_by` + xoá chỉ trước khi CHỐT
+  SỔ, chốt rồi phải quản lý mở khoá (có vết).
+- **Form "phát sinh sản xuất" 4 nhóm (§9)** — lần thứ BA; đã chốt không làm
+  (QC không lên hệ thống). Kênh hiện có: ghi chú dòng sổ, ghi chú thẻ việc,
+  lý do phế, cảnh báo nghẽn WIP.
+- **Ca kíp (§3)** — user đã được hỏi "cột nào còn thiếu" và KHÔNG chọn ca/giờ
+  công. Để đến bài lương sản phẩm cùng FK công nhân.
+
+ĐÃ LẤY từ tài liệu này (làm ngay 24/08): §8 "tồn công đoạn" + §2 "thấy tổng
+các giai đoạn khi nhập" → hàng phụ đọc-only dưới mỗi chi tiết trong lưới nhập
+(`FastEntryGrid`): dải LŨY KẾ TOÀN CHUỖI công đoạn (đang gõ Hàn vẫn thấy Phôi
+200 ✓) + những NGÀY đã ghi + **cảnh báo ngày đang chọn ĐÃ có số** (chống ghi
+trùng khi nhập lùi ngày — sổ append-only sẽ cộng dồn thành số gấp đôi). Dữ
+liệu lấy từ `entries` mà `summary` vốn đã trả về, KHÔNG thêm API. Verify thật
+trên LSX-TEST-UI ngày 23/8: "⚠ ngày 23/8 ĐÃ ghi 30 — gõ thêm là cộng dồn",
+khớp bảng sổ ngày.

@@ -104,51 +104,57 @@ export default async function PlanDetailPage({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
+            {/* border-separate + viền trên Ô để cột đóng băng mang viền theo
+                (cùng bẫy border-collapse×sticky của lưới định mức). */}
+            <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
               <thead>
-                <tr className="text-muted-foreground border-b text-left text-xs">
-                  <th className="py-1.5 pr-2">Công đoạn</th>
-                  <th className="py-1.5 pr-2 text-right">SL đạt / cần</th>
-                  <th className="py-1.5 pr-2 text-right">%</th>
-                  <th className="py-1.5 pr-2 text-right">Việc xong</th>
-                  <th className="py-1.5 pr-2 text-right">Quá hạn KH</th>
-                  <th className="py-1.5 pr-2 text-right">Phế</th>
-                  <th className="py-1.5">Ghi chú tổ</th>
+                <tr className="text-muted-foreground text-left text-xs">
+                  <th className="bg-card sticky left-0 z-10 border-b py-1.5 pr-3">
+                    Công đoạn
+                  </th>
+                  <th className="border-b py-1.5 pr-3 text-right">SL đạt / cần</th>
+                  <th className="border-b py-1.5 pr-3 text-right">%</th>
+                  <th className="border-b py-1.5 pr-3 text-right">Việc xong</th>
+                  <th className="border-b py-1.5 pr-3 text-right">Quá hạn KH</th>
+                  <th className="border-b py-1.5 pr-3 text-right">Phế</th>
+                  <th className="border-b py-1.5">Ghi chú tổ</th>
                 </tr>
               </thead>
               <tbody>
                 {stageRows.map((r) => (
-                  <tr key={r.stage} className="border-b">
-                    <td className="py-1.5 pr-2 font-medium">{stageLabel(r.stage)}</td>
-                    <td className="py-1.5 pr-2 text-right font-mono text-xs tabular-nums">
+                  <tr key={r.stage}>
+                    <td className="bg-card sticky left-0 z-10 border-b py-1.5 pr-3 font-medium">
+                      {stageLabel(r.stage)}
+                    </td>
+                    <td className="border-b py-1.5 pr-3 text-right font-mono text-xs tabular-nums">
                       {r.done_sets.toLocaleString('vi-VN')}/
                       {r.need_sets.toLocaleString('vi-VN')}
                     </td>
                     <td
-                      className={`py-1.5 pr-2 text-right font-mono text-xs tabular-nums ${
+                      className={`border-b py-1.5 pr-3 text-right font-mono text-xs tabular-nums ${
                         r.pct >= 1 ? 'font-semibold text-[var(--done)]' : ''
                       }`}
                     >
                       {Math.round(r.pct * 100)}%
                     </td>
-                    <td className="py-1.5 pr-2 text-right font-mono text-xs tabular-nums">
+                    <td className="border-b py-1.5 pr-3 text-right font-mono text-xs tabular-nums">
                       {r.jobs_total ? `${r.jobs_done}/${r.jobs_total} dòng` : '—'}
                     </td>
                     <td
-                      className={`py-1.5 pr-2 text-right font-mono text-xs tabular-nums ${
+                      className={`border-b py-1.5 pr-3 text-right font-mono text-xs tabular-nums ${
                         r.overdue ? 'font-semibold text-[var(--stop)]' : ''
                       }`}
                     >
                       {r.overdue || '—'}
                     </td>
                     <td
-                      className={`py-1.5 pr-2 text-right font-mono text-xs tabular-nums ${
+                      className={`border-b py-1.5 pr-3 text-right font-mono text-xs tabular-nums ${
                         r.defect ? 'text-[var(--warn)]' : ''
                       }`}
                     >
                       {r.defect ? r.defect.toLocaleString('vi-VN') : '—'}
                     </td>
-                    <td className="text-muted-foreground max-w-[260px] truncate py-1.5 text-xs">
+                    <td className="text-muted-foreground max-w-[260px] truncate border-b py-1.5 text-xs">
                       {r.note ?? '—'}
                     </td>
                   </tr>

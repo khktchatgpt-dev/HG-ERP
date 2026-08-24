@@ -272,7 +272,7 @@ describe('entriesService.record', () => {
     ])
     const { warnings } = await entriesService.record(thongKe, 'lsx1', record())
     expect(warnings.length).toBe(1)
-    expect(warnings[0]).toContain('han sẽ thành 30 mà phoi mới xong 20')
+    expect(warnings[0]).toContain('Hàn sẽ thành 30 mà Phôi mới xong 20')
     expect(entriesRepo.insertMany).toHaveBeenCalled()
   })
 
