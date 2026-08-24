@@ -11,6 +11,7 @@ import {
   backflushKg,
   overrunWarning,
   summarizeComponent,
+  stageChainWarning,
   summarizeTeamWip,
   syncedSets,
   teamWipShortageWarning,
@@ -182,6 +183,28 @@ export const entriesService = {
     const addingByComp = new Map<string, number>()
     for (const e of input.entries) {
       addingByComp.set(e.component_id, (addingByComp.get(e.component_id) ?? 0) + e.qty)
+    }
+
+    // Cảnh báo WIP ÂM THEO CHUỖI (24/08): công đoạn sau vượt số đã xong công
+    // đoạn TRƯỚC của cùng chi tiết. Cần lộ trình dòng để biết công đoạn trước;
+    // công đoạn ĐẦU của chính chi tiết/cụm thì bỏ (cụm đã có cảnh báo liên cấp).
+    for (const [compId, adding] of addingByComp) {
+      const comp = byId.get(compId)!
+      const route = routeByLine.get(comp.production_order_line_id)
+      if (!route) continue
+      const idx = route.indexOf(input.stage)
+      if (idx <= 0) continue
+      if (comp.first_stage === input.stage) continue
+      const prev = route[idx - 1]
+      const w = stageChainWarning(
+        comp.name,
+        input.stage,
+        prev,
+        doneByCompStage.get(`${compId}|${prev}`) ?? 0,
+        doneByCompStage.get(`${compId}|${input.stage}`) ?? 0,
+        adding,
+      )
+      if (w) warnings.push(w)
     }
     for (const [compId, adding] of addingByComp) {
       const asm = byId.get(compId)

@@ -16,7 +16,7 @@ export const dynamic = 'force-dynamic'
 export default async function ProductionEntryPage() {
   const user = await authService.requirePageUser()
 
-  const [{ rows, workload, stages }, tracking] = await Promise.all([
+  const [{ rows, workload, stages, pulse }, tracking] = await Promise.all([
     jobsService.overview(user),
     lsxService.tracking(),
   ])
@@ -39,6 +39,7 @@ export default async function ProductionEntryPage() {
       rows={rows}
       workload={workload}
       stages={stages}
+      pulse={pulse}
       waiting={waiting}
       canOperate={canOperate}
     />

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { entriesService } from '@/modules/dept/production/entries.service'
+import { paceTone } from '@/lib/production-summary'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
@@ -60,6 +61,11 @@ export default async function SoTongPage() {
       ) : (
         shown.map((lsx, i) => {
           const s = summaries[i]
+          const today = new Date().toISOString().slice(0, 10)
+          // Kế hoạch per (dòng SP × công đoạn) — tô nền ô lệch nhịp (GĐ3).
+          const jobByLineStage = new Map(
+            s.jobs.map((j) => [`${j.production_order_line_id}|${j.stage}`, j]),
+          )
           // Cột = công đoạn xuất hiện trong khoảng hiệu lực của BẤT KỲ dòng nào,
           // theo thứ tự danh mục.
           const usedStages = stages
@@ -155,17 +161,39 @@ export default async function SoTongPage() {
                               )
                             }
                             const full = c.total_needed > 0 && st.done >= c.total_needed
+                            // Lệch nhịp so kế hoạch (GĐ3): quá hạn = đỏ nhạt,
+                            // quá nửa thời gian mà chưa nửa số = vàng nhạt.
+                            const job = jobByLineStage.get(`${c.order_line_id}|${code}`)
+                            const tone = paceTone({
+                              done: st.done,
+                              needed: c.total_needed,
+                              plannedStart: job?.planned_start ?? null,
+                              plannedEnd: job?.planned_end ?? null,
+                              todayIso: today,
+                            })
+                            const toneCls =
+                              tone === 'late'
+                                ? 'bg-red-50 dark:bg-red-950/40'
+                                : tone === 'behind'
+                                  ? 'bg-amber-50 dark:bg-amber-950/30'
+                                  : ''
                             return (
                               <td
                                 key={code}
-                                className={`py-1.5 pr-2 text-right tabular-nums ${
+                                className={`py-1.5 pr-2 text-right tabular-nums ${toneCls} ${
                                   full
                                     ? 'text-emerald-600 dark:text-emerald-400'
                                     : st.done > 0
                                       ? 'text-amber-600 dark:text-amber-400'
                                       : 'text-zinc-400'
                                 }`}
-                                title={`Thiếu/(Dư): ${fmt(st.missing)}`}
+                                title={`${Math.round(st.pct * 100)}% · Thiếu/(Dư): ${fmt(st.missing)}${
+                                  tone === 'late' && job?.planned_end
+                                    ? ` · QUÁ HẠN KH (${new Date(job.planned_end).toLocaleDateString('vi-VN')})`
+                                    : tone === 'behind'
+                                      ? ' · chậm nhịp so kế hoạch'
+                                      : ''
+                                }`}
                               >
                                 {fmt(st.done)}
                                 {st.defect > 0 && (
@@ -174,6 +202,9 @@ export default async function SoTongPage() {
                                     ({fmt(st.defect)})
                                   </span>
                                 )}
+                                <span className="block text-[9px] text-zinc-400">
+                                  {Math.round(st.pct * 100)}%
+                                </span>
                               </td>
                             )
                           })}

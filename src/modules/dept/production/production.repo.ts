@@ -53,6 +53,25 @@ export type ProductionOrderWithOrders = ProductionOrder & {
   customer_name: string
 }
 
+/** 1 dòng đầy đủ của v_lsx_material_status — báo cáo định mức vs thực dùng. */
+export type LsxMaterialStatusRow = {
+  material_id: string | null
+  material_code: string
+  material_name: string | null
+  unit: string | null
+  qty_needed: number
+  qty_issued: number
+  qty_remaining: number
+}
+
+/** Vật tư còn thiếu của 1 lệnh (v_lsx_material_status) — badge Toàn cảnh xưởng. */
+export type LsxMaterialShortage = {
+  /** Số VẬT TƯ (dòng view) còn qty_remaining > 0. */
+  missing_count: number
+  /** Tối đa 5 tên đầu — tooltip, đủ để biết thiếu thứ gì mà không kéo cả bảng. */
+  missing_names: string[]
+}
+
 /** 1 dòng của view v_order_tracking (FR-SAL-07) — tiến độ SX đếm theo jobs (0084). */
 export type OrderTracking = {
   id: string
@@ -174,6 +193,54 @@ export const productionRepo = {
       .in('status', ['approved', 'in_progress'])
       .limit(1000)
     return ((data as { id: string }[] | null) ?? []).map((r) => r.id)
+  },
+
+  /** TOÀN BỘ dòng vật tư của 1 lệnh (cần / đã xuất / còn thiếu) — báo cáo
+   *  định mức vs thực dùng (GĐ4). Rỗng khi lệnh chưa chốt định mức. */
+  async materialStatusByLsx(id: string): Promise<LsxMaterialStatusRow[]> {
+    const { data } = await db()
+      .from('v_lsx_material_status')
+      .select(
+        'material_id, material_code, material_name, unit, qty_needed, qty_issued, qty_remaining',
+      )
+      .eq('production_order_id', id)
+      .order('material_code')
+      .limit(2000)
+    return ((data ?? []) as LsxMaterialStatusRow[]).map((r) => ({
+      ...r,
+      qty_needed: Number(r.qty_needed ?? 0),
+      qty_issued: Number(r.qty_issued ?? 0),
+      qty_remaining: Number(r.qty_remaining ?? 0),
+    }))
+  },
+
+  /**
+   * Vật tư còn THIẾU của nhiều lệnh — 1 query view v_lsx_material_status (0142)
+   * cho CẢ danh sách rồi gom client theo lệnh (Toàn cảnh xưởng — tránh N+1).
+   * Lệnh không còn dòng thiếu sẽ không có key trong Map.
+   */
+  async materialShortagesByLsx(ids: string[]): Promise<Map<string, LsxMaterialShortage>> {
+    if (!ids.length) return new Map()
+    const { data } = await db()
+      .from('v_lsx_material_status')
+      .select('production_order_id, material_name, qty_remaining')
+      .in('production_order_id', ids.slice(0, 300))
+      .gt('qty_remaining', 0)
+      .limit(10000)
+    const map = new Map<string, LsxMaterialShortage>()
+    type Row = { production_order_id: string; material_name: string | null }
+    for (const r of (data ?? []) as Row[]) {
+      const cur = map.get(r.production_order_id) ?? {
+        missing_count: 0,
+        missing_names: [],
+      }
+      cur.missing_count += 1
+      if (cur.missing_names.length < 5 && r.material_name) {
+        cur.missing_names.push(r.material_name)
+      }
+      map.set(r.production_order_id, cur)
+    }
+    return map
   },
 
   /** Mã LSX theo danh sách id — nhãn cho báo cáo tháng thống kê (0090). */

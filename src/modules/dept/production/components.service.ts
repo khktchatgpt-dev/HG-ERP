@@ -4,6 +4,7 @@ import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
+import { productsService } from '@/modules/dept/technical/technical.service'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import {
@@ -78,8 +79,21 @@ export const componentsService = {
     }
   },
 
-  /** Ghi đè trọn bộ bảng định hình (pattern BOM editor). */
-  async save(user: User, lsxId: string, input: ComponentInput[]): Promise<void> {
+  /**
+   * Ghi đè trọn bộ bảng định hình (pattern BOM editor).
+   * `opts.seedProfile` (user chốt 23/08/2026): sau khi lưu, nhập ngược bảng
+   * này lên hồ sơ SP cho các SP CHƯA có định mức — chi tiết đường ghi + rào
+   * chắn xem `productsService.seedPartsFromShaping`.
+   */
+  async save(
+    user: User,
+    lsxId: string,
+    input: ComponentInput[],
+    opts: { seedProfile?: boolean } = {},
+  ): Promise<{
+    seeded: { product_code: string; added: number }[]
+    seed_skipped: { product_code: string; reason: string }[]
+  }> {
     await assertAction(user, 'production.shaping.manage')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
@@ -116,6 +130,47 @@ export const componentsService = {
       }
     }
     await componentsRepo.replaceAll(lsxId, input)
+
+    // ── Nhập ngược lên hồ sơ SP (chỉ SP chưa có định mức) ──────────────────
+    const seeded: { product_code: string; added: number }[] = []
+    const seedSkipped: { product_code: string; reason: string }[] = []
+    if (opts.seedProfile) {
+      const seenProducts = new Set<string>()
+      for (const line of orderLines) {
+        if (!line.product_id || seenProducts.has(line.product_id)) continue
+        seenProducts.add(line.product_id)
+        // Dòng CỤM (assembly) không nhập ngược — định mức hồ sơ SP là cấp chi
+        // tiết; cụm chỉ giữ qua cluster_name trên từng dòng chi tiết.
+        const mine = input.filter(
+          (c) => c.production_order_line_id === line.id && c.kind !== 'assembly',
+        )
+        if (!mine.length) continue
+        const result = await productsService.seedPartsFromShaping(
+          user.id,
+          line.product_id,
+          lsx.code,
+          mine.map((c) => ({
+            cluster_name: c.cluster ?? null,
+            part_name: c.name,
+            material_kind: c.material_type ?? null,
+            dim_a_mm: c.spec_thickness_mm ?? null,
+            dim_b_mm: c.spec_width_mm ?? null,
+            wall_thickness_mm: c.wall_thickness_mm ?? null,
+            cut_length_mm: c.spec_length_mm ?? null,
+            unit: c.unit ?? null,
+            qty: c.qty_per_unit,
+            weight_kg: c.dm_kg ?? null,
+          })),
+        )
+        if ('added' in result) {
+          seeded.push({ product_code: line.product_code, added: result.added })
+        } else if (result.skipped !== 'has_parts') {
+          // Đã có định mức là chuyện bình thường (im lặng); khoá/mất SP thì báo.
+          seedSkipped.push({ product_code: line.product_code, reason: result.skipped })
+        }
+      }
+    }
+    return { seeded, seed_skipped: seedSkipped }
   },
 
   // `saveAsBom` (lưu ngược bảng định hình thành BOM kỹ thuật) ĐÃ BỎ ở 0096.
@@ -170,7 +225,9 @@ export const componentsService = {
             wall_thickness_mm: p.wall_thickness_mm ?? null,
             unit: p.unit ?? null,
             qty_per_unit: Number(p.qty),
-            dm_kg: null,
+            // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
+            // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
+            dm_kg: p.weight_kg ?? null,
             pcs_per_bar: null,
             note: p.material_code ?? null,
           })

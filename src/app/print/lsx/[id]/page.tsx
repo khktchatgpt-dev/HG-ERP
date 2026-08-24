@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { filesService } from '@/modules/core/files/files.service'
@@ -22,9 +23,10 @@ export default async function LsxPrintPage({
   const lsx = await productionRepo.findById(id)
   if (!lsx) redirect('/sales/lsx')
 
-  const [sheet, company] = await Promise.all([
+  const [sheet, company, tpl] = await Promise.all([
     lsxLinesService.sheet(user, id),
     settingsService.getAll(),
+    docTemplatesService.get('LSX'),
   ])
 
   // Ảnh SP (cột Hình ảnh) — signed URL ngắn hạn, lỗi thì bỏ ảnh, không chặn in.
@@ -46,6 +48,7 @@ export default async function LsxPrintPage({
 
   return (
     <LsxPrintSheet
+      tpl={tpl}
       company={company}
       header={{
         customer_name: lsx.customer_name,

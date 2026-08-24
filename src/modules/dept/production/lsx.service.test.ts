@@ -98,7 +98,7 @@ const freeOrder = (id: string, code: string, customerId = 'c1') => ({
 const doneJob = (id: string, stage: string) => ({
   id,
   production_order_id: 'lsx1',
-  order_line_id: 'line1',
+  production_order_line_id: 'line1',
   stage,
   seq: 0,
   status: 'done',

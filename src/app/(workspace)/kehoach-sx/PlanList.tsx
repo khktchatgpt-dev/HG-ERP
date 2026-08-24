@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
+import { DocChip } from '@/components/erp/DocChip'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
@@ -25,6 +26,11 @@ export type PlanRow = {
   jobs_total: number
   jobs_done: number
   plan_overdue: number
+  /** Σ cần / đã làm (sổ thống kê) — %SL của lệnh (plan-hoan-thien #4/#9). */
+  qty_needed: number
+  qty_done: number
+  /** Dự kiến xong theo nhịp 7 ngày có sổ; null = chưa có nhịp / đã đủ. */
+  forecast_date: string | null
 }
 
 type Filter = 'all' | 'no_plan' | 'plan_overdue'
@@ -40,6 +46,11 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
 
   const noPlan = rows.filter((r) => r.jobs_total === 0).length
   const overdue = rows.filter((r) => r.plan_overdue > 0).length
+  const nearShip = rows.filter((r) => r.late === 'at_risk').length
+  // Dự kiến xong MUỘN hơn hạn xuất — cảnh báo sớm nhất Kế hoạch có được.
+  const lateForecast = rows.filter(
+    (r) => r.forecast_date && r.ship_date && r.forecast_date > r.ship_date,
+  ).length
 
   const shown = useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -89,11 +100,8 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
       header: 'LSX',
       width: '130px',
       cell: (r) => (
-        <Link
-          href={`/kehoach-sx/${r.id}`}
-          className="font-mono font-semibold hover:text-red-600 dark:hover:text-red-400"
-        >
-          {r.code}
+        <Link href={`/kehoach-sx/${r.id}`} className="hover:text-primary">
+          <DocChip>{r.code}</DocChip>
         </Link>
       ),
     },
@@ -103,7 +111,9 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
       cell: (r) => (
         <span>
           <span className="font-medium">{r.customer_name}</span>{' '}
-          <span className="text-xs text-zinc-500">· {r.order_codes.join(', ')}</span>
+          <span className="text-muted-foreground text-xs">
+            · {r.order_codes.join(', ')}
+          </span>
         </span>
       ),
     },
@@ -124,11 +134,56 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
         ),
     },
     {
+      key: 'qty',
+      header: 'SL đạt / cần',
+      width: '160px',
+      align: 'right',
+      sortValue: (r) => (r.qty_needed > 0 ? r.qty_done / r.qty_needed : -1),
+      cell: (r) =>
+        r.qty_needed > 0 ? (
+          <span className="font-mono text-xs tabular-nums">
+            {r.qty_done.toLocaleString('vi-VN')}/{r.qty_needed.toLocaleString('vi-VN')}{' '}
+            <b>({Math.round((r.qty_done / r.qty_needed) * 100)}%)</b>
+          </span>
+        ) : (
+          // needed tính từ JOBS: chưa lên lộ trình thì chưa có gì để đo;
+          // có lộ trình mà vẫn 0 nghĩa là dòng SP chưa định hình chi tiết.
+          <span className="text-muted-foreground text-xs">
+            {r.jobs_total === 0 ? '—' : 'chưa định hình'}
+          </span>
+        ),
+    },
+    {
+      key: 'forecast',
+      header: 'Dự kiến xong',
+      width: '130px',
+      sortValue: (r) => r.forecast_date ?? '9999',
+      cell: (r) =>
+        r.forecast_date ? (
+          <span
+            className={`font-mono text-xs tabular-nums ${
+              r.ship_date && r.forecast_date > r.ship_date
+                ? 'font-semibold text-[var(--stop)]'
+                : ''
+            }`}
+            title={
+              r.ship_date && r.forecast_date > r.ship_date
+                ? 'Theo nhịp hiện tại sẽ XONG SAU HẠN XUẤT — đẩy nhịp hoặc điều chỉnh kế hoạch'
+                : 'Còn lại ÷ nhịp 7 ngày có sổ'
+            }
+          >
+            {fmtD(r.forecast_date)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-xs">—</span>
+        ),
+    },
+    {
       key: 'ship',
       header: 'Hạn xuất',
       width: '120px',
       cell: (r) => (
-        <span className={r.late === 'overdue' ? 'font-semibold text-red-600' : ''}>
+        <span className={r.late === 'overdue' ? 'font-semibold text-[var(--stop)]' : ''}>
           {fmtD(r.ship_date)}
         </span>
       ),
@@ -149,7 +204,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
               const v = Number(e.target.value)
               if (Number.isFinite(v) && v !== r.priority) setPriority(r, v)
             }}
-            className="w-16 rounded border border-zinc-300 px-2 py-1 text-center text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            className="border-input bg-background w-16 rounded border px-2 py-1 text-center text-sm"
           />
         ) : (
           <span>{r.priority}</span>
@@ -170,6 +225,18 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
           { label: 'Đang chạy', value: rows.length, tone: 'blue' },
           { label: 'Chưa lên lộ trình', value: noPlan, tone: noPlan ? 'amber' : 'gray' },
           { label: 'Trễ hạn kế hoạch', value: overdue, tone: overdue ? 'red' : 'gray' },
+          {
+            label: 'Sát hạn xuất',
+            value: nearShip,
+            tone: nearShip ? 'amber' : 'gray',
+            hint: 'hạn xuất trong 7 ngày tới',
+          },
+          {
+            label: 'Dự kiến trễ hạn xuất',
+            value: lateForecast,
+            tone: lateForecast ? 'red' : 'gray',
+            hint: 'theo nhịp 7 ngày có sổ',
+          },
         ]}
       />
       <Toolbar
@@ -193,7 +260,7 @@ export function PlanList({ rows, canEdit }: { rows: PlanRow[]; canEdit: boolean 
             />
           </>
         }
-        right={<span className="text-xs text-zinc-500">{shown.length} lệnh</span>}
+        right={<span className="text-muted-foreground text-xs">{shown.length} lệnh</span>}
       />
       <DataTable
         rows={shown}

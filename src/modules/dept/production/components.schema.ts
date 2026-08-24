@@ -33,6 +33,9 @@ export const componentLineSchema = z.object({
 
 export const componentsSaveSchema = z.object({
   lines: z.array(componentLineSchema).max(500),
+  /** Khởi tạo định mức hồ sơ SP từ bảng này cho SP CHƯA có BOM (user chốt
+   *  23/08/2026) — SP đã có định mức thì tự bỏ qua, không bao giờ đè. */
+  seed_profile: z.boolean().default(false),
 })
 
 export const componentsSuggestQuerySchema = z.object({

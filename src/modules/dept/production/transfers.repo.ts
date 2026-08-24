@@ -94,6 +94,17 @@ export const transfersRepo = {
     return ((data ?? []) as Transfer[]).map((r) => ({ ...r, qty: Number(r.qty) }))
   },
 
+  /** Bàn giao thô của NHIỀU lệnh — tính WIP/nghẽn ở Toàn cảnh xưởng (GĐ3). */
+  async listRawByLsxBulk(ids: string[]): Promise<Transfer[]> {
+    if (!ids.length) return []
+    const { data } = await db()
+      .from('production_transfers')
+      .select(COLS)
+      .in('production_order_id', ids)
+      .limit(50000)
+    return ((data ?? []) as Transfer[]).map((r) => ({ ...r, qty: Number(r.qty) }))
+  },
+
   async insert(row: Omit<Transfer, 'id' | 'created_at'>): Promise<void> {
     const { error } = await db().from('production_transfers').insert(row)
     if (error) throw new Error(error.message)

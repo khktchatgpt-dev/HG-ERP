@@ -145,3 +145,51 @@ export const lsxListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(1000).default(100),
 })
+
+/** Query báo cáo sản xuất (GĐ4): kỳ tự do; ô select rỗng coi như bỏ lọc. */
+const emptyToUndef = (v: unknown) => (v === '' ? undefined : v)
+export const reportsQuerySchema = z
+  .object({
+    type: z.enum(['san-luong', 'phe', 'nang-suat', 'dinh-muc']),
+    from: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    to: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(),
+    team: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+    stage: z.preprocess(emptyToUndef, z.string().trim().max(50).optional()),
+    lsx: z.preprocess(emptyToUndef, z.string().uuid().optional()),
+    format: z.enum(['json', 'xlsx']).default('json'),
+  })
+  .superRefine((q, ctx) => {
+    if (q.type === 'dinh-muc') {
+      if (!q.lsx) {
+        ctx.addIssue({ code: 'custom', message: 'Báo cáo định mức cần ?lsx=<id lệnh>' })
+      }
+    } else if (!q.from || !q.to) {
+      ctx.addIssue({ code: 'custom', message: 'Cần ?from=yyyy-mm-dd&to=yyyy-mm-dd' })
+    }
+  })
+export type ReportsQuery = z.infer<typeof reportsQuerySchema>
+
+/** Chỉ tiêu ngày (0168): PUT ghi đè trọn ngày — ô trống KHÔNG gửi lên. */
+export const dailyTargetsSaveSchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  rows: z
+    .array(
+      z.object({
+        team_department_id: z.string().uuid(),
+        stage: z.string().trim().min(1).max(50),
+        qty: z.coerce.number().min(0),
+        note: z.string().trim().max(300).optional().nullable(),
+      }),
+    )
+    .max(500),
+})
+
+export const dailyTargetsQuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+})

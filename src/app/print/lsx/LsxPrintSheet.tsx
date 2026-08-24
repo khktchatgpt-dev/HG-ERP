@@ -15,6 +15,11 @@ import {
   PrintTitle,
   type PrintCompany,
 } from '../PrintSheet'
+import {
+  DEFAULT_DOC_TEMPLATES,
+  resolveSignatures,
+  type DocTemplate,
+} from '@/lib/doc-templates'
 
 /**
  * Phiếu LỆNH SẢN XUẤT — bày ĐÚNG như file Excel của Sales (docs/lsx-redesign.md).
@@ -93,6 +98,7 @@ export function LsxPrintSheet({
   groups,
   imageUrls,
   watermark,
+  tpl = DEFAULT_DOC_TEMPLATES.LSX,
 }: {
   company: PrintCompany & Record<string, string | null>
   header: LsxSheetHeader
@@ -101,6 +107,8 @@ export function LsxPrintSheet({
   imageUrls: Map<string, string>
   /** vd "BẢN XEM TRƯỚC — LỆNH CHƯA PHÁT". null = bản chính thức. */
   watermark?: string | null
+  /** Mẫu in của LSX (0164) — tiêu đề, quốc hiệu, các cột ký. */
+  tpl?: DocTemplate
 }) {
   // 06/08/2026: khối "Kiểm tra hồ sơ" (BOM/Bản vẽ/Mẫu/Showroom) KHÔNG in nữa —
   // nhường chỗ cho ảnh SP và các cột khác. Dữ liệu checks vẫn nhập ở màn soạn
@@ -123,13 +131,20 @@ export function LsxPrintSheet({
         </div>
       )}
 
-      <PrintLetterhead company={company} date={new Date()} />
+      <PrintLetterhead
+        company={company}
+        date={new Date()}
+        nationalHeading={tpl.national_heading}
+      />
       <PrintTitle
-        vi="LỆNH SẢN XUẤT"
+        vi={tpl.title_vi}
+        /* Dòng dưới tiêu đề của LSX là chỗ báo BẢN CHỈNH SỬA — thứ của chính tờ
+           lệnh, không phải chữ cấu hình. Lệnh chưa sửa lần nào thì mới nhường
+           chỗ cho dòng tiếng Anh trong mẫu (mặc định để trống). */
         en={
           isRevision
             ? `CHỈNH SỬA LẦN ${header.revision} — NGÀY ${fmtD(header.revised_at)}`
-            : undefined
+            : (tpl.title_en ?? undefined)
         }
       />
 
@@ -366,13 +381,7 @@ export function LsxPrintSheet({
         <div>- Kho vật tư, nguyên liệu</div>
       </div>
 
-      <PrintSignatures
-        cols={[
-          { role: 'Người lập' },
-          { role: 'Trưởng phòng kế hoạch' },
-          { role: 'Giám Đốc' },
-        ]}
-      />
+      <PrintSignatures cols={resolveSignatures(tpl.signatures, {})} />
     </PrintPage>
   )
 }

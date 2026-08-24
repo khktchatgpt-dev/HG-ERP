@@ -56,23 +56,27 @@ export async function LsxDetailScreen({
   const groupTitle = new Map(sheet.groups.map((g) => [g.id, g.title ?? '']))
   const sheetLines = sheet.groups.flatMap((g) => g.lines)
 
-  // Cung ứng / vật tư — CHỈ shell GĐ + Kế hoạch (PO có tiền = cam kết chi).
+  // Cung ứng / vật tư — shell GĐ + Kế hoạch thấy đủ (kèm tiền = cam kết chi);
+  // shell XƯỞNG (GĐ1 plan-sx): quản đốc thấy PO + trạng thái + ngày về nhưng
+  // KHÔNG thấy tiền, KHÔNG có nút chốt lại định mức.
   let supply: SupplyPanelData | null = null
-  if (variant === 'exec' || variant === 'planning') {
+  if (variant === 'exec' || variant === 'planning' || variant === 'production') {
+    const showMoney = variant !== 'production'
     const { rows: poRows } = await posService.list(user, {
       production_order_id: id,
       page: 1,
       page_size: 100,
     })
-    const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
+    const totals = showMoney ? await posRepo.totalsByPoIds(poRows.map((p) => p.id)) : {}
     const [bomSnapshot, canResnapBom] = await Promise.all([
       lsxService.bomSnapshotInfo(user, id),
-      canAction(user, 'production.lsx.bom_resnap'),
+      showMoney ? canAction(user, 'production.lsx.bom_resnap') : Promise.resolve(false),
     ])
     supply = {
       hasBom: (summary?.components.length ?? 0) > 0,
       bomSnapshot,
       canResnapBom,
+      showMoney,
       pos: poRows.map((p) => ({
         id: p.id,
         code: p.code,

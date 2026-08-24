@@ -1,9 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { entriesRepo } from '@/modules/dept/production/entries.repo'
-import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
-import { calcComponent } from '@/lib/component-needs'
+import { reportsService } from '@/modules/dept/production/reports.service'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { PrintButton } from './PrintButton'
@@ -15,6 +13,7 @@ export const dynamic = 'force-dynamic'
  * ("Tổng TĐ SX- TK - KT.xlsx"): 1 cột = 1 ngày trong tháng, hàng = chi tiết ×
  * công đoạn; cuối hàng: Σ tháng, Kg, lũy kế, tổng cần, Thiếu/(Dư), %HT.
  * Đây là bản thống kê nộp kế toán → có nút In (print CSS ẩn shell + bộ lọc).
+ * Số liệu từ reportsService.sanLuong (GĐ4) — cùng nguồn với API + file Excel.
  */
 
 const r2 = (n: number) => Math.round(n * 100) / 100
@@ -35,7 +34,7 @@ export default async function MonthReportPage({
 }: {
   searchParams: Promise<{ team?: string; stage?: string; month?: string }>
 }) {
-  await authService.requireUser()
+  const user = await authService.requireUser()
   const sp = await searchParams
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? '')
     ? sp.month!
@@ -44,89 +43,22 @@ export default async function MonthReportPage({
   const stage = sp.stage ?? ''
   const { from, to, days } = monthRange(month)
 
-  const [allEntries, stages, allDepts] = await Promise.all([
-    entriesRepo.listRange(from, to),
+  const [report, stages, allDepts] = await Promise.all([
+    reportsService.sanLuong(user, {
+      from,
+      to,
+      team: team || undefined,
+      stage: stage || undefined,
+    }),
     productionRepo.listStages(),
     departmentsRepo.list(),
   ])
   const teams = allDepts.filter((d) => d.workspace_id === 'production')
-  const entries = allEntries.filter(
-    (e) => (!team || e.team_department_id === team) && (!stage || e.stage === stage),
-  )
-
-  const lsxIds = [...new Set(entries.map((e) => e.production_order_id))]
-  const [comps, allTime, codes] = await Promise.all([
-    componentsRepo.listByLsxBulk(lsxIds),
-    entriesRepo.listByLsxBulk(lsxIds),
-    productionRepo.listCodesByIds(lsxIds),
-  ])
-  const compById = new Map(comps.map((c) => [c.id, c]))
-  // Lũy kế đã làm per (chi tiết × công đoạn) — mọi tổ, mọi tháng (cột Thiếu/Dư
-  // của Excel so với TỔNG CẦN nên phải lũy kế, không chỉ tháng đang xem).
-  const doneAll = new Map<string, number>()
-  for (const e of allTime) {
-    const k = `${e.component_id}|${e.stage}`
-    doneAll.set(k, (doneAll.get(k) ?? 0) + Number(e.qty))
-  }
-
-  // Gộp theo hàng báo cáo (lệnh × chi tiết × công đoạn).
-  type Row = {
-    lsx: string
-    comp: string
-    cluster: string | null
-    kind: string
-    stage: string
-    sort: number
-    byDay: number[]
-    total: number
-    kg: number
-    workers: Set<string>
-    totalNeeded: number
-    doneAll: number
-  }
-  const rows = new Map<string, Row>()
-  for (const e of entries) {
-    const c = compById.get(e.component_id)
-    const k = `${e.production_order_id}|${e.component_id}|${e.stage}`
-    let row = rows.get(k)
-    if (!row) {
-      row = {
-        lsx: codes.get(e.production_order_id) ?? '?',
-        comp: c?.name ?? '?',
-        cluster: c?.cluster ?? null,
-        kind: c?.kind ?? 'part',
-        stage: e.stage,
-        sort: c?.sort_order ?? 9999,
-        byDay: Array.from({ length: days }, () => 0),
-        total: 0,
-        kg: 0,
-        workers: new Set(),
-        totalNeeded: c
-          ? calcComponent(
-              {
-                qty_per_unit: c.qty_per_unit,
-                dm_kg: c.dm_kg,
-                pcs_per_bar: c.pcs_per_bar,
-              },
-              c.line_qty,
-            ).total_needed
-          : 0,
-        doneAll: doneAll.get(`${e.component_id}|${e.stage}`) ?? 0,
-      }
-      rows.set(k, row)
-    }
-    const day = Number(e.entry_date.slice(8, 10)) - 1
-    if (day >= 0 && day < days) row.byDay[day] += Number(e.qty)
-    row.total += Number(e.qty)
-    row.kg += e.kg == null ? 0 : Number(e.kg)
-    if (e.worker_name) row.workers.add(e.worker_name)
-  }
-  const sorted = [...rows.values()].sort(
-    (a, b) => a.lsx.localeCompare(b.lsx) || a.sort - b.sort,
-  )
+  const sorted = report.rows
   const stageLabel = (code: string) => stages.find((s) => s.code === code)?.label ?? code
-  const totQty = sorted.reduce((a, r) => a + r.total, 0)
-  const totKg = sorted.reduce((a, r) => a + r.kg, 0)
+  const totQty = report.total_qty
+  const totKg = report.total_kg
+  const excelHref = `/api/dept/production/reports?type=san-luong&from=${from}&to=${to}&team=${team}&stage=${stage}&format=xlsx`
 
   return (
     <div className="flex flex-col gap-4">
@@ -145,7 +77,17 @@ export default async function MonthReportPage({
           ]}
           title="Báo cáo sản lượng tháng (ma trận ngày)"
           description="Bảng 1 cột/ngày như sổ giấy: lọc theo tổ / công đoạn / tháng, cuối hàng là Σ tháng, kg, lũy kế và Thiếu/(Dư) so với tổng cần — dùng nộp kế toán."
-          actions={<PrintButton />}
+          actions={
+            <span className="flex items-center gap-2">
+              <a
+                href={excelHref}
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              >
+                ⬇ Tải Excel
+              </a>
+              <PrintButton />
+            </span>
+          }
         />
 
         <form method="get" className="mt-2 flex flex-wrap items-end gap-2 text-sm">
@@ -237,9 +179,9 @@ export default async function MonthReportPage({
             </thead>
             <tbody>
               {sorted.map((row, i) => {
-                const missing = r2(row.totalNeeded - row.doneAll)
+                const missing = r2(row.total_needed - row.done_all)
                 const pct =
-                  row.totalNeeded > 0 ? Math.min(row.doneAll / row.totalNeeded, 1) : 0
+                  row.total_needed > 0 ? Math.min(row.done_all / row.total_needed, 1) : 0
                 return (
                   <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
                     <td className="sticky left-0 bg-white px-2 py-1 whitespace-nowrap dark:bg-zinc-950 print:static">
@@ -255,7 +197,7 @@ export default async function MonthReportPage({
                     <td className="py-1 pr-1 whitespace-nowrap">
                       {stageLabel(row.stage)}
                     </td>
-                    {row.byDay.map((q, d) => (
+                    {row.by_day.map((q, d) => (
                       <td
                         key={d}
                         className={`py-1 text-center tabular-nums ${q > 0 ? '' : 'text-zinc-300 dark:text-zinc-700'}`}
@@ -270,10 +212,10 @@ export default async function MonthReportPage({
                       {row.kg > 0 ? fmt(r2(row.kg)) : '—'}
                     </td>
                     <td className="py-1 pr-1 text-right tabular-nums">
-                      {fmt(row.doneAll)}
+                      {fmt(row.done_all)}
                     </td>
                     <td className="py-1 pr-1 text-right tabular-nums">
-                      {fmt(row.totalNeeded)}
+                      {fmt(row.total_needed)}
                     </td>
                     <td
                       className={`py-1 pr-1 text-right font-medium tabular-nums ${

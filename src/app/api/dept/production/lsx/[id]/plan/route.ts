@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { planService } from '@/modules/dept/production/plan.service'
-import { linePlanSchema } from '@/modules/dept/production/plan.schema'
+import { linePlanSchema, lsxPlanSchema } from '@/modules/dept/production/plan.schema'
+import { z } from 'zod'
 
 type Params = { params: Promise<{ id: string }> }
 
@@ -14,11 +15,19 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
   return NextResponse.json(data)
 })
 
-/** Ghi kế hoạch 1 dòng SP (lộ trình + giao tổ + hạn) — vai Kế hoạch. */
+/**
+ * Ghi kế hoạch — vai Kế hoạch. Hai dạng body:
+ *  - { scope: 'lsx', stages, reason }  → CẢ LỆNH, rải xuống từng dòng SP
+ *  - { order_line_id, stages, ... }    → tinh chỉnh 1 dòng SP
+ */
 export const PUT = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const input = await parseJson(req, linePlanSchema)
+  const input = await parseJson(req, z.union([lsxPlanSchema, linePlanSchema]))
+  if ('scope' in input) {
+    const r = await planService.saveLsxPlan(user, id, input)
+    return NextResponse.json({ ok: true, ...r })
+  }
   await planService.saveLinePlan(user, id, input)
   return NextResponse.json({ ok: true })
 })

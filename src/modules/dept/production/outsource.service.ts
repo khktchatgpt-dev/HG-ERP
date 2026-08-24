@@ -1,7 +1,11 @@
 import { outsourceRepo, type OutsourceEntryJoined } from './outsource.repo'
 import { componentsRepo } from './components.repo'
 import { productionRepo } from './production.repo'
-import { summarizeOutsource, type OutsourceSummary } from '@/lib/production-summary'
+import {
+  backflushKg,
+  summarizeOutsource,
+  type OutsourceSummary,
+} from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -67,7 +71,8 @@ export const outsourceService = {
       throw BadRequest('Chỉ ghi gia công cho LSX đã duyệt / đang sản xuất')
     }
     const components = await componentsRepo.listByLsx(lsxId)
-    if (!components.some((c) => c.id === input.component_id)) {
+    const comp = components.find((c) => c.id === input.component_id)
+    if (!comp) {
       throw BadRequest('Chi tiết không thuộc lệnh này')
     }
     await outsourceRepo.insert({
@@ -77,7 +82,9 @@ export const outsourceService = {
       direction: input.direction,
       entry_date: input.entry_date,
       qty: input.qty,
-      kg: input.kg ?? null,
+      // Backflush như sổ thường (GĐ5.1): kg bỏ trống → ĐM × SL — báo cáo
+      // định mức đọc kg nên đường gia công ngoài không được là lỗ hổng.
+      kg: backflushKg(input.kg ?? null, comp.dm_kg, input.qty),
       defect_qty: input.defect_qty ?? 0,
       note: input.note ?? null,
       created_by: user.id,

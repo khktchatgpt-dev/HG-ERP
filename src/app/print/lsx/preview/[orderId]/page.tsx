@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
@@ -43,10 +44,11 @@ export default async function LsxPreviewPage({
     ...merged.filter((o) => o && o.customer_id === order.customer_id).map((o) => o!.id),
   ]
 
-  const [drafts, customer, company] = await Promise.all([
+  const [drafts, customer, company, tpl] = await Promise.all([
     lsxLinesService.draftFromOrders(orderIds),
     customersRepo.findById(order.customer_id),
     settingsService.getAll(),
+    docTemplatesService.get('LSX'),
   ])
 
   // Dòng nháp chưa có id thật — gán id tạm để React key và bảng chạy như thường.
@@ -90,6 +92,7 @@ export default async function LsxPreviewPage({
 
   return (
     <LsxPrintSheet
+      tpl={tpl}
       company={company}
       header={{
         customer_name: order.customer_name,

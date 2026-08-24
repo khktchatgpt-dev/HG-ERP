@@ -255,6 +255,45 @@ describe('entriesService.record', () => {
     expect(entriesRepo.insertMany).toHaveBeenCalled()
   })
 
+  it('công đoạn SAU vượt số công đoạn TRƯỚC → KHÔNG chặn, trả warning (WIP âm)', async () => {
+    // Lộ trình dòng: phôi → hàn. Phôi mới xong 20 mà ghi hàn 30.
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+      { ...JOB_HAN, id: 'j0', stage: 'phoi', seq: 0 },
+      { ...JOB_HAN, seq: 1 },
+    ] as never)
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'c1',
+        stage: 'phoi',
+        team_department_id: 'd-phoi',
+        qty: 20,
+        defect_qty: 0,
+      } as never,
+    ])
+    const { warnings } = await entriesService.record(thongKe, 'lsx1', record())
+    expect(warnings.length).toBe(1)
+    expect(warnings[0]).toContain('han sẽ thành 30 mà phoi mới xong 20')
+    expect(entriesRepo.insertMany).toHaveBeenCalled()
+  })
+
+  it('công đoạn sau ≤ công đoạn trước → im lặng', async () => {
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([
+      { ...JOB_HAN, id: 'j0', stage: 'phoi', seq: 0 },
+      { ...JOB_HAN, seq: 1 },
+    ] as never)
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'c1',
+        stage: 'phoi',
+        team_department_id: 'd-phoi',
+        qty: 30,
+        defect_qty: 0,
+      } as never,
+    ])
+    const { warnings } = await entriesService.record(thongKe, 'lsx1', record())
+    expect(warnings).toEqual([])
+  })
+
   it('kg bỏ trống → backflush ĐM × SL; ghi đè thì giữ nguyên (0090)', async () => {
     vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
       { ...COMP, dm_kg: 0.6 },

@@ -138,6 +138,8 @@ export function LsxComponentsPanel({
   const [rows, setRows] = useState<EditRow[]>([])
   const [dirty, setDirty] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  // Nhập ngược bảng này lên hồ sơ SP CHƯA có định mức (user chốt 23/08/2026).
+  const [seedProfile, setSeedProfile] = useState(false)
   // Lệnh đã có sổ sản lượng → khoá bảng NGAY từ đầu (banner) thay vì để người
   // nhập sửa chán rồi bấm Lưu mới ăn 400 (server vẫn chặn làm lớp cuối).
   const [lockedByEntries, setLockedByEntries] = useState(false)
@@ -256,9 +258,14 @@ export function LsxComponentsPanel({
     }
     setBusy(true)
     try {
-      await api(`/api/dept/production/lsx/${lsxId}/components`, {
+      const res = await api<{
+        ok: boolean
+        seeded: { product_code: string; added: number }[]
+        seed_skipped: { product_code: string; reason: string }[]
+      }>(`/api/dept/production/lsx/${lsxId}/components`, {
         method: 'PUT',
         body: {
+          seed_profile: seedProfile,
           lines: rows.map((r) => ({
             production_order_line_id: r.production_order_line_id,
             kind: r.kind,
@@ -286,6 +293,19 @@ export function LsxComponentsPanel({
         },
       })
       toast.success('Đã lưu bảng chi tiết', `${rows.length} dòng`)
+      if (res.seeded.length > 0) {
+        toast.success(
+          'Đã khởi tạo định mức hồ sơ SP',
+          res.seeded.map((s) => `${s.product_code}: ${s.added} dòng`).join(' · ') +
+            ' — Kỹ thuật rà lại rồi mới chốt done',
+        )
+      }
+      for (const s of res.seed_skipped ?? []) {
+        toast.error(
+          `Không khởi tạo được định mức ${s.product_code}`,
+          s.reason === 'locked' ? 'Hồ sơ SP đang khoá' : 'SP không tồn tại',
+        )
+      }
       setDirty(false)
       router.refresh()
     } catch (e) {
@@ -668,6 +688,18 @@ export function LsxComponentsPanel({
             >
               ⇣ Gợi ý từ BOM
             </button>
+            <label
+              className="flex cursor-pointer items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-300"
+              title="SP trong lệnh CHƯA có định mức thì lấy bảng này làm bản khởi tạo hồ sơ SP (đánh dấu 'đang vẽ' — Kỹ thuật rà lại). SP đã có định mức không bị đụng."
+            >
+              <input
+                type="checkbox"
+                checked={seedProfile}
+                onChange={(e) => setSeedProfile(e.target.checked)}
+                className="accent-sky-600"
+              />
+              Khởi tạo định mức SP chưa có BOM
+            </label>
             <button
               disabled={busy || !dirty}
               onClick={() => void save()}

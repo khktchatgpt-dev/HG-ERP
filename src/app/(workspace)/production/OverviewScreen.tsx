@@ -16,6 +16,7 @@ import type {
   OverviewRow,
   StageChip,
   TeamWorkloadRow,
+  TodayPulse,
 } from '@/modules/dept/production/jobs.service'
 
 export type WaitingDeliveryRow = {
@@ -26,9 +27,10 @@ export type WaitingDeliveryRow = {
   ship_date: string | null
 }
 
-type Filter = 'all' | 'late' | 'plan_overdue' | 'no_plan'
+type Filter = 'all' | 'late' | 'plan_overdue' | 'no_plan' | 'materials'
 
 const fmtD = (d: string | null) => (d ? new Date(d).toLocaleDateString('vi-VN') : '—')
+const fmtN = (n: number) => n.toLocaleString('vi-VN')
 
 /** Dải chip công đoạn: màu theo done/doing/todo. */
 function StageChips({ chips }: { chips: StageChip[] }) {
@@ -61,12 +63,14 @@ function StageChips({ chips }: { chips: StageChip[] }) {
 export function OverviewScreen({
   rows,
   workload,
+  pulse,
   waiting,
   canOperate,
 }: {
   rows: OverviewRow[]
   workload: TeamWorkloadRow[]
   stages: { code: string; label: string }[]
+  pulse: TodayPulse
   waiting: WaitingDeliveryRow[]
   canOperate: boolean
 }) {
@@ -83,6 +87,8 @@ export function OverviewScreen({
   const late = rows.filter((r) => r.lsx.late).length
   const planOverdue = rows.filter((r) => r.plan_overdue > 0).length
   const noPlan = rows.filter((r) => r.jobs_total === 0).length
+  const matsWaiting = rows.filter((r) => r.materials).length
+  const matsOverdue = rows.filter((r) => r.materials?.due_overdue_days).length
 
   const shown = useMemo(() => {
     const ql = q.trim().toLowerCase()
@@ -90,6 +96,7 @@ export function OverviewScreen({
       if (filter === 'late' && !r.lsx.late) return false
       if (filter === 'plan_overdue' && r.plan_overdue === 0) return false
       if (filter === 'no_plan' && r.jobs_total > 0) return false
+      if (filter === 'materials' && !r.materials) return false
       if (
         ql &&
         !`${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_codes.join(' ')}`
@@ -145,7 +152,50 @@ export function OverviewScreen({
             tone: planOverdue ? 'amber' : 'gray',
           },
           { label: 'Chưa lên kế hoạch', value: noPlan, tone: noPlan ? 'amber' : 'gray' },
+          {
+            label: 'Chờ vật tư',
+            value: matsWaiting,
+            tone: matsOverdue ? 'amber' : 'gray',
+            hint: matsOverdue ? `${matsOverdue} lệnh trễ hẹn vật tư` : undefined,
+          },
           { label: 'Chờ giao hàng', value: waiting.length, tone: 'default' },
+        ]}
+      />
+
+      {/* Nhịp hôm nay — sổ thống kê (cùng ngày sổ với logbook) so với chỉ
+          tiêu SUY từ lộ trình công đoạn (GĐ2 bước 1 — không ai phải nhập). */}
+      <StatsBar
+        stats={[
+          {
+            label: 'Kế hoạch hôm nay',
+            value: pulse.target > 0 ? fmtN(pulse.target) : '—',
+            tone: 'blue',
+            hint: pulse.target > 0 ? 'suy từ lộ trình công đoạn' : 'chưa có lộ trình',
+          },
+          {
+            label: 'SL đạt hôm nay',
+            value: fmtN(pulse.qty),
+            tone: 'green',
+            hint:
+              pulse.target > 0
+                ? `${Math.round((pulse.qty / pulse.target) * 100)}% kế hoạch`
+                : undefined,
+          },
+          { label: 'Kg hôm nay', value: fmtN(pulse.kg), tone: 'default' },
+          {
+            label: 'Phế hôm nay',
+            value: fmtN(pulse.defect),
+            tone: pulse.defect > 0 ? 'red' : 'gray',
+          },
+          {
+            label: 'Tổ chốt sổ',
+            value: `${pulse.teams_locked}/${pulse.teams_active}`,
+            tone:
+              pulse.teams_active > 0 && pulse.teams_locked === pulse.teams_active
+                ? 'green'
+                : 'gray',
+            hint: 'trên số tổ đang hoạt động',
+          },
         ]}
       />
 
@@ -167,6 +217,7 @@ export function OverviewScreen({
                 { value: 'late' as const, label: 'Nguy cơ trễ hạn xuất' },
                 { value: 'plan_overdue' as const, label: 'Trễ hạn kế hoạch' },
                 { value: 'no_plan' as const, label: 'Chưa lên kế hoạch' },
+                { value: 'materials' as const, label: 'Chờ vật tư' },
               ]}
             />
           </>
@@ -209,8 +260,29 @@ export function OverviewScreen({
                 {r.plan_overdue > 0 && (
                   <Badge tone="amber">{r.plan_overdue} việc quá hạn KH</Badge>
                 )}
-                {!r.lsx.materials_received_at && (
-                  <Badge tone="gray">Chưa nhận vật tư</Badge>
+                {r.materials && (
+                  // Định lượng thay badge có/không: thiếu GÌ (tooltip), BAO
+                  // NHIÊU vật tư, và đã trễ hẹn về chưa (materials_due_at).
+                  <span
+                    title={
+                      r.materials.missing_names.length
+                        ? `Còn thiếu: ${r.materials.missing_names.join(', ')}${
+                            r.materials.missing_count > r.materials.missing_names.length
+                              ? '…'
+                              : ''
+                          }`
+                        : undefined
+                    }
+                  >
+                    <Badge tone={r.materials.due_overdue_days ? 'amber' : 'gray'}>
+                      {r.materials.missing_count > 0
+                        ? `Thiếu ${r.materials.missing_count} vật tư`
+                        : 'Chưa nhận vật tư'}
+                      {r.materials.due_overdue_days
+                        ? ` · trễ hẹn ${r.materials.due_overdue_days} ngày`
+                        : ''}
+                    </Badge>
+                  </span>
                 )}
                 <span className="ml-auto text-xs text-zinc-500">
                   {r.lsx.customer_name} ·{' '}
@@ -257,18 +329,46 @@ export function OverviewScreen({
             {workload.map((w) => (
               <div
                 key={w.department_id}
-                className="flex items-center justify-between rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
+                className="rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800"
               >
-                <span className="truncate font-medium">{w.department_name}</span>
-                <span className="flex gap-2 text-xs">
-                  <span className="text-zinc-500">{w.todo} chưa</span>
-                  <span className="text-amber-600 dark:text-amber-400">
-                    {w.doing} đang
+                <div className="flex items-center justify-between">
+                  <span className="truncate font-medium">{w.department_name}</span>
+                  <span className="flex gap-2 text-xs">
+                    <span className="text-zinc-500">{w.todo} chưa</span>
+                    <span className="text-amber-600 dark:text-amber-400">
+                      {w.doing} đang
+                    </span>
+                    <span className="text-green-600 dark:text-green-400">
+                      {w.done} xong
+                    </span>
                   </span>
-                  <span className="text-green-600 dark:text-green-400">
-                    {w.done} xong
+                </div>
+                {/* Nhịp sổ hôm nay của tổ + đã chốt sổ chưa (0090/GĐ1). */}
+                <div className="mt-1 flex items-center gap-2 text-xs text-zinc-500">
+                  <span className="font-mono tabular-nums">
+                    Hôm nay: {fmtN(w.today_qty)}
+                    {w.today_target > 0 ? `/${fmtN(w.today_target)}` : ''} đạt
+                    {w.today_defect > 0 ? ` · ${fmtN(w.today_defect)} phế` : ''}
                   </span>
-                </span>
+                  {w.locked_today && (
+                    <span className="ml-auto text-green-600 dark:text-green-400">
+                      ✓ đã chốt sổ
+                    </span>
+                  )}
+                </div>
+                {/* Tồn WIP tại tổ + cảnh báo nghẽn (GĐ3 — từ sổ bàn giao). */}
+                {(w.wip > 0 || w.bottleneck_stages.length > 0) && (
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="font-mono text-zinc-500 tabular-nums">
+                      Tồn WIP: {fmtN(w.wip)}
+                    </span>
+                    {w.bottleneck_stages.length > 0 && (
+                      <span title="Tồn phôi tại tổ vượt quá 3 ngày làm theo nhịp hiện tại — hoặc tổ ôm phôi quá 2 ngày không ghi sổ.">
+                        <Badge tone="red">Nghẽn: {w.bottleneck_stages.join(', ')}</Badge>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

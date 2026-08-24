@@ -18,6 +18,9 @@ vi.mock('@/modules/dept/sales/orders.repo', () => ({
 vi.mock('@/modules/dept/technical/technical.repo', () => ({
   productProfileRepo: { parts: vi.fn(), clusters: vi.fn() },
 }))
+vi.mock('@/modules/dept/technical/technical.service', () => ({
+  productsService: { seedPartsFromShaping: vi.fn() },
+}))
 vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   hasPermission: vi.fn(),
@@ -37,7 +40,10 @@ vi.mock('./lsx-lines.repo', () => ({
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { componentsService } from './components.service'
 import { productionRepo } from './production.repo'
+import { entriesRepo } from './entries.repo'
+import { jobsRepo } from './jobs.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
+import { productsService } from '@/modules/dept/technical/technical.service'
 import type { User } from '@/modules/core/users/users.repo'
 
 const thongKe = { id: 'u-tk', role: 'employee' } as unknown as User
@@ -105,8 +111,102 @@ describe('componentsService.suggest("bom") — gợi ý từ ĐỊNH MỨC (0096
     expect(out[0].material_id).toBeNull()
   })
 
+  it('kg định mức đi theo gợi ý làm dm_kg (user chốt 23/08 — BOM là nguồn)', async () => {
+    vi.mocked(productProfileRepo.parts).mockResolvedValue([
+      { part_name: 'Chân bàn', cluster_id: null, qty: 4, weight_kg: 0.82 },
+    ] as never)
+    const out = await componentsService.suggest(thongKe, 'lsx1', 'bom')
+    expect(out[0].dm_kg).toBe(0.82)
+  })
+
   it('SP chưa có định mức → không gợi ý dòng nào', async () => {
     vi.mocked(productProfileRepo.parts).mockResolvedValue([] as never)
     await expect(componentsService.suggest(thongKe, 'lsx1', 'bom')).resolves.toEqual([])
+  })
+})
+
+describe('componentsService.save + seed_profile — nhập ngược lên hồ sơ SP (23/08)', () => {
+  const partLine = {
+    production_order_line_id: 'line1',
+    kind: 'part' as const,
+    cluster: 'Cụm khung',
+    name: 'Chân bàn',
+    material_type: 'AL',
+    spec_thickness_mm: 60,
+    spec_width_mm: null,
+    spec_length_mm: 570,
+    wall_thickness_mm: 1.1,
+    unit: 'Cái',
+    qty_per_unit: 4,
+    dm_kg: 0.82,
+  }
+  const assemblyLine = {
+    production_order_line_id: 'line1',
+    kind: 'assembly' as const,
+    cluster: 'Cụm khung',
+    name: 'CỤM KHUNG',
+    qty_per_unit: 1,
+  }
+
+  beforeEach(() => {
+    vi.mocked(entriesRepo.existsForLsx).mockResolvedValue(false)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+  })
+
+  it('seedProfile: gọi seed per SP với dòng CHI TIẾT (bỏ cụm), trả kết quả', async () => {
+    vi.mocked(productsService.seedPartsFromShaping).mockResolvedValue({ added: 1 })
+    const result = await componentsService.save(
+      thongKe,
+      'lsx1',
+      [partLine, assemblyLine] as never,
+      { seedProfile: true },
+    )
+    expect(productsService.seedPartsFromShaping).toHaveBeenCalledTimes(1)
+    expect(productsService.seedPartsFromShaping).toHaveBeenCalledWith(
+      'u-tk',
+      'p1',
+      'LSX-01',
+      [
+        {
+          cluster_name: 'Cụm khung',
+          part_name: 'Chân bàn',
+          material_kind: 'AL',
+          dim_a_mm: 60,
+          dim_b_mm: null,
+          wall_thickness_mm: 1.1,
+          cut_length_mm: 570,
+          unit: 'Cái',
+          qty: 4,
+          weight_kg: 0.82,
+        },
+      ],
+    )
+    expect(result.seeded).toEqual([{ product_code: 'SP1', added: 1 }])
+  })
+
+  it('SP đã có định mức (has_parts) → bỏ qua IM LẶNG, không báo lỗi', async () => {
+    vi.mocked(productsService.seedPartsFromShaping).mockResolvedValue({
+      skipped: 'has_parts',
+    })
+    const result = await componentsService.save(thongKe, 'lsx1', [partLine] as never, {
+      seedProfile: true,
+    })
+    expect(result.seeded).toEqual([])
+    expect(result.seed_skipped).toEqual([])
+  })
+
+  it('hồ sơ khoá → báo trong seed_skipped', async () => {
+    vi.mocked(productsService.seedPartsFromShaping).mockResolvedValue({
+      skipped: 'locked',
+    })
+    const result = await componentsService.save(thongKe, 'lsx1', [partLine] as never, {
+      seedProfile: true,
+    })
+    expect(result.seed_skipped).toEqual([{ product_code: 'SP1', reason: 'locked' }])
+  })
+
+  it('không bật seedProfile → không đụng hồ sơ SP', async () => {
+    await componentsService.save(thongKe, 'lsx1', [partLine] as never)
+    expect(productsService.seedPartsFromShaping).not.toHaveBeenCalled()
   })
 })
