@@ -37,3 +37,15 @@ export const invoiceListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(100).default(20),
 })
+
+/** Ghi thanh toán NCC (0167 — plan-ke-toan-cong-no-ncc). PO gắn TUỲ CHỌN. */
+export const supplierPaymentCreateSchema = z.object({
+  supplier_id: z.string().uuid(),
+  po_id: z.string().uuid().optional().nullable(),
+  amount: z.coerce.number().positive('Số tiền phải > 0'),
+  currency: z.string().trim().min(3).max(8).toUpperCase().default('VND'),
+  paid_on: dateSchema,
+  method: z.string().trim().max(40).optional().nullable(),
+  ref_no: z.string().trim().max(100).optional().nullable(),
+  note: z.string().trim().max(1000).optional().nullable(),
+})

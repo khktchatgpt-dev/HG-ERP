@@ -474,6 +474,19 @@ export const ACTIONS: Action[] = [
     domain: 'accounting',
     rule: perm('accounting.member'),
   },
+  {
+    key: 'accounting.payable.view',
+    label: 'Xem công nợ NCC',
+    domain: 'accounting',
+    rule: perm('accounting.member'),
+  },
+  {
+    key: 'accounting.payable.manage',
+    label: 'Ghi / xoá thanh toán NCC',
+    domain: 'accounting',
+    rule: perm('accounting.member'),
+    rowLevel: 'Xoá: người ghi hoặc Ban quản lý.',
+  },
 
   // ── Ban Giám Đốc ─────────────────────────────────────────────────────────
   {
