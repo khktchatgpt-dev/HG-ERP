@@ -50,5 +50,13 @@ export default async function GhiSoPage({
     )
   }
 
-  return <EntrySheetScreen sheet={sheet} userTeamId={user.department_id ?? null} />
+  // key theo công đoạn: đổi chip là REMOUNT màn — tổ mặc định + số đang gõ
+  // reset theo phiếu mới (phiếu là per công đoạn, giữ state cũ là ghi nhầm tổ).
+  return (
+    <EntrySheetScreen
+      key={sheet.stage}
+      sheet={sheet}
+      userTeamId={user.department_id ?? null}
+    />
+  )
 }
