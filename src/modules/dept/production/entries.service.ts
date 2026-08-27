@@ -48,8 +48,9 @@ type RecordInput = {
   entry_date: string
   team_department_id?: string | null
   /**
-   * true = bấm "Gửi tổ trưởng" → phiếu vào 'cho_xac_nhan' (số TẠM TÍNH ngay).
-   * false/bỏ trống = "Lưu nháp" → 'nhap', chưa ai thấy, chưa tính vào đâu.
+   * true = "Ghi sổ chính thức" → phiếu vào thẳng 'da_xac_nhan' (user chốt
+   * 27/08: hiện không cần tổ trưởng xác nhận). false/bỏ trống = "Lưu nháp"
+   * → 'nhap', chưa ai thấy, chưa tính vào đâu.
    */
   submit?: boolean
   /** Ghi chú CẢ PHIẾU (khác note của từng dòng chi tiết). */
@@ -499,7 +500,14 @@ export const entriesService = {
       stage: input.stage,
       team_department_id: team,
       entry_date: input.entry_date,
-      status: input.submit ? 'cho_xac_nhan' : 'nhap',
+      // User chốt 27/08/2026: HIỆN KHÔNG CẦN tổ trưởng xác nhận (tổ trưởng
+      // không dùng hệ thống hằng ngày) — gửi phiếu là số CHÍNH THỨC luôn.
+      // Check 0176 bắt phiếu chính thức phải có chủ: người chốt là chính
+      // thống kê. Máy luật entry-doc-flow + cho_xac_nhan/tu_choi GIỮ NGUYÊN —
+      // ngày nào cần tầng duyệt thì đổi lại khối này, không phải xây lại.
+      status: input.submit ? 'da_xac_nhan' : 'nhap',
+      confirmed_by: input.submit ? user.id : null,
+      confirmed_at: input.submit ? new Date().toISOString() : null,
       note: input.note?.trim() || null,
       created_by: user.id,
     })

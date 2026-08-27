@@ -134,7 +134,7 @@ export function EntrySheetScreen({
       setDocNote('')
       toast.success(
         submit
-          ? `Phiếu ${res.doc_no} đã gửi tổ trưởng`
+          ? `Phiếu ${res.doc_no} đã ghi chính thức`
           : `Phiếu ${res.doc_no} đã lưu nháp`,
         res.warnings.length
           ? `${res.warnings.length} cảnh báo — xem dưới bảng`
@@ -484,9 +484,10 @@ export function EntrySheetScreen({
           {busy && <Spinner size={14} />}
           Lưu nháp
         </Button>
+        {/* User chốt 27/08: không cần tổ trưởng xác nhận — gửi là chính thức. */}
         <Button size="sm" disabled={busy || !sheet.can_record} onClick={() => save(true)}>
           {busy ? <Spinner size={14} /> : <Send aria-hidden />}
-          Gửi tổ trưởng
+          Ghi sổ chính thức
           <span className="text-[10px] opacity-70">Ctrl+⏎</span>
         </Button>
       </section>

@@ -84,7 +84,10 @@ export const entryDocsRepo = {
       EntryDoc,
       'id' | 'created_at' | 'status' | 'confirmed_by' | 'confirmed_at' | 'reject_reason'
     > &
-      Partial<Pick<EntryDoc, 'status'>>,
+      // confirmed_* khai được ngay lúc tạo: chế độ "không cần tổ trưởng xác
+      // nhận" (27/08) ghi thẳng da_xac_nhan, và check DB 0176 bắt phiếu chính
+      // thức phải có chủ + mốc giờ.
+      Partial<Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at'>>,
   ): Promise<EntryDoc> {
     const { data, error } = await db()
       .from('production_entry_docs')

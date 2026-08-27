@@ -64,7 +64,7 @@ export function LsxListScreen({
           { label: 'Lệnh có việc', value: shown.length, tone: 'blue' },
           { label: 'Việc đang mở', value: fmt(totOpen), tone: 'gray' },
           {
-            label: 'Chờ tổ trưởng duyệt (bộ)',
+            label: 'Chờ duyệt (bộ)',
             value: fmt(totPending),
             tone: totPending > 0 ? 'amber' : 'gray',
           },

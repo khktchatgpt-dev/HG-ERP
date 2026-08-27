@@ -150,7 +150,7 @@ export function LsxWorkScreen({
             tone: 'gray',
           },
           {
-            label: 'Chờ tổ trưởng duyệt (bộ)',
+            label: 'Chờ duyệt (bộ)',
             value: fmt(pendingSets),
             tone: pendingSets > 0 ? 'amber' : 'gray',
           },
