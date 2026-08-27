@@ -355,8 +355,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'SX',
     ready: true,
     // Workspace ĐIỀU HÀNH của quản đốc/GĐ — gia đình SX tách theo VAI (07/2026):
-    // tổ ở /to, thống kê ở /thongke, kế hoạch ở /kehoach-sx. Từ đây quản đốc
-    // nhảy sang 3 workspace kia qua switcher.
+    // tổ ở /to, kế hoạch ở /kehoach-sx. Từ đây quản đốc nhảy sang các
+    // workspace kia qua switcher. (Khu thống kê /thongke đã xoá 26/08/2026.)
     sections: [
       {
         heading: 'Điều hành xưởng',
@@ -394,23 +394,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'purple',
     logoText: 'TK',
     ready: true,
-    // Workspace của THỐNG KÊ (nhãn 0087): sổ tập trung + định hình + gia công.
+    // Dựng lại 26/08/2026 theo khung 5 bước. "Sổ sản lượng" (/thongke) đã XOÁ
+    // 27/08/2026 theo yêu cầu — trang gốc nay redirect sang /thongke/lenh, nên
+    // `route` vẫn để '/thongke' (đích redirect sau đăng nhập vẫn đúng chỗ).
     sections: [
       {
         heading: 'Thống kê',
-        items: [
-          { href: '/thongke', label: 'Sổ số liệu', icon: 'notebook-pen' },
-          { href: '/thongke/giao-to', label: 'Giao tổ', icon: 'arrow-right-to-line' },
-          { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: 'shapes' },
-          {
-            href: '/thongke/gia-cong',
-            label: 'Gia công ngoài',
-            icon: 'arrow-left-right',
-          },
-          { href: '/thongke/so-tong', label: 'Sổ tổng', icon: 'table' },
-          { href: '/thongke/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
-          { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
-        ],
+        items: [{ href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' }],
       },
     ],
   },

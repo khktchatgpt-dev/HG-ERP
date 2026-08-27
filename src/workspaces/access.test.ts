@@ -36,7 +36,6 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
         'planning',
         'production',
         'team',
-        'stat',
         'prodplan',
         'exec',
       ] as const) {
@@ -48,7 +47,7 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
   })
 
   it('nhà xưởng (homeId=production) mở cửa CẢ gia đình SX', () => {
-    for (const id of ['production', 'team', 'stat', 'prodplan'] as const) {
+    for (const id of ['production', 'team', 'prodplan'] as const) {
       expect(canEnterWorkspaceSync(employee, id, 'production'), id).toBe(true)
     }
   })
@@ -66,7 +65,6 @@ describe('workspaceViewPermission', () => {
     expect(workspaceViewPermission('production')).toBe('workspace.view.production')
     // Cả gia đình SX dùng chung 1 quyền xem.
     expect(workspaceViewPermission('team')).toBe('workspace.view.production')
-    expect(workspaceViewPermission('stat')).toBe('workspace.view.production')
     expect(workspaceViewPermission('prodplan')).toBe('workspace.view.production')
     expect(workspaceViewPermission('warehouse')).toBe('workspace.view.warehouse')
   })

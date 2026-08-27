@@ -10,6 +10,9 @@ export const componentLineSchema = z.object({
   kind: z.enum(['part', 'assembly']).default('part'),
   cluster: z.string().trim().max(100).optional().nullable(), // "CỤM TỰA"
   name: z.string().trim().min(1, 'Nhập tên chi tiết').max(200), // "TAY+TỰA"
+  // Nhóm vật tư sao từ hồ sơ SP (0174) — quyết định chi tiết đi qua công đoạn
+  // nào; NGU_KIM (vít/bulong) là hàng mua, không vào sổ sản lượng.
+  group_code: z.string().trim().max(30).optional().nullable(),
   material_id: z.string().uuid().optional().nullable(), // được để trống — chưa vào nhu cầu mua
   material_type: z.string().trim().max(50).optional().nullable(), // TRÒN/ĐẶC/HỘP…
   spec_thickness_mm: z.coerce.number().positive().optional().nullable(),

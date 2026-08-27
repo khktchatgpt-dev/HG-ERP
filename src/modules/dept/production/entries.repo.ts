@@ -13,6 +13,8 @@ export type ProductionEntry = {
   component_id: string
   stage: string
   team_department_id: string | null
+  /** Phiếu báo sản lượng chứa dòng này (0172) — null = bản ghi lẻ trước PBS. */
+  doc_id: string | null
   entry_date: string
   qty: number
   kg: number | null
@@ -38,7 +40,7 @@ export type ProductionEntryJoined = ProductionEntry & {
 }
 
 const COLS =
-  'id, production_order_id, component_id, stage, team_department_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, worker_name, finish_state, note, created_by, created_at'
+  'id, production_order_id, component_id, stage, team_department_id, doc_id, entry_date, qty, kg, defect_qty, defect_reason, machine_note, worker_name, finish_state, note, created_by, created_at'
 const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), component:production_components(name, cluster, production_order_line_id), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
@@ -85,6 +87,36 @@ export const entriesRepo = {
       .eq('id', id)
       .maybeSingle()
     return (data as ProductionEntry | null) ?? null
+  },
+
+  /**
+   * Sổ của một lệnh KÈM trạng thái phiếu (0176) — để tách "đã xác nhận" (số
+   * chính thức) khỏi "chờ duyệt" (tạm tính) theo luật Bước 3. Dòng lẻ không có
+   * phiếu (`doc_id` null, bản ghi trước 0172) coi như đã xác nhận: chúng có từ
+   * thời chưa có luồng duyệt, loại bỏ là mất số liệu lịch sử.
+   */
+  async listByLsxWithStatus(
+    productionOrderId: string,
+  ): Promise<(ProductionEntry & { doc_status: string })[]> {
+    const { data } = await db()
+      .from('production_entries')
+      .select(`${COLS}, doc:production_entry_docs(status)`)
+      .eq('production_order_id', productionOrderId)
+      .limit(20000)
+    type Row = ProductionEntry & {
+      doc: { status: string } | { status: string }[] | null
+    }
+    return ((data ?? []) as unknown as Row[]).map((r) => {
+      const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      return {
+        ...r,
+        doc: undefined,
+        qty: Number(r.qty),
+        kg: r.kg == null ? null : Number(r.kg),
+        defect_qty: Number(r.defect_qty),
+        doc_status: doc?.status ?? 'da_xac_nhan',
+      } as unknown as ProductionEntry & { doc_status: string }
+    })
   },
 
   async listByLsx(productionOrderId: string): Promise<ProductionEntry[]> {
@@ -150,6 +182,42 @@ export const entriesRepo = {
     return unwrap(data as unknown as Raw[] | null)
   },
 
+  /** Cặp (ngày × tổ) CÓ bản ghi trong khoảng — nhắc "ngày cũ chưa chốt sổ". */
+  async listDayTeamPairs(
+    fromDate: string,
+    toDate: string,
+  ): Promise<
+    { entry_date: string; team_department_id: string; team_name: string | null }[]
+  > {
+    const { data } = await db()
+      .from('production_entries')
+      .select('entry_date, team_department_id, team:departments(name)')
+      .gte('entry_date', fromDate)
+      .lte('entry_date', toDate)
+      .not('team_department_id', 'is', null)
+      .limit(20000)
+    const rows = (data ?? []) as unknown as {
+      entry_date: string
+      team_department_id: string
+      team: One<{ name: string }>
+    }[]
+    const seen = new Map<
+      string,
+      { entry_date: string; team_department_id: string; team_name: string | null }
+    >()
+    for (const r of rows) {
+      const k = `${r.entry_date}|${r.team_department_id}`
+      if (!seen.has(k)) {
+        seen.set(k, {
+          entry_date: r.entry_date,
+          team_department_id: r.team_department_id,
+          team_name: first(r.team)?.name ?? null,
+        })
+      }
+    }
+    return [...seen.values()]
+  },
+
   /** Sổ toàn xưởng 1 ngày (kèm tên tổ/người/chi tiết/lệnh) — màn logbook. */
   async listByDate(date: string): Promise<ProductionEntryJoined[]> {
     const { data } = await db()
@@ -169,6 +237,23 @@ export const entriesRepo = {
 
   async delete(id: string): Promise<void> {
     const { error } = await db().from('production_entries').delete().eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Dòng của MỘT phiếu (0172) — trang in PBS. */
+  async listByDoc(docId: string): Promise<ProductionEntryJoined[]> {
+    const { data } = await db()
+      .from('production_entries')
+      .select(SELECT_JOINED)
+      .eq('doc_id', docId)
+      .order('created_at', { ascending: true })
+      .limit(500)
+    return unwrap(data as unknown as Raw[] | null)
+  },
+
+  /** Xoá NGUYÊN PHIẾU (0172) — mọi dòng thuộc doc_id, trước khi xoá header. */
+  async deleteByDoc(docId: string): Promise<void> {
+    const { error } = await db().from('production_entries').delete().eq('doc_id', docId)
     if (error) throw new Error(error.message)
   },
 

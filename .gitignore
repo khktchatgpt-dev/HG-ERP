@@ -55,3 +55,4 @@ supabase/.temp/
 
 # Bản sao dữ liệu trước khi xoá hàng loạt (scripts/*-reset.mjs) — không commit
 /backup
+/backups

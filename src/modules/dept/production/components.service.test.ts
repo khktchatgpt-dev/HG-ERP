@@ -123,6 +123,68 @@ describe('componentsService.suggest("bom") — gợi ý từ ĐỊNH MỨC (0096
     vi.mocked(productProfileRepo.parts).mockResolvedValue([] as never)
     await expect(componentsService.suggest(thongKe, 'lsx1', 'bom')).resolves.toEqual([])
   })
+
+  it('cụm CHUẨN (0097) → sinh dòng assembly + chi tiết trong cụm dừng trước hàn (27/08)', async () => {
+    vi.mocked(productProfileRepo.clusters).mockResolvedValue([
+      {
+        id: 'cl1',
+        name: 'Cụm khung',
+        qty_per_product: 2,
+        first_stage: null,
+        final_stage: null,
+        note: null,
+      },
+    ] as never)
+    vi.mocked(productProfileRepo.parts).mockResolvedValue([
+      { part_name: 'Chân', cluster_id: 'cl1', group_code: 'FRAME', qty: 4, unit: 'Cái' },
+      // Pát RỜI không thuộc cụm → giữ nguyên, không bị chốt khoảng.
+      {
+        part_name: 'Pát rời',
+        cluster_id: null,
+        group_code: 'FRAME',
+        qty: 2,
+        unit: 'Cái',
+      },
+    ] as never)
+
+    const out = await componentsService.suggest(thongKe, 'lsx1', 'bom')
+    expect(out).toHaveLength(3)
+    const chan = out.find((r) => r.name === 'Chân')!
+    // 4 chân/SP ÷ 2 cụm/SP = 2 chân/cụm; dừng ngay trước công đoạn ghép.
+    expect(chan.final_stage).toBe('phoi')
+    expect(chan.qty_per_assembly).toBe(2)
+    const pat = out.find((r) => r.name === 'Pát rời')!
+    expect(pat.final_stage).toBeUndefined()
+    const asm = out.find((r) => r.kind === 'assembly')!
+    expect(asm).toMatchObject({
+      cluster: 'Cụm khung',
+      name: 'Cụm khung',
+      group_code: 'FRAME',
+      qty_per_unit: 2,
+      first_stage: 'han',
+      final_stage: null,
+      unit: 'cụm',
+    })
+  })
+
+  it('cụm không định vị được công đoạn ghép (nhóm không qua hàn) → để phẳng', async () => {
+    vi.mocked(productProfileRepo.clusters).mockResolvedValue([
+      {
+        id: 'cl1',
+        name: 'Cụm gỗ',
+        qty_per_product: null,
+        first_stage: null,
+        final_stage: null,
+        note: null,
+      },
+    ] as never)
+    vi.mocked(productProfileRepo.parts).mockResolvedValue([
+      { part_name: 'Nan gỗ', cluster_id: 'cl1', group_code: 'WOOD', qty: 6, unit: 'Cái' },
+    ] as never)
+    const out = await componentsService.suggest(thongKe, 'lsx1', 'bom')
+    expect(out).toHaveLength(1)
+    expect(out[0].final_stage).toBeUndefined()
+  })
 })
 
 describe('componentsService.save + seed_profile — nhập ngược lên hồ sơ SP (23/08)', () => {

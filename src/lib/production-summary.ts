@@ -25,6 +25,11 @@ export type ComponentStageSummary = {
   missing: number
   /** 0..1, cap 1; tổng cần 0 → 0 (không chia 0). */
   pct: number
+  /**
+   * Phần TRONG `done` do gia công ngoài NHẬN VỀ (0171) — service gắn sau khi
+   * tổng hợp, chỉ có khi > 0. Hàm thuần này không tự tính.
+   */
+  gc?: number
 }
 
 export type ComponentSummary = {
@@ -509,4 +514,83 @@ export function overrunWarning(
     return `${name} @ ${stage}: đã làm ${after}/${totalNeeded} — VƯỢT ${r2(after - totalNeeded)}`
   }
   return null
+}
+
+// ── BƯỚC 3 — LOGIC: kế hoạch → thực tế → lũy kế → tiến độ → trạng thái ──────
+//
+// Năm công thức chốt 26/08/2026. Nguyên tắc xuyên suốt: thống kê KHÔNG bao giờ
+// nhập "còn lại" hay "tiến độ" — mọi số dẫn xuất tính ở đây.
+
+/**
+ * Sản lượng gộp của MỘT (chi tiết × công đoạn), tách theo trạng thái phiếu.
+ *
+ *  - `confirmed` — phiếu tổ trưởng ĐÃ xác nhận (`da_xac_nhan`). Chỉ số này vào
+ *    tiến độ chính thức, theo đúng luật "Đã đạt lũy kế = Σ phiếu đã xác nhận".
+ *  - `pending`   — phiếu đã gửi, ĐANG chờ tổ trưởng duyệt (`cho_xac_nhan`).
+ *
+ * Phiếu `nhap` (nháp chưa gửi) và `tu_choi` (bị trả về, số đang sai) KHÔNG thuộc
+ * nhóm nào — caller không đưa vào. Cố ý: nháp là việc riêng của thống kê, còn
+ * phiếu bị từ chối mà vẫn cộng vào "chờ" sẽ vẽ ra tiến độ không có thật.
+ */
+export type EntryTally = {
+  confirmed: { qty: number; defect: number }
+  pending: { qty: number; defect: number }
+}
+
+export type StageProgress = {
+  /** Kế hoạch của công đoạn = SL dòng SP × định mức/SP (KHÔNG nhập tay). */
+  planned: number
+  /** Đã đạt lũy kế — chỉ đếm phiếu đã xác nhận. */
+  done: number
+  defect: number
+  /** Còn lại = kế hoạch − đã đạt; kẹp ở 0 (làm dư không thành số âm). */
+  remaining: number
+  /** Tiến độ = đã đạt / kế hoạch, kẹp trần 1. */
+  pct: number
+  /** Tỷ lệ lỗi = lỗi / thực hiện, với thực hiện = đạt + lỗi. */
+  defect_rate: number
+  /**
+   * Đang chờ tổ trưởng duyệt — bày RIÊNG, không cộng vào `done`. Có số này thì
+   * mới thấy được "tiến độ đứng im vì chưa ai duyệt", thay vì tưởng xưởng nghỉ.
+   */
+  pending_qty: number
+  /**
+   * Suy TỪ SỐ, không lưu cứng. Không có 'paused' — tạm dừng là quyết định của
+   * người, phải có ai đó bấm, không suy ra được từ sản lượng.
+   */
+  status: 'not_started' | 'in_progress' | 'done'
+}
+
+/** Thực hiện = đạt + lỗi (không lưu thành cột — xem 0176). */
+export function totalRun(qty: number, defect: number): number {
+  return r2(qty + defect)
+}
+
+/** Tỷ lệ lỗi = lỗi / thực hiện. Chưa làm gì → 0 (không chia 0). */
+export function defectRate(qty: number, defect: number): number {
+  const run = qty + defect
+  if (run <= 0) return 0
+  return defect / run
+}
+
+/**
+ * Gộp cả năm công thức cho một (chi tiết × công đoạn).
+ * `planned = 0` (chưa định hình) → mọi tỷ lệ về 0, KHÔNG chia 0 và không vẽ ra
+ * tiến độ 100% giả.
+ */
+export function stageProgress(planned: number, tally: EntryTally): StageProgress {
+  const done = tally.confirmed.qty
+  const defect = tally.confirmed.defect
+  const pendingQty = tally.pending.qty
+  return {
+    planned: r2(planned),
+    done: r2(done),
+    defect: r2(defect),
+    remaining: r2(Math.max(0, planned - done)),
+    pct: planned > 0 ? Math.min(done / planned, 1) : 0,
+    defect_rate: defectRate(done, defect),
+    pending_qty: r2(pendingQty),
+    status:
+      planned > 0 && done >= planned ? 'done' : done > 0 ? 'in_progress' : 'not_started',
+  }
 }

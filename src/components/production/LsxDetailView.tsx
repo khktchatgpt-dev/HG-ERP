@@ -1098,7 +1098,9 @@ export function LsxDetailView({
         </div>
       )}
 
-      {tab === 'outsource' && <LsxOutsourcePanel lsxId={lsx.id} canRecord={canManage} />}
+      {tab === 'outsource' && (
+        <LsxOutsourcePanel lsxId={lsx.id} stages={stages} canRecord={canManage} />
+      )}
 
       {/* Dialog SỬA THÔNG TIN ĐẦU LỆNH (0117) — khách hàng không sửa ở đây:
           mọi đơn trong lệnh phải cùng khách, đổi khách = tạo lệnh khác. */}

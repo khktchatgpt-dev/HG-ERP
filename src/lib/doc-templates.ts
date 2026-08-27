@@ -29,6 +29,7 @@ export const DOC_KINDS = [
   'DCK',
   'MS',
   'PM',
+  'PBS',
 ] as const
 export type DocKind = (typeof DOC_KINDS)[number]
 
@@ -286,6 +287,25 @@ export const DEFAULT_DOC_TEMPLATES: Record<DocKind, DocTemplate> = {
     signatures: [],
     default_terms: '',
     printable: false,
+  },
+  PBS: {
+    kind: 'PBS',
+    label: 'Phiếu báo sản lượng',
+    prefix: 'PBS',
+    pattern: '{prefix}-{yyyy}-{seq}',
+    seq_pad: 4,
+    reset_scope: 'year',
+    title_vi: 'PHIẾU BÁO SẢN LƯỢNG',
+    title_en: null,
+    national_heading: false,
+    form_no: null,
+    signatures: [
+      { role: 'Người lập phiếu', hint: KY, slot: 'creator' },
+      { role: 'Tổ trưởng', hint: KY },
+      { role: 'Quản đốc', hint: KY },
+    ],
+    default_terms: '',
+    printable: true,
   },
 }
 

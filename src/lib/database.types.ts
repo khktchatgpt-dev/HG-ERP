@@ -13,7 +13,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -714,6 +714,7 @@ export type Database = {
           dm_kg: number | null
           final_stage: string | null
           first_stage: string | null
+          group_code: string | null
           id: string
           kind: string
           material_id: string | null
@@ -739,6 +740,7 @@ export type Database = {
           dm_kg?: number | null
           final_stage?: string | null
           first_stage?: string | null
+          group_code?: string | null
           id?: string
           kind?: string
           material_id?: string | null
@@ -764,6 +766,7 @@ export type Database = {
           dm_kg?: number | null
           final_stage?: string | null
           first_stage?: string | null
+          group_code?: string | null
           id?: string
           kind?: string
           material_id?: string | null
@@ -918,6 +921,7 @@ export type Database = {
           created_by: string | null
           defect_qty: number
           defect_reason: string | null
+          doc_id: string | null
           entry_date: string
           finish_state: string | null
           id: string
@@ -936,6 +940,7 @@ export type Database = {
           created_by?: string | null
           defect_qty?: number
           defect_reason?: string | null
+          doc_id?: string | null
           entry_date: string
           finish_state?: string | null
           id?: string
@@ -954,6 +959,7 @@ export type Database = {
           created_by?: string | null
           defect_qty?: number
           defect_reason?: string | null
+          doc_id?: string | null
           entry_date?: string
           finish_state?: string | null
           id?: string
@@ -982,6 +988,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "production_entries_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "production_entry_docs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "production_entries_production_order_id_fkey"
             columns: ["production_order_id"]
             isOneToOne: false
@@ -997,6 +1010,90 @@ export type Database = {
           },
           {
             foreignKeyName: "production_entries_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      production_entry_docs: {
+        Row: {
+          confirmed_at: string | null
+          confirmed_by: string | null
+          created_at: string
+          created_by: string | null
+          doc_no: string
+          entry_date: string
+          id: string
+          note: string | null
+          production_order_id: string
+          reject_reason: string | null
+          stage: string
+          status: string
+          team_department_id: string | null
+        }
+        Insert: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_no: string
+          entry_date: string
+          id?: string
+          note?: string | null
+          production_order_id: string
+          reject_reason?: string | null
+          stage: string
+          status?: string
+          team_department_id?: string | null
+        }
+        Update: {
+          confirmed_at?: string | null
+          confirmed_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          doc_no?: string
+          entry_date?: string
+          id?: string
+          note?: string | null
+          production_order_id?: string
+          reject_reason?: string | null
+          stage?: string
+          status?: string
+          team_department_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "production_entry_docs_confirmed_by_fkey"
+            columns: ["confirmed_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_entry_docs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_entry_docs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_entry_docs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "v_order_tracking"
+            referencedColumns: ["production_order_id"]
+          },
+          {
+            foreignKeyName: "production_entry_docs_team_department_id_fkey"
             columns: ["team_department_id"]
             isOneToOne: false
             referencedRelation: "departments"
@@ -1497,6 +1594,7 @@ export type Database = {
           note: string | null
           production_order_id: string
           qty: number
+          stage: string | null
           supplier_id: string
         }
         Insert: {
@@ -1511,6 +1609,7 @@ export type Database = {
           note?: string | null
           production_order_id: string
           qty: number
+          stage?: string | null
           supplier_id: string
         }
         Update: {
@@ -1525,6 +1624,7 @@ export type Database = {
           note?: string | null
           production_order_id?: string
           qty?: number
+          stage?: string | null
           supplier_id?: string
         }
         Relationships: [

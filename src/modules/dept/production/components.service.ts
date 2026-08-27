@@ -12,6 +12,8 @@ import {
   calcComponent,
   type MaterialNeed,
 } from '@/lib/component-needs'
+import { routeForGroup } from '@/lib/stage-route'
+import { JOIN_STAGE } from '@/lib/default-assembly'
 import type { MaterialAllocation } from '@/lib/po-allocation'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -212,26 +214,70 @@ export const componentsService = {
         // Trước đây chỗ này phải MƯỢN `set_item_label` — nhãn món trong bộ — làm
         // cụm, vì định mức chưa có cấp cụm nào khác để lấy.
         const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
-        for (const p of parts) {
-          out.push({
+        const rows: ComponentInput[] = parts.map((p) => ({
+          production_order_line_id: line.id,
+          cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
+          name: p.part_name,
+          // 0174: mang nhóm vật tư sang để sổ sản lượng lọc được hàng mua.
+          group_code: p.group_code ?? null,
+          material_id: null,
+          material_type: p.material_kind ?? null,
+          spec_thickness_mm: p.dim_a_mm ?? null,
+          spec_width_mm: p.dim_b_mm ?? null,
+          spec_length_mm: p.cut_length_mm ?? null,
+          wall_thickness_mm: p.wall_thickness_mm ?? null,
+          unit: p.unit ?? null,
+          qty_per_unit: Number(p.qty),
+          // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
+          // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
+          dm_kg: p.weight_kg ?? null,
+          pcs_per_bar: null,
+          note: p.material_code ?? null,
+        }))
+
+        // CỤM CHUẨN của hồ sơ → dòng ASSEMBLY + chốt khoảng cho chi tiết trong
+        // cụm (27/08 — bậc 1 thang đơn vị đếm tự kích hoạt khi BOM đã chuẩn):
+        // cụm đếm từ công đoạn ghép (mặc định hàn), chi tiết dừng ngay trước
+        // đó. Cụm không định vị được công đoạn ghép (nhóm không qua hàn và
+        // không khai first_stage) thì để phẳng — cụm mặc nhiên lo phần còn lại.
+        const asmRows: ComponentInput[] = []
+        for (const c of clusters) {
+          const memberIdx = parts
+            .map((p, i) => (p.cluster_id === c.id ? i : -1))
+            .filter((i) => i >= 0)
+          if (memberIdx.length === 0) continue
+          const group = memberIdx.map((i) => parts[i].group_code).find(Boolean) ?? null
+          // suggest chạy trước khi lệnh lên kế hoạch → định vị theo lộ trình nhóm.
+          const route = routeForGroup(group)
+          const first = c.first_stage ?? (route.includes(JOIN_STAGE) ? JOIN_STAGE : null)
+          if (!first) continue
+          const qtyPer = c.qty_per_product != null ? Number(c.qty_per_product) : 1
+          const idx = route.indexOf(first)
+          const partFinal = idx > 0 ? route[idx - 1] : null
+          for (const i of memberIdx) {
+            rows[i] = {
+              ...rows[i],
+              final_stage: partFinal,
+              qty_per_assembly: qtyPer > 0 ? Number(parts[i].qty) / qtyPer : null,
+            }
+          }
+          asmRows.push({
             production_order_line_id: line.id,
-            cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
-            name: p.part_name,
+            kind: 'assembly',
+            cluster: c.name,
+            name: c.name,
+            group_code: group,
             material_id: null,
-            material_type: p.material_kind ?? null,
-            spec_thickness_mm: p.dim_a_mm ?? null,
-            spec_width_mm: p.dim_b_mm ?? null,
-            spec_length_mm: p.cut_length_mm ?? null,
-            wall_thickness_mm: p.wall_thickness_mm ?? null,
-            unit: p.unit ?? null,
-            qty_per_unit: Number(p.qty),
-            // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
-            // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
-            dm_kg: p.weight_kg ?? null,
+            unit: 'cụm',
+            qty_per_unit: qtyPer,
+            dm_kg: null,
             pcs_per_bar: null,
-            note: p.material_code ?? null,
+            first_stage: first,
+            final_stage: c.final_stage ?? null,
+            note: c.note ?? null,
           })
         }
+        out.push(...rows, ...asmRows)
       }
       return out
     }
@@ -258,6 +304,7 @@ export const componentsService = {
         kind: row.kind,
         cluster: row.cluster,
         name: row.name,
+        group_code: row.group_code,
         material_id: row.material_id,
         material_type: row.material_type,
         spec_thickness_mm: row.spec_thickness_mm,

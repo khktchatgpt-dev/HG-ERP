@@ -15,6 +15,8 @@ import {
   isTeamStageBottleneck,
   paceTone,
   resolveDailyTargets,
+  stageProgress,
+  totalRun,
   forecastFinishDate,
 } from './production-summary'
 
@@ -591,5 +593,63 @@ describe('paceForWindow — nhịp suy cho cả khung lúc đặt hạn (editor)
 
   it('nhận cả timestamp đầy đủ — cắt về ngày', () => {
     expect(paceForWindow(30, '2026-08-24T07:00:00Z', '2026-08-26T21:00:00Z')).toBe(10)
+  })
+})
+
+describe('Bước 3 — logic tiến độ (26/08/2026)', () => {
+  const tally = (cq: number, cd: number, pq = 0, pd = 0) => ({
+    confirmed: { qty: cq, defect: cd },
+    pending: { qty: pq, defect: pd },
+  })
+
+  it('lũy kế CHỈ đếm phiếu đã xác nhận — phiếu chờ duyệt bày riêng', () => {
+    const r = stageProgress(1000, tally(700, 20, 250, 5))
+    expect(r.done).toBe(700)
+    expect(r.remaining).toBe(300)
+    expect(r.pct).toBeCloseTo(0.7)
+    // 250 cái đang chờ duyệt KHÔNG được cộng vào tiến độ...
+    expect(r.done).not.toBe(950)
+    // ...nhưng phải nhìn thấy được, nếu không sẽ tưởng xưởng nghỉ.
+    expect(r.pending_qty).toBe(250)
+  })
+
+  it('tỷ lệ lỗi tính trên THỰC HIỆN (đạt + lỗi), không phải trên kế hoạch', () => {
+    const r = stageProgress(1000, tally(240, 10))
+    expect(totalRun(240, 10)).toBe(250)
+    expect(r.defect_rate).toBeCloseTo(10 / 250)
+  })
+
+  it('làm dư: còn lại kẹp ở 0, tiến độ kẹp trần 100%', () => {
+    const r = stageProgress(100, tally(120, 0))
+    expect(r.remaining).toBe(0)
+    expect(r.pct).toBe(1)
+    expect(r.status).toBe('done')
+  })
+
+  it('chưa định hình (kế hoạch 0) → không chia 0, không vẽ 100% giả', () => {
+    const r = stageProgress(0, tally(0, 0))
+    expect(r.pct).toBe(0)
+    expect(r.defect_rate).toBe(0)
+    expect(r.status).toBe('not_started')
+  })
+
+  it('trạng thái suy từ số: chưa bắt đầu → đang SX → hoàn thành', () => {
+    expect(stageProgress(100, tally(0, 0)).status).toBe('not_started')
+    expect(stageProgress(100, tally(1, 0)).status).toBe('in_progress')
+    expect(stageProgress(100, tally(100, 0)).status).toBe('done')
+  })
+
+  it('chỉ có phiếu CHỜ duyệt → tiến độ vẫn 0 (chưa ai xác nhận)', () => {
+    const r = stageProgress(100, tally(0, 0, 80, 2))
+    expect(r.done).toBe(0)
+    expect(r.status).toBe('not_started')
+    expect(r.pending_qty).toBe(80)
+  })
+
+  it('phế KHÔNG tính là đạt — 100 thực hiện, 5 phế thì đạt là 95', () => {
+    const r = stageProgress(200, tally(95, 5))
+    expect(r.done).toBe(95)
+    expect(totalRun(r.done, r.defect)).toBe(100)
+    expect(r.remaining).toBe(105)
   })
 })

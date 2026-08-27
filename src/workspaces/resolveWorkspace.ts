@@ -1,6 +1,6 @@
 import { db } from '@/server/db'
-import type { User } from '@/modules/core/users/users.repo'
 import { hasRoleTag } from '@/modules/core/rbac/rbac.service'
+import type { User } from '@/modules/core/users/users.repo'
 import { WORKSPACES, type WorkspaceConfig, type WorkspaceId } from './workspaces.config'
 
 /**

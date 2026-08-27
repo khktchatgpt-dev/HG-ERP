@@ -53,6 +53,16 @@ export const dayLocksRepo = {
     return unwrap(data as unknown as Raw[] | null)
   },
 
+  /** Khoá trong khoảng ngày — đối chiếu "ngày cũ có sổ mà chưa chốt". */
+  async listRange(fromDate: string, toDate: string): Promise<DayLock[]> {
+    const { data } = await db()
+      .from('production_day_locks')
+      .select(SELECT_JOINED)
+      .gte('entry_date', fromDate)
+      .lte('entry_date', toDate)
+    return unwrap(data as unknown as Raw[] | null)
+  },
+
   /** duplicate = tổ đã chốt ngày này (unique 23505) — service trả Conflict. */
   async insert(row: {
     team_department_id: string
