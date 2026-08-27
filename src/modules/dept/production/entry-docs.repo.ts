@@ -132,6 +132,26 @@ export const entryDocsRepo = {
     return data ? unwrap([data as unknown as Raw])[0] : null
   },
 
+  /** Trạng thái phiếu trong khoảng ngày — ma trận tuần chấm ô còn nháp. */
+  async listStatusRange(
+    fromDate: string,
+    toDate: string,
+  ): Promise<
+    { entry_date: string; team_department_id: string | null; status: EntryDocStatus }[]
+  > {
+    const { data } = await db()
+      .from('production_entry_docs')
+      .select('entry_date, team_department_id, status')
+      .gte('entry_date', fromDate)
+      .lte('entry_date', toDate)
+      .limit(5000)
+    return (data ?? []) as {
+      entry_date: string
+      team_department_id: string | null
+      status: EntryDocStatus
+    }[]
+  },
+
   /** Phiếu của MỘT ngày (mọi lệnh) — sổ đã ghi nhóm theo phiếu. */
   async listByDate(date: string): Promise<EntryDocJoined[]> {
     const { data } = await db()

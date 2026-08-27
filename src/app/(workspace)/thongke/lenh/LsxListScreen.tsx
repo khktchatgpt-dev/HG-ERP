@@ -20,6 +20,32 @@ import type { LsxCard } from '@/modules/dept/production/worklist.service'
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 const fmtDate = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('vi-VN')
 
+/** Còn bao nhiêu ngày tới hạn xuất (âm = trễ) — tính theo ngày lịch. */
+function daysLeft(ship: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((new Date(`${ship}T00:00:00`).getTime() - today.getTime()) / 86400000)
+}
+
+/** Chip hạn xuất: quá hạn đỏ, ≤7 ngày cam, còn xa thì chữ thường. */
+function ShipChip({ ship }: { ship: string }) {
+  const d = daysLeft(ship)
+  const label =
+    d < 0 ? `trễ ${fmt(-d)} ngày` : d === 0 ? 'xuất HÔM NAY' : `còn ${fmt(d)} ngày`
+  const cls =
+    d < 0
+      ? 'text-[var(--stop)] font-semibold'
+      : d <= 7
+        ? 'text-[var(--warn)] font-semibold'
+        : 'text-muted-foreground'
+  return (
+    <span className="text-xs">
+      xuất <span className="t-data">{fmtDate(ship)}</span>{' '}
+      <span className={cls}>· {label}</span>
+    </span>
+  )
+}
+
 export function LsxListScreen({
   cards,
   unroutedCount,
@@ -136,23 +162,41 @@ export function LsxListScreen({
                   {c.order_codes.length > 0 && (
                     <span className="t-data">{c.order_codes.join(' · ')}</span>
                   )}
-                  {c.ship_date && (
-                    <>
-                      {c.order_codes.length > 0 && ' · '}xuất{' '}
-                      <span className="t-data">{fmtDate(c.ship_date)}</span>
-                    </>
-                  )}
                 </p>
+                {c.ship_date && (
+                  <p className="mt-0.5">
+                    <ShipChip ship={c.ship_date} />
+                  </p>
+                )}
 
-                <p className="mt-2 text-xs">
-                  <b className="t-data">{fmt(c.product_count)}</b> sản phẩm ·{' '}
-                  <b className="t-data text-[var(--warn)]">{fmt(c.open_count)}</b> việc
-                  còn
-                  <span className="text-muted-foreground">
-                    {' '}
-                    / {fmt(c.job_count)} việc
+                {/* Bao quát theo BỘ: xong cả chuỗi công đoạn mới tính là xong. */}
+                <div className="mt-2">
+                  <p className="flex items-baseline justify-between text-xs">
+                    <span>
+                      <b className="t-data">{fmt(c.done_sets)}</b>
+                      <span className="text-muted-foreground">
+                        {' '}
+                        / {fmt(c.total_sets)} bộ xong
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground">
+                      <b className="t-data text-[var(--warn)]">{fmt(c.open_count)}</b>/
+                      {fmt(c.job_count)} việc · {fmt(c.product_count)} SP
+                    </span>
+                  </p>
+                  <span className="bg-muted mt-1 block h-1.5 w-full overflow-hidden rounded">
+                    <span
+                      className={`block h-1.5 rounded ${
+                        c.total_sets > 0 && c.done_sets >= c.total_sets
+                          ? 'bg-[var(--done)]'
+                          : 'bg-[var(--primary)]'
+                      }`}
+                      style={{
+                        width: `${c.total_sets > 0 ? Math.min(100, Math.round((c.done_sets / c.total_sets) * 100)) : 0}%`,
+                      }}
+                    />
                   </span>
-                </p>
+                </div>
 
                 {/* Dải công đoạn có việc — nhìn là biết lệnh đang chạy tới đâu. */}
                 <span className="mt-2 flex flex-wrap gap-1">

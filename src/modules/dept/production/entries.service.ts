@@ -4,6 +4,7 @@ import { productionRepo } from './production.repo'
 import { jobsRepo, type Job } from './jobs.repo'
 import { dayLocksRepo } from './day-locks.repo'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { calcComponent } from '@/lib/component-needs'
 import {
@@ -985,6 +986,69 @@ export const entriesService = {
       confirmed_by: user.id,
       confirmed_at: new Date().toISOString(),
     })
+  },
+
+  /**
+   * MA TRẬN TUẦN (tổ × ngày) — cái nhìn bao quát thay vì xem từng ngày một
+   * (user chốt 27/08): mỗi ô = Σ đạt của tổ trong ngày, kèm cờ còn-nháp và
+   * đã-chốt-sổ. 7 ngày kết thúc tại `endDate` — đúng khung sổ Tổng TĐ SX giấy.
+   */
+  async dayMatrix(
+    _user: User,
+    endDate: string,
+    days = 7,
+  ): Promise<{
+    days: string[]
+    teams: { id: string; name: string | null }[]
+    cells: Record<
+      string,
+      { qty: number; defect: number; drafts: number; locked: boolean }
+    >
+  }> {
+    const from = shiftIso(endDate, -(days - 1))
+    const [entries, docs, locks] = await Promise.all([
+      entriesRepo.listRange(from, endDate),
+      entryDocsRepo.listStatusRange(from, endDate),
+      dayLocksRepo.listRange(from, endDate),
+    ])
+    const dayList: string[] = []
+    for (let i = days - 1; i >= 0; i--) dayList.push(shiftIso(endDate, -i))
+
+    const cells: Record<
+      string,
+      { qty: number; defect: number; drafts: number; locked: boolean }
+    > = {}
+    const cell = (team: string, date: string) => {
+      const k = `${team}|${date}`
+      return (cells[k] ??= { qty: 0, defect: 0, drafts: 0, locked: false })
+    }
+    const teamIds = new Set<string>()
+    for (const e of entries) {
+      if (!e.team_department_id) continue
+      teamIds.add(e.team_department_id)
+      const c = cell(e.team_department_id, e.entry_date)
+      c.qty = Math.round((c.qty + Number(e.qty)) * 100) / 100
+      c.defect = Math.round((c.defect + Number(e.defect_qty)) * 100) / 100
+    }
+    for (const d of docs) {
+      if (!d.team_department_id) continue
+      teamIds.add(d.team_department_id)
+      if (d.status === 'nhap' || d.status === 'tu_choi') {
+        cell(d.team_department_id, d.entry_date).drafts++
+      }
+    }
+    const lockName = new Map<string, string | null>()
+    for (const l of locks) {
+      teamIds.add(l.team_department_id)
+      cell(l.team_department_id, l.entry_date).locked = true
+      lockName.set(l.team_department_id, l.team_name)
+    }
+    const depts = await departmentsRepo.list()
+    const nameOf = new Map(depts.map((d) => [d.id, d.name]))
+    const teams = [...teamIds]
+      .map((id) => ({ id, name: nameOf.get(id) ?? lockName.get(id) ?? null }))
+      .sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''))
+    return { days: dayList, teams, cells }
   },
 
   /**

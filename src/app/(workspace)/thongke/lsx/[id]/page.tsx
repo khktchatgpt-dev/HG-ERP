@@ -4,6 +4,9 @@ import { worklistService } from '@/modules/dept/production/worklist.service'
 import { entriesService } from '@/modules/dept/production/entries.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { isProductionStaff } from '@/modules/dept/production/perms'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
+import { productsRepo } from '@/modules/dept/technical/technical.repo'
+import { fileImageSrc } from '@/server/file-image'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { LsxWorkScreen } from './LsxWorkScreen'
 import { LsxDocsCard } from './LsxDocsCard'
@@ -21,11 +24,28 @@ export default async function LsxWorkPage({
 }) {
   const user = await authService.requirePageUser()
   const { id } = await params
-  const [data, lsx, docs] = await Promise.all([
+  const [data, lsx, docs, lines] = await Promise.all([
     worklistService.list(user, { lsxId: id }),
     productionRepo.findById(id),
     entriesService.docsOfLsx(user, id),
+    lsxLinesRepo.listLines(id),
   ])
+  // Ảnh: dòng lệnh có ảnh riêng thì dùng; không thì rơi về ảnh HỒ SƠ SP —
+  // phần lớn lệnh nhập script không đính ảnh nhưng thư viện SP đã có 154 ảnh.
+  const needProduct = lines.filter((l) => !l.image_file_id && l.product_id)
+  const products = await productsRepo.listPickByIds([
+    ...new Set(needProduct.map((l) => l.product_id as string)),
+  ])
+  const productImg = new Map(products.map((p) => [p.id, p.image_file_id]))
+  const imageByLine = Object.fromEntries(
+    lines
+      .map((l) => {
+        const fid =
+          l.image_file_id ?? (l.product_id ? productImg.get(l.product_id) : null)
+        return fid ? [l.id, fileImageSrc(fid)] : null
+      })
+      .filter((x): x is [string, string] => !!x),
+  )
 
   if (!lsx || data.rows.length === 0) {
     return (
@@ -68,6 +88,13 @@ export default async function LsxWorkPage({
         stages={data.stages}
         rows={data.rows}
         canRecord={canRecord}
+        imageByLine={imageByLine}
+        docStats={{
+          count: docs.length,
+          drafts: docs.filter((d) => d.status === 'nhap' || d.status === 'tu_choi')
+            .length,
+          defect: Math.round(docs.reduce((a, d) => a + d.total_defect, 0) * 100) / 100,
+        }}
       />
       <LsxDocsCard
         docs={docs.map((d) => ({

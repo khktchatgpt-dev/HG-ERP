@@ -41,11 +41,17 @@ export function LsxWorkScreen({
   stages,
   rows,
   canRecord,
+  imageByLine = {},
+  docStats,
 }: {
   lsx: Lsx
   stages: Stage[]
   rows: WorklistRow[]
   canRecord: boolean
+  /** Ảnh SP theo dòng lệnh (URL ký ổn định) — đối chiếu bằng mắt với sổ giấy. */
+  imageByLine?: Record<string, string>
+  /** Tổng hợp phiếu của lệnh — phế + số phiếu cho khối bao quát. */
+  docStats?: { count: number; drafts: number; defect: number }
 }) {
   const [stage, setStage] = useState('')
   const [onlyOpen, setOnlyOpen] = useState(false)
@@ -84,6 +90,28 @@ export function LsxWorkScreen({
     () => stages.filter((s) => rows.some((r) => r.stage === s.code)),
     [stages, rows],
   )
+
+  // Bao quát theo BỘ: xong = đã qua công đoạn CUỐI của từng dòng SP.
+  const stageIdx = useMemo(() => new Map(stages.map((s, i) => [s.code, i])), [stages])
+  const doneByLine = useMemo(() => {
+    const m = new Map<string, { total: number; done: number; stage: string }>()
+    for (const r of rows) {
+      const cur = m.get(r.order_line_id)
+      if (!cur || (stageIdx.get(r.stage) ?? 99) > (stageIdx.get(cur.stage) ?? 99)) {
+        m.set(r.order_line_id, { total: r.planned, done: r.done, stage: r.stage })
+      }
+    }
+    return m
+  }, [rows, stageIdx])
+  const totalSets = [...doneByLine.values()].reduce((a, x) => a + x.total, 0)
+  const doneSets = [...doneByLine.values()].reduce((a, x) => a + x.done, 0)
+  const shipLeft = lsx.ship_date
+    ? Math.round(
+        (new Date(`${lsx.ship_date}T00:00:00`).getTime() -
+          new Date(new Date().setHours(0, 0, 0, 0)).getTime()) /
+          86400000,
+      )
+    : null
 
   return (
     <div className="flex flex-col gap-4">
@@ -151,17 +179,51 @@ export function LsxWorkScreen({
 
       <StatsBar
         stats={[
-          { label: 'Sản phẩm', value: productCount, tone: 'blue' },
+          {
+            label: 'Xong / SL đặt (bộ)',
+            value: `${fmt(doneSets)}/${fmt(totalSets)}`,
+            tone: totalSets > 0 && doneSets >= totalSets ? 'green' : 'blue',
+          },
+          { label: 'Sản phẩm', value: productCount, tone: 'gray' },
           {
             label: 'Việc còn / tổng',
             value: `${openCount}/${rows.length}`,
-            tone: 'gray',
+            tone: openCount > 0 ? 'amber' : 'gray',
           },
           {
-            label: 'Chờ duyệt (bộ)',
-            value: fmt(pendingSets),
-            tone: pendingSets > 0 ? 'amber' : 'gray',
+            label: 'Phế luỹ kế',
+            value: fmt(docStats?.defect ?? 0),
+            tone: (docStats?.defect ?? 0) > 0 ? 'amber' : 'gray',
           },
+          {
+            label: 'Phiếu (nháp)',
+            value: `${fmt(docStats?.count ?? 0)} (${fmt(docStats?.drafts ?? 0)})`,
+            tone: (docStats?.drafts ?? 0) > 0 ? 'amber' : 'gray',
+          },
+          ...(shipLeft != null
+            ? [
+                {
+                  label: 'Hạn xuất',
+                  value:
+                    shipLeft < 0
+                      ? `trễ ${fmt(-shipLeft)} ngày`
+                      : shipLeft === 0
+                        ? 'HÔM NAY'
+                        : `còn ${fmt(shipLeft)} ngày`,
+                  tone: (shipLeft <= 0 ? 'red' : shipLeft <= 7 ? 'amber' : 'gray') as
+                    'red' | 'amber' | 'gray',
+                },
+              ]
+            : []),
+          ...(pendingSets > 0
+            ? [
+                {
+                  label: 'Chờ duyệt (bộ)',
+                  value: fmt(pendingSets),
+                  tone: 'amber' as const,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -192,106 +254,140 @@ export function LsxWorkScreen({
       />
 
       <div className="flex flex-col gap-3">
-        {groups.map(([lineId, g]) => (
-          <section key={lineId} className="bg-card overflow-hidden rounded-lg border">
-            <div className="bg-muted/60 flex flex-wrap items-center gap-2 border-b px-4 py-2">
-              <span className="t-data text-sm font-semibold">{g.code}</span>
-              <span className="text-muted-foreground text-xs">{g.name}</span>
-              <span className="t-data text-muted-foreground ml-auto text-xs">
-                × {fmt(g.qty)} bộ
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className="text-muted-foreground border-b text-left text-[10px] uppercase">
-                    <th className="px-4 py-1.5">Công đoạn</th>
-                    <th className="w-20 py-1.5 pr-2 text-right">Kế hoạch</th>
-                    <th className="w-16 py-1.5 pr-2 text-right">Đạt</th>
-                    <th className="w-20 py-1.5 pr-2 text-right">Chờ duyệt</th>
-                    <th className="w-16 py-1.5 pr-2 text-right">Còn</th>
-                    <th className="w-32 py-1.5 pr-2">Tiến độ</th>
-                    <th className="py-1.5 pr-4">Trạng thái</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {g.items.map((r) => {
-                    const cells = (
-                      <>
-                        <td className="t-data py-1.5 pr-2 text-right">
-                          {fmt(r.planned)}
-                        </td>
-                        <td className="t-data py-1.5 pr-2 text-right font-semibold">
-                          {fmt(r.done)}
-                        </td>
-                        <td className="t-data py-1.5 pr-2 text-right">
-                          {r.pending > 0 ? (
-                            <span className="text-[var(--warn)]">+{fmt(r.pending)}</span>
-                          ) : (
-                            <span className="text-muted-foreground/40">—</span>
-                          )}
-                        </td>
-                        <td className="t-data py-1.5 pr-2 text-right">
-                          {r.remaining > 0 ? (
-                            <span className="text-[var(--warn)]">{fmt(r.remaining)}</span>
-                          ) : (
-                            <Check
-                              size={14}
-                              strokeWidth={2}
-                              className="inline text-[var(--done)]"
-                              aria-label="Đã đủ"
-                            />
-                          )}
-                        </td>
-                        <td className="py-1.5 pr-2">
-                          <span className="flex items-center gap-2">
-                            <span className="bg-muted block h-1.5 w-16 overflow-hidden rounded">
-                              <span
-                                className={`block h-1.5 rounded ${
-                                  r.status === 'done'
-                                    ? 'bg-[var(--done)]'
-                                    : 'bg-[var(--primary)]'
-                                }`}
-                                style={{ width: `${Math.round(r.pct * 100)}%` }}
-                              />
-                            </span>
-                            <span className="t-data text-muted-foreground text-[11px]">
-                              {Math.round(r.pct * 100)}%
-                            </span>
-                          </span>
-                        </td>
-                        <td className="py-1.5 pr-4">
-                          <span className="flex items-center gap-2">
-                            <Badge tone={STATUS_TONE[r.status].tone}>
-                              {STATUS_TONE[r.status].label}
-                            </Badge>
-                            {canRecord && (
-                              <Link
-                                href={`/thongke/lsx/${lsx.id}/ghi?stage=${r.stage}`}
-                                className="text-xs font-medium text-[var(--primary)] hover:underline"
-                              >
-                                Ghi
-                              </Link>
+        {groups.map(([lineId, g]) => {
+          const df = doneByLine.get(lineId)
+          return (
+            <section key={lineId} className="bg-card overflow-hidden rounded-lg border">
+              <div className="bg-muted/60 flex flex-wrap items-center gap-2.5 border-b px-4 py-2">
+                {imageByLine[lineId] && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={imageByLine[lineId]}
+                    alt={g.code}
+                    className="bg-card h-10 w-10 shrink-0 rounded-md border object-contain"
+                  />
+                )}
+                <span className="min-w-0">
+                  <span className="t-data block text-sm font-semibold">{g.code}</span>
+                  <span className="text-muted-foreground block truncate text-xs">
+                    {g.name}
+                  </span>
+                </span>
+                <span className="ml-auto text-right">
+                  <span className="t-data text-muted-foreground block text-xs">
+                    × {fmt(g.qty)} bộ
+                  </span>
+                  {df && (
+                    <span
+                      className={`t-data block text-xs font-semibold ${
+                        df.done >= df.total
+                          ? 'text-[var(--done)]'
+                          : df.done > 0
+                            ? 'text-[var(--primary)]'
+                            : 'text-muted-foreground'
+                      }`}
+                    >
+                      xong {fmt(df.done)}
+                    </span>
+                  )}
+                </span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="text-muted-foreground border-b text-left text-[10px] uppercase">
+                      <th className="px-4 py-1.5">Công đoạn</th>
+                      <th className="w-20 py-1.5 pr-2 text-right">Kế hoạch</th>
+                      <th className="w-16 py-1.5 pr-2 text-right">Đạt</th>
+                      <th className="w-20 py-1.5 pr-2 text-right">Chờ duyệt</th>
+                      <th className="w-16 py-1.5 pr-2 text-right">Còn</th>
+                      <th className="w-32 py-1.5 pr-2">Tiến độ</th>
+                      <th className="py-1.5 pr-4">Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {g.items.map((r) => {
+                      const cells = (
+                        <>
+                          <td className="t-data py-1.5 pr-2 text-right">
+                            {fmt(r.planned)}
+                          </td>
+                          <td className="t-data py-1.5 pr-2 text-right font-semibold">
+                            {fmt(r.done)}
+                          </td>
+                          <td className="t-data py-1.5 pr-2 text-right">
+                            {r.pending > 0 ? (
+                              <span className="text-[var(--warn)]">
+                                +{fmt(r.pending)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/40">—</span>
                             )}
-                          </span>
-                        </td>
-                      </>
-                    )
-                    return (
-                      <tr
-                        key={r.stage}
-                        className="border-b last:border-b-0 hover:bg-[color-mix(in_srgb,var(--accent)_45%,transparent)]"
-                      >
-                        <td className="px-4 py-1.5 font-medium">{r.stage_label}</td>
-                        {cells}
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))}
+                          </td>
+                          <td className="t-data py-1.5 pr-2 text-right">
+                            {r.remaining > 0 ? (
+                              <span className="text-[var(--warn)]">
+                                {fmt(r.remaining)}
+                              </span>
+                            ) : (
+                              <Check
+                                size={14}
+                                strokeWidth={2}
+                                className="inline text-[var(--done)]"
+                                aria-label="Đã đủ"
+                              />
+                            )}
+                          </td>
+                          <td className="py-1.5 pr-2">
+                            <span className="flex items-center gap-2">
+                              <span className="bg-muted block h-1.5 w-16 overflow-hidden rounded">
+                                <span
+                                  className={`block h-1.5 rounded ${
+                                    r.status === 'done'
+                                      ? 'bg-[var(--done)]'
+                                      : 'bg-[var(--primary)]'
+                                  }`}
+                                  style={{ width: `${Math.round(r.pct * 100)}%` }}
+                                />
+                              </span>
+                              <span className="t-data text-muted-foreground text-[11px]">
+                                {Math.round(r.pct * 100)}%
+                              </span>
+                            </span>
+                          </td>
+                          <td className="py-1.5 pr-4">
+                            <span className="flex items-center gap-2">
+                              <Badge tone={STATUS_TONE[r.status].tone}>
+                                {STATUS_TONE[r.status].label}
+                              </Badge>
+                              {canRecord && (
+                                <Link
+                                  href={`/thongke/lsx/${lsx.id}/ghi?stage=${r.stage}`}
+                                  className="text-xs font-medium text-[var(--primary)] hover:underline"
+                                >
+                                  Ghi
+                                </Link>
+                              )}
+                            </span>
+                          </td>
+                        </>
+                      )
+                      return (
+                        <tr
+                          key={r.stage}
+                          className="border-b last:border-b-0 hover:bg-[color-mix(in_srgb,var(--accent)_45%,transparent)]"
+                        >
+                          <td className="px-4 py-1.5 font-medium">{r.stage_label}</td>
+                          {cells}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )
+        })}
       </div>
 
       {canRecord && (

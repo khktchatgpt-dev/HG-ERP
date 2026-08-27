@@ -23,10 +23,11 @@ export default async function NgayPage({
   const today = vnTodayIso()
   const date = /^\d{4}-\d{2}-\d{2}$/.test(sp.date ?? '') ? (sp.date as string) : today
 
-  const [day, stages, depts] = await Promise.all([
+  const [day, stages, depts, matrix] = await Promise.all([
     entriesService.listDay(user, date),
     productionRepo.listStages(),
     departmentsRepo.list(),
+    entriesService.dayMatrix(user, date, 7),
   ])
   const teamName = new Map(depts.map((d) => [d.id, d.name]))
 
@@ -78,6 +79,7 @@ export default async function NgayPage({
       }))}
       canLock={canLock}
       canUnlock={canUnlock}
+      matrix={matrix}
     />
   )
 }

@@ -17,6 +17,8 @@ import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import { transfersRepo } from './transfers.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { resolveTeamStage } from '@/lib/stage-for-dept'
+import { fileImageSrc } from '@/server/file-image'
+import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -76,6 +78,10 @@ export type LsxCard = {
   pending_sets: number
   /** Công đoạn có việc, đúng thứ tự danh mục — vẽ dải chip trên thẻ. */
   stage_labels: string[]
+  /** Σ SL đặt (bộ) của các dòng SP có việc — mẫu số cái nhìn bao quát. */
+  total_sets: number
+  /** Σ bộ đã qua CÔNG ĐOẠN CUỐI của từng dòng — tử số "xong x/y bộ". */
+  done_sets: number
 }
 
 export type WorklistPayload = {
@@ -272,6 +278,8 @@ export const worklistService = {
         done_count: 0,
         pending_sets: 0,
         stage_labels: [],
+        total_sets: 0,
+        done_sets: 0,
       }
       card.job_count++
       if (r.status === 'done') card.done_count++
@@ -283,14 +291,28 @@ export const worklistService = {
       cardById.set(r.lsx_id, card)
     }
     for (const [id, card] of cardById) {
-      card.product_count = new Set(
-        rows.filter((r) => r.lsx_id === id).map((r) => r.order_line_id),
-      ).size
+      const mine = rows.filter((r) => r.lsx_id === id)
+      card.product_count = new Set(mine.map((r) => r.order_line_id)).size
       card.stage_labels.sort(
         (a, b) =>
           (stages.findIndex((s) => s.label === a) + 1 || 99) -
           (stages.findIndex((s) => s.label === b) + 1 || 99),
       )
+      // Bao quát theo BỘ: mẫu số = Σ SL đặt các dòng có việc; tử số = Σ bộ đã
+      // qua công đoạn CUỐI CÙNG của từng dòng (xong cả chuỗi mới là xong).
+      const byLine = new Map<string, WorklistRow[]>()
+      for (const r of mine) {
+        const arr = byLine.get(r.order_line_id) ?? []
+        arr.push(r)
+        byLine.set(r.order_line_id, arr)
+      }
+      for (const rs of byLine.values()) {
+        const last = rs.reduce((a, b) =>
+          (stageOrder.get(b.stage) ?? 99) > (stageOrder.get(a.stage) ?? 99) ? b : a,
+        )
+        card.total_sets += last.planned
+        card.done_sets += last.done
+      }
     }
     // Lệnh còn nhiều việc mở lên trước; hết việc xuống cuối.
     const lsx_cards = [...cardById.values()].sort(
@@ -333,6 +355,8 @@ export type EntrySheetGroup = {
   product_name: string
   /** SL đặt của dòng — đơn vị BỘ. */
   qty: number
+  /** Ảnh SP (URL ký HMAC ổn định) — thống kê đối chiếu với sổ giấy bằng mắt. */
+  image_src: string | null
   lines: EntrySheetLine[]
 }
 
@@ -415,6 +439,24 @@ export async function loadEntrySheet(
   const stage = stages.some((s) => s.code === stageWanted)
     ? (stageWanted as string)
     : stages[0].code
+
+  // Ảnh SP: ảnh dòng lệnh thắng, thiếu thì rơi về ảnh hồ sơ SP.
+  const productImgs = new Map(
+    (
+      await productsRepo.listPickByIds([
+        ...new Set(
+          lines
+            .filter((l) => !l.image_file_id && l.product_id)
+            .map((l) => l.product_id as string),
+        ),
+      ])
+    ).map((p) => [p.id, p.image_file_id]),
+  )
+  const imageOf = (line: (typeof lines)[number]): string | null => {
+    const fid =
+      line.image_file_id ?? (line.product_id ? productImgs.get(line.product_id) : null)
+    return fid ? fileImageSrc(fid) : null
+  }
 
   // Sản lượng của CÔNG ĐOẠN đang mở, tách theo trạng thái phiếu + đã ghi hôm nay.
   const todayIso = vnTodayIso()
@@ -510,6 +552,7 @@ export async function loadEntrySheet(
         product_code: line.product_code,
         product_name: line.name_vi ?? line.product_code,
         qty: line.qty,
+        image_src: imageOf(line),
         lines: out,
       })
     }

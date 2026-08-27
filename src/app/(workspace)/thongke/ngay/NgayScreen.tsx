@@ -59,6 +59,7 @@ export function NgayScreen({
   unlockedPast,
   canLock,
   canUnlock,
+  matrix,
 }: {
   date: string
   today: string
@@ -68,6 +69,14 @@ export function NgayScreen({
   unlockedPast: { entry_date: string; team_id: string; team_name: string }[]
   canLock: boolean
   canUnlock: boolean
+  matrix: {
+    days: string[]
+    teams: { id: string; name: string | null }[]
+    cells: Record<
+      string,
+      { qty: number; defect: number; drafts: number; locked: boolean }
+    >
+  }
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -166,6 +175,111 @@ export function NgayScreen({
           </Button>
         )}
       </section>
+
+      {/* MA TRẬN TUẦN tổ × ngày — đúng khung sổ Tổng TĐ SX giấy: liếc một phát
+          thấy cả tuần, bấm ô là nhảy tới ngày đó. Số = Σ đạt; chấm vàng = còn
+          phiếu nháp; ✓ = tổ đã chốt sổ. */}
+      {matrix.teams.length > 0 && (
+        <section className="bg-card overflow-hidden rounded-lg border">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="text-muted-foreground border-b text-[10px] uppercase">
+                  <th className="px-4 py-1.5 text-left">7 ngày gần nhất</th>
+                  {matrix.days.map((d) => (
+                    <th
+                      key={d}
+                      className={`px-1 py-1.5 text-right ${
+                        d === date ? 'text-[var(--primary)]' : ''
+                      }`}
+                    >
+                      <Link
+                        href={`/thongke/ngay?date=${d}`}
+                        className="hover:text-[var(--primary)]"
+                      >
+                        {new Date(`${d}T00:00:00`).toLocaleDateString('vi-VN', {
+                          weekday: 'short',
+                        })}
+                        <span className="t-data block normal-case">
+                          {d.slice(8, 10)}/{d.slice(5, 7)}
+                        </span>
+                      </Link>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrix.teams.map((t) => (
+                  <tr key={t.id} className="border-b last:border-b-0">
+                    <td className="px-4 py-1.5 text-xs font-medium">{t.name ?? '?'}</td>
+                    {matrix.days.map((d) => {
+                      const c = matrix.cells[`${t.id}|${d}`]
+                      return (
+                        <td
+                          key={d}
+                          className={`px-1 py-1 text-right ${
+                            d === date
+                              ? 'bg-[color-mix(in_srgb,var(--accent)_55%,transparent)]'
+                              : ''
+                          }`}
+                        >
+                          <Link
+                            href={`/thongke/ngay?date=${d}`}
+                            className="t-data block rounded px-1 text-xs hover:bg-[var(--accent)]"
+                            title={
+                              c
+                                ? `${t.name ?? ''} — ${fmtDate(d)}: đạt ${fmt(c.qty)}${c.defect ? ` · phế ${fmt(c.defect)}` : ''}${c.drafts ? ` · ${c.drafts} phiếu nháp` : ''}${c.locked ? ' · đã chốt sổ' : ''}`
+                                : `${t.name ?? ''} — ${fmtDate(d)}: chưa có sổ`
+                            }
+                          >
+                            {c && c.qty > 0 ? (
+                              <b>{fmt(c.qty)}</b>
+                            ) : (
+                              <span className="text-muted-foreground/40">·</span>
+                            )}
+                            {c?.drafts ? (
+                              <span className="text-[var(--warn)]" aria-hidden>
+                                {' '}
+                                ●
+                              </span>
+                            ) : null}
+                            {c?.locked ? (
+                              <span className="text-[var(--done)]" aria-hidden>
+                                {' '}
+                                ✓
+                              </span>
+                            ) : null}
+                          </Link>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+                <tr className="bg-muted/40">
+                  <td className="px-4 py-1.5 text-xs font-semibold">Toàn xưởng</td>
+                  {matrix.days.map((d) => {
+                    const sum = matrix.teams.reduce(
+                      (a, t) => a + (matrix.cells[`${t.id}|${d}`]?.qty ?? 0),
+                      0,
+                    )
+                    return (
+                      <td
+                        key={d}
+                        className="t-data px-2 py-1.5 text-right text-xs font-semibold"
+                      >
+                        {sum > 0 ? fmt(Math.round(sum * 100) / 100) : '·'}
+                      </td>
+                    )
+                  })}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="text-muted-foreground border-t px-4 py-1.5 text-[10px]">
+            ● còn phiếu nháp · ✓ đã chốt sổ — bấm vào ô/ngày để mở sổ ngày đó
+          </p>
+        </section>
+      )}
 
       {/* Ngày cũ có sổ mà quên chốt — sổ mở vô hạn là mất ý nghĩa khoá số liệu */}
       {unlockedPast.length > 0 && (

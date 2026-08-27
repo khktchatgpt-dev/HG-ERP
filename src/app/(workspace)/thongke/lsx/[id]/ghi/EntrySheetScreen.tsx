@@ -155,6 +155,19 @@ export function EntrySheetScreen({
     }
   }
 
+  // NHỊP NHẬP NHANH: Enter trong ô SL đạt nhảy xuống dòng dưới (Shift+Enter đi
+  // lên) — chép sổ giấy 10 dòng không phải rời bàn phím; Ctrl+Enter vẫn là gửi.
+  const qtyOrder = useMemo(
+    () => sheet.groups.flatMap((g) => g.lines.map((l) => l.component_id)),
+    [sheet.groups],
+  )
+  const onQtyKey = (id: string) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter' || e.ctrlKey || e.metaKey) return
+    e.preventDefault()
+    const next = qtyOrder[qtyOrder.indexOf(id) + (e.shiftKey ? -1 : 1)]
+    if (next) document.getElementById(`qty-${next}`)?.focus()
+  }
+
   const typedQty = typed.reduce((a, t) => a + num(t.d.qty), 0)
 
   return (
@@ -238,9 +251,23 @@ export function EntrySheetScreen({
             key={g.order_line_id}
             className="bg-card overflow-hidden rounded-lg border"
           >
-            <div className="bg-muted/60 flex flex-wrap items-center gap-2 border-b px-4 py-2">
-              <span className="t-data text-sm font-semibold">{g.product_code}</span>
-              <span className="text-muted-foreground text-xs">{g.product_name}</span>
+            <div className="bg-muted/60 flex flex-wrap items-center gap-2.5 border-b px-4 py-2">
+              {g.image_src && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={g.image_src}
+                  alt={g.product_code}
+                  className="bg-card h-10 w-10 shrink-0 rounded-md border object-contain"
+                />
+              )}
+              <span className="min-w-0">
+                <span className="t-data block text-sm font-semibold">
+                  {g.product_code}
+                </span>
+                <span className="text-muted-foreground block truncate text-xs">
+                  {g.product_name}
+                </span>
+              </span>
               <span className="t-data text-muted-foreground ml-auto text-xs">
                 × {fmt(g.qty)} bộ
               </span>
@@ -303,6 +330,20 @@ export function EntrySheetScreen({
                                 )}
                                 {l.unit && !isSet && `ĐVT ${l.unit}`}
                               </div>
+                              {l.needed > 0 && (
+                                <span className="bg-muted mt-1 block h-1 max-w-44 overflow-hidden rounded">
+                                  <span
+                                    className={`block h-1 rounded ${
+                                      l.done >= l.needed
+                                        ? 'bg-[var(--done)]'
+                                        : 'bg-[var(--primary)]'
+                                    }`}
+                                    style={{
+                                      width: `${Math.min(100, Math.round((l.done / l.needed) * 100))}%`,
+                                    }}
+                                  />
+                                </span>
+                              )}
                             </td>
                             <td className="t-data py-2 pr-2 text-right">
                               {fmt(l.needed)}
@@ -319,6 +360,7 @@ export function EntrySheetScreen({
                             </td>
                             <td className="py-2 pr-2">
                               <Input
+                                id={`qty-${l.component_id}`}
                                 type="number"
                                 min={0}
                                 step="any"
@@ -327,9 +369,31 @@ export function EntrySheetScreen({
                                 onChange={(e) =>
                                   patch(l.component_id, { qty: e.target.value })
                                 }
+                                onKeyDown={onQtyKey(l.component_id)}
+                                autoFocus={
+                                  sheet.can_record && qtyOrder[0] === l.component_id
+                                }
+                                placeholder={l.remaining > 0 ? fmt(l.remaining) : ''}
+                                title={
+                                  l.remaining > 0
+                                    ? `Còn thiếu ${fmt(l.remaining)} — Enter xuống dòng, Ctrl+Enter ghi sổ`
+                                    : undefined
+                                }
                                 className="t-data h-8 text-right"
                                 aria-label={`SL đạt ${l.name}`}
                               />
+                              {l.remaining > 0 && !d.qty && (
+                                <button
+                                  onClick={() =>
+                                    patch(l.component_id, { qty: String(l.remaining) })
+                                  }
+                                  disabled={!sheet.can_record}
+                                  className="mt-0.5 block w-full text-right text-[10px] text-[var(--primary)] hover:underline"
+                                  aria-label={`Điền ${fmt(l.remaining)} còn lại cho ${l.name}`}
+                                >
+                                  điền {fmt(l.remaining)} còn lại
+                                </button>
+                              )}
                             </td>
                             <td className="py-2 pr-2">
                               <Input
