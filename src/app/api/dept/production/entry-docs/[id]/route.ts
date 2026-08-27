@@ -12,3 +12,14 @@ export const DELETE = handle(async (_req: Request, { params }: Params) => {
   await entriesService.deleteDoc(user, id)
   return NextResponse.json({ ok: true })
 })
+
+/**
+ * Ghi CHÍNH THỨC phiếu nháp (chế độ không cần tổ trưởng xác nhận — 27/08).
+ * Chưa nhận action nào khác: tầng duyệt bật lại thì mở rộng body ở đây.
+ */
+export const PATCH = handle(async (_req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  await entriesService.submitDoc(user, id)
+  return NextResponse.json({ ok: true })
+})

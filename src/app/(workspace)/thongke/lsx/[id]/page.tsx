@@ -1,10 +1,12 @@
 import Link from 'next/link'
 import { authService } from '@/modules/core/auth/auth.service'
 import { worklistService } from '@/modules/dept/production/worklist.service'
+import { entriesService } from '@/modules/dept/production/entries.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { isProductionStaff } from '@/modules/dept/production/perms'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { LsxWorkScreen } from './LsxWorkScreen'
+import { LsxDocsCard } from './LsxDocsCard'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,9 +21,10 @@ export default async function LsxWorkPage({
 }) {
   const user = await authService.requirePageUser()
   const { id } = await params
-  const [data, lsx] = await Promise.all([
+  const [data, lsx, docs] = await Promise.all([
     worklistService.list(user, { lsxId: id }),
     productionRepo.findById(id),
+    entriesService.docsOfLsx(user, id),
   ])
 
   if (!lsx || data.rows.length === 0) {
@@ -44,18 +47,37 @@ export default async function LsxWorkPage({
   const canRecord = user.role === 'admin' || (await isProductionStaff(user))
 
   return (
-    <LsxWorkScreen
-      lsx={{
-        id: lsx.id,
-        code: lsx.code,
-        customer_name: lsx.customer_name,
-        order_codes: lsx.order_codes,
-        ship_date: lsx.ship_date,
-        status: lsx.status,
-      }}
-      stages={data.stages}
-      rows={data.rows}
-      canRecord={canRecord}
-    />
+    <div className="flex flex-col gap-4">
+      <LsxWorkScreen
+        lsx={{
+          id: lsx.id,
+          code: lsx.code,
+          customer_name: lsx.customer_name,
+          order_codes: lsx.order_codes,
+          ship_date: lsx.ship_date,
+          status: lsx.status,
+        }}
+        stages={data.stages}
+        rows={data.rows}
+        canRecord={canRecord}
+      />
+      <LsxDocsCard
+        docs={docs.map((d) => ({
+          id: d.id,
+          doc_no: d.doc_no,
+          entry_date: d.entry_date,
+          stage: d.stage,
+          status: d.status,
+          team_name: d.team_name,
+          created_by_name: d.created_by_name,
+          note: d.note,
+          total_qty: d.total_qty,
+          total_defect: d.total_defect,
+          line_count: d.line_count,
+        }))}
+        stageLabels={Object.fromEntries(data.stages.map((s) => [s.code, s.label]))}
+        canRecord={canRecord}
+      />
+    </div>
   )
 }

@@ -29,7 +29,7 @@ import {
 } from '@/lib/default-assembly'
 import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
-import { entryDocsRepo } from './entry-docs.repo'
+import { entryDocsRepo, type EntryDocJoined } from './entry-docs.repo'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
@@ -922,6 +922,72 @@ export const entriesService = {
   },
 
   /**
+   * PHIẾU của một lệnh + tổng đạt/phế per phiếu — tab Phiếu ở màn tiến độ.
+   * Đọc: mọi NV đã đăng nhập.
+   */
+  async docsOfLsx(
+    _user: User,
+    lsxId: string,
+  ): Promise<
+    (EntryDocJoined & { total_qty: number; total_defect: number; line_count: number })[]
+  > {
+    const [docs, entries] = await Promise.all([
+      entryDocsRepo.listByLsx(lsxId),
+      entriesRepo.listByLsx(lsxId),
+    ])
+    const sums = new Map<string, { qty: number; defect: number; lines: number }>()
+    for (const e of entries) {
+      if (!e.doc_id) continue
+      const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, lines: 0 }
+      s.qty += Number(e.qty)
+      s.defect += Number(e.defect_qty)
+      s.lines++
+      sums.set(e.doc_id, s)
+    }
+    return docs.map((d) => {
+      const s = sums.get(d.id)
+      return {
+        ...d,
+        total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
+        total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
+        line_count: s?.lines ?? 0,
+      }
+    })
+  },
+
+  /**
+   * GHI CHÍNH THỨC một phiếu đang NHÁP (chế độ không cần tổ trưởng — 27/08):
+   * người lập hoặc GĐ/QL; tổ đã chốt ngày thì mở khoá trước; lệnh kết thúc thì
+   * sổ khoá. Người chốt (confirmed_by) là người bấm — số chính thức có chủ.
+   */
+  async submitDoc(user: User, docId: string): Promise<void> {
+    const doc = await entryDocsRepo.findById(docId)
+    if (!doc) throw NotFound('Phiếu báo sản lượng không tồn tại')
+    const allowed =
+      user.role === 'admin' || user.role === 'manager' || doc.created_by === user.id
+    if (!allowed)
+      throw Forbidden('Chỉ người lập phiếu hoặc Ban quản lý ghi chính thức được')
+    if (doc.status !== 'nhap' && doc.status !== 'tu_choi') {
+      throw BadRequest('Phiếu không ở trạng thái nháp — không có gì để ghi chính thức')
+    }
+    if (doc.team_department_id) {
+      const lock = await dayLocksRepo.find(doc.team_department_id, doc.entry_date)
+      if (lock) {
+        throw BadRequest('Sổ ngày của tổ đã chốt — mở khoá trước khi ghi chính thức')
+      }
+    }
+    const lsx = await productionRepo.findById(doc.production_order_id)
+    if (lsx && (lsx.status === 'completed' || lsx.status === 'cancelled')) {
+      throw BadRequest('LSX đã kết thúc — sổ khoá')
+    }
+    await entryDocsRepo.patch(docId, {
+      status: 'da_xac_nhan',
+      confirmed_by: user.id,
+      confirmed_at: new Date().toISOString(),
+    })
+  },
+
+  /**
    * Xoá NGUYÊN PHIẾU báo sản lượng (0172) — dòng + header. Cùng luật với xoá
    * dòng lẻ: người lập hoặc GĐ/QL; tổ đã chốt ngày đó thì mở khoá trước;
    * lệnh kết thúc thì sổ khoá.
@@ -968,16 +1034,19 @@ export const entriesService = {
   },
 
   /**
-   * Chốt sổ cuối ngày theo tổ. NV xưởng bị ép tổ mình; GĐ/QL chốt hộ tổ
-   * chỉ định. Đã chốt rồi → Conflict.
+   * Chốt sổ cuối ngày theo tổ. Đã chốt rồi → Conflict.
+   *
+   * 27/08/2026 (cùng đợt bỏ tầng tổ trưởng xác nhận): THỐNG KÊ chốt hộ được
+   * tổ CHỈ ĐỊNH — trước đây employee bị ép tổ mình, nhưng thống kê không thuộc
+   * tổ nào trong xưởng nên ép là không ai chốt được. Quyền vẫn gác bằng
+   * `production.daylock.lock` (0175) + `locked_by` lưu vết ai chốt.
    */
   async lockDay(
     user: User,
     input: { entry_date: string; team_department_id?: string | null },
   ): Promise<void> {
     await assertAction(user, 'production.daylock.lock')
-    let team = input.team_department_id ?? user.department_id ?? null
-    if (user.role === 'employee') team = user.department_id ?? null
+    const team = input.team_department_id ?? user.department_id ?? null
     if (!team) throw BadRequest('Chưa xác định được tổ để chốt sổ')
     const { duplicate } = await dayLocksRepo.insert({
       team_department_id: team,

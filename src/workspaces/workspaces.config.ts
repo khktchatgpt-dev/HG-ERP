@@ -400,7 +400,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     sections: [
       {
         heading: 'Thống kê',
-        items: [{ href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' }],
+        items: [
+          { href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' },
+          { href: '/thongke/ngay', label: 'Sổ ngày & chốt sổ', icon: 'calendar-check' },
+        ],
       },
     ],
   },

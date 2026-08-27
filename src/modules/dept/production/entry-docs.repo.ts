@@ -40,7 +40,10 @@ export type EntryDocJoined = EntryDoc & {
 
 const COLS =
   'id, doc_no, production_order_id, stage, team_department_id, entry_date, status, confirmed_by, confirmed_at, reject_reason, note, created_by, created_at'
-const SELECT_JOINED = `${COLS}, team:departments(name), actor:users(name), lsx:production_orders(code)`
+// BẪY embed: bảng có HAI FK sang users (created_by + confirmed_by từ 0176) —
+// `users(name)` trần là PostgREST báo "more than one relationship" và supabase-js
+// nuốt lỗi thành data null → mọi list phiếu RỖNG âm thầm. Phải chỉ đích danh FK.
+const SELECT_JOINED = `${COLS}, team:departments(name), actor:users!production_entry_docs_created_by_fkey(name), lsx:production_orders(code)`
 
 type One<T> = T | T[] | null
 type Raw = EntryDoc & {
@@ -96,6 +99,28 @@ export const entryDocsRepo = {
       .single()
     if (error) throw new Error(error.message)
     return data as EntryDoc
+  },
+
+  /** Phiếu của MỘT lệnh — tab Phiếu ở màn tiến độ lệnh, mới nhất trước. */
+  async listByLsx(productionOrderId: string): Promise<EntryDocJoined[]> {
+    const { data } = await db()
+      .from('production_entry_docs')
+      .select(SELECT_JOINED)
+      .eq('production_order_id', productionOrderId)
+      .order('created_at', { ascending: false })
+      .limit(500)
+    return unwrap(data as unknown as Raw[] | null)
+  },
+
+  /** Sửa header phiếu — đường chuyển trạng thái (service gác luật). */
+  async patch(
+    id: string,
+    fields: Partial<
+      Pick<EntryDoc, 'status' | 'confirmed_by' | 'confirmed_at' | 'reject_reason'>
+    >,
+  ): Promise<void> {
+    const { error } = await db().from('production_entry_docs').update(fields).eq('id', id)
+    if (error) throw new Error(error.message)
   },
 
   async findById(id: string): Promise<EntryDocJoined | null> {

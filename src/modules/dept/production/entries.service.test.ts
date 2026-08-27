@@ -46,6 +46,8 @@ vi.mock('./entry-docs.repo', () => ({
     insert: vi.fn(),
     findById: vi.fn(),
     listByDate: vi.fn(),
+    listByLsx: vi.fn(),
+    patch: vi.fn(),
     delete: vi.fn(),
   },
 }))
@@ -540,17 +542,17 @@ describe('entriesService.deleteEntry', () => {
 })
 
 describe('entriesService.lockDay / unlockDay', () => {
-  it('NV xưởng bị ép tổ mình', async () => {
+  it('thống kê chốt hộ tổ CHỈ ĐỊNH (27/08 — thống kê không thuộc tổ xưởng nào)', async () => {
     vi.mocked(dayLocksRepo.insert).mockResolvedValue({
       lock: { id: 'l1' },
       duplicate: false,
     } as never)
     await entriesService.lockDay(thongKe, {
       entry_date: '2026-07-24',
-      team_department_id: 'd-khac',
+      team_department_id: 'd-han',
     })
     expect(dayLocksRepo.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ team_department_id: 'd-tk' }),
+      expect.objectContaining({ team_department_id: 'd-han', locked_by: 'u-tk' }),
     )
   })
 
@@ -679,6 +681,62 @@ describe('entriesService — PHIẾU BÁO SẢN LƯỢNG (0172)', () => {
       status: 403,
     })
     expect(entryDocsRepo.delete).not.toHaveBeenCalled()
+  })
+
+  it('submitDoc: phiếu NHÁP → chính thức, người chốt là người bấm (27/08)', async () => {
+    vi.mocked(entryDocsRepo.findById).mockResolvedValue({
+      id: 'doc1',
+      status: 'nhap',
+      created_by: 'u-tk',
+      team_department_id: 'd-han',
+      entry_date: '2026-07-24',
+      production_order_id: 'lsx1',
+    } as never)
+    await entriesService.submitDoc(thongKe, 'doc1')
+    expect(entryDocsRepo.patch).toHaveBeenCalledWith(
+      'doc1',
+      expect.objectContaining({ status: 'da_xac_nhan', confirmed_by: 'u-tk' }),
+    )
+  })
+
+  it('submitDoc: phiếu đã chính thức → 400; người ngoài → 403', async () => {
+    vi.mocked(entryDocsRepo.findById).mockResolvedValue({
+      id: 'doc1',
+      status: 'da_xac_nhan',
+      created_by: 'u-tk',
+      team_department_id: null,
+      production_order_id: 'lsx1',
+    } as never)
+    await expect(entriesService.submitDoc(thongKe, 'doc1')).rejects.toMatchObject({
+      status: 400,
+    })
+    vi.mocked(entryDocsRepo.findById).mockResolvedValue({
+      id: 'doc1',
+      status: 'nhap',
+      created_by: 'ai-do-khac',
+      team_department_id: null,
+      production_order_id: 'lsx1',
+    } as never)
+    await expect(entriesService.submitDoc(thongKe, 'doc1')).rejects.toMatchObject({
+      status: 403,
+    })
+    expect(entryDocsRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('submitDoc: tổ đã chốt ngày → 400 (mở khoá trước)', async () => {
+    vi.mocked(entryDocsRepo.findById).mockResolvedValue({
+      id: 'doc1',
+      status: 'nhap',
+      created_by: 'u-tk',
+      team_department_id: 'd-han',
+      entry_date: '2026-07-24',
+      production_order_id: 'lsx1',
+    } as never)
+    vi.mocked(dayLocksRepo.find).mockResolvedValue({ id: 'lock1' } as never)
+    await expect(entriesService.submitDoc(thongKe, 'doc1')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(entryDocsRepo.patch).not.toHaveBeenCalled()
   })
 
   it('deleteDoc: tổ đã chốt ngày của phiếu → 400', async () => {
