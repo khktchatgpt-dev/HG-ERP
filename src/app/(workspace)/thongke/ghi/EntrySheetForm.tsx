@@ -3,20 +3,21 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Send } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Send, Table2, TrendingUp } from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
 import { Input } from '@/components/shadcn/input'
-import { PageHeader } from '@/components/erp/PageHeader'
+import { DocChip } from '@/components/erp/DocChip'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import type { EntrySheet } from '@/modules/dept/production/worklist.service'
 
 /**
- * MÀN LẬP PHIẾU (Sổ Sản Lượng v2 — B1). Một phiếu = lệnh × công đoạn × tổ ×
- * ngày; thân phiếu gom theo SP, dòng nào bỏ trống thì không vào phiếu.
- * Đơn vị đếm đổi theo công đoạn: phôi gõ chi tiết, hàn+ gõ MỘT SỐ theo BỘ.
+ * PHIẾU NHẬP — cột phải của màn Ghi sản lượng (tách màn riêng 27/08). Một
+ * phiếu = lệnh × công đoạn × tổ × ngày; thân phiếu gom theo SP, dòng bỏ trống
+ * không vào phiếu. Đơn vị đếm đổi theo công đoạn: phôi gõ chi tiết, hàn+ gõ
+ * MỘT SỐ theo BỘ.
  */
 
 type LineDraft = {
@@ -45,7 +46,7 @@ const num = (s: string) => {
   return Number.isFinite(n) ? n : 0
 }
 
-export function EntrySheetScreen({
+export function EntrySheetForm({
   sheet,
   userTeamId,
 }: {
@@ -171,26 +172,32 @@ export function EntrySheetScreen({
   const typedQty = typed.reduce((a, t) => a + num(t.d.qty), 0)
 
   return (
-    <div className="flex flex-col gap-4" onKeyDown={onKeyDown}>
+    <div className="flex min-w-0 flex-col gap-3" onKeyDown={onKeyDown}>
       <TopProgressBar active={busy} />
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Thống kê xưởng', href: '/thongke' },
-          { label: 'Tiến độ theo lệnh', href: '/thongke/lenh' },
-          { label: sheet.lsx.code, href: `/thongke/lsx/${sheet.lsx.id}` },
-          { label: 'Ghi sổ' },
-        ]}
-        title={`Ghi sổ — ${sheet.stage_label}`}
-        description={`${sheet.lsx.code} · ${sheet.lsx.customer_name}`}
-        actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/thongke/lsx/${sheet.lsx.id}`}>
-              <ArrowLeft aria-hidden />
-              Tiến độ lệnh
-            </Link>
-          </Button>
-        }
-      />
+
+      {/* Đầu lệnh — biết mình đang ghi cho lệnh nào, đường tắt sang hai màn kia */}
+      <section className="bg-card flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-4 py-2.5">
+        <DocChip>{sheet.lsx.code}</DocChip>
+        <span className="min-w-0 truncate text-sm font-medium">
+          {sheet.lsx.customer_name}
+        </span>
+        <span className="ml-auto flex items-center gap-3 text-xs">
+          <Link
+            href={`/thongke/lsx/${sheet.lsx.id}`}
+            className="flex items-center gap-1 font-medium text-[var(--primary)] hover:underline"
+          >
+            <TrendingUp size={13} aria-hidden />
+            Tiến độ
+          </Link>
+          <Link
+            href={`/thongke/lsx/${sheet.lsx.id}/dinh-hinh`}
+            className="flex items-center gap-1 font-medium text-[var(--primary)] hover:underline"
+          >
+            <Table2 size={13} aria-hidden />
+            Định hình
+          </Link>
+        </span>
+      </section>
 
       {!sheet.can_record && (
         <div className="rounded-lg border border-[var(--warn)]/40 bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] px-4 py-2.5 text-sm">
@@ -204,7 +211,7 @@ export function EntrySheetScreen({
           {sheet.stages.map((s) => (
             <Link
               key={s.code}
-              href={`/thongke/lsx/${sheet.lsx.id}/ghi?stage=${s.code}`}
+              href={`/thongke/ghi?lsx=${sheet.lsx.id}&stage=${s.code}`}
               scroll={false}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                 s.code === sheet.stage

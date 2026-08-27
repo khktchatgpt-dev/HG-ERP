@@ -401,6 +401,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Thống kê',
         items: [
+          { href: '/thongke/ghi', label: 'Ghi sản lượng', icon: 'notebook-pen' },
           { href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' },
           { href: '/thongke/ngay', label: 'Sổ ngày & chốt sổ', icon: 'calendar-check' },
         ],

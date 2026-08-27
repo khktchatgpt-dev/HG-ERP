@@ -140,9 +140,9 @@ export function LsxWorkScreen({
                   </Link>
                 </Button>
                 <Button asChild size="sm">
-                  <Link href={`/thongke/lsx/${lsx.id}/ghi`}>
+                  <Link href={`/thongke/ghi?lsx=${lsx.id}`}>
                     <PenLine aria-hidden />
-                    Ghi sổ
+                    Ghi sản lượng
                   </Link>
                 </Button>
               </>
@@ -362,7 +362,7 @@ export function LsxWorkScreen({
                               </Badge>
                               {canRecord && (
                                 <Link
-                                  href={`/thongke/lsx/${lsx.id}/ghi?stage=${r.stage}`}
+                                  href={`/thongke/ghi?lsx=${lsx.id}&stage=${r.stage}`}
                                   className="text-xs font-medium text-[var(--primary)] hover:underline"
                                 >
                                   Ghi
