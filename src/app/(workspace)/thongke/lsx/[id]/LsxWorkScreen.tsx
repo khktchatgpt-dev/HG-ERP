@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Check, PenLine } from 'lucide-react'
+import { ArrowLeft, Check, PenLine, Table2 } from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -104,12 +104,20 @@ export function LsxWorkScreen({
               </Link>
             </Button>
             {canRecord && (
-              <Button asChild size="sm">
-                <Link href={`/thongke/lsx/${lsx.id}/ghi`}>
-                  <PenLine aria-hidden />
-                  Ghi sổ
-                </Link>
-              </Button>
+              <>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/thongke/lsx/${lsx.id}/dinh-hinh`}>
+                    <Table2 aria-hidden />
+                    Định hình
+                  </Link>
+                </Button>
+                <Button asChild size="sm">
+                  <Link href={`/thongke/lsx/${lsx.id}/ghi`}>
+                    <PenLine aria-hidden />
+                    Ghi sổ
+                  </Link>
+                </Button>
+              </>
             )}
           </>
         }

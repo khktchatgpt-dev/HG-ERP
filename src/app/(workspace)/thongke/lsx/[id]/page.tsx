@@ -32,10 +32,18 @@ export default async function LsxWorkPage({
       <div className="py-10">
         <EmptyState
           icon="▦"
-          title="Lệnh không có việc ghi nhận"
-          description="Lệnh đã kết thúc, hoặc chi tiết của lệnh chưa được phân nhóm nên chưa biết đi công đoạn nào."
+          title="Lệnh chưa có việc ghi nhận"
+          description="Lệnh chưa ĐỊNH HÌNH chi tiết (hoặc đã kết thúc). Định hình = nạp từ BOM kỹ thuật / chép lệnh trước rồi soát lại — xong là sổ tự mở việc."
         />
-        <p className="mt-2 text-center">
+        <p className="mt-2 flex justify-center gap-4 text-center">
+          {lsx && (
+            <Link
+              href={`/thongke/lsx/${lsx.id}/dinh-hinh`}
+              className="text-sm font-medium text-[var(--primary)] hover:underline"
+            >
+              Định hình chi tiết →
+            </Link>
+          )}
           <Link href="/thongke" className="text-sm text-[var(--primary)] hover:underline">
             Về danh sách lệnh
           </Link>
