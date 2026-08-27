@@ -13,7 +13,10 @@ import {
 } from '@/lib/default-assembly'
 import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
-import { vnTodayIso } from '@/lib/local-date'
+import { shiftIso, vnTodayIso } from '@/lib/local-date'
+import { transfersRepo } from './transfers.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { resolveTeamStage } from '@/lib/stage-for-dept'
 import type { User } from '@/modules/core/users/users.repo'
 
 /**
@@ -298,79 +301,124 @@ export const worklistService = {
   },
 }
 
-// ── Chi tiết MỘT công việc — nguồn cho màn Ghi sổ sản lượng ─────────────────
+// ── PHIẾU GHI SỔ — dữ liệu màn lập phiếu (Sổ Sản Lượng v2, B1 — 27/08) ──────
+//
+// 1 phiếu = 1 lệnh × 1 công đoạn × 1 tổ × 1 ngày (0172). Màn bày sẵn ĐÚNG dòng
+// phải gõ theo thang đơn vị đếm: phôi ra CHI TIẾT, từ hàn ra dòng CỤM đếm BỘ
+// (cụm thật, hoặc cụm mặc nhiên id ảo — record vật chất hoá ở lượt ghi đầu).
 
-export type WorkItemLine = {
+export type EntrySheetLine = {
   component_id: string
-  name: string
+  kind: 'part' | 'assembly'
+  /** true = cụm mặc nhiên (id ảo `default-asm:`) — chưa có dòng DB. */
+  is_virtual: boolean
   cluster: string | null
+  name: string
   unit: string | null
-  /** ĐM kg/đơn vị — gợi ý kg khi ghi, không bắt gõ. */
+  /** ĐM kg/đơn vị — gợi ý kg = ĐM × SL, không bắt gõ. */
   dm_kg: number | null
-  /** Cần tổng của chi tiết này (đơn vị chi tiết, không phải bộ). */
   needed: number
   /** Đã đạt — chỉ phiếu đã xác nhận. */
   done: number
-  /** Đã ghi nhưng chờ tổ trưởng duyệt. */
+  /** Đã ghi, chờ tổ trưởng xác nhận. */
   pending: number
   remaining: number
-  /**
-   * Đã ghi HÔM NAY cho chi tiết này (mọi trạng thái phiếu, kể cả nháp) —
-   * chống gõ đúp khi thống kê ghi làm nhiều lần trong ngày.
-   */
+  /** Đã ghi HÔM NAY (mọi trạng thái phiếu, kể cả nháp) — chống gõ đúp. */
   today_qty: number
 }
 
-export type WorkItemDetail = {
-  lsx_id: string
-  lsx_code: string
-  customer_name: string
+export type EntrySheetGroup = {
   order_line_id: string
   product_code: string
   product_name: string
-  /** SL đặt của dòng SP — đơn vị BỘ. */
-  product_qty: number
+  /** SL đặt của dòng — đơn vị BỘ. */
+  qty: number
+  lines: EntrySheetLine[]
+}
+
+export type EntrySheet = {
+  lsx: {
+    id: string
+    code: string
+    customer_name: string
+    ship_date: string | null
+    status: string
+  }
   stage: string
   stage_label: string
-  /** Tiến độ quy về BỘ (khối "Kế hoạch / Đã đạt / Còn lại" ở đầu màn). */
-  planned_sets: number
-  done_sets: number
-  remaining_sets: number
-  pending_sets: number
-  lines: WorkItemLine[]
+  /** Công đoạn CÓ VIỆC của lệnh, đúng thứ tự danh mục — dải chip chuyển tab. */
+  stages: { code: string; label: string }[]
+  /** Tổ xưởng + công đoạn phụ trách — mặc định chọn tổ khớp công đoạn. */
+  teams: { id: string; name: string; stage_code: string | null }[]
+  groups: EntrySheetGroup[]
+  /** (chi tiết × tổ) hệ đề xuất: tổ đang cầm hàng được giao / ghi 7 ngày qua. */
+  suggested: { component_id: string; team_id: string }[]
+  /** Lý do phế dùng 30 ngày gần đây — gợi ý gõ nhanh. */
+  recent_defect_reasons: string[]
+  today: string
+  /** false = lệnh chưa duyệt / đã kết thúc → màn chỉ xem. */
+  can_record: boolean
 }
 
 /**
- * Một công việc = (lệnh × dòng SP × công đoạn). Trả khối tiến độ theo BỘ để
- * người ghi biết mình đang đứng ở đâu, kèm danh sách CHI TIẾT để gõ số — vì sổ
- * ghi theo chi tiết, còn tiến độ đọc theo bộ.
+ * Tải dữ liệu màn lập phiếu. `stage` bỏ trống / không có việc → công đoạn đầu
+ * tiên có việc của lệnh. Trả null khi lệnh không tồn tại hoặc không có việc.
  */
-export async function loadWorkItem(
+export async function loadEntrySheet(
   lsxId: string,
-  orderLineId: string,
-  stage: string,
-): Promise<WorkItemDetail | null> {
-  const [lsx, components, lines, jobs, entries, stages] = await Promise.all([
-    productionRepo.findById(lsxId),
-    componentsRepo.listByLsx(lsxId),
-    lsxLinesRepo.listLines(lsxId),
-    jobsRepo.listByLsx(lsxId),
-    entriesRepo.listByLsxWithStatus(lsxId),
-    productionRepo.listStages(),
-  ])
-  if (!lsx) return null
-  const line = lines.find((l) => l.id === orderLineId)
-  if (!line) return null
+  stageWanted?: string | null,
+): Promise<EntrySheet | null> {
+  const [lsx, components, lines, jobs, entries, stagesCat, depts, transfers] =
+    await Promise.all([
+      productionRepo.findById(lsxId),
+      componentsRepo.listByLsx(lsxId),
+      lsxLinesRepo.listLines(lsxId),
+      jobsRepo.listByLsx(lsxId),
+      entriesRepo.listByLsxWithStatus(lsxId),
+      productionRepo.listStages(),
+      departmentsRepo.list(),
+      transfersRepo.listRawByLsx(lsxId),
+    ])
+  if (!lsx || lines.length === 0) return null
 
-  const plannedRoute: string[] = jobs
-    .filter((j) => j.production_order_line_id === orderLineId)
-    .sort((a, b) => a.seq - b.seq)
-    .map((j) => j.stage)
+  const plannedByLine = new Map<string, string[]>()
+  for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
+    const arr = plannedByLine.get(j.production_order_line_id) ?? []
+    arr.push(j.stage)
+    plannedByLine.set(j.production_order_line_id, arr)
+  }
 
-  const tally = new Map<string, EntryTally>()
-  // Đã ghi HÔM NAY — mọi trạng thái phiếu, kể cả nháp: mục đích là chống gõ
-  // đúp, nên nháp của chính mình cũng phải đếm.
+  // Lộ trình hiệu lực per component + kế hoạch đếm per dòng — một lần, dùng
+  // cho cả việc chọn công đoạn lẫn dựng dòng nhập.
+  const planByLine = new Map<string, ReturnType<typeof resolveCountingPlan>>()
+  const routeOf = new Map<string, string[]>()
+  const worked = new Set<string>()
+  for (const line of lines) {
+    const lineComps = components.filter((c) => c.production_order_line_id === line.id)
+    const plan = resolveCountingPlan(lineComps, plannedByLine.get(line.id))
+    planByLine.set(line.id, plan)
+    for (const c of lineComps) {
+      const r =
+        plan.own_route.get(c.id) ??
+        clipRoute(
+          resolveComponentRoute(plannedByLine.get(line.id), c.group_code),
+          c.first_stage,
+          c.final_stage,
+        )
+      routeOf.set(c.id, r)
+      for (const s of r) worked.add(s)
+    }
+    for (const s of plan.virtual_stages) worked.add(s)
+  }
+  const stages = stagesCat.filter((s) => worked.has(s.code))
+  if (stages.length === 0) return null
+  const stage = stages.some((s) => s.code === stageWanted)
+    ? (stageWanted as string)
+    : stages[0].code
+
+  // Sản lượng của CÔNG ĐOẠN đang mở, tách theo trạng thái phiếu + đã ghi hôm nay.
   const todayIso = vnTodayIso()
+  const tally = new Map<string, EntryTally>()
   const todayQty = new Map<string, number>()
   for (const e of entries) {
     if (e.stage !== stage) continue
@@ -387,110 +435,152 @@ export async function loadWorkItem(
     }
   }
 
-  // THANG ĐƠN VỊ ĐẾM (lib/default-assembly): cụm thật thắng; BOM phẳng thì chi
-  // tiết dừng trước hàn và từ hàn trở đi ghi trên dòng CỤM MẶC NHIÊN (id ảo —
-  // service ghi sẽ vật chất hoá ở lượt ghi đầu tiên).
-  const lineComps = components.filter((c) => c.production_order_line_id === orderLineId)
-  const plan = resolveCountingPlan(lineComps, plannedRoute)
-  const mine = lineComps.filter((c) =>
-    (
-      plan.own_route.get(c.id) ??
-      clipRoute(
-        resolveComponentRoute(plannedRoute, c.group_code),
-        c.first_stage,
-        c.final_stage,
-      )
-    ).includes(stage),
-  )
-  const virtualHere = plan.virtual_stages.includes(stage)
-  if (mine.length === 0 && !virtualHere) return null
-
-  const out: WorkItemLine[] = mine.map((c) => {
-    const needed = calcComponent(
-      { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
-      line.qty,
-    ).total_needed
-    const t = tally.get(c.id)
-    const done = t?.confirmed.qty ?? 0
-    const pending = t?.pending.qty ?? 0
-    return {
-      component_id: c.id,
-      name: c.name,
-      cluster: c.cluster,
-      unit: c.unit,
-      dm_kg: c.dm_kg,
-      needed,
-      done,
-      pending,
-      remaining: Math.max(0, needed - done),
-      today_qty: todayQty.get(c.id) ?? 0,
-    }
-  })
-
-  // Dòng CỤM MẶC NHIÊN ở công đoạn từ hàn trở đi: đơn vị BỘ, cần = SL đặt.
-  // Sản lượng SUY từ sổ chi tiết bị gộp (min chi tiết chậm nhất) — sau khi
-  // service ghi vật chất hoá thì dòng cụm THẬT thay chỗ này và có sổ riêng.
-  if (virtualHere) {
-    const absorbed = lineComps
-      .filter((c) => plan.own_route.has(c.id))
+  const groups: EntrySheetGroup[] = []
+  for (const line of lines) {
+    const lineComps = components.filter((c) => c.production_order_line_id === line.id)
+    const plan = planByLine.get(line.id)!
+    const out: EntrySheetLine[] = lineComps
+      .filter((c) => routeOf.get(c.id)?.includes(stage))
       .map((c) => {
-        const total = calcComponent(
+        const needed = calcComponent(
           { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
           line.qty,
         ).total_needed
         const t = tally.get(c.id)
+        const done = t?.confirmed.qty ?? 0
         return {
-          total,
-          confirmed: t?.confirmed.qty ?? 0,
+          component_id: c.id,
+          kind: c.kind,
+          is_virtual: false,
+          cluster: c.cluster,
+          name: c.name,
+          unit: c.unit,
+          dm_kg: c.dm_kg,
+          needed,
+          done,
           pending: t?.pending.qty ?? 0,
+          remaining: Math.max(0, needed - done),
+          today_qty: todayQty.get(c.id) ?? 0,
         }
       })
-    const minSets = (pick: (a: (typeof absorbed)[number]) => number) => {
-      let m: number | null = null
-      for (const a of absorbed) {
-        if (a.total <= 0) continue
-        const sets = Math.floor((pick(a) * line.qty) / a.total)
-        m = m == null ? sets : Math.min(m, sets)
+
+    // Dòng CỤM MẶC NHIÊN: đơn vị BỘ, cần = SL đặt; sản lượng SUY từ sổ chi
+    // tiết bị gộp (min chi tiết chậm nhất) vì cụm ảo chưa có sổ riêng.
+    if (plan.virtual_stages.includes(stage)) {
+      const absorbed = lineComps
+        .filter((c) => plan.own_route.has(c.id))
+        .map((c) => {
+          const total = calcComponent(
+            { qty_per_unit: c.qty_per_unit, dm_kg: c.dm_kg, pcs_per_bar: c.pcs_per_bar },
+            line.qty,
+          ).total_needed
+          const t = tally.get(c.id)
+          return { total, confirmed: t?.confirmed.qty ?? 0, pending: t?.pending.qty ?? 0 }
+        })
+      const minSets = (pick: (a: (typeof absorbed)[number]) => number) => {
+        let m: number | null = null
+        for (const a of absorbed) {
+          if (a.total <= 0) continue
+          const sets = Math.floor((pick(a) * line.qty) / a.total)
+          m = m == null ? sets : Math.min(m, sets)
+        }
+        return Math.min(m ?? 0, line.qty)
       }
-      return Math.min(m ?? 0, line.qty)
+      const vDone = minSets((a) => a.confirmed)
+      const vAll = minSets((a) => a.confirmed + a.pending)
+      out.push({
+        component_id: defaultAssemblyId(line.id),
+        kind: 'assembly',
+        is_virtual: true,
+        cluster: null,
+        name: DEFAULT_ASSEMBLY_NAME,
+        unit: 'bộ',
+        dm_kg: null,
+        needed: line.qty,
+        done: vDone,
+        pending: Math.max(0, vAll - vDone),
+        remaining: Math.max(0, line.qty - vDone),
+        today_qty: 0,
+      })
     }
-    const vDone = minSets((a) => a.confirmed)
-    const vAll = minSets((a) => a.confirmed + a.pending)
-    out.push({
-      component_id: defaultAssemblyId(line.id),
-      name: DEFAULT_ASSEMBLY_NAME,
-      cluster: null,
-      unit: 'bộ',
-      dm_kg: null,
-      needed: line.qty,
-      done: vDone,
-      pending: Math.max(0, vAll - vDone),
-      remaining: Math.max(0, line.qty - vDone),
-      today_qty: 0,
-    })
+
+    if (out.length > 0) {
+      groups.push({
+        order_line_id: line.id,
+        product_code: line.product_code,
+        product_name: line.name_vi ?? line.product_code,
+        qty: line.qty,
+        lines: out,
+      })
+    }
   }
 
-  const measured = out.map((l) => ({ total_needed: l.needed, done: l.done }))
-  const doneSets = setsDone(measured, line.qty)
-  const pendingSets = setsDone(
-    out.map((l) => ({ total_needed: l.needed, done: l.done + l.pending })),
-    line.qty,
-  )
+  // ĐỀ XUẤT TRƯỚC, NHẬP SAU (mượn proposal của SAP CO11N): tổ đang cầm hàng
+  // được giao chưa dùng hết, hoặc tổ đã ghi (chi tiết × công đoạn này) trong
+  // 7 ngày — thực tế xưởng cùng một mã làm nhiều ngày liền.
+  const suggested: { component_id: string; team_id: string }[] = []
+  const seenSug = new Set<string>()
+  const pushSug = (componentId: string, teamId: string) => {
+    const k = `${componentId}|${teamId}`
+    if (seenSug.has(k)) return
+    seenSug.add(k)
+    suggested.push({ component_id: componentId, team_id: teamId })
+  }
+  const issuedNet = new Map<string, number>()
+  for (const t of transfers) {
+    if (t.stage !== stage) continue
+    const k = `${t.component_id}|${t.team_department_id}`
+    issuedNet.set(
+      k,
+      (issuedNet.get(k) ?? 0) +
+        (t.direction === 'issue' ? Number(t.qty) : -Number(t.qty)),
+    )
+  }
+  for (const [k, net] of issuedNet) {
+    if (net <= 0) continue
+    const [componentId, teamId] = k.split('|')
+    pushSug(componentId, teamId)
+  }
+  const from7 = shiftIso(todayIso, -7)
+  const from30 = shiftIso(todayIso, -30)
+  const reasonSeen = new Set<string>()
+  const reasons: { reason: string; at: string }[] = []
+  for (const e of entries) {
+    if (e.stage === stage && e.team_department_id && e.entry_date >= from7) {
+      pushSug(e.component_id, e.team_department_id)
+    }
+    if (e.defect_reason && e.entry_date >= from30) {
+      const r = e.defect_reason.trim()
+      if (r && !reasonSeen.has(r.toLowerCase())) {
+        reasonSeen.add(r.toLowerCase())
+        reasons.push({ reason: r, at: e.created_at })
+      }
+    }
+  }
+  reasons.sort((a, b) => b.at.localeCompare(a.at))
 
   return {
-    lsx_id: lsx.id,
-    lsx_code: lsx.code,
-    customer_name: lsx.customer_name,
-    order_line_id: line.id,
-    product_code: line.product_code,
-    product_name: line.name_vi ?? line.product_code,
-    product_qty: line.qty,
+    lsx: {
+      id: lsx.id,
+      code: lsx.code,
+      customer_name: lsx.customer_name,
+      ship_date: lsx.ship_date,
+      status: lsx.status,
+    },
     stage,
-    stage_label: stages.find((s) => s.code === stage)?.label ?? stage,
-    planned_sets: line.qty,
-    done_sets: doneSets,
-    remaining_sets: Math.max(0, line.qty - doneSets),
-    pending_sets: Math.max(0, pendingSets - doneSets),
-    lines: out,
+    stage_label: stagesCat.find((s) => s.code === stage)?.label ?? stage,
+    stages,
+    teams: depts
+      .filter((d) => d.workspace_id === 'production')
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        stage_code: resolveTeamStage(d, stagesCat),
+      })),
+    groups,
+    suggested,
+    recent_defect_reasons: reasons.slice(0, 15).map((r) => r.reason),
+    today: todayIso,
+    can_record: lsx.status === 'approved' || lsx.status === 'in_progress',
   }
 }

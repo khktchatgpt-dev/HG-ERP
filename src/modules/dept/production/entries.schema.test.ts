@@ -37,4 +37,22 @@ describe('entryLineSchema', () => {
     const r = entryLineSchema.safeParse({ ...base, qty: 10, defect_qty: 2 })
     expect(r.success).toBe(false)
   })
+
+  it('id ảo cụm mặc nhiên default-asm:<uuid> → hợp lệ (27/08)', () => {
+    const r = entryLineSchema.safeParse({
+      component_id: 'default-asm:5f0e8db4-6f65-4f5e-9c8b-1a2b3c4d5e6f',
+      qty: 12,
+    })
+    expect(r.success).toBe(true)
+  })
+
+  it('id không phải uuid / tiền tố lạ → từ chối', () => {
+    expect(entryLineSchema.safeParse({ component_id: 'abc', qty: 1 }).success).toBe(false)
+    expect(
+      entryLineSchema.safeParse({
+        component_id: 'khac:5f0e8db4-6f65-4f5e-9c8b-1a2b3c4d5e6f',
+        qty: 1,
+      }).success,
+    ).toBe(false)
+  })
 })

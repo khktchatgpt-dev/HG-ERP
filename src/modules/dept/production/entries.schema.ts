@@ -5,9 +5,22 @@ import { z } from 'zod'
  * 1 lần lưu = nhiều chi tiết cùng công đoạn + ngày + tổ (thói quen lưới Excel).
  * Phế phẩm = số + lý do text tự do (bỏ danh mục mã lỗi — user chốt 07/2026).
  */
+/**
+ * id chi tiết/cụm — nhận CẢ id ảo cụm mặc nhiên `default-asm:<line_id>`
+ * (lib/default-assembly, 27/08): service record sẽ vật chất hoá thành dòng
+ * thật ở lượt ghi đầu tiên. Chỉ uuid trần thì phiếu ghi theo BỘ bị đá ngay
+ * ở biên validate.
+ */
+const componentIdSchema = z
+  .string()
+  .regex(
+    /^(default-asm:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    'id chi tiết không hợp lệ',
+  )
+
 export const entryLineSchema = z
   .object({
-    component_id: z.string().uuid(),
+    component_id: componentIdSchema,
     /** 0 hợp lệ khi dòng CHỈ báo phế (0173) — phát hiện phế lô cũ, không có đạt mới. */
     qty: z.coerce.number().min(0, 'SL không âm'),
     kg: z.coerce.number().min(0).optional().nullable(),

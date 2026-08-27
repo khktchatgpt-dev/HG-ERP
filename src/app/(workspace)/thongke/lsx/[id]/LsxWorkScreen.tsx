@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Check } from 'lucide-react'
+import { ArrowLeft, Check, PenLine } from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -96,12 +96,22 @@ export function LsxWorkScreen({
         title={`Lệnh ${lsx.code}`}
         description={lsx.customer_name}
         actions={
-          <Button asChild variant="outline" size="sm">
-            <Link href="/thongke/lenh">
-              <ArrowLeft aria-hidden />
-              Danh sách lệnh
-            </Link>
-          </Button>
+          <>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/thongke/lenh">
+                <ArrowLeft aria-hidden />
+                Danh sách lệnh
+              </Link>
+            </Button>
+            {canRecord && (
+              <Button asChild size="sm">
+                <Link href={`/thongke/lsx/${lsx.id}/ghi`}>
+                  <PenLine aria-hidden />
+                  Ghi sổ
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -243,9 +253,19 @@ export function LsxWorkScreen({
                           </span>
                         </td>
                         <td className="py-1.5 pr-4">
-                          <Badge tone={STATUS_TONE[r.status].tone}>
-                            {STATUS_TONE[r.status].label}
-                          </Badge>
+                          <span className="flex items-center gap-2">
+                            <Badge tone={STATUS_TONE[r.status].tone}>
+                              {STATUS_TONE[r.status].label}
+                            </Badge>
+                            {canRecord && (
+                              <Link
+                                href={`/thongke/lsx/${lsx.id}/ghi?stage=${r.stage}`}
+                                className="text-xs font-medium text-[var(--primary)] hover:underline"
+                              >
+                                Ghi
+                              </Link>
+                            )}
+                          </span>
                         </td>
                       </>
                     )
@@ -266,10 +286,10 @@ export function LsxWorkScreen({
         ))}
       </div>
 
-      {/* Màn nhập "Sổ sản lượng" đã xoá 27/08/2026 — bỏ luôn câu chỉ đường sang
-          đó, để lại là dắt người dùng vào chỗ không còn tồn tại. */}
       {canRecord && (
-        <p className="text-muted-foreground text-xs">Màn này chỉ để XEM tiến độ.</p>
+        <p className="text-muted-foreground text-xs">
+          Bấm “Ghi” trên dòng công đoạn (hoặc nút Ghi sổ) để lập phiếu báo sản lượng.
+        </p>
       )}
     </div>
   )
