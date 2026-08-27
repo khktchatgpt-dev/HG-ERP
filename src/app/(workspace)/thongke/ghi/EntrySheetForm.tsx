@@ -49,9 +49,12 @@ const num = (s: string) => {
 export function EntrySheetForm({
   sheet,
   userTeamId,
+  lsxSwitcher,
 }: {
   sheet: EntrySheet
   userTeamId: string | null
+  /** Ô đổi lệnh nhanh (server truyền xuống) — thay cho mã lệnh tĩnh ở đầu. */
+  lsxSwitcher?: React.ReactNode
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -177,7 +180,7 @@ export function EntrySheetForm({
 
       {/* Đầu lệnh — biết mình đang ghi cho lệnh nào, đường tắt sang hai màn kia */}
       <section className="bg-card flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border px-4 py-2.5">
-        <DocChip>{sheet.lsx.code}</DocChip>
+        {lsxSwitcher ?? <DocChip>{sheet.lsx.code}</DocChip>}
         <span className="min-w-0 truncate text-sm font-medium">
           {sheet.lsx.customer_name}
         </span>
@@ -280,17 +283,17 @@ export function EntrySheetForm({
               </span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
+              <table className="w-full min-w-[680px] text-sm">
                 <thead>
                   <tr className="text-muted-foreground border-b text-left text-[10px] uppercase">
-                    <th className="px-4 py-1.5">Dòng ghi</th>
-                    <th className="w-24 py-1.5 pr-2 text-right">Cần</th>
-                    <th className="w-24 py-1.5 pr-2 text-right">Đã đạt</th>
-                    <th className="w-28 py-1.5 pr-2 text-right">SL đạt</th>
-                    <th className="w-24 py-1.5 pr-2 text-right">Phế</th>
-                    <th className="w-44 py-1.5 pr-2">Lý do phế</th>
-                    <th className="w-28 py-1.5 pr-2 text-right">kg</th>
-                    <th className="w-10 py-1.5 pr-4" />
+                    <th className="min-w-44 px-3 py-1.5">Dòng ghi</th>
+                    <th className="w-16 py-1.5 pr-2 text-right">Cần</th>
+                    <th className="w-20 py-1.5 pr-2 text-right">Đã đạt</th>
+                    <th className="w-24 py-1.5 pr-2 text-right">SL đạt</th>
+                    <th className="w-20 py-1.5 pr-2 text-right">Phế</th>
+                    <th className="w-36 py-1.5 pr-2">Lý do phế</th>
+                    <th className="w-20 py-1.5 pr-2 text-right">kg</th>
+                    <th className="w-8 py-1.5 pr-3" />
                   </tr>
                 </thead>
                 <tbody>
@@ -307,8 +310,10 @@ export function EntrySheetForm({
                         key={l.component_id}
                         open={d.open}
                         main={
-                          <tr className="border-b last:border-b-0">
-                            <td className="px-4 py-2">
+                          // align-middle: ô nhập đứng giữa hàng kể cả khi tên
+                          // dòng xuống 2 dòng — hết cảnh lưới nhìn xộc xệch.
+                          <tr className="border-b last:border-b-0 [&>td]:align-middle">
+                            <td className="px-3 py-2">
                               <div className="flex items-center gap-1.5">
                                 {suggestedSet.has(l.component_id) && (
                                   <span
