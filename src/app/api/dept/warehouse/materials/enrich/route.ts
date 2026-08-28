@@ -11,7 +11,7 @@ import { materialEnrichSchema } from '@/modules/dept/warehouse/warehouse.schema'
  */
 export const POST = handle(async (req: Request) => {
   const user = await authService.requireUser()
-  const { items } = await parseJson(req, materialEnrichSchema)
-  const result = await materialsService.enrichFromOrder(user, items)
+  const { items, po_code } = await parseJson(req, materialEnrichSchema)
+  const result = await materialsService.enrichFromOrder(user, items, po_code)
   return NextResponse.json(result)
 })

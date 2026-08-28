@@ -4958,6 +4958,67 @@ export type Database = {
           },
         ]
       }
+      warehouse_material_changes: {
+        Row: {
+          actor_id: string | null
+          after_value: string | null
+          before_value: string | null
+          created_at: string
+          field: string
+          id: string
+          material_code: string | null
+          material_id: string
+          source: string
+          source_ref: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          after_value?: string | null
+          before_value?: string | null
+          created_at?: string
+          field: string
+          id?: string
+          material_code?: string | null
+          material_id: string
+          source?: string
+          source_ref?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          after_value?: string | null
+          before_value?: string | null
+          created_at?: string
+          field?: string
+          id?: string
+          material_code?: string | null
+          material_id?: string
+          source?: string
+          source_ref?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_material_changes_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_material_changes_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_material_changes_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouse_materials: {
         Row: {
           barcode: string | null

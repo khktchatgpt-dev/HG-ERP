@@ -175,6 +175,8 @@ export type DomainEvent =
       po_id: string
       code: string
       currency: string
+      /** Người bấm gửi NCC — vào sổ vết giá của danh mục (0177). */
+      ordered_by: string
       lines: { material_id: string | null; unit_price: number | null }[]
     }
   /**
@@ -346,6 +348,23 @@ export type DomainEvent =
       role_key: string
       role_label: string
       actor_id: string
+    }
+
+  /**
+   * VẾT THAY ĐỔI DANH MỤC VẬT TƯ (0177). Danh mục sửa được từ nhiều đường —
+   * màn Kho, hộp xác nhận sau khi lưu đơn, event giá khi gửi NCC — nên vết đi
+   * qua bus: nơi ghi CHỈ MỘT (handler material.audit), service khỏi phải nhớ.
+   */
+  | {
+      name: 'material.changed'
+      material_id: string
+      material_code: string | null
+      /** NULL = máy tự ghi (event giá chạy ngoài phiên người dùng). */
+      actor_id: string | null
+      source: 'manual' | 'po_enrich' | 'po_price' | 'import' | 'system'
+      /** Mã chứng từ gây ra thay đổi — PO-2026-0024, tên file nạp… */
+      source_ref: string | null
+      changes: { field: string; before: string | null; after: string | null }[]
     }
 
 export type EventName = DomainEvent['name']

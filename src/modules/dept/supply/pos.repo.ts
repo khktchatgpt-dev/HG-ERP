@@ -234,6 +234,28 @@ export type PurchasedMaterial = {
   last_at: string
 }
 
+/**
+ * MỘT LẦN MUA của một vật tư — nền của "lịch sử giá mua".
+ *
+ * KHÔNG có bảng lịch sử giá riêng, và cố ý vậy: mỗi lần mua ĐÃ nằm sẵn ở dòng
+ * đơn đặt. Dựng thêm bảng là chép đôi cùng một con số, rồi sớm muộn hai chỗ lệch
+ * nhau và không ai biết bên nào đúng. Đọc thẳng từ chứng từ thì lịch sử có
+ * NGAY cho toàn bộ đơn cũ, không cần nạp lại gì.
+ */
+export type MaterialPricePoint = {
+  po_id: string
+  po_code: string
+  supplier_name: string
+  currency: string
+  unit_price: number | null
+  /** null = giá theo ĐVT mua; 'kg'/'m²' = giá theo đơn vị 2 (0053). */
+  price_unit: string | null
+  qty_ordered: number
+  status: string
+  /** Ngày gửi NCC; đơn cũ chưa có mốc thì lùi về ngày lập. */
+  at: string
+}
+
 export const posRepo = {
   async nextCode(): Promise<string> {
     const { data, error } = await db().rpc('next_doc_code', { p_kind: 'PO' })
@@ -354,6 +376,61 @@ export const posRepo = {
       out.set(r.po_id, list)
     }
     return out
+  },
+
+  /**
+   * LỊCH SỬ GIÁ MUA của MỘT vật tư — mọi lần đã gửi NCC, mới nhất trên.
+   *
+   * Chỉ tính đơn từ 'ordered' trở đi: giá trên đơn nháp/chờ duyệt chưa phải giá
+   * chốt (cùng ranh giới với lúc ghi `last_purchase_price`). Đơn huỷ bị loại.
+   */
+  async priceHistoryByMaterial(materialId: string, limit = 50): Promise<MaterialPricePoint[]> {
+    const { data } = await db()
+      .from('supply_purchase_order_lines')
+      .select(
+        'qty_ordered, unit_price, price_basis, unit2, po:supply_purchase_orders!inner(id, code, currency, status, ordered_at, created_at, supplier:supply_suppliers(name))',
+      )
+      .eq('material_id', materialId)
+      .not('unit_price', 'is', null)
+      .in('po.status', ['ordered', 'confirmed', 'in_transit', 'partial', 'received'])
+      .limit(limit)
+    type S = { name: string }
+    type P = {
+      id: string
+      code: string
+      currency: string
+      status: string
+      ordered_at: string | null
+      created_at: string
+      supplier: S | S[] | null
+    }
+    type Raw = {
+      qty_ordered: number
+      unit_price: number | null
+      price_basis: 'unit' | 'unit2' | null
+      unit2: string | null
+      po: P | P[] | null
+    }
+    const out: MaterialPricePoint[] = []
+    for (const r of (data ?? []) as Raw[]) {
+      const po = Array.isArray(r.po) ? r.po[0] : r.po
+      if (!po) continue
+      const sup = Array.isArray(po.supplier) ? po.supplier[0] : po.supplier
+      out.push({
+        po_id: po.id,
+        po_code: po.code,
+        supplier_name: sup?.name ?? '—',
+        currency: po.currency,
+        unit_price: r.unit_price,
+        price_unit: r.price_basis === 'unit2' ? r.unit2 : null,
+        qty_ordered: Number(r.qty_ordered) || 0,
+        status: po.status,
+        at: po.ordered_at ?? po.created_at,
+      })
+    }
+    // Sắp ở đây chứ không nhờ PostgREST: khoá sắp nằm ở BẢNG THAM CHIẾU và mốc
+    // thật là `ordered_at ?? created_at`, một câu order không diễn tả được.
+    return out.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0))
   },
 
   /**

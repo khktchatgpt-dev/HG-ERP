@@ -220,6 +220,50 @@ export const supplyRepo = {
    * dòng đơn theo doc — mỗi phiếu một mốc "PNK-… nhận 98 / PXK-… trả 5".
    * direction out + po_line = phiếu TRẢ NCC (0080).
    */
+  /**
+   * ĐÃ VỀ THEO ĐỢT, phần CÓ CHỨNG TỪ (0153): PNK nối `shipment_id` → cộng
+   * movement theo (đợt × dòng đơn). Đây là số THẬT; phiếu không nối đợt (giao
+   * đột xuất, đơn trước 0152) không có ở đây — tầng hiển thị suy diễn nốt.
+   * Cộng cả qty_rejected: "NCC đã chở tới" gồm cả phần QC loại, cùng cách đếm
+   * với logic tự chuyển đợt sang 'received' ở stock.service.
+   */
+  async receiptsByShipment(poId: string): Promise<Map<string, Map<string, number>>> {
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('po_line_id, qty, qty_rejected, direction, doc:warehouse_docs!inner(shipment_id, kind)')
+      .eq('doc.kind', 'receipt')
+      .not('doc.shipment_id', 'is', null)
+      .not('po_line_id', 'is', null)
+      .limit(2000)
+    type R = {
+      po_line_id: string
+      qty: number
+      qty_rejected: number | null
+      direction: 'in' | 'out'
+      doc: { shipment_id: string | null } | { shipment_id: string | null }[] | null
+    }
+    // Lọc theo PO qua bảng đợt — movement không mang po_id, còn shipment thì có.
+    const { data: ships } = await db()
+      .from('supply_po_shipments')
+      .select('id')
+      .eq('po_id', poId)
+    const shipIds = new Set(((ships ?? []) as { id: string }[]).map((r) => r.id))
+    const out = new Map<string, Map<string, number>>()
+    for (const r of (data ?? []) as R[]) {
+      if (r.direction !== 'in') continue
+      const doc = Array.isArray(r.doc) ? r.doc[0] : r.doc
+      const sid = doc?.shipment_id
+      if (!sid || !shipIds.has(sid)) continue
+      const per = out.get(sid) ?? new Map<string, number>()
+      per.set(
+        r.po_line_id,
+        (per.get(r.po_line_id) ?? 0) + Number(r.qty) + Number(r.qty_rejected ?? 0),
+      )
+      out.set(sid, per)
+    }
+    return out
+  },
+
   async docsByPo(poId: string): Promise<
     {
       doc_id: string

@@ -271,3 +271,61 @@ export const materialsRepo = {
     return (data ?? []).length
   },
 }
+
+/**
+ * Một dòng vết = MỘT Ô đổi (0177). Xem header migration để biết vì sao không
+ * chụp cả bản ghi.
+ */
+export type MaterialChange = {
+  id: string
+  material_id: string
+  material_code: string | null
+  field: string
+  before_value: string | null
+  after_value: string | null
+  actor_id: string | null
+  actor_name: string | null
+  source: string
+  source_ref: string | null
+  created_at: string
+}
+
+export const materialChangesRepo = {
+  /**
+   * Ghi vết. Lỗi được LOG chứ không ném: sổ vết hỏng thì thao tác gốc vẫn phải
+   * xong (handler chạy sau khi vật tư đã ghi) — cùng lối với activityRepo.
+   */
+  async insertMany(
+    rows: {
+      material_id: string
+      material_code: string | null
+      field: string
+      before_value: string | null
+      after_value: string | null
+      actor_id: string | null
+      source: string
+      source_ref: string | null
+    }[],
+  ): Promise<void> {
+    if (rows.length === 0) return
+    const { error } = await db().from('warehouse_material_changes').insert(rows)
+    if (error) console.error('material change log failed:', error.message)
+  },
+
+  /** Lịch sử của MỘT vật tư — mới nhất trên, kèm tên người sửa. */
+  async listByMaterial(materialId: string, limit = 200): Promise<MaterialChange[]> {
+    const { data } = await db()
+      .from('warehouse_material_changes')
+      .select(
+        'id, material_id, material_code, field, before_value, after_value, actor_id, source, source_ref, created_at, actor:users!warehouse_material_changes_actor_id_fkey(name)',
+      )
+      .eq('material_id', materialId)
+      .order('created_at', { ascending: false })
+      .limit(limit)
+    type Raw = Omit<MaterialChange, 'actor_name'> & { actor: { name: string | null } | null }
+    return ((data ?? []) as unknown as Raw[]).map((r) => ({
+      ...r,
+      actor_name: r.actor?.name ?? null,
+    }))
+  },
+}
