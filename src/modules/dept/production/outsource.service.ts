@@ -1,7 +1,12 @@
 import { outsourceRepo, type OutsourceEntryJoined } from './outsource.repo'
 import { componentsRepo } from './components.repo'
+import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
-import { summarizeOutsource, type OutsourceSummary } from '@/lib/production-summary'
+import {
+  backflushKg,
+  summarizeOutsource,
+  type OutsourceSummary,
+} from '@/lib/production-summary'
 import type { User } from '@/modules/core/users/users.repo'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
@@ -16,6 +21,8 @@ export type OutsourcePairSummary = {
   component_name: string | null
   supplier_id: string
   supplier_name: string | null
+  /** Công đoạn (0171) — null gom các bản ghi cũ chưa gắn công đoạn. */
+  stage: string | null
   summary: OutsourceSummary
 }
 
@@ -28,9 +35,11 @@ export const outsourceService = {
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
     const entries = await outsourceRepo.listByLsx(lsxId)
+    // Đối chiếu tách theo CÔNG ĐOẠN (0171) — cùng chi tiết đi TTP hàn rồi đi
+    // VINH sơn là hai dòng đối chiếu, không trộn giao/nhận của hai việc.
     const byPair = new Map<string, OutsourceEntryJoined[]>()
     for (const e of entries) {
-      const k = `${e.component_id}|${e.supplier_id}`
+      const k = `${e.component_id}|${e.supplier_id}|${e.stage ?? ''}`
       const arr = byPair.get(k) ?? []
       arr.push(e)
       byPair.set(k, arr)
@@ -40,6 +49,7 @@ export const outsourceService = {
       component_name: list[0].component_name,
       supplier_id: list[0].supplier_id,
       supplier_name: list[0].supplier_name,
+      stage: list[0].stage,
       summary: summarizeOutsource(list),
     }))
     return { entries, pairs }
@@ -52,6 +62,7 @@ export const outsourceService = {
     input: {
       component_id: string
       supplier_id: string
+      stage?: string | null
       direction: 'send' | 'receive'
       entry_date: string
       qty: number
@@ -67,17 +78,34 @@ export const outsourceService = {
       throw BadRequest('Chỉ ghi gia công cho LSX đã duyệt / đang sản xuất')
     }
     const components = await componentsRepo.listByLsx(lsxId)
-    if (!components.some((c) => c.id === input.component_id)) {
+    const comp = components.find((c) => c.id === input.component_id)
+    if (!comp) {
       throw BadRequest('Chi tiết không thuộc lệnh này')
+    }
+    // Công đoạn (0171) phải thuộc lộ trình của dòng SP — cùng chính sách sổ số
+    // liệu; dòng chưa lên kế hoạch thì ghi tự do.
+    if (input.stage) {
+      const jobs = await jobsRepo.listByLsx(lsxId)
+      const route = jobs
+        .filter((j) => j.production_order_line_id === comp.production_order_line_id)
+        .map((j) => j.stage)
+      if (route.length > 0 && !route.includes(input.stage)) {
+        throw BadRequest(
+          `Chi tiết "${comp.name}" không đi qua công đoạn này theo kế hoạch — kiểm tra lại hoặc sửa kế hoạch ở màn Kế hoạch SX`,
+        )
+      }
     }
     await outsourceRepo.insert({
       production_order_id: lsxId,
       component_id: input.component_id,
       supplier_id: input.supplier_id,
+      stage: input.stage ?? null,
       direction: input.direction,
       entry_date: input.entry_date,
       qty: input.qty,
-      kg: input.kg ?? null,
+      // Backflush như sổ thường (GĐ5.1): kg bỏ trống → ĐM × SL — báo cáo
+      // định mức đọc kg nên đường gia công ngoài không được là lỗ hổng.
+      kg: backflushKg(input.kg ?? null, comp.dm_kg, input.qty),
       defect_qty: input.defect_qty ?? 0,
       note: input.note ?? null,
       created_by: user.id,

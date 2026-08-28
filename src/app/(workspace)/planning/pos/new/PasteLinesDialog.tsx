@@ -48,7 +48,6 @@ const num = (n: number) => n.toLocaleString('vi-VN')
  */
 export function PasteLinesDialog({
   open,
-  template,
   allowFree,
   onClose,
   onConfirm,

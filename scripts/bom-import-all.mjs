@@ -479,7 +479,6 @@ const unmatched = []
 const weak = []
 const assets = []
 const skippedHasParts = []
-let totalRows = 0
 
 for (const file of files) {
   let wb
@@ -547,7 +546,6 @@ for (const file of files) {
       pics,
       wbFiles: wb.files,
     })
-    totalRows += parts.length
   }
 }
 

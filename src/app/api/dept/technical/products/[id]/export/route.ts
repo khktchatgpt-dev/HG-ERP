@@ -3,6 +3,7 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { productsService } from '@/modules/dept/technical/technical.service'
 import { filesRepo } from '@/modules/core/files/files.repo'
 import { filesService } from '@/modules/core/files/files.service'
+import { settingsService } from '@/modules/core/settings/settings.service'
 import {
   buildProductExcel,
   productExcelFilename,
@@ -24,7 +25,11 @@ export const GET = handle(
     if (!profile.product) throw NotFound('Sản phẩm không tồn tại')
     const p = profile.product
 
-    const files = await filesRepo.listByProduct(id)
+    // Đầu thư của phiếu in lấy từ cấu hình chung — cùng nguồn với LSX/đơn hàng.
+    const [files, company] = await Promise.all([
+      filesRepo.listByProduct(id),
+      settingsService.getAll(),
+    ])
 
     /*
      * Ảnh đại diện: ký URL rồi tải về nhúng vào file. NUỐT LỖI có chủ ý — thiếu
@@ -64,6 +69,7 @@ export const GET = handle(
         size_bytes: f.size_bytes,
       })),
       image,
+      company,
       exportedBy: user.name ?? user.email,
       exportedAt: new Date(),
     })

@@ -14,11 +14,14 @@ export const GET = handle(async (_req: Request, { params }: Params) => {
   return NextResponse.json(data)
 })
 
-/** Ghi đè trọn bộ bảng chi tiết — Kế hoạch (KH-CƯ) nhập tay, BOM chỉ tham khảo. */
+/** Ghi đè trọn bộ bảng chi tiết — Kế hoạch (KH-CƯ) nhập tay, BOM chỉ tham khảo.
+ *  `seed_profile` nhập ngược lên hồ sơ SP chưa có định mức (user chốt 23/08). */
 export const PUT = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const { lines } = await parseJson(req, componentsSaveSchema)
-  await componentsService.save(user, id, lines)
-  return NextResponse.json({ ok: true })
+  const { lines, seed_profile } = await parseJson(req, componentsSaveSchema)
+  const result = await componentsService.save(user, id, lines, {
+    seedProfile: seed_profile,
+  })
+  return NextResponse.json({ ok: true, ...result })
 })

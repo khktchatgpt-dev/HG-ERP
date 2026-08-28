@@ -10,7 +10,6 @@ import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { RowMenu } from '@/components/erp/RowMenu'
-import { PartCardEdit } from './PartCardEdit'
 import { PartsCopyDialog } from './PartsCopyDialog'
 import { PartsBulkEntry } from './PartsBulkEntry'
 import { BomAiImport } from './BomAiImport'
@@ -255,9 +254,9 @@ function ClusterHead({
   const c = block.cluster
   const route = [c?.first_stage, c?.final_stage].filter(Boolean).join(' → ')
   return (
-    <tr className={cn('border-b', c ? 'bg-accent/60' : 'bg-muted/20')}>
-      <td colSpan={colSpan} className="px-1 py-1.5">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+    <tr className={cn(c ? 'bg-accent/60' : 'bg-muted/20')}>
+      <td colSpan={colSpan} className="border-b px-1 py-1.5">
+        <div className="sticky left-1 flex w-fit max-w-full flex-wrap items-center gap-x-2 gap-y-1">
           {canEdit && (
             <input
               type="checkbox"
@@ -712,8 +711,8 @@ export function ProductPartsCard({
           Đóng khối
         </button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-md border">
+        <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
           <thead>
             {/* Ô nhập đổi theo nhóm hạng mục vừa chọn ở trên: chọn "Bao bì" thì
                 6 ô kích thước biến mất, hiện ra ô Vật liệu + Màu. */}
@@ -983,7 +982,12 @@ export function ProductPartsCard({
                   <div className="px-5 pb-3">
                     {
                       <div>
-                        <div className="overflow-x-auto">
+                        <div
+                          className={cn(
+                            'overflow-x-auto',
+                            inline && 'rounded-md border',
+                          )}
+                        >
                           {/* Chế độ NHẬP phải `w-max`, chế độ XEM thì `w-full`.
                               Lưới nhập của khối khung có 20 cột: để `w-full` thì
                               bảng auto-layout nén cho vừa bề ngang và bóp mọi ô
@@ -998,7 +1002,11 @@ export function ProductPartsCard({
                           <table
                             className={cn(
                               'text-sm',
-                              inline ? 'w-max min-w-full' : 'w-full',
+                              // border-separate: viền vẽ trên Ô để đi theo cột
+                              // đóng băng khi cuộn (collapse thì viền đứng yên).
+                              inline
+                                ? 'w-max min-w-full border-separate border-spacing-0'
+                                : 'w-full',
                             )}
                           >
                             <thead>
@@ -1055,9 +1063,9 @@ export function ProductPartsCard({
                                     <tr className="bg-muted/40">
                                       <td
                                         colSpan={colSpanOf(g.code)}
-                                        className="px-1 py-1.5"
+                                        className="border-b px-1 py-1.5"
                                       >
-                                        <span className="text-xs font-semibold">
+                                        <span className="sticky left-1 inline-block text-xs font-semibold">
                                           {sec.title}
                                         </span>
                                         {sec.unitBasis && (
@@ -1108,24 +1116,45 @@ export function ProductPartsCard({
                                             }}
                                           />
                                         ) : editRow === p.id ? (
-                                          // Thẻ chia vùng bung NGAY DƯỚI vị trí dòng,
-                                          // chiếm trọn bề ngang bảng — không đè lên
-                                          // các dòng khác, vẫn đối chiếu được trên dưới.
+                                          /* SỬA TRỰC TIẾP tại chỗ (user chốt
+                                             21/08/2026 — bỏ hộp thoại): dòng
+                                             biến thành đúng lưới nhập của "Gõ
+                                             nhiều dòng", kèm hàng tiêu đề cột
+                                             ngay trên đầu vì bộ cột nhập khác
+                                             bộ cột xem. Enter / nút Xong = lưu
+                                             + đóng, rời dòng = lưu. */
                                           <tr
                                             key={p.id}
                                             className="border-b last:border-0"
                                           >
                                             <td
-                                              colSpan={inlineColSpan(g.code)}
-                                              className="p-2"
+                                              colSpan={colSpanOf(g.code)}
+                                              className="p-0"
                                             >
-                                              <PartCardEdit
-                                                productId={productId}
-                                                part={p}
-                                                groupCode={g.code}
-                                                clusterName={blk.cluster?.name ?? null}
-                                                onClose={() => setEditRow(null)}
-                                              />
+                                              <div className="overflow-x-auto border-y border-[var(--primary)]/40">
+                                                <table className="w-max min-w-full border-separate border-spacing-0 text-sm">
+                                                  <thead>
+                                                    <InlineHead
+                                                      groupCode={g.code}
+                                                    />
+                                                  </thead>
+                                                  <tbody>
+                                                    <PartRowInline
+                                                      productId={productId}
+                                                      part={p}
+                                                      groupCode={g.code}
+                                                      clusterName={
+                                                        blk.cluster?.name ?? null
+                                                      }
+                                                      onDeleted={() => {
+                                                        setBusyId(null)
+                                                        setEditRow(null)
+                                                      }}
+                                                      onDone={() => setEditRow(null)}
+                                                    />
+                                                  </tbody>
+                                                </table>
+                                              </div>
                                             </td>
                                           </tr>
                                         ) : (

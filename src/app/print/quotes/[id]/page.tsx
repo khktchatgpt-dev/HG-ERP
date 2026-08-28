@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
+import { resolveSignatures } from '@/lib/doc-templates'
 import { quotesRepo, listQuoteLinesForPrint } from '@/modules/dept/sales/quotes.repo'
 import { filesService } from '@/modules/core/files/files.service'
 import {
@@ -26,9 +28,11 @@ export default async function QuotePrintPage({
 
   const quote = await quotesRepo.findById(id)
   if (!quote) redirect('/sales/quotes')
-  const [lines, company] = await Promise.all([
+  const [lines, company, tpl] = await Promise.all([
     listQuoteLinesForPrint(id),
     settingsService.getAll(),
+    // Mẫu in (0164): tiêu đề, quốc hiệu, cột ký — /admin/doc-templates.
+    docTemplatesService.get('BG'),
   ])
 
   // Ảnh đại diện SP (cột Picture của mẫu in) — signed URL ngắn hạn, lỗi thì bỏ ảnh.
@@ -82,10 +86,10 @@ export default async function QuotePrintPage({
       <PrintLetterhead
         company={company}
         date={new Date()}
-        nationalHeading={false}
+        nationalHeading={tpl.national_heading}
         dateLabel={`Date: ${new Date().toLocaleDateString('en-GB')}`}
       />
-      <PrintTitle vi="BÁO GIÁ" en="QUOTATION" />
+      <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
 
       <PrintMeta
         rows={[
@@ -217,11 +221,7 @@ export default async function QuotePrintPage({
         </table>
       </div>
       <PrintSignatures
-        cols={[
-          { role: 'KHÁCH HÀNG / CUSTOMER', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
-          { role: 'NGƯỜI LẬP / PREPARED BY', hint: 'Ký, ghi rõ họ tên' },
-          { role: 'GIÁM ĐỐC / DIRECTOR', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
-        ]}
+        cols={resolveSignatures(tpl.signatures, { company: company.company_name })}
       />
     </PrintPage>
   )

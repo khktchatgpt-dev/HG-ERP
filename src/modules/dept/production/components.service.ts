@@ -4,6 +4,7 @@ import { jobsRepo } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { productProfileRepo } from '@/modules/dept/technical/technical.repo'
+import { productsService } from '@/modules/dept/technical/technical.service'
 import { canEditComponents } from './perms'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import {
@@ -11,6 +12,8 @@ import {
   calcComponent,
   type MaterialNeed,
 } from '@/lib/component-needs'
+import { routeForGroup } from '@/lib/stage-route'
+import { JOIN_STAGE } from '@/lib/default-assembly'
 import type { MaterialAllocation } from '@/lib/po-allocation'
 import type { User } from '@/modules/core/users/users.repo'
 import { BadRequest, NotFound } from '@/server/http'
@@ -78,8 +81,21 @@ export const componentsService = {
     }
   },
 
-  /** Ghi đè trọn bộ bảng định hình (pattern BOM editor). */
-  async save(user: User, lsxId: string, input: ComponentInput[]): Promise<void> {
+  /**
+   * Ghi đè trọn bộ bảng định hình (pattern BOM editor).
+   * `opts.seedProfile` (user chốt 23/08/2026): sau khi lưu, nhập ngược bảng
+   * này lên hồ sơ SP cho các SP CHƯA có định mức — chi tiết đường ghi + rào
+   * chắn xem `productsService.seedPartsFromShaping`.
+   */
+  async save(
+    user: User,
+    lsxId: string,
+    input: ComponentInput[],
+    opts: { seedProfile?: boolean } = {},
+  ): Promise<{
+    seeded: { product_code: string; added: number }[]
+    seed_skipped: { product_code: string; reason: string }[]
+  }> {
     await assertAction(user, 'production.shaping.manage')
     const { lsx, orderLines } = await lsxWithLines(lsxId)
     if (lsx.status === 'completed' || lsx.status === 'cancelled') {
@@ -116,6 +132,47 @@ export const componentsService = {
       }
     }
     await componentsRepo.replaceAll(lsxId, input)
+
+    // ── Nhập ngược lên hồ sơ SP (chỉ SP chưa có định mức) ──────────────────
+    const seeded: { product_code: string; added: number }[] = []
+    const seedSkipped: { product_code: string; reason: string }[] = []
+    if (opts.seedProfile) {
+      const seenProducts = new Set<string>()
+      for (const line of orderLines) {
+        if (!line.product_id || seenProducts.has(line.product_id)) continue
+        seenProducts.add(line.product_id)
+        // Dòng CỤM (assembly) không nhập ngược — định mức hồ sơ SP là cấp chi
+        // tiết; cụm chỉ giữ qua cluster_name trên từng dòng chi tiết.
+        const mine = input.filter(
+          (c) => c.production_order_line_id === line.id && c.kind !== 'assembly',
+        )
+        if (!mine.length) continue
+        const result = await productsService.seedPartsFromShaping(
+          user.id,
+          line.product_id,
+          lsx.code,
+          mine.map((c) => ({
+            cluster_name: c.cluster ?? null,
+            part_name: c.name,
+            material_kind: c.material_type ?? null,
+            dim_a_mm: c.spec_thickness_mm ?? null,
+            dim_b_mm: c.spec_width_mm ?? null,
+            wall_thickness_mm: c.wall_thickness_mm ?? null,
+            cut_length_mm: c.spec_length_mm ?? null,
+            unit: c.unit ?? null,
+            qty: c.qty_per_unit,
+            weight_kg: c.dm_kg ?? null,
+          })),
+        )
+        if ('added' in result) {
+          seeded.push({ product_code: line.product_code, added: result.added })
+        } else if (result.skipped !== 'has_parts') {
+          // Đã có định mức là chuyện bình thường (im lặng); khoá/mất SP thì báo.
+          seedSkipped.push({ product_code: line.product_code, reason: result.skipped })
+        }
+      }
+    }
+    return { seeded, seed_skipped: seedSkipped }
   },
 
   // `saveAsBom` (lưu ngược bảng định hình thành BOM kỹ thuật) ĐÃ BỎ ở 0096.
@@ -157,24 +214,70 @@ export const componentsService = {
         // Trước đây chỗ này phải MƯỢN `set_item_label` — nhãn món trong bộ — làm
         // cụm, vì định mức chưa có cấp cụm nào khác để lấy.
         const clusterName = new Map(clusters.map((c) => [c.id, c.name]))
-        for (const p of parts) {
-          out.push({
+        const rows: ComponentInput[] = parts.map((p) => ({
+          production_order_line_id: line.id,
+          cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
+          name: p.part_name,
+          // 0174: mang nhóm vật tư sang để sổ sản lượng lọc được hàng mua.
+          group_code: p.group_code ?? null,
+          material_id: null,
+          material_type: p.material_kind ?? null,
+          spec_thickness_mm: p.dim_a_mm ?? null,
+          spec_width_mm: p.dim_b_mm ?? null,
+          spec_length_mm: p.cut_length_mm ?? null,
+          wall_thickness_mm: p.wall_thickness_mm ?? null,
+          unit: p.unit ?? null,
+          qty_per_unit: Number(p.qty),
+          // kg/chi tiết lấy theo định mức (user chốt 23/08: BOM là nguồn) —
+          // backflush kg chạy được ngay từ bản nháp; thống kê sửa được trên lưới.
+          dm_kg: p.weight_kg ?? null,
+          pcs_per_bar: null,
+          note: p.material_code ?? null,
+        }))
+
+        // CỤM CHUẨN của hồ sơ → dòng ASSEMBLY + chốt khoảng cho chi tiết trong
+        // cụm (27/08 — bậc 1 thang đơn vị đếm tự kích hoạt khi BOM đã chuẩn):
+        // cụm đếm từ công đoạn ghép (mặc định hàn), chi tiết dừng ngay trước
+        // đó. Cụm không định vị được công đoạn ghép (nhóm không qua hàn và
+        // không khai first_stage) thì để phẳng — cụm mặc nhiên lo phần còn lại.
+        const asmRows: ComponentInput[] = []
+        for (const c of clusters) {
+          const memberIdx = parts
+            .map((p, i) => (p.cluster_id === c.id ? i : -1))
+            .filter((i) => i >= 0)
+          if (memberIdx.length === 0) continue
+          const group = memberIdx.map((i) => parts[i].group_code).find(Boolean) ?? null
+          // suggest chạy trước khi lệnh lên kế hoạch → định vị theo lộ trình nhóm.
+          const route = routeForGroup(group)
+          const first = c.first_stage ?? (route.includes(JOIN_STAGE) ? JOIN_STAGE : null)
+          if (!first) continue
+          const qtyPer = c.qty_per_product != null ? Number(c.qty_per_product) : 1
+          const idx = route.indexOf(first)
+          const partFinal = idx > 0 ? route[idx - 1] : null
+          for (const i of memberIdx) {
+            rows[i] = {
+              ...rows[i],
+              final_stage: partFinal,
+              qty_per_assembly: qtyPer > 0 ? Number(parts[i].qty) / qtyPer : null,
+            }
+          }
+          asmRows.push({
             production_order_line_id: line.id,
-            cluster: p.cluster_id ? (clusterName.get(p.cluster_id) ?? null) : null,
-            name: p.part_name,
+            kind: 'assembly',
+            cluster: c.name,
+            name: c.name,
+            group_code: group,
             material_id: null,
-            material_type: p.material_kind ?? null,
-            spec_thickness_mm: p.dim_a_mm ?? null,
-            spec_width_mm: p.dim_b_mm ?? null,
-            spec_length_mm: p.cut_length_mm ?? null,
-            wall_thickness_mm: p.wall_thickness_mm ?? null,
-            unit: p.unit ?? null,
-            qty_per_unit: Number(p.qty),
+            unit: 'cụm',
+            qty_per_unit: qtyPer,
             dm_kg: null,
             pcs_per_bar: null,
-            note: p.material_code ?? null,
+            first_stage: first,
+            final_stage: c.final_stage ?? null,
+            note: c.note ?? null,
           })
         }
+        out.push(...rows, ...asmRows)
       }
       return out
     }
@@ -201,6 +304,7 @@ export const componentsService = {
         kind: row.kind,
         cluster: row.cluster,
         name: row.name,
+        group_code: row.group_code,
         material_id: row.material_id,
         material_type: row.material_type,
         spec_thickness_mm: row.spec_thickness_mm,

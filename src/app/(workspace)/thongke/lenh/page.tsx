@@ -1,23 +1,26 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { jobsService } from '@/modules/dept/production/jobs.service'
-import { RunningLsxList } from '@/components/production/RunningLsxList'
+import { worklistService } from '@/modules/dept/production/worklist.service'
+import { isProductionStaff } from '@/modules/dept/production/perms'
+import { LsxListScreen } from './LsxListScreen'
 
 export const dynamic = 'force-dynamic'
 
-/** Lệnh đang chạy — bối cảnh cho thống kê (không highlight tổ). */
-export default async function StatLsxInfoPage() {
+/**
+ * TIẾN ĐỘ THEO LỆNH — màn XEM, trả lời "lệnh này đang tới đâu".
+ *
+ * Là TRANG GỐC của khu Thống kê từ 27/08/2026: màn nhập "Sổ sản lượng" đã xoá
+ * theo yêu cầu, `/thongke` redirect vào đây. Khu này hiện chưa có màn nhập.
+ */
+export default async function LenhPage() {
   const user = await authService.requirePageUser()
-  const { rows } = await jobsService.overview(user)
+  const data = await worklistService.list(user)
+  const canRecord = user.role === 'admin' || (await isProductionStaff(user))
+
   return (
-    <RunningLsxList
-      rows={rows}
-      myStages={{}}
-      lsxBase="/thongke/lsx"
-      breadcrumbs={[
-        { label: 'Thống kê xưởng', href: '/thongke' },
-        { label: 'Lệnh đang chạy' },
-      ]}
-      description="Toàn bộ lệnh đang chạy — tiến độ đọc từ kế hoạch + sổ số liệu."
+    <LsxListScreen
+      cards={data.lsx_cards}
+      unroutedCount={data.unrouted_count}
+      canRecord={canRecord}
     />
   )
 }

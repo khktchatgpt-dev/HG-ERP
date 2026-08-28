@@ -5,12 +5,13 @@ import { SHAPE_OPTIONS, pcsPerBarFrom } from '@/lib/bom-calc'
 import type { InputCell, InputKey } from './part-layouts'
 
 /**
- * MỘT Ô NHẬP của dòng định mức — dùng chung cho lưới ngang (`PartRowInline`) và
- * thẻ sửa chia vùng (`PartCardEdit`).
+ * MỘT Ô NHẬP của dòng định mức — mọi chỗ nhập (lưới "Gõ nhiều dòng", dòng sửa
+ * tại chỗ, dòng thêm mới) đều đọc CÙNG một định nghĩa ô ở đây; chép lại là hai
+ * đường lệch nhau ngay lần sửa đầu (ô chọn vật tư kéo theo ĐVT ở bên này mà bên
+ * kia không).
  *
- * Trước đây phần dựng ô nằm gọn trong lưới; thẻ sửa mà chép lại thì hai đường
- * lệch nhau ngay lần sửa đầu (ô chọn vật tư kéo theo ĐVT ở bên này mà bên kia
- * không). Tách ra đây để cả hai đọc CÙNG một định nghĩa.
+ * (Thẻ sửa chia vùng `PartCardEdit` đã BỎ 21/08/2026 — user chọn sửa trực tiếp
+ * trên dòng; các vùng `zonesFor` gỡ cùng đợt.)
  */
 
 export type PartDraft = Record<InputKey, string>
@@ -74,6 +75,9 @@ export function PartField({
         ariaLabel={cell.label}
         onPick={(d) => setMany(diePatch(draft, d))}
         onTextChange={(code) => set('profile_code', code)}
+        // Ăn theo kiểu ô của nơi gọi — lưới truyền ô bảng tính, thẻ truyền ô form.
+        inputClassName={`${className} font-mono`}
+        placeholder={cell.placeholder ?? null}
       />
     )
   }

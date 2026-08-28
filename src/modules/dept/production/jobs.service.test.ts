@@ -15,13 +15,23 @@ vi.mock('./production.repo', () => ({
     findById: vi.fn(),
     listActive: vi.fn(),
     listStages: vi.fn(),
+    materialShortagesByLsx: vi.fn(),
   },
 }))
 vi.mock('./components.repo', () => ({
   componentsRepo: { listByLsxBulk: vi.fn() },
 }))
 vi.mock('./entries.repo', () => ({
-  entriesRepo: { listByLsxBulk: vi.fn() },
+  entriesRepo: { listByLsxBulk: vi.fn(), listByDate: vi.fn() },
+}))
+vi.mock('./day-locks.repo', () => ({
+  dayLocksRepo: { listByDate: vi.fn() },
+}))
+vi.mock('./transfers.repo', () => ({
+  transfersRepo: { listRawByLsxBulk: vi.fn() },
+}))
+vi.mock('./targets.repo', () => ({
+  targetsRepo: { listByDate: vi.fn() },
 }))
 vi.mock('@/modules/dept/sales/orders.repo', () => ({
   ordersRepo: { listLines: vi.fn(), listLinesByOrders: vi.fn() },
@@ -45,11 +55,19 @@ vi.mock('./lsx-lines.repo', () => ({
     markChanged: vi.fn(),
   },
 }))
-import { assessJobProgress, jobsService, lateByShipDate } from './jobs.service'
+import {
+  assessJobProgress,
+  jobsService,
+  lateByShipDate,
+  overdueDays,
+} from './jobs.service'
 import { jobsRepo, type Job } from './jobs.repo'
 import { productionRepo } from './production.repo'
 import { componentsRepo } from './components.repo'
 import { entriesRepo } from './entries.repo'
+import { dayLocksRepo } from './day-locks.repo'
+import { transfersRepo } from './transfers.repo'
+import { targetsRepo } from './targets.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
 import { emit } from '@/events/bus'
 import { HttpError } from '@/server/http'
@@ -132,6 +150,11 @@ beforeEach(() => {
   ])
   vi.mocked(componentsRepo.listByLsxBulk).mockResolvedValue([COMP] as never)
   vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([])
+  vi.mocked(entriesRepo.listByDate).mockResolvedValue([])
+  vi.mocked(dayLocksRepo.listByDate).mockResolvedValue([])
+  vi.mocked(productionRepo.materialShortagesByLsx).mockResolvedValue(new Map())
+  vi.mocked(transfersRepo.listRawByLsxBulk).mockResolvedValue([])
+  vi.mocked(targetsRepo.listByDate).mockResolvedValue([])
   vi.mocked(jobsRepo.patch).mockImplementation(
     async (_id, p) => ({ ...JOB, ...p }) as Job,
   )
@@ -303,5 +326,145 @@ describe('lateByShipDate', () => {
     expect(lateByShipDate('2026-07-28', '2026-07-24')).toBe('at_risk')
     expect(lateByShipDate('2026-09-01', '2026-07-24')).toBeNull()
     expect(lateByShipDate(null, '2026-07-24')).toBeNull()
+  })
+})
+
+describe('overdueDays — trễ hẹn vật tư (thuần)', () => {
+  it('không hẹn / chưa tới hẹn / đúng hôm nay → null', () => {
+    expect(overdueDays(null, '2026-08-23')).toBeNull()
+    expect(overdueDays('2026-08-25', '2026-08-23')).toBeNull()
+    expect(overdueDays('2026-08-23', '2026-08-23')).toBeNull()
+  })
+
+  it('quá hẹn → số ngày dương; nhận cả timestamptz', () => {
+    expect(overdueDays('2026-08-20', '2026-08-23')).toBe(3)
+    expect(overdueDays('2026-08-20T07:15:00+00:00', '2026-08-23')).toBe(3)
+  })
+})
+
+describe('jobsService.overview — nhịp hôm nay + vật tư thiếu (GĐ1)', () => {
+  it('gom pulse từ sổ hôm nay, đếm tổ hoạt động/chốt sổ, kèm vật tư thiếu', async () => {
+    vi.mocked(entriesRepo.listByDate).mockResolvedValue([
+      { qty: 10, kg: 5, defect_qty: 1, team_department_id: 'dept-han' },
+      { qty: 20, kg: null, defect_qty: 0, team_department_id: 'dept-son' },
+      // Dòng không gắn tổ vẫn vào tổng toàn xưởng.
+      { qty: 5, kg: 2.5, defect_qty: 0, team_department_id: null },
+    ] as never)
+    vi.mocked(dayLocksRepo.listByDate).mockResolvedValue([
+      { team_department_id: 'dept-han' },
+    ] as never)
+    vi.mocked(productionRepo.materialShortagesByLsx).mockResolvedValue(
+      new Map([
+        ['lsx1', { missing_count: 3, missing_names: ['Thép hộp 25', 'Sơn đen'] }],
+      ]),
+    )
+
+    const { rows, workload, pulse } = await jobsService.overview(admin)
+
+    expect(pulse).toMatchObject({ qty: 35, kg: 7.5, defect: 1 })
+    // dept-han (1 doing) + dept-son (1 todo) đều đang hoạt động; chỉ han đã chốt.
+    expect(pulse.teams_active).toBe(2)
+    expect(pulse.teams_locked).toBe(1)
+
+    const han = workload.find((w) => w.department_id === 'dept-han')
+    expect(han).toMatchObject({ today_qty: 10, today_defect: 1, locked_today: true })
+    const son = workload.find((w) => w.department_id === 'dept-son')
+    expect(son).toMatchObject({ today_qty: 20, locked_today: false })
+
+    // LSX chưa nhận vật tư → khối materials định lượng.
+    expect(rows[0].materials).toMatchObject({ missing_count: 3 })
+    expect(rows[0].materials?.missing_names).toContain('Thép hộp 25')
+    // Chỉ hỏi vật tư cho lệnh CHƯA nhận (tránh query thừa).
+    expect(productionRepo.materialShortagesByLsx).toHaveBeenCalledWith(['lsx1'])
+  })
+
+  it('lệnh ĐÃ nhận vật tư → materials = null, không hỏi view thiếu', async () => {
+    vi.mocked(productionRepo.listActive).mockResolvedValue([
+      { ...LSX, materials_received_at: '2026-08-01T00:00:00Z' },
+    ] as never)
+    const { rows } = await jobsService.overview(admin)
+    expect(rows[0].materials).toBeNull()
+    expect(productionRepo.materialShortagesByLsx).toHaveBeenCalledWith([])
+  })
+
+  it('chỉ tiêu hôm nay SUY từ lộ trình: hạn = hôm nay → dồn phần còn lại (GĐ2)', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    // Việc HÀN hạn chót hôm nay; đã làm 40/100 tính đến hết hôm qua.
+    vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
+      { ...JOB, planned_end: today },
+      // Việc SƠN chưa lên hạn → không có chỉ tiêu, không vào mẫu số.
+      {
+        ...JOB,
+        id: 'j2',
+        stage: 'son',
+        seq: 2,
+        status: 'todo',
+        team_department_id: 'dept-son',
+      },
+    ])
+    vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([
+      {
+        component_id: 'c1',
+        stage: 'han',
+        team_department_id: 'dept-han',
+        entry_date: '2000-01-01', // trước hôm nay → tính vào doneQty
+        qty: 40,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+
+    const { workload, pulse } = await jobsService.overview(admin)
+    expect(pulse.target).toBe(60) // 100 cần − 40 đã làm, dồn cả vào hạn chót
+    expect(workload.find((w) => w.department_id === 'dept-han')?.today_target).toBe(60)
+    expect(workload.find((w) => w.department_id === 'dept-son')?.today_target).toBe(0)
+  })
+
+  it('chỉ tiêu THẬT (0168) đè số suy cho đúng (tổ × công đoạn) đó (GĐ 2.2)', async () => {
+    const today = new Date().toISOString().slice(0, 10)
+    vi.mocked(jobsRepo.listByLsxBulk).mockResolvedValue([
+      { ...JOB, planned_end: today }, // suy: 100 cần → 100/hạn chót
+    ])
+    // Kế hoạch giao 250 cho (dept-han, han) → số thật thắng số suy.
+    vi.mocked(targetsRepo.listByDate).mockResolvedValue([
+      {
+        team_department_id: 'dept-han',
+        stage: 'han',
+        qty: 250,
+      },
+    ] as never)
+    const { workload, pulse } = await jobsService.overview(admin)
+    expect(pulse.target).toBe(250)
+    expect(workload.find((w) => w.department_id === 'dept-han')?.today_target).toBe(250)
+  })
+
+  it('tồn WIP + nghẽn từ sổ bàn giao: tồn vượt 3 ngày nhịp → badge nghẽn (GĐ3)', async () => {
+    vi.mocked(entriesRepo.listByLsxBulk).mockResolvedValue([
+      // Nhịp tổ hàn: 1 ngày có sổ, 40/ngày; đã dùng 40.
+      {
+        component_id: 'c1',
+        stage: 'han',
+        team_department_id: 'dept-han',
+        entry_date: '2000-01-01',
+        qty: 40,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+    vi.mocked(transfersRepo.listRawByLsxBulk).mockResolvedValue([
+      {
+        team_department_id: 'dept-han',
+        stage: 'han',
+        direction: 'issue',
+        qty: 500,
+        entry_date: '2000-01-01',
+      },
+    ] as never)
+
+    const { workload } = await jobsService.overview(admin)
+    const han = workload.find((w) => w.department_id === 'dept-han')
+    expect(han?.wip).toBe(460) // 500 giao − 40 đã dùng
+    // 460 / nhịp 40 = 11,5 ngày > ngưỡng 3 → nghẽn, nhãn theo danh mục.
+    expect(han?.bottleneck_stages).toEqual(['Hàn'])
   })
 })

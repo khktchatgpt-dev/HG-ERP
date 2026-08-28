@@ -118,6 +118,8 @@ export type SupplyPanelData = {
   bomSnapshot: { snapped_at: string; products: number } | null
   /** Được bấm "chốt lại định mức" (`production.lsx.bom_resnap`). */
   canResnapBom: boolean
+  /** false = shell xưởng: hiện PO/trạng thái/ngày về nhưng giấu tiền. */
+  showMoney: boolean
   pos: {
     id: string
     code: string
@@ -994,8 +996,10 @@ export function LsxDetailView({
                           </Badge>
                         </div>
                         <div className="text-muted-foreground mt-0.5 truncate text-xs">
-                          {p.supplier_name} · {p.total.toLocaleString('vi-VN')}{' '}
-                          {p.currency} · về {fmtD(p.expected_at)}
+                          {p.supplier_name}
+                          {supply.showMoney &&
+                            ` · ${p.total.toLocaleString('vi-VN')} ${p.currency}`}{' '}
+                          · về {fmtD(p.expected_at)}
                         </div>
                       </li>
                     ))}
@@ -1094,7 +1098,9 @@ export function LsxDetailView({
         </div>
       )}
 
-      {tab === 'outsource' && <LsxOutsourcePanel lsxId={lsx.id} canRecord={canManage} />}
+      {tab === 'outsource' && (
+        <LsxOutsourcePanel lsxId={lsx.id} stages={stages} canRecord={canManage} />
+      )}
 
       {/* Dialog SỬA THÔNG TIN ĐẦU LỆNH (0117) — khách hàng không sửa ở đây:
           mọi đơn trong lệnh phải cùng khách, đổi khách = tạo lệnh khác. */}

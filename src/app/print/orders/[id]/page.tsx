@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { customersRepo } from '@/modules/dept/sales/sales.repo'
 import { amountInWords } from '@/lib/amount-words'
@@ -27,10 +28,11 @@ export default async function OrderContractPrintPage({
 
   const order = await ordersRepo.findById(id)
   if (!order) redirect('/sales/orders')
-  const [lines, customer, s] = await Promise.all([
+  const [lines, customer, s, tpl] = await Promise.all([
     ordersRepo.listLines(id),
     customersRepo.findById(order.customer_id),
     settingsService.getAll(),
+    docTemplatesService.get('DH'),
   ])
 
   const total = lines.reduce((sum, l) => sum + l.qty * l.unit_price, 0)
@@ -76,7 +78,9 @@ export default async function OrderContractPrintPage({
 
   return (
     <PrintPage orientation="portrait" maxWidth="max-w-3xl">
-      <h1 className="text-center text-2xl font-bold tracking-wide">SALES CONTRACT</h1>
+      {/* Tiêu đề lấy từ mẫu chứng từ (0164); phần thân hợp đồng in theo khuôn
+          riêng Article 1-9 nên không dùng khối ký dùng chung. */}
+      <h1 className="text-center text-2xl font-bold tracking-wide">{tpl.title_vi}</h1>
       <div className="mt-1 flex justify-between text-[12px]">
         <div>
           <span className="font-semibold">No: </span>

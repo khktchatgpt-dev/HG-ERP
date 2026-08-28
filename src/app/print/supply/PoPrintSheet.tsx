@@ -24,6 +24,11 @@ import {
   PrintTitle,
   type PrintCompany,
 } from '../PrintSheet'
+import {
+  DEFAULT_DOC_TEMPLATES,
+  resolveSignatures,
+  type DocTemplate,
+} from '@/lib/doc-templates'
 
 /**
  * TỜ ĐƠN ĐẶT HÀNG — phần thân, THUẦN HIỂN THỊ, không đụng DB.
@@ -99,6 +104,8 @@ export type PoPrintHeader = {
   order_code: string | null
   supplier_name: string
   created_at: string
+  /** Tên người soạn đơn — in dưới nét ký cột "Người lập". */
+  creator_name?: string | null
 }
 
 export type PoPrintSupplier = {
@@ -273,12 +280,19 @@ function columnsFor(
 
 export function PoPrintSheet({
   company,
+  tpl = DEFAULT_DOC_TEMPLATES.PO,
   po,
   supplier,
   lines,
   exportHref,
 }: {
   company: PrintCompany & { company_name?: string | null }
+  /**
+   * Mẫu in của loại PO (0164). Có mặc định vì ô "Xem trước phiếu in" trên form
+   * soạn đơn là client component — không tự đọc DB được; trang in thật và trang
+   * soạn đơn đều truyền bản từ server xuống.
+   */
+  tpl?: DocTemplate
   po: PoPrintHeader
   supplier: PoPrintSupplier
   lines: PoPrintLine[]
@@ -336,8 +350,8 @@ export function PoPrintSheet({
   const hasTerms = terms.some(([, v]) => v)
   return (
     <PrintPage exportHref={exportHref}>
-      <PrintLetterhead company={company} date={d} />
-      <PrintTitle vi="ĐƠN ĐẶT HÀNG" en="PURCHASE ORDER" />
+      <PrintLetterhead company={company} date={d} nationalHeading={tpl.national_heading} />
+      <PrintTitle vi={tpl.title_vi} en={tpl.title_en ?? undefined} />
 
       <PrintMeta
         rows={[
@@ -507,14 +521,13 @@ export function PoPrintSheet({
        * dấu) — thay cho "Đơn vị cung cấp / … / Giám đốc" cũ.
        */}
       <PrintSignatures
-        cols={[
-          { role: 'XÁC NHẬN CỦA NHÀ CUNG CẤP', hint: 'Ký, ghi rõ họ tên, đóng dấu' },
-          { role: po.signer_role ?? meta.signerRole, hint: 'Ký, ghi rõ họ tên' },
-          {
-            role: (company.company_name ?? 'GIÁM ĐỐC').toUpperCase(),
-            hint: 'Ký tên, đóng dấu',
-          },
-        ]}
+        cols={resolveSignatures(tpl.signatures, {
+          company: company.company_name,
+          // Chức danh người ký của CHÍNH đơn (sửa được trên form), không phải
+          // một chuỗi cố định — mẫu chỉ giữ chỗ bằng {signer_role}.
+          signer_role: po.signer_role ?? meta.signerRole,
+          names: { creator: po.creator_name },
+        })}
       />
     </PrintPage>
   )

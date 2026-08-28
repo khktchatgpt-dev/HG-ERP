@@ -1,8 +1,11 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { Check } from 'lucide-react'
 import { Badge } from '@/components/Badge'
+import { Button } from '@/components/shadcn/button'
 import { EmptyState } from '@/components/erp/EmptyState'
+import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner } from '@/components/erp/Spinner'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
@@ -17,6 +20,7 @@ type Entry = {
   id: string
   component_id: string
   supplier_id: string
+  stage: string | null
   direction: 'send' | 'receive'
   entry_date: string
   qty: number
@@ -33,6 +37,7 @@ type Pair = {
   component_name: string | null
   supplier_id: string
   supplier_name: string | null
+  stage: string | null
   summary: {
     sent: number
     received: number
@@ -50,15 +55,19 @@ type SupplierOpt = { id: string; name: string }
 const fmtN = (n: number) => n.toLocaleString('vi-VN')
 const fmtD = (d: string) => new Date(d).toLocaleDateString('vi-VN')
 const inp =
-  'rounded-lg border border-zinc-300 px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900'
+  'border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm outline-none focus-visible:ring-[3px]'
 
 export function LsxOutsourcePanel({
   lsxId,
+  stages,
   canRecord,
 }: {
   lsxId: string
+  stages: { code: string; label: string }[]
   canRecord: boolean
 }) {
+  const stageLabel = (c: string | null) =>
+    c == null ? '—' : (stages.find((s) => s.code === c)?.label ?? c)
   const toast = useToast()
   const confirm = useConfirm()
   const [data, setData] = useState<Data | null>(null)
@@ -68,6 +77,7 @@ export function LsxOutsourcePanel({
   const [form, setForm] = useState({
     component_id: '',
     supplier_id: '',
+    stage: '',
     direction: 'send' as 'send' | 'receive',
     entry_date: new Date().toISOString().slice(0, 10),
     qty: '',
@@ -114,6 +124,12 @@ export function LsxOutsourcePanel({
       toast.error('Chọn chi tiết + NCC + số lượng')
       return
     }
+    if (!form.stage) {
+      // Không chặn cứng (bản ghi cũ vẫn null) nhưng nhắc: thiếu công đoạn thì
+      // số nhận về KHÔNG cộng vào sổ tổng.
+      toast.error('Chọn công đoạn gia công — thiếu thì số này không vào sổ tổng')
+      return
+    }
     setBusy(true)
     try {
       await api(`/api/dept/production/lsx/${lsxId}/outsource`, {
@@ -121,6 +137,7 @@ export function LsxOutsourcePanel({
         body: {
           component_id: form.component_id,
           supplier_id: form.supplier_id,
+          stage: form.stage || null,
           direction: form.direction,
           entry_date: form.entry_date,
           qty: Number(form.qty),
@@ -162,13 +179,14 @@ export function LsxOutsourcePanel({
     <div className="flex flex-col gap-4">
       {/* Đối chiếu per (chi tiết, NCC) */}
       {data && data.pairs.length > 0 && (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+        <section className="bg-card rounded-lg border p-4">
           <h3 className="mb-2 text-sm font-semibold">Đối chiếu giao / nhận</h3>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+                <tr className="text-muted-foreground border-b text-left text-xs">
                   <th className="py-1.5 pr-2">Chi tiết</th>
+                  <th className="py-1.5 pr-2">Công đoạn</th>
                   <th className="py-1.5 pr-2">NCC</th>
                   <th className="py-1.5 pr-2 text-right">Giao</th>
                   <th className="py-1.5 pr-2 text-right">Nhận</th>
@@ -179,18 +197,19 @@ export function LsxOutsourcePanel({
               <tbody>
                 {data.pairs.map((p) => (
                   <tr
-                    key={`${p.component_id}|${p.supplier_id}`}
-                    className="border-b border-zinc-100 dark:border-zinc-900"
+                    key={`${p.component_id}|${p.supplier_id}|${p.stage ?? ''}`}
+                    className="border-b last:border-b-0"
                   >
                     <td className="py-1.5 pr-2 font-medium">{p.component_name}</td>
+                    <td className="py-1.5 pr-2 text-xs">{stageLabel(p.stage)}</td>
                     <td className="py-1.5 pr-2">{p.supplier_name}</td>
                     <td className="py-1.5 pr-2 text-right">{fmtN(p.summary.sent)}</td>
                     <td className="py-1.5 pr-2 text-right">{fmtN(p.summary.received)}</td>
-                    <td className="py-1.5 pr-2 text-right text-red-500">
+                    <td className="py-1.5 pr-2 text-right text-[var(--stop)]">
                       {p.summary.defect > 0 ? fmtN(p.summary.defect) : '—'}
                     </td>
                     <td
-                      className={`py-1.5 text-right font-semibold ${p.summary.missing > 0 ? 'text-amber-600' : 'text-green-600'}`}
+                      className={`py-1.5 text-right font-semibold ${p.summary.missing > 0 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
                     >
                       {fmtN(p.summary.missing)}
                     </td>
@@ -204,7 +223,7 @@ export function LsxOutsourcePanel({
 
       {/* Form ghi */}
       {canRecord && (
-        <section className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+        <section className="bg-card rounded-lg border p-4">
           <h3 className="mb-2 text-sm font-semibold">Ghi giao / nhận</h3>
           <div className="flex flex-wrap items-end gap-2">
             <select
@@ -244,6 +263,18 @@ export function LsxOutsourcePanel({
                 </option>
               ))}
             </select>
+            <select
+              value={form.stage}
+              onChange={(e) => setForm((f) => ({ ...f, stage: e.target.value }))}
+              className={`${inp} min-w-32`}
+            >
+              <option value="">— Công đoạn —</option>
+              {stages.map((s) => (
+                <option key={s.code} value={s.code}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
             <input
               type="date"
               value={form.entry_date}
@@ -274,20 +305,17 @@ export function LsxOutsourcePanel({
               onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
               className={`${inp} min-w-40 flex-1`}
             />
-            <button
-              onClick={submit}
-              disabled={busy}
-              className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            >
-              {busy && <Spinner size={14} />} Ghi sổ
-            </button>
+            <Button size="sm" onClick={submit} disabled={busy}>
+              {busy ? <Spinner size={14} /> : <Check aria-hidden />}
+              Ghi sổ
+            </Button>
           </div>
         </section>
       )}
 
       {/* Sổ */}
       {!data ? (
-        <p className="py-6 text-center text-xs text-zinc-400">Đang tải…</p>
+        <p className="text-muted-foreground py-6 text-center text-xs">Đang tải…</p>
       ) : data.entries.length === 0 ? (
         <EmptyState
           icon="⇄"
@@ -295,13 +323,14 @@ export function LsxOutsourcePanel({
           description="Ghi giao đi / nhận về khi chi tiết được đưa ra ngoài gia công."
         />
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="bg-card overflow-x-auto rounded-lg border">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 dark:border-zinc-800">
+              <tr className="text-muted-foreground border-b text-left text-xs">
                 <th className="px-3 py-1.5">Ngày</th>
                 <th className="py-1.5 pr-2">Chiều</th>
                 <th className="py-1.5 pr-2">Chi tiết</th>
+                <th className="py-1.5 pr-2">Công đoạn</th>
                 <th className="py-1.5 pr-2">NCC</th>
                 <th className="py-1.5 pr-2 text-right">SL</th>
                 <th className="py-1.5 pr-2 text-right">Phế</th>
@@ -312,7 +341,7 @@ export function LsxOutsourcePanel({
             </thead>
             <tbody>
               {data.entries.map((en) => (
-                <tr key={en.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                <tr key={en.id} className="border-b last:border-b-0">
                   <td className="px-3 py-1.5 text-xs">{fmtD(en.entry_date)}</td>
                   <td className="py-1.5 pr-2">
                     <Badge tone={en.direction === 'send' ? 'blue' : 'green'}>
@@ -320,25 +349,31 @@ export function LsxOutsourcePanel({
                     </Badge>
                   </td>
                   <td className="py-1.5 pr-2 font-medium">{en.component_name}</td>
+                  <td className="py-1.5 pr-2 text-xs">{stageLabel(en.stage)}</td>
                   <td className="py-1.5 pr-2">{en.supplier_name}</td>
                   <td className="py-1.5 pr-2 text-right font-semibold">{fmtN(en.qty)}</td>
-                  <td className="py-1.5 pr-2 text-right text-red-500">
+                  <td className="py-1.5 pr-2 text-right text-[var(--stop)]">
                     {en.defect_qty > 0 ? fmtN(en.defect_qty) : '—'}
                   </td>
-                  <td className="py-1.5 pr-2 text-xs text-zinc-500">{en.note ?? '—'}</td>
-                  <td className="py-1.5 pr-2 text-xs text-zinc-500">
+                  <td className="text-muted-foreground py-1.5 pr-2 text-xs">
+                    {en.note ?? '—'}
+                  </td>
+                  <td className="text-muted-foreground py-1.5 pr-2 text-xs">
                     {en.created_by_name ?? '—'}
                   </td>
                   <td className="py-1.5 pr-2 text-right">
                     {canRecord && (
-                      <button
-                        onClick={() => void remove(en)}
-                        disabled={busy}
-                        className="text-red-500 hover:text-red-700 disabled:opacity-30"
-                        aria-label="Xoá"
-                      >
-                        ✕
-                      </button>
+                      <RowMenu
+                        ariaLabel={`Thao tác bản ghi ${en.component_name ?? ''}`}
+                        items={[
+                          {
+                            label: 'Xoá bản ghi (nhập nhầm)',
+                            danger: true,
+                            onClick: () => void remove(en),
+                            disabled: busy,
+                          },
+                        ]}
+                      />
                     )}
                   </td>
                 </tr>

@@ -34,7 +34,8 @@ export const authService = {
       pv: passwordVersion(row.password_changed_at),
     })
     void usersRepo.touchLastLogin(row.id)
-    const { password_hash, ...user } = row
+    const { password_hash: _ph, ...user } = row
+    void _ph
     return user
   },
 

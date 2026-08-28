@@ -7,11 +7,7 @@ import { lsxLinesService } from '@/modules/dept/production/lsx-lines.service'
 import { colKey, specColumnsOf } from '@/modules/dept/sales/lsx-template'
 import { shipText } from '@/modules/dept/production/lsx-sheet-cells'
 import { entriesService } from '@/modules/dept/production/entries.service'
-import {
-  isProductionStaff,
-  canManagePlan,
-  canEditComponents,
-} from '@/modules/dept/production/perms'
+import { isProductionStaff, canManagePlan } from '@/modules/dept/production/perms'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
@@ -34,7 +30,7 @@ export async function LsxDetailScreen({
   variant,
 }: {
   id: string
-  variant: 'production' | 'exec' | 'planning' | 'team' | 'stat' | 'prodplan'
+  variant: 'production' | 'exec' | 'planning' | 'team' | 'prodplan'
 }) {
   const user = await authService.requirePageUser()
 
@@ -56,23 +52,27 @@ export async function LsxDetailScreen({
   const groupTitle = new Map(sheet.groups.map((g) => [g.id, g.title ?? '']))
   const sheetLines = sheet.groups.flatMap((g) => g.lines)
 
-  // Cung ứng / vật tư — CHỈ shell GĐ + Kế hoạch (PO có tiền = cam kết chi).
+  // Cung ứng / vật tư — shell GĐ + Kế hoạch thấy đủ (kèm tiền = cam kết chi);
+  // shell XƯỞNG (GĐ1 plan-sx): quản đốc thấy PO + trạng thái + ngày về nhưng
+  // KHÔNG thấy tiền, KHÔNG có nút chốt lại định mức.
   let supply: SupplyPanelData | null = null
-  if (variant === 'exec' || variant === 'planning') {
+  if (variant === 'exec' || variant === 'planning' || variant === 'production') {
+    const showMoney = variant !== 'production'
     const { rows: poRows } = await posService.list(user, {
       production_order_id: id,
       page: 1,
       page_size: 100,
     })
-    const totals = await posRepo.totalsByPoIds(poRows.map((p) => p.id))
+    const totals = showMoney ? await posRepo.totalsByPoIds(poRows.map((p) => p.id)) : {}
     const [bomSnapshot, canResnapBom] = await Promise.all([
       lsxService.bomSnapshotInfo(user, id),
-      canAction(user, 'production.lsx.bom_resnap'),
+      showMoney ? canAction(user, 'production.lsx.bom_resnap') : Promise.resolve(false),
     ])
     supply = {
       hasBom: (summary?.components.length ?? 0) > 0,
       bomSnapshot,
       canResnapBom,
+      showMoney,
       pos: poRows.map((p) => ({
         id: p.id,
         code: p.code,
@@ -105,13 +105,13 @@ export async function LsxDetailScreen({
   const isMgr = user.role === 'admin' || user.role === 'manager'
   const isProd = await isProductionStaff(user)
   const canPlan = await canManagePlan(user)
-  const canShape = await canEditComponents(user)
   const flags = {
     production: {
       canApprove: false, // GĐ duyệt ở /exec
       canManage: isMgr || isProd,
       planHref: canPlan ? `/kehoach-sx/${id}` : null,
-      shapingHref: canShape ? `/thongke/dinh-hinh/${id}` : null,
+      // Màn định hình nằm trong khu /thongke đã xoá 26/08/2026.
+      shapingHref: null,
       breadcrumbs: [
         { label: 'Sản xuất', href: '/production' },
         { label: `LSX ${lsx.code}` },
@@ -124,16 +124,6 @@ export async function LsxDetailScreen({
       planHref: null,
       shapingHref: null,
       breadcrumbs: [{ label: 'Tổ sản xuất', href: '/to' }, { label: `LSX ${lsx.code}` }],
-    },
-    stat: {
-      canApprove: false,
-      canManage: isMgr || isProd,
-      planHref: null,
-      shapingHref: canShape ? `/thongke/dinh-hinh/${id}` : null,
-      breadcrumbs: [
-        { label: 'Thống kê xưởng', href: '/thongke' },
-        { label: `LSX ${lsx.code}` },
-      ],
     },
     prodplan: {
       canApprove: false,
@@ -159,7 +149,7 @@ export async function LsxDetailScreen({
       canApprove: false,
       canManage: user.role === 'admin',
       planHref: canPlan ? `/kehoach-sx/${id}` : null,
-      shapingHref: canShape ? `/thongke/dinh-hinh/${id}` : null,
+      shapingHref: null,
       breadcrumbs: [
         { label: 'Cung ứng', href: '/planning' },
         { label: `LSX ${lsx.code}` },

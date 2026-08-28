@@ -16,8 +16,31 @@ import {
 import { PartField } from './PartField'
 import type { PartView } from './ProductProfileCards'
 
+/**
+ * Ô nhập chiếm TRỌN ô bảng — lưới trông như bảng tính: viền là của ô (td),
+ * input trong suốt bên trong, focus thì cả ô sáng ring cobalt. Bản trước input
+ * viền trong suốt nằm giữa bảng không kẻ dòng — nhìn như chữ trôi tự do, không
+ * biết ô nào gõ được.
+ */
 const inp =
-  'hover:border-input focus:border-[var(--primary)] focus:bg-background w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-xs focus:outline-none'
+  'w-full rounded-none bg-transparent px-1.5 py-1.5 text-xs focus:bg-[var(--accent)]/40 focus:ring-2 focus:ring-[var(--primary)] focus:outline-none focus:ring-inset'
+
+/** Viền ô — vẽ trên td (bảng border-separate) để cột đóng băng mang viền theo. */
+const cellB = 'border-border/70 border-r border-b p-0'
+
+/**
+ * HAI Ô ĐẦU (STT · Tên) ĐÓNG BĂNG khi lưới cuộn ngang — cùng lý do với bảng
+ * xem (FREEZE ở ProductPartsCard): khối khung 20 cột, kéo sang gõ SL mà mất cột
+ * tên là không biết đang sửa dòng nào. Nền phải ĐẶC (bg-card / bg-muted) vì các
+ * ô khác trôi bên dưới khi cuộn.
+ */
+const FREEZE_TD: (string | null)[] = [
+  'sticky left-0 z-10 min-w-10',
+  'sticky left-10 z-10 shadow-[2px_0_4px_-2px_rgba(16,24,40,0.12)]',
+]
+const MIN_W: Record<string, string> = { 'w-48': 'min-w-48', 'w-56': 'min-w-56' }
+const freezeCls = (i: number, cell: InputCell, solidBg: string) =>
+  FREEZE_TD[i] ? cn(FREEZE_TD[i], solidBg, i === 1 && MIN_W[cell.w]) : null
 
 /**
  * Bản nháp một dòng đang gõ. Chứa MỌI trường của mọi họ khối; ô nào thật sự hiện
@@ -161,6 +184,7 @@ function Cells({
   preview,
   shapeOff,
   nameRef,
+  isNew = false,
 }: {
   cells: InputCell[]
   draft: Draft
@@ -173,13 +197,25 @@ function Cells({
   shapeOff: boolean
   /** Ô tên — dòng thêm mới cần giữ để trả con trỏ về sau khi lưu. */
   nameRef?: React.RefObject<HTMLInputElement | null>
+  /**
+   * Dòng THÊM MỚI: nền xám đặc + giữ placeholder. Dòng đã có thì TẮT placeholder
+   * — "Carton 5 lớp…" lặp lại trên 30 dòng chỉ còn là nhiễu.
+   */
+  isNew?: boolean
 }) {
+  const solidBg = isNew ? 'bg-muted' : 'bg-card'
   return (
     <>
-      {cells.map((c) => (
-        <td key={c.key} className="py-0.5 pr-1">
+      {cells.map((c, i) => (
+        <td key={c.key} className={cn(cellB, isNew && 'bg-muted', freezeCls(i, c, solidBg))}>
           <PartField
-            cell={c}
+            cell={
+              isNew
+                ? c.key === 'part_name'
+                  ? { ...c, placeholder: '+ Gõ tên để thêm dòng…' }
+                  : c
+                : { ...c, placeholder: undefined }
+            }
             draft={draft}
             set={set}
             setMany={setMany}
@@ -191,7 +227,10 @@ function Cells({
       ))}
       {preview && (
         <td
-          className="text-muted-foreground py-0.5 pr-2 text-right text-xs tabular-nums"
+          className={cn(
+            cellB,
+            'text-muted-foreground bg-muted/40 px-1.5 py-1.5 text-right text-xs tabular-nums',
+          )}
           title={
             shapeOff ? 'Dạng này tiết diện tuỳ ý — không tính được khối lượng' : undefined
           }
@@ -216,20 +255,24 @@ export function inlineColSpan(groupCode: string): number {
 export function InlineHead({ groupCode }: { groupCode: string }) {
   const cells = inputCellsFor(groupCode)
   const preview = derivedPreviewFor(groupCode)
+  // Nền th phải ĐẶC (bg-muted): hai ô đầu đóng băng, cột khác trôi bên dưới.
+  const th = 'bg-muted text-muted-foreground py-2 px-1.5 text-left text-[11px] font-medium uppercase'
   return (
-    <tr className="text-muted-foreground border-b text-left text-[11px] uppercase">
-      {cells.map((c) => (
+    <tr>
+      {cells.map((c, i) => (
         <th
           key={c.key}
-          className={cn(c.w, 'py-1.5 pr-1 font-medium', c.kind === 'num' && 'text-right')}
+          className={cn(th, cellB, c.w, c.kind === 'num' && 'text-right', freezeCls(i, c, 'bg-muted'))}
         >
           {c.label}
         </th>
       ))}
       {preview && (
-        <th className="w-20 py-1.5 pr-2 text-right font-medium">{preview.label}</th>
+        <th className={cn(th, cellB, 'w-20 text-right')} title="Số tự tính từ quy cách">
+          ƒ {preview.label}
+        </th>
       )}
-      <th className="w-16 py-1.5" />
+      <th className={cn(th, cellB, 'w-16')} />
     </tr>
   )
 }
@@ -253,6 +296,7 @@ export function PartRowInline({
   groupCode,
   clusterName,
   onDeleted,
+  onDone,
 }: {
   productId: string
   part: PartView
@@ -260,6 +304,12 @@ export function PartRowInline({
   /** Tên cụm hiện tại của dòng — đổ vào ô Cụm để sửa được ngay trên dòng. */
   clusterName: string | null
   onDeleted: () => void
+  /**
+   * Có mặt = dòng đang SỬA MỘT MÌNH (bút chì ở bảng xem): Enter lưu xong thì
+   * đóng luôn, và ô nút có thêm nút ✓ Xong. Chế độ "Gõ nhiều dòng" không truyền
+   * — Enter chỉ lưu, người nhập đi tiếp dòng khác.
+   */
+  onDone?: () => void
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -286,10 +336,11 @@ export function PartRowInline({
   const { body, preview } = usePreview(draft, part.material_kind, groupCode)
   const dirty = serverSnapshot !== JSON.stringify(draft)
 
-  async function save() {
-    if (!dirty || saving.current) return
-    if (!body.part_name) return
-    if (!(body.qty && body.qty > 0)) return
+  /** `true` = mọi thứ đã yên vị (đã lưu, hoặc không có gì để lưu) — đóng được. */
+  async function save(): Promise<boolean> {
+    if (!dirty || saving.current) return !saving.current
+    if (!body.part_name) return false
+    if (!(body.qty && body.qty > 0)) return false
     saving.current = true
     setBusy(true)
     try {
@@ -301,12 +352,19 @@ export function PartRowInline({
       setSaved(true)
       setTimeout(() => setSaved(false), 1200)
       router.refresh()
+      return true
     } catch (err) {
       toast.error('Lưu dòng thất bại', apiErrorText(err))
+      return false
     } finally {
       saving.current = false
       setBusy(false)
     }
+  }
+
+  /** Lưu rồi đóng — dùng cho Enter và nút ✓ khi sửa một mình. */
+  async function commit() {
+    if (await save()) onDone?.()
   }
 
   async function remove() {
@@ -330,14 +388,14 @@ export function PartRowInline({
       onBlur={(e) => {
         if (!rowRef.current?.contains(e.relatedTarget as Node | null)) void save()
       }}
-      className={busy ? 'border-b opacity-60' : 'border-b last:border-0'}
+      className={busy ? 'opacity-60' : undefined}
     >
       <Cells
         cells={inputCellsFor(groupCode)}
         draft={draft}
         set={set}
         setMany={setMany}
-        onEnter={() => void save()}
+        onEnter={() => void commit()}
         preview={
           preview && preview.label.startsWith('KL')
             ? { ...preview, value: part.weight_kg ?? preview.value }
@@ -345,11 +403,11 @@ export function PartRowInline({
         }
         shapeOff={!!draft.profile_shape && !isCalculable(draft.profile_shape)}
       />
-      <td className="py-0.5">
+      <td className={cn(cellB, 'px-1')}>
         <div className="flex items-center justify-end gap-1">
           {saved && <Check className="size-3.5 text-emerald-600" />}
           {dirty && !saved && (
-            <span className="text-[10px] text-[var(--warn)]">chưa lưu</span>
+            <span className="text-[10px] font-medium text-[var(--warn)]">chưa lưu</span>
           )}
           <button
             type="button"
@@ -359,6 +417,16 @@ export function PartRowInline({
           >
             <Trash2 className="text-muted-foreground size-3.5" />
           </button>
+          {onDone && (
+            <button
+              type="button"
+              onClick={() => void commit()}
+              title="Lưu và đóng (Enter)"
+              className="bg-primary text-primary-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+            >
+              Xong
+            </button>
+          )}
         </div>
       </td>
     </tr>
@@ -435,7 +503,7 @@ export function PartRowNew({
   }
 
   return (
-    <tr className={busy ? 'bg-muted/20 opacity-60' : 'bg-muted/20'}>
+    <tr className={busy ? 'opacity-60' : undefined}>
       <Cells
         cells={inputCellsFor(groupCode)}
         draft={draft}
@@ -445,15 +513,16 @@ export function PartRowNew({
         preview={preview}
         shapeOff={!!draft.profile_shape && !isCalculable(draft.profile_shape)}
         nameRef={nameRef}
+        isNew
       />
-      <td className="py-0.5">
+      <td className={cn(cellB, 'bg-muted px-1 text-center')}>
         <button
           type="button"
           onClick={() => void create()}
           disabled={!ready || busy}
-          className="text-primary w-full text-right text-[10px] font-medium hover:underline disabled:opacity-40"
+          className="text-primary-foreground bg-primary rounded px-2 py-0.5 text-[10px] font-medium disabled:opacity-40"
         >
-          {busy ? '…' : 'Thêm'}
+          {busy ? '…' : '+ Thêm'}
         </button>
       </td>
     </tr>

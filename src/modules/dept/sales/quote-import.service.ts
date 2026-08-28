@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { parseQuoteExcel, type QuoteExcelRow } from '@/lib/quote-excel'
+import { parseQuoteExcel } from '@/lib/quote-excel'
 import { resolveImportRows, type ResolvedRow } from '@/lib/quote-import-match'
 import { productsRepo } from '@/modules/dept/technical/technical.repo'
 import { filesService } from '@/modules/core/files/files.service'

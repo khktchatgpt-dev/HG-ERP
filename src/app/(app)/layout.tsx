@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { AppShell } from '@/components/AppShell'
 
 /**
  * Layout for all signed-in users (employee/manager/admin).

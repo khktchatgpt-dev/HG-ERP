@@ -342,7 +342,7 @@ export const ordersRepo = {
    * Đồng bộ dòng đơn theo danh sách mới — GIỮ NGUYÊN id của dòng còn lại (khớp
    * theo product_id, mỗi SP một dòng). Bản cũ xoá sạch rồi chèn lại: id dòng đổi
    * hết → FK cascade nuốt luôn lịch sử xuất hàng (0120) và link công việc SX
-   * (production_jobs.order_line_id) của cả những dòng KHÔNG đổi gì.
+   * (production_jobs.production_order_line_id) của cả những dòng KHÔNG đổi gì.
    */
   async replaceLines(orderId: string, lines: OrderLineInput[]): Promise<void> {
     const { data: existing, error: exErr } = await db()

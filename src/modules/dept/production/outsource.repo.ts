@@ -11,6 +11,8 @@ export type OutsourceEntry = {
   production_order_id: string
   component_id: string
   supplier_id: string
+  /** Công đoạn được gia công (code catalog, 0171); null = bản ghi cũ chưa gắn. */
+  stage: string | null
   direction: 'send' | 'receive'
   entry_date: string
   qty: number
@@ -28,7 +30,7 @@ export type OutsourceEntryJoined = OutsourceEntry & {
 }
 
 const COLS =
-  'id, production_order_id, component_id, supplier_id, direction, entry_date, qty, kg, defect_qty, note, created_by, created_at'
+  'id, production_order_id, component_id, supplier_id, stage, direction, entry_date, qty, kg, defect_qty, note, created_by, created_at'
 const SELECT_JOINED = `${COLS}, supplier:supply_suppliers(name), component:production_components(name), actor:users(name)`
 
 type One<T> = T | T[] | null

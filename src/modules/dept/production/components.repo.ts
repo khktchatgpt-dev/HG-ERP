@@ -9,6 +9,12 @@ export type ComponentRow = {
   kind: 'part' | 'assembly'
   cluster: string | null
   name: string
+  /**
+   * Nhóm vật tư sao từ hồ sơ SP (0174): FRAME/WOOD/NGU_KIM/CUSHION/PACKAGING…
+   * Quyết định chi tiết có ĐI QUA công đoạn nào — NGU_KIM là hàng mua, không
+   * bao giờ vào sổ sản lượng. null = chưa phân nhóm (KHÔNG suy là hàng mua).
+   */
+  group_code: string | null
   material_id: string | null
   material_type: string | null
   spec_thickness_mm: number | null
@@ -38,6 +44,7 @@ export type ComponentInput = {
   kind?: 'part' | 'assembly'
   cluster?: string | null
   name: string
+  group_code?: string | null
   material_id?: string | null
   material_type?: string | null
   spec_thickness_mm?: number | null
@@ -55,7 +62,7 @@ export type ComponentInput = {
 }
 
 const COLS =
-  'id, production_order_id, production_order_line_id, kind, cluster, name, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
+  'id, production_order_id, production_order_line_id, kind, cluster, name, group_code, material_id, material_type, spec_thickness_mm, spec_width_mm, spec_length_mm, wall_thickness_mm, unit, qty_per_unit, dm_kg, pcs_per_bar, qty_per_assembly, first_stage, final_stage, sort_order, note'
 
 type Raw = Omit<ComponentRow, 'material_code' | 'material_name' | 'material_unit'> & {
   material:
@@ -140,6 +147,7 @@ export const componentsRepo = {
           kind: l.kind ?? 'part',
           cluster: l.cluster ?? null,
           name: l.name,
+          group_code: l.group_code ?? null,
           material_id: l.material_id ?? null,
           material_type: l.material_type ?? null,
           spec_thickness_mm: l.spec_thickness_mm ?? null,
@@ -158,6 +166,53 @@ export const componentsRepo = {
         })),
       )
     if (error) throw new Error(error.message)
+  },
+
+  /**
+   * Thêm MỘT dòng vào bảng định hình — đường VẬT CHẤT HOÁ cụm mặc nhiên khi ghi
+   * sổ (lib/default-assembly). KHÔNG dùng cho grid nhập (grid đi replaceAll);
+   * sort_order đẩy xuống cuối để không chen giữa thứ tự người xếp.
+   */
+  async insertOne(row: {
+    production_order_id: string
+    production_order_line_id: string
+    kind: 'part' | 'assembly'
+    cluster: string | null
+    name: string
+    group_code: string | null
+    unit: string | null
+    qty_per_unit: number
+    first_stage: string | null
+    final_stage: string | null
+    note: string | null
+  }): Promise<string> {
+    const { data, error } = await db()
+      .from('production_components')
+      .insert({ ...row, sort_order: 9999 })
+      .select('id')
+      .single()
+    if (error) throw new Error(error.message)
+    return (data as { id: string }).id
+  },
+
+  /**
+   * Chốt công đoạn CUỐI cho một loạt chi tiết (vật chất hoá cụm mặc nhiên: chi
+   * tiết bị gộp dừng trước hàn). Gom theo công đoạn để ít round-trip.
+   */
+  async setFinalStages(pairs: { id: string; final_stage: string }[]): Promise<void> {
+    const byStage = new Map<string, string[]>()
+    for (const p of pairs) {
+      const arr = byStage.get(p.final_stage) ?? []
+      arr.push(p.id)
+      byStage.set(p.final_stage, arr)
+    }
+    for (const [stage, ids] of byStage) {
+      const { error } = await db()
+        .from('production_components')
+        .update({ final_stage: stage })
+        .in('id', ids)
+      if (error) throw new Error(error.message)
+    }
   },
 
   /**

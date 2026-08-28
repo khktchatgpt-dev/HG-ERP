@@ -36,6 +36,9 @@ export default async function PlanPage() {
         jobs_total: r.jobs_total,
         jobs_done: r.jobs_done,
         plan_overdue: r.plan_overdue,
+        qty_needed: r.qty_needed,
+        qty_done: r.qty_done,
+        forecast_date: r.forecast_date,
       }))}
       canEdit={canEdit}
     />

@@ -200,6 +200,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế toán',
         items: [
           { href: '/finance', label: 'Trang chủ', icon: 'home' },
+          {
+            href: '/finance/cong-no-ncc',
+            label: 'Công nợ NCC',
+            icon: 'circle-dollar-sign',
+          },
           { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
         ],
       },
@@ -350,8 +355,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     logoText: 'SX',
     ready: true,
     // Workspace ĐIỀU HÀNH của quản đốc/GĐ — gia đình SX tách theo VAI (07/2026):
-    // tổ ở /to, thống kê ở /thongke, kế hoạch ở /kehoach-sx. Từ đây quản đốc
-    // nhảy sang 3 workspace kia qua switcher.
+    // tổ ở /to, kế hoạch ở /kehoach-sx. Từ đây quản đốc nhảy sang các
+    // workspace kia qua switcher. (Khu thống kê /thongke đã xoá 26/08/2026.)
     sections: [
       {
         heading: 'Điều hành xưởng',
@@ -389,22 +394,16 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'purple',
     logoText: 'TK',
     ready: true,
-    // Workspace của THỐNG KÊ (nhãn 0087): sổ tập trung + định hình + gia công.
+    // Dựng lại 26/08/2026 theo khung 5 bước. "Sổ sản lượng" (/thongke) đã XOÁ
+    // 27/08/2026 theo yêu cầu — trang gốc nay redirect sang /thongke/lenh, nên
+    // `route` vẫn để '/thongke' (đích redirect sau đăng nhập vẫn đúng chỗ).
     sections: [
       {
         heading: 'Thống kê',
         items: [
-          { href: '/thongke', label: 'Sổ số liệu', icon: 'notebook-pen' },
-          { href: '/thongke/giao-to', label: 'Giao tổ', icon: 'arrow-right-to-line' },
-          { href: '/thongke/dinh-hinh', label: 'Định hình chi tiết', icon: 'shapes' },
-          {
-            href: '/thongke/gia-cong',
-            label: 'Gia công ngoài',
-            icon: 'arrow-left-right',
-          },
-          { href: '/thongke/so-tong', label: 'Sổ tổng', icon: 'table' },
-          { href: '/thongke/bao-cao', label: 'Báo cáo tháng', icon: 'chart-column' },
-          { href: '/thongke/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
+          { href: '/thongke/ghi', label: 'Ghi sản lượng', icon: 'notebook-pen' },
+          { href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' },
+          { href: '/thongke/ngay', label: 'Sổ ngày & chốt sổ', icon: 'calendar-check' },
         ],
       },
     ],
@@ -424,6 +423,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế hoạch',
         items: [
           { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: 'calendar-range' },
+          { href: '/kehoach-sx/tuan', label: 'Kế hoạch tuần', icon: 'calendar-check' },
+          { href: '/kehoach-sx/tien-do', label: 'Tiến độ', icon: 'chart-gantt' },
+          { href: '/kehoach-sx/chi-tieu', label: 'Chỉ tiêu ngày', icon: 'list-todo' },
+          { href: '/kehoach-sx/theo-to', label: 'Theo tổ', icon: 'users-round' },
           { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
         ],
       },
@@ -541,6 +544,12 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // "Nguyên nhân lỗi SX" (/admin/defect-codes) đã gỡ khỏi nav: bảng
           // production_defect_codes (0067) có sẵn nhưng TRANG QUẢN LÝ CHƯA DỰNG
           // → bấm vào là 404. Thêm lại item này khi có màn thật.
+          {
+            href: '/admin/doc-templates',
+            label: 'Mẫu chứng từ',
+            icon: 'file-text',
+            roles: ['admin'],
+          },
           {
             href: '/admin/audit',
             label: 'Nhật ký thao tác',

@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { leaveService } from '@/modules/dept/hr/hr.service'
-import { leaveDecideSchema } from '@/modules/dept/hr/hr.schema'
 import { z } from 'zod'
 
 type Params = { params: Promise<{ id: string }> }

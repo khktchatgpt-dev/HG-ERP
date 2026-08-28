@@ -8,6 +8,16 @@ import {
   assemblyWipWarning,
   backflushKg,
   teamWipShortageWarning,
+  deriveDailyTarget,
+  paceForWindow,
+  lsxStageProgress,
+  stageChainWarning,
+  isTeamStageBottleneck,
+  paceTone,
+  resolveDailyTargets,
+  stageProgress,
+  totalRun,
+  forecastFinishDate,
 } from './production-summary'
 
 const STAGES = ['phoi', 'han', 'nguoi', 'son']
@@ -232,5 +242,414 @@ describe('assemblyWipWarning — cảnh báo WIP liên cấp cụm/chi tiết (0
       ]),
     ).toBeNull()
     expect(assemblyWipWarning('x', 10, [])).toBeNull()
+  })
+})
+
+describe('deriveDailyTarget — chỉ tiêu ngày suy từ lộ trình (GĐ2)', () => {
+  const base = { needQty: 100, doneQty: 10, plannedStart: null, plannedEnd: null }
+
+  it('chưa lên lộ trình (planned_end null) → null', () => {
+    expect(deriveDailyTarget({ ...base, todayIso: '2026-08-24' })).toBeNull()
+  })
+
+  it('chia đều phần còn lại cho số ngày làm việc còn lại', () => {
+    // T2 24/08 → T4 26/08 = 3 ngày; còn 90 → 30/ngày.
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedEnd: '2026-08-26',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(30)
+  })
+
+  it('Chủ nhật TÍNH vào mẫu số (WORKING_SUNDAYS=true — user chốt 23/08)', () => {
+    // T6 28/08 → T2 31/08 chứa CN 30/08 → đủ 4 ngày làm; còn 90 → 22.5.
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedEnd: '2026-08-31',
+        todayIso: '2026-08-28',
+      }),
+    ).toBe(22.5)
+  })
+
+  it('quá hạn → NỢ DỒN cả phần còn lại', () => {
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedEnd: '2026-08-20',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(90)
+  })
+
+  it('khoảng chỉ còn 1 ngày → dồn hết hôm nay', () => {
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedEnd: '2026-08-24',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(90)
+  })
+
+  it('đã đủ số → 0 (không âm)', () => {
+    expect(
+      deriveDailyTarget({
+        needQty: 100,
+        doneQty: 120,
+        plannedStart: null,
+        plannedEnd: '2026-08-30',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(0)
+  })
+
+  it('chưa tới planned_start → 0 (chưa phải lượt)', () => {
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedStart: '2026-08-27',
+        plannedEnd: '2026-08-31',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(0)
+  })
+
+  it('nhận cả timestamptz (cắt về ngày)', () => {
+    expect(
+      deriveDailyTarget({
+        ...base,
+        plannedEnd: '2026-08-24T07:00:00+00:00',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe(90)
+  })
+})
+
+describe('isTeamStageBottleneck — nghẽn tại tổ × công đoạn (GĐ3)', () => {
+  it('tồn vượt 3 ngày nhịp → nghẽn; trong ngưỡng → không', () => {
+    expect(isTeamStageBottleneck(100, [10, 10], 0)).toBe(true) // 10 ngày nhịp
+    expect(isTeamStageBottleneck(20, [10, 10], 0)).toBe(false) // 2 ngày nhịp
+  })
+
+  it('không có nhịp (chưa ghi sổ): ôm phôi quá 2 ngày → nghẽn', () => {
+    expect(isTeamStageBottleneck(50, [], 3)).toBe(true)
+    expect(isTeamStageBottleneck(50, [], 1)).toBe(false)
+  })
+
+  it('không tồn → không bao giờ nghẽn', () => {
+    expect(isTeamStageBottleneck(0, [], 10)).toBe(false)
+    expect(isTeamStageBottleneck(-5, [1], 10)).toBe(false)
+  })
+})
+
+describe('paceTone — nhịp so kế hoạch của ô sổ tổng (GĐ3)', () => {
+  it('quá planned_end mà chưa đủ → late', () => {
+    expect(
+      paceTone({
+        done: 50,
+        needed: 100,
+        plannedStart: '2026-08-01',
+        plannedEnd: '2026-08-20',
+        todayIso: '2026-08-24',
+      }),
+    ).toBe('late')
+  })
+
+  it('qua nửa thời gian mà chưa nửa số → behind; đủ nhịp → null', () => {
+    const w = {
+      needed: 100,
+      plannedStart: '2026-08-01',
+      plannedEnd: '2026-08-21',
+      todayIso: '2026-08-15',
+    }
+    expect(paceTone({ ...w, done: 10 })).toBe('behind')
+    expect(paceTone({ ...w, done: 60 })).toBeNull()
+  })
+
+  it('xong / không kế hoạch / khoảng 0 ngày → null', () => {
+    expect(
+      paceTone({
+        done: 100,
+        needed: 100,
+        plannedStart: '2026-08-01',
+        plannedEnd: '2026-08-10',
+        todayIso: '2026-08-24',
+      }),
+    ).toBeNull()
+    expect(
+      paceTone({
+        done: 0,
+        needed: 100,
+        plannedStart: null,
+        plannedEnd: null,
+        todayIso: '2026-08-24',
+      }),
+    ).toBeNull()
+    expect(
+      paceTone({
+        done: 0,
+        needed: 100,
+        plannedStart: '2026-08-24',
+        plannedEnd: '2026-08-24',
+        todayIso: '2026-08-24',
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('resolveDailyTargets — chỉ tiêu thật thắng số suy (GĐ 2.2)', () => {
+  it('cặp (tổ×công đoạn) có chỉ tiêu thật → dùng thật, kể cả 0; thiếu → số suy', () => {
+    const r = resolveDailyTargets(
+      [
+        { team_department_id: 't1', stage: 'han', qty: 200 }, // suy — bị thật đè
+        { team_department_id: 't1', stage: 'son', qty: 80 }, // suy — giữ
+        { team_department_id: 't2', stage: 'nguoi', qty: 150 }, // suy — thật = 0 đè
+      ],
+      [
+        { team_department_id: 't1', stage: 'han', qty: 250 },
+        { team_department_id: 't2', stage: 'nguoi', qty: 0 },
+      ],
+    )
+    expect(r.total).toBe(330) // 250 thật + 80 suy + 0 thật
+    expect(r.by_team.get('t1')).toBe(330 - 0)
+    expect(r.by_team.get('t2')).toBe(0)
+  })
+
+  it('chỉ tiêu thật cho cặp KHÔNG có việc suy vẫn tính (KH giao trước)', () => {
+    const r = resolveDailyTargets(
+      [],
+      [{ team_department_id: 't3', stage: 'phoi', qty: 500 }],
+    )
+    expect(r.total).toBe(500)
+    expect(r.by_team.get('t3')).toBe(500)
+  })
+
+  it('việc chưa giao tổ chỉ có vế suy, cộng vào tổng', () => {
+    const r = resolveDailyTargets(
+      [
+        { team_department_id: null, stage: 'han', qty: 60 },
+        { team_department_id: 't1', stage: 'han', qty: 40 },
+      ],
+      [],
+    )
+    expect(r.total).toBe(100)
+    expect(r.by_team.get('t1')).toBe(40)
+  })
+
+  it('nhiều job cùng (tổ×công đoạn) cộng dồn vế suy trước khi so', () => {
+    const r = resolveDailyTargets(
+      [
+        { team_department_id: 't1', stage: 'han', qty: 30 },
+        { team_department_id: 't1', stage: 'han', qty: 20 },
+      ],
+      [],
+    )
+    expect(r.by_team.get('t1')).toBe(50)
+  })
+})
+
+describe('forecastFinishDate — dự kiến xong theo nhịp (plan-hoan-thien #4)', () => {
+  it('còn 300, nhịp TB 100/ngày → +3 ngày lịch (xưởng làm CN)', () => {
+    expect(forecastFinishDate(300, [120, 80, 100], '2026-08-23')).toBe('2026-08-26')
+  })
+
+  it('chia có dư → làm tròn LÊN (250/100 → 3 ngày)', () => {
+    expect(forecastFinishDate(250, [100], '2026-08-23')).toBe('2026-08-26')
+  })
+
+  it('đã đủ số / chưa có nhịp → null (không đoán)', () => {
+    expect(forecastFinishDate(0, [100], '2026-08-23')).toBeNull()
+    expect(forecastFinishDate(-5, [100], '2026-08-23')).toBeNull()
+    expect(forecastFinishDate(300, [], '2026-08-23')).toBeNull()
+  })
+})
+
+describe('stageChainWarning — công đoạn sau vượt công đoạn trước (WIP âm)', () => {
+  it('sơn sẽ thành 50 mà nguội mới 30 → cảnh báo, không chặn', () => {
+    expect(stageChainWarning('KHUNG', 'son', 'nguoi', 30, 20, 30)).toBe(
+      'KHUNG: son sẽ thành 50 mà nguoi mới xong 30 — kiểm tra lại số hoặc sổ công đoạn trước',
+    )
+  })
+
+  it('đủ nguồn (sau ≤ trước) → null', () => {
+    expect(stageChainWarning('KHUNG', 'son', 'nguoi', 50, 20, 30)).toBeNull()
+    expect(stageChainWarning('KHUNG', 'son', 'nguoi', 50, 0, 50)).toBeNull()
+  })
+})
+
+describe('lsxStageProgress — tiến độ cả lệnh per công đoạn quy về bộ SP', () => {
+  const ORDER = ['phoi', 'han', 'son']
+
+  it('đồng bộ SP=MIN per công đoạn: chi tiết chậm nhất quyết định', () => {
+    // Dòng 10 SP: mặt bàn ×1 (cần 10), chân ×4 (cần 40).
+    const r = lsxStageProgress(
+      ORDER,
+      [{ id: 'l1', qty: 10 }],
+      [
+        {
+          order_line_id: 'l1',
+          total_needed: 10,
+          stages: [
+            { stage: 'phoi', done: 10, defect: 0 },
+            { stage: 'han', done: 8, defect: 1 },
+          ],
+        },
+        {
+          order_line_id: 'l1',
+          total_needed: 40,
+          stages: [
+            { stage: 'phoi', done: 40, defect: 0 },
+            { stage: 'han', done: 20, defect: 0 },
+          ],
+        },
+      ],
+    )
+    expect(r).toEqual([
+      { stage: 'phoi', need_sets: 10, done_sets: 10, defect: 0, pct: 1 },
+      // han: mặt bàn 8 bộ, chân floor(20×10/40)=5 bộ → min 5.
+      { stage: 'han', need_sets: 10, done_sets: 5, defect: 1, pct: 0.5 },
+    ])
+  })
+
+  it('dòng không có công đoạn thì không vào mẫu số của công đoạn đó', () => {
+    const r = lsxStageProgress(
+      ORDER,
+      [
+        { id: 'l1', qty: 10 },
+        { id: 'l2', qty: 20 },
+      ],
+      [
+        {
+          order_line_id: 'l1',
+          total_needed: 10,
+          stages: [
+            { stage: 'phoi', done: 10, defect: 0 },
+            { stage: 'son', done: 0, defect: 0 },
+          ],
+        },
+        {
+          order_line_id: 'l2',
+          total_needed: 20,
+          stages: [{ stage: 'phoi', done: 5, defect: 0 }],
+        },
+      ],
+    )
+    expect(r.find((s) => s.stage === 'son')).toEqual({
+      stage: 'son',
+      need_sets: 10, // chỉ dòng l1
+      done_sets: 0,
+      defect: 0,
+      pct: 0,
+    })
+    expect(r.find((s) => s.stage === 'phoi')).toMatchObject({
+      need_sets: 30,
+      done_sets: 15,
+    })
+  })
+
+  it('đạt cap theo SL dòng (làm dư không đếm quá) + tổng cần 0 bị bỏ khỏi min', () => {
+    const r = lsxStageProgress(
+      ORDER,
+      [{ id: 'l1', qty: 10 }],
+      [
+        {
+          order_line_id: 'l1',
+          total_needed: 10,
+          stages: [{ stage: 'phoi', done: 15, defect: 0 }],
+        },
+        {
+          order_line_id: 'l1',
+          total_needed: 0, // định mức hỏng — bỏ khỏi min, không chia 0
+          stages: [{ stage: 'phoi', done: 0, defect: 0 }],
+        },
+      ],
+    )
+    expect(r[0]).toMatchObject({ need_sets: 10, done_sets: 10, pct: 1 })
+  })
+
+  it('lệnh chưa định hình (không chi tiết) → mảng rỗng', () => {
+    expect(lsxStageProgress(ORDER, [{ id: 'l1', qty: 10 }], [])).toEqual([])
+  })
+})
+
+describe('paceForWindow — nhịp suy cho cả khung lúc đặt hạn (editor)', () => {
+  it('50 SP trong 24→26/08 (3 ngày, xưởng làm CN) → 17/ngày (tròn LÊN)', () => {
+    expect(paceForWindow(50, '2026-08-24', '2026-08-26')).toBe(17)
+  })
+
+  it('cùng ngày hai đầu → cả SL trong 1 ngày', () => {
+    expect(paceForWindow(50, '2026-08-24', '2026-08-24')).toBe(50)
+  })
+
+  it('thiếu một đầu / khoảng ngược / SL 0 → null (không đoán)', () => {
+    expect(paceForWindow(50, null, '2026-08-26')).toBeNull()
+    expect(paceForWindow(50, '2026-08-24', null)).toBeNull()
+    expect(paceForWindow(50, '2026-08-26', '2026-08-24')).toBeNull()
+    expect(paceForWindow(0, '2026-08-24', '2026-08-26')).toBeNull()
+  })
+
+  it('nhận cả timestamp đầy đủ — cắt về ngày', () => {
+    expect(paceForWindow(30, '2026-08-24T07:00:00Z', '2026-08-26T21:00:00Z')).toBe(10)
+  })
+})
+
+describe('Bước 3 — logic tiến độ (26/08/2026)', () => {
+  const tally = (cq: number, cd: number, pq = 0, pd = 0) => ({
+    confirmed: { qty: cq, defect: cd },
+    pending: { qty: pq, defect: pd },
+  })
+
+  it('lũy kế CHỈ đếm phiếu đã xác nhận — phiếu chờ duyệt bày riêng', () => {
+    const r = stageProgress(1000, tally(700, 20, 250, 5))
+    expect(r.done).toBe(700)
+    expect(r.remaining).toBe(300)
+    expect(r.pct).toBeCloseTo(0.7)
+    // 250 cái đang chờ duyệt KHÔNG được cộng vào tiến độ...
+    expect(r.done).not.toBe(950)
+    // ...nhưng phải nhìn thấy được, nếu không sẽ tưởng xưởng nghỉ.
+    expect(r.pending_qty).toBe(250)
+  })
+
+  it('tỷ lệ lỗi tính trên THỰC HIỆN (đạt + lỗi), không phải trên kế hoạch', () => {
+    const r = stageProgress(1000, tally(240, 10))
+    expect(totalRun(240, 10)).toBe(250)
+    expect(r.defect_rate).toBeCloseTo(10 / 250)
+  })
+
+  it('làm dư: còn lại kẹp ở 0, tiến độ kẹp trần 100%', () => {
+    const r = stageProgress(100, tally(120, 0))
+    expect(r.remaining).toBe(0)
+    expect(r.pct).toBe(1)
+    expect(r.status).toBe('done')
+  })
+
+  it('chưa định hình (kế hoạch 0) → không chia 0, không vẽ 100% giả', () => {
+    const r = stageProgress(0, tally(0, 0))
+    expect(r.pct).toBe(0)
+    expect(r.defect_rate).toBe(0)
+    expect(r.status).toBe('not_started')
+  })
+
+  it('trạng thái suy từ số: chưa bắt đầu → đang SX → hoàn thành', () => {
+    expect(stageProgress(100, tally(0, 0)).status).toBe('not_started')
+    expect(stageProgress(100, tally(1, 0)).status).toBe('in_progress')
+    expect(stageProgress(100, tally(100, 0)).status).toBe('done')
+  })
+
+  it('chỉ có phiếu CHỜ duyệt → tiến độ vẫn 0 (chưa ai xác nhận)', () => {
+    const r = stageProgress(100, tally(0, 0, 80, 2))
+    expect(r.done).toBe(0)
+    expect(r.status).toBe('not_started')
+    expect(r.pending_qty).toBe(80)
+  })
+
+  it('phế KHÔNG tính là đạt — 100 thực hiện, 5 phế thì đạt là 95', () => {
+    const r = stageProgress(200, tally(95, 5))
+    expect(r.done).toBe(95)
+    expect(totalRun(r.done, r.defect)).toBe(100)
+    expect(r.remaining).toBe(105)
   })
 })

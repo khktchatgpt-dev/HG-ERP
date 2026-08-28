@@ -56,6 +56,7 @@ import { EditMaterialDialog } from './EditMaterialDialog'
 import { PasteLinesDialog, type PasteConfirm } from './PasteLinesDialog'
 import { Modal } from '@/components/Modal'
 import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
+import type { DocTemplate } from '@/lib/doc-templates'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
 
 type SupplierOption = {
@@ -189,6 +190,7 @@ export function PoCreateForm({
   suppliers,
   lsxs,
   company,
+  tpl,
   defaultSupplierId,
   defaultLsxId,
   initial,
@@ -197,6 +199,9 @@ export function PoCreateForm({
   lsxs: LsxOption[]
   /** Đầu phiếu (tên cty, MST, địa danh) cho bản xem trước — từ Cài đặt. */
   company: Record<string, string | null>
+  /** Mẫu in của PO (0164) — server nạp, truyền xuống để ô xem trước dựng đúng
+   *  tờ sẽ gửi NCC. Thiếu thì PoPrintSheet tự dùng mặc định trong code. */
+  tpl?: DocTemplate
   defaultSupplierId?: string
   /** `?lsx=` — mở form từ màn "Vật tư theo lệnh", chọn sẵn lệnh + nạp nhu cầu. */
   defaultLsxId?: string
@@ -1282,6 +1287,7 @@ export function PoCreateForm({
         <div className="overflow-x-auto">
           <PoPrintSheet
             company={company}
+            tpl={tpl}
             po={previewHeaderFromDraft(header, {
               // Số đơn do server cấp lúc lưu — bản nháp chưa có, nói thẳng ra
               // thay vì bịa một mã trông như thật.

@@ -1,7 +1,9 @@
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { usersRepo } from '@/modules/core/users/users.repo'
 import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { PoPrintSheet } from '../PoPrintSheet'
 
@@ -23,12 +25,21 @@ export default async function PoPrintPage({
 
   const po = await posRepo.findById(id)
   if (!po) redirect('/planning/pos')
-  const [lines, supplier, company, extraLsx] = await Promise.all([
+  const [lines, supplier, company, extraLsx, tpl] = await Promise.all([
     posRepo.listLines(id),
     suppliersRepo.findById(po.supplier_id),
     settingsService.getAll(),
     posRepo.listExtraLsx(id),
+    docTemplatesService.get('PO'),
   ])
+  /*
+   * Tên NGƯỜI LẬP dưới nét ký. Ưu tiên người soạn đơn; đơn nạp từ dữ liệu cũ
+   * không có `created_by` thì lấy người phụ trách (0128) — thà đúng một người
+   * đang cầm đơn còn hơn để trống nét ký trên tờ gửi NCC.
+   */
+  const creator = po.created_by ? await usersRepo.findById(po.created_by) : null
+  const creatorName = creator ? (creator.name ?? creator.email) : po.assignee_name
+
   // Đơn gộp nhiều LSX (0125): phiếu ghi "LSX 04.26.27 + 02.26.27" như sổ thật.
   const lsxCode =
     [po.lsx_code, ...extraLsx.map((e) => e.code)].filter(Boolean).join(' + ') || null
@@ -36,7 +47,13 @@ export default async function PoPrintPage({
   return (
     <PoPrintSheet
       company={company}
-      po={{ ...po, template: po.template ?? 'simple', lsx_code: lsxCode }}
+      tpl={tpl}
+      po={{
+        ...po,
+        template: po.template ?? 'simple',
+        lsx_code: lsxCode,
+        creator_name: creatorName,
+      }}
       supplier={supplier}
       lines={lines}
       exportHref={`/api/dept/supply/pos/${id}/export`}

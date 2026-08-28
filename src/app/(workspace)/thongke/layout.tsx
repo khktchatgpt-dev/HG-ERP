@@ -5,8 +5,8 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
 import { WORKSPACES } from '@/workspaces/workspaces.config'
 
 /**
- * Layout workspace Thống kê xưởng — sổ số liệu tập trung + định hình + gia công (nhãn 0087).
- * Gate: canEnterWorkspace('stat') (gia đình SX — access.ts).
+ * Layout workspace Thống kê xưởng — dựng lại 26/08/2026 theo khung 5 bước.
+ * Gate: canEnterWorkspace('stat') (gia đình SX — xem workspaces/access.ts).
  */
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()

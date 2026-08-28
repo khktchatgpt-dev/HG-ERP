@@ -31,6 +31,7 @@ export default async function ProductPartsPage({
       clusters={data.clusters}
       setItems={data.setItems}
       paintCoverage={data.product.paint_coverage_m2_per_kg ?? null}
+      actualWeightKg={data.product.actual_weight_kg ?? null}
       baseMaterial={data.product.base_material ?? null}
       canEdit={canEdit}
     />

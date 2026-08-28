@@ -5,7 +5,6 @@ import { teamService } from '@/modules/workflow/team/team.service'
 import { AppShell } from '@/components/AppShell'
 import { Avatar } from '@/components/Avatar'
 import { Badge } from '@/components/Badge'
-import { Forbidden } from '@/server/http'
 
 const STATUS_TONE: Record<string, Parameters<typeof Badge>[0]['tone']> = {
   todo: 'gray',

@@ -19,6 +19,6 @@ export const POST = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
   const input = await parseJson(req, entriesRecordSchema)
-  const { warnings } = await entriesService.record(user, id, input)
-  return NextResponse.json({ ok: true, warnings })
+  const { warnings, doc_no } = await entriesService.record(user, id, input)
+  return NextResponse.json({ ok: true, warnings, doc_no })
 })
