@@ -1330,6 +1330,32 @@ export function PoCreateForm({
                 : null
             }
             lines={previewLinesFromDraft(template, lines)}
+            /*
+             * LỊCH GIAO cũng phải có trong bản xem trước (28/08): khối "Chia
+             * đợt giao" in thẳng lên phiếu gửi NCC, mà xem trước thiếu nó thì
+             * người dùng duyệt một tờ KHÁC tờ sẽ gửi — đúng cái bẫy mà nút này
+             * sinh ra để tránh. Tiền từng đợt chia tỷ lệ như bản in thật.
+             */
+            shipments={columnsToShipments(shipCols).map((sh, i) => ({
+              // Số đợt thật do server cấp lúc lưu; bản nháp đánh theo thứ tự
+              // ngày — cùng thứ tự server sẽ dùng (columnsToShipments đã sắp).
+              seq: i + 1,
+              expected_date: sh.expected_date,
+              lines: sh.lines.map((sl) => {
+                const l = lines[sl.line_index]
+                const ordered = Number(l?.qty) || 0
+                const price = l?.price === '' ? null : Number(l?.price)
+                return {
+                  name: l?.name ?? '?',
+                  qty: sl.qty,
+                  unit: l?.unit ?? '',
+                  amount:
+                    price != null && ordered > 0
+                      ? price * ordered * (sl.qty / ordered)
+                      : null,
+                }
+              }),
+            }))}
           />
         </div>
       </Modal>
