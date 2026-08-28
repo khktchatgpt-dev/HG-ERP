@@ -41,6 +41,13 @@ export type PoGroup = {
   /** Cộng sẵn cho đầu nhóm — người dùng khỏi tự nhẩm. */
   total: number
   currency: string
+  /**
+   * Tiền của các LOẠI TIỀN KHÁC trong nhóm (28/08). `total` cố ý chỉ cộng đơn
+   * cùng loại tiền với đơn đầu nhóm — nhưng nếu không kể ra phần còn lại thì
+   * thẻ ghi "2 đơn · 4.500.000 VND" trong khi thật ra còn 12.500 USD nữa:
+   * người xem đọc thành tổng của cả nhóm và tin vào một con số thiếu.
+   */
+  otherTotals: { currency: string; total: number }[]
   pending: number
   open: number
   received: number
@@ -78,6 +85,7 @@ function emptyGroup(key: string, lsx_code: string): PoGroup {
     pos: [],
     total: 0,
     currency: 'VND',
+    otherTotals: [],
     pending: 0,
     open: 0,
     received: 0,
@@ -101,8 +109,15 @@ function tally(g: PoGroup, p: Po, today: string, borrowed = false): void {
   if (borrowed) g.borrowed.add(p.id)
   // Cộng tiền chỉ gộp đơn CÙNG loại tiền với đơn đầu nhóm — cộng thẳng USD vào
   // VND ra một con số vô nghĩa mà nhìn vẫn như thật.
-  if (!borrowed && p.currency === g.currency && p.status !== 'cancelled')
-    g.total += p.total ?? 0
+  if (!borrowed && p.status !== 'cancelled') {
+    if (p.currency === g.currency) {
+      g.total += p.total ?? 0
+    } else {
+      const cur = g.otherTotals.find((t) => t.currency === p.currency)
+      if (cur) cur.total += p.total ?? 0
+      else g.otherTotals.push({ currency: p.currency, total: p.total ?? 0 })
+    }
+  }
   if (p.status === 'pending_approval') g.pending++
   if (PO_OPEN_STATUSES.includes(p.status)) g.open++
   if (p.status === 'received') g.received++
