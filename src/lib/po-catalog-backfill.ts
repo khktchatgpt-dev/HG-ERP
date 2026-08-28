@@ -14,6 +14,8 @@
  * tiền của mọi đơn sau, giữ nút "lưu vào danh mục" bấm tay có chủ đích.
  */
 
+import { parseInnerDims } from './dims'
+
 /** Trường mô tả trên dòng đơn có thể chảy về danh mục. */
 export type CatalogLineInfo = {
   material_id?: string | null
@@ -158,4 +160,41 @@ export function lastPriceUpdates(
     }
   }
   return out
+}
+
+/**
+ * QUY CÁCH SUY TỪ DÒNG ĐƠN — vá chỗ hở của hộp xác nhận (28/08/2026).
+ *
+ * Mẫu bao bì carton không có ô "Quy cách": người mua gõ **Lọt lòng D×R×C**, ba
+ * số ấy vào `inner_*_mm` của DÒNG chứ không vào `spec`. Mẫu kính/xốp thì gõ ô
+ * **Quy cách** riêng của dòng (`dimension_text`). Hệ quả trước đây: hộp "Cập
+ * nhật kho vật tư?" không bao giờ đề xuất quy cách cho hai mẫu này — muốn đẩy
+ * về danh mục phải biết mà bấm cái link `lưu quy cách ↑` bé xíu trên dòng, tức
+ * là CÙNG MỘT MÀN có hai đường đưa thông tin về danh mục và người dùng không
+ * đoán được cái nào đi đâu.
+ *
+ * Nay một đường: dòng nào suy ra được quy cách thì hộp xác nhận đề xuất luôn.
+ * Chuỗi sinh ra giữ đúng khuôn `900x605x115` mà link cũ vẫn ghi, để hai lối
+ * không đẻ ra hai kiểu chữ khác nhau trong cùng một cột.
+ */
+export function specFromLine(l: {
+  spec?: string | null
+  /** Nhận cả `''` vì lưới ở client giữ ô số rỗng là chuỗi (kiểu `Num`). */
+  inner_l_mm?: number | string | null
+  inner_w_mm?: number | string | null
+  inner_h_mm?: number | string | null
+  dimension_text?: string | null
+}): string | null {
+  const typed = (l.spec ?? '').trim()
+  if (typed) return typed // gõ thẳng thì không suy diễn gì
+
+  const dims = [l.inner_l_mm, l.inner_w_mm, l.inner_h_mm].map((v) => Number(v))
+  if (dims.every((d) => Number.isFinite(d) && d > 0)) {
+    return `${dims[0]}x${dims[1]}x${dims[2]}`
+  }
+
+  // Kính/xốp: chỉ nhận khi ô quy cách của dòng ĐỌC RA được D×R×C — chuỗi mô tả
+  // linh tinh không đáng đẩy vào danh mục dùng chung.
+  const text = (l.dimension_text ?? '').trim()
+  return text && parseInnerDims(text) != null ? text : null
 }

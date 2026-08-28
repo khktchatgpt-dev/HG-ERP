@@ -114,3 +114,116 @@ export function earliestExpectedDate(
 export function nextSeq(shipments: { seq: number }[]): number {
   return shipments.reduce((m, s) => Math.max(m, s.seq), 0) + 1
 }
+
+/**
+ * TIỀN CỦA MỘT ĐỢT (28/08/2026 — feedback: đơn số lượng lớn thường 1 vật tư,
+ * hàng chia đợt, cần thấy "đợt này khoảng bao nhiêu tiền" mà không tách PO con).
+ *
+ * Giá KHÔNG đổi theo đợt (user chốt) nên tiền đợt = thành tiền dòng × tỷ lệ SL
+ * đợt trên SL đặt — chia TỶ LỆ chứ không nhân `qty × unit_price` trực tiếp, vì
+ * dòng tính giá theo đơn vị 2 (đ/kg trong khi SL đặt theo cây, 0053) thì đơn
+ * giá không đi với đơn vị của SL đợt; tỷ lệ thì đúng với cả hai kiểu giá.
+ *
+ * Đây là SỐ KẾ HOẠCH để đối chiếu với NCC — tiền phải trả thật vẫn theo phiếu
+ * nhập kho (công nợ NCC tính từng PNK). Dòng giá kg (`unit2`) mang cờ `approx`:
+ * kg thật cân ở bàn cân lúc nhận, kế hoạch chỉ là ước.
+ */
+export type ShipmentLineMoney = {
+  /** Thành tiền của CẢ DÒNG (poLineAmount) — null khi dòng chưa có giá. */
+  amount: number | null
+  qty_ordered: number
+  /** true = giá theo đơn vị 2 (kg/m²) — tiền đợt là ước tính theo tỷ lệ. */
+  approx: boolean
+}
+
+export function shipmentAmount(
+  lines: ShipmentLineInput[],
+  moneyByLine: Map<string, ShipmentLineMoney>,
+): { amount: number; approx: boolean; priced: boolean } {
+  let amount = 0
+  let approx = false
+  let priced = false
+  for (const l of lines) {
+    const m = moneyByLine.get(l.po_line_id)
+    if (!m || m.amount == null || !(m.qty_ordered > 0)) continue
+    priced = true
+    amount += m.amount * (l.qty / m.qty_ordered)
+    if (m.approx) approx = true
+  }
+  return { amount, approx, priced }
+}
+
+/**
+ * ĐÃ VỀ BAO NHIÊU CỦA TỪNG ĐỢT — theo THỰC TẾ vận hành (chỉnh 28/08/2026).
+ *
+ * Luồng thật: màn nhập kho dựng quanh đợt giao — PNK thường NỐI `shipment_id`
+ * (0153), tức "đợt này về mấy" phần lớn nằm TRONG CHỨNG TỪ. Nên:
+ *
+ *   1. SỐ CHỨNG TỪ TRƯỚC (`linked`): PNK nối đợt nào thì cộng thẳng vào đợt
+ *      ấy, không cắt trần theo kế hoạch — Kho nhận vượt trong dung sai là
+ *      chuyện thật, số phiếu thắng số hẹn.
+ *   2. PHẦN KHÔNG NỐI ĐỢT còn lại (giao đột xuất, đơn trước 0152) mới suy
+ *      diễn — và rót theo ĐỘ CHẮC thực tế chứ không mù theo số thứ tự:
+ *      đợt 'received' (Kho đã nhận xong) → 'arrived' (xe đã tới cổng) →
+ *      'planned'; cùng hạng thì ngày hẹn sớm trước. Nhờ vậy NCC giao chéo
+ *      (đợt 2 về trước) mà Cung ứng có bấm "Xe tới" là số rơi đúng đợt.
+ *
+ * Kết quả từng dòng mang cờ `exact`: false = có phần suy diễn → UI hiện ≈.
+ * Sổ thật vẫn là cột "Đã về" của dòng đơn (BR-08); đây là số đối chiếu.
+ */
+export type ShipmentReceipt = { qty: number; exact: boolean }
+
+const STATUS_RANK: Record<string, number> = { received: 0, arrived: 1, planned: 2 }
+
+export function allocateReceiptsToShipments(
+  shipments: {
+    id: string
+    seq: number
+    status: string
+    expected_date: string
+    lines: ShipmentLineInput[]
+  }[],
+  receivedByLine: Map<string, number>,
+  /** Số đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id) — đợt × dòng đơn. */
+  linked: Map<string, Map<string, number>> = new Map(),
+): Map<string, Map<string, ShipmentReceipt>> {
+  const pool = new Map(receivedByLine)
+  const out = new Map<string, Map<string, ShipmentReceipt>>()
+  const alive = shipments.filter((s) => s.status !== 'cancelled')
+
+  // 1. Chứng từ trước — trừ khỏi bể chưa-phân-bổ.
+  for (const s of alive) {
+    const per = new Map<string, ShipmentReceipt>()
+    for (const l of s.lines) {
+      const got = linked.get(s.id)?.get(l.po_line_id) ?? 0
+      if (got <= 0) continue
+      per.set(l.po_line_id, { qty: got, exact: true })
+      pool.set(l.po_line_id, Math.max((pool.get(l.po_line_id) ?? 0) - got, 0))
+    }
+    out.set(s.id, per)
+  }
+
+  // 2. Phần không nối đợt: rót theo độ chắc (received → arrived → planned),
+  //    cùng hạng thì ngày hẹn sớm trước; trần = SL hẹn trừ phần chứng từ.
+  const order = [...alive].sort(
+    (a, b) =>
+      (STATUS_RANK[a.status] ?? 9) - (STATUS_RANK[b.status] ?? 9) ||
+      a.expected_date.localeCompare(b.expected_date) ||
+      a.seq - b.seq,
+  )
+  for (const s of order) {
+    const per = out.get(s.id) ?? new Map<string, ShipmentReceipt>()
+    for (const l of s.lines) {
+      const have = pool.get(l.po_line_id) ?? 0
+      if (have <= 0) continue
+      const already = per.get(l.po_line_id)
+      const cap = Math.max(l.qty - (already?.qty ?? 0), 0)
+      if (cap <= 0) continue
+      const take = Math.min(have, cap)
+      per.set(l.po_line_id, { qty: (already?.qty ?? 0) + take, exact: false })
+      pool.set(l.po_line_id, have - take)
+    }
+    out.set(s.id, per)
+  }
+  return out
+}

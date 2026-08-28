@@ -4,6 +4,7 @@ import {
   catalogFillPatch,
   lastPriceUpdates,
   linesByMaterial,
+  specFromLine,
   type CatalogFields,
 } from './po-catalog-backfill'
 
@@ -116,5 +117,34 @@ describe('buildCatalogSuggestions — danh sách cho hộp xác nhận sau khi l
       ),
     ).toEqual([])
     expect(buildCatalogSuggestions([{ material_id: 'a' }], [mat])).toEqual([])
+  })
+})
+
+describe('specFromLine — quy cách suy từ dòng (mẫu không có ô Quy cách)', () => {
+  it('gõ thẳng quy cách thì giữ nguyên, không suy diễn', () => {
+    expect(specFromLine({ spec: ' 25x50x1li ', inner_l_mm: 900 })).toBe('25x50x1li')
+  })
+
+  it('carton: ba số lọt lòng → chuỗi cùng khuôn với link "lưu quy cách ↑"', () => {
+    expect(specFromLine({ inner_l_mm: 900, inner_w_mm: 605, inner_h_mm: 115 })).toBe(
+      '900x605x115',
+    )
+  })
+
+  it('thiếu một chiều thì không suy — nửa bộ kích thước vào danh mục là sai', () => {
+    expect(specFromLine({ inner_l_mm: 900, inner_w_mm: 605 })).toBeNull()
+    expect(specFromLine({ inner_l_mm: 900, inner_w_mm: 605, inner_h_mm: 0 })).toBeNull()
+  })
+
+  it('kính/xốp: ô quy cách của dòng đọc ra D×R×C thì lấy', () => {
+    expect(specFromLine({ dimension_text: '1220×2440×5' })).toBe('1220×2440×5')
+  })
+
+  it('chuỗi mô tả không ra kích thước thì bỏ — danh mục dùng chung, không chứa chữ linh tinh', () => {
+    expect(specFromLine({ dimension_text: 'khổ lớn, cắt theo yêu cầu' })).toBeNull()
+  })
+
+  it('dòng trống hoàn toàn → null', () => {
+    expect(specFromLine({})).toBeNull()
   })
 })

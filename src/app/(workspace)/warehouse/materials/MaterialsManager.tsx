@@ -14,6 +14,7 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
+import { MaterialHistory } from './MaterialHistory'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import {
   Field,
@@ -124,6 +125,8 @@ export function MaterialsManager({
   const [busy, setBusy] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
   const [editing, setEditing] = useState<Material | null>(null)
+  /** Vật tư đang mở sổ vết (0177) — "ai đổi ô nào, vì chứng từ nào". */
+  const [history, setHistory] = useState<Material | null>(null)
   /** Dung sai nhóm (0156): null = đóng; chuỗi = giá trị % đang gõ trong modal. */
   const [groupTol, setGroupTol] = useState<string | null>(null)
 
@@ -337,12 +340,20 @@ export function MaterialsManager({
         if (!canEdit) return null
         // Cung ứng: chỉ sửa trường mua hàng — ngừng dùng/xoá là việc của Kho.
         if (purchasing) {
-          return <RowMenu items={[{ label: 'Sửa', onClick: () => setEditing(m) }]} />
+          return (
+            <RowMenu
+              items={[
+                { label: 'Sửa', onClick: () => setEditing(m) },
+                { label: 'Lịch sử', onClick: () => setHistory(m) },
+              ]}
+            />
+          )
         }
         return (
           <RowMenu
             items={[
               { label: 'Sửa', onClick: () => setEditing(m) },
+              { label: 'Lịch sử', onClick: () => setHistory(m) },
               // Vật tư Cung ứng khai vội từ form đơn (0136): Kho đối chiếu
               // trùng + bổ sung barem/kệ xong thì gỡ cờ tại đây.
               ...(m.needs_review
@@ -594,6 +605,23 @@ export function MaterialsManager({
             }
           }}
         />
+      </Modal>
+
+      {/* SỔ VẾT (0177) — mở từ menu dòng; đọc theo quyền xem kho nên cả Cung ứng
+          lẫn Kho đều soi được thay đổi của nhau. */}
+      <Modal
+        open={!!history}
+        onClose={() => setHistory(null)}
+        title={history ? `Lịch sử — ${history.name}` : ''}
+        maxWidth="sm:max-w-2xl"
+      >
+        {history && (
+          <MaterialHistory
+            key={history.id}
+            materialId={history.id}
+            materialUnit={history.unit}
+          />
+        )}
       </Modal>
 
       <Modal

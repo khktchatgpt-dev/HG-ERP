@@ -1,4 +1,4 @@
-import { materialsRepo, type Material } from './warehouse.repo'
+import { materialsRepo, materialChangesRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
 import { Conflict, Forbidden, NotFound } from '@/server/http'
@@ -13,6 +13,11 @@ import {
 import { invalidateTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
 import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
+import { diffMaterial } from '@/lib/material-diff'
+import { emit } from '@/events/bus'
+// BẮT BUỘC: handler chỉ tồn tại sau khi module này được import — thiếu dòng
+// này thì `emit` chạy vào hư không, vết không ai ghi mà cũng không ai báo lỗi.
+import '@/events/register'
 
 // Phase 2 RBAC: guard đọc thẳng permission (bỏ hardcode tên phòng).
 async function isWarehouseUser(user: User): Promise<boolean> {
@@ -311,7 +316,16 @@ export const materialsService = {
       .slice(0, 5)
   },
 
-  async update(user: User, id: string, patch: UpdateInput): Promise<Material> {
+  async update(
+    user: User,
+    id: string,
+    patch: UpdateInput,
+    /**
+     * Đường ghi (0177) — mặc định 'manual' (màn Kho). Hộp xác nhận sau khi lưu
+     * đơn truyền 'po_enrich' + mã đơn để sổ vết kể được "vì đơn nào".
+     */
+    meta?: { source?: 'manual' | 'po_enrich' | 'import' | 'system'; source_ref?: string | null },
+  ): Promise<Material> {
     // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng — enforce bên dưới).
     const full = await canAction(user, 'warehouse.material.update')
     if (!full) {
@@ -339,7 +353,38 @@ export const materialsService = {
     // "Đã rà xong" (0138): hạ cờ là xoá luôn danh sách trường đáng ngờ — chip
     // từng trường trên màn Kho không được sống lâu hơn cái cờ chung.
     if (rest.needs_review === false) rest.needs_review_fields = []
-    return materialsRepo.patch(id, code ? { ...rest, code } : rest)
+    const written = code ? { ...rest, code } : rest
+    const saved = await materialsRepo.patch(id, written)
+    /*
+     * VẾT THAY ĐỔI (0177) — ghi SAU khi đã ghi vật tư, qua bus nên hỏng sổ vết
+     * không kéo đổ thao tác. So bản trước với ĐÚNG những ô vừa ghi, nên patch
+     * một trường không đẻ ra vết cho cả bản ghi.
+     */
+    await emit({
+      name: 'material.changed',
+      material_id: id,
+      material_code: saved.code,
+      actor_id: user.id,
+      source: meta?.source ?? 'manual',
+      source_ref: meta?.source_ref ?? null,
+      changes: diffMaterial(
+        before as unknown as Record<string, unknown>,
+        written as Record<string, unknown>,
+      ),
+    })
+    return saved
+  },
+
+  /**
+   * SỔ VẾT của một vật tư (0177). Đọc theo quyền XEM kho — cùng mức với chính
+   * bản ghi vật tư: giấu lịch sử với người đọc được giá trị hiện tại thì vết
+   * chẳng để làm gì.
+   */
+  async changes(user: User, id: string) {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Không có quyền xem kho')
+    const m = await materialsRepo.findById(id)
+    if (!m) throw NotFound('Vật tư không tồn tại')
+    return materialChangesRepo.listByMaterial(id)
   },
 
   async remove(user: User, id: string): Promise<void> {
@@ -376,6 +421,8 @@ export const materialsService = {
   async enrichFromOrder(
     user: User,
     items: { material_id: string; set: Record<string, unknown> }[],
+    /** Mã đơn vừa lưu — vào sổ vết để truy được "ô này vào vì đơn nào" (0177). */
+    poCode?: string | null,
   ): Promise<{ updated: number }> {
     let updated = 0
     for (const it of items) {
@@ -383,7 +430,10 @@ export const materialsService = {
       if (!m) continue
       const patch = catalogFillPatch(m, it.set as CatalogLineInfo)
       if (!patch) continue
-      await materialsService.update(user, it.material_id, patch)
+      await materialsService.update(user, it.material_id, patch, {
+        source: 'po_enrich',
+        source_ref: poCode ?? null,
+      })
       updated++
     }
     return { updated }

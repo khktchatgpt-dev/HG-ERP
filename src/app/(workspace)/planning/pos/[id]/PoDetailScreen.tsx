@@ -3,12 +3,15 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Printer } from 'lucide-react'
+import { ArrowLeft, Pencil, Printer } from 'lucide-react'
 import { Badge } from '@/components/Badge'
+import { Modal } from '@/components/Modal'
+import { useToast } from '@/components/ui/Toast'
+import { api, ApiError } from '@/lib/api'
 import { DocumentFiles } from '@/components/DocumentFiles'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { RefChain, type ChainNode } from '@/components/erp/RefChain'
-import { TopProgressBar } from '@/components/erp/Spinner'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
@@ -104,6 +107,8 @@ const btnPrimary =
   'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
 const btnGreen =
   'w-full rounded-md bg-[var(--done)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
+const btnSmall =
+  'rounded-md border border-input px-2 py-1.5 text-[12.5px] hover:bg-muted'
 const btnDanger =
   'w-full rounded-md border border-[var(--stop)]/40 px-3 py-1.5 text-sm text-[var(--stop)] hover:bg-[var(--stop)]/10'
 
@@ -111,6 +116,7 @@ export function PoDetailScreen({
   po,
   lines,
   statusLines,
+  shipmentReceipts,
   extraLsx,
   shipments,
   history,
@@ -124,6 +130,8 @@ export function PoDetailScreen({
   po: PoDetailPo
   lines: PoLine[]
   statusLines: StatusLine[]
+  /** Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id) — {đợt: {dòng: SL}}. */
+  shipmentReceipts: Record<string, Record<string, number>>
   /** LSX PHỤ gộp vào đơn (0125). */
   extraLsx: { id: string; code: string }[]
   /** Kế hoạch giao theo đợt (0152). */
@@ -152,6 +160,11 @@ export function PoDetailScreen({
   const [reasoning, setReasoning] = useState<ReasonState | null>(null)
   /** Dialog xác nhận NCC / thêm đợt giao (0152). */
   const [confirming, setConfirming] = useState<'confirm' | 'add' | null>(null)
+  /** Hộp sửa điều khoản & ghi chú (28/08) — chữ trên phiếu, mở tới khi đơn huỷ. */
+  const [editingTerms, setEditingTerms] = useState(false)
+  /** Dòng thời gian gấp lại còn 4 mốc gần nhất — nhật ký dài là để TRA, không
+      phải để chiếm nửa cột nội dung. */
+  const [allMarks, setAllMarks] = useState(false)
 
   // Dòng đơn cho dialog + thẻ đợt giao — chỉ dòng VẬT TƯ KHO (dòng tự do gỗ/gia
   // công nghiệm thu ngoài sổ, không đi theo đợt).
@@ -162,6 +175,10 @@ export function PoDetailScreen({
       name: l.material_name,
       unit: l.material_unit,
       qty_ordered: l.qty_ordered,
+      // Tiền theo đợt (28/08) chia tỷ lệ từ thành tiền dòng; giá theo kg/m²
+      // (unit2) là số ước — kg thật cân lúc nhận.
+      amount: l.unit_price != null ? poLineAmount(l) : null,
+      price_approx: l.price_basis === 'unit2',
     }))
   const shipmentLinesById = new Map(shipmentLines.map((l) => [l.id, l]))
   /** SL đã nằm ở các đợt còn sống — validate cộng dồn khi thêm đợt. */
@@ -182,6 +199,30 @@ export function PoDetailScreen({
   const canCloseShort = ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
     po.status,
   )
+  /** Dải tiến độ "hàng về tới đâu" — mỗi dòng vật tư kho một thanh. */
+  const progressLines = statusLines
+    .filter((l) => l.material_id != null && l.qty_ordered > 0)
+    .map((l) => {
+      const line = lines.find((x) => x.id === l.id)
+      const received = l.qty_received ?? 0
+      const scheduled = Math.min(shippedByLine.get(l.id) ?? 0, l.qty_ordered)
+      return {
+        id: l.id,
+        name: line?.material_name ?? '?',
+        unit: line?.material_unit ?? '',
+        ordered: l.qty_ordered,
+        received,
+        unscheduled: Math.max(l.qty_ordered - scheduled, 0),
+        pctReceived: Math.min((received / l.qty_ordered) * 100, 100),
+        // Phần ĐÃ HẸN nhưng chưa về — vẽ nối sau phần đã về, không vẽ đè.
+        pctScheduled: Math.max(
+          (Math.min(scheduled, l.qty_ordered) / l.qty_ordered) * 100 -
+            Math.min((received / l.qty_ordered) * 100, 100),
+          0,
+        ),
+      }
+    })
+
   /** Dòng vật tư kho còn CHỜ VỀ — nuôi nút "Chốt phần thiếu" cả đơn. */
   const openStockLines = statusLines.filter(
     (l) => l.material_id != null && l.qty_open > 0,
@@ -334,7 +375,9 @@ export function PoDetailScreen({
         }
       />
 
-      <RefChain nodes={chain} />
+      {/* Chuỗi liên kết chỉ đáng chỗ khi có gì để LẦN NGƯỢC (đơn hàng/LSX);
+          đơn ngoài LSX thì chuỗi một chip chỉ lặp lại tiêu đề ngay trên nó. */}
+      {chain.length > 1 && <RefChain nodes={chain} />}
 
       <div className={card}>
         <div className="px-3.5 py-3">
@@ -350,15 +393,82 @@ export function PoDetailScreen({
             }}
           />
         </div>
+
+        {/* HÀNG VỀ TỚI ĐÂU (28/08) — câu hỏi số một của đơn lớn giao theo đợt,
+            trả lời trong một giây thay vì bắt đọc bảng: mỗi vật tư một thanh
+            [đã về | đã hẹn đợt chưa về | chưa hẹn]. Chỉ hiện từ lúc đơn đã
+            gửi NCC — trước đó chưa có gì để về. */}
+        {showReceived && progressLines.length > 0 && (
+          <div className="border-border/70 flex flex-col gap-2.5 border-t px-3.5 py-3">
+            {progressLines.map((r) => (
+              <div key={r.id} className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12px]">
+                  <span className="min-w-0 truncate font-medium">{r.name}</span>
+                  <span className="t-data text-muted-foreground">
+                    về{' '}
+                    <span
+                      className="font-semibold"
+                      style={{
+                        color:
+                          r.received >= r.ordered - 1e-6
+                            ? 'var(--done)'
+                            : 'var(--foreground)',
+                      }}
+                    >
+                      {money(r.received)}
+                    </span>
+                    /{money(r.ordered)} {r.unit}
+                    {r.unscheduled > 1e-6 && (
+                      <span className="font-medium text-[var(--warn)]">
+                        {' '}
+                        · {money(r.unscheduled)} chưa hẹn đợt
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div
+                  className="bg-muted flex h-1.5 overflow-hidden rounded-full"
+                  role="img"
+                  aria-label={`${r.name}: về ${r.received}/${r.ordered} ${r.unit}`}
+                >
+                  <span
+                    style={{
+                      width: `${r.pctReceived}%`,
+                      background: 'var(--done)',
+                    }}
+                  />
+                  <span
+                    style={{
+                      width: `${r.pctScheduled}%`,
+                      background: 'color-mix(in oklab, var(--primary) 35%, transparent)',
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── TRÁI: đơn này gồm những gì ─────────────────────────────────── */}
-        <div className="flex min-w-0 flex-col gap-4">
+        <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1">
           {(shipments.length > 0 || po.confirmed_note) && (
             <PoShipmentsCard
               shipments={shipments}
               linesById={shipmentLinesById}
+              currency={po.currency ?? 'VND'}
+              receivedByLine={
+                new Map(statusLines.map((s) => [s.id, s.qty_received ?? 0]))
+              }
+              linkedReceipts={
+                new Map(
+                  Object.entries(shipmentReceipts).map(([sid, per]) => [
+                    sid,
+                    new Map(Object.entries(per)),
+                  ]),
+                )
+              }
               confirmedNote={po.confirmed_note}
               canEdit={canEdit}
               canAddMore={
@@ -552,7 +662,15 @@ export function PoDetailScreen({
             </div>
           </section>
 
-          <PoTerms po={po} />
+          <PoTerms
+            po={po}
+            // Sửa được tới khi đơn huỷ — server enforce lại (updateTerms).
+            onEdit={
+              canEdit && po.status !== 'cancelled'
+                ? () => setEditingTerms(true)
+                : undefined
+            }
+          />
 
           {/* Đơn gộp (0125) — nói rõ tiền này mua cho những lệnh nào. */}
           {extraLsx.length > 0 && (
@@ -586,10 +704,52 @@ export function PoDetailScreen({
               title="Hồ sơ mua hàng (báo giá NCC, hợp đồng, chứng từ)"
             />
           </section>
+
+          {/* Dòng thời gian nằm CUỐI cột nội dung (28/08): nhật ký để tra khi
+              cần, không phải việc phải làm — để ở cột phải thì màn hẹp nó chen
+              lên trước cả bảng hàng, còn desktop thì đẩy khối sticky ngắn đi. */}
+          <section className={card}>
+            <div className={cardHead}>
+              <b>Dòng thời gian</b>
+              <span className="text-muted-foreground">{marks.length} mốc</span>
+            </div>
+            {marks.length === 0 ? (
+              <p className="text-muted-foreground px-3.5 py-3 text-xs">
+                Chưa có mốc nào — đơn còn nằm ở người soạn.
+              </p>
+            ) : (
+              <ol className="flex flex-col gap-2.5 px-3.5 py-3">
+                {(allMarks ? marks : marks.slice(0, 4)).map((m) => (
+                  <li key={m.key} className="flex flex-col gap-0.5 text-xs">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <Badge tone={m.tone}>{m.label}</Badge>
+                      {m.actor && (
+                        <span className="text-muted-foreground">{m.actor}</span>
+                      )}
+                    </span>
+                    <span className="text-muted-foreground">{stamp(m.at)}</span>
+                    {m.detail && (
+                      <span className="text-muted-foreground">{m.detail}</span>
+                    )}
+                  </li>
+                ))}
+                {marks.length > 4 && (
+                  <li>
+                    <button
+                      onClick={() => setAllMarks((v) => !v)}
+                      className="text-[12px] font-medium text-[var(--primary)] hover:underline"
+                    >
+                      {allMarks ? 'Thu gọn' : `Xem tất cả ${marks.length} mốc`}
+                    </button>
+                  </li>
+                )}
+              </ol>
+            )}
+          </section>
         </div>
 
-        {/* ── PHẢI: giờ tôi phải làm gì ──────────────────────────────────── */}
-        <div className="flex min-w-0 flex-col gap-4">
+        {/* ── PHẢI: giờ tôi phải làm gì ── màn hẹp thì đứng TRƯỚC bảng. */}
+        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
           <div className="flex flex-col gap-4 lg:sticky lg:top-4">
             <section className={card}>
               <div className={cardHead}>
@@ -773,51 +933,60 @@ export function PoDetailScreen({
                     Chốt phần thiếu (NCC không giao nữa)
                   </button>
                 )}
-                {canEdit && canReschedule(po.status).ok && (
-                  <button
-                    className={btn}
-                    onClick={() =>
-                      setRescheduling({
-                        po,
-                        date: po.expected_at?.slice(0, 10) ?? '',
-                        reason: '',
-                      })
-                    }
-                  >
-                    Đổi hẹn giao
-                  </button>
-                )}
-                {canReassign && !['received', 'cancelled'].includes(po.status) && (
-                  <button
-                    className={btn}
-                    onClick={() => setReassigning({ po, toId: '' })}
-                  >
-                    Bàn giao người phụ trách
-                  </button>
-                )}
+
                 {/*
                   NHÂN BẢN mở cho MỌI trạng thái, không riêng đơn đã huỷ: mua
                   lặp lại cùng một rổ vật tư từ cùng một NCC là việc hằng tháng,
                   và chép tay 15 dòng là chỗ sinh sai số.
                 */}
-                {isSupply && (
-                  <Link
-                    href={`/planning/pos/${po.id}/edit?duplicate=1`}
-                    className={`${btn} block text-center`}
-                  >
-                    {po.status === 'cancelled' ? 'Tạo lại từ đơn này' : 'Nhân bản đơn'}
-                  </Link>
-                )}
+
                 {/* Nháp không có"Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho
                     đơn đã gửi đi và cần để lại dấu vết. */}
-                {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
-                  <button
-                    className={btnDanger}
-                    onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-                  >
-                    Huỷ đơn
-                  </button>
-                )}
+                {/* VIỆC PHỤ (28/08 — gọn UI): mỗi nút một ô lưới 2 cột thay vì
+                    5 nút full-width xếp chồng ăn nửa màn. Nút VIỆC CHÍNH theo
+                    trạng thái vẫn full-width ở trên — mắt tìm hành động tiếp
+                    theo trước, việc phụ nằm gọn bên dưới. */}
+                <div className="grid grid-cols-2 gap-2">
+                  {canEdit && canReschedule(po.status).ok && (
+                    <button
+                      className={btnSmall}
+                      onClick={() =>
+                        setRescheduling({
+                          po,
+                          date: po.expected_at?.slice(0, 10) ?? '',
+                          reason: '',
+                        })
+                      }
+                    >
+                      Đổi hẹn giao
+                    </button>
+                  )}
+                  {canReassign && !['received', 'cancelled'].includes(po.status) && (
+                    <button
+                      className={btnSmall}
+                      onClick={() => setReassigning({ po, toId: '' })}
+                    >
+                      Bàn giao phụ trách
+                    </button>
+                  )}
+                  {isSupply && (
+                    <Link
+                      href={`/planning/pos/${po.id}/edit?duplicate=1`}
+                      className={`${btnSmall} block text-center`}
+                    >
+                      {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
+                    </Link>
+                  )}
+                  {canEdit &&
+                    !['draft', 'received', 'cancelled'].includes(po.status) && (
+                      <button
+                        className={`${btnSmall} border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10`}
+                        onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+                      >
+                        Huỷ đơn
+                      </button>
+                    )}
+                </div>
                 {!canEdit && !canApprove && (
                   <p className="text-muted-foreground text-xs">
                     Bạn đang xem đơn của người khác — chỉ đọc.
@@ -826,37 +995,19 @@ export function PoDetailScreen({
               </div>
             </section>
           </div>
-
-          <section className={card}>
-            <div className={cardHead}>
-              <b>Dòng thời gian</b>
-              <span className="text-muted-foreground">{marks.length} mốc</span>
-            </div>
-            {marks.length === 0 ? (
-              <p className="text-muted-foreground px-3.5 py-3 text-xs">
-                Chưa có mốc nào — đơn còn nằm ở người soạn.
-              </p>
-            ) : (
-              <ol className="flex flex-col gap-2.5 px-3.5 py-3">
-                {marks.map((m) => (
-                  <li key={m.key} className="flex flex-col gap-0.5 text-xs">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={m.tone}>{m.label}</Badge>
-                      {m.actor && (
-                        <span className="text-muted-foreground">{m.actor}</span>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">{stamp(m.at)}</span>
-                    {m.detail && (
-                      <span className="text-muted-foreground">{m.detail}</span>
-                    )}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
         </div>
       </div>
+
+      <PoTermsDialog
+        open={editingTerms}
+        po={po}
+        busy={act.busy}
+        onClose={() => setEditingTerms(false)}
+        onSaved={() => {
+          setEditingTerms(false)
+          router.refresh()
+        }}
+      />
 
       <PoConfirmDialog
         open={confirming !== null}
@@ -927,9 +1078,10 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
  * phải mở tab in ra xem, mà tờ in thì lại là thứ NCC đang cầm: sai một chữ ở đó
  * là sai cam kết.
  */
-function PoTerms({ po }: { po: PoDetailPo }) {
+function PoTerms({ po, onEdit }: { po: PoDetailPo; onEdit?: () => void }) {
   const rows: [string, string | null][] = [
     ['Mẫu đơn', poTemplateMeta(po.template as PoTemplate).label],
+    ['Theo HĐ số', po.contract_no],
     ['Chất lượng', po.terms_quality],
     ['Nơi giao hàng', po.terms_delivery_place],
     ['Thanh toán', po.terms_payment],
@@ -938,12 +1090,20 @@ function PoTerms({ po }: { po: PoDetailPo }) {
     ['Người ký', po.signer_role],
   ]
   const shown = rows.filter(([, v]) => v)
-  if (shown.length === 0 && !po.terms && !po.note) return null
+  if (shown.length === 0 && !po.terms && !po.note && !onEdit) return null
 
   return (
     <section className={card}>
       <div className={cardHead}>
         <b>Điều khoản & ghi chú</b>
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            className="border-input hover:bg-muted ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
+          >
+            <Pencil className="size-3.5" aria-hidden /> Sửa
+          </button>
+        )}
       </div>
       <dl className="grid gap-x-4 gap-y-1.5 px-3.5 py-3 text-[13px] sm:grid-cols-2">
         {shown.map(([k, v]) => (
@@ -960,5 +1120,135 @@ function PoTerms({ po }: { po: PoDetailPo }) {
         </div>
       )}
     </section>
+  )
+}
+
+/**
+ * HỘP SỬA ĐIỀU KHOẢN & GHI CHÚ (28/08) — chỉ CHỮ in lên phiếu. Dòng hàng, giá,
+ * NCC không có ở đây: đổi mấy thứ đó là phải rút về nháp đi duyệt lại; còn câu
+ * thanh toán gõ nhầm thì không thể bắt huỷ đơn NCC đang giao mới sửa được.
+ */
+function PoTermsDialog({
+  open,
+  po,
+  busy,
+  onClose,
+  onSaved,
+}: {
+  open: boolean
+  po: PoDetailPo
+  busy: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const toast = useToast()
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({
+    contract_no: '',
+    terms_quality: '',
+    terms_delivery_place: '',
+    terms_payment: '',
+    terms_invoice: '',
+    terms_lead_time: '',
+    signer_role: '',
+    note: '',
+  })
+  // Nạp giá trị hiện tại mỗi lần MỞ — đóng rồi mở lại phải thấy bản mới nhất.
+  const [wasOpen, setWasOpen] = useState(false)
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setForm({
+        contract_no: po.contract_no ?? '',
+        terms_quality: po.terms_quality ?? '',
+        terms_delivery_place: po.terms_delivery_place ?? '',
+        terms_payment: po.terms_payment ?? '',
+        terms_invoice: po.terms_invoice ?? '',
+        terms_lead_time: po.terms_lead_time ?? '',
+        signer_role: po.signer_role ?? '',
+        note: po.note ?? '',
+      })
+    }
+  }
+
+  const field =
+    'border-input focus:border-ring h-9 w-full rounded-md border px-2 text-sm outline-none'
+  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }))
+
+  const FIELDS: [keyof typeof form, string][] = [
+    ['contract_no', 'Theo HĐ số'],
+    ['terms_quality', 'Chất lượng'],
+    ['terms_delivery_place', 'Nơi giao hàng'],
+    ['terms_payment', 'Thanh toán'],
+    ['terms_invoice', 'Hoá đơn'],
+    ['terms_lead_time', 'Thời gian giao'],
+    ['signer_role', 'Người ký (chức danh)'],
+  ]
+
+  async function save() {
+    if (saving) return
+    setSaving(true)
+    try {
+      await api(`/api/dept/supply/pos/${po.id}/terms`, {
+        method: 'PATCH',
+        body: Object.fromEntries(
+          Object.entries(form).map(([k, v]) => [k, v.trim() || null]),
+        ),
+      })
+      toast.success('Đã lưu điều khoản', 'Phiếu in dùng bản vừa sửa')
+      onSaved()
+    } catch (e) {
+      toast.error('Lưu điều khoản thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={`Sửa điều khoản — ${po.code}`}
+      maxWidth="sm:max-w-xl"
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <p className="text-muted-foreground bg-muted rounded-md px-3 py-2 text-xs">
+          Chỉ sửa được phần CHỮ in lên phiếu. Dòng hàng, giá, nhà cung cấp muốn đổi thì
+          rút đơn về nháp.
+        </p>
+        {FIELDS.map(([k, label]) => (
+          <label key={k} className="flex flex-col gap-1">
+            <span className="text-muted-foreground text-xs font-medium">{label}</span>
+            <input value={form[k]} onChange={set(k)} className={field} />
+          </label>
+        ))}
+        <label className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs font-medium">Ghi chú</span>
+          <textarea
+            rows={2}
+            value={form.note}
+            onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+            className="border-input focus:border-ring w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="border-input hover:bg-muted rounded-md border px-3 py-1.5"
+          >
+            Huỷ
+          </button>
+          <button
+            disabled={saving || busy}
+            onClick={() => void save()}
+            className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-1.5 font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {saving && <Spinner size={14} />}
+            Lưu điều khoản
+          </button>
+        </div>
+      </div>
+    </Modal>
   )
 }

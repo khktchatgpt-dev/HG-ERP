@@ -80,6 +80,8 @@ export const materialEnrichSchema = z.object({
     )
     .min(1)
     .max(100),
+  /** Mã đơn vừa lưu — chỉ để ghi vào sổ vết (0177), không ảnh hưởng phần ghi. */
+  po_code: z.string().trim().max(50).optional(),
 })
 
 /** Dò tên gần giống lúc khai vật tư (0124) — cùng phạm vi nhóm với chặn cứng. */

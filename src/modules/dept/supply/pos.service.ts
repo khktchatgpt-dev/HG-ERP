@@ -16,6 +16,7 @@ import '@/events/register' // Đăng ký handler event ở lần import đầu (
 import {
   buildCatalogSuggestions,
   linesByMaterial,
+  specFromLine,
   type CatalogSuggestion,
 } from '@/lib/po-catalog-backfill'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
@@ -68,7 +69,9 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
 function catalogLines(lines: PoLineInput[]) {
   return lines.map((l) => ({
     material_id: l.material_id ?? null,
-    spec: l.spec ?? null,
+    // Quy cách SUY từ dòng khi mẫu không có ô "Quy cách" (carton gõ lọt lòng,
+    // kính/xốp gõ dimension_text) — xem specFromLine.
+    spec: specFromLine(l),
     material_grade: l.material_grade ?? null,
     finish: l.finish ?? null,
     open_style: l.open_style ?? null,
@@ -186,6 +189,26 @@ export const posService = {
       if (m) materials.push(m)
     }
     return buildCatalogSuggestions(catalogLines(lines), materials)
+  },
+
+  /**
+   * LỊCH SỬ GIÁ MUA của một vật tư — đọc cùng mức với danh mục vật tư (mọi NV
+   * đã đăng nhập; Kho đã thấy "giá mua gần nhất" trên lưới thì giấu lịch sử
+   * chẳng để làm gì, mà lại là thứ duy nhất giải thích con số ấy ở đâu ra).
+   */
+  async materialPriceHistory(_user: User, materialId: string) {
+    return posRepo.priceHistoryByMaterial(materialId)
+  },
+
+  /**
+   * Đã về CÓ CHỨNG TỪ theo đợt (0153) — object thuần {đợt: {dòng: SL}} vì Map
+   * không sống qua ranh giới server→client component.
+   */
+  async shipmentReceipts(_user: User, poId: string) {
+    const m = await supplyRepo.receiptsByShipment(poId)
+    const out: Record<string, Record<string, number>> = {}
+    for (const [sid, per] of m) out[sid] = Object.fromEntries(per)
+    return out
   },
 
   async detail(_user: User, id: string) {
@@ -338,6 +361,44 @@ export const posService = {
    * muốn sửa phải `withdraw` về nháp trước, để nội dung trên bàn GĐ không đổi
    * sau lưng thông báo. Sau duyệt là cam kết với GĐ/NCC — không sửa.
    */
+  /**
+   * SỬA ĐIỀU KHOẢN & GHI CHÚ — mở cho MỌI trạng thái trừ đã huỷ (kể cả đã về
+   * đủ: ghi chú đối chiếu vẫn cần sửa được). Chỉ chữ trên phiếu, không đụng
+   * dòng hàng/giá — thứ đó đi đường update() và bị khoá ngoài nháp.
+   */
+  async updateTerms(
+    user: User,
+    id: string,
+    input: {
+      contract_no?: string | null
+      terms_quality?: string | null
+      terms_delivery_place?: string | null
+      terms_payment?: string | null
+      terms_invoice?: string | null
+      terms_lead_time?: string | null
+      signer_role?: string | null
+      note?: string | null
+    },
+  ): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+    if (before.status === 'cancelled') {
+      throw BadRequest('Đơn đã huỷ — hồ sơ đóng, không sửa nữa')
+    }
+    return posRepo.patch(id, {
+      contract_no: input.contract_no ?? null,
+      terms_quality: input.terms_quality ?? null,
+      terms_delivery_place: input.terms_delivery_place ?? null,
+      terms_payment: input.terms_payment ?? null,
+      terms_invoice: input.terms_invoice ?? null,
+      terms_lead_time: input.terms_lead_time ?? null,
+      signer_role: input.signer_role ?? null,
+      note: input.note ?? null,
+    })
+  },
+
   async update(user: User, id: string, input: PoInput): Promise<Po> {
     await assertAction(user, 'supply.po.manage')
     const before = await posRepo.findById(id)
@@ -479,6 +540,7 @@ export const posService = {
         po_id: id,
         code: before.code,
         currency: before.currency ?? 'VND',
+        ordered_by: user.id,
         lines: lines.map((l) => ({
           material_id: l.material_id,
           unit_price: l.unit_price,

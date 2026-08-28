@@ -46,9 +46,12 @@ export default async function PoDetailPage({
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [history, shipments] = await Promise.all([
+  const [history, shipments, shipmentReceipts] = await Promise.all([
     approvalEventsRepo.listByEntity('po', po.id),
     posService.listShipments(user, po.id),
+    // Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id, 0153) — phần không nối
+    // đợt thì client suy diễn nốt, xem allocateReceiptsToShipments.
+    posService.shipmentReceipts(user, po.id),
   ])
 
   /*
@@ -108,6 +111,7 @@ export default async function PoDetailPage({
       statusLines={status_lines}
       extraLsx={extra_lsx}
       shipments={shipments}
+      shipmentReceipts={shipmentReceipts}
       history={history}
       warehouseDocs={warehouse_docs}
       canEdit={canEdit}

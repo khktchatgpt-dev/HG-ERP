@@ -10,6 +10,7 @@ import {
   recalcCartonArea,
   type Line,
 } from './po-line'
+import { specFromLine } from '@/lib/po-catalog-backfill'
 
 /**
  * Ô nhập của DÒNG ĐƠN, dựng theo khai báo trong `@/lib/po-fields`.
@@ -351,11 +352,10 @@ export function LineCell({
               <button
                 type="button"
                 onClick={() =>
-                  onSaveToCatalog(
-                    l.material_id,
-                    'spec',
-                    `${l.inner_l_mm}x${l.inner_w_mm}x${l.inner_h_mm}`,
-                  )
+                  // MỘT chỗ sinh chuỗi quy cách cho cả hai lối (link này và hộp
+                  // xác nhận sau khi lưu đơn) — hai lối viết hai kiểu chữ vào
+                  // cùng một cột thì danh mục lại lệch.
+                  onSaveToCatalog(l.material_id, 'spec', specFromLine(l) ?? '')
                 }
                 title="Danh mục chưa có quy cách — lưu để lần đặt sau tự bóc kích thước"
                 className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
