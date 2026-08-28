@@ -54,6 +54,7 @@ import {
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { DataTable, type Column } from '@/components/erp/DataTable'
+import { DateField } from '@/components/erp/DateField'
 import { DocChip } from '@/components/erp/DocChip'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { RefChain } from '@/components/erp/RefChain'
@@ -547,6 +548,7 @@ function TypeSection() {
 
 function ControlsSection() {
   const [saving, setSaving] = useState(false)
+  const [ngay, setNgay] = useState('2026-08-03')
   return (
     <Section
       id="nut-nhap-lieu"
@@ -651,6 +653,48 @@ function ControlsSection() {
               <Checkbox defaultChecked />
               <span className="t-body">Cộng dòng này vào barem kg/m của mẫu đơn</span>
             </label>
+          </div>
+        </DemoCard>
+
+        <DemoCard title="Ô ngày — luôn dd/mm/yyyy">
+          <div className="grid gap-4">
+            <p className="t-body text-muted-foreground">
+              <code className="t-data">&lt;input type=&quot;date&quot;&gt;</code> vẽ chữ theo NGÔN
+              NGỮ TRÌNH DUYỆT chứ không theo app: máy cài Chrome tiếng Anh hiện{' '}
+              <code className="t-data">mm/dd/yyyy</code> trong khi mọi chỗ khác của app và mọi
+              chứng từ giấy đọc <code className="t-data">dd/mm/yyyy</code>. Hai ô dưới đang giữ
+              CÙNG MỘT ngày — so chữ để thấy.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1.5">
+                <span className="t-label text-[var(--primary)]">
+                  DateField (kit) — đúng
+                </span>
+                <DateField value={ngay} onChange={setNgay} aria-label="Hẹn giao" />
+                <span className="text-muted-foreground text-[11px]">
+                  Gõ số liền tay tự chèn dấu; nút lịch vẫn mở bộ chọn của trình duyệt.
+                </span>
+              </label>
+              <label className="grid gap-1.5">
+                <span className="t-label text-muted-foreground">
+                  input type=&quot;date&quot; — theo trình duyệt
+                </span>
+                <Input
+                  type="date"
+                  value={ngay}
+                  onChange={(e) => setNgay(e.target.value)}
+                  className="t-data"
+                />
+                <span className="text-muted-foreground text-[11px]">
+                  Chrome tiếng Anh: mm/dd/yyyy. Không có cách nào nhìn ra ô đang nói kiểu nào.
+                </span>
+              </label>
+            </div>
+            <p className="t-body text-muted-foreground">
+              Giá trị thật cả hai ô đang giữ:{' '}
+              <span className="t-data text-foreground">{ngay || '(trống)'}</span> — DateField chỉ
+              đổi CHỮ, giá trị vào/ra vẫn là ISO nên chỗ gọi không phải sửa gì.
+            </p>
           </div>
         </DemoCard>
       </div>

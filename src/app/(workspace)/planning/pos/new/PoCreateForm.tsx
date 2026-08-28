@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   Building2,
-  CalendarDays,
   FileText,
   Printer,
   Search,
@@ -14,6 +13,7 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { PageHeader } from '@/components/erp/PageHeader'
+import { DateField } from '@/components/erp/DateField'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import {
   MaterialPickDialog,
@@ -724,6 +724,8 @@ export function PoCreateForm({
   const [enrich, setEnrich] = useState<{
     items: CatalogSuggestion[]
     dest: string
+    /** Mã đơn vừa lưu — đi kèm để sổ vết (0177) kể được "vì đơn nào". */
+    poCode: string
   } | null>(null)
   const [enrichBusy, setEnrichBusy] = useState(false)
 
@@ -745,6 +747,7 @@ export function PoCreateForm({
               material_id: s.material_id,
               set: Object.fromEntries(s.fields.map((f) => [f.field, f.value])),
             })),
+            po_code: enrich.poCode,
           },
         },
       )
@@ -788,7 +791,7 @@ export function PoCreateForm({
       const dest = isEdit ? '/planning/pos' : `/planning/pos?view=${po.id}`
       // Có thông tin danh mục đang thiếu → hỏi trước khi rời trang; không thì đi luôn.
       if (catalog_suggestions && catalog_suggestions.length > 0) {
-        setEnrich({ items: catalog_suggestions, dest })
+        setEnrich({ items: catalog_suggestions, dest, poCode: po.code })
         return
       }
       leaveTo(dest)
@@ -1056,15 +1059,12 @@ export function PoCreateForm({
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={fieldLabel}>Hẹn giao</span>
-            <span className="relative">
-              <CalendarDays className={fieldIcon} aria-hidden />
-              <input
-                type="date"
-                value={expectedAt}
-                onChange={(e) => setExpectedAt(e.target.value)}
-                className={`${field} pl-8`}
-              />
-            </span>
+            <DateField
+              value={expectedAt}
+              onChange={setExpectedAt}
+              aria-label="Hẹn giao"
+              className={field}
+            />
           </label>
           <label className="flex flex-col gap-1.5">
             <span className={fieldLabel}>Theo HĐ số</span>
