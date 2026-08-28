@@ -528,9 +528,12 @@ export function PoPrintSheet({
               chứng từ phải thẳng hàng để cộng bằng mắt. Ô Đợt/Ngày gộp dọc
               (rowSpan) nên một chuyến vẫn đọc ra là một khối.
             */}
-            <table className="mt-0.5 w-full border-collapse text-[11.5px]">
+            <table className="mt-0.5 w-full border-collapse text-[11.5px] [print-color-adjust:exact]">
               <thead>
-                <tr>
+                {/* Cùng NỀN VÀNG với bảng hàng chính: hai bảng trên một tờ mà
+                    tiêu đề khác kiểu thì bảng dưới đọc như phần ghi chú.
+                    print-color-adjust để máy in không nuốt mất nền. */}
+                <tr className="bg-yellow-200">
                   {[
                     ['Đợt', 'left'],
                     ['Ngày giao', 'left'],
