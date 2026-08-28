@@ -285,6 +285,7 @@ export function PoPrintSheet({
   supplier,
   lines,
   exportHref,
+  shipments,
 }: {
   company: PrintCompany & { company_name?: string | null }
   /**
@@ -298,6 +299,16 @@ export function PoPrintSheet({
   lines: PoPrintLine[]
   /** Đơn ĐÃ LƯU truyền link tải .xlsx — bản xem trước từ nháp thì không có. */
   exportHref?: string
+  /**
+   * LỊCH GIAO theo đợt (0152, in từ 28/08): cam kết NCC đã chốt phải nằm TRÊN
+   * TỜ GIẤY NCC ký — một dòng "Hẹn giao" không tả được "1.200 tấm chia 2 đợt".
+   * Chỉ đợt còn sống; đơn chưa chốt đợt thì khối tự ẩn, phiếu y như cũ.
+   */
+  shipments?: {
+    seq: number
+    expected_date: string
+    lines: { name: string; qty: number; unit: string; amount: number | null }[]
+  }[]
 }) {
   const template = po.template ?? 'simple'
   const meta = poTemplateMeta(template)
@@ -500,9 +511,56 @@ export function PoPrintSheet({
             {po.vat_rate != null ? ` ${po.vat_rate}%` : ''}.
           </b>
         </div>
-        {po.expected_at && (
+        {/* Có lịch đợt thì lịch là cam kết — dòng "Hẹn giao" đơn lẻ chỉ in khi
+            KHÔNG có đợt, in cả hai là hai nguồn ngày trên một tờ giấy. */}
+        {(!shipments || shipments.length === 0) && po.expected_at && (
           <div>
             Hẹn giao: <b>{new Date(po.expected_at).toLocaleDateString('vi-VN')}</b>
+          </div>
+        )}
+        {shipments && shipments.length > 0 && (
+          <div className="mt-1">
+            <b>Lịch giao hàng ({shipments.length} đợt):</b>
+            <table className="mt-0.5 w-full border-collapse text-[11.5px]">
+              <thead>
+                <tr>
+                  {['Đợt', 'Ngày giao', 'Hàng hoá — số lượng', `Tạm tính (${po.currency})`].map(
+                    (h, i) => (
+                      <th
+                        key={h}
+                        className={`border border-black px-1.5 py-0.5 font-bold ${i >= 3 ? 'text-right' : 'text-left'}`}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {shipments.map((sh) => {
+                  const amount = sh.lines.reduce((t, l) => t + (l.amount ?? 0), 0)
+                  return (
+                    <tr key={sh.seq}>
+                      <td className="border border-black px-1.5 py-0.5">{sh.seq}</td>
+                      <td className="border border-black px-1.5 py-0.5 whitespace-nowrap">
+                        {new Date(sh.expected_date).toLocaleDateString('vi-VN')}
+                      </td>
+                      <td className="border border-black px-1.5 py-0.5">
+                        {sh.lines
+                          .map((l) => `${l.name}: ${fmt(l.qty)} ${l.unit}`)
+                          .join(' · ')}
+                      </td>
+                      <td className="border border-black px-1.5 py-0.5 text-right">
+                        {amount > 0 ? fmt(Math.round(amount)) : ''}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            <div className="mt-0.5 text-[10.5px] italic">
+              Tạm tính theo đơn giá trên đơn; thanh toán theo thực nhận từng đợt.
+            </div>
           </div>
         )}
         {/* Cột `terms` cũ — đơn tạo trước 0106 chỉ có một dòng điều khoản gộp. */}
