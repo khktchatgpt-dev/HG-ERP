@@ -202,6 +202,23 @@ export const poConfirmSchema = z.object({
   shipments: z.array(poShipmentInputSchema).max(20).default([]),
 })
 
+/**
+ * SỬA ĐIỀU KHOẢN & GHI CHÚ sau khi đơn đã rời bàn duyệt (28/08/2026) — chỉ
+ * chữ in lên phiếu, KHÔNG có dòng hàng/giá/NCC: mấy thứ đó đổi là phải quay
+ * về nháp đi duyệt lại, còn sửa câu thanh toán gõ nhầm thì không thể bắt huỷ
+ * đơn NCC đang giao.
+ */
+export const poTermsPatchSchema = z.object({
+  contract_no: optText(100),
+  terms_quality: optText(1000),
+  terms_delivery_place: optText(500),
+  terms_payment: optText(500),
+  terms_invoice: optText(500),
+  terms_lead_time: optText(500),
+  signer_role: optText(100),
+  note: optText(2000),
+})
+
 /** Thao tác trên MỘT đợt giao: dời ngày (bắt lý do) / xe tới / huỷ (bắt lý do). */
 export const poShipmentActionSchema = z
   .object({

@@ -6,9 +6,12 @@ import { Modal } from '@/components/Modal'
 import { Badge } from '@/components/Badge'
 import { Spinner } from '@/components/erp/Spinner'
 import {
+  allocateReceiptsToShipments,
+  shipmentAmount,
   validateShipments,
   type PoLineForShipment,
   type ShipmentInput,
+  type ShipmentLineMoney,
 } from '@/lib/po-shipments'
 
 /**
@@ -39,6 +42,13 @@ export type ShipmentLineRef = {
   name: string
   unit: string
   qty_ordered: number
+  /**
+   * Thành tiền cả dòng + cờ giá-theo-kg (0053) — nuôi TIỀN THEO ĐỢT (28/08:
+   * đơn lớn 1 vật tư chia đợt, người mua cần "đợt này khoảng bao nhiêu" ngay
+   * trên kế hoạch giao, không tách PO con). null = dòng chưa có giá.
+   */
+  amount: number | null
+  price_approx: boolean
 }
 
 const dmy = (iso: string) =>
@@ -126,6 +136,21 @@ export function PoConfirmDialog({
   const v = useMemo(
     () => validateShipments(shipments, poLines, existing),
     [shipments, poLines, existing],
+  )
+  // Tiền sống theo những gì đang gõ — người mua đối chiếu ngay với con số NCC
+  // đọc qua điện thoại, khỏi bấm máy tính.
+  const draftMoney = useMemo(
+    () =>
+      shipmentAmount(
+        shipments.flatMap((s) => s.lines),
+        new Map(
+          lines.map((l) => [
+            l.id,
+            { amount: l.amount, qty_ordered: l.qty_ordered, approx: l.price_approx },
+          ]),
+        ),
+      ),
+    [shipments, lines],
   )
   // Mode 'add' giao bù MỘT phần là chuyện thường — cảnh báo "chưa đủ" chỉ có
   // nghĩa ở lần xác nhận đầu, khi đang chép nguyên cam kết của NCC.
@@ -275,6 +300,16 @@ export function PoConfirmDialog({
           </table>
         </div>
 
+        {draftMoney.priced && shipments.length > 0 && (
+          <p className="text-muted-foreground -mt-2 text-right text-xs">
+            Tiền theo các đợt đang khai:{' '}
+            <span className="t-data text-foreground font-semibold">
+              {draftMoney.approx && '≈ '}
+              {num(Math.round(draftMoney.amount))}
+            </span>
+          </p>
+        )}
+
         {v.errors.length > 0 && (
           <ul className="flex flex-col gap-1 text-xs text-[var(--stop)]">
             {v.errors.map((e) => (
@@ -338,6 +373,9 @@ type ShipmentAsk = {
 export function PoShipmentsCard({
   shipments,
   linesById,
+  currency,
+  receivedByLine,
+  linkedReceipts,
   confirmedNote,
   canEdit,
   canAddMore,
@@ -350,6 +388,11 @@ export function PoShipmentsCard({
 }: {
   shipments: ShipmentView[]
   linesById: Map<string, ShipmentLineRef>
+  currency: string
+  /** SL đã về theo DÒNG (sổ kho, BR-08) — nguồn cho suy diễn "đợt này về mấy". */
+  receivedByLine: Map<string, number>
+  /** Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id, 0153) — số thật. */
+  linkedReceipts: Map<string, Map<string, number>>
   confirmedNote: string | null
   canEdit: boolean
   canAddMore: boolean
@@ -361,6 +404,27 @@ export function PoShipmentsCard({
   onAdd: () => void
 }) {
   const [ask, setAsk] = useState<ShipmentAsk | null>(null)
+
+  // TIỀN THEO ĐỢT (28/08) — chia tỷ lệ từ thành tiền dòng, xem shipmentAmount.
+  const moneyByLine = new Map<string, ShipmentLineMoney>(
+    [...linesById.values()].map((l) => [
+      l.id,
+      { amount: l.amount, qty_ordered: l.qty_ordered, approx: l.price_approx },
+    ]),
+  )
+  const aliveShipments = shipments.filter((s) => s.status !== 'cancelled')
+  const planTotal = shipmentAmount(
+    aliveShipments.flatMap((s) => s.lines),
+    moneyByLine,
+  )
+  // "Đợt này về mấy": PNK nối đợt là số thật; phần không nối mới suy diễn —
+  // xem allocateReceiptsToShipments. Số đối chiếu, sổ thật là cột Đã về của dòng.
+  const receivedByShipment = allocateReceiptsToShipments(
+    shipments,
+    receivedByLine,
+    linkedReceipts,
+  )
+  const anyReceived = [...receivedByLine.values()].some((v) => v > 0)
 
   return (
     <section className="border-border bg-card rounded-xl border">
@@ -387,6 +451,7 @@ export function PoShipmentsCard({
           const st = SHIPMENT_STATUS[s.status] ?? SHIPMENT_STATUS.planned
           const alive = s.status === 'planned' || s.status === 'arrived'
           const overdue = alive && s.expected_date < today
+          const money = shipmentAmount(s.lines, moneyByLine)
           return (
             <div key={s.id} className="flex flex-col gap-1.5 px-3.5 py-2.5">
               <div className="flex flex-wrap items-center gap-2">
@@ -437,18 +502,54 @@ export function PoShipmentsCard({
                   </span>
                 )}
               </div>
-              <div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+              <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[12px]">
                 {s.lines.map((l) => {
                   const ref = linesById.get(l.po_line_id)
+                  const got = receivedByShipment.get(s.id)?.get(l.po_line_id)
                   return (
                     <span key={l.po_line_id}>
                       {ref?.name ?? '?'}{' '}
                       <span className="t-data">
                         {num(l.qty)} {ref?.unit ?? ''}
                       </span>
+                      {/* Chỉ chú "về …" khi đơn ĐÃ có hàng về — đơn chưa về
+                          gì thì chip trạng thái đợt đã nói đủ, chua thêm
+                          "về 0" vào từng dòng chỉ thêm rác. */}
+                      {anyReceived && s.status !== 'cancelled' && (
+                        <span
+                          className="t-data font-medium"
+                          style={{
+                            color:
+                              (got?.qty ?? 0) >= l.qty - 0.000001
+                                ? 'var(--done)'
+                                : (got?.qty ?? 0) > 0
+                                  ? 'var(--warn)'
+                                  : 'var(--stop)',
+                          }}
+                          title={
+                            got && !got.exact
+                              ? 'Ước theo thứ tự đợt — phiếu nhập không ghi rõ đợt'
+                              : undefined
+                          }
+                        >
+                          {' '}
+                          · về {got && !got.exact ? '≈' : ''}
+                          {num(got?.qty ?? 0)}
+                        </span>
+                      )}
                     </span>
                   )
                 })}
+                {/* Tiền kế hoạch của đợt — số đối chiếu với NCC; tiền phải trả
+                    thật vẫn theo PNK (công nợ). Giá kg thì kg thật cân lúc nhận
+                    nên mang dấu ≈. Đợt huỷ không hiện tiền — không còn là kế
+                    hoạch nữa. */}
+                {money.priced && s.status !== 'cancelled' && (
+                  <span className="t-data text-foreground ml-auto font-medium whitespace-nowrap">
+                    {money.approx && '≈ '}
+                    {num(Math.round(money.amount))} {currency}
+                  </span>
+                )}
               </div>
               {s.note && (
                 <p className="text-muted-foreground text-[11.5px]">“{s.note}”</p>
@@ -457,6 +558,57 @@ export function PoShipmentsCard({
           )
         })}
       </div>
+
+      {/* TỔNG ĐỐI CHIẾU: từng vật tư đã hẹn bao nhiêu / đặt bao nhiêu — trả
+          lời "còn bao nhiêu CHƯA có đợt" mà không phải tự cộng nhẩm; kèm tổng
+          tiền các đợt. Hiện khi có ≥2 đợt sống hoặc còn phần chưa hẹn (một đợt
+          phủ đủ thì hàng tổng chỉ lặp lại hàng đợt). */}
+      {(() => {
+        const scheduled = new Map<string, number>()
+        for (const s of aliveShipments) {
+          for (const l of s.lines) {
+            scheduled.set(l.po_line_id, (scheduled.get(l.po_line_id) ?? 0) + l.qty)
+          }
+        }
+        const rows = [...linesById.values()].map((l) => ({
+          ...l,
+          done: scheduled.get(l.id) ?? 0,
+          left: Math.max(l.qty_ordered - (scheduled.get(l.id) ?? 0), 0),
+        }))
+        const anyLeft = rows.some((r) => r.left > 0.000001)
+        if (aliveShipments.length === 0 || (aliveShipments.length < 2 && !anyLeft)) {
+          return null
+        }
+        return (
+          <div className="border-border/70 flex flex-col gap-1 border-t px-3.5 py-2 text-[12px]">
+            <div className="text-muted-foreground flex items-baseline justify-between gap-3">
+              <span>Cộng {aliveShipments.length} đợt</span>
+              {planTotal.priced && (
+                <span className="t-data text-foreground font-semibold">
+                  {planTotal.approx && '≈ '}
+                  {num(Math.round(planTotal.amount))} {currency}
+                </span>
+              )}
+            </div>
+            <div className="text-muted-foreground flex flex-wrap gap-x-4 gap-y-0.5">
+              {rows.map((r) => (
+                <span key={r.id}>
+                  {r.name}{' '}
+                  <span className="t-data text-foreground">
+                    {num(r.done)}/{num(r.qty_ordered)} {r.unit}
+                  </span>
+                  {r.left > 0.000001 && (
+                    <span className="font-medium text-[var(--warn)]">
+                      {' '}
+                      · còn {num(r.left)} chưa hẹn
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       <Modal
         open={!!ask}
