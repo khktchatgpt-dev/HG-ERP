@@ -479,7 +479,12 @@ export function PoPrintSheet({
             ] as [string, string | null, number, string][]
           ).map(([label, rateText, value, cls]) => (
             <tr key={label} className={cls}>
-              <td colSpan={amountIdx - 1} className="border border-black px-2 text-right">
+              {/* Nhãn dòng tổng in ĐẬM — cột nhãn và cột số nằm hai đầu tờ
+                  giấy, nhãn nhạt thì mắt trượt mất hàng khi dò sang phải. */}
+              <td
+                colSpan={amountIdx - 1}
+                className="border border-black px-2 text-right font-semibold"
+              >
                 {label}
               </td>
               <td className="border border-black px-1 text-right whitespace-nowrap">
