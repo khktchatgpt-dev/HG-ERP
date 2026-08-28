@@ -2,13 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  ArrowLeft,
-  Building2,
-  FileText,
-  Printer,
-  Search,
-} from 'lucide-react'
+import { ArrowLeft, Building2, FileText, Printer, Search } from 'lucide-react'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
@@ -30,6 +24,7 @@ import {
   type PoTerms,
 } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
+import { ShipmentPlanPanel, batchesToShipments } from './sections/ShipmentPlanPanel'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import {
   buildPoPayload,
@@ -101,6 +96,13 @@ export type PoInitial = {
     terms: PoTerms
   }
   lines: Line[]
+  /**
+   * Kế hoạch chia đợt đã lưu (28/08) — khoá theo CHỈ SỐ dòng, đúng thứ tự
+   * `lines` ở trên. Chế độ sửa nạp lại để người dùng chỉnh chứ không phải gõ
+   * lại từ đầu; nhân bản đơn thì cố ý bỏ (lịch của lần mua trước không còn
+   * đúng cho lần này).
+   */
+  shipments?: Record<number, { date: string; qty: number | '' }[]>
 }
 
 /*
@@ -721,6 +723,14 @@ export function PoCreateForm({
    * trống"; người soạn duyệt rồi mới ghi. `dest` giữ đường điều hướng — đóng
    * hộp (đồng ý hay bỏ qua) mới rời trang.
    */
+  /**
+   * Kế hoạch chia đợt (28/08) — khoá theo CHỈ SỐ dòng trên lưới; server ánh xạ
+   * sang po_line_id sau khi ghi dòng (mapDraftShipments).
+   */
+  const [shipBatches, setShipBatches] = useState<
+    Record<number, { date: string; qty: number | '' }[]>
+  >(() => initial?.shipments ?? {})
+
   const [enrich, setEnrich] = useState<{
     items: CatalogSuggestion[]
     dest: string
@@ -773,7 +783,7 @@ export function PoCreateForm({
       }>(isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos', {
         // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
         method: isEdit ? 'PATCH' : 'POST',
-        body: buildPoPayload(header, lines),
+        body: buildPoPayload(header, lines, batchesToShipments(shipBatches)),
       })
       // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
       // sau không bị hỏi khôi phục đơn đã lưu rồi.
@@ -1266,6 +1276,16 @@ export function PoCreateForm({
       </section>
 
       {/* ── Điều khoản: mặc định theo mẫu, sửa được ── */}
+      {/* CHIA ĐỢT GIAO (28/08) — đứng ngay sau bảng hàng: chia đợt là nói về
+          chính mấy dòng vừa gõ, mà trước khối điều khoản vì đây là cam kết
+          với NCC chứ không phải câu chữ mẫu. */}
+      <ShipmentPlanPanel
+        lines={lines}
+        batches={shipBatches}
+        currency={currency}
+        onChange={setShipBatches}
+      />
+
       <TermsSection
         templateLabel={meta.label}
         open={showTerms}

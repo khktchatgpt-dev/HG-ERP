@@ -112,6 +112,29 @@ export const poCreateSchema = z.object({
   terms_lead_time: optText(500),
   signer_role: optText(100), // "TRƯỞNG PHÒNG CUNG ỨNG" / "TRƯỞNG PHÒNG KẾ HOẠCH"
   note: optText(2000),
+  /**
+   * KẾ HOẠCH CHIA ĐỢT khai ngay lúc soạn đơn (28/08) — tuỳ chọn. Dòng chưa có
+   * id nên đợt trỏ theo `line_index` (thứ tự trên lưới); service ánh xạ sang
+   * po_line_id sau khi ghi dòng (xem mapDraftShipments).
+   */
+  shipments: z
+    .array(
+      z.object({
+        expected_date: z.string().date(),
+        note: optText(500),
+        lines: z
+          .array(
+            z.object({
+              line_index: z.coerce.number().int().min(0).max(199),
+              qty: z.coerce.number().positive(),
+            }),
+          )
+          .min(1)
+          .max(200),
+      }),
+    )
+    .max(20)
+    .optional(),
   lines: z
     .array(poLineInputSchema)
     .min(1, 'Đơn đặt phải có ít nhất 1 dòng vật tư')

@@ -25,6 +25,7 @@ import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import {
   earliestExpectedDate,
+  mapDraftShipments,
   nextSeq,
   validateShipments,
   type ShipmentInput,
@@ -52,6 +53,12 @@ type PoInput = {
   signer_role?: string | null
   note?: string | null
   lines: PoLineInput[]
+  /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
+  shipments?: {
+    expected_date: string
+    note?: string | null
+    lines: { line_index: number; qty: number }[]
+  }[]
 }
 
 /**
@@ -169,6 +176,56 @@ function withTemplateDefaults(input: PoInput, template: PoTemplate) {
   }
 }
 
+/**
+ * GHI LẠI TOÀN BỘ ĐỢT GIAO của đơn từ kế hoạch khai trong form (28/08).
+ *
+ * Ghi ĐÈ cả bộ chứ không diff: sửa đơn nháp đi qua replaceLines (xoá rồi chèn)
+ * nên po_line_id đổi hết — giữ đợt cũ là giữ con trỏ tới dòng đã biến mất.
+ * Chạy SAU khi dòng đã nằm trong DB, và đọc lại chính bộ dòng ấy để ánh xạ.
+ *
+ * Đợt khai lúc soạn mang trạng thái 'planned' — bước "NCC xác nhận" sau đó vẫn
+ * là nơi chốt cam kết thật, chỉ khác là nay nó SỬA một kế hoạch có sẵn thay vì
+ * khai từ đầu.
+ */
+async function saveDraftShipments(
+  poId: string,
+  drafts: NonNullable<PoInput['shipments']>,
+  userId: string,
+): Promise<string | null> {
+  await poShipmentsRepo.deleteByPo(poId)
+  if (drafts.length === 0) return null
+  const lines = await posRepo.listLines(poId)
+  const mapped = mapDraftShipments(
+    drafts,
+    lines.map((l) => l.id),
+  )
+  if (mapped.length === 0) return null
+  const v = validateShipments(
+    mapped,
+    lines.map((l) => ({
+      id: l.id,
+      qty_ordered: l.qty_ordered,
+      name: l.material_name ?? l.line_name ?? '?',
+    })),
+  )
+  if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+  await poShipmentsRepo.insertMany(
+    poId,
+    mapped.map((sh, i) => ({
+      seq: i + 1,
+      expected_date: sh.expected_date,
+      method: null,
+      place: null,
+      note: sh.note ?? null,
+      lines: sh.lines,
+    })),
+    userId,
+  )
+  return earliestExpectedDate(
+    mapped.map((sh) => ({ expected_date: sh.expected_date, status: 'planned' })),
+  )
+}
+
 export const posService = {
   /** Đọc: mọi NV đã đăng nhập (Kho nhận hàng, Kế toán xem phải trả…). */
   async list(_user: User, opts: Parameters<typeof posRepo.list>[0]) {
@@ -282,6 +339,17 @@ export const posService = {
       withDerived(template, input.lines),
     )
     if (extraLsxIds.length > 0) await posRepo.replaceExtraLsx(po.id, extraLsxIds)
+    /*
+     * KẾ HOẠCH CHIA ĐỢT khai ngay trong form (28/08). Ngày sớm nhất của bộ đợt
+     * ghi đè "Hẹn giao" của đơn — có lịch đợt thì đó mới là ngày thật; để hai
+     * chỗ nói hai ngày khác nhau là mời người đọc chọn nhầm.
+     */
+    if (input.shipments && input.shipments.length > 0) {
+      const minDate = await saveDraftShipments(po.id, input.shipments, user.id)
+      if (minDate && minDate !== po.expected_at) {
+        return posRepo.patch(po.id, { expected_at: minDate })
+      }
+    }
     return po
   },
 
@@ -436,6 +504,18 @@ export const posService = {
     })
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
+    /*
+     * Đợt giao ghi lại CẢ BỘ mỗi lần sửa — replaceLines vừa xoá/chèn lại dòng
+     * nên po_line_id đổi hết, đợt cũ trỏ vào dòng không còn tồn tại. Mảng RỖNG
+     * nghĩa là người dùng bỏ chia đợt, cũng phải dọn sạch — nên điều kiện chỉ
+     * hỏi "có gửi trường này không", không hỏi độ dài như lúc tạo.
+     */
+    if (input.shipments) {
+      const minDate = await saveDraftShipments(id, input.shipments, user.id)
+      if (minDate && minDate !== po.expected_at) {
+        return posRepo.patch(id, { expected_at: minDate })
+      }
+    }
     return po
   },
 

@@ -227,3 +227,36 @@ export function allocateReceiptsToShipments(
   }
   return out
 }
+
+/**
+ * ĐỢT GIAO KHAI NGAY TRONG FORM SOẠN ĐƠN (28/08/2026).
+ *
+ * Lúc soạn, dòng hàng CHƯA có id trong DB — nên form gửi đợt theo `line_index`
+ * (thứ tự dòng trên lưới), server ánh xạ sang `po_line_id` sau khi ghi dòng.
+ * Ánh xạ chạy được vì `replaceLines` ghi `sort_order` đúng bằng chỉ số mảng và
+ * `listLines` đọc lại theo `sort_order` — hai đầu cùng một thứ tự.
+ *
+ * Index trỏ ra ngoài mảng thì BỎ dòng đó thay vì ném: người dùng xoá bớt dòng
+ * hàng sau khi đã chia đợt là chuyện thường; mất một mảnh kế hoạch còn hơn
+ * chặn cả lượt lưu đơn. Đợt rỗng sau khi lọc cũng bỏ luôn.
+ */
+export function mapDraftShipments(
+  drafts: { expected_date: string; note?: string | null; lines: { line_index: number; qty: number }[] }[],
+  lineIds: string[],
+): ShipmentInput[] {
+  const out: ShipmentInput[] = []
+  for (const d of drafts) {
+    const lines: ShipmentLineInput[] = []
+    for (const l of d.lines) {
+      const id = lineIds[l.line_index]
+      if (!id || !(l.qty > 0)) continue
+      const cur = lines.find((x) => x.po_line_id === id)
+      // Cùng một dòng khai hai lần trong CÙNG đợt thì cộng lại — validate sau
+      // đó bắt "lặp hai lần" và chặn oan một thứ người dùng thấy là hợp lý.
+      if (cur) cur.qty += l.qty
+      else lines.push({ po_line_id: id, qty: l.qty })
+    }
+    if (lines.length > 0) out.push({ expected_date: d.expected_date, note: d.note ?? null, lines })
+  }
+  return out
+}

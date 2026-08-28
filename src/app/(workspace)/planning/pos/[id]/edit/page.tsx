@@ -4,6 +4,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { posService } from '@/modules/dept/supply/pos.service'
+import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { settingsService } from '@/modules/core/settings/settings.service'
 import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { poMaterialsRepo } from '@/modules/dept/supply/po-materials.repo'
@@ -64,6 +65,23 @@ export default async function EditPoPage({
     docTemplatesService.get('PO'),
   ])
   const onHand = new Map(mats.map((m) => [m.id, m.on_hand])) // null = chưa có sổ kho
+  /*
+   * KẾ HOẠCH CHIA ĐỢT đã lưu (28/08) — nạp lại theo CHỈ SỐ dòng để form chỉnh
+   * tiếp, chứ không bắt gõ lại. Nhân bản đơn thì bỏ: lịch giao của lần mua
+   * trước gần như chắc chắn sai cho lần này, mang sang là bẫy.
+   */
+  const lineIndexById = new Map(lines.map((l, i) => [l.id, i]))
+  const savedShipments: Record<number, { date: string; qty: number | '' }[]> = {}
+  if (mode === 'edit') {
+    for (const sh of await poShipmentsRepo.listByPo(po.id)) {
+      if (sh.status === 'cancelled') continue
+      for (const l of sh.lines) {
+        const idx = lineIndexById.get(l.po_line_id)
+        if (idx == null) continue
+        ;(savedShipments[idx] ??= []).push({ date: sh.expected_date, qty: l.qty })
+      }
+    }
+  }
   const meta = poTemplateMeta(po.template)
 
   return (
@@ -120,6 +138,7 @@ export default async function EditPoPage({
         lines: lines.map((l) =>
           lineFromPo(l, l.material_id ? (onHand.get(l.material_id) ?? null) : null),
         ),
+        shipments: savedShipments,
       }}
     />
   )

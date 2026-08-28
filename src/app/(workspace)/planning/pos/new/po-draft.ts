@@ -104,9 +104,22 @@ export function readyLineCount(template: PoTemplate, lines: Line[]): number {
  * dẫn xuất theo mẫu đơn, và server còn dẫn xuất lại lần nữa. Nhờ vậy không có
  * đường nào để một dòng lọt vào DB với tổng kg không khớp thông số của chính nó.
  */
-export function buildPoPayload(header: PoHeader, lines: Line[]) {
+/** Đợt giao khai trong form (28/08) — trỏ dòng theo chỉ số trên lưới. */
+export type DraftShipmentPayload = {
+  expected_date: string
+  lines: { line_index: number; qty: number }[]
+}
+
+export function buildPoPayload(
+  header: PoHeader,
+  lines: Line[],
+  shipments?: DraftShipmentPayload[],
+) {
   const { discountAmount } = poTotals(header, lines)
   return {
+    // Bỏ trống = đơn giao một lần theo ô Hẹn giao (server hiểu undefined
+    // là "không đụng tới đợt", mảng rỗng là "xoá hết đợt").
+    shipments,
     production_order_id: header.poType === 'lsx' ? header.lsxId : null,
     extra_lsx_ids: header.poType === 'lsx' ? header.extraLsxIds : [],
     supplier_id: header.supplierId,
