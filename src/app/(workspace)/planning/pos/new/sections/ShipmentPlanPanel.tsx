@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { CalendarDays, Plus, Truck, X } from 'lucide-react'
+import { Plus, Truck, X } from 'lucide-react'
 import { DateField } from '@/components/erp/DateField'
-import { validateShipments, shipmentAmount } from '@/lib/po-shipments'
+import { shipmentAmount, validateShipments } from '@/lib/po-shipments'
 import type { Line } from '../po-line'
 
 /**
@@ -11,90 +11,97 @@ import type { Line } from '../po-line'
  *
  * Trước đây đợt chỉ khai được ở bước "NCC xác nhận" — tức là SAU khi phiếu đã
  * gửi đi. Hệ quả: tờ giấy NCC cầm, thứ duy nhất họ ký, không nói được "1.200
- * tấm xin giao 600 ngày 15 + 600 ngày 18"; người mua phải nhét vào ô ghi chú.
- * Và Giám đốc duyệt đơn cũng không thấy tiến độ nhận hàng, chỉ thấy tổng tiền.
+ * tấm xin giao 700 ngày 10 + 500 ngày 20"; người mua phải nhét vào ô ghi chú.
  *
- * Khối này GẤP GỌN mặc định: khoảng 90% đơn giao một lần, bắt cả phòng nhìn
- * thêm một bảng nữa là trả giá cho số ít. Bấm mở mới hiện.
+ * MỖI ĐỢT LÀ MỘT CỘT (không phải một hàng phụ dưới dòng hàng — bản đầu làm
+ * vậy, user chốt đổi 28/08). Lý do là nghiệp vụ: NCC giao theo CHUYẾN, cả
+ * chuyến cùng một ngày. Cột dọc thì ngày khai MỘT lần cho mọi vật tư trong
+ * chuyến, và người mua đọc ngang một hàng là thấy trọn đường đi của một vật tư
+ * — đúng cách họ đọc bảng kê trên giấy.
  *
- * Không đẻ khái niệm mới: mỗi dòng hàng tách được nhiều mảnh (SL + ngày), các
- * mảnh CÙNG NGÀY gộp thành một đợt lúc gửi lên — đúng cách dialog "NCC xác
- * nhận" đang làm, để hai chỗ khai ra cùng một hình dạng dữ liệu.
+ * Khối GẤP GỌN mặc định: khoảng 90% đơn giao một lần, bắt cả phòng nhìn thêm
+ * một bảng nữa là trả giá cho số ít.
  */
+
+/** Một ĐỢT = một cột: ngày giao + số lượng của từng dòng hàng (theo chỉ số). */
+export type PlanColumn = { date: string; qty: Record<number, number | ''> }
 
 export type DraftShipment = {
   expected_date: string
   lines: { line_index: number; qty: number }[]
 }
 
-type Batch = { date: string; qty: number | '' }
-
-/** Gom mảnh của mọi dòng theo NGÀY thành bộ đợt gửi server. */
-export function batchesToShipments(batches: Record<number, Batch[]>): DraftShipment[] {
-  const byDate = new Map<string, { line_index: number; qty: number }[]>()
-  for (const [idx, list] of Object.entries(batches)) {
-    for (const b of list) {
-      const qty = typeof b.qty === 'number' ? b.qty : 0
-      if (!b.date || qty <= 0) continue
-      const cur = byDate.get(b.date) ?? []
-      cur.push({ line_index: Number(idx), qty })
-      byDate.set(b.date, cur)
-    }
+/** Cột → bộ đợt gửi server. Cột chưa có ngày hoặc chưa có số nào thì bỏ. */
+export function columnsToShipments(cols: PlanColumn[]): DraftShipment[] {
+  const out: DraftShipment[] = []
+  for (const c of cols) {
+    if (!c.date) continue
+    const lines = Object.entries(c.qty)
+      .map(([idx, q]) => ({
+        line_index: Number(idx),
+        qty: typeof q === 'number' ? q : 0,
+      }))
+      .filter((l) => l.qty > 0)
+    if (lines.length > 0) out.push({ expected_date: c.date, lines })
   }
-  return [...byDate.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, lines]) => ({ expected_date: date, lines }))
+  return out.sort((a, b) => a.expected_date.localeCompare(b.expected_date))
 }
 
 const num = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
 export function ShipmentPlanPanel({
   lines,
-  batches,
+  columns,
   currency,
   onChange,
 }: {
   lines: Line[]
-  batches: Record<number, Batch[]>
+  columns: PlanColumn[]
   currency: string
-  onChange: (next: Record<number, Batch[]>) => void
+  onChange: (next: PlanColumn[]) => void
 }) {
-  const [open, setOpen] = useState(() => Object.keys(batches).length > 0)
+  const [open, setOpen] = useState(() => columns.length > 0)
 
-  const stock = lines.filter((l) => !l.is_free)
-  if (stock.length === 0) return null
+  // Dòng tự do (gỗ/gia công) nghiệm thu ngoài sổ kho — không đi theo đợt.
+  const rows = lines.map((l, i) => ({ l, i })).filter(({ l }) => !l.is_free)
+  if (rows.length === 0) return null
 
   const qtyOf = (l: Line) => (typeof l.qty === 'number' ? l.qty : 0)
-  const setBatch = (idx: number, i: number, patch: Partial<Batch>) =>
-    onChange({
-      ...batches,
-      [idx]: (batches[idx] ?? []).map((b, j) => (j === i ? { ...b, ...patch } : b)),
-    })
+  const setCol = (ci: number, patch: Partial<PlanColumn>) =>
+    onChange(columns.map((c, j) => (j === ci ? { ...c, ...patch } : c)))
+  const setQty = (ci: number, li: number, v: number | '') =>
+    onChange(columns.map((c, j) => (j === ci ? { ...c, qty: { ...c.qty, [li]: v } } : c)))
 
-  // Kiểm bằng CHÍNH hàm server dùng — chỉ số dòng đóng vai id, nên cảnh báo ở
-  // form và lỗi ở server không bao giờ nói hai chuyện khác nhau.
-  const drafts = batchesToShipments(batches)
+  /** Phần chưa xếp vào đợt nào — con số để gọi điện đòi NCC chốt nốt. */
+  const leftOf = (li: number, ordered: number) =>
+    ordered -
+    columns.reduce((t, c) => {
+      const q = c.qty[li]
+      return t + (typeof q === 'number' ? q : 0)
+    }, 0)
+
+  const drafts = columnsToShipments(columns)
+  // Kiểm bằng CHÍNH hàm server dùng (chỉ số dòng đóng vai id) — cảnh báo ở form
+  // và lỗi ở server không bao giờ nói hai chuyện khác nhau.
   const v = validateShipments(
     drafts.map((d) => ({
       expected_date: d.expected_date,
       lines: d.lines.map((l) => ({ po_line_id: String(l.line_index), qty: l.qty })),
     })),
-    lines.map((l, i) => ({ id: String(i), qty_ordered: qtyOf(l), name: l.name })),
+    rows.map(({ l, i }) => ({ id: String(i), qty_ordered: qtyOf(l), name: l.name })),
   )
   const money = new Map(
     lines.map((l, i) => [
       String(i),
       {
-        amount:
-          l.price === ''
-            ? null
-            : Number(l.price) * (typeof l.qty === 'number' ? l.qty : 0),
+        amount: l.price === '' ? null : Number(l.price) * qtyOf(l),
         qty_ordered: qtyOf(l),
         approx: false,
       },
     ]),
   )
-  const planned = drafts.length
+
+  const addColumn = () => onChange([...columns, { date: '', qty: {} }])
 
   return (
     <section className="border-border bg-card rounded-xl border">
@@ -107,8 +114,8 @@ export function ShipmentPlanPanel({
         <Truck className="text-muted-foreground size-4" strokeWidth={1.8} aria-hidden />
         <b>Chia đợt giao</b>
         <span className="text-muted-foreground text-xs">
-          {planned > 0
-            ? `${planned} đợt — in lên phiếu gửi NCC`
+          {drafts.length > 0
+            ? `${drafts.length} đợt — in lên phiếu gửi NCC`
             : 'tuỳ chọn — hàng về làm nhiều chuyến'}
         </span>
         <span className="text-muted-foreground ml-auto text-xs">
@@ -119,166 +126,143 @@ export function ShipmentPlanPanel({
       {open && (
         <div className="border-border/70 flex flex-col gap-3 border-t px-3.5 py-3">
           <p className="text-muted-foreground bg-muted rounded-md px-3 py-2 text-xs">
-            Đây là lịch <b>đề nghị</b> gửi NCC — in thẳng lên đơn đặt hàng. Sau khi NCC
-            trả lời, sửa lại ở nút “NCC xác nhận” trên trang chi tiết. Bỏ trống thì đơn
-            giao một lần theo ô Hẹn giao.
+            Lịch <b>đề nghị</b> gửi NCC — in thẳng lên đơn đặt hàng. Mỗi đợt là một chuyến
+            giao: khai ngày một lần, điền số lượng cho từng vật tư. Sau khi NCC trả lời,
+            sửa lại ở nút “NCC xác nhận” trên trang chi tiết.
           </p>
 
-          <div className="border-border overflow-x-auto rounded-lg border">
-            <table className="w-full text-[13px]">
-              <thead className="t-label text-muted-foreground bg-muted/50 border-b text-left">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Vật tư</th>
-                  <th className="w-24 px-2 py-2 text-right font-medium">SL đặt</th>
-                  <th className="w-28 px-2 py-2 text-right font-medium">SL đợt</th>
-                  <th className="w-40 px-2 py-2 font-medium">Ngày giao</th>
-                  <th className="w-8 px-1 py-2" />
-                </tr>
-              </thead>
-              <tbody className="divide-border/60 divide-y">
-                {lines.map((l, idx) => {
-                  if (l.is_free) return null
-                  const list = batches[idx] ?? []
-                  if (list.length === 0) {
+          {columns.length === 0 ? (
+            <button
+              type="button"
+              onClick={addColumn}
+              className="border-input text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center gap-1.5 rounded-lg border border-dashed py-3 text-[13px]"
+            >
+              <Plus className="size-4" aria-hidden /> Thêm đợt giao đầu tiên
+            </button>
+          ) : (
+            <div className="border-border overflow-x-auto rounded-lg border">
+              <table className="w-full text-[13px]">
+                <thead className="t-label text-muted-foreground bg-muted/50 border-b text-left">
+                  <tr>
+                    <th className="min-w-[150px] px-3 py-2 font-medium">Vật tư</th>
+                    <th className="w-20 px-2 py-2 text-right font-medium">SL đặt</th>
+                    {columns.map((c, ci) => (
+                      <th key={ci} className="w-[152px] px-2 py-1.5 font-medium">
+                        <div className="flex items-center justify-between gap-1">
+                          <span>Đợt {ci + 1}</span>
+                          <button
+                            type="button"
+                            aria-label={`Bỏ đợt ${ci + 1}`}
+                            title="Bỏ đợt này"
+                            onClick={() => onChange(columns.filter((_, j) => j !== ci))}
+                            className="text-muted-foreground grid size-5 place-items-center rounded hover:text-[var(--stop)]"
+                          >
+                            <X className="size-3.5" />
+                          </button>
+                        </div>
+                        <DateField
+                          value={c.date}
+                          onChange={(iso) => setCol(ci, { date: iso })}
+                          aria-label={`Ngày giao đợt ${ci + 1}`}
+                          className="mt-1 h-7 text-[12px] font-normal"
+                        />
+                      </th>
+                    ))}
+                    <th className="w-24 px-2 py-2 text-right font-medium">Chưa chia</th>
+                    <th className="w-9 px-1 py-2">
+                      <button
+                        type="button"
+                        onClick={addColumn}
+                        aria-label="Thêm một đợt giao"
+                        title="Thêm một đợt giao"
+                        className="border-input text-muted-foreground hover:border-primary hover:text-primary grid size-6 place-items-center rounded-md border border-dashed"
+                      >
+                        <Plus className="size-3.5" />
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-border/60 divide-y">
+                  {rows.map(({ l, i }) => {
+                    const ordered = qtyOf(l)
+                    const left = leftOf(i, ordered)
                     return (
-                      <tr key={idx}>
+                      <tr key={i}>
                         <td className="px-3 py-1.5">
                           <span className="min-w-0">{l.name || '—'}</span>{' '}
                           <span className="text-muted-foreground text-[11px]">
                             {l.unit}
                           </span>
                         </td>
-                        <td className="t-data px-2 py-1.5 text-right">{num(qtyOf(l))}</td>
-                        <td className="text-muted-foreground px-2 py-1.5 text-right text-[12px]">
-                          giao 1 lần
+                        <td className="t-data px-2 py-1.5 text-right">{num(ordered)}</td>
+                        {columns.map((c, ci) => (
+                          <td key={ci} className="px-2 py-1.5">
+                            <input
+                              inputMode="decimal"
+                              value={c.qty[i] ?? ''}
+                              onChange={(e) => {
+                                const raw = e.target.value.replace(',', '.')
+                                setQty(
+                                  ci,
+                                  i,
+                                  raw === '' ? '' : Number(raw) >= 0 ? Number(raw) : '',
+                                )
+                              }}
+                              placeholder="—"
+                              aria-label={`SL đợt ${ci + 1} của ${l.name}`}
+                              className="border-input focus:border-ring t-data h-7 w-full rounded-md border px-2 text-right outline-none"
+                            />
+                          </td>
+                        ))}
+                        <td
+                          className="t-data px-2 py-1.5 text-right"
+                          style={{
+                            color:
+                              Math.abs(left) < 1e-6
+                                ? 'var(--done)'
+                                : left < 0
+                                  ? 'var(--stop)'
+                                  : 'var(--warn)',
+                          }}
+                        >
+                          {Math.abs(left) < 1e-6 ? '✓ đủ' : num(left)}
                         </td>
-                        <td className="px-2 py-1.5" />
-                        <td className="px-1 py-1.5">
-                          <button
-                            type="button"
-                            title="Chia dòng này thành nhiều đợt"
-                            aria-label={`Chia đợt cho ${l.name}`}
-                            onClick={() =>
-                              onChange({
-                                ...batches,
-                                [idx]: [{ date: '', qty: qtyOf(l) }],
-                              })
-                            }
-                            className="text-muted-foreground hover:text-foreground grid size-6 place-items-center rounded-md"
-                          >
-                            <CalendarDays className="size-3.5" />
-                          </button>
-                        </td>
+                        <td className="px-1 py-1.5" />
                       </tr>
                     )
-                  }
-                  return list.map((b, i) => (
-                    <tr key={`${idx}-${i}`}>
-                      <td className="px-3 py-1.5">
-                        {i === 0 ? (
-                          <>
-                            <span className="min-w-0">{l.name || '—'}</span>{' '}
-                            <span className="text-muted-foreground text-[11px]">
-                              {l.unit}
-                            </span>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground pl-3 text-[11.5px]">
-                            ↳ đợt {i + 1}
-                          </span>
-                        )}
-                      </td>
-                      <td className="t-data px-2 py-1.5 text-right">
-                        {i === 0 ? num(qtyOf(l)) : ''}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <input
-                          inputMode="decimal"
-                          value={b.qty}
-                          onChange={(e) => {
-                            const raw = e.target.value.replace(',', '.')
-                            setBatch(idx, i, {
-                              qty: raw === '' ? '' : Number(raw) >= 0 ? Number(raw) : '',
-                            })
-                          }}
-                          className="border-input focus:border-ring t-data h-7 w-full rounded-md border px-2 text-right outline-none"
-                          aria-label={`SL đợt ${i + 1} của ${l.name}`}
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <DateField
-                          value={b.date}
-                          onChange={(iso) => setBatch(idx, i, { date: iso })}
-                          aria-label={`Ngày giao đợt ${i + 1} của ${l.name}`}
-                          className="h-7 text-[12px]"
-                        />
-                      </td>
-                      <td className="px-1 py-1.5">
-                        <button
-                          type="button"
-                          aria-label={i === 0 ? `Thêm đợt cho ${l.name}` : 'Bỏ đợt này'}
-                          title={i === 0 ? 'Thêm một đợt nữa' : 'Bỏ đợt này'}
-                          onClick={() =>
-                            i === 0
-                              ? onChange({
-                                  ...batches,
-                                  [idx]: [...list, { date: '', qty: '' }],
-                                })
-                              : onChange({
-                                  ...batches,
-                                  [idx]: list.filter((_, j) => j !== i),
-                                })
-                          }
-                          className={`grid size-6 place-items-center rounded-md ${
-                            i === 0
-                              ? 'text-muted-foreground hover:text-foreground'
-                              : 'text-muted-foreground hover:text-[var(--stop)]'
-                          }`}
+                  })}
+                </tbody>
+                {/* Tiền từng đợt nằm ngay DƯỚI cột của đợt đó — người mua đọc
+                    cho NCC nghe lúc gọi điện mà không phải dò hàng khác. */}
+                <tfoot className="border-border/70 border-t">
+                  <tr className="text-[12px]">
+                    <td className="text-muted-foreground px-3 py-1.5" colSpan={2}>
+                      Tạm tính ({currency})
+                    </td>
+                    {columns.map((c, ci) => {
+                      const d = drafts.find((x) => x.expected_date === c.date)
+                      const m = d
+                        ? shipmentAmount(
+                            d.lines.map((l) => ({
+                              po_line_id: String(l.line_index),
+                              qty: l.qty,
+                            })),
+                            money,
+                          )
+                        : null
+                      return (
+                        <td
+                          key={ci}
+                          className="t-data px-2 py-1.5 text-right font-medium"
                         >
-                          {i === 0 ? (
-                            <Plus className="size-3.5" />
-                          ) : (
-                            <X className="size-3.5" />
-                          )}
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Tiền từng đợt — người mua đọc cho NCC nghe ngay lúc gọi điện. */}
-          {drafts.length > 0 && (
-            <div className="flex flex-col gap-1 text-[12px]">
-              {drafts.map((d, i) => {
-                const m = shipmentAmount(
-                  d.lines.map((l) => ({
-                    po_line_id: String(l.line_index),
-                    qty: l.qty,
-                  })),
-                  money,
-                )
-                return (
-                  <div
-                    key={d.expected_date}
-                    className="text-muted-foreground flex items-baseline justify-between gap-3"
-                  >
-                    <span>
-                      Đợt {i + 1} ·{' '}
-                      <span className="t-data">
-                        {new Date(d.expected_date).toLocaleDateString('vi-VN')}
-                      </span>
-                    </span>
-                    {m.priced && (
-                      <span className="t-data text-foreground font-medium">
-                        {num(Math.round(m.amount))} {currency}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
+                          {m?.priced ? num(Math.round(m.amount)) : ''}
+                        </td>
+                      )
+                    })}
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           )}
 

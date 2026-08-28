@@ -24,7 +24,11 @@ import {
   type PoTerms,
 } from '@/lib/po-template'
 import { PoLineTable } from './PoLineTable'
-import { ShipmentPlanPanel, batchesToShipments } from './sections/ShipmentPlanPanel'
+import {
+  ShipmentPlanPanel,
+  columnsToShipments,
+  type PlanColumn,
+} from './sections/ShipmentPlanPanel'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import {
   buildPoPayload,
@@ -102,7 +106,7 @@ export type PoInitial = {
    * lại từ đầu; nhân bản đơn thì cố ý bỏ (lịch của lần mua trước không còn
    * đúng cho lần này).
    */
-  shipments?: Record<number, { date: string; qty: number | '' }[]>
+  shipments?: { date: string; qty: Record<number, number | ''> }[]
 }
 
 /*
@@ -727,9 +731,7 @@ export function PoCreateForm({
    * Kế hoạch chia đợt (28/08) — khoá theo CHỈ SỐ dòng trên lưới; server ánh xạ
    * sang po_line_id sau khi ghi dòng (mapDraftShipments).
    */
-  const [shipBatches, setShipBatches] = useState<
-    Record<number, { date: string; qty: number | '' }[]>
-  >(() => initial?.shipments ?? {})
+  const [shipCols, setShipCols] = useState<PlanColumn[]>(() => initial?.shipments ?? [])
 
   const [enrich, setEnrich] = useState<{
     items: CatalogSuggestion[]
@@ -783,7 +785,7 @@ export function PoCreateForm({
       }>(isEdit ? `/api/dept/supply/pos/${initial!.po.id}` : '/api/dept/supply/pos', {
         // Route sửa đơn là PATCH (`/api/dept/supply/pos/[id]`), không phải PUT.
         method: isEdit ? 'PATCH' : 'POST',
-        body: buildPoPayload(header, lines, batchesToShipments(shipBatches)),
+        body: buildPoPayload(header, lines, columnsToShipments(shipCols)),
       })
       // Đã vào server thì bản nháp trình duyệt hết nhiệm vụ — dọn để lần soạn
       // sau không bị hỏi khôi phục đơn đã lưu rồi.
@@ -1281,9 +1283,9 @@ export function PoCreateForm({
           với NCC chứ không phải câu chữ mẫu. */}
       <ShipmentPlanPanel
         lines={lines}
-        batches={shipBatches}
+        columns={shipCols}
         currency={currency}
-        onChange={setShipBatches}
+        onChange={setShipCols}
       />
 
       <TermsSection

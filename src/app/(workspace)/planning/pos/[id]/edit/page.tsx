@@ -71,15 +71,16 @@ export default async function EditPoPage({
    * trước gần như chắc chắn sai cho lần này, mang sang là bẫy.
    */
   const lineIndexById = new Map(lines.map((l, i) => [l.id, i]))
-  const savedShipments: Record<number, { date: string; qty: number | '' }[]> = {}
+  const savedShipments: { date: string; qty: Record<number, number | ''> }[] = []
   if (mode === 'edit') {
     for (const sh of await poShipmentsRepo.listByPo(po.id)) {
       if (sh.status === 'cancelled') continue
+      const qty: Record<number, number | ''> = {}
       for (const l of sh.lines) {
         const idx = lineIndexById.get(l.po_line_id)
-        if (idx == null) continue
-        ;(savedShipments[idx] ??= []).push({ date: sh.expected_date, qty: l.qty })
+        if (idx != null) qty[idx] = l.qty
       }
+      savedShipments.push({ date: sh.expected_date, qty })
     }
   }
   const meta = poTemplateMeta(po.template)

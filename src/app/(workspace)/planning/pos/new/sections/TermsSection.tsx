@@ -7,6 +7,7 @@ import {
   Clock,
   FileText,
   MapPin,
+  ScrollText,
   PenLine,
   StickyNote,
   type LucideIcon,
@@ -58,24 +59,41 @@ export function TermsSection({
   onNoteChange: (v: string) => void
 }) {
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="border-border bg-card rounded-xl border">
+      {/*
+        28/08: khối này người dùng KHÔNG THẤY. Hai lý do, sửa cả hai:
+        (1) nó dùng màu cứng zinc/white thay vì token nên nhạt hơn mọi thẻ khác;
+        (2) đóng lại chỉ còn một dòng chữ xám nói "đã điền sẵn" — không hé lộ
+        nội dung nào, nên mắt lướt qua như thể là chú thích chứ không phải một
+        phần của đơn. Nay: icon neo mắt + CHÍNH câu thanh toán / nơi giao hiện
+        ngay trên đầu, và nút "Sửa" thay cho mũi tên câm.
+      */}
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px]"
       >
-        <b>Điều khoản &amp; chữ ký</b>
-        <span className="text-muted-foreground text-[11px]">
-          đã điền sẵn theo mẫu {templateLabel.toLowerCase()} — bấm để sửa
-        </span>
-        <ChevronDown
+        <ScrollText
+          className="text-muted-foreground size-4 shrink-0"
+          strokeWidth={1.8}
           aria-hidden
-          className={`text-muted-foreground ml-auto size-4 transition-transform ${open ? 'rotate-180' : ''}`}
         />
+        <b className="shrink-0">Điều khoản &amp; chữ ký</b>
+        <span className="text-muted-foreground min-w-0 truncate text-[11.5px]">
+          {[terms.payment, terms.delivery_place].filter(Boolean).join(' · ') ||
+            `theo mẫu ${templateLabel.toLowerCase()}`}
+        </span>
+        <span className="border-input text-muted-foreground ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11.5px]">
+          {open ? 'Thu gọn' : 'Sửa'}
+          <ChevronDown
+            aria-hidden
+            className={`size-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
+          />
+        </span>
       </button>
       {open && (
-        <div className="grid gap-3 border-t border-zinc-100 p-3.5 sm:grid-cols-2 dark:border-zinc-800">
+        <div className="border-border/70 grid gap-3 border-t p-3.5 sm:grid-cols-2">
           {TERM_ROWS.map(([k, label, Icon]) => (
             <label key={k} className="flex flex-col gap-1.5">
               <span className={fieldLabel}>{label}</span>
