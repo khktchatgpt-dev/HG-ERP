@@ -1,11 +1,7 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import {
-  suppliersRepo,
-  materialGroupsRepo,
-  supplyRepo,
-} from '@/modules/dept/supply/supply.repo'
+import { suppliersRepo, materialGroupsRepo } from '@/modules/dept/supply/supply.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SupplierDetail } from './SupplierDetail'
@@ -22,14 +18,19 @@ export default async function SupplierDetailPage({
   const supplier = await suppliersRepo.findById(id)
   if (!supplier) notFound()
 
-  const [{ rows: pos }, { rows: materials }, purchased, allGroups, groupIds, kpis] =
+  /*
+   * 28/08: bỏ tab "Đánh giá" nên KHÔNG nạp KPI giao hàng nữa — một truy vấn ít
+   * đi cho mỗi lần mở NCC. `supplyRepo.supplierDeliveryKpis` GIỮ NGUYÊN (P5.2,
+   * có test): số liệu tự tính từ lịch sử giao vẫn đúng, cần bày lại chỗ nào thì
+   * gọi lại, không phải viết lại.
+   */
+  const [{ rows: pos }, { rows: materials }, purchased, allGroups, groupIds] =
     await Promise.all([
       posRepo.list({ supplier_id: id, page: 1, page_size: 200 }),
       materialsService.list(user, { page: 1, page_size: 1000, active_only: true }),
       posRepo.materialsPurchasedBySupplier(id),
       materialGroupsRepo.options(),
       materialGroupsRepo.forSupplier(id),
-      supplyRepo.supplierDeliveryKpis(id), // KPI giao hàng tự tính (P5.2)
     ])
   const totals = await posRepo.totalsByPoIds(pos.map((p) => p.id))
 
@@ -55,7 +56,6 @@ export default async function SupplierDetailPage({
         name: m.name,
         unit: m.unit,
       }))}
-      kpis={kpis}
       canEdit={!!canEdit}
     />
   )

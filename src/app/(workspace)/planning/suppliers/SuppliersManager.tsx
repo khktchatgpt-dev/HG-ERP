@@ -25,7 +25,6 @@ type Supplier = {
   tax_no: string | null
   type: string | null
   status: string
-  rating: string | null
   region: string | null
   can_order: boolean
   is_active: boolean
@@ -37,34 +36,11 @@ type Supplier = {
   groups: string[]
 }
 
-const money = (n: number) => n.toLocaleString('vi-VN')
 
 const STATUS: Record<string, { label: string; tone: 'green' | 'amber' | 'gray' }> = {
   active: { label: 'Hoạt động', tone: 'green' },
   suspended: { label: 'Tạm ngưng', tone: 'amber' },
   terminated: { label: 'Ngừng hợp tác', tone: 'gray' },
-}
-const GRADE_BG: Record<string, string> = {
-  A: 'bg-green-600',
-  B: 'bg-blue-600',
-  C: 'bg-amber-500',
-  D: 'bg-red-600',
-}
-
-function Grade({ r }: { r: string | null }) {
-  if (!r)
-    return (
-      <span className="grid h-6 w-6 place-items-center rounded-md bg-zinc-200 text-xs font-bold text-zinc-400 dark:bg-zinc-800">
-        —
-      </span>
-    )
-  return (
-    <span
-      className={`grid h-6 w-6 place-items-center rounded-md text-xs font-bold text-white ${GRADE_BG[r] ?? 'bg-zinc-500'}`}
-    >
-      {r}
-    </span>
-  )
 }
 
 export function SuppliersManager({
@@ -86,7 +62,6 @@ export function SuppliersManager({
   const [q, setQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [typeFilter, setTypeFilter] = useState('all')
-  const [ratingFilter, setRatingFilter] = useState('all')
   const [groupFilter, setGroupFilter] = useState('all')
 
   // Options lọc lấy từ dữ liệu thật.
@@ -104,13 +79,12 @@ export function SuppliersManager({
     return suppliers.filter((s) => {
       if (statusFilter !== 'all' && s.status !== statusFilter) return false
       if (typeFilter !== 'all' && s.type !== typeFilter) return false
-      if (ratingFilter !== 'all' && s.rating !== ratingFilter) return false
       if (groupFilter !== 'all' && !s.groups.includes(groupFilter)) return false
       if (ql && !`${s.code ?? ''} ${s.name} ${s.tax_no ?? ''}`.toLowerCase().includes(ql))
         return false
       return true
     })
-  }, [suppliers, q, statusFilter, typeFilter, ratingFilter, groupFilter])
+  }, [suppliers, q, statusFilter, typeFilter, groupFilter])
 
   // Ngừng giao dịch khi còn PO mở là tình huống thật (NCC ngưng cung cấp) —
   // không chặn, nhưng confirm phải nói rõ để Cung ứng xử lý các PO dở dang.
@@ -193,45 +167,32 @@ export function SuppliersManager({
           <span className="text-xs text-zinc-400">—</span>
         ),
     },
-    {
-      key: 'rating',
-      header: 'Hạng',
-      width: '70px',
-      align: 'center',
-      sortValue: (s) => s.rating ?? 'Z',
-      cell: (s) => (
-        <div className="flex justify-center">
-          <Grade r={s.rating} />
-        </div>
-      ),
-    },
-    {
-      key: 'spend',
-      header: 'Tổng chi',
-      align: 'right',
-      width: '140px',
-      sortValue: (s) => s.total_spend,
-      cell: (s) =>
-        s.total_spend > 0 ? (
-          <span className="font-medium tabular-nums">
-            {money(s.total_spend)} <span className="text-xs text-zinc-400">₫</span>
-          </span>
-        ) : (
-          <span className="text-xs text-zinc-400">—</span>
-        ),
-    },
+    /*
+     * 28/08 — BỎ cột "Tổng chi": rỗng ở cả 154 dòng (chưa nhập đơn thật), mà
+     * vẫn ăn 140px và đẩy bảng sang cuộn ngang. Số này vốn thuộc về TRANG CHI
+     * TIẾT của NCC, nơi nó nằm cạnh số PO và lần mua gần nhất để đọc thành
+     * một câu; đứng lẻ ở danh sách thì chỉ là một cột số không so với ai.
+     */
     {
       key: 'status',
       header: 'Trạng thái',
       width: '140px',
       sortValue: (s) => s.status,
       cell: (s) => {
+        /*
+         * 28/08: 154/154 NCC đều "Hoạt động" — in 154 badge xanh giống hệt
+         * nhau thì cột này không phân biệt được gì, chỉ dạy mắt bỏ qua nó.
+         * Nay cột chỉ LÊN TIẾNG khi có chuyện: tạm ngưng, ngừng hợp tác, hoặc
+         * khoá đặt hàng. Bình thường để trống — im lặng cũng là thông tin.
+         */
         const st = STATUS[s.status] ?? { label: s.status, tone: 'gray' as const }
+        const normal = s.status === 'active' && s.can_order
+        if (normal) return <span className="text-muted-foreground/50 text-xs">—</span>
         return (
           <div className="flex flex-col gap-0.5">
-            <Badge tone={st.tone}>{st.label}</Badge>
+            {s.status !== 'active' && <Badge tone={st.tone}>{st.label}</Badge>}
             {!s.can_order && (
-              <span className="text-[11px] font-medium text-red-600 dark:text-red-400">
+              <span className="text-[11px] font-medium text-[var(--stop)]">
                 ⚠ khoá đặt hàng
               </span>
             )}
@@ -294,18 +255,39 @@ export function SuppliersManager({
       />
 
       <StatsBar
+        /*
+         * 28/08: ba thẻ cũ là "Tổng 154 · Đang giao dịch 154 · Có lịch sử mua
+         * 0" — hai thẻ đầu trùng y hệt nhau (chưa ai ngừng giao dịch NCC nào)
+         * và thẻ ba bằng 0. Ba con số không nói được gì.
+         *
+         * Nay chỉ giữ thẻ có KHẢ NĂNG ĐỔI và đáng nhìn: đang giao dịch, đã
+         * ngừng, khoá đặt hàng. Thẻ nào đếm 0 thì TỰ ẨN — bảng trắng ba số 0
+         * là chỗ mắt học cách bỏ qua cả dải KPI.
+         */
         stats={[
-          { label: 'Tổng NCC', value: suppliers.length, tone: 'default' },
           {
             label: 'Đang giao dịch',
             value: suppliers.filter((s) => s.is_active).length,
             tone: 'green',
           },
-          {
-            label: 'Có lịch sử mua',
-            value: suppliers.filter((s) => s.po_count > 0).length,
-            tone: 'blue',
-          },
+          ...(suppliers.some((s) => !s.is_active)
+            ? [
+                {
+                  label: 'Đã ngừng',
+                  value: suppliers.filter((s) => !s.is_active).length,
+                  tone: 'gray' as const,
+                },
+              ]
+            : []),
+          ...(suppliers.some((s) => !s.can_order)
+            ? [
+                {
+                  label: 'Khoá đặt hàng',
+                  value: suppliers.filter((s) => !s.can_order).length,
+                  tone: 'red' as const,
+                },
+              ]
+            : []),
         ]}
       />
 
@@ -336,17 +318,7 @@ export function SuppliersManager({
                   ...groupOptions.map((g) => ({ value: g, label: g })),
                 ]}
               />
-              <ToolbarSelect
-                value={ratingFilter}
-                onChange={setRatingFilter}
-                options={[
-                  { value: 'all', label: 'Mọi hạng' },
-                  { value: 'A', label: 'Hạng A' },
-                  { value: 'B', label: 'Hạng B' },
-                  { value: 'C', label: 'Hạng C' },
-                  { value: 'D', label: 'Hạng D' },
-                ]}
-              />
+              
               <ToolbarSelect
                 value={statusFilter}
                 onChange={setStatusFilter}
