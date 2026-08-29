@@ -18,6 +18,6 @@ export const POST = handle(async (req: Request) => {
   const po = await posService.create(user, input)
   // Đề xuất cập nhật danh mục từ số vừa gõ (13/08) — form hiện hộp xác nhận,
   // người soạn đồng ý mới ghi (qua /api/dept/warehouse/materials/enrich).
-  const catalog_suggestions = await posService.catalogSuggestions(input.lines)
+  const catalog_suggestions = await posService.catalogSuggestions(input.lines, input.currency)
   return NextResponse.json({ po, catalog_suggestions }, { status: 201 })
 })

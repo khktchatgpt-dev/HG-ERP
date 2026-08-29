@@ -47,6 +47,10 @@ export type Material = {
   pcs_per_ctn: number | null
   /** Thông số theo nhóm (0137): kim loại — màu / bề mặt ("inox bóng"). */
   finish: string | null
+  /** m³ mỗi đơn vị đặt (0178) — mẫu đơn gỗ tính tiền theo m³. */
+  m3_per_unit: number | null
+  /** Bảo hành dạng chữ, "12 tháng" (0178) — mẫu đơn MRO. */
+  warranty_text: string | null
   note: string | null
   /** Khai nhanh từ form đơn đặt, chờ Kho rà lại (0136) — gỡ cờ khi đã chuẩn hoá. */
   needs_review: boolean
@@ -58,8 +62,14 @@ export type Material = {
   updated_at: string
 }
 
+/*
+ * DANH SÁCH CỘT PHẢI KHỚP DB — select một cột chưa tồn tại thì PostgREST ném
+ * lỗi cho MỌI truy vấn danh mục, và màn "Vật tư & giá mua" hiện "danh mục
+ * trống" chứ không báo lỗi gì (đúng cái bẫy đã dính lúc thêm 0178). Thêm cột
+ * vào đây thì migration tương ứng phải apply TRƯỚC.
+ */
 const COLS =
-  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, over_tolerance_pct, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, note, needs_review, needs_review_fields, created_by, is_active, created_at, updated_at'
+  'id, code, name, unit, barcode, spec, price_unit, unit2_factor, group_name, sub_group, min_stock, max_stock, over_tolerance_pct, reorder_point, reorder_qty, shelf_location, vat_rate, default_supplier_id, last_purchase_price, po_template, kg_per_m, kg_per_unit, default_bar_length_m, pack_size, pack_unit, material_grade, open_style, pcs_per_ctn, finish, m3_per_unit, warranty_text, note, needs_review, needs_review_fields, created_by, is_active, created_at, updated_at'
 
 export type ListFilter = {
   q?: string
@@ -94,6 +104,9 @@ function toMaterial(row: Record<string, unknown>): Material {
       row.default_bar_length_m == null ? null : Number(row.default_bar_length_m),
     pack_size: row.pack_size == null ? null : Number(row.pack_size),
     pcs_per_ctn: row.pcs_per_ctn == null ? null : Number(row.pcs_per_ctn),
+    // Chưa apply 0178 thì hai cột không có trong row → null, không phải undefined.
+    m3_per_unit: row.m3_per_unit == null ? null : Number(row.m3_per_unit),
+    warranty_text: (row.warranty_text as string | null) ?? null,
   }
 }
 
@@ -322,7 +335,9 @@ export const materialChangesRepo = {
       .eq('material_id', materialId)
       .order('created_at', { ascending: false })
       .limit(limit)
-    type Raw = Omit<MaterialChange, 'actor_name'> & { actor: { name: string | null } | null }
+    type Raw = Omit<MaterialChange, 'actor_name'> & {
+      actor: { name: string | null } | null
+    }
     return ((data ?? []) as unknown as Raw[]).map((r) => ({
       ...r,
       actor_name: r.actor?.name ?? null,

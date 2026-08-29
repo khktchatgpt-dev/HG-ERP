@@ -109,7 +109,11 @@ export function PrintLetterhead({
     <div className="flex justify-between gap-4 text-[12px]">
       <div className="max-w-[55%]">
         <div className="font-bold uppercase">{company.company_name}</div>
-        {company.company_address && <div>Địa chỉ: {company.company_address}</div>}
+        {company.company_address && (
+          <div>
+            <span className="font-semibold">Địa chỉ:</span> {company.company_address}
+          </div>
+        )}
         {info.length > 0 && <div>{info.join('      ')}</div>}
       </div>
       <div className="shrink-0 text-center">
@@ -172,7 +176,12 @@ export function PrintMeta({
             .filter(([, v]) => v !== null && v !== undefined && v !== '')
             .map(([label, v]) => (
               <tr key={label}>
-                <td className="pr-2 align-top whitespace-nowrap">{label}</td>
+                {/* Nhãn ĐẬM (28/08) — cùng lối với PrintTerms: trên giấy in
+                    đen trắng, nét chữ là thứ duy nhất tách được nhãn khỏi
+                    nội dung. */}
+                <td className="pr-2 align-top font-semibold whitespace-nowrap">
+                  {label}
+                </td>
                 <td>{v}</td>
               </tr>
             ))}
@@ -214,7 +223,12 @@ export function PrintTerms({
         <tbody>
           {rows.map(([label, v]) => (
             <tr key={label}>
-              <td className="pr-3 align-top whitespace-nowrap">{label}:</td>
+              {/* Nhãn ĐẬM (28/08): nhãn và nội dung cùng một sắc chữ thì mắt
+                  không tách được đâu là mục, đâu là điều khoản — nhất là khi
+                  in đen trắng, thứ duy nhất phân biệt được là nét chữ. */}
+              <td className="pr-3 align-top font-semibold whitespace-nowrap">
+                {label}:
+              </td>
               <td>{v}</td>
             </tr>
           ))}

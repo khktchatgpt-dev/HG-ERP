@@ -269,3 +269,44 @@ describe('đơn gộp nhiều lệnh (0125)', () => {
     expect(groups[0].pos).toHaveLength(1)
   })
 })
+
+describe('nhóm nhiều loại tiền — không giấu phần còn lại', () => {
+  it('USD trong nhóm VND đi vào otherTotals, không cộng vào total', () => {
+    const { standalone } = groupPosByLsx(
+      [
+        po({ id: 'a', code: 'PO-1', currency: 'VND', total: 4_500_000 }),
+        po({ id: 'b', code: 'PO-2', currency: 'USD', total: 12_500 }),
+      ],
+      [],
+      '2026-08-28',
+    )
+    expect(standalone.total).toBe(4_500_000)
+    expect(standalone.currency).toBe('VND')
+    expect(standalone.otherTotals).toEqual([{ currency: 'USD', total: 12_500 }])
+  })
+
+  it('nhiều đơn cùng ngoại tệ thì cộng dồn về một dòng', () => {
+    const { standalone } = groupPosByLsx(
+      [
+        po({ id: 'a', code: 'PO-1', currency: 'VND', total: 1_000 }),
+        po({ id: 'b', code: 'PO-2', currency: 'USD', total: 100 }),
+        po({ id: 'c', code: 'PO-3', currency: 'USD', total: 50 }),
+      ],
+      [],
+      '2026-08-28',
+    )
+    expect(standalone.otherTotals).toEqual([{ currency: 'USD', total: 150 }])
+  })
+
+  it('đơn đã huỷ không vào tổng nào', () => {
+    const { standalone } = groupPosByLsx(
+      [
+        po({ id: 'a', code: 'PO-1', currency: 'VND', total: 1_000 }),
+        po({ id: 'b', code: 'PO-2', currency: 'USD', total: 900, status: 'cancelled' }),
+      ],
+      [],
+      '2026-08-28',
+    )
+    expect(standalone.otherTotals).toEqual([])
+  })
+})

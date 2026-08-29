@@ -479,7 +479,12 @@ export function PoPrintSheet({
             ] as [string, string | null, number, string][]
           ).map(([label, rateText, value, cls]) => (
             <tr key={label} className={cls}>
-              <td colSpan={amountIdx - 1} className="border border-black px-2 text-right">
+              {/* Nhãn dòng tổng in ĐẬM — cột nhãn và cột số nằm hai đầu tờ
+                  giấy, nhãn nhạt thì mắt trượt mất hàng khi dò sang phải. */}
+              <td
+                colSpan={amountIdx - 1}
+                className="border border-black px-2 text-right font-semibold"
+              >
                 {label}
               </td>
               <td className="border border-black px-1 text-right whitespace-nowrap">
@@ -521,41 +526,67 @@ export function PoPrintSheet({
         {shipments && shipments.length > 0 && (
           <div className="mt-1">
             <b>Lịch giao hàng ({shipments.length} đợt):</b>
-            <table className="mt-0.5 w-full border-collapse text-[11.5px]">
+            {/*
+              MỖI DÒNG HÀNG MỘT HÀNG BẢNG, số lượng đứng CỘT RIÊNG (28/08 —
+              user chốt). Bản trước nhồi "tên: SL đơn vị" vào một ô rồi nối
+              bằng dấu chấm: NCC không dò được số theo cột, và cột số trên
+              chứng từ phải thẳng hàng để cộng bằng mắt. Ô Đợt/Ngày gộp dọc
+              (rowSpan) nên một chuyến vẫn đọc ra là một khối.
+            */}
+            <table className="mt-0.5 w-full border-collapse text-[11.5px] [print-color-adjust:exact]">
               <thead>
-                <tr>
-                  {['Đợt', 'Ngày giao', 'Hàng hoá — số lượng', `Tạm tính (${po.currency})`].map(
-                    (h, i) => (
-                      <th
-                        key={h}
-                        className={`border border-black px-1.5 py-0.5 font-bold ${i >= 3 ? 'text-right' : 'text-left'}`}
-                      >
-                        {h}
-                      </th>
-                    ),
-                  )}
+                {/* Cùng NỀN VÀNG với bảng hàng chính: hai bảng trên một tờ mà
+                    tiêu đề khác kiểu thì bảng dưới đọc như phần ghi chú.
+                    print-color-adjust để máy in không nuốt mất nền. */}
+                <tr className="bg-yellow-200">
+                  {[
+                    ['Đợt', 'left'],
+                    ['Ngày giao', 'left'],
+                    ['Tên hàng', 'left'],
+                    ['ĐVT', 'left'],
+                    ['Số lượng', 'right'],
+                    [`Tạm tính (${po.currency})`, 'right'],
+                  ].map(([h, align]) => (
+                    <th
+                      key={h}
+                      className={`border border-black px-1.5 py-0.5 font-bold ${align === 'right' ? 'text-right' : 'text-left'}`}
+                    >
+                      {h}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {shipments.map((sh) => {
-                  const amount = sh.lines.reduce((t, l) => t + (l.amount ?? 0), 0)
-                  return (
-                    <tr key={sh.seq}>
-                      <td className="border border-black px-1.5 py-0.5">{sh.seq}</td>
-                      <td className="border border-black px-1.5 py-0.5 whitespace-nowrap">
-                        {new Date(sh.expected_date).toLocaleDateString('vi-VN')}
-                      </td>
-                      <td className="border border-black px-1.5 py-0.5">
-                        {sh.lines
-                          .map((l) => `${l.name}: ${fmt(l.qty)} ${l.unit}`)
-                          .join(' · ')}
+                {shipments.flatMap((sh) =>
+                  sh.lines.map((l, li) => (
+                    <tr key={`${sh.seq}-${li}`}>
+                      {li === 0 && (
+                        <>
+                          <td
+                            rowSpan={sh.lines.length}
+                            className="border border-black px-1.5 py-0.5 align-top"
+                          >
+                            {sh.seq}
+                          </td>
+                          <td
+                            rowSpan={sh.lines.length}
+                            className="border border-black px-1.5 py-0.5 align-top whitespace-nowrap"
+                          >
+                            {new Date(sh.expected_date).toLocaleDateString('vi-VN')}
+                          </td>
+                        </>
+                      )}
+                      <td className="border border-black px-1.5 py-0.5">{l.name}</td>
+                      <td className="border border-black px-1.5 py-0.5">{l.unit}</td>
+                      <td className="border border-black px-1.5 py-0.5 text-right">
+                        {fmt(l.qty)}
                       </td>
                       <td className="border border-black px-1.5 py-0.5 text-right">
-                        {amount > 0 ? fmt(Math.round(amount)) : ''}
+                        {l.amount != null && l.amount > 0 ? fmt(Math.round(l.amount)) : ''}
                       </td>
                     </tr>
-                  )
-                })}
+                  )),
+                )}
               </tbody>
             </table>
             <div className="mt-0.5 text-[10.5px] italic">

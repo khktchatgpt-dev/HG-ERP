@@ -379,6 +379,7 @@ export function PoShipmentsCard({
   confirmedNote,
   canEdit,
   canAddMore,
+  emptyHint,
   busy,
   today,
   onArrived,
@@ -396,6 +397,8 @@ export function PoShipmentsCard({
   confirmedNote: string | null
   canEdit: boolean
   canAddMore: boolean
+  /** Đơn chưa có đợt nào thì nói bước kế tiếp — khác nhau theo trạng thái đơn. */
+  emptyHint?: string | null
   busy: boolean
   today: string
   onArrived: (id: string) => void
@@ -431,7 +434,9 @@ export function PoShipmentsCard({
       <div className="border-border/70 flex flex-wrap items-center gap-2 border-b px-3.5 py-2.5 text-[13px]">
         <Truck className="text-muted-foreground size-4" strokeWidth={1.8} />
         <b>Kế hoạch giao</b>
-        <span className="text-muted-foreground">{shipments.length} đợt</span>
+        <span className="text-muted-foreground">
+          {shipments.length > 0 ? `${shipments.length} đợt` : 'chưa chia đợt'}
+        </span>
         {canEdit && canAddMore && (
           <button
             onClick={onAdd}
@@ -445,6 +450,22 @@ export function PoShipmentsCard({
         <p className="text-muted-foreground border-border/70 border-b px-3.5 py-2 text-xs">
           “{confirmedNote}”
         </p>
+      )}
+      {/*
+        TRỐNG THÌ VẪN NÓI (29/08/2026). Trước đây trang chi tiết ẩn HẲN khối này
+        khi đơn chưa có đợt nào — người dùng mở đơn ra không thấy chữ "đợt giao"
+        ở đâu, không biết là "đơn giao một lần" hay là "tính năng không có".
+        Nay khối luôn hiện, và nói thẳng bước kế tiếp theo đúng trạng thái đơn.
+      */}
+      {shipments.length === 0 && (
+        <div className="px-3.5 py-3 text-[12.5px]">
+          <p className="text-muted-foreground">
+            Đơn chưa chia đợt — hiểu là <b>giao một lần</b> vào ngày hẹn giao của đơn.
+          </p>
+          {emptyHint && (
+            <p className="mt-1 text-[var(--muted-foreground)]">{emptyHint}</p>
+          )}
+        </div>
       )}
       <div className="divide-border/60 divide-y">
         {shipments.map((s) => {

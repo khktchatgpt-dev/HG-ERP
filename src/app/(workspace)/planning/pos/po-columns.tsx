@@ -128,7 +128,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
   cols.push({
     key: 'code',
     header: 'Số PO / NCC',
-    width: '235px',
+    width: '176px',
     sortValue: (p) => p.code,
     cell: (p) => {
       const extra = p.extra_lsx ?? []
@@ -194,7 +194,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       key: 'total',
       header: 'Giá trị',
       align: 'right',
-      width: '130px',
+      width: '108px',
       sortValue: (p) => p.total ?? 0,
       cell: (p) => (
         <span className="t-data font-medium">
@@ -207,7 +207,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       key: 'status',
       header: 'Trạng thái',
       sortValue: (p) => p.status,
-      width: '140px',
+      width: '112px',
       cell: (p) => (
         <div className="flex flex-col gap-0.5">
           <Badge tone={PO_STATUS_TONE[p.status]}>{PO_STATUS_LABEL[p.status]}</Badge>
@@ -247,7 +247,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       key: 'expected',
       header: 'Hẹn giao · Kịp SX?',
       sortValue: (p) => p.expected_at ?? '9999',
-      width: '175px',
+      width: '140px',
       cell: (p) => {
         const fit = assessPoFit(
           p,
@@ -299,7 +299,7 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
     {
       key: 'assignee',
       header: 'Phụ trách',
-      width: '130px',
+      width: '112px',
       sortValue: (p) => p.assignee_name ?? '',
       cell: (p) =>
         p.assignee_name ? (
@@ -364,23 +364,37 @@ export function PoFlatTable({
  * không sắp xếp / không phân trang: một lệnh có vài đơn, thêm bộ máy đó vào chỉ
  * tổ nặng mắt.
  */
+/**
+ * Cột ẨN ở màn hẹp thay vì bắt cuộn ngang (28/08). Bảng nằm TRONG thẻ lệnh nên
+ * bề ngang chỉ còn ~2/3 màn: giữ đủ 8 cột là sinh thanh cuộn ngang, mà cuộn
+ * ngang trong một thẻ thì gần như không ai kéo — cột "Phụ trách" coi như biến
+ * mất. Bỏ theo thứ tự ít-cần-trước: người phụ trách (đa số là chính mình) rồi
+ * tiến độ về kho (đã có badge tổng ở đầu thẻ).
+ */
+const HIDE_AT: Record<string, string> = {
+  assignee: 'hidden xl:table-cell',
+  received: 'hidden lg:table-cell',
+}
+
 export function PoRowsTable({ rows, columns }: { rows: Po[]; columns: Column<Po>[] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="t-body w-full min-w-[720px] table-fixed">
-        <colgroup>
-          {columns.map((col) => (
-            <col key={col.key} style={col.width ? { width: col.width } : undefined} />
-          ))}
-        </colgroup>
+      <table className="t-body w-full table-fixed">
+        {/*
+          KHÔNG dùng <colgroup>: <col> của cột đang ẩn vẫn giữ nguyên bề ngang
+          trong table-fixed, nên ẩn cột mà bảng vẫn rộng y như cũ và thanh cuộn
+          ngang không mất. Đặt bề ngang lên chính <th> thì cột ẩn biến mất khỏi
+          phép chia — table-fixed vốn lấy layout từ hàng đầu tiên.
+        */}
         <thead>
           <tr className="t-label text-muted-foreground text-left">
             {columns.map((col, i) => (
               <th
                 key={col.key}
+                style={col.width ? { width: col.width } : undefined}
                 className={`py-1.5 pr-2 font-medium ${i === 0 ? 'pl-4' : ''} ${
                   col.align === 'right' ? 'text-right' : ''
-                }`}
+                } ${HIDE_AT[col.key] ?? ''}`}
               >
                 {col.header}
               </th>
@@ -406,7 +420,7 @@ export function PoRowsTable({ rows, columns }: { rows: Po[]; columns: Column<Po>
                   key={col.key}
                   className={`py-2 pr-2 align-middle ${i === 0 ? 'pl-3.5' : ''} ${
                     col.align === 'right' ? 'text-right' : ''
-                  }`}
+                  } ${HIDE_AT[col.key] ?? ''}`}
                 >
                   {col.cell?.(p, 0)}
                 </td>

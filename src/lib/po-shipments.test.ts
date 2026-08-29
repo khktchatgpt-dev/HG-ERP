@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   allocateReceiptsToShipments,
   earliestExpectedDate,
+  mapDraftShipments,
   nextSeq,
   shipmentAmount,
   validateShipments,
@@ -247,5 +248,69 @@ describe('allocateReceiptsToShipments — chứng từ trước, suy diễn theo
     const input = new Map([['l1', 800]])
     allocateReceiptsToShipments([ship('s1', 1, 600)], input)
     expect(input.get('l1')).toBe(800)
+  })
+})
+
+describe('mapDraftShipments — đợt khai trong form (dòng chưa có id)', () => {
+  const ids = ['line-a', 'line-b']
+
+  it('đổi line_index sang po_line_id theo đúng thứ tự dòng', () => {
+    const r = mapDraftShipments(
+      [{ expected_date: '2026-09-01', lines: [{ line_index: 1, qty: 300 }] }],
+      ids,
+    )
+    expect(r).toEqual([
+      { expected_date: '2026-09-01', note: null, lines: [{ po_line_id: 'line-b', qty: 300 }] },
+    ])
+  })
+
+  it('index trỏ ra ngoài (dòng đã bị xoá) thì bỏ, không chặn lưu đơn', () => {
+    const r = mapDraftShipments(
+      [
+        {
+          expected_date: '2026-09-01',
+          lines: [
+            { line_index: 0, qty: 100 },
+            { line_index: 9, qty: 50 },
+          ],
+        },
+      ],
+      ids,
+    )
+    expect(r[0].lines).toEqual([{ po_line_id: 'line-a', qty: 100 }])
+  })
+
+  it('đợt rỗng sau khi lọc thì bỏ hẳn', () => {
+    expect(
+      mapDraftShipments(
+        [{ expected_date: '2026-09-01', lines: [{ line_index: 5, qty: 10 }] }],
+        ids,
+      ),
+    ).toEqual([])
+  })
+
+  it('SL ≤ 0 bị loại', () => {
+    expect(
+      mapDraftShipments(
+        [{ expected_date: '2026-09-01', lines: [{ line_index: 0, qty: 0 }] }],
+        ids,
+      ),
+    ).toEqual([])
+  })
+
+  it('cùng dòng khai hai lần trong một đợt thì cộng lại', () => {
+    const r = mapDraftShipments(
+      [
+        {
+          expected_date: '2026-09-01',
+          lines: [
+            { line_index: 0, qty: 100 },
+            { line_index: 0, qty: 50 },
+          ],
+        },
+      ],
+      ids,
+    )
+    expect(r[0].lines).toEqual([{ po_line_id: 'line-a', qty: 150 }])
   })
 })

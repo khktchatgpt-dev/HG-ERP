@@ -51,12 +51,6 @@ const STATUS_LABEL: Record<string, string> = {
   suspended: 'Tạm ngưng',
   terminated: 'Ngừng hợp tác',
 }
-const RATING_TONE: Record<string, 'green' | 'blue' | 'amber' | 'red'> = {
-  A: 'green',
-  B: 'blue',
-  C: 'amber',
-  D: 'red',
-}
 const GRADE_BG: Record<string, string> = {
   A: 'bg-green-600',
   B: 'bg-blue-600',
@@ -65,7 +59,15 @@ const GRADE_BG: Record<string, string> = {
 }
 const TYPES = ['Nguyên vật liệu', 'Bao bì', 'Máy móc', 'Dịch vụ', 'Logistics', 'Khác']
 
-type Tab = 'profile' | 'eval' | 'purchased' | 'prices' | 'certs' | 'history'
+/**
+ * BA TAB (28/08, gọn lại từ sáu).
+ *
+ * Sáu tab cũ tách "Vật tư đã mua / Bảng giá / Lịch sử mua" thành ba chỗ, mà cả
+ * ba trả lời CÙNG MỘT câu hỏi: mua gì của NCC này, giá bao nhiêu. Người mua
+ * phải bấm qua lại ba lần để ghép một bức tranh — nay xếp dọc trong một tab.
+ * Tab "Đánh giá" bỏ hẳn: 1/154 NCC có điểm, tức là không ai dùng.
+ */
+type Tab = 'profile' | 'buying' | 'certs'
 
 /** KPI giao hàng tự tính từ lịch sử (P5.2) — đếm đơn/dòng, không cộng SL chéo ĐVT. */
 export type SupplierKpis = {
@@ -86,7 +88,6 @@ export function SupplierDetail({
   materials,
   allGroups,
   groupIds,
-  kpis,
   canEdit,
 }: {
   supplier: Supplier
@@ -95,7 +96,6 @@ export function SupplierDetail({
   materials: MaterialOption[]
   allGroups: MaterialGroup[]
   groupIds: string[]
-  kpis: SupplierKpis
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -125,14 +125,6 @@ export function SupplierDetail({
   const groupLabels = groupIds
     .map((id) => allGroups.find((g) => g.id === id)?.label)
     .filter(Boolean) as string[]
-  const scores = [
-    supplier.quality_score,
-    supplier.service_score,
-    supplier.price_score,
-  ].filter((n): n is number => n != null)
-  const avgScore = scores.length
-    ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
-    : null
 
   async function toggleActive() {
     if (supplier.is_active) {
@@ -223,11 +215,8 @@ export function SupplierDetail({
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'profile', label: 'Hồ sơ' },
-    { id: 'eval', label: 'Đánh giá' },
-    { id: 'purchased', label: `Vật tư đã mua (${purchased.length})` },
-    { id: 'prices', label: 'Bảng giá' },
+    { id: 'buying', label: 'Mua hàng' },
     { id: 'certs', label: 'Chứng chỉ' },
-    { id: 'history', label: `Lịch sử mua (${pos.length})` },
   ]
 
   const S = supplier // ngắn gọn
@@ -291,7 +280,6 @@ export function SupplierDetail({
         <VendorSidebar
           s={S}
           groupLabels={groupLabels}
-          avgScore={avgScore}
           spend={stats.spend}
           openPo={stats.open}
           totalPo={stats.total}
@@ -523,12 +511,13 @@ export function SupplierDetail({
             </div>
           )}
 
-          {tab === 'eval' && (
-            <EvalTab supplier={S} pos={pos} kpis={kpis} canEdit={canEdit} />
-          )}
-
-          {tab === 'purchased' &&
-            (purchased.length === 0 ? (
+          {tab === 'buying' && (
+            <div className="flex flex-col gap-5">
+              <section>
+                <h2 className="t-label text-muted-foreground mb-2">
+                  Vật tư đã mua ({purchased.length})
+                </h2>
+                {purchased.length === 0 ? (
               <EmptyState
                 icon="▤"
                 title="Chưa mua vật tư nào"
@@ -584,11 +573,33 @@ export function SupplierDetail({
                   </tbody>
                 </table>
               </div>
-            ))}
+                )}
+              </section>
 
-          {tab === 'prices' && (
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-              <PricesPanel supplier={S} materials={materials} canEdit={canEdit} />
+              <section>
+                <h2 className="t-label text-muted-foreground mb-2">Bảng giá NCC chào</h2>
+                <div className="border-border rounded-lg border p-4">
+                  <PricesPanel supplier={S} materials={materials} canEdit={canEdit} />
+                </div>
+              </section>
+
+              <section>
+                <h2 className="t-label text-muted-foreground mb-2">
+                  Lịch sử đơn đặt ({pos.length})
+                </h2>
+                <DataTable<PoRow>
+                  rows={pos}
+                  columns={historyCols}
+                  storageKey="supplier-po-history"
+                  emptyState={
+                    <EmptyState
+                      icon="◫"
+                      title="Chưa có đơn đặt nào"
+                      description="NCC này chưa từng nhận đơn đặt vật tư."
+                    />
+                  }
+                />
+              </section>
             </div>
           )}
 
@@ -598,20 +609,6 @@ export function SupplierDetail({
             </div>
           )}
 
-          {tab === 'history' && (
-            <DataTable<PoRow>
-              rows={pos}
-              columns={historyCols}
-              storageKey="supplier-po-history"
-              emptyState={
-                <EmptyState
-                  icon="◫"
-                  title="Chưa có đơn đặt nào"
-                  description="NCC này chưa từng nhận đơn đặt vật tư."
-                />
-              }
-            />
-          )}
         </div>
       </div>
     </div>
@@ -623,7 +620,6 @@ export function SupplierDetail({
 function VendorSidebar({
   s,
   groupLabels,
-  avgScore,
   spend,
   openPo,
   totalPo,
@@ -631,7 +627,6 @@ function VendorSidebar({
 }: {
   s: Supplier
   groupLabels: string[]
-  avgScore: number | null
   spend: number
   openPo: number
   totalPo: number
@@ -640,41 +635,13 @@ function VendorSidebar({
   const stTone = ({ active: 'green', suspended: 'amber', terminated: 'gray' } as const)[
     s.status as 'active' | 'suspended' | 'terminated'
   ]
-  const initials = s.name.trim().slice(0, 2).toUpperCase()
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-4">
       <div className="rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-violet-600 text-lg font-bold text-white">
-          {initials}
-        </div>
         <div className="mt-2.5 text-base font-bold">{s.name}</div>
         <div className="mt-0.5 font-mono text-[11px] text-zinc-400">
           {s.code ?? '—'}
           {s.tax_no ? ` · MST ${s.tax_no}` : ''}
-        </div>
-        <div className="mt-3 flex items-center justify-center gap-2">
-          {s.rating ? (
-            <span
-              className={`grid h-8 w-8 place-items-center rounded-lg text-base font-bold text-white ${GRADE_BG[s.rating] ?? 'bg-zinc-500'}`}
-            >
-              {s.rating}
-            </span>
-          ) : (
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-zinc-200 text-sm font-bold text-zinc-400 dark:bg-zinc-800">
-              —
-            </span>
-          )}
-          <div className="text-left">
-            <div className="text-sm leading-none text-amber-500">
-              {'★'.repeat(Math.round(avgScore ?? 0))}
-              <span className="text-zinc-300 dark:text-zinc-600">
-                {'★'.repeat(5 - Math.round(avgScore ?? 0))}
-              </span>
-            </div>
-            <div className="mt-1 text-xs text-zinc-400">
-              {avgScore != null ? `Điểm TB ${avgScore}/5` : 'Chưa đánh giá'}
-            </div>
-          </div>
         </div>
         <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           {s.type && <Badge tone="blue">{s.type}</Badge>}
@@ -696,12 +663,17 @@ function VendorSidebar({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200 dark:border-zinc-800 dark:bg-zinc-800">
-        <Mini label="Tổng chi" value={money(spend)} />
-        <Mini label="PO đang mở" value={openPo} />
-        <Mini label="Tổng PO" value={totalPo} />
-        <Mini label="Mua gần nhất" value={lastAt ? date(lastAt) : '—'} small />
-      </div>
+      {/* Bốn ô này chỉ có nghĩa khi NCC đã từng nhận đơn. Chưa mua lần nào mà
+          vẫn bày "0 · 0 · 0 · —" thì bốn ô số 0 là thứ đầu tiên đập vào mắt
+          khi mở hồ sơ — nói rằng ở đây không có gì, bằng cách chiếm chỗ. */}
+      {totalPo > 0 && (
+        <div className="border-border bg-border grid grid-cols-2 gap-px overflow-hidden rounded-xl border">
+          <Mini label="Tổng chi" value={money(spend)} />
+          <Mini label="PO đang mở" value={openPo} />
+          <Mini label="Tổng PO" value={totalPo} />
+          <Mini label="Mua gần nhất" value={lastAt ? date(lastAt) : '—'} small />
+        </div>
+      )}
 
       {(s.phone || s.email) && (
         <SideCard title="Liên hệ mua hàng">
@@ -939,253 +911,3 @@ function EditableSection({
 
 // ── Tab Đánh giá ─────────────────────────────────────────────────────────────
 
-function Stars({
-  value,
-  onChange,
-  disabled,
-}: {
-  value: number
-  onChange: (n: number) => void
-  disabled?: boolean
-}) {
-  return (
-    <div className="flex gap-0.5 text-lg leading-none">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          disabled={disabled}
-          onClick={() => onChange(n === value ? 0 : n)}
-          className={
-            (n <= value ? 'text-amber-500' : 'text-zinc-300 dark:text-zinc-600') +
-            (disabled ? '' : ' hover:text-amber-400')
-          }
-          aria-label={`${n} sao`}
-        >
-          ★
-        </button>
-      ))}
-      <span className="ml-1 text-xs text-zinc-400">
-        {value ? `${value}/5` : 'chưa chấm'}
-      </span>
-    </div>
-  )
-}
-
-function EvalTab({
-  supplier,
-  pos,
-  kpis,
-  canEdit,
-}: {
-  supplier: Supplier
-  pos: PoRow[]
-  kpis: SupplierKpis
-  canEdit: boolean
-}) {
-  const router = useRouter()
-  const toast = useToast()
-  const [busy, setBusy] = useState(false)
-  const [q, setQ] = useState(supplier.quality_score ?? 0)
-  const [s, setS] = useState(supplier.service_score ?? 0)
-  const [p, setP] = useState(supplier.price_score ?? 0)
-  const [complaint, setComplaint] = useState(String(supplier.complaint_count ?? 0))
-  const [rating, setRating] = useState(supplier.rating ?? '')
-
-  const kpi = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    const active = pos.filter((x) => x.status !== 'cancelled')
-    const received = active.filter((x) => x.status === 'received').length
-    const late = pos.filter(
-      (x) =>
-        x.expected_at &&
-        x.expected_at.slice(0, 10) < today &&
-        !['received', 'cancelled'].includes(x.status),
-    ).length
-    const rate = active.length ? Math.round((received / active.length) * 100) : 0
-    return { total: active.length, received, late, rate }
-  }, [pos])
-
-  async function save() {
-    setBusy(true)
-    try {
-      await api(`/api/dept/supply/suppliers/${supplier.id}`, {
-        method: 'PATCH',
-        body: {
-          quality_score: q || null,
-          service_score: s || null,
-          price_score: p || null,
-          complaint_count: Number(complaint) || 0,
-          rating: rating || null,
-        },
-      })
-      toast.success('Đã lưu đánh giá', supplier.name)
-      router.refresh()
-    } catch (e) {
-      toast.error('Lưu thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
-
-  return (
-    <div className="flex flex-col gap-5">
-      <section>
-        <h3 className="mb-2 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-          Giao hàng · tự tính từ PO
-        </h3>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi label="Tổng PO" value={kpi.total} />
-          <Kpi label="Đã hoàn tất" value={kpi.received} tone="green" />
-          <Kpi label="Đang trễ hẹn" value={kpi.late} tone={kpi.late ? 'red' : 'gray'} />
-          <Kpi label="Tỷ lệ hoàn tất" value={`${kpi.rate}%`} tone="blue" />
-        </div>
-        {/* P5.2 — KPI TỰ TÍNH từ sổ nhận hàng (0080/0152/0154): đếm đơn/dòng,
-            không cộng số lượng chéo ĐVT. Mẫu số hiện cạnh từng con số để người
-            đọc tự cân "94% của 3 đơn" khác "94% của 300 đơn". */}
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Kpi
-            label="Giao đúng hẹn (ngày nhận thật)"
-            value={
-              kpis.po_with_expected > 0
-                ? `${Math.round((kpis.po_on_time / kpis.po_with_expected) * 100)}% / ${kpis.po_with_expected} đơn`
-                : 'chưa đủ dữ liệu'
-            }
-            tone={
-              kpis.po_with_expected > 0 && kpis.po_on_time / kpis.po_with_expected < 0.8
-                ? 'red'
-                : 'blue'
-            }
-          />
-          <Kpi
-            label="Dòng có hàng QC loại"
-            value={
-              kpis.lines_total > 0
-                ? `${kpis.lines_rejected} / ${kpis.lines_total} dòng`
-                : '—'
-            }
-            tone={kpis.lines_rejected > 0 ? 'red' : 'gray'}
-          />
-          <Kpi
-            label="Đơn phải trả hàng"
-            value={kpis.po_returned}
-            tone={kpis.po_returned > 0 ? 'red' : 'gray'}
-          />
-          <Kpi
-            label="Dòng NCC bỏ (chốt thiếu)"
-            value={kpis.lines_closed_short}
-            tone={kpis.lines_closed_short > 0 ? 'red' : 'gray'}
-          />
-        </div>
-        <p className="mt-2 text-xs text-zinc-400">
-          “Đang trễ hẹn” = PO quá hẹn giao mà chưa về đủ. “Giao đúng hẹn” tính trên đơn ĐÃ
-          về đủ có hẹn giao: ngày nhận cuối theo sổ kho ≤ hẹn. Các số tự tính từ phiếu
-          nhập/trả/chốt thiếu — không sửa tay được.
-        </p>
-      </section>
-
-      <section>
-        <h3 className="mb-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-          Chấm điểm · người mua đánh giá
-        </h3>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <ScoreRow label="Chất lượng">
-            <Stars value={q} onChange={setQ} disabled={!canEdit} />
-          </ScoreRow>
-          <ScoreRow label="Dịch vụ">
-            <Stars value={s} onChange={setS} disabled={!canEdit} />
-          </ScoreRow>
-          <ScoreRow label="Giá">
-            <Stars value={p} onChange={setP} disabled={!canEdit} />
-          </ScoreRow>
-          <ScoreRow label="Số lần khiếu nại">
-            <input
-              type="number"
-              min={0}
-              value={complaint}
-              onChange={(e) => setComplaint(e.target.value)}
-              disabled={!canEdit}
-              className={`${inp} w-24`}
-            />
-          </ScoreRow>
-          <ScoreRow label="Xếp hạng">
-            {canEdit ? (
-              <select
-                value={rating}
-                onChange={(e) => setRating(e.target.value)}
-                className={`${inp} w-24`}
-              >
-                <option value="">—</option>
-                {['A', 'B', 'C', 'D'].map((r) => (
-                  <option key={r} value={r}>
-                    {r}
-                  </option>
-                ))}
-              </select>
-            ) : rating ? (
-              <Badge tone={RATING_TONE[rating] ?? 'gray'}>Hạng {rating}</Badge>
-            ) : (
-              <span className="text-sm text-zinc-400">Chưa xếp hạng</span>
-            )}
-          </ScoreRow>
-        </div>
-
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-xs text-zinc-400">
-            {supplier.evaluated_at
-              ? `Đánh giá gần nhất: ${date(supplier.evaluated_at)}`
-              : 'Chưa có đánh giá.'}
-          </span>
-          {canEdit && (
-            <button
-              onClick={() => void save()}
-              disabled={busy}
-              className="rounded-md bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-            >
-              {busy ? 'Đang lưu…' : 'Lưu đánh giá'}
-            </button>
-          )}
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function Kpi({
-  label,
-  value,
-  tone = 'default',
-}: {
-  label: string
-  value: number | string
-  tone?: 'default' | 'green' | 'red' | 'blue' | 'gray'
-}) {
-  const color =
-    tone === 'green'
-      ? 'text-green-600 dark:text-green-400'
-      : tone === 'red'
-        ? 'text-red-600 dark:text-red-400'
-        : tone === 'blue'
-          ? 'text-blue-600 dark:text-blue-400'
-          : ''
-  return (
-    <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
-      <div className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
-        {label}
-      </div>
-      <div className={`mt-1 text-2xl font-semibold tabular-nums ${color}`}>{value}</div>
-    </div>
-  )
-}
-
-function ScoreRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-3 py-2.5 dark:border-zinc-800">
-      <span className="text-sm text-zinc-600 dark:text-zinc-300">{label}</span>
-      {children}
-    </div>
-  )
-}

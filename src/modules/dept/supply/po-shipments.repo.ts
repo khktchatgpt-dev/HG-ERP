@@ -121,6 +121,16 @@ export const poShipmentsRepo = {
     if (e2) throw new Error(e2.message)
   },
 
+  /**
+   * Xoá sạch đợt của một đơn — dùng khi SỬA ĐƠN NHÁP: replaceLines xoá rồi
+   * chèn lại dòng nên po_line_id đổi hết, đợt cũ trỏ vào dòng đã biến mất.
+   * Ghi lại cả bộ là cách duy nhất giữ hai bảng khớp nhau.
+   */
+  async deleteByPo(poId: string): Promise<void> {
+    const { error } = await db().from('supply_po_shipments').delete().eq('po_id', poId)
+    if (error) throw new Error(error.message)
+  },
+
   async patch(
     id: string,
     patch: Partial<Pick<PoShipment, 'expected_date' | 'status' | 'note'>>,

@@ -160,9 +160,18 @@ function GroupCard({
               )}
             </label>
           )}
+          {/* Kể ĐỦ mọi loại tiền: nhóm có cả VND lẫn USD mà chỉ in một con số
+              thì người xem đọc thành tổng của cả nhóm (28/08). */}
           <span className="t-data ml-1 font-semibold">
             {fmtMoney(g.total)}{' '}
             <span className="text-muted-foreground">{g.currency}</span>
+            {g.otherTotals.map((t) => (
+              <span key={t.currency}>
+                <span className="text-muted-foreground font-normal"> · </span>
+                {fmtMoney(t.total)}{' '}
+                <span className="text-muted-foreground">{t.currency}</span>
+              </span>
+            ))}
           </span>
           {canEdit && !standalone && (
             <Link

@@ -16,6 +16,19 @@
 
 import { parseInnerDims } from './dims'
 
+/**
+ * m³/SP + BẢO HÀNH — cần migration `0178_material_m3_warranty.sql`.
+ *
+ * ĐÃ APPLY trên project `pcbfvrapknzykhtntuwg` lúc 29/08/2026 (qua MCP
+ * `apply_migration`, xác nhận bằng truy vấn thật hai cột trả 200).
+ *
+ * Cờ này GIỮ LẠI làm phanh cho môi trường khác (bản clone/staging chưa chạy
+ * 0178): để `false` thì hai trường không được ghi, phần còn lại của hộp xác
+ * nhận vẫn chạy. Đi kèm là hằng `COLS` ở `warehouse.repo.ts` — bật cờ mà quên
+ * cột thì đọc luôn ra null, tắt cột mà quên cờ thì mọi truy vấn danh mục hỏng.
+ */
+export const MATERIAL_0178_APPLIED = true
+
 /** Trường mô tả trên dòng đơn có thể chảy về danh mục. */
 export type CatalogLineInfo = {
   material_id?: string | null
@@ -24,6 +37,20 @@ export type CatalogLineInfo = {
   finish?: string | null
   open_style?: string | null
   pcs_per_ctn?: number | null
+  /*
+   * BAREM + ĐÓNG GÓI (29/08/2026) — trước cố ý để ngoài đường này với lý do
+   * "số nhân thẳng ra tiền, giữ nút bấm tay". Thực tế nút bấm tay chỉ có ở
+   * kg/m và kg/đơn vị, nằm bé xíu trên ô, và đóng gói thì KHÔNG có đường nào:
+   * người mua gõ "1 bì = 500 con" ở mọi đơn, mãi mãi. Nay tất cả đi CHUNG một
+   * hộp xác nhận — vẫn fill-empty-only nên vẫn không đè ai.
+   */
+  kg_per_m?: number | null
+  kg_per_unit?: number | null
+  pack_size?: number | null
+  pack_unit?: string | null
+  /** m³/SP (mẫu gỗ) và Bảo hành (mẫu MRO) — danh mục có cột từ 0178. */
+  m3_per_unit?: number | null
+  warranty_text?: string | null
 }
 
 /** Trường tương ứng của bản ghi danh mục — null/'' coi là TRỐNG. */
@@ -33,6 +60,12 @@ export type CatalogFields = {
   finish: string | null
   open_style: string | null
   pcs_per_ctn: number | null
+  kg_per_m: number | null
+  kg_per_unit: number | null
+  pack_size: number | null
+  pack_unit: string | null
+  m3_per_unit: number | null
+  warranty_text: string | null
 }
 
 const clean = (v: string | null | undefined, max: number): string | null => {
@@ -63,7 +96,48 @@ export function catalogFillPatch(
   if (Number.isFinite(pcs) && pcs > 0 && material.pcs_per_ctn == null) {
     patch.pcs_per_ctn = pcs
   }
+  // Barem + đóng gói: cùng luật fill-empty-only với mô tả.
+  const kgm = Number(line.kg_per_m)
+  if (Number.isFinite(kgm) && kgm > 0 && material.kg_per_m == null) patch.kg_per_m = kgm
+  const kgu = Number(line.kg_per_unit)
+  if (Number.isFinite(kgu) && kgu > 0 && material.kg_per_unit == null) {
+    patch.kg_per_unit = kgu
+  }
+  const packSize = Number(line.pack_size)
+  if (Number.isFinite(packSize) && packSize > 0 && material.pack_size == null) {
+    patch.pack_size = packSize
+  }
+  const packUnit = clean(line.pack_unit, 50)
+  if (packUnit && empty(material.pack_unit)) patch.pack_unit = packUnit
+  if (MATERIAL_0178_APPLIED) {
+    const m3 = Number(line.m3_per_unit)
+    if (Number.isFinite(m3) && m3 > 0 && material.m3_per_unit == null) {
+      patch.m3_per_unit = m3
+    }
+    const warranty = clean(line.warranty_text, 100)
+    if (warranty && empty(material.warranty_text)) patch.warranty_text = warranty
+  }
   return Object.keys(patch).length > 0 ? patch : null
+}
+
+/**
+ * GIÁ MUA GẦN NHẤT — luật KHÁC HẲN nhóm trên: ĐÈ, không phải điền ô trống.
+ * "Giá gần nhất" mà chỉ ghi khi ô đang trống thì đứng yên mãi ở lần mua đầu.
+ *
+ * Trả null khi không có gì để hỏi: đơn ngoại tệ (cột giá ngầm là VND — ghi
+ * 700.21 vào đó là sai bậc tiền), không có giá, hoặc giá y hệt bản đang có.
+ */
+export function priceChange(
+  material: { last_purchase_price: number | null },
+  currency: string,
+  unitPrice: number | null | undefined,
+): { before: number | null; after: number } | null {
+  if (currency !== 'VND') return null
+  const after = Number(unitPrice)
+  if (!Number.isFinite(after) || after <= 0) return null
+  const before = material.last_purchase_price ?? null
+  if (before != null && Number(before) === after) return null
+  return { before, after }
 }
 
 /**
@@ -87,6 +161,12 @@ export function linesByMaterial(lines: CatalogLineInfo[]): Map<string, CatalogLi
       finish: cur.finish?.trim() ? cur.finish : l.finish,
       open_style: cur.open_style?.trim() ? cur.open_style : l.open_style,
       pcs_per_ctn: cur.pcs_per_ctn ?? l.pcs_per_ctn,
+      kg_per_m: cur.kg_per_m ?? l.kg_per_m,
+      kg_per_unit: cur.kg_per_unit ?? l.kg_per_unit,
+      pack_size: cur.pack_size ?? l.pack_size,
+      pack_unit: cur.pack_unit?.trim() ? cur.pack_unit : l.pack_unit,
+      m3_per_unit: cur.m3_per_unit ?? l.m3_per_unit,
+      warranty_text: cur.warranty_text?.trim() ? cur.warranty_text : l.warranty_text,
       material_id: l.material_id,
     })
   }
@@ -98,20 +178,41 @@ export function linesByMaterial(lines: CatalogLineInfo[]): Map<string, CatalogLi
  * (user chốt 13/08/2026: KHÔNG tự ghi ngầm; người soạn thấy danh sách và bấm
  * "Cập nhật danh mục" mới ghi).
  */
+export type SuggestField = {
+  field: keyof CatalogFields | 'last_purchase_price'
+  label: string
+  value: string | number
+  /**
+   * ĐÈ giá trị đang có (chỉ `last_purchase_price`). Thiếu cờ này = fill-empty:
+   * hộp xác nhận và endpoint enrich đọc CÙNG một cờ, nên không có đường nào để
+   * lời hứa trên màn hình khác việc server làm.
+   */
+  overwrite?: true
+  /** Giá trị danh mục ĐANG có — chỉ dùng cho trường đè, để hộp nói "8.200 → 8.500". */
+  before?: string | number | null
+}
+
 export type CatalogSuggestion = {
   material_id: string
   code: string
   name: string
-  fields: { field: keyof CatalogFields; label: string; value: string | number }[]
+  fields: SuggestField[]
 }
 
 /** Nhãn hiện trong hộp xác nhận — khớp MATERIAL_FIELD_LABELS của form khai. */
-const SUGGEST_LABELS: Record<keyof CatalogFields, string> = {
+const SUGGEST_LABELS: Record<keyof CatalogFields | 'last_purchase_price', string> = {
   spec: 'Quy cách',
   material_grade: 'Vật liệu / màu',
   finish: 'Màu / bề mặt',
   open_style: 'Cách mở thùng',
   pcs_per_ctn: 'SP mỗi thùng',
+  kg_per_m: 'kg / m',
+  kg_per_unit: 'kg / đơn vị',
+  pack_size: 'Quy cách đóng gói',
+  pack_unit: 'ĐVT đóng gói',
+  m3_per_unit: 'm³ / đơn vị',
+  warranty_text: 'Bảo hành',
+  last_purchase_price: 'Giá mua gần nhất',
 }
 
 /**
@@ -121,23 +222,49 @@ const SUGGEST_LABELS: Record<keyof CatalogFields, string> = {
  */
 export function buildCatalogSuggestions(
   lines: CatalogLineInfo[],
-  materials: (CatalogFields & { id: string; code: string; name: string })[],
+  materials: (CatalogFields & {
+    id: string
+    code: string
+    name: string
+    last_purchase_price?: number | null
+  })[],
+  /**
+   * Tiền tệ của đơn + giá từng dòng — có thì hộp xác nhận hỏi luôn phần GIÁ
+   * (user chốt 29/08). Bỏ trống thì hộp chỉ có phần mô tả như trước.
+   */
+  price?: { currency: string; byMaterial: Map<string, number> },
 ): CatalogSuggestion[] {
   const byId = new Map(materials.map((m) => [m.id, m]))
   const out: CatalogSuggestion[] = []
   for (const [materialId, line] of linesByMaterial(lines)) {
     const m = byId.get(materialId)
     if (!m) continue
-    const patch = catalogFillPatch(m, line)
-    if (!patch) continue
-    out.push({
-      material_id: materialId,
-      code: m.code,
-      name: m.name,
-      fields: (Object.entries(patch) as [keyof CatalogFields, string | number][]).map(
-        ([field, value]) => ({ field, label: SUGGEST_LABELS[field], value }),
-      ),
-    })
+    const fields: SuggestField[] = (
+      Object.entries(catalogFillPatch(m, line) ?? {}) as [
+        keyof CatalogFields,
+        string | number,
+      ][]
+    ).map(([field, value]) => ({ field, label: SUGGEST_LABELS[field], value }))
+
+    if (price) {
+      const chg = priceChange(
+        { last_purchase_price: m.last_purchase_price ?? null },
+        price.currency,
+        price.byMaterial.get(materialId),
+      )
+      if (chg) {
+        fields.push({
+          field: 'last_purchase_price',
+          label: SUGGEST_LABELS.last_purchase_price,
+          value: chg.after,
+          overwrite: true,
+          before: chg.before,
+        })
+      }
+    }
+
+    if (fields.length === 0) continue
+    out.push({ material_id: materialId, code: m.code, name: m.name, fields })
   }
   return out
 }

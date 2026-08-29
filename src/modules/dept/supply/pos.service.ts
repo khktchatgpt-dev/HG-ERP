@@ -15,6 +15,7 @@ import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import {
   buildCatalogSuggestions,
+  lastPriceUpdates,
   linesByMaterial,
   specFromLine,
   type CatalogSuggestion,
@@ -25,6 +26,7 @@ import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import {
   earliestExpectedDate,
+  mapDraftShipments,
   nextSeq,
   validateShipments,
   type ShipmentInput,
@@ -52,6 +54,12 @@ type PoInput = {
   signer_role?: string | null
   note?: string | null
   lines: PoLineInput[]
+  /** Kế hoạch chia đợt khai ngay lúc soạn (28/08) — trỏ dòng theo line_index. */
+  shipments?: {
+    expected_date: string
+    note?: string | null
+    lines: { line_index: number; qty: number }[]
+  }[]
 }
 
 /**
@@ -76,6 +84,15 @@ function catalogLines(lines: PoLineInput[]) {
     finish: l.finish ?? null,
     open_style: l.open_style ?? null,
     pcs_per_ctn: l.pcs_per_ctn ?? null,
+    // Barem + đóng gói (29/08): gõ trên dòng thì cũng chảy về danh mục qua
+    // CHÍNH hộp xác nhận, thay vì mỗi thứ một đường như trước.
+    kg_per_m: l.weight_per_m ?? null,
+    kg_per_unit: l.weight_per_unit ?? null,
+    pack_size: l.pack_size ?? null,
+    pack_unit: l.pack_unit ?? null,
+    // m³/SP + Bảo hành — danh mục có cột từ 0178.
+    m3_per_unit: l.m3_per_unit ?? null,
+    warranty_text: l.warranty_text ?? null,
   }))
 }
 
@@ -169,6 +186,56 @@ function withTemplateDefaults(input: PoInput, template: PoTemplate) {
   }
 }
 
+/**
+ * GHI LẠI TOÀN BỘ ĐỢT GIAO của đơn từ kế hoạch khai trong form (28/08).
+ *
+ * Ghi ĐÈ cả bộ chứ không diff: sửa đơn nháp đi qua replaceLines (xoá rồi chèn)
+ * nên po_line_id đổi hết — giữ đợt cũ là giữ con trỏ tới dòng đã biến mất.
+ * Chạy SAU khi dòng đã nằm trong DB, và đọc lại chính bộ dòng ấy để ánh xạ.
+ *
+ * Đợt khai lúc soạn mang trạng thái 'planned' — bước "NCC xác nhận" sau đó vẫn
+ * là nơi chốt cam kết thật, chỉ khác là nay nó SỬA một kế hoạch có sẵn thay vì
+ * khai từ đầu.
+ */
+async function saveDraftShipments(
+  poId: string,
+  drafts: NonNullable<PoInput['shipments']>,
+  userId: string,
+): Promise<string | null> {
+  await poShipmentsRepo.deleteByPo(poId)
+  if (drafts.length === 0) return null
+  const lines = await posRepo.listLines(poId)
+  const mapped = mapDraftShipments(
+    drafts,
+    lines.map((l) => l.id),
+  )
+  if (mapped.length === 0) return null
+  const v = validateShipments(
+    mapped,
+    lines.map((l) => ({
+      id: l.id,
+      qty_ordered: l.qty_ordered,
+      name: l.material_name ?? l.line_name ?? '?',
+    })),
+  )
+  if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+  await poShipmentsRepo.insertMany(
+    poId,
+    mapped.map((sh, i) => ({
+      seq: i + 1,
+      expected_date: sh.expected_date,
+      method: null,
+      place: null,
+      note: sh.note ?? null,
+      lines: sh.lines,
+    })),
+    userId,
+  )
+  return earliestExpectedDate(
+    mapped.map((sh) => ({ expected_date: sh.expected_date, status: 'planned' })),
+  )
+}
+
 export const posService = {
   /** Đọc: mọi NV đã đăng nhập (Kho nhận hàng, Kế toán xem phải trả…). */
   async list(_user: User, opts: Parameters<typeof posRepo.list>[0]) {
@@ -181,14 +248,26 @@ export const posService = {
    * này kèm response, form hiện hộp XÁC NHẬN — user chốt "không tự ghi ngầm";
    * bấm đồng ý mới ghi (qua /materials/enrich, nơi kiểm fill-empty lần nữa).
    */
-  async catalogSuggestions(lines: PoLineInput[]): Promise<CatalogSuggestion[]> {
+  async catalogSuggestions(
+    lines: PoLineInput[],
+    /**
+     * Tiền tệ đơn — có thì hộp hỏi luôn phần GIÁ MUA GẦN NHẤT (user chốt
+     * 29/08: giá cũng phải xác nhận, không tự đè). Trước đây giá do handler
+     * `po.ordered` tự ghi lúc gửi NCC, không hỏi ai.
+     */
+    currency?: string,
+  ): Promise<CatalogSuggestion[]> {
     const wanted = linesByMaterial(catalogLines(lines))
     const materials = []
     for (const id of wanted.keys()) {
       const m = await materialsRepo.findById(id)
       if (m) materials.push(m)
     }
-    return buildCatalogSuggestions(catalogLines(lines), materials)
+    return buildCatalogSuggestions(
+      catalogLines(lines),
+      materials,
+      currency ? { currency, byMaterial: lastPriceUpdates(currency, lines) } : undefined,
+    )
   },
 
   /**
@@ -282,6 +361,17 @@ export const posService = {
       withDerived(template, input.lines),
     )
     if (extraLsxIds.length > 0) await posRepo.replaceExtraLsx(po.id, extraLsxIds)
+    /*
+     * KẾ HOẠCH CHIA ĐỢT khai ngay trong form (28/08). Ngày sớm nhất của bộ đợt
+     * ghi đè "Hẹn giao" của đơn — có lịch đợt thì đó mới là ngày thật; để hai
+     * chỗ nói hai ngày khác nhau là mời người đọc chọn nhầm.
+     */
+    if (input.shipments && input.shipments.length > 0) {
+      const minDate = await saveDraftShipments(po.id, input.shipments, user.id)
+      if (minDate && minDate !== po.expected_at) {
+        return posRepo.patch(po.id, { expected_at: minDate })
+      }
+    }
     return po
   },
 
@@ -436,6 +526,18 @@ export const posService = {
     })
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
+    /*
+     * Đợt giao ghi lại CẢ BỘ mỗi lần sửa — replaceLines vừa xoá/chèn lại dòng
+     * nên po_line_id đổi hết, đợt cũ trỏ vào dòng không còn tồn tại. Mảng RỖNG
+     * nghĩa là người dùng bỏ chia đợt, cũng phải dọn sạch — nên điều kiện chỉ
+     * hỏi "có gửi trường này không", không hỏi độ dài như lúc tạo.
+     */
+    if (input.shipments) {
+      const minDate = await saveDraftShipments(id, input.shipments, user.id)
+      if (minDate && minDate !== po.expected_at) {
+        return posRepo.patch(id, { expected_at: minDate })
+      }
+    }
     return po
   },
 
@@ -580,6 +682,18 @@ export const posService = {
       throw BadRequest('Chỉ xác nhận được đơn ĐÃ GỬI NCC (đang ở "Đã gửi NCC")')
     }
 
+    /*
+     * GHI ĐÈ CẢ BỘ, không nối thêm (sửa 29/08/2026).
+     *
+     * Từ 28/08 người soạn chia đợt được ngay trong form — lịch ĐỀ NGHỊ in lên
+     * phiếu gửi NCC. Bước này ghi lại CAM KẾT của NCC, tức bản chốt thay cho đề
+     * nghị đó. Code cũ `insertMany` thẳng và đánh `seq: i + 1`: đơn đã có 2 đợt
+     * đề nghị mà NCC xác nhận 2 đợt là thành BỐN bản ghi, seq trùng 1-2-1-2, và
+     * `validateShipments` gọi không kèm `existing` nên tổng vượt SL đặt cũng
+     * không ai chặn. Con số đó chảy thẳng vào "Hàng sắp về" và sổ nhận hàng.
+     *
+     * Xoá trước rồi chèn — cùng cách `saveDraftShipments` làm khi sửa đơn nháp.
+     */
     if (input.shipments.length > 0) {
       const lines = await posRepo.listLines(id)
       const v = validateShipments(
@@ -591,6 +705,7 @@ export const posService = {
         })),
       )
       if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+      await poShipmentsRepo.deleteByPo(id)
       await poShipmentsRepo.insertMany(
         id,
         input.shipments.map((s, i) => ({
