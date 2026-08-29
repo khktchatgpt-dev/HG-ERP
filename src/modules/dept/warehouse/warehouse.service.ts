@@ -70,6 +70,10 @@ type CreateInput = {
   open_style?: string | null
   pcs_per_ctn?: number | null
   finish?: string | null
+  /** m³ mỗi đơn vị đặt (0178) — mẫu đơn gỗ. */
+  m3_per_unit?: number | null
+  /** Bảo hành dạng chữ (0178) — mẫu đơn MRO. */
+  warranty_text?: string | null
   note?: string | null
   /** Khai nhanh từ form đơn đặt gửi true — chờ Kho rà lại (0136). */
   needs_review?: boolean
@@ -123,6 +127,10 @@ const PURCHASING_EDITABLE_FIELDS: ReadonlySet<string> = new Set([
   // Dung sai nhận vượt (0156): người đàm phán với NCC biết hàng nào hay lệch
   // cân — Cung ứng đặt được, Kho (chuyên tồn trữ) đương nhiên cũng sửa được.
   'over_tolerance_pct',
+  // m³/SP + Bảo hành (0178) — cùng bản chất với barem: người mua đọc từ NCC rồi
+  // ghi lại, nên Cung ứng phải sửa được, không thì hộp xác nhận ném Forbidden.
+  'm3_per_unit',
+  'warranty_text',
 ])
 
 /**
@@ -275,6 +283,9 @@ export const materialsService = {
       open_style: input.open_style?.trim() || null,
       pcs_per_ctn: input.pcs_per_ctn ?? null,
       finish: input.finish?.trim() || null,
+      // m³/SP + Bảo hành (0178) — chảy về từ hộp xác nhận sau khi lưu đơn.
+      m3_per_unit: input.m3_per_unit ?? null,
+      warranty_text: input.warranty_text?.trim() || null,
       note: input.note ?? null,
       // Khai nhanh từ form đơn đặt gửi cờ "chờ Kho rà" (0136); ghi vết người
       // khai để Kho biết hỏi ai khi tên/quy cách không rõ. Kèm danh sách TRƯỜNG
@@ -324,7 +335,10 @@ export const materialsService = {
      * Đường ghi (0177) — mặc định 'manual' (màn Kho). Hộp xác nhận sau khi lưu
      * đơn truyền 'po_enrich' + mã đơn để sổ vết kể được "vì đơn nào".
      */
-    meta?: { source?: 'manual' | 'po_enrich' | 'import' | 'system'; source_ref?: string | null },
+    meta?: {
+      source?: 'manual' | 'po_enrich' | 'import' | 'system'
+      source_ref?: string | null
+    },
   ): Promise<Material> {
     // Kho (full) hoặc Cung ứng (chỉ nhóm trường nền + mua hàng — enforce bên dưới).
     const full = await canAction(user, 'warehouse.material.update')
@@ -420,7 +434,7 @@ export const materialsService = {
    */
   async enrichFromOrder(
     user: User,
-    items: { material_id: string; set: Record<string, unknown> }[],
+    items: { material_id: string; set: Record<string, unknown>; price?: number }[],
     /** Mã đơn vừa lưu — vào sổ vết để truy được "ô này vào vì đơn nào" (0177). */
     poCode?: string | null,
   ): Promise<{ updated: number }> {
@@ -428,8 +442,28 @@ export const materialsService = {
     for (const it of items) {
       const m = await materialsRepo.findById(it.material_id)
       if (!m) continue
-      const patch = catalogFillPatch(m, it.set as CatalogLineInfo)
-      if (!patch) continue
+      // Giá có thể tới ở `price` (màn v2) hoặc lẫn trong `set` (màn cũ đổ phẳng
+      // cả danh sách đề xuất) — bóc ra trước, phần còn lại mới là fill-empty.
+      const { last_purchase_price: priceInSet, ...fill } = it.set as CatalogLineInfo & {
+        last_purchase_price?: number
+      }
+      const price = it.price ?? priceInSet
+      const patch: Record<string, unknown> = {
+        ...(catalogFillPatch(m, fill as CatalogLineInfo) ?? {}),
+      }
+      /*
+       * GIÁ MUA GẦN NHẤT — ĐÈ, không fill-empty (29/08/2026).
+       *
+       * Trước ngày này giá do handler `po.ordered` tự ghi lúc đơn gửi NCC,
+       * không hỏi ai; user chốt chuyển sang HỎI ngay lúc lưu đơn. Vẫn kiểm lại
+       * ở đây thay vì tin số client gửi: giữa lúc bày hộp và lúc bấm đồng ý mà
+       * có đơn khác vừa ghi đúng con số ấy thì bỏ qua, khỏi đẻ một dòng vết
+       * "8.500 → 8.500". Ghi qua `update()` nên sổ vết 0177 vẫn đủ.
+       */
+      if (price != null && Number(m.last_purchase_price) !== Number(price)) {
+        patch.last_purchase_price = price
+      }
+      if (Object.keys(patch).length === 0) continue
       await materialsService.update(user, it.material_id, patch, {
         source: 'po_enrich',
         source_ref: poCode ?? null,

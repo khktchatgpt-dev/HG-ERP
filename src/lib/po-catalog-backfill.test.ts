@@ -4,13 +4,15 @@ import {
   catalogFillPatch,
   lastPriceUpdates,
   linesByMaterial,
+  priceChange,
   specFromLine,
   type CatalogFields,
 } from './po-catalog-backfill'
 
 /*
- * Danh mục tự giàu từ dòng đơn (13/08/2026) — mô tả fill-empty-only,
- * giá ghi đè có chủ đích khi gửi NCC (chỉ VND).
+ * Danh mục tự giàu từ dòng đơn (13/08/2026) — mô tả + barem + đóng gói đều
+ * fill-empty-only; GIÁ ghi ĐÈ và từ 29/08/2026 phải đi qua hộp xác nhận lúc
+ * lưu đơn (không còn tự ghi ở bước gửi NCC).
  */
 
 const EMPTY: CatalogFields = {
@@ -19,6 +21,12 @@ const EMPTY: CatalogFields = {
   finish: null,
   open_style: null,
   pcs_per_ctn: null,
+  kg_per_m: null,
+  kg_per_unit: null,
+  pack_size: null,
+  pack_unit: null,
+  m3_per_unit: null,
+  warranty_text: null,
 }
 
 describe('catalogFillPatch — mô tả chỉ điền ô trống', () => {
@@ -146,5 +154,111 @@ describe('specFromLine — quy cách suy từ dòng (mẫu không có ô Quy cá
 
   it('dòng trống hoàn toàn → null', () => {
     expect(specFromLine({})).toBeNull()
+  })
+})
+
+/*
+ * 29/08/2026 — GIÁ và BAREM/ĐÓNG GÓI vào chung hộp xác nhận lúc lưu đơn.
+ * Trước đó giá do handler `po.ordered` tự ghi (không hỏi), barem phải bấm nút
+ * riêng trên ô, đóng gói thì không có đường nào.
+ */
+describe('priceChange — giá mua gần nhất là ĐÈ, không phải fill-empty', () => {
+  const m = (p: number | null) => ({ last_purchase_price: p })
+
+  it('danh mục đã có giá khác → vẫn đề xuất, kèm giá cũ để hộp nói "8.200 → 8.500"', () => {
+    expect(priceChange(m(8200), 'VND', 8500)).toEqual({ before: 8200, after: 8500 })
+  })
+
+  it('chưa có giá → before null, hộp hiện "chưa có → 8.500"', () => {
+    expect(priceChange(m(null), 'VND', 8500)).toEqual({ before: null, after: 8500 })
+  })
+
+  it('giá y như cũ → null: không hỏi, không đẻ một dòng vết "8.500 → 8.500"', () => {
+    expect(priceChange(m(8500), 'VND', 8500)).toBeNull()
+  })
+
+  it('đơn ngoại tệ → null (cột giá ngầm VND, ghi 700.21 vào đó là sai bậc tiền)', () => {
+    expect(priceChange(m(8200), 'USD', 700.21)).toBeNull()
+  })
+
+  it('giá 0 / rỗng → null', () => {
+    expect(priceChange(m(8200), 'VND', 0)).toBeNull()
+    expect(priceChange(m(8200), 'VND', null)).toBeNull()
+  })
+})
+
+describe('catalogFillPatch — barem + đóng gói cũng chỉ điền ô trống', () => {
+  it('danh mục trống → điền kg/m, kg/đơn vị, quy cách đóng gói, ĐVT đóng gói', () => {
+    expect(
+      catalogFillPatch(EMPTY, {
+        kg_per_m: 1.234,
+        kg_per_unit: 12.5,
+        pack_size: 500,
+        pack_unit: 'bì',
+      }),
+    ).toEqual({ kg_per_m: 1.234, kg_per_unit: 12.5, pack_size: 500, pack_unit: 'bì' })
+  })
+
+  it('danh mục đã có → không đè, kể cả khi dòng gõ số khác', () => {
+    const full: CatalogFields = {
+      ...EMPTY,
+      kg_per_m: 1,
+      kg_per_unit: 2,
+      pack_size: 100,
+      pack_unit: 'thùng',
+    }
+    expect(
+      catalogFillPatch(full, {
+        kg_per_m: 9,
+        kg_per_unit: 9,
+        pack_size: 9,
+        pack_unit: 'bì',
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('buildCatalogSuggestions — gộp giá vào cùng hộp xác nhận', () => {
+  const mat = (over: Partial<CatalogFields & { last_purchase_price: number | null }>) => ({
+    ...EMPTY,
+    id: 'm1',
+    code: 'BB-01',
+    name: 'Thùng carton',
+    last_purchase_price: null,
+    ...over,
+  })
+
+  it('giá đổi → có mục "Giá mua gần nhất" mang cờ overwrite + giá cũ', () => {
+    const out = buildCatalogSuggestions([{ material_id: 'm1' }], [mat({ last_purchase_price: 8200 })], {
+      currency: 'VND',
+      byMaterial: new Map([['m1', 8500]]),
+    })
+    expect(out).toHaveLength(1)
+    expect(out[0].fields).toEqual([
+      {
+        field: 'last_purchase_price',
+        label: 'Giá mua gần nhất',
+        value: 8500,
+        overwrite: true,
+        before: 8200,
+      },
+    ])
+  })
+
+  it('không truyền giá → hộp chỉ có phần mô tả, y như trước 29/08', () => {
+    const out = buildCatalogSuggestions(
+      [{ material_id: 'm1', open_style: 'AD' }],
+      [mat({ last_purchase_price: 8200 })],
+    )
+    expect(out[0].fields.map((f) => f.field)).toEqual(['open_style'])
+  })
+
+  it('mô tả đủ + giá y như cũ → không có gì để hỏi, hộp không hiện', () => {
+    const out = buildCatalogSuggestions(
+      [{ material_id: 'm1' }],
+      [mat({ last_purchase_price: 8500 })],
+      { currency: 'VND', byMaterial: new Map([['m1', 8500]]) },
+    )
+    expect(out).toEqual([])
   })
 })

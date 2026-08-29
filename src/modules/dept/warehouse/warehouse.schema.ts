@@ -45,6 +45,9 @@ export const materialCreateSchema = z.object({
   open_style: z.string().trim().max(20).optional().nullable(),
   pcs_per_ctn: z.coerce.number().positive().optional().nullable(),
   finish: z.string().trim().max(100).optional().nullable(),
+  // m³/SP (mẫu gỗ) + Bảo hành (mẫu MRO) — 0178, chảy về từ hộp xác nhận đơn.
+  m3_per_unit: z.coerce.number().min(0).optional().nullable(),
+  warranty_text: z.string().trim().max(100).optional().nullable(),
   note: z.string().trim().max(2000).optional().nullable(),
   /**
    * Cờ "CHỜ KHO RÀ" (0136) — form khai nhanh trong đơn đặt gửi true: người khai
@@ -75,7 +78,28 @@ export const materialEnrichSchema = z.object({
           finish: z.string().trim().max(100).optional(),
           open_style: z.string().trim().max(20).optional(),
           pcs_per_ctn: z.coerce.number().positive().optional(),
+          // Barem + đóng gói (29/08) — cùng luật fill-empty với nhóm trên.
+          kg_per_m: z.coerce.number().positive().max(1e4).optional(),
+          kg_per_unit: z.coerce.number().positive().max(1e6).optional(),
+          pack_size: z.coerce.number().positive().max(1e9).optional(),
+          pack_unit: z.string().trim().max(50).optional(),
+          m3_per_unit: z.coerce.number().positive().max(1e4).optional(),
+          warranty_text: z.string().trim().max(100).optional(),
+          /**
+           * Nhận CẢ trong `set` — màn soạn đơn cũ (`/planning/pos/new`) đổ
+           * phẳng mọi trường của đề xuất vào đây; không khai thì zod lọc mất
+           * giá và đơn từ màn đó không bao giờ cập nhật được giá nữa (đường tự
+           * ghi ở bước gửi NCC đã tắt 29/08). Service bóc nó ra xử lý theo luật
+           * ĐÈ, không lẫn với nhóm fill-empty.
+           */
+          last_purchase_price: z.coerce.number().positive().max(1e12).optional(),
         }),
+        /**
+         * GIÁ MUA GẦN NHẤT — chỗ khai TƯỜNG MINH, luật khác hẳn `set`: ĐÈ giá
+         * trị đang có. Để lẫn trong `set` thì service không phân biệt được cái
+         * nào fill-empty cái nào đè, và "giá gần nhất" sẽ đứng yên ở lần mua đầu.
+         */
+        price: z.coerce.number().positive().max(1e12).optional(),
       }),
     )
     .min(1)

@@ -15,6 +15,7 @@ import { emit } from '@/events/bus'
 import '@/events/register' // Đăng ký handler event ở lần import đầu (notif PO + audit).
 import {
   buildCatalogSuggestions,
+  lastPriceUpdates,
   linesByMaterial,
   specFromLine,
   type CatalogSuggestion,
@@ -83,6 +84,15 @@ function catalogLines(lines: PoLineInput[]) {
     finish: l.finish ?? null,
     open_style: l.open_style ?? null,
     pcs_per_ctn: l.pcs_per_ctn ?? null,
+    // Barem + đóng gói (29/08): gõ trên dòng thì cũng chảy về danh mục qua
+    // CHÍNH hộp xác nhận, thay vì mỗi thứ một đường như trước.
+    kg_per_m: l.weight_per_m ?? null,
+    kg_per_unit: l.weight_per_unit ?? null,
+    pack_size: l.pack_size ?? null,
+    pack_unit: l.pack_unit ?? null,
+    // m³/SP + Bảo hành — danh mục có cột từ 0178.
+    m3_per_unit: l.m3_per_unit ?? null,
+    warranty_text: l.warranty_text ?? null,
   }))
 }
 
@@ -238,14 +248,26 @@ export const posService = {
    * này kèm response, form hiện hộp XÁC NHẬN — user chốt "không tự ghi ngầm";
    * bấm đồng ý mới ghi (qua /materials/enrich, nơi kiểm fill-empty lần nữa).
    */
-  async catalogSuggestions(lines: PoLineInput[]): Promise<CatalogSuggestion[]> {
+  async catalogSuggestions(
+    lines: PoLineInput[],
+    /**
+     * Tiền tệ đơn — có thì hộp hỏi luôn phần GIÁ MUA GẦN NHẤT (user chốt
+     * 29/08: giá cũng phải xác nhận, không tự đè). Trước đây giá do handler
+     * `po.ordered` tự ghi lúc gửi NCC, không hỏi ai.
+     */
+    currency?: string,
+  ): Promise<CatalogSuggestion[]> {
     const wanted = linesByMaterial(catalogLines(lines))
     const materials = []
     for (const id of wanted.keys()) {
       const m = await materialsRepo.findById(id)
       if (m) materials.push(m)
     }
-    return buildCatalogSuggestions(catalogLines(lines), materials)
+    return buildCatalogSuggestions(
+      catalogLines(lines),
+      materials,
+      currency ? { currency, byMaterial: lastPriceUpdates(currency, lines) } : undefined,
+    )
   },
 
   /**
@@ -660,6 +682,18 @@ export const posService = {
       throw BadRequest('Chỉ xác nhận được đơn ĐÃ GỬI NCC (đang ở "Đã gửi NCC")')
     }
 
+    /*
+     * GHI ĐÈ CẢ BỘ, không nối thêm (sửa 29/08/2026).
+     *
+     * Từ 28/08 người soạn chia đợt được ngay trong form — lịch ĐỀ NGHỊ in lên
+     * phiếu gửi NCC. Bước này ghi lại CAM KẾT của NCC, tức bản chốt thay cho đề
+     * nghị đó. Code cũ `insertMany` thẳng và đánh `seq: i + 1`: đơn đã có 2 đợt
+     * đề nghị mà NCC xác nhận 2 đợt là thành BỐN bản ghi, seq trùng 1-2-1-2, và
+     * `validateShipments` gọi không kèm `existing` nên tổng vượt SL đặt cũng
+     * không ai chặn. Con số đó chảy thẳng vào "Hàng sắp về" và sổ nhận hàng.
+     *
+     * Xoá trước rồi chèn — cùng cách `saveDraftShipments` làm khi sửa đơn nháp.
+     */
     if (input.shipments.length > 0) {
       const lines = await posRepo.listLines(id)
       const v = validateShipments(
@@ -671,6 +705,7 @@ export const posService = {
         })),
       )
       if (v.errors.length > 0) throw BadRequest(v.errors.join(' · '))
+      await poShipmentsRepo.deleteByPo(id)
       await poShipmentsRepo.insertMany(
         id,
         input.shipments.map((s, i) => ({

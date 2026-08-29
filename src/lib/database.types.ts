@@ -5034,6 +5034,7 @@ export type Database = {
           kg_per_m: number | null
           kg_per_unit: number | null
           last_purchase_price: number | null
+          m3_per_unit: number | null
           material_grade: string | null
           max_stock: number | null
           min_stock: number
@@ -5058,6 +5059,7 @@ export type Database = {
           unit2_factor: number | null
           updated_at: string
           vat_rate: number | null
+          warranty_text: string | null
         }
         Insert: {
           barcode?: string | null
@@ -5073,6 +5075,7 @@ export type Database = {
           kg_per_m?: number | null
           kg_per_unit?: number | null
           last_purchase_price?: number | null
+          m3_per_unit?: number | null
           material_grade?: string | null
           max_stock?: number | null
           min_stock?: number
@@ -5097,6 +5100,7 @@ export type Database = {
           unit2_factor?: number | null
           updated_at?: string
           vat_rate?: number | null
+          warranty_text?: string | null
         }
         Update: {
           barcode?: string | null
@@ -5112,6 +5116,7 @@ export type Database = {
           kg_per_m?: number | null
           kg_per_unit?: number | null
           last_purchase_price?: number | null
+          m3_per_unit?: number | null
           material_grade?: string | null
           max_stock?: number | null
           min_stock?: number
@@ -5136,6 +5141,7 @@ export type Database = {
           unit2_factor?: number | null
           updated_at?: string
           vat_rate?: number | null
+          warranty_text?: string | null
         }
         Relationships: [
           {

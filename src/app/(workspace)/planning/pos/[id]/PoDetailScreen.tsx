@@ -107,8 +107,7 @@ const btnPrimary =
   'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
 const btnGreen =
   'w-full rounded-md bg-[var(--done)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
-const btnSmall =
-  'rounded-md border border-input px-2 py-1.5 text-[12.5px] hover:bg-muted'
+const btnSmall = 'rounded-md border border-input px-2 py-1.5 text-[12.5px] hover:bg-muted'
 const btnDanger =
   'w-full rounded-md border border-[var(--stop)]/40 px-3 py-1.5 text-sm text-[var(--stop)] hover:bg-[var(--stop)]/10'
 
@@ -453,7 +452,13 @@ export function PoDetailScreen({
       <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
         {/* ── TRÁI: đơn này gồm những gì ─────────────────────────────────── */}
         <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1">
-          {(shipments.length > 0 || po.confirmed_note) && (
+          {/*
+            LUÔN HIỆN khối kế hoạch giao (29/08/2026) — trừ đơn đã huỷ.
+            Trước đây ẩn hẳn khi chưa có đợt nào, nên mở một đơn ra là không
+            thấy chữ "đợt giao" ở đâu: người dùng không phân biệt được "đơn này
+            giao một lần" với "hệ thống không có phần chia đợt".
+          */}
+          {po.status !== 'cancelled' && (
             <PoShipmentsCard
               shipments={shipments}
               linesById={shipmentLinesById}
@@ -474,6 +479,24 @@ export function PoDetailScreen({
               canAddMore={
                 shipmentLines.length > 0 &&
                 ['confirmed', 'in_transit', 'partial'].includes(po.status)
+              }
+              /*
+               * Chưa có đợt nào thì chỉ đúng LỐI VÀO của trạng thái hiện tại —
+               * mỗi trạng thái chia đợt ở một chỗ khác nhau, và đây là thứ
+               * người dùng không đoán được nếu màn hình im lặng.
+               */
+              emptyHint={
+                po.status === 'draft'
+                  ? 'Chia đợt ngay trong màn “Sửa đơn” — tab Chia đợt giao; lịch đó in lên phiếu gửi NCC.'
+                  : po.status === 'pending_approval'
+                    ? 'Đơn đang chờ duyệt nên khoá sửa — bấm “Thu hồi về nháp” rồi chia đợt trong màn Sửa đơn.'
+                    : po.status === 'approved'
+                      ? 'Đơn đã duyệt nên khoá sửa. Lịch giao sẽ ghi ở bước “NCC xác nhận” sau khi gửi đơn.'
+                      : po.status === 'ordered'
+                        ? 'Bấm “NCC xác nhận” ở cột phải để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+                        : shipmentLines.length === 0
+                          ? 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt được.'
+                          : null
               }
               busy={act.busy}
               today={today}
@@ -977,15 +1000,14 @@ export function PoDetailScreen({
                       {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
                     </Link>
                   )}
-                  {canEdit &&
-                    !['draft', 'received', 'cancelled'].includes(po.status) && (
-                      <button
-                        className={`${btnSmall} border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10`}
-                        onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-                      >
-                        Huỷ đơn
-                      </button>
-                    )}
+                  {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
+                    <button
+                      className={`${btnSmall} border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10`}
+                      onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+                    >
+                      Huỷ đơn
+                    </button>
+                  )}
                 </div>
                 {!canEdit && !canApprove && (
                   <p className="text-muted-foreground text-xs">
