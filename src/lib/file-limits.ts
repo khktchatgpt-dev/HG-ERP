@@ -21,8 +21,13 @@ export const DOC_TYPES = [
   'bom',
   'packing',
   'assembly',
-  'image',
+  'sample_photo',
+  'label',
+  'loading',
   'cert',
+  'approval',
+  'video',
+  'image',
   'other',
 ] as const
 export type DocType = (typeof DOC_TYPES)[number]
@@ -37,8 +42,16 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   bom: 'File BOM / định mức',
   packing: 'Đóng gói / kích thước',
   assembly: 'Hướng dẫn lắp ráp',
-  image: 'Ảnh sản phẩm',
+  // 0180 — năm loại dưới đây trước không có chỗ nào để đứng nên nằm ngoài hệ
+  // thống. `sample_photo` KHÁC `image`: ảnh SP là ảnh đại diện trong thư viện,
+  // còn đây là ảnh mẫu thật đã chốt với khách.
+  sample_photo: 'Ảnh mẫu đã duyệt',
+  label: 'Nhãn / mã vạch',
+  loading: 'Sơ đồ xếp cont',
   cert: 'Chứng chỉ / test report',
+  approval: 'Hồ sơ khách duyệt',
+  video: 'Video',
+  image: 'Ảnh sản phẩm',
   other: 'Khác',
 }
 
@@ -66,6 +79,16 @@ export const DOC_TYPE_MAX_BYTES: Record<DocType, number> = {
   // PowerPoint đóng gói nhúng nhiều ảnh xếp thùng — dễ vượt 20MB (0150).
   packing: HARD_MAX,
   cert: HARD_MAX,
+  // Ảnh mẫu đã duyệt cũng là ẢNH — cùng lý do siết như `image`, đừng để thành
+  // cửa sau đưa ảnh DSLR 13MB lên bằng cách chọn loại khác.
+  sample_photo: 5 * MB,
+  label: HARD_MAX,
+  loading: HARD_MAX,
+  approval: HARD_MAX,
+  // Trần chung 50MB là `file_size_limit` của bucket (0147) — không nới riêng
+  // cho video được, bucket chỉ nhận MỘT giá trị. Clip dài hơn thì cắt đoạn
+  // hoặc để link Drive vào ghi chú.
+  video: HARD_MAX,
   other: HARD_MAX,
 }
 
@@ -122,6 +145,19 @@ export const ALLOWED_MIME = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // CAD / mô hình 3D — MIME suy từ ĐUÔI, không lấy thứ trình duyệt khai (xem
+  // `EXT_CANONICAL_MIME` ở lib/file-signature để biết vì sao). Không dùng tiền
+  // tố `image/` cho nhóm này: route ảnh phục vụ `image/*` bằng URL ký không gác
+  // phiên, gắn image/* cho bản vẽ là biến bản vẽ thành thứ ai có link cũng tải.
+  'application/acad',
+  'application/dxf',
+  'model/step',
+  'model/iges',
+  'application/vnd.sketchup.skp',
+  'application/postscript',
+  'application/x-photoshop',
+  // video quay mẫu / hướng dẫn lắp
+  'video/mp4',
   // text
   'text/plain',
   'text/csv',

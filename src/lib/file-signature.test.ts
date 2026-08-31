@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   ALLOWED_EXTENSIONS,
+  EXT_CANONICAL_MIME,
   MACRO_EXTENSIONS,
+  canonicalMime,
   extensionIssue,
   fileExtension,
   signatureIssue,
 } from './file-signature'
-import { ALLOWED_MIME } from './file-limits'
+import { ALLOWED_MIME, isAllowedMime } from './file-limits'
 
 const PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]) // %PDF-1.7
 const ZIP = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0, 0, 0, 0]) // PK.. (docx/xlsx/pptx)
@@ -108,5 +110,43 @@ describe('allowlist đuôi ↔ allowlist MIME phải nói cùng một điều', 
       expect((ALLOWED_EXTENSIONS as readonly string[]).includes(ext)).toBe(true)
       expect((ALLOWED_MIME as readonly string[]).includes(mime)).toBe(true)
     }
+  })
+})
+
+describe('canonicalMime — đuôi quyết định MIME (31/08/2026)', () => {
+  /**
+   * Ca thật: ngăn "Bản vẽ" của hồ sơ SP có ĐÚNG 0 file suốt từ 0059 vì mọi biến
+   * thể MIME của .dwg đều bị `z.enum(ALLOWED_MIME)` chặn. Ba dòng dưới là ba
+   * chuỗi trình duyệt thật sự trả về, tuỳ máy có cài AutoCAD hay không.
+   */
+  it('.dwg khai kiểu gì cũng ra một MIME được nhận', () => {
+    for (const khai of ['', 'application/acad', 'image/vnd.dwg', 'drawing/x-dwg']) {
+      expect(isAllowedMime(canonicalMime('ban-ve.dwg', khai))).toBe(true)
+    }
+  })
+
+  it('mọi MIME suy từ đuôi đều nằm trong allowlist', () => {
+    for (const [ext, mime] of Object.entries(EXT_CANONICAL_MIME)) {
+      expect((ALLOWED_EXTENSIONS as readonly string[]).includes(ext)).toBe(true)
+      expect(isAllowedMime(mime)).toBe(true)
+    }
+  })
+
+  /**
+   * KHÔNG được có `image/*` ở đây: `/api/files/[id]/img` phục vụ file `image/*`
+   * qua URL ký KHÔNG gác phiên. Gắn `image/vnd.dwg` cho bản vẽ (đó là tên MIME
+   * chính thức của nó) là biến mọi bản vẽ thành thứ ai cầm link cũng tải được.
+   */
+  it('không MIME suy-từ-đuôi nào mang tiền tố image/', () => {
+    for (const mime of Object.values(EXT_CANONICAL_MIME)) {
+      expect(mime.startsWith('image/')).toBe(false)
+    }
+  })
+
+  it('đuôi thường thì giữ nguyên thứ trình duyệt khai', () => {
+    expect(canonicalMime('anh.png', 'image/png')).toBe('image/png')
+    expect(canonicalMime('tai-lieu.pdf', 'application/pdf')).toBe('application/pdf')
+    // MIME lạ trên đuôi thường vẫn phải rớt — đuôi không cứu cho nhóm này.
+    expect(isAllowedMime(canonicalMime('anh.png', 'application/x-weird'))).toBe(false)
   })
 })

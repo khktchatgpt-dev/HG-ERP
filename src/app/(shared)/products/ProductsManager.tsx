@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import {
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  PackageSearch,
-  Plus,
-  Sparkles,
-  X,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, PackageSearch, Plus, Sparkles, X } from 'lucide-react'
 import { BomAiNewProduct } from '@/components/technical/BomAiNewProduct'
 import { Button } from '@/components/shadcn/button'
 import { Modal } from '@/components/Modal'
@@ -19,7 +11,6 @@ import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
 import { parseProductCode } from '@/lib/product-code'
-import { downloadCsv } from '@/lib/csv'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { EmptyState } from '@/components/erp/EmptyState'
 import type { RowMenuItem } from '@/components/erp/RowMenu'
@@ -27,13 +18,12 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { BomEditor } from './_components/BomEditor'
 import { CloneForm } from './_components/CloneForm'
 import { FilterBar } from './_components/FilterBar'
+import { StartPanel } from './_components/StartPanel'
 import { ImagePreviewModal } from './_components/ImagePreviewModal'
 import { ProductCard } from './_components/ProductCard'
 import { ProductTable } from './_components/ProductTable'
-import { classLabel } from './_components/product-meta'
 import {
   ACCENT_SOLID,
-  BOM_LABEL,
   VIEW_STORAGE_KEY,
   type BomRow,
   type BomTarget,
@@ -47,6 +37,26 @@ import {
   type ToggleFilterKey,
 } from './_components/types'
 
+/** Hằng ngoài component: `{}` viết tại chỗ là object mới mỗi render → thẻ nhớ lại. */
+const EMPTY_IMAGE_URLS: Record<string, string> = {}
+
+/** Người dùng đang thu hẹp danh sách (tìm hoặc lọc) chứ không phải chỉ mở trang. */
+function hasActiveFilter(f: Filters): boolean {
+  return (
+    !!f.q ||
+    f.customer !== 'all' ||
+    f.bom !== 'all' ||
+    f.status !== 'all' ||
+    f.image !== 'all' ||
+    // `locked` bị bỏ sót từ 0140 và `sample` thêm ở 0141: bật một trong hai chip
+    // này mà nút "Xoá lọc" không hiện thì người dùng kẹt với danh sách đã lọc.
+    f.locked !== 'all' ||
+    f.lifecycle !== 'all' ||
+    f.type !== 'all' ||
+    f.category !== 'all'
+  )
+}
+
 /**
  * Màn Thư viện sản phẩm — chỉ giữ TRẠNG THÁI và ĐIỀU PHỐI.
  *
@@ -57,6 +67,8 @@ import {
 export function ProductsManager({
   products,
   total,
+  idle,
+  recent,
   fuzzy,
   page,
   pageSize,
@@ -71,6 +83,10 @@ export function ProductsManager({
   fuzzy?: boolean
   products: ProductRow[]
   total: number
+  /** Chưa gõ và chưa lọc gì → server KHÔNG truy vấn danh sách; bày màn mở đầu. */
+  idle: boolean
+  /** Đang xem lối tắt "Vừa sửa gần đây" (?recent=1) — không phải bộ lọc. */
+  recent: boolean
   page: number
   pageSize: number
   counts: ProductCounts
@@ -169,18 +185,26 @@ export function ProductsManager({
   const searching = q.trim() !== (filters.q ?? '')
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const hasFilter =
-    !!filters.q ||
-    filters.customer !== 'all' ||
-    filters.bom !== 'all' ||
-    filters.status !== 'all' ||
-    filters.image !== 'all' ||
-    // `locked` bị bỏ sót từ 0140 và `sample` thêm ở 0141: bật một trong hai chip
-    // này mà nút "Xoá lọc" không hiện thì người dùng kẹt với danh sách đã lọc.
-    filters.locked !== 'all' ||
-    filters.lifecycle !== 'all' ||
-    filters.type !== 'all' ||
-    filters.category !== 'all'
+  const hasFilter = hasActiveFilter(filters)
+
+  /*
+   * ẢNH CHỈ TẢI KHI ĐƯỢC HỎI TỚI.
+   *
+   * Mỗi tấm ảnh là một vòng gọi Supabase Storage ~0,9–1,5 giây (đo 31/08/2026:
+   * phần lớn là độ trễ mạng tới Storage, gần như không phụ thuộc file to hay
+   * nhỏ). Lưới 24 thẻ nghĩa là mở trang trắng cũng nổ 24 lượt như thế — trong
+   * khi phần lớn lần vào đây người ta đang đi TÌM một mã, chưa cần nhìn ảnh.
+   *
+   * Nên: vào trang trơn = không ảnh; vừa gõ tìm hoặc bấm một bộ lọc là ảnh hiện
+   * (lúc đó danh sách đã hẹp lại, ảnh mới đáng tiền). Nút 🖼 để bật/tắt tay khi
+   * muốn ngắm cả lưới. Suy ra chứ không dùng effect: 'auto' bám theo bộ lọc,
+   * bấm nút là chốt cứng cho tới khi rời trang. KHÔNG nhớ vào localStorage —
+   * nhớ "bật" thì lần vào sau lại nổ 24 lượt, đúng thứ đang muốn tránh.
+   */
+  const [imagePref, setImagePref] = useState<'auto' | 'on' | 'off'>('auto')
+  const showImages = imagePref === 'auto' ? hasFilter : imagePref === 'on'
+  const shownImageUrls = showImages ? imageUrls : EMPTY_IMAGE_URLS
+  const imageCount = products.filter((p) => p.image_file_id).length
 
   function clearFilters() {
     setQ('')
@@ -194,6 +218,9 @@ export function ProductsManager({
       lifecycle: undefined,
       type: undefined,
       category: undefined,
+      // Xoá lọc phải đưa về ĐÚNG màn mở đầu; sót `recent` thì vẫn còn một danh
+      // sách 24 dòng nằm đó và người dùng tưởng lọc chưa xoá hết.
+      recent: undefined,
     })
   }
 
@@ -325,39 +352,6 @@ export function ProductsManager({
   }, [])
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  function exportCsv() {
-    downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, products, [
-      { key: 'code', header: 'Mã' },
-      {
-        key: 'customer_item_code',
-        header: 'Mã KH đặt',
-        get: (p) => p.customer_item_code ?? '',
-      },
-      { key: 'name', header: 'Tên' },
-      {
-        key: 'customer_name',
-        header: 'Khách hàng',
-        get: (p) => p.customer_name ?? 'Mẫu chung',
-      },
-      // Cột `category` đã bỏ khỏi CSV: 9/537 dòng có giá trị và toàn là tên
-      // khách gõ nhầm ô, nên nó chỉ lặp lại cột "Khách hàng" ở trên.
-      { key: 'product_type', header: 'Loại', get: (p) => classLabel(p) ?? '' },
-      { key: 'unit', header: 'ĐVT' },
-      { key: 'bom_status', header: 'BOM', get: (p) => BOM_LABEL[p.bom_status] },
-      {
-        key: 'packing',
-        header: 'Loading 40HC',
-        get: (p) => (p.loading_40hc != null ? String(p.loading_40hc) : ''),
-      },
-      {
-        key: 'is_active',
-        header: 'Trạng thái',
-        get: (p) => (p.is_active ? 'Đang dùng' : 'Ngừng'),
-      },
-    ])
-    toast.success(`Đã xuất ${products.length} dòng (trang hiện tại) ra CSV`)
-  }
-
   /** Menu ⋯ dùng chung cho thẻ và dòng bảng — một bộ hành động, một thứ tự. */
   function rowActions(p: ProductRow): RowMenuItem[] {
     const items: RowMenuItem[] = [
@@ -400,15 +394,16 @@ export function ProductsManager({
         breadcrumbs={[{ label: 'Thư viện sản phẩm' }]}
         title="Thư viện sản phẩm"
         description={
-          hasFilter
-            ? `${total} kết quả · lọc từ ${counts.total} sản phẩm`
-            : `${counts.total} sản phẩm · ${customerNames.length} khách hàng`
+          idle
+            ? `${counts.total} sản phẩm · ${customerNames.length} khách hàng`
+            : // `total` lúc này là CẢ THƯ VIỆN (recent chỉ đổi thứ tự, không thu
+              // hẹp) nên không được ghi "779 sản phẩm vừa sửa" — sai nghĩa.
+              recent && !hasFilter
+              ? `Sửa gần đây nhất · ${counts.total} sản phẩm trong thư viện`
+              : `${total} kết quả · lọc từ ${counts.total} sản phẩm`
         }
         actions={
           <>
-            <Button variant="outline" size="sm" onClick={exportCsv}>
-              <Download /> Xuất CSV
-            </Button>
             {canEdit && (
               <Button variant="outline" size="sm" onClick={() => setFromBom(true)}>
                 <Sparkles /> Tạo bằng AI
@@ -437,6 +432,9 @@ export function ProductsManager({
         searching={searching}
         view={view}
         onViewChange={changeView}
+        showImages={showImages}
+        imageCount={imageCount}
+        onToggleImages={() => setImagePref(showImages ? 'off' : 'on')}
         onParamChange={applyParams}
         onToggle={toggleParam}
         hasFilter={hasFilter}
@@ -452,7 +450,9 @@ export function ProductsManager({
         </div>
       )}
 
-      {products.length === 0 ? (
+      {idle ? (
+        <StartPanel counts={counts} customerNames={customerNames} onPick={applyParams} />
+      ) : products.length === 0 ? (
         <EmptyState
           icon={<PackageSearch className="size-6 text-sky-500" />}
           title={hasFilter ? 'Không tìm thấy sản phẩm nào' : 'Chưa có sản phẩm nào'}
@@ -480,7 +480,7 @@ export function ProductsManager({
       ) : view === 'list' ? (
         <ProductTable
           products={products}
-          imageUrls={imageUrls}
+          imageUrls={shownImageUrls}
           rowActions={rowActions}
           onZoom={(product, url) => setPreview({ product, url })}
         />
@@ -490,7 +490,8 @@ export function ProductsManager({
             <ProductCard
               key={p.id}
               p={p}
-              imageUrl={imageUrls[p.id]}
+              imageUrl={shownImageUrls[p.id]}
+              imageHidden={!showImages && !!p.image_file_id}
               actions={rowActions(p)}
               onZoom={(url) => setPreview({ product: p, url })}
             />

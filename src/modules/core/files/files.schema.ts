@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import { extensionIssue } from '@/lib/file-signature'
+import { canonicalMime, extensionIssue } from '@/lib/file-signature'
 import {
   ALLOWED_MIME,
+  isAllowedMime,
   DOC_TYPES,
   DOC_TYPE_LABEL,
   DOC_TYPE_MAX_BYTES,
@@ -48,7 +49,16 @@ export type FileParentKind = (typeof PARENT_KINDS)[number]
 export const initUploadSchema = z
   .object({
     filename: z.string().min(1).max(255),
-    mime_type: z.enum(ALLOWED_MIME),
+    /*
+     * KHÔNG còn `z.enum(ALLOWED_MIME)` ở đây (31/08/2026).
+     *
+     * Trình duyệt đoán MIME từ registry của MÁY NGƯỜI DÙNG, nên `.dwg` ra
+     * `''` / `application/acad` / `image/vnd.dwg` tuỳ máy — enum chặn sạch cả
+     * ba, và ngăn "Bản vẽ" của hồ sơ SP vì thế có đúng 0 file suốt từ 0059.
+     * Giờ MIME được chuẩn hoá theo ĐUÔI trước (`canonicalMime`) rồi mới soát ở
+     * `superRefine`, và câu từ chối là câu người đọc được thay vì một mảng enum.
+     */
+    mime_type: z.string().max(255),
     size_bytes: z.number().int().positive(),
     bucket: z.enum(FILE_BUCKETS),
     doc_type: z.enum(DOC_TYPES).optional().nullable(), // phân loại tài liệu (0059)
@@ -81,8 +91,23 @@ export const initUploadSchema = z
     const extIssue = extensionIssue(input.filename)
     if (extIssue) {
       ctx.addIssue({ code: 'custom', path: ['filename'], message: extIssue })
+      return // đuôi đã hỏng thì đừng bắt lỗi MIME nữa, một câu là đủ
+    }
+    if (!isAllowedMime(canonicalMime(input.filename, input.mime_type))) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['mime_type'],
+        message: `Máy bạn khai file này là "${input.mime_type || 'không rõ định dạng'}" — hệ thống không nhận kiểu đó. Kiểm lại xem file có đúng đuôi không.`,
+      })
     }
   })
+  // Chốt MIME theo ĐUÔI trước khi xuống service/DB: cột `files.mime_type` còn
+  // được dùng làm `content-type` lúc phục vụ file, lưu chuỗi rỗng là trình
+  // duyệt không biết mở bằng gì.
+  .transform((input) => ({
+    ...input,
+    mime_type: canonicalMime(input.filename, input.mime_type),
+  }))
 export type InitUploadInput = z.infer<typeof initUploadSchema>
 
 function describeDocType(docType: DocType | null | undefined): string {

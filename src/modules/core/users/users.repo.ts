@@ -31,6 +31,13 @@ export type UserInsert = {
   role?: UserRole
   department_id?: string | null
   title?: string | null
+  /**
+   * Mặc định TRUE ở `insert`/`bulkInsert`: mật khẩu của tài khoản mới do admin
+   * gõ rồi đọc/nhắn cho người ta — tức là ít nhất hai người biết. Bắt đổi ở lần
+   * đăng nhập đầu (proxy giữ ở `/doi-mat-khau`). Chỉ tắt cho trường hợp người
+   * tự đặt mật khẩu ngay lúc tạo, hiện chưa có.
+   */
+  must_change_password?: boolean
 }
 
 export type UserPatch = Partial<{
@@ -92,7 +99,7 @@ export const usersRepo = {
   async insert(row: UserInsert): Promise<User> {
     const { data, error } = await db()
       .from('users')
-      .insert(row)
+      .insert({ must_change_password: true, ...row })
       .select(SELECT_PUBLIC)
       .single()
     if (error || !data) {
@@ -103,7 +110,10 @@ export const usersRepo = {
 
   async bulkInsert(rows: UserInsert[]): Promise<User[]> {
     if (rows.length === 0) return []
-    const { data, error } = await db().from('users').insert(rows).select(SELECT_PUBLIC)
+    const { data, error } = await db()
+      .from('users')
+      .insert(rows.map((r) => ({ must_change_password: true, ...r })))
+      .select(SELECT_PUBLIC)
     if (error || !data) {
       throw new Error(error?.message ?? 'Could not bulk-insert users')
     }

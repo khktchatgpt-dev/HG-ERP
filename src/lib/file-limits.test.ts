@@ -62,9 +62,9 @@ describe('DOC_TYPES ↔ check constraint dưới DB', () => {
    * files_doc_type_valid), sau khi đã PUT xong file lên storage. Đọc thẳng
    * migration mới nhất động tới constraint — cùng lối với actions.test.ts.
    */
-  it('mọi doc_type đều nằm trong files_doc_type_valid (0150)', () => {
+  it('mọi doc_type đều nằm trong files_doc_type_valid (0180)', () => {
     const sql = readFileSync(
-      resolve(process.cwd(), 'supabase/migrations/0150_files_doc_type_packing.sql'),
+      resolve(process.cwd(), 'supabase/migrations/0180_files_doc_type_mo_rong.sql'),
       'utf8',
     )
     const inList = sql.match(/doc_type in \(([^)]+)\)/)?.[1] ?? ''

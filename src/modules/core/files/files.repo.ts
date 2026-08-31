@@ -24,6 +24,16 @@ export type FileRow = {
   doc_type: string | null
   finalized_at: string | null
   deleted_at: string | null
+  /**
+   * Bản ĐANG DÙNG của (product_id, doc_type) — 0181. Chỉ có nghĩa với file gắn
+   * SP. Duy nhất được ép bằng UNIQUE index có điều kiện dưới DB, không phải do
+   * tầng ứng dụng tự giữ.
+   */
+  is_current: boolean
+  /** Ký hiệu phiên bản người dùng gõ ("Rev 3", "v2.1") — text tự do, xem 0181. */
+  rev: string | null
+  /** Ghi chú ngắn cho riêng file này. */
+  note: string | null
 }
 
 export type FileParentColumns = {
@@ -157,6 +167,51 @@ export const filesRepo = {
       .from('files')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Ghi chú + ký hiệu phiên bản của một file (0181). Chuỗi rỗng → null. */
+  async updateMeta(
+    id: string,
+    patch: { rev?: string | null; note?: string | null },
+  ): Promise<FileRow> {
+    const { data, error } = await db()
+      .from('files')
+      .update(patch)
+      .eq('id', id)
+      .select('*')
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'files updateMeta failed')
+    return data as FileRow
+  },
+
+  /**
+   * Đánh dấu BẢN ĐANG DÙNG cho (product_id, doc_type) — hạ cờ ở các file cùng
+   * nhóm TRƯỚC rồi mới nâng, vì DB có UNIQUE index chỉ cho phép một bản. Làm
+   * ngược thứ tự là đụng ràng buộc ngay ở lệnh đầu.
+   *
+   * Không chạy trong transaction: supabase-js không mở được transaction từ
+   * client. Rủi ro thật là lỡ hạ xong mà lệnh nâng hỏng thì nhóm đó tạm thời
+   * KHÔNG có bản nào được đánh dấu — mất một cái nhãn, không mất file, và người
+   * dùng bấm lại là xong. Đổi lại nếu làm ngược thì luôn đụng UNIQUE.
+   */
+  async setCurrent(
+    file: Pick<FileRow, 'id' | 'product_id' | 'doc_type'>,
+    isCurrent: boolean,
+  ): Promise<void> {
+    if (isCurrent && file.product_id && file.doc_type) {
+      const { error: clearErr } = await db()
+        .from('files')
+        .update({ is_current: false })
+        .eq('product_id', file.product_id)
+        .eq('doc_type', file.doc_type)
+        .eq('is_current', true)
+      if (clearErr) throw new Error(clearErr.message)
+    }
+    const { error } = await db()
+      .from('files')
+      .update({ is_current: isCurrent })
+      .eq('id', file.id)
     if (error) throw new Error(error.message)
   },
 }

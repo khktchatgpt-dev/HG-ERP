@@ -94,7 +94,7 @@ export function UserForm({
       </label>
       {mode === 'create' && (
         <label className="flex flex-col gap-1 text-sm sm:col-span-2">
-          Mật khẩu (≥ 8 ký tự)
+          Mật khẩu tạm (≥ 8 ký tự)
           <input
             name="password"
             type="password"
@@ -102,6 +102,10 @@ export function UserForm({
             minLength={8}
             className={inputCls}
           />
+          <span className="text-xs text-zinc-500">
+            Đây là mật khẩu TẠM để báo cho người dùng. Lần đăng nhập đầu, hệ thống buộc họ
+            tự đặt mật khẩu riêng trước khi vào được bất kỳ trang nào.
+          </span>
         </label>
       )}
       <label className="flex flex-col gap-1 text-sm">

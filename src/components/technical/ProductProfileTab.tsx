@@ -64,6 +64,7 @@ export function ProductProfileTab({
   suggestions,
   categories,
   owners,
+  creatorName,
   canEdit,
 }: {
   product: ProductView
@@ -75,6 +76,11 @@ export function ProductProfileTab({
   categories: CategoryOption[]
   /** Nhân sự chọn được làm người phụ trách (0144) — cùng phần Nhận diện. */
   owners: OwnerOption[]
+  /**
+   * Tên NGƯỜI LẬP hồ sơ (0179) — tra sẵn ở server. Không dò trong `owners`:
+   * danh sách đó chỉ có người đang làm việc, người lập đã nghỉ sẽ mất tên.
+   */
+  creatorName: string | null
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -248,6 +254,10 @@ export function ProductProfileTab({
                         false,
                       ],
                       ['ĐVT bán', product.unit, false],
+                      // 0179 — NGƯỜI LẬP hồ sơ, đứng ngay cạnh ngày tạo vì hai
+                      // ô này trả lời chung một câu hỏi. Khác "Người phụ trách"
+                      // ở trên: ô kia đổi được khi bàn giao, ô này bất biến.
+                      ['Người tạo', creatorName, false],
                       [
                         'Ngày tạo hồ sơ',
                         new Date(product.created_at).toLocaleDateString('vi-VN'),

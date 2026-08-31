@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { handle } from '@/server/http'
+import { z } from 'zod'
+import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { filesService } from '@/modules/core/files/files.service'
 
@@ -20,6 +21,32 @@ export const GET = handle(async (req: Request, { params }: Params) => {
     { url },
     { headers: { 'cache-control': `private, max-age=${expiresIn}` } },
   )
+})
+
+/**
+ * Nhãn của tài liệu SP (0181): ghi chú, ký hiệu phiên bản, cờ "bản đang dùng".
+ * Chỉ ba trường này — nội dung file thì tải lên bản mới chứ không sửa tại chỗ.
+ */
+const patchSchema = z
+  .object({
+    rev: z.string().trim().max(50, 'Ký hiệu phiên bản tối đa 50 ký tự').nullable(),
+    note: z.string().trim().max(500, 'Ghi chú tối đa 500 ký tự').nullable(),
+    is_current: z.boolean(),
+  })
+  .partial()
+  .refine((v) => Object.keys(v).length > 0, 'Không có gì để cập nhật')
+
+export const PATCH = handle(async (req: Request, { params }: Params) => {
+  const user = await authService.requireUser()
+  const { id } = await params
+  const input = await parseJson(req, patchSchema)
+  const file = await filesService.setProductFileMeta(user, id, input)
+  return NextResponse.json({
+    id: file.id,
+    rev: file.rev,
+    note: file.note,
+    is_current: file.is_current,
+  })
 })
 
 export const DELETE = handle(async (_req: Request, { params }: Params) => {

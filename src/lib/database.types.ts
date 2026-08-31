@@ -395,6 +395,9 @@ export type Database = {
           doc_type: string | null
           filename: string
           finalized_at: string | null
+          is_current: boolean
+          rev: string | null
+          note: string | null
           id: string
           invoice_id: string | null
           mime_type: string
@@ -419,6 +422,9 @@ export type Database = {
           doc_type?: string | null
           filename: string
           finalized_at?: string | null
+          is_current?: boolean
+          rev?: string | null
+          note?: string | null
           id?: string
           invoice_id?: string | null
           mime_type: string
@@ -443,6 +449,9 @@ export type Database = {
           doc_type?: string | null
           filename?: string
           finalized_at?: string | null
+          is_current?: boolean
+          rev?: string | null
+          note?: string | null
           id?: string
           invoice_id?: string | null
           mime_type?: string
@@ -4248,6 +4257,7 @@ export type Database = {
           notes: string | null
           origin_country: string | null
           owner_id: string | null
+          created_by: string | null
           packing: Json
           paint_area_m2: number | null
           paint_coverage_m2_per_kg: number | null
@@ -4324,6 +4334,7 @@ export type Database = {
           notes?: string | null
           origin_country?: string | null
           owner_id?: string | null
+          created_by?: string | null
           packing?: Json
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null
@@ -4400,6 +4411,7 @@ export type Database = {
           notes?: string | null
           origin_country?: string | null
           owner_id?: string | null
+          created_by?: string | null
           packing?: Json
           paint_area_m2?: number | null
           paint_coverage_m2_per_kg?: number | null

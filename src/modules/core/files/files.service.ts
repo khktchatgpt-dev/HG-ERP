@@ -8,7 +8,10 @@ import {
 import { assertCan } from '@/server/permissions'
 import type { User } from '@/modules/core/users/users.repo'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
-import { isTechnicalStaff } from '@/modules/dept/technical/technical.service'
+import {
+  canEditProducts,
+  isTechnicalStaff,
+} from '@/modules/dept/technical/technical.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { MAX_SAMPLE_PHOTOS } from '@/modules/dept/technical/samples.schema'
 import { tasksRepo } from '@/modules/workflow/tasks/tasks.repo'
@@ -458,6 +461,46 @@ export const filesService = {
       await filesRepo.softDelete(row.id)
     }
     return { removed: rows.length, freedBytes }
+  },
+
+  /**
+   * Sửa NHÃN của một file trong hồ sơ SP (0181): ghi chú, ký hiệu phiên bản, và
+   * cờ "bản đang dùng".
+   *
+   * Quyền KHÁC `delete`: xoá thì đòi chính người tải hoặc admin, còn ở đây là ai
+   * sửa được hồ sơ SP. Lý do thực tế — file BOM thường do người này nạp mà người
+   * chốt "dùng bản nào" lại là người khác trong Kỹ thuật; bắt đúng người tải mới
+   * đánh dấu được thì cái nhãn không bao giờ được dùng.
+   *
+   * Chỉ áp cho file gắn SẢN PHẨM: ba cột này vô nghĩa với file của báo giá/đơn
+   * hàng, và mở rộng bừa là mở luôn quyền cho parent chưa có ai nghĩ tới.
+   */
+  async setProductFileMeta(
+    user: User,
+    fileId: string,
+    patch: { rev?: string | null; note?: string | null; is_current?: boolean },
+  ): Promise<FileRow> {
+    const file = await filesRepo.getById(fileId)
+    if (!file) throw NotFound('File not found')
+    if (!file.product_id) throw BadRequest('Chỉ áp dụng cho tài liệu của sản phẩm')
+    if (!(await canEditProducts(user))) {
+      throw Forbidden('Không có quyền sửa hồ sơ sản phẩm')
+    }
+
+    if (patch.is_current !== undefined) {
+      if (patch.is_current && !file.doc_type) {
+        throw BadRequest('Phân loại tài liệu trước rồi mới chọn được bản đang dùng')
+      }
+      await filesRepo.setCurrent(file, patch.is_current)
+    }
+    const meta: { rev?: string | null; note?: string | null } = {}
+    // Chuỗi rỗng = người dùng xoá trắng ô → null, không lưu '' để hai giá trị
+    // cùng nghĩa "chưa có" nằm lẫn trong cột.
+    if (patch.rev !== undefined) meta.rev = patch.rev?.trim() || null
+    if (patch.note !== undefined) meta.note = patch.note?.trim() || null
+    if (Object.keys(meta).length > 0) return filesRepo.updateMeta(fileId, meta)
+
+    return (await filesRepo.getById(fileId)) ?? file
   },
 
   async delete(user: User, fileId: string): Promise<void> {

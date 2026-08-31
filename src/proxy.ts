@@ -40,6 +40,14 @@ const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   ['/technical/products', '/products'],
 ]
 
+/**
+ * Trang đổi mật khẩu BẮT BUỘC + những đường duy nhất người đang bị giữ ở đó còn
+ * đi được: chính API đổi mật khẩu, và đăng xuất (đăng nhập nhầm tài khoản thì
+ * phải có lối ra, không thì kẹt cứng).
+ */
+const FORCE_CHANGE_PATH = '/doi-mat-khau'
+const FORCE_CHANGE_ALLOW = [FORCE_CHANGE_PATH, '/api/account/password', '/api/logout']
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
@@ -72,6 +80,31 @@ export async function proxy(request: NextRequest) {
     if (pathname !== '/') {
       url.searchParams.set('next', pathname + request.nextUrl.search)
     }
+    return NextResponse.redirect(url)
+  }
+
+  /*
+   * MẬT KHẨU TẠM — giữ người dùng ở /doi-mat-khau cho tới khi họ tự đặt lại.
+   *
+   * Gác ở proxy chứ không ở từng trang: tài khoản mới cấp (hoặc vừa bị admin
+   * reset vì lộ mật khẩu) đang dùng mật khẩu mà NGƯỜI KHÁC BIẾT — chừa sót một
+   * trang là chừa cả một đường vào. Cờ đọc từ claim `mc` trong token; token
+   * được cấp lại ngay khi đổi xong (xem `accountService.changePassword`) nên
+   * không có độ trễ.
+   */
+  if (session.mc && !FORCE_CHANGE_ALLOW.includes(pathname)) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json(
+        {
+          error: 'Bạn phải đổi mật khẩu trước khi tiếp tục',
+          code: 'MUST_CHANGE_PASSWORD',
+        },
+        { status: 403 },
+      )
+    }
+    const url = request.nextUrl.clone()
+    url.pathname = FORCE_CHANGE_PATH
+    url.search = ''
     return NextResponse.redirect(url)
   }
 

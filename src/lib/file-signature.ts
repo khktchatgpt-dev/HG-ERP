@@ -30,9 +30,19 @@ export const ALLOWED_EXTENSIONS = [
   'xlsx',
   'ppt',
   'pptx',
-  // bản vẽ (mở bằng phần mềm CAD, không chạy được)
+  // bản vẽ / mô hình (mở bằng CAD, không chạy được)
   'dwg',
   'dxf',
+  'step',
+  'stp',
+  'igs',
+  'iges',
+  'skp',
+  // artwork nhãn & mã vạch (Illustrator / Photoshop)
+  'ai',
+  'psd',
+  // video quay mẫu / hướng dẫn lắp
+  'mp4',
   // text
   'txt',
   'csv',
@@ -93,9 +103,46 @@ export function extensionIssue(filename: string): string | null {
     return `File .${ext} chạy được mã lệnh nên hệ thống không nhận.`
   }
   if (!(ALLOWED_EXTENSIONS as readonly string[]).includes(ext)) {
-    return `Không nhận file .${ext}. Hệ thống nhận: PDF, ảnh, Word, Excel, PowerPoint, CAD (dwg/dxf), CSV, ZIP.`
+    return `Không nhận file .${ext}. Hệ thống nhận: PDF, ảnh, Word, Excel, PowerPoint, CAD (dwg/dxf/step/igs/skp), artwork (ai/psd), video mp4, CSV, ZIP.`
   }
   return null
+}
+
+/**
+ * ĐUÔI QUYẾT ĐỊNH MIME cho những định dạng trình duyệt không biết.
+ *
+ * Vì sao cần: `.dwg` được các trình duyệt trả về `''`, `application/acad`,
+ * `image/vnd.dwg`, `drawing/x-dwg`… tuỳ máy và tuỳ phần mềm CAD đã cài. Bắt
+ * đúng một chuỗi trong số đó là chặn nhầm phần lớn người dùng. Đo thật
+ * 31/08/2026: chính vì vậy mà ngăn "Bản vẽ" của hồ sơ SP có ĐÚNG 0 file — API
+ * trả 400 cho mọi biến thể, kèm một đống enum thô không ai đọc được.
+ *
+ * Nên với các đuôi ở đây thì bỏ qua thứ trình duyệt khai và chốt theo đuôi —
+ * đuôi vốn đã phải qua `extensionIssue` (chặn macro + file chạy được) nên không
+ * mở thêm cửa nào.
+ *
+ * CỐ Ý không có mime nào bắt đầu bằng `image/`: `/api/files/[id]/img` phục vụ
+ * file `image/*` qua URL ký KHÔNG gác phiên. Gắn `image/vnd.dwg` cho bản vẽ là
+ * biến toàn bộ bản vẽ thành thứ tải được chỉ bằng một đường link.
+ */
+export const EXT_CANONICAL_MIME: Record<string, string> = {
+  dwg: 'application/acad',
+  dxf: 'application/dxf',
+  step: 'model/step',
+  stp: 'model/step',
+  igs: 'model/iges',
+  iges: 'model/iges',
+  skp: 'application/vnd.sketchup.skp',
+  ai: 'application/postscript',
+  psd: 'application/x-photoshop',
+}
+
+/**
+ * MIME sẽ được LƯU cho file này. Với đuôi ở `EXT_CANONICAL_MIME` thì lấy theo
+ * đuôi; còn lại giữ nguyên thứ trình duyệt khai (ảnh/PDF/Office đều đoán đúng).
+ */
+export function canonicalMime(filename: string, mime: string): string {
+  return EXT_CANONICAL_MIME[fileExtension(filename)] ?? mime
 }
 
 /**

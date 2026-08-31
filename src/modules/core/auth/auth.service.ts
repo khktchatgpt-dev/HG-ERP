@@ -11,9 +11,20 @@ const DUMMY_HASH = '$2a$12$CwTycUXWue0Thq9StjUM0uJ8L0v.5h6h7n5xq4Hkz8t9V1iX3W3i.
 /**
  * Mốc đời mật khẩu đem nhét vào token. Người chưa từng đổi mật khẩu có
  * `password_changed_at = null` → dùng chuỗi rỗng cho claim luôn là string.
+ *
+ * CHUẨN HOÁ VỀ ISO-Z, không dùng chuỗi thô. Hai đầu của phép so sánh đến từ hai
+ * nguồn viết giờ KHÁC NHAU: lúc đổi mật khẩu, `setPasswordHash` sinh mốc bằng
+ * `new Date().toISOString()` → `…478Z`; còn lúc `currentUser()` đọc lại thì
+ * Postgres trả `…478+00:00`. Cùng một khoảnh khắc, khác chuỗi → so thô là lệch,
+ * và người vừa đổi mật khẩu bị chính hệ thống coi là "token đời cũ" rồi đá về
+ * /login (đo thật 31/08/2026, lỗi có từ 0130).
  */
 export function passwordVersion(passwordChangedAt: string | null): string {
-  return passwordChangedAt ?? ''
+  if (!passwordChangedAt) return ''
+  const ms = Date.parse(passwordChangedAt)
+  // Chuỗi lạ (không parse được) thì giữ nguyên: thà so thô còn hơn quy hết về
+  // một giá trị, vì như thế là mọi token đều hợp lệ với nhau.
+  return Number.isNaN(ms) ? passwordChangedAt : new Date(ms).toISOString()
 }
 
 // NOTE: there is no self-registration. Accounts are provisioned by an admin via
@@ -32,6 +43,9 @@ export const authService = {
       sub: row.id,
       email: row.email,
       pv: passwordVersion(row.password_changed_at),
+      // Mật khẩu do admin đặt hộ → token mang cờ, proxy giữ người này ở
+      // /doi-mat-khau cho tới khi họ tự đặt mật khẩu riêng.
+      mc: row.must_change_password,
     })
     void usersRepo.touchLastLogin(row.id)
     const { password_hash: _ph, ...user } = row

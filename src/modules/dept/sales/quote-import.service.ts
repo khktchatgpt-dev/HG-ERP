@@ -258,6 +258,10 @@ export const quoteImportService = {
 
       if (!productId) {
         const product = await productsRepo.insert({
+          // Hồ sơ SP sinh ra từ file báo giá vẫn phải biết ai bấm nhập (0179).
+          // Không đặt `owner_id`: đây là đường của Kinh doanh, "Người phụ trách
+          // hồ sơ" là vai Kỹ thuật — xem `quickCreate`.
+          created_by: user.id,
           code: r.code?.trim() || (await nextProductCode(codesInBatch)),
           name: r.name,
           unit: r.unit?.trim() || 'cai',

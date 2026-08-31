@@ -1,6 +1,6 @@
 import { api } from '@/lib/api'
-import { formatBytes, maxBytesFor, type DocType } from '@/lib/file-limits'
-import { extensionIssue } from '@/lib/file-signature'
+import { formatBytes, isAllowedMime, maxBytesFor, type DocType } from '@/lib/file-limits'
+import { canonicalMime, extensionIssue } from '@/lib/file-signature'
 import { downscaleImage } from '@/lib/image-downscale'
 
 /**
@@ -86,6 +86,13 @@ export async function uploadFileTracked(
   if (docType === 'image') file = await downscaleImage(file)
   const extIssue = extensionIssue(file.name)
   if (extIssue) throw new Error(extIssue)
+  // Soát MIME ngay ở client để báo câu dễ hiểu, khỏi tốn một vòng gọi API. Chuẩn
+  // hoá theo đuôi trước — .dwg/.psd… trình duyệt khai lung tung (xem canonicalMime).
+  if (!isAllowedMime(canonicalMime(file.name, file.type))) {
+    throw new Error(
+      `Máy bạn khai file này là "${file.type || 'không rõ định dạng'}" — hệ thống không nhận kiểu đó.`,
+    )
+  }
   const max = maxBytesFor(docType)
   if (file.size > max) {
     throw new Error(`File ${formatBytes(file.size)} vượt giới hạn ${formatBytes(max)}`)
@@ -128,6 +135,13 @@ export async function uploadFile(
   // từ chối. Ràng buộc thật vẫn nằm ở server (filesService.finalize).
   const extIssue = extensionIssue(file.name)
   if (extIssue) throw new Error(extIssue)
+  // Soát MIME ngay ở client để báo câu dễ hiểu, khỏi tốn một vòng gọi API. Chuẩn
+  // hoá theo đuôi trước — .dwg/.psd… trình duyệt khai lung tung (xem canonicalMime).
+  if (!isAllowedMime(canonicalMime(file.name, file.type))) {
+    throw new Error(
+      `Máy bạn khai file này là "${file.type || 'không rõ định dạng'}" — hệ thống không nhận kiểu đó.`,
+    )
+  }
   const max = maxBytesFor(docType)
   if (file.size > max) {
     throw new Error(`File ${formatBytes(file.size)} vượt giới hạn ${formatBytes(max)}`)

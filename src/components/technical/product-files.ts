@@ -7,6 +7,11 @@ export type ProductFile = {
   size_bytes: number
   created_at: string
   doc_type: DocType | null
+  /** Bản ĐANG DÙNG của loại này trong hồ sơ (0181). */
+  is_current: boolean
+  /** Ký hiệu phiên bản người dùng gõ — 'Rev 3', 'v2.1'… */
+  rev: string | null
+  note: string | null
   /** Tên người tải lên — null nếu tài khoản đã bị xoá (owner_id set null). */
   owner_name: string | null
 }

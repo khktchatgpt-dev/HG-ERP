@@ -43,21 +43,47 @@ export default async function TechnicalProductsPage({
   // catalog có thể đổi, mã lạ chỉ ra 0 dòng chứ không gây lỗi.
   const category = str(spRaw.category) || 'all'
   const page = Math.max(1, Number(str(spRaw.page)) || 1)
+  // Lối tắt "Vừa sửa gần đây" ở màn mở đầu — không phải bộ lọc, chỉ đổi thứ tự.
+  const recent = str(spRaw.recent) === '1'
+
+  /*
+   * MÀN MỞ ĐẦU KHÔNG TRUY VẤN DANH SÁCH.
+   *
+   * Thư viện có 779 hồ sơ và hầu hết lần vào đây là để TÌM một mã cụ thể, chứ
+   * không phải để ngắm 24 SP mới nhất. Nạp sẵn một trang nghĩa là mỗi lượt mở
+   * đều tốn: 1 query danh sách + 1 query cờ tài liệu + 1 query xếp cont + tối
+   * đa 24 vòng gọi Supabase Storage cho ảnh (~1–1,5s mỗi tấm, đo 31/08/2026).
+   * Chưa gõ/chưa lọc thì để trống, bày ô tìm và mấy lối tắt.
+   */
+  const filtering =
+    !!q ||
+    customer !== 'all' ||
+    bom !== 'all' ||
+    status !== 'all' ||
+    image !== 'all' ||
+    locked !== 'all' ||
+    lifecycle !== 'all' ||
+    type !== 'all' ||
+    category !== 'all'
+  const idle = !filtering && !recent
 
   // Chỉ nạp 1 TRANG SP (nhẹ) + lọc phía server thay vì kéo cả bảng.
-  const { rows, total, fuzzy } = await productsService.listLite(user, {
-    q,
-    customer_name: customer === 'all' ? undefined : customer,
-    bom_status: bom === 'all' ? undefined : (bom as BomStatus),
-    is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
-    has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
-    locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
-    lifecycle: lifecycle === 'all' ? undefined : lifecycle,
-    product_type: type === 'all' ? undefined : type,
-    category: category === 'all' ? undefined : category,
-    page,
-    page_size: PAGE_SIZE,
-  })
+  const { rows, total, fuzzy } = idle
+    ? { rows: [], total: 0, fuzzy: false }
+    : await productsService.listLite(user, {
+        q,
+        customer_name: customer === 'all' ? undefined : customer,
+        bom_status: bom === 'all' ? undefined : (bom as BomStatus),
+        is_active: status === 'active' ? true : status === 'inactive' ? false : undefined,
+        has_image: image === 'missing' ? false : image === 'has' ? true : undefined,
+        locked: locked === 'yes' ? true : locked === 'no' ? false : undefined,
+        lifecycle: lifecycle === 'all' ? undefined : lifecycle,
+        product_type: type === 'all' ? undefined : type,
+        category: category === 'all' ? undefined : category,
+        sort: recent ? 'updated' : 'created',
+        page,
+        page_size: PAGE_SIZE,
+      })
 
   // Nhãn khách/nhóm cho bộ lọc + đếm cho StatsBar + cờ "đã có bản vẽ / BOM"
   // suy từ FILE đã upload (chỉ cho SP của trang này). Vật tư cho BOM editor
@@ -65,6 +91,11 @@ export default async function TechnicalProductsPage({
   //
   // `packingLoading`: số xếp cont THẬT nằm ở technical_packing_options, không
   // phải jsonb `packing` — xem chú thích ở packingLoadingByProducts.
+  //
+  // `stats` + `customerNames` VẪN nạp lúc màn trống: chúng chính là nội dung của
+  // màn mở đầu (số trên các lối tắt, danh sách khách để lọc). Hai truy vấn tổng
+  // hợp, không kéo theo ảnh. Còn `docFlags`/`packingLoading` tính theo TỪNG DÒNG
+  // của trang kết quả — `ids` rỗng thì cả hai tự trả `{}` không chạm DB.
   const ids = rows.map((p) => p.id)
   const [stats, customerNames, docFlags, packingLoading, catalog] = await Promise.all([
     productsService.stats(),
@@ -117,6 +148,8 @@ export default async function TechnicalProductsPage({
         loading_40hc: packingLoading[p.id] ?? p.packing?.loading_40hc ?? null,
       }))}
       total={total}
+      idle={idle}
+      recent={recent}
       fuzzy={fuzzy ?? false}
       page={page}
       pageSize={PAGE_SIZE}

@@ -21,11 +21,20 @@ function secret() {
  * Token cũ (trước 08/2026) không có `pv` → verify trả null → phải đăng nhập lại
  * một lần. Cố ý: coi token thiếu claim là không hợp lệ thay vì cho đi tiếp, để
  * không có cửa sau tồn tại tới 7 ngày.
+ *
+ * `mc` = "must change": tài khoản đang mang mật khẩu do ADMIN đặt hộ, phải tự
+ * đổi trước khi dùng tiếp (`users.must_change_password`). Nằm trong token vì
+ * proxy chạy ở Edge, không tra được DB — xem cổng chặn ở `src/proxy.ts`. Chỉ ký
+ * khi bật, nên token của người bình thường không dài thêm; thiếu claim = false.
  */
-export type SessionPayload = { sub: string; email: string; pv: string }
+export type SessionPayload = { sub: string; email: string; pv: string; mc: boolean }
 
 export async function createSession(payload: SessionPayload) {
-  const token = await new SignJWT({ email: payload.email, pv: payload.pv })
+  const token = await new SignJWT({
+    email: payload.email,
+    pv: payload.pv,
+    ...(payload.mc ? { mc: true } : {}),
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(payload.sub)
     .setIssuedAt()
@@ -64,7 +73,12 @@ export async function verifySessionToken(token: string): Promise<SessionPayload 
     ) {
       return null
     }
-    return { sub: payload.sub, email: payload.email, pv: payload.pv }
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      pv: payload.pv,
+      mc: payload.mc === true,
+    }
   } catch {
     return null
   }

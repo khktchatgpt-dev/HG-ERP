@@ -6,6 +6,7 @@ import {
   CircleCheck,
   CircleSlash,
   Ellipsis,
+  EyeOff,
   ImageOff,
   Lock,
   Maximize2,
@@ -24,11 +25,15 @@ import type { ProductRow } from './types'
  */
 function Thumb({ p, url, onZoom }: { p: ProductRow; url?: string; onZoom: () => void }) {
   if (!url) {
+    // Có `image_file_id` mà không có url = lưới đang tắt ảnh cho nhẹ, KHÁC hẳn
+    // "chưa có ảnh". Dùng đúng icon để người dùng không đi tải lại ảnh đã có.
+    const hidden = !!p.image_file_id
+    const Icon = hidden ? EyeOff : ImageOff
     return (
       <div className="bg-muted grid size-9 place-items-center rounded border">
-        <ImageOff
+        <Icon
           className="text-muted-foreground/50 size-3.5"
-          aria-label={`${p.name}: chưa có ảnh`}
+          aria-label={`${p.name}: ${hidden ? 'ảnh đang tắt' : 'chưa có ảnh'}`}
         />
       </div>
     )

@@ -60,6 +60,9 @@ export const GET = handle(async (req: Request) => {
       size_bytes: f.size_bytes,
       created_at: f.created_at,
       doc_type: f.doc_type,
+      is_current: f.is_current,
+      rev: f.rev,
+      note: f.note,
       owner_name: f.owner_id ? (names.get(f.owner_id) ?? null) : null,
     })),
   })

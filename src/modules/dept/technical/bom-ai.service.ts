@@ -451,15 +451,17 @@ export const bomAiService = {
     const product = await productsService.create(user, input.product)
 
     // `create` chỉ insert bộ cột của form "Thêm sản phẩm" — kích thước bình
-    // thường vào sau qua tab Thông số, nên patch bồi một lượt. Kèm `owner_id`:
-    // hồ sơ tạo từ app ghi nhận NGƯỜI TẠO theo phiên đăng nhập (user chốt
-    // 18/08/2026 — không chép chữ ký giấy từ khối ISO của file).
+    // thường vào sau qua tab Thông số, nên patch bồi một lượt.
+    //
+    // `owner_id` KHÔNG còn đặt ở đây: từ 0179 `create` tự ghi cả `created_by`
+    // lẫn `owner_id` theo phiên đăng nhập cho mọi đường tạo của Kỹ thuật. Hồ sơ
+    // đọc từ file vẫn ghi nhận người tạo theo NGƯỜI ĐANG ĐĂNG NHẬP, không chép
+    // chữ ký giấy ở khối ISO của file (user chốt 18/08/2026).
     const p = input.product
     await productsService.update(user, product.id, {
       length_mm: p.length_mm ?? null,
       width_mm: p.width_mm ?? null,
       height_mm: p.height_mm ?? null,
-      owner_id: user.id,
     })
 
     /*
