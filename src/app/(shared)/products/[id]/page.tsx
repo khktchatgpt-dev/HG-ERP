@@ -69,6 +69,9 @@ export default async function ProductProfilePage({
       suggestions={suggestions}
       categories={categories}
       owners={owners}
+      // Tên tra sẵn ở server (`getProfileInfo`) chứ không dò trong `owners`:
+      // danh sách đó chỉ có người ĐANG làm việc, người lập đã nghỉ sẽ mất tên.
+      creatorName={data.creatorName}
       canEdit={canEdit}
     />
   )

@@ -314,6 +314,8 @@ export const productsService = {
       lifecycle?: Lifecycle
       product_type?: string
       category?: string
+      /** 'updated' = xếp theo lần sửa gần nhất (lối tắt "Vừa sửa gần đây"). */
+      sort?: 'created' | 'updated'
       page: number
       page_size: number
     },
@@ -511,6 +513,12 @@ export const productsService = {
       throw Conflict(`Mã "${input.code}" đã tồn tại`, 'CODE_TAKEN')
     }
     return productsRepo.insert({
+      // Người LẬP hồ sơ (0179) — dấu vết bất biến, lấy từ phiên đăng nhập chứ
+      // không nhận từ input. `owner_id` cũng mặc định là người này: đường tạo
+      // này là của Kỹ thuật, ai lập thì trả lời về hồ sơ, bàn giao sau vẫn đổi
+      // được ô đó mà không mất dấu người lập.
+      created_by: user.id,
+      owner_id: user.id,
       code: input.code,
       name: input.name,
       category: input.category ?? null,
@@ -572,6 +580,11 @@ export const productsService = {
       ? await productsRepo.customerNameById(input.customer_id)
       : null
     return productsRepo.insert({
+      created_by: user.id,
+      // CỐ Ý không đặt `owner_id`: đường này thường do Kinh doanh gõ giữa lúc
+      // làm báo giá, còn "Người phụ trách hồ sơ" là vai của Kỹ thuật. Ghi tên
+      // sale vào đó là chỉ sai người khi hồ sơ có vấn đề. Vẫn biết ai tạo nhờ
+      // `created_by`.
       code: input.code,
       name: input.name,
       // Kinh doanh tạo nhanh thì không chọn loại/vật liệu — suy từ mã là đủ.
@@ -789,6 +802,10 @@ export const productsService = {
     }
 
     const created = await productsRepo.insert({
+      // Bản sao là một hồ sơ MỚI: người tạo là người bấm nhân bản, không phải
+      // người lập mẫu gốc. Cũng KHÔNG copy `owner_id` của mẫu gốc vì lý do đó.
+      created_by: user.id,
+      owner_id: user.id,
       code: input.code,
       name: input.name ?? src.name,
       category: src.category,
@@ -851,13 +868,20 @@ export const productsService = {
       productProfileRepo.partsCount(productId),
     ])
     if (!product) throw NotFound('Sản phẩm không tồn tại')
-    // Tên người phụ trách cho khối "Hồ sơ" của tab Thông số (thay khối ISO đã
-    // bỏ 18/08/2026 — chỉ ghi nhận người tạo theo phiên đăng nhập + ngày tạo).
-    const ownerName = product.owner_id
-      ? ((await usersRepo.displayNamesByIds([product.owner_id])).get(product.owner_id) ??
-        null)
+    /*
+     * Tên người phụ trách + NGƯỜI LẬP hồ sơ (0179) cho khối "Hồ sơ" (thay khối
+     * ISO đã bỏ 18/08/2026 — ghi nhận theo phiên đăng nhập, không chép chữ ký
+     * giấy). Tra Ở SERVER chứ không để trang tự dò trong danh sách nhân sự đang
+     * làm việc: người lập có thể đã nghỉ, mà nghỉ rồi thì càng phải còn tên —
+     * dấu vết mất đúng lúc cần nhất thì bằng không có.
+     */
+    const ids = [product.owner_id, product.created_by].filter((v): v is string => !!v)
+    const names = ids.length ? await usersRepo.displayNamesByIds(ids) : new Map()
+    const ownerName = product.owner_id ? (names.get(product.owner_id) ?? null) : null
+    const creatorName = product.created_by
+      ? (names.get(product.created_by) ?? null)
       : null
-    return { product, packing, bomRows, ownerName }
+    return { product, packing, bomRows, ownerName, creatorName }
   },
 
   /** Tab Định mức: định mức + món trong bộ + danh mục nhóm. */

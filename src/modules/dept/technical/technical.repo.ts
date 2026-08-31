@@ -143,8 +143,13 @@ export type Product = {
   sample_confirmed_at: string | null
   sample_confirmed_by: string | null
   sample_note: string | null
-  /** Người phụ trách hồ sơ (0144) — người trả lời khi hồ sơ có vấn đề. */
+  /** Người phụ trách hồ sơ (0144) — người trả lời khi hồ sơ có vấn đề. Đổi được. */
   owner_id: string | null
+  /**
+   * Người LẬP hồ sơ (0179) — server tự ghi lúc tạo, BẤT BIẾN. Tách khỏi
+   * `owner_id` vì bàn giao người phụ trách không được xoá dấu vết ai đã làm.
+   */
+  created_by: string | null
   /**
    * TRẠNG THÁI hồ sơ (0145) — nguồn DUY NHẤT người dùng chạm vào. Không ghi qua
    * `patch` (xem `ProductWrite`): mọi đường đổi trạng thái phải đi
@@ -164,11 +169,11 @@ export type Product = {
  * dòng lịch sử, nên chỉ có `productsRepo.setLifecycle` (gọi từ service) mới
  * được chạm vào. Loại ở tầng type để quên là hỏng build, không phải hỏng dữ liệu.
  */
-export type ProductWrite = Partial<Omit<Product, 'lifecycle'>>
+export type ProductWrite = Partial<Omit<Product, 'lifecycle' | 'created_by'>>
 
 // Một string literal duy nhất — supabase-js suy type cột từ literal, nối chuỗi sẽ hỏng.
 const COLS =
-  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
+  'id, code, name, category, customer_id, customer_name, customer_item_code, description_en, unit, bom_status, packing, image_file_id, notes, name_foreign, shipping_mark, barcode, showroom_sample, reference_price, tech_spec, hs_code, origin_country, material, max_load_kg, assembly, set_contents, product_type, frame_material, code_legacy, is_upholstered, has_glass, is_set, net_weight_kg, frame_weight_kg, frame_length_m, paint_area_m2, part_count, length_mm, width_mm, height_mm, length_open_mm, width_open_mm, height_open_mm, thickness_mm, base_material, actual_weight_kg, paint_coverage_m2_per_kg, bom_rev, bom_effective_date, bom_prepared_by, bom_approved_by, bom_checked_at, bom_checked_by, bom_file_id, locked_at, locked_by, lock_note, unlocked_at, unlocked_by, unlock_reason, sample_confirmed_at, sample_confirmed_by, sample_note, owner_id, created_by, lifecycle, lifecycle_at, lifecycle_by, is_active, created_at, updated_at'
 
 /** Cột nhẹ cho thư viện (thẻ/bảng) — KHÔNG kéo tech_spec/notes/shipping_mark… để
  *  tiết kiệm egress Supabase. Chi tiết đầy đủ nạp riêng ở trang chi tiết. */
@@ -320,13 +325,20 @@ export const productsRepo = {
      * `NO_CATEGORY_FILTER` = chưa gán danh mục.
      */
     category?: string
+    /**
+     * `updated` = vừa sửa gần đây — lối tắt ở màn mở đầu thư viện, dành cho
+     * người đang làm dở một hồ sơ và muốn quay lại. Mặc định vẫn là mới TẠO.
+     */
+    sort?: 'created' | 'updated'
     page: number
     page_size: number
   }): Promise<{ rows: ProductLite[]; total: number }> {
     let q = db()
       .from('technical_products')
       .select(LITE_COLS, { count: 'exact' })
-      .order('created_at', { ascending: false })
+      .order(filter.sort === 'updated' ? 'updated_at' : 'created_at', {
+        ascending: false,
+      })
     if (filter.is_active != null) q = q.eq('is_active', filter.is_active)
     if (filter.customer_name === NO_CUSTOMER_FILTER) q = q.is('customer_name', null)
     else if (filter.customer_name) q = q.eq('customer_name', filter.customer_name)
@@ -577,7 +589,14 @@ export const productsRepo = {
     return (data as { id: string } | null)?.id ?? null
   },
 
-  async insert(row: ProductWrite & Pick<Product, 'code' | 'name'>): Promise<Product> {
+  /**
+   * `created_by` chỉ nhận Ở ĐÂY. `ProductWrite` (dùng cho `patch`) cố tình loại
+   * nó ra cùng `lifecycle`: người lập hồ sơ là dấu vết, không phải một ô sửa
+   * được — chặn ở tầng type nên quên là hỏng build chứ không hỏng dữ liệu.
+   */
+  async insert(
+    row: ProductWrite & Pick<Product, 'code' | 'name'> & { created_by?: string | null },
+  ): Promise<Product> {
     const { data, error } = await db()
       .from('technical_products')
       .insert(row)
