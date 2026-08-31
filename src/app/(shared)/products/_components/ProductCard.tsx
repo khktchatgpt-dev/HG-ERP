@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { CircleSlash, Ellipsis, ImageOff, Lock, Maximize2 } from 'lucide-react'
+import { CircleSlash, Ellipsis, EyeOff, ImageOff, Lock, Maximize2 } from 'lucide-react'
 import { LIFECYCLE_LABEL, LIFECYCLE_TONE } from '@/lib/product-lifecycle'
 import { isSvgUrl } from '@/lib/image'
 import { Badge } from '@/components/shadcn/badge'
@@ -14,11 +14,18 @@ import { IMAGE_FRAME_BG, type ProductRow } from './types'
 export function ProductCard({
   p,
   imageUrl,
+  imageHidden = false,
   actions,
   onZoom,
 }: {
   p: ProductRow
   imageUrl?: string
+  /**
+   * SP CÓ ảnh nhưng lưới đang tắt ảnh cho nhẹ (xem `ProductsManager`). Phải phân
+   * biệt với "chưa có ảnh": hai chỗ trống trông giống nhau sẽ khiến người dùng
+   * tưởng hồ sơ mất ảnh và đi tải lại.
+   */
+  imageHidden?: boolean
   actions: RowMenuItem[]
   /** Mở hộp xem ảnh lớn. Chỉ gọi khi `imageUrl` có. */
   onZoom: (url: string) => void
@@ -72,7 +79,15 @@ export function ProductCard({
                 {p.code}
               </span>
               <span className="text-muted-foreground/50 inline-flex items-center gap-1 text-[11px]">
-                <ImageOff className="size-3.5" aria-hidden /> Chưa có ảnh
+                {imageHidden ? (
+                  <>
+                    <EyeOff className="size-3.5" aria-hidden /> Ảnh đang tắt
+                  </>
+                ) : (
+                  <>
+                    <ImageOff className="size-3.5" aria-hidden /> Chưa có ảnh
+                  </>
+                )}
               </span>
             </div>
           )}
