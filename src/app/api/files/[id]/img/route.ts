@@ -5,6 +5,9 @@ import { verifyImageSig } from '@/server/file-image'
 
 type Params = { params: Promise<{ id: string }> }
 
+/** Ảnh RASTER trình duyệt vẽ được — khớp nhóm ảnh trong `ALLOWED_MIME`. */
+const RASTER_MIME = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
+
 /**
  * ẢNH qua ĐƯỜNG DẪN CỐ ĐỊNH — nguồn cho `next/image`.
  *
@@ -25,9 +28,19 @@ export const GET = handle(async (req: Request, { params }: Params) => {
 
   const file = await filesRepo.getById(id)
   if (!file || file.deleted_at) throw NotFound('File not found')
-  // Chỉ phục vụ ảnh: đường này không gác phiên nên không được thành lối tải
-  // trộm tài liệu (BOM, bản vẽ, chứng từ).
-  if (!file.mime_type.startsWith('image/')) throw BadRequest('Không phải ảnh')
+  /*
+   * Chỉ phục vụ ảnh: đường này không gác phiên nên không được thành lối tải
+   * trộm tài liệu (BOM, bản vẽ, chứng từ).
+   *
+   * DANH SÁCH ĐÍCH DANH chứ không `startsWith('image/')` (siết 31/08/2026):
+   * `image/` có cả những thứ KHÔNG phải ảnh xem được — `image/vnd.dwg`,
+   * `image/vnd.dxf`, `image/vnd.adobe.photoshop` là tên MIME chính thức của bản
+   * vẽ CAD và file Photoshop. Lỡ gán một trong số đó cho tài liệu là bản vẽ
+   * thành thứ ai cầm link cũng tải được. `EXT_CANONICAL_MIME` đã cố tình tránh
+   * tiền tố `image/`, nhưng chặn ở đúng chỗ phục vụ thì không phụ thuộc vào
+   * việc người sau có nhớ quy ước đó không.
+   */
+  if (!RASTER_MIME.has(file.mime_type)) throw BadRequest('Không phải ảnh')
 
   const { url } = await storage.createSignedDownloadUrl(file.bucket, file.path)
   const upstream = await fetch(url)
