@@ -107,6 +107,9 @@ export const accountService = {
       sub: actor.id,
       email: actor.email,
       pv: passwordVersion(changedAt),
+      // `setPasswordHash` vừa hạ `must_change_password` — token mới phải hạ
+      // theo, không thì người vừa đổi xong vẫn bị proxy giữ ở /doi-mat-khau.
+      mc: false,
     })
     await userAuditRepo.insert({
       target_user_id: actor.id,

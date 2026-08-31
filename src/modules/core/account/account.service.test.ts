@@ -68,6 +68,9 @@ describe('changePassword', () => {
       sub: 'u1',
       email: 'nv@hg.com',
       pv: '2026-08-10T00:00:00.000Z',
+      // Đổi xong là hết nợ mật khẩu tạm — cờ phải hạ, không thì proxy giữ
+      // người vừa đổi ở lại /doi-mat-khau.
+      mc: false,
     })
   })
 
