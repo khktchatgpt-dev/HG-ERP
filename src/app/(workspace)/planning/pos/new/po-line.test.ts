@@ -60,6 +60,8 @@ const base: PoLineDto = {
   carton_basis: null,
   pack_size: null,
   pack_unit: null,
+  unit2_per_unit: null,
+  unit2: null,
 }
 
 /** Tiền của dòng ĐÃ LƯU, tính đúng cách server tính. */

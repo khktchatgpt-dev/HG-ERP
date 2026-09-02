@@ -1,11 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { ClipboardPaste } from 'lucide-react'
+import { ArrowLeft, ClipboardPaste } from 'lucide-react'
 import { Modal } from '@/components/Modal'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
+import { Textarea } from '@/components/shadcn/textarea'
+import { ToolbarSelect } from '@/components/erp/Toolbar'
 import { parsePoPaste, type PastedPoLine } from '@/lib/po-paste'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
@@ -188,47 +191,42 @@ export function PasteLinesDialog({
             tiêu đề) rồi dán vào đây. Máy khớp với danh mục, dòng nào mơ hồ sẽ hỏi lại —
             không tự đoán.
           </p>
-          <textarea
+          <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={10}
             autoFocus
             placeholder={'Vít 4x15 đuôi cá\t13.596\t250\nLong đền nhựa 6x16\t500\t120'}
-            className="border-input bg-card w-full rounded-lg border p-3 font-mono text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-sky-500/40"
+            className="bg-card rounded-lg p-3 font-mono text-xs"
           />
           <div className="flex justify-end gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 reset()
                 onClose()
               }}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               Huỷ
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               disabled={busy || text.trim() === ''}
               onClick={() => void analyze()}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
             >
               {busy && <Spinner size={14} />}
               Đọc &amp; khớp mã
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {/* Đếm rõ từng loại — không nuốt dòng nào im lặng. */}
           <p className="text-xs">
-            <b className="text-emerald-700 dark:text-emerald-400">
-              {counts!.sure} khớp chắc
-            </b>
+            <b className="text-[var(--done)]">{counts!.sure} khớp chắc</b>
             {' · '}
-            <b className="text-amber-700 dark:text-amber-400">
-              {counts!.fuzzy} máy đề cử — xem lại
-            </b>
+            <b className="text-[var(--warn)]">{counts!.fuzzy} máy đề cử — xem lại</b>
             {' · '}
             <b>{counts!.manual} chọn tay</b>
             {' · '}
@@ -240,7 +238,10 @@ export function PasteLinesDialog({
               </span>
             )}
           </p>
-          <div className="max-h-[50vh] overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div className="border-border max-h-[50vh] overflow-y-auto rounded-lg border">
+            {/* eslint-disable-next-line hg/no-raw-control -- bảng SOÁT LẠI trước khi
+                thêm: mỗi dòng có một ô chọn cách khớp, tô nền theo độ tin cậy.
+                DataTable là bảng danh sách (sắp xếp/phân trang) — không hợp. */}
             <table className="w-full text-xs">
               <thead className="bg-muted/50 sticky top-0">
                 <tr className="text-muted-foreground text-left">
@@ -256,12 +257,12 @@ export function PasteLinesDialog({
                     r.choice === 'skip'
                       ? 'opacity-60'
                       : r.result.confidence === 'fuzzy' && typeof r.choice === 'number'
-                        ? 'bg-amber-50/60 dark:bg-amber-950/20'
+                        ? 'bg-[color-mix(in_srgb,var(--warn)_10%,transparent)]'
                         : ''
                   return (
                     <tr
                       key={i}
-                      className={`border-t border-zinc-100 dark:border-zinc-800 ${tone}`}
+                      className={`border-border/60 border-t ${tone}`}
                     >
                       <td className="px-2 py-1.5">
                         <div className="font-medium">{r.pasted.name}</div>
@@ -278,40 +279,39 @@ export function PasteLinesDialog({
                         {r.pasted.price != null ? num(r.pasted.price) : '—'}
                       </td>
                       <td className="px-2 py-1.5">
-                        <select
+                        <ToolbarSelect
                           value={String(r.choice)}
-                          onChange={(e) =>
+                          onChange={(v) =>
                             setRows((rs) =>
                               rs!.map((x, xi) =>
                                 xi === i
                                   ? {
                                       ...x,
                                       choice:
-                                        e.target.value === 'skip' ||
-                                        e.target.value === 'free'
-                                          ? (e.target.value as 'skip' | 'free')
-                                          : Number(e.target.value),
+                                        v === 'skip' || v === 'free'
+                                          ? (v as 'skip' | 'free')
+                                          : Number(v),
                                     }
                                   : x,
                               ),
                             )
                           }
-                          className="border-input bg-card w-full rounded border px-1.5 py-1 text-xs"
+                          className="h-auto w-full rounded px-1.5 py-1 text-xs"
                           aria-label={`Khớp cho ${r.pasted.name}`}
-                        >
-                          <option value="skip">— bỏ qua dòng này —</option>
-                          {allowFree && (
-                            <option value="free">＋ thêm thành dòng tự gõ</option>
-                          )}
-                          {r.result.candidates.map((c, ci) => (
-                            <option key={c.id} value={ci}>
-                              {c.code} — {c.name}
-                            </option>
-                          ))}
-                        </select>
+                          options={[
+                            { value: 'skip', label: '— bỏ qua dòng này —' },
+                            ...(allowFree
+                              ? [{ value: 'free', label: '＋ thêm thành dòng tự gõ' }]
+                              : []),
+                            ...r.result.candidates.map((c, ci) => ({
+                              value: String(ci),
+                              label: `${c.code} — ${c.name}`,
+                            })),
+                          ]}
+                        />
                         {r.result.confidence === 'fuzzy' &&
                           typeof r.choice === 'number' && (
-                            <div className="mt-0.5 text-[10px] text-amber-700 dark:text-amber-400">
+                            <div className="mt-0.5 text-[10px] text-[var(--warn)]">
                               tên gần giống, máy đề cử — xác nhận đúng hàng trước khi thêm
                             </div>
                           )}
@@ -323,32 +323,28 @@ export function PasteLinesDialog({
             </table>
           </div>
           <div className="flex items-center justify-end gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => setRows(null)}
-              className="mr-auto rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="mr-auto gap-1.5"
             >
-              ← Dán lại
-            </button>
-            <button
+              <ArrowLeft aria-hidden /> Dán lại
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 reset()
                 onClose()
               }}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-xs hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
             >
               Huỷ
-            </button>
-            <button
-              type="button"
-              disabled={addable === 0}
-              onClick={confirm}
-              className="inline-flex items-center gap-2 rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-50"
-            >
-              <ClipboardPaste className="size-4" aria-hidden />
+            </Button>
+            <Button type="button" disabled={addable === 0} onClick={confirm}>
+              <ClipboardPaste aria-hidden />
               Thêm {addable} dòng vào đơn
-            </button>
+            </Button>
           </div>
         </div>
       )}

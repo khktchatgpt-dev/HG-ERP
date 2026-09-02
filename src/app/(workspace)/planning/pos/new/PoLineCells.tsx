@@ -2,6 +2,13 @@
 
 import { useState } from 'react'
 import { DiePicker } from '@/components/supply/DiePicker'
+import {
+  gridCellClass as cell,
+  GridCellInput,
+  GridCellSelect,
+  GridCellTextarea,
+} from '@/components/erp/GridCell'
+import { Button } from '@/components/shadcn/button'
 import type { PoField } from '@/lib/po-fields'
 import {
   baremFor,
@@ -29,8 +36,9 @@ import { specFromLine } from '@/lib/po-catalog-backfill'
  * che mất số dài trong ô hẹp, vừa vô dụng — SL đặt 2.060 không ai bấm mũi tên
  * 2.060 lần, và cuộn-để-đổi-số đã bị chặn từ trước (blurOnWheel).
  */
-export const cell =
-  'h-[32px] w-full rounded-none border-0 bg-transparent px-2 text-[13px] outline-none ring-inset transition-colors focus:bg-sky-50/70 focus-visible:ring-2 focus-visible:ring-sky-500/60 dark:focus:bg-sky-950/30 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+/* Chuyển vào kit 02/09 (`erp/GridCell`) — giữ tên `cell` vì cả thư mục đang
+ * gọi, nhưng chỉ còn MỘT định nghĩa và đã hết `sky-*` sót từ theme-v2. */
+export { cell }
 export const calc =
   'bg-muted/50 flex h-[32px] items-center justify-end px-2 text-[13px] font-medium tabular-nums'
 
@@ -104,7 +112,7 @@ export function AutoGrowCell({
   onAutoFocused?: () => void
 }) {
   return (
-    <textarea
+    <GridCellTextarea
       value={value}
       rows={1}
       maxLength={maxLength}
@@ -147,14 +155,15 @@ function SaveToCatalog({
   const value = Number(get(line, f.field))
   const label = f.key === 'kgm' ? 'kg/m' : `kg/${line.unit || 'đơn vị'}`
   return (
-    <button
+    <Button
+      variant="link"
       type="button"
       onClick={() => onSave(line.material_id, f.key === 'kgm' ? 'kgm' : 'kgunit', value)}
       title={`Ghi ${num(value)} ${label} vào danh mục vật tư — lần đặt sau tự điền, khỏi gõ lại`}
-      className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+      className="text-muted-foreground mt-0.5 block h-auto w-full justify-end p-0 text-right text-[10.5px] font-normal whitespace-nowrap hover:text-[var(--primary)] hover:underline"
     >
       lưu vào danh mục ↑
-    </button>
+    </Button>
   )
 }
 
@@ -192,7 +201,7 @@ function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps)
       <>
         {lech >= 0.1 && (
           <div
-            className="mt-0.5 text-right text-[10.5px] leading-tight text-amber-700 dark:text-amber-500"
+            className="mt-0.5 text-right text-[10.5px] leading-tight text-[var(--warn)]"
             title={`Số đang dùng ${num(filled)}; barem tính từ quy cách ra ${num(kg!)}. Lệch lớn thường do dài cây khai sai — đối chiếu lại trước khi gửi.`}
           >
             barem {num(kg!)} · lệch {Math.round(lech * 100)}%
@@ -211,14 +220,15 @@ function BaremHint({ f, line, index, onPatch, onSaveToCatalog }: BaremHintProps)
     )
   }
   return (
-    <button
+    <Button
+      variant="link"
       type="button"
       onClick={() => onPatch(index, patchOf(f.field!, kg))}
       title={`Tính từ quy cách trong tên vật tư theo barem xưởng — bấm để dùng ${num(kg)}`}
-      className="mt-0.5 block w-full text-right text-[11px] font-medium whitespace-nowrap text-sky-700 hover:underline dark:text-sky-400"
+      className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
     >
       barem {num(kg)} ↩
-    </button>
+    </Button>
   )
 }
 
@@ -255,7 +265,7 @@ export function LineCell({
     case 'number':
       return (
         <>
-          <input
+          <GridCellInput
             type="number"
             min="0"
             max={f.max}
@@ -313,7 +323,7 @@ export function LineCell({
 
     case 'openStyle':
       return (
-        <select
+        <GridCellSelect
           value={l.open_style}
           onChange={(e) => {
             // Đổi cách mở là đổi công thức m² (AD khác MR) — tính lại ngay.
@@ -333,7 +343,7 @@ export function LineCell({
           <option value="AD">AD</option>
           <option value="MR">MR</option>
           <option value="ĐK">ĐK</option>
-        </select>
+        </GridCellSelect>
       )
 
     case 'inner':
@@ -349,7 +359,8 @@ export function LineCell({
             l.inner_l_mm !== '' &&
             l.inner_w_mm !== '' &&
             l.inner_h_mm !== '' && (
-              <button
+              <Button
+                variant="link"
                 type="button"
                 onClick={() =>
                   // MỘT chỗ sinh chuỗi quy cách cho cả hai lối (link này và hộp
@@ -358,10 +369,10 @@ export function LineCell({
                   onSaveToCatalog(l.material_id, 'spec', specFromLine(l) ?? '')
                 }
                 title="Danh mục chưa có quy cách — lưu để lần đặt sau tự bóc kích thước"
-                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+                className="text-muted-foreground mt-0.5 block h-auto w-full justify-end p-0 text-right text-[10.5px] font-normal whitespace-nowrap hover:text-[var(--primary)] hover:underline"
               >
                 lưu quy cách ↑
-              </button>
+              </Button>
             )}
         </>
       )
@@ -369,7 +380,7 @@ export function LineCell({
     case 'area':
       return (
         <>
-          <input
+          <GridCellInput
             type="number"
             min="0"
             step="0.0001"
@@ -390,16 +401,17 @@ export function LineCell({
             !l.is_free &&
             l.spec.trim() === '' &&
             parseInnerDims(l.dimension_text) != null && (
-              <button
+              <Button
+                variant="link"
                 type="button"
                 onClick={() =>
                   onSaveToCatalog(l.material_id, 'spec', l.dimension_text.trim())
                 }
                 title="Danh mục chưa có quy cách — lưu để lần đặt sau tự tính m²/tấm"
-                className="text-muted-foreground mt-0.5 block w-full text-right text-[10.5px] whitespace-nowrap hover:text-sky-700 hover:underline dark:hover:text-sky-400"
+                className="text-muted-foreground mt-0.5 block h-auto w-full justify-end p-0 text-right text-[10.5px] font-normal whitespace-nowrap hover:text-[var(--primary)] hover:underline"
               >
                 lưu quy cách ↑
-              </button>
+              </Button>
             )}
         </>
       )
@@ -408,7 +420,7 @@ export function LineCell({
       // Bộ lựa chọn theo MẪU (khai ở PO_FIELDS): bao bì thùng/m², kính tấm/m²,
       // xốp tấm/m³, gia công SP/kg — cùng một cột DB `carton_basis`.
       return (
-        <select
+        <GridCellSelect
           value={l.carton_basis}
           onChange={(e) =>
             onPatch(index, {
@@ -428,9 +440,61 @@ export function LineCell({
               {o.label}
             </option>
           ))}
-        </select>
+        </GridCellSelect>
       )
+
+    case 'unit2':
+      // 0182 — quy đổi giá tổng quát, MỘT ô "17.5 Lít" (cùng lối gõ-một-ô của
+      // 'inner'): 1 ĐVT đặt = 17,5 lít, ĐƠN GIÁ nhập theo LÍT. Xoá trống là
+      // quay về SL × giá. Danh mục có khai thì ô đã được điền sẵn từ newLine.
+      return <Unit2Cell l={l} index={index} onPatch={onPatch} label={label} />
   }
+}
+
+/**
+ * Ô quy đổi giá (0182): hiển thị/parse "17.5 Lít" ↔ cặp
+ * {unit2_per_unit, unit2_label}. Gõ dở (chỉ số, chưa có chữ) thì cứ giữ nguyên
+ * chuỗi trong ô — chỉ đẩy vào state khi parse trọn cặp hoặc khi trống hẳn,
+ * cùng nguyên tắc với ô lọt lòng.
+ */
+function Unit2Cell({
+  l,
+  index,
+  onPatch,
+  label,
+}: {
+  l: Line
+  index: number
+  onPatch: (i: number, patch: Partial<Line>) => void
+  label: string
+}) {
+  const [raw, setRaw] = useState(() =>
+    l.unit2_per_unit !== '' && l.unit2_label
+      ? `${l.unit2_per_unit} ${l.unit2_label}`
+      : '',
+  )
+  return (
+    <GridCellInput
+      value={raw}
+      onChange={(e) => {
+        const v = e.target.value
+        setRaw(v)
+        const m = v.trim().match(/^([d.,]+)s*(D.*)$/)
+        if (m) {
+          const per = Number(m[1].replace(',', '.'))
+          if (per > 0) {
+            onPatch(index, { unit2_per_unit: per, unit2_label: m[2].trim() })
+            return
+          }
+        }
+        if (v.trim() === '') onPatch(index, { unit2_per_unit: '', unit2_label: '' })
+      }}
+      placeholder="17.5 Lít"
+      title="1 ĐVT đặt = ? đơn-vị-giá — đơn giá sẽ nhập theo đơn vị này. Trống = tính SL × giá."
+      aria-label={label}
+      className="text-right"
+    />
+  )
 }
 
 /**
@@ -458,7 +522,7 @@ function InnerDimsCell({
       : '',
   )
   return (
-    <input
+    <GridCellInput
       value={raw}
       onChange={(e) => {
         const v = e.target.value

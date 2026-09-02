@@ -83,6 +83,13 @@ export const poLineInputSchema = z.object({
   // "(= 28 bì)", KHÔNG tham gia tính tiền. SL đặt vẫn luôn theo ĐVT gốc.
   pack_size: optNum(1e9),
   pack_unit: optText(50),
+  /*
+   * 0182 — quy đổi giá tổng quát cho mẫu không có công thức riêng:
+   * 1 ĐVT đặt = unit2_per_unit × đơn-vị-giá (nhãn unit2_label). Client chỉ gửi
+   * CẶP NGUYÊN LIỆU; qty2/unit2/price_basis vẫn do server dẫn xuất (deriveLine).
+   */
+  unit2_per_unit: optNum(1e6),
+  unit2_label: optText(20),
 })
 
 export const poCreateSchema = z.object({

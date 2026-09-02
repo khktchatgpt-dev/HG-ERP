@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   ArrowLeft,
   ClipboardList,
+  ClipboardPaste,
   Plus,
   Printer,
   ScrollText,
@@ -16,6 +17,7 @@ import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import {
   MaterialPickDialog,
@@ -904,18 +906,19 @@ export function PoCreateForm({
           </p>
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <button
+          <Button
             type="button"
+            variant="outline"
             disabled={lines.length === 0}
             onClick={() => setPreviewOpen(true)}
             title={lines.length === 0 ? 'Thêm ít nhất một dòng hàng đã' : undefined}
-            className="border-input hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] shadow-xs disabled:opacity-50"
+            className="h-auto gap-1.5 px-3 py-1.5 text-[13px]"
           >
-            <Printer className="size-4" strokeWidth={1.8} aria-hidden /> Xem trước phiếu
-            in
-          </button>
-          <button
+            <Printer strokeWidth={1.8} aria-hidden /> Xem trước phiếu in
+          </Button>
+          <Button
             type="button"
+            variant="outline"
             onClick={async () => {
               if (
                 dirtyRef.current &&
@@ -930,10 +933,10 @@ export function PoCreateForm({
               }
               router.push('/planning/pos')
             }}
-            className="border-input hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[13px] shadow-xs"
+            className="h-auto gap-1.5 px-3 py-1.5 text-[13px]"
           >
-            <ArrowLeft className="size-4" strokeWidth={1.8} aria-hidden /> Về danh sách
-          </button>
+            <ArrowLeft strokeWidth={1.8} aria-hidden /> Về danh sách
+          </Button>
         </div>
       </div>
 
@@ -946,25 +949,27 @@ export function PoCreateForm({
             {new Date(savedDraft.at).toLocaleString('vi-VN')}
           </span>
           <div className="ml-auto flex gap-2">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => restoreDraft(savedDraft)}
-              className="bg-card rounded-md border border-[var(--warn)]/50 px-2.5 py-1 text-xs font-medium text-[var(--warn)] shadow-xs"
+              className="h-auto border-[var(--warn)]/50 px-2.5 py-1 text-xs text-[var(--warn)]"
             >
               Khôi phục
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={() => {
                 try {
                   localStorage.removeItem(draftKey)
                 } catch {}
                 setSavedDraft(null)
               }}
-              className="border-input bg-card text-muted-foreground hover:bg-accent rounded-md border px-2.5 py-1 text-xs shadow-xs"
+              className="text-muted-foreground h-auto px-2.5 py-1 text-xs font-normal"
             >
               Bỏ
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -1072,23 +1077,25 @@ export function PoCreateForm({
                 {poType === 'lsx' && lsxId && pendingNeeds.length > 0 && (
                   <>
                     , hoặc lấy sẵn{' '}
-                    <button
+                    <Button
                       type="button"
+                      variant="link"
                       onClick={() => setTab('needs')}
-                      className="font-medium text-[var(--primary)] hover:underline"
+                      className="h-auto p-0 align-baseline text-[13px] font-medium"
                     >
                       {pendingNeeds.length} vật tư nhu cầu LSX
-                    </button>
+                    </Button>
                   </>
                 )}
                 .
               </p>
             )}
-            <button
+            <Button
               ref={pickerRef}
               type="button"
+              variant="outline"
               onClick={() => setPickOpen(true)}
-              className="border-input bg-card text-muted-foreground flex h-9 min-w-0 flex-1 items-center gap-2.5 rounded-lg border border-dashed px-3 text-left text-[13px] transition-colors outline-none hover:border-[var(--primary)] focus:border-[var(--primary)] focus:ring-2 focus:ring-[var(--ring)]/25"
+              className="text-muted-foreground min-w-0 flex-1 justify-start gap-2.5 rounded-lg border-dashed px-3 text-left text-[13px] font-normal hover:border-[var(--primary)]"
             >
               <Search className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />
               <span className="truncate">
@@ -1097,24 +1104,28 @@ export function PoCreateForm({
               <kbd className="border-border bg-muted t-data ml-auto hidden rounded border px-1.5 text-[10px] sm:inline">
                 Enter
               </kbd>
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="outline"
               onClick={() => setPasteOpen(true)}
-              className="border-input bg-card hover:bg-accent h-9 shrink-0 rounded-lg border px-3 text-[13px] font-medium"
+              className="shrink-0 gap-1.5 rounded-lg px-3 text-[13px]"
               title="Dán vùng bảng (tên/mã · SL · giá) từ sổ Excel — máy khớp mã, thêm dòng hàng loạt"
             >
-              ⎘ Dán từ Excel
-            </button>
+              {/* ⎘ trước đây là KÝ TỰ unicode giả làm icon — bộ icon của app là
+                  lucide, và ký tự thì đổi hình theo font của từng máy. */}
+              <ClipboardPaste strokeWidth={1.8} aria-hidden /> Dán từ Excel
+            </Button>
             {FREE_LINE_TEMPLATES.includes(template) && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={addFreeLine}
-                className="border-input bg-card hover:bg-accent inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border px-3 text-[13px] font-medium"
+                className="shrink-0 gap-1.5 rounded-lg px-3 text-[13px]"
                 title="Thêm dòng không gắn vật tư kho — tên SP/món gia công gõ ngay trên dòng"
               >
-                <Plus className="size-4" strokeWidth={1.8} aria-hidden /> Dòng SP tự gõ
-              </button>
+                <Plus strokeWidth={1.8} aria-hidden /> Dòng SP tự gõ
+              </Button>
             )}
             <QuickAddMaterial
               template={template}
@@ -1346,22 +1357,21 @@ export function PoCreateForm({
               là ghi đè — bấm <b>Bỏ qua</b> thì danh mục giữ nguyên giá cũ.
             </p>
             <div className="flex justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="outline"
                 onClick={() => leaveTo(enrich.dest)}
-                className="border-input bg-card hover:bg-muted rounded-md border px-3 py-2 text-sm shadow-xs"
               >
                 Bỏ qua
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled={enrichBusy}
                 onClick={() => void confirmEnrich()}
-                className="inline-flex items-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
               >
                 {enrichBusy && <Spinner size={14} />}
                 Cập nhật danh mục ({enrich.items.length})
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -1408,12 +1418,15 @@ function TabBtn({
   children: React.ReactNode
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
       aria-current={on}
+      /* Tab: bo góc 0 + gạch chân, nên bỏ nền hover của ghost mà vẫn giữ
+         focus-ring và nhịp padding của kit. */
       className={
-        'inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-[13px] transition-colors ' +
+        'h-auto gap-1.5 rounded-none border-b-2 px-3 py-2 text-[13px] font-normal hover:bg-transparent ' +
         (on
           ? 'border-[var(--primary)] font-semibold text-[var(--primary)]'
           : 'text-muted-foreground hover:text-foreground border-transparent')
@@ -1421,7 +1434,7 @@ function TabBtn({
     >
       <Icon className="size-4" strokeWidth={on ? 2.1 : 1.8} />
       {children}
-    </button>
+    </Button>
   )
 }
 

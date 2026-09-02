@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
 import { Modal } from '@/components/Modal'
+import { Button } from '@/components/shadcn/button'
+import { Checkbox } from '@/components/shadcn/checkbox'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
 import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import {
   MaterialCoreFields,
-  materialBtnPrimary,
-  materialBtnSecondary,
   materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
@@ -137,14 +137,15 @@ export function QuickAddMaterial({
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="outline"
         onClick={() => setOpen(true)}
-        className="inline-flex h-[38px] shrink-0 items-center gap-1.5 rounded-lg border border-zinc-300 bg-white px-3 text-[13px] font-medium text-zinc-600 shadow-xs transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300 dark:hover:bg-zinc-900"
+        className="text-muted-foreground h-[38px] gap-1.5 rounded-lg px-3 text-[13px]"
         title="NCC chào loại chưa có trong danh mục — khai tại chỗ, vào thẳng dòng"
       >
-        <Plus className="size-4" aria-hidden /> Khai vật tư mới
-      </button>
+        <Plus aria-hidden /> Khai vật tư mới
+      </Button>
       {open && (
         <Modal
           open={open}
@@ -170,11 +171,10 @@ export function QuickAddMaterial({
             </p>
             {/* Có tên gần giống → nút Thêm khoá tới khi xác nhận đã đối chiếu. */}
             {canSimilar && (
-              <label className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
-                <input
-                  type="checkbox"
+              <label className="border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] flex items-start gap-2 rounded-md border px-3 py-2 text-xs text-[var(--warn)]">
+                <Checkbox
                   checked={daDoiChieu}
-                  onChange={(e) => setConfirmedFor(e.target.checked ? core.f.name : '')}
+                  onCheckedChange={(v) => setConfirmedFor(v === true ? core.f.name : '')}
                   className="mt-0.5"
                 />
                 <span>
@@ -184,14 +184,10 @@ export function QuickAddMaterial({
               </label>
             )}
             <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className={materialBtnSecondary}
-              >
+              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
                 Huỷ
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
                 disabled={busy || blocked}
                 title={
@@ -200,11 +196,10 @@ export function QuickAddMaterial({
                     : undefined
                 }
                 onClick={() => void handle()}
-                className={materialBtnPrimary}
               >
                 {busy && <Spinner size={14} />}
                 Thêm &amp; đưa vào đơn
-              </button>
+              </Button>
             </div>
           </div>
         </Modal>

@@ -52,6 +52,9 @@ export type PoPrintLine = {
   unit_price: number | null
   price_basis: 'unit' | 'unit2'
   qty2: number | null
+  /** 0182 — quy đổi giá tổng quát: in "17,5 Lít/Thùng" để NCC hiểu phép nhân. */
+  unit2_per_unit?: number | null
+  unit2?: string | null
   spec: string | null
   note: string | null
   material_grade: string | null
@@ -178,6 +181,14 @@ function printCell(f: PoField): (l: PoPrintLine) => React.ReactNode {
       return (l) => fmt(get(l) as number | null)
     case 'calc':
       return (l) => fmt(l.qty2)
+    case 'unit2':
+      // "17,5 Lít/Thùng". 02/09: user quyết KHÔNG in cột này — PO_PRINT_ORDER
+      // không mẫu nào còn khai 'unit2' nên case này đang là đường chờ; giữ lại
+      // để lúc muốn in chỉ cần thêm key vào order, không phải dựng lại cell.
+      return (l) =>
+        l.unit2_per_unit != null && l.unit2
+          ? `${fmt(l.unit2_per_unit)} ${l.unit2}/${l.material_unit}`
+          : ''
     case 'inner':
       return (l) =>
         l.inner_l_mm && l.inner_w_mm && l.inner_h_mm

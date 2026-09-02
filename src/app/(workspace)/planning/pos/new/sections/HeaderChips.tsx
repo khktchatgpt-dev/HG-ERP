@@ -10,9 +10,13 @@ import {
   FileText,
   Package,
   ScrollText,
+  X,
   type LucideIcon,
 } from 'lucide-react'
 import { DateField } from '@/components/erp/DateField'
+import { Button } from '@/components/shadcn/button'
+import { Input } from '@/components/shadcn/input'
+import { ToolbarSelect } from '@/components/erp/Toolbar'
 import { SupplierPicker } from '@/components/supply/SupplierPicker'
 import { PO_CURRENCIES } from '@/lib/po-line'
 import { PO_TEMPLATES, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
@@ -62,8 +66,9 @@ export type HeaderChipsProps = {
   lineReady: number
 }
 
-const field =
-  'border-input bg-card h-9 w-full rounded-lg border px-2.5 text-[13px] shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+/* Chỉ phần KHÁC mặc định của `Input`/`ToolbarSelect`: bo góc + cỡ chữ của khối
+ * này. Viền/nền/focus-ring để kit lo — chép tay là nguồn của trôi tông. */
+const field = 'bg-card h-9 w-full rounded-lg px-2.5 text-[13px]'
 /** Nhãn TRƯỜNG trong popover — cùng một mức đậm với tiêu đề cột của bảng. */
 const label = 't-label text-foreground font-bold'
 
@@ -100,9 +105,10 @@ export function HeaderChips(p: HeaderChipsProps) {
               const m = poTemplateMeta(t)
               const on = t === p.template
               return (
-                <button
+                <Button
                   key={t}
                   type="button"
+                  variant="outline"
                   title={m.hint}
                   onClick={() => {
                     p.onTemplate(t)
@@ -110,15 +116,15 @@ export function HeaderChips(p: HeaderChipsProps) {
                   }}
                   aria-pressed={on}
                   className={
-                    'rounded-md border px-2.5 py-1.5 text-[13px] transition-colors ' +
+                    'h-auto px-2.5 py-1.5 text-[13px] font-normal shadow-none ' +
                     (on
                       ? 'border-[var(--primary)] bg-[var(--accent)] font-semibold text-[var(--accent-foreground)]'
-                      : 'border-input hover:bg-accent')
+                      : '')
                   }
                 >
                   {m.label}
                   {on && <Check className="ml-1 inline size-3" strokeWidth={3} />}
-                </button>
+                </Button>
               )
             })}
           </div>
@@ -150,37 +156,39 @@ export function HeaderChips(p: HeaderChipsProps) {
                 ['standalone', 'Ngoài LSX'],
               ] as const
             ).map(([v, t]) => (
-              <button
+              <Button
                 key={v}
                 type="button"
+                variant="outline"
+                aria-pressed={p.poType === v}
                 onClick={() => p.onPoType(v)}
                 className={
-                  'flex-1 rounded-md border px-2 py-1 text-[12.5px] transition-colors ' +
+                  'h-auto flex-1 px-2 py-1 text-[12.5px] font-normal shadow-none ' +
                   (p.poType === v
                     ? 'border-[var(--primary)] bg-[var(--accent)] font-semibold text-[var(--accent-foreground)]'
-                    : 'border-input hover:bg-accent')
+                    : '')
                 }
               >
                 {t}
-              </button>
+              </Button>
             ))}
           </div>
           {p.poType === 'lsx' && (
             <>
               <label className="grid gap-1">
                 <span className={label}>Lệnh chính</span>
-                <select
+                <ToolbarSelect
                   value={p.lsxId}
-                  onChange={(e) => p.onLsx(e.target.value)}
+                  onChange={p.onLsx}
                   className={field}
-                >
-                  <option value="">— chọn LSX đã duyệt —</option>
-                  {p.lsxs.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.code} — {l.customer_name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: '', label: '— chọn LSX đã duyệt —' },
+                    ...p.lsxs.map((l) => ({
+                      value: l.id,
+                      label: `${l.code} — ${l.customer_name}`,
+                    })),
+                  ]}
+                />
               </label>
               {lsx && lsx.order_codes.length > 0 && (
                 <p className="text-muted-foreground mt-1 text-[11.5px]">
@@ -198,33 +206,37 @@ export function HeaderChips(p: HeaderChipsProps) {
                         className="border-input bg-muted t-data inline-flex items-center gap-1 rounded-full border py-0.5 pr-1 pl-2 text-[11px]"
                       >
                         {p.lsxs.find((l) => l.id === id)?.code ?? '?'}
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => p.onToggleExtraLsx(id, false)}
-                          className="text-muted-foreground grid size-4 place-items-center rounded-full hover:text-[var(--stop)]"
+                          className="text-muted-foreground size-4 rounded-full hover:text-[var(--stop)]"
                           aria-label="Bỏ lệnh phụ khỏi đơn"
                         >
-                          ×
-                        </button>
+                          <X className="size-3" aria-hidden />
+                        </Button>
                       </span>
                     ))}
-                    <select
+                    <ToolbarSelect
                       value=""
-                      onChange={(e) => {
-                        if (e.target.value) p.onToggleExtraLsx(e.target.value, true)
+                      onChange={(v) => {
+                        if (v) p.onToggleExtraLsx(v, true)
                       }}
-                      className="border-input text-muted-foreground h-7 rounded-md border border-dashed bg-transparent px-1.5 text-[11.5px]"
+                      className="text-muted-foreground h-7 border-dashed bg-transparent px-1.5 text-[11.5px]"
                       aria-label="Gộp thêm LSX vào đơn"
-                    >
-                      <option value="">＋ gộp thêm lệnh…</option>
-                      {p.lsxs
-                        .filter((l) => l.id !== p.lsxId && !p.extraLsxIds.includes(l.id))
-                        .map((l) => (
-                          <option key={l.id} value={l.id}>
-                            {l.code} — {l.customer_name}
-                          </option>
-                        ))}
-                    </select>
+                      options={[
+                        { value: '', label: '＋ gộp thêm lệnh…' },
+                        ...p.lsxs
+                          .filter(
+                            (l) => l.id !== p.lsxId && !p.extraLsxIds.includes(l.id),
+                          )
+                          .map((l) => ({
+                            value: l.id,
+                            label: `${l.code} — ${l.customer_name}`,
+                          })),
+                      ]}
+                    />
                   </div>
                 </div>
               )}
@@ -303,7 +315,7 @@ export function HeaderChips(p: HeaderChipsProps) {
         <div className="grid w-[320px] gap-2 p-2.5">
           <label className="grid gap-1">
             <span className={label}>Theo HĐ số</span>
-            <input
+            <Input
               maxLength={100}
               value={p.contractNo}
               onChange={(e) => p.onContractNo(e.target.value)}
@@ -313,20 +325,19 @@ export function HeaderChips(p: HeaderChipsProps) {
           </label>
           <label className="grid gap-1">
             <span className={label}>Tiền tệ</span>
-            <select
+            <ToolbarSelect
               value={p.currency}
-              onChange={(e) => p.onCurrency(e.target.value)}
+              onChange={p.onCurrency}
               className={field}
-            >
-              {(PO_CURRENCIES as readonly string[]).includes(p.currency) ? null : (
-                <option value={p.currency}>{p.currency}</option>
-              )}
-              {PO_CURRENCIES.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
+              /* Đơn cũ có thể mang mã tiền ngoài danh sách — chèn nó lên đầu để ô
+                 không tự nhảy sang mã khác khi mở lại đơn. */
+              options={[
+                ...((PO_CURRENCIES as readonly string[]).includes(p.currency)
+                  ? []
+                  : [{ value: p.currency, label: p.currency }]),
+                ...PO_CURRENCIES.map((c) => ({ value: c, label: c })),
+              ]}
+            />
           </label>
         </div>
       </Chip>
@@ -402,20 +413,25 @@ function Chip({
 
   return (
     <div className="relative">
-      <button
+      <Button
         ref={btnRef}
         type="button"
+        variant="outline"
         onClick={onOpen}
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`${name}: ${value} — bấm để sửa`}
+        /* `justify-start` + `whitespace-normal`: nút của kit mặc định canh giữa và
+           không xuống dòng, còn chip này có một ô GIÁ TRỊ co được và cắt bằng
+           truncate. Phần màu là trạng thái CHÍNH của chip (thiếu / đang mở) nên
+           vẫn khai tại chỗ. */
         className={
-          'inline-flex max-w-[300px] items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[13px] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50 ' +
+          'h-auto max-w-[300px] justify-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[13px] font-normal whitespace-normal shadow-none ' +
           (missing
             ? 'border-[var(--stop)]/50 bg-[var(--stop)]/8 text-[var(--stop)]'
             : open
               ? 'border-[var(--primary)] bg-[var(--accent)]'
-              : 'border-input hover:bg-accent')
+              : '')
         }
       >
         <Icon className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />
@@ -424,7 +440,7 @@ function Chip({
           {value}
         </b>
         <ChevronDown className="text-muted-foreground size-3.5 shrink-0" aria-hidden />
-      </button>
+      </Button>
       {open && (
         <>
           {/* Nền bắt click để đóng — popover trong form, không dùng Radix portal

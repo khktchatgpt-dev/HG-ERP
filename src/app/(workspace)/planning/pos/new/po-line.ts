@@ -70,6 +70,9 @@ export type Line = {
    */
   pack_size: number | null
   pack_unit: string
+  /** 0182 — quy đổi giá tổng quát: 1 ĐVT = unit2_per_unit × đơn-vị-giá. */
+  unit2_per_unit: Num
+  unit2_label: string
   /**
    * Số DANH MỤC đưa ra lúc chọn vật tư, để biết người mua đã gõ đè hay chưa —
    * gõ đè thì mời lưu ngược về danh mục (0128). null = mở từ đơn đã lưu, không
@@ -98,6 +101,8 @@ export function draftOf(l: Line) {
     inner_w_mm: n(l.inner_w_mm),
     inner_h_mm: n(l.inner_h_mm),
     carton_basis: l.carton_basis,
+    unit2_per_unit: n(l.unit2_per_unit),
+    unit2_label: l.unit2_label || null,
   }
 }
 
@@ -207,6 +212,20 @@ export function recallBasis(
   return ok && basis && ok.includes(basis) ? (basis as Line['carton_basis']) : 'ctn'
 }
 
+/** Cặp quy đổi giá từ danh mục — rỗng khi không khai hoặc trùng ĐVT đặt. */
+function dualPriceOf(m: {
+  unit: string
+  price_unit: string | null
+  unit2_factor: number | null
+}): Pick<Line, 'unit2_per_unit' | 'unit2_label'> {
+  const label = (m.price_unit ?? '').trim()
+  const same = label.toLowerCase() === m.unit.trim().toLowerCase()
+  if (!label || same || !(Number(m.unit2_factor) > 0)) {
+    return { unit2_per_unit: '', unit2_label: '' }
+  }
+  return { unit2_per_unit: Number(m.unit2_factor), unit2_label: label }
+}
+
 export function newLine(t: PoTemplate, m: PoMaterial): Line {
   /*
    * Quy cách danh mục TỰ BÓC vào ba ô số cho các mẫu tính theo kích thước —
@@ -291,6 +310,9 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     carton_basis: recallBasis(t, last?.carton_basis),
     pack_size: m.pack_size ?? null,
     pack_unit: m.pack_unit ?? '',
+    // 0182: danh mục khai "giá theo đv khác" (sơn lít/thùng…) thì điền sẵn cặp
+    // quy đổi. Trùng ĐVT đặt thì thôi — hệ số 1 chỉ là nhiễu trên phiếu.
+    ...dualPriceOf(m),
     catalog_kg_m: m.kg_per_m ?? null,
     catalog_kg_unit: kgPerUnitOf(m).kg,
   }
@@ -408,6 +430,8 @@ export function newFreeLine(): Line {
     price_per_m2: '',
     print_fee: '',
     carton_basis: 'ctn',
+    unit2_per_unit: '',
+    unit2_label: '',
     pack_size: null,
     pack_unit: '',
     catalog_kg_m: null,
@@ -450,6 +474,9 @@ export type PoLineDto = {
   carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   pack_size: number | null
   pack_unit: string | null
+  /** 0182 — quy đổi giá tổng quát; unit2 mang NHÃN đơn-vị-giá server đã chốt. */
+  unit2_per_unit: number | null
+  unit2: string | null
 }
 
 const n2 = (v: number | null | undefined): Num => (v == null ? '' : Number(v))
@@ -506,6 +533,11 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     // cũ trước 0128 để null thì quy đổi tự ẩn như trước.
     pack_size: l.pack_size,
     pack_unit: s2(l.pack_unit),
+    // 0182: hệ số từ cột riêng; NHÃN đọc lại từ unit2 đã lưu — chỉ khi dòng
+    // thật sự tính theo unit2 (mẫu kim loại cũng ghi unit2='kg', nhưng ở đó
+    // nhãn là SẢN PHẨM của công thức, không phải ô người dùng gõ).
+    unit2_per_unit: n2(l.unit2_per_unit),
+    unit2_label: l.unit2_per_unit != null ? s2(l.unit2) : '',
     // Mở đơn đã lưu thì không biết danh mục đang để số gì — để null, nút "lưu
     // vào danh mục" cứ hiện khi ô có số (ghi đè bằng chính số đã chốt trên đơn
     // là việc đúng, không phải việc thừa).
@@ -526,6 +558,9 @@ export function migrateDraftLine(t: PoTemplate, l: Line): Line {
     ...l,
     m3_per_unit: l.m3_per_unit ?? '',
     warranty_text: l.warranty_text ?? '',
+    // 0182 — nháp lưu trước khi có cặp quy đổi giá.
+    unit2_per_unit: l.unit2_per_unit ?? '',
+    unit2_label: l.unit2_label ?? '',
   }
   if (t === 'wood' && next.m3_per_unit === '' && next.weight_per_unit !== '') {
     next.m3_per_unit = next.weight_per_unit

@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { Plus, Truck, X } from 'lucide-react'
 import { DateField } from '@/components/erp/DateField'
+import { Button } from '@/components/shadcn/button'
+import { Input } from '@/components/shadcn/input'
+import { SectionToggle } from '@/components/erp/SectionToggle'
 import { shipmentAmount, validateShipments } from '@/lib/po-shipments'
 import type { Line } from '../po-line'
 
@@ -105,23 +108,17 @@ export function ShipmentPlanPanel({
 
   return (
     <section className="border-border bg-card rounded-xl border">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px]"
-      >
-        <Truck className="text-muted-foreground size-4" strokeWidth={1.8} aria-hidden />
-        <b>Chia đợt giao</b>
-        <span className="text-muted-foreground text-xs">
-          {drafts.length > 0
+      <SectionToggle
+        icon={Truck}
+        title="Chia đợt giao"
+        summary={
+          drafts.length > 0
             ? `${drafts.length} đợt — in lên phiếu gửi NCC`
-            : 'tuỳ chọn — hàng về làm nhiều chuyến'}
-        </span>
-        <span className="text-muted-foreground ml-auto text-xs">
-          {open ? 'Thu gọn' : 'Mở'}
-        </span>
-      </button>
+            : 'tuỳ chọn — hàng về làm nhiều chuyến'
+        }
+        open={open}
+        onToggle={() => setOpen((o) => !o)}
+      />
 
       {open && (
         <div className="border-border/70 flex flex-col gap-3 border-t px-3.5 py-3">
@@ -132,15 +129,20 @@ export function ShipmentPlanPanel({
           </p>
 
           {columns.length === 0 ? (
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={addColumn}
-              className="border-input text-muted-foreground hover:border-primary hover:text-primary flex items-center justify-center gap-1.5 rounded-lg border border-dashed py-3 text-[13px]"
+              className="text-muted-foreground hover:border-primary hover:text-primary h-auto rounded-lg border-dashed py-3 text-[13px] font-normal shadow-none"
             >
-              <Plus className="size-4" aria-hidden /> Thêm đợt giao đầu tiên
-            </button>
+              <Plus aria-hidden /> Thêm đợt giao đầu tiên
+            </Button>
           ) : (
             <div className="border-border overflow-x-auto rounded-lg border">
+              {/* eslint-disable-next-line hg/no-raw-control -- LƯỚI NHẬP kiểu bảng
+                  tính (vật tư × đợt giao), không phải bảng danh sách: mỗi ô là một
+                  input, cột sinh động theo số đợt, không sắp xếp/phân trang.
+                  DataTable không mô tả được hình này. */}
               <table className="w-full text-[13px]">
                 <thead className="t-label text-muted-foreground bg-muted/50 border-b text-left">
                   <tr>
@@ -150,15 +152,17 @@ export function ShipmentPlanPanel({
                       <th key={ci} className="w-[152px] px-2 py-1.5 font-medium">
                         <div className="flex items-center justify-between gap-1">
                           <span>Đợt {ci + 1}</span>
-                          <button
+                          <Button
                             type="button"
+                            variant="ghost"
+                            size="icon"
                             aria-label={`Bỏ đợt ${ci + 1}`}
                             title="Bỏ đợt này"
                             onClick={() => onChange(columns.filter((_, j) => j !== ci))}
-                            className="text-muted-foreground grid size-5 place-items-center rounded hover:text-[var(--stop)]"
+                            className="text-muted-foreground size-5 rounded hover:text-[var(--stop)]"
                           >
                             <X className="size-3.5" />
-                          </button>
+                          </Button>
                         </div>
                         <DateField
                           value={c.date}
@@ -170,15 +174,17 @@ export function ShipmentPlanPanel({
                     ))}
                     <th className="w-24 px-2 py-2 text-right font-medium">Chưa chia</th>
                     <th className="w-9 px-1 py-2">
-                      <button
+                      <Button
                         type="button"
+                        variant="outline"
+                        size="icon"
                         onClick={addColumn}
                         aria-label="Thêm một đợt giao"
                         title="Thêm một đợt giao"
-                        className="border-input text-muted-foreground hover:border-primary hover:text-primary grid size-6 place-items-center rounded-md border border-dashed"
+                        className="text-muted-foreground hover:border-primary hover:text-primary size-6 border-dashed shadow-none"
                       >
                         <Plus className="size-3.5" />
-                      </button>
+                      </Button>
                     </th>
                   </tr>
                 </thead>
@@ -197,7 +203,7 @@ export function ShipmentPlanPanel({
                         <td className="t-data px-2 py-1.5 text-right">{num(ordered)}</td>
                         {columns.map((c, ci) => (
                           <td key={ci} className="px-2 py-1.5">
-                            <input
+                            <Input
                               inputMode="decimal"
                               value={c.qty[i] ?? ''}
                               onChange={(e) => {
@@ -210,7 +216,7 @@ export function ShipmentPlanPanel({
                               }}
                               placeholder="—"
                               aria-label={`SL đợt ${ci + 1} của ${l.name}`}
-                              className="border-input focus:border-ring t-data h-7 w-full rounded-md border px-2 text-right outline-none"
+                              className="t-data h-7 px-2 text-right shadow-none"
                             />
                           </td>
                         ))}

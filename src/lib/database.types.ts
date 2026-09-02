@@ -2860,6 +2860,7 @@ export type Database = {
           open_style: string | null
           pack_size: number | null
           pack_unit: string | null
+          unit2_per_unit: number | null
           pcs_per_ctn: number | null
           po_id: string
           price_basis: string
@@ -2913,6 +2914,7 @@ export type Database = {
           open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
+          unit2_per_unit?: number | null
           pcs_per_ctn?: number | null
           po_id: string
           price_basis?: string
@@ -2966,6 +2968,7 @@ export type Database = {
           open_style?: string | null
           pack_size?: number | null
           pack_unit?: string | null
+          unit2_per_unit?: number | null
           pcs_per_ctn?: number | null
           po_id?: string
           price_basis?: string

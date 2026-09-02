@@ -83,6 +83,12 @@ export type PoLineTemplateFields = {
    */
   pack_size: number | null
   pack_unit: string | null
+  /**
+   * 0182 — QUY ĐỔI GIÁ TỔNG QUÁT (mẫu không có công thức riêng): 1 ĐVT đặt =
+   * unit2_per_unit × đơn-vị-giá; nhãn nằm ở `unit2`, tổng ở `qty2` (server dẫn
+   * xuất). Chụp trên dòng như pack_size — sửa danh mục không đổi tiền đơn cũ.
+   */
+  unit2_per_unit: number | null
 }
 
 export type PoLine = PoLineTemplateFields & {
@@ -118,6 +124,9 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   spec?: string | null
   qty2?: number | null
   unit2?: string | null
+  /** 0182 — NHÃN đơn-vị-giá client gửi kèm unit2_per_unit; deriveLine chuyển
+   *  vào `unit2`, bản thân nó không phải cột DB. */
+  unit2_label?: string | null
   note?: string | null
 }
 
@@ -145,6 +154,8 @@ const TEMPLATE_LINE_COLS = [
   'carton_basis',
   'pack_size',
   'pack_unit',
+  // 0182 — hệ số quy đổi giá tổng quát (1 ĐVT = ? đơn-vị-giá, nhãn ở unit2).
+  'unit2_per_unit',
 ] as const
 
 const COLS =
@@ -167,6 +178,7 @@ const NUMERIC_LINE_COLS = [
   'price_per_m2',
   'print_fee',
   'pack_size',
+  'unit2_per_unit',
 ] as const
 
 function numericLineFields(row: Record<string, unknown>): Record<string, number | null> {
@@ -531,7 +543,7 @@ export const posRepo = {
         // Chuỗi PHẢI là literal — supabase-js suy type cột từ chính chuỗi này,
         // ghép bằng template literal thì nó trả ParserError. Giữ đồng bộ với
         // TEMPLATE_LINE_COLS ở trên (dùng cho INSERT).
-        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, material:warehouse_materials(code, name, unit)',
+        'id, po_id, material_id, qty_ordered, unit_price, price_basis, spec, qty2, unit2, note, sort_order, line_name, line_unit, material_grade, dm_per_sp, qty_demand, qty_on_hand, die_code, weight_per_m, bar_length_m, dimension_text, finish, weight_per_unit, m3_per_unit, warranty_text, open_style, pcs_per_ctn, inner_l_mm, inner_w_mm, inner_h_mm, area_m2, price_per_m2, print_fee, carton_basis, pack_size, pack_unit, unit2_per_unit, material:warehouse_materials(code, name, unit)',
       )
       .eq('po_id', poId)
       .order('sort_order')
@@ -608,6 +620,15 @@ export const posRepo = {
           // để sửa đơn từ mẫu này sang mẫu khác không sót số cũ của mẫu trước.
           const tpl: Record<string, unknown> = {}
           for (const k of TEMPLATE_LINE_COLS) tpl[k] = l[k] ?? null
+          /*
+           * CẦU AN TOÀN 0182 (gỡ sau khi migration đã apply mọi môi trường):
+           * cột unit2_per_unit chỉ ghi khi CÓ GIÁ TRỊ — DB chưa có cột mà cứ
+           * ghi null tường minh là MỌI lượt lưu đơn đều lỗi "column does not
+           * exist", kể cả đơn không dùng quy đổi. Bỏ qua khi null KHÔNG để lại
+           * số cũ: replaceLines là xoá-rồi-chèn, dòng mới không ghi cột thì
+           * cột về default NULL.
+           */
+          if (tpl.unit2_per_unit == null) delete tpl.unit2_per_unit
           return {
             po_id: poId,
             material_id: l.material_id ?? null,
