@@ -30,6 +30,9 @@ export function previewLinesFromDraft(
       unit_price: l.price === '' ? null : Number(l.price),
       price_basis: d.price_basis,
       qty2: d.qty2,
+      // 0182 — nhãn lấy từ deriveLine (chỉ có khi cặp trọn vẹn), khớp bản in thật.
+      unit2_per_unit: draft.unit2_per_unit,
+      unit2: d.unit2,
       spec: l.spec.trim() || null,
       note: l.note.trim() || null,
       material_grade: l.material_grade.trim() || null,

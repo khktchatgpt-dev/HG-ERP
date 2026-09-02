@@ -1,6 +1,7 @@
 'use client'
 
 import { Plus, Sparkles } from 'lucide-react'
+import { Button } from '@/components/shadcn/button'
 
 /** Nhu cầu vật tư của LSX từ BOM — payload của `/api/dept/supply/needs`. */
 export type Need = {
@@ -51,10 +52,18 @@ export function NeedsPanel({
   // mua / 0 trong BOM" chỉ chiếm chỗ giữa hai vùng đang làm việc thật.
   if (!loading && needs.length === 0) return null
   return (
-    <section className="rounded-xl border border-violet-200 bg-violet-50/50 dark:border-violet-900 dark:bg-violet-950/20">
+    /*
+     * 02/09: khối này từng mang bảng màu RIÊNG (violet + zinc + sky, kèm mọi
+     * biến `dark:` gõ tay) nên đứng cạnh các thẻ khác là lệch tông. Theme v3 chỉ
+     * có MỘT màu hành động, nên "gợi ý từ BOM" nay nhận diện bằng tint cobalt
+     * `--accent` + icon, không bằng một màu tự chế. Nhãn "số nháp" là CẢNH BÁO
+     * thật nên ăn `--warn` — đó mới là chỗ màu vòng đời được phép xuất hiện.
+     */
+    <section className="border-[color-mix(in_srgb,var(--primary)_25%,transparent)] bg-[color-mix(in_srgb,var(--primary)_4%,transparent)] rounded-xl border">
       <div className="flex items-center gap-2 px-3.5 py-2.5 text-[13px]">
         <Sparkles
-          className="size-4 shrink-0 text-violet-600 dark:text-violet-400"
+          className="size-4 shrink-0 text-[var(--primary)]"
+          strokeWidth={1.8}
           aria-hidden
         />
         <b>Nhu cầu từ BOM của LSX</b>
@@ -67,35 +76,37 @@ export function NeedsPanel({
             số là NHÁP để không ai đặt theo mà chưa đối chiếu. */}
         {!loading && (
           <span
-            className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+            className="border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] rounded-full border px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-[var(--warn)]"
             title="Số lấy từ bảng chi tiết LSX (ưu tiên nhập tay, thiếu mới nhân từ BOM×SL) — định mức đang hoàn thiện, đối chiếu với sổ trước khi đặt theo"
           >
             số nháp — đối chiếu trước khi dùng
           </span>
         )}
         {pending.length > 0 && (
-          <button
+          <Button
             type="button"
+            variant="outline"
             onClick={() => onAdd(pending)}
-            className="ml-auto inline-flex items-center gap-1 rounded-md border border-violet-300 bg-white px-2.5 py-1 text-xs font-medium text-violet-700 shadow-xs hover:bg-violet-50 dark:border-violet-800 dark:bg-zinc-950 dark:text-violet-300 dark:hover:bg-violet-950/40"
+            className="ml-auto h-auto gap-1 px-2.5 py-1 text-xs"
           >
             <Plus className="size-3" aria-hidden /> Thêm tất cả ({pending.length})
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={onToggle}
-          className="rounded-md border border-zinc-300 bg-white px-2.5 py-1 text-xs shadow-xs dark:border-zinc-700 dark:bg-zinc-950"
+          className="h-auto px-2.5 py-1 text-xs font-normal"
         >
           {open ? 'Thu gọn' : 'Xem'}
-        </button>
+        </Button>
       </div>
       {open && pending.length > 0 && (
-        <div className="grid gap-2 border-t border-violet-100 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-violet-950">
+        <div className="border-[color-mix(in_srgb,var(--primary)_15%,transparent)] grid gap-2 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
           {pending.slice(0, 24).map((n) => (
             <div
               key={n.material_id}
-              className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 dark:border-zinc-800 dark:bg-zinc-950"
+              className="border-border bg-card flex items-center gap-2 rounded-lg border px-2.5 py-1.5"
             >
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-semibold" title={n.material_name}>
@@ -107,18 +118,20 @@ export function NeedsPanel({
               </div>
               <div className="text-muted-foreground shrink-0 text-right text-[10px]">
                 đề xuất
-                <div className="text-xs font-bold text-zinc-700 dark:text-zinc-200">
+                <div className="text-foreground text-xs font-bold">
                   {num(n.suggest)} {n.unit}
                 </div>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="icon"
                 onClick={() => onAdd([n])}
-                className="grid h-6 w-6 shrink-0 place-items-center rounded-md border border-zinc-300 text-sm font-bold text-sky-600 hover:border-sky-400 hover:bg-sky-50 dark:border-zinc-700"
+                className="hover:border-primary hover:text-primary size-6 shrink-0"
                 aria-label={`Thêm ${n.material_name}`}
               >
-                +
-              </button>
+                <Plus className="size-3.5" aria-hidden />
+              </Button>
             </div>
           ))}
           {pending.length > 24 && (

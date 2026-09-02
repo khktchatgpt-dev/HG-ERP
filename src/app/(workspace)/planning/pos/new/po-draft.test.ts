@@ -42,6 +42,8 @@ const line = (over: Partial<Line> = {}): Line => ({
   carton_basis: 'ctn',
   pack_size: null,
   pack_unit: '',
+  unit2_per_unit: '',
+  unit2_label: '',
   catalog_kg_m: null,
   catalog_kg_unit: null,
   ...over,

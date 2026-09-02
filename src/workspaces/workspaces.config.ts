@@ -276,6 +276,11 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },
+          {
+            href: '/technical/dinh-muc',
+            label: 'Sức khoẻ định mức',
+            icon: 'heart-pulse',
+          },
         ],
       },
     ],

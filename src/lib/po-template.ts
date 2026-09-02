@@ -358,6 +358,15 @@ export type PoLineDraft = {
   /** Cơ sở tính tiền dòng: thùng/tấm · m² · m³ (xốp). 'kg' là giá trị chết
    *  của mẫu gia công đã gỡ — DB còn nhận (0135) nhưng form không sinh mới. */
   carton_basis?: 'ctn' | 'm2' | 'm3' | 'kg' | null
+  /*
+   * ĐƯỜNG QUY ĐỔI TỔNG QUÁT (0182) — cho mẫu KHÔNG có công thức riêng: sơn
+   * lít/thùng, hoá chất kg/can, phụ kiện m/cuộn… "1 ĐVT đặt = unit2_per_unit
+   * đơn-vị-giá (unit2_label)". Nguồn tự điền: price_unit/unit2_factor khai ở
+   * danh mục (0053) — hai cột nằm im "tham khảo" từ đó tới nay, giờ mới nối
+   * vào máy tính tiền.
+   */
+  unit2_per_unit?: number | null
+  unit2_label?: string | null
 }
 
 export type PoLineDerived = {
@@ -421,8 +430,14 @@ export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
         price_basis: 'unit2',
       }
     }
-    default:
-      return { qty2: null, unit2: null, price_basis: 'unit' }
+    default: {
+      // Quy đổi tổng quát: 1 ĐVT = per × đơn-vị-giá. Thiếu một nửa cặp thì rơi
+      // về SL × giá — cùng triết lý "sai rõ ràng hơn im lặng ra 0" ở trên.
+      const per = Number(l.unit2_per_unit) || 0
+      const label = (l.unit2_label ?? '').trim()
+      if (per <= 0 || label === '') return { qty2: null, unit2: null, price_basis: 'unit' }
+      return { qty2: round4(per * qty), unit2: label, price_basis: 'unit2' }
+    }
   }
 }
 

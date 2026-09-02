@@ -104,7 +104,7 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Một màu hành động**: royal cobalt `--primary` (#2743c4) cho nút chính/link/focus/tab đang chọn. Hover/selected dùng tint `--accent` (#eef1fc). **Ba màu trạng thái** `--warn/--stop/--done` chỉ mã hoá vòng đời (nhãn, vạch `spine`), không bao giờ dùng cho nút.
 - **Chữ**: thang 5 bậc `t-display/t-title/t-body/t-label/t-data` (globals.css). Mọi MÃ chứng từ, tiền, số lượng, ngày = `t-data` (JetBrains Mono, tabular-nums); mã phiếu hiển thị qua `DocChip`. KPI lớn: `font-mono tabular-nums`.
 - **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
-- **BẪY Radix portal**: Dialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell → phải gắn `theme-v3` vào className của \*Content (`DialogContent className="theme-v3 bg-card"` — kèm `bg-card` vì mặc định `bg-background` ra hộp xám). Riêng `RowMenu` tự dò theme từ trigger; `Modal` render inline nên tự ăn theme.
+- **BẪY Radix portal — ĐÃ VÁ Ở PRIMITIVE (02/09/2026), không phải nhớ nữa**: Dialog/AlertDialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell nên token theme không phủ tới. Nay mỗi `*Content` tự gọi `usePortalTheme()` ([`src/components/shadcn/portal-theme.ts`](src/components/shadcn/portal-theme.ts)) — dò lớp theme đang phủ trong DOM rồi tự gắn lại. **Chỗ gọi KHÔNG cần gõ `theme-v3` nữa**; các chỗ đang gõ là thừa (vô hại, dọn dần). Dò theo DOM chứ không hằng số hoá nên đường lùi v2 vẫn nguyên. `Dialog`/`AlertDialog` cũng đã đổi nền mặc định `bg-background` → `bg-card`: dialog là thẻ trắng nổi trên nền đã tối, để màu canvas là ra hộp xám. `Modal` render inline nên vốn tự ăn theme.
 - **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
 - Rollback khẩn: đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` (khối token v2 vẫn giữ trong globals.css).
 
@@ -126,6 +126,43 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Vitest** (`npm test`). Test file co-located `*.test.ts`. Bắt buộc test cho: logic thuần rủi ro cao (tính tiền/tồn/công nợ), `permissions.can()`, zod schema quan trọng, event bus. UI để verify tay.
 - **Trước khi coi là xong**: `npm run check` (typecheck + lint + test) phải sạch. Format: `npm run format` (Prettier + tự sắp class Tailwind). Hook tự chạy prettier+eslint `--fix` trên file vừa sửa.
 - **Đừng** mark hoàn thành khi typecheck/test còn đỏ.
+
+### Cổng đồng bộ giao diện (`eslint-rules/hg-ui.mjs`)
+
+Hai luật ESLint riêng, chạy trên `src/app/**/*.tsx` + `src/components/**/*.tsx`:
+
+- `hg/no-hardcoded-color` — cấm palette Tailwind dựng sẵn (`bg-zinc-50`,
+  `text-emerald-600`, `dark:bg-zinc-950`…) và hex trong class (`text-[#2743c4]`).
+  Thông báo lỗi tự gợi ý token đúng theo NGỮ NGHĨA: đỏ→`--stop`, hổ
+  phách→`--warn`, lục→`--done`, lam→`--primary`, xám→`bg-muted`/`text-muted-foreground`.
+- `hg/no-raw-control` — cấm `<table> <button> <input> <select> <textarea>` thô,
+  chỉ ra đúng thành phần kit thay thế.
+
+**Được miễn**: `components/erp/*`, `components/shadcn/*`, `components/ui/*`,
+`app/design-lab/*` — đó là nơi ĐỊNH NGHĨA chuẩn, không phải nơi tiêu thụ chuẩn.
+
+**Bánh cóc (ratchet)**: `ui-baseline.json` giữ 193 file nợ cũ ở mức `warn` để
+`check` không đỏ ngày đầu. **Mọi file khác — gồm mọi file mới — là `error`.**
+Dọn xong một file thì `npm run ui:baseline` để nó rớt khỏi danh sách và từ đó bị
+canh ở mức `error` vĩnh viễn. Script thoát mã 1 nếu có file MỚI lọt vào baseline
+— baseline chỉ được ngắn đi, không được dài ra.
+
+**Đừng nhét file mới vào baseline để qua cổng.** Cần ngoại lệ thật thì
+`// eslint-disable-next-line hg/<luật>` kèm một dòng lý do.
+
+**Luật lint có test** (`eslint-rules/hg-ui.test.ts`, 20 ca, chạy trong `npm test`
+qua `include` của `vitest.config.ts`). Bắt buộc, vì lint hỏng **im lặng**: regex
+sai thì lint vẫn báo "0 lỗi" và cả hàng rào thành đồ giả. Sửa luật thì chạy test.
+
+`npm run lint` (`--quiet`) chỉ in LỖI cho gọn; nợ cũ vẫn hiện inline trong IDE —
+đúng lúc đang mở file đó. Muốn xem hết: `npm run lint:all`.
+
+**BẪY khi sửa luật**: regex trong `hg-ui.mjs` phải viết bằng `` String.raw`…` ``.
+Template literal thường nuốt `\b`/`\d` thành ký tự điều khiển và regex hỏng IM
+LẶNG — luật vẫn chạy, chỉ là không khớp gì. Route group App Router có dấu ngoặc
+(`src/app/(workspace)/…`) nên đường dẫn baseline phải escape trước khi đưa vào
+`files` của flat config, nếu không minimatch hiểu `(` là nhóm glob và cả khu
+workspace trượt khỏi baseline.
 
 ## Skills (`.claude/skills/`)
 

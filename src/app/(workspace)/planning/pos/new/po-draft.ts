@@ -180,6 +180,10 @@ export function buildPoPayload(
         // không có đơn vị, hoặc "= bì" không có số.
         pack_size: l.pack_size && l.pack_unit ? l.pack_size : null,
         pack_unit: l.pack_size && l.pack_unit ? l.pack_unit : null,
+        // 0182 — quy đổi giá tổng quát: gửi cả cặp hoặc không gì (nửa cặp thì
+        // deriveLine bỏ qua, nhưng nửa cặp nằm trong DB là rác gây hoang mang).
+        unit2_per_unit: d.unit2_per_unit != null && d.unit2_label ? d.unit2_per_unit : null,
+        unit2_label: d.unit2_per_unit != null && d.unit2_label ? d.unit2_label : null,
       }
     }),
   }

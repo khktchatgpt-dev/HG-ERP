@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import { ChevronDown, TriangleAlert } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
+import { Input } from '@/components/shadcn/input'
+import { Checkbox } from '@/components/shadcn/checkbox'
 import { fmtMoney } from '@/lib/po-line'
 import type { Num } from '../po-line'
 
@@ -17,8 +20,10 @@ import type { Num } from '../po-line'
  * Tiền tệ chuyển hẳn lên chip "Khác" của thanh đầu đơn (nó là thuộc tính đầu
  * đơn, không phải một phép cộng).
  */
+/* Chỉ phần KHÁC mặc định của `Input`: thấp hơn, canh phải, và tắt nút xoay của
+ * input number. Viền/nền/focus-ring để kit lo. */
 const box =
-  'border-input bg-card h-7 rounded-md border px-2 text-right text-[13px] outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+  'bg-card h-7 px-2 text-right text-[13px] shadow-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
 const VAT_PRESETS = [0, 8, 10] as const
 
@@ -71,11 +76,12 @@ export function TotalsBar({
       </span>
 
       <div className="relative">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="border-input hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[12.5px]"
+          className="h-auto gap-1.5 px-2.5 py-1 text-[12.5px] font-normal shadow-none"
         >
           VAT <b className="t-data text-[12.5px]">{vat === '' ? '—' : `${vat}%`}</b>
           <span className="text-muted-foreground">
@@ -87,7 +93,7 @@ export function TotalsBar({
             </span>
           )}
           <ChevronDown className="size-3.5" aria-hidden />
-        </button>
+        </Button>
         {open && (
           <>
             <div
@@ -99,21 +105,23 @@ export function TotalsBar({
               <div className="t-label text-muted-foreground mb-1.5">Thuế suất</div>
               <div className="flex gap-1.5">
                 {VAT_PRESETS.map((v) => (
-                  <button
+                  <Button
                     key={v}
                     type="button"
+                    variant="outline"
+                    aria-pressed={Number(vat) === v && vat !== ''}
                     onClick={() => onVatChange(v)}
                     className={
-                      'flex-1 rounded-md border px-2 py-1 text-[12.5px] transition-colors ' +
+                      'h-auto flex-1 px-2 py-1 text-[12.5px] font-normal shadow-none ' +
                       (Number(vat) === v && vat !== ''
                         ? 'border-[var(--primary)] bg-[var(--accent)] font-semibold text-[var(--accent-foreground)]'
-                        : 'border-input hover:bg-accent')
+                        : '')
                     }
                   >
                     {v}%
-                  </button>
+                  </Button>
                 ))}
-                <input
+                <Input
                   type="number"
                   min="0"
                   max="100"
@@ -129,11 +137,9 @@ export function TotalsBar({
                 />
               </div>
               <label className="mt-2 flex items-center gap-2 text-[12.5px]">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={inclVat}
-                  onChange={(e) => onInclVatChange(e.target.checked)}
-                  className="accent-[var(--primary)]"
+                  onCheckedChange={(v) => onInclVatChange(v === true)}
                 />
                 Đơn giá đã gồm VAT
               </label>
@@ -141,7 +147,7 @@ export function TotalsBar({
               {hasDiscount && (
                 <label className="mt-2 flex items-center justify-between gap-2 text-[12.5px]">
                   Chiết khấu
-                  <input
+                  <Input
                     type="number"
                     min="0"
                     step="1000"
@@ -166,16 +172,17 @@ export function TotalsBar({
           đọc: "dòng 27 thiếu SL đặt" mà vẫn phải tự cuộn đi tìm dòng 27 thì đơn
           40 dòng vẫn mất công như cũ. */}
       {problem && (
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={onProblemClick}
           disabled={!onProblemClick}
-          className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-[12px] font-medium text-[var(--warn)] outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)]/50 enabled:hover:bg-[var(--warn)]/10 enabled:hover:underline disabled:cursor-default"
+          className="h-auto gap-1.5 px-1.5 py-0.5 text-[12px] text-[var(--warn)] enabled:hover:bg-[var(--warn)]/10 enabled:hover:underline disabled:cursor-default disabled:opacity-100"
           title={onProblemClick ? 'Bấm để tới chỗ cần sửa' : undefined}
         >
           <TriangleAlert className="size-3.5" strokeWidth={1.8} aria-hidden />
           Chưa lưu được: {problem}
-        </button>
+        </Button>
       )}
 
       <span className="ml-auto flex shrink-0 items-center gap-3">
@@ -185,16 +192,16 @@ export function TotalsBar({
           </span>
           <b className="t-data text-[19px] font-bold">{fmtMoney(grandTotal, currency)}</b>
         </span>
-        <button
+        <Button
           type="button"
           disabled={busy || !!problem}
           title={problem ? `Chưa lưu được: ${problem}` : undefined}
           onClick={onSubmit}
-          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-md bg-[var(--primary)] px-4 py-2 text-[13px] font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="text-[13px]"
         >
           {busy && <Spinner size={14} />}
           {busy ? 'Đang lưu…' : submitLabel}
-        </button>
+        </Button>
       </span>
     </footer>
   )

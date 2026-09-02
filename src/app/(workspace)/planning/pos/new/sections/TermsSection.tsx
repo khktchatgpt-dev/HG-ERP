@@ -3,7 +3,6 @@
 import {
   BadgeCheck,
   Banknote,
-  ChevronDown,
   Clock,
   FileText,
   MapPin,
@@ -12,10 +11,13 @@ import {
   StickyNote,
   type LucideIcon,
 } from 'lucide-react'
+import { Input } from '@/components/shadcn/input'
+import { SectionToggle } from '@/components/erp/SectionToggle'
 import type { PoTerms } from '@/lib/po-template'
 
-const field =
-  'border-input bg-card h-9 w-full rounded-lg border px-2.5 pl-8 text-[13px] shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+/* Chỉ còn phần KHÁC mặc định của `Input`: chừa chỗ cho icon bên trái + cỡ chữ
+ * của khối này. Viền/nền/focus-ring do kit lo — trước đây chép tay nên trôi. */
+const field = 'bg-card rounded-lg pl-8 text-[13px]'
 const fieldLabel =
   'text-[11px] font-semibold tracking-wide text-muted-foreground uppercase'
 const fieldIcon =
@@ -68,30 +70,17 @@ export function TermsSection({
         phần của đơn. Nay: icon neo mắt + CHÍNH câu thanh toán / nơi giao hiện
         ngay trên đầu, và nút "Sửa" thay cho mũi tên câm.
       */}
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13px]"
-      >
-        <ScrollText
-          className="text-muted-foreground size-4 shrink-0"
-          strokeWidth={1.8}
-          aria-hidden
-        />
-        <b className="shrink-0">Điều khoản &amp; chữ ký</b>
-        <span className="text-muted-foreground min-w-0 truncate text-[11.5px]">
-          {[terms.payment, terms.delivery_place].filter(Boolean).join(' · ') ||
-            `theo mẫu ${templateLabel.toLowerCase()}`}
-        </span>
-        <span className="border-input text-muted-foreground ml-auto inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-[11.5px]">
-          {open ? 'Thu gọn' : 'Sửa'}
-          <ChevronDown
-            aria-hidden
-            className={`size-3.5 transition-transform ${open ? 'rotate-180' : ''}`}
-          />
-        </span>
-      </button>
+      <SectionToggle
+        icon={ScrollText}
+        title="Điều khoản & chữ ký"
+        summary={
+          [terms.payment, terms.delivery_place].filter(Boolean).join(' · ') ||
+          `theo mẫu ${templateLabel.toLowerCase()}`
+        }
+        open={open}
+        onToggle={onToggle}
+        openLabel="Sửa"
+      />
       {open && (
         <div className="border-border/70 grid gap-3 border-t p-3.5 sm:grid-cols-2">
           {TERM_ROWS.map(([k, label, Icon]) => (
@@ -99,7 +88,7 @@ export function TermsSection({
               <span className={fieldLabel}>{label}</span>
               <span className="relative">
                 <Icon className={fieldIcon} aria-hidden />
-                <input
+                <Input
                   maxLength={1000}
                   value={terms[k]}
                   onChange={(e) => onTermsChange({ ...terms, [k]: e.target.value })}
@@ -112,7 +101,7 @@ export function TermsSection({
             <span className={fieldLabel}>Chữ ký giữa phiếu</span>
             <span className="relative">
               <PenLine className={fieldIcon} aria-hidden />
-              <input
+              <Input
                 maxLength={100}
                 value={signerRole}
                 onChange={(e) => onSignerChange(e.target.value)}
@@ -124,7 +113,7 @@ export function TermsSection({
             <span className={fieldLabel}>Ghi chú đơn</span>
             <span className="relative">
               <StickyNote className={fieldIcon} aria-hidden />
-              <input
+              <Input
                 maxLength={2000}
                 value={note}
                 onChange={(e) => onNoteChange(e.target.value)}

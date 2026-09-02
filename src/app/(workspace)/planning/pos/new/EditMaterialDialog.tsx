@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Modal } from '@/components/Modal'
+import { Button } from '@/components/shadcn/button'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { Spinner } from '@/components/erp/Spinner'
@@ -9,8 +10,6 @@ import { invalidateMaterialPickCache } from '@/components/supply/MaterialPicker'
 import {
   MaterialCoreFields,
   coreFromMaterial,
-  materialBtnPrimary,
-  materialBtnSecondary,
   materialInputClass,
   useMaterialCore,
 } from '@/components/warehouse/MaterialCoreFields'
@@ -167,11 +166,11 @@ export function EditMaterialDialog({
           </p>
           {/* Nhịp 2 xác nhận null-đè — thường do lỡ tay đổi nhóm. */}
           {clearWarn && (
-            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/40">
-              <p className="font-medium text-red-700 dark:text-red-400">
+            <div className="border-[color-mix(in_srgb,var(--stop)_30%,transparent)] bg-[color-mix(in_srgb,var(--stop)_8%,transparent)] rounded-md border p-3 text-sm">
+              <p className="font-medium text-[var(--stop)]">
                 Lưu sẽ XOÁ {clearWarn.length} thông số đang có (thường do đổi nhóm):
               </p>
-              <ul className="mt-1 list-disc pl-5 text-red-700 dark:text-red-400">
+              <ul className="mt-1 list-disc pl-5 text-[var(--stop)]">
                 {clearWarn.map((c) => (
                   <li key={c.field}>
                     {c.label}: <b>{c.oldValue}</b> → trống
@@ -179,38 +178,31 @@ export function EditMaterialDialog({
                 ))}
               </ul>
               <div className="mt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setClearWarn(null)}
-                  className={materialBtnSecondary}
-                >
+                <Button type="button" variant="outline" onClick={() => setClearWarn(null)}>
                   Quay lại sửa
-                </button>
-                <button
+                </Button>
+                {/* Hành động PHÁ HUỶ (xoá thông số đang có) — đúng chỗ dùng
+                    variant destructive của kit, thay vì tự tô bg-red-600. */}
+                <Button
                   type="button"
+                  variant="destructive"
                   disabled={busy}
                   onClick={() => void save(true)}
-                  className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                 >
                   {busy && <Spinner size={14} />}
                   Vẫn lưu — xoá {clearWarn.length} ô
-                </button>
+                </Button>
               </div>
             </div>
           )}
           <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className={materialBtnSecondary}>
+            <Button type="button" variant="outline" onClick={onClose}>
               Huỷ
-            </button>
-            <button
-              type="button"
-              disabled={busy || core.invalid}
-              onClick={() => void save()}
-              className={materialBtnPrimary}
-            >
+            </Button>
+            <Button type="button" disabled={busy || core.invalid} onClick={() => void save()}>
               {busy && <Spinner size={14} />}
               Lưu vào danh mục
-            </button>
+            </Button>
           </div>
         </div>
       )}

@@ -22,6 +22,7 @@ export type PoFieldKind =
   | 'inner' // ba ô D×R×C trong một ô — carton: lọt lòng; foam: quy cách D×R×Dày
   | 'area' // m²/thùng·m²/tấm: tự tính (carton) hoặc gõ tay (kính)
   | 'cartonBasis' // cơ sở tính tiền từng dòng — nhãn lấy từ `options` của mẫu
+  | 'unit2' // 0182: MỘT ô "17.5 Lít" ghi cặp unit2_per_unit + unit2_label — quy đổi giá tổng quát
 
 export type PoField = {
   key: string
@@ -85,6 +86,20 @@ const n = (
  * một số. Số tồn vẫn được điền ngầm vào dòng lúc chọn vật tư nên gợi ý vẫn trừ
  * tồn đúng — chỉ là không còn ô để gõ đè.
  */
+/**
+ * Ô "GIÁ THEO ĐV KHÁC" (0182) — cho mẫu KHÔNG có công thức riêng: sơn NCC chào
+ * theo lít nhưng mua theo thùng, hoá chất kg/can, phụ kiện m/cuộn… Gõ "17.5
+ * Lít" nghĩa là 1 ĐVT đặt = 17,5 lít và ĐƠN GIÁ nhập theo LÍT; bỏ trống thì
+ * dòng tính SL × giá như cũ. Danh mục khai price_unit/unit2_factor thì tự điền.
+ */
+const UNIT2_FIELD: PoField = {
+  key: 'unit2',
+  label: 'Giá theo ĐV khác',
+  printLabel: 'Quy đổi',
+  width: 'w-[110px]',
+  kind: 'unit2',
+}
+
 export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
   accessory: [
     t('grade', 'Vật liệu', 'w-[110px]', 'material_grade', 'Sắt xi trắng…'),
@@ -94,6 +109,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     // từng mẫu): tồn là số nội bộ, NCC chỉ cần SL đơn hàng để hiểu con số đặt.
     // `qty_on_hand` vẫn được chụp lúc chọn vật tư nên gợi ý "đặt = nhu cầu − tồn"
     // không đổi.
+    UNIT2_FIELD,
   ],
   aluminium: [
     { key: 'die', label: 'Mã khuôn', width: 'w-[120px]', kind: 'die', field: 'die_code' },
@@ -168,6 +184,7 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('dinhmuc', 'Định mức', 'w-[110px]', 'material_grade', '5m/g = 32-34g'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
+    UNIT2_FIELD,
   ],
   paint: [
     // Đơn sơn thật (Dosa/Việt Sapa/Đắc Vinh/TNP) nhận diện hàng bằng MÃ MÀU
@@ -175,11 +192,13 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('grade', 'Mã màu NCC', 'w-[130px]', 'material_grade', 'T67443C (C679-ASA)…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
+    UNIT2_FIELD,
   ],
   chemical: [
     t('spec', 'Quy cách', 'w-[120px]', 'spec', '25kg/can…'),
     n('demand', 'SL đơn hàng', 'w-[92px]', 'qty_demand'),
     { ...n('onhand', 'Tồn kho', 'w-[78px]', 'qty_on_hand'), editHidden: true },
+    UNIT2_FIELD,
   ],
   foam: [
     t('spec', 'Quy cách', 'w-[140px]', 'spec', '8mm x 1.05m x 50m…'),
@@ -261,8 +280,9 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     t('dungcho', 'Dùng cho máy / vị trí', 'w-[130px]', 'dimension_text', 'Máy dập 8T…'),
     // Bảo hành có CỘT RIÊNG từ 0139 — trước mượn finish (màu/bề mặt).
     t('baohanh', 'Bảo hành', 'w-[90px]', 'warranty_text', '12 tháng'),
+    UNIT2_FIELD,
   ],
-  simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…')],
+  simple: [t('spec', 'Quy cách', 'w-[140px]', 'spec', '25×50×1li…'), UNIT2_FIELD],
 }
 
 /**

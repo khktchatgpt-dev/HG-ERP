@@ -5,7 +5,8 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    // eslint-rules: luật lint tự viết cũng phải có test — nó hỏng im lặng.
+    include: ['src/**/*.test.ts', 'eslint-rules/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],

@@ -4,6 +4,8 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
+import { GridCellInput } from '@/components/erp/GridCell'
+import { Button } from '@/components/shadcn/button'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
 import {
   AutoGrowCell,
@@ -243,6 +245,9 @@ export function PoLineTable({
         `w-full` chia phần thừa theo nội dung: cột SL đặt phình gấp đôi ô nhập
         92px trong khi ĐVT co lại — nhìn là thấy so le.
       */}
+      {/* eslint-disable-next-line hg/no-raw-control -- LƯỚI NHẬP kiểu bảng tính:
+          cột ghim, mỗi ô là một input, bề rộng khai tay ở header. DataTable là
+          bảng DANH SÁCH (sắp xếp/phân trang) — không mô tả được hình này. */}
       <table className="w-full border-separate border-spacing-0 text-[13px]">
         <thead>
           <tr>
@@ -414,15 +419,17 @@ export function PoLineTable({
                                   {l.code}
                                 </span>
                                 {onEditMaterial && (
-                                  <button
+                                  <Button
                                     type="button"
+                                    variant="ghost"
+                                    size="icon"
                                     onClick={() => onEditMaterial(l.material_id)}
-                                    className="text-muted-foreground/70 hover:bg-accent rounded p-0.5 transition-colors hover:text-[var(--primary)]"
+                                    className="text-muted-foreground/70 size-auto rounded p-0.5 hover:text-[var(--primary)]"
                                     title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
                                     aria-label={`Sửa vật tư ${l.name}`}
                                   >
                                     <Pencil className="size-3" aria-hidden />
-                                  </button>
+                                  </Button>
                                 )}
                                 {l.on_hand == null ? (
                                   <span className="text-muted-foreground/70">kho ?</span>
@@ -441,14 +448,16 @@ export function PoLineTable({
                         </div>
                         {/* Nút xoá về đây (bản đầu để trong ô tiền — chen mất chỗ
                           của con số dài nhất bảng). */}
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => onRemove(i)}
-                          className="text-muted-foreground mt-0.5 shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus:opacity-100"
+                          className="text-muted-foreground mt-0.5 size-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus:opacity-100"
                           aria-label={`Xoá dòng ${l.name}`}
                         >
                           <Trash2 className="size-3.5" aria-hidden />
-                        </button>
+                        </Button>
                       </div>
                     </td>
 
@@ -469,7 +478,7 @@ export function PoLineTable({
 
                     <td className={`${tdBase} text-center text-[12px] whitespace-nowrap`}>
                       {l.is_free ? (
-                        <input
+                        <GridCellInput
                           value={l.unit}
                           maxLength={30}
                           onChange={(e) => onPatch(i, { unit: e.target.value })}
@@ -484,7 +493,7 @@ export function PoLineTable({
                     {/* ── ô GÕ THẬT #1 ── */}
                     <td className={tdBase}>
                       <div className="w-[92px]">
-                        <input
+                        <GridCellInput
                           id={`qty-${l.material_id}`}
                           type="number"
                           min="0"
@@ -516,10 +525,11 @@ export function PoLineTable({
                         />
                       </div>
                       {l.qty === '' && useSuggest != null && useSuggest > 0 && (
-                        <button
+                        <Button
+                          variant="link"
                           type="button"
                           onClick={() => onPatch(i, { qty: useSuggest })}
-                          className="mt-0.5 block w-full text-right text-[11px] font-medium whitespace-nowrap text-[var(--primary)] hover:underline"
+                          className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
                           title={
                             (shortSuggest != null
                               ? 'SL đơn hàng − tồn kho'
@@ -531,7 +541,7 @@ export function PoLineTable({
                           }
                         >
                           dùng {num(useSuggest)} ↩
-                        </button>
+                        </Button>
                       )}
                       {cap != null && l.qty !== '' && Number(l.qty) > cap && (
                         <div
@@ -555,7 +565,7 @@ export function PoLineTable({
                     {/* ── ô GÕ THẬT #2 ── */}
                     <td className={tdBase}>
                       <div className="w-[104px]">
-                        <input
+                        <GridCellInput
                           id={`price-${l.material_id}`}
                           type="number"
                           min="0"
@@ -580,14 +590,15 @@ export function PoLineTable({
                         />
                       </div>
                       {goiY != null && l.price !== goiY && (
-                        <button
+                        <Button
+                          variant="link"
                           type="button"
                           onClick={() => onPatch(i, { price: goiY })}
-                          className="mt-0.5 block w-full text-right text-[11px] font-medium whitespace-nowrap text-[var(--primary)] hover:underline"
+                          className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
                           title="m²/thùng × đơn giá/m² + bản in — bấm để dùng"
                         >
                           = {num(goiY)} ↩
-                        </button>
+                        </Button>
                       )}
                     </td>
 

@@ -259,3 +259,43 @@ describe('dòng tự do (0134)', () => {
     expect(FREE_LINE_TEMPLATES).toEqual(['wood'])
   })
 })
+
+describe('deriveLine — quy đổi tổng quát (0182: sơn lít/thùng, hoá chất kg/can…)', () => {
+  it('sơn nước: 10 thùng × 17,5 lít/thùng → 175 lít, tính giá theo lít', () => {
+    const d = deriveLine('paint', {
+      qty_ordered: 10,
+      unit2_per_unit: 17.5,
+      unit2_label: 'Lít',
+    })
+    expect(d).toEqual({ qty2: 175, unit2: 'Lít', price_basis: 'unit2' })
+  })
+
+  it('hoá chất: 4 can × 25 kg/can → 100 kg', () => {
+    const d = deriveLine('chemical', {
+      qty_ordered: 4,
+      unit2_per_unit: 25,
+      unit2_label: 'kg',
+    })
+    expect(d).toEqual({ qty2: 100, unit2: 'kg', price_basis: 'unit2' })
+  })
+
+  it('thiếu hệ số HOẶC thiếu nhãn → rơi về SL × giá, không im lặng ra 0', () => {
+    expect(deriveLine('paint', { qty_ordered: 10, unit2_label: 'Lít' }).price_basis).toBe(
+      'unit',
+    )
+    expect(
+      deriveLine('paint', { qty_ordered: 10, unit2_per_unit: 17.5 }).price_basis,
+    ).toBe('unit')
+  })
+
+  it('mẫu CÓ công thức riêng không bị đường tổng quát đè — nhôm vẫn kg/m × dài cây', () => {
+    const d = deriveLine('aluminium', {
+      qty_ordered: 10,
+      weight_per_m: 0.26,
+      bar_length_m: 6,
+      unit2_per_unit: 999, // cố tình nhét rác — phải bị bỏ qua
+      unit2_label: 'Lít',
+    })
+    expect(d).toEqual({ qty2: 15.6, unit2: 'kg', price_basis: 'unit2' })
+  })
+})
