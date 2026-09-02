@@ -230,7 +230,9 @@ export const supplyRepo = {
   async receiptsByShipment(poId: string): Promise<Map<string, Map<string, number>>> {
     const { data } = await db()
       .from('warehouse_movements')
-      .select('po_line_id, qty, qty_rejected, direction, doc:warehouse_docs!inner(shipment_id, kind)')
+      .select(
+        'po_line_id, qty, qty_rejected, direction, doc:warehouse_docs!inner(shipment_id, kind)',
+      )
       .eq('doc.kind', 'receipt')
       .not('doc.shipment_id', 'is', null)
       .not('po_line_id', 'is', null)
@@ -574,6 +576,142 @@ export const supplyRepo = {
     return out
   },
 
+  /**
+   * ĐANG VỀ theo vật tư — như `orderedPendingAll` nhưng KÈM ngày về sớm nhất
+   * và đơn tương ứng, cho màn "Kho & tồn" của Cung ứng (02/09/2026).
+   *
+   * Người mua nhìn "đã đặt 500" mà không biết BAO GIỜ về thì vẫn phải mở từng
+   * đơn ra tra — nên số lượng và ngày phải đi cùng nhau trên một dòng. Ngày lấy
+   * là `expected_at` SỚM NHẤT trong các đơn còn mở của mã đó: đó là mốc quyết
+   * định "có kịp không", đơn về sau không cứu được deadline gần.
+   *
+   * Đơn CHƯA HẸN NGÀY (`expected_at` null) vẫn tính vào `ordered` nhưng không
+   * cho ngày — cố tình để trống thay vì đẩy xuống cuối: người mua phải thấy
+   * "đã đặt mà chưa có ngày" là một trạng thái, không phải dữ liệu thiếu.
+   *
+   * `materialIds` rỗng = mọi vật tư (dùng cho KPI); có danh sách thì lọc luôn
+   * ở SQL để trang chỉ kéo phần mình hiện.
+   */
+  async openOrderInfoByMaterial(materialIds?: string[]): Promise<
+    Map<
+      string,
+      {
+        ordered: number
+        pending: number
+        eta: string | null
+        po_code: string | null
+        po_id: string | null
+        po_count: number
+      }
+    >
+  > {
+    type Info = {
+      ordered: number
+      pending: number
+      eta: string | null
+      po_code: string | null
+      po_id: string | null
+      po_count: number
+    }
+    const out = new Map<string, Info>()
+    if (materialIds && materialIds.length === 0) return out
+
+    const { data: pos } = await db()
+      .from('supply_purchase_orders')
+      .select('id, code, status, expected_at')
+      .in('status', [...RECEIVABLE, 'pending_approval'])
+      .limit(2000)
+    type Po = { id: string; code: string; status: string; expected_at: string | null }
+    const poById = new Map(((pos as Po[] | null) ?? []).map((p) => [p.id, p]))
+    const committed = [...poById.values()]
+      .filter((p) => p.status !== 'pending_approval')
+      .map((p) => p.id)
+    const pending = [...poById.values()]
+      .filter((p) => p.status === 'pending_approval')
+      .map((p) => p.id)
+
+    const seenPo = new Map<string, Set<string>>()
+    const touch = (mid: string): Info => {
+      const e = out.get(mid) ?? {
+        ordered: 0,
+        pending: 0,
+        eta: null,
+        po_code: null,
+        po_id: null,
+        po_count: 0,
+      }
+      out.set(mid, e)
+      return e
+    }
+    const countPo = (mid: string, poId: string) => {
+      const s = seenPo.get(mid) ?? new Set<string>()
+      s.add(poId)
+      seenPo.set(mid, s)
+    }
+
+    if (committed.length > 0) {
+      let q = db()
+        .from('supply_po_line_status')
+        .select('material_id, po_id, qty_open')
+        .in('po_id', committed.slice(0, 400))
+      if (materialIds) q = q.in('material_id', materialIds)
+      const { data } = await q.limit(10000)
+      for (const r of (data as
+        { material_id: string | null; po_id: string; qty_open: unknown }[] | null) ??
+        []) {
+        if (!r.material_id) continue // dòng tự do (gõ tay) không gắn mã nào
+        const open = Math.max(Number(r.qty_open) || 0, 0)
+        if (open <= 0) continue // đã về đủ / đã chốt thiếu — không còn đang về
+        const e = touch(r.material_id)
+        e.ordered += open
+        countPo(r.material_id, r.po_id)
+        const po = poById.get(r.po_id)
+        // Ngày SỚM NHẤT thắng; đơn chưa hẹn không đè lên đơn đã có ngày.
+        if (po?.expected_at && (e.eta == null || po.expected_at < e.eta)) {
+          e.eta = po.expected_at
+          e.po_code = po.code
+          e.po_id = po.id
+        } else if (e.po_code == null && po) {
+          e.po_code = po.code
+          e.po_id = po.id
+        }
+      }
+    }
+
+    if (pending.length > 0) {
+      let q = db()
+        .from('supply_purchase_order_lines')
+        .select('material_id, po_id, qty_ordered')
+        .in('po_id', pending.slice(0, 400))
+      if (materialIds) q = q.in('material_id', materialIds)
+      const { data } = await q.limit(10000)
+      for (const r of (data as
+        { material_id: string | null; po_id: string; qty_ordered: unknown }[] | null) ??
+        []) {
+        if (!r.material_id) continue
+        const e = touch(r.material_id)
+        e.pending += Number(r.qty_ordered) || 0
+        countPo(r.material_id, r.po_id)
+        // Đơn CHỜ DUYỆT cũng phải chỉ được ra đơn nào: thấy "2.800 chờ duyệt"
+        // mà không có mã đơn thì người mua không biết đi giục ai. Chỉ điền khi
+        // chưa có đơn đã duyệt nào — đơn chắc chắn vẫn là mốc chính.
+        if (e.po_code == null) {
+          const po = poById.get(r.po_id)
+          if (po) {
+            e.po_code = po.code
+            e.po_id = po.id
+          }
+        }
+      }
+    }
+
+    for (const [mid, s] of seenPo) {
+      const e = out.get(mid)
+      if (e) e.po_count = s.size
+    }
+    return out
+  },
+
   async findPoCode(poId: string): Promise<string | null> {
     const { data } = await db()
       .from('supply_purchase_orders')
@@ -701,6 +839,15 @@ export const suppliersRepo = {
       .eq('id', id)
       .maybeSingle()
     return (data as Supplier | null) ?? null
+  },
+
+  /** Chỉ TÊN theo id — bảng hiện tên NCC mặc định, không cần cả hồ sơ. */
+  async namesByIds(ids: string[]): Promise<Map<string, string>> {
+    if (ids.length === 0) return new Map()
+    const { data } = await db().from('supply_suppliers').select('id, name').in('id', ids)
+    return new Map(
+      ((data as { id: string; name: string }[] | null) ?? []).map((s) => [s.id, s.name]),
+    )
   },
 
   async insert(row: Partial<Supplier> & Pick<Supplier, 'name'>): Promise<Supplier> {
