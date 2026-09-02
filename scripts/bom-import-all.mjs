@@ -26,9 +26,22 @@ import { client } from './products-lib.mjs'
 const require = createRequire(import.meta.url)
 const XLSX = require('xlsx')
 
-const DIR = 'E:/All BOM_Thức'
-const SCRATCH =
-  'C:/Users/HP/AppData/Local/Temp/claude/D--HG-ERP/898a80db-19d7-4257-bd66-16d2d0ebc235/scratchpad'
+/**
+ * `--dir <đường dẫn>` để nạp một thư mục BOM khác (vd thư mục theo khách trong
+ * "LSX 2026"). Không có thì vẫn là kho gốc như cũ.
+ */
+const argOf = (flag, fallback) => {
+  const i = process.argv.indexOf(flag)
+  return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback
+}
+const DIR = argOf('--dir', 'E:/All BOM_Thức')
+// Thư mục báo cáo: mặc định theo phiên cũ có thể đã bị dọn — tự tạo nếu thiếu,
+// không thì `writeFileSync` ném ngay giữa lượt dò khô.
+const SCRATCH = argOf(
+  '--out',
+  'C:/Users/HP/AppData/Local/Temp/claude/D--HG-ERP/898a80db-19d7-4257-bd66-16d2d0ebc235/scratchpad',
+)
+fs2.mkdirSync(SCRATCH, { recursive: true })
 const APPLY = process.argv.includes('--apply')
 const CREATE = process.argv.includes('--create-missing')
 const IMAGES = process.argv.includes('--images')
