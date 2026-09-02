@@ -6,6 +6,7 @@ import {
   specFromName,
   specPreview,
   unitWarning,
+  baremGate,
 } from './material-form-guards'
 
 /*
@@ -146,5 +147,41 @@ describe('specFromName — bóc quy cách từ tên khi ô Quy cách trống', (
 
   it('tên CHỈ là quy cách → null (điền sang là lặp nguyên tên)', () => {
     expect(specFromName('20x40x1li')).toBeNull()
+  })
+})
+
+describe('baremGate — barem tiền lệch phải xác nhận mới lưu (02/09)', () => {
+  const base = { kg_per_m: '', kg_per_unit: '', default_bar_length_m: '', derivedKg: null }
+
+  it('trống hết → không chặn (vật tư không phải hàng cân)', () => {
+    expect(baremGate(base).blocked).toBe(false)
+  })
+
+  it('khớp số máy đọc trong ngưỡng → không chặn', () => {
+    expect(baremGate({ ...base, kg_per_m: '0.25', derivedKg: 0.248 }).blocked).toBe(false)
+  })
+
+  it('gõ nhầm dấu chấm (2.48 vs máy đọc 0.248) → CHẶN', () => {
+    expect(baremGate({ ...base, kg_per_m: '2.48', derivedKg: 0.248 }).blocked).toBe(true)
+  })
+
+  it('máy không đọc được tên (derivedKg null) → không có gì để so, không chặn', () => {
+    expect(baremGate({ ...base, kg_per_m: '2.48' }).blocked).toBe(false)
+  })
+
+  it('kg/đơn-vị lệch kg/m × dài cây quá ngưỡng → CHẶN', () => {
+    const f = { ...base, kg_per_m: '0.26', default_bar_length_m: '6', kg_per_unit: '15.6' }
+    expect(baremGate(f).blocked).toBe(true) // đúng phải ~1.56
+  })
+
+  it('kg/đơn-vị khớp tích kg/m × dài cây → không chặn', () => {
+    const f = { ...base, kg_per_m: '0.26', default_bar_length_m: '6', kg_per_unit: '1.56' }
+    expect(baremGate(f).blocked).toBe(false)
+  })
+
+  it('key đổi khi BẤT KỲ ô nào đổi — xác nhận cũ phải hết giá trị', () => {
+    const a = baremGate({ ...base, kg_per_m: '2.48', derivedKg: 0.248 })
+    const b = baremGate({ ...base, kg_per_m: '2.49', derivedKg: 0.248 })
+    expect(a.key).not.toBe(b.key)
   })
 })

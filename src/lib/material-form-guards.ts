@@ -193,6 +193,42 @@ export function kgUnitVsBar(
 }
 
 /**
+ * Ngưỡng lệch barem coi là "nghi gõ nhầm dấu chấm" — dùng CHUNG cho ô kg/m,
+ * kg/đơn-vị và cổng chặn lưu, để ba chỗ không trôi khỏi nhau.
+ */
+export const BAREM_OFF_LIMIT = 0.05
+
+/**
+ * CỔNG BAREM TIỀN (02/09/2026): lệch quá ngưỡng thì PHẢI xác nhận rồi mới lưu
+ * — cùng cơ chế với ĐVT lạ, không còn là cảnh báo suông.
+ *
+ * Vì sao chặn-có-cửa-thoát chứ không chặn cứng: số máy đọc từ tên có thể sai
+ * (tên ghi quy cách lạ), và kg thực tế của NCC lệch lý thuyết là có thật —
+ * nhưng các ca đó phải là quyết định CÓ CHỦ ĐÍCH, không phải lỡ tay bấm Lưu.
+ * Gõ 2.48 thay vì 0.248 mà lưu trót lọt thì mọi đơn nhôm sau điền sẵn kg/m sai
+ * 10 lần — thành tiền sai 10 lần mà nhìn vẫn như thật.
+ *
+ * `key` gắn xác nhận với ĐÚNG bộ số lúc bấm: đổi bất kỳ ô nào là xác nhận cũ
+ * hết giá trị (cùng lối `unitOkFor` của ĐVT và tick trùng-tên của QuickAdd).
+ */
+export function baremGate(f: {
+  kg_per_m: string
+  kg_per_unit: string
+  default_bar_length_m: string
+  derivedKg: number | null
+}): { blocked: boolean; key: string } {
+  const key = `${f.kg_per_m}|${f.kg_per_unit}|${f.default_bar_length_m}`
+  const typed = Number(f.kg_per_m)
+  const kgOff =
+    f.derivedKg != null && f.derivedKg > 0 && Number.isFinite(typed) && typed > 0
+      ? Math.abs(typed - f.derivedKg) / f.derivedKg
+      : 0
+  const unitOff = kgUnitVsBar(f.kg_per_unit, f.kg_per_m, f.default_bar_length_m)
+  const blocked = kgOff > BAREM_OFF_LIMIT || (unitOff != null && unitOff > BAREM_OFF_LIMIT)
+  return { blocked, key }
+}
+
+/**
  * Mã gõ tay lệch quy ước `XX-0000` / `XXX0000` — server vẫn tôn trọng mã người
  * gõ nên chỗ duy nhất chặn được là lúc đang gõ. Bỏ trống là an toàn nhất
  * (server tự cấp nối tiếp theo nhóm).

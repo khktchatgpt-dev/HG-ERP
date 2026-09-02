@@ -1102,7 +1102,13 @@ function MaterialForm({
       <div className="sticky bottom-0 -mx-6 -mb-5 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white/95 px-6 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
         {core.invalid && (
           <span className="mr-auto text-xs text-amber-600 dark:text-amber-500">
-            Cần tên vật tư và ĐVT.
+            {/* Nói đúng lý do khoá nút — "Cần tên và ĐVT" trong khi thiếu xác
+                nhận barem thì người khai không biết đi tìm ở đâu. */}
+            {core.baremBlocked && !core.baremConfirmed
+              ? 'Barem kg đang lệch bất thường — xác nhận ở khối cảnh báo đỏ phía trên.'
+              : core.unitWarn && !core.unitConfirmed
+                ? 'ĐVT lạ — xác nhận ở ngay dưới ô ĐVT.'
+                : 'Cần tên vật tư và ĐVT.'}
           </span>
         )}
         <button disabled={busy || core.invalid} className={materialBtnPrimary}>

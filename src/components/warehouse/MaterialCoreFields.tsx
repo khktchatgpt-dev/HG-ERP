@@ -10,6 +10,7 @@ import {
   specFromName,
   specPreview,
   unitWarning,
+  baremGate,
 } from '@/lib/material-form-guards'
 import { isSheetLike, kgPerM, rhoFor } from '@/lib/metal-weight'
 import { guessTemplate } from '@/lib/po-template-guess'
@@ -45,6 +46,14 @@ import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service
  */
 export const materialInputClass =
   'w-full rounded-lg border border-input bg-card px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+/**
+ * @deprecated Hai hằng này chép lại đúng `Button` (default) và
+ * `Button variant="outline"` của kit, nên chúng trôi mỗi khi kit đổi. Dùng
+ * `Button` từ `@/components/shadcn/button`.
+ *
+ * Chưa xoá được vì `MaterialsManager.tsx` còn gọi (4 chỗ) — file đó nằm trong
+ * nợ baseline, dọn cùng đợt của nó rồi xoá hai hằng này.
+ */
 export const materialBtnPrimary =
   'inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 export const materialBtnSecondary =
@@ -163,14 +172,25 @@ export function useMaterialCore({
   requireGroup?: boolean
 }) {
   const [f, setF] = useState<MaterialCore>({ ...EMPTY_CORE, ...initial })
-  const [fetched, setFetched] = useState<MaterialTaxonomy>({ units: [], groups: [] })
+  const [fetched, setFetched] = useState<MaterialTaxonomy>({
+    units: [],
+    groups: [],
+    packUnits: [],
+  })
   const tax = taxonomy ?? fetched
   const [similar, setSimilar] = useState<{ code: string; name: string }[]>([])
 
-  const subs = useMemo(
-    () => tax.groups.find((g) => g.name === f.group_name)?.subs ?? [],
+  const groupTax = useMemo(
+    () => tax.groups.find((g) => g.name === f.group_name),
     [tax, f.group_name],
   )
+  const subs = groupTax?.subs ?? []
+  /* Nhãn ĐÃ DÙNG trong nhóm — nguồn cho ô chọn Vật liệu/màu và Màu/bề mặt.
+   * Chưa chọn nhóm thì gộp mọi nhóm: vẫn gợi ý được thay vì câm. */
+  const allOf = (pick: (g: MaterialTaxonomy['groups'][number]) => string[]) =>
+    [...new Set(tax.groups.flatMap(pick))].sort((a, b) => a.localeCompare(b, 'vi'))
+  const grades = groupTax ? groupTax.grades : allOf((g) => g.grades)
+  const finishes = groupTax ? groupTax.finishes : allOf((g) => g.finishes)
 
   /** Bộ ô + placeholder theo NHÓM (0137) — mỗi loại vật tư hỏi đúng bộ của nó. */
   const groupCfg = useMemo(() => groupFieldConfig(f.group_name), [f.group_name])
@@ -328,6 +348,21 @@ export function useMaterialCore({
   // (cùng lối tick trùng-tên của QuickAdd).
   const [unitOkFor, setUnitOkFor] = useState('')
   const unitConfirmed = unitOkFor === f.unit
+
+  /*
+   * CỔNG BAREM TIỀN (02/09): kgMismatch/kgUnitOff trước đây chỉ tô đỏ — gõ 2.48
+   * thay vì 0.248 vẫn lưu trót lọt, rồi mọi đơn nhôm sau điền sẵn kg/m sai 10
+   * lần. Nay lệch quá ngưỡng phải bấm xác nhận (cùng cơ chế ĐVT lạ); xác nhận
+   * gắn với đúng bộ số lúc bấm, đổi ô nào cũng hết giá trị.
+   */
+  const barem = baremGate({
+    kg_per_m: f.kg_per_m,
+    kg_per_unit: f.kg_per_unit,
+    default_bar_length_m: f.default_bar_length_m,
+    derivedKg: derived?.kg ?? null,
+  })
+  const [baremOkFor, setBaremOkFor] = useState('')
+  const baremConfirmed = baremOkFor === barem.key
   const specPrev = useMemo(
     () => specPreview(f.group_name, f.spec, f.open_style),
     [f.group_name, f.spec, f.open_style],
@@ -400,6 +435,12 @@ export function useMaterialCore({
     unitWarn,
     unitConfirmed,
     confirmUnit: () => setUnitOkFor(f.unit),
+    grades,
+    finishes,
+    packUnits: tax.packUnits,
+    baremBlocked: barem.blocked,
+    baremConfirmed,
+    confirmBarem: () => setBaremOkFor(barem.key),
     specPrev,
     specSuggest,
     packPrev,
@@ -410,12 +451,33 @@ export function useMaterialCore({
       (requireGroup && !f.group_name.trim()) ||
       // ĐVT lạ/nghi gõ nhầm phải xác nhận rồi mới lưu — sai đơn vị là mọi đơn
       // sau đặt sai, không phải lỗi sửa được bằng mắt thường trên phiếu.
-      (unitWarn != null && !unitConfirmed),
+      (unitWarn != null && !unitConfirmed) ||
+      // Barem tiền lệch quá ngưỡng cũng vậy — đây là số nhân thẳng vào tiền.
+      (barem.blocked && !baremConfirmed),
     corePayload,
   }
 }
 
 // ── Mảnh dựng form dùng chung ────────────────────────────────────────────────
+
+/** Nút "vẫn dùng số này" cho cảnh báo barem — chưa bấm thì chưa lưu được. */
+function BaremConfirm({ s }: { s: MaterialCoreState }) {
+  if (s.baremConfirmed) return <b> Đã xác nhận dùng số này.</b>
+  return (
+    <>
+      {' '}
+      Số cân thật của NCC đúng là vậy thì{' '}
+      <button
+        type="button"
+        onClick={s.confirmBarem}
+        className="rounded border border-red-300 px-1.5 py-0.5 hover:bg-red-100 dark:border-red-800"
+      >
+        xác nhận dùng số này
+      </button>{' '}
+      — chưa xác nhận thì chưa lưu được.
+    </>
+  )
+}
 
 /**
  * Ô gõ tự do + GỢI Ý CÓ KIỂM SOÁT — thay `<datalist>` native.
@@ -426,6 +488,7 @@ export function useMaterialCore({
  * rồi cuộn, và vẫn GÕ TỰ DO được — "Lố", "Nhãn", "Thẻ" là ĐVT thật của xưởng,
  * khoá cứng là không khai được (triết lý gõ-tự-do-thay-FK của dự án).
  */
+
 function SuggestInput({
   value,
   onChange,
@@ -619,11 +682,11 @@ export function MaterialCoreFields({
   /**
    * Hiện mảng "Cách NCC báo giá" (đơn vị tính giá + hệ số quy đổi).
    *
-   * CHỈ Ở DANH MỤC. Trong form đặt hàng thì tắt: hai ô đó không đi vào tính tiền
-   * (mẫu đơn mới quyết định), nên với người đang soạn đơn chúng chỉ là hai chỗ
-   * để hiểu nhầm. Đếm trên danh mục 12.991 vật tư: 477/489 giá trị đang có chỉ
-   * lặp lại đúng cái mẫu đơn đã nói (nhôm→kg, inox/sắt→kg), chỉ 12 dòng mang
-   * thông tin thật (gỗ đặt theo tấm, NCC chào theo m³).
+   * CHỈ Ở DANH MỤC — nhưng từ 0182 hai ô này ĐI VÀO TIỀN với các mẫu không có
+   * công thức riêng (sơn/hoá chất/phụ kiện/mro/simple): khai "giá theo Lít,
+   * 1 Thùng = 17,5" thì dòng đơn tự điền cặp quy đổi và thành tiền = lít × giá.
+   * Mẫu kim loại/bao bì vẫn theo công thức riêng, hai ô này với chúng chỉ là
+   * ghi chú (477/489 giá trị cũ chỉ lặp lại điều mẫu đơn đã nói).
    *
    * Giữ ở danh mục để 12 dòng đó còn sửa được — Kho/Cung ứng khai danh mục thì
    * có thời gian đọc kỹ, khác người đang gõ dở một cái đơn.
@@ -769,10 +832,18 @@ export function MaterialCoreFields({
         </Field>
         {/* Cột "Vật liệu" của đơn phụ kiện/inox (0124) — trước chỉ chép từ lần
             đặt trước nên vật tư mới khai thì trống, phải gõ ở từng dòng đơn. */}
-        <Field label="Vật liệu / màu" hint="Tự điền cột Vật liệu trên đơn đặt.">
-          <input
+        <Field
+          label="Vật liệu / màu"
+          hint="Tự điền cột Vật liệu trên đơn đặt — chọn nhãn đã dùng trong nhóm, gõ mới nếu chưa có."
+        >
+          {/* CHỌN TRƯỚC, GÕ SAU (02/09): input trần thì "xi trắng"/"Xi trắng"/
+              "xi trang" thành ba nhãn cho cùng một thứ trên đơn in. Nguồn chọn
+              là nhãn đã dùng trong nhóm; vẫn gõ được vì màu là từ vựng mở. */}
+          <SuggestInput
             value={f.material_grade}
-            onChange={set('material_grade')}
+            onChange={(v) => setF((x) => ({ ...x, material_grade: v }))}
+            options={s.grades}
+            listId={`${unitListId}-grade`}
             maxLength={100}
             placeholder={s.groupCfg.gradePlaceholder}
             className={inputClass}
@@ -781,10 +852,15 @@ export function MaterialCoreFields({
         {/* KIM LOẠI: màu / bề mặt (0137) — cột "Màu / bề mặt" của đơn inox/sắt,
             trước chỉ nhớ từ lần đặt gần nhất. */}
         {s.groupCfg.showFinish && (
-          <Field label="Màu / bề mặt" hint="Tự điền cột Màu / bề mặt trên đơn inox/sắt.">
-            <input
+          <Field
+            label="Màu / bề mặt"
+            hint="Tự điền cột Màu / bề mặt trên đơn inox/sắt — chọn nhãn đã dùng, gõ mới nếu chưa có."
+          >
+            <SuggestInput
               value={f.finish}
-              onChange={set('finish')}
+              onChange={(v) => setF((x) => ({ ...x, finish: v }))}
+              options={s.finishes}
+              listId={`${unitListId}-finish`}
               maxLength={100}
               placeholder="inox bóng · xi trắng · sơn đen…"
               className={inputClass}
@@ -867,9 +943,13 @@ export function MaterialCoreFields({
           một lần ở đây thì ô SL đặt của mọi đơn sau tự quy đổi + gợi ý tròn bao.
         */}
         <Field label="Đóng gói khi mua" hint="Bỏ trống nếu mua lẻ theo ĐVT.">
-          <input
+          {/* Nhãn bao gói đã dùng toàn danh mục — "bì" và "bịch" là hai nhãn
+              cho cùng một thứ nếu để gõ trần. */}
+          <SuggestInput
             value={f.pack_unit}
-            onChange={set('pack_unit')}
+            onChange={(v) => setF((x) => ({ ...x, pack_unit: v }))}
+            options={s.packUnits}
+            listId={`${unitListId}-pack`}
             maxLength={30}
             placeholder="bì / bó / thùng / bao…"
             className={inputClass}
@@ -948,6 +1028,7 @@ export function MaterialCoreFields({
                 đã khai (
                 {(Number(f.kg_per_m) * Number(f.default_bar_length_m)).toFixed(2)} kg).
                 Kiểm lại dấu chấm thập phân — sai chỗ này là sai thẳng tiền đơn.
+                <BaremConfirm s={s} />
               </p>
             )}
           </div>
@@ -1013,6 +1094,7 @@ export function MaterialCoreFields({
                 ⚠ Số đang nhập lệch {Math.round(s.kgOff * 100)}% so với {s.derived.kg}{' '}
                 kg/m máy tính từ quy cách. Kiểm lại dấu chấm thập phân — sai chỗ này là
                 sai thẳng số tiền trên đơn.
+                <BaremConfirm s={s} />
               </p>
             )}
             <p className="text-xs text-zinc-500 sm:col-span-2">
