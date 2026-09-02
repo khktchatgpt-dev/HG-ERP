@@ -874,7 +874,15 @@ export function PoCreateForm({
   }
 
   return (
-    <div className="flex flex-col gap-3 pb-2">
+    /*
+     * min-h: THANH TỔNG phải nằm ở ĐÁY MÀN, không lơ lửng giữa trang.
+     * Nó `sticky bottom-0`, nhưng sticky chỉ có tác dụng khi trang cao hơn màn
+     * hình — đơn mới có 1-2 dòng thì thanh (kèm nút Lưu) đứng chơ vơ giữa chừng
+     * với một mảng trắng lớn bên dưới. Cho khung tối thiểu bằng chiều cao vùng
+     * nội dung là thanh luôn tì đáy, đơn ngắn hay dài cũng vậy.
+     * dvh chứ không vh: trên điện thoại thanh địa chỉ trượt làm vh sai.
+     */
+    <div className="flex min-h-[calc(100dvh-7.5rem)] flex-col gap-3 pb-2">
       <TopProgressBar active={busy} />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -1095,6 +1103,9 @@ export function PoCreateForm({
               type="button"
               variant="outline"
               onClick={() => setPickOpen(true)}
+              /* Nhãn cho trình đọc màn hình: chữ trong nút bị `truncate` và có
+                 <kbd> chen vào nên cây accessibility đọc ra nút KHÔNG TÊN. */
+              aria-label="Tìm và chọn vật tư cho đơn"
               className="text-muted-foreground min-w-0 flex-1 justify-start gap-2.5 rounded-lg border-dashed px-3 text-left text-[13px] font-normal hover:border-[var(--primary)]"
             >
               <Search className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />
@@ -1200,6 +1211,7 @@ export function PoCreateForm({
           loading={loadingNeeds}
           open={showNeeds}
           onToggle={() => setShowNeeds((v) => !v)}
+          onGoLines={() => setTab('lines')}
           onAdd={(list) => {
             void addFromNeeds(list)
             setTab('lines')

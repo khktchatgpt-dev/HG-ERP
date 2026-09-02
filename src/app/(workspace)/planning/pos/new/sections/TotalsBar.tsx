@@ -67,7 +67,9 @@ export function TotalsBar({
   const isPreset = vat !== '' && (VAT_PRESETS as readonly number[]).includes(Number(vat))
 
   return (
-    <footer className="border-border bg-card sticky bottom-0 z-30 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
+    /* mt-auto: khung ngoài cao tối thiểu bằng màn hình (xem PoCreateForm) nên
+       thanh phải tự đẩy mình xuống đáy khoảng trống còn lại. */
+    <footer className="border-border bg-card sticky bottom-0 z-30 mt-auto flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t px-4 py-2.5">
       <span className="text-muted-foreground text-[13px]">
         Tiền hàng{' '}
         <b className="t-data text-foreground text-[13px]">
