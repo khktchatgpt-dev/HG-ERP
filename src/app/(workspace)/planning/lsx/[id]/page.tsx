@@ -1,14 +1,28 @@
-import { LsxDetailScreen } from '../../../production/lsx/[id]/LsxDetailScreen'
+import { notFound } from 'next/navigation'
+import { authService } from '@/modules/core/auth/auth.service'
+import { buildLsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
+import { LsxPoScreen } from './LsxPoScreen'
+
+export const dynamic = 'force-dynamic'
 
 /**
- * Chi tiết LSX trong shell Kế hoạch - Cung ứng — tra cứu khi theo dõi đơn/đặt
- * vật tư; vai Kế hoạch sửa được bảng chi tiết. Không nhảy sang shell Sales.
+ * ĐƠN MUA CỦA LỆNH — cửa vào từ danh sách `/planning/lsx` (03/09/2026).
+ *
+ * Route này TRƯỚC ĐÂY render `LsxDetailScreen` (hồ sơ lệnh dùng chung với
+ * xưởng/GĐ). Đổi vì trong shell Cung ứng, bấm vào một lệnh nghĩa là "cho tôi
+ * xem các đơn của lệnh này", không phải "cho tôi xem bảng chi tiết sản phẩm".
+ * Hồ sơ lệnh đầy đủ chuyển sang `/planning/lsx/[id]/ho-so`, có nút dẫn sang ở
+ * đầu trang nên không mất đường đi.
  */
-export default async function PlanningLsxDetailPage({
+export default async function PlanningLsxPoPage({
   params,
 }: {
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  return <LsxDetailScreen id={id} variant="planning" />
+  const user = await authService.requirePageUser()
+  const today = new Date().toISOString().slice(0, 10)
+  const detail = await buildLsxSupplyDetail(user, id, today)
+  if (!detail) notFound()
+  return <LsxPoScreen lsx={detail} today={today} />
 }

@@ -170,6 +170,120 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
   return out
 }
 
+/** Một lệnh + mọi đơn mua phục vụ nó, như người mua cần đọc. */
+export type LsxSupplyDetail = {
+  id: string
+  code: string
+  customer_name: string
+  order_codes: string[]
+  status: string
+  priority: number
+  ship_date: string | null
+  materials_due_at: string | null
+  materials_received_at: string | null
+  products: { code: string; name: string; qty: number }[]
+  pos: {
+    id: string
+    code: string
+    supplier_name: string
+    status: string
+    ordered_at: string | null
+    expected_at: string | null
+    currency: string
+    note: string | null
+    assignee_name: string | null
+    /** Đơn của lệnh KHÁC có mua hộ lệnh này (0125). */
+    shared: boolean
+    shared_with: string[]
+    late: boolean
+    amount: number
+    paid: number
+    qty_ordered: number
+    qty_received: number
+    lines_missing: number
+    received_at: string | null
+    material_group: string | null
+  }[]
+}
+
+/**
+ * CHI TIẾT MỘT LỆNH cho Cung ứng — trang "lệnh này có những đơn nào" (03/09/
+ * 2026, user: "1 LSX có nhiều đơn hàng đi theo… biết đơn nào tình trạng ra sao
+ * và ai là người đảm nhận").
+ *
+ * Đơn lấy qua `posRepo.list({ production_order_id })` vì hàm đó ĐÃ gộp sẵn đơn
+ * mua chung (0125): đơn ghi "LSX 2+3" có lệnh chính là 2, nhưng người đang xem
+ * lệnh 3 vẫn phải thấy nó — bỏ sót là tưởng lệnh 3 chưa ai mua rồi đặt trùng.
+ *
+ * Số tiền/đã nhận dùng lại `loadPoReportDetails` của báo cáo họp: màn hình và
+ * file Excel đọc CÙNG một phép tính, không đẻ ra hai định nghĩa "đã về".
+ */
+export async function buildLsxSupplyDetail(
+  user: User,
+  lsxId: string,
+  today: string,
+): Promise<LsxSupplyDetail | null> {
+  const lsx = await productionRepo.findById(lsxId)
+  if (!lsx) return null
+
+  const [{ rows: pos }, productLines] = await Promise.all([
+    posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
+    listOrderLineProducts(lsx.order_ids),
+  ])
+
+  const [details, extraLsx] = await Promise.all([
+    loadPoReportDetails(pos.map((p) => p.id)),
+    posRepo.extraLsxByPoIds(pos.map((p) => p.id)),
+  ])
+
+  const products: LsxSupplyDetail['products'] = []
+  for (const pl of productLines) {
+    const hit = products.find((x) => x.code === pl.code)
+    if (hit) hit.qty += pl.qty
+    else products.push({ code: pl.code, name: pl.name, qty: pl.qty })
+  }
+
+  return {
+    id: lsx.id,
+    code: lsx.code,
+    customer_name: lsx.customer_name,
+    order_codes: lsx.order_codes,
+    status: lsx.status,
+    priority: lsx.priority,
+    ship_date: lsx.ship_date,
+    materials_due_at: lsx.materials_due_at,
+    materials_received_at: lsx.materials_received_at,
+    products,
+    pos: pos.map((p) => {
+      const d = details[p.id]
+      const extras = extraLsx.get(p.id) ?? []
+      return {
+        id: p.id,
+        code: p.code,
+        supplier_name: p.supplier_name,
+        status: p.status,
+        ordered_at: p.ordered_at,
+        expected_at: p.expected_at,
+        currency: p.currency,
+        note: p.note,
+        assignee_name: p.assignee_name,
+        // "Mua hộ" nhìn TỪ LỆNH ĐANG XEM: đơn thuộc lệnh khác mà có phục vụ
+        // lệnh này. Cờ này quyết định người mua có được sửa đơn ở đây không.
+        shared: p.production_order_id !== lsxId,
+        shared_with: extras.filter((e) => e.id !== lsxId).map((e) => e.code),
+        late: assessPoLate(p, today) === 'overdue',
+        amount: d?.amount ?? 0,
+        paid: d?.paid ?? 0,
+        qty_ordered: d?.qty_ordered ?? 0,
+        qty_received: d?.qty_received ?? 0,
+        lines_missing: d?.lines_missing ?? 0,
+        received_at: d?.received_at ?? null,
+        material_group: d?.material_group ?? null,
+      }
+    }),
+  }
+}
+
 /**
  * BỐN TRUY VẤN cho cả tập, không N+1:
  *   1. LSX đang chạy (kèm khách, hạn vật tư, ngày giao).

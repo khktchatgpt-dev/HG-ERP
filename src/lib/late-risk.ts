@@ -62,7 +62,14 @@ export type PoLateInput = {
   expected_at: string | null
 }
 
-/** overdue = quá hẹn giao; due_soon = còn ≤ horizon ngày. */
+/**
+ * overdue = quá hẹn giao; due_soon = còn ≤ horizon ngày.
+ *
+ * CỐ Ý tính cả đơn còn nháp/chờ duyệt: "đơn nằm chờ ký trong khi ngày hẹn đã
+ * trôi qua" là câu hỏi có thật của bộ lọc `late` (xem po-filter.test.ts). Nhưng
+ * vì thế hàm này KHÔNG có nghĩa "NCC trễ" — chỗ gọi muốn quy trách nhiệm cho
+ * nhà cung cấp phải tự lọc đơn đã gửi trước (xem `LsxPoScreen`).
+ */
 export function assessPoLate(
   po: PoLateInput,
   todayIso: string,
