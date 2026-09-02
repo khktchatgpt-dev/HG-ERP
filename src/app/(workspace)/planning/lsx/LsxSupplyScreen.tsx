@@ -7,6 +7,7 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  Download,
   Factory,
   Package,
   Plus,
@@ -30,34 +31,11 @@ import {
   type DueLevel,
   type LsxSupplyGateKey,
 } from '@/lib/lsx-supply'
+import type { LsxSupplyRow } from '@/modules/dept/supply/lsx-supply.service'
 
-export type LsxSupplyRow = {
-  id: string
-  code: string
-  customer_name: string
-  order_codes: string[]
-  ship_date: string | null
-  materials_due_at: string | null
-  materials_received_at: string | null
-  priority: number
-  /** Sản phẩm phải làm của cả lệnh (đã cộng dồn qua các đơn). */
-  products: { code: string; name: string; qty: number }[]
-  pos: {
-    id: string
-    code: string
-    supplier_name: string
-    status: string
-    expected_at: string | null
-    currency: string
-    /** Đơn MUA CHUNG của lệnh khác, có mua hộ lệnh này (0125). */
-    shared: boolean
-    late: boolean
-  }[]
-  posTotal: number
-  posUnsent: number
-  posOpen: number
-  posLate: number
-}
+/* Kiểu dòng do SERVICE định nghĩa (dùng chung với file xuất Excel). Import
+   type-only nên không kéo code server vào bundle client. */
+export type { LsxSupplyRow }
 
 const GATE_COLOR: Record<LsxSupplyGateKey, string> = {
   none: 'var(--warn)',
@@ -164,13 +142,24 @@ export function LsxSupplyScreen({
         title="Vật tư theo lệnh"
         description="Lệnh đang chạy kèm khách hàng, sản phẩm phải làm và hạn vật tư — xếp theo việc bạn cần làm trước. Bung một lệnh để xem sản phẩm và các đơn mua đã lập."
         actions={
-          canEdit && (
-            <Button size="sm" asChild>
-              <Link href="/planning/pos/new">
-                <Plus /> Tạo phiếu mua
-              </Link>
+          <>
+            {/* File mang vào HỌP TUẦN — ai cũng tải được, không gác theo
+                `canEdit`: người cần nó nhất là bên Sản xuất và Ban Giám đốc
+                ngồi họp, họ không có quyền sửa đơn mua. Dùng <a> thường chứ
+                không `router.push`: đây là tải file, không phải điều hướng. */}
+            <Button size="sm" variant="outline" asChild>
+              <a href="/api/dept/supply/lsx-report" download>
+                <Download /> Xuất Excel
+              </a>
             </Button>
-          )
+            {canEdit && (
+              <Button size="sm" asChild>
+                <Link href="/planning/pos/new">
+                  <Plus /> Tạo phiếu mua
+                </Link>
+              </Button>
+            )}
+          </>
         }
       />
 
