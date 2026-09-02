@@ -83,16 +83,22 @@ export function ToolbarSelect<T extends string>({
   onChange,
   options,
   className = '',
+  'aria-label': ariaLabel,
 }: {
   value: T
   onChange: (v: T) => void
   options: readonly { value: T; label: string }[]
   className?: string
+  /** Bắt buộc khi ô KHÔNG có <label> nhìn thấy được — select trần không tự có
+   *  tên cho trình đọc màn hình. Trước đây prop này không tồn tại nên chỗ gọi
+   *  truyền vào là rơi im lặng (TS không báo). */
+  'aria-label'?: string
 }) {
   return (
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as T)}
+      aria-label={ariaLabel}
       className={cn(
         'border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm transition-[color,box-shadow] outline-none focus-visible:ring-[3px]',
         className,

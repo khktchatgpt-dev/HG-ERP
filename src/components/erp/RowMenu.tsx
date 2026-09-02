@@ -1,13 +1,11 @@
 'use client'
 
-import { useRef, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn/dropdown-menu'
-import { cn } from '@/lib/utils'
 
 export type RowMenuItem = {
   label: string
@@ -24,10 +22,10 @@ export type RowMenuItem = {
  * đóng khi cuộn/Esc/click ngoài đều do Radix lo, bỏ được ~80 dòng đo toạ độ
  * tự viết (kèm bug lệch khi zoom).
  *
- * BẪY PORTAL: Radix render content ra <body>, NGOÀI wrapper `.theme-v2/.theme-v3`
- * nên token theme không phủ tới. Fix tự động: lúc mở, dò class theme gần nhất
- * từ nút trigger (`closest`) rồi gắn lại vào content — component gọi không phải
- * quan tâm gì.
+ * BẪY PORTAL (đã dời xuống primitive 02/09/2026): Radix render content ra
+ * <body>, ngoài wrapper `.theme-v3`. Trước đây RowMenu tự dò theme từ trigger;
+ * nay `DropdownMenuContent` tự lo qua `usePortalTheme()`, nên chỗ này bỏ được
+ * bản tự chế — một cơ chế, không phải hai.
  */
 export function RowMenu({
   items,
@@ -44,26 +42,10 @@ export function RowMenu({
    *  đó, không thì aria-label "Actions" đè lên và người dùng NVDA nghe sai nút. */
   ariaLabel?: string
 }) {
-  const btnRef = useRef<HTMLButtonElement>(null)
-  const [themeClass, setThemeClass] = useState<string | undefined>(undefined)
-
   return (
-    <DropdownMenu
-      onOpenChange={(open) => {
-        if (!open) return
-        const themed = btnRef.current?.closest('.theme-v3, .theme-v2')
-        setThemeClass(
-          themed?.classList.contains('theme-v3')
-            ? 'theme-v3'
-            : themed?.classList.contains('theme-v2')
-              ? 'theme-v2'
-              : undefined,
-        )
-      }}
-    >
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          ref={btnRef}
           aria-label={ariaLabel ?? 'Actions'}
           className={
             triggerClassName ??
@@ -73,7 +55,7 @@ export function RowMenu({
           {trigger ?? '⋯'}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className={cn('min-w-40', themeClass)}>
+      <DropdownMenuContent align="end" className="min-w-40">
         {items.map((it, i) => (
           <DropdownMenuItem
             key={i}
