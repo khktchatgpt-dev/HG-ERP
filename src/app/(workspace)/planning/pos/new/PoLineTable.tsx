@@ -6,15 +6,9 @@ import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-templ
 import { PO_FIELDS } from '@/lib/po-fields'
 import { GridCellInput } from '@/components/erp/GridCell'
 import { Button } from '@/components/shadcn/button'
+import { cn } from '@/lib/utils'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
-import {
-  AutoGrowCell,
-  LineCell,
-  NoteCell,
-  blurOnWheel,
-  calc,
-  cell,
-} from './PoLineCells'
+import { AutoGrowCell, LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
 import {
   cartonPriceSuggest,
   lineAmount,
@@ -235,7 +229,13 @@ export function PoLineTable({
        * số, đợt giao vượt SL) — ở đây nó là màu NHẤN MẠNH. Nếu về sau thấy
        * người dùng đọc nhầm "số đỏ = số sai" thì đổi hai ô này sang cobalt đậm.
        */
-      className="min-h-[200px] overflow-auto [&_[data-cell]]:font-semibold [&_[data-cell]]:text-[var(--stop)] [&_input:focus]:bg-[var(--accent)] [&_input:focus-visible]:ring-[var(--ring)]/45 [&_textarea:focus]:bg-[var(--accent)] [&_textarea:focus-visible]:ring-[var(--ring)]/45"
+      /* Sàn 200px giữ bảng khỏi "nhảy" khi thêm dòng đầu tiên — nhưng lúc đơn
+         còn TRỐNG thì nó là 145px trắng trơn dưới một dòng ma. Đơn rỗng hạ sàn
+         xuống vừa đủ dòng ma; từ dòng thật đầu tiên trở đi mới cần sàn cao. */
+      className={cn(
+        'overflow-auto [&_[data-cell]]:font-semibold [&_[data-cell]]:text-[var(--stop)] [&_input:focus]:bg-[var(--accent)] [&_input:focus-visible]:ring-[var(--ring)]/45 [&_textarea:focus]:bg-[var(--accent)] [&_textarea:focus-visible]:ring-[var(--ring)]/45',
+        empty ? 'min-h-0' : 'min-h-[200px]',
+      )}
     >
       {/*
         `text-[13px]` trên chính THẺ BẢNG: ô nào không tự khai cỡ chữ thì thừa
@@ -372,291 +372,291 @@ export function PoLineTable({
 
               return (
                 <tr key={l.material_id} data-line className="group hover:bg-accent">
-                    {/*
+                  {/*
                     Ô DANH TÍNH — cột ghim DUY NHẤT bên trái: số thứ tự, tên, mã,
                     tồn, nút mở ô mẫu, nút xoá. Gộp về một ô nên không còn phép
                     cộng offset nào để lệch.
 
                     VẠCH CAM: dòng còn thiếu số, đọc được bằng đuôi mắt khi cuộn.
                   */}
-                    <td
-                      className={`${tdBase} bg-card group-hover:bg-accent sticky left-0 align-top`}
-                      style={{
-                        maxWidth: NAME_W,
-                        boxShadow: problem ? `inset 3px 0 0 var(--warn), ${shL}` : shL,
-                      }}
-                    >
-                      <div className="flex items-start gap-1.5">
-                        <span className="text-muted-foreground t-data w-4 shrink-0 pt-0.5 text-right text-[11px]">
-                          {i + 1}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          {l.is_free ? (
-                            <>
-                              <AutoGrowCell
-                                value={l.name}
-                                placeholder="Tên SP / món gia công…"
-                                onChange={(v) => onPatch(i, { name: v })}
-                                label={`Tên hàng dòng ${i + 1}`}
-                                className="font-semibold"
-                                autoFocus={focusIndex === i}
-                                onAutoFocused={onFocused}
-                              />
-                              <div className="text-muted-foreground mt-1 text-[11px]">
-                                dòng tự gõ — không trừ kho
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div
-                                className="text-foreground text-[13px] leading-snug font-semibold break-words"
-                                title={l.name}
-                              >
-                                {l.name}
-                              </div>
-                              <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
-                                <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
-                                  {l.code}
+                  <td
+                    className={`${tdBase} bg-card group-hover:bg-accent sticky left-0 align-top`}
+                    style={{
+                      maxWidth: NAME_W,
+                      boxShadow: problem ? `inset 3px 0 0 var(--warn), ${shL}` : shL,
+                    }}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      <span className="text-muted-foreground t-data w-4 shrink-0 pt-0.5 text-right text-[11px]">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        {l.is_free ? (
+                          <>
+                            <AutoGrowCell
+                              value={l.name}
+                              placeholder="Tên SP / món gia công…"
+                              onChange={(v) => onPatch(i, { name: v })}
+                              label={`Tên hàng dòng ${i + 1}`}
+                              className="font-semibold"
+                              autoFocus={focusIndex === i}
+                              onAutoFocused={onFocused}
+                            />
+                            <div className="text-muted-foreground mt-1 text-[11px]">
+                              dòng tự gõ — không trừ kho
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div
+                              className="text-foreground text-[13px] leading-snug font-semibold break-words"
+                              title={l.name}
+                            >
+                              {l.name}
+                            </div>
+                            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
+                              <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
+                                {l.code}
+                              </span>
+                              {onEditMaterial && (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onEditMaterial(l.material_id)}
+                                  className="text-muted-foreground/70 size-auto rounded p-0.5 hover:text-[var(--primary)]"
+                                  title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
+                                  aria-label={`Sửa vật tư ${l.name}`}
+                                >
+                                  <Pencil className="size-3" aria-hidden />
+                                </Button>
+                              )}
+                              {l.on_hand == null ? (
+                                <span className="text-muted-foreground/70">kho ?</span>
+                              ) : (
+                                <span
+                                  className={
+                                    l.on_hand > 0 ? 'text-[var(--done)]' : undefined
+                                  }
+                                >
+                                  tồn {num(l.on_hand)}
                                 </span>
-                                {onEditMaterial && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => onEditMaterial(l.material_id)}
-                                    className="text-muted-foreground/70 size-auto rounded p-0.5 hover:text-[var(--primary)]"
-                                    title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
-                                    aria-label={`Sửa vật tư ${l.name}`}
-                                  >
-                                    <Pencil className="size-3" aria-hidden />
-                                  </Button>
-                                )}
-                                {l.on_hand == null ? (
-                                  <span className="text-muted-foreground/70">kho ?</span>
-                                ) : (
-                                  <span
-                                    className={
-                                      l.on_hand > 0 ? 'text-[var(--done)]' : undefined
-                                    }
-                                  >
-                                    tồn {num(l.on_hand)}
-                                  </span>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        {/* Nút xoá về đây (bản đầu để trong ô tiền — chen mất chỗ
+                              )}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                      {/* Nút xoá về đây (bản đầu để trong ô tiền — chen mất chỗ
                           của con số dài nhất bảng). */}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onRemove(i)}
-                          className="text-muted-foreground mt-0.5 size-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus:opacity-100"
-                          aria-label={`Xoá dòng ${l.name}`}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden />
-                        </Button>
-                      </div>
-                    </td>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onRemove(i)}
+                        className="text-muted-foreground mt-0.5 size-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus:opacity-100"
+                        aria-label={`Xoá dòng ${l.name}`}
+                      >
+                        <Trash2 className="size-3.5" aria-hidden />
+                      </Button>
+                    </div>
+                  </td>
 
-                    {shownCols.map((c) => (
-                      <td key={c.key} className={tdBase}>
-                        <div className={c.width}>
-                          <LineCell
-                            f={c}
-                            line={l}
-                            index={i}
-                            kgTotal={kg}
-                            onPatch={onPatch}
-                            onSaveToCatalog={onSaveToCatalog}
-                          />
-                        </div>
-                      </td>
-                    ))}
-
-                    <td className={`${tdBase} text-center text-[12px] whitespace-nowrap`}>
-                      {l.is_free ? (
-                        <GridCellInput
-                          value={l.unit}
-                          maxLength={30}
-                          onChange={(e) => onPatch(i, { unit: e.target.value })}
-                          className={`${cell} w-[44px] px-1 text-center`}
-                          aria-label={`ĐVT dòng ${i + 1}`}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">{l.unit}</span>
-                      )}
-                    </td>
-
-                    {/* ── ô GÕ THẬT #1 ── */}
-                    <td className={tdBase}>
-                      <div className="w-[92px]">
-                        <GridCellInput
-                          id={`qty-${l.material_id}`}
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          data-cell="qty"
-                          onWheel={blurOnWheel}
-                          ref={(el) => {
-                            if (el && focusIndex === i && !l.is_free) {
-                              el.focus()
-                              el.select()
-                              onFocused?.()
-                            }
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            e.preventDefault()
-                            focusInRow(e.currentTarget, 'price')
-                          }}
-                          value={l.qty}
-                          onChange={(e) =>
-                            onPatch(i, {
-                              qty: (e.target.value === ''
-                                ? ''
-                                : Number(e.target.value)) as Num,
-                            })
-                          }
-                          className={`${cell} text-right text-[13px] font-medium`}
-                          aria-label={`SL đặt ${l.name}`}
+                  {shownCols.map((c) => (
+                    <td key={c.key} className={tdBase}>
+                      <div className={c.width}>
+                        <LineCell
+                          f={c}
+                          line={l}
+                          index={i}
+                          kgTotal={kg}
+                          onPatch={onPatch}
+                          onSaveToCatalog={onSaveToCatalog}
                         />
                       </div>
-                      {l.qty === '' && useSuggest != null && useSuggest > 0 && (
-                        <Button
-                          variant="link"
-                          type="button"
-                          onClick={() => onPatch(i, { qty: useSuggest })}
-                          className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
-                          title={
-                            (shortSuggest != null
-                              ? 'SL đơn hàng − tồn kho'
-                              : 'Đề xuất từ nhu cầu BOM') +
-                            (useSuggest !== rawSuggest
-                              ? ` (${num(rawSuggest ?? 0)} làm tròn lên nguyên ${l.pack_unit || 'bao'})`
-                              : '') +
-                            ' — bấm để dùng'
-                          }
-                        >
-                          dùng {num(useSuggest)} ↩
-                        </Button>
-                      )}
-                      {cap != null && l.qty !== '' && Number(l.qty) > cap && (
-                        <div
-                          className="mt-0.5 text-right text-[11px] whitespace-nowrap text-[var(--warn)]"
-                          title="Trần tồn (max_stock) trừ tồn hiện có và lượng đã đặt chưa về. Vượt trần là chủ đích thì cứ đặt — chỉ nhắc, không chặn."
-                        >
-                          ⚠ vượt trần — thêm được {num(cap)}
-                        </div>
-                      )}
-                      {qtyPacks != null && (
-                        <div
-                          className="text-muted-foreground mt-0.5 text-right text-[11px] whitespace-nowrap"
-                          title={`Đóng gói mua: 1 ${l.pack_unit} = ${num(l.pack_size ?? 0)} ${l.unit}`}
-                        >
-                          {Number.isInteger(qtyPacks) ? '=' : '≈'} {num(qtyPacks)}{' '}
-                          {l.pack_unit}
-                        </div>
-                      )}
                     </td>
+                  ))}
 
-                    {/* ── ô GÕ THẬT #2 ── */}
-                    <td className={tdBase}>
-                      <div className="w-[104px]">
-                        <GridCellInput
-                          id={`price-${l.material_id}`}
-                          type="number"
-                          min="0"
-                          step="1"
-                          data-cell="price"
-                          onWheel={blurOnWheel}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            e.preventDefault()
-                            onDoneRow?.()
-                          }}
-                          value={l.price}
-                          onChange={(e) =>
-                            onPatch(i, {
-                              price: (e.target.value === ''
-                                ? ''
-                                : Number(e.target.value)) as Num,
-                            })
-                          }
-                          className={`${cell} text-right text-[13px]`}
-                          aria-label={`Đơn giá ${l.name}`}
-                        />
-                      </div>
-                      {goiY != null && l.price !== goiY && (
-                        <Button
-                          variant="link"
-                          type="button"
-                          onClick={() => onPatch(i, { price: goiY })}
-                          className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
-                          title="m²/thùng × đơn giá/m² + bản in — bấm để dùng"
-                        >
-                          = {num(goiY)} ↩
-                        </Button>
-                      )}
-                    </td>
-
-                    {calcCol && (
-                      <td className={tdBase}>
-                        <div
-                          className={`${calc} w-[88px]`}
-                          title="Hệ thống tự tính từ thông số dòng"
-                        >
-                          {kg == null ? (
-                            <span className="text-muted-foreground font-normal">—</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              <Weight
-                                className="text-muted-foreground size-3"
-                                aria-hidden
-                              />
-                              {num(kg)}
-                            </span>
-                          )}
-                        </div>
-                      </td>
+                  <td className={`${tdBase} text-center text-[12px] whitespace-nowrap`}>
+                    {l.is_free ? (
+                      <GridCellInput
+                        value={l.unit}
+                        maxLength={30}
+                        onChange={(e) => onPatch(i, { unit: e.target.value })}
+                        className={`${cell} w-[44px] px-1 text-center`}
+                        aria-label={`ĐVT dòng ${i + 1}`}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground">{l.unit}</span>
                     )}
+                  </td>
 
-                    <td className={tdBase}>
-                      <div className="min-w-[140px]">
-                        <NoteCell
-                          value={l.note}
-                          label={`Ghi chú ${l.name}`}
-                          placeholder={
-                            template === 'aluminium' || template === 'metal_kg'
-                              ? 'vị trí: chân trước…'
-                              : '50 bàn santorin (4c/sp)…'
+                  {/* ── ô GÕ THẬT #1 ── */}
+                  <td className={tdBase}>
+                    <div className="w-[92px]">
+                      <GridCellInput
+                        id={`qty-${l.material_id}`}
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        data-cell="qty"
+                        onWheel={blurOnWheel}
+                        ref={(el) => {
+                          if (el && focusIndex === i && !l.is_free) {
+                            el.focus()
+                            el.select()
+                            onFocused?.()
                           }
-                          onChange={(v) => onPatch(i, { note: v })}
-                        />
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          e.preventDefault()
+                          focusInRow(e.currentTarget, 'price')
+                        }}
+                        value={l.qty}
+                        onChange={(e) =>
+                          onPatch(i, {
+                            qty: (e.target.value === ''
+                              ? ''
+                              : Number(e.target.value)) as Num,
+                          })
+                        }
+                        className={`${cell} text-right text-[13px] font-medium`}
+                        aria-label={`SL đặt ${l.name}`}
+                      />
+                    </div>
+                    {l.qty === '' && useSuggest != null && useSuggest > 0 && (
+                      <Button
+                        variant="link"
+                        type="button"
+                        onClick={() => onPatch(i, { qty: useSuggest })}
+                        className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
+                        title={
+                          (shortSuggest != null
+                            ? 'SL đơn hàng − tồn kho'
+                            : 'Đề xuất từ nhu cầu BOM') +
+                          (useSuggest !== rawSuggest
+                            ? ` (${num(rawSuggest ?? 0)} làm tròn lên nguyên ${l.pack_unit || 'bao'})`
+                            : '') +
+                          ' — bấm để dùng'
+                        }
+                      >
+                        dùng {num(useSuggest)} ↩
+                      </Button>
+                    )}
+                    {cap != null && l.qty !== '' && Number(l.qty) > cap && (
+                      <div
+                        className="mt-0.5 text-right text-[11px] whitespace-nowrap text-[var(--warn)]"
+                        title="Trần tồn (max_stock) trừ tồn hiện có và lượng đã đặt chưa về. Vượt trần là chủ đích thì cứ đặt — chỉ nhắc, không chặn."
+                      >
+                        ⚠ vượt trần — thêm được {num(cap)}
+                      </div>
+                    )}
+                    {qtyPacks != null && (
+                      <div
+                        className="text-muted-foreground mt-0.5 text-right text-[11px] whitespace-nowrap"
+                        title={`Đóng gói mua: 1 ${l.pack_unit} = ${num(l.pack_size ?? 0)} ${l.unit}`}
+                      >
+                        {Number.isInteger(qtyPacks) ? '=' : '≈'} {num(qtyPacks)}{' '}
+                        {l.pack_unit}
+                      </div>
+                    )}
+                  </td>
+
+                  {/* ── ô GÕ THẬT #2 ── */}
+                  <td className={tdBase}>
+                    <div className="w-[104px]">
+                      <GridCellInput
+                        id={`price-${l.material_id}`}
+                        type="number"
+                        min="0"
+                        step="1"
+                        data-cell="price"
+                        onWheel={blurOnWheel}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          e.preventDefault()
+                          onDoneRow?.()
+                        }}
+                        value={l.price}
+                        onChange={(e) =>
+                          onPatch(i, {
+                            price: (e.target.value === ''
+                              ? ''
+                              : Number(e.target.value)) as Num,
+                          })
+                        }
+                        className={`${cell} text-right text-[13px]`}
+                        aria-label={`Đơn giá ${l.name}`}
+                      />
+                    </div>
+                    {goiY != null && l.price !== goiY && (
+                      <Button
+                        variant="link"
+                        type="button"
+                        onClick={() => onPatch(i, { price: goiY })}
+                        className="mt-0.5 block h-auto w-full justify-end p-0 text-right text-[11px] font-medium whitespace-nowrap"
+                        title="m²/thùng × đơn giá/m² + bản in — bấm để dùng"
+                      >
+                        = {num(goiY)} ↩
+                      </Button>
+                    )}
+                  </td>
+
+                  {calcCol && (
+                    <td className={tdBase}>
+                      <div
+                        className={`${calc} w-[88px]`}
+                        title="Hệ thống tự tính từ thông số dòng"
+                      >
+                        {kg == null ? (
+                          <span className="text-muted-foreground font-normal">—</span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1">
+                            <Weight
+                              className="text-muted-foreground size-3"
+                              aria-hidden
+                            />
+                            {num(kg)}
+                          </span>
+                        )}
                       </div>
                     </td>
+                  )}
 
-                    {/* ── bậc nổi bật #2: THÀNH TIỀN, ghim phải ── */}
-                    <td
-                      className={`${tdBase} bg-muted group-hover:bg-accent sticky right-0 text-right`}
-                      style={{ boxShadow: shR }}
-                    >
-                      {amount > 0 ? (
-                        <span className="t-data text-[13.5px] font-semibold whitespace-nowrap">
-                          {fmtMoney(roundMoney(amount, currency), currency)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/50 text-[13.5px]">—</span>
-                      )}
-                      {problem && (
-                        <span className="mt-0.5 flex items-center justify-end gap-1 text-[10.5px] font-medium whitespace-nowrap text-[var(--warn)]">
-                          <TriangleAlert className="size-3 shrink-0" aria-hidden />{' '}
-                          {problem}
-                        </span>
-                      )}
-                    </td>
+                  <td className={tdBase}>
+                    <div className="min-w-[140px]">
+                      <NoteCell
+                        value={l.note}
+                        label={`Ghi chú ${l.name}`}
+                        placeholder={
+                          template === 'aluminium' || template === 'metal_kg'
+                            ? 'vị trí: chân trước…'
+                            : '50 bàn santorin (4c/sp)…'
+                        }
+                        onChange={(v) => onPatch(i, { note: v })}
+                      />
+                    </div>
+                  </td>
+
+                  {/* ── bậc nổi bật #2: THÀNH TIỀN, ghim phải ── */}
+                  <td
+                    className={`${tdBase} bg-muted group-hover:bg-accent sticky right-0 text-right`}
+                    style={{ boxShadow: shR }}
+                  >
+                    {amount > 0 ? (
+                      <span className="t-data text-[13.5px] font-semibold whitespace-nowrap">
+                        {fmtMoney(roundMoney(amount, currency), currency)}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/50 text-[13.5px]">—</span>
+                    )}
+                    {problem && (
+                      <span className="mt-0.5 flex items-center justify-end gap-1 text-[10.5px] font-medium whitespace-nowrap text-[var(--warn)]">
+                        <TriangleAlert className="size-3 shrink-0" aria-hidden />{' '}
+                        {problem}
+                      </span>
+                    )}
+                  </td>
                 </tr>
               )
             })

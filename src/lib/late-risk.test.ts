@@ -90,6 +90,17 @@ describe('assessPoLate — PO quá hẹn giao NCC (thu mua)', () => {
     expect(assessPoLate({ status: 'ordered', expected_at: null }, TODAY)).toBeNull()
   })
 
+  it('đơn chưa gửi mà quá hẹn VẪN overdue — nhưng đó là trễ của ta, không phải của NCC', () => {
+    // Giữ có chủ đích cho bộ lọc "chờ duyệt đang quá hẹn" (po-filter.test.ts).
+    // Chỗ nào muốn nói "NCC trễ" thì phải tự loại đơn chưa gửi ra trước.
+    expect(assessPoLate({ status: 'draft', expected_at: '2026-07-01' }, TODAY)).toBe(
+      'overdue',
+    )
+    expect(
+      assessPoLate({ status: 'pending_approval', expected_at: '2026-07-01' }, TODAY),
+    ).toBe('overdue')
+  })
+
   it('về một phần (partial) quá hẹn vẫn cảnh báo — phần thiếu là nghẽn SX', () => {
     expect(assessPoLate({ status: 'partial', expected_at: '2026-07-01' }, TODAY)).toBe(
       'overdue',

@@ -22,7 +22,9 @@ import {
  * Màn HỒ SƠ LỆNH dùng chung 3 shell — "mỗi bộ phận một màn riêng":
  *   production  /production/lsx/[id]  — xưởng theo dõi (kế hoạch/jobs + số liệu)
  *   exec        /exec/lsx/[id]        — GĐ thẩm định + DUYỆT ngay trong shell GĐ
- *   planning    /planning/lsx/[id]    — Kế hoạch/Cung ứng tra cứu (+ panel PO)
+ *   planning    /planning/lsx/[id]/ho-so — Kế hoạch/Cung ứng tra cứu (+ panel PO).
+ *               Route `/planning/lsx/[id]` trần nay là DANH SÁCH ĐƠN MUA của
+ *               lệnh (màn riêng của người mua, 03/09/2026).
  * Bản của Sales (/sales/lsx) vẫn riêng vì có sửa spec + gửi duyệt lại.
  */
 export async function LsxDetailScreen({

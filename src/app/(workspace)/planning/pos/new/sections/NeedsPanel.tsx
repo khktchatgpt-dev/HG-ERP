@@ -2,6 +2,8 @@
 
 import { Plus, Sparkles } from 'lucide-react'
 import { Button } from '@/components/shadcn/button'
+import { EmptyState } from '@/components/erp/EmptyState'
+import { Spinner } from '@/components/erp/Spinner'
 
 /** Nhu cầu vật tư của LSX từ BOM — payload của `/api/dept/supply/needs`. */
 export type Need = {
@@ -39,6 +41,7 @@ export function NeedsPanel({
   open,
   onToggle,
   onAdd,
+  onGoLines,
 }: {
   needs: Need[]
   /** Nhu cầu còn thiếu và chưa có trên dòng nào. */
@@ -47,10 +50,39 @@ export function NeedsPanel({
   open: boolean
   onToggle: () => void
   onAdd: (list: Need[]) => void
+  /** Lệnh chưa có định mức — lối đi duy nhất còn lại là tự chọn vật tư. */
+  onGoLines: () => void
 }) {
-  // LSX không có BOM (0/0) thì panel không nói được gì — một dải "0 vật tư cần
-  // mua / 0 trong BOM" chỉ chiếm chỗ giữa hai vùng đang làm việc thật.
-  if (!loading && needs.length === 0) return null
+  /*
+   * LSX không có BOM. Khi khối này còn là một DẢI nằm chen giữa hai vùng làm
+   * việc, trả `null` là đúng — không ai muốn một dải "0/0" chiếm chỗ. Nhưng nó
+   * đã thành một TAB riêng (03/09/2026): bấm vào tab mà ra trang trắng thì
+   * người dùng tưởng màn hỏng, chứ không hiểu là "lệnh này chưa có định mức".
+   * Tab phải tự nói tại sao nó rỗng.
+   */
+  if (!loading && needs.length === 0) {
+    return (
+      <section className="bg-card rounded-xl border">
+        <EmptyState
+          icon={<Sparkles />}
+          title="Lệnh này chưa có định mức để gợi ý"
+          description="Nhu cầu vật tư lấy từ bảng chi tiết LSX (ưu tiên số nhập tay, thiếu mới nhân từ BOM × SL). Lệnh chưa chốt định mức thì không có gì để gợi ý — cứ chọn vật tư ở tab Dòng hàng như thường."
+          action={
+            <Button type="button" variant="outline" onClick={onGoLines}>
+              Sang tab Dòng hàng
+            </Button>
+          }
+        />
+      </section>
+    )
+  }
+  if (loading) {
+    return (
+      <section className="bg-card text-muted-foreground flex items-center gap-2 rounded-xl border px-3.5 py-6 text-[13px]">
+        <Spinner size={14} /> Đang đọc định mức của lệnh…
+      </section>
+    )
+  }
   return (
     /*
      * 02/09: khối này từng mang bảng màu RIÊNG (violet + zinc + sky, kèm mọi
@@ -59,7 +91,7 @@ export function NeedsPanel({
      * `--accent` + icon, không bằng một màu tự chế. Nhãn "số nháp" là CẢNH BÁO
      * thật nên ăn `--warn` — đó mới là chỗ màu vòng đời được phép xuất hiện.
      */
-    <section className="border-[color-mix(in_srgb,var(--primary)_25%,transparent)] bg-[color-mix(in_srgb,var(--primary)_4%,transparent)] rounded-xl border">
+    <section className="rounded-xl border border-[color-mix(in_srgb,var(--primary)_25%,transparent)] bg-[color-mix(in_srgb,var(--primary)_4%,transparent)]">
       <div className="flex items-center gap-2 px-3.5 py-2.5 text-[13px]">
         <Sparkles
           className="size-4 shrink-0 text-[var(--primary)]"
@@ -76,7 +108,7 @@ export function NeedsPanel({
             số là NHÁP để không ai đặt theo mà chưa đối chiếu. */}
         {!loading && (
           <span
-            className="border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] rounded-full border px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-[var(--warn)]"
+            className="rounded-full border border-[color-mix(in_srgb,var(--warn)_35%,transparent)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] px-2 py-0.5 text-[10.5px] font-medium whitespace-nowrap text-[var(--warn)]"
             title="Số lấy từ bảng chi tiết LSX (ưu tiên nhập tay, thiếu mới nhân từ BOM×SL) — định mức đang hoàn thiện, đối chiếu với sổ trước khi đặt theo"
           >
             số nháp — đối chiếu trước khi dùng
@@ -102,7 +134,7 @@ export function NeedsPanel({
         </Button>
       </div>
       {open && pending.length > 0 && (
-        <div className="border-[color-mix(in_srgb,var(--primary)_15%,transparent)] grid gap-2 border-t p-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-2 border-t border-[color-mix(in_srgb,var(--primary)_15%,transparent)] p-3 sm:grid-cols-2 lg:grid-cols-3">
           {pending.slice(0, 24).map((n) => (
             <div
               key={n.material_id}

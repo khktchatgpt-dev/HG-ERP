@@ -77,6 +77,12 @@ export type ListFilter = {
   active_only: boolean
   /** true = chỉ vật tư "chờ Kho rà" (0136). */
   needs_review?: boolean
+  /**
+   * Giới hạn trong đúng bộ mã này (màn Kho & tồn của Cung ứng: tập "đang có đơn
+   * chưa về" tính từ bảng đơn, SQL của danh mục không suy ra được). Danh sách
+   * rỗng = không có ứng viên nào → trả rỗng, KHÔNG âm thầm bỏ điều kiện.
+   */
+  ids?: string[]
   page: number
   page_size: number
 }
@@ -120,6 +126,9 @@ export const materialsRepo = {
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
     if (filter.needs_review) q = q.eq('needs_review', true)
+    // `in` chịu được vài nghìn id qua POST-style filter của PostgREST; tập gọi
+    // thực tế là số mã đang có đơn mở nên nhỏ hơn thế nhiều.
+    if (filter.ids) q = q.in('id', filter.ids)
     // Tìm KHÔNG DẤU trên search_text (0127) — AND từng từ, gõ "vit 4x15" vẫn trúng.
     for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
 

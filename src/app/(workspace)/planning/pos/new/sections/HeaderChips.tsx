@@ -344,9 +344,19 @@ export function HeaderChips(p: HeaderChipsProps) {
 
       <span className="ml-auto shrink-0">
         {p.problem ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--warn)]/12 px-2.5 py-1 text-[11.5px] font-medium text-[var(--warn)]">
+          /*
+           * NÓI MỘT LẦN. Trước 03/09/2026 badge này chép nguyên câu `problem`,
+           * mà câu đó đã nằm cạnh nút Lưu ở thanh tổng — cộng với chip liên
+           * quan (NCC/LSX) tự đỏ lên, màn 760px hiện "chưa chọn nhà cung cấp"
+           * BA LẦN cùng lúc. Ở đây chỉ giữ tín hiệu ngắn; lý do đầy đủ để đúng
+           * chỗ người ta sắp bấm Lưu, chi tiết vẫn còn trong tooltip.
+           */
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--warn)]/12 px-2.5 py-1 text-[11.5px] font-medium text-[var(--warn)]"
+            title={p.problem}
+          >
             <AlertTriangle className="size-3.5" strokeWidth={1.8} aria-hidden />
-            {p.problem}
+            chưa lưu được
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--done)]/12 px-2.5 py-1 text-[11.5px] font-medium text-[var(--done)]">
