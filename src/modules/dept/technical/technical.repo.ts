@@ -826,6 +826,90 @@ const PART_COLS =
 const CLUSTER_COLS =
   'id, name, qty_per_product, first_stage, final_stage, note, sort_order'
 
+/** Dòng định mức rút gọn cho màn "Sức khoẻ định mức" — chỉ cột đi vào công thức. */
+export type HealthPartRow = {
+  product_id: string
+  profile_shape: string | null
+  material_kind: string | null
+  dim_a_mm: number | null
+  dim_b_mm: number | null
+  wall_thickness_mm: number | null
+  cut_length_mm: number | null
+  bend_waste_mm: number | null
+  tenon_mm: number | null
+  kg_per_m: number | null
+  qty: number | null
+  total_length_m: number | null
+  weight_kg: number | null
+  paint_area_m2: number | null
+  volume_m3: number | null
+}
+
+/* Một chuỗi LITERAL, không nối bằng `+`: supabase-js suy kiểu hàng trả về từ
+ * chính chuỗi select, nối chuỗi làm nó rơi về `string` và mất kiểu. */
+const HEALTH_PART_COLS =
+  'product_id, profile_shape, material_kind, dim_a_mm, dim_b_mm, wall_thickness_mm, cut_length_mm, bend_waste_mm, tenon_mm, kg_per_m, qty, total_length_m, weight_kg, paint_area_m2, volume_m3'
+
+/** PostgREST trả tối đa 1000 dòng/lượt — bảng định mức đang >4.000 dòng. */
+const PAGE = 1000
+
+export const productHealthRepo = {
+  /**
+   * Kéo TOÀN BỘ dòng định mức, chỉ các cột dùng để chấm điểm.
+   *
+   * Cố ý quét cả bảng thay vì tính từng SP: màn này xếp hạng SP theo mức nợ,
+   * mà muốn xếp hạng thì phải chấm hết. Chấm lười từng SP sẽ thành N+1 truy
+   * vấn cho ~800 hồ sơ. Cột đã rút gọn nên tải thực tế nhỏ.
+   */
+  async allParts(): Promise<HealthPartRow[]> {
+    const out: HealthPartRow[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await db()
+        .from('technical_product_parts')
+        .select(HEALTH_PART_COLS)
+        .range(from, from + PAGE - 1)
+      if (error) throw new Error(`technical_product_parts: ${error.message}`)
+      const rows = (data ?? []) as HealthPartRow[]
+      out.push(...rows)
+      if (rows.length < PAGE) break
+    }
+    return out
+  },
+
+  /**
+   * Danh sách SP đang dùng, chỉ cột để hiện trên bảng chấm điểm.
+   *
+   * Không mượn `productsRepo.list()`: nó nhận `page_size` nhưng PostgREST vẫn
+   * cắt ở 1000 dòng/lượt, nên xin 5.000 sẽ IM LẶNG trả về 1.000 và màn báo
+   * thiếu ~200 hồ sơ mà không có lỗi nào nổi lên.
+   */
+  async allProducts(): Promise<HealthProductRow[]> {
+    const out: HealthProductRow[] = []
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await db()
+        .from('technical_products')
+        .select('id, code, name, customer_name, category, bom_status')
+        .eq('is_active', true)
+        .order('code')
+        .range(from, from + PAGE - 1)
+      if (error) throw new Error(`technical_products: ${error.message}`)
+      const rows = (data ?? []) as HealthProductRow[]
+      out.push(...rows)
+      if (rows.length < PAGE) break
+    }
+    return out
+  },
+}
+
+export type HealthProductRow = {
+  id: string
+  code: string
+  name: string
+  customer_name: string | null
+  category: string | null
+  bom_status: string
+}
+
 export const productProfileRepo = {
   async parts(productId: string): Promise<ProductPart[]> {
     const { data } = await db()
