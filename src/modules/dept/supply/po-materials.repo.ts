@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { normalizeSearch, searchTokens } from '@/lib/search-text'
+import { matchScore, rankMaterials } from '@/lib/material-search-rank'
 import { namesAlike, sureKey, MIN_KEY_LEN } from '@/lib/material-key'
 import type { PoLastLine, PoMaterial } from '@/lib/po-material.types'
 
@@ -134,6 +135,22 @@ async function lastLinesMany(ids: string[]): Promise<Map<string, PoLastLine>> {
   return m
 }
 
+/**
+ * Gắn tồn kho + dòng đơn gần nhất cho MỘT TRANG kết quả. Tách riêng vì hai truy
+ * vấn này đắt: chỉ chạy sau khi đã xếp hạng và cắt, không chạy trên cả cửa sổ lọc.
+ */
+async function hydrate(rows: Record<string, unknown>[]): Promise<PoMaterial[]> {
+  const ids = rows.map((r) => r.id as string)
+  const [onHand, lastLines] = await Promise.all([onHandMany(ids), lastLinesMany(ids)])
+  return rows.map((r) =>
+    toMaterial(
+      r,
+      onHand.get(r.id as string) ?? null, // null = chưa có sổ kho (0127)
+      lastLines.get(r.id as string) ?? null,
+    ),
+  )
+}
+
 export const poMaterialsRepo = {
   /**
    * Tìm theo mã / tên / barcode — KHÔNG dính gì tới mẫu đơn.
@@ -162,50 +179,75 @@ export const poMaterialsRepo = {
      * ilike trên cột gốc phân biệt dấu, người gõ vội trắng tay.
      */
     const tokens = searchTokens(opts.q ?? '')
-    let rows: Record<string, unknown>[]
-    if (tokens.length > 0) {
-      let query = base()
-      for (const t of tokens) query = query.ilike('search_text', `%${t}%`)
-      // Kéo dư gấp đôi rồi tự xếp hạng bên dưới — thứ hạng cần lịch sử đặt,
-      // thứ DB không biết lúc lọc.
-      const { data } = await query.order('name').limit(opts.limit * 2)
-      rows = (data as Record<string, unknown>[] | null) ?? []
-    } else {
+    if (tokens.length === 0) {
       const { data } = await base().order('code', { ascending: true }).limit(opts.limit)
-      rows = (data as Record<string, unknown>[] | null) ?? []
+      return hydrate((data as Record<string, unknown>[] | null) ?? [])
     }
 
-    const rowIds = rows.map((r) => r.id as string)
-    const [onHand, lastLines] = await Promise.all([
-      onHandMany(rowIds),
-      lastLinesMany(rowIds),
-    ])
-    const mats = rows.map((r) =>
-      toMaterial(
-        r,
-        onHand.get(r.id as string) ?? null, // null = chưa có sổ kho (0127)
-        lastLines.get(r.id as string) ?? null,
-      ),
-    )
-    if (tokens.length === 0) return mats
-
     /*
-     * XẾP HẠNG "MÃ ĐANG DÙNG" LÊN ĐẦU (bất cập #4 — rừng mã trùng): "vít 4x15"
-     * ra 25 mã na ná nhau, tồn 0 hết, không có tín hiệu nào để chọn. Tín hiệu
-     * tốt nhất hệ thống có: mã ĐÃ TỪNG LÊN ĐƠN (last_line) rồi tới mã có giá
-     * trong danh mục — người trước đã chọn nó thì người sau nên theo, danh mục
-     * mới liền mạch thay vì mỗi người một mã.
+     * BA ĐƯỜNG LỌC SONG SONG rồi gộp — vì một câu `ilike` AND từng từ là KHÔNG
+     * ĐỦ (sửa 03/09/2026, người dùng báo: "gõ tên khá sát vẫn không lọc ra,
+     * chọn nhóm mới tìm thấy").
+     *
+     * Gốc lỗi: câu AND đó khớp 471 mã cho "thùng carton", mà cửa sổ lấy về chỉ
+     * 50 dòng ĐẦU BẢNG CHỮ CÁI ("BB ..."), nên món người ta vừa gõ gần đúng tên
+     * không có mặt để mà xếp hạng. Chọn nhóm làm tập nhỏ lại dưới 50 nên "tự
+     * nhiên tìm thấy" — đúng hiện tượng được báo.
+     *
+     *   1. CẢ CỤM: search_text chứa nguyên chuỗi đã chuẩn hoá — bắt đúng ca gõ
+     *      gần hết tên, dù mã đó nằm cuối bảng chữ cái.
+     *   2. TỪNG TỪ (AND): đường cũ, cho người gõ thiếu/đảo từ. Cửa sổ rộng hơn.
+     *   3. MÃ: gõ mã thì ra ngay, không phải chờ khớp tên.
+     *
+     * Gộp xong mới xếp hạng (`rankMaterials`) rồi CẮT — và chỉ sau khi cắt mới
+     * đi lấy tồn + dòng đơn gần nhất, nên phần đắt tiền vẫn chỉ chạy trên `limit`
+     * dòng dù cửa sổ lọc rộng gấp nhiều lần.
      */
-    const nq = normalizeSearch(opts.q ?? '')
-    const score = (m: PoMaterial) =>
-      (m.last_line ? 4 : 0) +
-      (m.last_purchase_price != null ? 2 : 0) +
-      (normalizeSearch(m.name).startsWith(nq) || normalizeSearch(m.code).startsWith(nq)
-        ? 1
-        : 0)
-    return mats
-      .sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name, 'vi'))
-      .slice(0, opts.limit)
+    const phrase = normalizeSearch(opts.q ?? '')
+      .replace(/[,()*%\\]/g, ' ')
+      .trim()
+    const WINDOW = Math.max(opts.limit * 8, 200)
+    let tokenQuery = base()
+    for (const t of tokens) tokenQuery = tokenQuery.ilike('search_text', `%${t}%`)
+
+    const [byPhrase, byTokens, byCode] = await Promise.all([
+      phrase.length >= 2
+        ? base().ilike('search_text', `%${phrase}%`).order('name').limit(60)
+        : null,
+      tokenQuery.order('name').limit(WINDOW),
+      phrase.includes(' ') ? null : base().ilike('code', `${phrase}%`).limit(10),
+    ])
+
+    const seen = new Set<string>()
+    const rows: Record<string, unknown>[] = []
+    for (const res of [byCode, byPhrase, byTokens]) {
+      for (const r of (res?.data as Record<string, unknown>[] | null) ?? []) {
+        const id = r.id as string
+        if (seen.has(id)) continue
+        seen.add(id)
+        rows.push(r)
+      }
+    }
+
+    // Xếp theo ĐỘ KHỚP CHỮ trước (thuần, có test ở material-search-rank.test.ts).
+    // Giá mua là tín hiệu "đang dùng" duy nhất có sẵn trong cột — dùng luôn ở
+    // bước này; lịch sử lên đơn phải truy vấn nên để bước sau.
+    const ranked = rankMaterials(
+      opts.q ?? '',
+      rows.map((r) => ({ code: r.code as string, name: r.name as string, row: r })),
+      (x) => ({ priced: x.row.last_purchase_price != null }),
+    ).slice(0, opts.limit)
+
+    const mats = await hydrate(ranked.map((x) => x.row))
+    /*
+     * Bên trong danh sách đã hợp lệ, nhấc MÃ ĐÃ TỪNG LÊN ĐƠN lên trên (bất cập
+     * "rừng mã trùng"): "vít 4x15" ra chục mã na ná, tồn 0 hết, thì tín hiệu tốt
+     * nhất là mã người trước đã chọn. Chỉ đảo trong tập đã cắt nên không đẩy
+     * được món lạc đề lên đầu.
+     */
+    const key = (m: PoMaterial) =>
+      matchScore(opts.q ?? '', m) * 10 + (m.last_line ? 4 : 0)
+    return mats.sort((a, b) => key(b) - key(a))
   },
 
   /**
