@@ -737,7 +737,14 @@ for (const o of plan) {
     sort_order: i,
     qty_basis: 'manual',
     price_basis: 'unit',
-    spec: r.spec || null,
+    // Màn chi tiết đơn hiện cột "Quy cách" từ `spec`. Phiếu bao bì không có cột
+    // quy cách riêng, chỉ có QC LỌT LÒNG — ghép lại, không thì mở đơn ra thấy
+    // tám dòng thùng carton mà không dòng nào nói mình to bằng chừng nào.
+    spec:
+      r.spec ||
+      (r.inner?.some((x) => x != null)
+        ? `${r.inner.filter((x) => x != null).join('×')} mm (lọt lòng)`
+        : null),
     material_grade: r.grade || null,
     qty_demand: r.demand ?? null,
     qty_on_hand: r.onhand ?? null,

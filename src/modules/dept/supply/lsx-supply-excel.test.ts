@@ -193,6 +193,9 @@ async function read2() {
       lines_missing: 1,
       amount: 123166593,
       paid: 23166593,
+      line_count: 8,
+      unpriced_lines: 0,
+      supplier_doc_no: '01/2026- HG/PV',
     },
   })
   const wb = new ExcelJS.Workbook()

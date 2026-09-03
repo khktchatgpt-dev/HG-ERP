@@ -7,6 +7,10 @@ import {
 } from '@/modules/dept/production/production.repo'
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
+import { supplyRepo } from './supply.repo'
+import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
+import { smartLsxNeeds, reservedByOtherLsx } from '@/modules/dept/warehouse/stock.service'
+import { suggestForMaterial } from '@/lib/po-suggestion'
 
 /**
  * VẬT TƯ THEO LỆNH — một dòng cho mỗi lệnh sản xuất đang chạy, kèm mọi đơn mua
@@ -70,6 +74,12 @@ export type PoReportDetail = {
   lines_missing: number
   amount: number
   paid: number
+  /** Số DÒNG trên đơn — đơn 5 dòng và đơn 59 dòng là hai việc khác nhau. */
+  line_count: number
+  /** Dòng chưa điền đơn giá — đơn nháp kiểu này gửi duyệt là gửi đơn hụt tiền. */
+  unpriced_lines: number
+  /** Số ĐH của NCC ghi trên tờ giấy — cái người mua đọc khi gọi điện. */
+  supplier_doc_no: string | null
 }
 
 export type PoReportDetails = Record<string, PoReportDetail>
@@ -91,7 +101,7 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
       .in('po_id', poIds),
     db()
       .from('supply_purchase_order_lines')
-      .select('po_id, material_id')
+      .select('po_id, material_id, unit_price')
       .in('po_id', poIds),
     db().from('accounting_supplier_payments').select('po_id, amount').in('po_id', poIds),
     posRepo.totalsByPoIds(poIds),
@@ -125,8 +135,30 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
     lines_missing: 0,
     amount: 0,
     paid: 0,
+    line_count: 0,
+    unpriced_lines: 0,
+    supplier_doc_no: null,
   })
   for (const id of poIds) out[id] = blank()
+
+  // Đếm dòng + dòng chưa có giá, ngay trên tập `lines` đã lấy sẵn.
+  for (const l of (lines.data ?? []) as { po_id: string; unit_price: unknown }[]) {
+    const d = out[l.po_id]
+    if (!d) continue
+    d.line_count++
+    if (!Number(l.unit_price)) d.unpriced_lines++
+  }
+
+  // Số ĐH của NCC không nằm trong COLS của pos.repo (cột đọc dùng chung, không
+  // đụng vào), nên lấy riêng ở đây cho đúng phạm vi màn báo cáo.
+  const { data: docNos } = await db()
+    .from('supply_purchase_orders')
+    .select('id, supplier_doc_no')
+    .in('id', poIds)
+  for (const r of (docNos ?? []) as { id: string; supplier_doc_no: string | null }[]) {
+    const d = out[r.id]
+    if (d) d.supplier_doc_no = r.supplier_doc_no
+  }
 
   for (const r of (lineStatus.data ?? []) as {
     po_id: string
@@ -171,7 +203,18 @@ export async function loadPoReportDetails(poIds: string[]): Promise<PoReportDeta
 }
 
 /** Một lệnh + mọi đơn mua phục vụ nó, như người mua cần đọc. */
+export type LsxSupplyCoverage = {
+  /** Số MÃ vật tư lệnh còn cần (đã trừ phần đã xuất kho). */
+  needed: number
+  /** Số mã đã đủ: tồn khả dụng + đã đặt ≥ còn cần. */
+  covered: number
+  /** Số mã còn hụt — chính là số mã phải lên đơn tiếp. */
+  missing: number
+  missing_top: { code: string; name: string; unit: string; qty: number }[]
+}
+
 export type LsxSupplyDetail = {
+  coverage: LsxSupplyCoverage
   id: string
   code: string
   customer_name: string
@@ -203,6 +246,9 @@ export type LsxSupplyDetail = {
     lines_missing: number
     received_at: string | null
     material_group: string | null
+    line_count: number
+    unpriced_lines: number
+    supplier_doc_no: string | null
   }[]
 }
 
@@ -218,6 +264,58 @@ export type LsxSupplyDetail = {
  * Số tiền/đã nhận dùng lại `loadPoReportDetails` của báo cáo họp: màn hình và
  * file Excel đọc CÙNG một phép tính, không đẻ ra hai định nghĩa "đã về".
  */
+/**
+ * ĐỘ PHỦ NHU CẦU của lệnh — "đã mua đủ chưa", câu hỏi số một của người mua.
+ *
+ * Trang chi tiết lệnh trước đây chỉ đếm ĐƠN (12 đơn) — mà 12 đơn không nói được
+ * lệnh còn thiếu vật tư nào. Muốn biết phải bấm sang màn soạn đơn rồi mở tab
+ * Nhu cầu, tức là bước vào màn TẠO chỉ để TRA. Ở đây tính sẵn, cùng công thức
+ * với màn soạn đơn (`suggestForMaterial`) để hai chỗ không nói hai con số.
+ *
+ * "Đủ" = còn cần ≤ khả dụng + đã đặt. Chưa đủ thì gợi ý mua chính là phần hụt.
+ */
+async function buildCoverage(lsxId: string): Promise<LsxSupplyCoverage> {
+  const needs = await smartLsxNeeds(lsxId)
+  const matIds = needs.map((n) => n.material_id)
+  if (matIds.length === 0) return { needed: 0, covered: 0, missing: 0, missing_top: [] }
+
+  const [stock, reserved, orderedPending] = await Promise.all([
+    stockInfoMany(matIds),
+    reservedByOtherLsx([lsxId], matIds),
+    supplyRepo.orderedPendingByLsxSet([lsxId]),
+  ])
+  const onHand = new Map(stock.map((s) => [s.material_id, s.on_hand]))
+
+  const missing: LsxSupplyCoverage['missing_top'] = []
+  let covered = 0
+  for (const n of needs) {
+    const op = orderedPending.get(n.material_id)
+    const s = suggestForMaterial({
+      material_id: n.material_id,
+      needed: n.qty_remaining,
+      on_hand: onHand.get(n.material_id) ?? 0,
+      reserved_others: reserved.get(n.material_id) ?? 0,
+      ordered: op?.ordered ?? 0,
+      pending: op?.pending ?? 0,
+    })
+    if (s.suggest > 0)
+      missing.push({
+        code: n.material_code,
+        name: n.material_name,
+        unit: n.unit,
+        qty: s.suggest,
+      })
+    else covered++
+  }
+  missing.sort((a, b) => b.qty - a.qty)
+  return {
+    needed: needs.length,
+    covered,
+    missing: missing.length,
+    missing_top: missing.slice(0, 8),
+  }
+}
+
 export async function buildLsxSupplyDetail(
   user: User,
   lsxId: string,
@@ -226,9 +324,10 @@ export async function buildLsxSupplyDetail(
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) return null
 
-  const [{ rows: pos }, productLines] = await Promise.all([
+  const [{ rows: pos }, productLines, coverage] = await Promise.all([
     posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
     listOrderLineProducts(lsx.order_ids),
+    buildCoverage(lsxId),
   ])
 
   const [details, extraLsx] = await Promise.all([
@@ -253,6 +352,7 @@ export async function buildLsxSupplyDetail(
     ship_date: lsx.ship_date,
     materials_due_at: lsx.materials_due_at,
     materials_received_at: lsx.materials_received_at,
+    coverage,
     products,
     pos: pos.map((p) => {
       const d = details[p.id]
@@ -277,6 +377,9 @@ export async function buildLsxSupplyDetail(
         qty_ordered: d?.qty_ordered ?? 0,
         qty_received: d?.qty_received ?? 0,
         lines_missing: d?.lines_missing ?? 0,
+        line_count: d?.line_count ?? 0,
+        unpriced_lines: d?.unpriced_lines ?? 0,
+        supplier_doc_no: d?.supplier_doc_no ?? null,
         received_at: d?.received_at ?? null,
         material_group: d?.material_group ?? null,
       }
