@@ -107,7 +107,7 @@ export function LsxSupplyScreen({
   canEdit: boolean
 }) {
   const [gate, setGate] = useState<LsxSupplyGateKey | 'mine' | 'all'>('all')
-  const [owner, setOwner] = useState('')
+  const [customer, setCustomer] = useState('')
   const [q, setQ] = useState('')
 
   const enriched = useMemo(
@@ -138,10 +138,19 @@ export function LsxSupplyScreen({
     return c
   }, [enriched])
 
-  /** Người đảm nhận có thật trong tập lệnh — nguồn cho ô chọn "ai giữ". */
-  const ownerOptions = useMemo(
+  /**
+   * KHÁCH HÀNG là chiều lọc của màn này (user chốt 03/09/2026).
+   *
+   * Bản trước lọc theo NGƯỜI ĐẢM NHẬN — sai đơn vị: lệnh là của KHÁCH, còn các
+   * đơn mua bên trong một lệnh do NHIỀU nhân viên lập, nên "lệnh của tôi" không
+   * phải một khái niệm có thật. Người đảm nhận vẫn hiện trên dòng (biết gọi ai)
+   * và lọc được ở tầng dưới — trang đơn mua của lệnh, nơi đơn vị đúng là ĐƠN.
+   */
+  const customerOptions = useMemo(
     () =>
-      [...new Set(enriched.flatMap((e) => e.owners))].sort((a, b) => a.localeCompare(b)),
+      [...new Set(enriched.map((e) => e.row.customer_name).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b, 'vi'),
+      ),
     [enriched],
   )
 
@@ -150,7 +159,7 @@ export function LsxSupplyScreen({
     return enriched.filter((e) => {
       if (gate === 'mine' && !e.gate.mine) return false
       if (gate !== 'mine' && gate !== 'all' && e.gate.key !== gate) return false
-      if (owner && !e.owners.includes(owner)) return false
+      if (customer && e.row.customer_name !== customer) return false
       if (!ql) return true
       // Tìm cả theo KHÁCH và MÃ SP: người mua hay được hỏi ngược từ hai phía đó.
       return `${e.row.code} ${e.row.customer_name} ${e.row.order_codes.join(' ')} ${e.row.products
@@ -159,7 +168,7 @@ export function LsxSupplyScreen({
         .toLowerCase()
         .includes(ql)
     })
-  }, [enriched, gate, owner, q])
+  }, [enriched, gate, customer, q])
 
   const toggle = (k: LsxSupplyGateKey | 'mine') => setGate(gate === k ? 'all' : k)
 
@@ -260,14 +269,14 @@ export function LsxSupplyScreen({
                 placeholder="Tìm mã lệnh, khách hàng, mã đơn, mã sản phẩm…"
                 className="w-80"
               />
-              {ownerOptions.length > 0 && (
+              {customerOptions.length > 1 && (
                 <ToolbarSelect
-                  value={owner}
-                  onChange={setOwner}
-                  aria-label="Lọc theo người đảm nhận đơn"
+                  value={customer}
+                  onChange={setCustomer}
+                  aria-label="Lọc theo khách hàng"
                   options={[
-                    { value: '', label: 'Mọi người đảm nhận' },
-                    ...ownerOptions.map((n) => ({ value: n, label: n })),
+                    { value: '', label: 'Mọi khách hàng' },
+                    ...customerOptions.map((n) => ({ value: n, label: n })),
                   ]}
                 />
               )}
@@ -301,7 +310,7 @@ export function LsxSupplyScreen({
                     variant="outline"
                     onClick={() => {
                       setGate('all')
-                      setOwner('')
+                      setCustomer('')
                       setQ('')
                     }}
                   >
@@ -370,9 +379,16 @@ export function LsxSupplyScreen({
                       {row.posTotal > 0 && ` · ${row.posTotal} đơn`}
                     </span>
                     {owners.length > 0 ? (
-                      <span className="text-muted-foreground inline-flex items-center gap-1 text-[11.5px]">
+                      /* Một lệnh có thể do NHIỀU người lập đơn — kể tên hết thì
+                         dòng dài ngoằng và át cả bậc vật tư. Hai tên đầu là đủ
+                         để biết gọi ai; danh sách đủ nằm ở trang đơn của lệnh. */
+                      <span
+                        className="text-muted-foreground inline-flex items-center gap-1 text-[11.5px]"
+                        title={owners.join(', ')}
+                      >
                         <UserRound className="size-3.5" strokeWidth={1.8} />
-                        {owners.join(', ')}
+                        {owners.slice(0, 2).join(', ')}
+                        {owners.length > 2 && ` +${owners.length - 2}`}
                       </span>
                     ) : (
                       row.posTotal > 0 && (
