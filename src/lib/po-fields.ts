@@ -264,7 +264,12 @@ export const PO_FIELDS: Record<PoTemplate, PoField[]> = {
     { key: 'm3total', label: 'Tổng m³', width: 'w-[88px]', kind: 'calc', align: 'right' },
     t('loaigo', 'Loại gỗ', 'w-[120px]', 'material_grade', 'Acacia FSC 100%'),
     t('maugo', 'Màu gỗ', 'w-[90px]', 'finish', 'Màu 142'),
-    t('kehoach', 'KH giao hàng', 'w-[110px]', 'dimension_text', '20-25/07/26'),
+    // "KH giao hàng" theo dòng BỎ HẲN khỏi form (03/09/2026, user chốt): hẹn giao
+    // đã có ở đầu đơn, cột này chỉ còn là chỗ chuỗi quy cách thùng carton chui
+    // vào nhầm. Thay bằng QUY CÁCH — ô `spec` thật, tự đổ từ danh mục như mọi
+    // mẫu khác, không phải cột mượn. 43 dòng gỗ cũ có ngày trong dimension_text
+    // vẫn nằm nguyên trong DB, chỉ không còn ô trên form.
+    t('spec', 'Quy cách', 'w-[130px]', 'spec', 'vd 1200×450×18 mm…'),
   ],
   /*
    * MRO (10/08/2026). KHÔNG có "SL đơn hàng · Tồn kho": hàng bảo trì mua lẻ
@@ -415,8 +420,9 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   ],
   // Gỗ theo form Minh Đạt: m³/SP (KL gỗ) · giá/m³ · thành tiền · loại gỗ · màu ·
   // kế hoạch giao từng dòng.
-  // "KH giao hàng" theo dòng BỎ 12/08/2026 (duyệt cột từng mẫu) — hẹn giao dùng
-  // chung đầu phiếu; ô nhập `kehoach` vẫn trên form nếu cần ghi chú nội bộ.
+  // "KH giao hàng" theo dòng BỎ khỏi phiếu 12/08/2026 và khỏi cả form 03/09 —
+  // hẹn giao dùng chung đầu phiếu. Cột Quy cách mới của form KHÔNG in: bộ cột
+  // NCC đang ký giữ nguyên, muốn in thì thêm 'spec' vào đây + sửa test khoá.
   wood: [
     '@stt',
     '@name',
@@ -537,7 +543,6 @@ export const PO_SHARED_FIELD_MEANING: Record<
   dimension_text: {
     metal_kg: 'Kích thước',
     glass: 'Quy cách',
-    wood: 'KH giao hàng',
     mro: 'Dùng cho máy / vị trí',
   },
   finish: {
@@ -579,7 +584,6 @@ export const PO_SHARED_FIELD_PREFILL: Record<string, Partial<Record<PoTemplate, 
     dimension_text: {
       metal_kg: true,
       glass: true,
-      wood: false, // "KH giao hàng" — ngày, không phải quy cách
       mro: false, // "Dùng cho máy / vị trí"
     },
     finish: {

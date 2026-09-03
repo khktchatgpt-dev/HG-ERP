@@ -876,8 +876,10 @@ describe('newLine — không đổ số danh mục vào cột mượn đã đổ
     },
   }
 
-  it('gỗ: "KH giao hàng" để TRỐNG, không phải quy cách thùng; Loại gỗ/Màu vẫn điền', () => {
+  it('gỗ: quy cách đổ vào ô QUY CÁCH thật; cột mượn dimension_text không mang gì', () => {
     const l = newLine('wood', carton)
+    // 03/09: "KH giao hàng" bỏ khỏi form, thay bằng Quy cách (ô `spec` của danh mục).
+    expect(l.spec).toBe('950x620x135 mm')
     expect(l.dimension_text).toBe('')
     expect(l.material_grade).toBe('Carton 5 lớp')
     expect(l.finish).toBe('Màu 142')
@@ -933,7 +935,7 @@ describe('remapLinesForTemplate — đổi mẫu thì dọn cột mượn đã �
     last_line: null,
   }
 
-  it('inox → gỗ: "Kích thước" thành "KH giao hàng" → xoá; Vật liệu→Loại gỗ cũng khác nhãn → xoá', () => {
+  it('inox → gỗ: gỗ không có ô "Kích thước" → xoá; Vật liệu→Loại gỗ khác nhãn → xoá', () => {
     const [l] = remapLinesForTemplate('metal_kg', 'wood', [newLine('metal_kg', inox)])
     expect(l.dimension_text).toBe('')
     expect(l.material_grade).toBe('')
