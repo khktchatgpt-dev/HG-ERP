@@ -162,6 +162,9 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
   wood: [
     'STT',
     'Tên sản phẩm / vật tư',
+    // "KH giao hàng" theo dòng bỏ 12/08/2026 — hẹn giao dùng chung đầu phiếu —
+    // và 03/09/2026 chỗ đó thành QUY CÁCH: NCC gỗ đọc kích thước ngay cạnh tên.
+    'Quy cách',
     'ĐVT',
     'Số lượng',
     'm³ / SP',
@@ -170,7 +173,6 @@ const NHAN_COT_PHIEU_IN: Record<PoTemplate, string[]> = {
     'Thành tiền (VND)',
     'Loại gỗ',
     'Màu gỗ',
-    // "KH giao hàng" theo dòng bỏ 12/08/2026 — hẹn giao dùng chung đầu phiếu.
     'Ghi chú',
   ],
   // Mẫu 'outsourcing' đã gỡ 12/08/2026 — gia công là nghiệp vụ ngoài tầm vật tư.
@@ -339,6 +341,54 @@ describe('PO_SHARED_FIELD_PREFILL — cột mượn nào được đổ số dan
       if (PO_SHARED_FIELD_MEANING.dimension_text[t] == null) {
         expect(prefillsFromCatalog(t, 'dimension_text'), t).toBe(false)
       }
+    }
+  })
+})
+
+/**
+ * Cột phiếu in đi theo `PO_PRINT_ORDER`, còn ô nhập theo `PO_FIELDS` — hai bảng
+ * rời nhau, nên thêm ô mà quên cột là ô đó KHÔNG BAO GIỜ tới tay NCC mà không
+ * ai báo. Đúng ca "Quy cách" của mẫu gỗ 03/09/2026.
+ */
+describe('PO_PRINT_ORDER — mọi ô nhập của mẫu đều có mặt trên phiếu', () => {
+  it('cột gỗ: có Quy cách, không còn KH giao hàng', () => {
+    expect(PO_PRINT_ORDER.wood).toContain('spec')
+    expect(PO_PRINT_ORDER.wood).not.toContain('kehoach')
+  })
+
+  /*
+   * BÁNH CÓC: ô nhập KHÔNG in ra phiếu phải nằm trong danh sách này — đó là ô
+   * phục vụ NGƯỜI SOẠN (nhu cầu, tồn kho, cơ sở tính) hoặc số máy tự tính đã
+   * gộp vào cột khác, NCC không cần đọc. Thêm ô mới mà quên cột in thì test đỏ
+   * và người thêm phải nói rõ ô đó thuộc loại nào — đúng ca "Quy cách" của mẫu
+   * gỗ 03/09/2026, thêm ô xong mà phiếu gửi NCC vẫn không có cột.
+   */
+  const NOT_PRINTED: Partial<Record<PoTemplate, string[]>> = {
+    accessory: ['unit2'],
+    aluminium: ['demand'],
+    carton: ['demand', 'onhand', 'basis'],
+    rattan: ['demand', 'onhand', 'unit2'],
+    paint: ['demand', 'onhand', 'unit2'],
+    chemical: ['demand', 'onhand', 'unit2'],
+    foam: ['dims', 'm3total', 'basis', 'demand', 'onhand'],
+    glass: ['m2total', 'basis'],
+    mro: ['unit2'],
+    simple: ['unit2'],
+  }
+
+  it('ô nhập nào cũng được in, trừ danh sách cố ý không in', () => {
+    for (const t of PO_TEMPLATES) {
+      const skip = new Set(NOT_PRINTED[t] ?? [])
+      for (const f of PO_FIELDS[t]) {
+        if (skip.has(f.key)) continue
+        expect(PO_PRINT_ORDER[t].includes(f.key), `${t}.${f.key} thiếu cột in`).toBe(true)
+      }
+      // Danh sách chỉ được ngắn đi: ô đã có cột in thì gỡ khỏi đây.
+      for (const k of skip)
+        expect(
+          PO_PRINT_ORDER[t].includes(k),
+          `${t}.${k} đã in — bỏ khỏi NOT_PRINTED`,
+        ).toBe(false)
     }
   })
 })

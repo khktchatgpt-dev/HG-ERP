@@ -9,12 +9,19 @@ import { db } from '@/server/db'
  * phải quét cả danh mục (PostgREST trần 1.000 dòng/lượt → phân trang như
  * `materialTaxonomy`).
  */
+/** Thuộc tính phụ của nhóm (catalog_items.meta, 0183). */
+export type GroupMeta = {
+  /** Mẫu đơn mua mặc định cho vật tư mới khai vào nhóm. */
+  po_template?: string | null
+}
+
 export type GroupItem = {
   id: string
   code: string
   label: string
   sort_order: number
   is_active: boolean
+  meta: GroupMeta
 }
 
 export type GroupCounts = Map<
@@ -22,7 +29,7 @@ export type GroupCounts = Map<
   { total: number; noSub: number; subs: Map<string, number> }
 >
 
-const COLS = 'id, code, label, sort_order, is_active'
+const COLS = 'id, code, label, sort_order, is_active, meta'
 
 export const materialGroupsRepo = {
   async listItems(): Promise<GroupItem[]> {
@@ -104,7 +111,7 @@ export const materialGroupsRepo = {
 
   async patchItem(
     id: string,
-    patch: { label?: string; is_active?: boolean },
+    patch: { label?: string; is_active?: boolean; meta?: GroupMeta },
   ): Promise<GroupItem> {
     const { data, error } = await db()
       .from('catalog_items')

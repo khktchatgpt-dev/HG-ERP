@@ -113,6 +113,22 @@ export const materialGroupsService = {
     return { item, moved }
   },
 
+  /**
+   * Mẫu đơn mua mặc định của nhóm (0183). Chỉ là GIÁ TRỊ KHỞI ĐẦU cho vật tư
+   * mới — vật tư đã có mẫu riêng không bị đổi (mẫu là của vật tư/đơn, không
+   * phải của nhóm; xem `po-template-not-on-material` trong sổ nhớ).
+   */
+  async setTemplate(user: User, id: string, tpl: string | null): Promise<GroupItem> {
+    await assertAction(user, ACTION)
+    const it = await materialGroupsRepo.findItem(id)
+    if (!it) throw NotFound('Nhóm không tồn tại')
+    const item = await materialGroupsRepo.patchItem(id, {
+      meta: { ...it.meta, po_template: tpl },
+    })
+    invalidateTaxonomy()
+    return item
+  },
+
   async setActive(user: User, id: string, isActive: boolean): Promise<GroupItem> {
     await assertAction(user, ACTION)
     const it = await materialGroupsRepo.findItem(id)

@@ -426,6 +426,9 @@ export const PO_PRINT_ORDER: Record<PoTemplate, string[]> = {
   wood: [
     '@stt',
     '@name',
+    // Quy cách (03/09/2026) thay cho "KH giao hàng" cũ — kích thước tấm/thanh
+    // là thứ NCC gỗ cần đọc ngay cạnh tên; hẹn giao đã có ở đầu phiếu.
+    'spec',
     '@unit',
     '@qty',
     'm3sp',
@@ -570,27 +573,29 @@ export const PO_SHARED_FIELD_MEANING: Record<
  * lộ ra dưới nhãn khác khi đổi mẫu. `po-fields.test.ts` khoá hai bảng phủ
  * đúng cùng một tập (cột, mẫu).
  */
-export const PO_SHARED_FIELD_PREFILL: Record<string, Partial<Record<PoTemplate, boolean>>> =
-  {
-    material_grade: {
-      accessory: true,
-      metal_kg: true,
-      rattan: false, // "Định mức" — barem g/5m, không phải vật liệu
-      paint: true, // "Mã màu NCC" — danh mục khai "vật liệu / MÀU", cùng nghĩa
-      glass: true,
-      wood: true,
-      mro: false, // "Model / Mã hãng"
-    },
-    dimension_text: {
-      metal_kg: true,
-      glass: true,
-      mro: false, // "Dùng cho máy / vị trí"
-    },
-    finish: {
-      metal_kg: true,
-      wood: true,
-    },
-  }
+export const PO_SHARED_FIELD_PREFILL: Record<
+  string,
+  Partial<Record<PoTemplate, boolean>>
+> = {
+  material_grade: {
+    accessory: true,
+    metal_kg: true,
+    rattan: false, // "Định mức" — barem g/5m, không phải vật liệu
+    paint: true, // "Mã màu NCC" — danh mục khai "vật liệu / MÀU", cùng nghĩa
+    glass: true,
+    wood: true,
+    mro: false, // "Model / Mã hãng"
+  },
+  dimension_text: {
+    metal_kg: true,
+    glass: true,
+    mro: false, // "Dùng cho máy / vị trí"
+  },
+  finish: {
+    metal_kg: true,
+    wood: true,
+  },
+}
 
 /** Ô mượn ở mẫu này có nhận số danh mục / lần đặt trước không. */
 export function prefillsFromCatalog(t: PoTemplate, field: string): boolean {

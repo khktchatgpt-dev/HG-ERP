@@ -21,6 +21,7 @@ import { Button } from '@/components/shadcn/button'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import {
   MaterialPickDialog,
+  fetchMaterialByCode,
   invalidateMaterialPickCache,
   type PoMaterial,
 } from '@/components/supply/MaterialPicker'
@@ -192,6 +193,7 @@ export function PoCreateForm({
   tpl,
   defaultSupplierId,
   defaultLsxId,
+  defaultMaterialCode,
   initial,
 }: {
   suppliers: SupplierOption[]
@@ -204,6 +206,8 @@ export function PoCreateForm({
   defaultSupplierId?: string
   /** `?lsx=` — mở form từ màn "Vật tư theo lệnh", chọn sẵn lệnh + nạp nhu cầu. */
   defaultLsxId?: string
+  /** `?material=` — "Soạn đơn mua" từ dòng tồn kho: mã đó vào dòng đầu tiên. */
+  defaultMaterialCode?: string
   /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
   initial?: PoInitial
 }) {
@@ -218,7 +222,15 @@ export function PoCreateForm({
 
   const [template, setTemplate] = useState<PoTemplate>(start?.template ?? 'accessory')
   const [poType, setPoType] = useState<'lsx' | 'standalone'>(
-    start ? (start.production_order_id ? 'lsx' : 'standalone') : 'lsx',
+    start
+      ? start.production_order_id
+        ? 'lsx'
+        : 'standalone'
+      : // Mở từ dòng tồn kho (`?material=`) mà không kèm lệnh = mua bù tồn:
+        // đơn ngoài LSX ngay từ đầu, khỏi bắt người mua bỏ chọn lệnh.
+        defaultMaterialCode && !defaultLsxId
+        ? 'standalone'
+        : 'lsx',
   )
   const [lsxId, setLsxId] = useState(
     start?.production_order_id ??
@@ -528,6 +540,22 @@ export function PoCreateForm({
   const [pasteOpen, setPasteOpen] = useState(false)
   /** Xem trước phiếu in — dựng từ chính bản nháp đang gõ, không cần lưu đơn. */
   const [previewOpen, setPreviewOpen] = useState(false)
+
+  /*
+   * `?material=` (03/09/2026): mở từ dòng tồn kho ở /planning/stock. Mua bù tồn
+   * không gắn lệnh nên chuyển sang đơn ngoài LSX (trừ khi URL cũng chỉ lệnh).
+   * Chỉ chạy một lần lúc mở; không trúng mã thì báo chứ không im.
+   */
+  const seededMaterial = useRef(false)
+  useEffect(() => {
+    if (!defaultMaterialCode || initial || seededMaterial.current) return
+    seededMaterial.current = true
+    void fetchMaterialByCode(defaultMaterialCode).then((m) => {
+      if (m) addMaterial(m)
+      else toast.error(`Không thấy vật tư "${defaultMaterialCode}" để đưa vào đơn`)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ mồi một lần lúc mở form
+  }, [])
 
   function addMaterial(m: PoMaterial) {
     addMaterials([m])

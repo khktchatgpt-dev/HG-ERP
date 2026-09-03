@@ -1,6 +1,7 @@
 import { WorkspaceSidebar } from './WorkspaceSidebar'
 import { WorkspaceTopbar } from './WorkspaceTopbar'
 import { CommandPalette } from '@/components/erp/CommandPalette'
+import { NumberWheelGuard } from './NumberWheelGuard'
 import type { WorkspaceConfig } from '@/workspaces/workspaces.config'
 
 /**
@@ -42,6 +43,7 @@ export async function WorkspaceShell({
         </main>
       </div>
       <CommandPalette />
+      <NumberWheelGuard />
     </div>
   )
 }
