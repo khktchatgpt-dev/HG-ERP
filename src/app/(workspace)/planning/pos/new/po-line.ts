@@ -2,7 +2,11 @@ import { poLineAmount } from '@/lib/po-line'
 import { cartonAreaM2, deriveLine, type PoTemplate } from '@/lib/po-template'
 import { kgPerM, kgPerOrderUnit, kgPerUnitOf, rhoFor } from '@/lib/metal-weight'
 import { parseInnerDims } from '@/lib/dims'
-import type { PoField } from '@/lib/po-fields'
+import {
+  PO_SHARED_FIELD_MEANING,
+  prefillsFromCatalog,
+  type PoField,
+} from '@/lib/po-fields'
 import type { PoMaterial } from '@/components/supply/MaterialPicker'
 
 /**
@@ -251,7 +255,12 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
   const openStyle = t === 'carton' ? (last?.open_style ?? m.open_style ?? '') : ''
   // Vật liệu: lần đặt gần nhất là nguồn tươi nhất; vật tư CHƯA TỪNG lên đơn thì
   // lấy số khai ở danh mục (0124) — trước đây ô này trống và phải gõ tay.
-  const grade = last?.material_grade ?? m.material_grade ?? ''
+  // …nhưng CHỈ ở mẫu mà cột này thật sự nghĩa là vật liệu (xem
+  // PO_SHARED_FIELD_PREFILL): mẫu mây gọi cột này là "Định mức", mẫu MRO gọi là
+  // "Model" — đổ vật liệu vào là bày một ô SAI thay vì một ô trống.
+  const grade = prefillsFromCatalog(t, 'material_grade')
+    ? (last?.material_grade ?? m.material_grade ?? '')
+    : ''
   const area =
     (t === 'glass'
       ? glassDims
@@ -283,9 +292,13 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     weight_per_m: m.kg_per_m ?? '',
     bar_length_m: m.default_bar_length_m ?? '',
     // Quy cách danh mục là nguồn CHỐT; chưa khai thì lấy kích thước ghi ở đơn trước.
-    dimension_text: m.spec ?? last?.dimension_text ?? '',
+    // Lỗi 03/09/2026: thùng carton thêm vào đơn GỖ thì "950×620×135 mm" chui vào
+    // cột "KH GIAO HÀNG" — mẫu gỗ mượn dimension_text cho một nghĩa khác hẳn.
+    dimension_text: prefillsFromCatalog(t, 'dimension_text')
+      ? (m.spec ?? last?.dimension_text ?? '')
+      : '',
     // Màu/bề mặt: lần đặt gần nhất → danh mục (0137).
-    finish: last?.finish ?? m.finish ?? '',
+    finish: prefillsFromCatalog(t, 'finish') ? (last?.finish ?? m.finish ?? '') : '',
     /*
      * kg/ĐƠN-VỊ-ĐẶT cho mẫu inox/sắt — ba nguồn xếp theo độ tin, xem
      * `kgPerUnitOf`. Ô này mà trống thì `lineReady` CHẶN gửi, người soạn kẹt và
@@ -365,9 +378,14 @@ export function refreshLineFromMaterial(
     weight_per_m: l.weight_per_m === '' ? (m.kg_per_m ?? '') : l.weight_per_m,
     bar_length_m: l.bar_length_m === '' ? (m.default_bar_length_m ?? '') : l.bar_length_m,
     weight_per_unit: l.weight_per_unit === '' ? (kgUnit.kg ?? '') : l.weight_per_unit,
-    material_grade: l.material_grade === '' ? (m.material_grade ?? '') : l.material_grade,
+    // Lấp ô trống CHỈ khi cột ở mẫu này cùng nghĩa với danh mục (PO_SHARED_FIELD_PREFILL).
+    material_grade:
+      l.material_grade === '' && prefillsFromCatalog(t, 'material_grade')
+        ? (m.material_grade ?? '')
+        : l.material_grade,
     // Thông số theo nhóm (0137) — cùng luật lấp-ô-trống.
-    finish: l.finish === '' ? (m.finish ?? '') : l.finish,
+    finish:
+      l.finish === '' && prefillsFromCatalog(t, 'finish') ? (m.finish ?? '') : l.finish,
     open_style: l.open_style === '' ? (m.open_style ?? '') : l.open_style,
     pcs_per_ctn: l.pcs_per_ctn === '' ? (m.pcs_per_ctn ?? '') : l.pcs_per_ctn,
   }
@@ -544,6 +562,33 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     catalog_kg_m: null,
     catalog_kg_unit: null,
   }
+}
+
+/**
+ * ĐỔI MẪU ĐƠN → dọn các cột mượn đã ĐỔI NGHĨA (03/09/2026).
+ *
+ * Dòng thêm ở mẫu inox mang `dimension_text = "Inox phi 15.9x1.5li"` (cột
+ * "Kích thước"); đổi sang mẫu gỗ, cùng ô đó hiện dưới nhãn "KH GIAO HÀNG" và
+ * chẳng ai nhận ra đấy là đồ cũ. Nhãn ở hai mẫu KHÁC nhau → xoá; nhãn giống
+ * (phụ kiện ↔ inox cùng gọi "Vật liệu") → giữ, người soạn không mất chữ đã gõ.
+ * Số/ô khác của dòng không đụng — `deriveLine` tự bỏ qua ô không thuộc mẫu.
+ */
+export function remapLinesForTemplate(
+  from: PoTemplate,
+  to: PoTemplate,
+  lines: Line[],
+): Line[] {
+  if (from === to) return lines
+  const fields = Object.keys(PO_SHARED_FIELD_MEANING) as (keyof Line & string)[]
+  return lines.map((l) => {
+    const next = { ...l }
+    for (const f of fields) {
+      const before = PO_SHARED_FIELD_MEANING[f]?.[from]
+      const after = PO_SHARED_FIELD_MEANING[f]?.[to]
+      if (before !== after) (next as Record<string, unknown>)[f] = ''
+    }
+    return next
+  })
 }
 
 /**

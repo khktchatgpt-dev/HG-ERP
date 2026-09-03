@@ -61,6 +61,7 @@ import {
   newFreeLine,
   newLine,
   refreshLineFromMaterial,
+  remapLinesForTemplate,
   type Line,
 } from './po-line'
 import { previewHeaderFromDraft, previewLinesFromDraft } from './po-preview'
@@ -459,6 +460,9 @@ export function PoCreateForm({
    */
   function selectTemplate(t: PoTemplate) {
     const d = templateDefaults(t)
+    // Cột mượn đổi nghĩa theo mẫu (Kích thước → KH giao hàng…) thì dọn, kẻo
+    // chữ cũ hiện dưới nhãn mới — xem remapLinesForTemplate.
+    setLines((ls) => remapLinesForTemplate(template, t, ls))
     setTemplate(t)
     if (!vatDirty) {
       setVat(d.vat)

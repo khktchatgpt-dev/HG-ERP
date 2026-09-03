@@ -5,6 +5,8 @@ import {
   PO_PRINT_ORDER,
   PO_PRINT_QTY_LABEL,
   PO_SHARED_FIELD_MEANING,
+  PO_SHARED_FIELD_PREFILL,
+  prefillsFromCatalog,
   poField,
 } from './po-fields'
 
@@ -299,6 +301,42 @@ describe('PO_SHARED_FIELD_MEANING — bảng tra cột mượn khớp khai báo 
           f?.label,
           `bảng tra ghi ${col}@${t} = "${label}" nhưng mẫu không có ô nhập nào ghi vào cột này`,
         ).toBe(label)
+      }
+    }
+  })
+})
+
+describe('PO_SHARED_FIELD_PREFILL — cột mượn nào được đổ số danh mục vào', () => {
+  /*
+   * Lỗi thật 03/09/2026: thùng carton thêm vào đơn GỖ thì quy cách "950×620×135
+   * mm" chui vào cột "KH GIAO HÀNG". Bảng này phải QUYẾT ĐỊNH cho ĐÚNG tập
+   * (cột, mẫu) mà bảng nghĩa đã liệt kê — thiếu một ô là `newLine` âm thầm rơi
+   * về mặc định, và mặc định thì không ai đọc lại.
+   */
+  it('phủ đúng cùng tập (cột, mẫu) với PO_SHARED_FIELD_MEANING, không thừa không thiếu', () => {
+    for (const col of Object.keys(PO_SHARED_FIELD_MEANING)) {
+      const meaning = Object.keys(PO_SHARED_FIELD_MEANING[col]).sort()
+      const prefill = Object.keys(PO_SHARED_FIELD_PREFILL[col] ?? {}).sort()
+      expect(prefill, `cột ${col}`).toEqual(meaning)
+    }
+    expect(Object.keys(PO_SHARED_FIELD_PREFILL).sort()).toEqual(
+      Object.keys(PO_SHARED_FIELD_MEANING).sort(),
+    )
+  })
+
+  it('nghĩa khác danh mục thì KHÔNG điền: KH giao hàng, Dùng cho máy, Định mức, Model', () => {
+    expect(prefillsFromCatalog('wood', 'dimension_text')).toBe(false)
+    expect(prefillsFromCatalog('mro', 'dimension_text')).toBe(false)
+    expect(prefillsFromCatalog('rattan', 'material_grade')).toBe(false)
+    expect(prefillsFromCatalog('mro', 'material_grade')).toBe(false)
+  })
+
+  it('cùng nghĩa thì điền; mẫu không có ô đó thì không điền (khỏi lộ khi đổi mẫu)', () => {
+    expect(prefillsFromCatalog('metal_kg', 'dimension_text')).toBe(true)
+    expect(prefillsFromCatalog('wood', 'material_grade')).toBe(true)
+    for (const t of PO_TEMPLATES) {
+      if (PO_SHARED_FIELD_MEANING.dimension_text[t] == null) {
+        expect(prefillsFromCatalog(t, 'dimension_text'), t).toBe(false)
       }
     }
   })

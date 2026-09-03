@@ -11,6 +11,7 @@ import {
   lineReady,
   newFreeLine,
   newLine,
+  remapLinesForTemplate,
   overridesCatalog,
   recallBasis,
   refreshLineFromMaterial,
@@ -834,5 +835,120 @@ describe('newLine — thông số theo nhóm từ danh mục (0137)', () => {
     })
     expect(after.open_style).toBe('AD')
     expect(after.area_m2).toBeCloseTo(1.9268, 4)
+  })
+})
+
+/*
+ * CỘT MƯỢN ĐỔI NGHĨA THEO MẪU (03/09/2026). Lỗi thật: thêm thùng carton
+ * BB-0025 (quy cách "950×620×135 mm") vào đơn GỖ → chuỗi ấy hiện dưới cột "KH
+ * GIAO HÀNG", vì cột đó mượn `dimension_text` mà `newLine` đổ quy cách danh mục
+ * vào đó cho MỌI mẫu. Một ô trống người ta sẽ điền; một ô sai người ta ký luôn.
+ */
+describe('newLine — không đổ số danh mục vào cột mượn đã đổi nghĩa', () => {
+  const carton: PoMaterial = {
+    id: 'm-carton',
+    code: 'BB-0025',
+    name: 'BB ghế 5 bậc Athos',
+    unit: 'Thùng',
+    group_name: 'Bao bì - đóng gói - tem nhãn',
+    sub_group: null,
+    spec: '950x620x135 mm',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: 'Carton 5 lớp',
+    finish: 'Màu 142',
+    on_hand: 0,
+    last_line: {
+      material_grade: 'Carton 5 lớp',
+      dimension_text: '950x620x135 mm',
+      finish: 'Màu 142',
+      pcs_per_ctn: null,
+      open_style: null,
+      dm_per_sp: null,
+    },
+  }
+
+  it('gỗ: "KH giao hàng" để TRỐNG, không phải quy cách thùng; Loại gỗ/Màu vẫn điền', () => {
+    const l = newLine('wood', carton)
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('Carton 5 lớp')
+    expect(l.finish).toBe('Màu 142')
+  })
+
+  it('mro: "Dùng cho máy" và "Model" để trống — cả từ danh mục lẫn đơn trước', () => {
+    const l = newLine('mro', carton)
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('')
+  })
+
+  it('mây: "Định mức" không nhận vật liệu', () => {
+    expect(newLine('rattan', carton).material_grade).toBe('')
+  })
+
+  it('inox: cùng nghĩa nên vẫn điền như trước — không đổi hành vi đang đúng', () => {
+    const l = newLine('metal_kg', carton)
+    expect(l.dimension_text).toBe('950x620x135 mm')
+    expect(l.material_grade).toBe('Carton 5 lớp')
+    expect(l.finish).toBe('Màu 142')
+  })
+
+  it('mẫu KHÔNG có ô cho cột mượn thì không mang giá trị vô hình', () => {
+    // Phụ kiện không có ô dimension_text/finish — mang theo là lộ ra khi đổi mẫu.
+    const l = newLine('accessory', carton)
+    expect(l.dimension_text).toBe('')
+    expect(l.finish).toBe('')
+  })
+})
+
+describe('remapLinesForTemplate — đổi mẫu thì dọn cột mượn đã đổi nghĩa', () => {
+  const inox: PoMaterial = {
+    id: 'm-inox',
+    code: 'IN-0001',
+    name: 'Inox hộp',
+    unit: 'cây',
+    group_name: 'Inox',
+    sub_group: null,
+    spec: 'Inox phi 15.9x1.5li',
+    kg_per_unit: null,
+    kg_per_m: null,
+    default_bar_length_m: null,
+    price_unit: null,
+    unit2_factor: null,
+    vat_rate: null,
+    default_supplier_id: null,
+    last_purchase_price: null,
+    pack_size: null,
+    pack_unit: null,
+    material_grade: 'Inox 304',
+    finish: 'inox bóng',
+    on_hand: 0,
+    last_line: null,
+  }
+
+  it('inox → gỗ: "Kích thước" thành "KH giao hàng" → xoá; Vật liệu→Loại gỗ cũng khác nhãn → xoá', () => {
+    const [l] = remapLinesForTemplate('metal_kg', 'wood', [newLine('metal_kg', inox)])
+    expect(l.dimension_text).toBe('')
+    expect(l.material_grade).toBe('')
+    // Màu/bề mặt → Màu gỗ: khác nhãn → cũng xoá, người soạn gõ lại cho đúng.
+    expect(l.finish).toBe('')
+  })
+
+  it('phụ kiện ↔ inox cùng gọi "Vật liệu" → giữ chữ đã gõ', () => {
+    const src = { ...newLine('accessory', inox), material_grade: 'Sắt xi trắng' }
+    const [l] = remapLinesForTemplate('accessory', 'metal_kg', [src])
+    expect(l.material_grade).toBe('Sắt xi trắng')
+  })
+
+  it('cùng mẫu → không đụng gì', () => {
+    const src = [newLine('wood', inox)]
+    expect(remapLinesForTemplate('wood', 'wood', src)).toBe(src)
   })
 })
