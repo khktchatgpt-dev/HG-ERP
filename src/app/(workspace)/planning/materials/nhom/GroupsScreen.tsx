@@ -8,6 +8,7 @@ import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
+import { PO_TEMPLATES, poTemplateMeta } from '@/lib/po-template'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { EmptyState } from '@/components/erp/EmptyState'
@@ -148,6 +149,20 @@ export function GroupsScreen({
       )
   }
 
+  /** Mẫu đơn mặc định của nhóm (0183) — chỉ mồi cho vật tư MỚI. */
+  async function setTemplate(g: GroupRow, tpl: string) {
+    const r = await send(`/api/dept/warehouse/material-groups/${g.id}`, 'PATCH', {
+      po_template: tpl || null,
+    })
+    if (r)
+      toast.success(
+        tpl
+          ? `Vật tư mới của "${g.label}" sẽ dùng mẫu ${poTemplateMeta(tpl as never).label}`
+          : `Đã bỏ mẫu mặc định của "${g.label}"`,
+        'Vật tư đã khai giữ nguyên mẫu của chúng',
+      )
+  }
+
   async function removeSub(g: GroupRow, sub: { name: string; count: number }) {
     const ok = await confirm({
       title: `Xoá nhóm phụ "${sub.name}"?`,
@@ -256,8 +271,36 @@ export function GroupsScreen({
                   {num(g.no_sub)} trống nhóm phụ
                 </Link>
               )}
+              {/*
+                MẪU ĐƠN MẶC ĐỊNH CỦA NHÓM (0183) — mồi cho vật tư MỚI khai vào
+                nhóm này. Không đụng vật tư đã có: mẫu thuộc về vật tư/đơn, đây
+                chỉ là giá trị khởi đầu để người khai khỏi phải nhớ.
+              */}
+              <span className="ml-auto flex items-center gap-1.5">
+                <span className="text-muted-foreground text-[11px]">Mẫu đơn</span>
+                {canEdit ? (
+                  <ToolbarSelect
+                    value={g.meta?.po_template ?? ''}
+                    onChange={(v) => void setTemplate(g, v)}
+                    aria-label={`Mẫu đơn mua mặc định của nhóm ${g.label}`}
+                    options={[
+                      { value: '', label: '— chưa đặt —' },
+                      ...PO_TEMPLATES.map((t) => ({
+                        value: t,
+                        label: poTemplateMeta(t).label,
+                      })),
+                    ]}
+                  />
+                ) : (
+                  <span className="text-[12px]">
+                    {g.meta?.po_template
+                      ? poTemplateMeta(g.meta.po_template as never).label
+                      : '—'}
+                  </span>
+                )}
+              </span>
               {canEdit && (
-                <span className="ml-auto flex items-center gap-1">
+                <span className="flex items-center gap-1">
                   <Button
                     size="sm"
                     variant="ghost"

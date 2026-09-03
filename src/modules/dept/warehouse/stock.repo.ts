@@ -50,20 +50,31 @@ export const stockRepo = {
     group_name?: string
     low_only: boolean
   }): Promise<StockRow[]> {
-    let q = db()
-      .from('warehouse_stock')
-      .select(STOCK_COLS)
-      .eq('is_active', true)
-      .order('code', { ascending: true })
+    const build = () => {
+      let q = db()
+        .from('warehouse_stock')
+        .select(STOCK_COLS)
+        .eq('is_active', true)
+        .order('code', { ascending: true })
 
-    if (filter.group_name) q = q.eq('group_name', filter.group_name)
-    if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
-    // is_low (0160) lọc Ở SQL: PostgREST trần 1000 dòng/lượt — lọc client thì
-    // vật tư dưới min ngoài 1000 mã đầu không bao giờ về tới nơi.
-    if (filter.low_only) q = q.eq('is_low', true)
-
-    const { data } = await q
-    const rows = ((data as Record<string, unknown>[] | null) ?? []).map((r) => {
+      if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+      // is_low (0160) lọc Ở SQL: PostgREST trần 1000 dòng/lượt — lọc client thì
+      // vật tư dưới min ngoài 1000 mã đầu không bao giờ về tới nơi.
+      if (filter.low_only) q = q.eq('is_low', true)
+      return q
+    }
+    // Quét hết theo trang (03/09/2026): không lọc gì thì view này là cả danh
+    // mục 13k mã — một lượt chỉ về 1000 dòng ĐẦU BẢNG CHỮ CÁI, im lặng, nên màn
+    // "mua bù tồn" và các bảng tổng hợp từng thiếu mọi mã từ chữ M trở đi.
+    const data: Record<string, unknown>[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data: page } = await build().range(from, from + 999)
+      const rows = (page as Record<string, unknown>[] | null) ?? []
+      data.push(...rows)
+      if (rows.length < 1000) break
+    }
+    const rows = data.map((r) => {
       const on_hand = num(r.on_hand)
       const min_stock = num(r.min_stock)
       return {

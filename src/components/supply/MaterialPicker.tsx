@@ -59,6 +59,20 @@ async function search(q: string, group: string): Promise<PoMaterial[]> {
   return data.materials
 }
 
+/**
+ * Một vật tư theo MÃ — cho `?material=` khi bấm "Soạn đơn mua" từ dòng tồn kho
+ * (03/09/2026). Đi qua cùng endpoint tìm kiếm rồi lấy đúng mã, để payload y hệt
+ * món chọn từ hộp thoại (barem, mẫu, giá gần nhất…).
+ */
+export async function fetchMaterialByCode(code: string): Promise<PoMaterial | null> {
+  const params = new URLSearchParams({ q: code, limit: '10' })
+  const data = await api<{ materials: PoMaterial[] }>(
+    `/api/dept/supply/po-materials?${params}`,
+  )
+  const want = code.trim().toLowerCase()
+  return data.materials.find((m) => m.code.toLowerCase() === want) ?? null
+}
+
 /** Nạp lại đúng các vật tư đang nằm trên dòng (mở form sửa đơn). */
 export async function fetchMaterialsByIds(ids: string[]): Promise<PoMaterial[]> {
   if (ids.length === 0) return []

@@ -17,8 +17,22 @@ export const GET = handle(async () => {
   const user = await authService.requireUser()
   await assertAction(user, 'supply.po.manage') // nguồn điền vào form tạo PO
 
-  const [{ rows: mats }, stock, reserved, onOrder] = await Promise.all([
-    materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
+  const [mats, stock, reserved, onOrder] = await Promise.all([
+    // Cả danh mục, theo trang: PostgREST trần 1000 dòng/lượt, mà vật tư active
+    // là 13k mã — page_size 1000 từng làm gợi ý mua bù tồn dừng ở chữ "M".
+    (async () => {
+      const all: Awaited<ReturnType<typeof materialsRepo.list>>['rows'] = []
+      for (let page = 1; ; page++) {
+        const { rows } = await materialsRepo.list({
+          active_only: true,
+          page,
+          page_size: 1000,
+        })
+        all.push(...rows)
+        if (rows.length < 1000) break
+      }
+      return all
+    })(),
     stockRepo.list({ low_only: false }),
     reservedByCommittedLsx(),
     supplyRepo.orderedPendingAll(),

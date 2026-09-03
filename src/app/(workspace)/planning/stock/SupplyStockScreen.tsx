@@ -3,7 +3,14 @@
 import { useCallback, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { CalendarClock, PackageSearch, Search, Truck, TriangleAlert } from 'lucide-react'
+import {
+  CalendarClock,
+  PackageSearch,
+  Search,
+  ShoppingCart,
+  Truck,
+  TriangleAlert,
+} from 'lucide-react'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
@@ -114,8 +121,20 @@ export function SupplyStockScreen({
       header: 'Mã / Tên vật tư',
       width: '240px',
       cell: (r) => (
-        <div className="min-w-0">
-          <DocChip className="text-[11px]">{r.code}</DocChip>
+        <div className="group/row min-w-0">
+          <span className="flex items-center gap-1.5">
+            <DocChip className="text-[11px]">{r.code}</DocChip>
+            {/* Soạn đơn mua từ chính dòng đang thiếu (03/09/2026): trước đây
+                người mua phải nhớ mã rồi sang form tự tìm lại. */}
+            <Link
+              href={`/planning/pos/new?material=${encodeURIComponent(r.code)}`}
+              className="text-[var(--primary)] opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100"
+              title={`Soạn đơn mua ${r.code}`}
+              aria-label={`Soạn đơn mua ${r.code}`}
+            >
+              <ShoppingCart size={13} strokeWidth={1.8} />
+            </Link>
+          </span>
           <div className="mt-0.5 truncate font-medium">{r.name}</div>
           {r.group_name && (
             <div className="text-muted-foreground truncate text-[11px]">

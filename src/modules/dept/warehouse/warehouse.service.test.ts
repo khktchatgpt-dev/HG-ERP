@@ -16,6 +16,31 @@ vi.mock('@/modules/core/rbac/rbac.service', () => ({
   assertAction: vi.fn(),
   canAction: vi.fn(),
 }))
+/*
+ * Taxonomy đọc DB thật. `create`/`update` gọi nó để (a) chặn nhóm lạ và (b) lấy
+ * mẫu đơn mặc định của nhóm — hai việc của Đợt 4/0183, không phải chủ đề của
+ * file test này. Mock trả đúng các nhóm mà test dùng, thêm một nhóm CÓ mẫu mặc
+ * định để kiểm chuyện mồi mẫu.
+ */
+vi.mock('./taxonomy.service', () => ({
+  invalidateTaxonomy: vi.fn(),
+  materialTaxonomy: vi.fn().mockResolvedValue({
+    units: [],
+    packUnits: [],
+    groups: [
+      {
+        name: 'Ngũ kim - phụ kiện',
+        subs: [],
+        grades: [],
+        finishes: [],
+        po_template: null,
+      },
+      { name: 'Inox', subs: [], grades: [], finishes: [], po_template: 'metal_kg' },
+      { name: 'Hàng linh tinh', subs: [], grades: [], finishes: [], po_template: null },
+      { name: 'Nhôm', subs: [], grades: [], finishes: [], po_template: null },
+    ],
+  }),
+}))
 
 import { materialsService } from './warehouse.service'
 import { materialsRepo } from './warehouse.repo'
@@ -227,6 +252,40 @@ describe('materialsService.create — tự cấp mã theo nếp của nhóm', ()
     expect(materialsRepo.insert).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'NK-0125' }),
     )
+  })
+
+  /*
+   * Mẫu đơn mặc định theo nhóm (0183): nhóm Inox khai `metal_kg`, nên vật tư
+   * mới của nhóm nhận mẫu đó mà không phải chọn. Người khai CHỌN mẫu thì mẫu
+   * của họ thắng — mẫu là của vật tư, nhóm chỉ cho giá trị khởi đầu.
+   */
+  it('mẫu đơn: chưa chọn thì lấy mặc định của nhóm; đã chọn thì giữ nguyên', async () => {
+    await materialsService.create(cungUng, { ...NEW, group_name: 'Inox' })
+    expect(materialsRepo.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ po_template: 'metal_kg' }),
+    )
+
+    await materialsService.create(cungUng, {
+      ...NEW,
+      group_name: 'Inox',
+      po_template: 'accessory',
+    })
+    expect(materialsRepo.insert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ po_template: 'accessory' }),
+    )
+
+    // Nhóm không đặt mặc định → null, không mượn mẫu của nhóm khác.
+    await materialsService.create(cungUng, { ...NEW, group_name: 'Nhôm' })
+    expect(materialsRepo.insert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ po_template: null }),
+    )
+  })
+
+  it('nhóm lạ (không có trong danh mục) → 400, không insert', async () => {
+    await expect(
+      materialsService.create(cungUng, { ...NEW, group_name: 'Sắt thép' }),
+    ).rejects.toThrow(/không có trong danh mục/)
+    expect(materialsRepo.insert).not.toHaveBeenCalled()
   })
 
   it('nhóm chưa có mã nào → tra bảng theo tên nhóm', async () => {

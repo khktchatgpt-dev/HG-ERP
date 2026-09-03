@@ -207,11 +207,17 @@ export const materialsService = {
     const group = input.group_name ?? null
     // Nhóm chính là danh sách chốt (Đợt 4) — form là dropdown, nhưng API và
     // script nạp liệu đi thẳng vào đây; chặn ở service để mọi đường ghi cùng luật.
+    const tax = await materialTaxonomy()
     const gateErr = groupGateError(
-      (await materialTaxonomy()).groups.map((g) => g.name),
+      tax.groups.map((g) => g.name),
       group,
     )
     if (gateErr) throw BadRequest(gateErr)
+    // Mẫu đơn mặc định của nhóm (0183) — chỉ mồi khi người khai không chọn gì.
+    // Mẫu vẫn thuộc về vật tư: đã có thì giữ, đợt sau đổi mặc định của nhóm
+    // cũng không ghi đè hàng đã khai.
+    const poTemplate =
+      input.po_template ?? tax.groups.find((g) => g.name === group)?.po_template ?? null
     const siblings = await materialsRepo.namesInGroup(group)
 
     /*
@@ -279,7 +285,7 @@ export const materialsService = {
        * vật tư vừa khai xong đã mang nhãn "chưa khai mẫu", lần đặt sau bị xếp
        * cuối danh sách tìm — trong khi màn hình vừa báo tạo thành công.
        */
-      po_template: input.po_template ?? null,
+      po_template: poTemplate,
       kg_per_m: input.kg_per_m ?? null,
       kg_per_unit: input.kg_per_unit ?? null,
       default_bar_length_m: input.default_bar_length_m ?? null,

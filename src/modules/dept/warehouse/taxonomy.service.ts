@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { isPoTemplate, type PoTemplate } from '@/lib/po-template'
 
 /**
  * PHÂN LOẠI VẬT TƯ CHO FORM KHAI MỚI: ĐVT · nhóm · nhóm phụ.
@@ -20,7 +21,14 @@ export type MaterialTaxonomy = {
    * "xi trang") và đơn in ra ba nhãn cho cùng một thứ. Chọn từ nhãn ĐÃ DÙNG
    * trong nhóm là đường mặc định; gõ mới vẫn được vì màu/bề mặt là từ vựng mở.
    */
-  groups: { name: string; subs: string[]; grades: string[]; finishes: string[] }[]
+  groups: {
+    name: string
+    subs: string[]
+    grades: string[]
+    finishes: string[]
+    /** Mẫu đơn mua mặc định cho vật tư mới của nhóm (0183) — null = chưa đặt. */
+    po_template: PoTemplate | null
+  }[]
   /** Nhãn bao gói đã dùng toàn danh mục (bì/bó/thùng/bao…) — không theo nhóm. */
   packUnits: string[]
 }
@@ -49,14 +57,25 @@ export async function materialTaxonomy(): Promise<MaterialTaxonomy> {
 
   const { data: items } = await db()
     .from('catalog_items')
-    .select('type, label, sort_order')
+    .select('type, label, sort_order, meta')
     .in('type', ['unit', 'material_group'])
     .eq('is_active', true)
     .order('sort_order')
 
-  const rows = (items as { type: string; label: string }[] | null) ?? []
+  const rows =
+    (items as
+      | { type: string; label: string; meta: { po_template?: string | null } | null }[]
+      | null) ?? []
   const units = rows.filter((r) => r.type === 'unit').map((r) => r.label)
-  const groupNames = rows.filter((r) => r.type === 'material_group').map((r) => r.label)
+  const groupRows = rows.filter((r) => r.type === 'material_group')
+  const groupNames = groupRows.map((r) => r.label)
+  // Mẫu đơn mặc định theo nhóm (0183) — chỉ nhận giá trị hợp lệ, meta là jsonb tự do.
+  const groupTemplate = new Map<string, PoTemplate | null>(
+    groupRows.map((r) => {
+      const t = r.meta?.po_template
+      return [r.label, isPoTemplate(t) ? t : null]
+    }),
+  )
 
   // Quét cả bảng — PostgREST chặn cứng 1000 dòng/request, `.limit()` lớn hơn vẫn
   // chỉ trả 1000 và KHÔNG báo lỗi.
@@ -147,6 +166,7 @@ export async function materialTaxonomy(): Promise<MaterialTaxonomy> {
         subs: viSort(bySub.get(name)),
         grades: viSort(byGrade.get(name)),
         finishes: viSort(byFinish.get(name)),
+        po_template: groupTemplate.get(name) ?? null,
       }
     }),
     packUnits: [...packUnits].sort((a, b) => a.localeCompare(b, 'vi')),

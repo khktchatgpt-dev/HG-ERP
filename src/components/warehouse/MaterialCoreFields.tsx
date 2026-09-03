@@ -225,10 +225,16 @@ export function useMaterialCore({
 
   const guess = useMemo(() => {
     const g = guessTemplate(f.name, f.sub_group, derived?.kg ?? null)
-    return g.reason.startsWith('không suy được') && templateHint
-      ? { template: templateHint, reason: 'theo mẫu đơn đang soạn' }
-      : g
-  }, [f.name, f.sub_group, derived, templateHint])
+    if (!g.reason.startsWith('không suy được')) return g
+    // Tên không nói lên gì → mẫu MẶC ĐỊNH CỦA NHÓM (0183) trước, rồi mới tới
+    // mẫu của đơn đang soạn: nhóm là thứ người khai vừa chọn có chủ đích.
+    if (groupTax?.po_template)
+      return {
+        template: groupTax.po_template,
+        reason: `mặc định của nhóm ${f.group_name}`,
+      }
+    return templateHint ? { template: templateHint, reason: 'theo mẫu đơn đang soạn' } : g
+  }, [f.name, f.sub_group, f.group_name, derived, templateHint, groupTax])
 
   // Mẫu chỉ dùng NGẦM (quyết định có hỏi barem kg/m) — không còn ô chọn, không lưu.
   const template = guess.template

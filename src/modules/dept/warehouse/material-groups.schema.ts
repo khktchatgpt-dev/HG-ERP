@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PO_TEMPLATES } from '@/lib/po-template'
 
 /**
  * Quản lý NHÓM / NHÓM PHỤ vật tư (03/09/2026) — biên vào của các route
@@ -14,10 +15,14 @@ export const materialGroupUpdateSchema = z
   .object({
     name: label.optional(),
     is_active: z.boolean().optional(),
+    /** Mẫu đơn mua mặc định cho vật tư MỚI của nhóm (0183); null = bỏ mặc định. */
+    po_template: z.enum(PO_TEMPLATES).nullable().optional(),
   })
-  .refine((v) => v.name !== undefined || v.is_active !== undefined, {
-    message: 'Chưa nói đổi gì',
-  })
+  .refine(
+    (v) =>
+      v.name !== undefined || v.is_active !== undefined || v.po_template !== undefined,
+    { message: 'Chưa nói đổi gì' },
+  )
 
 /**
  * Nhóm phụ không có bảng riêng — nó là cột text trên vật tư — nên "đổi tên",

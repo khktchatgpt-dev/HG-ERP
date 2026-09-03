@@ -21,6 +21,9 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   if (patch.is_active !== undefined) {
     item = await materialGroupsService.setActive(user, id, patch.is_active)
   }
+  if (patch.po_template !== undefined) {
+    item = await materialGroupsService.setTemplate(user, id, patch.po_template)
+  }
   return NextResponse.json({ item, moved })
 })
 
