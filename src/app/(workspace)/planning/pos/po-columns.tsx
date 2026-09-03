@@ -135,13 +135,21 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       const isBorrowed = c.borrowed?.has(p.id) ?? false
       return (
         <div className="flex min-w-0 flex-col">
+          {/*
+            `w-full` ở CẢ nút lẫn dòng tên: bảng là `table-fixed`, mà `truncate`
+            chỉ cắt được khi phần tử có bề ngang xác định. Trước đây nút là
+            `items-start` nên dòng tên rộng bằng CHÍNH CHỮ của nó — tên NCC dài
+            tràn khỏi ô 176px và đè lên cột Giá trị / Trạng thái bên cạnh.
+          */}
           <button
             onClick={() => c.onView(p)}
-            className="hover:text-primary flex min-w-0 flex-col items-start gap-0.5 text-left"
+            className="hover:text-primary flex w-full min-w-0 flex-col items-start gap-0.5 text-left"
           >
             {/* Mã chứng từ = DocChip (chữ ký v3) — nhận ra "một tờ phiếu" từ xa. */}
             <DocChip className="text-[11px]">{p.code}</DocChip>
-            <span className="truncate font-medium">{p.supplier_name}</span>
+            <span className="w-full truncate font-medium" title={p.supplier_name}>
+              {p.supplier_name}
+            </span>
           </button>
           {/*
             ĐƠN GỘP NHIỀU LỆNH (0125). Ở thẻ lệnh PHỤ phải nói rõ đơn này thuộc
@@ -196,9 +204,16 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       align: 'right',
       width: '108px',
       sortValue: (p) => p.total ?? 0,
+      /*
+       * Tiền và đơn vị tiền XUỐNG DÒNG có chủ đích: ô rộng 108px, để chung một
+       * dòng thì "81.916.000 VND" tự ngắt giữa chừng và chữ VND rơi đè lên dòng
+       * dưới. Xuống dòng chủ động thì cả hai luôn đứng đúng chỗ.
+       */
       cell: (p) => (
-        <span className="t-data font-medium">
-          {money(p.total ?? 0)}{' '}
+        <span className="flex flex-col items-end leading-tight">
+          <span className="t-data font-medium whitespace-nowrap">
+            {money(p.total ?? 0)}
+          </span>
           <span className="text-muted-foreground text-[11px]">{p.currency}</span>
         </span>
       ),
@@ -303,7 +318,13 @@ export function buildPoColumns(c: PoColumnCtx): Column<Po>[] {
       sortValue: (p) => p.assignee_name ?? '',
       cell: (p) =>
         p.assignee_name ? (
-          <span className={'truncate' + (p.assigned_to === meId ? ' font-medium' : '')}>
+          // `block w-full`: `truncate` trên span inline không cắt được gì.
+          <span
+            className={
+              'block w-full truncate' + (p.assigned_to === meId ? ' font-medium' : '')
+            }
+            title={p.assignee_name}
+          >
             {p.assigned_to === meId ? '★ ' : ''}
             {p.assignee_name}
           </span>
@@ -404,23 +425,36 @@ export function PoRowsTable({ rows, columns }: { rows: Po[]; columns: Column<Po>
         <tbody>
           {rows.map((p) => (
             /*
-             * VẠCH TRẠNG THÁI ở mép trái (xem `.spine` trong globals.css).
-             * Dòng đầu tiên của thẻ không kẻ trên — đã có viền đầu thẻ rồi, kẻ
-             * thêm là hai đường sát nhau.
+             * VẠCH TRẠNG THÁI ở mép trái (`.spine` trong globals.css) đặt trên Ô
+             * ĐẦU chứ KHÔNG trên <tr>.
+             *
+             * BẪY ĐÃ TRẢ GIÁ (04/09/2026): `.spine::before` là nội dung sinh ra
+             * bên trong hàng, mà con của <tr> bắt buộc phải là ô — trình duyệt
+             * tự bọc nó vào một Ô VÔ HÌNH đứng đầu hàng. Bảng `table-fixed` lấy
+             * bề ngang từ hàng tiêu đề, nên mọi ô thật bị đẩy sang phải MỘT CỘT:
+             * tên NCC nhận bề ngang của cột Giá trị, cột cuối lòi ra ngoài bảng
+             * — đúng cảnh chữ chồng chữ ở thẻ lệnh 05/26-27.
+             *
+             * Biến `--spine` vẫn khai ở <tr> để mọi ô cùng đọc được.
              */
             <tr
               key={p.id}
-              className={`spine border-border/70 [&:not(:first-child)]:border-t ${
+              className={`border-border/70 [&:not(:first-child)]:border-t ${
                 p.status === 'cancelled' ? 'opacity-55' : ''
               }`}
               style={{ '--spine': poSpineColor(p.status) } as React.CSSProperties}
             >
               {columns.map((col, i) => (
+                /*
+                 * `overflow-hidden`: bảng `table-fixed` KHÔNG tự cắt nội dung
+                 * quá khổ — nó vẽ tràn sang ô bên cạnh. Một ô lỡ có chuỗi dài
+                 * là cả hàng thành chữ chồng chữ (lỗi thấy ở thẻ lệnh 05/26-27).
+                 */
                 <td
                   key={col.key}
-                  className={`py-2 pr-2 align-middle ${i === 0 ? 'pl-3.5' : ''} ${
-                    col.align === 'right' ? 'text-right' : ''
-                  } ${HIDE_AT[col.key] ?? ''}`}
+                  className={`overflow-hidden py-2 pr-2 align-middle ${
+                    i === 0 ? 'spine pl-3.5' : ''
+                  } ${col.align === 'right' ? 'text-right' : ''} ${HIDE_AT[col.key] ?? ''}`}
                 >
                   {col.cell?.(p, 0)}
                 </td>
