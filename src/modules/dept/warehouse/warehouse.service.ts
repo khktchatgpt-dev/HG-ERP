@@ -10,7 +10,7 @@ import {
   softKey,
   sureKey,
 } from '@/lib/material-key'
-import { invalidateTaxonomy } from './taxonomy.service'
+import { invalidateTaxonomy, materialTaxonomy } from './taxonomy.service'
 import { normalizeUnit } from '@/lib/unit'
 import { catalogFillPatch, type CatalogLineInfo } from '@/lib/po-catalog-backfill'
 import { diffMaterial } from '@/lib/material-diff'
@@ -421,6 +421,54 @@ export const materialsService = {
     const updated = await materialsRepo.setGroupTolerance(groupName, pct)
     if (updated === 0) throw NotFound(`Nhóm "${groupName}" không có vật tư nào`)
     return { updated }
+  },
+
+  /**
+   * ĐỔI NHÓM / NHÓM PHỤ HÀNG LOẠT (03/09/2026 — Cung ứng: "thêm/sửa nhóm cho
+   * vật tư rất khó thao tác"). Đo được: nhóm Sắt thép có ~149 mã mực/bút/giấy
+   * lạc vào và 722 mã trống nhóm phụ — sửa lẻ là 149 lượt ⋯ → Sửa → Lưu.
+   *
+   * Quyền như sửa trường mua hàng (nhóm/nhóm phụ đều thuộc
+   * PURCHASING_EDITABLE_FIELDS). Nhóm CHÍNH phải có trong danh mục nhóm — nó
+   * quyết định phạm vi chặn trùng tên, gõ sai là chặn hụt; nhóm PHỤ là nhãn mở.
+   * Đổi nhóm chính mà không nói nhóm phụ → nhóm phụ về TRỐNG: nhóm phụ cũ
+   * thuộc nhóm cũ, mang sang là bày một cặp nhóm/nhóm-phụ không tồn tại.
+   * Mỗi mã một vết (0177) — sổ vết đọc theo mã, gộp là mất dấu.
+   */
+  async regroup(
+    user: User,
+    input: { ids: string[]; group_name?: string; sub_group?: string | null },
+  ): Promise<{ updated: number }> {
+    await assertAction(user, 'warehouse.material.update_purchasing')
+    const patch: { group_name?: string; sub_group?: string | null } = {}
+    if (input.group_name !== undefined) {
+      const tax = await materialTaxonomy()
+      if (!tax.groups.some((g) => g.name === input.group_name)) {
+        throw NotFound(`Nhóm "${input.group_name}" không có trong danh mục nhóm`)
+      }
+      patch.group_name = input.group_name
+      patch.sub_group = input.sub_group === undefined ? null : input.sub_group
+    } else if (input.sub_group !== undefined) {
+      patch.sub_group = input.sub_group
+    }
+    const before = await materialsRepo.regroup(input.ids, patch)
+    if (before.length === 0) throw NotFound('Không tìm thấy vật tư nào trong danh sách')
+    invalidateTaxonomy()
+    for (const b of before) {
+      await emit({
+        name: 'material.changed',
+        material_id: b.id,
+        material_code: b.code,
+        actor_id: user.id,
+        source: 'manual',
+        source_ref: null,
+        changes: diffMaterial(
+          b as unknown as Record<string, unknown>,
+          patch as Record<string, unknown>,
+        ),
+      })
+    }
+    return { updated: before.length }
   },
 
   /**

@@ -131,6 +131,29 @@ export const materialToleranceBulkSchema = z.object({
   pct: z.coerce.number().min(0).max(20),
 })
 
+/**
+ * ĐỔI NHÓM HÀNG LOẠT (03/09/2026). Chuỗi rỗng sau trim coi như "không gửi"
+ * (giữ nguyên); `null` ở sub_group nghĩa là XOÁ nhóm phụ. Phải có ít nhất một
+ * thứ để đổi — một update không đổi gì vẫn đẻ vết, chặn ở biên.
+ */
+const optText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v === '' ? undefined : v))
+    .optional()
+
+export const materialRegroupSchema = z
+  .object({
+    ids: z.array(z.string().uuid()).min(1).max(500),
+    group_name: optText(100),
+    sub_group: optText(100).nullable(),
+  })
+  .refine((v) => v.group_name !== undefined || v.sub_group !== undefined, {
+    message: 'Chưa chọn đổi nhóm hay nhóm phụ',
+  })
+
 export const materialSimilarQuerySchema = z.object({
   name: z.string().trim().min(3).max(200),
   group_name: z.string().trim().max(100).optional(),
