@@ -4,6 +4,7 @@ import type { User } from '@/modules/core/users/users.repo'
 import type { z } from 'zod'
 import { hasPermission, assertAction } from '@/modules/core/rbac/rbac.service'
 import { NotFound } from '@/server/http'
+import { nextSupplierCode } from '@/lib/supplier-code'
 
 /**
  * Tên phòng CUNG ỨNG như trong public.departments. KHÔNG dùng cho authz nữa
@@ -47,8 +48,21 @@ export const suppliersService = {
     const { is_active: _ignore, ...rest } = input as SupplierInput & {
       is_active?: boolean
     }
+    /*
+     * MÃ NCC: bỏ trống thì server tự cấp (03/09/2026, user chốt). Đo được 120/157
+     * NCC không có mã — người tạo đang vội thì bỏ qua ô đó, và không ai quay lại
+     * đặt. Mã sinh theo ĐÚNG nếp 37 mã người dùng tự đặt (chữ đầu của tên riêng),
+     * không đẻ khuôn thứ hai kiểu "NCC-0001".
+     *
+     * Cấp ở SERVICE chứ không ở form: mọi đường ghi (form, API, script nạp) đều
+     * đi qua đây, và chỉ ở đây mới biết mã nào đang bị chiếm.
+     */
+    const code =
+      input.code?.trim() || nextSupplierCode(input.name, await suppliersRepo.allCodes())
+
     return suppliersRepo.insert({
       ...toRow(rest),
+      code: code || null,
       name: input.name,
       status,
       is_active: status === 'active', // đồng bộ cổng chọn NCC khi tạo PO

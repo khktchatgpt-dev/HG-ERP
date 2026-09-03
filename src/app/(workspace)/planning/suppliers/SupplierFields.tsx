@@ -16,6 +16,7 @@ import { DateField } from '@/components/erp/DateField'
 import { Input } from '@/components/shadcn/input'
 import { Textarea } from '@/components/shadcn/textarea'
 import { PO_CURRENCIES } from '@/lib/po-line'
+import { nextSupplierCode } from '@/lib/supplier-code'
 
 /**
  * BỘ Ô HỒ SƠ NHÀ CUNG CẤP — cho cả TẠO MỚI và SỬA (03/09/2026).
@@ -140,9 +141,13 @@ export function SupplierFields({
   value: SupplierFormValues
   onChange: (patch: SupplierFormValues) => void
   mode: 'create' | 'edit'
-  existing?: { id: string; name: string; tax_no?: string | null }[]
+  existing?: { id: string; name: string; tax_no?: string | null; code?: string | null }[]
 }) {
   const uid = useId()
+  const codes = useMemo(
+    () => existing.map((s) => s.code ?? '').filter(Boolean),
+    [existing],
+  )
   const [open, setOpen] = useState({
     payment: mode === 'edit',
     buying: mode === 'edit',
@@ -159,6 +164,15 @@ export function SupplierFields({
    * mỗi bản giữ một nửa lịch sử đặt hàng nên không ai nhìn ra công nợ thật.
    * CHỈ CẢNH BÁO, không chặn: có khi hai pháp nhân trùng tên thật.
    */
+  /** Mã server sẽ cấp nếu để trống — bày trước cho người khai thấy. */
+  const autoCode = useMemo(
+    () =>
+      mode === 'create' && !(value.code ?? '').trim()
+        ? nextSupplierCode(value.name ?? '', codes)
+        : '',
+    [mode, value.code, value.name, codes],
+  )
+
   const dup = useMemo(() => {
     const n = (value.name ?? '').trim().toLowerCase()
     const t = (value.tax_no ?? '').trim()
@@ -200,10 +214,25 @@ export function SupplierFields({
             </span>
           )}
         </Field>
-        <Field label="Mã NCC" hint="Bỏ trống cũng được — dùng để đối chiếu sổ tay.">
+        {/*
+          Mã bỏ trống thì SERVER tự cấp (nextSupplierCode). Ở đây chạy đúng hàm
+          đó để bày trước cái mã sẽ ra — người khai thấy ngay và sửa được nếu
+          không ưng, thay vì tạo xong mới phát hiện mã lạ.
+        */}
+        <Field
+          label="Mã NCC"
+          hint={
+            txt('code')
+              ? 'Dùng để đối chiếu sổ tay.'
+              : autoCode
+                ? `Để trống thì hệ thống cấp mã ${autoCode}.`
+                : 'Để trống thì hệ thống tự cấp theo tên.'
+          }
+        >
           <Input
             maxLength={50}
             className="t-data"
+            placeholder={autoCode || 'tự cấp theo tên'}
             value={txt('code')}
             onChange={(e) => set('code', e.target.value)}
           />
