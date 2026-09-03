@@ -5,6 +5,7 @@ import { DiePicker } from '@/components/supply/DiePicker'
 import {
   gridCellClass as cell,
   GridCellInput,
+  GridCellNumber,
   GridCellSelect,
   GridCellTextarea,
 } from '@/components/erp/GridCell'
@@ -265,19 +266,10 @@ export function LineCell({
     case 'number':
       return (
         <>
-          <GridCellInput
-            type="number"
-            min="0"
-            max={f.max}
-            step={f.step ?? '0.01'}
-            onWheel={blurOnWheel}
-            value={String(get(l, f.field) ?? '')}
-            onChange={(e) =>
-              onPatch(
-                index,
-                patchOf(f.field!, e.target.value === '' ? '' : Number(e.target.value)),
-              )
-            }
+          <GridCellNumber
+            max={f.max == null ? undefined : Number(f.max)}
+            value={(get(l, f.field) ?? '') as number | ''}
+            onValueChange={(v) => onPatch(index, patchOf(f.field!, v))}
             className={`${cell} text-right`}
             aria-label={label}
           />
@@ -380,17 +372,9 @@ export function LineCell({
     case 'area':
       return (
         <>
-          <GridCellInput
-            type="number"
-            min="0"
-            step="0.0001"
-            onWheel={blurOnWheel}
+          <GridCellNumber
             value={l.area_m2}
-            onChange={(e) =>
-              onPatch(index, {
-                area_m2: e.target.value === '' ? '' : Number(e.target.value),
-              })
-            }
+            onValueChange={(v) => onPatch(index, { area_m2: v })}
             className={`${cell} text-right`}
             title="Tự tính từ lọt lòng theo cách mở — sửa được nếu NCC chào khác barem"
             aria-label={label}
@@ -479,7 +463,15 @@ function Unit2Cell({
       onChange={(e) => {
         const v = e.target.value
         setRaw(v)
-        const m = v.trim().match(/^([d.,]+)s*(D.*)$/)
+        /*
+         * ĐÃ MẤT DẤU GẠCH CHÉO NGƯỢC (phát hiện 03/09/2026): bản đang chạy là
+         * `/^([d.,]+)s*(D.*)$/` — `\d` `\s` `\D` rụng hết backslash nên nó đòi
+         * chuỗi phải bắt đầu bằng chữ "d" và có chữ "D" ở giữa. Kết quả: gõ
+         * "17.5 Lít" vào ô này KHÔNG BAO GIỜ khớp, cặp quy đổi 0182 chỉ vào
+         * được dòng khi tự điền từ danh mục. Đúng cái bẫy CLAUDE.md đã ghi cho
+         * `hg-ui.mjs` — regex hỏng thì im lặng, không ai thấy.
+         */
+        const m = v.trim().match(/^([\d.,]+)\s*(\D.*)$/)
         if (m) {
           const per = Number(m[1].replace(',', '.'))
           if (per > 0) {
