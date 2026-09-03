@@ -14,6 +14,7 @@ import {
   type SampleCondition,
   type SampleKind,
 } from '@/modules/dept/technical/samples.schema'
+import { NumberField } from '@/components/erp/NumberField'
 
 /**
  * Thêm hiện vật vào showroom. `quantity` > 1 sinh nhiều mẫu, MỖI CÁI MỘT MÃ —
@@ -38,7 +39,8 @@ export function SampleCreateModal({
   const [category, setCategory] = useState('')
   const [source, setSource] = useState('')
   const [condition, setCondition] = useState<SampleCondition>('good')
-  const [quantity, setQuantity] = useState(1)
+  // Cho phép RỖNG trong lúc gõ (xoá sạch để gõ số khác); lưu thì chốt về 1.
+  const [quantity, setQuantity] = useState<number | ''>(1)
   const [location, setLocation] = useState('')
   const [note, setNote] = useState('')
 
@@ -59,7 +61,7 @@ export function SampleCreateModal({
           category: isProduct ? null : category || null,
           source: isProduct ? null : source || null,
           condition,
-          quantity,
+          quantity: quantity === '' ? 1 : quantity,
           location: location || null,
           note: note || null,
         },
@@ -144,15 +146,16 @@ export function SampleCreateModal({
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Số lượng hiện vật">
-            <input
-              type="number"
+            {/* Bản cũ kẹp `Math.max(1, …||1)` ngay trong onChange nên KHÔNG XOÁ
+                được số đang có: xoá tới ký tự cuối là ô tự nhảy về 1, muốn gõ
+                20 phải xoá-rồi-gõ-đè. Nay để trống được, chốt về 1 khi lưu. */}
+            <NumberField
               min={1}
               max={20}
               value={quantity}
-              onChange={(e) =>
-                setQuantity(Math.max(1, Number(e.currentTarget.value) || 1))
-              }
+              onValueChange={setQuantity}
               className={INPUT}
+              aria-label="Số lượng hiện vật"
             />
             <p className="mt-1 text-[11px] text-zinc-400">
               Mỗi cái được cấp một mã riêng.

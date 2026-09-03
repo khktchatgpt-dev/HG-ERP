@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/Toast'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { uploadFile, MAX_UPLOAD_BYTES } from '@/lib/upload'
 import { shipWeekLabel } from '@/lib/ship-week'
+import { NumberField } from '@/components/erp/NumberField'
 
 export type QuoteOption = {
   id: string
@@ -929,32 +930,21 @@ export function OrderForm(props: {
                       Ghi chú   — tuỳ chọn → chữ nhỏ, nhãn xám
                   */}
                     <LineField label="Số lượng *" strong>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                      {/* Ô SỐ: xem `useNumberDraft` — `type="number"` nuốt
+                          trạng thái gõ dở nên số lẻ không gõ thẳng được. */}
+                      <NumberField
                         value={l.qty}
-                        onChange={(e) =>
-                          setLine(l.key, {
-                            qty: e.target.value === '' ? '' : Number(e.target.value),
-                          })
-                        }
+                        onValueChange={(v) => setLine(l.key, { qty: v })}
                         className={`${cls} t-data text-right font-semibold`}
+                        aria-label="Số lượng"
                       />
                     </LineField>
                     <LineField label={`Đơn giá * (${currency})`} strong>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                      <NumberField
                         value={l.unitPrice}
-                        onChange={(e) =>
-                          setLine(l.key, {
-                            unitPrice:
-                              e.target.value === '' ? '' : Number(e.target.value),
-                          })
-                        }
+                        onValueChange={(v) => setLine(l.key, { unitPrice: v })}
                         className={`${cls} t-data text-right`}
+                        aria-label="Đơn giá"
                       />
                     </LineField>
                     <LineField label={`Thành tiền (${currency})`}>
