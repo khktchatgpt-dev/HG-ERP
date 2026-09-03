@@ -111,7 +111,9 @@ export async function materialTaxonomy(): Promise<MaterialTaxonomy> {
   for (let from = 0; from < 60_000; from += 1000) {
     const { data, error } = await db()
       .from('supply_purchase_order_lines')
-      .select('material_grade, finish, pack_unit, material:warehouse_materials(group_name)')
+      .select(
+        'material_grade, finish, pack_unit, material:warehouse_materials(group_name)',
+      )
       .range(from, from + 999)
     if (error) throw new Error(error.message)
     const page = (data as PoRow[]) ?? []
@@ -128,7 +130,13 @@ export async function materialTaxonomy(): Promise<MaterialTaxonomy> {
 
   // Nhóm có trong danh mục nhưng chưa có vật tư nào vẫn phải hiện — không thì
   // không ai khai được vật tư đầu tiên cho nhóm đó.
-  const names = [...new Set([...groupNames, ...bySub.keys()])]
+  //
+  // CHỈ nhóm trong danh mục (Đợt 4, 03/09/2026). Trước đây gộp thêm mọi
+  // `group_name` lạ đang có trên vật tư, nên một mã gõ lệch nhóm là dropdown
+  // của cả app mọc thêm một "nhóm" không ai tạo. Nay vật tư mang nhóm lạ chỉ
+  // đơn giản là không thuộc nhóm nào — và API tạo/sửa đã chặn ghi nhóm lạ
+  // (`groupGateError`), nên trường hợp đó chỉ còn ở dữ liệu cũ.
+  const names = groupNames
   const data: MaterialTaxonomy = {
     units,
     groups: names.map((name) => {
