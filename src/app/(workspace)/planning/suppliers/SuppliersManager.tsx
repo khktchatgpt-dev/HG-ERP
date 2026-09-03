@@ -16,7 +16,13 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { RowMenu } from '@/components/erp/RowMenu'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { PricesPanel, type MaterialOption } from './PricesPanel'
-import { SupplierQuickForm } from './SupplierQuickForm'
+import {
+  SupplierFields,
+  emptySupplier,
+  toSupplierPayload,
+  type SupplierFormValues,
+} from './SupplierFields'
+import { Button } from '@/components/shadcn/button'
 
 type Supplier = {
   id: string
@@ -35,7 +41,6 @@ type Supplier = {
   total_spend: number
   groups: string[]
 }
-
 
 const STATUS: Record<string, { label: string; tone: 'green' | 'amber' | 'gray' }> = {
   active: { label: 'Hoạt động', tone: 'green' },
@@ -57,6 +62,8 @@ export function SuppliersManager({
   const confirm = useConfirm()
   const [busy, setBusy] = useState(false)
   const [openCreate, setOpenCreate] = useState(false)
+  /** Bản nháp NCC đang tạo — form có kiểm soát nên state nằm ở đây. */
+  const [draft, setDraft] = useState<SupplierFormValues>(emptySupplier)
   const [pricing, setPricing] = useState<Supplier | null>(null)
 
   const [q, setQ] = useState('')
@@ -318,7 +325,7 @@ export function SuppliersManager({
                   ...groupOptions.map((g) => ({ value: g, label: g })),
                 ]}
               />
-              
+
               <ToolbarSelect
                 value={statusFilter}
                 onChange={setStatusFilter}
@@ -362,13 +369,24 @@ export function SuppliersManager({
         />
       </div>
 
+      {/*
+        TẠO NCC = HỒ SƠ ĐẦY ĐỦ, không còn "thêm nhanh 6 ô" (03/09/2026).
+        Bản cũ chỉ hỏi tên/mã/loại/MST/ĐT/email rồi đá sang trang hồ sơ, và
+        thực tế không ai quay lại điền tiếp — nên điều khoản thanh toán, tiền tệ,
+        lead time (đúng ba thứ form soạn đơn đọc để mồi) trống ở phần lớn NCC.
+        Nay hỏi ngay tại đây, mảng nào chưa cần thì vẫn gập lại.
+      */}
       <Modal
         open={openCreate}
         onClose={() => setOpenCreate(false)}
         title="Thêm nhà cung cấp"
+        maxWidth="sm:max-w-3xl"
       >
-        <SupplierQuickForm
-          onSubmit={async (body) => {
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={async (e) => {
+            e.preventDefault()
+            const body = toSupplierPayload(draft)
             setBusy(true)
             try {
               const { supplier } = await api<{ supplier: { id: string; name: string } }>(
@@ -376,15 +394,42 @@ export function SuppliersManager({
                 { method: 'POST', body },
               )
               setOpenCreate(false)
+              setDraft(emptySupplier)
               toast.success('Đã thêm NCC', supplier.name)
               router.push(`/planning/suppliers/${supplier.id}`)
-            } catch (e) {
-              toast.error('Thêm thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
+            } catch (err) {
+              toast.error(
+                'Thêm thất bại',
+                err instanceof ApiError ? err.message : 'Có lỗi',
+              )
             } finally {
               setBusy(false)
             }
           }}
-        />
+        >
+          <SupplierFields
+            mode="create"
+            value={draft}
+            onChange={(patch) => setDraft((d) => ({ ...d, ...patch }))}
+            existing={suppliers.map((s) => ({
+              id: s.id,
+              name: s.name,
+              tax_no: s.tax_no,
+            }))}
+          />
+          <div className="bg-card sticky bottom-0 flex items-center justify-end gap-2 border-t py-2">
+            <span className="text-muted-foreground mr-auto text-[12px]">
+              Chỉ tên là bắt buộc — phần còn lại điền được lúc nào cũng được.
+            </span>
+            <Button type="button" variant="ghost" onClick={() => setOpenCreate(false)}>
+              Huỷ
+            </Button>
+            <Button type="submit" disabled={busy}>
+              {busy && <Spinner size={14} />}
+              {busy ? 'Đang tạo…' : 'Tạo & mở hồ sơ'}
+            </Button>
+          </div>
+        </form>
       </Modal>
 
       <Modal
