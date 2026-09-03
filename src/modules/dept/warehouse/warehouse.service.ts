@@ -1,7 +1,8 @@
 import { materialsRepo, materialChangesRepo, type Material } from './warehouse.repo'
 import { type User } from '@/modules/core/users/users.repo'
 import { hasPermission, assertAction, canAction } from '@/modules/core/rbac/rbac.service'
-import { Conflict, Forbidden, NotFound } from '@/server/http'
+import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
+import { groupGateError } from '@/lib/material-group-gate'
 import { type PoTemplate } from '@/lib/po-template'
 import {
   MIN_KEY_LEN,
@@ -204,6 +205,13 @@ export const materialsService = {
     await assertAction(user, 'warehouse.material.create')
 
     const group = input.group_name ?? null
+    // Nhóm chính là danh sách chốt (Đợt 4) — form là dropdown, nhưng API và
+    // script nạp liệu đi thẳng vào đây; chặn ở service để mọi đường ghi cùng luật.
+    const gateErr = groupGateError(
+      (await materialTaxonomy()).groups.map((g) => g.name),
+      group,
+    )
+    if (gateErr) throw BadRequest(gateErr)
     const siblings = await materialsRepo.namesInGroup(group)
 
     /*
@@ -356,6 +364,13 @@ export const materialsService = {
     if (patch.code && patch.code !== before.code) {
       const dup = await materialsRepo.findByCode(patch.code)
       if (dup) throw Conflict(`Mã vật tư "${patch.code}" đã tồn tại`)
+    }
+    if (patch.group_name != null) {
+      const gateErr = groupGateError(
+        (await materialTaxonomy()).groups.map((g) => g.name),
+        patch.group_name,
+      )
+      if (gateErr) throw BadRequest(gateErr)
     }
     if ('barcode' in patch) patch.barcode = patch.barcode?.trim() || null
     /*
