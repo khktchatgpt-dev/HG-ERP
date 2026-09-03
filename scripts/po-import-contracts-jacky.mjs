@@ -306,7 +306,9 @@ for (const c of CONTRACTS) {
     sort_order: i,
     qty_basis: 'manual',
     price_basis: 'unit',
-    spec: l.spec ?? null,
+    // Màn chi tiết đọc cột Quy cách từ spec, phiếu in mẫu Kính đọc
+    // dimension_text — điền cả hai, không thì một trong hai chỗ trống trơn.
+    spec: l.spec ?? l.dim ?? null,
     material_grade: l.grade ?? null,
     dimension_text: l.dim ?? null,
     area_m2: l.m2 ?? null,

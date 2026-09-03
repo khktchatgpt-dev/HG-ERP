@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   FileText,
+  ClipboardList,
   Package,
   PackageCheck,
   Plus,
@@ -75,6 +76,22 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
   const owners = [
     ...new Set(live.map((p) => p.assignee_name).filter((v): v is string => !!v)),
   ]
+  const cov = lsx.coverage
+  /* Tiền của lệnh cộng theo VND; đơn ngoại tệ đứng riêng ở cột Giá trị của nó. */
+  const totalAmount = live
+    .filter((p) => p.currency === 'VND')
+    .reduce((s, p) => s + p.amount, 0)
+  const totalLines = live.reduce((s, p) => s + p.line_count, 0)
+  /** Nháp mà thiếu giá hoặc chưa có dòng nào — gửi duyệt bây giờ là gửi đơn hụt. */
+  const notReady = live.filter(
+    (p) =>
+      (p.status === 'draft' || p.status === 'pending_approval') &&
+      (p.line_count === 0 || p.unpriced_lines > 0),
+  ).length
+  /** Đã gửi NCC mà chưa có ngày hẹn về — không trễ được, nhưng cũng không biết đường chờ. */
+  const noEta = live.filter(
+    (p) => !p.expected_at && p.status !== 'draft' && p.status !== 'pending_approval',
+  ).length
 
   const columns: Column<Po>[] = [
     {
@@ -86,6 +103,25 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
           <Link href={`/planning/pos/${p.id}`} className="hover:underline">
             <DocChip>{p.code}</DocChip>
           </Link>
+          {/* Số ĐH trên tờ giấy: người mua gọi NCC thì đọc số này, không ai bên
+              kia biết PO-2026-0038 là gì. Chỉ hiện khi khác mã hệ thống. */}
+          {p.supplier_doc_no && p.supplier_doc_no !== p.code && (
+            <span className="text-muted-foreground t-data text-[11px]">
+              ĐH {p.supplier_doc_no}
+            </span>
+          )}
+          <span className="text-muted-foreground text-[11px]">
+            {p.line_count} dòng
+            {p.unpriced_lines > 0 && (
+              <span style={{ color: 'var(--warn)' }}>
+                {' '}
+                · {p.unpriced_lines} chưa có giá
+              </span>
+            )}
+            {p.line_count === 0 && (
+              <span style={{ color: 'var(--stop)' }}> · đơn rỗng</span>
+            )}
+          </span>
           {p.shared && (
             <span className="text-muted-foreground text-[11px]">
               mua chung{p.shared_with.length > 0 && ` · ${p.shared_with.join(', ')}`}
@@ -250,28 +286,109 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
 
       {/* Bốn con số của lệnh — đọc, không lọc: bảng dưới chỉ có mấy dòng, lọc
           thêm một tầng nữa là thừa. Nên dùng thẻ ĐỌC chứ không phải thẻ bấm. */}
+      {/*
+        Bốn con số của lệnh, xếp theo THỨ TỰ NGƯỜI MUA HỎI:
+          1. đã mua đủ chưa (độ phủ nhu cầu) — câu hỏi số một, trước đây phải
+             bấm sang màn soạn đơn mới biết;
+          2. đã đặt bao nhiêu tiền — con số GĐ hỏi khi duyệt;
+          3. còn kẹt ở đâu (chưa gửi NCC);
+          4. hàng về tới đâu.
+        Ô "NCC trễ hẹn" cũ bị bỏ: khi chưa đơn nào có ngày hẹn, nó luôn hiện 0 và
+        trấn an sai — nay việc "chưa hẹn ngày" nói thẳng trong ô Hàng về.
+      */}
       <StatTiles>
-        <StatTile label="Đơn mua" value={live.length} icon={ShoppingCart} />
+        <StatTile
+          label="Vật tư đã có đơn"
+          value={cov.needed > 0 ? `${cov.covered}/${cov.needed}` : String(live.length)}
+          icon={ClipboardList}
+          tone={cov.missing > 0 ? 'warn' : cov.needed > 0 ? 'done' : 'default'}
+          hint={
+            cov.needed === 0
+              ? 'lệnh chưa có định mức để đối chiếu'
+              : cov.missing > 0
+                ? `còn ${cov.missing} mã chưa đủ — xem bên dưới`
+                : 'đủ cho toàn lệnh'
+          }
+        />
+        <StatTile
+          label="Giá trị đã đặt"
+          value={money(totalAmount, 'VND')}
+          icon={ShoppingCart}
+          hint={`${live.length} đơn · ${totalLines} dòng`}
+        />
         <StatTile
           label="Chưa gửi NCC"
           value={unsent}
           icon={Send}
           tone={unsent > 0 ? 'warn' : 'default'}
-          hint={unsentLate > 0 ? `${unsentLate} đơn đã quá hẹn giao` : undefined}
+          hint={
+            notReady > 0
+              ? `${notReady} đơn còn thiếu giá / thiếu dòng`
+              : unsentLate > 0
+                ? `${unsentLate} đơn đã quá hẹn giao`
+                : undefined
+          }
         />
         <StatTile
-          label="NCC trễ hẹn"
-          value={sentLate}
-          icon={TriangleAlert}
-          tone={sentLate > 0 ? 'stop' : 'default'}
-        />
-        <StatTile
-          label="Về đủ"
-          value={done}
+          label="Hàng về"
+          value={`${done}/${live.length}`}
           icon={PackageCheck}
-          tone={done > 0 ? 'done' : 'default'}
+          tone={sentLate > 0 ? 'stop' : done > 0 ? 'done' : 'default'}
+          hint={
+            sentLate > 0
+              ? `${sentLate} đơn NCC trễ hẹn`
+              : noEta > 0
+                ? `${noEta} đơn chưa hẹn ngày về`
+                : undefined
+          }
         />
       </StatTiles>
+
+      {/*
+        DANH SÁCH CÒN THIẾU — thứ khiến người mua phát hiện mình quên một loại
+        vật tư TRƯỚC khi xưởng dừng máy. Chỉ hiện khi thật sự thiếu.
+      */}
+      {cov.missing > 0 && (
+        <Card style={{ borderColor: 'var(--warn)' }}>
+          <CardContent className="px-4 py-3.5">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <TriangleAlert
+                size={16}
+                strokeWidth={1.8}
+                style={{ color: 'var(--warn)' }}
+              />
+              <span className="text-[13px] font-semibold">
+                Còn {cov.missing} mã vật tư chưa đủ cho lệnh
+              </span>
+              <Button asChild size="sm" variant="ghost" className="ml-auto">
+                <Link href={`/planning/pos/new?lsx=${lsx.id}`}>
+                  <Plus /> Lên đơn cho phần thiếu
+                </Link>
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {cov.missing_top.map((m) => (
+                <span
+                  key={m.code}
+                  className="bg-muted inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px]"
+                  title={m.name}
+                >
+                  <DocChip className="text-[11px]">{m.code}</DocChip>
+                  <span className="max-w-[190px] truncate">{m.name}</span>
+                  <span className="t-data font-medium" style={{ color: 'var(--warn)' }}>
+                    thiếu {m.qty.toLocaleString('vi-VN')} {m.unit}
+                  </span>
+                </span>
+              ))}
+              {cov.missing > cov.missing_top.length && (
+                <span className="text-muted-foreground self-center text-[12px]">
+                  … và {cov.missing - cov.missing_top.length} mã nữa
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardContent className="grid grid-cols-2 gap-4 px-4 py-3.5 md:grid-cols-4">
