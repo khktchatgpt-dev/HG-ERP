@@ -415,6 +415,7 @@ export function SuppliersManager({
               id: s.id,
               name: s.name,
               tax_no: s.tax_no,
+              code: s.code,
             }))}
           />
           <div className="bg-card sticky bottom-0 flex items-center justify-end gap-2 border-t py-2">

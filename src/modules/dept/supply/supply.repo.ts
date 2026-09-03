@@ -814,6 +814,20 @@ const SUPPLIER_COLS =
   'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
+  /**
+   * Mọi mã NCC đang dùng — để tự cấp mã không đụng mã sẵn có. Danh mục 157 dòng
+   * nên lấy hết một lượt là đủ; cột `code` unique nên đây là nguồn duy nhất.
+   */
+  async allCodes(): Promise<string[]> {
+    const { data } = await db()
+      .from('supply_suppliers')
+      .select('code')
+      .not('code', 'is', null)
+    return ((data as { code: string | null }[] | null) ?? [])
+      .map((r) => r.code ?? '')
+      .filter(Boolean)
+  },
+
   async list(filter: {
     q?: string
     active_only: boolean
