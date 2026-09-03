@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
+import { Button } from '@/components/shadcn/button'
 import { useToast } from '@/components/ui/Toast'
 import { useConfirm } from '@/components/ui/ConfirmDialog'
 import { api, ApiError } from '@/lib/api'
@@ -127,6 +128,13 @@ export function MaterialsManager({
   const [editing, setEditing] = useState<Material | null>(null)
   /** Vật tư đang mở sổ vết (0177) — "ai đổi ô nào, vì chứng từ nào". */
   const [history, setHistory] = useState<Material | null>(null)
+  /**
+   * ĐỔI NHÓM HÀNG LOẠT (03/09/2026): tích các mã lạc nhóm → một lượt. Trước đây
+   * 149 mã mực/bút nằm trong nhóm Sắt thép là 149 lượt ⋯ → Sửa → Lưu.
+   */
+  const [selected, setSelected] = useState<Material[]>([])
+  /** null = đóng; {group, sub} = giá trị đang chọn trong hộp thoại. */
+  const [regroup, setRegroup] = useState<{ group: string; sub: string } | null>(null)
   /** Dung sai nhóm (0156): null = đóng; chuỗi = giá trị % đang gõ trong modal. */
   const [groupTol, setGroupTol] = useState<string | null>(null)
 
@@ -482,7 +490,107 @@ export function MaterialsManager({
               >
                 Chờ Kho rà{counts.needsReview ? ` (${counts.needsReview})` : ''}
               </button>
-              {/* Dung sai nhận vượt CẢ NHÓM (0156) — chỉ hiện khi đang lọc đúng
+              {/* THANH HÀNG LOẠT — chỉ hiện khi có mã được tích; dính đáy như PoBulkBar
+          vì lựa chọn rải khắp trang sau khi cuộn. */}
+      {selected.length > 0 && (
+        <div className="border-input bg-card sticky bottom-3 z-20 mx-auto flex w-fit max-w-full flex-wrap items-center gap-2 rounded-xl border px-3.5 py-2.5 shadow-lg">
+          <span className="text-[13px] font-medium">
+            Đã chọn <b className="tabular-nums">{selected.length}</b> mã
+          </span>
+          <span className="bg-border mx-1 h-5 w-px" aria-hidden />
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              // Mở sẵn nhóm hiện tại nếu cả tập cùng một nhóm — đổi nhóm phụ trong
+              // nhóm là ca hay gặp nhất (722 mã Sắt thép trống nhóm phụ).
+              const gs = new Set(selected.map((m) => m.group_name ?? ''))
+              setRegroup({ group: gs.size === 1 ? [...gs][0] : '', sub: '' })
+            }}
+          >
+            Đổi nhóm / nhóm phụ…
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
+            Bỏ chọn
+          </Button>
+        </div>
+      )}
+
+      <Modal
+        open={regroup !== null}
+        onClose={() => setRegroup(null)}
+        title={`Đổi nhóm cho ${selected.length} mã`}
+        maxWidth="sm:max-w-md"
+      >
+        {regroup !== null && (
+          <form
+            className="flex flex-col gap-3 text-sm"
+            onSubmit={async (e) => {
+              e.preventDefault()
+              const body: Record<string, unknown> = { ids: selected.map((m) => m.id) }
+              if (regroup.group) body.group_name = regroup.group
+              // Nhóm phụ: chuỗi = đặt; "-" = xoá; trống = giữ nguyên (khi không đổi nhóm).
+              if (regroup.sub === '-') body.sub_group = null
+              else if (regroup.sub) body.sub_group = regroup.sub
+              if (body.group_name === undefined && body.sub_group === undefined) {
+                toast.error('Chưa chọn đổi gì', 'Chọn nhóm hoặc nhóm phụ trước.')
+                return
+              }
+              const ok = await send('/api/dept/warehouse/materials/regroup', 'POST', body)
+              if (ok) {
+                toast.success(`Đã đổi nhóm ${selected.length} mã`)
+                setRegroup(null)
+                setSelected([])
+              }
+            }}
+          >
+            <p className="text-muted-foreground text-xs">
+              Nhóm chính là danh sách chốt (quyết định phạm vi chặn trùng tên). Đổi nhóm
+              chính mà không chọn nhóm phụ thì nhóm phụ về trống — nhóm phụ cũ thuộc
+              nhóm cũ.
+            </p>
+            <label className="flex flex-col gap-1">
+              <span className="text-muted-foreground text-xs">Nhóm chính</span>
+              <ToolbarSelect
+                value={regroup.group}
+                onChange={(v) => setRegroup({ group: v, sub: '' })}
+                aria-label="Nhóm chính"
+                options={[
+                  { value: '', label: '— giữ nguyên nhóm —' },
+                  ...taxonomy.groups.map((g) => ({ value: g.name, label: g.name })),
+                ]}
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-muted-foreground text-xs">Nhóm phụ</span>
+              <ToolbarSelect
+                value={regroup.sub}
+                onChange={(v) => setRegroup({ ...regroup, sub: v })}
+                aria-label="Nhóm phụ"
+                options={[
+                  { value: '', label: regroup.group ? '— để trống —' : '— giữ nguyên —' },
+                  { value: '-', label: '(xoá nhóm phụ)' },
+                  ...(
+                    taxonomy.groups.find(
+                      (g) => g.name === (regroup.group || selected[0]?.group_name),
+                    )?.subs ?? []
+                  ).map((x) => ({ value: x, label: x })),
+                ]}
+              />
+            </label>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={() => setRegroup(null)}>
+                Huỷ
+              </Button>
+              <Button type="submit" disabled={busy}>
+                {busy && <Spinner size={12} />} Đổi cho {selected.length} mã
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Dung sai nhận vượt CẢ NHÓM (0156) — chỉ hiện khi đang lọc đúng
                   một nhóm; đặt lẻ từng mã thì sửa trong form vật tư. */}
               {canEdit && filters.group && (
                 <button
@@ -522,6 +630,7 @@ export function MaterialsManager({
         <DataTable<Material>
           rows={filtered}
           columns={columns}
+          selection={canEdit ? { selected, onChange: setSelected } : undefined}
           storageKey="warehouse-materials"
           rowClassName={(m) => (!m.is_active ? 'opacity-60' : '')}
           emptyState={

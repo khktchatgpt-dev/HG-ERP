@@ -280,6 +280,38 @@ export const materialsRepo = {
   },
 
   /**
+   * ĐỔI NHÓM / NHÓM PHỤ cho một tập mã (03/09/2026) — một câu update, trả bản
+   * TRƯỚC của từng mã để service ghi vết thay đổi (0177) đúng như sửa lẻ.
+   */
+  async regroup(
+    ids: string[],
+    patch: { group_name?: string; sub_group?: string | null },
+  ): Promise<{ id: string; code: string; group_name: string | null; sub_group: string | null }[]> {
+    if (ids.length === 0) return []
+    const { data: before, error: e1 } = await db()
+      .from('warehouse_materials')
+      .select('id, code, group_name, sub_group')
+      .in('id', ids)
+    if (e1) throw new Error(e1.message)
+    const rows = (before ?? []) as {
+      id: string
+      code: string
+      group_name: string | null
+      sub_group: string | null
+    }[]
+    if (rows.length === 0) return []
+    const { error } = await db()
+      .from('warehouse_materials')
+      .update(patch)
+      .in(
+        'id',
+        rows.map((r) => r.id),
+      )
+    if (error) throw new Error(error.message)
+    return rows
+  },
+
+  /**
    * Đặt DUNG SAI NHẬN VƯỢT cho cả một nhóm (0156) — bulk theo group_name, một
    * câu update thay vì N lượt PATCH (nhóm gỗ/kính hàng trăm mã). Trả số dòng đổi.
    */
