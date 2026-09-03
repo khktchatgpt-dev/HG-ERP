@@ -35,6 +35,7 @@ import {
 import { codeWarning } from '@/lib/material-form-guards'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { PAGE_SIZE } from './constants'
+import { InlineGroupCell } from './InlineGroupCell'
 
 type Material = {
   id: string
@@ -262,7 +263,20 @@ export function MaterialsManager({
                 </Badge>
               ))}
           </span>
-          <span className="truncate font-medium">{m.name}</span>
+          {/* Bấm TÊN là mở form sửa (bước 3/3, 03/09/2026) — trước phải tìm nút ⋯
+              ở cuối hàng, thường nằm ngoài khung nhìn vì bảng cuộn ngang. */}
+          {canEdit ? (
+            <Button
+              variant="link"
+              className="text-foreground h-auto justify-start truncate p-0 font-medium"
+              onClick={() => setEditing(m)}
+              title="Bấm để sửa vật tư"
+            >
+              {m.name}
+            </Button>
+          ) : (
+            <span className="truncate font-medium">{m.name}</span>
+          )}
         </div>
       ),
     },
@@ -300,12 +314,9 @@ export function MaterialsManager({
       header: 'Nhóm',
       width: '160px',
       sortValue: (m) => m.group_name ?? 'zzz',
-      cell: (m) =>
-        m.group_name ? (
-          <Badge>{m.group_name}</Badge>
-        ) : (
-          <span className="text-zinc-400">—</span>
-        ),
+      // Sửa nhóm / nhóm phụ NGAY TẠI Ô (bước 3/3) — ca lẻ tẻ khi đang rà danh
+      // sách; hàng loạt thì tích chọn (bước 1). Xem InlineGroupCell.
+      cell: (m) => <InlineGroupCell material={m} taxonomy={taxonomy} canEdit={canEdit} />,
     },
     {
       key: 'min_stock',
