@@ -6,6 +6,7 @@ import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import { Modal } from '@/components/Modal'
 import { Spinner } from '@/components/erp/Spinner'
+import { NumberField } from '@/components/erp/NumberField'
 
 export type MaterialOption = { id: string; code: string; name: string; unit: string }
 
@@ -438,16 +439,14 @@ function BulkQuoteForm({
                   </td>
                   <td className="py-1 pr-2">
                     <div className="flex items-center justify-end gap-1">
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
+                      {/* Ô GIÁ — xem `useNumberDraft`: `type="number"` không
+                          cho gõ số lẻ (0,38) vì nuốt trạng thái gõ dở. */}
+                      <NumberField
                         value={l.price}
-                        onChange={(e) =>
-                          setPrice(i, e.target.value === '' ? '' : Number(e.target.value))
-                        }
+                        onValueChange={(v) => setPrice(i, v)}
                         placeholder="—"
                         className={`${inp} w-28 text-right tabular-nums`}
+                        aria-label={`Giá ${l.name}`}
                       />
                       <span className="w-8 shrink-0 text-xs text-zinc-400">
                         /{l.unit}

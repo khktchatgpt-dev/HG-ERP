@@ -18,6 +18,7 @@ import type {
   PayableSupplierRow,
 } from '@/modules/dept/accounting/payables.service'
 import type { SupplierPayment } from '@/modules/dept/accounting/payables.repo'
+import { NumberField } from '@/components/erp/NumberField'
 
 /**
  * SỔ CÔNG NỢ NCC (GĐ C.1 — plan-ke-toan-cong-no-ncc): còn nợ = phát sinh
@@ -396,17 +397,13 @@ export function PayablesManager({
           <div className="grid grid-cols-2 gap-2">
             <label className="flex flex-col gap-1">
               <span className="text-muted-foreground text-xs">Số tiền</span>
-              <input
-                type="number"
-                min={0}
+              {/* Ô TIỀN — `type="number"` nuốt mọi trạng thái gõ dở nên số lẻ
+                  không gõ thẳng được; xem `useNumberDraft`. */}
+              <NumberField
                 value={form.amount}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    amount: e.target.value === '' ? '' : Number(e.target.value),
-                  })
-                }
+                onValueChange={(v) => setForm({ ...form, amount: v })}
                 className="bg-background rounded-md border px-2 py-1.5"
+                aria-label="Số tiền"
               />
             </label>
             <label className="flex flex-col gap-1">
