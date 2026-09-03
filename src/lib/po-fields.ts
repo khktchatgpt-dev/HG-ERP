@@ -545,3 +545,50 @@ export const PO_SHARED_FIELD_MEANING: Record<
     wood: 'Màu gỗ',
   },
 }
+
+/**
+ * CỘT MƯỢN NÀO ĐƯỢC ĐỔ SỐ DANH MỤC / LẦN ĐẶT TRƯỚC VÀO (03/09/2026).
+ *
+ * Lỗi thật: thêm thùng carton BB-0025 (quy cách "950×620×135 mm") vào đơn GỖ
+ * thì chuỗi đó chui vào cột "KH GIAO HÀNG" — vì cột ấy mượn `dimension_text`,
+ * mà `newLine` đổ `spec` danh mục vào `dimension_text` cho MỌI mẫu. Cùng
+ * lỗi ở MRO ("Dùng cho máy / vị trí" nhận quy cách), mây ("Định mức" nhận vật
+ * liệu), sơn/MRO ("Mã màu NCC" / "Model" nhận vật liệu).
+ *
+ * Bảng `PO_SHARED_FIELD_MEANING` đã nói mỗi cột mượn NGHĨA LÀ GÌ ở từng mẫu;
+ * bảng này nói tiếp: nghĩa đó có TRÙNG với nghĩa trong danh mục vật tư không
+ * (material_grade = "vật liệu / màu" 0124, dimension_text = quy cách/kích
+ * thước, finish = màu / bề mặt). Trùng thì điền sẵn cho đỡ gõ; khác thì để
+ * TRỐNG — một ô trống người ta sẽ điền, một ô sai người ta ký luôn.
+ *
+ * Mẫu không có ô nhập cho cột đó cũng KHÔNG điền: giá trị vô hình hôm nay sẽ
+ * lộ ra dưới nhãn khác khi đổi mẫu. `po-fields.test.ts` khoá hai bảng phủ
+ * đúng cùng một tập (cột, mẫu).
+ */
+export const PO_SHARED_FIELD_PREFILL: Record<string, Partial<Record<PoTemplate, boolean>>> =
+  {
+    material_grade: {
+      accessory: true,
+      metal_kg: true,
+      rattan: false, // "Định mức" — barem g/5m, không phải vật liệu
+      paint: true, // "Mã màu NCC" — danh mục khai "vật liệu / MÀU", cùng nghĩa
+      glass: true,
+      wood: true,
+      mro: false, // "Model / Mã hãng"
+    },
+    dimension_text: {
+      metal_kg: true,
+      glass: true,
+      wood: false, // "KH giao hàng" — ngày, không phải quy cách
+      mro: false, // "Dùng cho máy / vị trí"
+    },
+    finish: {
+      metal_kg: true,
+      wood: true,
+    },
+  }
+
+/** Ô mượn ở mẫu này có nhận số danh mục / lần đặt trước không. */
+export function prefillsFromCatalog(t: PoTemplate, field: string): boolean {
+  return PO_SHARED_FIELD_PREFILL[field]?.[t] ?? false
+}
