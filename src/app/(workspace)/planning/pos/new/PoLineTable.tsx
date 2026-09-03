@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
 import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { GridCellInput } from '@/components/erp/GridCell'
+import { GridCellInput, GridCellNumber } from '@/components/erp/GridCell'
 import { Button } from '@/components/shadcn/button'
 import { cn } from '@/lib/utils'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
@@ -493,11 +493,8 @@ export function PoLineTable({
                   {/* ── ô GÕ THẬT #1 ── */}
                   <td className={tdBase}>
                     <div className="w-[92px]">
-                      <GridCellInput
+                      <GridCellNumber
                         id={`qty-${l.material_id}`}
-                        type="number"
-                        min="0"
-                        step="0.01"
                         data-cell="qty"
                         onWheel={blurOnWheel}
                         ref={(el) => {
@@ -513,13 +510,7 @@ export function PoLineTable({
                           focusInRow(e.currentTarget, 'price')
                         }}
                         value={l.qty}
-                        onChange={(e) =>
-                          onPatch(i, {
-                            qty: (e.target.value === ''
-                              ? ''
-                              : Number(e.target.value)) as Num,
-                          })
-                        }
+                        onValueChange={(v) => onPatch(i, { qty: v as Num })}
                         className={`${cell} text-right text-[13px] font-medium`}
                         aria-label={`SL đặt ${l.name}`}
                       />
@@ -565,11 +556,8 @@ export function PoLineTable({
                   {/* ── ô GÕ THẬT #2 ── */}
                   <td className={tdBase}>
                     <div className="w-[104px]">
-                      <GridCellInput
+                      <GridCellNumber
                         id={`price-${l.material_id}`}
-                        type="number"
-                        min="0"
-                        step="1"
                         data-cell="price"
                         onWheel={blurOnWheel}
                         onKeyDown={(e) => {
@@ -578,13 +566,7 @@ export function PoLineTable({
                           onDoneRow?.()
                         }}
                         value={l.price}
-                        onChange={(e) =>
-                          onPatch(i, {
-                            price: (e.target.value === ''
-                              ? ''
-                              : Number(e.target.value)) as Num,
-                          })
-                        }
+                        onValueChange={(v) => onPatch(i, { price: v as Num })}
                         className={`${cell} text-right text-[13px]`}
                         aria-label={`Đơn giá ${l.name}`}
                       />
