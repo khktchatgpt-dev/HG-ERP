@@ -324,8 +324,7 @@ describe('PO_SHARED_FIELD_PREFILL — cột mượn nào được đổ số dan
     )
   })
 
-  it('nghĩa khác danh mục thì KHÔNG điền: KH giao hàng, Dùng cho máy, Định mức, Model', () => {
-    expect(prefillsFromCatalog('wood', 'dimension_text')).toBe(false)
+  it('nghĩa khác danh mục thì KHÔNG điền: Dùng cho máy, Định mức, Model', () => {
     expect(prefillsFromCatalog('mro', 'dimension_text')).toBe(false)
     expect(prefillsFromCatalog('rattan', 'material_grade')).toBe(false)
     expect(prefillsFromCatalog('mro', 'material_grade')).toBe(false)
@@ -333,6 +332,8 @@ describe('PO_SHARED_FIELD_PREFILL — cột mượn nào được đổ số dan
 
   it('cùng nghĩa thì điền; mẫu không có ô đó thì không điền (khỏi lộ khi đổi mẫu)', () => {
     expect(prefillsFromCatalog('metal_kg', 'dimension_text')).toBe(true)
+    // Gỗ bỏ hẳn ô "KH giao hàng" (03/09) → không còn ô nào ghi dimension_text.
+    expect(prefillsFromCatalog('wood', 'dimension_text')).toBe(false)
     expect(prefillsFromCatalog('wood', 'material_grade')).toBe(true)
     for (const t of PO_TEMPLATES) {
       if (PO_SHARED_FIELD_MEANING.dimension_text[t] == null) {
