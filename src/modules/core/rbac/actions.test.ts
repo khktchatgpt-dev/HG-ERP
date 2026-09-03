@@ -157,3 +157,25 @@ describe('canDo — hồ sơ SP: mọi phòng xem, 3 nhóm sửa', () => {
     expect(ACTIONS.every((a) => canDo(a, adminCtx))).toBe(true)
   })
 })
+
+/**
+ * Nhóm / nhóm phụ vật tư (03/09/2026): user chốt "không để admin quản lí phần
+ * này" — Cung ứng và Kho tự thêm/đổi tên/gộp/xoá; nhân viên phòng khác không.
+ */
+describe('canDo — quản lý nhóm vật tư: Cung ứng + Kho, không cần admin', () => {
+  const byKey = (k: string) => ACTIONS.find((a) => a.key === k) as Action
+  const ctxOf = (keys: string[]) => ({ role: 'employee' as const, has: has(keys) })
+  const supply = ctxOf(['supply.member'])
+  const warehouse = ctxOf(['warehouse.member', 'warehouse.edit'])
+  const sales = ctxOf(['sales.member'])
+  const KEY = 'warehouse.material.group_manage'
+
+  it('Cung ứng (chỉ cần supply.member) và Kho (member + edit) quản lý được nhóm', () => {
+    expect(canDo(byKey(KEY), supply)).toBe(true)
+    expect(canDo(byKey(KEY), warehouse)).toBe(true)
+  })
+
+  it('phòng khác không đổi được cấu trúc nhóm', () => {
+    expect(canDo(byKey(KEY), sales)).toBe(false)
+  })
+})

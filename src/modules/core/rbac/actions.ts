@@ -310,6 +310,17 @@ export const ACTIONS: Action[] = [
     rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
   },
   {
+    // NHÓM / NHÓM PHỤ VẬT TƯ là công cụ làm việc hằng ngày của Cung ứng (user chốt
+    // 03/09/2026: "không để admin quản lí phần này"). Trước đó nhóm chính chỉ
+    // thêm được ở /admin/catalogs (role admin) nên 14 nhóm đứng im từ 07/2026
+    // trong khi 107 nhóm phụ gõ tự do mục dần. Mở cho Cung ứng + Kho; admin vẫn
+    // sửa được ở khu admin như cũ.
+    key: 'warehouse.material.group_manage',
+    label: 'Thêm / đổi tên / gộp / xoá nhóm và nhóm phụ vật tư',
+    domain: 'warehouse',
+    rule: anyOf(perm('supply.member'), memberEdit('warehouse.member', 'warehouse.edit')),
+  },
+  {
     key: 'warehouse.stock.write',
     label: 'Ghi phiếu nhập / xuất tồn',
     domain: 'warehouse',
