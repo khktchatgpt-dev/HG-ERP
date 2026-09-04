@@ -3,15 +3,38 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Printer } from 'lucide-react'
+import {
+  Ban,
+  CalendarClock,
+  Copy,
+  History,
+  Layers,
+  MoreHorizontal,
+  PackageCheck,
+  PackageSearch,
+  Paperclip,
+  Pencil,
+  Printer,
+  ScrollText,
+  Trash2,
+  UserCog,
+} from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import { DocumentFiles } from '@/components/DocumentFiles'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { RefChain, type ChainNode } from '@/components/erp/RefChain'
+import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
+import { DocBlock, DocFact, LedgerMark, StatusStamp, type DocTone } from './PoDocParts'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
@@ -19,7 +42,6 @@ import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { PO_NEXT_HINT, PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/po-status'
 import type { PoStatus } from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
-import { PoStatusStepper } from '../PoStatusStepper'
 import {
   PoDialogs,
   ReasonDialog,
@@ -32,16 +54,32 @@ import { PoConfirmDialog, PoShipmentsCard, type ShipmentView } from './PoShipmen
 import type { PoLine, StatusLine } from '../po-types'
 
 /**
- * TRANG CHI TIẾT ĐƠN ĐẶT VẬT TƯ — thay cái modal cũ.
+ * CHI TIẾT ĐƠN ĐẶT VẬT TƯ — dựng như TỜ PHIẾU, không như bảng điều khiển
+ * (thiết kế lại 04/09/2026).
  *
- * Bố cục theo hai câu hỏi khác nhau của cùng một người:
- *   TRÁI  —"đơn này gồm những gì ": dòng hàng, điều khoản, hồ sơ đính kèm.
- *   PHẢI  —"giờ tôi phải làm gì ": tóm tắt + đúng những nút hợp lệ ở trạng thái
- *           hiện tại, dính theo cuộn nên đơn 30 dòng vẫn với tới được; dưới đó
- *           là lịch sử để biết đơn đã qua tay ai.
+ * Bản trước là sáu thẻ bo góc giống hệt nhau, tiền nằm tận cột phải, trạng thái
+ * là dải 8 bước nằm ngang ăn hết bề ngang. Nhưng thứ người mua đang cầm không
+ * phải dashboard: nó là tờ ĐƠN ĐẶT HÀNG chính họ in ra, ký, rồi gửi Zalo cho
+ * NCC — cả phòng gọi nhau bằng "tờ 6/2026-HG/ATP".
  *
- * Nút hiện ra theo TỪNG trạng thái chứ không xám đi: một nút xám giữa mười nút
- * khác vẫn bắt người ta đọc rồi mới hiểu là bấm không được.
+ * Bốn quyết định của bản mới, mỗi cái trả lời một câu hỏi có thật:
+ *   ĐẦU PHIẾU  — "tờ nào, của ai": số đơn cỡ lớn bằng chữ máy + bên bán + lệnh,
+ *                 và CON DẤU trạng thái đóng lệch ở góc. Trong phòng làm việc,
+ *                 tình trạng một chứng từ LÀ con dấu; nhãn bo tròn đọc ra phần
+ *                 mềm, con dấu đọc ra hồ sơ. Đây là điểm nhấn DUY NHẤT của trang.
+ *   LỀ TRÁI    — "tờ này đã đi tới đâu": nhật ký xếp DỌC. Vòng đời thật có mười
+ *                 mấy mốc (gửi, xác nhận, từng đợt, từng phiếu nhập) — dải ngang
+ *                 8 bước chỉ vẽ nổi 8 mốc rồi đẩy phần còn lại xuống một thẻ
+ *                 riêng cuối trang, thành hai chỗ kể một câu chuyện.
+ *   THÂN PHIẾU — "trên tờ có gì": bảng hàng chiếm hết bề ngang, và TIỀN nằm ngay
+ *                 chân bảng như mọi hoá đơn giấy, không phải ở cột bên kia màn
+ *                 hình — đối chiếu "dòng này × giá này = tổng kia" trong một tầm
+ *                 mắt.
+ *   THANH ĐÁY  — "giờ làm gì": đọc xong tờ phiếu thì tay đã ở cuối trang. Đúng
+ *                 MỘT nút tô màu cho việc của trạng thái hiện tại; việc phụ nằm
+ *                 trong menu — không xám đi mà cũng không giành chỗ.
+ *
+ * Mảnh ghép hình nằm ở `PoDocParts.tsx`.
  */
 
 export type PoDetailPo = {
@@ -98,18 +136,6 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
     withdrawn: 'gray',
     reassigned: 'gray',
   }
-
-const card = 'rounded-xl border border-border bg-card'
-const cardHead =
-  'flex flex-wrap items-center gap-2 border-b border-border/70 px-3.5 py-2.5 text-[13px]'
-const btn = 'w-full rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted'
-const btnPrimary =
-  'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
-const btnGreen =
-  'w-full rounded-md bg-[var(--done)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
-const btnSmall = 'rounded-md border border-input px-2 py-1.5 text-[12.5px] hover:bg-muted'
-const btnDanger =
-  'w-full rounded-md border border-[var(--stop)]/40 px-3 py-1.5 text-sm text-[var(--stop)] hover:bg-[var(--stop)]/10'
 
 export function PoDetailScreen({
   po,
@@ -242,11 +268,10 @@ export function PoDetailScreen({
     ? [po.lsx_code, ...extraLsx.map((l) => l.code)].join(' + ')
     : null
 
-  const chain: ChainNode[] = [
-    ...(po.order_code ? [{ label: 'Đơn hàng', value: po.order_code }] : []),
-    ...(lsxCodes ? [{ label: 'Lệnh SX', value: lsxCodes }] : []),
-    { label: 'Đơn đặt vật tư', value: po.code, current: true },
-  ]
+  {
+    /* Chuỗi liên kết đơn hàng → lệnh → phiếu nay nằm ngay trong ĐẦU PHIẾU
+       (ba ô dữ kiện), không cần một dải chip riêng lặp lại tiêu đề. */
+  }
 
   /*
    * TIMELINE ĐỦ MỐC (GĐ3 plan-po-giao-nhan): khối "Lịch sử" trước đây chỉ có
@@ -341,123 +366,460 @@ export function PoDetailScreen({
     if (await act.deleteDraft(po)) router.push('/planning/pos')
   }
 
+  /** Việc CHÍNH của trạng thái hiện tại — cái nút duy nhất tô màu ở thanh đáy. */
+  const primary: {
+    label: string
+    onClick: () => void
+    tone?: 'primary' | 'done'
+  } | null =
+    canEdit && po.status === 'draft'
+      ? { label: 'Gửi Giám đốc duyệt', onClick: () => void act.submitPo(po) }
+      : canApprove && po.status === 'pending_approval'
+        ? { label: 'Duyệt đơn đặt', onClick: () => void act.approve(po), tone: 'done' }
+        : canEdit && po.status === 'approved'
+          ? { label: 'Gửi cho NCC', onClick: () => void act.advance(po, 'ordered') }
+          : canEdit && po.status === 'ordered'
+            ? {
+                label: 'NCC đã xác nhận',
+                onClick: () =>
+                  shipmentLines.length > 0
+                    ? setConfirming('confirm')
+                    : void act.advance(po, 'confirmed'),
+              }
+            : canEdit && po.status === 'confirmed'
+              ? {
+                  label: 'Hàng đang trên đường',
+                  onClick: () => void act.advance(po, 'in_transit'),
+                }
+              : canEdit && po.status === 'partial' && openStockLines.length > 0
+                ? {
+                    label: 'Chốt phần thiếu',
+                    onClick: () =>
+                      setReasoning({
+                        po,
+                        kind: 'close_short',
+                        reason: '',
+                        lineId: null,
+                        detail:
+                          openStockLines.length === 1
+                            ? `${openStockLines[0].material_name} — thiếu ${money(openStockLines[0].qty_missing)} ${openStockLines[0].material_unit}`
+                            : `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
+                      }),
+                  }
+                : null
+
+  /** Nghiệm thu tay — chỉ đơn CÓ dòng tự do (gỗ/gia công) mới cần (0134). */
+  const canAcceptByHand =
+    canEdit &&
+    lines.length > 0 &&
+    lines.some((l) => l.material_id == null) &&
+    statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
+    ['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)
+
   return (
-    <div className="flex flex-col gap-4 pb-16">
+    <div className="flex flex-col gap-4 pb-28">
       <TopProgressBar active={act.busy} />
-      <PageHeader
-        breadcrumbs={[
+      <Breadcrumbs
+        items={[
           { label: 'Cung ứng', href: '/planning' },
           { label: 'Đơn đặt vật tư', href: '/planning/pos' },
           { label: po.code },
         ]}
-        title={`Đơn đặt ${po.code}`}
-        description={`${po.supplier_name} · ${lsxCodes ? `LSX ${lsxCodes}` : 'đơn ngoài LSX'}${
-          po.contract_no ? ` · theo HĐ ${po.contract_no}` : ''
-        }`}
-        actions={
-          <div className="flex items-center gap-2">
-            <a
-              href={`/print/supply/${po.id}`}
-              target="_blank"
-              rel="noopener"
-              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
-            >
-              <Printer className="size-4" aria-hidden /> In đơn đặt hàng
-            </a>
-            <Link
-              href="/planning/pos"
-              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
-            >
-              <ArrowLeft className="size-4" aria-hidden /> Về danh sách
-            </Link>
-          </div>
-        }
       />
 
-      {/* Chuỗi liên kết chỉ đáng chỗ khi có gì để LẦN NGƯỢC (đơn hàng/LSX);
-          đơn ngoài LSX thì chuỗi một chip chỉ lặp lại tiêu đề ngay trên nó. */}
-      {chain.length > 1 && <RefChain nodes={chain} />}
-
-      <div className={card}>
-        <div className="px-3.5 py-3">
-          <PoStatusStepper
-            status={po.status}
-            dates={{
-              draft: po.created_at,
-              // Đơn cũ (trước 0116) tạo là vào thẳng chờ duyệt nên created_at
-              // chính là mốc gửi; đơn nháp thì chưa gửi — không có mốc.
-              pending_approval: po.status === 'draft' ? null : po.created_at,
-              approved: po.approved_at,
-              ordered: po.ordered_at,
-            }}
-          />
+      {/*
+        ĐẦU PHIẾU — dựng theo tờ giấy thật: số đơn cỡ lớn bằng chữ máy (thứ cả
+        phòng gọi tên nhau), hai bên mua/bán, rồi con dấu trạng thái đóng lệch.
+      */}
+      <header className="bg-card overflow-hidden rounded-lg border">
+        <div className="flex flex-wrap items-start justify-between gap-4 px-4 py-4 sm:px-5">
+          <div className="min-w-0">
+            <p className="text-muted-foreground text-[10.5px] font-bold tracking-[0.2em] uppercase">
+              Đơn đặt hàng · Purchase order
+            </p>
+            <h1 className="t-data mt-1.5 text-[26px] leading-none font-bold tracking-[0.05em]">
+              {po.code}
+            </h1>
+            <p className="text-muted-foreground mt-2 text-[12.5px]">
+              Ngày lập {day(po.created_at)}
+              {po.contract_no && (
+                <>
+                  {' · '}theo hợp đồng <span className="t-data">{po.contract_no}</span>
+                </>
+              )}
+            </p>
+          </div>
+          <div className="flex items-start gap-3">
+            <StatusStamp
+              status={po.status}
+              tone={PO_STATUS_TONE[po.status] as DocTone}
+              date={
+                po.status === 'draft'
+                  ? day(po.created_at)
+                  : po.ordered_at
+                    ? day(po.ordered_at)
+                    : po.approved_at
+                      ? day(po.approved_at)
+                      : null
+              }
+            />
+          </div>
         </div>
 
-        {/* HÀNG VỀ TỚI ĐÂU (28/08) — câu hỏi số một của đơn lớn giao theo đợt,
-            trả lời trong một giây thay vì bắt đọc bảng: mỗi vật tư một thanh
-            [đã về | đã hẹn đợt chưa về | chưa hẹn]. Chỉ hiện từ lúc đơn đã
-            gửi NCC — trước đó chưa có gì để về. */}
-        {showReceived && progressLines.length > 0 && (
-          <div className="border-border/70 flex flex-col gap-2.5 border-t px-3.5 py-3">
-            {progressLines.map((r) => (
-              <div key={r.id} className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12px]">
-                  <span className="min-w-0 truncate font-medium">{r.name}</span>
-                  <span className="t-data text-muted-foreground">
-                    về{' '}
-                    <span
-                      className="font-semibold"
-                      style={{
-                        color:
-                          r.received >= r.ordered - 1e-6
-                            ? 'var(--done)'
-                            : 'var(--foreground)',
-                      }}
-                    >
-                      {money(r.received)}
-                    </span>
-                    /{money(r.ordered)} {r.unit}
-                    {r.unscheduled > 1e-6 && (
-                      <span className="font-medium text-[var(--warn)]">
-                        {' '}
-                        · {money(r.unscheduled)} chưa hẹn đợt
-                      </span>
-                    )}
+        <div className="grid gap-x-6 gap-y-3 border-t px-4 py-3 sm:grid-cols-2 sm:px-5 lg:grid-cols-4">
+          <DocFact label="Bên bán">{po.supplier_name}</DocFact>
+          <DocFact label="Lệnh sản xuất" mono>
+            {lsxCodes ? (
+              <Link href="/planning/lsx" className="hover:underline">
+                {lsxCodes}
+              </Link>
+            ) : (
+              <span className="text-muted-foreground">đơn ngoài lệnh</span>
+            )}
+          </DocFact>
+          <DocFact label="Đơn hàng khách" mono>
+            {po.order_code ?? <span className="text-muted-foreground">—</span>}
+          </DocFact>
+          <DocFact label="Người phụ trách">
+            {po.assignee_name ?? (
+              <span style={{ color: 'var(--warn)' }}>chưa giao ai</span>
+            )}
+          </DocFact>
+        </div>
+      </header>
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[212px_minmax(0,1fr)]">
+        {/*
+          LỀ TRÁI — vòng đời tờ phiếu, xếp DỌC. Vòng đời thật có tới mười mấy
+          mốc (gửi, xác nhận, từng đợt, từng phiếu nhập); dải ngang 8 bước của
+          bản cũ chỉ vẽ được 8 mốc cố định rồi đẩy phần còn lại xuống một thẻ
+          "Dòng thời gian" tận cuối trang, thành ra hai chỗ kể một câu chuyện.
+        */}
+        <aside className="order-2 min-w-0 lg:order-1">
+          <div className="flex flex-col gap-4 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+            <DocBlock title="Hẹn giao" icon={CalendarClock}>
+              <div className="flex flex-col gap-2 px-4 py-3">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-muted-foreground text-[12px]">NCC hẹn</span>
+                  <span
+                    className="t-data text-[13px] font-semibold"
+                    style={{
+                      color:
+                        late === 'overdue'
+                          ? 'var(--stop)'
+                          : isMissingEta(po)
+                            ? 'var(--warn)'
+                            : undefined,
+                    }}
+                  >
+                    {po.expected_at
+                      ? day(po.expected_at)
+                      : isMissingEta(po)
+                        ? 'chưa hẹn'
+                        : '—'}
                   </span>
                 </div>
-                <div
-                  className="bg-muted flex h-1.5 overflow-hidden rounded-full"
-                  role="img"
-                  aria-label={`${r.name}: về ${r.received}/${r.ordered} ${r.unit}`}
-                >
-                  <span
-                    style={{
-                      width: `${r.pctReceived}%`,
-                      background: 'var(--done)',
-                    }}
-                  />
-                  <span
-                    style={{
-                      width: `${r.pctScheduled}%`,
-                      background: 'color-mix(in oklab, var(--primary) 35%, transparent)',
-                    }}
-                  />
-                </div>
+                {late === 'overdue' && (
+                  <p className="text-[11.5px]" style={{ color: 'var(--stop)' }}>
+                    Đã quá hẹn — gọi NCC hoặc đổi hẹn để lịch vật tư của lệnh còn đúng.
+                  </p>
+                )}
+                {po.confirmed_at && (
+                  <p className="text-muted-foreground text-[11.5px]">
+                    NCC xác nhận {day(po.confirmed_at)}
+                    {po.confirmed_note ? ` · “${po.confirmed_note}”` : ''}
+                  </p>
+                )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </DocBlock>
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* ── TRÁI: đơn này gồm những gì ─────────────────────────────────── */}
-        <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1">
-          {/*
-            LUÔN HIỆN khối kế hoạch giao (29/08/2026) — trừ đơn đã huỷ.
-            Trước đây ẩn hẳn khi chưa có đợt nào, nên mở một đơn ra là không
-            thấy chữ "đợt giao" ở đâu: người dùng không phân biệt được "đơn này
-            giao một lần" với "hệ thống không có phần chia đợt".
-          */}
+            <DocBlock
+              title="Nhật ký phiếu"
+              icon={History}
+              meta={`${marks.length} mốc`}
+              className="min-w-0"
+            >
+              {marks.length === 0 ? (
+                <p className="text-muted-foreground px-4 py-3 text-[12px]">
+                  Chưa có mốc nào — phiếu còn nằm ở người soạn.
+                </p>
+              ) : (
+                <ol className="px-4 py-3">
+                  {(allMarks ? marks : marks.slice(0, 5)).map((mk, i, arr) => (
+                    <LedgerMark
+                      key={mk.key}
+                      label={mk.label}
+                      at={stamp(mk.at)}
+                      tone={mk.tone}
+                      actor={mk.actor}
+                      detail={mk.detail}
+                      last={i === arr.length - 1 && (allMarks || marks.length <= 5)}
+                    />
+                  ))}
+                  {marks.length > 5 && (
+                    <li className="pt-1">
+                      <button
+                        onClick={() => setAllMarks((v) => !v)}
+                        className="text-[12px] font-medium text-[var(--primary)] hover:underline"
+                      >
+                        {allMarks ? 'Thu gọn' : `Xem tất cả ${marks.length} mốc`}
+                      </button>
+                    </li>
+                  )}
+                </ol>
+              )}
+            </DocBlock>
+          </div>
+        </aside>
+
+        {/* ── THÂN PHIẾU ────────────────────────────────────────────────── */}
+        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
+          <DocBlock
+            title="Hàng hoá"
+            icon={PackageSearch}
+            meta={`${lines.length} dòng · mẫu ${poTemplateMeta(po.template as PoTemplate).label.toLowerCase()}`}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[620px] text-sm">
+                <thead>
+                  <tr className="text-muted-foreground border-b text-left">
+                    <th className="w-8 py-2 pr-2 pl-4 text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      #
+                    </th>
+                    <th className="py-2 pr-2 text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      Vật tư
+                    </th>
+                    <th className="w-28 py-2 pr-2 text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      Quy cách
+                    </th>
+                    <th className="w-24 py-2 pr-2 text-right text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      SL đặt
+                    </th>
+                    {showReceived && (
+                      <th className="w-32 py-2 pr-2 text-right text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                        Về kho
+                      </th>
+                    )}
+                    <th className="w-24 py-2 pr-2 text-right text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      Đơn giá
+                    </th>
+                    <th className="w-32 py-2 pr-4 text-right text-[10.5px] font-semibold tracking-[0.08em] uppercase">
+                      Thành tiền
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((l, i) => {
+                    const st = receivedById.get(l.id)
+                    const pct =
+                      st && st.qty_ordered > 0
+                        ? Math.min((st.qty_received ?? 0) / st.qty_ordered, 1) * 100
+                        : 0
+                    return (
+                      <tr key={l.id} className="border-border/60 border-b align-top">
+                        <td className="t-data text-muted-foreground py-2.5 pr-2 pl-4 text-[11px]">
+                          {i + 1}
+                        </td>
+                        <td className="py-2.5 pr-2">
+                          <div className="flex flex-col gap-0.5">
+                            <span className="leading-snug">
+                              <span className="t-data text-muted-foreground text-[11px]">
+                                {l.material_code}
+                              </span>{' '}
+                              {l.material_name}
+                            </span>
+                            {(l.qty2 != null || l.note) && (
+                              <span className="text-muted-foreground text-[11.5px] leading-snug">
+                                {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
+                                {l.qty2 != null && l.note && ' · '}
+                                {l.note}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="text-muted-foreground py-2.5 pr-2 text-[12px]">
+                          {l.spec ?? '—'}
+                        </td>
+                        <td className="t-data py-2.5 pr-2 text-right whitespace-nowrap">
+                          {money(l.qty_ordered)}{' '}
+                          <span className="text-muted-foreground text-[11px]">
+                            {l.material_unit}
+                          </span>
+                        </td>
+                        {showReceived &&
+                          (l.material_id == null ? (
+                            <td
+                              className="text-muted-foreground py-2.5 pr-2 text-right text-[11.5px]"
+                              title="Dòng không gắn vật tư kho — nghiệm thu ngoài sổ kho"
+                            >
+                              ngoài sổ kho
+                            </td>
+                          ) : (
+                            /*
+                              MỘT Ô cho cả "về bao nhiêu / thiếu bao nhiêu" kèm
+                              vạch tiến độ ngay dưới: bản cũ tách hai cột số,
+                              mắt phải tự trừ mới biết còn thiếu bao nhiêu.
+                            */
+                            <td className="py-2.5 pr-2 text-right">
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="t-data text-[12.5px] whitespace-nowrap">
+                                  <span
+                                    className="font-semibold"
+                                    style={{
+                                      color:
+                                        st && st.qty_missing <= 0
+                                          ? 'var(--done)'
+                                          : undefined,
+                                    }}
+                                  >
+                                    {money(st?.qty_received ?? 0)}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    /{money(l.qty_ordered)}
+                                  </span>
+                                </span>
+                                <span
+                                  className="bg-muted block h-1 w-16 overflow-hidden rounded-full"
+                                  aria-hidden
+                                >
+                                  <span
+                                    className="block h-full"
+                                    style={{
+                                      width: `${pct}%`,
+                                      background: 'var(--done)',
+                                    }}
+                                  />
+                                </span>
+                                {st?.closed_short_at ? (
+                                  <span
+                                    className="flex flex-col items-end gap-0.5"
+                                    title={`Chốt thiếu ${day(st.closed_short_at)}${st.closed_short_reason ? ` — ${st.closed_short_reason}` : ''}`}
+                                  >
+                                    <Badge tone="gray">
+                                      chốt thiếu {money(st.qty_missing)}
+                                    </Badge>
+                                    {canEdit && po.status !== 'cancelled' && (
+                                      <button
+                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
+                                        onClick={() => void act.reopenShort(po, st.id)}
+                                      >
+                                        Mở lại
+                                      </button>
+                                    )}
+                                  </span>
+                                ) : (
+                                  st &&
+                                  st.qty_missing > 0 && (
+                                    <span className="flex flex-col items-end gap-0.5">
+                                      <span
+                                        className="t-data text-[11.5px] font-medium"
+                                        style={{ color: 'var(--warn)' }}
+                                      >
+                                        thiếu {money(st.qty_missing)}
+                                      </span>
+                                      {canEdit && canCloseShort && st.qty_open > 0 && (
+                                        <button
+                                          className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
+                                          title="NCC không giao phần thiếu của dòng này nữa"
+                                          onClick={() =>
+                                            setReasoning({
+                                              po,
+                                              kind: 'close_short',
+                                              reason: '',
+                                              lineId: st.id,
+                                              detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
+                                            })
+                                          }
+                                        >
+                                          Chốt thiếu
+                                        </button>
+                                      )}
+                                    </span>
+                                  )
+                                )}
+                              </div>
+                            </td>
+                          ))}
+                        <td className="t-data py-2.5 pr-2 text-right whitespace-nowrap">
+                          {l.unit_price != null ? (
+                            <>
+                              {cash(l.unit_price)}
+                              {l.price_basis === 'unit2' && l.unit2 && (
+                                <span className="text-muted-foreground text-[11px]">
+                                  /{l.unit2}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span style={{ color: 'var(--warn)' }}>chưa có giá</span>
+                          )}
+                        </td>
+                        <td className="t-data py-2.5 pr-4 text-right font-semibold whitespace-nowrap">
+                          {l.unit_price != null
+                            ? cash(roundMoney(poLineAmount(l), po.currency))
+                            : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/*
+              CHÂN PHIẾU — tiền về đúng chỗ nó thuộc về: cuối bảng hàng, như mọi
+              hoá đơn giấy. Bản cũ nhét khối tiền vào cột phải, cách bảng hàng
+              cả màn hình, nên đối chiếu "dòng này × giá này = tổng kia" phải
+              nhìn chéo qua trang.
+            */}
+            <div className="grid gap-4 border-t px-4 py-3.5 sm:grid-cols-[1fr_auto]">
+              <div className="text-muted-foreground flex flex-col gap-1 text-[12px]">
+                {qtyTotals(
+                  lines.some((l) => l.price_basis === 'unit2' && l.unit2),
+                  lines,
+                ).map((t) => (
+                  <span key={t.label}>
+                    {t.label}: <span className="t-data">{money(t.value)}</span>
+                  </span>
+                ))}
+              </div>
+              <dl className="flex min-w-[220px] flex-col gap-1 text-[13px]">
+                <div className="flex justify-between gap-6">
+                  <dt className="text-muted-foreground">Tiền hàng</dt>
+                  <dd className="t-data">{cash(m.subtotal)}</dd>
+                </div>
+                {m.discountAmount > 0 && (
+                  <div className="flex justify-between gap-6">
+                    <dt className="text-muted-foreground">Chiết khấu</dt>
+                    <dd className="t-data">− {cash(m.discountAmount)}</dd>
+                  </div>
+                )}
+                {po.vat_rate != null && (
+                  <div className="flex justify-between gap-6">
+                    <dt className="text-muted-foreground">
+                      VAT {po.vat_rate}%{' '}
+                      <span className="text-[11px]">
+                        ({po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})
+                      </span>
+                    </dt>
+                    <dd className="t-data">{cash(m.vatAmount)}</dd>
+                  </div>
+                )}
+                <div className="mt-1 flex items-baseline justify-between gap-6 border-t pt-2">
+                  <dt className="text-[11px] font-bold tracking-[0.1em] uppercase">
+                    Tổng thanh toán
+                  </dt>
+                  <dd className="t-data text-[17px] font-bold">
+                    {cash(m.grandTotal)}{' '}
+                    <span className="text-muted-foreground text-[11px] font-normal">
+                      {po.currency}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </DocBlock>
+
           {po.status !== 'cancelled' && (
             <PoShipmentsCard
               shipments={shipments}
@@ -480,11 +842,6 @@ export function PoDetailScreen({
                 shipmentLines.length > 0 &&
                 ['confirmed', 'in_transit', 'partial'].includes(po.status)
               }
-              /*
-               * Chưa có đợt nào thì chỉ đúng LỐI VÀO của trạng thái hiện tại —
-               * mỗi trạng thái chia đợt ở một chỗ khác nhau, và đây là thứ
-               * người dùng không đoán được nếu màn hình im lặng.
-               */
               emptyHint={
                 po.status === 'draft'
                   ? 'Chia đợt ngay trong màn “Sửa đơn” — tab Chia đợt giao; lịch đó in lên phiếu gửi NCC.'
@@ -493,7 +850,7 @@ export function PoDetailScreen({
                     : po.status === 'approved'
                       ? 'Đơn đã duyệt nên khoá sửa. Lịch giao sẽ ghi ở bước “NCC xác nhận” sau khi gửi đơn.'
                       : po.status === 'ordered'
-                        ? 'Bấm “NCC xác nhận” ở cột phải để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+                        ? 'Bấm “NCC đã xác nhận” ở thanh cuối trang để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
                         : shipmentLines.length === 0
                           ? 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt được.'
                           : null
@@ -516,178 +873,9 @@ export function PoDetailScreen({
               onAdd={() => setConfirming('add')}
             />
           )}
-          <section className={`${card} min-w-0`}>
-            <div className={cardHead}>
-              <b>Dòng hàng</b>
-              <span className="text-muted-foreground">{lines.length} dòng</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className="border-border text-muted-foreground border-b text-left text-xs uppercase">
-                    <th className="py-2 pr-2 pl-3.5">Vật tư</th>
-                    <th className="w-24 py-2 pr-2">Quy cách</th>
-                    <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
-                    {showReceived && (
-                      <>
-                        <th className="w-20 py-2 pr-2 text-right">Đã về</th>
-                        <th className="w-20 py-2 pr-2 text-right">Còn thiếu</th>
-                      </>
-                    )}
-                    <th className="w-24 py-2 pr-2 text-right">Đơn giá</th>
-                    <th className="w-28 py-2 pr-3.5 text-right">Thành tiền</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => {
-                    const st = receivedById.get(l.id)
-                    return (
-                      <tr key={l.id} className="border-border/60 border-b">
-                        <td className="py-1.5 pr-2 pl-3.5">
-                          <div className="flex flex-col">
-                            <span>
-                              <span className="text-muted-foreground font-mono text-xs">
-                                {l.material_code}
-                              </span>{' '}
-                              {l.material_name}
-                            </span>
-                            {(l.qty2 != null || l.note) && (
-                              <span className="text-muted-foreground text-xs">
-                                {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
-                                {l.qty2 != null && l.note && ' · '}
-                                {l.note}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-1.5 pr-2 text-xs">{l.spec ?? '—'}</td>
-                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                          {money(l.qty_ordered)} {l.material_unit}
-                        </td>
-                        {showReceived &&
-                          (l.material_id == null ? (
-                            /* Dòng tự do (0134) không đi qua sổ kho vật tư —
-                               "đã về 0 / còn thiếu" là số giả, để trống. */
-                            <td
-                              colSpan={2}
-                              className="text-muted-foreground py-1.5 pr-2 text-right text-xs"
-                              title="Dòng không gắn vật tư kho — nghiệm thu ngoài sổ kho"
-                            >
-                              —
-                            </td>
-                          ) : (
-                            <>
-                              <td className="py-1.5 pr-2 text-right">
-                                {money(st?.qty_received ?? 0)}
-                              </td>
-                              <td className="py-1.5 pr-2 text-right">
-                                {st?.closed_short_at ? (
-                                  /* 0154: NCC không giao phần này nữa — số thiếu
-                                     THẬT vẫn hiện (đối chiếu), kèm dấu đã chốt. */
-                                  <span
-                                    className="inline-flex flex-col items-end gap-0.5"
-                                    title={`Chốt thiếu ${day(st.closed_short_at)}${st.closed_short_reason ? ` — ${st.closed_short_reason}` : ''}`}
-                                  >
-                                    <Badge tone="gray">
-                                      Chốt thiếu {money(st.qty_missing)}
-                                    </Badge>
-                                    {canEdit && po.status !== 'cancelled' && (
-                                      <button
-                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
-                                        onClick={() => void act.reopenShort(po, st.id)}
-                                      >
-                                        Mở lại
-                                      </button>
-                                    )}
-                                  </span>
-                                ) : st && st.qty_missing > 0 ? (
-                                  <span className="inline-flex flex-col items-end gap-0.5">
-                                    <span className="font-medium text-amber-600">
-                                      {money(st.qty_missing)}
-                                    </span>
-                                    {canEdit && canCloseShort && st.qty_open > 0 && (
-                                      <button
-                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
-                                        title="NCC không giao phần thiếu của dòng này nữa"
-                                        onClick={() =>
-                                          setReasoning({
-                                            po,
-                                            kind: 'close_short',
-                                            reason: '',
-                                            lineId: st.id,
-                                            detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
-                                          })
-                                        }
-                                      >
-                                        Chốt thiếu
-                                      </button>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <Badge tone="green">Đủ</Badge>
-                                )}
-                              </td>
-                            </>
-                          ))}
-                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                          {l.unit_price != null ? (
-                            <>
-                              {cash(l.unit_price)}
-                              {l.price_basis === 'unit2' && l.unit2 && (
-                                <span className="text-xs text-violet-600">
-                                  /{l.unit2}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="py-1.5 pr-3.5 text-right font-medium">
-                          {l.unit_price != null
-                            ? cash(roundMoney(poLineAmount(l), po.currency))
-                            : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                {/*
-                  TỔNG SỐ LƯỢNG — cùng con số với phiếu in mà NCC đang cầm.
-                  Đơn tính theo kg thì tổng là KG (mua nhôm/inox ai cũng hỏi
-                  "bao nhiêu kg"), còn lại gộp theo từng ĐVT: cộng 500 con vít
-                  với 3 kg nhôm ra một con số vô nghĩa.
-                */}
-                {qtyTotals(
-                  lines.some((l) => l.price_basis === 'unit2' && l.unit2),
-                  lines,
-                ).length > 0 && (
-                  <tfoot>
-                    <tr className="border-border border-t">
-                      <td
-                        colSpan={showReceived ? 6 : 4}
-                        className="text-muted-foreground py-2 pr-2 pl-3.5 text-right text-xs"
-                      >
-                        {qtyTotals(
-                          lines.some((l) => l.price_basis === 'unit2' && l.unit2),
-                          lines,
-                        )
-                          .map((t) => `${t.label}: ${money(t.value)}`)
-                          .join('  ·  ')}
-                      </td>
-                      <td className="py-2 pr-3.5 text-right text-xs font-semibold">
-                        {cash(m.subtotal)} {po.currency}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </section>
 
           <PoTerms
             po={po}
-            // Sửa được tới khi đơn huỷ — server enforce lại (updateTerms).
             onEdit={
               canEdit && po.status !== 'cancelled'
                 ? () => setEditingTerms(true)
@@ -695,328 +883,173 @@ export function PoDetailScreen({
             }
           />
 
-          {/* Đơn gộp (0125) — nói rõ tiền này mua cho những lệnh nào. */}
           {extraLsx.length > 0 && (
-            <section className={card}>
-              <div className={cardHead}>
-                <b>Mua chung cho nhiều lệnh</b>
-                <span className="text-muted-foreground">{extraLsx.length + 1} lệnh</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 px-3.5 py-3">
+            <DocBlock
+              title="Mua chung cho nhiều lệnh"
+              icon={Layers}
+              meta={`${extraLsx.length + 1} lệnh`}
+            >
+              <div className="flex flex-wrap gap-1.5 px-4 py-3">
                 {[{ id: po.production_order_id ?? '', code: po.lsx_code ?? '—' }]
                   .concat(extraLsx)
                   .map((l, i) => (
                     <span
                       key={l.id || i}
-                      className="rounded-full bg-violet-50 px-2 py-0.5 font-mono text-[11px] font-medium text-violet-700"
+                      className="bg-accent t-data text-primary rounded-full px-2 py-0.5 text-[11px] font-medium"
                     >
                       {l.code}
                       {i === 0 && ' · lệnh chính'}
                     </span>
                   ))}
               </div>
-            </section>
+            </DocBlock>
           )}
 
-          {/* Hồ sơ mua hàng (FR-SUP-07): báo giá NCC, hợp đồng, chứng từ giao nhận */}
-          <section className={`${card} p-3.5`}>
-            <DocumentFiles
-              kind="purchase_order"
-              id={po.id}
-              canEdit={isSupply || canApprove}
-              title="Hồ sơ mua hàng (báo giá NCC, hợp đồng, chứng từ)"
-            />
-          </section>
-
-          {/* Dòng thời gian nằm CUỐI cột nội dung (28/08): nhật ký để tra khi
-              cần, không phải việc phải làm — để ở cột phải thì màn hẹp nó chen
-              lên trước cả bảng hàng, còn desktop thì đẩy khối sticky ngắn đi. */}
-          <section className={card}>
-            <div className={cardHead}>
-              <b>Dòng thời gian</b>
-              <span className="text-muted-foreground">{marks.length} mốc</span>
+          <DocBlock title="Hồ sơ kèm phiếu" icon={Paperclip}>
+            <div className="px-4 py-3">
+              <DocumentFiles
+                kind="purchase_order"
+                id={po.id}
+                canEdit={isSupply || canApprove}
+                title="Báo giá NCC · hợp đồng · chứng từ giao nhận"
+              />
             </div>
-            {marks.length === 0 ? (
-              <p className="text-muted-foreground px-3.5 py-3 text-xs">
-                Chưa có mốc nào — đơn còn nằm ở người soạn.
-              </p>
-            ) : (
-              <ol className="flex flex-col gap-2.5 px-3.5 py-3">
-                {(allMarks ? marks : marks.slice(0, 4)).map((m) => (
-                  <li key={m.key} className="flex flex-col gap-0.5 text-xs">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={m.tone}>{m.label}</Badge>
-                      {m.actor && (
-                        <span className="text-muted-foreground">{m.actor}</span>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">{stamp(m.at)}</span>
-                    {m.detail && (
-                      <span className="text-muted-foreground">{m.detail}</span>
-                    )}
-                  </li>
-                ))}
-                {marks.length > 4 && (
-                  <li>
-                    <button
-                      onClick={() => setAllMarks((v) => !v)}
-                      className="text-[12px] font-medium text-[var(--primary)] hover:underline"
-                    >
-                      {allMarks ? 'Thu gọn' : `Xem tất cả ${marks.length} mốc`}
-                    </button>
-                  </li>
-                )}
-              </ol>
-            )}
-          </section>
+          </DocBlock>
         </div>
+      </div>
 
-        {/* ── PHẢI: giờ tôi phải làm gì ── màn hẹp thì đứng TRƯỚC bảng. */}
-        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
-          <div className="flex flex-col gap-4 lg:sticky lg:top-4">
-            <section className={card}>
-              <div className={cardHead}>
-                <Badge tone={PO_STATUS_TONE[po.status]}>
-                  {PO_STATUS_LABEL[po.status]}
-                </Badge>
-                {PO_NEXT_HINT[po.status] && (
-                  <span className="text-muted-foreground text-[11px]">
-                    → {PO_NEXT_HINT[po.status]}
-                  </span>
-                )}
-              </div>
-              <dl className="flex flex-col gap-2 px-3.5 py-3 text-[13px]">
-                <Row label="Nhà cung cấp" value={po.supplier_name} />
-                <Row label="Phụ trách" value={po.assignee_name ?? '— chưa có —'} />
-                <Row
-                  label="Hẹn giao"
-                  value={
-                    po.expected_at ? (
-                      <span
-                        className={
-                          late === 'overdue' ? 'font-medium text-[var(--stop)]' : ''
-                        }
-                      >
-                        {day(po.expected_at)}
-                        {late === 'overdue' && ' ⚠ quá hẹn'}
-                      </span>
-                    ) : isMissingEta(po) ? (
-                      <span className="font-medium text-amber-600">⚠ chưa hẹn giao</span>
-                    ) : (
-                      '—'
-                    )
-                  }
-                />
-                <Row label="Ngày tạo" value={day(po.created_at)} />
-                <div className="border-border/70 mt-1 border-t pt-2">
-                  <Row label="Tiền hàng" value={`${cash(m.subtotal)} ${po.currency}`} />
-                  {m.discountAmount > 0 && (
-                    <Row label="Chiết khấu" value={`− ${cash(m.discountAmount)}`} />
-                  )}
-                  {po.vat_rate != null && (
-                    <Row
-                      label={`VAT ${po.vat_rate}% (${po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})`}
-                      value={cash(m.vatAmount)}
-                    />
-                  )}
-                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                    <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
-                      Tổng thanh toán
-                    </span>
-                    <b className="text-base tabular-nums">
-                      {cash(m.grandTotal)}{' '}
-                      <span className="text-muted-foreground text-xs font-normal">
-                        {po.currency}
-                      </span>
-                    </b>
-                  </div>
-                </div>
-              </dl>
-            </section>
+      {/*
+        THANH VIỆC dính đáy — đọc xong tờ phiếu thì tay đã ở cuối trang, nút nằm
+        ngay đó. Chỉ MỘT nút tô màu (việc của trạng thái hiện tại); mọi việc
+        khác nằm trong menu, không xám đi mà cũng không giành chỗ.
+      */}
+      <div className="pointer-events-none sticky bottom-0 z-20 -mx-4 mt-2 px-4 sm:-mx-6 sm:px-6">
+        <div className="bg-card pointer-events-auto flex flex-wrap items-center gap-x-4 gap-y-2 rounded-t-lg border border-b-0 px-4 py-2.5 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <span className="t-data text-[15px] font-bold">{cash(m.grandTotal)}</span>
+            <span className="text-muted-foreground text-[11px]">{po.currency}</span>
+          </div>
+          <span className="text-muted-foreground hidden text-[12px] sm:inline">
+            {PO_NEXT_HINT[po.status] ?? PO_STATUS_LABEL[po.status]}
+          </span>
 
-            <section className={card}>
-              <div className={cardHead}>
-                <b>Thao tác</b>
-              </div>
-              <div className="flex flex-col gap-2 px-3.5 py-3">
-                {/* NHÁP (0116): người soạn toàn quyền — đơn chưa tới bàn sếp. */}
+          <div className="ml-auto flex items-center gap-2">
+            {canAcceptByHand && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void act.advance(po, 'received')}
+              >
+                <PackageCheck /> Đã nhận đủ
+              </Button>
+            )}
+            {canEdit && po.status === 'pending_approval' && (
+              <Button variant="outline" size="sm" onClick={() => void act.withdrawPo(po)}>
+                Rút về nháp
+              </Button>
+            )}
+            {canApprove && po.status === 'pending_approval' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReasoning({ po, kind: 'reject', reason: '' })}
+                className="border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10"
+              >
+                Từ chối
+              </Button>
+            )}
+            {primary && (
+              <Button
+                size="sm"
+                onClick={primary.onClick}
+                disabled={act.busy}
+                style={
+                  primary.tone === 'done'
+                    ? { background: 'var(--done)', color: '#fff' }
+                    : undefined
+                }
+              >
+                {act.busy && <Spinner size={14} />}
+                {primary.label}
+              </Button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Việc khác trên phiếu">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <a href={`/print/supply/${po.id}`} target="_blank" rel="noopener">
+                    <Printer /> In đơn đặt hàng
+                  </a>
+                </DropdownMenuItem>
                 {canEdit && po.status === 'draft' && (
-                  <>
-                    <button className={btnPrimary} onClick={() => void act.submitPo(po)}>
-                      Gửi GĐ duyệt
-                    </button>
-                    <Link
-                      href={`/planning/pos/${po.id}/edit`}
-                      className={`${btn} block text-center`}
-                    >
-                      Sửa đơn
+                  <DropdownMenuItem asChild>
+                    <Link href={`/planning/pos/${po.id}/edit`}>
+                      <Pencil /> Sửa đơn
                     </Link>
-                    <button className={btnDanger} onClick={() => void removeDraft()}>
-                      Xoá nháp
-                    </button>
-                  </>
+                  </DropdownMenuItem>
                 )}
-                {/* Chờ duyệt (0128): không sửa trực tiếp — rút về nháp rồi sửa. */}
-                {canEdit && po.status === 'pending_approval' && (
-                  <button className={btn} onClick={() => void act.withdrawPo(po)}>
-                    Rút về nháp để sửa
-                  </button>
-                )}
-                {canApprove && po.status === 'pending_approval' && (
-                  <>
-                    <button className={btnGreen} onClick={() => void act.approve(po)}>
-                      Duyệt đơn đặt
-                    </button>
-                    <button
-                      className={btnDanger}
-                      onClick={() => setReasoning({ po, kind: 'reject', reason: '' })}
-                    >
-                      Từ chối
-                    </button>
-                  </>
-                )}
-                {canEdit && po.status === 'approved' && (
-                  <button
-                    className={btnPrimary}
-                    onClick={() => void act.advance(po, 'ordered')}
-                  >
-                    Gửi NCC
-                  </button>
-                )}
-                {/*
-                  NCC XÁC NHẬN (0152): mở form ghi cam kết + đợt giao thay vì
-                  lật cờ trần. Đơn TOÀN dòng tự do không có đợt theo dòng —
-                  vẫn qua dialog nhưng chỉ ghi chú (shipmentLines rỗng thì
-                  service nhận shipments rỗng, chỉ đóng dấu confirmed).
-                */}
-                {canEdit && po.status === 'ordered' && (
-                  <button
-                    className={btn}
-                    onClick={() =>
-                      shipmentLines.length > 0
-                        ? setConfirming('confirm')
-                        : void act.advance(po, 'confirmed')
-                    }
-                  >
-                    NCC xác nhận
-                  </button>
-                )}
-                {canEdit && ['ordered', 'confirmed'].includes(po.status) && (
-                  <button
-                    className={btn}
-                    onClick={() => void act.advance(po, 'in_transit')}
-                  >
-                    Đang giao
-                  </button>
-                )}
-                {/*
-                  "ĐÃ NHẬN ĐỦ" bằng tay — cho đơn CÓ DÒNG TỰ DO (gỗ/gia công,
-                  0134): hàng nghiệm thu ngoài sổ kho nên không có phiếu nhập
-                  nào tự chốt. Chỉ hiện khi mọi DÒNG VẬT TƯ KHO (nếu có) đã về
-                  đủ theo sổ — đơn hỗn hợp trước đây kẹt vĩnh viễn vì sổ kho
-                  không chốt nổi (dòng tự do không có movement) mà nút tay lại
-                  bị cấm. Server enforce lại đúng luật này (BR-08 giữ phần kho).
-                */}
-                {canEdit &&
-                  lines.length > 0 &&
-                  lines.some((l) => l.material_id == null) &&
-                  // qty_open (0154): dòng kho đã chốt thiếu không chặn nghiệm thu
-                  statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
-                  ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
-                    po.status,
-                  ) && (
-                    <button
-                      className={btnGreen}
-                      onClick={() => void act.advance(po, 'received')}
-                    >
-                      Đã nhận đủ (nghiệm thu)
-                    </button>
-                  )}
-                {/*
-                  CHỐT PHẦN THIẾU cả đơn (0154) — đơn VỀ MỘT PHẦN mà NCC báo
-                  không giao nữa: một phát cho mọi dòng còn thiếu. Từng dòng lẻ
-                  có nút riêng ngay trong bảng.
-                */}
-                {canEdit && po.status === 'partial' && openStockLines.length > 0 && (
-                  <button
-                    className={btn}
-                    onClick={() =>
-                      setReasoning({
+                {canEdit && canReschedule(po.status).ok && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      setRescheduling({
                         po,
-                        kind: 'close_short',
+                        date: po.expected_at?.slice(0, 10) ?? '',
                         reason: '',
-                        lineId: null,
-                        detail:
-                          openStockLines.length === 1
-                            ? `${openStockLines[0].material_name} — thiếu ${money(openStockLines[0].qty_missing)} ${openStockLines[0].material_unit}`
-                            : `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
                       })
                     }
                   >
-                    Chốt phần thiếu (NCC không giao nữa)
-                  </button>
+                    <CalendarClock /> Đổi hẹn giao
+                  </DropdownMenuItem>
                 )}
-
-                {/*
-                  NHÂN BẢN mở cho MỌI trạng thái, không riêng đơn đã huỷ: mua
-                  lặp lại cùng một rổ vật tư từ cùng một NCC là việc hằng tháng,
-                  và chép tay 15 dòng là chỗ sinh sai số.
-                */}
-
-                {/* Nháp không có"Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho
-                    đơn đã gửi đi và cần để lại dấu vết. */}
-                {/* VIỆC PHỤ (28/08 — gọn UI): mỗi nút một ô lưới 2 cột thay vì
-                    5 nút full-width xếp chồng ăn nửa màn. Nút VIỆC CHÍNH theo
-                    trạng thái vẫn full-width ở trên — mắt tìm hành động tiếp
-                    theo trước, việc phụ nằm gọn bên dưới. */}
-                <div className="grid grid-cols-2 gap-2">
-                  {canEdit && canReschedule(po.status).ok && (
-                    <button
-                      className={btnSmall}
-                      onClick={() =>
-                        setRescheduling({
-                          po,
-                          date: po.expected_at?.slice(0, 10) ?? '',
-                          reason: '',
-                        })
-                      }
-                    >
-                      Đổi hẹn giao
-                    </button>
-                  )}
-                  {canReassign && !['received', 'cancelled'].includes(po.status) && (
-                    <button
-                      className={btnSmall}
-                      onClick={() => setReassigning({ po, toId: '' })}
-                    >
-                      Bàn giao phụ trách
-                    </button>
-                  )}
-                  {isSupply && (
-                    <Link
-                      href={`/planning/pos/${po.id}/edit?duplicate=1`}
-                      className={`${btnSmall} block text-center`}
-                    >
+                {canReassign && !['received', 'cancelled'].includes(po.status) && (
+                  <DropdownMenuItem onSelect={() => setReassigning({ po, toId: '' })}>
+                    <UserCog /> Bàn giao phụ trách
+                  </DropdownMenuItem>
+                )}
+                {isSupply && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/planning/pos/${po.id}/edit?duplicate=1`}>
+                      <Copy />
                       {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
                     </Link>
-                  )}
-                  {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
-                    <button
-                      className={`${btnSmall} border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10`}
-                      onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-                    >
-                      Huỷ đơn
-                    </button>
-                  )}
-                </div>
-                {!canEdit && !canApprove && (
-                  <p className="text-muted-foreground text-xs">
-                    Bạn đang xem đơn của người khác — chỉ đọc.
-                  </p>
+                  </DropdownMenuItem>
                 )}
-              </div>
-            </section>
+                {canEdit && po.status === 'draft' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => void removeDraft()}
+                      className="text-[var(--stop)]"
+                    >
+                      <Trash2 /> Xoá nháp
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+                      className="text-[var(--stop)]"
+                    >
+                      <Ban /> Huỷ đơn
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
+
+          {!canEdit && !canApprove && (
+            <p className="text-muted-foreground w-full text-[11.5px]">
+              Bạn đang xem phiếu của người khác — chỉ đọc.
+            </p>
+          )}
         </div>
       </div>
 
@@ -1082,66 +1115,60 @@ export function PoDetailScreen({
   )
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-muted-foreground shrink-0 text-xs">{label}</dt>
-      <dd className="min-w-0 truncate text-right">{value}</dd>
-    </div>
-  )
-}
-
 /**
- * ĐIỀU KHOẢN ĐẦY ĐỦ — đúng những dòng in ra cho nhà cung cấp.
- *
- * Bản trước chỉ hiện mỗi `terms` (dòng gộp) nên năm điều khoản riêng — chất
- * lượng, nơi giao, thanh toán, hoá đơn, thời gian giao — chỉ tồn tại trên phiếu
- * in. Người phụ trách muốn kiểm lại "mình đã hẹn thanh toán bao nhiêu ngày "
- * phải mở tab in ra xem, mà tờ in thì lại là thứ NCC đang cầm: sai một chữ ở đó
- * là sai cam kết.
+ * ĐIỀU KHOẢN — in ra là chữ NCC đọc, nên trình bày như văn bản có ĐIỀU đánh số
+ * chứ không phải bảng thuộc tính. Trên tờ hợp đồng thật chúng đúng là
+ * "ARTICLE 1..6"; giữ cấu trúc đó thì người soát dò theo số điều, không phải
+ * đọc lướt tìm chữ.
  */
 function PoTerms({ po, onEdit }: { po: PoDetailPo; onEdit?: () => void }) {
-  const rows: [string, string | null][] = [
-    ['Mẫu đơn', poTemplateMeta(po.template as PoTemplate).label],
-    ['Theo HĐ số', po.contract_no],
+  const articles: [string, string | null][] = [
     ['Chất lượng', po.terms_quality],
     ['Nơi giao hàng', po.terms_delivery_place],
     ['Thanh toán', po.terms_payment],
     ['Hoá đơn', po.terms_invoice],
     ['Thời gian giao', po.terms_lead_time],
-    ['Người ký', po.signer_role],
   ]
-  const shown = rows.filter(([, v]) => v)
+  const shown = articles.filter(([, v]) => v)
   if (shown.length === 0 && !po.terms && !po.note && !onEdit) return null
 
   return (
-    <section className={card}>
-      <div className={cardHead}>
-        <b>Điều khoản & ghi chú</b>
-        {onEdit && (
-          <button
-            onClick={onEdit}
-            className="border-input hover:bg-muted ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
-          >
-            <Pencil className="size-3.5" aria-hidden /> Sửa
-          </button>
-        )}
-      </div>
-      <dl className="grid gap-x-4 gap-y-1.5 px-3.5 py-3 text-[13px] sm:grid-cols-2">
-        {shown.map(([k, v]) => (
-          <div key={k} className="flex gap-2">
-            <dt className="text-muted-foreground w-28 shrink-0 text-xs">{k}</dt>
-            <dd className="min-w-0">{v}</dd>
-          </div>
-        ))}
-      </dl>
+    <DocBlock
+      title="Điều khoản & ghi chú"
+      icon={ScrollText}
+      meta={po.signer_role ? `người ký: ${po.signer_role}` : undefined}
+      action={
+        onEdit && (
+          <Button variant="outline" size="sm" onClick={onEdit}>
+            <Pencil /> Sửa
+          </Button>
+        )
+      }
+    >
+      {shown.length > 0 && (
+        <ol className="divide-border/60 divide-y">
+          {shown.map(([k, v], i) => (
+            <li key={k} className="flex gap-3 px-4 py-2.5">
+              <span className="t-data text-muted-foreground w-10 shrink-0 text-[11px]">
+                Điều {i + 1}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.06em] uppercase">
+                  {k}
+                </p>
+                <p className="text-[13px] leading-snug">{v}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
       {(po.terms || po.note) && (
-        <div className="border-border/70 text-muted-foreground flex flex-col gap-1.5 border-t px-3.5 py-3 text-xs">
+        <div className="text-muted-foreground flex flex-col gap-1.5 border-t px-4 py-3 text-[12.5px] leading-snug">
           {po.terms && <p>{po.terms}</p>}
           {po.note && <p>{po.note}</p>}
         </div>
       )}
-    </section>
+    </DocBlock>
   )
 }
 
