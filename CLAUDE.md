@@ -110,7 +110,21 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 
 ### Kit & pattern
 
-- **Dùng ERP kit** ở `src/components/erp/*` — KHÔNG dựng bảng/toolbar thô, KHÔNG import thư viện UI mới (đã chuẩn hoá shadcn + lucide). Kit là lớp mỏng trên shadcn/token, GIỮ API cũ: `PageHeader`, `StatsBar`, `Toolbar`/`ToolbarInput`/`ToolbarSelect`, `DataTable` (+`Column<T>`), `RowMenu` (action ⋯), `DocChip` (mã chứng từ), `RefChain`, `EmptyState`, `Spinner`/`TopProgressBar`, `Breadcrumbs`, `MiniBarChart`. Primitives shadcn ở `src/components/shadcn/*`. Mẫu tham chiếu: `(workspace)/planning/pos/` (màn chuẩn v3), `/design-lab` mục 14.
+- **Dùng ERP kit** ở `src/components/erp/*` và `src/components/shadcn/*` — TUYỆT ĐỐI KHÔNG dựng concept "tờ giấy in", "con dấu mộc xoay", "cột lề hẹp" hay bất kỳ skeuomorphism nào. Đây là Web SaaS ERP.
+- **Thành phần kit bắt buộc**:
+  - `RefChain`: chuỗi liên kết chứng từ cha→con (`Đơn hàng khách → Lệnh SX → Đơn đặt`).
+  - `DocChip`: mã chứng từ và mã vật tư (`PO-…`, `LSX-…`, `VT-…`).
+  - `StatTiles` / `StatTile` / `StatsBar`: dải 4 thẻ KPI tóm tắt đầu trang.
+  - `PageHeader` & `Breadcrumbs`: điều hướng và nhận diện trang.
+  - Action Toolbar: nút chính + nút phụ + DropdownMenu (⋯) luôn ở góc trên bên phải header.
+  - `DataTable` hoặc `shadcn/table`: bảng dữ liệu có sticky header, căn phải font-mono cho số/tiền, tổng kết kế toán ở chân bảng.
+  - `shadcn/tabs`: chia tab nghiệp vụ (Tổng quan, Đợt giao, Điều khoản, Dòng thời gian, Hồ sơ).
+  - `Badge` (`@/components/Badge`): nhãn trạng thái theo token vòng đời (`primary`, `warn`, `done`, `stop`, `gray`).
+- **Mẫu tham chiếu chuẩn**:
+  - Chi tiết đơn đặt vật tư: `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
+  - Chi tiết đơn hàng: `src/components/sales/OrderDetailView.tsx`
+  - Chi tiết lệnh sản xuất: `src/components/production/LsxDetailView.tsx`
+  - Mẫu linh kiện: `src/app/design-lab/DesignLab.tsx` (/design-lab)
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
 - **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.

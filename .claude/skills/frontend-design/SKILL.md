@@ -6,6 +6,12 @@ license: Complete terms in LICENSE.txt
 
 # Frontend Design
 
+> [!CRITICAL]
+> **HG-ERP APPLICATION OVERRIDE:**
+> If you are working within this workspace (`HG-ERP`), the visual identity is **already strictly established** as an Enterprise ERP system (`theme-v3`).
+> **DO NOT** attempt skeuomorphic metaphors (such as simulated paper invoices, rubber stamps, letterheads, or boutique single-column layouts).
+> **ALWAYS** adhere to `AGENTS.md` and use the ERP component kit (`src/components/erp/*` and `src/components/shadcn/*`).
+
 Approach this as the design lead at a small studio known for giving every client a visual identity that could not be mistaken for anyone else's. This client has already rejected proposals that felt templated, and is paying for a distinctive point of view: make deliberate, opinionated choices about palette, typography, and layout that are specific to this brief, and take one real aesthetic risk you can justify.
 
 ## Ground it in the subject

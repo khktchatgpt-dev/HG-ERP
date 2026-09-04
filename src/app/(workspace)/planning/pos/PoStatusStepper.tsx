@@ -1,4 +1,5 @@
 import type { PoStatus } from '@/modules/dept/supply/pos.schema'
+import { Ban, Check } from 'lucide-react'
 
 /** Chuỗi chặng "happy path" của 1 PO — cancelled xử lý riêng. */
 const STEPS: { key: PoStatus; label: string }[] = [
@@ -20,7 +21,7 @@ function fmt(d?: string | null): string | null {
 
 /**
  * Stepper trạng thái PO — nhìn 1 giây biết đơn đang ở chặng nào trong vòng đời,
- * kèm mốc thời gian ở các chặng đã có dữ liệu. Thay cho việc đọc 1 chữ trạng thái.
+ * kèm mốc thời gian ở các chặng đã có dữ liệu. Dùng chung cho các màn PO trong ERP.
  */
 export function PoStatusStepper({
   status,
@@ -32,11 +33,14 @@ export function PoStatusStepper({
 }) {
   if (status === 'cancelled') {
     return (
-      <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
-        <span className="grid h-5 w-5 place-items-center rounded-full bg-red-600 text-xs font-bold text-white">
-          ✕
-        </span>
-        Đơn đã huỷ — dừng ở giữa chuỗi cung ứng.
+      <div className="flex items-center gap-2.5 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <Ban className="size-4 shrink-0" />
+        <div>
+          <span className="font-semibold">Đơn đặt hàng đã huỷ</span>
+          <span className="text-muted-foreground ml-2 text-xs">
+            — Đã dừng giữa chuỗi cung ứng.
+          </span>
+        </div>
       </div>
     )
   }
@@ -44,54 +48,61 @@ export function PoStatusStepper({
   const cur = INDEX.get(status) ?? 0
 
   return (
-    <div className="flex overflow-x-auto py-1">
-      {STEPS.map((s, i) => {
-        const state = i < cur ? 'done' : i === cur ? 'cur' : 'todo'
-        const date = fmt(dates?.[s.key])
-        return (
-          <div
-            key={s.key}
-            className="relative flex min-w-[76px] flex-1 flex-col items-center text-center"
-          >
-            {/* Đường nối tới chặng trước */}
-            {i > 0 && (
+    <div className="flex w-full overflow-x-auto py-1">
+      <div className="flex min-w-[680px] flex-1 items-center justify-between">
+        {STEPS.map((s, i) => {
+          const state = i < cur ? 'done' : i === cur ? 'cur' : 'todo'
+          const date = fmt(dates?.[s.key])
+          return (
+            <div
+              key={s.key}
+              className="relative flex min-w-[76px] flex-1 flex-col items-center text-center"
+            >
+              {/* Đường nối tới chặng trước */}
+              {i > 0 && (
+                <span
+                  className={`absolute top-[11px] left-[-50%] z-0 h-0.5 w-full transition-colors ${
+                    i <= cur ? 'bg-emerald-500' : 'bg-muted'
+                  }`}
+                  aria-hidden
+                />
+              )}
+              {/* Bead */}
               <span
-                className={`absolute top-[11px] left-[-50%] z-0 h-0.5 w-full ${
-                  i <= cur ? 'bg-green-500' : 'bg-zinc-200 dark:bg-zinc-700'
+                className={`z-10 grid size-6 place-items-center rounded-full text-xs font-bold transition-all ${
+                  state === 'done'
+                    ? 'bg-emerald-500 text-white'
+                    : state === 'cur'
+                      ? 'bg-primary text-primary-foreground ring-4 ring-primary/20'
+                      : 'border-border bg-muted text-muted-foreground border-2'
                 }`}
-              />
-            )}
-            {/* Bead */}
-            <span
-              className={
-                'z-10 grid h-[22px] w-[22px] place-items-center rounded-full border-2 text-[11px] font-bold ' +
-                (state === 'done'
-                  ? 'border-green-500 bg-green-500 text-white'
-                  : state === 'cur'
-                    ? 'border-violet-500 bg-violet-500 text-white ring-4 ring-violet-500/15'
-                    : 'border-zinc-300 bg-white text-zinc-400 dark:border-zinc-600 dark:bg-zinc-900')
-              }
-            >
-              {state === 'done' ? '✓' : state === 'cur' ? '•' : ''}
-            </span>
-            <span
-              className={
-                'mt-1.5 text-[11px] leading-tight font-semibold ' +
-                (state === 'cur'
-                  ? 'text-violet-600 dark:text-violet-400'
-                  : state === 'done'
-                    ? 'text-zinc-600 dark:text-zinc-300'
-                    : 'text-zinc-400 dark:text-zinc-500')
-              }
-            >
-              {s.label}
-            </span>
-            <span className="mt-0.5 h-3 font-mono text-[10px] text-zinc-400 dark:text-zinc-500">
-              {date ?? ''}
-            </span>
-          </div>
-        )
-      })}
+              >
+                {state === 'done' ? (
+                  <Check className="size-3.5 stroke-[2.5]" />
+                ) : state === 'cur' ? (
+                  <span className="size-1.5 rounded-full bg-current" />
+                ) : (
+                  i + 1
+                )}
+              </span>
+              <span
+                className={`mt-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
+                  state === 'cur'
+                    ? 'text-primary font-semibold'
+                    : state === 'done'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                }`}
+              >
+                {s.label}
+              </span>
+              <span className="text-muted-foreground font-mono mt-0.5 h-3.5 text-[10px]">
+                {date ?? ''}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }

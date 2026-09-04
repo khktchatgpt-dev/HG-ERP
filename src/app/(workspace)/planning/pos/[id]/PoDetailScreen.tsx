@@ -3,21 +3,69 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Pencil, Printer } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Ban,
+  CalendarClock,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  Copy,
+  FileText,
+  History,
+  MoreHorizontal,
+  Package,
+  PackageCheck,
+  PackageSearch,
+  Paperclip,
+  Pencil,
+  Printer,
+  ScrollText,
+  SendHorizontal,
+  Trash2,
+  Truck,
+  UserCog,
+} from 'lucide-react'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import { DocumentFiles } from '@/components/DocumentFiles'
-import { PageHeader } from '@/components/erp/PageHeader'
+import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import { RefChain, type ChainNode } from '@/components/erp/RefChain'
+import { DocChip } from '@/components/erp/DocChip'
+import { StatTile, StatTiles } from '@/components/erp/StatTile'
+import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn/table'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import { PO_NEXT_HINT, PO_STATUS_LABEL, PO_STATUS_TONE } from '@/lib/po-status'
-import type { PoStatus } from '@/lib/po-status'
+import {
+  PO_NEXT_HINT,
+  PO_STATUS_LABEL,
+  PO_STATUS_TONE,
+  type PoStatus,
+} from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
 import { PoStatusStepper } from '../PoStatusStepper'
 import {
@@ -30,19 +78,6 @@ import {
 import { usePoActions } from '../usePoActions'
 import { PoConfirmDialog, PoShipmentsCard, type ShipmentView } from './PoShipmentsPanel'
 import type { PoLine, StatusLine } from '../po-types'
-
-/**
- * TRANG CHI TIẾT ĐƠN ĐẶT VẬT TƯ — thay cái modal cũ.
- *
- * Bố cục theo hai câu hỏi khác nhau của cùng một người:
- *   TRÁI  —"đơn này gồm những gì ": dòng hàng, điều khoản, hồ sơ đính kèm.
- *   PHẢI  —"giờ tôi phải làm gì ": tóm tắt + đúng những nút hợp lệ ở trạng thái
- *           hiện tại, dính theo cuộn nên đơn 30 dòng vẫn với tới được; dưới đó
- *           là lịch sử để biết đơn đã qua tay ai.
- *
- * Nút hiện ra theo TỪNG trạng thái chứ không xám đi: một nút xám giữa mười nút
- * khác vẫn bắt người ta đọc rồi mới hiểu là bấm không được.
- */
 
 export type PoDetailPo = {
   id: string
@@ -72,7 +107,6 @@ export type PoDetailPo = {
   assignee_name: string | null
   approved_at: string | null
   ordered_at: string | null
-  /** NCC xác nhận (0152) — NV cung ứng ghi lại cam kết. */
   confirmed_at: string | null
   confirmed_note: string | null
   created_at: string
@@ -82,7 +116,6 @@ const money = (n: number) => n.toLocaleString('vi-VN')
 const day = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
 const stamp = (s: string) => new Date(s).toLocaleString('vi-VN')
 
-/** Nhãn tiếng Việt cho mốc lịch sử — cùng bộ từ với nút bấm sinh ra nó. */
 const HISTORY_LABEL: Record<ApprovalEvent['action'], string> = {
   submitted: 'Gửi Giám đốc duyệt',
   approved: 'Giám đốc duyệt',
@@ -90,26 +123,13 @@ const HISTORY_LABEL: Record<ApprovalEvent['action'], string> = {
   withdrawn: 'Rút về nháp',
   reassigned: 'Bàn giao người phụ trách',
 }
-const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> =
-  {
-    submitted: 'amber',
-    approved: 'green',
-    rejected: 'red',
-    withdrawn: 'gray',
-    reassigned: 'gray',
-  }
-
-const card = 'rounded-xl border border-border bg-card'
-const cardHead =
-  'flex flex-wrap items-center gap-2 border-b border-border/70 px-3.5 py-2.5 text-[13px]'
-const btn = 'w-full rounded-md border border-input px-3 py-1.5 text-sm hover:bg-muted'
-const btnPrimary =
-  'w-full rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
-const btnGreen =
-  'w-full rounded-md bg-[var(--done)] px-3 py-1.5 text-sm font-medium text-white hover:opacity-90'
-const btnSmall = 'rounded-md border border-input px-2 py-1.5 text-[12.5px] hover:bg-muted'
-const btnDanger =
-  'w-full rounded-md border border-[var(--stop)]/40 px-3 py-1.5 text-sm text-[var(--stop)] hover:bg-[var(--stop)]/10'
+const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> = {
+  submitted: 'amber',
+  approved: 'green',
+  rejected: 'red',
+  withdrawn: 'gray',
+  reassigned: 'gray',
+}
 
 export function PoDetailScreen({
   po,
@@ -129,14 +149,10 @@ export function PoDetailScreen({
   po: PoDetailPo
   lines: PoLine[]
   statusLines: StatusLine[]
-  /** Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id) — {đợt: {dòng: SL}}. */
   shipmentReceipts: Record<string, Record<string, number>>
-  /** LSX PHỤ gộp vào đơn (0125). */
   extraLsx: { id: string; code: string }[]
-  /** Kế hoạch giao theo đợt (0152). */
   shipments: ShipmentView[]
   history: ApprovalEvent[]
-  /** PNK / phiếu trả gắn dòng đơn — mốc timeline (GĐ3). */
   warehouseDocs: {
     doc_id: string
     code: string
@@ -144,9 +160,7 @@ export function PoDetailScreen({
     qty_total: number
     at: string
   }[]
-  /** Quyền GHI trên ĐƠN NÀY (0128) — người phụ trách / trưởng phòng / admin. */
   canEdit: boolean
-  /** Là NV cung ứng — đính kèm hồ sơ, nhân bản đơn đã huỷ. */
   isSupply: boolean
   canApprove: boolean
   canReassign: boolean
@@ -157,16 +171,16 @@ export function PoDetailScreen({
   const [rescheduling, setRescheduling] = useState<RescheduleState | null>(null)
   const [reassigning, setReassigning] = useState<ReassignState | null>(null)
   const [reasoning, setReasoning] = useState<ReasonState | null>(null)
-  /** Dialog xác nhận NCC / thêm đợt giao (0152). */
   const [confirming, setConfirming] = useState<'confirm' | 'add' | null>(null)
-  /** Hộp sửa điều khoản & ghi chú (28/08) — chữ trên phiếu, mở tới khi đơn huỷ. */
   const [editingTerms, setEditingTerms] = useState(false)
-  /** Dòng thời gian gấp lại còn 4 mốc gần nhất — nhật ký dài là để TRA, không
-      phải để chiếm nửa cột nội dung. */
-  const [allMarks, setAllMarks] = useState(false)
+  const [copied, setCopied] = useState(false)
 
-  // Dòng đơn cho dialog + thẻ đợt giao — chỉ dòng VẬT TƯ KHO (dòng tự do gỗ/gia
-  // công nghiệm thu ngoài sổ, không đi theo đợt).
+  const copyCode = () => {
+    void navigator.clipboard.writeText(po.code)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   const shipmentLines = lines
     .filter((l) => l.material_id != null)
     .map((l) => ({
@@ -174,13 +188,11 @@ export function PoDetailScreen({
       name: l.material_name,
       unit: l.material_unit,
       qty_ordered: l.qty_ordered,
-      // Tiền theo đợt (28/08) chia tỷ lệ từ thành tiền dòng; giá theo kg/m²
-      // (unit2) là số ước — kg thật cân lúc nhận.
       amount: l.unit_price != null ? poLineAmount(l) : null,
       price_approx: l.price_basis === 'unit2',
     }))
   const shipmentLinesById = new Map(shipmentLines.map((l) => [l.id, l]))
-  /** SL đã nằm ở các đợt còn sống — validate cộng dồn khi thêm đợt. */
+
   const shippedByLine = new Map<string, number>()
   for (const s of shipments) {
     if (s.status === 'cancelled') continue
@@ -190,42 +202,16 @@ export function PoDetailScreen({
   }
 
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
-  //"Đã về / còn thiếu " chỉ có nghĩa từ lúc đơn rời bàn duyệt trở đi.
   const showReceived = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
     po.status,
   )
-  // Chốt thiếu (0154): đơn đã gửi NCC và chưa kết thúc. Server enforce lại.
   const canCloseShort = ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
     po.status,
   )
-  /** Dải tiến độ "hàng về tới đâu" — mỗi dòng vật tư kho một thanh. */
-  const progressLines = statusLines
-    .filter((l) => l.material_id != null && l.qty_ordered > 0)
-    .map((l) => {
-      const line = lines.find((x) => x.id === l.id)
-      const received = l.qty_received ?? 0
-      const scheduled = Math.min(shippedByLine.get(l.id) ?? 0, l.qty_ordered)
-      return {
-        id: l.id,
-        name: line?.material_name ?? '?',
-        unit: line?.material_unit ?? '',
-        ordered: l.qty_ordered,
-        received,
-        unscheduled: Math.max(l.qty_ordered - scheduled, 0),
-        pctReceived: Math.min((received / l.qty_ordered) * 100, 100),
-        // Phần ĐÃ HẸN nhưng chưa về — vẽ nối sau phần đã về, không vẽ đè.
-        pctScheduled: Math.max(
-          (Math.min(scheduled, l.qty_ordered) / l.qty_ordered) * 100 -
-            Math.min((received / l.qty_ordered) * 100, 100),
-          0,
-        ),
-      }
-    })
-
-  /** Dòng vật tư kho còn CHỜ VỀ — nuôi nút "Chốt phần thiếu" cả đơn. */
   const openStockLines = statusLines.filter(
     (l) => l.material_id != null && l.qty_open > 0,
   )
+
   const m = poMoney({
     subtotalRaw: lines.reduce((s, l) => s + poLineAmount(l), 0),
     discount: po.discount_amount,
@@ -233,8 +219,6 @@ export function PoDetailScreen({
     priceIncludesVat: po.price_includes_vat,
     currency: po.currency,
   })
-  // Ô TIỀN format theo tiền tệ của đơn (USD đủ 2 số lẻ cent) — `money` ở trên
-  // vẫn dùng cho các ô SỐ LƯỢNG.
   const cash = (n: number) => fmtMoney(n, po.currency)
   const today = new Date().toISOString().slice(0, 10)
   const late = assessPoLate(po, today)
@@ -242,18 +226,38 @@ export function PoDetailScreen({
     ? [po.lsx_code, ...extraLsx.map((l) => l.code)].join(' + ')
     : null
 
+  const totalOrderedStock = statusLines
+    .filter((l) => l.material_id != null)
+    .reduce((s, l) => s + l.qty_ordered, 0)
+  const totalReceivedStock = statusLines
+    .filter((l) => l.material_id != null)
+    .reduce((s, l) => s + (l.qty_received ?? 0), 0)
+  const pctReceived =
+    totalOrderedStock > 0
+      ? Math.min(Math.round((totalReceivedStock / totalOrderedStock) * 100), 100)
+      : 0
+
+  const daysBetween = (a: string, b: string) =>
+    Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+  const dueDays = po.expected_at ? daysBetween(today, po.expected_at.slice(0, 10)) : null
+
+  // Chuỗi liên kết chứng từ cha → con (RefChain)
   const chain: ChainNode[] = [
-    ...(po.order_code ? [{ label: 'Đơn hàng', value: po.order_code }] : []),
-    ...(lsxCodes ? [{ label: 'Lệnh SX', value: lsxCodes }] : []),
+    ...(po.order_code
+      ? [{ label: 'Đơn hàng khách', value: po.order_code, href: '/sales/orders' }]
+      : []),
+    ...(po.lsx_code
+      ? [
+          {
+            label: 'Lệnh sản xuất',
+            value: lsxCodes ?? po.lsx_code,
+            href: '/planning/lsx',
+          },
+        ]
+      : []),
     { label: 'Đơn đặt vật tư', value: po.code, current: true },
   ]
 
-  /*
-   * TIMELINE ĐỦ MỐC (GĐ3 plan-po-giao-nhan): khối "Lịch sử" trước đây chỉ có
-   * các mốc DUYỆT — nửa sau vòng đời (gửi NCC → xác nhận → từng đợt → từng
-   * phiếu nhập/trả → chốt thiếu) phải đi lục ba màn khác. Gộp về một dòng thời
-   * gian; dữ liệu đều có sẵn trên trang, không thêm trạng thái nào.
-   */
   type Mark = {
     key: string
     at: string
@@ -285,8 +289,6 @@ export function PoDetailScreen({
           },
         ]
       : []),
-    // Mỗi đợt một mốc tại lúc KHAI đợt; trạng thái hiện tại đọc kèm — đợt không
-    // lưu timestamp từng bước chuyển, đừng bịa mốc "xe tới lúc…".
     ...shipments.map((s) => ({
       key: `sh-${s.id}`,
       at: s.created_at,
@@ -315,7 +317,6 @@ export function PoDetailScreen({
           : `${d.code} — trả NCC ${money(d.qty_total)}`,
       tone: d.kind === 'receipt' ? ('green' as const) : ('red' as const),
     })),
-    // Chốt thiếu (0154): các dòng chốt cùng một lượt chung một mốc.
     ...[
       ...new Map(
         statusLines
@@ -336,129 +337,835 @@ export function PoDetailScreen({
     }),
   ].sort((a, b) => b.at.localeCompare(a.at))
 
-  /** Xoá nháp xong thì đơn không còn — ở lại trang này là ở lại một trang 404. */
   async function removeDraft() {
     if (await act.deleteDraft(po)) router.push('/planning/pos')
   }
 
-  return (
-    <div className="flex flex-col gap-4 pb-16">
-      <TopProgressBar active={act.busy} />
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Cung ứng', href: '/planning' },
-          { label: 'Đơn đặt vật tư', href: '/planning/pos' },
-          { label: po.code },
-        ]}
-        title={`Đơn đặt ${po.code}`}
-        description={`${po.supplier_name} · ${lsxCodes ? `LSX ${lsxCodes}` : 'đơn ngoài LSX'}${
-          po.contract_no ? ` · theo HĐ ${po.contract_no}` : ''
-        }`}
-        actions={
-          <div className="flex items-center gap-2">
-            <a
-              href={`/print/supply/${po.id}`}
-              target="_blank"
-              rel="noopener"
-              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
-            >
-              <Printer className="size-4" aria-hidden /> In đơn đặt hàng
-            </a>
-            <Link
-              href="/planning/pos"
-              className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm shadow-xs"
-            >
-              <ArrowLeft className="size-4" aria-hidden /> Về danh sách
-            </Link>
-          </div>
+  const primary =
+    canEdit && po.status === 'draft'
+      ? {
+          label: 'Gửi Giám đốc duyệt',
+          onClick: () => void act.submitPo(po),
+          icon: SendHorizontal,
         }
-      />
+      : canApprove && po.status === 'pending_approval'
+        ? {
+            label: 'Duyệt đơn đặt',
+            onClick: () => void act.approve(po),
+            icon: CheckCircle2,
+            isDoneTone: true,
+          }
+        : canEdit && po.status === 'approved'
+          ? {
+              label: 'Gửi cho NCC',
+              onClick: () => void act.advance(po, 'ordered'),
+              icon: SendHorizontal,
+            }
+          : canEdit && po.status === 'ordered'
+            ? {
+                label: 'NCC đã xác nhận',
+                onClick: () =>
+                  shipmentLines.length > 0
+                    ? setConfirming('confirm')
+                    : void act.advance(po, 'confirmed'),
+                icon: Check,
+              }
+            : canEdit && po.status === 'confirmed'
+              ? {
+                  label: 'Hàng đang trên đường',
+                  onClick: () => void act.advance(po, 'in_transit'),
+                  icon: Truck,
+                }
+              : canEdit && po.status === 'partial' && openStockLines.length > 0
+                ? {
+                    label: 'Chốt phần thiếu',
+                    onClick: () =>
+                      setReasoning({
+                        po,
+                        kind: 'close_short',
+                        reason: '',
+                        lineId: null,
+                        detail:
+                          openStockLines.length === 1
+                            ? `${openStockLines[0].material_name} — thiếu ${money(openStockLines[0].qty_missing)} ${openStockLines[0].material_unit}`
+                            : `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
+                      }),
+                    icon: Check,
+                  }
+                : null
 
-      {/* Chuỗi liên kết chỉ đáng chỗ khi có gì để LẦN NGƯỢC (đơn hàng/LSX);
-          đơn ngoài LSX thì chuỗi một chip chỉ lặp lại tiêu đề ngay trên nó. */}
-      {chain.length > 1 && <RefChain nodes={chain} />}
+  const canAcceptByHand =
+    canEdit &&
+    lines.length > 0 &&
+    lines.some((l) => l.material_id == null) &&
+    statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
+    ['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)
 
-      <div className={card}>
-        <div className="px-3.5 py-3">
-          <PoStatusStepper
-            status={po.status}
-            dates={{
-              draft: po.created_at,
-              // Đơn cũ (trước 0116) tạo là vào thẳng chờ duyệt nên created_at
-              // chính là mốc gửi; đơn nháp thì chưa gửi — không có mốc.
-              pending_approval: po.status === 'draft' ? null : po.created_at,
-              approved: po.approved_at,
-              ordered: po.ordered_at,
-            }}
-          />
+  const stepDates: Partial<Record<PoStatus, string | null>> = {
+    draft: po.created_at,
+    pending_approval: history.find((h) => h.action === 'submitted')?.created_at ?? null,
+    approved: po.approved_at,
+    ordered: po.ordered_at,
+    confirmed: po.confirmed_at,
+    in_transit:
+      shipments.find((s) => s.status === 'arrived' || s.status === 'received')
+        ?.created_at ?? null,
+    partial:
+      statusLines.some((l) => (l.qty_received ?? 0) > 0)
+        ? warehouseDocs[0]?.at ?? null
+        : null,
+    received: po.status === 'received' ? warehouseDocs[0]?.at ?? null : null,
+  }
+
+  return (
+    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-16">
+      <TopProgressBar active={act.busy} />
+
+      {/* ── Breadcrumbs & Back Navigation ──────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Breadcrumbs
+          items={[
+            { label: 'Cung ứng', href: '/planning' },
+            { label: 'Đơn đặt vật tư', href: '/planning/pos' },
+            { label: po.code },
+          ]}
+        />
+        <Link
+          href="/planning/pos"
+          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+        >
+          <ArrowLeft className="size-3.5" />
+          Về danh sách đơn đặt
+        </Link>
+      </div>
+
+      {/* ── Chuỗi liên kết chứng từ (RefChain) ─────────────────────────── */}
+      {chain.length > 1 && (
+        <div className="bg-card rounded-xl border px-4 py-2.5 shadow-2xs">
+          <RefChain nodes={chain} size="md" />
+        </div>
+      )}
+
+      {/* ── Page Header: Tiêu đề & Action Bar ────────────────────────────── */}
+      <div className="bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-xs">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="font-mono text-2xl font-bold tracking-tight">{po.code}</h1>
+              <button
+                type="button"
+                onClick={copyCode}
+                title="Sao chép mã đơn"
+                className="text-muted-foreground hover:text-foreground inline-flex size-7 items-center justify-center rounded-md hover:bg-muted transition-colors"
+              >
+                {copied ? (
+                  <Check className="size-4 text-emerald-600" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </button>
+
+              <Badge tone={PO_STATUS_TONE[po.status]}>{PO_STATUS_LABEL[po.status]}</Badge>
+
+              <Badge tone="gray" className="font-normal text-xs">
+                Mẫu {poTemplateMeta(po.template as PoTemplate).label.toLowerCase()}
+              </Badge>
+
+              {late === 'overdue' && (
+                <Badge tone="red" className="flex items-center gap-1 font-semibold">
+                  <AlertTriangle className="size-3" />
+                  Quá hạn giao
+                </Badge>
+              )}
+            </div>
+
+            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+              <span>
+                Nhà cung cấp:{' '}
+                <Link
+                  href={`/planning/suppliers/${po.supplier_id}`}
+                  className="text-foreground font-semibold hover:underline"
+                >
+                  {po.supplier_name}
+                </Link>
+              </span>
+              <span>·</span>
+              <span>Ngày lập: {day(po.created_at)}</span>
+              {po.contract_no && (
+                <>
+                  <span>·</span>
+                  <span>
+                    Hợp đồng: <b className="font-mono text-foreground">{po.contract_no}</b>
+                  </span>
+                </>
+              )}
+              {po.assignee_name && (
+                <>
+                  <span>·</span>
+                  <span>Phụ trách: {po.assignee_name}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons toolbar */}
+          <div className="flex flex-wrap items-center gap-2">
+            {canAcceptByHand && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void act.advance(po, 'received')}
+              >
+                <PackageCheck className="size-4" /> Đã nhận đủ
+              </Button>
+            )}
+
+            {canEdit && po.status === 'pending_approval' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void act.withdrawPo(po)}
+              >
+                Rút về nháp
+              </Button>
+            )}
+
+            {canApprove && po.status === 'pending_approval' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReasoning({ po, kind: 'reject', reason: '' })}
+                className="border-destructive/40 text-destructive hover:bg-destructive/10"
+              >
+                Từ chối
+              </Button>
+            )}
+
+            <Button variant="outline" size="sm" asChild>
+              <a href={`/print/supply/${po.id}`} target="_blank" rel="noopener">
+                <Printer className="size-4" /> In phiếu
+              </a>
+            </Button>
+
+            {canEdit && po.status === 'draft' && (
+              <Button variant="outline" size="sm" asChild>
+                <Link href={`/planning/pos/${po.id}/edit`}>
+                  <Pencil className="size-4" /> Sửa đơn
+                </Link>
+              </Button>
+            )}
+
+            {primary && (
+              <Button
+                size="sm"
+                onClick={primary.onClick}
+                disabled={act.busy}
+                className={
+                  primary.isDoneTone
+                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                    : ''
+                }
+              >
+                {act.busy ? (
+                  <Spinner size={14} />
+                ) : (
+                  <primary.icon className="size-4" />
+                )}
+                {primary.label}
+              </Button>
+            )}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label="Thao tác khác">
+                  <MoreHorizontal className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem asChild>
+                  <a href={`/print/supply/${po.id}`} target="_blank" rel="noopener">
+                    <Printer className="size-4" /> In đơn đặt hàng
+                  </a>
+                </DropdownMenuItem>
+
+                {canEdit && po.status === 'draft' && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/planning/pos/${po.id}/edit`}>
+                      <Pencil className="size-4" /> Sửa đơn
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+
+                {canEdit && canReschedule(po.status).ok && (
+                  <DropdownMenuItem
+                    onSelect={() =>
+                      setRescheduling({
+                        po,
+                        date: po.expected_at?.slice(0, 10) ?? '',
+                        reason: '',
+                      })
+                    }
+                  >
+                    <CalendarClock className="size-4" /> Đổi hẹn giao
+                  </DropdownMenuItem>
+                )}
+
+                {canReassign && !['received', 'cancelled'].includes(po.status) && (
+                  <DropdownMenuItem onSelect={() => setReassigning({ po, toId: '' })}>
+                    <UserCog className="size-4" /> Bàn giao phụ trách
+                  </DropdownMenuItem>
+                )}
+
+                {isSupply && (
+                  <DropdownMenuItem asChild>
+                    <Link href={`/planning/pos/${po.id}/edit?duplicate=1`}>
+                      <Copy className="size-4" />
+                      {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
+                    </Link>
+                  </DropdownMenuItem>
+                )}
+
+                {canEdit && po.status === 'draft' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => void removeDraft()}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="size-4" /> Xoá nháp
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onSelect={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Ban className="size-4" /> Huỷ đơn
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
-        {/* HÀNG VỀ TỚI ĐÂU (28/08) — câu hỏi số một của đơn lớn giao theo đợt,
-            trả lời trong một giây thay vì bắt đọc bảng: mỗi vật tư một thanh
-            [đã về | đã hẹn đợt chưa về | chưa hẹn]. Chỉ hiện từ lúc đơn đã
-            gửi NCC — trước đó chưa có gì để về. */}
-        {showReceived && progressLines.length > 0 && (
-          <div className="border-border/70 flex flex-col gap-2.5 border-t px-3.5 py-3">
-            {progressLines.map((r) => (
-              <div key={r.id} className="flex flex-col gap-1">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3 text-[12px]">
-                  <span className="min-w-0 truncate font-medium">{r.name}</span>
-                  <span className="t-data text-muted-foreground">
-                    về{' '}
-                    <span
-                      className="font-semibold"
-                      style={{
-                        color:
-                          r.received >= r.ordered - 1e-6
-                            ? 'var(--done)'
-                            : 'var(--foreground)',
-                      }}
-                    >
-                      {money(r.received)}
-                    </span>
-                    /{money(r.ordered)} {r.unit}
-                    {r.unscheduled > 1e-6 && (
-                      <span className="font-medium text-[var(--warn)]">
-                        {' '}
-                        · {money(r.unscheduled)} chưa hẹn đợt
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <div
-                  className="bg-muted flex h-1.5 overflow-hidden rounded-full"
-                  role="img"
-                  aria-label={`${r.name}: về ${r.received}/${r.ordered} ${r.unit}`}
-                >
-                  <span
-                    style={{
-                      width: `${r.pctReceived}%`,
-                      background: 'var(--done)',
-                    }}
-                  />
-                  <span
-                    style={{
-                      width: `${r.pctScheduled}%`,
-                      background: 'color-mix(in oklab, var(--primary) 35%, transparent)',
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+        {!canEdit && !canApprove && (
+          <div className="bg-muted/60 text-muted-foreground rounded-md px-3 py-2 text-xs">
+            Bạn đang xem đơn của nhân sự khác — chế độ chỉ đọc.
           </div>
         )}
       </div>
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-        {/* ── TRÁI: đơn này gồm những gì ─────────────────────────────────── */}
-        <div className="order-2 flex min-w-0 flex-col gap-4 lg:order-1">
-          {/*
-            LUÔN HIỆN khối kế hoạch giao (29/08/2026) — trừ đơn đã huỷ.
-            Trước đây ẩn hẳn khi chưa có đợt nào, nên mở một đơn ra là không
-            thấy chữ "đợt giao" ở đâu: người dùng không phân biệt được "đơn này
-            giao một lần" với "hệ thống không có phần chia đợt".
-          */}
-          {po.status !== 'cancelled' && (
+      {/* ── Lifecycle Stepper / Tiến trình vòng đời ─────────────────────── */}
+      <div className="bg-card w-full overflow-x-auto rounded-xl border p-4 shadow-xs">
+        <PoStatusStepper status={po.status} dates={stepDates} />
+      </div>
+
+      {/* ── 4 ERP Kit StatTiles ─────────────────────────────────────────── */}
+      <StatTiles>
+        <StatTile
+          label="Trạng thái"
+          value={PO_STATUS_LABEL[po.status]}
+          tone={
+            po.status === 'received'
+              ? 'done'
+              : po.status === 'cancelled'
+                ? 'stop'
+                : ['in_transit', 'partial', 'pending_approval'].includes(po.status)
+                  ? 'warn'
+                  : 'primary'
+          }
+          hint={
+            PO_NEXT_HINT[po.status]
+              ? `Bước kế: ${PO_NEXT_HINT[po.status]}`
+              : 'Đã hoàn tất chu trình'
+          }
+        />
+        <StatTile
+          label="Hạn giao hàng"
+          value={po.expected_at ? day(po.expected_at) : 'Chưa hẹn'}
+          tone={late === 'overdue' ? 'stop' : 'default'}
+          hint={
+            late === 'overdue'
+              ? `Quá hạn ${dueDays !== null ? -dueDays : ''} ngày`
+              : po.confirmed_at
+                ? `NCC xác nhận: ${day(po.confirmed_at)}`
+                : isMissingEta(po)
+                  ? 'Chưa cam kết ngày'
+                  : dueDays !== null && dueDays >= 0
+                    ? `Còn ${dueDays} ngày`
+                    : undefined
+          }
+          icon={CalendarDays}
+        />
+        <StatTile
+          label="Vật tư & Nhập kho"
+          value={
+            showReceived
+              ? `${money(totalReceivedStock)} / ${money(totalOrderedStock)}`
+              : `${lines.length} mặt hàng`
+          }
+          tone={
+            showReceived && pctReceived >= 100
+              ? 'done'
+              : showReceived && pctReceived > 0
+                ? 'warn'
+                : 'default'
+          }
+          hint={
+            showReceived
+              ? `Đã nhập ${pctReceived}% (${openStockLines.length > 0 ? `${openStockLines.length} dòng chờ` : 'đủ hàng'})`
+              : `Tổng ${money(lines.reduce((s, l) => s + l.qty_ordered, 0))} đơn vị`
+          }
+          icon={Package}
+        />
+        <StatTile
+          label="Tổng thanh toán"
+          value={cash(m.grandTotal)}
+          tone="primary"
+          hint={`Tiền tệ: ${po.currency}${m.vatAmount > 0 ? ` · VAT: ${cash(m.vatAmount)}` : ''}`}
+          icon={Truck}
+        />
+      </StatTiles>
+
+      {/* ── Tabs nội dung chính ─────────────────────────────────────────── */}
+      <Tabs defaultValue="overview" className="flex flex-col gap-4">
+        <TabsList className="bg-muted/60 h-auto flex-wrap p-1">
+          <TabsTrigger value="overview" className="gap-2">
+            <Package className="size-4" />
+            Tổng quan & Mặt hàng
+            <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
+              {lines.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="shipments" className="gap-2">
+            <Truck className="size-4" />
+            Kế hoạch giao & Đợt hàng
+            {shipments.length > 0 && (
+              <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
+                {shipments.length}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="terms" className="gap-2">
+            <ScrollText className="size-4" />
+            Điều khoản & Hợp đồng
+          </TabsTrigger>
+          <TabsTrigger value="timeline" className="gap-2">
+            <History className="size-4" />
+            Dòng thời gian
+            <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
+              {marks.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="docs" className="gap-2">
+            <Paperclip className="size-4" />
+            Tài liệu đính kèm
+          </TabsTrigger>
+        </TabsList>
+
+        {/* ── TAB 1: TỔNG QUAN & MẶT HÀNG ───────────────────────────────── */}
+        <TabsContent value="overview" className="flex flex-col gap-5">
+          {/* Khối thông tin đối tác & logistics */}
+          <Card>
+            <CardHeader className="border-b bg-muted/20 py-3">
+              <CardTitle className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+                Thông tin đơn hàng & Đối tác
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Bên bán (Nhà cung cấp)
+                </span>
+                <Link
+                  href={`/planning/suppliers/${po.supplier_id}`}
+                  className="font-semibold text-primary hover:underline text-sm"
+                >
+                  {po.supplier_name}
+                </Link>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Lệnh sản xuất
+                </span>
+                {lsxCodes ? (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <Link
+                      href="/planning/lsx"
+                      className="font-mono text-sm font-medium hover:underline text-primary"
+                    >
+                      {lsxCodes}
+                    </Link>
+                    {extraLsx.length > 0 && (
+                      <Badge tone="blue" className="text-[10px]">
+                        Gộp {extraLsx.length + 1} lệnh
+                      </Badge>
+                    )}
+                  </div>
+                ) : (
+                  <span className="text-muted-foreground text-sm">Đơn ngoài lệnh</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Đơn hàng khách
+                </span>
+                {po.order_code ? (
+                  <Link
+                    href="/sales/orders"
+                    className="font-mono text-sm font-medium hover:underline text-primary"
+                  >
+                    {po.order_code}
+                  </Link>
+                ) : (
+                  <span className="text-muted-foreground text-sm">—</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Người phụ trách
+                </span>
+                <span className="text-sm font-medium">
+                  {po.assignee_name ?? (
+                    <span className="text-amber-600 dark:text-amber-400">Chưa giao</span>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Tiền tệ & Thuế VAT
+                </span>
+                <span className="text-sm">
+                  {po.currency}
+                  {po.vat_rate != null && (
+                    <span className="text-muted-foreground ml-1 text-xs">
+                      (VAT {po.vat_rate}%, {po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Số hợp đồng
+                </span>
+                <div>
+                  {po.contract_no ? <DocChip>{po.contract_no}</DocChip> : <span className="text-muted-foreground text-sm">—</span>}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Chiết khấu
+                </span>
+                <span className="text-sm">
+                  {m.discountAmount > 0 ? cash(m.discountAmount) : 'Không có'}
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  Điều kiện giao hàng
+                </span>
+                <span className="text-sm truncate">
+                  {po.terms_delivery_place || 'Theo thoả thuận'}
+                </span>
+              </div>
+            </CardContent>
+            {po.note && (
+              <div className="border-t bg-muted/20 px-5 py-2.5 text-xs text-muted-foreground">
+                <span className="font-semibold text-foreground">Ghi chú: </span>
+                {po.note}
+              </div>
+            )}
+          </Card>
+
+          {/* Bảng danh mục vật tư */}
+          <Card className="overflow-hidden">
+            <CardHeader className="border-b bg-muted/20 py-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <PackageSearch className="size-4 text-primary" />
+                  Danh mục vật tư đặt hàng ({lines.length} dòng)
+                </CardTitle>
+                {canEdit && po.status === 'draft' && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href={`/planning/pos/${po.id}/edit`}>
+                      <Pencil className="size-3.5" /> Chỉnh sửa vật tư
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-0">
+              <Table className="min-w-[720px]">
+                <TableHeader className="bg-muted/40 sticky top-0 z-10">
+                  <TableRow>
+                    <TableHead className="w-12 text-center font-semibold text-xs uppercase tracking-wider">
+                      #
+                    </TableHead>
+                    <TableHead className="font-semibold text-xs uppercase tracking-wider">
+                      Vật tư
+                    </TableHead>
+                    <TableHead className="w-36 font-semibold text-xs uppercase tracking-wider">
+                      Quy cách
+                    </TableHead>
+                    <TableHead className="w-28 text-right font-semibold text-xs uppercase tracking-wider">
+                      SL đặt
+                    </TableHead>
+                    {showReceived && (
+                      <TableHead className="w-48 text-right font-semibold text-xs uppercase tracking-wider">
+                        Về kho
+                      </TableHead>
+                    )}
+                    <TableHead className="w-32 text-right font-semibold text-xs uppercase tracking-wider">
+                      Đơn giá
+                    </TableHead>
+                    <TableHead className="w-36 text-right font-semibold text-xs uppercase tracking-wider">
+                      Thành tiền
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.map((l, i) => {
+                    const st = receivedById.get(l.id)
+                    const pct =
+                      st && st.qty_ordered > 0
+                        ? Math.min((st.qty_received ?? 0) / st.qty_ordered, 1) * 100
+                        : 0
+
+                    return (
+                      <TableRow key={l.id} className="align-top">
+                        <TableCell className="font-mono text-muted-foreground text-center text-xs">
+                          {i + 1}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
+                              {l.material_code && <DocChip>{l.material_code}</DocChip>}
+                            </div>
+                            <div className="font-medium text-sm text-foreground">
+                              {l.material_name}
+                            </div>
+                            {(l.qty2 != null || l.note) && (
+                              <div className="text-muted-foreground text-xs">
+                                {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
+                                {l.qty2 != null && l.note && ' · '}
+                                {l.note}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                          {l.spec ?? '—'}
+                        </TableCell>
+                        <TableCell className="text-right whitespace-nowrap">
+                          <span className="font-mono font-semibold text-sm">
+                            {money(l.qty_ordered)}
+                          </span>
+                          <span className="text-muted-foreground ml-1 text-xs">
+                            {l.material_unit}
+                          </span>
+                        </TableCell>
+
+                        {showReceived && (
+                          <TableCell className="text-right">
+                            {l.material_id == null ? (
+                              <span
+                                className="text-muted-foreground text-xs"
+                                title="Nghiệm thu ngoài sổ kho"
+                              >
+                                Ngoài sổ kho
+                              </span>
+                            ) : (
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="font-mono text-xs whitespace-nowrap">
+                                  <span
+                                    className={`font-semibold ${
+                                      st && st.qty_missing <= 0
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : ''
+                                    }`}
+                                  >
+                                    {money(st?.qty_received ?? 0)}
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    /{money(l.qty_ordered)}
+                                  </span>
+                                </span>
+                                <div className="bg-muted h-1.5 w-20 overflow-hidden rounded-full">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{
+                                      width: `${pct}%`,
+                                      backgroundColor:
+                                        pct >= 100
+                                          ? 'var(--done, #10b981)'
+                                          : 'var(--warn, #f59e0b)',
+                                    }}
+                                  />
+                                </div>
+                                {st?.closed_short_at ? (
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <Badge tone="gray" className="text-[10px]">
+                                      Chốt thiếu {money(st.qty_missing)}
+                                    </Badge>
+                                    {canEdit && po.status !== 'cancelled' && (
+                                      <button
+                                        type="button"
+                                        className="text-muted-foreground hover:text-foreground text-[11px] underline"
+                                        onClick={() => void act.reopenShort(po, st.id)}
+                                      >
+                                        Mở lại
+                                      </button>
+                                    )}
+                                  </div>
+                                ) : (
+                                  st &&
+                                  st.qty_missing > 0 && (
+                                    <div className="flex flex-col items-end gap-0.5">
+                                      <span className="font-mono text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                        Thiếu {money(st.qty_missing)}
+                                      </span>
+                                      {canEdit && canCloseShort && st.qty_open > 0 && (
+                                        <button
+                                          type="button"
+                                          className="text-muted-foreground hover:text-foreground text-[11px] underline"
+                                          onClick={() =>
+                                            setReasoning({
+                                              po,
+                                              kind: 'close_short',
+                                              reason: '',
+                                              lineId: st.id,
+                                              detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
+                                            })
+                                          }
+                                        >
+                                          Chốt thiếu
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                )}
+                              </div>
+                            )}
+                          </TableCell>
+                        )}
+
+                        <TableCell className="text-right whitespace-nowrap">
+                          {l.unit_price != null ? (
+                            <div className="flex flex-col items-end">
+                              <span className="font-mono text-sm">
+                                {cash(l.unit_price)}
+                              </span>
+                              {l.price_basis === 'unit2' && l.unit2 && (
+                                <span className="text-muted-foreground text-[11px]">
+                                  /{l.unit2}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-amber-600 dark:text-amber-400 text-xs">
+                              Chưa có giá
+                            </span>
+                          )}
+                        </TableCell>
+
+                        <TableCell className="text-right whitespace-nowrap">
+                          <span className="font-mono font-semibold text-sm">
+                            {l.unit_price != null
+                              ? cash(roundMoney(poLineAmount(l), po.currency))
+                              : '—'}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+
+              {/* Chân bảng: Tổng số lượng & Tổng thanh toán */}
+              <div className="grid gap-4 border-t bg-muted/10 p-5 sm:grid-cols-[1fr_auto]">
+                <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
+                  <span className="font-semibold uppercase tracking-wider text-foreground">
+                    Tổng số lượng theo đơn vị:
+                  </span>
+                  {qtyTotals(
+                    lines.some((l) => l.price_basis === 'unit2' && l.unit2),
+                    lines,
+                  ).map((t) => (
+                    <div key={t.label} className="flex items-center gap-2">
+                      <span>{t.label}:</span>
+                      <span className="font-mono font-medium text-foreground">
+                        {money(t.value)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex min-w-[280px] flex-col gap-2 text-sm">
+                  <div className="flex justify-between gap-6 text-muted-foreground">
+                    <span>Tiền hàng</span>
+                    <span className="font-mono font-medium text-foreground">
+                      {cash(m.subtotal)}
+                    </span>
+                  </div>
+
+                  {m.discountAmount > 0 && (
+                    <div className="flex justify-between gap-6 text-emerald-600 dark:text-emerald-400">
+                      <span>Chiết khấu</span>
+                      <span className="font-mono font-medium">
+                        − {cash(m.discountAmount)}
+                      </span>
+                    </div>
+                  )}
+
+                  {po.vat_rate != null && (
+                    <div className="flex justify-between gap-6 text-muted-foreground">
+                      <span>
+                        VAT ({po.vat_rate}%)
+                        <span className="ml-1 text-[11px]">
+                          {po.price_includes_vat ? '(đã gồm)' : '(chưa gồm)'}
+                        </span>
+                      </span>
+                      <span className="font-mono font-medium text-foreground">
+                        {cash(m.vatAmount)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-baseline justify-between gap-6 border-t pt-2.5">
+                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                      Tổng thanh toán
+                    </span>
+                    <div className="text-right">
+                      <span className="font-mono text-xl font-bold text-primary">
+                        {cash(m.grandTotal)}
+                      </span>
+                      <span className="text-muted-foreground ml-1.5 text-xs font-normal">
+                        {po.currency}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── TAB 2: KẾ HOẠCH GIAO & ĐỢT HÀNG ────────────────────────────── */}
+        <TabsContent value="shipments" className="flex flex-col gap-5">
+          {po.status !== 'cancelled' ? (
             <PoShipmentsCard
               shipments={shipments}
               linesById={shipmentLinesById}
@@ -480,11 +1187,6 @@ export function PoDetailScreen({
                 shipmentLines.length > 0 &&
                 ['confirmed', 'in_transit', 'partial'].includes(po.status)
               }
-              /*
-               * Chưa có đợt nào thì chỉ đúng LỐI VÀO của trạng thái hiện tại —
-               * mỗi trạng thái chia đợt ở một chỗ khác nhau, và đây là thứ
-               * người dùng không đoán được nếu màn hình im lặng.
-               */
               emptyHint={
                 po.status === 'draft'
                   ? 'Chia đợt ngay trong màn “Sửa đơn” — tab Chia đợt giao; lịch đó in lên phiếu gửi NCC.'
@@ -493,7 +1195,7 @@ export function PoDetailScreen({
                     : po.status === 'approved'
                       ? 'Đơn đã duyệt nên khoá sửa. Lịch giao sẽ ghi ở bước “NCC xác nhận” sau khi gửi đơn.'
                       : po.status === 'ordered'
-                        ? 'Bấm “NCC xác nhận” ở cột phải để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+                        ? 'Bấm “NCC đã xác nhận” ở thanh công cụ để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
                         : shipmentLines.length === 0
                           ? 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt được.'
                           : null
@@ -515,511 +1217,245 @@ export function PoDetailScreen({
               }
               onAdd={() => setConfirming('add')}
             />
-          )}
-          <section className={`${card} min-w-0`}>
-            <div className={cardHead}>
-              <b>Dòng hàng</b>
-              <span className="text-muted-foreground">{lines.length} dòng</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className="border-border text-muted-foreground border-b text-left text-xs uppercase">
-                    <th className="py-2 pr-2 pl-3.5">Vật tư</th>
-                    <th className="w-24 py-2 pr-2">Quy cách</th>
-                    <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
-                    {showReceived && (
-                      <>
-                        <th className="w-20 py-2 pr-2 text-right">Đã về</th>
-                        <th className="w-20 py-2 pr-2 text-right">Còn thiếu</th>
-                      </>
-                    )}
-                    <th className="w-24 py-2 pr-2 text-right">Đơn giá</th>
-                    <th className="w-28 py-2 pr-3.5 text-right">Thành tiền</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => {
-                    const st = receivedById.get(l.id)
-                    return (
-                      <tr key={l.id} className="border-border/60 border-b">
-                        <td className="py-1.5 pr-2 pl-3.5">
-                          <div className="flex flex-col">
-                            <span>
-                              <span className="text-muted-foreground font-mono text-xs">
-                                {l.material_code}
-                              </span>{' '}
-                              {l.material_name}
-                            </span>
-                            {(l.qty2 != null || l.note) && (
-                              <span className="text-muted-foreground text-xs">
-                                {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
-                                {l.qty2 != null && l.note && ' · '}
-                                {l.note}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-1.5 pr-2 text-xs">{l.spec ?? '—'}</td>
-                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                          {money(l.qty_ordered)} {l.material_unit}
-                        </td>
-                        {showReceived &&
-                          (l.material_id == null ? (
-                            /* Dòng tự do (0134) không đi qua sổ kho vật tư —
-                               "đã về 0 / còn thiếu" là số giả, để trống. */
-                            <td
-                              colSpan={2}
-                              className="text-muted-foreground py-1.5 pr-2 text-right text-xs"
-                              title="Dòng không gắn vật tư kho — nghiệm thu ngoài sổ kho"
-                            >
-                              —
-                            </td>
-                          ) : (
-                            <>
-                              <td className="py-1.5 pr-2 text-right">
-                                {money(st?.qty_received ?? 0)}
-                              </td>
-                              <td className="py-1.5 pr-2 text-right">
-                                {st?.closed_short_at ? (
-                                  /* 0154: NCC không giao phần này nữa — số thiếu
-                                     THẬT vẫn hiện (đối chiếu), kèm dấu đã chốt. */
-                                  <span
-                                    className="inline-flex flex-col items-end gap-0.5"
-                                    title={`Chốt thiếu ${day(st.closed_short_at)}${st.closed_short_reason ? ` — ${st.closed_short_reason}` : ''}`}
-                                  >
-                                    <Badge tone="gray">
-                                      Chốt thiếu {money(st.qty_missing)}
-                                    </Badge>
-                                    {canEdit && po.status !== 'cancelled' && (
-                                      <button
-                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
-                                        onClick={() => void act.reopenShort(po, st.id)}
-                                      >
-                                        Mở lại
-                                      </button>
-                                    )}
-                                  </span>
-                                ) : st && st.qty_missing > 0 ? (
-                                  <span className="inline-flex flex-col items-end gap-0.5">
-                                    <span className="font-medium text-amber-600">
-                                      {money(st.qty_missing)}
-                                    </span>
-                                    {canEdit && canCloseShort && st.qty_open > 0 && (
-                                      <button
-                                        className="text-muted-foreground text-[11px] underline-offset-2 hover:underline"
-                                        title="NCC không giao phần thiếu của dòng này nữa"
-                                        onClick={() =>
-                                          setReasoning({
-                                            po,
-                                            kind: 'close_short',
-                                            reason: '',
-                                            lineId: st.id,
-                                            detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
-                                          })
-                                        }
-                                      >
-                                        Chốt thiếu
-                                      </button>
-                                    )}
-                                  </span>
-                                ) : (
-                                  <Badge tone="green">Đủ</Badge>
-                                )}
-                              </td>
-                            </>
-                          ))}
-                        <td className="py-1.5 pr-2 text-right whitespace-nowrap">
-                          {l.unit_price != null ? (
-                            <>
-                              {cash(l.unit_price)}
-                              {l.price_basis === 'unit2' && l.unit2 && (
-                                <span className="text-xs text-violet-600">
-                                  /{l.unit2}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td className="py-1.5 pr-3.5 text-right font-medium">
-                          {l.unit_price != null
-                            ? cash(roundMoney(poLineAmount(l), po.currency))
-                            : '—'}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-                {/*
-                  TỔNG SỐ LƯỢNG — cùng con số với phiếu in mà NCC đang cầm.
-                  Đơn tính theo kg thì tổng là KG (mua nhôm/inox ai cũng hỏi
-                  "bao nhiêu kg"), còn lại gộp theo từng ĐVT: cộng 500 con vít
-                  với 3 kg nhôm ra một con số vô nghĩa.
-                */}
-                {qtyTotals(
-                  lines.some((l) => l.price_basis === 'unit2' && l.unit2),
-                  lines,
-                ).length > 0 && (
-                  <tfoot>
-                    <tr className="border-border border-t">
-                      <td
-                        colSpan={showReceived ? 6 : 4}
-                        className="text-muted-foreground py-2 pr-2 pl-3.5 text-right text-xs"
-                      >
-                        {qtyTotals(
-                          lines.some((l) => l.price_basis === 'unit2' && l.unit2),
-                          lines,
-                        )
-                          .map((t) => `${t.label}: ${money(t.value)}`)
-                          .join('  ·  ')}
-                      </td>
-                      <td className="py-2 pr-3.5 text-right text-xs font-semibold">
-                        {cash(m.subtotal)} {po.currency}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          </section>
-
-          <PoTerms
-            po={po}
-            // Sửa được tới khi đơn huỷ — server enforce lại (updateTerms).
-            onEdit={
-              canEdit && po.status !== 'cancelled'
-                ? () => setEditingTerms(true)
-                : undefined
-            }
-          />
-
-          {/* Đơn gộp (0125) — nói rõ tiền này mua cho những lệnh nào. */}
-          {extraLsx.length > 0 && (
-            <section className={card}>
-              <div className={cardHead}>
-                <b>Mua chung cho nhiều lệnh</b>
-                <span className="text-muted-foreground">{extraLsx.length + 1} lệnh</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5 px-3.5 py-3">
-                {[{ id: po.production_order_id ?? '', code: po.lsx_code ?? '—' }]
-                  .concat(extraLsx)
-                  .map((l, i) => (
-                    <span
-                      key={l.id || i}
-                      className="rounded-full bg-violet-50 px-2 py-0.5 font-mono text-[11px] font-medium text-violet-700"
-                    >
-                      {l.code}
-                      {i === 0 && ' · lệnh chính'}
-                    </span>
-                  ))}
-              </div>
-            </section>
-          )}
-
-          {/* Hồ sơ mua hàng (FR-SUP-07): báo giá NCC, hợp đồng, chứng từ giao nhận */}
-          <section className={`${card} p-3.5`}>
-            <DocumentFiles
-              kind="purchase_order"
-              id={po.id}
-              canEdit={isSupply || canApprove}
-              title="Hồ sơ mua hàng (báo giá NCC, hợp đồng, chứng từ)"
+          ) : (
+            <EmptyState
+              icon={<Ban className="size-6 text-destructive" />}
+              title="Đơn hàng đã huỷ"
+              description="Kế hoạch giao nhận và chứng từ kho không còn áp dụng cho đơn này."
             />
-          </section>
+          )}
 
-          {/* Dòng thời gian nằm CUỐI cột nội dung (28/08): nhật ký để tra khi
-              cần, không phải việc phải làm — để ở cột phải thì màn hẹp nó chen
-              lên trước cả bảng hàng, còn desktop thì đẩy khối sticky ngắn đi. */}
-          <section className={card}>
-            <div className={cardHead}>
-              <b>Dòng thời gian</b>
-              <span className="text-muted-foreground">{marks.length} mốc</span>
-            </div>
-            {marks.length === 0 ? (
-              <p className="text-muted-foreground px-3.5 py-3 text-xs">
-                Chưa có mốc nào — đơn còn nằm ở người soạn.
-              </p>
-            ) : (
-              <ol className="flex flex-col gap-2.5 px-3.5 py-3">
-                {(allMarks ? marks : marks.slice(0, 4)).map((m) => (
-                  <li key={m.key} className="flex flex-col gap-0.5 text-xs">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      <Badge tone={m.tone}>{m.label}</Badge>
-                      {m.actor && (
-                        <span className="text-muted-foreground">{m.actor}</span>
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">{stamp(m.at)}</span>
-                    {m.detail && (
-                      <span className="text-muted-foreground">{m.detail}</span>
-                    )}
-                  </li>
-                ))}
-                {marks.length > 4 && (
-                  <li>
-                    <button
-                      onClick={() => setAllMarks((v) => !v)}
-                      className="text-[12px] font-medium text-[var(--primary)] hover:underline"
-                    >
-                      {allMarks ? 'Thu gọn' : `Xem tất cả ${marks.length} mốc`}
-                    </button>
-                  </li>
+          {warehouseDocs.length > 0 && (
+            <Card>
+              <CardHeader className="border-b bg-muted/20 py-3.5">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <FileText className="size-4 text-primary" />
+                  Chứng từ kho liên quan ({warehouseDocs.length} phiếu)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="font-semibold text-xs uppercase">Mã chứng từ</TableHead>
+                      <TableHead className="font-semibold text-xs uppercase">Loại nghiệp vụ</TableHead>
+                      <TableHead className="text-right font-semibold text-xs uppercase">Tổng số lượng</TableHead>
+                      <TableHead className="text-right font-semibold text-xs uppercase">Thời gian ghi nhận</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {warehouseDocs.map((doc) => (
+                      <TableRow key={doc.doc_id}>
+                        <TableCell className="font-mono font-medium text-sm">
+                          <DocChip>{doc.code}</DocChip>
+                        </TableCell>
+                        <TableCell>
+                          <Badge tone={doc.kind === 'receipt' ? 'green' : 'red'}>
+                            {doc.kind === 'receipt' ? 'Phiếu nhập kho (PNK)' : 'Phiếu xuất trả NCC'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-right text-sm">
+                          {money(doc.qty_total)}
+                        </TableCell>
+                        <TableCell className="font-mono text-muted-foreground text-right text-xs">
+                          {stamp(doc.at)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        {/* ── TAB 3: ĐIỀU KHOẢN & HỢP ĐỒNG ─────────────────────────────────── */}
+        <TabsContent value="terms" className="flex flex-col gap-5">
+          <Card>
+            <CardHeader className="border-b bg-muted/20 py-3.5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <ScrollText className="size-4 text-primary" />
+                  Điều khoản hợp đồng & Cam kết
+                </CardTitle>
+                {canEdit && po.status !== 'cancelled' && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditingTerms(true)}
+                  >
+                    <Pencil className="size-3.5" /> Sửa điều khoản
+                  </Button>
                 )}
-              </ol>
-            )}
-          </section>
-        </div>
-
-        {/* ── PHẢI: giờ tôi phải làm gì ── màn hẹp thì đứng TRƯỚC bảng. */}
-        <div className="order-1 flex min-w-0 flex-col gap-4 lg:order-2">
-          <div className="flex flex-col gap-4 lg:sticky lg:top-4">
-            <section className={card}>
-              <div className={cardHead}>
-                <Badge tone={PO_STATUS_TONE[po.status]}>
-                  {PO_STATUS_LABEL[po.status]}
-                </Badge>
-                {PO_NEXT_HINT[po.status] && (
-                  <span className="text-muted-foreground text-[11px]">
-                    → {PO_NEXT_HINT[po.status]}
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-6 p-6">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Điều 1 · Tiêu chuẩn chất lượng
                   </span>
-                )}
+                  <span className="text-sm font-medium text-foreground">
+                    {po.terms_quality || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
+
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Điều 2 · Địa điểm giao hàng
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {po.terms_delivery_place || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
+
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Điều 3 · Điều kiện thanh toán
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {po.terms_payment || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
+
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Điều 4 · Hoá đơn & Chứng từ
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {po.terms_invoice || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
+
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Điều 5 · Thời hạn giao hàng
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {po.terms_lead_time || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
+
+                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
+                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                    Đại diện ký đơn (Chức danh)
+                  </span>
+                  <span className="text-sm font-medium text-foreground">
+                    {po.signer_role || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  </span>
+                </div>
               </div>
-              <dl className="flex flex-col gap-2 px-3.5 py-3 text-[13px]">
-                <Row label="Nhà cung cấp" value={po.supplier_name} />
-                <Row label="Phụ trách" value={po.assignee_name ?? '— chưa có —'} />
-                <Row
-                  label="Hẹn giao"
-                  value={
-                    po.expected_at ? (
-                      <span
-                        className={
-                          late === 'overdue' ? 'font-medium text-[var(--stop)]' : ''
-                        }
-                      >
-                        {day(po.expected_at)}
-                        {late === 'overdue' && ' ⚠ quá hẹn'}
+
+              {(po.terms || po.note) && (
+                <div className="bg-muted/30 flex flex-col gap-2 rounded-lg border p-4 text-sm">
+                  {po.terms && (
+                    <div>
+                      <span className="font-semibold text-foreground">
+                        Điều khoản bổ sung:{' '}
                       </span>
-                    ) : isMissingEta(po) ? (
-                      <span className="font-medium text-amber-600">⚠ chưa hẹn giao</span>
-                    ) : (
-                      '—'
-                    )
-                  }
+                      <span className="text-muted-foreground leading-relaxed">
+                        {po.terms}
+                      </span>
+                    </div>
+                  )}
+                  {po.note && (
+                    <div>
+                      <span className="font-semibold text-foreground">
+                        Ghi chú chung:{' '}
+                      </span>
+                      <span className="text-muted-foreground leading-relaxed">
+                        {po.note}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ── TAB 4: DÒNG THỜI GIAN & LỊCH SỬ DUYỆT ─────────────────────────── */}
+        <TabsContent value="timeline" className="flex flex-col gap-5">
+          <Card>
+            <CardHeader className="border-b bg-muted/20 py-3.5">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <History className="size-4 text-primary" />
+                Dòng thời gian & Nhật ký xử lý ({marks.length} mốc sự kiện)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {marks.length === 0 ? (
+                <EmptyState
+                  icon={<History className="size-6 text-muted-foreground" />}
+                  title="Chưa có mốc nhật ký"
+                  description="Phiếu còn nằm ở người soạn hoặc chưa phát sinh sự kiện nào."
                 />
-                <Row label="Ngày tạo" value={day(po.created_at)} />
-                <div className="border-border/70 mt-1 border-t pt-2">
-                  <Row label="Tiền hàng" value={`${cash(m.subtotal)} ${po.currency}`} />
-                  {m.discountAmount > 0 && (
-                    <Row label="Chiết khấu" value={`− ${cash(m.discountAmount)}`} />
-                  )}
-                  {po.vat_rate != null && (
-                    <Row
-                      label={`VAT ${po.vat_rate}% (${po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})`}
-                      value={cash(m.vatAmount)}
-                    />
-                  )}
-                  <div className="mt-1.5 flex items-baseline justify-between gap-2">
-                    <span className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
-                      Tổng thanh toán
-                    </span>
-                    <b className="text-base tabular-nums">
-                      {cash(m.grandTotal)}{' '}
-                      <span className="text-muted-foreground text-xs font-normal">
-                        {po.currency}
-                      </span>
-                    </b>
-                  </div>
+              ) : (
+                <div className="border-border relative ml-3 space-y-6 border-l-2 pl-6">
+                  {marks.map((mk) => (
+                    <div key={mk.key} className="group relative">
+                      <div
+                        className={`border-background absolute -left-[31px] top-1 size-3.5 rounded-full border-2 ring-4 ${
+                          mk.tone === 'green'
+                            ? 'bg-emerald-500 ring-emerald-500/15'
+                            : mk.tone === 'blue'
+                              ? 'bg-primary ring-primary/15'
+                              : mk.tone === 'amber'
+                                ? 'bg-amber-500 ring-amber-500/15'
+                                : mk.tone === 'red'
+                                  ? 'bg-rose-500 ring-rose-500/15'
+                                  : 'bg-muted-foreground ring-muted/20'
+                        }`}
+                      />
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <span className="text-sm font-semibold text-foreground">
+                          {mk.label}
+                        </span>
+                        <span className="text-muted-foreground font-mono text-xs">
+                          {stamp(mk.at)}
+                        </span>
+                      </div>
+                      {(mk.actor || mk.detail) && (
+                        <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                          {mk.actor && (
+                            <span className="font-medium text-foreground">
+                              {mk.actor}
+                            </span>
+                          )}
+                          {mk.actor && mk.detail && ' · '}
+                          {mk.detail && <span>{mk.detail}</span>}
+                        </p>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </dl>
-            </section>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <section className={card}>
-              <div className={cardHead}>
-                <b>Thao tác</b>
-              </div>
-              <div className="flex flex-col gap-2 px-3.5 py-3">
-                {/* NHÁP (0116): người soạn toàn quyền — đơn chưa tới bàn sếp. */}
-                {canEdit && po.status === 'draft' && (
-                  <>
-                    <button className={btnPrimary} onClick={() => void act.submitPo(po)}>
-                      Gửi GĐ duyệt
-                    </button>
-                    <Link
-                      href={`/planning/pos/${po.id}/edit`}
-                      className={`${btn} block text-center`}
-                    >
-                      Sửa đơn
-                    </Link>
-                    <button className={btnDanger} onClick={() => void removeDraft()}>
-                      Xoá nháp
-                    </button>
-                  </>
-                )}
-                {/* Chờ duyệt (0128): không sửa trực tiếp — rút về nháp rồi sửa. */}
-                {canEdit && po.status === 'pending_approval' && (
-                  <button className={btn} onClick={() => void act.withdrawPo(po)}>
-                    Rút về nháp để sửa
-                  </button>
-                )}
-                {canApprove && po.status === 'pending_approval' && (
-                  <>
-                    <button className={btnGreen} onClick={() => void act.approve(po)}>
-                      Duyệt đơn đặt
-                    </button>
-                    <button
-                      className={btnDanger}
-                      onClick={() => setReasoning({ po, kind: 'reject', reason: '' })}
-                    >
-                      Từ chối
-                    </button>
-                  </>
-                )}
-                {canEdit && po.status === 'approved' && (
-                  <button
-                    className={btnPrimary}
-                    onClick={() => void act.advance(po, 'ordered')}
-                  >
-                    Gửi NCC
-                  </button>
-                )}
-                {/*
-                  NCC XÁC NHẬN (0152): mở form ghi cam kết + đợt giao thay vì
-                  lật cờ trần. Đơn TOÀN dòng tự do không có đợt theo dòng —
-                  vẫn qua dialog nhưng chỉ ghi chú (shipmentLines rỗng thì
-                  service nhận shipments rỗng, chỉ đóng dấu confirmed).
-                */}
-                {canEdit && po.status === 'ordered' && (
-                  <button
-                    className={btn}
-                    onClick={() =>
-                      shipmentLines.length > 0
-                        ? setConfirming('confirm')
-                        : void act.advance(po, 'confirmed')
-                    }
-                  >
-                    NCC xác nhận
-                  </button>
-                )}
-                {canEdit && ['ordered', 'confirmed'].includes(po.status) && (
-                  <button
-                    className={btn}
-                    onClick={() => void act.advance(po, 'in_transit')}
-                  >
-                    Đang giao
-                  </button>
-                )}
-                {/*
-                  "ĐÃ NHẬN ĐỦ" bằng tay — cho đơn CÓ DÒNG TỰ DO (gỗ/gia công,
-                  0134): hàng nghiệm thu ngoài sổ kho nên không có phiếu nhập
-                  nào tự chốt. Chỉ hiện khi mọi DÒNG VẬT TƯ KHO (nếu có) đã về
-                  đủ theo sổ — đơn hỗn hợp trước đây kẹt vĩnh viễn vì sổ kho
-                  không chốt nổi (dòng tự do không có movement) mà nút tay lại
-                  bị cấm. Server enforce lại đúng luật này (BR-08 giữ phần kho).
-                */}
-                {canEdit &&
-                  lines.length > 0 &&
-                  lines.some((l) => l.material_id == null) &&
-                  // qty_open (0154): dòng kho đã chốt thiếu không chặn nghiệm thu
-                  statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
-                  ['ordered', 'confirmed', 'in_transit', 'partial'].includes(
-                    po.status,
-                  ) && (
-                    <button
-                      className={btnGreen}
-                      onClick={() => void act.advance(po, 'received')}
-                    >
-                      Đã nhận đủ (nghiệm thu)
-                    </button>
-                  )}
-                {/*
-                  CHỐT PHẦN THIẾU cả đơn (0154) — đơn VỀ MỘT PHẦN mà NCC báo
-                  không giao nữa: một phát cho mọi dòng còn thiếu. Từng dòng lẻ
-                  có nút riêng ngay trong bảng.
-                */}
-                {canEdit && po.status === 'partial' && openStockLines.length > 0 && (
-                  <button
-                    className={btn}
-                    onClick={() =>
-                      setReasoning({
-                        po,
-                        kind: 'close_short',
-                        reason: '',
-                        lineId: null,
-                        detail:
-                          openStockLines.length === 1
-                            ? `${openStockLines[0].material_name} — thiếu ${money(openStockLines[0].qty_missing)} ${openStockLines[0].material_unit}`
-                            : `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
-                      })
-                    }
-                  >
-                    Chốt phần thiếu (NCC không giao nữa)
-                  </button>
-                )}
+        {/* ── TAB 5: TÀI LIỆU ĐÍNH KÈM ─────────────────────────────────────── */}
+        <TabsContent value="docs" className="flex flex-col gap-5">
+          <Card>
+            <CardHeader className="border-b bg-muted/20 py-3.5">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <Paperclip className="size-4 text-primary" />
+                Hồ sơ & Tài liệu đính kèm
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              <DocumentFiles
+                kind="purchase_order"
+                id={po.id}
+                canEdit={isSupply || canApprove}
+                title="Báo giá NCC · Hợp đồng mua bán · Chứng từ giao nhận"
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
 
-                {/*
-                  NHÂN BẢN mở cho MỌI trạng thái, không riêng đơn đã huỷ: mua
-                  lặp lại cùng một rổ vật tư từ cùng một NCC là việc hằng tháng,
-                  và chép tay 15 dòng là chỗ sinh sai số.
-                */}
-
-                {/* Nháp không có"Huỷ" — xoá hẳn ở trên; huỷ-có-lý-do dành cho
-                    đơn đã gửi đi và cần để lại dấu vết. */}
-                {/* VIỆC PHỤ (28/08 — gọn UI): mỗi nút một ô lưới 2 cột thay vì
-                    5 nút full-width xếp chồng ăn nửa màn. Nút VIỆC CHÍNH theo
-                    trạng thái vẫn full-width ở trên — mắt tìm hành động tiếp
-                    theo trước, việc phụ nằm gọn bên dưới. */}
-                <div className="grid grid-cols-2 gap-2">
-                  {canEdit && canReschedule(po.status).ok && (
-                    <button
-                      className={btnSmall}
-                      onClick={() =>
-                        setRescheduling({
-                          po,
-                          date: po.expected_at?.slice(0, 10) ?? '',
-                          reason: '',
-                        })
-                      }
-                    >
-                      Đổi hẹn giao
-                    </button>
-                  )}
-                  {canReassign && !['received', 'cancelled'].includes(po.status) && (
-                    <button
-                      className={btnSmall}
-                      onClick={() => setReassigning({ po, toId: '' })}
-                    >
-                      Bàn giao phụ trách
-                    </button>
-                  )}
-                  {isSupply && (
-                    <Link
-                      href={`/planning/pos/${po.id}/edit?duplicate=1`}
-                      className={`${btnSmall} block text-center`}
-                    >
-                      {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
-                    </Link>
-                  )}
-                  {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
-                    <button
-                      className={`${btnSmall} border-[var(--stop)]/40 text-[var(--stop)] hover:bg-[var(--stop)]/10`}
-                      onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-                    >
-                      Huỷ đơn
-                    </button>
-                  )}
-                </div>
-                {!canEdit && !canApprove && (
-                  <p className="text-muted-foreground text-xs">
-                    Bạn đang xem đơn của người khác — chỉ đọc.
-                  </p>
-                )}
-              </div>
-            </section>
-          </div>
-        </div>
-      </div>
-
+      {/* ── Dialogs ──────────────────────────────────────────────────────── */}
       <PoTermsDialog
         open={editingTerms}
         po={po}
@@ -1082,74 +1518,6 @@ export function PoDetailScreen({
   )
 }
 
-function Row({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-2">
-      <dt className="text-muted-foreground shrink-0 text-xs">{label}</dt>
-      <dd className="min-w-0 truncate text-right">{value}</dd>
-    </div>
-  )
-}
-
-/**
- * ĐIỀU KHOẢN ĐẦY ĐỦ — đúng những dòng in ra cho nhà cung cấp.
- *
- * Bản trước chỉ hiện mỗi `terms` (dòng gộp) nên năm điều khoản riêng — chất
- * lượng, nơi giao, thanh toán, hoá đơn, thời gian giao — chỉ tồn tại trên phiếu
- * in. Người phụ trách muốn kiểm lại "mình đã hẹn thanh toán bao nhiêu ngày "
- * phải mở tab in ra xem, mà tờ in thì lại là thứ NCC đang cầm: sai một chữ ở đó
- * là sai cam kết.
- */
-function PoTerms({ po, onEdit }: { po: PoDetailPo; onEdit?: () => void }) {
-  const rows: [string, string | null][] = [
-    ['Mẫu đơn', poTemplateMeta(po.template as PoTemplate).label],
-    ['Theo HĐ số', po.contract_no],
-    ['Chất lượng', po.terms_quality],
-    ['Nơi giao hàng', po.terms_delivery_place],
-    ['Thanh toán', po.terms_payment],
-    ['Hoá đơn', po.terms_invoice],
-    ['Thời gian giao', po.terms_lead_time],
-    ['Người ký', po.signer_role],
-  ]
-  const shown = rows.filter(([, v]) => v)
-  if (shown.length === 0 && !po.terms && !po.note && !onEdit) return null
-
-  return (
-    <section className={card}>
-      <div className={cardHead}>
-        <b>Điều khoản & ghi chú</b>
-        {onEdit && (
-          <button
-            onClick={onEdit}
-            className="border-input hover:bg-muted ml-auto inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
-          >
-            <Pencil className="size-3.5" aria-hidden /> Sửa
-          </button>
-        )}
-      </div>
-      <dl className="grid gap-x-4 gap-y-1.5 px-3.5 py-3 text-[13px] sm:grid-cols-2">
-        {shown.map(([k, v]) => (
-          <div key={k} className="flex gap-2">
-            <dt className="text-muted-foreground w-28 shrink-0 text-xs">{k}</dt>
-            <dd className="min-w-0">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {(po.terms || po.note) && (
-        <div className="border-border/70 text-muted-foreground flex flex-col gap-1.5 border-t px-3.5 py-3 text-xs">
-          {po.terms && <p>{po.terms}</p>}
-          {po.note && <p>{po.note}</p>}
-        </div>
-      )}
-    </section>
-  )
-}
-
-/**
- * HỘP SỬA ĐIỀU KHOẢN & GHI CHÚ (28/08) — chỉ CHỮ in lên phiếu. Dòng hàng, giá,
- * NCC không có ở đây: đổi mấy thứ đó là phải rút về nháp đi duyệt lại; còn câu
- * thanh toán gõ nhầm thì không thể bắt huỷ đơn NCC đang giao mới sửa được.
- */
 function PoTermsDialog({
   open,
   po,
@@ -1175,7 +1543,6 @@ function PoTermsDialog({
     signer_role: '',
     note: '',
   })
-  // Nạp giá trị hiện tại mỗi lần MỞ — đóng rồi mở lại phải thấy bản mới nhất.
   const [wasOpen, setWasOpen] = useState(false)
   if (open !== wasOpen) {
     setWasOpen(open)
@@ -1194,7 +1561,7 @@ function PoTermsDialog({
   }
 
   const field =
-    'border-input focus:border-ring h-9 w-full rounded-md border px-2 text-sm outline-none'
+    'border-input focus:border-ring h-9 w-full rounded-md border px-3 text-sm outline-none bg-background'
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }))
 
@@ -1218,7 +1585,7 @@ function PoTermsDialog({
           Object.entries(form).map(([k, v]) => [k, v.trim() || null]),
         ),
       })
-      toast.success('Đã lưu điều khoản', 'Phiếu in dùng bản vừa sửa')
+      toast.success('Đã lưu điều khoản', 'Phiếu in và hồ sơ dùng bản vừa sửa')
       onSaved()
     } catch (e) {
       toast.error('Lưu điều khoản thất bại', e instanceof ApiError ? e.message : 'Có lỗi')
@@ -1234,10 +1601,9 @@ function PoTermsDialog({
       title={`Sửa điều khoản — ${po.code}`}
       maxWidth="sm:max-w-xl"
     >
-      <div className="flex flex-col gap-3 text-sm">
+      <div className="flex flex-col gap-3.5 text-sm">
         <p className="text-muted-foreground bg-muted rounded-md px-3 py-2 text-xs">
-          Chỉ sửa được phần CHỮ in lên phiếu. Dòng hàng, giá, nhà cung cấp muốn đổi thì
-          rút đơn về nháp.
+          Chỉ sửa đổi thông tin điều khoản và ghi chú. Muốn thay đổi danh sách mặt hàng, số lượng hoặc đơn giá vui lòng rút đơn về nháp để chỉnh sửa.
         </p>
         {FIELDS.map(([k, label]) => (
           <label key={k} className="flex flex-col gap-1">
@@ -1246,29 +1612,26 @@ function PoTermsDialog({
           </label>
         ))}
         <label className="flex flex-col gap-1">
-          <span className="text-muted-foreground text-xs font-medium">Ghi chú</span>
+          <span className="text-muted-foreground text-xs font-medium">Ghi chú chung</span>
           <textarea
             rows={2}
             value={form.note}
             onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
-            className="border-input focus:border-ring w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+            className="border-input focus:border-ring bg-background w-full rounded-md border px-3 py-1.5 text-sm outline-none"
           />
         </label>
-        <div className="flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="border-input hover:bg-muted rounded-md border px-3 py-1.5"
-          >
+        <div className="mt-2 flex justify-end gap-2">
+          <Button variant="outline" size="sm" onClick={onClose}>
             Huỷ
-          </button>
-          <button
+          </Button>
+          <Button
+            size="sm"
             disabled={saving || busy}
             onClick={() => void save()}
-            className="bg-primary inline-flex items-center gap-2 rounded-md px-4 py-1.5 font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             {saving && <Spinner size={14} />}
             Lưu điều khoản
-          </button>
+          </Button>
         </div>
       </div>
     </Modal>
