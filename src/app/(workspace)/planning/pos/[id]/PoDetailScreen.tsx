@@ -60,12 +60,7 @@ import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import {
-  PO_NEXT_HINT,
-  PO_STATUS_LABEL,
-  PO_STATUS_TONE,
-  type PoStatus,
-} from '@/lib/po-status'
+import { PO_STATUS_LABEL, PO_STATUS_TONE, type PoStatus } from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
 import { PoStatusStepper } from '../PoStatusStepper'
 import {
@@ -123,13 +118,14 @@ const HISTORY_LABEL: Record<ApprovalEvent['action'], string> = {
   withdrawn: 'Rút về nháp',
   reassigned: 'Bàn giao người phụ trách',
 }
-const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> = {
-  submitted: 'amber',
-  approved: 'green',
-  rejected: 'red',
-  withdrawn: 'gray',
-  reassigned: 'gray',
-}
+const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> =
+  {
+    submitted: 'amber',
+    approved: 'green',
+    rejected: 'red',
+    withdrawn: 'gray',
+    reassigned: 'gray',
+  }
 
 export function PoDetailScreen({
   po,
@@ -200,6 +196,13 @@ export function PoDetailScreen({
       shippedByLine.set(l.po_line_id, (shippedByLine.get(l.po_line_id) ?? 0) + l.qty)
     }
   }
+
+  /*
+   * ĐỢT GIAO — đếm cho thẻ số đầu trang. Đợt đã HUỶ không nằm ở mẫu số: chia 5
+   * đợt rồi huỷ 2 thì "3/5" đọc thành còn thiếu, trong khi thực tế đã xong.
+   */
+  const liveShipments = shipments.filter((s) => s.status !== 'cancelled')
+  const shipmentsDone = liveShipments.filter((s) => s.status === 'received').length
 
   const receivedById = new Map(statusLines.map((s) => [s.id, s]))
   const showReceived = !['draft', 'pending_approval', 'approved', 'cancelled'].includes(
@@ -410,11 +413,10 @@ export function PoDetailScreen({
     in_transit:
       shipments.find((s) => s.status === 'arrived' || s.status === 'received')
         ?.created_at ?? null,
-    partial:
-      statusLines.some((l) => (l.qty_received ?? 0) > 0)
-        ? warehouseDocs[0]?.at ?? null
-        : null,
-    received: po.status === 'received' ? warehouseDocs[0]?.at ?? null : null,
+    partial: statusLines.some((l) => (l.qty_received ?? 0) > 0)
+      ? (warehouseDocs[0]?.at ?? null)
+      : null,
+    received: po.status === 'received' ? (warehouseDocs[0]?.at ?? null) : null,
   }
 
   return (
@@ -430,24 +432,29 @@ export function PoDetailScreen({
             { label: po.code },
           ]}
         />
+        {/* Ẩn ở màn hẹp: nó trỏ đúng chỗ mà breadcrumb "Đơn đặt vật tư" ngay
+            bên trái đã trỏ, mà trên điện thoại nó lại xuống hàng riêng — tốn
+            một dòng cho một lối đi đã có. */}
         <Link
           href="/planning/pos"
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 text-xs font-medium transition-colors"
+          className="text-muted-foreground hover:text-foreground hidden items-center gap-1.5 text-xs font-medium transition-colors sm:inline-flex"
         >
           <ArrowLeft className="size-3.5" />
           Về danh sách đơn đặt
         </Link>
       </div>
 
-      {/* ── Chuỗi liên kết chứng từ (RefChain) ─────────────────────────── */}
-      {chain.length > 1 && (
-        <div className="bg-card rounded-xl border px-4 py-2.5 shadow-2xs">
-          <RefChain nodes={chain} size="md" />
-        </div>
-      )}
+      {/*
+        ── MỘT THẺ ĐẦU TRANG (04/09/2026) ───────────────────────────────────
+        Trước đây ba thẻ rời: RefChain / tiêu đề+hành động / stepper. Ba viền,
+        ba lần đổ bóng, hai khoảng cách 16px — 457px trước khi tới nội dung, và
+        chúng nói trùng nhau: đo trên đơn thật thì `PO-2026-0065` hiện 3 lần,
+        `Nháp` 3 lần, mã lệnh 3 lần.
 
-      {/* ── Page Header: Tiêu đề & Action Bar ────────────────────────────── */}
-      <div className="bg-card flex flex-col gap-4 rounded-xl border p-5 shadow-xs">
+        Gộp lại vì cả ba trả lời CÙNG một câu: "đơn này là đơn nào, thuộc về
+        đâu, đang ở bước nào". Đó là một khối nhận diện, không phải ba.
+      */}
+      <div className="bg-card flex flex-col gap-3 rounded-xl border p-4 shadow-xs">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
@@ -456,7 +463,7 @@ export function PoDetailScreen({
                 type="button"
                 onClick={copyCode}
                 title="Sao chép mã đơn"
-                className="text-muted-foreground hover:text-foreground inline-flex size-7 items-center justify-center rounded-md hover:bg-muted transition-colors"
+                className="text-muted-foreground hover:text-foreground hover:bg-muted inline-flex size-7 items-center justify-center rounded-md transition-colors"
               >
                 {copied ? (
                   <Check className="size-4 text-emerald-600" />
@@ -467,7 +474,7 @@ export function PoDetailScreen({
 
               <Badge tone={PO_STATUS_TONE[po.status]}>{PO_STATUS_LABEL[po.status]}</Badge>
 
-              <Badge tone="gray" className="font-normal text-xs">
+              <Badge tone="gray" className="text-xs font-normal">
                 Mẫu {poTemplateMeta(po.template as PoTemplate).label.toLowerCase()}
               </Badge>
 
@@ -479,7 +486,17 @@ export function PoDetailScreen({
               )}
             </div>
 
-            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            {/*
+              DẤU PHÂN CÁCH GẮN VÀO MỤC, KHÔNG ĐỨNG RIÊNG (04/09/2026).
+
+              Bản cũ chèn `<span>·</span>` rời giữa các mục. Hàng này chắc chắn
+              xuống dòng trên điện thoại, và khi đó dấu chấm — vốn là một phần
+              tử độc lập — trôi ra cuối dòng trên hoặc đầu dòng dưới, để lại
+              "· Ngày lập: 3/9/2026 ·" trông như câu bị cụt. Nay dấu là
+              `::before` của chính mục đứng sau nên không tách khỏi mục được
+              nữa; màn hẹp thì xếp dọc và bỏ dấu, vì mỗi mục đã một dòng riêng.
+            */}
+            <div className="text-muted-foreground sm:[&>span+span]:before:text-muted-foreground/60 flex flex-col gap-y-0.5 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:[&>span+span]:before:mr-3 sm:[&>span+span]:before:content-['·']">
               <span>
                 Nhà cung cấp:{' '}
                 <Link
@@ -489,22 +506,13 @@ export function PoDetailScreen({
                   {po.supplier_name}
                 </Link>
               </span>
-              <span>·</span>
               <span>Ngày lập: {day(po.created_at)}</span>
               {po.contract_no && (
-                <>
-                  <span>·</span>
-                  <span>
-                    Hợp đồng: <b className="font-mono text-foreground">{po.contract_no}</b>
-                  </span>
-                </>
+                <span>
+                  Hợp đồng: <b className="text-foreground font-mono">{po.contract_no}</b>
+                </span>
               )}
-              {po.assignee_name && (
-                <>
-                  <span>·</span>
-                  <span>Phụ trách: {po.assignee_name}</span>
-                </>
-              )}
+              {po.assignee_name && <span>Phụ trách: {po.assignee_name}</span>}
             </div>
           </div>
 
@@ -521,11 +529,7 @@ export function PoDetailScreen({
             )}
 
             {canEdit && po.status === 'pending_approval' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void act.withdrawPo(po)}
-              >
+              <Button variant="outline" size="sm" onClick={() => void act.withdrawPo(po)}>
                 Rút về nháp
               </Button>
             )}
@@ -566,11 +570,7 @@ export function PoDetailScreen({
                     : ''
                 }
               >
-                {act.busy ? (
-                  <Spinner size={14} />
-                ) : (
-                  <primary.icon className="size-4" />
-                )}
+                {act.busy ? <Spinner size={14} /> : <primary.icon className="size-4" />}
                 {primary.label}
               </Button>
             )}
@@ -658,32 +658,56 @@ export function PoDetailScreen({
             Bạn đang xem đơn của nhân sự khác — chế độ chỉ đọc.
           </div>
         )}
-      </div>
 
-      {/* ── Lifecycle Stepper / Tiến trình vòng đời ─────────────────────── */}
-      <div className="bg-card w-full overflow-x-auto rounded-xl border p-4 shadow-xs">
-        <PoStatusStepper status={po.status} dates={stepDates} />
+        {/*
+          CHUỖI CHỨNG TỪ — nay nằm TRONG thẻ, ngay dưới tiêu đề, và BỎ mắt cuối
+          (chính đơn đang xem). Mắt đó lặp lại cái mã đang in to ngay phía trên
+          nó; giữ lại chỉ để đánh dấu "bạn đang ở đây" thì thừa, vì cả thẻ này
+          đã là "đây" rồi.
+        */}
+        {chain.length > 1 && (
+          <div className="border-t pt-3">
+            <RefChain nodes={chain.filter((n) => !n.current)} size="md" />
+          </div>
+        )}
+
+        {/* Tiến trình vòng đời — cùng thẻ vì nó cũng đang tả CHÍNH đơn này. */}
+        <div className="w-full overflow-x-auto border-t pt-3">
+          <PoStatusStepper status={po.status} dates={stepDates} />
+        </div>
       </div>
 
       {/* ── 4 ERP Kit StatTiles ─────────────────────────────────────────── */}
       <StatTiles>
+        {/*
+          Ô "Trạng thái" từng đứng đây, nay bỏ (04/09/2026): nó in đúng chữ mà
+          Badge cạnh tiêu đề và stepper ngay trên đã nói — ba chỗ cho một giá
+          trị. Tệ hơn, nó là CHỮ nằm trong lưới bốn thẻ SỐ: mắt quét hàng thẻ
+          tìm con số thì vấp phải một từ.
+
+          Thay bằng đợt giao — thứ chưa chỗ nào trên đầu trang nói, mà lại là
+          câu hỏi kế tiếp ngay sau "hạn giao khi nào".
+        */}
         <StatTile
-          label="Trạng thái"
-          value={PO_STATUS_LABEL[po.status]}
+          label="Đợt giao"
+          value={
+            liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'
+          }
           tone={
-            po.status === 'received'
-              ? 'done'
-              : po.status === 'cancelled'
-                ? 'stop'
-                : ['in_transit', 'partial', 'pending_approval'].includes(po.status)
-                  ? 'warn'
-                  : 'primary'
+            liveShipments.length === 0
+              ? 'default'
+              : shipmentsDone >= liveShipments.length
+                ? 'done'
+                : 'warn'
           }
           hint={
-            PO_NEXT_HINT[po.status]
-              ? `Bước kế: ${PO_NEXT_HINT[po.status]}`
-              : 'Đã hoàn tất chu trình'
+            liveShipments.length === 0
+              ? 'chưa chia đợt — giao trọn gói'
+              : shipmentsDone >= liveShipments.length
+                ? 'đã nhận đủ mọi đợt'
+                : `còn ${liveShipments.length - shipmentsDone} đợt chưa về`
           }
+          icon={Truck}
         />
         <StatTile
           label="Hạn giao hàng"
@@ -772,33 +796,33 @@ export function PoDetailScreen({
         <TabsContent value="overview" className="flex flex-col gap-5">
           {/* Khối thông tin đối tác & logistics */}
           <Card>
-            <CardHeader className="border-b bg-muted/20 py-3">
-              <CardTitle className="text-xs font-bold tracking-wider uppercase text-muted-foreground">
+            <CardHeader className="bg-muted/20 border-b py-3">
+              <CardTitle className="text-muted-foreground text-xs font-bold tracking-wider uppercase">
                 Thông tin đơn hàng & Đối tác
               </CardTitle>
             </CardHeader>
             <CardContent className="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Bên bán (Nhà cung cấp)
                 </span>
                 <Link
                   href={`/planning/suppliers/${po.supplier_id}`}
-                  className="font-semibold text-primary hover:underline text-sm"
+                  className="text-primary text-sm font-semibold hover:underline"
                 >
                   {po.supplier_name}
                 </Link>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Lệnh sản xuất
                 </span>
                 {lsxCodes ? (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Link
                       href="/planning/lsx"
-                      className="font-mono text-sm font-medium hover:underline text-primary"
+                      className="text-primary font-mono text-sm font-medium hover:underline"
                     >
                       {lsxCodes}
                     </Link>
@@ -814,13 +838,13 @@ export function PoDetailScreen({
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Đơn hàng khách
                 </span>
                 {po.order_code ? (
                   <Link
                     href="/sales/orders"
-                    className="font-mono text-sm font-medium hover:underline text-primary"
+                    className="text-primary font-mono text-sm font-medium hover:underline"
                   >
                     {po.order_code}
                   </Link>
@@ -830,7 +854,7 @@ export function PoDetailScreen({
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Người phụ trách
                 </span>
                 <span className="text-sm font-medium">
@@ -841,30 +865,35 @@ export function PoDetailScreen({
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Tiền tệ & Thuế VAT
                 </span>
                 <span className="text-sm">
                   {po.currency}
                   {po.vat_rate != null && (
                     <span className="text-muted-foreground ml-1 text-xs">
-                      (VAT {po.vat_rate}%, {po.price_includes_vat ? 'đã gồm' : 'chưa gồm'})
+                      (VAT {po.vat_rate}%, {po.price_includes_vat ? 'đã gồm' : 'chưa gồm'}
+                      )
                     </span>
                   )}
                 </span>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Số hợp đồng
                 </span>
                 <div>
-                  {po.contract_no ? <DocChip>{po.contract_no}</DocChip> : <span className="text-muted-foreground text-sm">—</span>}
+                  {po.contract_no ? (
+                    <DocChip>{po.contract_no}</DocChip>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  )}
                 </div>
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Chiết khấu
                 </span>
                 <span className="text-sm">
@@ -873,17 +902,17 @@ export function PoDetailScreen({
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                   Điều kiện giao hàng
                 </span>
-                <span className="text-sm truncate">
+                <span className="truncate text-sm">
                   {po.terms_delivery_place || 'Theo thoả thuận'}
                 </span>
               </div>
             </CardContent>
             {po.note && (
-              <div className="border-t bg-muted/20 px-5 py-2.5 text-xs text-muted-foreground">
-                <span className="font-semibold text-foreground">Ghi chú: </span>
+              <div className="bg-muted/20 text-muted-foreground border-t px-5 py-2.5 text-xs">
+                <span className="text-foreground font-semibold">Ghi chú: </span>
                 {po.note}
               </div>
             )}
@@ -891,10 +920,10 @@ export function PoDetailScreen({
 
           {/* Bảng danh mục vật tư */}
           <Card className="overflow-hidden">
-            <CardHeader className="border-b bg-muted/20 py-3.5">
+            <CardHeader className="bg-muted/20 border-b py-3.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                  <PackageSearch className="size-4 text-primary" />
+                  <PackageSearch className="text-primary size-4" />
                   Danh mục vật tư đặt hàng ({lines.length} dòng)
                 </CardTitle>
                 {canEdit && po.status === 'draft' && (
@@ -911,27 +940,27 @@ export function PoDetailScreen({
               <Table className="min-w-[720px]">
                 <TableHeader className="bg-muted/40 sticky top-0 z-10">
                   <TableRow>
-                    <TableHead className="w-12 text-center font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="w-12 text-center text-xs font-semibold tracking-wider uppercase">
                       #
                     </TableHead>
-                    <TableHead className="font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="text-xs font-semibold tracking-wider uppercase">
                       Vật tư
                     </TableHead>
-                    <TableHead className="w-36 font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="w-36 text-xs font-semibold tracking-wider uppercase">
                       Quy cách
                     </TableHead>
-                    <TableHead className="w-28 text-right font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="w-28 text-right text-xs font-semibold tracking-wider uppercase">
                       SL đặt
                     </TableHead>
                     {showReceived && (
-                      <TableHead className="w-48 text-right font-semibold text-xs uppercase tracking-wider">
+                      <TableHead className="w-48 text-right text-xs font-semibold tracking-wider uppercase">
                         Về kho
                       </TableHead>
                     )}
-                    <TableHead className="w-32 text-right font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="w-32 text-right text-xs font-semibold tracking-wider uppercase">
                       Đơn giá
                     </TableHead>
-                    <TableHead className="w-36 text-right font-semibold text-xs uppercase tracking-wider">
+                    <TableHead className="w-36 text-right text-xs font-semibold tracking-wider uppercase">
                       Thành tiền
                     </TableHead>
                   </TableRow>
@@ -946,7 +975,7 @@ export function PoDetailScreen({
 
                     return (
                       <TableRow key={l.id} className="align-top">
-                        <TableCell className="font-mono text-muted-foreground text-center text-xs">
+                        <TableCell className="text-muted-foreground text-center font-mono text-xs">
                           {i + 1}
                         </TableCell>
                         <TableCell>
@@ -954,7 +983,7 @@ export function PoDetailScreen({
                             <div className="flex items-center gap-1.5">
                               {l.material_code && <DocChip>{l.material_code}</DocChip>}
                             </div>
-                            <div className="font-medium text-sm text-foreground">
+                            <div className="text-foreground text-sm font-medium">
                               {l.material_name}
                             </div>
                             {(l.qty2 != null || l.note) && (
@@ -970,7 +999,7 @@ export function PoDetailScreen({
                           {l.spec ?? '—'}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-mono font-semibold text-sm">
+                          <span className="font-mono text-sm font-semibold">
                             {money(l.qty_ordered)}
                           </span>
                           <span className="text-muted-foreground ml-1 text-xs">
@@ -1075,14 +1104,14 @@ export function PoDetailScreen({
                               )}
                             </div>
                           ) : (
-                            <span className="text-amber-600 dark:text-amber-400 text-xs">
+                            <span className="text-xs text-amber-600 dark:text-amber-400">
                               Chưa có giá
                             </span>
                           )}
                         </TableCell>
 
                         <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-mono font-semibold text-sm">
+                          <span className="font-mono text-sm font-semibold">
                             {l.unit_price != null
                               ? cash(roundMoney(poLineAmount(l), po.currency))
                               : '—'}
@@ -1095,9 +1124,9 @@ export function PoDetailScreen({
               </Table>
 
               {/* Chân bảng: Tổng số lượng & Tổng thanh toán */}
-              <div className="grid gap-4 border-t bg-muted/10 p-5 sm:grid-cols-[1fr_auto]">
-                <div className="flex flex-col gap-1.5 text-xs text-muted-foreground">
-                  <span className="font-semibold uppercase tracking-wider text-foreground">
+              <div className="bg-muted/10 grid gap-4 border-t p-5 sm:grid-cols-[1fr_auto]">
+                <div className="text-muted-foreground flex flex-col gap-1.5 text-xs">
+                  <span className="text-foreground font-semibold tracking-wider uppercase">
                     Tổng số lượng theo đơn vị:
                   </span>
                   {qtyTotals(
@@ -1106,7 +1135,7 @@ export function PoDetailScreen({
                   ).map((t) => (
                     <div key={t.label} className="flex items-center gap-2">
                       <span>{t.label}:</span>
-                      <span className="font-mono font-medium text-foreground">
+                      <span className="text-foreground font-mono font-medium">
                         {money(t.value)}
                       </span>
                     </div>
@@ -1114,9 +1143,9 @@ export function PoDetailScreen({
                 </div>
 
                 <div className="flex min-w-[280px] flex-col gap-2 text-sm">
-                  <div className="flex justify-between gap-6 text-muted-foreground">
+                  <div className="text-muted-foreground flex justify-between gap-6">
                     <span>Tiền hàng</span>
-                    <span className="font-mono font-medium text-foreground">
+                    <span className="text-foreground font-mono font-medium">
                       {cash(m.subtotal)}
                     </span>
                   </div>
@@ -1131,25 +1160,25 @@ export function PoDetailScreen({
                   )}
 
                   {po.vat_rate != null && (
-                    <div className="flex justify-between gap-6 text-muted-foreground">
+                    <div className="text-muted-foreground flex justify-between gap-6">
                       <span>
                         VAT ({po.vat_rate}%)
                         <span className="ml-1 text-[11px]">
                           {po.price_includes_vat ? '(đã gồm)' : '(chưa gồm)'}
                         </span>
                       </span>
-                      <span className="font-mono font-medium text-foreground">
+                      <span className="text-foreground font-mono font-medium">
                         {cash(m.vatAmount)}
                       </span>
                     </div>
                   )}
 
                   <div className="flex items-baseline justify-between gap-6 border-t pt-2.5">
-                    <span className="text-xs font-bold uppercase tracking-wider text-foreground">
+                    <span className="text-foreground text-xs font-bold tracking-wider uppercase">
                       Tổng thanh toán
                     </span>
                     <div className="text-right">
-                      <span className="font-mono text-xl font-bold text-primary">
+                      <span className="text-primary font-mono text-xl font-bold">
                         {cash(m.grandTotal)}
                       </span>
                       <span className="text-muted-foreground ml-1.5 text-xs font-normal">
@@ -1219,7 +1248,7 @@ export function PoDetailScreen({
             />
           ) : (
             <EmptyState
-              icon={<Ban className="size-6 text-destructive" />}
+              icon={<Ban className="text-destructive size-6" />}
               title="Đơn hàng đã huỷ"
               description="Kế hoạch giao nhận và chứng từ kho không còn áp dụng cho đơn này."
             />
@@ -1227,9 +1256,9 @@ export function PoDetailScreen({
 
           {warehouseDocs.length > 0 && (
             <Card>
-              <CardHeader className="border-b bg-muted/20 py-3.5">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <FileText className="size-4 text-primary" />
+              <CardHeader className="bg-muted/20 border-b py-3.5">
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <FileText className="text-primary size-4" />
                   Chứng từ kho liên quan ({warehouseDocs.length} phiếu)
                 </CardTitle>
               </CardHeader>
@@ -1237,27 +1266,37 @@ export function PoDetailScreen({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="font-semibold text-xs uppercase">Mã chứng từ</TableHead>
-                      <TableHead className="font-semibold text-xs uppercase">Loại nghiệp vụ</TableHead>
-                      <TableHead className="text-right font-semibold text-xs uppercase">Tổng số lượng</TableHead>
-                      <TableHead className="text-right font-semibold text-xs uppercase">Thời gian ghi nhận</TableHead>
+                      <TableHead className="text-xs font-semibold uppercase">
+                        Mã chứng từ
+                      </TableHead>
+                      <TableHead className="text-xs font-semibold uppercase">
+                        Loại nghiệp vụ
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase">
+                        Tổng số lượng
+                      </TableHead>
+                      <TableHead className="text-right text-xs font-semibold uppercase">
+                        Thời gian ghi nhận
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {warehouseDocs.map((doc) => (
                       <TableRow key={doc.doc_id}>
-                        <TableCell className="font-mono font-medium text-sm">
+                        <TableCell className="font-mono text-sm font-medium">
                           <DocChip>{doc.code}</DocChip>
                         </TableCell>
                         <TableCell>
                           <Badge tone={doc.kind === 'receipt' ? 'green' : 'red'}>
-                            {doc.kind === 'receipt' ? 'Phiếu nhập kho (PNK)' : 'Phiếu xuất trả NCC'}
+                            {doc.kind === 'receipt'
+                              ? 'Phiếu nhập kho (PNK)'
+                              : 'Phiếu xuất trả NCC'}
                           </Badge>
                         </TableCell>
-                        <TableCell className="font-mono text-right text-sm">
+                        <TableCell className="text-right font-mono text-sm">
                           {money(doc.qty_total)}
                         </TableCell>
-                        <TableCell className="font-mono text-muted-foreground text-right text-xs">
+                        <TableCell className="text-muted-foreground text-right font-mono text-xs">
                           {stamp(doc.at)}
                         </TableCell>
                       </TableRow>
@@ -1272,10 +1311,10 @@ export function PoDetailScreen({
         {/* ── TAB 3: ĐIỀU KHOẢN & HỢP ĐỒNG ─────────────────────────────────── */}
         <TabsContent value="terms" className="flex flex-col gap-5">
           <Card>
-            <CardHeader className="border-b bg-muted/20 py-3.5">
+            <CardHeader className="bg-muted/20 border-b py-3.5">
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                  <ScrollText className="size-4 text-primary" />
+                  <ScrollText className="text-primary size-4" />
                   Điều khoản hợp đồng & Cam kết
                 </CardTitle>
                 {canEdit && po.status !== 'cancelled' && (
@@ -1292,56 +1331,80 @@ export function PoDetailScreen({
             <CardContent className="flex flex-col gap-6 p-6">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Điều 1 · Tiêu chuẩn chất lượng
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.terms_quality || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.terms_quality || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Điều 2 · Địa điểm giao hàng
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.terms_delivery_place || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.terms_delivery_place || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Điều 3 · Điều kiện thanh toán
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.terms_payment || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.terms_payment || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Điều 4 · Hoá đơn & Chứng từ
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.terms_invoice || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.terms_invoice || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Điều 5 · Thời hạn giao hàng
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.terms_lead_time || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.terms_lead_time || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
 
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                     Đại diện ký đơn (Chức danh)
                   </span>
-                  <span className="text-sm font-medium text-foreground">
-                    {po.signer_role || <span className="text-muted-foreground font-normal">Chưa khai báo</span>}
+                  <span className="text-foreground text-sm font-medium">
+                    {po.signer_role || (
+                      <span className="text-muted-foreground font-normal">
+                        Chưa khai báo
+                      </span>
+                    )}
                   </span>
                 </div>
               </div>
@@ -1350,7 +1413,7 @@ export function PoDetailScreen({
                 <div className="bg-muted/30 flex flex-col gap-2 rounded-lg border p-4 text-sm">
                   {po.terms && (
                     <div>
-                      <span className="font-semibold text-foreground">
+                      <span className="text-foreground font-semibold">
                         Điều khoản bổ sung:{' '}
                       </span>
                       <span className="text-muted-foreground leading-relaxed">
@@ -1360,7 +1423,7 @@ export function PoDetailScreen({
                   )}
                   {po.note && (
                     <div>
-                      <span className="font-semibold text-foreground">
+                      <span className="text-foreground font-semibold">
                         Ghi chú chung:{' '}
                       </span>
                       <span className="text-muted-foreground leading-relaxed">
@@ -1377,16 +1440,16 @@ export function PoDetailScreen({
         {/* ── TAB 4: DÒNG THỜI GIAN & LỊCH SỬ DUYỆT ─────────────────────────── */}
         <TabsContent value="timeline" className="flex flex-col gap-5">
           <Card>
-            <CardHeader className="border-b bg-muted/20 py-3.5">
+            <CardHeader className="bg-muted/20 border-b py-3.5">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <History className="size-4 text-primary" />
+                <History className="text-primary size-4" />
                 Dòng thời gian & Nhật ký xử lý ({marks.length} mốc sự kiện)
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               {marks.length === 0 ? (
                 <EmptyState
-                  icon={<History className="size-6 text-muted-foreground" />}
+                  icon={<History className="text-muted-foreground size-6" />}
                   title="Chưa có mốc nhật ký"
                   description="Phiếu còn nằm ở người soạn hoặc chưa phát sinh sự kiện nào."
                 />
@@ -1395,7 +1458,7 @@ export function PoDetailScreen({
                   {marks.map((mk) => (
                     <div key={mk.key} className="group relative">
                       <div
-                        className={`border-background absolute -left-[31px] top-1 size-3.5 rounded-full border-2 ring-4 ${
+                        className={`border-background absolute top-1 -left-[31px] size-3.5 rounded-full border-2 ring-4 ${
                           mk.tone === 'green'
                             ? 'bg-emerald-500 ring-emerald-500/15'
                             : mk.tone === 'blue'
@@ -1408,7 +1471,7 @@ export function PoDetailScreen({
                         }`}
                       />
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="text-sm font-semibold text-foreground">
+                        <span className="text-foreground text-sm font-semibold">
                           {mk.label}
                         </span>
                         <span className="text-muted-foreground font-mono text-xs">
@@ -1418,7 +1481,7 @@ export function PoDetailScreen({
                       {(mk.actor || mk.detail) && (
                         <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
                           {mk.actor && (
-                            <span className="font-medium text-foreground">
+                            <span className="text-foreground font-medium">
                               {mk.actor}
                             </span>
                           )}
@@ -1437,9 +1500,9 @@ export function PoDetailScreen({
         {/* ── TAB 5: TÀI LIỆU ĐÍNH KÈM ─────────────────────────────────────── */}
         <TabsContent value="docs" className="flex flex-col gap-5">
           <Card>
-            <CardHeader className="border-b bg-muted/20 py-3.5">
+            <CardHeader className="bg-muted/20 border-b py-3.5">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                <Paperclip className="size-4 text-primary" />
+                <Paperclip className="text-primary size-4" />
                 Hồ sơ & Tài liệu đính kèm
               </CardTitle>
             </CardHeader>
@@ -1603,7 +1666,8 @@ function PoTermsDialog({
     >
       <div className="flex flex-col gap-3.5 text-sm">
         <p className="text-muted-foreground bg-muted rounded-md px-3 py-2 text-xs">
-          Chỉ sửa đổi thông tin điều khoản và ghi chú. Muốn thay đổi danh sách mặt hàng, số lượng hoặc đơn giá vui lòng rút đơn về nháp để chỉnh sửa.
+          Chỉ sửa đổi thông tin điều khoản và ghi chú. Muốn thay đổi danh sách mặt hàng,
+          số lượng hoặc đơn giá vui lòng rút đơn về nháp để chỉnh sửa.
         </p>
         {FIELDS.map(([k, label]) => (
           <label key={k} className="flex flex-col gap-1">
@@ -1624,11 +1688,7 @@ function PoTermsDialog({
           <Button variant="outline" size="sm" onClick={onClose}>
             Huỷ
           </Button>
-          <Button
-            size="sm"
-            disabled={saving || busy}
-            onClick={() => void save()}
-          >
+          <Button size="sm" disabled={saving || busy} onClick={() => void save()}>
             {saving && <Spinner size={14} />}
             Lưu điều khoản
           </Button>

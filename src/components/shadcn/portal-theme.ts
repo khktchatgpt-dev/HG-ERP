@@ -20,6 +20,17 @@ import { useState } from 'react'
  */
 const THEMES = ['theme-v3', 'theme-v2'] as const
 
+/**
+ * Bản KHÔNG-hook, cho vùng nổi sống dai hơn một lượt mở/đóng — cụ thể là khay
+ * toast: nó mount một lần ở layout gốc rồi ở đó suốt phiên, nên chụp lớp theme
+ * lúc mount là chụp phải khoảnh khắc shell chưa dựng xong (vào app từ `/login`
+ * là dính). Gọi lại mỗi lần có toast mới thì luôn đúng, mà cũng chỉ tốn một
+ * `querySelector`.
+ */
+export function resolvePortalTheme(): string | undefined {
+  return resolveTheme()
+}
+
 function resolveTheme(): string | undefined {
   // SSR: chưa có DOM. Dialog mặc định đóng nên gần như không render ở server;
   // nếu có (defaultOpen) thì lượt hydrate ngay sau đó gắn đúng lớp.

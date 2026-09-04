@@ -1,7 +1,22 @@
 'use client'
 
-import { Search, SlidersHorizontal, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  CalendarOff,
+  CheckCheck,
+  Clock,
+  PackageCheck,
+  Search,
+  SlidersHorizontal,
+  User,
+  X,
+} from 'lucide-react'
+import { FilterChip } from '@/components/erp/FilterChip'
+import { StatTile, StatTiles } from '@/components/erp/StatTile'
+import { ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { Spinner } from '@/components/erp/Spinner'
+import { Button } from '@/components/shadcn/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
 import { cn } from '@/lib/utils'
 import {
   PO_BUCKETS,
@@ -12,169 +27,45 @@ import {
 import type { SupplierOption } from './po-types'
 
 /**
- * THANH LỌC theo thiết kế v3 (/design-lab mục 02) — ba tầng, số VÀ lối đi là một:
+ * THANH LỌC ĐƠN MUA — ba tầng, "số và lối đi là một":
  *
  *   · THẺ SỐ bấm được — bốn chỗ cần động tay (chờ duyệt / đã duyệt chưa gửi /
- *     quá hẹn / về đủ). Bấm = lọc đúng nhóm đó, bấm lại = bỏ.
- *   · TAB GẠCH CHÂN — sáu nhóm vòng đời chọn một (đơn chỉ ở một chỗ).
- *   · CÔNG TẮC phụ — của tôi / quá hẹn / chưa hẹn giao, NHÂN với tab đang chọn.
+ *     quá hẹn / về đủ). Bấm = lọc đúng nhóm đó.
+ *   · TAB GẠCH CHÂN — nhóm vòng đời, chọn một (một đơn chỉ nằm ở một rổ).
+ *   · THANH CÔNG CỤ — ô tìm, hai bộ lọc chọn, công tắc phụ NHÂN với tab.
  *
- * Vẫn giữ nguyên po-filter.ts: chỉ đổi cách bày, không đổi ngữ nghĩa lọc.
- * Tab số 0 vẫn hiện nhưng mờ và không bấm được — giấu hẳn thì hàng tab nhảy
- * chỗ mỗi lần dữ liệu đổi, không ai nhắm trúng nút biết nhảy.
+ * Ngữ nghĩa lọc không đổi: vẫn nguyên `po-filter.ts`, chỉ đổi cách bày.
+ *
+ * 04/09/2026 — DỌN BA BẢN TỰ CHÉP. Trước đó file này tự dựng `StatBtn`,
+ * `ToggleChip` và `Tab` riêng; hai cái đầu chính là bản gốc mà `erp/StatTile`
+ * và `erp/FilterChip` đã được rút lên kit để thay thế (đọc docblock của hai tệp
+ * đó — chúng gọi thẳng tên tệp này). Giữ bản chép ở đây nghĩa là kit có một
+ * đằng, màn chủ lực của phòng đi một nẻo, và mỗi lần sửa kit lại quên chỗ này.
+ * Nay dùng đúng khuôn ba tầng của `/planning/stock` và `/planning/lsx`.
+ *
+ * HAI THAY ĐỔI HÀNH VI có chủ ý khi chuyển:
+ *
+ *  1. Chip "Quá hẹn giao" bị BỎ — nó với thẻ số thứ ba là MỘT bộ lọc
+ *     (`filter.late`), cùng một `onClick`, chỉ khác chỗ ngồi. Hai công tắc cho
+ *     một việc thì người dùng bấm cái này thấy cái kia tự sáng, tưởng hỏng.
+ *     Giữ thẻ số vì nó bày luôn con số to.
+ *  2. Chip phụ hết tô `--warn`/`--stop` khi đang chọn (luật theme v3: màu vòng
+ *     đời không được mượn để mã hoá trạng thái điều khiển). Ý "gấp" nay do ICON
+ *     chở, không do màu nền.
  */
 
 export type PoView = 'lsx' | 'flat'
 
-const selectCls =
-  'border-input bg-card text-foreground/85 h-8 rounded-lg border px-2 text-[12px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50'
+const TYPE_OPTIONS = [
+  { value: 'all', label: 'Mọi loại đơn' },
+  { value: 'lsx', label: 'Theo lệnh SX' },
+  { value: 'standalone', label: 'Ngoài LSX' },
+] as const
 
-function Count({ n, on }: { n: number; on: boolean }) {
-  return (
-    <span
-      className={cn(
-        'rounded-full px-1.5 font-mono text-[11px] tabular-nums',
-        on
-          ? 'bg-[var(--accent)] text-[var(--accent-foreground)]'
-          : 'bg-muted text-muted-foreground',
-      )}
-    >
-      {n}
-    </span>
-  )
-}
-
-/** Tab vòng đời — gạch chân màu hành động khi đang chọn. */
-function Tab({
-  label,
-  n,
-  on,
-  onClick,
-}: {
-  label: string
-  n: number
-  on: boolean
-  onClick: () => void
-}) {
-  const base =
-    '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2 text-[12.5px] font-medium transition-colors'
-  if (n === 0 && !on) {
-    return (
-      <span className={cn(base, 'text-muted-foreground/40 border-transparent')}>
-        {label} <Count n={0} on={false} />
-      </span>
-    )
-  }
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      className={cn(
-        base,
-        on
-          ? 'border-[var(--primary)] text-[var(--primary)]'
-          : 'text-muted-foreground hover:text-foreground border-transparent',
-      )}
-    >
-      {label} <Count n={n} on={on} />
-    </button>
-  )
-}
-
-/** Công tắc phụ — chip nhỏ, cộng dồn với tab. */
-function ToggleChip({
-  label,
-  n,
-  on,
-  tone = 'primary',
-  onClick,
-}: {
-  label: string
-  n: number
-  on: boolean
-  tone?: 'primary' | 'amber' | 'red'
-  onClick: () => void
-}) {
-  const base =
-    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors'
-  if (n === 0 && !on) {
-    return (
-      <span className={cn(base, 'border-border/60 bg-card text-muted-foreground/40')}>
-        {label} <Count n={0} on={false} />
-      </span>
-    )
-  }
-  const onCls = {
-    primary: 'border-[var(--primary)] bg-[var(--primary)] text-white',
-    amber: 'border-[var(--warn)] bg-[var(--warn)] text-white',
-    red: 'border-[var(--stop)] bg-[var(--stop)] text-white',
-  }[tone]
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={on}
-      className={cn(
-        base,
-        on
-          ? onCls
-          : 'border-border bg-card hover:border-foreground/30 text-foreground/75',
-      )}
-    >
-      {label}{' '}
-      <span
-        className={cn(
-          'rounded-full px-1.5 font-mono text-[11px] tabular-nums',
-          on ? 'bg-white/25' : 'bg-muted',
-        )}
-      >
-        {n}
-      </span>
-    </button>
-  )
-}
-
-/** Thẻ số bấm được — như mục Màn hình mẫu của design-lab. */
-function StatBtn({
-  label,
-  n,
-  color,
-  on,
-  onClick,
-}: {
-  label: string
-  n: number
-  color: string
-  on: boolean
-  onClick: () => void
-}) {
-  const empty = n === 0 && !on
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={empty}
-      aria-pressed={on}
-      className={cn(
-        'bg-card rounded-xl border px-3.5 py-2.5 text-left transition-colors',
-        on
-          ? 'border-[var(--primary)] bg-[var(--accent)]/60'
-          : empty
-            ? 'cursor-default opacity-55'
-            : 'hover:border-[var(--primary)]/40',
-      )}
-    >
-      <p className="t-label text-muted-foreground truncate">{label}</p>
-      <p
-        className="mt-1 font-mono text-[20px] leading-none font-semibold tabular-nums"
-        style={{ color }}
-      >
-        {n}
-      </p>
-    </button>
-  )
-}
+const VIEWS = [
+  ['lsx', 'Theo lệnh SX'],
+  ['flat', 'Danh sách'],
+] as const
 
 export function PoFilters({
   filter,
@@ -198,169 +89,185 @@ export function PoFilters({
 }) {
   const set = (patch: Partial<PoFilterState>) => onFilter({ ...filter, ...patch })
   const active = isFilterActive(filter)
-  const toggleBucket = (b: PoFilterState['bucket']) =>
-    set({ bucket: filter.bucket === b ? 'all' : b })
+
+  const supplierOptions = [
+    { value: 'all', label: 'Mọi NCC' },
+    ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+  ]
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Tầng 1 — bốn thẻ số cần động tay */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <StatBtn
+      {/* ── Tầng 1 — bốn chỗ cần động tay ──────────────────────────────── */}
+      <StatTiles>
+        <StatTile
           label="Chờ duyệt"
-          n={counts.pending}
-          color="var(--warn)"
-          on={filter.bucket === 'pending'}
-          onClick={() => toggleBucket('pending')}
+          value={counts.pending}
+          tone="warn"
+          icon={Clock}
+          hint="đang nằm ở bàn Giám đốc"
+          active={filter.bucket === 'pending'}
+          onClick={() => set({ bucket: 'pending' })}
         />
-        <StatBtn
+        <StatTile
           label="Đã duyệt · chưa gửi"
-          n={counts.ready}
-          color="var(--primary)"
-          on={filter.bucket === 'ready'}
-          onClick={() => toggleBucket('ready')}
+          value={counts.ready}
+          tone="primary"
+          icon={CheckCheck}
+          hint="ký rồi nhưng NCC chưa nhận"
+          active={filter.bucket === 'ready'}
+          onClick={() => set({ bucket: 'ready' })}
         />
-        <StatBtn
+        <StatTile
           label="Quá hẹn giao"
-          n={counts.late}
-          color="var(--stop)"
-          on={filter.late}
+          value={counts.late}
+          tone="stop"
+          icon={AlertTriangle}
+          hint="qua ngày hẹn mà chưa về đủ"
+          active={filter.late}
           onClick={() => set({ late: !filter.late })}
         />
-        <StatBtn
+        <StatTile
           label="Về đủ"
-          n={counts.received}
-          color="var(--done)"
-          on={filter.bucket === 'received'}
-          onClick={() => toggleBucket('received')}
+          value={counts.received}
+          tone="done"
+          icon={PackageCheck}
+          hint="kho đã nhận hết dòng"
+          active={filter.bucket === 'received'}
+          onClick={() => set({ bucket: 'received' })}
         />
-      </div>
+      </StatTiles>
 
-      {/* Tầng 2 — tìm & lọc phụ, đáy là tab bar vòng đời */}
-      <div className="bg-card rounded-xl border">
-        <div className="flex flex-wrap items-center gap-2 px-3.5 py-2.5">
-          <label className="relative min-w-[220px] flex-1">
-            <Search
-              className="text-muted-foreground pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2"
-              aria-hidden
-            />
-            <input
-              value={filter.q}
-              onChange={(e) => set({ q: e.target.value })}
-              placeholder="Tìm số PO, NCC, LSX, mã đơn hàng…"
-              className="border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 w-full rounded-lg border pr-2 pl-8 text-[13px] outline-none focus-visible:ring-[3px]"
-            />
-          </label>
+      {/* ── Tầng 2 — tab vòng đời, chọn một ────────────────────────────────
+          Bỏ chọn bằng tab "Tất cả" chứ không bấm lại tab đang sáng: Radix
+          không phát `onValueChange` khi bấm đúng tab hiện hành, và "bấm lại để
+          bỏ" vốn cũng là cử chỉ không ai đoán ra. */}
+      <Tabs
+        value={filter.bucket}
+        onValueChange={(v) => set({ bucket: v as PoFilterState['bucket'] })}
+      >
+        <TabsList
+          variant="line"
+          className="flex-wrap group-data-[orientation=horizontal]/tabs:h-auto"
+        >
+          <TabsTrigger value="all" className="group/tab gap-1.5">
+            Tất cả <Count n={counts.all} />
+          </TabsTrigger>
+          {PO_BUCKETS.map((b) => (
+            <TabsTrigger
+              key={b.key}
+              value={b.key}
+              // Rổ rỗng thì không bấm được, nhưng VẪN BÀY: giấu đi là hàng tab
+              // nhảy chỗ mỗi lần dữ liệu đổi, không ai nhắm trúng nút biết nhảy.
+              disabled={counts[b.key] === 0 && filter.bucket !== b.key}
+              className="group/tab gap-1.5"
+            >
+              {b.label} <Count n={counts[b.key]} />
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-          <select
-            value={filter.supplierId}
-            onChange={(e) => set({ supplierId: e.target.value })}
-            className={cn(selectCls, 'max-w-[200px]')}
-            aria-label="Lọc theo nhà cung cấp"
-          >
-            <option value="all">Mọi NCC</option>
-            {suppliers.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
+      {/* ── Tầng 3 — tìm, lọc chọn, công tắc phụ ───────────────────────── */}
+      <div className="bg-card flex flex-wrap items-center gap-2 rounded-xl border px-3 py-2.5">
+        <ToolbarInput
+          value={filter.q}
+          onChange={(q) => set({ q })}
+          placeholder="Tìm số PO, NCC, LSX, mã đơn hàng…"
+          icon={<Search />}
+          className="min-w-[220px] flex-1"
+        />
 
-          <select
-            value={filter.type}
-            onChange={(e) => set({ type: e.target.value as PoFilterState['type'] })}
-            className={selectCls}
-            aria-label="Lọc theo loại đơn"
-          >
-            <option value="all">Mọi loại đơn</option>
-            <option value="lsx">Theo lệnh SX</option>
-            <option value="standalone">Ngoài LSX</option>
-          </select>
+        <ToolbarSelect
+          value={filter.supplierId}
+          onChange={(supplierId) => set({ supplierId })}
+          options={supplierOptions}
+          className="max-w-[200px]"
+          aria-label="Lọc theo nhà cung cấp"
+        />
 
+        <ToolbarSelect
+          value={filter.type}
+          onChange={(type) => set({ type })}
+          options={TYPE_OPTIONS}
+          aria-label="Lọc theo loại đơn"
+        />
+
+        <span className="bg-border mx-0.5 hidden h-5 w-px sm:block" aria-hidden />
+
+        <SlidersHorizontal
+          className="text-muted-foreground size-3.5 shrink-0"
+          aria-hidden
+        />
+        {showMine && (
+          <FilterChip
+            label="Của tôi"
+            count={counts.mine}
+            icon={User}
+            title="Chỉ đơn do tôi lập"
+            active={filter.mine}
+            onClick={() => set({ mine: !filter.mine })}
+          />
+        )}
+        <FilterChip
+          label="Chưa hẹn giao"
+          count={counts.noEta}
+          icon={CalendarOff}
+          title="Đơn chưa có ngày hẹn giao — không theo dõi trễ được"
+          active={filter.noEta}
+          onClick={() => set({ noEta: !filter.noEta })}
+        />
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           {busy && (
             <span className="text-muted-foreground inline-flex items-center gap-1.5 text-xs">
               <Spinner size={12} /> Đang xử lý…
             </span>
           )}
 
-          {/* Kiểu xem — "theo lệnh" để nắm việc, "danh sách" để soi một đơn. */}
-          <div className="border-border ml-auto inline-flex rounded-lg border p-0.5 text-[12px]">
-            {(
-              [
-                ['lsx', 'Theo lệnh SX'],
-                ['flat', 'Danh sách'],
-              ] as const
-            ).map(([v, label]) => (
-              <button
+          {active && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onFilter({ ...filter, ...EMPTY })}
+            >
+              <X aria-hidden /> Bỏ lọc
+            </Button>
+          )}
+
+          {/* Kiểu xem — "theo lệnh" để nắm việc, "danh sách" để soi một đơn.
+              KHÔNG phải bộ lọc, nên tách hẳn sang phải và "Bỏ lọc" không đụng. */}
+          <div className="border-border inline-flex rounded-lg border p-0.5">
+            {VIEWS.map(([v, label]) => (
+              <Button
                 key={v}
                 type="button"
+                variant="ghost"
+                size="sm"
+                aria-pressed={view === v}
                 onClick={() => onView(v)}
                 className={cn(
-                  'rounded-md px-2.5 py-1 font-medium transition-colors',
+                  'h-7 px-2.5 text-[12px]',
                   view === v
                     ? 'bg-[var(--accent)] text-[var(--accent-foreground)]'
-                    : 'text-muted-foreground hover:text-foreground',
+                    : 'text-muted-foreground',
                 )}
               >
                 {label}
-              </button>
+              </Button>
             ))}
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-1 gap-y-1.5 border-t px-2 pb-0">
-          <Tab
-            label="Tất cả"
-            n={counts.all}
-            on={filter.bucket === 'all'}
-            onClick={() => set({ bucket: 'all' })}
-          />
-          {PO_BUCKETS.map((b) => (
-            <Tab
-              key={b.key}
-              label={b.label}
-              n={counts[b.key]}
-              on={filter.bucket === b.key}
-              onClick={() => toggleBucket(b.key)}
-            />
-          ))}
-
-          <div className="ml-auto flex flex-wrap items-center gap-1.5 py-1.5 pr-1.5">
-            <SlidersHorizontal className="text-muted-foreground size-3.5" aria-hidden />
-            {showMine && (
-              <ToggleChip
-                label="Của tôi"
-                n={counts.mine}
-                on={filter.mine}
-                onClick={() => set({ mine: !filter.mine })}
-              />
-            )}
-            <ToggleChip
-              label="Quá hẹn giao"
-              n={counts.late}
-              tone="red"
-              on={filter.late}
-              onClick={() => set({ late: !filter.late })}
-            />
-            <ToggleChip
-              label="Chưa hẹn giao"
-              n={counts.noEta}
-              tone="amber"
-              on={filter.noEta}
-              onClick={() => set({ noEta: !filter.noEta })}
-            />
-            {active && (
-              <button
-                type="button"
-                onClick={() => onFilter({ ...filter, ...EMPTY })}
-                className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-1 text-xs transition-colors"
-              >
-                <X className="size-3" aria-hidden /> Bỏ lọc
-              </button>
-            )}
           </div>
         </div>
       </div>
     </div>
+  )
+}
+
+/** Số bên cạnh nhãn tab. Trong tab đang chọn thì ăn tint accent. */
+function Count({ n }: { n: number }) {
+  return (
+    <span className="bg-muted text-muted-foreground rounded-full px-1.5 font-mono text-[11px] tabular-nums group-data-[state=active]/tab:bg-[var(--accent)] group-data-[state=active]/tab:text-[var(--accent-foreground)]">
+      {n}
+    </span>
   )
 }
 

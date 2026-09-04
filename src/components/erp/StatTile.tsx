@@ -57,8 +57,14 @@ export function StatTile({
         {Icon && <Icon size={14} strokeWidth={active ? 2.1 : 1.8} />}
         {label}
       </p>
+      {/*
+        Cỡ chữ theo màn (04/09/2026): 22px vừa cho lưới 4 cột trên máy tính,
+        nhưng ở điện thoại lưới thành 2 cột hẹp và những giá trị dạng CHỮ
+        ("10 mặt hàng", "Chưa hẹn") vỡ làm hai dòng, làm hàng thẻ so le. Giảm
+        một bậc ở màn hẹp là đủ, không cần đổi nội dung.
+      */}
       <p
-        className="mt-1.5 font-mono text-[22px] leading-none font-semibold tabular-nums"
+        className="mt-1.5 font-mono text-[18px] leading-tight font-semibold tabular-nums sm:text-[22px] sm:leading-none"
         style={{ color: VALUE_COLOR[tone] }}
       >
         {value}

@@ -64,6 +64,24 @@ const thBase =
 const tdBase = 'border-border border-b border-r px-1 py-1.5 align-middle last:border-r-0'
 
 /**
+ * TẦNG NỔI CỦA Ô GHIM Ở THÂN BẢNG (05/09/2026).
+ *
+ * `position: sticky` KHÔNG tự đặt phần tử lên trên: nó chỉ ghim vị trí. Bốn ô
+ * ghim của thân bảng trước đây để `z-index: auto`, nên khi cuộn ngang thì ô của
+ * cột kế trượt xuống dưới chúng mà vẫn VẼ ĐÈ LÊN — đo được: cuộn 140px thì ô
+ * nhập "Mã khuôn" chồng lên cột Tên đúng 136px, trông như một ô mờ lạc vào giữa
+ * tên vật tư.
+ *
+ * Ẩn kỹ vì nền `bg-card` của ô ghim là trắng đặc, nên phần CHỮ tĩnh vẫn bị che
+ * đúng như mong đợi; chỉ mấy ô NHẬP của cột kế mới nổi lên trên — tức lỗi chỉ
+ * lộ ở đúng những cột có input, và chỉ khi cuộn.
+ *
+ * Đặt 2: trên các ô thường (auto = 0) nhưng dưới đầu bảng (5), để hàng tiêu đề
+ * ghim vẫn che được ô ghim khi cuộn dọc.
+ */
+const STICKY_Z = 2
+
+/**
  * Bóng đổ của cột ghim — nói rằng nội dung đang TRƯỢT XUỐNG DƯỚI, không phải mất.
  * Chỉ bật khi phía đó THẬT SỰ còn nội dung bị che; bảng không tràn ngang (chế độ
  * gọn) mà vẫn đổ bóng thì giữa bảng có một vệt tối vô cớ.
@@ -306,7 +324,7 @@ export function PoLineTable({
             <tr aria-hidden className="pointer-events-none select-none">
               <td
                 className={`${tdBase} bg-card sticky left-0 align-top`}
-                style={{ boxShadow: shL }}
+                style={{ zIndex: STICKY_Z, boxShadow: shL }}
               >
                 <div className="text-muted-foreground/60 text-[13px] italic">
                   — tên vật tư sẽ hiện ở đây —
@@ -346,7 +364,7 @@ export function PoLineTable({
               </td>
               <td
                 className={`${tdBase} bg-muted text-muted-foreground/40 sticky right-0 text-right`}
-                style={{ boxShadow: shR }}
+                style={{ zIndex: STICKY_Z, boxShadow: shR }}
               >
                 —
               </td>
@@ -383,12 +401,35 @@ export function PoLineTable({
                     className={`${tdBase} bg-card group-hover:bg-accent sticky left-0 align-top`}
                     style={{
                       maxWidth: NAME_W,
+                      zIndex: STICKY_Z,
                       boxShadow: problem ? `inset 3px 0 0 var(--warn), ${shL}` : shL,
                     }}
                   >
+                    {/*
+                      CỘT SỐ THỨ TỰ KIÊM NÚT XOÁ (05/09/2026).
+
+                      Nút xoá trước đây nằm góc trên PHẢI của ô tên, hiện khi rê
+                      chuột — nên với tên dài hai dòng nó đè thẳng lên chữ (thấy
+                      rõ ở ảnh người dùng gửi: thùng rác nằm trên "(TD-B40)").
+                      Đưa vào ô STT thì nó có chỗ cố định của riêng mình, không
+                      bao giờ tranh chỗ với chữ nữa: rê chuột thì con số hoá
+                      thành nút xoá, đúng mẫu quen của Sheets/Airtable.
+                    */}
                     <div className="flex items-start gap-1.5">
-                      <span className="text-muted-foreground t-data w-4 shrink-0 pt-0.5 text-right text-[11px]">
-                        {i + 1}
+                      <span className="relative w-4 shrink-0 self-stretch">
+                        <span className="text-muted-foreground t-data absolute inset-x-0 top-0.5 text-right text-[11px] transition-opacity group-hover:opacity-0">
+                          {i + 1}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onRemove(i)}
+                          className="text-muted-foreground absolute inset-x-0 top-0 size-auto rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus-visible:opacity-100"
+                          aria-label={`Xoá dòng ${l.name}`}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
+                        </Button>
                       </span>
                       <div className="min-w-0 flex-1">
                         {l.is_free ? (
@@ -408,56 +449,93 @@ export function PoLineTable({
                           </>
                         ) : (
                           <>
-                            <div
-                              className="text-foreground text-[13px] leading-snug font-semibold break-words"
-                              title={l.name}
-                            >
-                              {l.name}
-                            </div>
-                            <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px]">
-                              <span className="bg-muted text-foreground/80 rounded border px-1.5 font-mono font-medium">
+                            {/*
+                              MÃ VÀ TÊN CÙNG MỘT DÒNG, CHIỀU CAO HÀNG ĐỀU
+                              (05/09/2026).
+
+                              Bản cũ để tên xuống dòng tự do rồi mới tới hàng
+                              mã/tồn, nên tên một dòng và tên hai dòng cho ra hai
+                              chiều cao hàng khác nhau — bảng nhập liệu sống bằng
+                              việc QUÉT NGANG, hàng so le là mắt mất mốc.
+
+                              Nay mã đứng trước (rộng cố định, mono — đây là thứ
+                              đối chiếu với phiếu giấy), tên chiếm phần còn lại
+                              và cắt tối đa 2 dòng. `min-h` giữ hàng cao bằng
+                              nhau dù tên dài hay ngắn.
+                            */}
+                            <div className="flex min-h-[34px] items-start gap-1.5">
+                              <span className="bg-muted text-foreground/80 mt-px shrink-0 rounded border px-1.5 font-mono text-[11px] font-medium">
                                 {l.code}
                               </span>
+                              <span
+                                className="text-foreground line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug font-semibold"
+                                title={l.name}
+                              >
+                                {l.name}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 flex items-center gap-1.5 text-[11px]">
+                              {/*
+                                TỒN KHO ĐỌC ĐƯỢC BẰNG ĐUÔI MẮT — nó là con số
+                                quyết định "có cần mua không, mua bao nhiêu", mà
+                                trước đây là chữ xám 11px lọt thỏm cuối một hàng
+                                chật. Không tách thành cột riêng (user chốt
+                                05/09): chỉ cần nổi lên tại chỗ.
+
+                                Ba trạng thái KHÁC NGHĨA nhau, nên khác hình:
+                                  · còn tồn  → nền xanh, số đậm (cân nhắc mua ít)
+                                  · tồn 0    → chữ thường, xám (mua đủ)
+                                  · chưa có sổ kho → hổ phách, vì đây là THIẾU
+                                    DỮ LIỆU chứ không phải "hết hàng" — hai thứ
+                                    này lẫn nhau là đặt mua nhầm.
+                              */}
+                              {l.on_hand == null ? (
+                                <span
+                                  className="rounded px-1.5 py-px font-medium text-[var(--warn)]"
+                                  style={{
+                                    background:
+                                      'color-mix(in srgb, var(--warn) 12%, transparent)',
+                                  }}
+                                  title="Vật tư chưa có sổ kho — chưa từng nhập/xuất/kiểm kê. Khác với tồn bằng 0."
+                                >
+                                  chưa có sổ kho
+                                </span>
+                              ) : l.on_hand > 0 ? (
+                                <span
+                                  className="rounded px-1.5 py-px font-medium text-[var(--done)]"
+                                  style={{
+                                    background:
+                                      'color-mix(in srgb, var(--done) 14%, transparent)',
+                                  }}
+                                  title="Tồn kho hiện có — trừ vào lượng cần mua"
+                                >
+                                  tồn <b className="t-data">{num(l.on_hand)}</b>
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground px-1.5 py-px">
+                                  tồn 0
+                                </span>
+                              )}
+                              {/* Sửa vật tư trong DANH MỤC là việc rời khỏi luồng
+                                  soạn đơn — chỉ hiện khi rê chuột để không mời
+                                  bấm nhầm lúc đang nhắm chip mã. */}
                               {onEditMaterial && (
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="icon"
                                   onClick={() => onEditMaterial(l.material_id)}
-                                  className="text-muted-foreground/70 size-auto rounded p-0.5 hover:text-[var(--primary)]"
+                                  className="text-muted-foreground/70 size-auto rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--primary)] focus-visible:opacity-100"
                                   title="Sửa vật tư trong danh mục — quy cách, barem, đóng gói…"
                                   aria-label={`Sửa vật tư ${l.name}`}
                                 >
                                   <Pencil className="size-3" aria-hidden />
                                 </Button>
                               )}
-                              {l.on_hand == null ? (
-                                <span className="text-muted-foreground/70">kho ?</span>
-                              ) : (
-                                <span
-                                  className={
-                                    l.on_hand > 0 ? 'text-[var(--done)]' : undefined
-                                  }
-                                >
-                                  tồn {num(l.on_hand)}
-                                </span>
-                              )}
                             </div>
                           </>
                         )}
                       </div>
-                      {/* Nút xoá về đây (bản đầu để trong ô tiền — chen mất chỗ
-                          của con số dài nhất bảng). */}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => onRemove(i)}
-                        className="text-muted-foreground mt-0.5 size-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:text-[var(--stop)] focus:opacity-100"
-                        aria-label={`Xoá dòng ${l.name}`}
-                      >
-                        <Trash2 className="size-3.5" aria-hidden />
-                      </Button>
                     </div>
                   </td>
 
@@ -623,7 +701,7 @@ export function PoLineTable({
                   {/* ── bậc nổi bật #2: THÀNH TIỀN, ghim phải ── */}
                   <td
                     className={`${tdBase} bg-muted group-hover:bg-accent sticky right-0 text-right`}
-                    style={{ boxShadow: shR }}
+                    style={{ zIndex: STICKY_Z, boxShadow: shR }}
                   >
                     {amount > 0 ? (
                       <span className="t-data text-[13.5px] font-semibold whitespace-nowrap">

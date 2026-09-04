@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 
 /**
  * Chuỗi liên kết chứng từ — hiện quan hệ cha→con dạng chip (vd Đơn hàng → LSX → PO).
@@ -36,12 +37,29 @@ export function RefChain({
       </div>
     )
   }
-  // md (đầu màn chi tiết): xếp ngang có mũi tên.
+  /*
+   * md (đầu màn chi tiết): NGANG ở màn rộng, DỌC ở màn hẹp (04/09/2026).
+   *
+   * Bản cũ chỉ có `flex-wrap`: đo trên 375px thì chuỗi gãy giữa chừng và mũi
+   * tên rơi xuống ĐẦU dòng sau, đứng lẻ trước một chip — đọc như thể có một
+   * chứng từ cha vô hình. Xếp dọc và xoay mũi tên xuống thì chuỗi cha→con vẫn
+   * đọc được theo đúng chiều, không cần thu nhỏ gì.
+   */
   return (
-    <div className="flex flex-wrap items-center gap-2.5">
+    <div className="flex flex-col items-start gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2.5">
       {nodes.map((n, i) => (
-        <div key={i} className="flex items-center gap-2.5">
-          {i > 0 && <span className="text-border text-base">→</span>}
+        <div key={i} className="flex w-full items-center gap-2 sm:w-auto sm:gap-2.5">
+          {/* Icon lucide, KHÔNG phải ký tự "→" (04/09/2026). Ký tự mũi tên vẽ
+              theo font đang có trên máy nên mỗi máy một nét, không ăn stroke
+              1.8 như mọi icon khác, và không co theo cỡ chữ. Cùng luật đã dọn
+              "⚠" ở thẻ nhóm và "→" ở cột ngày bên `/planning/lsx`. */}
+          {i > 0 && (
+            <ChevronRight
+              className="text-muted-foreground/50 size-4 shrink-0 rotate-90 sm:rotate-0"
+              strokeWidth={1.8}
+              aria-hidden
+            />
+          )}
           <Chip node={n} sm={false} />
         </div>
       ))}
@@ -64,16 +82,22 @@ function Chip({ node, sm }: { node: ChainNode; sm: boolean }) {
     )
   }
 
+  /*
+   * Màn hẹp: nhãn và mã nằm CÙNG một dòng (04/09/2026). Dạng hai dòng ăn ~54px
+   * mỗi chip, chuỗi ba mắt là 160px chỉ để nói đơn này thuộc về đâu — trên
+   * điện thoại đó là một phần năm màn hình. Cùng thông tin, một dòng đọc vẫn
+   * đủ vì nhãn ngắn ("Lệnh SX", "Đơn hàng").
+   */
   const base =
-    'flex flex-col gap-0.5 rounded-lg border px-3 py-2 min-w-0 transition-colors'
+    'flex min-w-0 flex-1 items-baseline gap-2 rounded-lg border px-2.5 py-1.5 transition-colors sm:flex-none sm:flex-col sm:items-stretch sm:gap-0.5 sm:px-3 sm:py-2'
   const tone = node.current
     ? 'border-[var(--primary)]/40 bg-[var(--accent)]'
     : 'bg-muted/60 hover:border-[var(--primary)]/30'
   const body = (
     <>
-      <span className="t-label text-muted-foreground">{node.label}</span>
+      <span className="t-label text-muted-foreground shrink-0">{node.label}</span>
       <span
-        className={`font-mono text-[13px] font-semibold ${
+        className={`truncate font-mono text-[13px] font-semibold ${
           node.current ? 'text-[var(--primary)]' : 'text-foreground'
         }`}
       >

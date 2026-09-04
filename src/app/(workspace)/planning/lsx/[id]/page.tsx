@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { buildLsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { LsxPoScreen } from './LsxPoScreen'
 
@@ -22,7 +23,12 @@ export default async function PlanningLsxPoPage({
   const { id } = await params
   const user = await authService.requirePageUser()
   const today = new Date().toISOString().slice(0, 10)
-  const detail = await buildLsxSupplyDetail(user, id, today)
+  const [detail, canEdit] = await Promise.all([
+    buildLsxSupplyDetail(user, id, today),
+    // Cùng quyền mà `lsxService.setMaterialsDue` kiểm ở server — ô ngày chỉ để
+    // sửa được khi bấm vào sẽ không bị 403. Server vẫn là chỗ chốt.
+    canAction(user, 'supply.po.manage'),
+  ])
   if (!detail) notFound()
-  return <LsxPoScreen lsx={detail} today={today} />
+  return <LsxPoScreen lsx={detail} today={today} canEdit={canEdit} />
 }

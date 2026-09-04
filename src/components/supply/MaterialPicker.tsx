@@ -4,6 +4,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { api } from '@/lib/api'
 import { Boxes, Layers, Ruler, Search as SearchIcon, Target, Weight } from 'lucide-react'
 import { Spinner } from '@/components/erp/Spinner'
+import { AnchoredPopover } from '@/components/erp/AnchoredPopover'
+import { Input } from '@/components/shadcn/input'
 import { Modal } from '@/components/Modal'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 
@@ -569,5 +571,324 @@ export function MaterialPickDialog({
         </div>
       </div>
     </Modal>
+  )
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ô TÌM VẬT TƯ GÕ THẲNG — KHÔNG QUA HỘP THOẠI (04/09/2026)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Vì sao thêm: form soạn đơn có bốn thứ phải chọn, và thứ chọn NHIỀU NHẤT lại
+   có cách chọn tệ nhất.
+
+     Nhà cung cấp   1 lần/đơn      gõ thẳng trong ô  (SupplierPicker)
+     Khuôn          vài lần/đơn    gõ thẳng trong ô  (DiePicker)
+     VẬT TƯ         10–20 lần/đơn  MỞ HỘP THOẠI      ← chỗ này
+     Nhu cầu BOM    1 lượt         đổi sang tab khác
+
+   Hộp thoại lấy mất ba thứ: NGỮ CẢNH (che bảng, không thấy mình đã thêm gì —
+   với đơn 10 dòng là vấn đề thật), ẨN DỤ BẢNG TÍNH (cả lưới gõ thẳng được,
+   riêng ô quan trọng nhất bật hộp thoại), và một nhịp mở/đóng nhân theo số
+   dòng.
+
+   Ô này KHÔNG thay hộp thoại — nó lấy đi việc thường ngày của hộp thoại. Biết
+   mình cần gì thì gõ; cần DUYỆT theo nhóm hoặc tích nhiều món một lượt thì vẫn
+   mở hộp thoại bằng nút ở chân danh sách.
+
+   Dùng chung `cache` + `search()` + `MIN_CHARS` khai ở đầu tệp này, nên gõ đi
+   gõ lại một từ khoá không sinh thêm request, và hộp thoại hâm nóng cache cho ô
+   này và ngược lại.
+*/
+export function MaterialCombo({
+  usedIds,
+  onPick,
+  onBrowse,
+  needs,
+}: {
+  /** Vật tư đã có trên dòng khác — hiện mờ, không chọn lại được. */
+  usedIds: Set<string>
+  /** Chọn xong MỘT món: ô tự xoá từ khoá và giữ con trỏ để gõ món kế. */
+  onPick: (m: PoMaterial) => void
+  /** Mở hộp thoại đầy đủ — dành cho lúc cần duyệt theo nhóm / tích hàng loạt. */
+  onBrowse: () => void
+  /** SL đề xuất theo nhu cầu BOM của LSX, theo `material_id`. */
+  needs?: Map<string, number>
+}) {
+  const [q, setQ] = useState('')
+  const [rows, setRows] = useState<PoMaterial[]>([])
+  const [loading, setLoading] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const [active, setActive] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  /* Phần tử neo giữ trong STATE chứ không đọc `inputRef.current` lúc render —
+     đọc ref trong thân render là thứ React không bảo đảm (bị lint chặn), và ở
+     đây còn sai thật: lượt render đầu ref chưa gắn nên popover mất điểm neo. */
+  const [inputEl, setInputEl] = useState<HTMLInputElement | null>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const listId = useId()
+
+  const term = q.trim()
+
+  /*
+   * Giãn nhịp 220ms rồi mới hỏi server. Danh mục 13k mã, gõ "thép hộp" là 8 ký
+   * tự — hỏi theo từng phím thì 8 vòng server cho một lần tìm, và kết quả về
+   * không theo thứ tự gõ còn làm danh sách nhảy dưới tay người dùng.
+   */
+  useEffect(() => {
+    // Từ khoá quá ngắn thì KHÔNG dọn state ở đây — kết quả cũ được lọc lúc
+    // render (`shown` bên dưới). Gọi setState thẳng trong thân effect làm React
+    // render dây chuyền và bị `react-hooks/set-state-in-effect` chặn.
+    if (term.length < MIN_CHARS) return
+    let alive = true
+    const t = setTimeout(async () => {
+      setLoading(true)
+      try {
+        const res = await search(term, '')
+        if (!alive) return
+        setRows(res)
+        setActive(0)
+      } catch {
+        if (alive) setRows([])
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }, 220)
+    return () => {
+      alive = false
+      clearTimeout(t)
+    }
+  }, [term])
+
+  // Danh sách vẽ ở <body> qua AnchoredPopover nên KHÔNG nằm trong boxRef —
+  // thiếu vế `data-anchored-popover` thì cú bấm chọn bị coi là bấm ra ngoài.
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: PointerEvent) {
+      const t = e.target as HTMLElement
+      if (t.closest('[data-anchored-popover]')) return
+      if (!boxRef.current?.contains(t)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [open])
+
+  function openList() {
+    setOpen(true)
+    const r = inputRef.current?.getBoundingClientRect()
+    if (r) setAnchor(r)
+  }
+
+  // Xoá bớt cho từ khoá ngắn lại thì kết quả cũ không còn nói về thứ đang gõ.
+  // Lọc ở đây thay vì dọn state trong effect — cùng lý do ghi ở effect trên.
+  const shown = term.length < MIN_CHARS ? [] : rows
+  const pickable = shown.filter((m) => !usedIds.has(m.id))
+
+  function choose(m: PoMaterial) {
+    if (usedIds.has(m.id)) return
+    onPick(m)
+    // Xoá từ khoá nhưng GIỮ con trỏ trong ô: đơn 10 dòng thì việc kế tiếp gần
+    // như chắc chắn là gõ tiếp món nữa, không phải đi chỗ khác.
+    setQ('')
+    setRows([])
+    setOpen(false)
+    /*
+     * Đòi con trỏ SAU khi popover đã gỡ, không phải ngay tại đây.
+     *
+     * Đo được lúc dựng: bấm chuột vào một dòng kết quả thì focus sang chính nút
+     * đó; gọi `focus()` đồng bộ ở đây có ăn, nhưng ngay sau đó React gỡ popover
+     * và focus rơi về <body> — ô trắng, gõ tiếp không vào đâu cả. Lùi sang
+     * khung hình kế là lúc DOM đã yên.
+     */
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }
+
+  function onKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') return setOpen(false)
+    // Tab = đi tiếp sang ô khác, nên danh sách phải đóng. Không chặn phím —
+    // để tiêu điểm chạy tự nhiên, chỉ dọn cái đang che.
+    if (e.key === 'Tab') return setOpen(false)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      openList()
+      setActive((i) =>
+        Math.max(0, Math.min(pickable.length - 1, e.key === 'ArrowDown' ? i + 1 : i - 1)),
+      )
+      return
+    }
+    // Nhảy đầu/cuối danh sách — danh mục 13k mã nên kết quả hay đủ 25 dòng.
+    if (e.key === 'Home' && open) {
+      e.preventDefault()
+      return setActive(0)
+    }
+    if (e.key === 'End' && open) {
+      e.preventDefault()
+      return setActive(Math.max(0, pickable.length - 1))
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      const m = pickable[active]
+      if (m) choose(m)
+    }
+  }
+
+  return (
+    <div ref={boxRef} className="relative min-w-0 flex-1">
+      <SearchIcon
+        className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2"
+        strokeWidth={1.8}
+        aria-hidden
+      />
+      <Input
+        ref={(el) => {
+          inputRef.current = el
+          setInputEl(el)
+        }}
+        value={q}
+        onChange={(e) => {
+          setQ(e.target.value)
+          openList()
+        }}
+        onFocus={openList}
+        onKeyDown={onKeyDown}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-autocomplete="list"
+        /*
+         * Trình đọc màn hình theo dõi Ô NHẬP, không theo dõi danh sách. Thiếu
+         * dòng này thì bấm ↑↓ chỉ đổi màu nền trên màn hình còn người dùng NVDA
+         * nghe im lặng — họ không biết mình đang trỏ vào món nào. Đây là mảnh
+         * ghép bắt buộc của một combobox, không phải phần trang trí.
+         */
+        aria-activedescendant={
+          open && pickable[active] ? `${listId}-${pickable[active].id}` : undefined
+        }
+        aria-label="Tìm vật tư để thêm dòng"
+        placeholder="Gõ mã hoặc tên vật tư để thêm dòng…"
+        className="h-9 rounded-lg border-dashed pl-9 text-[13px]"
+      />
+      {loading && (
+        <span className="absolute top-1/2 right-3 -translate-y-1/2">
+          <Spinner size={14} />
+        </span>
+      )}
+
+      {open && anchor && (
+        <AnchoredPopover
+          anchor={anchor}
+          /* Bám theo ô khi cuộn thay vì tự tắt — ô này nằm giữa một trang dài,
+             người dùng liếc xuống bảng rồi quay lại chọn là chuyện thường. */
+          anchorEl={inputEl}
+          onClose={() => setOpen(false)}
+          /* Rộng hơn ô — đây là lý do kỹ thuật duy nhất từng biện hộ cho hộp
+             thoại ("cột hẹp không đủ chỗ bày"), và AnchoredPopover xoá nó. */
+          width={Math.max(560, anchor.width)}
+          maxHeight={380}
+        >
+          <div id={listId} role="listbox">
+            {term.length < MIN_CHARS ? (
+              <p className="text-muted-foreground px-3 py-3 text-[13px]">
+                Gõ ít nhất {MIN_CHARS} ký tự — hoặc duyệt theo nhóm ở dưới.
+              </p>
+            ) : shown.length === 0 && !loading ? (
+              <p className="text-muted-foreground px-3 py-3 text-[13px]">
+                Không có vật tư nào khớp “{term}”.
+              </p>
+            ) : (
+              shown.map((m) => {
+                const used = usedIds.has(m.id)
+                const i = pickable.indexOf(m)
+                const need = needs?.get(m.id)
+                return (
+                  <button
+                    key={m.id}
+                    id={`${listId}-${m.id}`}
+                    type="button"
+                    role="option"
+                    aria-selected={!used && i === active}
+                    disabled={used}
+                    /*
+                     * Kéo mục đang trỏ vào tầm nhìn. Kết quả trả về 25 dòng mà
+                     * khung chỉ cao 380px (~6 dòng): bấm ↓ tới dòng thứ bảy là
+                     * vệt sáng chạy ra ngoài, người dùng bấm Enter mà không
+                     * biết mình đang chọn gì. `block: 'nearest'` để nó chỉ cuộn
+                     * vừa đủ, không giật danh sách về giữa mỗi lần bấm.
+                     */
+                    ref={
+                      !used && i === active
+                        ? (el) => el?.scrollIntoView({ block: 'nearest' })
+                        : undefined
+                    }
+                    onMouseEnter={() => i >= 0 && setActive(i)}
+                    onClick={() => choose(m)}
+                    className={`flex w-full items-start gap-3 px-3 py-2 text-left transition-colors ${
+                      used
+                        ? 'cursor-default opacity-45'
+                        : i === active
+                          ? 'bg-[var(--accent)]'
+                          : 'hover:bg-muted'
+                    }`}
+                  >
+                    <span className="t-data w-[92px] shrink-0 text-[12px] font-semibold text-[var(--primary)]">
+                      {m.code}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px]">{m.name}</span>
+                      <span className="text-muted-foreground block truncate text-[11px]">
+                        {[m.spec, m.sub_group ?? m.group_name]
+                          .filter(Boolean)
+                          .join(' · ') || '—'}
+                      </span>
+                    </span>
+                    {/* Ba con số người mua thật sự cân nhắc lúc chọn: đơn vị,
+                        còn bao nhiêu trong kho, lệnh này cần bao nhiêu. */}
+                    <span className="shrink-0 text-right text-[11px]">
+                      <span className="text-muted-foreground block">{m.unit}</span>
+                      <span className="block">
+                        {m.on_hand == null ? (
+                          <span className="text-muted-foreground">chưa có sổ kho</span>
+                        ) : (
+                          <>
+                            tồn{' '}
+                            <b className="t-data">{m.on_hand.toLocaleString('vi-VN')}</b>
+                          </>
+                        )}
+                      </span>
+                      {need != null && need > 0 && (
+                        <span className="block text-[var(--warn)]">
+                          cần <b className="t-data">{need.toLocaleString('vi-VN')}</b>
+                        </span>
+                      )}
+                      {used && <span className="block">đã có trên đơn</span>}
+                    </span>
+                  </button>
+                )
+              })
+            )}
+          </div>
+
+          <div className="bg-muted/40 flex items-center gap-3 border-t px-3 py-2">
+            <span className="text-muted-foreground text-[11px]">
+              <kbd className="border-border bg-card t-data rounded border px-1">↑↓</kbd>{' '}
+              chạy ·{' '}
+              <kbd className="border-border bg-card t-data rounded border px-1">
+                Enter
+              </kbd>{' '}
+              thêm dòng
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                onBrowse()
+              }}
+              className="ml-auto text-[12px] font-medium text-[var(--primary)] hover:underline"
+            >
+              Duyệt theo nhóm · tích nhiều món…
+            </button>
+          </div>
+        </AnchoredPopover>
+      )}
+    </div>
   )
 }

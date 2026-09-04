@@ -2,8 +2,15 @@
 
 import { createContext, useCallback, useContext, useState } from 'react'
 import { Modal } from '@/components/Modal'
-import { Button } from '@/components/ui/Button'
-import { Textarea } from '@/components/ui/Input'
+/*
+ * Nút và ô nhập lấy bản `shadcn/*` chứ không phải `ui/Button` + `ui/Input`
+ * (04/09/2026). Hai tệp kia còn nguyên theme-v2: nút `bg-slate-900`, và ô nhập
+ * `focus-visible:ring-amber-500` — vòng focus hổ phách, đúng màu theme-v3 dành
+ * cho CẢNH BÁO. Hộp thoại xác nhận là chỗ tệ nhất để một ô nhập bình thường tự
+ * nhuộm màu cảnh báo lúc người dùng vừa nhấp vào.
+ */
+import { Button } from '@/components/shadcn/button'
+import { Textarea } from '@/components/shadcn/textarea'
 
 type Options = {
   title: string
@@ -96,16 +103,14 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         title={cState.opts.title}
       >
         {cState.opts.description && (
-          <p className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-            {cState.opts.description}
-          </p>
+          <p className="text-muted-foreground mb-4 text-sm">{cState.opts.description}</p>
         )}
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => closeConfirm(false)}>
+          <Button variant="outline" onClick={() => closeConfirm(false)}>
             {cState.opts.cancelLabel ?? 'Huỷ'}
           </Button>
           <Button
-            variant={cState.opts.tone === 'danger' ? 'danger' : 'primary'}
+            variant={cState.opts.tone === 'danger' ? 'destructive' : 'default'}
             onClick={() => closeConfirm(true)}
             autoFocus
           >
@@ -120,12 +125,12 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
         title={pState.opts.title}
       >
         {pState.opts.description && (
-          <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
-            {pState.opts.description}
-          </p>
+          <p className="text-muted-foreground mb-3 text-sm">{pState.opts.description}</p>
         )}
         {pState.opts.inputLabel && (
-          <label className="mb-1 block text-sm">{pState.opts.inputLabel}</label>
+          <label className="mb-1 block text-sm font-medium">
+            {pState.opts.inputLabel}
+          </label>
         )}
         <Textarea
           rows={3}
@@ -135,11 +140,11 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
           autoFocus
         />
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" onClick={() => closePrompt(null)}>
+          <Button variant="outline" onClick={() => closePrompt(null)}>
             {pState.opts.cancelLabel ?? 'Huỷ'}
           </Button>
           <Button
-            variant={pState.opts.tone === 'danger' ? 'danger' : 'primary'}
+            variant={pState.opts.tone === 'danger' ? 'destructive' : 'default'}
             disabled={pState.opts.required && !pState.value.trim()}
             onClick={() => closePrompt(pState.value.trim())}
           >

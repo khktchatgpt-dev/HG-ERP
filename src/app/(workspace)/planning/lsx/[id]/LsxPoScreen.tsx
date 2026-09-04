@@ -1,8 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   Building2,
+  CalendarClock,
   CalendarDays,
   FileText,
   ClipboardList,
@@ -18,10 +21,14 @@ import { Badge } from '@/components/Badge'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { DataTable, type Column } from '@/components/erp/DataTable'
+import { DateField } from '@/components/erp/DateField'
 import { DocChip } from '@/components/erp/DocChip'
 import { EmptyState } from '@/components/erp/EmptyState'
+import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Button } from '@/components/shadcn/button'
 import { Card, CardContent } from '@/components/shadcn/card'
+import { useToast } from '@/components/ui/Toast'
+import { api, ApiError } from '@/lib/api'
 import {
   PO_NEXT_HINT,
   PO_STATUS_LABEL,
@@ -53,7 +60,15 @@ const money = (n: number, currency: string) =>
  * Mỗi dòng đơn bấm được sang `/planning/pos/[id]` — đó là chỗ duy nhất sửa đơn,
  * trang này chỉ đọc.
  */
-export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: string }) {
+export function LsxPoScreen({
+  lsx,
+  today,
+  canEdit,
+}: {
+  lsx: LsxSupplyDetail
+  today: string
+  canEdit: boolean
+}) {
   const live = lsx.pos.filter((p) => p.status !== 'cancelled')
   const unsent = live.filter(
     (p) => p.status === 'draft' || p.status === 'pending_approval',
@@ -77,11 +92,42 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
     ...new Set(live.map((p) => p.assignee_name).filter((v): v is string => !!v)),
   ]
   const cov = lsx.coverage
-  /* Tiền của lệnh cộng theo VND; đơn ngoại tệ đứng riêng ở cột Giá trị của nó. */
-  const totalAmount = live
-    .filter((p) => p.currency === 'VND')
-    .reduce((s, p) => s + p.amount, 0)
+  /*
+   * TIỀN CỦA LỆNH — CỘNG THEO TỪNG LOẠI TIỀN (04/09/2026).
+   *
+   * Bản cũ `filter(p => p.currency === 'VND')` rồi cộng: đơn ngoại tệ bị LOẠI
+   * IM LẶNG khỏi ô "Giá trị đã đặt" trong khi vẫn được đếm ở dòng "N đơn" ngay
+   * dưới. Lệnh 08/26-27 thật có `16.830,9 USD · 32.225.000 VND` — trang này chỉ
+   * bày con VND, người đọc hiểu đó là toàn bộ tiền của lệnh. Chú thích cũ bảo
+   * "đơn ngoại tệ đứng riêng ở cột Giá trị của nó", nhưng cột ấy nằm trong bảng
+   * bên dưới và không ai cộng nhẩm 12 dòng.
+   *
+   * Không quy đổi về VND: tỉ giá không nằm trên đơn, và một con số quy đổi bịa
+   * ra còn tệ hơn hai con số thật đứng cạnh nhau.
+   */
+  const totals = new Map<string, number>()
+  for (const p of live) totals.set(p.currency, (totals.get(p.currency) ?? 0) + p.amount)
+  // VND đứng đầu vì đa số đơn là VND; còn lại xếp theo giá trị giảm dần.
+  const totalsList = [...totals.entries()]
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => (a[0] === 'VND' ? -1 : b[0] === 'VND' ? 1 : b[1] - a[1]))
+  const mainTotal = totalsList[0] ?? (['VND', 0] as const)
+  const otherTotals = totalsList.slice(1)
   const totalLines = live.reduce((s, p) => s + p.line_count, 0)
+
+  /*
+   * HẠN VẬT TƯ PHẢI VỀ (0126) — mốc của LỆNH, không phải của đơn.
+   *
+   * Đèn "Kịp SX?" của từng đơn so ngày hẹn về với đúng mốc này, nên trước đây
+   * người mua phải sang `/planning/pos` (thẻ gộp theo lệnh) mới đặt được nó —
+   * tức mốc của lệnh lại nằm ở màn danh sách đơn. Nay về đúng trang lệnh, và có
+   * thêm phần đếm ngược mà ô cũ không có.
+   */
+  const dueLeft = lsx.materials_due_at
+    ? Math.round(
+        (Date.parse(lsx.materials_due_at.slice(0, 10)) - Date.parse(today)) / 86_400_000,
+      )
+    : null
   /** Nháp mà thiếu giá hoặc chưa có dòng nào — gửi duyệt bây giờ là gửi đơn hụt. */
   const notReady = live.filter(
     (p) =>
@@ -193,8 +239,15 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
       header: 'Đặt / Hẹn về',
       width: '132px',
       sortValue: (p) => p.expected_at ?? '9999',
+      /*
+       * Hai ngày xếp chồng, KHÔNG có mũi tên "→" dẫn giữa chúng (04/09/2026).
+       * Tiêu đề cột đã nói "Đặt / Hẹn về" nên vị trí dòng tự phân vai; thêm một
+       * ký tự mũi tên vào mỗi ô là 30 mũi tên trên một bảng 30 dòng, đọc thành
+       * nhiễu chứ không thành nghĩa. Cùng lý do đã bỏ "⚠" ở thẻ nhóm bên
+       * `/planning/pos`: ký tự không phải icon.
+       */
       cell: (p) => (
-        <div className="t-data flex flex-col">
+        <div className="t-data flex flex-col leading-[17px]">
           <span>{dmy(p.ordered_at)}</span>
           <span
             style={
@@ -205,7 +258,7 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
                 : { color: 'var(--muted-foreground)' }
             }
           >
-            {p.expected_at ? `→ ${dmy(p.expected_at)}` : '→ chưa hẹn'}
+            {p.expected_at ? dmy(p.expected_at) : 'chưa hẹn'}
           </span>
         </div>
       ),
@@ -312,9 +365,14 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
         />
         <StatTile
           label="Giá trị đã đặt"
-          value={money(totalAmount, 'VND')}
+          value={money(mainTotal[1], mainTotal[0])}
           icon={ShoppingCart}
-          hint={`${live.length} đơn · ${totalLines} dòng`}
+          hint={
+            otherTotals.length > 0
+              ? // Ngoại tệ đứng TRƯỚC số đơn: nó là phần dễ bị đọc sót nhất.
+                `+ ${otherTotals.map(([c, v]) => money(v, c)).join(' · ')} · ${live.length} đơn`
+              : `${live.length} đơn · ${totalLines} dòng`
+          }
         />
         <StatTile
           label="Chưa gửi NCC"
@@ -349,7 +407,8 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
         vật tư TRƯỚC khi xưởng dừng máy. Chỉ hiện khi thật sự thiếu.
       */}
       {cov.missing > 0 && (
-        <Card style={{ borderColor: 'var(--warn)' }}>
+        // `py-0` — xem ghi chú ở thẻ dữ kiện bên dưới.
+        <Card className="py-0" style={{ borderColor: 'var(--warn)' }}>
           <CardContent className="px-4 py-3.5">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <TriangleAlert
@@ -390,14 +449,28 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
         </Card>
       )}
 
-      <Card>
+      {/*
+        `py-0` TRÊN CARD — không thừa. `shadcn/card` gắn sẵn `py-6` cho thẻ, còn
+        `CardContent` chỉ có `px-6`. Viết `py-3.5` ở CardContent (như bản cũ) là
+        CỘNG THÊM chứ không phải thay: đo được 48px + 28px = 76px đệm bọc quanh
+        93px nội dung — thẻ cao 142px cho một dải bốn dòng chữ. Đây chính là chỗ
+        "khoảng trống dư thừa" nhìn thấy trên trang.
+      */}
+      <Card className="py-0">
         <CardContent className="grid grid-cols-2 gap-4 px-4 py-3.5 md:grid-cols-4">
-          <Fact
-            icon={<CalendarDays />}
-            label="Hạn vật tư"
-            value={dmy(lsx.materials_due_at)}
-            tone={lsx.materials_due_at ? undefined : 'var(--warn)'}
-            hint={lsx.materials_due_at ? undefined : 'chưa ai đặt hạn'}
+          {/*
+            "Hạn vật tư phải về" từng là một DẢI RIÊNG ngay dưới tiêu đề. Gộp về
+            đây 04/09/2026: nó cùng loại với ba ô bên cạnh — đều là dữ kiện của
+            LỆNH — nên tách ra thành khối thứ tư chỉ để nhét một ô nhập là ăn
+            thêm một thẻ, một đường viền và hai lần khoảng cách, đẩy bảng đơn
+            xuống quá nửa màn hình. Ô sửa được nằm lẫn giữa ô đọc vẫn phân biệt
+            đượcvì nó có viền input rõ ràng.
+          */}
+          <MaterialsDueFact
+            lsxId={lsx.id}
+            value={lsx.materials_due_at}
+            daysLeft={dueLeft}
+            canEdit={canEdit}
           />
           <Fact
             icon={<CalendarDays />}
@@ -425,11 +498,22 @@ export function LsxPoScreen({ lsx, today }: { lsx: LsxSupplyDetail; today: strin
         </CardContent>
       </Card>
 
+      {/*
+        PHÂN TRANG BẬT KHI LỆNH NHIỀU ĐƠN (04/09/2026).
+
+        Trước đây cứng `pagination={false}` với lý do "bảng ngắn". Lý do đó chỉ
+        đúng cho lệnh nhỏ: lệnh 06/26-27 thật có 12 đơn, và một lệnh gom nhiều
+        đơn hàng khách thì còn dài hơn — lúc ấy trang đổ hết một lượt, không đầu
+        bảng dính, không biết mình đang ở đâu. Ngưỡng 20 vì dưới đó thanh phân
+        trang chỉ tổ thêm một hàng chrome cho ba dòng dữ liệu.
+      */}
       <DataTable
         rows={lsx.pos}
         columns={columns}
         keyFn={(p) => p.id}
-        pagination={false}
+        pagination={lsx.pos.length > 20}
+        pageSize={20}
+        storageKey="lsx-po-page-size"
         rowClassName={(p) => (p.status === 'cancelled' ? 'opacity-50' : undefined)}
         emptyState={
           <EmptyState
@@ -475,6 +559,100 @@ function Fact({
           {value}
         </div>
         {hint && <div className="text-muted-foreground truncate text-[11px]">{hint}</div>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Ô "HẠN VẬT TƯ PHẢI VỀ" — mốc của lệnh, ô DUY NHẤT sửa được trong dải dữ kiện.
+ *
+ * Cùng khuôn `Fact` bên cạnh (icon vuông + nhãn + giá trị + dòng phụ) để dải
+ * đọc thành một hàng liền mạch, chỉ khác chỗ giá trị là `DateField` thay vì chữ
+ * chết. Không tách thành khối riêng: nó cùng loại với ba ô kia — đều là dữ kiện
+ * của lệnh — và tách ra chỉ tổ đẩy bảng đơn xuống quá nửa màn hình.
+ *
+ * Đổi ngày là ghi ngay (không có nút Lưu): ô chỉ có một giá trị, và `DateField`
+ * chỉ gọi `onChange` khi gõ đủ một ngày có thật.
+ */
+function MaterialsDueFact({
+  lsxId,
+  value,
+  daysLeft,
+  canEdit,
+}: {
+  lsxId: string
+  value: string | null
+  daysLeft: number | null
+  canEdit: boolean
+}) {
+  const router = useRouter()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+
+  async function save(iso: string) {
+    setBusy(true)
+    try {
+      await api(`/api/dept/production/lsx/${lsxId}/materials-due`, {
+        method: 'PATCH',
+        body: { materials_due_at: iso || null },
+      })
+      router.refresh()
+      toast.success(iso ? 'Đã đặt hạn vật tư phải về' : 'Đã xoá hạn vật tư')
+    } catch (e) {
+      toast.error(
+        'Không đặt được hạn vật tư',
+        e instanceof ApiError ? e.message : 'Có lỗi',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Quá hạn thì đỏ, còn dưới một tuần thì hổ phách — vòng đời, không phải hành động.
+  const tone =
+    daysLeft == null ? null : daysLeft < 0 ? 'stop' : daysLeft <= 7 ? 'warn' : 'done'
+  const note =
+    daysLeft == null
+      ? 'chưa đặt — không có mốc để chấm đơn nào kịp, đơn nào không'
+      : daysLeft < 0
+        ? `đã quá ${Math.abs(daysLeft)} ngày`
+        : daysLeft === 0
+          ? 'đúng hôm nay'
+          : `còn ${daysLeft} ngày`
+
+  return (
+    <div className="flex gap-2.5">
+      <TopProgressBar active={busy} />
+      <span
+        className="bg-muted mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg [&>svg]:size-3.5"
+        style={{ color: tone ? `var(--${tone})` : 'var(--muted-foreground)' }}
+      >
+        <CalendarClock aria-hidden />
+      </span>
+      <div className="min-w-0">
+        <div className="t-label text-muted-foreground">Hạn vật tư phải về</div>
+        {canEdit ? (
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <DateField
+              value={value ?? ''}
+              onChange={(iso) => void save(iso)}
+              disabled={busy}
+              className="h-7 w-[124px] text-[12px]"
+              aria-label="Hạn vật tư phải về của lệnh"
+            />
+            {busy && <Spinner size={13} />}
+          </div>
+        ) : (
+          <div className="t-data">{dmy(value)}</div>
+        )}
+        <div
+          className="mt-0.5 truncate text-[11px]"
+          style={tone ? { color: `var(--${tone})` } : undefined}
+          title="Đèn “Kịp SX?” của từng đơn so ngày hẹn về với mốc này"
+        >
+          {note}
+        </div>
       </div>
     </div>
   )

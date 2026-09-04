@@ -9,7 +9,6 @@ import {
   Plus,
   Printer,
   ScrollText,
-  Search,
   Sparkles,
   Truck,
 } from 'lucide-react'
@@ -20,6 +19,7 @@ import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Button } from '@/components/shadcn/button'
 import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
 import {
+  MaterialCombo,
   MaterialPickDialog,
   fetchMaterialByCode,
   invalidateMaterialPickCache,
@@ -44,7 +44,7 @@ import {
   columnsToShipments,
   type PlanColumn,
 } from './sections/ShipmentPlanPanel'
-import { NeedsPanel, type Need } from './sections/NeedsPanel'
+import type { Need } from './sections/NeedsPanel'
 import { TermsSection } from './sections/TermsSection'
 import { QuickAddMaterial } from './QuickAddMaterial'
 import { EditMaterialDialog } from './EditMaterialDialog'
@@ -131,6 +131,9 @@ export type PoInitial = {
  * (mốc `baselineRef`) để không gắn banner "sửa dở" oan.
  */
 const DRAFT_KEY = 'hg-po-draft-new'
+
+/** Số lượng trên chip nhu cầu — cùng cách đọc với mọi số trong form. */
+const num = (n: number) => n.toLocaleString('vi-VN')
 
 /*
  * "Đề xuất từ BOM" từng TẮT TOÀN CỤC (11/08/2026) vì định mức đang làm lại.
@@ -281,8 +284,7 @@ export function PoCreateForm({
 
   const [lines, setLines] = useState<Line[]>(initial?.lines ?? [])
   const [needs, setNeeds] = useState<Need[]>([])
-  const [loadingNeeds, setLoadingNeeds] = useState(false)
-  const [showNeeds, setShowNeeds] = useState(true)
+  const [, setLoadingNeeds] = useState(false)
 
   /*
    * BẢO VỆ CHUYỂN TRANG ĐỘT NGỘT (13/08/2026 — user: "chưa có cơ chế bảo vệ").
@@ -499,10 +501,6 @@ export function PoCreateForm({
         `/api/dept/supply/needs?production_order_id=${primary}${qs}`,
       )
       setNeeds(data.needs)
-      // Lệnh lớn (kiểm UI 12/08: LSX 01 có 106 vật tư) mà panel mở sẵn là nó
-      // chiếm cả màn giữa hai vùng làm việc — nhiều hơn một lưới 12 thẻ thì
-      // THU GỌN, header vẫn đếm đủ và một bấm là bung.
-      setShowNeeds(data.needs.length <= 12)
     } catch (e) {
       toast.error('Không tải được nhu cầu', e instanceof ApiError ? e.message : 'Có lỗi')
     } finally {
@@ -859,7 +857,7 @@ export function PoCreateForm({
    * khối Điều khoản), mở ra thì đẩy bảng dòng hàng đi mất. Thành tab thì luôn
    * thấy là CÓ, luôn một cú bấm, mà không tốn một dòng chiều cao nào.
    */
-  const [tab, setTab] = useState<'lines' | 'ship' | 'terms' | 'needs'>('lines')
+  const [tab, setTab] = useState<'lines' | 'ship' | 'terms'>('lines')
   /*
    * BỎ HẲN "chế độ gọn" (user chốt 29/08/2026): bảng LUÔN bày đủ cột như sổ
    * Excel. Bản trước mặc định gom cột riêng của mẫu vào một hàng chi tiết bung
@@ -1032,7 +1030,6 @@ export function PoCreateForm({
               setLsxId('')
               setExtraLsxIds([])
               setNeeds([])
-              if (tab === 'needs') setTab('lines')
             }
           }}
           lsxId={lsxId}
@@ -1077,12 +1074,8 @@ export function PoCreateForm({
           <TabBtn on={tab === 'terms'} onClick={() => setTab('terms')} icon={ScrollText}>
             Điều khoản
           </TabBtn>
-          {poType === 'lsx' && lsxId && (
-            <TabBtn on={tab === 'needs'} onClick={() => setTab('needs')} icon={Sparkles}>
-              Nhu cầu LSX
-              {pendingNeeds.length > 0 && <TabCount warn>{pendingNeeds.length}</TabCount>}
-            </TabBtn>
-          )}
+          {/* Tab "Nhu cầu LSX" bỏ 04/09/2026 — nhu cầu nay nằm ngay trong tab
+              Dòng hàng, cạnh ô thêm dòng. Xem ghi chú ở dải đó. */}
         </div>
       </div>
 
@@ -1113,41 +1106,94 @@ export function PoCreateForm({
             {lines.length === 0 && (
               <p className="text-muted-foreground basis-full text-[12px]">
                 Mẫu <b className="text-foreground">{meta.label}</b> nhập các cột như trên
-                — bấm ô tìm bên dưới để chọn vật tư đầu tiên
-                {poType === 'lsx' && lsxId && pendingNeeds.length > 0 && (
-                  <>
-                    , hoặc lấy sẵn{' '}
-                    <Button
-                      type="button"
-                      variant="link"
-                      onClick={() => setTab('needs')}
-                      className="h-auto p-0 align-baseline text-[13px] font-medium"
-                    >
-                      {pendingNeeds.length} vật tư nhu cầu LSX
-                    </Button>
-                  </>
-                )}
-                .
+                — bấm ô tìm bên dưới để chọn vật tư đầu tiên .
               </p>
             )}
-            <Button
-              ref={pickerRef}
-              type="button"
-              variant="outline"
-              onClick={() => setPickOpen(true)}
-              /* Nhãn cho trình đọc màn hình: chữ trong nút bị `truncate` và có
-                 <kbd> chen vào nên cây accessibility đọc ra nút KHÔNG TÊN. */
-              aria-label="Tìm và chọn vật tư cho đơn"
-              className="text-muted-foreground min-w-0 flex-1 justify-start gap-2.5 rounded-lg border-dashed px-3 text-left text-[13px] font-normal hover:border-[var(--primary)]"
-            >
-              <Search className="size-4 shrink-0" strokeWidth={1.8} aria-hidden />
-              <span className="truncate">
-                Tìm và chọn vật tư — mở phiên chọn, tích nhiều món một lượt…
-              </span>
-              <kbd className="border-border bg-muted t-data ml-auto hidden rounded border px-1.5 text-[10px] sm:inline">
-                Enter
-              </kbd>
-            </Button>
+
+            {/*
+              ── NHU CẦU CỦA LỆNH, NGAY TẠI CHỖ THÊM DÒNG (04/09/2026) ────────
+
+              Trước đây nhu cầu BOM nằm sau một TAB riêng: phải rời bảng, tích,
+              rồi bị đá ngược về. Cùng một mất-ngữ-cảnh như hộp thoại chọn vật
+              tư vừa dọn, chỉ khác là đổi tab thay vì mở hộp.
+
+              Đặt ở đây vì đây đúng là lúc cần: người dùng đang đứng ở ô "thêm
+              dòng", và câu hỏi tự nhiên là "lệnh này còn thiếu gì" — không phải
+              "để tôi đi tìm trong danh mục 13k mã".
+
+              Đo trước khi làm: 8/15 lệnh đang chạy suy ra được nhu cầu (53%).
+              Lệnh chưa có định mức thì `pendingNeeds` rỗng và dải này tự ẩn —
+              không bày một khối trống.
+            */}
+            {poType === 'lsx' && lsxId && pendingNeeds.length > 0 && (
+              <div className="basis-full">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <Sparkles
+                    className="size-3.5 shrink-0 text-[var(--warn)]"
+                    strokeWidth={1.8}
+                    aria-hidden
+                  />
+                  <span className="text-[12px] font-medium">
+                    Lệnh còn thiếu{' '}
+                    <b className="text-[var(--warn)]">{pendingNeeds.length}</b> vật tư
+                  </span>
+                  <span className="text-muted-foreground text-[11px]">
+                    số nháp — đối chiếu trước khi dùng
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void addFromNeeds(pendingNeeds)}
+                    className="ml-auto h-7 gap-1.5 text-[12px]"
+                  >
+                    <Plus strokeWidth={1.8} aria-hidden /> Thêm cả {pendingNeeds.length}
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {/* Bấm một chip = thêm đúng món đó. Bày tối đa 8 rồi thôi:
+                      dải này là lối tắt, không phải bảng thứ hai. */}
+                  {pendingNeeds.slice(0, 8).map((n) => (
+                    <Button
+                      key={n.material_id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void addFromNeeds([n])}
+                      title={`${n.material_name} — cần ${num(n.suggest)} ${n.unit}`}
+                      className="h-7 max-w-[260px] gap-1.5 rounded-full px-2.5 text-[11.5px] font-normal hover:border-[var(--primary)] hover:text-[var(--primary)]"
+                    >
+                      <Plus className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+                      <span className="t-data shrink-0">{n.material_code}</span>
+                      <span className="truncate">{n.material_name}</span>
+                      <b className="t-data shrink-0 text-[var(--warn)]">
+                        {num(n.suggest)}
+                      </b>
+                    </Button>
+                  ))}
+                  {pendingNeeds.length > 8 && (
+                    <span className="text-muted-foreground self-center text-[11px]">
+                      … và {pendingNeeds.length - 8} món nữa
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+            {/*
+              GÕ THẲNG, KHÔNG MỞ HỘP THOẠI (04/09/2026).
+
+              Chỗ này từng là một nút gạch đứt, bấm vào mở `MaterialPickDialog`.
+              Nay là ô tìm thật: gõ → danh sách thả xuống ngay dưới → Enter là
+              thêm dòng, con trỏ ở nguyên trong ô để gõ món kế. Hộp thoại vẫn
+              còn nguyên, mở bằng liên kết ở chân danh sách — nó về đúng vai
+              "duyệt theo nhóm / tích hàng loạt" thay vì chắn mọi lối vào.
+            */}
+            <MaterialCombo
+              usedIds={usedIds}
+              needs={suggestions}
+              onPick={(m) => addMaterials([m])}
+              onBrowse={() => setPickOpen(true)}
+            />
             <Button
               type="button"
               variant="outline"
@@ -1200,12 +1246,10 @@ export function PoCreateForm({
                 })
               }
             />
-            <span className="text-muted-foreground ml-1 hidden text-[11.5px] xl:inline">
-              <kbd className="border-border bg-muted t-data rounded border px-1 text-[10px]">
-                Enter
-              </kbd>{' '}
-              SL đặt → đơn giá → dòng kế
-            </span>
+            {/* Gợi ý "Enter: SL đặt → đơn giá → dòng kế" bỏ 04/09/2026: nó ăn
+                chỗ của ô tìm trên chính hàng đó, mà lại tả cách gõ TRONG BẢNG —
+                thứ người dùng gặp sau khi đã có dòng, không phải lúc đang tìm.
+                Chuỗi Enter trong bảng vẫn nguyên, chỉ bỏ dòng chữ. */}
           </div>
         </section>
       )}
@@ -1232,22 +1276,6 @@ export function PoCreateForm({
           onSignerChange={setSignerRole}
           note={note}
           onNoteChange={setNote}
-        />
-      )}
-
-      {/* ═══════════ NHU CẦU LSX ═══════════ */}
-      {tab === 'needs' && poType === 'lsx' && lsxId && (
-        <NeedsPanel
-          needs={needs}
-          pending={pendingNeeds}
-          loading={loadingNeeds}
-          open={showNeeds}
-          onToggle={() => setShowNeeds((v) => !v)}
-          onGoLines={() => setTab('lines')}
-          onAdd={(list) => {
-            void addFromNeeds(list)
-            setTab('lines')
-          }}
         />
       )}
 
