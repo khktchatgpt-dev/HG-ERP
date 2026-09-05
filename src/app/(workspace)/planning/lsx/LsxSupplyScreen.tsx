@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   Building2,
@@ -58,6 +59,10 @@ import {
 } from '@/lib/lsx-supply'
 import type { BadgeTone } from '@/components/Badge'
 import type { LsxSupplyRow } from '@/modules/dept/supply/lsx-supply.service'
+import { useToast } from '@/components/ui/Toast'
+import { apiErrorText } from '@/lib/api'
+import { suggestMaterialsDue } from '@/lib/lsx-supply'
+import { LsxDueEditor, saveMaterialsDue } from './LsxDueEditor'
 
 export type { LsxSupplyRow }
 
@@ -113,6 +118,32 @@ export function LsxSupplyScreen({
   canEdit: boolean
 }) {
   const [gate, setGate] = useState<LsxSupplyGateKey | 'mine' | 'all'>('all')
+
+  const router = useRouter()
+  const toast = useToast()
+  const [filling, setFilling] = useState(false)
+  // Lệnh chưa có hạn nhưng có ngày xuất — điền gợi ý "ngày xuất − 30" một lượt.
+  const fillable = useMemo(
+    () => rows.filter((r) => !r.materials_due_at && suggestMaterialsDue(r.ship_date, today)),
+    [rows, today],
+  )
+  async function fillSuggested() {
+    setFilling(true)
+    let ok = 0
+    try {
+      for (const r of fillable) {
+        await saveMaterialsDue(r.id, suggestMaterialsDue(r.ship_date, today))
+        ok++
+      }
+      toast.success(`Đã đặt hạn vật tư cho ${ok} lệnh theo ngày xuất − 30`)
+      router.refresh()
+    } catch (e) {
+      toast.error(`Dừng sau ${ok} lệnh`, apiErrorText(e))
+      router.refresh()
+    } finally {
+      setFilling(false)
+    }
+  }
   const [customer, setCustomer] = useState('')
   const [dueFilter, setDueFilter] = useState('')
   const [q, setQ] = useState('')
@@ -189,6 +220,11 @@ export function LsxSupplyScreen({
                 <Download className="size-4" /> Xuất Excel
               </a>
             </Button>
+            {canEdit && fillable.length > 0 && (
+              <Button size="sm" variant="outline" disabled={filling} onClick={() => void fillSuggested()}>
+                <CalendarClock className="size-4" /> Điền hạn gợi ý cho {fillable.length} lệnh
+              </Button>
+            )}
             {canEdit && (
               <Button size="sm" asChild>
                 <Link href="/planning/pos/new">
@@ -458,7 +494,11 @@ export function LsxSupplyScreen({
                             <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                               <CalendarClock className="size-3" /> Hạn vật tư
                             </span>
-                            <span className="font-mono font-semibold text-sm">{dmy(row.materials_due_at)}</span>
+                            {canEdit ? (
+                              <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} />
+                            ) : (
+                              <span className="font-mono font-semibold text-sm">{dmy(row.materials_due_at)}</span>
+                            )}
                             {due === 'overdue' && daysLeft !== null ? (
                               <Badge tone="red" className="w-fit text-[10px]">Quá {-daysLeft} ngày</Badge>
                             ) : due === 'today' ? (
@@ -615,7 +655,11 @@ export function LsxSupplyScreen({
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         <CalendarClock className="size-3" /> Hạn vật tư
                       </span>
-                      <span className="font-mono text-xs font-semibold">{dmy(row.materials_due_at)}</span>
+                      {canEdit ? (
+                        <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} compact />
+                      ) : (
+                        <span className="font-mono text-xs font-semibold">{dmy(row.materials_due_at)}</span>
+                      )}
                       {due === 'overdue' && daysLeft !== null ? (
                         <span className="text-[11px] font-semibold text-destructive">Quá {-daysLeft} ngày</span>
                       ) : due === 'today' ? (

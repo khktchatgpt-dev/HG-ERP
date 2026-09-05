@@ -4,6 +4,7 @@ import {
   daysUntilDue,
   dueLevel,
   lsxSupplyGate,
+  suggestMaterialsDue,
   type LsxSupplyInput,
   type SortableLsx,
 } from './lsx-supply'
@@ -118,5 +119,22 @@ describe('compareForSupply', () => {
   it('cùng mức thì mã mới nhất lên trước, thứ tự ổn định', () => {
     const rows = [mk(true, 'soon', 'LSX-2608-01'), mk(true, 'soon', 'LSX-2608-09')]
     expect(rows.sort(compareForSupply)[0].code).toBe('LSX-2608-09')
+  })
+})
+
+describe('suggestMaterialsDue', () => {
+  it('= ngày xuất − 30, qua tháng và qua năm đúng', () => {
+    expect(suggestMaterialsDue('2026-10-17')).toBe('2026-09-17')
+    expect(suggestMaterialsDue('2026-01-10')).toBe('2025-12-11')
+    expect(suggestMaterialsDue('2026-10-17', undefined, 42)).toBe('2026-09-05')
+  })
+  it('gợi ý đã qua thì kẹp về hôm nay; ngày xuất đã qua thì không gợi ý', () => {
+    expect(suggestMaterialsDue('2026-09-15', '2026-09-05')).toBe('2026-09-05')
+    expect(suggestMaterialsDue('2026-04-20', '2026-09-05')).toBeNull()
+    expect(suggestMaterialsDue('2026-10-17', '2026-09-05')).toBe('2026-09-17')
+  })
+  it('không có ngày xuất / ngày hỏng thì không gợi ý', () => {
+    expect(suggestMaterialsDue(null)).toBeNull()
+    expect(suggestMaterialsDue('abc')).toBeNull()
   })
 })
