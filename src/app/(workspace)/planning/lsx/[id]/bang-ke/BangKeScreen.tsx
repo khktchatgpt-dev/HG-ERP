@@ -25,6 +25,7 @@ import { TopProgressBar } from '@/components/erp/Spinner'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { Badge, type BadgeTone } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
+import { Input } from '@/components/shadcn/input'
 import {
   Table,
   TableBody,
@@ -436,10 +437,21 @@ export function BangKeScreen({
                           {r.group_name}
                         </div>
                       )}
-                      {r.note && (
-                        <div className="text-muted-foreground text-[11px] italic">
-                          {r.note}
-                        </div>
+                      {canEdit && r.source === 'manual' && !data.manual_error ? (
+                        <NoteCell
+                          value={r.note ?? ''}
+                          disabled={busy}
+                          onSave={(v) =>
+                            saveRows(
+                              [{ material_id: r.material_id, qty_needed: r.qty_needed, note: v || null }],
+                              v ? `${r.material_code}: đã ghi chú` : `${r.material_code}: đã xoá ghi chú`,
+                            )
+                          }
+                        />
+                      ) : (
+                        r.note && (
+                          <div className="text-muted-foreground text-[11px] italic">{r.note}</div>
+                        )
                       )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">{r.unit}</TableCell>
@@ -679,6 +691,44 @@ function QtyCell({
         if (e.key === 'Escape') change(value)
       }}
       aria-label="Số cần"
+    />
+  )
+}
+
+/** Ghi chú của dòng tay ("phải lấy tròn bó"): sửa tại chỗ, lưu khi rời ô hoặc Enter. */
+function NoteCell({
+  value,
+  disabled,
+  onSave,
+}: {
+  value: string
+  disabled: boolean
+  onSave: (v: string) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const latest = useRef(value)
+  const change = (v: string) => {
+    latest.current = v
+    setDraft(v)
+  }
+  const commit = () => {
+    const v = latest.current.trim()
+    if (v === value) return
+    onSave(v)
+  }
+  return (
+    <Input
+      value={draft}
+      onChange={(e) => change(e.target.value)}
+      disabled={disabled}
+      placeholder="ghi chú…"
+      className="mt-1 h-7 text-[11px]"
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') change(value)
+      }}
+      aria-label="Ghi chú dòng"
     />
   )
 }
