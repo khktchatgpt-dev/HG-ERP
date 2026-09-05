@@ -4,6 +4,7 @@ import { assessMeetingRisk } from '@/lib/supply-meeting'
 import { assessPoLate } from '@/lib/late-risk'
 import { buildLsxSupplyDetail } from './lsx-supply.service'
 import { loadReceiptBatches } from './po-receipts.service'
+import { loadLsxBangKe } from './lsx-bang-ke.service'
 import type { LsxDetailReport, LsxReportLine } from './lsx-detail-excel'
 
 /**
@@ -18,9 +19,23 @@ export async function loadLsxDetailReport(
   user: User,
   lsxId: string,
   today: string,
+  /** Xuất kèm cả định mức chưa xác nhận (khớp công tắc trên màn bảng kê). */
+  includeDraft = false,
 ): Promise<LsxDetailReport | null> {
-  const lsx = await buildLsxSupplyDetail(user, lsxId, today)
+  const [lsx, bk] = await Promise.all([
+    buildLsxSupplyDetail(user, lsxId, today),
+    loadLsxBangKe(user, lsxId, today, includeDraft),
+  ])
   if (!lsx) return null
+  const bangKe = bk
+    ? {
+        rows: bk.rows,
+        include_draft: bk.include_draft,
+        unconfirmed_products: bk.products
+          .filter((p) => !p.bom_confirmed && p.coded_parts > 0)
+          .map((p) => ({ code: p.code, name: p.name, qty: p.qty })),
+      }
+    : undefined
 
   const risk = assessMeetingRisk(
     {
@@ -47,7 +62,7 @@ export async function loadLsxDetailReport(
   const poIds = lsx.pos.map((p) => p.id)
   const lines: Record<string, LsxReportLine[]> = {}
   for (const id of poIds) lines[id] = []
-  if (poIds.length === 0) return { today, lsx, risk, lines, batches: {} }
+  if (poIds.length === 0) return { today, lsx, risk, lines, batches: {}, bangKe }
 
   const [{ data: statusRows }, { data: lineRows }] = await Promise.all([
     db()
@@ -119,9 +134,9 @@ export async function loadLsxDetailReport(
       note: s.note,
     })
   }
-  if (lineIds.length === 0) return { today, lsx, risk, lines, batches: {} }
+  if (lineIds.length === 0) return { today, lsx, risk, lines, batches: {}, bangKe }
 
   // ĐỢT NHẬN = phiếu nhập kho — cùng hàm với tab Đợt giao của chi tiết đơn.
   const batches = await loadReceiptBatches(poIds)
-  return { today, lsx, risk, lines, batches }
+  return { today, lsx, risk, lines, batches, bangKe }
 }

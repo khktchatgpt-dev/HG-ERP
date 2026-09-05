@@ -28,9 +28,10 @@ export const GET = handle(async (req: Request) => {
   // `?lsx=<id>` → HỒ SƠ MỘT LỆNH: lệnh → từng đơn → từng dòng vật tư (user chốt
   // 05/09/2026: người quản lý cần đi sâu từng đơn, không cần bảng gộp mọi lệnh).
   // Không có tham số thì vẫn là bản gộp cũ cho ai còn dùng.
-  const lsxId = new URL(req.url).searchParams.get('lsx')
+  const url = new URL(req.url)
+  const lsxId = url.searchParams.get('lsx')
   if (lsxId) {
-    const report = await loadLsxDetailReport(user, lsxId, today)
+    const report = await loadLsxDetailReport(user, lsxId, today, url.searchParams.get('nhap') === '1')
     if (!report) throw NotFound('Không tìm thấy lệnh sản xuất')
     const buf = await buildLsxDetailExcel(report)
     return xlsx(buf, `ho-so-cung-ung_${report.lsx.code.replace(/[\/:*?"<>|]+/g, '-')}_${today}.xlsx`)

@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
+import { BANG_KE_STATUS, type BangKeRow } from '@/lib/lsx-bang-ke'
 
 /**
  * HỒ SƠ CUNG ỨNG MỘT LỆNH — file Excel đi từ LỆNH xuống từng ĐƠN rồi từng DÒNG
@@ -53,6 +54,27 @@ export type LsxDetailReport = {
   lines: Record<string, LsxReportLine[]>
   /** po id → các đợt nhận, xếp theo ngày. */
   batches: Record<string, LsxReportBatch[]>
+  /**
+   * BẢNG KÊ VẬT TƯ của lệnh — sheet "cần mua gì" mà người mua đọc trước tiên.
+   * Rỗng = lệnh chưa có nhu cầu nào (không sinh sheet, thay vì sinh sheet trắng).
+   */
+  bangKe?: {
+    rows: BangKeRow[]
+    /** Đang tính cả định mức BOM chưa xác nhận? Ghi lên đầu sheet cho khỏi nhầm. */
+    include_draft: boolean
+    /** SP có định mức mà Kỹ thuật chưa xác nhận — cảnh báo ngay trên sheet. */
+    unconfirmed_products: { code: string; name: string; qty: number }[]
+  }
+}
+
+
+/** Nguồn số "Cần" — cùng chữ với màn hình để đọc file không phải đoán. */
+const NGUON: Record<BangKeRow['source'], string> = {
+  manual: 'Cung ứng nhập tay',
+  components: 'Bảng định hình',
+  bom: 'Định mức đã xác nhận',
+  bom_draft: 'BOM CHƯA xác nhận',
+  none: 'Ngoài định mức',
 }
 
 const fmtD = (d: string | null) =>
@@ -152,6 +174,78 @@ export async function buildLsxDetailExcel(report: LsxDetailReport): Promise<Buff
   }
   s1.getColumn(3).width = 14
   s1.getColumn(4).width = 10
+
+  // ── Sheet 2: BẢNG KÊ VẬT TƯ (khuôn "BK thép" của phòng) ───────────────
+  // Đặt TRƯỚC sheet đơn mua: câu hỏi đầu tiên của người mua là "còn phải đặt
+  // gì", không phải "đã đặt những đơn nào".
+  if (report.bangKe && report.bangKe.rows.length > 0) {
+    const bk = report.bangKe
+    const sb = wb.addWorksheet('Bảng kê VT')
+    const t = sb.addRow([`BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`])
+    t.font = { bold: true, size: 13 }
+    sb.addRow([
+      bk.include_draft
+        ? 'ĐANG TÍNH CẢ ĐỊNH MỨC CHƯA XÁC NHẬN — số Cần chỉ để tham khảo, không gửi đơn theo bản này.'
+        : 'Chỉ tính định mức đã được Kỹ thuật xác nhận.',
+    ]).font = { bold: !bk.include_draft ? false : true }
+    if (bk.unconfirmed_products.length > 0) {
+      sb.addRow([
+        `${bk.unconfirmed_products.length} sản phẩm có định mức nhưng chưa xác nhận BOM: ` +
+          bk.unconfirmed_products.map((p) => p.code).join(', '),
+      ])
+    }
+    sb.addRow([])
+    headerRow(sb, [
+      'STT',
+      'Nhóm vật tư',
+      'Mã VT',
+      'Tên vật tư',
+      'ĐVT',
+      'Cần',
+      // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
+      // thay vì để người đọc tự đoán đã cộng hay chưa.
+      bk.include_draft ? 'Trong đó: chưa xác nhận' : 'Chưa xác nhận (chưa tính)',
+      'Đã xuất',
+      'Tồn khả dụng',
+      'Đã đặt',
+      'Nháp/chờ ký',
+      'Đã về',
+      'Còn phải đặt',
+      'Tình trạng',
+      'Nguồn số Cần',
+      'Đơn mua',
+      'Ghi chú',
+    ])
+    let i = 0
+    for (const r of bk.rows) {
+      i++
+      sb.addRow([
+        i,
+        r.group_name ?? '',
+        r.material_code,
+        r.material_name,
+        r.unit,
+        r.qty_needed,
+        r.draft_needed || '',
+        r.qty_issued || '',
+        r.available,
+        r.ordered,
+        r.draft + r.pending || '',
+        r.received || '',
+        r.suggest,
+        BANG_KE_STATUS[r.status].label,
+        NGUON[r.source],
+        r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
+        r.note ?? '',
+      ])
+    }
+    for (const c of [6, 7, 8, 9, 10, 11, 12, 13]) sb.getColumn(c).numFmt = '#,##0.##'
+    sb.columns.forEach((c, k) => {
+      c.width =
+        [5, 22, 16, 38, 7, 11, 12, 10, 12, 10, 12, 10, 13, 18, 20, 30, 24][k] ?? 14
+    })
+    sb.views = [{ state: 'frozen', xSplit: 4, ySplit: bk.unconfirmed_products.length > 0 ? 5 : 4 }]
+  }
 
   // ── Sheet 2: ĐƠN MUA CỦA LỆNH (khuôn Thao_THĐH) ───────────────────────
   const s2 = wb.addWorksheet('Đơn mua')

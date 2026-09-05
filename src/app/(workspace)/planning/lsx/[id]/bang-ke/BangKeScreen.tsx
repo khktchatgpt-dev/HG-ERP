@@ -296,7 +296,10 @@ export function BangKeScreen({
               </Link>
             </Button>
             <Button variant="outline" size="sm" asChild>
-              <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}`} download>
+              <a
+                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}${data.include_draft ? "&nhap=1" : ""}`}
+                download
+              >
                 <Download />
                 Tải Excel
               </a>
