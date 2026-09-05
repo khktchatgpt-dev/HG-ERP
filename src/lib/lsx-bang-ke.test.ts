@@ -55,6 +55,18 @@ describe('classifyBangKe', () => {
     )
     expect(classifyBangKe({ ...base, suggest: 0, source: 'bom' })).toBe('done')
   })
+  it('chỉ có định mức từ BOM CHƯA xác nhận = BOM chưa xác nhận, không phải Đủ', () => {
+    expect(
+      classifyBangKe({
+        ...base,
+        qty_needed: 0,
+        qty_remaining: 0,
+        suggest: 0,
+        draft_needed: 500,
+        source: 'bom_draft',
+      }),
+    ).toBe('unconfirmed')
+  })
   it('dòng tay số 0 (vừa thêm mã) = Chưa có số, không phải Đủ', () => {
     expect(
       classifyBangKe({ ...base, qty_needed: 0, qty_remaining: 0, suggest: 0, source: 'manual' }),
@@ -121,6 +133,22 @@ describe('buildBangKe', () => {
     expect(m2).toMatchObject({ source: 'bom', qty_needed: 100, deviates: false })
   })
 
+  it('BOM chưa xác nhận: mặc định KHÔNG cộng vào Cần; bật includeDraft mới cộng', () => {
+    const needs = [
+      need({ qty_needed: 0, qty_remaining: 0, qty_needed_draft: 1453, source: 'bom' }),
+    ]
+    const off = buildBangKe({ needs, manual: [], facts: new Map() })
+    expect(off[0]).toMatchObject({
+      qty_needed: 0,
+      draft_needed: 1453,
+      suggest: 0,
+      source: 'bom_draft',
+      status: 'unconfirmed',
+    })
+    const on = buildBangKe({ needs, manual: [], facts: new Map(), includeDraft: true })
+    expect(on[0]).toMatchObject({ qty_needed: 1453, suggest: 1453, status: 'none' })
+  })
+
   it('mã có đơn mua nhưng không có trong nhu cầu → dòng Ngoài định mức, tên lấy từ đơn', () => {
     const rows = buildBangKe({
       needs: [],
@@ -182,6 +210,7 @@ describe('buildBangKe', () => {
     })
     expect(rows.map((r) => r.material_code)).toEqual(['E', 'C', 'D', 'A', 'B'])
     expect(summarizeBangKe(rows)).toMatchObject({
+      unconfirmed: 0,
       blank: 0,
       none: 1,
       short: 1,

@@ -15,7 +15,7 @@
 
 import { suggestForMaterial } from './po-suggestion'
 
-export type BangKeSource = 'manual' | 'components' | 'bom'
+export type BangKeSource = 'manual' | 'components' | 'bom' | 'bom_draft'
 
 /** Nhu cầu TỰ ĐỘNG của lệnh (định hình / định mức) — một dòng một mã. */
 export type BangKeNeed = {
@@ -24,12 +24,21 @@ export type BangKeNeed = {
   material_name: string
   unit: string
   group_name?: string | null
+  /** Số cần từ định mức ĐÃ XÁC NHẬN (BOM đã kiểm tra hoặc hồ sơ đã khoá). */
   qty_needed: number
+  /**
+   * Số cần từ định mức CHƯA xác nhận — giữ riêng, chỉ cộng vào khi người dùng
+   * bật "tính cả BOM chưa xác nhận". Mua theo bản nháp là mua sai (user chốt
+   * 05/09/2026), nhưng giấu số đi thì người mua không biết vì sao bảng trống.
+   */
+  qty_needed_draft?: number
   qty_issued: number
   qty_remaining: number
   source: Exclude<BangKeSource, 'manual'>
   /** Bảng định hình thiếu hệ số nên số chỉ là tham khảo. */
   incomplete?: boolean
+  /** SP nào sinh ra số này — giải thích trên dòng, và chỉ ra ai cần chốt BOM. */
+  from_products?: { code: string; name: string; qty: number; per: number; confirmed: boolean }[]
 }
 
 /** Dòng Cung ứng nhập tay (B2) — ghi đè số cần của đúng mã đó. */
@@ -86,11 +95,14 @@ export type BangKeStatus =
   | 'extra'
   /** Dòng nhập tay chưa điền số cần (vừa thêm mã) — chưa nói được gì. */
   | 'blank'
+  /** Chỉ có định mức từ BOM CHƯA xác nhận — chưa được dùng để mua. */
+  | 'unconfirmed'
 
 export const BANG_KE_STATUS: Record<
   BangKeStatus,
   { label: string; tone: 'stop' | 'warn' | 'primary' | 'done' | 'muted'; order: number }
 > = {
+  unconfirmed: { label: 'BOM chưa xác nhận', tone: 'warn', order: -2 },
   blank: { label: 'Chưa có số', tone: 'muted', order: -1 },
   none: { label: 'Chưa đặt', tone: 'stop', order: 0 },
   short: { label: 'Đặt chưa đủ', tone: 'warn', order: 1 },
@@ -115,6 +127,9 @@ export type BangKeRow = {
   deviates: boolean
   /** Số cần theo nguồn tự động, để so với dòng tay. */
   auto_needed: number | null
+  /** Số cần từ BOM chưa xác nhận (0 nếu không có) — hiện làm ghi chú trên dòng. */
+  draft_needed: number
+  from_products: { code: string; name: string; qty: number; per: number; confirmed: boolean }[]
   incomplete: boolean
   qty_needed: number
   qty_issued: number
@@ -148,6 +163,7 @@ const EMPTY_FACTS: BangKeFacts = {
 const DEVIATION = 0.1
 
 export function classifyBangKe(r: {
+  draft_needed?: number
   qty_needed: number
   qty_remaining: number
   suggest: number
@@ -157,6 +173,10 @@ export function classifyBangKe(r: {
   source: BangKeRow['source']
 }): BangKeStatus {
   if (r.source === 'none') return 'extra'
+  // Chỉ có số từ bản nháp BOM: chưa được dùng để mua, và cũng không phải "đủ".
+  if (r.source === 'bom_draft' && r.qty_needed === 0 && (r.draft_needed ?? 0) > 0) {
+    return 'unconfirmed'
+  }
   // Vừa "Thêm mã" xong, số cần còn 0: không phải "đủ", là chưa điền.
   if (r.source === 'manual' && r.qty_needed === 0) return 'blank'
   if (r.suggest > 0) {
@@ -176,7 +196,10 @@ export function buildBangKe(input: {
   needs: BangKeNeed[]
   manual: BangKeManual[]
   facts: Map<string, BangKeFacts>
+  /** Tính cả định mức từ BOM chưa xác nhận (mặc định KHÔNG — user chốt 05/09/2026). */
+  includeDraft?: boolean
 }): BangKeRow[] {
+  const includeDraft = input.includeDraft ?? false
   const auto = new Map(input.needs.map((n) => [n.material_id, n]))
   const manual = new Map(input.manual.map((m) => [m.material_id, m]))
   const ids = new Set<string>([...auto.keys(), ...manual.keys(), ...input.facts.keys()])
@@ -189,7 +212,9 @@ export function buildBangKe(input: {
     // Mã chỉ có ở facts (có đơn mua) mà không ở nguồn cần nào → ngoài định mức.
     if (!a && !m && f.pos.length === 0) continue
 
-    const qtyNeeded = m ? m.qty_needed : (a?.qty_needed ?? 0)
+    const draftNeeded = a?.qty_needed_draft ?? 0
+    const autoQty = (a?.qty_needed ?? 0) + (includeDraft ? draftNeeded : 0)
+    const qtyNeeded = m ? m.qty_needed : autoQty
     const qtyIssued = a?.qty_issued ?? 0
     const qtyRemaining = Math.max(qtyNeeded - qtyIssued, 0)
     const s = suggestForMaterial({
@@ -200,13 +225,20 @@ export function buildBangKe(input: {
       ordered: f.ordered,
       pending: f.pending,
     })
-    const source: BangKeRow['source'] = m ? 'manual' : (a?.source ?? 'none')
-    const autoNeeded = a?.qty_needed ?? null
+    const source: BangKeRow['source'] = m
+      ? 'manual'
+      : a
+        ? // Mã chỉ có ở bản nháp thì nói thẳng nguồn là nháp, kể cả khi đang bật
+          // "tính cả nháp" — người mua phải luôn thấy số này kém tin hơn.
+          (a.qty_needed === 0 && draftNeeded > 0 ? 'bom_draft' : a.source)
+        : 'none'
+    const autoNeeded = a ? autoQty : null
     const deviates =
       !!m &&
       autoNeeded != null &&
       Math.abs(m.qty_needed - autoNeeded) > Math.max(autoNeeded, 1) * DEVIATION
     const base = {
+      draft_needed: draftNeeded,
       qty_needed: qtyNeeded,
       qty_remaining: qtyRemaining,
       suggest: s.suggest,
@@ -224,6 +256,7 @@ export function buildBangKe(input: {
       group_name: ref?.group_name ?? null,
       deviates,
       auto_needed: autoNeeded,
+      from_products: a?.from_products ?? [],
       incomplete: a?.incomplete ?? false,
       qty_issued: qtyIssued,
       on_hand: s.on_hand,
@@ -253,6 +286,7 @@ export function summarizeBangKe(rows: BangKeRow[]): Record<BangKeStatus, number>
   needed: number
 } {
   const out = {
+    unconfirmed: 0,
     blank: 0,
     none: 0,
     short: 0,
@@ -266,7 +300,7 @@ export function summarizeBangKe(rows: BangKeRow[]): Record<BangKeStatus, number>
   for (const r of rows) {
     out[r.status]++
     out.total++
-    if (r.source !== 'none') out.needed++
+    if (r.source !== 'none' && r.status !== 'unconfirmed') out.needed++
   }
   return out
 }

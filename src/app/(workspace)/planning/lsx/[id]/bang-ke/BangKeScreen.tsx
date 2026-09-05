@@ -5,13 +5,17 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
+  CheckCircle2,
   ClipboardList,
   ClipboardPaste,
   Download,
+  FlaskConical,
+  Package,
   PackageSearch,
   Pencil,
   Plus,
   Search,
+  ShieldCheck,
   ShoppingCart,
   Undo2,
 } from 'lucide-react'
@@ -50,19 +54,33 @@ import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { PasteLinesDialog, type PasteConfirm } from '../../../pos/new/PasteLinesDialog'
 
 const STATUS_BADGE: Record<BangKeStatus, BadgeTone> = {
+  unconfirmed: 'amber',
+  blank: 'gray',
   none: 'red',
   short: 'amber',
   pending: 'amber',
   inflight: 'blue',
   done: 'green',
   extra: 'gray',
-  blank: 'gray',
+}
+
+/** Vạch trái mã hoá mức khẩn — chỉ ba màu vòng đời + xám. */
+const STATUS_STRIPE: Record<BangKeStatus, string> = {
+  unconfirmed: 'var(--warn)',
+  blank: 'var(--muted-foreground)',
+  none: 'var(--stop)',
+  short: 'var(--warn)',
+  pending: 'var(--warn)',
+  inflight: 'var(--primary)',
+  done: 'var(--done)',
+  extra: 'var(--muted-foreground)',
 }
 
 const SOURCE_LABEL: Record<BangKeRow['source'], string> = {
   manual: 'nhập tay',
   components: 'định hình',
-  bom: 'định mức',
+  bom: 'định mức đã xác nhận',
+  bom_draft: 'BOM chưa xác nhận',
   none: 'ngoài định mức',
 }
 
@@ -78,10 +96,15 @@ const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 type NeedRow = { material_id: string; qty_needed: number; note?: string | null }
 
 /**
- * BẢNG KÊ VẬT TƯ CỦA LỆNH — B1 đọc, B2 sửa (05/09/2026). Số CẦN của dòng nhập
- * tay sửa ngay trong ô; dòng định mức muốn sửa thì "Ghi đè" — mã đó thành dòng
- * tay, mã khác vẫn theo định mức. "Thêm mã" và "Dán từ Excel" dùng lại đúng hai
- * hộp thoại của form soạn đơn để người mua không phải học thêm gì.
+ * BẢNG KÊ VẬT TƯ CỦA LỆNH — màn nhân viên Cung ứng mở đầu ngày.
+ *
+ * Ba nguyên tắc trình bày (thiết kế lại 05/09/2026):
+ *  1. CHỈ ĐỊNH MỨC ĐÃ XÁC NHẬN mới thành số "Cần" — bản nháp hiện riêng, có
+ *     công tắc, và luôn mang nhãn cảnh báo. Mua theo bản nháp là mua sai.
+ *  2. GOM THEO NHÓM VẬT TƯ như sổ Excel của phòng: người mua gọi NCC theo
+ *     nhóm (thép một cuộc, ngũ kim một cuộc), không gọi theo thứ tự bảng chữ.
+ *  3. Mỗi dòng trả lời đúng một câu "còn phải đặt bao nhiêu" — cột đó nổi bật
+ *     nhất, các số phụ (tồn, đã đặt, đã về) gom lại và giải thích khi rê chuột.
  */
 export function BangKeScreen({
   data,
@@ -101,6 +124,7 @@ export function BangKeScreen({
   const [busy, setBusy] = useState(false)
   const [pickOpen, setPickOpen] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
+  const [showProducts, setShowProducts] = useState(false)
 
   const filtered = useMemo(() => {
     const nq = norm(q.trim())
@@ -112,7 +136,27 @@ export function BangKeScreen({
     })
   }, [rows, status, group, q])
 
-  // "Soạn đơn cho dòng thiếu": mọi mã còn phải đặt, theo thứ tự thiếu nhiều trước.
+  /** Gom theo nhóm vật tư, giữ thứ tự ưu tiên trong từng nhóm. */
+  const sections = useMemo(() => {
+    const map = new Map<string, BangKeRow[]>()
+    for (const r of filtered) {
+      const k = r.group_name ?? 'Chưa phân nhóm'
+      const list = map.get(k)
+      if (list) list.push(r)
+      else map.set(k, [r])
+    }
+    return (
+      [...map.entries()]
+        .map(([name, list]) => ({
+          name,
+          rows: list,
+          short: list.filter((r) => r.suggest > 0).length,
+        }))
+        // Nhóm còn phải đặt nhiều nhất lên trước — đó là cuộc gọi tiếp theo.
+        .sort((a, b) => b.short - a.short || a.name.localeCompare(b.name, 'vi'))
+    )
+  }, [filtered])
+
   const shortRows = useMemo(() => rows.filter((r) => r.suggest > 0), [rows])
   const prefillHref = useMemo(() => {
     const pick = shortRows.slice(0, MAX_PREFILL)
@@ -131,8 +175,13 @@ export function BangKeScreen({
       new Map(rows.filter((r) => r.suggest > 0).map((r) => [r.material_id, r.suggest])),
     [rows],
   )
+  const unconfirmedProducts = useMemo(
+    () => data.products.filter((p) => !p.bom_confirmed && p.coded_parts > 0),
+    [data.products],
+  )
 
   const manualDisabled = !canEdit || data.manual_error !== null
+  const draftHref = `/planning/lsx/${lsx.id}/bang-ke${data.include_draft ? '' : '?nhap=1'}`
 
   async function saveRows(list: NeedRow[], done: string) {
     if (list.length === 0) return
@@ -171,10 +220,12 @@ export function BangKeScreen({
     }
   }
 
-  /** Dòng tự động → dòng tay với đúng số hiện tại, để sửa ngay sau đó. */
+  /** Dòng tự động → dòng tay với đúng số đang thấy, để sửa ngay sau đó. */
   function override(r: BangKeRow) {
     const start =
-      r.source === 'none' ? r.pos.reduce((s, p) => s + p.qty_ordered, 0) : r.qty_needed
+      r.source === 'none'
+        ? r.pos.reduce((s, p) => s + p.qty_ordered, 0)
+        : r.qty_needed || r.draft_needed
     void saveRows(
       [{ material_id: r.material_id, qty_needed: start, note: r.note }],
       `${r.material_code} đã thành dòng nhập tay — sửa số Cần ngay trong ô`,
@@ -203,18 +254,6 @@ export function BangKeScreen({
     void saveRows(list, `Đã nhập ${list.length} dòng từ Excel`)
   }
 
-  const dueLabel = lsx.materials_due_at
-    ? `hạn vật tư ${dmy(lsx.materials_due_at)}`
-    : 'chưa đặt hạn vật tư'
-  const sourceLabel =
-    data.need_source === 'none'
-      ? data.manual_count > 0
-        ? `nguồn cần: nhập tay · ${data.manual_count} mã`
-        : 'lệnh chưa có định mức lẫn định hình — chỉ thấy mã đã lên đơn'
-      : `${data.need_source === 'components' ? 'bảng định hình' : 'định mức × số lượng'} · ${summary.needed} mã${
-          data.manual_count > 0 ? ` · ${data.manual_count} mã nhập tay` : ''
-        }`
-
   return (
     <div className="flex flex-col gap-4">
       <TopProgressBar active={busy} />
@@ -228,14 +267,24 @@ export function BangKeScreen({
         title={`Bảng kê vật tư · LSX ${lsx.code}`}
         description={`${lsx.customer_name}${lsx.order_codes.length > 0 ? ` · ĐH ${lsx.order_codes.join(', ')}` : ''}`}
         meta={
-          <span className="text-muted-foreground text-[12px]">
-            {lsx.ship_date ? (
-              <>
-                xuất <span className="t-data">{dmy(lsx.ship_date)}</span> ·{' '}
-              </>
-            ) : null}
-            {dueLabel} · {sourceLabel} · hôm nay{' '}
-            <span className="t-data">{dmy(today)}</span>
+          <span className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+            {lsx.ship_date && (
+              <span>
+                Ngày xuất <span className="t-data">{dmy(lsx.ship_date)}</span>
+              </span>
+            )}
+            <span>
+              Hạn vật tư{' '}
+              {lsx.materials_due_at ? (
+                <span className="t-data">{dmy(lsx.materials_due_at)}</span>
+              ) : (
+                <span className="text-[var(--warn)]">chưa đặt</span>
+              )}
+            </span>
+            <span>
+              <span className="t-data">{data.products.length}</span> sản phẩm ·{' '}
+              <span className="t-data">{rows.length}</span> mã vật tư
+            </span>
           </span>
         }
         actions={
@@ -249,7 +298,7 @@ export function BangKeScreen({
             <Button variant="outline" size="sm" asChild>
               <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}`} download>
                 <Download />
-                Tải Excel lệnh này
+                Tải Excel
               </a>
             </Button>
             {canEdit && (
@@ -278,7 +327,7 @@ export function BangKeScreen({
               <Button size="sm" asChild>
                 <Link href={prefillHref}>
                   <ShoppingCart />
-                  Soạn đơn cho {Math.min(shortRows.length, MAX_PREFILL)} dòng thiếu
+                  Soạn đơn cho {Math.min(shortRows.length, MAX_PREFILL)} mã thiếu
                 </Link>
               </Button>
             )}
@@ -287,51 +336,160 @@ export function BangKeScreen({
       />
 
       {data.manual_error && (
-        <p className="rounded-md border border-[var(--warn)] bg-[color-mix(in_srgb,var(--warn)_10%,transparent)] px-3 py-2 text-[12.5px]">
+        <Notice tone="warn">
           Chưa đọc được bảng kê nhập tay: migration{' '}
           <span className="t-data">0184_supply_lsx_needs</span> chưa áp lên cơ sở dữ liệu.
           Phần định mức vẫn hiện bình thường.
-        </p>
+        </Notice>
       )}
 
+      {/* ── Nguồn định mức: nói thẳng số nào dùng được để mua ────────── */}
+      <section className="bg-card rounded-lg border">
+        <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <span
+              className="grid size-9 shrink-0 place-items-center rounded-md"
+              style={{
+                background:
+                  unconfirmedProducts.length > 0
+                    ? 'color-mix(in srgb, var(--warn) 14%, transparent)'
+                    : 'color-mix(in srgb, var(--done) 14%, transparent)',
+                color: unconfirmedProducts.length > 0 ? 'var(--warn)' : 'var(--done)',
+              }}
+            >
+              {unconfirmedProducts.length > 0 ? (
+                <AlertTriangle className="size-5" strokeWidth={1.8} />
+              ) : (
+                <ShieldCheck className="size-5" strokeWidth={1.8} />
+              )}
+            </span>
+            <div className="min-w-0">
+              <h2 className="t-title">Nguồn số &ldquo;Cần&rdquo;</h2>
+              <p className="text-muted-foreground mt-0.5 text-[12.5px]">
+                {unconfirmedProducts.length > 0 ? (
+                  <>
+                    <span className="t-data">{unconfirmedProducts.length}</span>/
+                    <span className="t-data">{data.products.length}</span> sản phẩm có
+                    định mức nhưng <b>Kỹ thuật chưa xác nhận BOM</b>. Số của những sản
+                    phẩm này{' '}
+                    {data.include_draft ? (
+                      <>
+                        đang được cộng vào vì bạn bật xem cả bản nháp — đừng gửi đơn dựa
+                        trên đó.
+                      </>
+                    ) : (
+                      <>chưa tính vào cột Cần, để không mua theo bản nháp.</>
+                    )}
+                  </>
+                ) : data.need_source === 'none' ? (
+                  <>
+                    Lệnh chưa có định mức lẫn bảng định hình. Nhập tay bằng &ldquo;Thêm
+                    mã&rdquo; hoặc &ldquo;Dán từ Excel&rdquo;.
+                  </>
+                ) : (
+                  <>
+                    Toàn bộ định mức của lệnh đã được Kỹ thuật xác nhận — số Cần dùng để
+                    mua được.
+                  </>
+                )}
+                {data.manual_count > 0 && (
+                  <>
+                    {' '}
+                    Có <span className="t-data">{data.manual_count}</span> mã do Cung ứng
+                    nhập tay, ghi đè định mức.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            {unconfirmedProducts.length > 0 && (
+              <>
+                <Button
+                  variant={data.include_draft ? 'secondary' : 'outline'}
+                  size="sm"
+                  asChild
+                >
+                  <Link href={draftHref} scroll={false}>
+                    <FlaskConical />
+                    {data.include_draft
+                      ? 'Đang tính cả bản nháp'
+                      : 'Tính cả BOM chưa xác nhận'}
+                  </Link>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowProducts((v) => !v)}
+                  aria-expanded={showProducts}
+                >
+                  {showProducts ? 'Ẩn danh sách' : 'Xem sản phẩm chưa chốt'}
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+        {showProducts && unconfirmedProducts.length > 0 && (
+          <ul className="divide-border grid gap-px border-t sm:grid-cols-2 lg:grid-cols-3">
+            {unconfirmedProducts.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between gap-2 px-4 py-2"
+              >
+                <span className="flex min-w-0 items-center gap-2 text-[12.5px]">
+                  <DocChip>{p.code}</DocChip>
+                  <span className="truncate">{p.name}</span>
+                </span>
+                <span className="t-data text-muted-foreground shrink-0 text-[11px]">
+                  {fmt(p.qty)} SP · {p.coded_parts} dòng ĐM
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* ── Tóm tắt: 4 con số người mua đọc trước ─────────────────────── */}
       <StatTiles>
         <StatTile
-          label="Mã cần"
-          value={summary.needed}
+          label="Cần mua thêm"
+          value={shortRows.length}
           hint={
-            summary.extra > 0
-              ? `+${summary.extra} mã ngoài định mức`
-              : 'theo nguồn cần của lệnh'
+            shortRows.length > 0
+              ? `${fmt(shortRows.reduce((s, r) => s + r.suggest, 0))} đơn vị tổng cộng`
+              : 'không còn mã nào thiếu'
           }
-          icon={ClipboardList}
-          active={status === null}
-          onClick={() => setStatus(null)}
-        />
-        <StatTile
-          label="Chưa đặt"
-          value={summary.none}
-          hint="mã · chưa có đơn nào"
           tone="stop"
-          icon={AlertTriangle}
-          active={status === 'none'}
+          icon={PackageSearch}
+          active={status === 'none' || status === 'short'}
           onClick={() => setStatus(status === 'none' ? null : 'none')}
         />
         <StatTile
-          label="Đặt chưa đủ / chưa duyệt"
-          value={summary.short + summary.pending}
-          hint="mã · còn phải đặt thêm hoặc đơn còn nháp"
-          tone="warn"
-          icon={PackageSearch}
-          active={status === 'short' || status === 'pending'}
-          onClick={() => setStatus(status === 'short' ? null : 'short')}
+          label="Đã đặt · đang về"
+          value={summary.inflight + summary.pending}
+          hint="đơn đã gửi hoặc còn nháp"
+          tone="primary"
+          icon={ShoppingCart}
+          active={status === 'inflight'}
+          onClick={() => setStatus(status === 'inflight' ? null : 'inflight')}
         />
         <StatTile
-          label="Đủ / đang về"
-          value={summary.done + summary.inflight}
-          hint="mã · tồn, đã về hoặc đã đặt đủ"
+          label="Đủ"
+          value={summary.done}
+          hint="tồn kho và hàng về đã phủ"
           tone="done"
-          active={status === 'done' || status === 'inflight'}
+          icon={CheckCircle2}
+          active={status === 'done'}
           onClick={() => setStatus(status === 'done' ? null : 'done')}
+        />
+        <StatTile
+          label="Chưa dùng được"
+          value={summary.unconfirmed + summary.blank}
+          hint="BOM chưa xác nhận hoặc chưa điền số"
+          tone="warn"
+          icon={AlertTriangle}
+          active={status === 'unconfirmed'}
+          onClick={() => setStatus(status === 'unconfirmed' ? null : 'unconfirmed')}
         />
       </StatTiles>
 
@@ -344,7 +502,7 @@ export function BangKeScreen({
               active={status === null}
               onClick={() => setStatus(null)}
             />
-            {BANG_KE_STATUSES.map((k) => (
+            {BANG_KE_STATUSES.filter((k) => summary[k] > 0).map((k) => (
               <FilterChip
                 key={k}
                 label={BANG_KE_STATUS[k].label}
@@ -377,8 +535,8 @@ export function BangKeScreen({
         }
       />
 
-      <section className="bg-card overflow-hidden rounded-lg border">
-        {filtered.length === 0 ? (
+      {filtered.length === 0 ? (
+        <section className="bg-card rounded-lg border">
           <EmptyState
             icon={<ClipboardList className="size-5" />}
             title={
@@ -388,245 +546,89 @@ export function BangKeScreen({
             }
             description={
               rows.length === 0
-                ? 'Bấm "Thêm mã" hoặc "Dán từ Excel" để nhập bảng kê tay, hoặc chờ định mức từ Kỹ thuật.'
+                ? 'Bấm "Thêm mã" hoặc "Dán từ Excel" để nhập bảng kê tay, hoặc chờ Kỹ thuật xác nhận định mức.'
                 : undefined
             }
           />
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[150px]">Mã VT</TableHead>
-                  <TableHead className="min-w-[220px]">Tên vật tư</TableHead>
-                  <TableHead>ĐVT</TableHead>
-                  <TableHead className="text-right">Cần</TableHead>
-                  <TableHead className="text-right">Đã xuất</TableHead>
-                  <TableHead className="text-right">Tồn KD</TableHead>
-                  <TableHead className="text-right">Đã đặt</TableHead>
-                  <TableHead className="text-right">Nháp / chờ ký</TableHead>
-                  <TableHead className="text-right">Đã về</TableHead>
-                  <TableHead className="text-right">Còn phải đặt</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead className="min-w-[200px]">Đơn · NCC</TableHead>
-                  {canEdit && <TableHead className="min-w-[150px]" />}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((r) => (
-                  <TableRow key={r.material_id}>
-                    <TableCell>
-                      <DocChip>{r.material_code || '—'}</DocChip>
-                      <div className="text-muted-foreground mt-0.5 text-[11px]">
-                        {SOURCE_LABEL[r.source]}
-                        {r.deviates && r.auto_needed != null && (
-                          <span className="text-[var(--warn)]">
-                            {' '}
-                            · lệch định mức {fmt(r.auto_needed)}
-                          </span>
-                        )}
-                        {r.incomplete && (
-                          <span className="text-[var(--warn)]"> · thiếu hệ số</span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="line-clamp-2">{r.material_name}</div>
-                      {r.group_name && (
-                        <div className="text-muted-foreground text-[11px]">
-                          {r.group_name}
-                        </div>
-                      )}
-                      {canEdit && r.source === 'manual' && !data.manual_error ? (
-                        <NoteCell
-                          value={r.note ?? ''}
-                          disabled={busy}
-                          onSave={(v) =>
-                            saveRows(
-                              [{ material_id: r.material_id, qty_needed: r.qty_needed, note: v || null }],
-                              v ? `${r.material_code}: đã ghi chú` : `${r.material_code}: đã xoá ghi chú`,
-                            )
-                          }
-                        />
-                      ) : (
-                        r.note && (
-                          <div className="text-muted-foreground text-[11px] italic">{r.note}</div>
-                        )
-                      )}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{r.unit}</TableCell>
-                    <TableCell className="t-data text-right">
-                      {canEdit && r.source === 'manual' && !data.manual_error ? (
-                        <QtyCell
-                          value={r.qty_needed}
-                          disabled={busy}
-                          onSave={(v) =>
-                            saveRows(
-                              [
-                                {
-                                  material_id: r.material_id,
-                                  qty_needed: v,
-                                  note: r.note,
-                                },
-                              ],
-                              `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
-                            )
-                          }
-                        />
-                      ) : (
-                        fmt(r.qty_needed)
-                      )}
-                    </TableCell>
-                    <TableCell className="t-data text-muted-foreground text-right">
-                      {fmt(r.qty_issued)}
-                    </TableCell>
-                    <TableCell className="t-data text-right">
-                      {fmt(r.available)}
-                      {r.reserved_others > 0 && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-muted-foreground ml-1 text-[11px]">
-                              ({fmt(r.on_hand)})
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Tồn {fmt(r.on_hand)}, lệnh khác giữ chỗ{' '}
-                            {fmt(r.reserved_others)}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
-                    </TableCell>
-                    <TableCell className="t-data text-right">{fmt(r.ordered)}</TableCell>
-                    <TableCell
-                      className={cn(
-                        't-data text-right',
-                        r.draft + r.pending > 0
-                          ? 'text-[var(--warn)]'
-                          : 'text-muted-foreground',
-                      )}
-                    >
-                      {fmt(r.draft + r.pending)}
-                    </TableCell>
-                    <TableCell className="t-data text-right">{fmt(r.received)}</TableCell>
-                    <TableCell
-                      className={cn(
-                        't-data text-right font-semibold',
-                        r.suggest > 0 ? 'text-[var(--stop)]' : 'text-muted-foreground',
-                      )}
-                    >
-                      {fmt(r.suggest)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge tone={STATUS_BADGE[r.status]}>
-                        {BANG_KE_STATUS[r.status].label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {r.pos.length === 0 ? (
-                        <span className="text-muted-foreground">—</span>
-                      ) : (
-                        <ul className="flex flex-col gap-0.5">
-                          {r.pos.map((p) => (
-                            <li
-                              key={p.id}
-                              className="flex flex-wrap items-center gap-1.5 text-[12px]"
-                            >
-                              <Link
-                                href={`/planning/pos/${p.id}`}
-                                className="hover:opacity-80"
-                              >
-                                <DocChip>{p.code}</DocChip>
-                              </Link>
-                              <span className="max-w-[160px] truncate">
-                                {p.supplier_name}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {isPoStatus(p.status)
-                                  ? PO_STATUS_LABEL[p.status]
-                                  : p.status}
-                                {' · '}
-                                <span className="t-data">{fmt(p.qty_ordered)}</span>
-                                {p.expected_at && (
-                                  <>
-                                    {' · hẹn '}
-                                    <span
-                                      className={cn(
-                                        't-data',
-                                        p.late && 'text-[var(--stop)]',
-                                      )}
-                                    >
-                                      {dmy(p.expected_at)}
-                                    </span>
-                                  </>
-                                )}
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </TableCell>
-                    {canEdit && (
-                      <TableCell>
-                        <div className="flex flex-wrap justify-end gap-x-3 gap-y-1">
-                          {r.suggest > 0 && r.material_code && (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              asChild
-                              className="h-auto p-0"
-                            >
-                              <Link
-                                href={`/planning/pos/new?lsx=${lsx.id}&material=${encodeURIComponent(r.material_code)}&qty=${r.suggest}`}
-                              >
-                                <ShoppingCart />
-                                Soạn đơn
-                              </Link>
-                            </Button>
-                          )}
-                          {!data.manual_error &&
-                            (r.source === 'manual' ? (
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="text-muted-foreground h-auto p-0"
-                                disabled={busy}
-                                onClick={() => removeManual(r)}
-                                title={
-                                  r.auto_needed != null
-                                    ? 'Bỏ số tay, quay về định mức'
-                                    : 'Bỏ dòng nhập tay'
-                                }
-                              >
-                                <Undo2 />
-                                {r.auto_needed != null ? 'Về định mức' : 'Bỏ dòng'}
-                              </Button>
-                            ) : (
-                              <Button
-                                variant="link"
-                                size="sm"
-                                className="text-muted-foreground h-auto p-0"
-                                disabled={busy}
-                                onClick={() => override(r)}
-                                title="Chuyển thành dòng nhập tay để sửa số Cần"
-                              >
-                                <Pencil />
-                                {r.source === 'none' ? 'Nhập số cần' : 'Ghi đè'}
-                              </Button>
-                            ))}
-                        </div>
-                      </TableCell>
-                    )}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </section>
+        </section>
+      ) : (
+        <div className="flex flex-col gap-4">
+          {sections.map((sec) => (
+            <section key={sec.name} className="bg-card overflow-hidden rounded-lg border">
+              <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+                <h2 className="t-title flex items-center gap-2">
+                  <Package className="text-muted-foreground size-4" strokeWidth={1.8} />
+                  {sec.name}
+                  <span className="t-data text-muted-foreground font-normal">
+                    {sec.rows.length} mã
+                  </span>
+                </h2>
+                {sec.short > 0 && (
+                  <span className="text-[12px] font-medium text-[var(--stop)]">
+                    {sec.short} mã còn phải đặt
+                  </span>
+                )}
+              </header>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-1" />
+                      <TableHead className="min-w-[260px]">Vật tư</TableHead>
+                      <TableHead className="text-right">Cần</TableHead>
+                      <TableHead className="text-right">Đã có</TableHead>
+                      <TableHead className="text-right">Đã đặt</TableHead>
+                      <TableHead className="text-right">Còn phải đặt</TableHead>
+                      <TableHead className="min-w-[150px]">Tình trạng</TableHead>
+                      <TableHead className="min-w-[180px]">Đơn mua</TableHead>
+                      {canEdit && <TableHead className="w-[130px]" />}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sec.rows.map((r) => (
+                      <Row
+                        key={r.material_id}
+                        r={r}
+                        lsxId={lsx.id}
+                        canEdit={canEdit}
+                        editable={!data.manual_error}
+                        busy={busy}
+                        onSaveQty={(v) =>
+                          saveRows(
+                            [{ material_id: r.material_id, qty_needed: v, note: r.note }],
+                            `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
+                          )
+                        }
+                        onSaveNote={(v) =>
+                          saveRows(
+                            [
+                              {
+                                material_id: r.material_id,
+                                qty_needed: r.qty_needed,
+                                note: v || null,
+                              },
+                            ],
+                            v
+                              ? `${r.material_code}: đã ghi chú`
+                              : `${r.material_code}: đã xoá ghi chú`,
+                          )
+                        }
+                        onOverride={() => override(r)}
+                        onRemove={() => removeManual(r)}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+
       <p className="text-muted-foreground text-[12px]">
-        Còn phải đặt = cần − đã xuất − tồn khả dụng − đã đặt (đơn đã duyệt, chưa về). Đơn
-        nháp và chờ ký không trừ vào số này, chỉ hiện ở cột riêng để biết đã có ai soạn.
-        Dòng nhập tay ghi đè từng mã; nút Về định mức là bỏ số tay của mã đó.
+        <b>Còn phải đặt</b> = Cần − đã xuất cho lệnh − tồn khả dụng − đã đặt (đơn đã
+        duyệt, chưa về). Đơn nháp và chờ ký không trừ vào số này. Chỉ định mức đã được Kỹ
+        thuật xác nhận mới thành số Cần; dòng nhập tay ghi đè định mức của đúng mã đó.
       </p>
 
       {canEdit && (
@@ -650,6 +652,234 @@ export function BangKeScreen({
         </>
       )}
     </div>
+  )
+}
+
+/** Một dòng vật tư — tách riêng cho gọn và để ô sửa giữ được state của nó. */
+function Row({
+  r,
+  lsxId,
+  canEdit,
+  editable,
+  busy,
+  onSaveQty,
+  onSaveNote,
+  onOverride,
+  onRemove,
+}: {
+  r: BangKeRow
+  lsxId: string
+  canEdit: boolean
+  editable: boolean
+  busy: boolean
+  onSaveQty: (v: number) => void
+  onSaveNote: (v: string) => void
+  onOverride: () => void
+  onRemove: () => void
+}) {
+  const isManual = r.source === 'manual'
+  const onHandTotal = r.available + r.received
+  return (
+    <TableRow>
+      <TableCell className="p-0">
+        <span
+          className="block h-full min-h-[44px] w-1"
+          style={{ background: STATUS_STRIPE[r.status] }}
+          aria-hidden
+        />
+      </TableCell>
+
+      <TableCell>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <DocChip>{r.material_code || '—'}</DocChip>
+          <span className="line-clamp-1 font-medium">{r.material_name}</span>
+        </div>
+        <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
+          <span>{r.unit}</span>
+          <span>·</span>
+          <span
+            className={
+              r.source === 'bom_draft' || r.deviates ? 'text-[var(--warn)]' : undefined
+            }
+          >
+            {SOURCE_LABEL[r.source]}
+          </span>
+          {r.deviates && r.auto_needed != null && (
+            <span className="text-[var(--warn)]">lệch định mức {fmt(r.auto_needed)}</span>
+          )}
+          {r.incomplete && <span className="text-[var(--warn)]">thiếu hệ số</span>}
+          {r.from_products.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="cursor-help underline decoration-dotted">
+                  {r.from_products.length} SP
+                </span>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[320px]">
+                {r.from_products.map((p) => (
+                  <div key={p.code} className="text-[11px]">
+                    {p.code}: {fmt(p.per)} × {fmt(p.qty)} SP
+                    {!p.confirmed && ' (BOM chưa xác nhận)'}
+                  </div>
+                ))}
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+        {canEdit && isManual && editable ? (
+          <NoteCell value={r.note ?? ''} disabled={busy} onSave={onSaveNote} />
+        ) : (
+          r.note && (
+            <div className="text-muted-foreground mt-0.5 text-[11px] italic">
+              {r.note}
+            </div>
+          )
+        )}
+      </TableCell>
+
+      <TableCell className="text-right">
+        {canEdit && isManual && editable ? (
+          <QtyCell value={r.qty_needed} disabled={busy} onSave={onSaveQty} />
+        ) : (
+          <div className="t-data">{fmt(r.qty_needed)}</div>
+        )}
+        {r.draft_needed > 0 && (
+          <div className="mt-0.5 text-[11px] text-[var(--warn)]">
+            {r.qty_needed > 0 ? '+' : ''}
+            {fmt(r.draft_needed)} chờ xác nhận
+          </div>
+        )}
+        {r.qty_issued > 0 && (
+          <div className="text-muted-foreground mt-0.5 text-[11px]">
+            đã xuất {fmt(r.qty_issued)}
+          </div>
+        )}
+      </TableCell>
+
+      <TableCell className="text-right">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="t-data cursor-help">{fmt(onHandTotal)}</span>
+          </TooltipTrigger>
+          <TooltipContent>
+            Tồn khả dụng {fmt(r.available)}
+            {r.reserved_others > 0 &&
+              ` (tồn ${fmt(r.on_hand)}, lệnh khác giữ ${fmt(r.reserved_others)})`}
+            {' · '}đã về cho lệnh {fmt(r.received)}
+          </TooltipContent>
+        </Tooltip>
+      </TableCell>
+
+      <TableCell className="text-right">
+        <div className="t-data">{fmt(r.ordered)}</div>
+        {r.draft + r.pending > 0 && (
+          <div className="mt-0.5 text-[11px] text-[var(--warn)]">
+            {fmt(r.draft + r.pending)} chưa duyệt
+          </div>
+        )}
+      </TableCell>
+
+      <TableCell className="text-right">
+        <span
+          className={cn(
+            't-data text-[15px] font-semibold',
+            r.suggest > 0 ? 'text-[var(--stop)]' : 'text-muted-foreground',
+          )}
+        >
+          {fmt(r.suggest)}
+        </span>
+      </TableCell>
+
+      <TableCell>
+        <Badge tone={STATUS_BADGE[r.status]}>{BANG_KE_STATUS[r.status].label}</Badge>
+      </TableCell>
+
+      <TableCell>
+        {r.pos.length === 0 ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <ul className="flex flex-col gap-0.5">
+            {r.pos.map((p) => (
+              <li key={p.id} className="flex flex-wrap items-center gap-1.5 text-[12px]">
+                <Link href={`/planning/pos/${p.id}`} className="hover:opacity-80">
+                  <DocChip>{p.code}</DocChip>
+                </Link>
+                <span className="max-w-[140px] truncate">{p.supplier_name}</span>
+                <span className="text-muted-foreground">
+                  {isPoStatus(p.status) ? PO_STATUS_LABEL[p.status] : p.status}
+                  {p.expected_at && (
+                    <>
+                      {' · '}
+                      <span className={cn('t-data', p.late && 'text-[var(--stop)]')}>
+                        {dmy(p.expected_at)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </TableCell>
+
+      {canEdit && (
+        <TableCell>
+          <div className="flex flex-col items-end gap-1">
+            {r.suggest > 0 && r.material_code && (
+              <Button variant="link" size="sm" asChild className="h-auto p-0">
+                <Link
+                  href={`/planning/pos/new?lsx=${lsxId}&material=${encodeURIComponent(r.material_code)}&qty=${r.suggest}`}
+                >
+                  <ShoppingCart />
+                  Soạn đơn
+                </Link>
+              </Button>
+            )}
+            {editable &&
+              (isManual ? (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground h-auto p-0"
+                  disabled={busy}
+                  onClick={onRemove}
+                >
+                  <Undo2 />
+                  {r.auto_needed != null ? 'Về định mức' : 'Bỏ dòng'}
+                </Button>
+              ) : (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="text-muted-foreground h-auto p-0"
+                  disabled={busy}
+                  onClick={onOverride}
+                  title="Chuyển thành dòng nhập tay để sửa số Cần"
+                >
+                  <Pencil />
+                  {r.source === 'none' || r.status === 'unconfirmed'
+                    ? 'Nhập số cần'
+                    : 'Ghi đè'}
+                </Button>
+              ))}
+          </div>
+        </TableCell>
+      )}
+    </TableRow>
+  )
+}
+
+function Notice({ tone, children }: { tone: 'warn'; children: React.ReactNode }) {
+  return (
+    <p
+      className="rounded-md border px-3 py-2 text-[12.5px]"
+      style={{
+        borderColor: `var(--${tone})`,
+        background: `color-mix(in srgb, var(--${tone}) 10%, transparent)`,
+      }}
+    >
+      {children}
+    </p>
   )
 }
 
@@ -684,7 +914,7 @@ function QtyCell({
       value={draft}
       onValueChange={change}
       disabled={disabled}
-      className="t-data h-7 w-24 text-right"
+      className="t-data ml-auto h-7 w-24 text-right"
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -722,7 +952,7 @@ function NoteCell({
       onChange={(e) => change(e.target.value)}
       disabled={disabled}
       placeholder="ghi chú…"
-      className="mt-1 h-7 text-[11px]"
+      className="mt-1 h-7 max-w-[260px] text-[11px]"
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()

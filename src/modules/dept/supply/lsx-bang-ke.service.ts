@@ -2,7 +2,10 @@ import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
-import { smartLsxNeeds, reservedByOtherLsx } from '@/modules/dept/warehouse/stock.service'
+import { reservedByOtherLsx } from '@/modules/dept/warehouse/stock.service'
+import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
+import { issuedByLsx } from '@/modules/dept/warehouse/stock.repo'
+import { lsxBomNeeds } from './lsx-bom-needs.repo'
 import { assessPoLate } from '@/lib/late-risk'
 import {
   buildBangKe,
@@ -32,6 +35,10 @@ export type LsxBangKe = {
   groups: string[]
   /** Nguồn cần của lệnh: có định hình gắn mã / định mức / không có gì. */
   need_source: 'components' | 'bom' | 'none'
+  /** Đang tính cả định mức từ BOM chưa xác nhận? */
+  include_draft: boolean
+  /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
+  products: { id: string; code: string; name: string; qty: number; bom_confirmed: boolean; coded_parts: number }[]
   /** Số dòng nhập tay đang có. */
   manual_count: number
   /** Bảng nhập tay chưa đọc được (chưa áp migration 0184) — UI nói thẳng, không giấu. */
@@ -51,15 +58,22 @@ export async function loadLsxBangKe(
   user: User,
   lsxId: string,
   today: string,
+  /** Bật để tính cả định mức chưa xác nhận (công tắc trên màn hình). */
+  includeDraft = false,
 ): Promise<LsxBangKe | null> {
   const lsx = await productionRepo.findById(lsxId)
   if (!lsx) return null
 
-  const [needsRaw, { rows: pos }, manualRes] = await Promise.all([
-    smartLsxNeeds(lsxId),
+  const [bom, comp, issued, { rows: pos }, manualRes] = await Promise.all([
+    // ĐỊNH MỨC tách theo SP + trạng thái xác nhận (user chốt 05/09/2026: chỉ
+    // BOM đã xác nhận mới được dùng để mua).
+    lsxBomNeeds(lsxId),
+    // Bảng định hình của Sản xuất — chỉ dùng khi có dòng ĐÃ gắn mã vật tư.
+    componentMaterialNeeds(lsxId),
+    issuedByLsx(lsxId),
     posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
     // Bảng nhập tay (0184). Chưa áp migration thì bảng chưa có — trang vẫn phải
-    // mở được với phần tự động, và nói rõ vì sao thiếu phần tay.
+    // mở được với phần định mức, và nói rõ vì sao thiếu phần tay.
     lsxNeedsRepo.listByLsx(lsxId).then(
       (rows) => ({ rows, error: null as string | null }),
       (e: unknown) => ({ rows: [], error: e instanceof Error ? e.message : String(e) }),
@@ -74,17 +88,60 @@ export async function loadLsxBangKe(
     qty_needed: m.qty_needed,
     note: m.note,
   }))
-  const needs: BangKeNeed[] = needsRaw.map((n) => ({
-    material_id: n.material_id,
-    material_code: n.material_code,
-    material_name: n.material_name,
-    unit: n.unit,
-    qty_needed: n.qty_needed,
-    qty_issued: n.qty_issued,
-    qty_remaining: n.qty_remaining,
-    source: n.source === 'components' ? 'components' : 'bom',
-    incomplete: n.incomplete ?? false,
-  }))
+
+  // Gộp định mức theo VẬT TƯ, giữ riêng phần đã xác nhận và phần còn nháp.
+  const byMat = new Map<string, BangKeNeed>()
+  for (const l of bom.lines) {
+    const cur = byMat.get(l.material_id) ?? {
+      material_id: l.material_id,
+      material_code: l.material_code,
+      material_name: l.material_name,
+      unit: l.unit,
+      group_name: l.group_name,
+      qty_needed: 0,
+      qty_needed_draft: 0,
+      qty_issued: 0,
+      qty_remaining: 0,
+      source: 'bom' as const,
+      from_products: [],
+    }
+    if (l.bom_confirmed) cur.qty_needed += l.qty_needed
+    else cur.qty_needed_draft = (cur.qty_needed_draft ?? 0) + l.qty_needed
+    cur.from_products = [
+      ...(cur.from_products ?? []),
+      {
+        code: l.product_code,
+        name: l.product_name,
+        qty: l.product_qty,
+        per: l.qty_per_unit,
+        confirmed: l.bom_confirmed,
+      },
+    ]
+    byMat.set(l.material_id, cur)
+  }
+  // Bảng định hình ĐÈ lên định mức cho những mã nó nói được (số của xưởng sát
+  // thực tế hơn); mã nó không nhắc tới vẫn theo định mức.
+  for (const c of comp ?? []) {
+    const qty = c.bars_needed ?? c.kg_needed ?? c.total_components
+    byMat.set(c.material_id, {
+      material_id: c.material_id,
+      material_code: c.material_code,
+      material_name: c.material_name,
+      unit: c.unit,
+      qty_needed: qty,
+      qty_needed_draft: 0,
+      qty_issued: 0,
+      qty_remaining: 0,
+      source: 'components' as const,
+      incomplete: c.incomplete,
+      from_products: byMat.get(c.material_id)?.from_products ?? [],
+    })
+  }
+  const needs: BangKeNeed[] = [...byMat.values()].map((n) => {
+    const qtyIssued = Math.max(issued.get(n.material_id) ?? 0, 0)
+    const total = n.qty_needed + (includeDraft ? (n.qty_needed_draft ?? 0) : 0)
+    return { ...n, qty_issued: qtyIssued, qty_remaining: Math.max(total - qtyIssued, 0) }
+  })
 
   // Dòng của mọi đơn thuộc lệnh — đơn nháp lấy từ bảng dòng (view status
   // không cần cho nháp), đơn đã ký lấy từ view để có qty_open / qty_received.
@@ -192,7 +249,7 @@ export async function loadLsxBangKe(
     }
   }
 
-  const rows = buildBangKe({ needs, manual, facts })
+  const rows = buildBangKe({ needs, manual, facts, includeDraft })
   const groups = [
     ...new Set(rows.map((r) => r.group_name).filter((g): g is string => !!g)),
   ].sort((a, b) => a.localeCompare(b, 'vi'))
@@ -210,6 +267,8 @@ export async function loadLsxBangKe(
     summary: summarizeBangKe(rows),
     groups,
     manual_count: manual.length,
+    include_draft: includeDraft,
+    products: bom.products,
     manual_error: manualRes.error,
     need_source:
       needs.length === 0
