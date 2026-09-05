@@ -37,6 +37,18 @@ export type LsxBangKe = {
   need_source: 'components' | 'bom' | 'none'
   /** Đang tính cả định mức từ BOM chưa xác nhận? */
   include_draft: boolean
+  /**
+   * Dòng định mức KHÔNG quy đổi được sang đơn vị mua (thiếu chiều dài cây,
+   * thiếu khối lượng…) — số của chúng KHÔNG vào bảng, phải nói ra.
+   */
+  blocked: {
+    product_code: string
+    material_code: string
+    material_name: string
+    unit: string
+    part_name: string
+    reason: string
+  }[]
   /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
   products: { id: string; code: string; name: string; qty: number; bom_confirmed: boolean; coded_parts: number }[]
   /** Số dòng nhập tay đang có. */
@@ -115,6 +127,7 @@ export async function loadLsxBangKe(
         qty: l.product_qty,
         per: l.qty_per_unit,
         confirmed: l.bom_confirmed,
+        explain: l.explain,
       },
     ]
     byMat.set(l.material_id, cur)
@@ -268,6 +281,14 @@ export async function loadLsxBangKe(
     groups,
     manual_count: manual.length,
     include_draft: includeDraft,
+    blocked: bom.blocked.map((b) => ({
+      product_code: b.product_code,
+      material_code: b.material_code,
+      material_name: b.material_name,
+      unit: b.unit,
+      part_name: b.part_name,
+      reason: b.reason,
+    })),
     products: bom.products,
     manual_error: manualRes.error,
     need_source:

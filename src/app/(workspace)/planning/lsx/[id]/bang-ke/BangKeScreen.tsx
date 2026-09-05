@@ -125,6 +125,9 @@ export function BangKeScreen({
   const [pickOpen, setPickOpen] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [showProducts, setShowProducts] = useState(false)
+  const [showBlocked, setShowBlocked] = useState(false)
+  /** Mã đang mở phần "dùng cho sản phẩm nào". */
+  const [openRow, setOpenRow] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     const nq = norm(q.trim())
@@ -452,6 +455,63 @@ export function BangKeScreen({
         )}
       </section>
 
+      {data.blocked.length > 0 && (
+        <section className="bg-card rounded-lg border">
+          <div className="flex flex-wrap items-start justify-between gap-3 p-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span
+                className="grid size-9 shrink-0 place-items-center rounded-md"
+                style={{
+                  background: 'color-mix(in srgb, var(--stop) 14%, transparent)',
+                  color: 'var(--stop)',
+                }}
+              >
+                <AlertTriangle className="size-5" strokeWidth={1.8} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="t-title">
+                  <span className="t-data">{data.blocked.length}</span> dòng định mức chưa
+                  quy đổi được sang đơn vị mua
+                </h2>
+                <p className="text-muted-foreground mt-0.5 text-[12.5px]">
+                  Định mức đếm theo chi tiết, vật tư lại bán theo cây hoặc kg. Số của những
+                  dòng này <b>không được cộng vào cột Cần</b> — lấy số thanh làm số cây là
+                  mua thừa nhiều lần.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowBlocked((v) => !v)}
+              aria-expanded={showBlocked}
+            >
+              {showBlocked ? 'Ẩn danh sách' : 'Xem chi tiết'}
+            </Button>
+          </div>
+          {showBlocked && (
+            <ul className="divide-border divide-y border-t">
+              {data.blocked.map((b, i) => (
+                <li
+                  key={`${b.material_code}-${b.product_code}-${i}`}
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-[12.5px]"
+                >
+                  <span className="flex min-w-0 flex-wrap items-center gap-2">
+                    <DocChip>{b.material_code}</DocChip>
+                    <span className="truncate">{b.material_name}</span>
+                    <span className="text-muted-foreground">
+                      SP {b.product_code}
+                      {b.part_name ? ` · ${b.part_name}` : ''}
+                    </span>
+                  </span>
+                  <span className="text-[var(--stop)]">{b.reason}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {/* ── Tóm tắt: 4 con số người mua đọc trước ─────────────────────── */}
       <StatTiles>
         <StatTile
@@ -593,6 +653,10 @@ export function BangKeScreen({
                         key={r.material_id}
                         r={r}
                         lsxId={lsx.id}
+                        open={openRow === r.material_id}
+                        onToggle={() =>
+                          setOpenRow(openRow === r.material_id ? null : r.material_id)
+                        }
                         canEdit={canEdit}
                         editable={!data.manual_error}
                         busy={busy}
@@ -662,6 +726,8 @@ export function BangKeScreen({
 function Row({
   r,
   lsxId,
+  open,
+  onToggle,
   canEdit,
   editable,
   busy,
@@ -672,6 +738,8 @@ function Row({
 }: {
   r: BangKeRow
   lsxId: string
+  open: boolean
+  onToggle: () => void
   canEdit: boolean
   editable: boolean
   busy: boolean
@@ -712,21 +780,15 @@ function Row({
           )}
           {r.incomplete && <span className="text-[var(--warn)]">thiếu hệ số</span>}
           {r.from_products.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="cursor-help underline decoration-dotted">
-                  {r.from_products.length} SP
-                </span>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-[320px]">
-                {r.from_products.map((p) => (
-                  <div key={p.code} className="text-[11px]">
-                    {p.code}: {fmt(p.per)} × {fmt(p.qty)} SP
-                    {!p.confirmed && ' (BOM chưa xác nhận)'}
-                  </div>
-                ))}
-              </TooltipContent>
-            </Tooltip>
+            <Button
+              variant="link"
+              size="sm"
+              onClick={onToggle}
+              aria-expanded={open}
+              className="h-auto p-0 text-[11px] underline decoration-dotted"
+            >
+              {open ? 'Ẩn' : `dùng cho ${r.from_products.length} SP`}
+            </Button>
           )}
         </div>
         {canEdit && isManual && editable ? (
@@ -737,6 +799,28 @@ function Row({
               {r.note}
             </div>
           )
+        )}
+        {open && r.from_products.length > 0 && (
+          <ul className="bg-muted/40 mt-2 flex flex-col gap-1 rounded-md p-2">
+            {r.from_products.map((p) => (
+              <li
+                key={p.code}
+                className="flex flex-wrap items-baseline gap-x-2 text-[11.5px]"
+              >
+                <DocChip>{p.code}</DocChip>
+                <span className="text-muted-foreground max-w-[220px] truncate">
+                  {p.name}
+                </span>
+                <span className="t-data">
+                  {fmt(p.per)} × {fmt(p.qty)} SP = {fmt(p.per * p.qty)} {r.unit}
+                </span>
+                {p.explain && <span className="text-muted-foreground">({p.explain})</span>}
+                {!p.confirmed && (
+                  <span className="text-[var(--warn)]">BOM chưa xác nhận</span>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </TableCell>
 

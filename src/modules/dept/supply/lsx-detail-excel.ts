@@ -60,6 +60,15 @@ export type LsxDetailReport = {
    */
   bangKe?: {
     rows: BangKeRow[]
+    /** Dòng định mức chưa quy đổi được sang đơn vị mua — liệt kê ở cuối sheet. */
+    blocked: {
+      product_code: string
+      material_code: string
+      material_name: string
+      unit: string
+      part_name: string
+      reason: string
+    }[]
     /** Đang tính cả định mức BOM chưa xác nhận? Ghi lên đầu sheet cho khỏi nhầm. */
     include_draft: boolean
     /** SP có định mức mà Kỹ thuật chưa xác nhận — cảnh báo ngay trên sheet. */
@@ -245,6 +254,60 @@ export async function buildLsxDetailExcel(report: LsxDetailReport): Promise<Buff
         [5, 22, 16, 38, 7, 11, 12, 10, 12, 10, 12, 10, 13, 18, 20, 30, 24][k] ?? 14
     })
     sb.views = [{ state: 'frozen', xSplit: 4, ySplit: bk.unconfirmed_products.length > 0 ? 5 : 4 }]
+
+    if (bk.blocked.length > 0) {
+      sb.addRow([])
+      sb.addRow([
+        `CHƯA QUY ĐỔI ĐƯỢC SANG ĐƠN VỊ MUA (${bk.blocked.length} dòng định mức) — số của những dòng này KHÔNG nằm trong bảng trên`,
+      ]).font = { bold: true }
+      headerRow(sb, ['Mã VT', 'Tên vật tư', 'ĐVT mua', 'Sản phẩm', 'Chi tiết', 'Vì sao chưa tính được'])
+      for (const b of bk.blocked) {
+        sb.addRow([b.material_code, b.material_name, b.unit, b.product_code, b.part_name, b.reason])
+      }
+    }
+
+    // ── Sheet phụ: VẬT TƯ DÙNG CHO SẢN PHẨM NÀO ──────────────────────────
+    const rowsWithProducts = bk.rows.filter((r) => r.from_products.length > 0)
+    if (rowsWithProducts.length > 0) {
+      const sp = wb.addWorksheet('Phân bổ theo SP')
+      const tt = sp.addRow([`VẬT TƯ DÙNG CHO SẢN PHẨM NÀO — LSX ${lsx.code}`])
+      tt.font = { bold: true, size: 13 }
+      sp.addRow(['Cột "Định mức/SP" đã quy đổi sang đơn vị mua; cột "Cách tính" nói rõ phép quy đổi.'])
+      sp.addRow([])
+      headerRow(sp, [
+        'Mã VT',
+        'Tên vật tư',
+        'ĐVT',
+        'Mã SP',
+        'Tên sản phẩm',
+        'SL sản phẩm',
+        'Định mức/SP',
+        'Tổng cần',
+        'Cách tính',
+        'BOM đã xác nhận',
+      ])
+      for (const r of rowsWithProducts) {
+        for (const p of r.from_products) {
+          sp.addRow([
+            r.material_code,
+            r.material_name,
+            r.unit,
+            p.code,
+            p.name,
+            p.qty,
+            p.per,
+            p.per * p.qty,
+            p.explain ?? '',
+            p.confirmed ? 'Đã xác nhận' : 'CHƯA',
+          ])
+        }
+      }
+      for (const c of [6, 7, 8]) sp.getColumn(c).numFmt = '#,##0.####'
+      sp.columns.forEach((c, k) => {
+        c.width = [16, 34, 7, 16, 34, 12, 12, 16, 32, 16][k] ?? 14
+      })
+      sp.views = [{ state: 'frozen', ySplit: 4 }]
+    }
   }
 
   // ── Sheet 2: ĐƠN MUA CỦA LỆNH (khuôn Thao_THĐH) ───────────────────────

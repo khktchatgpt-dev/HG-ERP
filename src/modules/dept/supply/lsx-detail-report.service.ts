@@ -30,6 +30,7 @@ export async function loadLsxDetailReport(
   const bangKe = bk
     ? {
         rows: bk.rows,
+        blocked: bk.blocked,
         include_draft: bk.include_draft,
         unconfirmed_products: bk.products
           .filter((p) => !p.bom_confirmed && p.coded_parts > 0)

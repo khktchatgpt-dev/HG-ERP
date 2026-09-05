@@ -38,7 +38,14 @@ export type BangKeNeed = {
   /** Bảng định hình thiếu hệ số nên số chỉ là tham khảo. */
   incomplete?: boolean
   /** SP nào sinh ra số này — giải thích trên dòng, và chỉ ra ai cần chốt BOM. */
-  from_products?: { code: string; name: string; qty: number; per: number; confirmed: boolean }[]
+  from_products?: {
+    code: string
+    name: string
+    qty: number
+    per: number
+    confirmed: boolean
+    explain?: string
+  }[]
 }
 
 /** Dòng Cung ứng nhập tay (B2) — ghi đè số cần của đúng mã đó. */
@@ -129,7 +136,14 @@ export type BangKeRow = {
   auto_needed: number | null
   /** Số cần từ BOM chưa xác nhận (0 nếu không có) — hiện làm ghi chú trên dòng. */
   draft_needed: number
-  from_products: { code: string; name: string; qty: number; per: number; confirmed: boolean }[]
+  from_products: {
+    code: string
+    name: string
+    qty: number
+    per: number
+    confirmed: boolean
+    explain?: string
+  }[]
   incomplete: boolean
   qty_needed: number
   qty_issued: number
