@@ -197,6 +197,7 @@ export function PoCreateForm({
   defaultSupplierId,
   defaultLsxId,
   defaultMaterialCode,
+  defaultQty,
   initial,
 }: {
   suppliers: SupplierOption[]
@@ -211,6 +212,8 @@ export function PoCreateForm({
   defaultLsxId?: string
   /** `?material=` — "Soạn đơn mua" từ dòng tồn kho: mã đó vào dòng đầu tiên. */
   defaultMaterialCode?: string
+  /** SL đề xuất theo từng mã của `defaultMaterialCode` (cách nhau dấu phẩy, cùng thứ tự). */
+  defaultQty?: string
   /** Có = mở đơn có sẵn: 'edit' ghi đè đơn cũ, 'duplicate' tạo đơn mới từ nó. */
   initial?: PoInitial
 }) {
@@ -548,9 +551,30 @@ export function PoCreateForm({
   useEffect(() => {
     if (!defaultMaterialCode || initial || seededMaterial.current) return
     seededMaterial.current = true
-    void fetchMaterialByCode(defaultMaterialCode).then((m) => {
-      if (m) addMaterial(m)
-      else toast.error(`Không thấy vật tư "${defaultMaterialCode}" để đưa vào đơn`)
+    // Nhiều mã cách nhau dấu phẩy + SL đề xuất cùng thứ tự (bảng kê vật tư của
+    // lệnh, 05/09/2026): "Soạn đơn cho 12 dòng thiếu" là 12 dòng đã điền SL.
+    const codes = defaultMaterialCode
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    const qtys = (defaultQty ?? '').split(',').map((v) => Number(v.trim()))
+    void Promise.all(codes.map((c) => fetchMaterialByCode(c))).then((found) => {
+      const list: PoMaterial[] = []
+      const extras = new Map<string, { qty?: number | null }>()
+      const missing: string[] = []
+      found.forEach((m, i) => {
+        if (!m) {
+          missing.push(codes[i])
+          return
+        }
+        list.push(m)
+        const q = qtys[i]
+        if (Number.isFinite(q) && q > 0) extras.set(m.id, { qty: q })
+      })
+      if (list.length > 0) addMaterials(list, extras)
+      if (missing.length > 0) {
+        toast.error(`Không thấy vật tư "${missing.join('", "')}" để đưa vào đơn`)
+      }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ mồi một lần lúc mở form
   }, [])

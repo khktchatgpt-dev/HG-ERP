@@ -2693,6 +2693,57 @@ export type Database = {
           },
         ]
       }
+      supply_lsx_needs: {
+        Row: {
+          id: string
+          production_order_id: string
+          material_id: string
+          qty_needed: number
+          note: string | null
+          created_by: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          production_order_id: string
+          material_id: string
+          qty_needed: number
+          note?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          production_order_id?: string
+          material_id?: string
+          qty_needed?: number
+          note?: string | null
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_lsx_needs_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_po_extra_lsx: {
         Row: {
           po_id: string

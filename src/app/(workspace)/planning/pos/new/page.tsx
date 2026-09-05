@@ -16,7 +16,7 @@ import { PoCreateForm } from './PoCreateForm'
 export default async function NewPoPage({
   searchParams,
 }: {
-  searchParams: Promise<{ supplier?: string; lsx?: string; material?: string }>
+  searchParams: Promise<{ supplier?: string; lsx?: string; material?: string; qty?: string }>
 }) {
   const user = await authService.requirePageUser()
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
@@ -27,6 +27,8 @@ export default async function NewPoPage({
     supplier: defaultSupplierId,
     lsx: defaultLsxId,
     material: defaultMaterialCode,
+    // `?qty=` — SL đề xuất đi kèm từng mã (bảng kê vật tư của lệnh), cùng thứ tự.
+    qty: defaultQty,
   } = await searchParams
 
   // `company` cho nút "Xem trước phiếu in" — dựng đúng tờ phiếu sẽ gửi NCC ngay
@@ -43,6 +45,7 @@ export default async function NewPoPage({
       defaultSupplierId={defaultSupplierId}
       defaultLsxId={defaultLsxId}
       defaultMaterialCode={defaultMaterialCode}
+      defaultQty={defaultQty}
       company={company}
       tpl={tpl}
       suppliers={suppliers.map((s) => ({

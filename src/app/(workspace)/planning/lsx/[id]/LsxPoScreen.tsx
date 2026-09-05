@@ -9,6 +9,7 @@ import {
   CalendarDays,
   FileText,
   ClipboardList,
+  Download,
   Package,
   PackageCheck,
   Plus,
@@ -323,6 +324,18 @@ export function LsxPoScreen({
         description={`${lsx.customer_name}${lsx.order_codes.length > 0 ? ` · ĐH ${lsx.order_codes.join(', ')}` : ''}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              {/* Bảng kê vật tư (B1 05/09/2026): cần / tồn / đã đặt / còn phải đặt từng mã */}
+              <Link href={`/planning/lsx/${lsx.id}/bang-ke`}>
+                <ClipboardList /> Bảng kê vật tư
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              {/* Hồ sơ cung ứng MỘT lệnh: lệnh → từng đơn → từng dòng vật tư (05/09/2026) */}
+              <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}`} download>
+                <Download /> Tải Excel lệnh này
+              </a>
+            </Button>
             <Button asChild variant="outline">
               <Link href={`/planning/lsx/${lsx.id}/ho-so`}>
                 <FileText /> Hồ sơ lệnh
