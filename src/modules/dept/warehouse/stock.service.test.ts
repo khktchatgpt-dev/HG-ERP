@@ -458,6 +458,30 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
     expect(lsxNeedsRepo).not.toHaveBeenCalled()
   })
 
+  it('bảng chi tiết CÓ dòng nhưng chưa gắn mã vật tư (trả []) → vẫn rơi về BOM', async () => {
+    // Đo 05/09/2026: 8/15 lệnh có định hình mà 0 dòng có material_id — coi [] là
+    // "đã có bảng" thì mọi màn nhu cầu trống dù định mức có mã cho 7 lệnh.
+    vi.mocked(componentMaterialNeeds).mockResolvedValue([])
+    vi.mocked(lsxNeedsRepo).mockResolvedValue([
+      {
+        production_order_id: 'lsx1',
+        material_id: 'm9',
+        material_code: 'NK-0049',
+        material_name: 'Nhôm khung',
+        unit: 'cây',
+        qty_needed: 700,
+        qty_issued: 0,
+        qty_remaining: 700,
+      },
+    ])
+
+    const out = await smartLsxNeeds('lsx1')
+
+    expect(lsxNeedsRepo).toHaveBeenCalledWith('lsx1')
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({ material_code: 'NK-0049', qty_remaining: 700 })
+  })
+
   it('thiếu hệ số cây → qty rơi về kg; thiếu cả hai → số chi tiết', async () => {
     vi.mocked(componentMaterialNeeds).mockResolvedValue([
       {

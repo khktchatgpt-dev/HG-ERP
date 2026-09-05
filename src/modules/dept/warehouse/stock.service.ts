@@ -71,7 +71,15 @@ type IssueInput = {
  */
 export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   const comp = await componentMaterialNeeds(productionOrderId)
-  if (!comp) return lsxNeedsRepo(productionOrderId)
+  /*
+   * RỖNG cũng phải rơi về BOM (vá 05/09/2026). `componentMaterialNeeds` chỉ trả
+   * null khi lệnh KHÔNG có dòng định hình; lệnh có dòng mà chưa dòng nào gắn mã
+   * vật tư thì nó trả `[]` — và trước đây `[]` được coi là "đã có bảng, không
+   * cần gì". Đo 05/09: 8/15 lệnh có 994 dòng định hình, 0 dòng có mã, trong khi
+   * view định mức có mã cho 7 lệnh → mọi màn nhu cầu trống suốt từ 23/08.
+   * Bảng định hình chỉ THAY định mức khi nó thật sự nói được cần vật tư gì.
+   */
+  if (!comp || comp.length === 0) return lsxNeedsRepo(productionOrderId)
 
   const issued = await issuedByLsx(productionOrderId)
   return comp.map((c) => {
