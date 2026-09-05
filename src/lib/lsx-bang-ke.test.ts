@@ -55,6 +55,11 @@ describe('classifyBangKe', () => {
     )
     expect(classifyBangKe({ ...base, suggest: 0, source: 'bom' })).toBe('done')
   })
+  it('dòng tay số 0 (vừa thêm mã) = Chưa có số, không phải Đủ', () => {
+    expect(
+      classifyBangKe({ ...base, qty_needed: 0, qty_remaining: 0, suggest: 0, source: 'manual' }),
+    ).toBe('blank')
+  })
   it('mã chỉ có trên đơn = Ngoài định mức', () => {
     expect(classifyBangKe({ ...base, suggest: 0, ordered: 5, source: 'none' })).toBe(
       'extra',
@@ -177,6 +182,7 @@ describe('buildBangKe', () => {
     })
     expect(rows.map((r) => r.material_code)).toEqual(['E', 'C', 'D', 'A', 'B'])
     expect(summarizeBangKe(rows)).toMatchObject({
+      blank: 0,
       none: 1,
       short: 1,
       pending: 1,

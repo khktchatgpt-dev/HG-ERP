@@ -84,11 +84,14 @@ export type BangKeStatus =
   | 'done'
   /** Có đơn mua nhưng không nằm trong nhu cầu của lệnh. */
   | 'extra'
+  /** Dòng nhập tay chưa điền số cần (vừa thêm mã) — chưa nói được gì. */
+  | 'blank'
 
 export const BANG_KE_STATUS: Record<
   BangKeStatus,
   { label: string; tone: 'stop' | 'warn' | 'primary' | 'done' | 'muted'; order: number }
 > = {
+  blank: { label: 'Chưa có số', tone: 'muted', order: -1 },
   none: { label: 'Chưa đặt', tone: 'stop', order: 0 },
   short: { label: 'Đặt chưa đủ', tone: 'warn', order: 1 },
   pending: { label: 'Đơn chưa duyệt', tone: 'warn', order: 2 },
@@ -154,6 +157,8 @@ export function classifyBangKe(r: {
   source: BangKeRow['source']
 }): BangKeStatus {
   if (r.source === 'none') return 'extra'
+  // Vừa "Thêm mã" xong, số cần còn 0: không phải "đủ", là chưa điền.
+  if (r.source === 'manual' && r.qty_needed === 0) return 'blank'
   if (r.suggest > 0) {
     if (r.ordered > 0) return 'short'
     if (r.pending > 0 || r.draft > 0) return 'pending'
@@ -247,7 +252,17 @@ export function summarizeBangKe(rows: BangKeRow[]): Record<BangKeStatus, number>
   total: number
   needed: number
 } {
-  const out = { none: 0, short: 0, pending: 0, inflight: 0, done: 0, extra: 0, total: 0, needed: 0 }
+  const out = {
+    blank: 0,
+    none: 0,
+    short: 0,
+    pending: 0,
+    inflight: 0,
+    done: 0,
+    extra: 0,
+    total: 0,
+    needed: 0,
+  }
   for (const r of rows) {
     out[r.status]++
     out.total++

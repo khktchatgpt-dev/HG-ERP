@@ -55,6 +55,7 @@ const STATUS_BADGE: Record<BangKeStatus, BadgeTone> = {
   inflight: 'blue',
   done: 'green',
   extra: 'gray',
+  blank: 'gray',
 }
 
 const SOURCE_LABEL: Record<BangKeRow['source'], string> = {
@@ -630,6 +631,7 @@ export function BangKeScreen({
             open={pasteOpen}
             template="accessory"
             allowFree={false}
+            confirmLabel={(n) => `Đưa ${n} dòng vào bảng kê`}
             onClose={() => setPasteOpen(false)}
             onConfirm={onPasted}
           />
