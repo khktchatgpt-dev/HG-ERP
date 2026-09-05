@@ -1,144 +1,154 @@
 import Link from 'next/link'
+import {
+  AlertTriangle,
+  Building2,
+  CheckCircle2,
+  Factory,
+  Gavel,
+  Plus,
+  Truck,
+} from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
-import { posService } from '@/modules/dept/supply/pos.service'
-import { suppliersService } from '@/modules/dept/supply/suppliers.service'
-import { lsxService } from '@/modules/dept/production/lsx.service'
-import { productionRepo } from '@/modules/dept/production/production.repo'
-import { stockRepo } from '@/modules/dept/warehouse/stock.repo'
-import { assessLateRisk, assessPoLate } from '@/lib/late-risk'
-import type { PoStatus } from '@/modules/dept/supply/pos.schema'
+import { PageHeader } from '@/components/erp/PageHeader'
+import { EmptyState } from '@/components/erp/EmptyState'
+import { Button } from '@/components/shadcn/button'
+import { buildAgenda } from '@/lib/supply-meeting'
+import { loadMeeting } from './_data/meeting'
+import { IssueRow, dmy } from './_components/IssueRow'
+import { KpiTiles } from './_components/KpiTiles'
 
+export const dynamic = 'force-dynamic'
+
+const WEEKDAY = [
+  'Chủ nhật',
+  'Thứ Hai',
+  'Thứ Ba',
+  'Thứ Tư',
+  'Thứ Năm',
+  'Thứ Sáu',
+  'Thứ Bảy',
+]
+
+/** Tuần ISO — "Kỳ họp: Tuần 36" như tiêu đề sổ Excel của Cung ứng. */
+function isoWeek(iso: string): number {
+  const d = new Date(`${iso}T00:00:00Z`)
+  const day = d.getUTCDay() || 7
+  d.setUTCDate(d.getUTCDate() + 4 - day)
+  const start = Date.UTC(d.getUTCFullYear(), 0, 1)
+  return Math.ceil(((d.getTime() - start) / 86_400_000 + 1) / 7)
+}
+
+const TOP_ISSUES = 5
+
+/**
+ * TỔNG QUAN CUNG ỨNG — cửa ngõ của bảng họp, KHÔNG phải bảng họp (user chốt
+ * 05/09/2026: nhiều lệnh nên mỗi trang một vai trò). Trang này chỉ trả lời
+ * "hôm nay có vấn đề không" bằng 4 con số + 5 dòng khẩn nhất, rồi dẫn sang
+ * đúng trang cho từng câu hỏi tiếp theo:
+ *   Vấn đề cần xử lý → Vật tư theo lệnh → Hàng sắp về → Nhà cung cấp → Việc
+ *   cần quyết định.
+ */
 export default async function PlanningHomePage() {
   const user = await authService.requirePageUser()
-  const today = new Date().toISOString().slice(0, 10)
-
-  const [pending, approved, suppliers, producing, tracking, allPos, lowStock] =
-    await Promise.all([
-      posService.list(user, { status: 'pending_approval', page: 1, page_size: 1 }),
-      posService.list(user, { status: 'approved', page: 1, page_size: 1 }),
-      suppliersService.list(user, { active_only: true, page: 1, page_size: 1 }),
-      lsxService.list(user, { status: 'in_progress', page: 1, page_size: 1 }),
-      productionRepo.listTracking(),
-      posService.list(user, { page: 1, page_size: 500 }),
-      stockRepo.list({ low_only: true }),
-    ])
-
-  const lateRisk = tracking.filter((r) => assessLateRisk(r, today)).length
-  const poLate = allPos.rows.filter((p) => assessPoLate(p, today) === 'overdue').length
-  const countBy = (s: PoStatus) => allPos.rows.filter((p) => p.status === s).length
-  const inFlight =
-    countBy('pending_approval') +
-    countBy('approved') +
-    countBy('ordered') +
-    countBy('confirmed') +
-    countBy('in_transit') +
-    countBy('partial')
+  const { today, rows, counts, issues } = await loadMeeting(user)
+  const agenda = buildAgenda(rows)
+  const top = issues.slice(0, TOP_ISSUES)
+  const dateLabel = `${WEEKDAY[new Date(`${today}T00:00:00Z`).getUTCDay()]} ${dmy(today)}/${today.slice(0, 4)}`
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-lg font-semibold">Bảng điều phối Cung ứng</h1>
-        <p className="mt-0.5 text-sm text-zinc-500">
-          Chào {user.name ?? user.email} · {inFlight} PO đang chạy
-        </p>
-      </div>
+    <div className="flex flex-col gap-5">
+      <PageHeader
+        breadcrumbs={[{ label: 'Cung ứng' }]}
+        title="Tổng quan Cung ứng"
+        description="Hôm nay cung ứng có đang ảnh hưởng kế hoạch sản xuất không. Mỗi mục bên dưới mở một trang riêng."
+        meta={
+          <span className="text-muted-foreground text-[12px]">
+            {dateLabel} · Tuần <span className="t-data">{isoWeek(today)}</span> ·{' '}
+            <span className="t-data">{rows.length}</span> lệnh đang chạy
+          </span>
+        }
+        actions={
+          <>
+            <Button size="sm" asChild>
+              <Link href="/planning/pos/new">
+                <Plus />
+                Soạn đơn mua
+              </Link>
+            </Button>
+          </>
+        }
+      />
 
-      {/* ── Cần xử lý ngay ── */}
-      <section>
-        <SectionLabel>Cần xử lý ngay</SectionLabel>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <ActionCard
-            tone="red"
-            icon="⚠"
-            value={poLate}
-            label="PO quá hẹn giao"
-            sub="NCC trễ — cần nhắc"
-            action="Xem đơn trễ"
-            href="/planning/pos"
-          />
-          <ActionCard
-            tone="amber"
-            icon="◷"
-            value={pending.total}
-            label="PO chờ GĐ duyệt"
-            sub="Duyệt xong mới gửi NCC"
-            action="Xem hàng đợi"
-            href="/planning/pos"
-          />
-          <ActionCard
-            tone="violet"
-            icon="✈"
-            value={approved.total}
-            label="Đã duyệt · chưa gửi NCC"
-            sub="Sẵn sàng phát đơn"
-            action="Gửi NCC"
-            href="/planning/pos"
-          />
-          <ActionCard
-            tone="blue"
-            icon="▦"
-            value={lowStock.length}
-            label="Vật tư dưới tồn tối thiểu"
-            sub="Nguy cơ thiếu cho LSX"
-            action="Tạo PO"
-            href="/planning/pos/new"
-          />
-        </div>
-      </section>
+      {/* Tầng 1: hiện tại có vấn đề không? Mỗi ô dẫn sang trang đã lọc sẵn. */}
+      <KpiTiles counts={counts} />
 
-      {/* ── Đường ống mua hàng ── */}
-      <section>
-        <SectionLabel>Đường ống mua hàng</SectionLabel>
-        <div className="flex overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <Stage n={countBy('pending_approval')} label="Chờ duyệt" tone="amber" hot />
-          <Stage n={countBy('approved')} label="Đã duyệt" tone="violet" />
-          <Stage n={countBy('ordered')} label="Đã gửi NCC" tone="blue" />
-          <Stage n={countBy('confirmed')} label="NCC xác nhận" tone="blue" />
-          <Stage n={countBy('in_transit')} label="Đang giao" tone="blue" />
-          <Stage n={countBy('partial')} label="Về một phần" tone="indigo" />
-          <Stage n={countBy('received')} label="Về đủ" tone="green" />
-        </div>
-        <p className="mt-2 text-xs text-zinc-400">
-          {lateRisk > 0 ? (
-            <span className="text-red-500">
-              ⚠ {lateRisk} đơn hàng có nguy cơ trễ — kiểm ở Theo dõi đơn.
+      {/* Tầng 2: năm việc khẩn nhất — đủ để mở đầu cuộc họp, phần còn lại ở trang riêng. */}
+      <section className="bg-card overflow-hidden rounded-lg border">
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2.5">
+          <h2 className="t-title">
+            Khẩn nhất hôm nay
+            <span className="t-data text-muted-foreground ml-2 font-normal">
+              {Math.min(top.length, TOP_ISSUES)}/{issues.length}
             </span>
-          ) : (
-            'Không có đơn nào nguy cơ trễ.'
-          )}
-          {' · '}
-          {suppliers.total} nhà cung cấp · {producing.total} LSX đang sản xuất.
-        </p>
+          </h2>
+          <Button variant="link" size="sm" asChild className="h-auto p-0">
+            <Link href="/planning/van-de">
+              <AlertTriangle />
+              Xem tất cả {issues.length} vấn đề
+            </Link>
+          </Button>
+        </header>
+        {top.length === 0 ? (
+          <EmptyState
+            icon={<CheckCircle2 className="size-5" />}
+            title="Không có vấn đề nào cần nêu"
+            description="Mọi lệnh đang chạy đều đã đủ vật tư hoặc nhà cung cấp đang giao đúng hẹn."
+          />
+        ) : (
+          <ul className="divide-border divide-y">
+            {top.map(({ row, risk }) => (
+              <IssueRow key={row.id} row={row} risk={risk} />
+            ))}
+          </ul>
+        )}
       </section>
 
-      {/* ── Truy cập nhanh ── */}
+      {/* Tầng 3: đi tiếp — mỗi thẻ là một trang, một câu hỏi. */}
       <section>
-        <SectionLabel>Truy cập nhanh</SectionLabel>
+        <h2 className="t-label text-muted-foreground mb-2">Các trang họp</h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <QuickLink
-            href="/planning/pos"
-            title="Đơn đặt vật tư"
-            desc="Tạo PO, gửi duyệt, theo dõi hàng về"
+          <PageCard
+            href="/planning/van-de"
+            icon={AlertTriangle}
+            title="Vấn đề cần xử lý"
+            desc="Lệnh nào có nguy cơ, vì sao, ai đang cầm bóng"
+            stat={`${issues.length} lệnh`}
           />
-          <QuickLink
+          <PageCard
+            href="/planning/lsx"
+            icon={Factory}
+            title="Vật tư theo lệnh"
+            desc="Từng lệnh: hạn vật tư, đơn mua, đã về tới đâu"
+            stat={`${rows.length} lệnh`}
+          />
+          <PageCard
+            href="/planning/hang-sap-ve"
+            icon={Truck}
+            title="Hàng sắp về"
+            desc="Ngày mai, tuần này có gì về kho"
+          />
+          <PageCard
             href="/planning/suppliers"
+            icon={Building2}
             title="Nhà cung cấp"
-            desc="Hồ sơ NCC, lịch sử mua"
+            desc="Ai đang giao trễ, hồ sơ và lịch sử mua"
           />
-          <QuickLink
-            href="/production"
-            title="Tiến độ sản xuất"
-            desc="Cập nhật giai đoạn từng LSX (ở workspace Sản xuất)"
-          />
-          <QuickLink
-            href="/planning/tracking"
-            title="Theo dõi đơn hàng"
-            desc="BOM · vật tư · sản xuất từng đơn"
-          />
-          <QuickLink
-            href="/warehouse/docs"
-            title="Phiếu kho"
-            desc="Phiếu nhập theo PO, xuất theo LSX"
+          <PageCard
+            href="/planning/hop"
+            icon={Gavel}
+            title="Việc cần quyết định"
+            desc="Cung ứng phải làm gì, Sản xuất và Giám đốc phải quyết gì"
+            stat={`${agenda.length} việc`}
           />
         </div>
       </section>
@@ -146,116 +156,34 @@ export default async function PlanningHomePage() {
   )
 }
 
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <h2 className="mb-3 text-xs font-semibold tracking-wide text-zinc-500 uppercase">
-      {children}
-    </h2>
-  )
-}
-
-const CARD_TONE = {
-  red: {
-    stripe: 'bg-red-500',
-    ic: 'bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400',
-    act: 'text-red-600 dark:text-red-400',
-  },
-  amber: {
-    stripe: 'bg-amber-500',
-    ic: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-    act: 'text-amber-700 dark:text-amber-400',
-  },
-  violet: {
-    stripe: 'bg-violet-500',
-    ic: 'bg-violet-50 text-violet-600 dark:bg-violet-950 dark:text-violet-400',
-    act: 'text-violet-600 dark:text-violet-400',
-  },
-  blue: {
-    stripe: 'bg-blue-500',
-    ic: 'bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400',
-    act: 'text-blue-600 dark:text-blue-400',
-  },
-} as const
-
-function ActionCard({
-  tone,
-  icon,
-  value,
-  label,
-  sub,
-  action,
+function PageCard({
   href,
+  icon: Icon,
+  title,
+  desc,
+  stat,
 }: {
-  tone: keyof typeof CARD_TONE
-  icon: string
-  value: number
-  label: string
-  sub: string
-  action: string
   href: string
-}) {
-  const t = CARD_TONE[tone]
-  return (
-    <a
-      href={href}
-      className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-zinc-200 bg-white p-4 transition-colors hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700"
-    >
-      <span className={`absolute inset-y-0 left-0 w-1 ${t.stripe}`} />
-      <div className="flex items-center justify-between">
-        <span className="text-2xl font-bold tabular-nums">{value}</span>
-        <span className={`grid h-8 w-8 place-items-center rounded-lg text-base ${t.ic}`}>
-          {icon}
-        </span>
-      </div>
-      <div>
-        <div className="text-sm font-semibold">{label}</div>
-        <div className="text-xs text-zinc-400">{sub}</div>
-      </div>
-      <span className={`text-xs font-semibold ${t.act}`}>{action} →</span>
-    </a>
-  )
-}
-
-const STAGE_TONE = {
-  amber: 'text-amber-600 dark:text-amber-400',
-  violet: 'text-violet-600 dark:text-violet-400',
-  blue: 'text-blue-600 dark:text-blue-400',
-  indigo: 'text-indigo-600 dark:text-indigo-400',
-  green: 'text-green-600 dark:text-green-400',
-} as const
-
-function Stage({
-  n,
-  label,
-  tone,
-  hot,
-}: {
-  n: number
-  label: string
-  tone: keyof typeof STAGE_TONE
-  hot?: boolean
+  icon: typeof Factory
+  title: string
+  desc: string
+  stat?: string
 }) {
   return (
     <Link
-      href="/planning/pos"
-      className={`min-w-[104px] flex-1 border-r border-zinc-100 px-4 py-3 last:border-r-0 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800/40 ${
-        hot ? 'bg-amber-50/60 dark:bg-amber-950/20' : ''
-      }`}
-    >
-      <div className={`text-xl font-bold tabular-nums ${STAGE_TONE[tone]}`}>{n}</div>
-      <div className="mt-0.5 text-xs font-medium text-zinc-500">{label}</div>
-    </Link>
-  )
-}
-
-function QuickLink({ href, title, desc }: { href: string; title: string; desc: string }) {
-  return (
-    <a
       href={href}
-      className="block rounded-xl border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+      className="bg-card hover:bg-accent focus-visible:ring-ring flex items-start gap-3 rounded-lg border p-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
     >
-      <div className="font-medium">{title}</div>
-      <div className="mt-1 text-xs text-zinc-500">{desc}</div>
-    </a>
+      <span className="bg-muted text-muted-foreground grid size-9 shrink-0 place-items-center rounded-md">
+        <Icon className="size-5" strokeWidth={1.8} aria-hidden />
+      </span>
+      <span className="min-w-0">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="t-title">{title}</span>
+          {stat && <span className="t-data text-muted-foreground shrink-0">{stat}</span>}
+        </span>
+        <span className="text-muted-foreground mt-0.5 block text-[12.5px]">{desc}</span>
+      </span>
+    </Link>
   )
 }
