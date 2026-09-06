@@ -217,7 +217,7 @@ export function LsxSupplyScreen({
           <div className="flex items-center gap-2">
             <Button size="sm" variant="outline" asChild>
               <a href="/api/dept/supply/lsx-report" download>
-                <Download className="size-4" /> Xuất Excel
+                <Download className="size-4" /> Xuất Excel (mọi lệnh)
               </a>
             </Button>
             {canEdit && fillable.length > 0 && (

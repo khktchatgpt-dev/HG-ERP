@@ -304,7 +304,7 @@ export function BangKeScreen({
                 download
               >
                 <Download />
-                Tải Excel
+                Xuất bảng kê
               </a>
             </Button>
             {canEdit && (
