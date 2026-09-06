@@ -123,8 +123,23 @@ describe('countPos — số trên chip', () => {
     expect(c.received).toBe(1)
     expect(c.cancelled).toBe(1)
     expect(c.mine).toBe(1)
-    expect(c.late).toBe(1)
+    // Đơn CHỜ DUYỆT quá hẹn là lỗi của mình, không phải NCC trễ (tách 05/09/2026).
+    expect(c.late).toBe(0)
+    expect(c.lateUnsent).toBe(1)
     // Đơn đã huỷ trống ngày KHÔNG tính là "chưa hẹn giao".
     expect(c.noEta).toBe(1)
+  })
+
+  it('chỉ đơn ĐÃ GỬI mà quá hẹn mới là NCC trễ', () => {
+    const c = countPos(
+      [
+        po({ id: '1', status: 'ordered', expected_at: '2026-08-01' }),
+        po({ id: '2', status: 'draft', expected_at: '2026-08-01' }),
+      ],
+      null,
+      TODAY,
+    )
+    expect(c.late).toBe(1)
+    expect(c.lateUnsent).toBe(1)
   })
 })

@@ -15,12 +15,15 @@ export type LsxNeedManual = {
   qty_needed: number
   note: string | null
   updated_at: string
+  /** Ai sửa gần nhất — hai người cùng sửa thì phải truy được. */
+  updated_by_name: string | null
 }
 
 const COLS =
-  'id, production_order_id, material_id, qty_needed, note, updated_at, material:warehouse_materials(code, name, unit, group_name)'
+  'id, production_order_id, material_id, qty_needed, note, updated_at, material:warehouse_materials(code, name, unit, group_name), editor:users!supply_lsx_needs_updated_by_fkey(name, email)'
 
 type Mat = { code: string; name: string; unit: string; group_name: string | null }
+type Editor = { name: string | null; email: string }
 type Raw = {
   id: string
   production_order_id: string
@@ -29,11 +32,13 @@ type Raw = {
   note: string | null
   updated_at: string
   material: Mat | Mat[] | null
+  editor: Editor | Editor[] | null
 }
 
 function unwrap(rows: Raw[] | null): LsxNeedManual[] {
   return (rows ?? []).map((r) => {
     const m = Array.isArray(r.material) ? r.material[0] : r.material
+    const e = Array.isArray(r.editor) ? r.editor[0] : r.editor
     return {
       id: r.id,
       production_order_id: r.production_order_id,
@@ -45,6 +50,7 @@ function unwrap(rows: Raw[] | null): LsxNeedManual[] {
       qty_needed: Number(r.qty_needed) || 0,
       note: r.note,
       updated_at: r.updated_at,
+      updated_by_name: e ? (e.name ?? e.email) : null,
     }
   })
 }

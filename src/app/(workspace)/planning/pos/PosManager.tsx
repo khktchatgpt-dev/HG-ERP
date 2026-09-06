@@ -105,6 +105,8 @@ export function PosManager({
 
   // Số trên chip đếm trên TOÀN BỘ đơn, không phải kết quả đã lọc — xem po-filter.
   const counts = useMemo(() => countPos(pos, meId, today), [pos, meId, today])
+  // NCC thật sự có đơn — ô lọc không đổ cả danh mục 163 bên.
+  const withPos = useMemo(() => new Set(pos.map((p) => p.supplier_id)), [pos])
 
   /**
    * Mở chi tiết = ĐI SANG TRANG, không bật modal nữa.
@@ -247,6 +249,7 @@ export function PosManager({
           onFilter={setFilter}
           counts={counts}
           suppliers={suppliers}
+          withPos={withPos}
           showMine={!!(canEdit && meId)}
           view={view}
           onView={setView}

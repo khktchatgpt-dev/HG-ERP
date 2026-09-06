@@ -2729,6 +2729,20 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "supply_lsx_needs_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_lsx_needs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "supply_lsx_needs_material_id_fkey"
             columns: ["material_id"]
             isOneToOne: false

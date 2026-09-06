@@ -72,6 +72,7 @@ export function PoFilters({
   onFilter,
   counts,
   suppliers,
+  withPos,
   showMine,
   view,
   onView,
@@ -81,6 +82,8 @@ export function PoFilters({
   onFilter: (f: PoFilterState) => void
   counts: PoCounts
   suppliers: SupplierOption[]
+  /** Id NCC đang có đơn trong danh sách — ô lọc chỉ đổ những bên này. */
+  withPos: Set<string>
   /** Chỉ NV cung ứng đã đăng nhập mới có "đơn của tôi" để lọc. */
   showMine: boolean
   view: PoView
@@ -92,7 +95,11 @@ export function PoFilters({
 
   const supplierOptions = [
     { value: 'all', label: 'Mọi NCC' },
-    ...suppliers.map((s) => ({ value: s.id, label: s.name })),
+    // CHỈ NCC có đơn: danh mục có 163 bên, đổ hết ra thì phải cuộn qua trăm
+    // dòng để tìm một trong hai chục bên thật sự đang có đơn (rà 05/09/2026).
+    ...suppliers
+      .filter((s) => withPos.has(s.id))
+      .map((s) => ({ value: s.id, label: s.name })),
   ]
 
   return (
@@ -118,11 +125,15 @@ export function PoFilters({
           onClick={() => set({ bucket: 'ready' })}
         />
         <StatTile
-          label="Quá hẹn giao"
+          label="NCC trễ hẹn"
           value={counts.late}
           tone="stop"
           icon={AlertTriangle}
-          hint="qua ngày hẹn mà chưa về đủ"
+          hint={
+            counts.lateUnsent > 0
+              ? `đã gửi mà chưa về · ${counts.lateUnsent} đơn quá hẹn nhưng CHƯA GỬI`
+              : 'đã gửi NCC mà qua ngày hẹn vẫn chưa về đủ'
+          }
           active={filter.late}
           onClick={() => set({ late: !filter.late })}
         />

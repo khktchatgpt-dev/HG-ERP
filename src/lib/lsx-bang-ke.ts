@@ -57,6 +57,9 @@ export type BangKeManual = {
   group_name?: string | null
   qty_needed: number
   note?: string | null
+  /** Ai sửa gần nhất và lúc nào — chỉ dòng nhập tay mới có. */
+  edited_by?: string | null
+  edited_at?: string | null
 }
 
 /** Đơn mua có dòng cho mã này (trong lệnh, kể cả đơn mua chung). */
@@ -136,6 +139,8 @@ export type BangKeRow = {
   auto_needed: number | null
   /** Số cần từ BOM chưa xác nhận (0 nếu không có) — hiện làm ghi chú trên dòng. */
   draft_needed: number
+  edited_by: string | null
+  edited_at: string | null
   from_products: {
     code: string
     name: string
@@ -279,6 +284,8 @@ export function buildBangKe(input: {
       received: f.received,
       status: classifyBangKe(base),
       note: m?.note ?? null,
+      edited_by: m?.edited_by ?? null,
+      edited_at: m?.edited_at ?? null,
       pos: f.pos,
       ...base,
     })

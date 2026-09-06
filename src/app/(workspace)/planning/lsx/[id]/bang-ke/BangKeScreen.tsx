@@ -800,6 +800,11 @@ function Row({
             </div>
           )
         )}
+        {isManual && r.edited_by && (
+          <div className="text-muted-foreground mt-0.5 text-[11px]">
+            {r.edited_by} sửa {dmy(r.edited_at)}
+          </div>
+        )}
         {open && r.from_products.length > 0 && (
           <ul className="bg-muted/40 mt-2 flex flex-col gap-1 rounded-md p-2">
             {r.from_products.map((p) => (

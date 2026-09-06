@@ -99,6 +99,8 @@ export async function loadLsxBangKe(
     group_name: m.group_name,
     qty_needed: m.qty_needed,
     note: m.note,
+    edited_by: m.updated_by_name,
+    edited_at: m.updated_at,
   }))
 
   // Gộp định mức theo VẬT TƯ, giữ riêng phần đã xác nhận và phần còn nháp.
