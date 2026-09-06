@@ -265,8 +265,17 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
       // nên không có phiếu nhập nào tự chốt; service chặn đơn có dòng vật tư.
       received: 'Đã nhận đủ',
     }
+    // Mỗi bước nói rõ chuyện gì xảy ra sau khi bấm. Hộp chỉ có tiêu đề (bản cũ)
+    // khiến người dùng dừng lại đoán — rà 06/09/2026 khi chạy thử một đơn.
+    const why: Record<typeof to, string> = {
+      ordered: `Đơn sẽ được đánh dấu đã gửi cho ${po.supplier_name}. In phiếu rồi gửi qua email hoặc Zalo như thường lệ.`,
+      confirmed: `Ghi nhận ${po.supplier_name} đã nhận đơn và chốt lịch giao.`,
+      in_transit: `${po.supplier_name} báo đã xuất hàng. Đơn chuyển sang "Đang giao" để Kho biết mà chờ nhận — hẹn giao và số lượng không đổi.`,
+      received: 'Đóng đơn không qua phiếu kho — chỉ dùng cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho.',
+    }
     const ok = await confirm({
       title: `${labels[to]} — ${po.code}?`,
+      description: why[to],
       confirmLabel: labels[to],
     })
     if (!ok) return false

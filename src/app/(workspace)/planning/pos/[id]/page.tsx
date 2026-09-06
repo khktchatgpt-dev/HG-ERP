@@ -10,6 +10,11 @@ import { HttpError } from '@/server/http'
 import { loadReceiptBatches } from '@/modules/dept/supply/po-receipts.service'
 import { PoDetailScreen } from './PoDetailScreen'
 
+export const dynamic = 'force-dynamic'
+// Mọi thao tác trên đơn đổi trạng thái ở server rồi gọi router.refresh();
+// route không khai dynamic thì lần refresh đầu vẫn trả bản cũ — chốt thiếu
+// xong màn còn ghi "Về một phần" trong khi sổ đã "Về đủ" (rà 06/09/2026).
+
 /**
  * CHI TIẾT MỘT ĐƠN ĐẶT VẬT TƯ — trang thật, thay cho modal.
  *
