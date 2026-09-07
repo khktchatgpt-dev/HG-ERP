@@ -2758,6 +2758,46 @@ export type Database = {
           },
         ]
       }
+      supply_po_line_lsx: {
+        Row: {
+          line_id: string
+          production_order_id: string
+          qty: number
+        }
+        Insert: {
+          line_id: string
+          production_order_id: string
+          qty: number
+        }
+        Update: {
+          line_id?: string
+          production_order_id?: string
+          qty?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_purchase_order_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "supply_po_line_status"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "supply_po_line_lsx_production_order_id_fkey"
+            columns: ["production_order_id"]
+            isOneToOne: false
+            referencedRelation: "production_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_po_extra_lsx: {
         Row: {
           po_id: string

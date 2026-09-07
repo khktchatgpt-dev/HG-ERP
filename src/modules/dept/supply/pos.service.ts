@@ -1,3 +1,4 @@
+import { splitProblem } from '@/lib/po-lsx-split'
 import { posRepo, type Po, type PoLineInput } from './pos.repo'
 import {
   FREE_LINE_TEMPLATES,
@@ -71,6 +72,34 @@ type PoInput = {
  */
 function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] {
   return lines.map((l) => ({ ...l, ...deriveLine(template, l) }))
+}
+
+/**
+ * TỔNG PHẦN CHIA PHẢI BẰNG SL ĐẶT (0185) — kiểm ở đây chứ không ở DB.
+ *
+ * Ràng buộc cứng ở DB sẽ chặn ngay giữa chừng một thao tác bình thường: người
+ * soạn sửa SL đặt trước rồi mới sửa phần chia (hoặc ngược lại). Nhưng cũng
+ * không được thả: chia lệch nghĩa là lệnh này hay lệnh kia nhận sai số, và cái
+ * sai đó chỉ lộ ra ở bảng kê nhiều tuần sau.
+ *
+ * Kèm chặn lệnh lạ: chỉ được chia cho LSX chính hoặc LSX phụ CỦA CHÍNH ĐƠN NÀY.
+ */
+function assertSplits(
+  lines: PoLineInput[],
+  lsxIds: (string | null | undefined)[],
+): void {
+  const hopLe = new Set(lsxIds.filter(Boolean) as string[])
+  lines.forEach((l, i) => {
+    const sp = l.lsx_split ?? []
+    if (sp.length === 0) return
+    const loi = splitProblem(l.qty_ordered, sp)
+    if (loi) throw BadRequest(`Dòng ${i + 1}: ${loi}`)
+    for (const s of sp) {
+      if (!hopLe.has(s.production_order_id)) {
+        throw BadRequest(`Dòng ${i + 1}: chia cho một lệnh không thuộc đơn này`)
+      }
+    }
+  })
 }
 
 /** Trường mô tả của dòng đơn có thể chảy về danh mục (13/08/2026). */
@@ -338,6 +367,7 @@ export const posService = {
 
     const template = input.template ?? 'simple'
     assertFreeLinesAllowed(template, input.lines)
+    assertSplits(input.lines, [lsxId, ...extraLsxIds])
     const code = await posRepo.nextCode()
     const po = await posRepo.insert(
       {
@@ -524,6 +554,7 @@ export const posService = {
       ...withTemplateDefaults(input, template),
       note: input.note ?? null,
     })
+    assertSplits(input.lines, [before.production_order_id, ...extraLsxIds])
     await posRepo.replaceLines(id, withDerived(template, input.lines))
     await posRepo.replaceExtraLsx(id, extraLsxIds)
     /*

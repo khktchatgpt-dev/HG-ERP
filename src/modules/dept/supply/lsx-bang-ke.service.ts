@@ -15,8 +15,11 @@ import {
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
 import { posService } from './pos.service'
+import { posRepo } from './pos.repo'
+import { qtyForLsx } from '@/lib/po-lsx-split'
 import { supplyRepo, RECEIVABLE } from './supply.repo'
 import { lsxNeedsRepo } from './lsx-needs.repo'
+import { pricesRepo } from './prices.repo'
 import type { BangKeManual } from '@/lib/lsx-bang-ke'
 
 export type LsxBangKe = {
@@ -50,11 +53,24 @@ export type LsxBangKe = {
     reason: string
   }[]
   /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
-  products: { id: string; code: string; name: string; qty: number; bom_confirmed: boolean; coded_parts: number }[]
+  products: {
+    id: string
+    code: string
+    name: string
+    qty: number
+    bom_confirmed: boolean
+    coded_parts: number
+  }[]
   /** Số dòng nhập tay đang có. */
   manual_count: number
   /** Bảng nhập tay chưa đọc được (chưa áp migration 0184) — UI nói thẳng, không giấu. */
   manual_error: string | null
+  /**
+   * Đơn GỘP lệnh này nhưng CHƯA CHIA số (0185) — phần của lệnh đang tính là 0.
+   * Phải nói ra: im lặng cho ra 0 thì người xem tưởng chưa ai đặt gì và đặt
+   * chồng thêm một đơn nữa.
+   */
+  unsplit_pos: { po_code: string; lsx_chinh: string | null }[]
 }
 
 /**
@@ -117,10 +133,21 @@ export async function loadLsxBangKe(
       qty_issued: 0,
       qty_remaining: 0,
       source: 'bom' as const,
+      kind: l.kind,
+      positions: [],
       from_products: [],
     }
     if (l.bom_confirmed) cur.qty_needed += l.qty_needed
     else cur.qty_needed_draft = (cur.qty_needed_draft ?? 0) + l.qty_needed
+    // Một mã có thể nằm ở nhiều SP; loại lấy của dòng ĐẦU TIÊN nói được. Cùng
+    // một con vít thì mọi hồ sơ đều xếp NGU_KIM, lệch nhau là lỗi nhập ở hồ sơ
+    // SP — bảng kê không phải chỗ sửa việc đó.
+    cur.kind = cur.kind ?? l.kind
+    // Vị trí lắp ráp gộp qua mọi SP, bỏ trùng: cùng một con vít thường bắt vào
+    // cùng một chỗ ở nhiều sản phẩm cùng dòng.
+    for (const p of l.part_names) {
+      if (!cur.positions!.includes(p)) cur.positions!.push(p)
+    }
     cur.from_products = [
       ...(cur.from_products ?? []),
       {
@@ -148,6 +175,7 @@ export async function loadLsxBangKe(
       qty_issued: 0,
       qty_remaining: 0,
       source: 'components' as const,
+      kind: byMat.get(c.material_id)?.kind ?? null,
       incomplete: c.incomplete,
       from_products: byMat.get(c.material_id)?.from_products ?? [],
     })
@@ -164,6 +192,7 @@ export async function loadLsxBangKe(
   const poIds = live.map((p) => p.id)
   const poById = new Map(live.map((p) => [p.id, p]))
   type L = {
+    id: string
     po_id: string
     material_id: string | null
     qty_ordered: unknown
@@ -173,10 +202,21 @@ export async function loadLsxBangKe(
     poIds.length > 0
       ? await db()
           .from('supply_po_line_status')
-          .select('po_id, material_id, qty_ordered, qty_received')
+          .select('id, po_id, material_id, qty_ordered, qty_received')
           .in('po_id', poIds)
       : { data: [] as L[] }
   const lines = ((lineRows ?? []) as L[]).filter((l) => l.material_id)
+  /*
+    CHIA SL THEO LỆNH (0185). Một đơn mua chung cho nhiều lệnh thì mỗi lệnh chỉ
+    được tính PHẦN CỦA MÌNH — trước đây cả hai lệnh đều nhận trọn số trên đơn
+    (đo trên PO-2026-0065: đơn 1.350 tấm, bảng kê lệnh 08 và 09 đều ghi 1.350),
+    nên "còn phải đặt" bị trừ thừa và người mua đặt thiếu.
+
+    Dòng chưa chia = 100% thuộc LSX chính. Với lệnh PHỤ thì phần đó là 0 — và
+    đó là lúc phải NÓI RA (chuaChia bên dưới), không im lặng cho ra 0.
+  */
+  const splits = await posRepo.lineSplitsByPoIds(poIds)
+  const chuaChia: { po_code: string; lsx_chinh: string | null }[] = []
 
   const matIds = [
     ...new Set([
@@ -238,8 +278,24 @@ export async function loadLsxBangKe(
     const p = poById.get(l.po_id)
     if (!p) continue
     const f = factOf(l.material_id!)
-    const qtyOrdered = Number(l.qty_ordered) || 0
-    const qtyReceived = Number(l.qty_received) || 0
+    const phan = splits.get(l.id) ?? []
+    const qtyOrdered = qtyForLsx(lsxId, {
+      qty_ordered: Number(l.qty_ordered) || 0,
+      main_lsx_id: p.production_order_id ?? null,
+      allocations: phan,
+    })
+    // Tỉ lệ dùng chung cho SL đã nhận: hàng về của một dòng chia cho các lệnh
+    // theo đúng tỉ lệ đã chia, không thể chia kiểu khác mà vẫn cộng đủ.
+    const tyLe =
+      Number(l.qty_ordered) > 0 ? qtyOrdered / (Number(l.qty_ordered) || 1) : 0
+    const qtyReceived = (Number(l.qty_received) || 0) * tyLe
+    if (
+      phan.length === 0 &&
+      (p.production_order_id ?? null) !== lsxId &&
+      !chuaChia.some((c) => c.po_code === p.code)
+    ) {
+      chuaChia.push({ po_code: p.code, lsx_chinh: p.lsx_code ?? null })
+    }
     if (p.status === 'draft') f.draft += qtyOrdered
     if ((RECEIVABLE as readonly string[]).includes(p.status) || p.status === 'received') {
       f.received += qtyReceived
@@ -265,6 +321,7 @@ export async function loadLsxBangKe(
   }
 
   const rows = buildBangKe({ needs, manual, facts, includeDraft })
+  await enrichRows(rows)
   const groups = [
     ...new Set(rows.map((r) => r.group_name).filter((g): g is string => !!g)),
   ].sort((a, b) => a.localeCompare(b, 'vi'))
@@ -293,11 +350,62 @@ export async function loadLsxBangKe(
     })),
     products: bom.products,
     manual_error: manualRes.error,
+    unsplit_pos: chuaChia,
     need_source:
       needs.length === 0
         ? 'none'
         : needs.some((n) => n.source === 'components')
           ? 'components'
           : 'bom',
+  }
+}
+
+/**
+ * BƠM QUY CÁCH + GIÁ MUA GẦN NHẤT vào các dòng bảng kê.
+ *
+ * Hai thứ này không thuộc phép tính "cần bao nhiêu" nên không nằm trong
+ * `buildBangKe` (hàm thuần, có test riêng) — chúng chỉ là dữ kiện tra thêm để
+ * người mua khỏi phải mở tab khác: đi hỏi giá cần QUY CÁCH, ước tiền và biết
+ * gọi ai cần GIÁ và TÊN NCC của lần mua gần nhất.
+ *
+ * Hỏng thì NUỐT LỖI: bảng kê vẫn phải mở được khi tra giá lỗi — đây là thông
+ * tin phụ, không phải số để mua.
+ */
+async function enrichRows(rows: BangKeRow[]): Promise<void> {
+  const ids = rows.map((r) => r.material_id).filter(Boolean)
+  if (ids.length === 0) return
+  try {
+    const [specs, prices] = await Promise.all([
+      db().from('warehouse_materials').select('id, spec, sub_group').in('id', ids),
+      pricesRepo.lastPurchases(ids),
+    ])
+    const infoById = new Map(
+      (specs.data ?? []).map((m) => [
+        m.id as string,
+        {
+          spec: (m.spec as string | null) ?? null,
+          sub_group: (m.sub_group as string | null) ?? null,
+        },
+      ]),
+    )
+    const priceById = new Map(prices.map((p) => [p.material_id, p]))
+    for (const r of rows) {
+      const info = infoById.get(r.material_id)
+      r.spec = info?.spec ?? null
+      r.sub_group = info?.sub_group ?? null
+      const p = priceById.get(r.material_id)
+      r.last_price = p
+        ? {
+            unit_price: p.unit_price,
+            currency: p.currency,
+            supplier_id: p.supplier_id,
+            supplier_name: p.supplier_name,
+            po_code: p.po_code,
+            at: p.at,
+          }
+        : null
+    }
+  } catch {
+    // Không có giá/quy cách thì bảng vẫn dùng được — cột để trống.
   }
 }

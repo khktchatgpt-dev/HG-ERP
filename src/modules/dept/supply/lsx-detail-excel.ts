@@ -2,7 +2,33 @@ import ExcelJS from 'exceljs'
 import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
-import { BANG_KE_STATUS, type BangKeRow } from '@/lib/lsx-bang-ke'
+import {
+  BANG_KE_STATUS,
+  NCC_CHUA_BIET,
+  estimateByCurrency,
+  groupBySupplier,
+  groupForBangKe,
+  viTriLapRap,
+  type BangKeRow,
+} from '@/lib/lsx-bang-ke'
+import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
+import {
+  MONEY_FMT,
+  PCT_FMT,
+  applyWidths,
+  dateCell,
+  dateCols,
+  finishTable,
+  groupRow,
+  headerRow,
+  hideEmptyCols,
+  noteRow,
+  numberCells,
+  numberCols,
+  stampWorkbook,
+  titleRow,
+  totalRow,
+} from './excel-kit'
 
 /**
  * HỒ SƠ CUNG ỨNG MỘT LỆNH — file Excel đi từ LỆNH xuống từng ĐƠN rồi từng DÒNG
@@ -76,6 +102,11 @@ export type LsxDetailReport = {
   }
 }
 
+/** Vị trí lắp ráp gộp vào ghi chú — xem chú thích ở chỗ dựng dòng. */
+const viTri = (r: BangKeRow): string => {
+  const v = viTriLapRap(r)
+  return v.length > 0 ? `Lắp: ${v.join(', ')}` : ''
+}
 
 /** Nguồn số "Cần" — cùng chữ với màn hình để đọc file không phải đoán. */
 const NGUON: Record<BangKeRow['source'], string> = {
@@ -86,21 +117,13 @@ const NGUON: Record<BangKeRow['source'], string> = {
   none: 'Ngoài định mức',
 }
 
+/**
+ * Ngày dạng CHỮ — chỉ dùng cho khối "nhãn: giá trị" ở đầu sheet, nơi ô là một
+ * câu chứ không phải một cột. Trong BẢNG thì dùng `dateCell` để ra ô ngày thật
+ * (sắp/lọc/trừ ngày được).
+ */
 const fmtD = (d: string | null) =>
   d ? new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString('vi-VN') : ''
-
-const ACCENT = 'FFEEF1FC'
-
-function headerRow(ws: ExcelJS.Worksheet, cols: string[]): ExcelJS.Row {
-  const head = ws.addRow(cols)
-  head.font = { bold: true }
-  head.eachCell((c) => {
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ACCENT } }
-    c.border = { bottom: { style: 'thin' } }
-    c.alignment = { vertical: 'middle', wrapText: true }
-  })
-  return head
-}
 
 /** Dòng "Nhãn | giá trị" cho khối đầu sheet. */
 function kv(ws: ExcelJS.Worksheet, label: string, value: ExcelJS.CellValue): void {
@@ -154,15 +177,26 @@ export async function buildLsxDetailExcel(
 ): Promise<Buffer> {
   const { lsx, risk, today } = report
   const wb = new ExcelJS.Workbook()
+  stampWorkbook(
+    wb,
+    kind === 'bangke'
+      ? `Bảng kê vật tư — LSX ${lsx.code}`
+      : `Hồ sơ cung ứng — LSX ${lsx.code}`,
+  )
   const taken = new Set<string>()
 
   // ── Sheet 1: LỆNH ──────────────────────────────────────────────────────
   const s1 = wb.addWorksheet(sheetName('Lệnh', lsx.code, taken))
   s1.getColumn(1).width = 24
   s1.getColumn(2).width = 60
-  const title = s1.addRow([`HỒ SƠ CUNG ỨNG — LSX ${lsx.code}`])
-  title.font = { bold: true, size: 14 }
-  s1.addRow([`Ngày lập: ${fmtD(today)}`])
+  titleRow(
+    s1,
+    kind === 'bangke'
+      ? `BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`
+      : `HỒ SƠ CUNG ỨNG — LSX ${lsx.code}`,
+    14,
+  )
+  noteRow(s1, `Ngày lập: ${fmtD(today)}`)
   s1.addRow([])
   kv(s1, 'Khách hàng', lsx.customer_name)
   kv(s1, 'Đơn hàng', lsx.order_codes.join(', '))
@@ -197,6 +231,8 @@ export async function buildLsxDetailExcel(
   }
   s1.getColumn(3).width = 14
   s1.getColumn(4).width = 10
+  // Sheet bìa: hai bảng nhỏ nên không bật lọc, chỉ đặt trang in cho gọn.
+  s1.pageSetup = { paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
 
   // ── Sheet 2: BẢNG KÊ VẬT TƯ (khuôn "BK thép" của phòng) ───────────────
   // Đặt TRƯỚC sheet đơn mua: câu hỏi đầu tiên của người mua là "còn phải đặt
@@ -204,25 +240,73 @@ export async function buildLsxDetailExcel(
   if (kind === 'bangke' && report.bangKe && report.bangKe.rows.length > 0) {
     const bk = report.bangKe
     const sb = wb.addWorksheet('Bảng kê VT')
-    const t = sb.addRow([`BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`])
-    t.font = { bold: true, size: 13 }
-    sb.addRow([
+    titleRow(sb, `BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`)
+    noteRow(
+      sb,
       bk.include_draft
         ? 'ĐANG TÍNH CẢ ĐỊNH MỨC CHƯA XÁC NHẬN — số Cần chỉ để tham khảo, không gửi đơn theo bản này.'
         : 'Chỉ tính định mức đã được Kỹ thuật xác nhận.',
-    ]).font = { bold: !bk.include_draft ? false : true }
+      bk.include_draft ? 'warn' : 'muted',
+    )
+    noteRow(
+      sb,
+      // Ghép bằng filter(Boolean): lệnh chưa có ngày xuất thì đừng in "· ngày
+      // xuất ·" với khoảng trống ở giữa — nhìn như file lỗi.
+      [
+        lsx.customer_name,
+        lsx.ship_date ? `ngày xuất ${fmtD(lsx.ship_date)}` : null,
+        `hạn vật tư ${fmtD(lsx.materials_due_at) || 'chưa đặt'}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    )
+    /*
+      CỘT KHÔNG NÓI THÊM GÌ THÌ ĐỪNG BÀY (user 07/09/2026, sau khi nhìn bản in).
+
+      Hai kiểu vô ích khác nhau:
+        · cột chỉ có MỘT giá trị cho cả bảng ("Tình trạng" = Chưa đặt ở 105/105
+          dòng) — nó là một câu về CẢ LỆNH, không phải một cột;
+        · cột TRÙNG KHÍT một cột khác ("Trong đó: chưa xác nhận" = "Cần" từng
+          dòng, vì chưa SP nào được xác nhận BOM).
+
+      Cả hai đều ẨN cột và nói giá trị đó một lần trên đầu sheet — giấu luôn thì
+      người đọc mất thông tin, còn bày ra là 105 dòng chép lại một câu.
+
+      KHÔNG nhét chúng vào cột Ghi chú: Ghi chú là chỗ NGƯỜI DÙNG viết, trộn
+      nhãn máy vào đó thì hai thứ đè nhau; và khi lệnh có SP đã xác nhận BOM,
+      mấy cột này lại khác nhau từng dòng và trở nên đáng đọc.
+    */
+    const motGiaTri = (lay: (r: BangKeRow) => string): string | null => {
+      const v = new Set(bk.rows.map(lay))
+      return v.size === 1 ? [...v][0] : null
+    }
+    const anTinhTrang = motGiaTri((r) => BANG_KE_STATUS[r.status].label)
+    const anNguon = motGiaTri((r) => NGUON[r.source])
+    const anChuaXacNhan =
+      bk.rows.length > 0 && bk.rows.every((r) => r.draft_needed === r.qty_needed)
+    const daAn = [
+      anTinhTrang ? `Tình trạng: ${anTinhTrang}` : null,
+      anNguon ? `Nguồn số Cần: ${anNguon}` : null,
+      anChuaXacNhan ? 'Trong đó chưa xác nhận: đúng bằng cột Cần' : null,
+    ].filter(Boolean)
+    if (daAn.length > 0) {
+      noteRow(sb, `Cả bảng giống nhau nên đã ẩn cột — ${daAn.join(' · ')}`)
+    }
     if (bk.unconfirmed_products.length > 0) {
-      sb.addRow([
+      noteRow(
+        sb,
         `${bk.unconfirmed_products.length} sản phẩm có định mức nhưng chưa xác nhận BOM: ` +
           bk.unconfirmed_products.map((p) => p.code).join(', '),
-      ])
+        'warn',
+      )
     }
     sb.addRow([])
-    headerRow(sb, [
+    const bkHead = headerRow(sb, [
       'STT',
-      'Nhóm vật tư',
       'Mã VT',
       'Tên vật tư',
+      // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
+      'Quy cách',
       'ĐVT',
       'Cần',
       // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
@@ -234,61 +318,259 @@ export async function buildLsxDetailExcel(
       'Nháp/chờ ký',
       'Đã về',
       'Còn phải đặt',
+      // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
+      // ước được tiền và biết gọi ai mà không phải mở tab khác.
+      'Đơn giá gần nhất',
+      'Tiền tệ',
+      'Tạm tính',
+      'Mua lần cuối',
+      'NCC đã mua',
       'Tình trạng',
       'Nguồn số Cần',
       'Đơn mua',
       'Ghi chú',
     ])
     let i = 0
-    for (const r of bk.rows) {
-      i++
-      sb.addRow([
-        i,
-        r.group_name ?? '',
-        r.material_code,
-        r.material_name,
-        r.unit,
-        r.qty_needed,
-        r.draft_needed || '',
-        r.qty_issued || '',
-        r.available,
-        r.ordered,
-        r.draft + r.pending || '',
-        r.received || '',
-        r.suggest,
-        BANG_KE_STATUS[r.status].label,
-        NGUON[r.source],
-        r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
-        r.note ?? '',
-      ])
+    const nCot = bkHead.cellCount
+    /*
+      DÒNG TIÊU ĐỀ KHỐI thay cho hai cột "Loại" + "Nhóm vật tư" lặp ở mọi dòng.
+      Chép "Bu lông - vít - đinh - liên kết" xuống 100 dòng làm tờ giấy đọc như
+      một bức tường chữ; sổ tay của phòng dùng dòng tiêu đề khối cho danh sách
+      dài (file LSX 06.26.27). Chia khối bằng ĐÚNG hàm lõi mà màn hình dùng.
+    */
+    for (const sec of groupForBangKe(bk.rows, partGroupLabel, partGroupRank)) {
+      groupRow(
+        sb,
+        `${sec.name.toUpperCase()} · ${sec.rows.length} mã${sec.short > 0 ? ` · ${sec.short} mã còn phải đặt` : ''}`,
+        nCot,
+      )
+      for (const sub of sec.subs) {
+        if (sub.name)
+          groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
+        for (const r of sub.rows) {
+          i++
+          // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
+          // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
+          sb.addRow([
+            i,
+            r.material_code,
+            r.material_name,
+            r.spec ?? '',
+            r.unit,
+            r.qty_needed,
+            r.draft_needed,
+            r.qty_issued,
+            r.available,
+            r.ordered,
+            r.draft + r.pending,
+            r.received,
+            r.suggest,
+            r.last_price?.unit_price ?? '',
+            r.last_price?.currency ?? '',
+            r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
+            dateCell(r.last_price?.at ?? null),
+            r.last_price?.supplier_name ?? '',
+            BANG_KE_STATUS[r.status].label,
+            NGUON[r.source],
+            r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
+            /*
+              VỊ TRÍ LẮP RÁP nằm trong GHI CHÚ, không đứng riêng một cột.
+              Nguồn của nó là `part_name` — TÊN CHI TIẾT trong định mức, không
+              phải một trường vị trí thật: với khung/gỗ thì tên chi tiết tình cờ
+              mô tả vị trí ("Giang mặt cánh"), còn ngũ kim thì Kỹ thuật đặt tên
+              chi tiết bằng chính tên vật tư nên rỗng nghĩa. Đo 20 lệnh: chỉ
+              23/294 dòng (8%) có vị trí thật — giữ nguyên một cột cho thứ trống
+              92% thời gian là chép khuôn tờ giấy chứ không theo thực tế.
+            */
+            [r.note, viTri(r)].filter(Boolean).join(' · '),
+          ])
+        }
+      }
     }
-    for (const c of [6, 7, 8, 9, 10, 11, 12, 13]) sb.getColumn(c).numFmt = '#,##0.##'
-    sb.columns.forEach((c, k) => {
-      c.width =
-        [5, 22, 16, 38, 7, 11, 12, 10, 12, 10, 12, 10, 13, 18, 20, 30, 24][k] ?? 14
+    const bkLast = sb.rowCount
+    // Dòng tổng: "bao nhiêu mã còn phải đặt" và "hết bao nhiêu tiền" là hai con
+    // số người đọc mang đi làm việc tiếp — đừng bắt họ tự lọc rồi cộng tay.
+    // Tiền gộp THEO TỪNG TIỀN TỆ: bảng có cả mã mua VND lẫn USD.
+    totalRow(
+      sb,
+      `Cộng ${bk.rows.length} mã · ${bk.rows.filter((r) => r.suggest > 0).length} mã còn phải đặt`,
+      {},
+      2,
+    )
+    const uocTien = estimateByCurrency(bk.rows)
+    for (const [cur, tien] of uocTien) {
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 15: cur, 16: tien }, 2)
+    }
+    const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
+    if (chuaCoGia > 0) {
+      noteRow(
+        sb,
+        `${chuaCoGia} mã còn phải đặt CHƯA có giá mua lần nào — tiền tạm tính ở trên chưa gồm những mã đó.`,
+        'warn',
+      )
+    }
+    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13])
+    numberCols(sb, [14], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [16], MONEY_FMT)
+    // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
+    // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
+    numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14], {
+      from: bkHead.number + 1,
+      to: bkLast,
+      digits: 4,
     })
-    sb.views = [{ state: 'frozen', xSplit: 4, ySplit: bk.unconfirmed_products.length > 0 ? 5 : 4 }]
+    // Cột nào cả lệnh không có số thì ẩn — xem hideEmptyCols.
+    hideEmptyCols(sb, [7, 8, 9, 10, 11, 14, 15, 16, 17, 18], {
+      from: bkHead.number + 1,
+      to: bkLast,
+    })
+    if (anChuaXacNhan) sb.getColumn(7).hidden = true
+    if (anTinhTrang) sb.getColumn(19).hidden = true
+    if (anNguon) sb.getColumn(20).hidden = true
+    dateCols(sb, [17])
+    applyWidths(
+      sb,
+      [
+        5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18,
+        28, 30,
+      ],
+    )
+    // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
+    // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
+    for (const c of [22, 23]) {
+      sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+    }
+    // Lọc tự động TẮT: bảng có dòng tiêu đề khối, lọc sẽ giấu mất chúng và
+    // người đọc mất ngữ cảnh. Muốn lọc thì lọc trên màn hình.
+    finishTable(sb, {
+      head: bkHead,
+      lastRow: bkLast,
+      freezeCols: 3,
+      autoFilter: false,
+    })
 
     if (bk.blocked.length > 0) {
       sb.addRow([])
       sb.addRow([
         `CHƯA QUY ĐỔI ĐƯỢC SANG ĐƠN VỊ MUA (${bk.blocked.length} dòng định mức) — số của những dòng này KHÔNG nằm trong bảng trên`,
       ]).font = { bold: true }
-      headerRow(sb, ['Mã VT', 'Tên vật tư', 'ĐVT mua', 'Sản phẩm', 'Chi tiết', 'Vì sao chưa tính được'])
+      headerRow(sb, [
+        'Mã VT',
+        'Tên vật tư',
+        'ĐVT mua',
+        'Sản phẩm',
+        'Chi tiết',
+        'Vì sao chưa tính được',
+      ])
       for (const b of bk.blocked) {
-        sb.addRow([b.material_code, b.material_name, b.unit, b.product_code, b.part_name, b.reason])
+        sb.addRow([
+          b.material_code,
+          b.material_name,
+          b.unit,
+          b.product_code,
+          b.part_name,
+          b.reason,
+        ])
       }
+    }
+
+    // ── Sheet: ĐẶT CHO AI (nửa phải sổ tay của phòng) ────────────────────
+    /*
+      Sheet này là bảng CẮT ĐƠN: mỗi khối một nhà cung cấp, đúng khuôn nửa phải
+      sheet BKVT của phòng ("STT | NCC | Tên vật tư | ĐVT | Tổng SL cần đặt").
+      Sheet "Bảng kê VT" trả lời "còn thiếu gì", sheet này trả lời "gọi ai, mỗi
+      người bao nhiêu" — hai câu khác nhau nên hai tờ khác nhau, không nhét
+      chung rồi bắt người đọc tự lọc.
+
+      Cắt khối bằng ĐÚNG hàm lõi mà màn hình dùng, để file và màn không chia đơn
+      khác nhau.
+    */
+    const khoiNcc = groupBySupplier(bk.rows)
+    if (khoiNcc.length > 0) {
+      const sn = wb.addWorksheet('Đặt cho ai')
+      titleRow(sn, `ĐẶT CHO AI — LSX ${lsx.code}`)
+      noteRow(
+        sn,
+        'Chỉ những mã CÒN PHẢI ĐẶT. Nhà cung cấp lấy theo lần mua gần nhất của chính mã đó.',
+      )
+      sn.addRow([])
+      const nHead = headerRow(sn, [
+        'STT',
+        'Mã VT',
+        'Tên vật tư',
+        'Quy cách',
+        'ĐVT',
+        'Còn thiếu',
+        'Đơn giá gần nhất',
+        'Tiền tệ',
+        'Tạm tính',
+        'Mua lần cuối',
+        'Đơn gần nhất',
+      ])
+      let k = 0
+      const nCotN = nHead.cellCount
+      for (const b of khoiNcc) {
+        // Tên NCC dài ("CÔNG TY TNHH SX & TM DV TÂN THÀNH LONG") lặp ở mọi dòng
+        // thì ô phải wrap thành hai hàng và cả bảng cao gấp đôi — đưa lên dòng
+        // tiêu đề khối, đọc như một tờ đơn.
+        groupRow(sn, `${b.supplier_name} · ${b.rows.length} mã`, nCotN)
+        for (const r of b.rows) {
+          k++
+          sn.addRow([
+            k,
+            r.material_code,
+            r.material_name,
+            r.spec ?? '',
+            r.unit,
+            r.suggest,
+            r.last_price?.unit_price ?? '',
+            r.last_price?.currency ?? '',
+            r.last_price ? r.suggest * r.last_price.unit_price : '',
+            dateCell(r.last_price?.at ?? null),
+            r.last_price?.po_code ?? '',
+          ])
+        }
+        // Cộng theo TỪNG khối: đây là số tiền của một tờ đơn, người ký nhìn nó.
+        for (const [cur, tien] of b.tien) {
+          totalRow(sn, `Cộng (${cur})`, { 8: cur, 9: tien }, 2)
+        }
+        if (b.tien.size === 0) totalRow(sn, 'Cộng — chưa mã nào có giá', {}, 2)
+        // Một dòng trống giữa hai tờ đơn: khối này hết, khối sau bắt đầu.
+        sn.addRow([])
+      }
+      const chuaBiet = khoiNcc.find((b) => b.supplier_name === NCC_CHUA_BIET)
+      if (chuaBiet) {
+        sn.addRow([])
+        noteRow(
+          sn,
+          `${chuaBiet.rows.length} mã chưa mua lần nào nên chưa biết gọi ai — phải đi hỏi giá trước, và tiền tạm tính ở các khối trên không gồm chúng.`,
+          'warn',
+        )
+      }
+      numberCols(sn, [6, 7])
+      numberCols(sn, [8], '#,##0.####;-#,##0.####;""')
+      numberCols(sn, [10], MONEY_FMT)
+      numberCells(sn, [6, 7, 8, 10], {
+        from: nHead.number + 1,
+        to: sn.rowCount,
+        digits: 4,
+      })
+      dateCols(sn, [11])
+      applyWidths(sn, [5, 15, 40, 20, 7, 12, 12, 13, 8, 15, 12, 16])
+      finishTable(sn, { head: nHead, freezeCols: 3, autoFilter: false })
     }
 
     // ── Sheet phụ: VẬT TƯ DÙNG CHO SẢN PHẨM NÀO ──────────────────────────
     const rowsWithProducts = bk.rows.filter((r) => r.from_products.length > 0)
     if (rowsWithProducts.length > 0) {
       const sp = wb.addWorksheet('Phân bổ theo SP')
-      const tt = sp.addRow([`VẬT TƯ DÙNG CHO SẢN PHẨM NÀO — LSX ${lsx.code}`])
-      tt.font = { bold: true, size: 13 }
-      sp.addRow(['Cột "Định mức/SP" đã quy đổi sang đơn vị mua; cột "Cách tính" nói rõ phép quy đổi.'])
+      titleRow(sp, `VẬT TƯ DÙNG CHO SẢN PHẨM NÀO — LSX ${lsx.code}`)
+      noteRow(
+        sp,
+        'Cột "Định mức/SP" đã quy đổi sang đơn vị mua; cột "Cách tính" nói rõ phép quy đổi.',
+      )
       sp.addRow([])
-      headerRow(sp, [
+      const spHead = headerRow(sp, [
         'Mã VT',
         'Tên vật tư',
         'ĐVT',
@@ -316,11 +598,17 @@ export async function buildLsxDetailExcel(
           ])
         }
       }
-      for (const c of [6, 7, 8]) sp.getColumn(c).numFmt = '#,##0.####'
-      sp.columns.forEach((c, k) => {
-        c.width = [16, 34, 7, 16, 34, 12, 12, 16, 32, 16][k] ?? 14
+      numberCols(sp, [6, 7, 8], '#,##0.####;-#,##0.####;""')
+      numberCells(sp, [6, 7, 8], {
+        from: spHead.number + 1,
+        to: sp.rowCount,
+        digits: 4,
       })
-      sp.views = [{ state: 'frozen', ySplit: 4 }]
+      applyWidths(sp, [16, 34, 7, 16, 34, 12, 12, 16, 32, 16])
+      for (const c of [2, 5, 9]) {
+        sp.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+      }
+      finishTable(sp, { head: spHead, freezeCols: 1 })
     }
   }
 
@@ -331,7 +619,7 @@ export async function buildLsxDetailExcel(
 
   // ── Sheet 2: ĐƠN MUA CỦA LỆNH (khuôn Thao_THĐH) ───────────────────────
   const s2 = wb.addWorksheet('Đơn mua')
-  headerRow(s2, [
+  const s2Head = headerRow(s2, [
     'STT',
     'Số đơn',
     'Nhà cung cấp',
@@ -364,9 +652,9 @@ export async function buildLsxDetailExcel(
       p.supplier_name,
       p.supplier_doc_no ?? '',
       p.material_group ?? '',
-      fmtD(p.ordered_at),
-      fmtD(p.expected_at),
-      fmtD(p.received_at),
+      dateCell(p.ordered_at),
+      dateCell(p.expected_at),
+      dateCell(p.received_at),
       statusLabel(p.status),
       hanhDong(p),
       p.line_count,
@@ -384,14 +672,39 @@ export async function buildLsxDetailExcel(
     ])
   }
   if (stt === 0) s2.addRow(['— Lệnh chưa có đơn mua nào —'])
-  s2.getColumn(14).numFmt = '0%'
-  for (const c of [12, 13, 16, 17, 18]) s2.getColumn(c).numFmt = '#,##0.##'
-  s2.columns.forEach((c, i) => {
-    c.width =
-      [5, 16, 26, 14, 14, 11, 11, 11, 14, 28, 8, 10, 11, 8, 9, 14, 13, 13, 7, 16, 16, 28][
-        i
-      ] ?? 14
-  })
+  const s2Last = s2.rowCount
+  if (stt > 0) {
+    // Cộng tiền THEO TỪNG TIỀN TỆ — cộng thẳng VND với USD là ra một con số
+    // không có nghĩa gì. Đơn nhiều tiền tệ thì bày mỗi loại một dòng.
+    const byCur = new Map<string, { amount: number; paid: number }>()
+    for (const p of lsx.pos) {
+      const cur = byCur.get(p.currency) ?? { amount: 0, paid: 0 }
+      cur.amount += p.amount
+      cur.paid += p.paid
+      byCur.set(p.currency, cur)
+    }
+    for (const [cur, v] of byCur) {
+      totalRow(
+        s2,
+        `Cộng tiền (${cur})`,
+        { 16: v.amount, 17: v.paid, 18: v.amount - v.paid, 19: cur },
+        3,
+      )
+    }
+  }
+  numberCols(s2, [14], PCT_FMT)
+  numberCols(s2, [12, 13])
+  numberCols(s2, [16, 17, 18], MONEY_FMT)
+  numberCells(s2, [12, 13], { from: s2Head.number + 1, to: s2Last })
+  dateCols(s2, [6, 7, 8])
+  applyWidths(
+    s2,
+    [5, 16, 26, 14, 14, 11, 11, 11, 14, 28, 8, 10, 11, 8, 9, 14, 13, 13, 7, 16, 16, 28],
+  )
+  for (const c of [3, 10, 21, 22]) {
+    s2.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+  }
+  finishTable(s2, { head: s2Head, lastRow: s2Last, freezeCols: 2 })
 
   // ── Sheet 3..n: TỪNG ĐƠN, từng dòng vật tư, nhận theo đợt ─────────────
   for (const p of lsx.pos) {
@@ -399,9 +712,8 @@ export async function buildLsxDetailExcel(
     const lines = report.lines[p.id] ?? []
     const batches = report.batches[p.id] ?? []
 
-    const t = ws.addRow([`ĐƠN ĐẶT HÀNG ${p.code} — ${p.supplier_name}`])
-    t.font = { bold: true, size: 13 }
-    ws.addRow([`Cho LSX ${lsx.code} · ${lsx.customer_name}`])
+    titleRow(ws, `ĐƠN ĐẶT HÀNG ${p.code} — ${p.supplier_name}`)
+    noteRow(ws, `Cho LSX ${lsx.code} · ${lsx.customer_name}`)
     kv(ws, 'Số ĐH của NCC', p.supplier_doc_no ?? '')
     kv(ws, 'Trạng thái', statusLabel(p.status))
     kv(ws, 'Ngày đặt', fmtD(p.ordered_at))
@@ -469,32 +781,45 @@ export async function buildLsxDetailExcel(
         l.unit_price != null ? l.unit_price * l.qty_ordered : '',
         ...perBatch,
         l.qty_received,
-        l.qty_rejected || '',
+        l.qty_rejected,
         l.qty_missing,
         ketLuan,
-        fmtD(l.last_received_at),
+        dateCell(l.last_received_at),
         l.note ?? '',
       ])
     }
     if (lines.length === 0) ws.addRow(['— Đơn chưa có dòng vật tư —'])
-    else {
-      // Tổng cộng — chỉ cộng cột tiền và các cột số lượng cùng đơn vị đếm là
-      // vô nghĩa (500 con + 3 kg), nên chỉ SUM tiền.
-      const total = ws.addRow([])
-      total.getCell(3).value = 'Cộng tiền hàng'
-      total.getCell(3).font = { bold: true }
-      total.getCell(10).value = lines.reduce(
-        (s, l) => s + (l.unit_price != null ? l.unit_price * l.qty_ordered : 0),
-        0,
+    const lineLast = ws.rowCount
+    if (lines.length > 0) {
+      // Tổng cộng — cộng các cột số lượng khác đơn vị đếm là vô nghĩa (500 con
+      // + 3 kg), nên chỉ SUM tiền.
+      totalRow(
+        ws,
+        `Cộng tiền hàng (${p.currency})`,
+        {
+          10: lines.reduce(
+            (s, l) => s + (l.unit_price != null ? l.unit_price * l.qty_ordered : 0),
+            0,
+          ),
+        },
+        3,
       )
-      total.getCell(10).font = { bold: true }
     }
-    ws.getColumn(9).numFmt = '#,##0.##'
-    ws.getColumn(10).numFmt = '#,##0'
-    ws.columns.forEach((c, k) => {
-      c.width = [5, 14, 34, 22, 7, 9, 9, 7, 12, 14][k] ?? 12
-    })
-    ws.views = [{ state: 'frozen', xSplit: 3, ySplit: head.number }]
+    const nCols = head.cellCount
+    numberCols(ws, [6, 7])
+    numberCols(ws, [9], '#,##0.##')
+    numberCols(ws, [10], MONEY_FMT)
+    // Cột đợt nhận + tổng nhận/loại/thiếu: từ 11 tới hết, trừ ba cột chữ cuối.
+    numberCols(
+      ws,
+      Array.from({ length: nCols - 3 - 10 }, (_, k) => 11 + k),
+    )
+    dateCols(ws, [nCols - 1])
+    applyWidths(ws, [5, 14, 34, 22, 7, 9, 9, 7, 12, 14], 12)
+    for (const c of [3, 4, nCols]) {
+      ws.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+    }
+    finishTable(ws, { head, lastRow: lineLast, freezeCols: 3 })
   }
 
   const out = await wb.xlsx.writeBuffer()

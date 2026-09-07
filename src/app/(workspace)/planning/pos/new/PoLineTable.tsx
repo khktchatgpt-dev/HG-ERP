@@ -2,18 +2,26 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
-import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
+import { splitProblem } from '@/lib/po-lsx-split'
+import {
+  deriveLine,
+  poTemplateMeta,
+  suggestOrderQty,
+  type PoTemplate,
+} from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { GridCellInput, GridCellNumber } from '@/components/erp/GridCell'
+import { GridCellInput, GridCellNumber, GridCellSelect } from '@/components/erp/GridCell'
 import { Button } from '@/components/shadcn/button'
 import { cn } from '@/lib/utils'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
 import { AutoGrowCell, LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
 import {
   cartonPriceSuggest,
+  draftOf,
   lineAmount,
   lineProblem,
   lineQty2,
+  splitPayload,
   type Line,
   type Num,
 } from './po-line'
@@ -119,6 +127,7 @@ export function PoLineTable({
   suggestions,
   capLeft,
   currency,
+  lsxsOfPo = [],
   onPatch,
   onRemove,
   onSaveToCatalog,
@@ -132,6 +141,11 @@ export function PoLineTable({
   capLeft?: Map<string, number>
   lines: Line[]
   currency: string
+  /**
+   * Các lệnh của đơn (chính + phụ). CHỈ khi có từ 2 lệnh mới hiện cột chia SL —
+   * đơn một lệnh thì cả dòng đương nhiên thuộc lệnh đó.
+   */
+  lsxsOfPo?: { id: string; code: string }[]
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
   onSaveToCatalog?: (
@@ -145,6 +159,12 @@ export function PoLineTable({
   onDoneRow?: () => void
 }) {
   const meta = poTemplateMeta(template)
+  /*
+    CHIA SL THEO LỆNH (0185): một đơn mua chung cho nhiều lệnh thì mỗi dòng phải
+    nói phần nào của lệnh nào — không thì bảng kê của cả hai lệnh cùng nhận trọn
+    số trên đơn. Đơn một lệnh không cần cột này.
+  */
+  const chiaTheoLenh = lsxsOfPo.length > 1
   const cols = PO_FIELDS[template]
   const priceLabel = meta.priceUnit ? `Đơn giá / ${meta.priceUnit}` : 'Đơn giá'
   const calcCol = cols.find((c) => c.kind === 'calc')
@@ -301,6 +321,15 @@ export function PoLineTable({
               <InputDot />
               {priceLabel}
             </th>
+            {chiaTheoLenh && (
+              <th
+                className={`${thBase} text-right`}
+                style={{ minWidth: 96 * lsxsOfPo.length, zIndex: 3 }}
+              >
+                <InputDot />
+                Chia cho lệnh
+              </th>
+            )}
             {calcCol && (
               <th className={`${thBase} text-right`} style={{ ...COL.calc, zIndex: 3 }}>
                 {calcCol.label}
@@ -387,6 +416,37 @@ export function PoLineTable({
               const qtyPacks = l.qty !== '' ? packCount(Number(l.qty), l.pack_size) : null
               const cap = capLeft?.get(l.material_id)
               const goiY = cartonPriceSuggest(template, l)
+              // Dòng có quy đổi thì mới có chuyện "giá theo cây hay theo kg".
+              const dan = deriveLine(template, draftOf(l))
+              const qty2 = dan.qty2
+              const unit2 = dan.unit2
+              const basisMacDinh = deriveLine(template, {
+                ...draftOf(l),
+                price_per: null,
+              }).price_basis
+              /*
+                Giá tương đương ở đơn vị CÒN LẠI — chỉ dựng khi có đủ SL, giá và
+                số quy đổi; thiếu một thứ thì phép chia ra vô nghĩa.
+              */
+              const soLuong = l.qty === '' ? 0 : Number(l.qty)
+              const donGia = l.price === '' ? 0 : Number(l.price)
+              const loiChia = chiaTheoLenh
+                ? splitProblem(l.qty === '' ? 0 : Number(l.qty), splitPayload(l))
+                : null
+              const quyDoi =
+                qty2 != null && qty2 > 0 && soLuong > 0 && donGia > 0 && unit2
+                  ? dan.price_basis === 'unit2'
+                    ? {
+                        gia: roundMoney((donGia * qty2) / soLuong, currency),
+                        nhan: l.unit,
+                        sang: 'unit' as const,
+                      }
+                    : {
+                        gia: roundMoney((donGia * soLuong) / qty2, currency),
+                        nhan: unit2,
+                        sang: 'unit2' as const,
+                      }
+                  : null
 
               return (
                 <tr key={l.material_id} data-line className="group hover:bg-accent">
@@ -649,6 +709,59 @@ export function PoLineTable({
                         aria-label={`Đơn giá ${l.name}`}
                       />
                     </div>
+                    {/*
+                      ĐƠN VỊ TÍNH GIÁ — chỉ hiện khi dòng CÓ quy đổi (mẫu tính
+                      theo kg/m²/m³). Mẫu quyết định được cách quy đổi nhưng
+                      không quyết định được NCC báo giá theo cái gì: đơn Visa
+                      Steel báo 87.700 đ/CÂY trong khi mẫu ép tính theo kg, ra
+                      sai 4,47 lần. Để người nhập nhìn thấy mình đang gõ giá
+                      theo đơn vị nào, ngay dưới ô giá.
+                    */}
+                    {qty2 != null && unit2 && (
+                      <GridCellSelect
+                        value={l.price_per || 'mac-dinh'}
+                        onChange={(e) =>
+                          onPatch(i, {
+                            price_per: (e.target.value === 'mac-dinh'
+                              ? ''
+                              : e.target.value) as Line['price_per'],
+                          })
+                        }
+                        aria-label={`Đơn giá tính theo đơn vị nào — ${l.name}`}
+                        className="mt-0.5 h-6 w-full px-1 text-[11px]"
+                        title="Nhà cung cấp báo giá theo đơn vị nào"
+                      >
+                        <option value="mac-dinh">
+                          / {basisMacDinh === 'unit2' ? unit2 : l.unit} (mẫu)
+                        </option>
+                        <option value="unit">/ {l.unit}</option>
+                        <option value="unit2">/ {unit2}</option>
+                      </GridCellSelect>
+                    )}
+                    {/*
+                      GIÁ TƯƠNG ĐƯƠNG Ở ĐƠN VỊ CÒN LẠI — CHỈ ĐỂ ĐỌC, không bấm
+                      đổi được.
+
+                      Giá gốc của thép là đ/KG (19.620), con số đ/cây trên phiếu
+                      NCC là đã nhân barem rồi làm tròn (× 4,47 = 87.701 → phiếu
+                      ghi 87.700). Bày đ/kg ra để người mua so được với giá thị
+                      trường và với lần mua trước, vì đ/cây của cây 6m khác đ/cây
+                      của cây 4m còn đ/kg thì không đổi.
+
+                      CỐ Ý KHÔNG cho bấm để đổi luôn đơn giá: đổi 87.700 đ/cây
+                      thành 19.620 đ/kg làm tổng dòng nhảy từ 55.251.000 lên
+                      55.251.882 — lệch 882đ với hoá đơn NCC, vì giá kg đã bị làm
+                      tròn. Đơn phải khớp hoá đơn đến từng đồng; con số quy đổi
+                      chỉ để ĐỌC.
+                    */}
+                    {quyDoi && (
+                      <div
+                        className="text-muted-foreground mt-0.5 text-right text-[11px] whitespace-nowrap"
+                        title={`Tương đương ${num(quyDoi.gia)} / ${quyDoi.nhan} — số để so sánh giá, không dùng để tính tiền`}
+                      >
+                        ≈ {num(quyDoi.gia)} / {quyDoi.nhan}
+                      </div>
+                    )}
                     {goiY != null && l.price !== goiY && (
                       <Button
                         variant="link"
@@ -661,6 +774,43 @@ export function PoLineTable({
                       </Button>
                     )}
                   </td>
+
+                  {/*
+                    CHIA SL CHO TỪNG LỆNH — mỗi lệnh một ô, cộng lại phải bằng
+                    SL đặt. Bỏ trống hết = cả dòng thuộc lệnh CHÍNH của đơn
+                    (quy ước 0185), nên đơn nào không cần chia thì không phải
+                    gõ gì. Lệch tổng thì báo ngay dưới ô, và server chặn lần
+                    nữa lúc lưu — sai chỗ này chỉ lộ ra ở bảng kê nhiều tuần sau.
+                  */}
+                  {chiaTheoLenh && (
+                    <td className={tdBase}>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {lsxsOfPo.map((lx) => (
+                          <label key={lx.id} className="flex flex-col items-end">
+                            <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                              {lx.code}
+                            </span>
+                            <GridCellNumber
+                              value={l.lsx_split?.[lx.id] ?? ''}
+                              onValueChange={(v) =>
+                                onPatch(i, {
+                                  lsx_split: { ...l.lsx_split, [lx.id]: v as Num },
+                                })
+                              }
+                              onWheel={blurOnWheel}
+                              className={`${cell} w-[84px] text-right text-[13px]`}
+                              aria-label={`Chia cho lệnh ${lx.code} — ${l.name}`}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      {loiChia && (
+                        <div className="mt-0.5 text-right text-[11px] text-[var(--stop)]">
+                          {loiChia}
+                        </div>
+                      )}
+                    </td>
+                  )}
 
                   {calcCol && (
                     <td className={tdBase}>

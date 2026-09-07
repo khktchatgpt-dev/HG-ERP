@@ -367,6 +367,19 @@ export type PoLineDraft = {
    */
   unit2_per_unit?: number | null
   unit2_label?: string | null
+  /**
+   * ĐƠN GIÁ TÍNH THEO ĐƠN VỊ NÀO — người dùng chọn, ghi đè mặc định của mẫu.
+   *
+   * Vì sao cần: mẫu quyết định được CÁCH QUY ĐỔI (cây → kg), nhưng KHÔNG quyết
+   * định được nhà cung cấp báo giá theo cái gì. Đơn Visa Steel 04/09/2026 báo
+   * 87.700 đ/CÂY và chỉ dùng barem để ghi tổng kg; hệ thống ép tính theo kg nên
+   * ra 246.971.970 thay vì 55.251.000 — lệch đúng 4,47 lần, bằng barem.
+   *
+   * Rỗng = theo mặc định của mẫu (giữ nguyên mọi đơn đã nhập trước đây).
+   * 'unit2' chỉ có tác dụng khi dòng thật sự quy đổi được; không thì rơi về
+   * 'unit' như cũ.
+   */
+  price_per?: 'unit' | 'unit2' | null
 }
 
 export type PoLineDerived = {
@@ -388,6 +401,15 @@ function round4(n: number): number {
  * ngay, hơn là im lặng ra thành tiền 0 rồi lọt qua duyệt.
  */
 export function deriveLine(t: PoTemplate, l: PoLineDraft): PoLineDerived {
+  const d = deriveByTemplate(t, l)
+  // Người dùng chọn đơn vị tính giá thì theo họ — nhưng chỉ cho chọn 'unit2'
+  // khi dòng thật sự có số quy đổi, không thì tiền thành 0 mà không ai hiểu vì sao.
+  if (l.price_per === 'unit') return { ...d, price_basis: 'unit' }
+  if (l.price_per === 'unit2' && d.qty2 != null) return { ...d, price_basis: 'unit2' }
+  return d
+}
+
+function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
   const qty = Number(l.qty_ordered) || 0
   switch (t) {
     case 'aluminium': {

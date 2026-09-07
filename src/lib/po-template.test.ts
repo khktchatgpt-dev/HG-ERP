@@ -299,3 +299,35 @@ describe('deriveLine — quy đổi tổng quát (0182: sơn lít/thùng, hoá c
     expect(d).toEqual({ qty2: 15.6, unit2: 'kg', price_basis: 'unit2' })
   })
 })
+
+/**
+ * ĐƠN GIÁ THEO ĐVT MUA HAY THEO ĐƠN VỊ QUY ĐỔI (07/09/2026).
+ *
+ * Ca thật: đơn Visa Steel 04/09/2026 báo 87.700 đ/CÂY cho hộp kẽm 20x40, barem
+ * 4,47 kg/cây, 630 cây → 55.251.000 đ. Mẫu "sắt/thép theo kg" ép tính theo kg
+ * nên ra 246.971.970 — lệch đúng 4,47 lần.
+ */
+describe('deriveLine · chọn đơn vị tính giá', () => {
+  const thep = { qty_ordered: 630, weight_per_unit: 4.47 }
+
+  it('mặc định của mẫu metal_kg vẫn là tính theo kg — đơn cũ không đổi', () => {
+    expect(deriveLine('metal_kg', thep)).toEqual({
+      qty2: 2816.1,
+      unit2: 'kg',
+      price_basis: 'unit2',
+    })
+  })
+
+  it("chọn 'unit' thì tính theo CÂY, vẫn giữ tổng kg để in ra phiếu", () => {
+    const d = deriveLine('metal_kg', { ...thep, price_per: 'unit' })
+    expect(d.price_basis).toBe('unit')
+    expect(d.qty2).toBe(2816.1)
+    expect(d.unit2).toBe('kg')
+  })
+
+  it("chọn 'unit2' mà dòng không quy đổi được thì rơi về 'unit', không ra tiền 0", () => {
+    const d = deriveLine('metal_kg', { qty_ordered: 10, price_per: 'unit2' })
+    expect(d.qty2).toBeNull()
+    expect(d.price_basis).toBe('unit')
+  })
+})

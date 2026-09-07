@@ -8,6 +8,19 @@ import {
   lsxSupplyGate,
 } from '@/lib/lsx-supply'
 import type { LsxSupplyRow, PoReportDetails } from './lsx-supply.service'
+import {
+  MONEY_FMT,
+  PCT_FMT,
+  applyWidths,
+  dateCell,
+  dateCols,
+  finishTable,
+  headerRow,
+  numberCols,
+  stampWorkbook,
+  titleRow,
+  totalRow,
+} from './excel-kit'
 
 /**
  * BÁO CÁO VẬT TƯ THEO LỆNH — file mang vào họp tuần.
@@ -42,16 +55,6 @@ const fmtD = (d: string | null) =>
  */
 const conLaiNgay = (due: string | null, today: string): number | '' =>
   daysUntilDue(due, today) ?? ''
-
-function headerRow(ws: ExcelJS.Worksheet, cols: string[]): void {
-  const head = ws.addRow(cols)
-  head.font = { bold: true }
-  head.eachCell((c) => {
-    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF1FC' } }
-    c.border = { bottom: { style: 'thin' } }
-    c.alignment = { vertical: 'middle', wrapText: true }
-  })
-}
 
 /** Số ngày NCC hẹn giao = hẹn giao − ngày đặt. Thiếu một trong hai thì bỏ trống. */
 function soNgayGiao(orderedAt: string | null, expectedAt: string | null): number | '' {
@@ -102,12 +105,12 @@ export async function buildLsxSupplyExcel(
     )
 
   const wb = new ExcelJS.Workbook()
+  stampWorkbook(wb, `Vật tư theo lệnh — ${fmtD(today)}`)
 
   // ── Sheet 1: mỗi lệnh một dòng ────────────────────────────────────────────
   const s1 = wb.addWorksheet('Vật tư theo lệnh')
 
-  const tieuDe = s1.addRow([`BÁO CÁO VẬT TƯ THEO LỆNH SẢN XUẤT — ${fmtD(today)}`])
-  tieuDe.font = { bold: true, size: 13 }
+  titleRow(s1, `BÁO CÁO VẬT TƯ THEO LỆNH SẢN XUẤT — ${fmtD(today)}`)
   s1.addRow([])
 
   // Khối tóm tắt: đếm theo bậc. Đây là mấy con số đọc lên đầu buổi họp.
@@ -118,7 +121,7 @@ export async function buildLsxSupplyExcel(
   s1.addRow(['TỔNG', xep.length]).font = { bold: true }
   s1.addRow([])
 
-  headerRow(s1, [
+  const s1Head = headerRow(s1, [
     'Lệnh SX',
     'Khách hàng',
     'Sản phẩm',
@@ -140,8 +143,8 @@ export async function buildLsxSupplyExcel(
       r.code,
       r.customer_name,
       sp,
-      fmtD(r.ship_date),
-      fmtD(r.materials_due_at),
+      dateCell(r.ship_date),
+      dateCell(r.materials_due_at),
       conLaiNgay(r.materials_due_at, today),
       NHAN_BAC[gate.key] ?? gate.key,
       gate.detail,
@@ -151,9 +154,13 @@ export async function buildLsxSupplyExcel(
       r.posLate,
     ])
   }
-  s1.columns.forEach((c, i) => {
-    c.width = [16, 18, 40, 12, 12, 11, 16, 42, 11, 10, 9, 7][i] ?? 14
-  })
+  numberCols(s1, [6, 9, 10, 11, 12])
+  dateCols(s1, [4, 5])
+  applyWidths(s1, [16, 18, 40, 12, 12, 11, 16, 42, 11, 10, 9, 7])
+  for (const c of [2, 3, 8]) {
+    s1.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+  }
+  finishTable(s1, { head: s1Head, freezeCols: 1 })
 
   /*
    * ── Sheet 2: TỔNG HỢP ĐƠN HÀNG THEO LSX ─────────────────────────────────
@@ -163,7 +170,7 @@ export async function buildLsxSupplyExcel(
    * chép khuôn đó thay vì nghĩ ra bộ cột mới rồi bắt người dùng học lại.
    */
   const s2 = wb.addWorksheet('Tổng hợp ĐH theo LSX')
-  headerRow(s2, [
+  const s2Head = headerRow(s2, [
     'STT',
     'Nhà cung cấp',
     'Nhóm VT chính',
@@ -210,11 +217,11 @@ export async function buildLsxSupplyExcel(
         p.code,
         r.code,
         r.customer_name,
-        fmtD(p.ordered_at),
+        dateCell(p.ordered_at),
         soNgayGiao(p.ordered_at, p.expected_at),
-        fmtD(p.expected_at),
-        fmtD(d?.received_at ?? null),
-        fmtD(r.materials_due_at),
+        dateCell(p.expected_at),
+        dateCell(d?.received_at ?? null),
+        dateCell(r.materials_due_at),
         isPoStatus(p.status) ? PO_STATUS_LABEL[p.status] : p.status,
         soNgayTre,
         hanhDong(p),
@@ -223,10 +230,10 @@ export async function buildLsxSupplyExcel(
         // Để TRỐNG thay vì in 0% khi chưa đặt số lượng nào: 0% đọc thành "đã
         // đặt mà chưa về", còn thực tế là "chưa có số để tính".
         daDat > 0 ? Math.round((daNhan / daDat) * 100) / 100 : '',
-        d?.lines_missing || '',
-        tien || '',
-        daTra || '',
-        tien - daTra || '',
+        d?.lines_missing ?? 0,
+        tien,
+        daTra,
+        tien - daTra,
         p.note ?? '',
         p.assignee_name ?? '',
         p.shared ? 'x' : '',
@@ -237,15 +244,22 @@ export async function buildLsxSupplyExcel(
   // trong khi sự thật ("chưa lập đơn mua nào") mới là điều cần báo cáo.
   if (stt === 0) s2.addRow(['— Chưa có đơn mua nào cho các lệnh đang chạy —'])
 
-  s2.getColumn(17).numFmt = '0%'
-  for (const c of [19, 20, 21]) s2.getColumn(c).numFmt = '#,##0'
-  s2.columns.forEach((c, i) => {
-    c.width =
-      [
-        5, 24, 16, 16, 16, 18, 11, 9, 13, 13, 14, 15, 8, 26, 10, 11, 8, 9, 15, 14, 14, 24,
-        13, 10,
-      ][i] ?? 14
-  })
+  const s2Last = s2.rowCount
+  // Chỉ đếm số đơn, KHÔNG cộng tiền: bảng này gộp mọi lệnh nên có cả đơn VND
+  // lẫn USD mà không mang cột tiền tệ — cộng chung là ra một con số vô nghĩa.
+  if (stt > 0) totalRow(s2, `Cộng ${stt} đơn`, {}, 2)
+  numberCols(s2, [8, 13, 15, 16, 18])
+  numberCols(s2, [17], PCT_FMT)
+  numberCols(s2, [19, 20, 21], MONEY_FMT)
+  dateCols(s2, [7, 9, 10, 11])
+  applyWidths(s2, [
+    5, 24, 16, 16, 16, 18, 11, 9, 13, 13, 14, 15, 8, 26, 10, 11, 8, 9, 15, 14, 14, 24, 13,
+    10,
+  ])
+  for (const c of [2, 6, 14, 22]) {
+    s2.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+  }
+  finishTable(s2, { head: s2Head, lastRow: s2Last, freezeCols: 4 })
 
   const out = await wb.xlsx.writeBuffer()
   return Buffer.from(out as ArrayBuffer)

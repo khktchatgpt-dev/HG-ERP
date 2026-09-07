@@ -30,6 +30,11 @@ export type BomNeedLine = {
   material_name: string
   unit: string
   group_name: string | null
+  /**
+   * LOẠI theo định mức (`group_code`: NGU_KIM / PACKAGING / WOOD…) — trục chia
+   * khối của bảng kê. Xem `lib/part-groups`; khác nhóm KHO ở `group_name`.
+   */
+  kind: string | null
   /** Định mức trên 1 sản phẩm, ĐÃ QUY ĐỔI sang đơn vị mua của vật tư. */
   qty_per_unit: number
   /** = qty_per_unit × product_qty. */
@@ -40,6 +45,12 @@ export type BomNeedLine = {
   explain: string
   /** Số dòng chi tiết của SP cùng dùng mã này. */
   part_count: number
+  /**
+   * TÊN CHI TIẾT dùng mã này — cột "Vị trí lắp ráp" của sổ tay ("Tay vịn",
+   * "LK hộp trượt", "chân + MB"). Người đi hỏi giá và người nhận hàng đều cần
+   * biết con vít này bắt vào đâu; phủ 100% dòng định mức.
+   */
+  part_names: string[]
 }
 
 /** Dòng định mức KHÔNG quy đổi được sang đơn vị mua — phải nói ra, không lặng lẽ bỏ. */
@@ -107,7 +118,7 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
     db()
       .from('technical_product_parts')
       .select(
-        'product_id, material_code, part_name, qty, unit, total_length_m, weight_kg, paint_area_m2, volume_m3, bar_length_m, waste_pct',
+        'product_id, material_code, part_name, group_code, qty, unit, total_length_m, weight_kg, paint_area_m2, volume_m3, bar_length_m, waste_pct',
       )
       .in('product_id', productIds)
       .not('material_code', 'is', null)
@@ -131,6 +142,7 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
     product_id: string
     material_code: string
     part_name: string | null
+    group_code: string | null
     qty: unknown
     unit: string | null
     total_length_m: unknown
@@ -226,6 +238,9 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
       cur.qty_per_unit = r4(cur.qty_per_unit + per)
       cur.qty_needed = r4(cur.qty_per_unit * prod.qty)
       cur.part_count += 1
+      if (part.part_name && !cur.part_names.includes(part.part_name)) {
+        cur.part_names.push(part.part_name)
+      }
       cur.explain = `gộp ${cur.part_count} chi tiết = ${cur.qty_per_unit.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} ${mat.unit}/SP`
       continue
     }
@@ -240,11 +255,13 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
       material_name: mat.name,
       unit: mat.unit,
       group_name: mat.group_name,
+      kind: part.group_code,
       qty_per_unit: per,
       qty_needed: r4(per * prod.qty),
       basis: conv.basis,
       explain: conv.explain,
       part_count: 1,
+      part_names: part.part_name ? [part.part_name] : [],
     })
   }
 

@@ -89,7 +89,8 @@ async function open(buf: Buffer) {
 }
 
 /** Số dòng tiêu đề bảng = dòng đóng băng của sheet. */
-const headRowOf = (ws: ExcelJS.Worksheet) => (ws.views[0] as { ySplit?: number }).ySplit ?? 0
+const headRowOf = (ws: ExcelJS.Worksheet) =>
+  (ws.views[0] as { ySplit?: number }).ySplit ?? 0
 
 const text = (ws: ExcelJS.Worksheet) =>
   ws
@@ -163,6 +164,15 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
             status: 'none',
             note: null,
             pos: [],
+            spec: 'D20 x 0.7mm x 6m',
+            last_price: {
+              unit_price: 41_000,
+              currency: 'VND',
+              supplier_id: 'ncc-kp',
+              supplier_name: 'Kim Phát',
+              po_code: 'PO-01/26 KP',
+              at: '2026-07-15T02:00:00.000Z',
+            },
           },
         ],
         blocked: [],
@@ -186,6 +196,68 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     expect(names.some((n) => n.startsWith('ĐH'))).toBe(true)
     expect(names).not.toContain('Bảng kê VT')
     expect(names).not.toContain('Phân bổ theo SP')
+  })
+
+  /*
+   * KHUÔN TRÌNH BÀY (07/09/2026) — mấy thứ này hỏng thì không ai báo lỗi, chỉ
+   * âm thầm khó dùng: mất lọc thì người nhận tự bật, mất ghim thì cuộn xuống
+   * là quên cột, mất printTitlesRow thì in ra trang 2 không có tiêu đề.
+   */
+  it('bảng ghim tiêu đề và lặp tiêu đề khi in, KHÔNG bật lọc', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    // Lọc tự động TẮT có chủ đích từ 07/09/2026: bảng có dòng tiêu đề khối,
+    // lọc sẽ giấu mất chúng và người đọc mất ngữ cảnh (muốn lọc thì lọc trên màn).
+    expect(sb.autoFilter).toBeFalsy()
+    expect(sb.views[0]?.state).toBe('frozen')
+    expect(headRowOf(sb)).toBeGreaterThan(0)
+    expect(sb.pageSetup.printTitlesRow).toBe(`${headRowOf(sb)}:${headRowOf(sb)}`)
+    expect(sb.pageSetup.orientation).toBe('landscape')
+  })
+
+  it('tiêu đề cột số vẫn xuống dòng được (không bị style cột đè)', async () => {
+    // exceljs cho `column.alignment` đè lên mọi ô đang có, kể cả ô tiêu đề —
+    // đặt cột số căn phải là tiêu đề mất wrapText và bị cắt chữ.
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = sb.getRow(headRowOf(sb))
+    const conPhaiDat = head.getCell(13)
+    expect(conPhaiDat.value).toBe('Còn phải đặt')
+    expect(conPhaiDat.alignment?.wrapText).toBe(true)
+    expect(conPhaiDat.alignment?.horizontal).toBe('center')
+  })
+
+  it('có giá mua gần nhất, tạm tính = còn phải đặt × giá, tổng theo tiền tệ', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = headRowOf(sb)
+    const d = sb.getRow(head + 2)
+    expect(d.getCell(4).value).toBe('D20 x 0.7mm x 6m') // quy cách
+    expect(d.getCell(14).value).toBe(41_000) // đơn giá gần nhất
+    expect(d.getCell(15).value).toBe('VND')
+    // Tạm tính = còn phải đặt × giá.
+    expect(d.getCell(16).value).toBe(100 * 41_000)
+    expect((d.getCell(17).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(d.getCell(18).value).toBe('Kim Phát')
+    // Dòng tổng tiền phải nói rõ TIỀN TỆ — bảng có thể có cả VND lẫn USD.
+    const text = sb
+      .getSheetValues()
+      .flat()
+      .filter((v) => v != null)
+      .map(String)
+      .join(' | ')
+    expect(text).toContain('Tạm tính phần còn phải đặt (VND)')
+  })
+
+  it('cột số giữ KIỂU SỐ, số 0 không bị đổi thành chuỗi rỗng', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = headRowOf(sb)
+    // Dòng vật tư mẫu có "Đã về" = 0 (cột 12) — phải là số 0, không phải ''.
+    const c = sb.getRow(head + 2).getCell(12)
+    expect(typeof c.value).toBe('number')
+    expect(c.value).toBe(0)
+    expect(String(c.numFmt)).toContain('""')
   })
 })
 

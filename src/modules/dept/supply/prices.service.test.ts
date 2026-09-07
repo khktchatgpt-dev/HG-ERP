@@ -122,6 +122,7 @@ describe('pricesService — quyền + ràng buộc', () => {
         unit_price: 95,
         currency: 'VND',
         po_code: 'PO-2026-0001',
+        supplier_id: null,
         supplier_name: 'NCC 2',
         at: '2026-06-01',
       },

@@ -10,6 +10,8 @@ import {
 import type { Line } from './po-line'
 
 const line = (over: Partial<Line> = {}): Line => ({
+  price_per: '',
+  lsx_split: {},
   material_id: 'm1',
   code: 'NK-0001',
   name: 'Vít 4x15, 7 màu',

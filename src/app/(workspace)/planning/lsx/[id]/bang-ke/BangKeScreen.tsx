@@ -1,11 +1,13 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   ClipboardPaste,
   Download,
@@ -18,6 +20,7 @@ import {
   Search,
   ShieldCheck,
   ShoppingCart,
+  Truck,
   Undo2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/erp/PageHeader'
@@ -28,6 +31,7 @@ import { NumberField } from '@/components/erp/NumberField'
 import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { TopProgressBar } from '@/components/erp/Spinner'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
 import { Badge, type BadgeTone } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
 import { Input } from '@/components/shadcn/input'
@@ -47,9 +51,15 @@ import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import {
   BANG_KE_STATUS,
   BANG_KE_STATUSES,
+  estimateByCurrency,
+  groupBySupplier,
+  groupForBangKe,
+  type NccBlock,
+  viTriLapRap,
   type BangKeRow,
   type BangKeStatus,
 } from '@/lib/lsx-bang-ke'
+import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import { cn } from '@/lib/utils'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { PasteLinesDialog, type PasteConfirm } from '../../../pos/new/PasteLinesDialog'
@@ -88,6 +98,64 @@ const SOURCE_LABEL: Record<BangKeRow['source'], string> = {
 /** Tối đa mã đưa vào một lượt "Soạn đơn cho dòng thiếu" — đơn dài hơn là đơn khó đọc. */
 const MAX_PREFILL = 40
 
+/**
+ * SỐ CỘT SẢN PHẨM TỐI ĐA.
+ *
+ * Sổ tay của phòng bày mỗi sản phẩm một CỘT (sheet BKVT file YOTRIO, 3 SP) —
+ * đọc một dòng là thấy vật tư này chia cho SP nào bao nhiêu, không phải bấm mở
+ * từng dòng. Nhưng chính phòng cũng bỏ khuôn đó khi lệnh nhiều mã: file LSX
+ * 06.26.27 có 9 sản phẩm thì họ quay về kê từng khối một SP.
+ *
+ * Lý do là bề ngang: quá 6 cột thì Cần / Tồn / Còn phải đặt — mấy con số CHÍNH
+ * của bảng — bị đẩy khỏi màn. Trên ngưỡng này giữ nguyên cách cũ (nút "dùng cho
+ * N SP" mở ra chi tiết), vì thà bấm một nhịp còn hơn mất cột quan trọng.
+ */
+const MAX_SP_COLS = 6
+
+/**
+ * CỘT VẬT TƯ GHIM TRÁI khi bảng phải cuộn ngang.
+ *
+ * Bày 5 cột sản phẩm đẩy bảng lên 1.771px trong khung 1.135 — cuộn sang phải
+ * đọc "Còn phải đặt" là mất luôn tên vật tư, không biết đang đọc dòng nào.
+ *
+ * BẪY: bảng shadcn ăn `border-collapse` của Tailwind preflight, mà ô sticky
+ * trong bảng collapse KHÔNG vẽ được viền của chính nó — viền thuộc về bảng. Nên
+ * dựng đường ngăn bằng `box-shadow` bên phải, và ô ghim phải có NỀN ĐỤC, không
+ * thì chữ cột sau trôi qua dưới nó.
+ */
+const GHIM = 'sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]'
+
+/**
+ * Link sang form soạn đơn, điền sẵn mã + SL đề xuất (và NCC nếu biết).
+ *
+ * Cắt ở MAX_PREFILL: URL dài quá thì proxy/trình duyệt cắt ngang và form nhận
+ * được một danh sách mã cụt — thà điền ít mà đúng.
+ */
+function soanDonHref(
+  lsxId: string,
+  rows: BangKeRow[],
+  supplierId?: string | null,
+): string | null {
+  const pick = rows.slice(0, MAX_PREFILL)
+  if (pick.length === 0) return null
+  const p = new URLSearchParams({
+    lsx: lsxId,
+    material: pick.map((r) => r.material_code).join(','),
+    qty: pick.map((r) => String(r.suggest)).join(','),
+  })
+  if (supplierId) p.set('supplier', supplierId)
+  return `/planning/pos/new?${p.toString()}`
+}
+
+/** Id neo cho mục lục nhảy tới — tên khối có dấu và khoảng trắng. */
+const khoiId = (name: string) =>
+  'khoi-' +
+  name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+
 const fmt = (n: number) =>
   n === 0 ? '0' : n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const dmy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
@@ -95,6 +163,12 @@ const dmy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7
 const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
 
 type NeedRow = { material_id: string; qty_needed: number; note?: string | null }
+
+/** "loai" = rà còn thiếu gì · "ncc" = cắt đơn cho ai. */
+type ViewMode = 'loai' | 'ncc'
+
+/** Khối NCC của lõi, kèm link soạn đơn mà chỉ màn hình cần. */
+type NccBlockUi = NccBlock & { href: string | null }
 
 /**
  * BẢNG KÊ VẬT TƯ CỦA LỆNH — màn nhân viên Cung ứng mở đầu ngày.
@@ -129,6 +203,27 @@ export function BangKeScreen({
   const [showBlocked, setShowBlocked] = useState(false)
   /** Mã đang mở phần "dùng cho sản phẩm nào". */
   const [openRow, setOpenRow] = useState<string | null>(null)
+  const [view, setView] = useState<ViewMode>('loai')
+  /*
+    KHỐI ĐANG THU GỌN. Lưu tên khối đã đóng chứ không lưu khối đang mở: mặc
+    định là MỞ HẾT — mở bảng kê ra mà thấy mọi thứ gấp lại thì người dùng
+    tưởng lệnh chưa có gì. Đóng là hành động có chủ ý của họ.
+  */
+  const [dong, setDong] = useState<Set<string>>(new Set())
+  const doiKhoi = (k: string) =>
+    setDong((cur) => {
+      const next = new Set(cur)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  /*
+    HAO HỤT: đổi cho CẢ BẢNG, không lưu xuống DB.
+
+    Đây là con số của một lượt đặt hàng, không phải thuộc tính của vật tư — hôm
+    nay mua gấp thì để 5%, lô sau đặt dư còn tồn thì để 0%. Lưu lại là biến một
+    quyết định nhất thời thành mặc định vĩnh viễn mà không ai nhớ ai đặt.
+  */
   /** Người dùng chủ động mở bảng dù chưa có định mức xác nhận nào. */
   const [forceTable, setForceTable] = useState(false)
 
@@ -142,38 +237,87 @@ export function BangKeScreen({
     })
   }, [rows, status, group, q])
 
-  /** Gom theo nhóm vật tư, giữ thứ tự ưu tiên trong từng nhóm. */
-  const sections = useMemo(() => {
-    const map = new Map<string, BangKeRow[]>()
-    for (const r of filtered) {
-      const k = r.group_name ?? 'Chưa phân nhóm'
-      const list = map.get(k)
-      if (list) list.push(r)
-      else map.set(k, [r])
-    }
-    return (
-      [...map.entries()]
-        .map(([name, list]) => ({
-          name,
-          rows: list,
-          short: list.filter((r) => r.suggest > 0).length,
-        }))
-        // Nhóm còn phải đặt nhiều nhất lên trước — đó là cuộc gọi tiếp theo.
-        .sort((a, b) => b.short - a.short || a.name.localeCompare(b.name, 'vi'))
-    )
-  }, [filtered])
+  /*
+    CHIA KHỐI THEO LOẠI TRONG ĐỊNH MỨC (07/09/2026), không theo nhóm kho nữa.
+
+    Sổ tay của phòng tách hẳn "BẢNG KÊ VẬT TƯ NGŨ KIM" khỏi "VẬT TƯ BAO BÌ" khỏi
+    khối gỗ/nệm/vải — đó mới là trục người mua dùng. Nhóm KHO quá thô để làm
+    tầng duy nhất: lệnh 01/26-27 - MX có 107 mã thì 66 mã dồn vào đúng một nhóm
+    "Bu lông - vít - đinh - liên kết", đọc như một khối liền không đầu đuôi.
+
+    Mã chỉ có trên đơn (ngoài định mức) và dòng nhập tay KHÔNG có loại — cho rơi
+    về nhóm kho như cũ chứ không đoán bừa một loại cho chúng.
+
+    Khối dài hơn NGUONG_CHIA thì chia tiếp một tầng theo nhóm phụ của danh mục
+    (phủ 91%, riêng nhóm bu lông 97%). Khối ngắn thì KHÔNG chia — thêm một tầng
+    tiêu đề cho sáu dòng là làm rối chứ không làm rõ.
+  */
+  /*
+    Chia khối bằng ĐÚNG hàm lõi mà file Excel dùng — hai bản dựng riêng thì sớm
+    muộn màn và file chia khối khác nhau. Nhãn/thứ tự loại truyền vào từ
+    lib/part-groups (lõi không biết gì về nhãn tiếng Việt).
+  */
+  const sections = useMemo(
+    () => groupForBangKe(filtered, partGroupLabel, partGroupRank),
+    [filtered],
+  )
+
+  /*
+    Cột sản phẩm: chỉ bày khi lệnh có 2..MAX_SP_COLS sản phẩm. Một SP thì cột đó
+    lặp lại đúng cột "Cần", thêm vào chỉ tốn chỗ.
+  */
+  const spCols = useMemo(() => {
+    const ps = data.products
+    return ps.length >= 2 && ps.length <= MAX_SP_COLS ? ps : []
+  }, [data.products])
 
   const shortRows = useMemo(() => rows.filter((r) => r.suggest > 0), [rows])
-  const prefillHref = useMemo(() => {
-    const pick = shortRows.slice(0, MAX_PREFILL)
-    if (pick.length === 0) return null
-    const p = new URLSearchParams({
-      lsx: lsx.id,
-      material: pick.map((r) => r.material_code).join(','),
-      qty: pick.map((r) => String(r.suggest)).join(','),
-    })
-    return `/planning/pos/new?${p.toString()}`
-  }, [shortRows, lsx.id])
+  /*
+    TIỀN TẠM TÍNH cho phần còn phải đặt — theo TỪNG tiền tệ, vì bảng có cả mã
+    mua bằng VND lẫn USD. Đếm riêng số mã chưa có giá lần nào: không nói ra thì
+    con số tạm tính đọc thành "cả lệnh hết ngần này", trong khi nó mới chỉ gồm
+    những mã từng mua.
+  */
+  const uocTien = useMemo(() => estimateByCurrency(shortRows), [shortRows])
+  const khongCoGia = useMemo(
+    () => shortRows.filter((r) => !r.last_price).length,
+    [shortRows],
+  )
+  const prefillHref = useMemo(() => soanDonHref(lsx.id, shortRows), [shortRows, lsx.id])
+
+  /*
+    GỘP THEO NHÀ CUNG CẤP — nửa phải sổ tay của phòng (sheet BKVT file YOTRIO:
+    "STT | NCC | Tên vật tư | ĐVT | Tổng SL cần đặt"). Đây là bảng để CẮT ĐƠN:
+    mỗi khối là một cuộc gọi, một tờ đơn.
+
+    Chỉ lấy dòng CÒN PHẢI ĐẶT. Bày cả mã đã đủ ở đây là lẫn — người đang cắt đơn
+    không quan tâm mã đã xong.
+
+    NCC lấy theo lần mua GẦN NHẤT của chính mã đó. Mã chưa mua bao giờ gom vào
+    một khối riêng, KHÔNG đoán NCC cho chúng: đoán sai thì đơn gửi nhầm chỗ.
+  */
+  /*
+    Cắt khối bằng ĐÚNG hàm lõi mà file Excel dùng (groupBySupplier) — hai bản
+    dựng riêng thì sớm muộn một bên đổi luật và màn với file chia đơn khác nhau.
+    Ở đây chỉ thêm phần màn cần mà file không cần: link sang form soạn đơn.
+
+    Ăn theo bộ lọc đang bật, không đọc thẳng shortRows: để nguyên thanh lọc trên
+    đầu mà bấm không đổi gì thì đó là nút chết.
+  */
+  const nccBlocks = useMemo(
+    () =>
+      groupBySupplier(filtered).map((b) => ({
+        ...b,
+        href: soanDonHref(lsx.id, b.rows, b.supplier_id),
+      })),
+    [filtered, lsx.id],
+  )
+
+  /** Số mã đang hiện ở chế độ NCC — sau bộ lọc, không phải tổng của lệnh. */
+  const nccCount = useMemo(
+    () => nccBlocks.reduce((n, b) => n + b.rows.length, 0),
+    [nccBlocks],
+  )
 
   const usedIds = useMemo(() => new Set(rows.map((r) => r.material_id)), [rows])
   const suggestById = useMemo(
@@ -192,10 +336,7 @@ export function BangKeScreen({
    * "chưa xác nhận thì để trống, hiện nội dung cho nhân viên biết").
    */
   const blockedByBom =
-    !data.include_draft &&
-    summary.needed === 0 &&
-    summary.unconfirmed > 0 &&
-    !forceTable
+    !data.include_draft && summary.needed === 0 && summary.unconfirmed > 0 && !forceTable
 
   const manualDisabled = !canEdit || data.manual_error !== null
   const draftHref = `/planning/lsx/${lsx.id}/bang-ke${data.include_draft ? '' : '?nhap=1'}`
@@ -314,7 +455,7 @@ export function BangKeScreen({
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a
-                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? "&nhap=1" : ""}`}
+                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? '&nhap=1' : ''}`}
                 download
               >
                 <Download />
@@ -360,6 +501,25 @@ export function BangKeScreen({
           Chưa đọc được bảng kê nhập tay: migration{' '}
           <span className="t-data">0184_supply_lsx_needs</span> chưa áp lên cơ sở dữ liệu.
           Phần định mức vẫn hiện bình thường.
+        </Notice>
+      )}
+
+      {/*
+        ĐƠN GỘP LỆNH NÀY NHƯNG CHƯA CHIA SỐ (0185). Phần của lệnh đang tính
+        bằng 0 — im lặng thì người xem tưởng chưa ai đặt gì và đặt chồng thêm
+        một đơn nữa. Nói rõ đơn nào và mời vào chia.
+      */}
+      {data.unsplit_pos.length > 0 && (
+        <Notice tone="warn">
+          {data.unsplit_pos.map((p) => (
+            <span key={p.po_code} className="block">
+              Đơn <DocChip>{p.po_code}</DocChip> mua chung cho lệnh này nhưng{' '}
+              <b>chưa chia số lượng</b>, nên phần của lệnh đang tính bằng 0. Toàn bộ số
+              trên đơn đang thuộc lệnh{' '}
+              {p.lsx_chinh ? <DocChip>{p.lsx_chinh}</DocChip> : 'chính của đơn'} — mở đơn
+              để chia cho đúng.
+            </span>
+          ))}
         </Notice>
       )}
 
@@ -488,9 +648,9 @@ export function BangKeScreen({
                   quy đổi được sang đơn vị mua
                 </h2>
                 <p className="text-muted-foreground mt-0.5 text-[12.5px]">
-                  Định mức đếm theo chi tiết, vật tư lại bán theo cây hoặc kg. Số của những
-                  dòng này <b>không được cộng vào cột Cần</b> — lấy số thanh làm số cây là
-                  mua thừa nhiều lần.
+                  Định mức đếm theo chi tiết, vật tư lại bán theo cây hoặc kg. Số của
+                  những dòng này <b>không được cộng vào cột Cần</b> — lấy số thanh làm số
+                  cây là mua thừa nhiều lần.
                 </p>
               </div>
             </div>
@@ -533,7 +693,9 @@ export function BangKeScreen({
           value={shortRows.length}
           hint={
             shortRows.length > 0
-              ? `${fmt(shortRows.reduce((s, r) => s + r.suggest, 0))} đơn vị tổng cộng`
+              ? uocTien.size > 0
+                ? `≈ ${[...uocTien].map(([c, v]) => `${moneyShort(v)} ${c}`).join(' + ')}${khongCoGia > 0 ? ` · ${khongCoGia} mã chưa có giá` : ''}`
+                : `${fmt(shortRows.reduce((s, r) => s + r.suggest, 0))} đơn vị · chưa mã nào có giá mua`
               : 'không còn mã nào thiếu'
           }
           tone="stop"
@@ -569,6 +731,32 @@ export function BangKeScreen({
           onClick={() => setStatus(status === 'unconfirmed' ? null : 'unconfirmed')}
         />
       </StatTiles>
+
+      {/*
+        HAI CHẾ ĐỘ XEM, không phải hai trang: cùng một bảng kê, hai cách cắt.
+        "Theo loại vật tư" để RÀ (còn thiếu gì); "Gộp theo NCC" để CẮT ĐƠN (gọi
+        ai, đơn nào). Sổ tay của phòng để hai thứ này cạnh nhau trên một tờ.
+      */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Tabs value={view} onValueChange={(v) => setView(v as ViewMode)}>
+          <TabsList>
+            <TabsTrigger value="loai">
+              <Package /> Theo loại vật tư
+            </TabsTrigger>
+            <TabsTrigger value="ncc">
+              <Truck /> Gộp theo NCC
+              {nccBlocks.length > 0 && (
+                <span className="t-data ml-1.5 text-[11px]">{nccBlocks.length}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {view === 'ncc' && (
+          <span className="text-muted-foreground text-[12px]">
+            chỉ {nccCount} mã còn phải đặt
+          </span>
+        )}
+      </div>
 
       <Toolbar
         left={
@@ -612,7 +800,62 @@ export function BangKeScreen({
         }
       />
 
-      {blockedByBom ? (
+      {/*
+        MỤC LỤC KHỐI — lệnh 107 mã là một mạch cuộn dài; không có chỗ nhảy thì
+        muốn xem khối bao bì phải cuộn qua trăm dòng ngũ kim. Chỉ hiện khi có
+        từ hai khối trở lên, vì một khối thì mục lục chỉ là một cái nút thừa.
+      */}
+      {view === 'loai' && !blockedByBom && sections.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-[12px]">Nhảy tới:</span>
+          {sections.map((sec) => (
+            <Button
+              key={sec.name}
+              variant="outline"
+              size="sm"
+              className="h-7 text-[12px]"
+              onClick={() => {
+                setDong((cur) => {
+                  const next = new Set(cur)
+                  next.delete(sec.name)
+                  return next
+                })
+                document
+                  .getElementById(khoiId(sec.name))
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+            >
+              {sec.name}
+              <span className="t-data text-muted-foreground">{sec.rows.length}</span>
+              {sec.short > 0 && (
+                <span className="t-data text-[var(--stop)]">{sec.short} thiếu</span>
+              )}
+            </Button>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-[12px]"
+            onClick={() =>
+              setDong((cur) =>
+                cur.size === sections.length
+                  ? new Set()
+                  : new Set(sections.map((x) => x.name)),
+              )
+            }
+          >
+            {dong.size === sections.length ? 'Mở tất cả' : 'Thu gọn tất cả'}
+          </Button>
+        </div>
+      )}
+
+      {view === 'ncc' && !blockedByBom ? (
+        <NccView
+          blocks={nccBlocks}
+          canEdit={canEdit}
+          dangLoc={status !== null || group !== '' || q.trim() !== ''}
+        />
+      ) : blockedByBom ? (
         <section className="bg-card overflow-hidden rounded-lg border">
           <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
             <span
@@ -690,72 +933,178 @@ export function BangKeScreen({
       ) : (
         <div className="flex flex-col gap-4">
           {sections.map((sec) => (
-            <section key={sec.name} className="bg-card overflow-hidden rounded-lg border">
+            <section
+              key={sec.name}
+              id={khoiId(sec.name)}
+              className="bg-card scroll-mt-20 overflow-hidden rounded-lg border"
+            >
+              {/*
+                Tiêu đề khối GHIM khi cuộn (top-14 = chiều cao thanh đầu trang):
+                khối ngũ kim 105 dòng thì cuộn tới giữa là quên đang đọc khối
+                nào. Bấm vào để thu gọn — đó là cách duy nhất làm trang ngắn lại
+                mà không giấu mất dữ liệu.
+              */}
+              {/*
+                KHÔNG GHIM tiêu đề khối (gỡ 07/09/2026 — user báo lỗi UI).
+
+                Bảng nằm trong `div.overflow-x-auto` để cuộn ngang. Đặt
+                overflow-x: auto biến div thành SCROLL CONTAINER theo CẢ HAI
+                trục, nên `position: sticky` của hàng tiêu đề cột bám theo div
+                đó chứ không theo trang — div lại chỉ cao bằng nội dung, thành
+                ra hàng tiêu đề bị đẩy xuống và ĐÈ LÊN dòng dữ liệu.
+
+                Hàng tiêu đề cột vì vậy không ghim được. Mà nếu chỉ ghim tiêu đề
+                KHỐI thì khi cuộn nó trượt che mất chính hàng tiêu đề cột — thứ
+                người đọc cần hơn. Nên không ghim gì cả; định hướng đã có mục
+                lục "Nhảy tới" và nút thu gọn khối.
+              */}
               <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-                <h2 className="t-title flex items-center gap-2">
-                  <Package className="text-muted-foreground size-4" strokeWidth={1.8} />
-                  {sec.name}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => doiKhoi(sec.name)}
+                  aria-expanded={!dong.has(sec.name)}
+                  className="h-auto justify-start gap-2 px-0 py-0 hover:bg-transparent hover:text-[var(--primary)]"
+                >
+                  {dong.has(sec.name) ? (
+                    <ChevronRight className="text-muted-foreground size-4" />
+                  ) : (
+                    <ChevronDown className="text-muted-foreground size-4" />
+                  )}
+                  <span className="t-title">{sec.name}</span>
                   <span className="t-data text-muted-foreground font-normal">
                     {sec.rows.length} mã
                   </span>
-                </h2>
+                </Button>
                 {sec.short > 0 && (
                   <span className="text-[12px] font-medium text-[var(--stop)]">
                     {sec.short} mã còn phải đặt
                   </span>
                 )}
               </header>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" hidden={dong.has(sec.name)}>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-1" />
-                      <TableHead className="min-w-[260px]">Vật tư</TableHead>
+                      <TableHead className="bg-muted/40 sticky left-0 z-10 w-1 p-0" />
+                      <TableHead className={cn(GHIM, 'bg-muted/40 left-1 min-w-[220px]')}>
+                        Vật tư
+                      </TableHead>
+                      {spCols.map((p) => (
+                        <TableHead key={p.id} className="min-w-[86px] text-right">
+                          <span className="t-data block text-[11px] font-semibold">
+                            {p.code}
+                          </span>
+                          <span className="t-data text-muted-foreground block text-[10.5px] font-normal">
+                            {fmt(p.qty)} SP
+                          </span>
+                        </TableHead>
+                      ))}
                       <TableHead className="text-right">Cần</TableHead>
                       <TableHead className="text-right">Đã có</TableHead>
                       <TableHead className="text-right">Đã đặt</TableHead>
                       <TableHead className="text-right">Còn phải đặt</TableHead>
-                      <TableHead className="min-w-[150px]">Tình trạng</TableHead>
-                      <TableHead className="min-w-[180px]">Đơn mua</TableHead>
+                      <TableHead className="min-w-[112px] text-right">
+                        Giá gần nhất
+                      </TableHead>
+                      <TableHead className="min-w-[125px]">Tình trạng</TableHead>
+                      <TableHead className="min-w-[150px]">Đơn mua</TableHead>
                       {canEdit && <TableHead className="w-[130px]" />}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sec.rows.map((r) => (
-                      <Row
-                        key={r.material_id}
-                        r={r}
-                        lsxId={lsx.id}
-                        open={openRow === r.material_id}
-                        onToggle={() =>
-                          setOpenRow(openRow === r.material_id ? null : r.material_id)
-                        }
-                        canEdit={canEdit}
-                        editable={!data.manual_error}
-                        busy={busy}
-                        onSaveQty={(v) =>
-                          saveRows(
-                            [{ material_id: r.material_id, qty_needed: v, note: r.note }],
-                            `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
-                          )
-                        }
-                        onSaveNote={(v) =>
-                          saveRows(
-                            [
-                              {
-                                material_id: r.material_id,
-                                qty_needed: r.qty_needed,
-                                note: v || null,
-                              },
-                            ],
-                            v
-                              ? `${r.material_code}: đã ghi chú`
-                              : `${r.material_code}: đã xoá ghi chú`,
-                          )
-                        }
-                        onOverride={() => override(r)}
-                        onRemove={() => removeManual(r)}
-                      />
+                    {sec.subs.map((sub) => (
+                      <React.Fragment key={sub.name ?? '_'}>
+                        {sub.name && (
+                          /*
+                            Tầng nhóm phụ: một dòng gạch ngang trong thân bảng,
+                            KHÔNG phải một bảng con. Bảng con thì mỗi nhóm một
+                            hàng tiêu đề riêng, cột lệch nhau và mất luôn cái
+                            lợi của bảng dài là dóng số theo cột.
+                          */
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell className="bg-card sticky left-0 z-10 p-0" />
+                            <TableCell
+                              colSpan={(canEdit ? 10 : 9) + spCols.length}
+                              className="bg-muted/40 p-0"
+                            >
+                              {/*
+                                Nhóm phụ cũng gấp được: khối ngũ kim 105 mã chia
+                                13 nhóm phụ, gấp hết lại là 13 dòng nhìn hết —
+                                đó mới là thứ làm trang ngắn lại thật sự.
+                              */}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => doiKhoi(`${sec.name}/${sub.name}`)}
+                                aria-expanded={!dong.has(`${sec.name}/${sub.name}`)}
+                                className="text-muted-foreground h-auto w-full justify-start gap-1.5 rounded-none py-1.5 pl-2 text-[11.5px] font-semibold tracking-wide uppercase hover:bg-transparent hover:text-[var(--primary)]"
+                              >
+                                {dong.has(`${sec.name}/${sub.name}`) ? (
+                                  <ChevronRight className="size-3.5" />
+                                ) : (
+                                  <ChevronDown className="size-3.5" />
+                                )}
+                                {sub.name}
+                                <span className="t-data font-normal normal-case">
+                                  {sub.rows.length} mã
+                                </span>
+                                {sub.rows.filter((x) => x.suggest > 0).length > 0 && (
+                                  <span className="t-data font-normal text-[var(--stop)] normal-case">
+                                    {sub.rows.filter((x) => x.suggest > 0).length} thiếu
+                                  </span>
+                                )}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {(sub.name === null || !dong.has(`${sec.name}/${sub.name}`)) &&
+                          sub.rows.map((r) => (
+                            <Row
+                              key={r.material_id}
+                              r={r}
+                              spCols={spCols}
+                              lsxId={lsx.id}
+                              open={openRow === r.material_id}
+                              onToggle={() =>
+                                setOpenRow(
+                                  openRow === r.material_id ? null : r.material_id,
+                                )
+                              }
+                              canEdit={canEdit}
+                              editable={!data.manual_error}
+                              busy={busy}
+                              onSaveQty={(v) =>
+                                saveRows(
+                                  [
+                                    {
+                                      material_id: r.material_id,
+                                      qty_needed: v,
+                                      note: r.note,
+                                    },
+                                  ],
+                                  `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
+                                )
+                              }
+                              onSaveNote={(v) =>
+                                saveRows(
+                                  [
+                                    {
+                                      material_id: r.material_id,
+                                      qty_needed: r.qty_needed,
+                                      note: v || null,
+                                    },
+                                  ],
+                                  v
+                                    ? `${r.material_code}: đã ghi chú`
+                                    : `${r.material_code}: đã xoá ghi chú`,
+                                )
+                              }
+                              onOverride={() => override(r)}
+                              onRemove={() => removeManual(r)}
+                            />
+                          ))}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -798,6 +1147,7 @@ export function BangKeScreen({
 /** Một dòng vật tư — tách riêng cho gọn và để ô sửa giữ được state của nó. */
 function Row({
   r,
+  spCols,
   lsxId,
   open,
   onToggle,
@@ -810,6 +1160,8 @@ function Row({
   onRemove,
 }: {
   r: BangKeRow
+  /** Sản phẩm được bày thành cột; rỗng = lệnh nhiều SP quá, không bày ma trận. */
+  spCols: { id: string; code: string; qty: number }[]
   lsxId: string
   open: boolean
   onToggle: () => void
@@ -823,9 +1175,10 @@ function Row({
 }) {
   const isManual = r.source === 'manual'
   const onHandTotal = r.available + r.received
+  const viTri = viTriLapRap(r)
   return (
     <TableRow>
-      <TableCell className="p-0">
+      <TableCell className="bg-card sticky left-0 z-10 p-0">
         <span
           className="block h-full min-h-[44px] w-1"
           style={{ background: STATUS_STRIPE[r.status] }}
@@ -833,13 +1186,37 @@ function Row({
         />
       </TableCell>
 
-      <TableCell>
+      <TableCell className={cn(GHIM, 'left-1 align-top')}>
         <div className="flex flex-wrap items-center gap-1.5">
           <DocChip>{r.material_code || '—'}</DocChip>
           <span className="line-clamp-1 font-medium">{r.material_name}</span>
         </div>
         <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
           <span>{r.unit}</span>
+          {/* Quy cách: người đi hỏi giá cần độ dày / chiều dài cây, không chỉ tên. */}
+          {r.spec && (
+            <>
+              <span>·</span>
+              <span className="truncate">{r.spec}</span>
+            </>
+          )}
+          {/*
+            VỊ TRÍ LẮP RÁP đi cùng dòng phụ, KHÔNG đứng riêng một cột.
+            Nguồn của nó là tên chi tiết trong định mức, không phải một trường
+            vị trí thật: khung/gỗ thì tên chi tiết tình cờ mô tả vị trí, còn
+            ngũ kim thì Kỹ thuật đặt tên chi tiết bằng chính tên vật tư. Đo 20
+            lệnh: chỉ 23/294 dòng (8%) có vị trí thật — một cột trống 92% thời
+            gian là chép khuôn tờ giấy chứ không theo thực tế.
+          */}
+          {viTri.length > 0 && (
+            <>
+              <span>·</span>
+              <span className="truncate" title={viTri.join(' · ')}>
+                lắp {viTri.slice(0, 2).join(', ')}
+                {viTri.length > 2 ? '+' + (viTri.length - 2) : ''}
+              </span>
+            </>
+          )}
           <span>·</span>
           <span
             className={
@@ -892,7 +1269,9 @@ function Row({
                 <span className="t-data">
                   {fmt(p.per)} × {fmt(p.qty)} SP = {fmt(p.per * p.qty)} {r.unit}
                 </span>
-                {p.explain && <span className="text-muted-foreground">({p.explain})</span>}
+                {p.explain && (
+                  <span className="text-muted-foreground">({p.explain})</span>
+                )}
                 {!p.confirmed && (
                   <span className="text-[var(--warn)]">BOM chưa xác nhận</span>
                 )}
@@ -901,6 +1280,29 @@ function Row({
           </ul>
         )}
       </TableCell>
+
+      {/*
+        MA TRẬN SẢN PHẨM: mỗi SP một cột, số là phần của mã này chia cho SP đó
+        (định mức/SP × SL SP). Cộng ngang các cột ra đúng cột "Cần" — người đọc
+        tự kiểm được, không phải tin.
+      */}
+      {spCols.map((p) => {
+        const fp = r.from_products.find((x) => x.code === p.code)
+        return (
+          <TableCell key={p.id} className="text-right">
+            {fp ? (
+              <>
+                <div className="t-data">{fmt(fp.per * fp.qty)}</div>
+                <div className="text-muted-foreground mt-0.5 text-[10.5px]">
+                  {fmt(fp.per)}/SP
+                </div>
+              </>
+            ) : (
+              <span className="text-muted-foreground text-[11px]">—</span>
+            )}
+          </TableCell>
+        )
+      })}
 
       <TableCell className="text-right">
         {canEdit && isManual && editable ? (
@@ -953,6 +1355,41 @@ function Row({
         >
           {fmt(r.suggest)}
         </span>
+      </TableCell>
+
+      {/*
+        GIÁ GẦN NHẤT lấy từ dòng đơn thật (xem BangKeRow.last_price). Bày kèm
+        tiền tạm tính cho phần còn phải đặt — đó là con số người mua cần để xin
+        duyệt, trước đây phải mở tab khác tra rồi bấm máy tính.
+      */}
+      <TableCell className="text-right">
+        {r.last_price ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help">
+                <div className="t-data">
+                  {r.last_price.unit_price.toLocaleString('vi-VN')}
+                  <span className="text-muted-foreground ml-1 text-[11px]">
+                    {r.last_price.currency}
+                  </span>
+                </div>
+                {r.suggest > 0 && (
+                  <div className="text-muted-foreground mt-0.5 text-[11px]">
+                    ≈ {(r.suggest * r.last_price.unit_price).toLocaleString('vi-VN')}
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Mua gần nhất của {r.last_price.supplier_name} · đơn {r.last_price.po_code} ·{' '}
+              {dmy(r.last_price.at.slice(0, 10))}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-muted-foreground text-[11px] italic">
+            chưa mua bao giờ
+          </span>
+        )}
       </TableCell>
 
       <TableCell>
@@ -1031,6 +1468,147 @@ function Row({
         </TableCell>
       )}
     </TableRow>
+  )
+}
+
+/**
+ * XEM THEO NHÀ CUNG CẤP — mỗi khối là một tờ đơn sắp soạn.
+ *
+ * Cột ở đây ít hơn hẳn bảng chính: đang cắt đơn thì chỉ cần mã, số phải đặt,
+ * giá lần trước và thành tiền. Tồn / đã đặt / vị trí lắp ráp là chuyện của lúc
+ * rà, bày lại ở đây chỉ làm loãng.
+ */
+function NccView({
+  blocks,
+  canEdit,
+  dangLoc,
+}: {
+  blocks: NccBlockUi[]
+  canEdit: boolean
+  /** Có bộ lọc nào đang bật không — quyết định câu giải thích khi rỗng. */
+  dangLoc: boolean
+}) {
+  if (blocks.length === 0) {
+    return (
+      <section className="bg-card rounded-lg border px-6 py-10 text-center">
+        <p className="t-title">
+          {dangLoc
+            ? 'Bộ lọc đang bật không còn mã nào phải đặt'
+            : 'Không còn mã nào phải đặt'}
+        </p>
+        {/*
+          Nói ĐÚNG lý do rỗng. Khi có bộ lọc mà vẫn báo "tồn kho đã phủ hết" thì
+          người dùng tin là lệnh xong, trong khi thật ra họ đang nhìn qua một
+          khe hẹp do chính mình bật.
+        */}
+        <p className="text-muted-foreground mt-1 text-[13px]">
+          {dangLoc
+            ? 'Bỏ bớt bộ lọc ở trên để xem các mã còn lại.'
+            : 'Tồn kho và các đơn đã duyệt đã phủ hết nhu cầu của lệnh.'}
+        </p>
+      </section>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-4">
+      {blocks.map((b) => (
+        <section
+          key={b.supplier_id ?? b.supplier_name}
+          className="bg-card overflow-hidden rounded-lg border"
+        >
+          <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+              <h2 className="t-title truncate">{b.supplier_name}</h2>
+              <span className="t-data text-muted-foreground text-[12px] font-normal">
+                {b.rows.length} mã
+              </span>
+              {[...b.tien].map(([cur, v]) => (
+                <span key={cur} className="t-data text-[12px]">
+                  ≈ {v.toLocaleString('vi-VN')} {cur}
+                </span>
+              ))}
+            </div>
+            {canEdit && b.href && (
+              <Button size="sm" asChild>
+                <Link href={b.href}>
+                  <ShoppingCart />
+                  {b.supplier_id
+                    ? `Soạn đơn ${b.rows.length} mã`
+                    : 'Soạn đơn (chọn NCC sau)'}
+                </Link>
+              </Button>
+            )}
+          </header>
+          {!b.supplier_id && (
+            <p className="text-muted-foreground border-b px-4 py-2 text-[12px]">
+              Những mã này chưa mua lần nào nên chưa biết gọi ai — phải đi hỏi giá trước.
+              Số tạm tính ở các khối trên không gồm chúng.
+            </p>
+          )}
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="min-w-[240px]">Vật tư</TableHead>
+                  <TableHead>ĐVT</TableHead>
+                  <TableHead className="text-right">Còn phải đặt</TableHead>
+                  <TableHead className="text-right">Giá lần trước</TableHead>
+                  <TableHead className="text-right">Tạm tính</TableHead>
+                  <TableHead className="min-w-[130px]">Mua lần cuối</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {b.rows.map((r) => (
+                  <TableRow key={r.material_id}>
+                    <TableCell>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <DocChip>{r.material_code || '—'}</DocChip>
+                        <span className="line-clamp-1 font-medium">
+                          {r.material_name}
+                        </span>
+                      </div>
+                      {r.spec && (
+                        <div className="text-muted-foreground mt-0.5 text-[11px]">
+                          {r.spec}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-[12px]">{r.unit}</TableCell>
+                    <TableCell className="text-right">
+                      <span className="t-data text-[15px] font-semibold text-[var(--stop)]">
+                        {fmt(r.suggest)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="t-data text-right">
+                      {r.last_price
+                        ? `${r.last_price.unit_price.toLocaleString('vi-VN')} ${r.last_price.currency}`
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="t-data text-right">
+                      {r.last_price
+                        ? (r.suggest * r.last_price.unit_price).toLocaleString('vi-VN')
+                        : '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-[12px]">
+                      {r.last_price ? (
+                        <>
+                          <span className="t-data">
+                            {dmy(r.last_price.at.slice(0, 10))}
+                          </span>{' '}
+                          · {r.last_price.po_code}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      ))}
+    </div>
   )
 }
 
@@ -1126,4 +1704,14 @@ function NoteCell({
       aria-label="Ghi chú dòng"
     />
   )
+}
+
+/**
+ * Tiền rút gọn cho nhãn thẻ số: "12,3 tr" thay vì "12.345.678". Thẻ chỉ có một
+ * dòng gợi ý, số đầy đủ đã nằm ở cột "Giá gần nhất" của từng dòng.
+ */
+function moneyShort(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace('.', ',')} tỷ`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')} tr`
+  return n.toLocaleString('vi-VN')
 }

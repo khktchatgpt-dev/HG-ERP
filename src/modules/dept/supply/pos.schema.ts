@@ -90,6 +90,31 @@ export const poLineInputSchema = z.object({
    */
   unit2_per_unit: optNum(1e6),
   unit2_label: optText(20),
+  /*
+   * ĐƠN GIÁ TÍNH THEO ĐVT MUA ('unit') HAY THEO ĐƠN VỊ QUY ĐỔI ('unit2').
+   *
+   * Đây là LỰA CHỌN của người nhập, không phải số dẫn xuất — nhà cung cấp báo
+   * giá theo cái gì thì hệ thống không đoán được. Đơn Visa Steel 04/09/2026 báo
+   * 87.700 đ/CÂY trong khi mẫu "sắt/thép theo kg" ép tính theo kg, ra sai 4,47
+   * lần. qty2/unit2 vẫn do server dẫn xuất như cũ.
+   */
+  price_per: z.enum(['unit', 'unit2']).nullish(),
+  /*
+   * CHIA SL CỦA DÒNG cho nhiều lệnh (0185). Rỗng = 100% thuộc LSX chính của
+   * đơn — mọi đơn một-lệnh không gửi gì thêm. Service kiểm tổng phần chia phải
+   * bằng qty_ordered (xem lib/po-lsx-split), DB không ràng buộc vì người soạn
+   * sửa SL đặt trước rồi mới sửa phần chia.
+   */
+  lsx_split: z
+    .array(
+      z.object({
+        production_order_id: z.string().uuid(),
+        qty: z.coerce.number().positive(),
+      }),
+    )
+    .max(10)
+    .optional()
+    .nullable(),
 })
 
 export const poCreateSchema = z.object({

@@ -176,6 +176,7 @@ export const pricesService = {
               unit_price: lp.unit_price,
               currency: lp.currency,
               po_code: lp.po_code,
+              supplier_id: lp.supplier_id,
               supplier_name: lp.supplier_name,
               at: lp.at,
             }

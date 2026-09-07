@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { LsxSplit } from '@/lib/po-lsx-split'
 import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
 import type { PoTemplate } from '@/lib/po-template'
 import type { PoStatus } from './pos.schema'
@@ -118,6 +119,11 @@ export type PoLineInput = Partial<PoLineTemplateFields> & {
   line_name?: string | null
   line_unit?: string | null
   qty_ordered: number
+  /**
+   * CHIA SL CỦA DÒNG cho nhiều lệnh (0185) — rỗng = 100% thuộc LSX chính của
+   * đơn. Xem lib/po-lsx-split.
+   */
+  lsx_split?: LsxSplit[] | null
   unit_price?: number | null
   /** Service tự dẫn xuất từ mẫu đơn (`deriveLine`) — client không gửi. */
   price_basis?: 'unit' | 'unit2'
@@ -367,6 +373,31 @@ export const posRepo = {
    *
    * Một truy vấn gộp cho cả trang, cùng lối với `totalsByPoIds`.
    */
+  /**
+   * CHIA SL THEO LỆNH của từng dòng (0185) — line_id → danh sách (lệnh, SL).
+   *
+   * Dòng KHÔNG có bản ghi nào = 100% thuộc LSX chính của đơn; xem lib/po-lsx-split.
+   * Bảng chỉ có dòng ở những đơn thật sự gộp nhiều lệnh nên map này gần như rỗng.
+   */
+  async lineSplitsByPoIds(poIds: string[]): Promise<Map<string, LsxSplit[]>> {
+    const out = new Map<string, LsxSplit[]>()
+    if (poIds.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_line_lsx')
+      .select('line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)')
+      .in('line.po_id', poIds)
+    for (const r of (data ?? []) as {
+      line_id: string
+      production_order_id: string
+      qty: number
+    }[]) {
+      const cur = out.get(r.line_id) ?? []
+      cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
+      out.set(r.line_id, cur)
+    }
+    return out
+  },
+
   async extraLsxByPoIds(
     ids: string[],
   ): Promise<Map<string, { id: string; code: string }[]>> {
@@ -551,10 +582,33 @@ export const posRepo = {
     type RawLine = Omit<PoLine, 'material_code' | 'material_name' | 'material_unit'> & {
       material: P | P[] | null
     }
-    return ((data ?? []) as RawLine[]).map((r) => {
+    const rows = (data ?? []) as RawLine[]
+    // Phần chia SL theo lệnh (0185) — nạp kèm để mở lại đơn thấy đúng số đã
+    // chia, không phải gõ lại.
+    const splits = new Map<string, LsxSplit[]>()
+    if (rows.length > 0) {
+      const { data: sp } = await db()
+        .from('supply_po_line_lsx')
+        .select('line_id, production_order_id, qty')
+        .in(
+          'line_id',
+          rows.map((r) => r.id),
+        )
+      for (const r of (sp ?? []) as {
+        line_id: string
+        production_order_id: string
+        qty: number
+      }[]) {
+        const cur = splits.get(r.line_id) ?? []
+        cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
+        splits.set(r.line_id, cur)
+      }
+    }
+    return rows.map((r) => {
       const m = Array.isArray(r.material) ? r.material[0] : r.material
       return {
         ...r,
+        lsx_split: splits.get(r.id) ?? null,
         ...numericLineFields(r as unknown as Record<string, unknown>),
         material: undefined,
         // DÒNG TỰ DO (0134): không có vật tư kho — tên/ĐVT lấy từ cặp tự gõ,
@@ -605,6 +659,14 @@ export const posRepo = {
     return po
   },
 
+  /**
+   * Ghi lại toàn bộ dòng của đơn — XOÁ RỒI CHÈN.
+   *
+   * Vì xoá rồi chèn nên id dòng đổi mỗi lượt lưu, và bảng chia SL theo lệnh
+   * (supply_po_line_lsx, khoá ngoại ON DELETE CASCADE) bị dọn theo. Nên phần
+   * chia phải ghi LẠI ngay sau khi chèn, bám theo `sort_order` để khớp đúng
+   * dòng nào của dòng nào.
+   */
   async replaceLines(poId: string, lines: PoLineInput[]): Promise<void> {
     const { error: delErr } = await db()
       .from('supply_purchase_order_lines')
@@ -612,7 +674,7 @@ export const posRepo = {
       .eq('po_id', poId)
     if (delErr) throw new Error(delErr.message)
     if (lines.length === 0) return
-    const { error } = await db()
+    const { data: inserted, error } = await db()
       .from('supply_purchase_order_lines')
       .insert(
         lines.map((l, i) => {
@@ -646,7 +708,29 @@ export const posRepo = {
           }
         }),
       )
+      .select('id, sort_order')
     if (error) throw new Error(error.message)
+
+    // Chia SL theo lệnh: chỉ những dòng thật sự có phần chia mới sinh bản ghi.
+    const idByOrder = new Map(
+      ((inserted ?? []) as { id: string; sort_order: number }[]).map((r) => [
+        r.sort_order,
+        r.id,
+      ]),
+    )
+    const splitRows = lines.flatMap((l, i) => {
+      const id = idByOrder.get(i)
+      if (!id) return []
+      return (l.lsx_split ?? []).map((sp) => ({
+        line_id: id,
+        production_order_id: sp.production_order_id,
+        qty: sp.qty,
+      }))
+    })
+    if (splitRows.length > 0) {
+      const { error: e2 } = await db().from('supply_po_line_lsx').insert(splitRows)
+      if (e2) throw new Error(e2.message)
+    }
   },
 
   /** Lý do chốt thiếu theo dòng (0154) — cho tooltip trang chi tiết. */
