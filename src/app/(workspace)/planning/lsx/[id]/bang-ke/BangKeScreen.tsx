@@ -422,7 +422,7 @@ export function BangKeScreen({
               </p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 sm:shrink-0">
             {unconfirmedProducts.length > 0 && (
               <>
                 <Button

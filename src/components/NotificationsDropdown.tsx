@@ -118,7 +118,7 @@ export function NotificationsDropdown({ initialUnread }: { initialUnread: number
         onClick={toggle}
         aria-label="Thông báo"
         aria-expanded={open}
-        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground relative grid h-9 w-9 place-items-center rounded-md transition-colors"
+        className="text-muted-foreground hover:bg-accent hover:text-accent-foreground relative grid h-9 w-9 place-items-center rounded-md transition-colors pointer-coarse:h-11 pointer-coarse:w-11"
       >
         <Bell className="size-4.5" strokeWidth={1.8} />
         {unread > 0 && (

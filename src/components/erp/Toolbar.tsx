@@ -68,7 +68,7 @@ export function ToolbarInput({
           }
         }}
         placeholder={placeholder}
-        className={cn('h-8 w-full text-sm', icon && 'pl-7')}
+        className={cn('h-8 w-full text-sm pointer-coarse:h-11', icon && 'pl-7')}
       />
     </div>
   )
@@ -100,7 +100,7 @@ export function ToolbarSelect<T extends string>({
       onChange={(e) => onChange(e.target.value as T)}
       aria-label={ariaLabel}
       className={cn(
-        'border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 rounded-md border px-2 text-sm transition-[color,box-shadow] outline-none focus-visible:ring-[3px]',
+        'border-input bg-card focus-visible:border-ring focus-visible:ring-ring/50 h-8 pointer-coarse:h-11 rounded-md border px-2 text-sm transition-[color,box-shadow] outline-none focus-visible:ring-[3px]',
         className,
       )}
     >

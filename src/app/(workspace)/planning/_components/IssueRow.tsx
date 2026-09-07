@@ -65,7 +65,12 @@ export function IssueRow({ row, risk }: { row: LsxSupplyRow; risk: MeetingRisk }
           )}
         </div>
       </div>
-      <div className="text-[12px] sm:text-right">
+      {/*
+        col-start-2 ở mobile: lưới chỉ có hai cột dưới sm nên khối này rơi
+        xuống ĐÚNG cột vạch màu rộng 4px và chữ bị vắt dọc từng ký tự (đo ở
+        375px, 07/09/2026). Ép nó về cột nội dung.
+      */}
+      <div className="col-start-2 mt-1 text-[12px] sm:col-start-auto sm:mt-0 sm:text-right">
         <div className="text-muted-foreground">{risk.owner}</div>
         {risk.action && <div className="font-medium">{risk.action}</div>}
       </div>

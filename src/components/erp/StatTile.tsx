@@ -70,7 +70,15 @@ export function StatTile({
         {value}
       </p>
       {hint && (
-        <p className="text-muted-foreground mt-1.5 truncate text-[11px]">{hint}</p>
+        /*
+          Ở lưới 2 cột của điện thoại, truncate cắt câu gợi ý ngay giữa chừng
+          ("lệnh · mốc còn ≤ 3 ngày …") — chữ mất nghĩa mà không có chỗ nào
+          xem tiếp. Cho xuống hai dòng ở màn hẹp; từ sm giữ một dòng để hàng
+          thẻ vẫn bằng nhau.
+        */
+        <p className="text-muted-foreground mt-1.5 line-clamp-2 text-[11px] sm:truncate">
+          {hint}
+        </p>
       )}
     </>
   )

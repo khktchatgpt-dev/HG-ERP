@@ -50,7 +50,20 @@ function TabsList({
     <TabsPrimitive.List
       data-slot="tabs-list"
       data-variant={variant}
-      className={cn(tabsListVariants({ variant }), className)}
+      /*
+        BẪY (07/09/2026): chiều cao h-9 của dải tab đến từ variant
+        group-data-[orientation=horizontal] nên className "h-auto" của chỗ gọi
+        KHÔNG đè được (tailwind-merge coi hai lớp khác nhóm). Màn Vật tư theo
+        lệnh xin chip xuống dòng ở điện thoại, nhận lại một dải cao 36px chứa
+        89px chip — chip tràn đè lên ô tìm kiếm. Ai xin flex-wrap thì bỏ luôn
+        chiều cao cố định cho họ.
+      */
+      className={cn(
+        tabsListVariants({ variant }),
+        className?.includes('flex-wrap') &&
+          'group-data-[orientation=horizontal]/tabs:h-auto',
+        className,
+      )}
       {...props}
     />
   )
