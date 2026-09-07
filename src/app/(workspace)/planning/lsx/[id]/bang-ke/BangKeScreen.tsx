@@ -55,6 +55,7 @@ import {
   type BangKeStatus,
 } from '@/lib/lsx-bang-ke'
 import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
+import { HAO_HUT_MAC_DINH, slDatHang } from '@/lib/po-waste'
 import { cn } from '@/lib/utils'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { PasteLinesDialog, type PasteConfirm } from '../../../pos/new/PasteLinesDialog'
@@ -153,6 +154,7 @@ function buildSubs(rows: BangKeRow[]): { name: string | null; rows: BangKeRow[] 
 function soanDonHref(
   lsxId: string,
   rows: BangKeRow[],
+  hh: number,
   supplierId?: string | null,
 ): string | null {
   const pick = rows.slice(0, MAX_PREFILL)
@@ -160,7 +162,10 @@ function soanDonHref(
   const p = new URLSearchParams({
     lsx: lsxId,
     material: pick.map((r) => r.material_code).join(','),
-    qty: pick.map((r) => String(r.suggest)).join(','),
+    // SỐ ĐẶT, không phải số còn thiếu: đơn gửi NCC luôn là số đã cộng hao hụt
+    // và làm tròn lên. Chép số còn thiếu sang đơn là bỏ mất cả cột hh của mọi
+    // mẫu đơn giấy, rồi người soạn phải tự nhân tay từng dòng.
+    qty: pick.map((r) => String(slDatHang(r.suggest, hh, r.unit))).join(','),
   })
   if (supplierId) p.set('supplier', supplierId)
   return `/planning/pos/new?${p.toString()}`
@@ -219,6 +224,14 @@ export function BangKeScreen({
   /** Mã đang mở phần "dùng cho sản phẩm nào". */
   const [openRow, setOpenRow] = useState<string | null>(null)
   const [view, setView] = useState<ViewMode>('loai')
+  /*
+    HAO HỤT: đổi cho CẢ BẢNG, không lưu xuống DB.
+
+    Đây là con số của một lượt đặt hàng, không phải thuộc tính của vật tư — hôm
+    nay mua gấp thì để 5%, lô sau đặt dư còn tồn thì để 0%. Lưu lại là biến một
+    quyết định nhất thời thành mặc định vĩnh viễn mà không ai nhớ ai đặt.
+  */
+  const [hh, setHh] = useState(HAO_HUT_MAC_DINH)
   /** Người dùng chủ động mở bảng dù chưa có định mức xác nhận nào. */
   const [forceTable, setForceTable] = useState(false)
 
@@ -292,12 +305,15 @@ export function BangKeScreen({
     con số tạm tính đọc thành "cả lệnh hết ngần này", trong khi nó mới chỉ gồm
     những mã từng mua.
   */
-  const uocTien = useMemo(() => estimateByCurrency(shortRows), [shortRows])
+  const uocTien = useMemo(() => estimateByCurrency(shortRows, hh), [shortRows, hh])
   const khongCoGia = useMemo(
     () => shortRows.filter((r) => !r.last_price).length,
     [shortRows],
   )
-  const prefillHref = useMemo(() => soanDonHref(lsx.id, shortRows), [shortRows, lsx.id])
+  const prefillHref = useMemo(
+    () => soanDonHref(lsx.id, shortRows, hh),
+    [shortRows, lsx.id, hh],
+  )
 
   /*
     GỘP THEO NHÀ CUNG CẤP — nửa phải sổ tay của phòng (sheet BKVT file YOTRIO:
@@ -330,8 +346,8 @@ export function BangKeScreen({
       [...map.values()]
         .map((b) => ({
           ...b,
-          tien: estimateByCurrency(b.rows),
-          href: soanDonHref(lsx.id, b.rows, b.id),
+          tien: estimateByCurrency(b.rows, hh),
+          href: soanDonHref(lsx.id, b.rows, hh, b.id),
         }))
         // Khối chưa biết NCC xuống cuối — đó là việc đi hỏi giá, không phải việc
         // cắt đơn; xen giữa thì nó chen ngang mạch làm việc.
@@ -343,7 +359,7 @@ export function BangKeScreen({
             : b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'vi'),
         )
     )
-  }, [filtered, lsx.id])
+  }, [filtered, lsx.id, hh])
 
   /** Số mã đang hiện ở chế độ NCC — sau bộ lọc, không phải tổng của lệnh. */
   const nccCount = useMemo(
@@ -487,7 +503,7 @@ export function BangKeScreen({
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a
-                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? '&nhap=1' : ''}`}
+                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke&hh=${hh}${data.include_draft ? '&nhap=1' : ''}`}
                 download
               >
                 <Download />
@@ -769,6 +785,31 @@ export function BangKeScreen({
             chỉ {nccCount} mã còn phải đặt
           </span>
         )}
+        {/*
+          HAO HỤT của lượt đặt này. Đặt cạnh công tắc chế độ xem chứ không nhét
+          vào thanh lọc: nó không lọc gì cả, nó ĐỔI SỐ trên cột SL đặt và trên
+          mọi nút soạn đơn.
+        */}
+        <label className="text-muted-foreground ml-auto flex items-center gap-1.5 text-[12px]">
+          Hao hụt
+          <Input
+            type="number"
+            min={0}
+            max={50}
+            step={1}
+            value={hh}
+            onChange={(e) => {
+              const v = Number(e.target.value)
+              setHh(Number.isFinite(v) ? Math.min(Math.max(v, 0), 50) : 0)
+            }}
+            // Lăn chuột trên ô số đang focus là đổi số mà không ai định đổi —
+            // cùng cách NumberWheelGuard chặn ở form soạn đơn.
+            onWheel={(e) => e.currentTarget.blur()}
+            className="t-data h-8 w-16 px-2 text-right text-[13px]"
+            aria-label="Phần trăm hao hụt khi đặt hàng"
+          />
+          %
+        </label>
       </div>
 
       <Toolbar
@@ -817,6 +858,7 @@ export function BangKeScreen({
         <NccView
           blocks={nccBlocks}
           canEdit={canEdit}
+          hh={hh}
           dangLoc={status !== null || group !== '' || q.trim() !== ''}
         />
       ) : blockedByBom ? (
@@ -937,6 +979,12 @@ export function BangKeScreen({
                       <TableHead className="text-right">Đã có</TableHead>
                       <TableHead className="text-right">Đã đặt</TableHead>
                       <TableHead className="text-right">Còn phải đặt</TableHead>
+                      <TableHead className="min-w-[92px] text-right">
+                        SL đặt
+                        <span className="t-data text-muted-foreground ml-1 text-[10.5px] font-normal">
+                          +{hh}%
+                        </span>
+                      </TableHead>
                       <TableHead className="min-w-[112px] text-right">
                         Giá gần nhất
                       </TableHead>
@@ -958,7 +1006,7 @@ export function BangKeScreen({
                           <TableRow className="hover:bg-transparent">
                             <TableCell className="bg-card sticky left-0 z-10 p-0" />
                             <TableCell
-                              colSpan={(canEdit ? 10 : 9) + spCols.length}
+                              colSpan={(canEdit ? 11 : 10) + spCols.length}
                               className="bg-muted/40 text-muted-foreground py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"
                             >
                               {sub.name}
@@ -972,6 +1020,7 @@ export function BangKeScreen({
                           <Row
                             key={r.material_id}
                             r={r}
+                            hh={hh}
                             spCols={spCols}
                             lsxId={lsx.id}
                             open={openRow === r.material_id}
@@ -1054,6 +1103,7 @@ export function BangKeScreen({
 /** Một dòng vật tư — tách riêng cho gọn và để ô sửa giữ được state của nó. */
 function Row({
   r,
+  hh,
   spCols,
   lsxId,
   open,
@@ -1067,6 +1117,8 @@ function Row({
   onRemove,
 }: {
   r: BangKeRow
+  /** Phần trăm hao hụt đang đặt cho cả bảng. */
+  hh: number
   /** Sản phẩm được bày thành cột; rỗng = lệnh nhiều SP quá, không bày ma trận. */
   spCols: { id: string; code: string; qty: number }[]
   lsxId: string
@@ -1279,6 +1331,21 @@ function Row({
       </TableCell>
 
       {/*
+        SL ĐẶT = còn phải đặt + hao hụt, làm tròn LÊN (xem lib/po-waste). Đây là
+        con số đi vào đơn gửi NCC, nên nó phải đứng ngay cạnh "còn phải đặt" để
+        người mua so được hai số và thấy phần dư là bao nhiêu.
+      */}
+      <TableCell className="text-right">
+        {r.suggest > 0 ? (
+          <span className="t-data font-semibold">
+            {fmt(slDatHang(r.suggest, hh, r.unit))}
+          </span>
+        ) : (
+          <span className="text-muted-foreground text-[11px]">—</span>
+        )}
+      </TableCell>
+
+      {/*
         GIÁ GẦN NHẤT lấy từ dòng đơn thật (xem BangKeRow.last_price). Bày kèm
         tiền tạm tính cho phần còn phải đặt — đó là con số người mua cần để xin
         duyệt, trước đây phải mở tab khác tra rồi bấm máy tính.
@@ -1403,9 +1470,12 @@ function NccView({
   blocks,
   canEdit,
   dangLoc,
+  hh,
 }: {
   blocks: NccBlock[]
   canEdit: boolean
+  /** Hao hụt đang đặt — cột "SL đặt" ở đây phải khớp với bảng chính. */
+  hh: number
   /** Có bộ lọc nào đang bật không — quyết định câu giải thích khi rỗng. */
   dangLoc: boolean
 }) {
@@ -1470,7 +1540,13 @@ function NccView({
                 <TableRow>
                   <TableHead className="min-w-[240px]">Vật tư</TableHead>
                   <TableHead>ĐVT</TableHead>
-                  <TableHead className="text-right">Phải đặt</TableHead>
+                  <TableHead className="text-right">Còn thiếu</TableHead>
+                  <TableHead className="text-right">
+                    SL đặt
+                    <span className="t-data text-muted-foreground ml-1 text-[10.5px] font-normal">
+                      +{hh}%
+                    </span>
+                  </TableHead>
                   <TableHead className="text-right">Giá lần trước</TableHead>
                   <TableHead className="text-right">Tạm tính</TableHead>
                   <TableHead className="min-w-[130px]">Mua lần cuối</TableHead>
@@ -1494,8 +1570,17 @@ function NccView({
                     </TableCell>
                     <TableCell className="text-[12px]">{r.unit}</TableCell>
                     <TableCell className="text-right">
-                      <span className="t-data text-[15px] font-semibold text-[var(--stop)]">
+                      <span className="t-data text-muted-foreground">
                         {fmt(r.suggest)}
+                      </span>
+                    </TableCell>
+                    {/*
+                      SỐ ĐẶT nổi bật hơn số còn thiếu ở màn này: đang cắt đơn
+                      thì con số đi vào tờ đơn mới là con số phải đọc.
+                    */}
+                    <TableCell className="text-right">
+                      <span className="t-data text-[15px] font-semibold text-[var(--stop)]">
+                        {fmt(slDatHang(r.suggest, hh, r.unit))}
                       </span>
                     </TableCell>
                     <TableCell className="t-data text-right">
@@ -1505,7 +1590,9 @@ function NccView({
                     </TableCell>
                     <TableCell className="t-data text-right">
                       {r.last_price
-                        ? (r.suggest * r.last_price.unit_price).toLocaleString('vi-VN')
+                        ? (
+                            slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
+                          ).toLocaleString('vi-VN')
                         : '—'}
                     </TableCell>
                     <TableCell className="text-muted-foreground text-[12px]">

@@ -9,6 +9,7 @@ import {
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
 import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
+import { HAO_HUT_MAC_DINH, slDatHang } from '@/lib/po-waste'
 import {
   MONEY_FMT,
   PCT_FMT,
@@ -162,6 +163,8 @@ export type LsxExcelKind = 'bangke' | 'lsx'
 export async function buildLsxDetailExcel(
   report: LsxDetailReport,
   kind: LsxExcelKind = 'lsx',
+  /** Hao hụt (%) — khớp với ô trên màn bảng kê, xem lib/po-waste. */
+  hh = HAO_HUT_MAC_DINH,
 ): Promise<Buffer> {
   const { lsx, risk, today } = report
   const wb = new ExcelJS.Workbook()
@@ -273,6 +276,9 @@ export async function buildLsxDetailExcel(
       'Nháp/chờ ký',
       'Đã về',
       'Còn phải đặt',
+      // SL ĐẶT = còn phải đặt + hao hụt, làm tròn lên. Cột này có trong 12/12
+      // mẫu đơn giấy ("SL Đặt hàng hh 3%") — nó mới là số gửi nhà cung cấp.
+      `SL đặt (+${hh}%)`,
       // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
       // ước được tiền và biết gọi ai mà không phải mở tab khác.
       'Đơn giá gần nhất',
@@ -318,9 +324,12 @@ export async function buildLsxDetailExcel(
         r.draft + r.pending,
         r.received,
         r.suggest,
+        slDatHang(r.suggest, hh, r.unit) || '',
         r.last_price?.unit_price ?? '',
         r.last_price?.currency ?? '',
-        r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
+        r.last_price && r.suggest > 0
+          ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
+          : '',
         dateCell(r.last_price?.at ?? null),
         r.last_price?.supplier_name ?? '',
         BANG_KE_STATUS[r.status].label,
@@ -339,9 +348,9 @@ export async function buildLsxDetailExcel(
       {},
       2,
     )
-    const uocTien = estimateByCurrency(bk.rows)
+    const uocTien = estimateByCurrency(bk.rows, hh)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 18: cur, 19: tien }, 2)
+      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 19: cur, 20: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -351,18 +360,18 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [9, 10, 11, 12, 13, 14, 15, 16])
-    numberCols(sb, [17], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [19], MONEY_FMT)
-    dateCols(sb, [20])
+    numberCols(sb, [9, 10, 11, 12, 13, 14, 15, 16, 17])
+    numberCols(sb, [18], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [20], MONEY_FMT)
+    dateCols(sb, [21])
     applyWidths(
       sb,
       [
-        5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24,
-        18, 20, 30, 24,
+        5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 14, 8, 15, 13,
+        24, 18, 20, 30, 24,
       ],
     )
-    for (const c of [5, 6, 7, 21, 24, 25]) {
+    for (const c of [5, 6, 7, 22, 25, 26]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
     finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 4 })
