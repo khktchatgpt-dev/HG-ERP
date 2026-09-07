@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   Building2,
@@ -58,6 +59,10 @@ import {
 } from '@/lib/lsx-supply'
 import type { BadgeTone } from '@/components/Badge'
 import type { LsxSupplyRow } from '@/modules/dept/supply/lsx-supply.service'
+import { useToast } from '@/components/ui/Toast'
+import { apiErrorText } from '@/lib/api'
+import { suggestMaterialsDue } from '@/lib/lsx-supply'
+import { LsxDueEditor, saveMaterialsDue } from './LsxDueEditor'
 
 export type { LsxSupplyRow }
 
@@ -113,6 +118,32 @@ export function LsxSupplyScreen({
   canEdit: boolean
 }) {
   const [gate, setGate] = useState<LsxSupplyGateKey | 'mine' | 'all'>('all')
+
+  const router = useRouter()
+  const toast = useToast()
+  const [filling, setFilling] = useState(false)
+  // Lệnh chưa có hạn nhưng có ngày xuất — điền gợi ý "ngày xuất − 30" một lượt.
+  const fillable = useMemo(
+    () => rows.filter((r) => !r.materials_due_at && suggestMaterialsDue(r.ship_date, today)),
+    [rows, today],
+  )
+  async function fillSuggested() {
+    setFilling(true)
+    let ok = 0
+    try {
+      for (const r of fillable) {
+        await saveMaterialsDue(r.id, suggestMaterialsDue(r.ship_date, today))
+        ok++
+      }
+      toast.success(`Đã đặt hạn vật tư cho ${ok} lệnh theo ngày xuất − 30`)
+      router.refresh()
+    } catch (e) {
+      toast.error(`Dừng sau ${ok} lệnh`, apiErrorText(e))
+      router.refresh()
+    } finally {
+      setFilling(false)
+    }
+  }
   const [customer, setCustomer] = useState('')
   const [dueFilter, setDueFilter] = useState('')
   const [q, setQ] = useState('')
@@ -183,12 +214,17 @@ export function LsxSupplyScreen({
         title="Vật tư theo lệnh"
         description="Theo dõi tiến độ vật tư và tình trạng đơn mua của các lệnh sản xuất đang chạy. Xếp theo việc cần xử lý trước."
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" asChild>
               <a href="/api/dept/supply/lsx-report" download>
-                <Download className="size-4" /> Xuất Excel
+                <Download className="size-4" /> Xuất Excel (mọi lệnh)
               </a>
             </Button>
+            {canEdit && fillable.length > 0 && (
+              <Button size="sm" variant="outline" disabled={filling} onClick={() => void fillSuggested()}>
+                <CalendarClock className="size-4" /> Điền hạn gợi ý cho {fillable.length} lệnh
+              </Button>
+            )}
             {canEdit && (
               <Button size="sm" asChild>
                 <Link href="/planning/pos/new">
@@ -383,7 +419,7 @@ export function LsxSupplyScreen({
                   <TableRow>
                     <TableHead className="w-8 text-center font-semibold text-xs uppercase tracking-wider">#</TableHead>
                     <TableHead className="font-semibold text-xs uppercase tracking-wider">Lệnh SX & Khách hàng</TableHead>
-                    <TableHead className="font-semibold text-xs uppercase tracking-wider">Sản phẩm & Đơn hàng</TableHead>
+                    <TableHead className="w-[260px] font-semibold text-xs uppercase tracking-wider">Sản phẩm & Đơn hàng</TableHead>
                     <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Tiến độ vật tư</TableHead>
                     <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Hạn & Giao khách</TableHead>
                     <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Đơn mua (PO)</TableHead>
@@ -417,18 +453,27 @@ export function LsxSupplyScreen({
                         </div>
                       </TableCell>
 
-                      {/* Sản phẩm & Đơn hàng */}
-                      <TableCell className="py-3">
+                      {/*
+                        Sản phẩm & Đơn hàng — CÓ TRẦN BỀ NGANG (07/09/2026).
+                        TableCell mặc định whitespace-nowrap, nên một lệnh nhiều
+                        đơn thổi ô này lên 1434px và đẩy bốn cột quan trọng
+                        (tiến độ, hạn, PO, thao tác) ra ngoài màn 1440. Cắt bằng
+                        truncate + title để vẫn xem được đủ khi rê chuột.
+                      */}
+                      <TableCell className="max-w-[260px] py-3">
                         <div className="flex flex-col gap-1">
                           {row.order_codes.length > 0 && (
-                            <div className="font-mono text-xs text-muted-foreground">
+                            <div
+                              className="font-mono text-xs text-muted-foreground truncate"
+                              title={row.order_codes.join(', ')}
+                            >
                               ĐH: {row.order_codes.join(', ')}
                             </div>
                           )}
                           <div className="flex flex-col gap-0.5 text-xs">
                             {row.products.slice(0, 3).map((p) => (
                               <div key={p.code} className="flex items-baseline gap-2">
-                                <span className="font-medium text-foreground font-mono">{p.code}</span>
+                                <span className="font-medium text-foreground font-mono truncate">{p.code}</span>
                                 <span className="font-mono text-muted-foreground ml-auto shrink-0">{p.qty.toLocaleString('vi-VN')}</span>
                               </div>
                             ))}
@@ -458,7 +503,11 @@ export function LsxSupplyScreen({
                             <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                               <CalendarClock className="size-3" /> Hạn vật tư
                             </span>
-                            <span className="font-mono font-semibold text-sm">{dmy(row.materials_due_at)}</span>
+                            {canEdit ? (
+                              <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} />
+                            ) : (
+                              <span className="font-mono font-semibold text-sm">{dmy(row.materials_due_at)}</span>
+                            )}
                             {due === 'overdue' && daysLeft !== null ? (
                               <Badge tone="red" className="w-fit text-[10px]">Quá {-daysLeft} ngày</Badge>
                             ) : due === 'today' ? (
@@ -615,7 +664,11 @@ export function LsxSupplyScreen({
                       <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
                         <CalendarClock className="size-3" /> Hạn vật tư
                       </span>
-                      <span className="font-mono text-xs font-semibold">{dmy(row.materials_due_at)}</span>
+                      {canEdit ? (
+                        <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} compact />
+                      ) : (
+                        <span className="font-mono text-xs font-semibold">{dmy(row.materials_due_at)}</span>
+                      )}
                       {due === 'overdue' && daysLeft !== null ? (
                         <span className="text-[11px] font-semibold text-destructive">Quá {-daysLeft} ngày</span>
                       ) : due === 'today' ? (

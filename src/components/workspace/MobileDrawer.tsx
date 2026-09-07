@@ -51,7 +51,7 @@ export function MobileDrawer({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Mở menu"
-        className="text-muted-foreground hover:bg-accent hover:text-foreground grid h-9 w-9 place-items-center rounded-md lg:hidden"
+        className="text-muted-foreground hover:bg-accent hover:text-foreground grid h-11 w-11 place-items-center rounded-md lg:hidden"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
           <path

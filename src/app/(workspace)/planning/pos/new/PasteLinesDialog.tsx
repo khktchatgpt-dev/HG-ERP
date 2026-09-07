@@ -52,6 +52,7 @@ const num = (n: number) => n.toLocaleString('vi-VN')
 export function PasteLinesDialog({
   open,
   allowFree,
+  confirmLabel,
   onClose,
   onConfirm,
 }: {
@@ -59,6 +60,8 @@ export function PasteLinesDialog({
   template: string
   /** Mẫu gỗ/gia công: dòng không khớp được chuyển thành dòng tự gõ. */
   allowFree: boolean
+  /** Nhãn nút chốt theo ngữ cảnh (bảng kê dùng lại hộp này) — mặc định "Thêm N dòng vào đơn". */
+  confirmLabel?: (n: number) => string
   onClose: () => void
   onConfirm: (picked: PasteConfirm) => void
 }) {
@@ -343,7 +346,7 @@ export function PasteLinesDialog({
             </Button>
             <Button type="button" disabled={addable === 0} onClick={confirm}>
               <ClipboardPaste aria-hidden />
-              Thêm {addable} dòng vào đơn
+              {confirmLabel ? confirmLabel(addable) : `Thêm ${addable} dòng vào đơn`}
             </Button>
           </div>
         </div>

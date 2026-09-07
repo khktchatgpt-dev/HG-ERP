@@ -127,6 +127,7 @@ export type PoCounts = Record<Exclude<PoBucket, 'all'>, number> & {
   all: number
   mine: number
   late: number
+  lateUnsent: number
   noEta: number
 }
 
@@ -135,6 +136,9 @@ export type PoCounts = Record<Exclude<PoBucket, 'all'>, number> & {
  * lối đi, mà lối đi thì phải nói có bao nhiêu thứ ở đầu kia — kể cả khi bộ lọc
  * hiện tại đang giấu chúng đi.
  */
+/** Đơn chưa gửi NCC — quá hẹn ở nhóm này là lỗi của mình, không phải của NCC. */
+const UNSENT = new Set(['draft', 'pending_approval', 'approved'])
+
 export function countPos(pos: Po[], meId: string | null, today: string): PoCounts {
   const c: PoCounts = {
     all: pos.length,
@@ -146,13 +150,22 @@ export function countPos(pos: Po[], meId: string | null, today: string): PoCount
     cancelled: 0,
     mine: 0,
     late: 0,
+    /**
+     * Quá hẹn mà ĐƠN CHƯA RA KHỎI NHÀ (nháp / chờ ký / đã duyệt chưa gửi).
+     * Tách khỏi `late` vì gộp chung thì thẻ đọc thành "NCC trễ" trong khi lỗi
+     * nằm ở phía mình — đo 05/09/2026: cả 6 đơn "quá hẹn" đều còn nháp.
+     */
+    lateUnsent: 0,
     noEta: 0,
   }
   for (const p of pos) {
     const b = bucketOf(p.status)
     if (b) c[b]++
     if (meId && p.assigned_to === meId) c.mine++
-    if (assessPoLate(p, today) === 'overdue') c.late++
+    if (assessPoLate(p, today) === 'overdue') {
+      if (UNSENT.has(p.status)) c.lateUnsent++
+      else c.late++
+    }
     if (isMissingEta(p)) c.noEta++
   }
   return c

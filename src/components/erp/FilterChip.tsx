@@ -34,7 +34,7 @@ export function FilterChip({
   title?: string
 }) {
   const base =
-    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors'
+    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors pointer-coarse:min-h-11 pointer-coarse:px-4'
 
   // Rổ rỗng mà không đang chọn thì không có gì để bấm vào. Vẫn BÀY ra (không
   // ẩn) để người dùng thấy rổ đó tồn tại và đang bằng 0 — ẩn đi thì họ tưởng

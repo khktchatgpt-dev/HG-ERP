@@ -120,17 +120,30 @@ export function TodoScreen({
           <span className="grid size-12 place-items-center rounded-xl bg-[color-mix(in_srgb,var(--done)_12%,transparent)]">
             <CircleCheck className="size-6 text-[var(--done)]" strokeWidth={1.8} />
           </span>
-          <p className="t-title mt-4">Sạch việc</p>
+          <p className="t-title mt-4">
+            {scope === 'mine' && allCount > 0 ? 'Bạn không có việc nào' : 'Sạch việc'}
+          </p>
           <p className="t-body text-muted-foreground mt-1 max-w-sm">
             {scope === 'mine'
-              ? 'Không đơn nào của bạn đang chờ gửi, chờ hẹn ngày hay quá hạn.'
+              ? allCount > 0
+                ? // Nói thẳng cả phòng còn việc: bản cũ hiện "Sạch việc" trong khi
+                  // 64 đơn đang tồn, trưởng phòng mở ra tưởng hết việc thật.
+                  `Không đơn nào của bạn đang chờ, nhưng cả phòng còn ${allCount} việc — bấm "Cả phòng" để xem.`
+                : 'Không đơn nào của bạn đang chờ gửi, chờ hẹn ngày hay quá hạn.'
               : 'Cả phòng không còn đơn nào tồn đọng.'}
           </p>
-          <Button variant="outline" size="sm" className="mt-4" asChild>
-            <Link href="/planning/pos">
-              <Inbox /> Xem toàn bộ phiếu mua
-            </Link>
-          </Button>
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            {scope === 'mine' && allCount > 0 && (
+              <Button size="sm" onClick={() => setScope('all')}>
+                Xem {allCount} việc của cả phòng
+              </Button>
+            )}
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/planning/pos">
+                <Inbox /> Xem toàn bộ phiếu mua
+              </Link>
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-4">

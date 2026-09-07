@@ -4,8 +4,15 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 
+/*
+ * pointer-coarse:min-h-11 (07/09/2026) — quy ước mobile của dự án là vùng
+ * chạm 44px. Đặt ở ĐÂY chứ không vá từng màn: cỡ sm cao 32px, icon 36px, rà
+ * ở 375px thấy 61 phần tử dưới ngưỡng. Dùng pointer-coarse (không phải
+ * breakpoint) vì cửa sổ hẹp trên máy có chuột thì 32px vẫn bấm chuẩn — thứ
+ * cần nới là ngón tay, không phải bề ngang màn.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0 [&_svg]:shrink-0 pointer-coarse:min-h-11 outline-none focus-visible:ring-ring/50 focus-visible:ring-[3px] aria-invalid:ring-destructive/20 aria-invalid:border-destructive",
   {
     variants: {
       variant: {

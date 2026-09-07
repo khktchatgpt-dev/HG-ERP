@@ -330,6 +330,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
             icon: 'clipboard-check',
           },
           { href: '/planning/hang-sap-ve', label: 'Hàng sắp về', icon: 'truck' },
+          // Hai trang HỌP (05/09/2026) — tách khỏi Tổng quan vì nhiều lệnh, mỗi
+          // trang một câu hỏi: lệnh nào có nguy cơ / họp cần quyết gì.
+          { href: '/planning/van-de', label: 'Vấn đề cần xử lý', icon: 'triangle-alert' },
+          { href: '/planning/hop', label: 'Việc cần quyết định', icon: 'gavel' },
         ],
       },
     ],

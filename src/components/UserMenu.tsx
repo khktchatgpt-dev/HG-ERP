@@ -67,7 +67,7 @@ export function UserMenu({
         aria-label={`Tài khoản — ${user.name ?? user.email}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="grid place-items-center rounded-full transition-shadow hover:ring-2 hover:ring-[var(--primary)]/30"
+        className="grid size-9 place-items-center rounded-full transition-shadow hover:ring-2 hover:ring-[var(--primary)]/30 pointer-coarse:size-11"
       >
         <Avatar name={user.name} email={user.email} size="sm" src={avatarUrl} />
       </button>

@@ -151,6 +151,9 @@ async function hydrate(rows: Record<string, unknown>[]): Promise<PoMaterial[]> {
   )
 }
 
+/** Chuỗi trông như MÃ vật tư: không khoảng trắng, chữ-số-gạch, 3–40 ký tự. */
+const CODE_TOKEN = /^[A-Za-z0-9][A-Za-z0-9._/-]{2,39}$/
+
 export const poMaterialsRepo = {
   /**
    * Tìm theo mã / tên / barcode — KHÔNG dính gì tới mẫu đơn.
@@ -270,8 +273,20 @@ export const poMaterialsRepo = {
     }[]
   > {
     // Mã khớp thẳng — một truy vấn cho cả bộ.
+    // Sổ dán chỉ có cột "CN1527 | 150000" thì parser xếp mã vào cột TÊN — vẫn
+    // phải khớp như mã, không thì dòng đúng mã cũng thành "chưa chắc" bắt chọn tay
+    // (rà 05/09/2026). Tra cả bản gõ thường lẫn viết hoa vì `in` phân biệt hoa thường.
+    const codeKeyOf = (i: { name: string; code?: string | null }) => {
+      const c = i.code?.trim()
+      if (c) return c
+      const n = i.name.trim()
+      return CODE_TOKEN.test(n) ? n : ''
+    }
     const codes = [
-      ...new Set(items.map((i) => i.code?.trim()).filter((c): c is string => !!c)),
+      ...new Set(items.flatMap((i) => {
+        const k = codeKeyOf(i)
+        return k ? [k, k.toUpperCase()] : []
+      })),
     ]
     const byCode = new Map<string, PoMaterial>()
     if (codes.length > 0) {
@@ -308,9 +323,12 @@ export const poMaterialsRepo = {
       await Promise.all(
         chunk.map(async (item, j) => {
           const i = start + j
-          const coded = item.code?.trim() ? byCode.get(item.code.trim()) : undefined
+          const ck = codeKeyOf(item)
+          const coded = ck ? (byCode.get(ck) ?? byCode.get(ck.toUpperCase())) : undefined
           if (coded) {
-            out[i] = { match: coded, candidates: [], confidence: 'code' }
+            // Đưa chính mã khớp vào candidates: hộp dán vẽ ô chọn từ candidates, rỗng
+            // thì ô hiện "bỏ qua" dù dòng đã khớp chắc (rà 05/09/2026).
+            out[i] = { match: coded, candidates: [coded], confidence: 'code' }
             return
           }
           const candidates = await this.search({ q: item.name, limit: 4 })

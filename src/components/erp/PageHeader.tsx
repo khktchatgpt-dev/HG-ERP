@@ -30,7 +30,17 @@ export function PageHeader({
           )}
           {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
         </div>
-        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+        {actions && (
+          /*
+            flex-wrap + max-w-full (07/09/2026): shrink-0 đơn thuần khiến hàng
+            nút đẩy cả trang tràn ngang ở 375px (đo được scrollWidth 781 trên
+            màn bảng kê). Dưới sm cho nút xuống dòng; từ sm giữ nguyên nếp cũ
+            là khối nút không co.
+          */
+          <div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0">
+            {actions}
+          </div>
+        )}
       </div>
     </div>
   )

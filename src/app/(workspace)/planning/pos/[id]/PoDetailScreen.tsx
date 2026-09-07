@@ -72,6 +72,8 @@ import {
 } from '../PoDialogs'
 import { usePoActions } from '../usePoActions'
 import { PoConfirmDialog, PoShipmentsCard, type ShipmentView } from './PoShipmentsPanel'
+import { PoReceiptMatrix } from './PoReceiptMatrix'
+import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
 import type { PoLine, StatusLine } from '../po-types'
 
 export type PoDetailPo = {
@@ -132,6 +134,7 @@ export function PoDetailScreen({
   lines,
   statusLines,
   shipmentReceipts,
+  receiptBatches,
   extraLsx,
   shipments,
   history,
@@ -146,6 +149,8 @@ export function PoDetailScreen({
   lines: PoLine[]
   statusLines: StatusLine[]
   shipmentReceipts: Record<string, Record<string, number>>
+  /** Đợt về theo phiếu nhập — ma trận dòng × đợt (B3). */
+  receiptBatches: ReceiptBatch[]
   extraLsx: { id: string; code: string }[]
   shipments: ShipmentView[]
   history: ApprovalEvent[]
@@ -1251,6 +1256,20 @@ export function PoDetailScreen({
               icon={<Ban className="text-destructive size-6" />}
               title="Đơn hàng đã huỷ"
               description="Kế hoạch giao nhận và chứng từ kho không còn áp dụng cho đơn này."
+            />
+          )}
+
+          {po.status !== 'cancelled' && receiptBatches.length > 0 && (
+            <PoReceiptMatrix
+              batches={receiptBatches}
+              lines={lines.map((l) => ({
+                id: l.id,
+                material_code: l.material_code,
+                material_name: l.material_name,
+                unit: l.material_unit,
+                qty_ordered: l.qty_ordered,
+              }))}
+              status={statusLines}
             />
           )}
 

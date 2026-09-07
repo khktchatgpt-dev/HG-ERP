@@ -601,6 +601,8 @@ export type LsxNeed = {
   bars_needed?: number | null
   incomplete?: boolean
   source?: 'components' | 'bom'
+  /** Có phần định mức từ SP chưa xác nhận BOM — màn hình phải cảnh báo. */
+  unconfirmed?: boolean
 }
 
 /** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */

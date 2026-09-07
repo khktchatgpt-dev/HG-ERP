@@ -1,6 +1,6 @@
 {
   "_": "SINH TỰ ĐỘNG bởi scripts/ui-baseline.mjs — đừng sửa tay. Danh sách chỉ được ngắn đi.",
-  "generated_violations": 2329,
+  "generated_violations": 2300,
   "files": [
     "src/app/(admin)/admin/audit/AuditLogView.tsx",
     "src/app/(admin)/admin/catalogs/CatalogsManager.tsx",
@@ -65,10 +65,8 @@
     "src/app/(workspace)/kehoach-sx/theo-to/page.tsx",
     "src/app/(workspace)/kehoach-sx/tuan/page.tsx",
     "src/app/(workspace)/planning/lsx/LsxSupplyScreen.tsx",
-    "src/app/(workspace)/planning/page.tsx",
     "src/app/(workspace)/planning/pos/PoBulkBar.tsx",
     "src/app/(workspace)/planning/pos/PoDialogs.tsx",
-    "src/app/(workspace)/planning/pos/PoStatusStepper.tsx",
     "src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx",
     "src/app/(workspace)/planning/pos/[id]/PoShipmentsPanel.tsx",
     "src/app/(workspace)/planning/pos/po-columns.tsx",

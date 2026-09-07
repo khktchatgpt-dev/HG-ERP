@@ -39,6 +39,7 @@ import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { usersRepo, type User } from '@/modules/core/users/users.repo'
+import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { emit } from '@/events/bus'
 import { BadRequest, Conflict, Forbidden, NotFound } from '@/server/http'
 
@@ -69,9 +70,70 @@ type IssueInput = {
  * trừ). Chưa nhập bảng → fallback BOM×SL (view) như cũ.
  * KHÔNG guard user — dùng ở route needs (mọi NV đọc) lẫn stockService (có guard).
  */
+
+/**
+ * NHU CẦU THEO ĐỊNH MỨC — gộp theo vật tư, ĐÃ QUY ĐỔI sang đơn vị mua.
+ *
+ * Thay `lsxNeedsRepo` (đọc view `v_lsx_material_status`) từ 05/09/2026: view
+ * lấy thẳng `parts.qty × SL SP` nên coi SỐ CHI TIẾT là SỐ CÂY — nhôm 2 thanh
+ * 1,04 m thành "2 cây" thay vì 0,35 cây, thừa gần 6 lần (xem lib/bom-unit).
+ * Dùng chung một đường với bảng kê để hai màn không nói hai con số.
+ *
+ * Dòng có định mức từ SP CHƯA xác nhận BOM vẫn được tính ở đây (khác bảng kê,
+ * nơi người mua tự bật/tắt), nhưng mang cờ `unconfirmed` để màn hình cảnh báo:
+ * chặn thẳng thì form soạn đơn trống trơn và không ai đặt được gì.
+ */
+async function bomLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
+  const [bom, issued] = await Promise.all([
+    lsxBomNeeds(productionOrderId),
+    issuedByLsx(productionOrderId),
+  ])
+  const byMat = new Map<string, LsxNeed & { unconfirmed?: boolean }>()
+  for (const l of bom.lines) {
+    const cur = byMat.get(l.material_id)
+    if (cur) {
+      cur.qty_needed += l.qty_needed
+      if (!l.bom_confirmed) cur.unconfirmed = true
+      continue
+    }
+    byMat.set(l.material_id, {
+      production_order_id: productionOrderId,
+      material_id: l.material_id,
+      material_code: l.material_code,
+      material_name: l.material_name,
+      unit: l.unit,
+      qty_needed: l.qty_needed,
+      qty_issued: 0,
+      qty_remaining: 0,
+      source: 'bom',
+      unconfirmed: !l.bom_confirmed,
+    })
+  }
+  return [...byMat.values()].map((n) => {
+    const qtyIssued = Math.max(issued.get(n.material_id) ?? 0, 0)
+    return {
+      ...n,
+      qty_needed: Math.round(n.qty_needed * 10_000) / 10_000,
+      qty_issued: qtyIssued,
+      qty_remaining: Math.max(
+        Math.round((n.qty_needed - qtyIssued) * 10_000) / 10_000,
+        0,
+      ),
+    }
+  })
+}
+
 export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   const comp = await componentMaterialNeeds(productionOrderId)
-  if (!comp) return lsxNeedsRepo(productionOrderId)
+  /*
+   * RỖNG cũng phải rơi về BOM (vá 05/09/2026). `componentMaterialNeeds` chỉ trả
+   * null khi lệnh KHÔNG có dòng định hình; lệnh có dòng mà chưa dòng nào gắn mã
+   * vật tư thì nó trả `[]` — và trước đây `[]` được coi là "đã có bảng, không
+   * cần gì". Đo 05/09: 8/15 lệnh có 994 dòng định hình, 0 dòng có mã, trong khi
+   * view định mức có mã cho 7 lệnh → mọi màn nhu cầu trống suốt từ 23/08.
+   * Bảng định hình chỉ THAY định mức khi nó thật sự nói được cần vật tư gì.
+   */
+  if (!comp || comp.length === 0) return bomLsxNeeds(productionOrderId)
 
   const issued = await issuedByLsx(productionOrderId)
   return comp.map((c) => {

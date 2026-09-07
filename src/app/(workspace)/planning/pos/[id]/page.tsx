@@ -7,7 +7,13 @@ import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { HttpError } from '@/server/http'
+import { loadReceiptBatches } from '@/modules/dept/supply/po-receipts.service'
 import { PoDetailScreen } from './PoDetailScreen'
+
+export const dynamic = 'force-dynamic'
+// Mọi thao tác trên đơn đổi trạng thái ở server rồi gọi router.refresh();
+// route không khai dynamic thì lần refresh đầu vẫn trả bản cũ — chốt thiếu
+// xong màn còn ghi "Về một phần" trong khi sổ đã "Về đủ" (rà 06/09/2026).
 
 /**
  * CHI TIẾT MỘT ĐƠN ĐẶT VẬT TƯ — trang thật, thay cho modal.
@@ -46,12 +52,14 @@ export default async function PoDetailPage({
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [history, shipments, shipmentReceipts] = await Promise.all([
+  const [history, shipments, shipmentReceipts, receiptBatches] = await Promise.all([
     approvalEventsRepo.listByEntity('po', po.id),
     posService.listShipments(user, po.id),
     // Đã về CÓ CHỨNG TỪ theo đợt (PNK nối shipment_id, 0153) — phần không nối
     // đợt thì client suy diễn nốt, xem allocateReceiptsToShipments.
     posService.shipmentReceipts(user, po.id),
+    // Đợt về theo PHIẾU cho ma trận dòng × đợt (B3) — cùng hàm với Excel lệnh.
+    loadReceiptBatches([po.id]).then((r) => r[po.id] ?? []),
   ])
 
   /*
@@ -112,6 +120,7 @@ export default async function PoDetailPage({
       extraLsx={extra_lsx}
       shipments={shipments}
       shipmentReceipts={shipmentReceipts}
+      receiptBatches={receiptBatches}
       history={history}
       warehouseDocs={warehouse_docs}
       canEdit={canEdit}

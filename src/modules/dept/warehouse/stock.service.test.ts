@@ -24,6 +24,9 @@ vi.mock('./stock.repo', () => ({
   lsxRemainingByIds: vi.fn(),
   lsxNeeds: vi.fn(),
 }))
+vi.mock('@/modules/dept/supply/lsx-bom-needs.repo', () => ({
+  lsxBomNeeds: vi.fn(),
+}))
 vi.mock('@/modules/dept/production/components.service', () => ({
   componentMaterialNeeds: vi.fn(),
 }))
@@ -77,6 +80,7 @@ import {
 import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { componentMaterialNeeds } from '@/modules/dept/production/components.service'
+import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
@@ -458,6 +462,50 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
     expect(lsxNeedsRepo).not.toHaveBeenCalled()
   })
 
+  it('bảng chi tiết CÓ dòng nhưng chưa gắn mã vật tư (trả []) → vẫn rơi về BOM', async () => {
+    // Đo 05/09/2026: 8/15 lệnh có định hình mà 0 dòng có material_id — coi [] là
+    // "đã có bảng" thì mọi màn nhu cầu trống dù định mức có mã cho 7 lệnh.
+    vi.mocked(componentMaterialNeeds).mockResolvedValue([])
+    vi.mocked(lsxBomNeeds).mockResolvedValue({
+      lines: [
+        {
+          product_id: 'p1',
+          product_code: 'SP-1',
+          product_name: 'Bàn',
+          product_qty: 80,
+          bom_confirmed: false,
+          material_id: 'm9',
+          material_code: 'NK-0049',
+          material_name: 'Nhôm khung',
+          unit: 'cây',
+          group_name: null,
+          // 2,08 m/SP ÷ 6 m mỗi cây — số đã QUY ĐỔI, không phải số thanh.
+          qty_per_unit: 0.3467,
+          qty_needed: 27.736,
+          basis: 'length_to_bar',
+          explain: '2,08 m/SP ÷ 6 m mỗi Cây',
+          part_count: 1,
+        },
+      ],
+      blocked: [],
+      products: [],
+    })
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map())
+
+    const out = await smartLsxNeeds('lsx1')
+
+    expect(lsxBomNeeds).toHaveBeenCalledWith('lsx1')
+    expect(lsxNeedsRepo).not.toHaveBeenCalled() // view cũ tính sai đơn vị
+    expect(out).toHaveLength(1)
+    expect(out[0]).toMatchObject({
+      material_code: 'NK-0049',
+      qty_needed: 27.736,
+      qty_remaining: 27.736,
+      source: 'bom',
+      unconfirmed: true,
+    })
+  })
+
   it('thiếu hệ số cây → qty rơi về kg; thiếu cả hai → số chi tiết', async () => {
     vi.mocked(componentMaterialNeeds).mockResolvedValue([
       {
@@ -489,25 +537,42 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
     expect(out[0].incomplete).toBe(true)
   })
 
-  it('chưa nhập bảng chi tiết → fallback BOM×SL (view) như cũ', async () => {
+  it('chưa nhập bảng chi tiết → định mức đã quy đổi ĐVT, trừ đã xuất', async () => {
     vi.mocked(componentMaterialNeeds).mockResolvedValue(null)
-    vi.mocked(lsxNeedsRepo).mockResolvedValue([
-      {
-        production_order_id: 'lsx1',
-        material_id: 'm1',
-        material_code: 'VT-01',
-        material_name: 'x',
-        unit: 'kg',
-        qty_needed: 12,
-        qty_issued: 0,
-        qty_remaining: 12,
-      },
-    ])
+    vi.mocked(lsxBomNeeds).mockResolvedValue({
+      lines: [
+        {
+          product_id: 'p1',
+          product_code: 'SP-1',
+          product_name: 'x',
+          product_qty: 3,
+          bom_confirmed: true,
+          material_id: 'm1',
+          material_code: 'VT-01',
+          material_name: 'x',
+          unit: 'kg',
+          group_name: null,
+          qty_per_unit: 4,
+          qty_needed: 12,
+          basis: 'weight',
+          explain: '4 kg/SP',
+          part_count: 1,
+        },
+      ],
+      blocked: [],
+      products: [],
+    })
+    // Đã xuất kho cho lệnh thì trừ ra — nhánh BOM trước đây bỏ qua phần này.
+    vi.mocked(issuedByLsx).mockResolvedValue(new Map([['m1', 5]]))
 
     const out = await smartLsxNeeds('lsx1')
-    expect(out[0].qty_needed).toBe(12)
-    expect(out[0].source).toBeUndefined() // nhánh BOM giữ nguyên shape cũ
-    expect(issuedByLsx).not.toHaveBeenCalled()
+    expect(out[0]).toMatchObject({
+      qty_needed: 12,
+      qty_issued: 5,
+      qty_remaining: 7,
+      source: 'bom',
+      unconfirmed: false,
+    })
   })
 })
 

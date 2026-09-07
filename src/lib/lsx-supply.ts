@@ -196,3 +196,32 @@ export function compareForSupply(a: SortableLsx, b: SortableLsx): number {
  * `production_order_id` nên bỏ sót ĐƠN MUA CHUNG NHIỀU LỆNH (0125): lệnh phụ
  * trông như chưa đặt gì. Đếm từ danh sách PO đã nạp thì đúng cả hai chuyện.
  */
+
+// ── Gợi ý hạn vật tư ──────────────────────────────────────────────────
+
+/**
+ * Số ngày trước NGÀY XUẤT mà vật tư phải về đủ (user chốt 05/09/2026: 30). Sổ
+ * Excel lệnh ROSCO thực tế đặt 42 ngày; lệnh gấp sẽ ngắn hơn — đây chỉ là mốc
+ * khởi đầu để 0/15 lệnh không hạn thành 15/15 có hạn trong một lượt, người mua
+ * sửa từng lệnh sau.
+ */
+export const MATERIALS_DUE_LEAD_DAYS = 30
+
+/**
+ * Hạn vật tư gợi ý = ngày xuất − N ngày; không có ngày xuất thì không gợi ý.
+ * Có `todayIso` thì không gợi ý một ngày đã qua: lệnh xuất trong 10 ngày nữa
+ * cần vật tư NGAY, gợi ý là hôm nay chứ không phải một hạn đã trễ từ đầu.
+ */
+export function suggestMaterialsDue(
+  shipDateIso: string | null,
+  todayIso?: string,
+  leadDays = MATERIALS_DUE_LEAD_DAYS,
+): string | null {
+  if (!shipDateIso) return null
+  const d = new Date(`${shipDateIso.slice(0, 10)}T00:00:00Z`)
+  if (Number.isNaN(d.getTime())) return null
+  d.setUTCDate(d.getUTCDate() - leadDays)
+  const iso = d.toISOString().slice(0, 10)
+  if (todayIso && iso < todayIso) return shipDateIso.slice(0, 10) < todayIso ? null : todayIso
+  return iso
+}
