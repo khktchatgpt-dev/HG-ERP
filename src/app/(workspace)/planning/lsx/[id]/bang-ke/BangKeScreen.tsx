@@ -47,6 +47,7 @@ import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import {
   BANG_KE_STATUS,
   BANG_KE_STATUSES,
+  estimateByCurrency,
   type BangKeRow,
   type BangKeStatus,
 } from '@/lib/lsx-bang-ke'
@@ -164,6 +165,17 @@ export function BangKeScreen({
   }, [filtered])
 
   const shortRows = useMemo(() => rows.filter((r) => r.suggest > 0), [rows])
+  /*
+    TIỀN TẠM TÍNH cho phần còn phải đặt — theo TỪNG tiền tệ, vì bảng có cả mã
+    mua bằng VND lẫn USD. Đếm riêng số mã chưa có giá lần nào: không nói ra thì
+    con số tạm tính đọc thành "cả lệnh hết ngần này", trong khi nó mới chỉ gồm
+    những mã từng mua.
+  */
+  const uocTien = useMemo(() => estimateByCurrency(shortRows), [shortRows])
+  const khongCoGia = useMemo(
+    () => shortRows.filter((r) => !r.last_price).length,
+    [shortRows],
+  )
   const prefillHref = useMemo(() => {
     const pick = shortRows.slice(0, MAX_PREFILL)
     if (pick.length === 0) return null
@@ -533,7 +545,9 @@ export function BangKeScreen({
           value={shortRows.length}
           hint={
             shortRows.length > 0
-              ? `${fmt(shortRows.reduce((s, r) => s + r.suggest, 0))} đơn vị tổng cộng`
+              ? uocTien.size > 0
+                ? `≈ ${[...uocTien].map(([c, v]) => `${moneyShort(v)} ${c}`).join(' + ')}${khongCoGia > 0 ? ` · ${khongCoGia} mã chưa có giá` : ''}`
+                : `${fmt(shortRows.reduce((s, r) => s + r.suggest, 0))} đơn vị · chưa mã nào có giá mua`
               : 'không còn mã nào thiếu'
           }
           tone="stop"
@@ -710,13 +724,16 @@ export function BangKeScreen({
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-1" />
-                      <TableHead className="min-w-[260px]">Vật tư</TableHead>
+                      <TableHead className="min-w-[248px]">Vật tư</TableHead>
                       <TableHead className="text-right">Cần</TableHead>
                       <TableHead className="text-right">Đã có</TableHead>
                       <TableHead className="text-right">Đã đặt</TableHead>
                       <TableHead className="text-right">Còn phải đặt</TableHead>
-                      <TableHead className="min-w-[150px]">Tình trạng</TableHead>
-                      <TableHead className="min-w-[180px]">Đơn mua</TableHead>
+                      <TableHead className="min-w-[112px] text-right">
+                        Giá gần nhất
+                      </TableHead>
+                      <TableHead className="min-w-[125px]">Tình trạng</TableHead>
+                      <TableHead className="min-w-[150px]">Đơn mua</TableHead>
                       {canEdit && <TableHead className="w-[130px]" />}
                     </TableRow>
                   </TableHeader>
@@ -840,6 +857,13 @@ function Row({
         </div>
         <div className="text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]">
           <span>{r.unit}</span>
+          {/* Quy cách: người đi hỏi giá cần độ dày / chiều dài cây, không chỉ tên. */}
+          {r.spec && (
+            <>
+              <span>·</span>
+              <span className="truncate">{r.spec}</span>
+            </>
+          )}
           <span>·</span>
           <span
             className={
@@ -953,6 +977,39 @@ function Row({
         >
           {fmt(r.suggest)}
         </span>
+      </TableCell>
+
+      {/*
+        GIÁ GẦN NHẤT lấy từ dòng đơn thật (xem BangKeRow.last_price). Bày kèm
+        tiền tạm tính cho phần còn phải đặt — đó là con số người mua cần để xin
+        duyệt, trước đây phải mở tab khác tra rồi bấm máy tính.
+      */}
+      <TableCell className="text-right">
+        {r.last_price ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="cursor-help">
+                <div className="t-data">
+                  {r.last_price.unit_price.toLocaleString('vi-VN')}
+                  <span className="text-muted-foreground ml-1 text-[11px]">
+                    {r.last_price.currency}
+                  </span>
+                </div>
+                {r.suggest > 0 && (
+                  <div className="text-muted-foreground mt-0.5 text-[11px]">
+                    ≈ {(r.suggest * r.last_price.unit_price).toLocaleString('vi-VN')}
+                  </div>
+                )}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              Mua gần nhất của {r.last_price.supplier_name} · đơn {r.last_price.po_code} ·{' '}
+              {dmy(r.last_price.at.slice(0, 10))}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <span className="text-muted-foreground text-[11px] italic">chưa mua bao giờ</span>
+        )}
       </TableCell>
 
       <TableCell>
@@ -1126,4 +1183,14 @@ function NoteCell({
       aria-label="Ghi chú dòng"
     />
   )
+}
+
+/**
+ * Tiền rút gọn cho nhãn thẻ số: "12,3 tr" thay vì "12.345.678". Thẻ chỉ có một
+ * dòng gợi ý, số đầy đủ đã nằm ở cột "Giá gần nhất" của từng dòng.
+ */
+function moneyShort(n: number): string {
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1).replace('.', ',')} tỷ`
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace('.', ',')} tr`
+  return n.toLocaleString('vi-VN')
 }

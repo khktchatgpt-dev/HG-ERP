@@ -87,7 +87,12 @@ export type BangKeFacts = {
   received: number
   pos: BangKePoRef[]
   /** Tên/ĐVT của mã CHỈ có trên đơn (ngoài định mức) — nguồn cần không biết nó. */
-  material?: { material_code: string; material_name: string; unit: string; group_name: string | null }
+  material?: {
+    material_code: string
+    material_name: string
+    unit: string
+    group_name: string | null
+  }
 }
 
 export type BangKeStatus =
@@ -165,6 +170,39 @@ export type BangKeRow = {
   status: BangKeStatus
   note: string | null
   pos: BangKePoRef[]
+  /**
+   * Quy cách của mã trong danh mục vật tư. Đi hỏi giá mà chỉ có tên ("Nhôm hộp
+   * 15x25x1li") thì nhà cung cấp vẫn hỏi lại độ dày / chiều dài cây.
+   */
+  spec?: string | null
+  /**
+   * GIÁ MUA GẦN NHẤT — lấy từ DÒNG ĐƠN thật, không phải cột
+   * `warehouse_materials.last_purchase_price`: đo 07/09/2026 thì cột danh mục
+   * chỉ điền được 14/105 mã từng mua (13%), còn dòng đơn có giá ở 97/105 (92%).
+   * Rỗng = mã chưa mua bao giờ, người mua phải đi hỏi giá.
+   */
+  last_price?: {
+    unit_price: number
+    currency: string
+    supplier_name: string
+    po_code: string
+    /** ISO timestamp của đơn gần nhất có giá mã này. */
+    at: string
+  } | null
+}
+
+/**
+ * Tiền TẠM TÍNH cho phần còn phải đặt của một dòng — gộp theo TỪNG TIỀN TỆ vì
+ * bảng kê có cả đơn VND lẫn USD, cộng chung ra một con số không có nghĩa.
+ */
+export function estimateByCurrency(rows: BangKeRow[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    if (!r.last_price || r.suggest <= 0) continue
+    const cur = r.last_price.currency
+    out.set(cur, (out.get(cur) ?? 0) + r.suggest * r.last_price.unit_price)
+  }
+  return out
 }
 
 const EMPTY_FACTS: BangKeFacts = {
@@ -249,7 +287,9 @@ export function buildBangKe(input: {
       : a
         ? // Mã chỉ có ở bản nháp thì nói thẳng nguồn là nháp, kể cả khi đang bật
           // "tính cả nháp" — người mua phải luôn thấy số này kém tin hơn.
-          (a.qty_needed === 0 && draftNeeded > 0 ? 'bom_draft' : a.source)
+          a.qty_needed === 0 && draftNeeded > 0
+          ? 'bom_draft'
+          : a.source
         : 'none'
     const autoNeeded = a ? autoQty : null
     const deviates =

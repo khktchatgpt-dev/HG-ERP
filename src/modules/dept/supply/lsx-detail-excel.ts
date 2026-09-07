@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
-import { BANG_KE_STATUS, type BangKeRow } from '@/lib/lsx-bang-ke'
+import { BANG_KE_STATUS, estimateByCurrency, type BangKeRow } from '@/lib/lsx-bang-ke'
 import {
   MONEY_FMT,
   PCT_FMT,
@@ -248,6 +248,8 @@ export async function buildLsxDetailExcel(
       'Nhóm vật tư',
       'Mã VT',
       'Tên vật tư',
+      // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
+      'Quy cách',
       'ĐVT',
       'Cần',
       // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
@@ -259,6 +261,13 @@ export async function buildLsxDetailExcel(
       'Nháp/chờ ký',
       'Đã về',
       'Còn phải đặt',
+      // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
+      // ước được tiền và biết gọi ai mà không phải mở tab khác.
+      'Đơn giá gần nhất',
+      'Tiền tệ',
+      'Tạm tính',
+      'Mua lần cuối',
+      'NCC đã mua',
       'Tình trạng',
       'Nguồn số Cần',
       'Đơn mua',
@@ -274,6 +283,7 @@ export async function buildLsxDetailExcel(
         r.group_name ?? '',
         r.material_code,
         r.material_name,
+        r.spec ?? '',
         r.unit,
         r.qty_needed,
         r.draft_needed,
@@ -283,6 +293,11 @@ export async function buildLsxDetailExcel(
         r.draft + r.pending,
         r.received,
         r.suggest,
+        r.last_price?.unit_price ?? '',
+        r.last_price?.currency ?? '',
+        r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
+        dateCell(r.last_price?.at ?? null),
+        r.last_price?.supplier_name ?? '',
         BANG_KE_STATUS[r.status].label,
         NGUON[r.source],
         r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
@@ -290,17 +305,36 @@ export async function buildLsxDetailExcel(
       ])
     }
     const bkLast = sb.rowCount
-    // Dòng tổng: "bao nhiêu mã còn phải đặt" là con số người đọc mang đi làm
-    // việc tiếp — đừng bắt họ tự lọc rồi đếm.
+    // Dòng tổng: "bao nhiêu mã còn phải đặt" và "hết bao nhiêu tiền" là hai con
+    // số người đọc mang đi làm việc tiếp — đừng bắt họ tự lọc rồi cộng tay.
+    // Tiền gộp THEO TỪNG TIỀN TỆ: bảng có cả mã mua VND lẫn USD.
     totalRow(
       sb,
       `Cộng ${bk.rows.length} mã · ${bk.rows.filter((r) => r.suggest > 0).length} mã còn phải đặt`,
       {},
       2,
     )
-    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13])
-    applyWidths(sb, [5, 22, 16, 38, 7, 11, 12, 10, 12, 10, 12, 10, 13, 18, 20, 30, 24])
-    for (const c of [4, 16, 17]) {
+    const uocTien = estimateByCurrency(bk.rows)
+    for (const [cur, tien] of uocTien) {
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 16: cur, 17: tien }, 2)
+    }
+    const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
+    if (chuaCoGia > 0) {
+      noteRow(
+        sb,
+        `${chuaCoGia} mã còn phải đặt CHƯA có giá mua lần nào — tiền tạm tính ở trên chưa gồm những mã đó.`,
+        'warn',
+      )
+    }
+    numberCols(sb, [7, 8, 9, 10, 11, 12, 13, 14])
+    numberCols(sb, [15], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [17], MONEY_FMT)
+    dateCols(sb, [18])
+    applyWidths(sb, [
+      5, 22, 16, 38, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18, 20, 30,
+      24,
+    ])
+    for (const c of [4, 5, 19, 22, 23]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
     finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 4 })

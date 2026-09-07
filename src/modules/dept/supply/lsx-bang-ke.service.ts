@@ -17,6 +17,7 @@ import {
 import { posService } from './pos.service'
 import { supplyRepo, RECEIVABLE } from './supply.repo'
 import { lsxNeedsRepo } from './lsx-needs.repo'
+import { pricesRepo } from './prices.repo'
 import type { BangKeManual } from '@/lib/lsx-bang-ke'
 
 export type LsxBangKe = {
@@ -50,7 +51,14 @@ export type LsxBangKe = {
     reason: string
   }[]
   /** SP của lệnh kèm trạng thái chốt định mức — nói rõ ai cần làm nốt. */
-  products: { id: string; code: string; name: string; qty: number; bom_confirmed: boolean; coded_parts: number }[]
+  products: {
+    id: string
+    code: string
+    name: string
+    qty: number
+    bom_confirmed: boolean
+    coded_parts: number
+  }[]
   /** Số dòng nhập tay đang có. */
   manual_count: number
   /** Bảng nhập tay chưa đọc được (chưa áp migration 0184) — UI nói thẳng, không giấu. */
@@ -265,6 +273,7 @@ export async function loadLsxBangKe(
   }
 
   const rows = buildBangKe({ needs, manual, facts, includeDraft })
+  await enrichRows(rows)
   const groups = [
     ...new Set(rows.map((r) => r.group_name).filter((g): g is string => !!g)),
   ].sort((a, b) => a.localeCompare(b, 'vi'))
@@ -299,5 +308,46 @@ export async function loadLsxBangKe(
         : needs.some((n) => n.source === 'components')
           ? 'components'
           : 'bom',
+  }
+}
+
+/**
+ * BƠM QUY CÁCH + GIÁ MUA GẦN NHẤT vào các dòng bảng kê.
+ *
+ * Hai thứ này không thuộc phép tính "cần bao nhiêu" nên không nằm trong
+ * `buildBangKe` (hàm thuần, có test riêng) — chúng chỉ là dữ kiện tra thêm để
+ * người mua khỏi phải mở tab khác: đi hỏi giá cần QUY CÁCH, ước tiền và biết
+ * gọi ai cần GIÁ và TÊN NCC của lần mua gần nhất.
+ *
+ * Hỏng thì NUỐT LỖI: bảng kê vẫn phải mở được khi tra giá lỗi — đây là thông
+ * tin phụ, không phải số để mua.
+ */
+async function enrichRows(rows: BangKeRow[]): Promise<void> {
+  const ids = rows.map((r) => r.material_id).filter(Boolean)
+  if (ids.length === 0) return
+  try {
+    const [specs, prices] = await Promise.all([
+      db().from('warehouse_materials').select('id, spec').in('id', ids),
+      pricesRepo.lastPurchases(ids),
+    ])
+    const specById = new Map(
+      (specs.data ?? []).map((m) => [m.id as string, (m.spec as string | null) ?? null]),
+    )
+    const priceById = new Map(prices.map((p) => [p.material_id, p]))
+    for (const r of rows) {
+      r.spec = specById.get(r.material_id) ?? null
+      const p = priceById.get(r.material_id)
+      r.last_price = p
+        ? {
+            unit_price: p.unit_price,
+            currency: p.currency,
+            supplier_name: p.supplier_name,
+            po_code: p.po_code,
+            at: p.at,
+          }
+        : null
+    }
+  } catch {
+    // Không có giá/quy cách thì bảng vẫn dùng được — cột để trống.
   }
 }

@@ -164,6 +164,14 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
             status: 'none',
             note: null,
             pos: [],
+            spec: 'D20 x 0.7mm x 6m',
+            last_price: {
+              unit_price: 41_000,
+              currency: 'VND',
+              supplier_name: 'Kim Phát',
+              po_code: 'PO-01/26 KP',
+              at: '2026-07-15T02:00:00.000Z',
+            },
           },
         ],
         blocked: [],
@@ -199,10 +207,8 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const sb = wb.getWorksheet('Bảng kê VT')!
     expect(sb.autoFilter).toBeTruthy()
     expect(sb.views[0]?.state).toBe('frozen')
-    expect(sb.views[0]?.ySplit).toBeGreaterThan(0)
-    expect(sb.pageSetup.printTitlesRow).toBe(
-      `${sb.views[0]?.ySplit}:${sb.views[0]?.ySplit}`,
-    )
+    expect(headRowOf(sb)).toBeGreaterThan(0)
+    expect(sb.pageSetup.printTitlesRow).toBe(`${headRowOf(sb)}:${headRowOf(sb)}`)
     expect(sb.pageSetup.orientation).toBe('landscape')
   })
 
@@ -211,19 +217,40 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     // đặt cột số căn phải là tiêu đề mất wrapText và bị cắt chữ.
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
-    const head = sb.getRow(sb.views[0]!.ySplit as number)
-    const conPhaiDat = head.getCell(13)
+    const head = sb.getRow(headRowOf(sb))
+    const conPhaiDat = head.getCell(14)
     expect(conPhaiDat.value).toBe('Còn phải đặt')
     expect(conPhaiDat.alignment?.wrapText).toBe(true)
     expect(conPhaiDat.alignment?.horizontal).toBe('center')
   })
 
+  it('có giá mua gần nhất, tạm tính = còn phải đặt × giá, tổng theo tiền tệ', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = headRowOf(sb)
+    const d = sb.getRow(head + 1)
+    expect(d.getCell(5).value).toBe('D20 x 0.7mm x 6m') // quy cách
+    expect(d.getCell(15).value).toBe(41_000) // đơn giá gần nhất
+    expect(d.getCell(16).value).toBe('VND')
+    expect(d.getCell(17).value).toBe(100 * 41_000) // tạm tính = 100 cây × giá
+    expect((d.getCell(18).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(d.getCell(19).value).toBe('Kim Phát')
+    // Dòng tổng tiền phải nói rõ TIỀN TỆ — bảng có thể có cả VND lẫn USD.
+    const text = sb
+      .getSheetValues()
+      .flat()
+      .filter((v) => v != null)
+      .map(String)
+      .join(' | ')
+    expect(text).toContain('Tạm tính phần còn phải đặt (VND)')
+  })
+
   it('cột số giữ KIỂU SỐ, số 0 không bị đổi thành chuỗi rỗng', async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
-    const head = sb.views[0]!.ySplit as number
-    // Dòng vật tư mẫu có "Đã về" = 0 (cột 12) — phải là số 0, không phải ''.
-    const c = sb.getRow(head + 1).getCell(12)
+    const head = headRowOf(sb)
+    // Dòng vật tư mẫu có "Đã về" = 0 (cột 13) — phải là số 0, không phải ''.
+    const c = sb.getRow(head + 1).getCell(13)
     expect(typeof c.value).toBe('number')
     expect(c.value).toBe(0)
     expect(String(c.numFmt)).toContain('""')
