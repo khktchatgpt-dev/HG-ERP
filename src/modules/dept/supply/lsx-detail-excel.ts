@@ -4,7 +4,9 @@ import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
 import {
   BANG_KE_STATUS,
+  NCC_CHUA_BIET,
   estimateByCurrency,
+  groupBySupplier,
   viTriLapRap,
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
@@ -399,6 +401,91 @@ export async function buildLsxDetailExcel(
           b.reason,
         ])
       }
+    }
+
+    // ── Sheet: ĐẶT CHO AI (nửa phải sổ tay của phòng) ────────────────────
+    /*
+      Sheet này là bảng CẮT ĐƠN: mỗi khối một nhà cung cấp, đúng khuôn nửa phải
+      sheet BKVT của phòng ("STT | NCC | Tên vật tư | ĐVT | Tổng SL cần đặt").
+      Sheet "Bảng kê VT" trả lời "còn thiếu gì", sheet này trả lời "gọi ai, mỗi
+      người bao nhiêu" — hai câu khác nhau nên hai tờ khác nhau, không nhét
+      chung rồi bắt người đọc tự lọc.
+
+      Cắt khối bằng ĐÚNG hàm lõi mà màn hình dùng, để file và màn không chia đơn
+      khác nhau.
+    */
+    const khoiNcc = groupBySupplier(bk.rows, hh)
+    if (khoiNcc.length > 0) {
+      const sn = wb.addWorksheet('Đặt cho ai')
+      titleRow(sn, `ĐẶT CHO AI — LSX ${lsx.code}`)
+      noteRow(
+        sn,
+        `Chỉ những mã CÒN PHẢI ĐẶT. Số đặt đã cộng hao hụt ${hh}% và làm tròn lên. Nhà cung cấp lấy theo lần mua gần nhất của chính mã đó.`,
+      )
+      sn.addRow([])
+      const nHead = headerRow(sn, [
+        'STT',
+        'Nhà cung cấp',
+        'Mã VT',
+        'Tên vật tư',
+        'Quy cách',
+        'ĐVT',
+        'Còn thiếu',
+        `SL đặt (+${hh}%)`,
+        'Đơn giá gần nhất',
+        'Tiền tệ',
+        'Tạm tính',
+        'Mua lần cuối',
+        'Đơn gần nhất',
+      ])
+      let k = 0
+      for (const b of khoiNcc) {
+        for (const r of b.rows) {
+          k++
+          sn.addRow([
+            k,
+            b.supplier_name,
+            r.material_code,
+            r.material_name,
+            r.spec ?? '',
+            r.unit,
+            r.suggest,
+            slDatHang(r.suggest, hh, r.unit),
+            r.last_price?.unit_price ?? '',
+            r.last_price?.currency ?? '',
+            r.last_price
+              ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
+              : '',
+            dateCell(r.last_price?.at ?? null),
+            r.last_price?.po_code ?? '',
+          ])
+        }
+        // Cộng theo TỪNG khối: đây là số tiền của một tờ đơn, người ký nhìn nó.
+        for (const [cur, tien] of b.tien) {
+          totalRow(sn, `Cộng ${b.supplier_name} (${cur})`, { 10: cur, 11: tien }, 2)
+        }
+        if (b.tien.size === 0) {
+          totalRow(sn, `Cộng ${b.supplier_name} — ${b.rows.length} mã, chưa có giá`, {}, 2)
+        }
+      }
+      const chuaBiet = khoiNcc.find((b) => b.supplier_name === NCC_CHUA_BIET)
+      if (chuaBiet) {
+        sn.addRow([])
+        noteRow(
+          sn,
+          `${chuaBiet.rows.length} mã chưa mua lần nào nên chưa biết gọi ai — phải đi hỏi giá trước, và tiền tạm tính ở các khối trên không gồm chúng.`,
+          'warn',
+        )
+      }
+      numberCols(sn, [7, 8])
+      numberCols(sn, [9], '#,##0.####;-#,##0.####;""')
+      numberCols(sn, [11], MONEY_FMT)
+      dateCols(sn, [12])
+      applyWidths(sn, [5, 30, 16, 38, 22, 7, 12, 12, 14, 8, 15, 13, 16])
+      for (const c of [2, 4, 5]) {
+        sn.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+      }
+      finishTable(sn, { head: nHead, freezeCols: 2, autoFilter: false })
     }
 
     // ── Sheet phụ: VẬT TƯ DÙNG CHO SẢN PHẨM NÀO ──────────────────────────

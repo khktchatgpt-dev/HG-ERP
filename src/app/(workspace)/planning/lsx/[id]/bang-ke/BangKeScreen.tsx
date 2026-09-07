@@ -50,6 +50,8 @@ import {
   BANG_KE_STATUS,
   BANG_KE_STATUSES,
   estimateByCurrency,
+  groupBySupplier,
+  type NccBlock,
   viTriLapRap,
   type BangKeRow,
   type BangKeStatus,
@@ -182,13 +184,8 @@ type NeedRow = { material_id: string; qty_needed: number; note?: string | null }
 /** "loai" = rà còn thiếu gì · "ncc" = cắt đơn cho ai. */
 type ViewMode = 'loai' | 'ncc'
 
-type NccBlock = {
-  id: string | null
-  name: string
-  rows: BangKeRow[]
-  tien: Map<string, number>
-  href: string | null
-}
+/** Khối NCC của lõi, kèm link soạn đơn mà chỉ màn hình cần. */
+type NccBlockUi = NccBlock & { href: string | null }
 
 /**
  * BẢNG KÊ VẬT TƯ CỦA LỆNH — màn nhân viên Cung ứng mở đầu ngày.
@@ -326,40 +323,22 @@ export function BangKeScreen({
     NCC lấy theo lần mua GẦN NHẤT của chính mã đó. Mã chưa mua bao giờ gom vào
     một khối riêng, KHÔNG đoán NCC cho chúng: đoán sai thì đơn gửi nhầm chỗ.
   */
-  const nccBlocks = useMemo(() => {
-    const map = new Map<string, { id: string | null; name: string; rows: BangKeRow[] }>()
-    // Ăn theo ĐÚNG bộ lọc đang bật, không đọc thẳng shortRows: để nguyên thanh
-    // lọc trên đầu mà bấm không đổi gì thì đó là nút chết, người dùng tưởng
-    // hỏng. Lọc xong còn rỗng thì nói rỗng — đó là câu trả lời thật.
-    for (const r of filtered.filter((x) => x.suggest > 0)) {
-      const key = r.last_price?.supplier_id ?? r.last_price?.supplier_name ?? '_'
-      const cur = map.get(key)
-      if (cur) cur.rows.push(r)
-      else
-        map.set(key, {
-          id: r.last_price?.supplier_id ?? null,
-          name: r.last_price?.supplier_name ?? 'Chưa biết mua ở đâu',
-          rows: [r],
-        })
-    }
-    return (
-      [...map.values()]
-        .map((b) => ({
-          ...b,
-          tien: estimateByCurrency(b.rows, hh),
-          href: soanDonHref(lsx.id, b.rows, hh, b.id),
-        }))
-        // Khối chưa biết NCC xuống cuối — đó là việc đi hỏi giá, không phải việc
-        // cắt đơn; xen giữa thì nó chen ngang mạch làm việc.
-        .sort((a, b) =>
-          !a.id !== !b.id
-            ? a.id
-              ? -1
-              : 1
-            : b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'vi'),
-        )
-    )
-  }, [filtered, lsx.id, hh])
+  /*
+    Cắt khối bằng ĐÚNG hàm lõi mà file Excel dùng (groupBySupplier) — hai bản
+    dựng riêng thì sớm muộn một bên đổi luật và màn với file chia đơn khác nhau.
+    Ở đây chỉ thêm phần màn cần mà file không cần: link sang form soạn đơn.
+
+    Ăn theo bộ lọc đang bật, không đọc thẳng shortRows: để nguyên thanh lọc trên
+    đầu mà bấm không đổi gì thì đó là nút chết.
+  */
+  const nccBlocks = useMemo(
+    () =>
+      groupBySupplier(filtered, hh).map((b) => ({
+        ...b,
+        href: soanDonHref(lsx.id, b.rows, hh, b.supplier_id),
+      })),
+    [filtered, lsx.id, hh],
+  )
 
   /** Số mã đang hiện ở chế độ NCC — sau bộ lọc, không phải tổng của lệnh. */
   const nccCount = useMemo(
@@ -1472,7 +1451,7 @@ function NccView({
   dangLoc,
   hh,
 }: {
-  blocks: NccBlock[]
+  blocks: NccBlockUi[]
   canEdit: boolean
   /** Hao hụt đang đặt — cột "SL đặt" ở đây phải khớp với bảng chính. */
   hh: number
@@ -1504,12 +1483,12 @@ function NccView({
     <div className="flex flex-col gap-4">
       {blocks.map((b) => (
         <section
-          key={b.id ?? b.name}
+          key={b.supplier_id ?? b.supplier_name}
           className="bg-card overflow-hidden rounded-lg border"
         >
           <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-3 border-b px-4 py-2.5">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
-              <h2 className="t-title truncate">{b.name}</h2>
+              <h2 className="t-title truncate">{b.supplier_name}</h2>
               <span className="t-data text-muted-foreground text-[12px] font-normal">
                 {b.rows.length} mã
               </span>
@@ -1523,12 +1502,14 @@ function NccView({
               <Button size="sm" asChild>
                 <Link href={b.href}>
                   <ShoppingCart />
-                  {b.id ? `Soạn đơn ${b.rows.length} mã` : 'Soạn đơn (chọn NCC sau)'}
+                  {b.supplier_id
+                    ? `Soạn đơn ${b.rows.length} mã`
+                    : 'Soạn đơn (chọn NCC sau)'}
                 </Link>
               </Button>
             )}
           </header>
-          {!b.id && (
+          {!b.supplier_id && (
             <p className="text-muted-foreground border-b px-4 py-2 text-[12px]">
               Những mã này chưa mua lần nào nên chưa biết gọi ai — phải đi hỏi giá trước.
               Số tạm tính ở các khối trên không gồm chúng.

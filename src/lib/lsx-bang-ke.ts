@@ -430,3 +430,55 @@ export function viTriLapRap(r: {
     return true
   })
 }
+
+/** Một khối "đặt cho ai" — mỗi khối là một tờ đơn sắp soạn. */
+export type NccBlock = {
+  supplier_id: string | null
+  supplier_name: string
+  rows: BangKeRow[]
+  /** Tiền tạm tính theo SỐ ĐẶT, gộp theo từng tiền tệ. */
+  tien: Map<string, number>
+}
+
+/** Tên khối cho những mã chưa mua lần nào — dùng chung màn hình và file. */
+export const NCC_CHUA_BIET = 'Chưa biết mua ở đâu'
+
+/**
+ * GỘP THEO NHÀ CUNG CẤP — nửa phải sổ tay của phòng (sheet BKVT file YOTRIO:
+ * "STT | NCC | Tên vật tư | ĐVT | Tổng SL cần đặt"). Đây là bảng để CẮT ĐƠN.
+ *
+ * Chỉ lấy dòng CÒN PHẢI ĐẶT: người đang cắt đơn không quan tâm mã đã đủ.
+ *
+ * NCC lấy theo lần mua GẦN NHẤT của chính mã đó. Mã chưa mua bao giờ gom vào
+ * một khối riêng và KHÔNG đoán NCC — đoán sai thì đơn gửi nhầm chỗ. Khối đó
+ * xuống cuối vì nó là việc đi hỏi giá, không phải việc cắt đơn.
+ *
+ * Ở LÕI THUẦN vì cả màn hình lẫn file Excel đều phải cắt y hệt nhau; hai bản
+ * dựng riêng thì sớm muộn một bên đổi luật và hai bên chia đơn khác nhau.
+ */
+export function groupBySupplier(rows: BangKeRow[], hh = 0): NccBlock[] {
+  const map = new Map<string, NccBlock>()
+  for (const r of rows) {
+    if (r.suggest <= 0) continue
+    const key = r.last_price?.supplier_id ?? r.last_price?.supplier_name ?? '_'
+    const cur = map.get(key)
+    if (cur) cur.rows.push(r)
+    else
+      map.set(key, {
+        supplier_id: r.last_price?.supplier_id ?? null,
+        supplier_name: r.last_price?.supplier_name ?? NCC_CHUA_BIET,
+        rows: [r],
+        tien: new Map(),
+      })
+  }
+  return [...map.values()]
+    .map((b) => ({ ...b, tien: estimateByCurrency(b.rows, hh) }))
+    .sort((a, b) =>
+      !a.supplier_id !== !b.supplier_id
+        ? a.supplier_id
+          ? -1
+          : 1
+        : b.rows.length - a.rows.length ||
+          a.supplier_name.localeCompare(b.supplier_name, 'vi'),
+    )
+}
