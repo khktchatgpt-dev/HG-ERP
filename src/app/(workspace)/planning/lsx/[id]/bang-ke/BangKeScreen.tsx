@@ -979,7 +979,21 @@ export function BangKeScreen({
                 nào. Bấm vào để thu gọn — đó là cách duy nhất làm trang ngắn lại
                 mà không giấu mất dữ liệu.
               */}
-              <header className="bg-muted/40 sticky top-14 z-20 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 backdrop-blur">
+              {/*
+                KHÔNG GHIM tiêu đề khối (gỡ 07/09/2026 — user báo lỗi UI).
+
+                Bảng nằm trong `div.overflow-x-auto` để cuộn ngang. Đặt
+                overflow-x: auto biến div thành SCROLL CONTAINER theo CẢ HAI
+                trục, nên `position: sticky` của hàng tiêu đề cột bám theo div
+                đó chứ không theo trang — div lại chỉ cao bằng nội dung, thành
+                ra hàng tiêu đề bị đẩy xuống và ĐÈ LÊN dòng dữ liệu.
+
+                Hàng tiêu đề cột vì vậy không ghim được. Mà nếu chỉ ghim tiêu đề
+                KHỐI thì khi cuộn nó trượt che mất chính hàng tiêu đề cột — thứ
+                người đọc cần hơn. Nên không ghim gì cả; định hướng đã có mục
+                lục "Nhảy tới" và nút thu gọn khối.
+              */}
+              <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -1007,9 +1021,7 @@ export function BangKeScreen({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead
-                        className={cn('bg-muted/40 w-1 p-0', 'sticky left-0 z-10')}
-                      />
+                      <TableHead className="bg-muted/40 sticky left-0 z-10 w-1 p-0" />
                       <TableHead className={cn(GHIM, 'bg-muted/40 left-1 min-w-[220px]')}>
                         Vật tư
                       </TableHead>
