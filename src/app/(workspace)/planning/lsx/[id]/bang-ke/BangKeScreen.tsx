@@ -513,6 +513,25 @@ export function BangKeScreen({
         </Notice>
       )}
 
+      {/*
+        ĐƠN GỘP LỆNH NÀY NHƯNG CHƯA CHIA SỐ (0185). Phần của lệnh đang tính
+        bằng 0 — im lặng thì người xem tưởng chưa ai đặt gì và đặt chồng thêm
+        một đơn nữa. Nói rõ đơn nào và mời vào chia.
+      */}
+      {data.unsplit_pos.length > 0 && (
+        <Notice tone="warn">
+          {data.unsplit_pos.map((p) => (
+            <span key={p.po_code} className="block">
+              Đơn <DocChip>{p.po_code}</DocChip> mua chung cho lệnh này nhưng{' '}
+              <b>chưa chia số lượng</b>, nên phần của lệnh đang tính bằng 0. Toàn bộ số
+              trên đơn đang thuộc lệnh{' '}
+              {p.lsx_chinh ? <DocChip>{p.lsx_chinh}</DocChip> : 'chính của đơn'} — mở đơn
+              để chia cho đúng.
+            </span>
+          ))}
+        </Notice>
+      )}
+
       {/* ── Nguồn định mức: nói thẳng số nào dùng được để mua ────────── */}
       <section className="bg-card rounded-lg border">
         <div className="flex flex-wrap items-start justify-between gap-3 p-4">

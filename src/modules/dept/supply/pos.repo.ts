@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import type { LsxSplit } from '@/lib/po-lsx-split'
 import { poLineAmount, type PoLineAmountInput } from '@/lib/po-line'
 import type { PoTemplate } from '@/lib/po-template'
 import type { PoStatus } from './pos.schema'
@@ -367,6 +368,31 @@ export const posRepo = {
    *
    * Một truy vấn gộp cho cả trang, cùng lối với `totalsByPoIds`.
    */
+  /**
+   * CHIA SL THEO LỆNH của từng dòng (0185) — line_id → danh sách (lệnh, SL).
+   *
+   * Dòng KHÔNG có bản ghi nào = 100% thuộc LSX chính của đơn; xem lib/po-lsx-split.
+   * Bảng chỉ có dòng ở những đơn thật sự gộp nhiều lệnh nên map này gần như rỗng.
+   */
+  async lineSplitsByPoIds(poIds: string[]): Promise<Map<string, LsxSplit[]>> {
+    const out = new Map<string, LsxSplit[]>()
+    if (poIds.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_line_lsx')
+      .select('line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)')
+      .in('line.po_id', poIds)
+    for (const r of (data ?? []) as {
+      line_id: string
+      production_order_id: string
+      qty: number
+    }[]) {
+      const cur = out.get(r.line_id) ?? []
+      cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
+      out.set(r.line_id, cur)
+    }
+    return out
+  },
+
   async extraLsxByPoIds(
     ids: string[],
   ): Promise<Map<string, { id: string; code: string }[]>> {
