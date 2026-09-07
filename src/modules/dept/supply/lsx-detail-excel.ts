@@ -263,6 +263,38 @@ export async function buildLsxDetailExcel(
         .filter(Boolean)
         .join(' · '),
     )
+    /*
+      CỘT KHÔNG NÓI THÊM GÌ THÌ ĐỪNG BÀY (user 07/09/2026, sau khi nhìn bản in).
+
+      Hai kiểu vô ích khác nhau:
+        · cột chỉ có MỘT giá trị cho cả bảng ("Tình trạng" = Chưa đặt ở 105/105
+          dòng) — nó là một câu về CẢ LỆNH, không phải một cột;
+        · cột TRÙNG KHÍT một cột khác ("Trong đó: chưa xác nhận" = "Cần" từng
+          dòng, vì chưa SP nào được xác nhận BOM).
+
+      Cả hai đều ẨN cột và nói giá trị đó một lần trên đầu sheet — giấu luôn thì
+      người đọc mất thông tin, còn bày ra là 105 dòng chép lại một câu.
+
+      KHÔNG nhét chúng vào cột Ghi chú: Ghi chú là chỗ NGƯỜI DÙNG viết, trộn
+      nhãn máy vào đó thì hai thứ đè nhau; và khi lệnh có SP đã xác nhận BOM,
+      mấy cột này lại khác nhau từng dòng và trở nên đáng đọc.
+    */
+    const motGiaTri = (lay: (r: BangKeRow) => string): string | null => {
+      const v = new Set(bk.rows.map(lay))
+      return v.size === 1 ? [...v][0] : null
+    }
+    const anTinhTrang = motGiaTri((r) => BANG_KE_STATUS[r.status].label)
+    const anNguon = motGiaTri((r) => NGUON[r.source])
+    const anChuaXacNhan =
+      bk.rows.length > 0 && bk.rows.every((r) => r.draft_needed === r.qty_needed)
+    const daAn = [
+      anTinhTrang ? `Tình trạng: ${anTinhTrang}` : null,
+      anNguon ? `Nguồn số Cần: ${anNguon}` : null,
+      anChuaXacNhan ? 'Trong đó chưa xác nhận: đúng bằng cột Cần' : null,
+    ].filter(Boolean)
+    if (daAn.length > 0) {
+      noteRow(sb, `Cả bảng giống nhau nên đã ẩn cột — ${daAn.join(' · ')}`)
+    }
     if (bk.unconfirmed_products.length > 0) {
       noteRow(
         sb,
@@ -401,6 +433,9 @@ export async function buildLsxDetailExcel(
       from: bkHead.number + 1,
       to: bkLast,
     })
+    if (anChuaXacNhan) sb.getColumn(7).hidden = true
+    if (anTinhTrang) sb.getColumn(20).hidden = true
+    if (anNguon) sb.getColumn(21).hidden = true
     dateCols(sb, [18])
     applyWidths(
       sb,
