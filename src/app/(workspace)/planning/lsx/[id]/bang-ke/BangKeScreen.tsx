@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import {
   AlertTriangle,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   ClipboardList,
   ClipboardPaste,
   Download,
@@ -150,6 +152,15 @@ function soanDonHref(
   return `/planning/pos/new?${p.toString()}`
 }
 
+/** Id neo cho mục lục nhảy tới — tên khối có dấu và khoảng trắng. */
+const khoiId = (name: string) =>
+  'khoi-' +
+  name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+
 const fmt = (n: number) =>
   n === 0 ? '0' : n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const dmy = (iso: string | null) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}` : '—')
@@ -198,6 +209,19 @@ export function BangKeScreen({
   /** Mã đang mở phần "dùng cho sản phẩm nào". */
   const [openRow, setOpenRow] = useState<string | null>(null)
   const [view, setView] = useState<ViewMode>('loai')
+  /*
+    KHỐI ĐANG THU GỌN. Lưu tên khối đã đóng chứ không lưu khối đang mở: mặc
+    định là MỞ HẾT — mở bảng kê ra mà thấy mọi thứ gấp lại thì người dùng
+    tưởng lệnh chưa có gì. Đóng là hành động có chủ ý của họ.
+  */
+  const [dong, setDong] = useState<Set<string>>(new Set())
+  const doiKhoi = (k: string) =>
+    setDong((cur) => {
+      const next = new Set(cur)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
   /*
     HAO HỤT: đổi cho CẢ BẢNG, không lưu xuống DB.
 
@@ -791,6 +815,55 @@ export function BangKeScreen({
         }
       />
 
+      {/*
+        MỤC LỤC KHỐI — lệnh 107 mã là một mạch cuộn dài; không có chỗ nhảy thì
+        muốn xem khối bao bì phải cuộn qua trăm dòng ngũ kim. Chỉ hiện khi có
+        từ hai khối trở lên, vì một khối thì mục lục chỉ là một cái nút thừa.
+      */}
+      {view === 'loai' && !blockedByBom && sections.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-muted-foreground text-[12px]">Nhảy tới:</span>
+          {sections.map((sec) => (
+            <Button
+              key={sec.name}
+              variant="outline"
+              size="sm"
+              className="h-7 text-[12px]"
+              onClick={() => {
+                setDong((cur) => {
+                  const next = new Set(cur)
+                  next.delete(sec.name)
+                  return next
+                })
+                document
+                  .getElementById(khoiId(sec.name))
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              }}
+            >
+              {sec.name}
+              <span className="t-data text-muted-foreground">{sec.rows.length}</span>
+              {sec.short > 0 && (
+                <span className="t-data text-[var(--stop)]">{sec.short} thiếu</span>
+              )}
+            </Button>
+          ))}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-[12px]"
+            onClick={() =>
+              setDong((cur) =>
+                cur.size === sections.length
+                  ? new Set()
+                  : new Set(sections.map((x) => x.name)),
+              )
+            }
+          >
+            {dong.size === sections.length ? 'Mở tất cả' : 'Thu gọn tất cả'}
+          </Button>
+        </div>
+      )}
+
       {view === 'ncc' && !blockedByBom ? (
         <NccView
           blocks={nccBlocks}
@@ -876,22 +949,41 @@ export function BangKeScreen({
       ) : (
         <div className="flex flex-col gap-4">
           {sections.map((sec) => (
-            <section key={sec.name} className="bg-card overflow-hidden rounded-lg border">
-              <header className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
-                <h2 className="t-title flex items-center gap-2">
-                  <Package className="text-muted-foreground size-4" strokeWidth={1.8} />
-                  {sec.name}
+            <section
+              key={sec.name}
+              id={khoiId(sec.name)}
+              className="bg-card scroll-mt-20 overflow-hidden rounded-lg border"
+            >
+              {/*
+                Tiêu đề khối GHIM khi cuộn (top-14 = chiều cao thanh đầu trang):
+                khối ngũ kim 105 dòng thì cuộn tới giữa là quên đang đọc khối
+                nào. Bấm vào để thu gọn — đó là cách duy nhất làm trang ngắn lại
+                mà không giấu mất dữ liệu.
+              */}
+              <header className="bg-muted/40 sticky top-14 z-20 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 backdrop-blur">
+                <button
+                  type="button"
+                  onClick={() => doiKhoi(sec.name)}
+                  aria-expanded={!dong.has(sec.name)}
+                  className="flex items-center gap-2 text-left hover:text-[var(--primary)]"
+                >
+                  {dong.has(sec.name) ? (
+                    <ChevronRight className="text-muted-foreground size-4" />
+                  ) : (
+                    <ChevronDown className="text-muted-foreground size-4" />
+                  )}
+                  <span className="t-title">{sec.name}</span>
                   <span className="t-data text-muted-foreground font-normal">
                     {sec.rows.length} mã
                   </span>
-                </h2>
+                </button>
                 {sec.short > 0 && (
                   <span className="text-[12px] font-medium text-[var(--stop)]">
                     {sec.short} mã còn phải đặt
                   </span>
                 )}
               </header>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" hidden={dong.has(sec.name)}>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -943,59 +1035,84 @@ export function BangKeScreen({
                             <TableCell className="bg-card sticky left-0 z-10 p-0" />
                             <TableCell
                               colSpan={(canEdit ? 10 : 9) + spCols.length}
-                              className="bg-muted/40 text-muted-foreground py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"
+                              className="bg-muted/40 p-0"
                             >
-                              {sub.name}
-                              <span className="t-data ml-2 font-normal normal-case">
-                                {sub.rows.length} mã
-                              </span>
+                              {/*
+                                Nhóm phụ cũng gấp được: khối ngũ kim 105 mã chia
+                                13 nhóm phụ, gấp hết lại là 13 dòng nhìn hết —
+                                đó mới là thứ làm trang ngắn lại thật sự.
+                              */}
+                              <button
+                                type="button"
+                                onClick={() => doiKhoi(`${sec.name}/${sub.name}`)}
+                                aria-expanded={!dong.has(`${sec.name}/${sub.name}`)}
+                                className="text-muted-foreground flex w-full items-center gap-1.5 py-1.5 pl-2 text-left text-[11.5px] font-semibold tracking-wide uppercase hover:text-[var(--primary)]"
+                              >
+                                {dong.has(`${sec.name}/${sub.name}`) ? (
+                                  <ChevronRight className="size-3.5" />
+                                ) : (
+                                  <ChevronDown className="size-3.5" />
+                                )}
+                                {sub.name}
+                                <span className="t-data font-normal normal-case">
+                                  {sub.rows.length} mã
+                                </span>
+                                {sub.rows.filter((x) => x.suggest > 0).length > 0 && (
+                                  <span className="t-data font-normal text-[var(--stop)] normal-case">
+                                    {sub.rows.filter((x) => x.suggest > 0).length} thiếu
+                                  </span>
+                                )}
+                              </button>
                             </TableCell>
                           </TableRow>
                         )}
-                        {sub.rows.map((r) => (
-                          <Row
-                            key={r.material_id}
-                            r={r}
-                            hh={hh}
-                            spCols={spCols}
-                            lsxId={lsx.id}
-                            open={openRow === r.material_id}
-                            onToggle={() =>
-                              setOpenRow(openRow === r.material_id ? null : r.material_id)
-                            }
-                            canEdit={canEdit}
-                            editable={!data.manual_error}
-                            busy={busy}
-                            onSaveQty={(v) =>
-                              saveRows(
-                                [
-                                  {
-                                    material_id: r.material_id,
-                                    qty_needed: v,
-                                    note: r.note,
-                                  },
-                                ],
-                                `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
-                              )
-                            }
-                            onSaveNote={(v) =>
-                              saveRows(
-                                [
-                                  {
-                                    material_id: r.material_id,
-                                    qty_needed: r.qty_needed,
-                                    note: v || null,
-                                  },
-                                ],
-                                v
-                                  ? `${r.material_code}: đã ghi chú`
-                                  : `${r.material_code}: đã xoá ghi chú`,
-                              )
-                            }
-                            onOverride={() => override(r)}
-                            onRemove={() => removeManual(r)}
-                          />
-                        ))}
+                        {(sub.name === null || !dong.has(`${sec.name}/${sub.name}`)) &&
+                          sub.rows.map((r) => (
+                            <Row
+                              key={r.material_id}
+                              r={r}
+                              hh={hh}
+                              spCols={spCols}
+                              lsxId={lsx.id}
+                              open={openRow === r.material_id}
+                              onToggle={() =>
+                                setOpenRow(
+                                  openRow === r.material_id ? null : r.material_id,
+                                )
+                              }
+                              canEdit={canEdit}
+                              editable={!data.manual_error}
+                              busy={busy}
+                              onSaveQty={(v) =>
+                                saveRows(
+                                  [
+                                    {
+                                      material_id: r.material_id,
+                                      qty_needed: v,
+                                      note: r.note,
+                                    },
+                                  ],
+                                  `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
+                                )
+                              }
+                              onSaveNote={(v) =>
+                                saveRows(
+                                  [
+                                    {
+                                      material_id: r.material_id,
+                                      qty_needed: r.qty_needed,
+                                      note: v || null,
+                                    },
+                                  ],
+                                  v
+                                    ? `${r.material_code}: đã ghi chú`
+                                    : `${r.material_code}: đã xoá ghi chú`,
+                                )
+                              }
+                              onOverride={() => override(r)}
+                              onRemove={() => removeManual(r)}
+                            />
+                          ))}
                       </React.Fragment>
                     ))}
                   </TableBody>
