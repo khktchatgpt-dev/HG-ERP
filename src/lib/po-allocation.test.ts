@@ -1,58 +1,113 @@
 import { describe, expect, it } from 'vitest'
-import { allocationNote, mergeAllocations } from './po-allocation'
+import {
+  allocatedTo,
+  allocationProblem,
+  rescaleAllocations,
+  type LineAllocation,
+} from './po-allocation'
 
-/*
- * Chuẩn so là lối ghi TRONG SỔ THẬT (đơn TTL/MT/Wecare): mỗi sản phẩm một dòng
- * "50 bàn santorin (4c/sp)". Sai định dạng ở đây là ghi chú in lên phiếu NCC ký.
+/**
+ * Ca thật dựng test: PO-2026-0065 gộp lệnh 08 và 09, dòng 1.350 tấm KIM0161.
+ * Trước 0185 cả hai lệnh đều thấy "đã đặt 1.350" — mỗi lệnh tưởng đủ, "còn phải
+ * đặt" bị trừ thừa và người mua đặt thiếu.
  */
-describe('allocationNote — đúng lối ghi của sổ Cung ứng', () => {
-  it('mỗi sản phẩm một dòng, kèm định mức (Nc/sp)', () => {
-    expect(
-      allocationNote([
-        { product: 'Bàn Santorin', qty: 50, per_unit: 4 },
-        { product: 'Bàn 65 gỗ', qty: 300, per_unit: 2 },
-      ]),
-    ).toBe('50 Bàn Santorin (4c/sp)\n300 Bàn 65 gỗ (2c/sp)')
+const L08 = 'lsx-08'
+const L09 = 'lsx-09'
+
+describe('allocatedTo', () => {
+  it('không chia → cả dòng thuộc LSX chính, lệnh phụ được 0', () => {
+    const line = { qty_ordered: 1350, main_lsx_id: L08, allocations: [] }
+    expect(allocatedTo(L08, line)).toBe(1350)
+    // Đây là con số 0185 sinh ra để sửa: trước đây lệnh 09 cũng nhận 1.350.
+    expect(allocatedTo(L09, line)).toBe(0)
   })
 
-  it('không có định mức (hàng tính kg/m²) → chỉ SL + tên', () => {
-    expect(allocationNote([{ product: 'Ghế Tilos', qty: 126, per_unit: null }])).toBe(
-      '126 Ghế Tilos',
-    )
+  it('có chia → mỗi lệnh đúng phần của mình', () => {
+    const line = {
+      qty_ordered: 1350,
+      main_lsx_id: L08,
+      allocations: [
+        { production_order_id: L08, qty: 800 },
+        { production_order_id: L09, qty: 550 },
+      ],
+    }
+    expect(allocatedTo(L08, line)).toBe(800)
+    expect(allocatedTo(L09, line)).toBe(550)
+    expect(allocatedTo('lsx-khac', line)).toBe(0)
   })
 
-  it('SL nghìn có dấu chấm vi-VN, dòng rác (qty 0 / tên trống) bị bỏ', () => {
-    expect(
-      allocationNote([
-        { product: 'Bồn hoa lớn', qty: 1050, per_unit: 10 },
-        { product: '', qty: 5, per_unit: 1 },
-        { product: 'Ghế X', qty: 0, per_unit: 2 },
-      ]),
-    ).toBe('1.050 Bồn hoa lớn (10c/sp)')
+  it('đơn không gắn lệnh nào thì không lệnh nào nhận', () => {
+    expect(allocatedTo(L08, { qty_ordered: 100, main_lsx_id: null })).toBe(0)
   })
 })
 
-describe('mergeAllocations — gộp nhiều LSX', () => {
-  it('cùng SP + cùng định mức thì cộng SL', () => {
-    expect(
-      mergeAllocations(
-        [{ product: 'Bàn Santorin', qty: 450, per_unit: 4 }],
-        [{ product: 'Bàn Santorin', qty: 50, per_unit: 4 }],
-      ),
-    ).toEqual([{ product: 'Bàn Santorin', qty: 500, per_unit: 4 }])
+describe('allocationProblem', () => {
+  const ok: LineAllocation[] = [
+    { production_order_id: L08, qty: 800 },
+    { production_order_id: L09, qty: 550 },
+  ]
+
+  it('không chia hoặc chia khớp → hợp lệ', () => {
+    expect(allocationProblem(1350, [])).toBeNull()
+    expect(allocationProblem(1350, ok)).toBeNull()
   })
 
-  it('khác định mức thì giữ hai dòng — 2c/sp và 4c/sp là hai cách dùng thật', () => {
-    const out = mergeAllocations(
-      [{ product: 'Bàn Santorin', qty: 450, per_unit: 2 }],
-      [{ product: 'Bàn Santorin', qty: 50, per_unit: 4 }],
+  it('chia thiếu / chia thừa đều nói rõ lệch bao nhiêu', () => {
+    expect(allocationProblem(1350, [{ production_order_id: L08, qty: 800 }])).toBe(
+      'Chia thiếu 550 so với SL đặt 1.350',
     )
-    expect(out).toHaveLength(2)
+    expect(allocationProblem(1000, ok)).toBe('Chia thừa 350 so với SL đặt 1.000')
   })
 
-  it('không phá mảng gốc', () => {
-    const a = [{ product: 'A', qty: 1, per_unit: 1 }]
-    mergeAllocations(a, [{ product: 'A', qty: 9, per_unit: 1 }])
-    expect(a[0].qty).toBe(1)
+  it('SL lẻ cộng dư số nhị phân vẫn coi là khớp', () => {
+    expect(
+      allocationProblem(0.3, [
+        { production_order_id: L08, qty: 0.1 },
+        { production_order_id: L09, qty: 0.2 },
+      ]),
+    ).toBeNull()
+  })
+
+  it('bắt số 0, số âm và lệnh trùng', () => {
+    expect(allocationProblem(100, [{ production_order_id: L08, qty: 0 }])).toMatch(
+      /lớn hơn 0/,
+    )
+    expect(
+      allocationProblem(100, [
+        { production_order_id: L08, qty: 60 },
+        { production_order_id: L08, qty: 40 },
+      ]),
+    ).toMatch(/hai lần/)
+  })
+})
+
+describe('rescaleAllocations', () => {
+  it('SL đặt đổi thì giữ tỉ lệ và tổng khớp tuyệt đối', () => {
+    const out = rescaleAllocations(
+      [
+        { production_order_id: L08, qty: 800 },
+        { production_order_id: L09, qty: 550 },
+      ],
+      600,
+    )
+    expect(out.reduce((s, a) => s + a.qty, 0)).toBe(600)
+    expect(allocationProblem(600, out)).toBeNull()
+  })
+
+  it('phần lẻ do làm tròn dồn vào lệnh lớn nhất, không đẻ ra "chia thiếu 0,0001"', () => {
+    const out = rescaleAllocations(
+      [
+        { production_order_id: L08, qty: 1 },
+        { production_order_id: L09, qty: 1 },
+        { production_order_id: 'lsx-10', qty: 1 },
+      ],
+      100,
+    )
+    expect(out.reduce((s, a) => s + a.qty, 0)).toBe(100)
+    expect(allocationProblem(100, out)).toBeNull()
+  })
+
+  it('chưa chia gì thì không đụng vào', () => {
+    expect(rescaleAllocations([], 600)).toEqual([])
   })
 })
