@@ -45,6 +45,12 @@ export type BomNeedLine = {
   explain: string
   /** Số dòng chi tiết của SP cùng dùng mã này. */
   part_count: number
+  /**
+   * TÊN CHI TIẾT dùng mã này — cột "Vị trí lắp ráp" của sổ tay ("Tay vịn",
+   * "LK hộp trượt", "chân + MB"). Người đi hỏi giá và người nhận hàng đều cần
+   * biết con vít này bắt vào đâu; phủ 100% dòng định mức.
+   */
+  part_names: string[]
 }
 
 /** Dòng định mức KHÔNG quy đổi được sang đơn vị mua — phải nói ra, không lặng lẽ bỏ. */
@@ -232,6 +238,9 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
       cur.qty_per_unit = r4(cur.qty_per_unit + per)
       cur.qty_needed = r4(cur.qty_per_unit * prod.qty)
       cur.part_count += 1
+      if (part.part_name && !cur.part_names.includes(part.part_name)) {
+        cur.part_names.push(part.part_name)
+      }
       cur.explain = `gộp ${cur.part_count} chi tiết = ${cur.qty_per_unit.toLocaleString('vi-VN', { maximumFractionDigits: 3 })} ${mat.unit}/SP`
       continue
     }
@@ -252,6 +261,7 @@ export async function lsxBomNeeds(productionOrderId: string): Promise<LsxBomNeed
       basis: conv.basis,
       explain: conv.explain,
       part_count: 1,
+      part_names: part.part_name ? [part.part_name] : [],
     })
   }
 

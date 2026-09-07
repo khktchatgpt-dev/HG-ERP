@@ -480,6 +480,7 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
           unit: 'cây',
           group_name: null,
         kind: null,
+        part_names: [],
           // 2,08 m/SP ÷ 6 m mỗi cây — số đã QUY ĐỔI, không phải số thanh.
           qty_per_unit: 0.3467,
           qty_needed: 27.736,
@@ -554,6 +555,7 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
           unit: 'kg',
           group_name: null,
         kind: null,
+        part_names: [],
           qty_per_unit: 4,
           qty_needed: 12,
           basis: 'weight',

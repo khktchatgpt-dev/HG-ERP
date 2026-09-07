@@ -100,6 +100,56 @@ const NGOAI_DINH_MUC_RANK = 900
 const NGUONG_CHIA = 15
 
 /**
+ * SỐ CỘT SẢN PHẨM TỐI ĐA.
+ *
+ * Sổ tay của phòng bày mỗi sản phẩm một CỘT (sheet BKVT file YOTRIO, 3 SP) —
+ * đọc một dòng là thấy vật tư này chia cho SP nào bao nhiêu, không phải bấm mở
+ * từng dòng. Nhưng chính phòng cũng bỏ khuôn đó khi lệnh nhiều mã: file LSX
+ * 06.26.27 có 9 sản phẩm thì họ quay về kê từng khối một SP.
+ *
+ * Lý do là bề ngang: quá 6 cột thì Cần / Tồn / Còn phải đặt — mấy con số CHÍNH
+ * của bảng — bị đẩy khỏi màn. Trên ngưỡng này giữ nguyên cách cũ (nút "dùng cho
+ * N SP" mở ra chi tiết), vì thà bấm một nhịp còn hơn mất cột quan trọng.
+ */
+const MAX_SP_COLS = 6
+
+/**
+ * CỘT VẬT TƯ GHIM TRÁI khi bảng phải cuộn ngang.
+ *
+ * Bày 5 cột sản phẩm đẩy bảng lên 1.771px trong khung 1.135 — cuộn sang phải
+ * đọc "Còn phải đặt" là mất luôn tên vật tư, không biết đang đọc dòng nào.
+ *
+ * BẪY: bảng shadcn ăn `border-collapse` của Tailwind preflight, mà ô sticky
+ * trong bảng collapse KHÔNG vẽ được viền của chính nó — viền thuộc về bảng. Nên
+ * dựng đường ngăn bằng `box-shadow` bên phải, và ô ghim phải có NỀN ĐỤC, không
+ * thì chữ cột sau trôi qua dưới nó.
+ */
+const GHIM = 'sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]'
+
+/**
+ * Vị trí lắp ráp chỉ đáng bày khi nó NÓI THÊM được gì.
+ *
+ * Ở khối ngũ kim, Kỹ thuật thường đặt tên chi tiết bằng chính tên vật tư ("Vít
+ * dù 4x12, 7M") — bày ra là một cột chép lại cột bên cạnh. Bỏ những cái đó đi,
+ * giữ lại cái thật sự chỉ chỗ ("Tay vịn", "Giang mặt cánh", "LK hộp trượt").
+ */
+function viTriThat(r: BangKeRow): string[] {
+  // So bằng khoá CHỈ CÒN CHỮ VÀ SỐ: hồ sơ hay lệch nhau đúng một dấu phẩy hoặc
+  // một dấu cách đôi ("Vít dù  4x18 7M" vs "Vít dù 4x18 7M") — so nguyên văn
+  // là không khớp và cột lại đầy dòng chép lại tên vật tư.
+  const key = (t: string) => norm(t).replace(/[^a-z0-9]/g, '')
+  const ten = key(r.material_name)
+  const seen = new Set<string>()
+  return (r.positions ?? []).filter((p) => {
+    const v = key(p)
+    if (!v || v === ten || ten.includes(v) || v.includes(ten)) return false
+    if (seen.has(v)) return false
+    seen.add(v)
+    return true
+  })
+}
+
+/**
  * Chia một khối thành các nhóm phụ. Trả về MỘT nhóm không tên khi khối còn
  * ngắn, hoặc khi cả khối cùng một nhóm phụ — lúc đó dòng tiêu đề chỉ lặp lại
  * tên khối ở ngay trên.
@@ -216,6 +266,15 @@ export function BangKeScreen({
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'vi'))
     )
   }, [filtered])
+
+  /*
+    Cột sản phẩm: chỉ bày khi lệnh có 2..MAX_SP_COLS sản phẩm. Một SP thì cột đó
+    lặp lại đúng cột "Cần", thêm vào chỉ tốn chỗ.
+  */
+  const spCols = useMemo(() => {
+    const ps = data.products
+    return ps.length >= 2 && ps.length <= MAX_SP_COLS ? ps : []
+  }, [data.products])
 
   const shortRows = useMemo(() => rows.filter((r) => r.suggest > 0), [rows])
   /*
@@ -773,8 +832,23 @@ export function BangKeScreen({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-1" />
-                      <TableHead className="min-w-[248px]">Vật tư</TableHead>
+                      <TableHead
+                        className={cn('bg-muted/40 w-1 p-0', 'sticky left-0 z-10')}
+                      />
+                      <TableHead className={cn(GHIM, 'bg-muted/40 left-1 min-w-[220px]')}>
+                        Vật tư
+                      </TableHead>
+                      <TableHead className="min-w-[104px]">Vị trí lắp ráp</TableHead>
+                      {spCols.map((p) => (
+                        <TableHead key={p.id} className="min-w-[86px] text-right">
+                          <span className="t-data block text-[11px] font-semibold">
+                            {p.code}
+                          </span>
+                          <span className="t-data text-muted-foreground block text-[10.5px] font-normal">
+                            {fmt(p.qty)} SP
+                          </span>
+                        </TableHead>
+                      ))}
                       <TableHead className="text-right">Cần</TableHead>
                       <TableHead className="text-right">Đã có</TableHead>
                       <TableHead className="text-right">Đã đặt</TableHead>
@@ -798,9 +872,9 @@ export function BangKeScreen({
                             lợi của bảng dài là dóng số theo cột.
                           */
                           <TableRow className="hover:bg-transparent">
-                            <TableCell className="p-0" />
+                            <TableCell className="bg-card sticky left-0 z-10 p-0" />
                             <TableCell
-                              colSpan={canEdit ? 9 : 8}
+                              colSpan={(canEdit ? 10 : 9) + spCols.length}
                               className="bg-muted/40 text-muted-foreground py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"
                             >
                               {sub.name}
@@ -814,6 +888,7 @@ export function BangKeScreen({
                           <Row
                             key={r.material_id}
                             r={r}
+                            spCols={spCols}
                             lsxId={lsx.id}
                             open={openRow === r.material_id}
                             onToggle={() =>
@@ -895,6 +970,7 @@ export function BangKeScreen({
 /** Một dòng vật tư — tách riêng cho gọn và để ô sửa giữ được state của nó. */
 function Row({
   r,
+  spCols,
   lsxId,
   open,
   onToggle,
@@ -907,6 +983,8 @@ function Row({
   onRemove,
 }: {
   r: BangKeRow
+  /** Sản phẩm được bày thành cột; rỗng = lệnh nhiều SP quá, không bày ma trận. */
+  spCols: { id: string; code: string; qty: number }[]
   lsxId: string
   open: boolean
   onToggle: () => void
@@ -920,9 +998,10 @@ function Row({
 }) {
   const isManual = r.source === 'manual'
   const onHandTotal = r.available + r.received
+  const viTri = viTriThat(r)
   return (
     <TableRow>
-      <TableCell className="p-0">
+      <TableCell className="bg-card sticky left-0 z-10 p-0">
         <span
           className="block h-full min-h-[44px] w-1"
           style={{ background: STATUS_STRIPE[r.status] }}
@@ -930,7 +1009,7 @@ function Row({
         />
       </TableCell>
 
-      <TableCell>
+      <TableCell className={cn(GHIM, 'left-1 align-top')}>
         <div className="flex flex-wrap items-center gap-1.5">
           <DocChip>{r.material_code || '—'}</DocChip>
           <span className="line-clamp-1 font-medium">{r.material_name}</span>
@@ -1007,6 +1086,60 @@ function Row({
           </ul>
         )}
       </TableCell>
+
+      {/*
+        VỊ TRÍ LẮP RÁP — tên chi tiết dùng mã này. Cột có trong mọi bảng kê tay
+        của phòng: mã và tên vật tư không nói được con vít này bắt vào đâu, mà
+        đó lại là thứ người đi hỏi giá và người nhận hàng hỏi đầu tiên.
+      */}
+      <TableCell>
+        {viTri.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {viTri.slice(0, 2).map((p) => (
+              <span
+                key={p}
+                className="bg-muted text-muted-foreground max-w-[130px] truncate rounded-full border px-2 py-0.5 text-[11px]"
+                title={p}
+              >
+                {p}
+              </span>
+            ))}
+            {viTri.length > 2 && (
+              <span
+                className="text-muted-foreground text-[11px]"
+                title={viTri.join(' · ')}
+              >
+                +{viTri.length - 2}
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-muted-foreground text-[11px]">—</span>
+        )}
+      </TableCell>
+
+      {/*
+        MA TRẬN SẢN PHẨM: mỗi SP một cột, số là phần của mã này chia cho SP đó
+        (định mức/SP × SL SP). Cộng ngang các cột ra đúng cột "Cần" — người đọc
+        tự kiểm được, không phải tin.
+      */}
+      {spCols.map((p) => {
+        const fp = r.from_products.find((x) => x.code === p.code)
+        return (
+          <TableCell key={p.id} className="text-right">
+            {fp ? (
+              <>
+                <div className="t-data">{fmt(fp.per * fp.qty)}</div>
+                <div className="text-muted-foreground mt-0.5 text-[10.5px]">
+                  {fmt(fp.per)}/SP
+                </div>
+              </>
+            ) : (
+              <span className="text-muted-foreground text-[11px]">—</span>
+            )}
+          </TableCell>
+        )
+      })}
 
       <TableCell className="text-right">
         {canEdit && isManual && editable ? (

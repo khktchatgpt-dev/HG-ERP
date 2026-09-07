@@ -26,6 +26,8 @@ export type BangKeNeed = {
   group_name?: string | null
   /** LOẠI theo định mức — xem BangKeRow.kind. */
   kind?: string | null
+  /** Tên chi tiết dùng mã này — cột "Vị trí lắp ráp". */
+  positions?: string[]
   /** Số cần từ định mức ĐÃ XÁC NHẬN (BOM đã kiểm tra hoặc hồ sơ đã khoá). */
   qty_needed: number
   /**
@@ -181,6 +183,12 @@ export type BangKeRow = {
   /** Nhóm phụ trong danh mục kho — tầng chia thứ hai khi một loại quá dài. */
   sub_group?: string | null
   /**
+   * VỊ TRÍ LẮP RÁP — tên các chi tiết dùng mã này, gộp từ mọi sản phẩm của
+   * lệnh. Cột này có trong mọi bảng kê tay của phòng; nó trả lời "con vít này
+   * bắt vào đâu", thứ mà mã và tên vật tư không nói được.
+   */
+  positions?: string[]
+  /**
    * Quy cách của mã trong danh mục vật tư. Đi hỏi giá mà chỉ có tên ("Nhôm hộp
    * 15x25x1li") thì nhà cung cấp vẫn hỏi lại độ dày / chiều dài cây.
    */
@@ -326,6 +334,7 @@ export function buildBangKe(input: {
       // Loại chỉ đến từ định mức. Dòng nhập tay và mã chỉ có trên đơn không có
       // loại — màn hình cho chúng rơi về nhóm kho chứ không đoán.
       kind: a?.kind ?? null,
+      positions: a?.positions ?? [],
       deviates,
       auto_needed: autoNeeded,
       from_products: a?.from_products ?? [],

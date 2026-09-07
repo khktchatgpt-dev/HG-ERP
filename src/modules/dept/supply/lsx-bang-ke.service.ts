@@ -126,6 +126,7 @@ export async function loadLsxBangKe(
       qty_remaining: 0,
       source: 'bom' as const,
       kind: l.kind,
+      positions: [],
       from_products: [],
     }
     if (l.bom_confirmed) cur.qty_needed += l.qty_needed
@@ -134,6 +135,11 @@ export async function loadLsxBangKe(
     // một con vít thì mọi hồ sơ đều xếp NGU_KIM, lệch nhau là lỗi nhập ở hồ sơ
     // SP — bảng kê không phải chỗ sửa việc đó.
     cur.kind = cur.kind ?? l.kind
+    // Vị trí lắp ráp gộp qua mọi SP, bỏ trùng: cùng một con vít thường bắt vào
+    // cùng một chỗ ở nhiều sản phẩm cùng dòng.
+    for (const p of l.part_names) {
+      if (!cur.positions!.includes(p)) cur.positions!.push(p)
+    }
     cur.from_products = [
       ...(cur.from_products ?? []),
       {

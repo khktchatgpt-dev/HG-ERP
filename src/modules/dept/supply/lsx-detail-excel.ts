@@ -254,6 +254,9 @@ export async function buildLsxDetailExcel(
       'Tên vật tư',
       // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
       'Quy cách',
+      // Vị trí lắp ráp: tên chi tiết dùng mã này. Có trong mọi bảng kê tay của
+      // phòng — mã và tên vật tư không nói được con vít này bắt vào đâu.
+      'Vị trí lắp ráp',
       'ĐVT',
       'Cần',
       // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
@@ -300,6 +303,7 @@ export async function buildLsxDetailExcel(
         r.material_code,
         r.material_name,
         r.spec ?? '',
+        (r.positions ?? []).join(' · '),
         r.unit,
         r.qty_needed,
         r.draft_needed,
@@ -332,7 +336,7 @@ export async function buildLsxDetailExcel(
     )
     const uocTien = estimateByCurrency(bk.rows)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 17: cur, 18: tien }, 2)
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 18: cur, 19: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -342,15 +346,15 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [8, 9, 10, 11, 12, 13, 14, 15])
-    numberCols(sb, [16], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [18], MONEY_FMT)
-    dateCols(sb, [19])
+    numberCols(sb, [9, 10, 11, 12, 13, 14, 15, 16])
+    numberCols(sb, [17], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [19], MONEY_FMT)
+    dateCols(sb, [20])
     applyWidths(sb, [
-      5, 14, 22, 16, 38, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18, 20,
-      30, 24,
+      5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18,
+      20, 30, 24,
     ])
-    for (const c of [5, 6, 20, 23, 24]) {
+    for (const c of [5, 6, 7, 21, 24, 25]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
     finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 4 })
