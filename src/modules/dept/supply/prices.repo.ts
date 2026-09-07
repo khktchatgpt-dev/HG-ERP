@@ -32,6 +32,8 @@ export type LastPurchase = {
   unit_price: number
   currency: string
   po_code: string
+  /** Cần cho link "soạn đơn cho NCC này" — form đơn nhận `?supplier=<id>`. */
+  supplier_id: string | null
   supplier_name: string
   at: string
 }
@@ -162,7 +164,7 @@ export const pricesRepo = {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(
-        'material_id, unit_price, po:supply_purchase_orders!inner(code, currency, status, created_at, supplier:supply_suppliers(name))',
+        'material_id, unit_price, po:supply_purchase_orders!inner(code, currency, status, created_at, supplier_id, supplier:supply_suppliers(name))',
       )
       .in('material_id', materialIds)
       .not('unit_price', 'is', null)
@@ -175,6 +177,7 @@ export const pricesRepo = {
         currency: string
         status: string
         created_at: string
+        supplier_id: string | null
         supplier: { name: string } | { name: string }[] | null
       }
     }
@@ -189,6 +192,7 @@ export const pricesRepo = {
         unit_price: Number(r.unit_price),
         currency: r.po.currency,
         po_code: r.po.code,
+        supplier_id: r.po.supplier_id,
         supplier_name: s?.name ?? '?',
         at: r.po.created_at,
       })

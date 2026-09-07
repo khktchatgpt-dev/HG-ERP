@@ -168,6 +168,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
             last_price: {
               unit_price: 41_000,
               currency: 'VND',
+              supplier_id: 'ncc-kp',
               supplier_name: 'Kim Phát',
               po_code: 'PO-01/26 KP',
               at: '2026-07-15T02:00:00.000Z',

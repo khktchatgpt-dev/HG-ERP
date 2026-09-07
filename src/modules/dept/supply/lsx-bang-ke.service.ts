@@ -361,6 +361,7 @@ async function enrichRows(rows: BangKeRow[]): Promise<void> {
         ? {
             unit_price: p.unit_price,
             currency: p.currency,
+            supplier_id: p.supplier_id,
             supplier_name: p.supplier_name,
             po_code: p.po_code,
             at: p.at,

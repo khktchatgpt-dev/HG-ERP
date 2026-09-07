@@ -202,6 +202,8 @@ export type BangKeRow = {
   last_price?: {
     unit_price: number
     currency: string
+    /** Để dựng link soạn đơn cho đúng NCC đó. */
+    supplier_id: string | null
     supplier_name: string
     po_code: string
     /** ISO timestamp của đơn gần nhất có giá mã này. */
