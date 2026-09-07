@@ -89,7 +89,8 @@ async function open(buf: Buffer) {
 }
 
 /** Số dòng tiêu đề bảng = dòng đóng băng của sheet. */
-const headRowOf = (ws: ExcelJS.Worksheet) => (ws.views[0] as { ySplit?: number }).ySplit ?? 0
+const headRowOf = (ws: ExcelJS.Worksheet) =>
+  (ws.views[0] as { ySplit?: number }).ySplit ?? 0
 
 const text = (ws: ExcelJS.Worksheet) =>
   ws
@@ -186,6 +187,46 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     expect(names.some((n) => n.startsWith('ĐH'))).toBe(true)
     expect(names).not.toContain('Bảng kê VT')
     expect(names).not.toContain('Phân bổ theo SP')
+  })
+
+  /*
+   * KHUÔN TRÌNH BÀY (07/09/2026) — mấy thứ này hỏng thì không ai báo lỗi, chỉ
+   * âm thầm khó dùng: mất lọc thì người nhận tự bật, mất ghim thì cuộn xuống
+   * là quên cột, mất printTitlesRow thì in ra trang 2 không có tiêu đề.
+   */
+  it('bảng có lọc tự động, ghim tiêu đề và lặp tiêu đề khi in', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    expect(sb.autoFilter).toBeTruthy()
+    expect(sb.views[0]?.state).toBe('frozen')
+    expect(sb.views[0]?.ySplit).toBeGreaterThan(0)
+    expect(sb.pageSetup.printTitlesRow).toBe(
+      `${sb.views[0]?.ySplit}:${sb.views[0]?.ySplit}`,
+    )
+    expect(sb.pageSetup.orientation).toBe('landscape')
+  })
+
+  it('tiêu đề cột số vẫn xuống dòng được (không bị style cột đè)', async () => {
+    // exceljs cho `column.alignment` đè lên mọi ô đang có, kể cả ô tiêu đề —
+    // đặt cột số căn phải là tiêu đề mất wrapText và bị cắt chữ.
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = sb.getRow(sb.views[0]!.ySplit as number)
+    const conPhaiDat = head.getCell(13)
+    expect(conPhaiDat.value).toBe('Còn phải đặt')
+    expect(conPhaiDat.alignment?.wrapText).toBe(true)
+    expect(conPhaiDat.alignment?.horizontal).toBe('center')
+  })
+
+  it('cột số giữ KIỂU SỐ, số 0 không bị đổi thành chuỗi rỗng', async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const sb = wb.getWorksheet('Bảng kê VT')!
+    const head = sb.views[0]!.ySplit as number
+    // Dòng vật tư mẫu có "Đã về" = 0 (cột 12) — phải là số 0, không phải ''.
+    const c = sb.getRow(head + 1).getCell(12)
+    expect(typeof c.value).toBe('number')
+    expect(c.value).toBe(0)
+    expect(String(c.numFmt)).toContain('""')
   })
 })
 

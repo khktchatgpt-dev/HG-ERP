@@ -161,7 +161,12 @@ describe('sheet Tổng hợp ĐH — số lượng và tiền', () => {
   it('điền đủ SL / % nhận / tiền / còn nợ', async () => {
     const { cell } = await read2()
     expect(cell('Tổng hợp ĐH theo LSX', 2, 3)).toBe('Hộp') // nhóm VT chính
-    expect(cell('Tổng hợp ĐH theo LSX', 2, 10)).toBe('31/8/2026') // ngày về thực tế
+    // Ngày là Ô NGÀY THẬT chứ không phải chuỗi — có thế Excel mới sắp/lọc/trừ
+    // ngày được. Dựng ở nửa đêm UTC: dựng theo giờ máy thì ở múi +7 exceljs
+    // ghi ra 17:00 hôm trước và người dùng thấy lùi một ngày.
+    const ngayVe = cell('Tổng hợp ĐH theo LSX', 2, 10)
+    expect(ngayVe).toBeInstanceOf(Date)
+    expect((ngayVe as Date).toISOString()).toBe('2026-08-31T00:00:00.000Z')
     expect(cell('Tổng hợp ĐH theo LSX', 2, 15)).toBe(5003) // SL đặt
     expect(cell('Tổng hợp ĐH theo LSX', 2, 16)).toBe(5316) // SL đã nhận
     expect(cell('Tổng hợp ĐH theo LSX', 2, 17)).toBe(1.06) // % nhận
