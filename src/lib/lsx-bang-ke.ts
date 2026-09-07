@@ -389,3 +389,38 @@ export function summarizeBangKe(rows: BangKeRow[]): Record<BangKeStatus, number>
   }
   return out
 }
+
+/**
+ * VỊ TRÍ LẮP RÁP ĐÁNG BÀY — lọc tên chi tiết chỉ chép lại tên vật tư.
+ *
+ * Ở khối ngũ kim, Kỹ thuật thường đặt tên chi tiết bằng chính tên vật tư ("Vít
+ * dù 4x18 7M", "Túi vải") — bày ra là một cột chép lại cột bên cạnh, có khi lặp
+ * hai lần chỉ khác hoa/thường. Giữ lại cái thật sự chỉ chỗ ("Tay vịn", "Giang
+ * mặt cánh", "LK hộp trượt").
+ *
+ * Ở LÕI THUẦN chứ không ở màn hình: màn lọc mà file Excel không lọc thì hai bên
+ * nói hai chuyện về cùng một dòng — đúng ca đã xảy ra 07/09/2026.
+ */
+export function viTriLapRap(r: {
+  material_name: string
+  positions?: string[]
+}): string[] {
+  // Khoá so sánh CHỈ CÒN CHỮ VÀ SỐ: hồ sơ hay lệch đúng một dấu phẩy hoặc một
+  // dấu cách đôi ("Vít dù  4x18 7M" vs "Vít dù 4x18 7M"), so nguyên văn là
+  // không khớp và cột lại đầy dòng chép lại tên vật tư.
+  const key = (t: string) =>
+    t
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]/g, '')
+  const ten = key(r.material_name)
+  const seen = new Set<string>()
+  return (r.positions ?? []).filter((p) => {
+    const v = key(p)
+    if (!v || v === ten || ten.includes(v) || v.includes(ten)) return false
+    if (seen.has(v)) return false
+    seen.add(v)
+    return true
+  })
+}

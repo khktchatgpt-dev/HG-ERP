@@ -50,6 +50,7 @@ import {
   BANG_KE_STATUS,
   BANG_KE_STATUSES,
   estimateByCurrency,
+  viTriLapRap,
   type BangKeRow,
   type BangKeStatus,
 } from '@/lib/lsx-bang-ke'
@@ -128,34 +129,6 @@ const MAX_SP_COLS = 6
  */
 const GHIM = 'sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]'
 
-/**
- * Vị trí lắp ráp chỉ đáng bày khi nó NÓI THÊM được gì.
- *
- * Ở khối ngũ kim, Kỹ thuật thường đặt tên chi tiết bằng chính tên vật tư ("Vít
- * dù 4x12, 7M") — bày ra là một cột chép lại cột bên cạnh. Bỏ những cái đó đi,
- * giữ lại cái thật sự chỉ chỗ ("Tay vịn", "Giang mặt cánh", "LK hộp trượt").
- */
-function viTriThat(r: BangKeRow): string[] {
-  // So bằng khoá CHỈ CÒN CHỮ VÀ SỐ: hồ sơ hay lệch nhau đúng một dấu phẩy hoặc
-  // một dấu cách đôi ("Vít dù  4x18 7M" vs "Vít dù 4x18 7M") — so nguyên văn
-  // là không khớp và cột lại đầy dòng chép lại tên vật tư.
-  const key = (t: string) => norm(t).replace(/[^a-z0-9]/g, '')
-  const ten = key(r.material_name)
-  const seen = new Set<string>()
-  return (r.positions ?? []).filter((p) => {
-    const v = key(p)
-    if (!v || v === ten || ten.includes(v) || v.includes(ten)) return false
-    if (seen.has(v)) return false
-    seen.add(v)
-    return true
-  })
-}
-
-/**
- * Chia một khối thành các nhóm phụ. Trả về MỘT nhóm không tên khi khối còn
- * ngắn, hoặc khi cả khối cùng một nhóm phụ — lúc đó dòng tiêu đề chỉ lặp lại
- * tên khối ở ngay trên.
- */
 function buildSubs(rows: BangKeRow[]): { name: string | null; rows: BangKeRow[] }[] {
   if (rows.length <= NGUONG_CHIA) return [{ name: null, rows }]
   const map = new Map<string, BangKeRow[]>()
@@ -1109,7 +1082,7 @@ function Row({
 }) {
   const isManual = r.source === 'manual'
   const onHandTotal = r.available + r.received
-  const viTri = viTriThat(r)
+  const viTri = viTriLapRap(r)
   return (
     <TableRow>
       <TableCell className="bg-card sticky left-0 z-10 p-0">

@@ -2,7 +2,12 @@ import ExcelJS from 'exceljs'
 import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
-import { BANG_KE_STATUS, estimateByCurrency, type BangKeRow } from '@/lib/lsx-bang-ke'
+import {
+  BANG_KE_STATUS,
+  estimateByCurrency,
+  viTriLapRap,
+  type BangKeRow,
+} from '@/lib/lsx-bang-ke'
 import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import {
   MONEY_FMT,
@@ -303,7 +308,7 @@ export async function buildLsxDetailExcel(
         r.material_code,
         r.material_name,
         r.spec ?? '',
-        (r.positions ?? []).join(' · '),
+        viTriLapRap(r).join(' · '),
         r.unit,
         r.qty_needed,
         r.draft_needed,
@@ -350,10 +355,13 @@ export async function buildLsxDetailExcel(
     numberCols(sb, [17], '#,##0.####;-#,##0.####;""')
     numberCols(sb, [19], MONEY_FMT)
     dateCols(sb, [20])
-    applyWidths(sb, [
-      5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18,
-      20, 30, 24,
-    ])
+    applyWidths(
+      sb,
+      [
+        5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24,
+        18, 20, 30, 24,
+      ],
+    )
     for (const c of [5, 6, 7, 21, 24, 25]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
