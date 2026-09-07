@@ -7,6 +7,7 @@ import {
   NCC_CHUA_BIET,
   estimateByCurrency,
   groupBySupplier,
+  groupForBangKe,
   viTriLapRap,
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
@@ -19,8 +20,11 @@ import {
   dateCell,
   dateCols,
   finishTable,
+  groupRow,
   headerRow,
+  hideEmptyCols,
   noteRow,
+  numberCells,
   numberCols,
   stampWorkbook,
   titleRow,
@@ -243,7 +247,15 @@ export async function buildLsxDetailExcel(
     )
     noteRow(
       sb,
-      `${lsx.customer_name} · ngày xuất ${fmtD(lsx.ship_date)} · hạn vật tư ${fmtD(lsx.materials_due_at) || 'chưa đặt'}`,
+      // Ghép bằng filter(Boolean): lệnh chưa có ngày xuất thì đừng in "· ngày
+      // xuất ·" với khoảng trống ở giữa — nhìn như file lỗi.
+      [
+        lsx.customer_name,
+        lsx.ship_date ? `ngày xuất ${fmtD(lsx.ship_date)}` : null,
+        `hạn vật tư ${fmtD(lsx.materials_due_at) || 'chưa đặt'}`,
+      ]
+        .filter(Boolean)
+        .join(' · '),
     )
     if (bk.unconfirmed_products.length > 0) {
       noteRow(
@@ -256,10 +268,6 @@ export async function buildLsxDetailExcel(
     sb.addRow([])
     const bkHead = headerRow(sb, [
       'STT',
-      // LOẠI theo định mức đứng TRƯỚC nhóm kho: đó là trục sổ tay của phòng
-      // dùng để tách bảng (ngũ kim / bao bì / gỗ…), nhóm kho chỉ là chỗ xếp kệ.
-      'Loại',
-      'Nhóm vật tư',
       'Mã VT',
       'Tên vật tư',
       // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
@@ -294,51 +302,56 @@ export async function buildLsxDetailExcel(
       'Ghi chú',
     ])
     let i = 0
-    // Xếp theo LOẠI rồi tới nhóm phụ: cột Loại mà nhảy cóc thì lọc trong Excel
-    // ra một rổ rời rạc, và in ra giấy thì không gom được khối nào.
-    const sorted = [...bk.rows].sort(
-      (a, b) =>
-        partGroupRank(a.kind) - partGroupRank(b.kind) ||
-        (a.sub_group ?? a.group_name ?? '').localeCompare(
-          b.sub_group ?? b.group_name ?? '',
-          'vi',
-        ) ||
-        a.material_code.localeCompare(b.material_code, 'vi'),
-    )
-    for (const r of sorted) {
-      i++
-      // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
-      // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
-      sb.addRow([
-        i,
-        partGroupLabel(r.kind) ?? '',
-        r.group_name ?? '',
-        r.material_code,
-        r.material_name,
-        r.spec ?? '',
-        viTriLapRap(r).join(' · '),
-        r.unit,
-        r.qty_needed,
-        r.draft_needed,
-        r.qty_issued,
-        r.available,
-        r.ordered,
-        r.draft + r.pending,
-        r.received,
-        r.suggest,
-        slDatHang(r.suggest, hh, r.unit) || '',
-        r.last_price?.unit_price ?? '',
-        r.last_price?.currency ?? '',
-        r.last_price && r.suggest > 0
-          ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
-          : '',
-        dateCell(r.last_price?.at ?? null),
-        r.last_price?.supplier_name ?? '',
-        BANG_KE_STATUS[r.status].label,
-        NGUON[r.source],
-        r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
-        r.note ?? '',
-      ])
+    const nCot = bkHead.cellCount
+    /*
+      DÒNG TIÊU ĐỀ KHỐI thay cho hai cột "Loại" + "Nhóm vật tư" lặp ở mọi dòng.
+      Chép "Bu lông - vít - đinh - liên kết" xuống 100 dòng làm tờ giấy đọc như
+      một bức tường chữ; sổ tay của phòng dùng dòng tiêu đề khối cho danh sách
+      dài (file LSX 06.26.27). Chia khối bằng ĐÚNG hàm lõi mà màn hình dùng.
+    */
+    for (const sec of groupForBangKe(bk.rows, partGroupLabel, partGroupRank)) {
+      groupRow(
+        sb,
+        `${sec.name.toUpperCase()} · ${sec.rows.length} mã${sec.short > 0 ? ` · ${sec.short} mã còn phải đặt` : ''}`,
+        nCot,
+      )
+      for (const sub of sec.subs) {
+        if (sub.name)
+          groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
+        for (const r of sub.rows) {
+          i++
+          // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
+          // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
+          sb.addRow([
+            i,
+            r.material_code,
+            r.material_name,
+            r.spec ?? '',
+            viTriLapRap(r).join(' · '),
+            r.unit,
+            r.qty_needed,
+            r.draft_needed,
+            r.qty_issued,
+            r.available,
+            r.ordered,
+            r.draft + r.pending,
+            r.received,
+            r.suggest,
+            slDatHang(r.suggest, hh, r.unit) || '',
+            r.last_price?.unit_price ?? '',
+            r.last_price?.currency ?? '',
+            r.last_price && r.suggest > 0
+              ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
+              : '',
+            dateCell(r.last_price?.at ?? null),
+            r.last_price?.supplier_name ?? '',
+            BANG_KE_STATUS[r.status].label,
+            NGUON[r.source],
+            r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
+            r.note ?? '',
+          ])
+        }
+      }
     }
     const bkLast = sb.rowCount
     // Dòng tổng: "bao nhiêu mã còn phải đặt" và "hết bao nhiêu tiền" là hai con
@@ -352,7 +365,7 @@ export async function buildLsxDetailExcel(
     )
     const uocTien = estimateByCurrency(bk.rows, hh)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 19: cur, 20: tien }, 2)
+      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 17: cur, 18: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -362,21 +375,42 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [9, 10, 11, 12, 13, 14, 15, 16, 17])
-    numberCols(sb, [18], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [20], MONEY_FMT)
-    dateCols(sb, [21])
+    numberCols(sb, [7, 8, 9, 10, 11, 12, 13, 14, 15])
+    numberCols(sb, [16], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [18], MONEY_FMT)
+    // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
+    // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
+    numberCells(sb, [7, 8, 9, 10, 11, 12, 13, 14, 15, 16], {
+      from: bkHead.number + 1,
+      to: bkLast,
+      digits: 4,
+    })
+    // Cột nào cả lệnh không có số thì ẩn — xem hideEmptyCols.
+    hideEmptyCols(sb, [8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20], {
+      from: bkHead.number + 1,
+      to: bkLast,
+    })
+    dateCols(sb, [19])
     applyWidths(
       sb,
       [
-        5, 14, 22, 16, 38, 22, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 14, 8, 15, 13,
-        24, 18, 20, 30, 24,
+        5, 15, 40, 20, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16,
+        18, 28, 22,
       ],
     )
-    for (const c of [5, 6, 7, 22, 25, 26]) {
+    // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
+    // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
+    for (const c of [23, 24]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
-    finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 4 })
+    // Lọc tự động TẮT: bảng có dòng tiêu đề khối, lọc sẽ giấu mất chúng và
+    // người đọc mất ngữ cảnh. Muốn lọc thì lọc trên màn hình.
+    finishTable(sb, {
+      head: bkHead,
+      lastRow: bkLast,
+      freezeCols: 3,
+      autoFilter: false,
+    })
 
     if (bk.blocked.length > 0) {
       sb.addRow([])
@@ -425,7 +459,6 @@ export async function buildLsxDetailExcel(
       sn.addRow([])
       const nHead = headerRow(sn, [
         'STT',
-        'Nhà cung cấp',
         'Mã VT',
         'Tên vật tư',
         'Quy cách',
@@ -439,12 +472,16 @@ export async function buildLsxDetailExcel(
         'Đơn gần nhất',
       ])
       let k = 0
+      const nCotN = nHead.cellCount
       for (const b of khoiNcc) {
+        // Tên NCC dài ("CÔNG TY TNHH SX & TM DV TÂN THÀNH LONG") lặp ở mọi dòng
+        // thì ô phải wrap thành hai hàng và cả bảng cao gấp đôi — đưa lên dòng
+        // tiêu đề khối, đọc như một tờ đơn.
+        groupRow(sn, `${b.supplier_name} · ${b.rows.length} mã`, nCotN)
         for (const r of b.rows) {
           k++
           sn.addRow([
             k,
-            b.supplier_name,
             r.material_code,
             r.material_name,
             r.spec ?? '',
@@ -462,11 +499,11 @@ export async function buildLsxDetailExcel(
         }
         // Cộng theo TỪNG khối: đây là số tiền của một tờ đơn, người ký nhìn nó.
         for (const [cur, tien] of b.tien) {
-          totalRow(sn, `Cộng ${b.supplier_name} (${cur})`, { 10: cur, 11: tien }, 2)
+          totalRow(sn, `Cộng (${cur})`, { 9: cur, 10: tien }, 2)
         }
-        if (b.tien.size === 0) {
-          totalRow(sn, `Cộng ${b.supplier_name} — ${b.rows.length} mã, chưa có giá`, {}, 2)
-        }
+        if (b.tien.size === 0) totalRow(sn, 'Cộng — chưa mã nào có giá', {}, 2)
+        // Một dòng trống giữa hai tờ đơn: khối này hết, khối sau bắt đầu.
+        sn.addRow([])
       }
       const chuaBiet = khoiNcc.find((b) => b.supplier_name === NCC_CHUA_BIET)
       if (chuaBiet) {
@@ -477,15 +514,17 @@ export async function buildLsxDetailExcel(
           'warn',
         )
       }
-      numberCols(sn, [7, 8])
-      numberCols(sn, [9], '#,##0.####;-#,##0.####;""')
-      numberCols(sn, [11], MONEY_FMT)
-      dateCols(sn, [12])
-      applyWidths(sn, [5, 30, 16, 38, 22, 7, 12, 12, 14, 8, 15, 13, 16])
-      for (const c of [2, 4, 5]) {
-        sn.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
-      }
-      finishTable(sn, { head: nHead, freezeCols: 2, autoFilter: false })
+      numberCols(sn, [6, 7])
+      numberCols(sn, [8], '#,##0.####;-#,##0.####;""')
+      numberCols(sn, [10], MONEY_FMT)
+      numberCells(sn, [6, 7, 8, 10], {
+        from: nHead.number + 1,
+        to: sn.rowCount,
+        digits: 4,
+      })
+      dateCols(sn, [11])
+      applyWidths(sn, [5, 15, 40, 20, 7, 12, 12, 13, 8, 15, 12, 16])
+      finishTable(sn, { head: nHead, freezeCols: 3, autoFilter: false })
     }
 
     // ── Sheet phụ: VẬT TƯ DÙNG CHO SẢN PHẨM NÀO ──────────────────────────
@@ -527,6 +566,11 @@ export async function buildLsxDetailExcel(
         }
       }
       numberCols(sp, [6, 7, 8], '#,##0.####;-#,##0.####;""')
+      numberCells(sp, [6, 7, 8], {
+        from: spHead.number + 1,
+        to: sp.rowCount,
+        digits: 4,
+      })
       applyWidths(sp, [16, 34, 7, 16, 34, 12, 12, 16, 32, 16])
       for (const c of [2, 5, 9]) {
         sp.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
@@ -618,6 +662,7 @@ export async function buildLsxDetailExcel(
   numberCols(s2, [14], PCT_FMT)
   numberCols(s2, [12, 13])
   numberCols(s2, [16, 17, 18], MONEY_FMT)
+  numberCells(s2, [12, 13], { from: s2Head.number + 1, to: s2Last })
   dateCols(s2, [6, 7, 8])
   applyWidths(
     s2,

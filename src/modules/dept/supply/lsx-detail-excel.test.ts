@@ -203,10 +203,12 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
    * âm thầm khó dùng: mất lọc thì người nhận tự bật, mất ghim thì cuộn xuống
    * là quên cột, mất printTitlesRow thì in ra trang 2 không có tiêu đề.
    */
-  it('bảng có lọc tự động, ghim tiêu đề và lặp tiêu đề khi in', async () => {
+  it('bảng ghim tiêu đề và lặp tiêu đề khi in, KHÔNG bật lọc', async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
-    expect(sb.autoFilter).toBeTruthy()
+    // Lọc tự động TẮT có chủ đích từ 07/09/2026: bảng có dòng tiêu đề khối,
+    // lọc sẽ giấu mất chúng và người đọc mất ngữ cảnh (muốn lọc thì lọc trên màn).
+    expect(sb.autoFilter).toBeFalsy()
     expect(sb.views[0]?.state).toBe('frozen')
     expect(headRowOf(sb)).toBeGreaterThan(0)
     expect(sb.pageSetup.printTitlesRow).toBe(`${headRowOf(sb)}:${headRowOf(sb)}`)
@@ -219,7 +221,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = sb.getRow(headRowOf(sb))
-    const conPhaiDat = head.getCell(16)
+    const conPhaiDat = head.getCell(14)
     expect(conPhaiDat.value).toBe('Còn phải đặt')
     expect(conPhaiDat.alignment?.wrapText).toBe(true)
     expect(conPhaiDat.alignment?.horizontal).toBe('center')
@@ -229,16 +231,16 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = headRowOf(sb)
-    const d = sb.getRow(head + 1)
-    expect(d.getCell(6).value).toBe('D20 x 0.7mm x 6m') // quy cách
+    const d = sb.getRow(head + 2)
+    expect(d.getCell(4).value).toBe('D20 x 0.7mm x 6m') // quy cách
     // SL đặt = 100 cây × 1,03 = 103 (làm tròn LÊN, xem lib/po-waste).
-    expect(d.getCell(17).value).toBe(103)
-    expect(d.getCell(18).value).toBe(41_000) // đơn giá gần nhất
-    expect(d.getCell(19).value).toBe('VND')
+    expect(d.getCell(15).value).toBe(103)
+    expect(d.getCell(16).value).toBe(41_000) // đơn giá gần nhất
+    expect(d.getCell(17).value).toBe('VND')
     // Tiền tính theo SỐ ĐẶT chứ không theo số còn thiếu — phải khớp đơn gửi đi.
-    expect(d.getCell(20).value).toBe(103 * 41_000)
-    expect((d.getCell(21).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
-    expect(d.getCell(22).value).toBe('Kim Phát')
+    expect(d.getCell(18).value).toBe(103 * 41_000)
+    expect((d.getCell(19).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(d.getCell(20).value).toBe('Kim Phát')
     // Dòng tổng tiền phải nói rõ TIỀN TỆ — bảng có thể có cả VND lẫn USD.
     const text = sb
       .getSheetValues()
@@ -253,8 +255,8 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = headRowOf(sb)
-    // Dòng vật tư mẫu có "Đã về" = 0 (cột 15) — phải là số 0, không phải ''.
-    const c = sb.getRow(head + 1).getCell(15)
+    // Dòng vật tư mẫu có "Đã về" = 0 (cột 13) — phải là số 0, không phải ''.
+    const c = sb.getRow(head + 2).getCell(13)
     expect(typeof c.value).toBe('number')
     expect(c.value).toBe(0)
     expect(String(c.numFmt)).toContain('""')

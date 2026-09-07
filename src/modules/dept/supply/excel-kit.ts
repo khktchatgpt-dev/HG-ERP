@@ -27,8 +27,15 @@ export const DATE_FMT = 'dd/mm/yyyy'
  * Trước đây các builder ghi `x || ''` cho đẹp mắt, tức là nhét chuỗi rỗng vào
  * cột số — cột thành nửa số nửa chữ, lọc "lớn hơn 0" và SUM đều lệch. Định
  * dạng ba khoảng (dương;âm;không) làm đúng việc đó ở tầng hiển thị.
+ *
+ * BẪY (user báo 07/09/2026; đã dính một lần ở product-excel): mã `#,##0.##`
+ * VẪN in dấu thập phân khi phần lẻ bằng 0 — 297 hiện ra "297," trên Excel
+ * tiếng Việt. Đặt numFmt theo CỘT là dính bẫy ngay, vì cột nào cũng có cả số
+ * nguyên lẫn số lẻ. Dùng `numberCells()` để chọn mã theo chính giá trị ô.
  */
-export const NUM_FMT = '#,##0.##;-#,##0.##;""'
+export const NUM_FMT = '#,##0;-#,##0;""'
+/** Chỉ dùng cho ô CÓ phần lẻ — xem bẫy ở trên. */
+export const NUM_FMT_LE = '#,##0.##;-#,##0.##;""'
 export const MONEY_FMT = '#,##0;-#,##0;""'
 export const PCT_FMT = '0%;;""'
 
@@ -199,6 +206,32 @@ export function numberCols(
   }
 }
 
+/**
+ * ĐỊNH DẠNG SỐ THEO TỪNG Ô — số nguyên mang mã không có phần lẻ, số lẻ mới
+ * mang mã có phần lẻ. Xem bẫy "297," ở NUM_FMT.
+ *
+ * Gọi SAU khi đã đổ hết dòng và sau `numberCols` (căn lề vẫn lấy từ cột).
+ */
+export function numberCells(
+  ws: ExcelJS.Worksheet,
+  cols: number[],
+  opts: { from: number; to: number; digits?: number } & { money?: boolean },
+): void {
+  const le = opts.digits
+    ? `#,##0.${'#'.repeat(opts.digits)};-#,##0.${'#'.repeat(opts.digits)};""`
+    : NUM_FMT_LE
+  for (let r = opts.from; r <= opts.to; r++) {
+    const row = ws.getRow(r)
+    for (const c of cols) {
+      const cell = row.getCell(c)
+      const v = cell.value
+      if (typeof v !== 'number') continue
+      cell.numFmt = opts.money || Number.isInteger(v) ? MONEY_FMT : le
+      cell.alignment = { horizontal: 'right' }
+    }
+  }
+}
+
 /** Định dạng ngày cho một loạt cột (1-based). */
 export function dateCols(ws: ExcelJS.Worksheet, cols: number[]): void {
   for (const c of cols) {
@@ -227,4 +260,74 @@ export function totalRow(
     c.border = { top: { style: 'medium', color: { argb: 'FF9AA6C8' } } }
   })
   return r
+}
+
+/**
+ * DÒNG TIÊU ĐỀ KHỐI trong thân bảng — thay cho việc lặp lại tên nhóm ở mọi dòng.
+ *
+ * Lặp "Bu lông - vít - đinh - liên kết" xuống 100 dòng làm tờ giấy đọc như một
+ * bức tường chữ (user chê "rất thô", 07/09/2026), trong khi chính sổ tay của
+ * phòng dùng dòng tiêu đề khối cho danh sách dài (file LSX 06.26.27: "BÀN
+ * BALKON - SƠN GRAPHIT - 50 cái" rồi mới tới các dòng vật tư).
+ *
+ * ĐÁNH ĐỔI: bảng có dòng khối thì lọc tự động của Excel không dùng được nữa —
+ * lọc sẽ giấu mất dòng tiêu đề và người đọc mất luôn ngữ cảnh. Tờ này để ĐỌC và
+ * IN; ai cần lọc thì lọc trên màn hình.
+ */
+export function groupRow(
+  ws: ExcelJS.Worksheet,
+  text: string,
+  lastCol: number,
+  opts: { sub?: boolean } = {},
+): ExcelJS.Row {
+  const r = ws.addRow([text])
+  ws.mergeCells(r.number, 1, r.number, lastCol)
+  const c = r.getCell(1)
+  c.font = { bold: !opts.sub, size: opts.sub ? 10 : 11 }
+  c.alignment = { vertical: 'middle', indent: opts.sub ? 2 : 0 }
+  r.height = opts.sub ? 16 : 20
+  // Quét cả dải: tô nền ô CHỦ thôi thì ô gộp chỉ có màu ở nửa bên trái.
+  for (let i = 1; i <= lastCol; i++) {
+    const cell = r.getCell(i)
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: opts.sub ? 'FFF3F5FA' : ACCENT },
+    }
+    cell.border = {
+      top: { style: opts.sub ? 'hair' : 'thin', color: { argb: GRID } },
+      bottom: { style: opts.sub ? 'hair' : 'thin', color: { argb: GRID } },
+    }
+  }
+  return r
+}
+
+/**
+ * ẨN CỘT KHÔNG CÓ GÌ trong vùng dữ liệu.
+ *
+ * Bảng kê có sẵn cột cho mọi tình huống (đã xuất, tồn, đã đặt, nháp/chờ ký, đã
+ * về…), nhưng một lệnh cụ thể thường chỉ dùng vài cột — số còn lại là năm cột
+ * trắng chiếm gần một phần ba bề ngang. Ẩn chứ KHÔNG xoá: cột vẫn còn đó, ai
+ * cần thì bỏ ẩn trong Excel, và chỉ số cột không đổi nên code không phải tính
+ * lại theo dữ liệu.
+ */
+export function hideEmptyCols(
+  ws: ExcelJS.Worksheet,
+  cols: number[],
+  range: { from: number; to: number },
+): void {
+  for (const c of cols) {
+    let coGi = false
+    for (let r = range.from; r <= range.to && !coGi; r++) {
+      const cell = ws.getRow(r).getCell(c)
+      // BỎ QUA Ô GỘP: dòng tiêu đề khối gộp hết bề ngang, nên đọc ô ở BẤT KỲ
+      // cột nào của dòng đó cũng trả về chữ của ô chủ — không bỏ qua thì cột
+      // nào cũng "có giá trị" và hàm này chẳng ẩn được gì.
+      if (cell.isMerged) continue
+      const v = cell.value
+      if (v == null || v === '' || v === 0) continue
+      coGi = true
+    }
+    if (!coGi) ws.getColumn(c).hidden = true
+  }
 }

@@ -51,6 +51,7 @@ import {
   BANG_KE_STATUSES,
   estimateByCurrency,
   groupBySupplier,
+  groupForBangKe,
   type NccBlock,
   viTriLapRap,
   type BangKeRow,
@@ -97,15 +98,6 @@ const SOURCE_LABEL: Record<BangKeRow['source'], string> = {
 const MAX_PREFILL = 40
 
 /**
- * Khối KHÔNG có loại (mã chỉ có trên đơn, dòng nhập tay) luôn xuống cuối: đó là
- * phần rìa của bảng kê, không phải ruột định mức.
- */
-const NGOAI_DINH_MUC_RANK = 900
-
-/** Dưới ngưỡng này thì một khối đọc thẳng được, chia thêm tầng chỉ tổ rối. */
-const NGUONG_CHIA = 15
-
-/**
  * SỐ CỘT SẢN PHẨM TỐI ĐA.
  *
  * Sổ tay của phòng bày mỗi sản phẩm một CỘT (sheet BKVT file YOTRIO, 3 SP) —
@@ -131,21 +123,6 @@ const MAX_SP_COLS = 6
  * thì chữ cột sau trôi qua dưới nó.
  */
 const GHIM = 'sticky z-10 bg-card shadow-[1px_0_0_0_var(--border)]'
-
-function buildSubs(rows: BangKeRow[]): { name: string | null; rows: BangKeRow[] }[] {
-  if (rows.length <= NGUONG_CHIA) return [{ name: null, rows }]
-  const map = new Map<string, BangKeRow[]>()
-  for (const r of rows) {
-    const k = r.sub_group?.trim() || r.group_name?.trim() || 'Chưa có nhóm phụ'
-    const cur = map.get(k)
-    if (cur) cur.push(r)
-    else map.set(k, [r])
-  }
-  if (map.size < 2) return [{ name: null, rows }]
-  return [...map.entries()]
-    .map(([name, list]) => ({ name, rows: list }))
-    .sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'vi'))
-}
 
 /**
  * Link sang form soạn đơn, điền sẵn mã + SL đề xuất (và NCC nếu biết).
@@ -257,34 +234,15 @@ export function BangKeScreen({
     (phủ 91%, riêng nhóm bu lông 97%). Khối ngắn thì KHÔNG chia — thêm một tầng
     tiêu đề cho sáu dòng là làm rối chứ không làm rõ.
   */
-  const sections = useMemo(() => {
-    const map = new Map<string, { rank: number; rows: BangKeRow[] }>()
-    for (const r of filtered) {
-      const loai = partGroupLabel(r.kind)
-      const name = loai ?? r.group_name ?? 'Chưa phân loại'
-      const cur = map.get(name)
-      if (cur) cur.rows.push(r)
-      else
-        map.set(name, {
-          rank: loai ? partGroupRank(r.kind) : NGOAI_DINH_MUC_RANK,
-          rows: [r],
-        })
-    }
-    return (
-      [...map.entries()]
-        .map(([name, { rank, rows: list }]) => ({
-          name,
-          rank,
-          rows: list,
-          short: list.filter((x) => x.suggest > 0).length,
-          subs: buildSubs(list),
-        }))
-        // Thứ tự khối theo biểu mẫu định mức (khung → gỗ → ngũ kim → … → bao bì),
-        // KHÔNG theo "khối nào thiếu nhiều nhất": trật tự nhảy theo dữ liệu thì
-        // mỗi lần mở lại thấy bảng khác nhau, người dùng mất luôn trí nhớ vị trí.
-        .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'vi'))
-    )
-  }, [filtered])
+  /*
+    Chia khối bằng ĐÚNG hàm lõi mà file Excel dùng — hai bản dựng riêng thì sớm
+    muộn màn và file chia khối khác nhau. Nhãn/thứ tự loại truyền vào từ
+    lib/part-groups (lõi không biết gì về nhãn tiếng Việt).
+  */
+  const sections = useMemo(
+    () => groupForBangKe(filtered, partGroupLabel, partGroupRank),
+    [filtered],
+  )
 
   /*
     Cột sản phẩm: chỉ bày khi lệnh có 2..MAX_SP_COLS sản phẩm. Một SP thì cột đó

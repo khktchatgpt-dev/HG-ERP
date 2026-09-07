@@ -482,3 +482,68 @@ export function groupBySupplier(rows: BangKeRow[], hh = 0): NccBlock[] {
           a.supplier_name.localeCompare(b.supplier_name, 'vi'),
     )
 }
+
+/** Khối của bảng kê: một LOẠI, có thể chia tiếp thành nhóm phụ. */
+export type BangKeSection = {
+  name: string
+  rank: number
+  rows: BangKeRow[]
+  short: number
+  subs: { name: string | null; rows: BangKeRow[] }[]
+}
+
+/** Khối KHÔNG có loại (mã chỉ có trên đơn, dòng nhập tay) luôn xuống cuối. */
+const NGOAI_DINH_MUC_RANK = 900
+
+/** Dưới ngưỡng này thì một khối đọc thẳng được, chia thêm tầng chỉ tổ rối. */
+const NGUONG_CHIA = 15
+
+function buildSubs(rows: BangKeRow[]): BangKeSection['subs'] {
+  if (rows.length <= NGUONG_CHIA) return [{ name: null, rows }]
+  const map = new Map<string, BangKeRow[]>()
+  for (const r of rows) {
+    const k = r.sub_group?.trim() || r.group_name?.trim() || 'Chưa có nhóm phụ'
+    const cur = map.get(k)
+    if (cur) cur.push(r)
+    else map.set(k, [r])
+  }
+  // Cả khối cùng một nhóm phụ thì dòng tiêu đề chỉ lặp lại tên khối ở trên.
+  if (map.size < 2) return [{ name: null, rows }]
+  return [...map.entries()]
+    .map(([name, list]) => ({ name, rows: list }))
+    .sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'vi'))
+}
+
+/**
+ * CHIA KHỐI BẢNG KÊ theo LOẠI trong định mức, khối dài thì chia tiếp nhóm phụ.
+ *
+ * Thứ tự khối CỐ ĐỊNH theo biểu mẫu định mức (khung → gỗ → ngũ kim → nệm/vải →
+ * sơn → bao bì → tem), KHÔNG xếp theo "khối nào thiếu nhiều nhất": trật tự nhảy
+ * theo dữ liệu thì mỗi lần mở lại thấy bảng khác nhau, người dùng mất luôn trí
+ * nhớ vị trí.
+ *
+ * Ở lõi thuần vì màn hình và file Excel phải chia y hệt nhau.
+ */
+export function groupForBangKe(
+  rows: BangKeRow[],
+  label: (kind: string | null | undefined) => string | null,
+  rank: (kind: string | null | undefined) => number,
+): BangKeSection[] {
+  const map = new Map<string, { rank: number; rows: BangKeRow[] }>()
+  for (const r of rows) {
+    const loai = label(r.kind)
+    const name = loai ?? r.group_name ?? 'Chưa phân loại'
+    const cur = map.get(name)
+    if (cur) cur.rows.push(r)
+    else map.set(name, { rank: loai ? rank(r.kind) : NGOAI_DINH_MUC_RANK, rows: [r] })
+  }
+  return [...map.entries()]
+    .map(([name, v]) => ({
+      name,
+      rank: v.rank,
+      rows: v.rows,
+      short: v.rows.filter((x) => x.suggest > 0).length,
+      subs: buildSubs(v.rows),
+    }))
+    .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'vi'))
+}
