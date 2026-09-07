@@ -53,7 +53,12 @@ export function StatTile({
 }) {
   const body = (
     <>
-      <p className="t-label text-muted-foreground flex items-center gap-1.5 truncate">
+      {/*
+        Nhãn: ở lưới 2 cột của điện thoại cho xuống dòng ("VẬT TƯ TRONG DANH
+        MỤC" bị cắt còn "DANH …"). Thẻ trong cùng hàng lưới vẫn cao bằng nhau
+        nên không so le. Từ sm giữ một dòng như cũ.
+      */}
+      <p className="t-label text-muted-foreground flex items-center gap-1.5 sm:truncate">
         {Icon && <Icon size={14} strokeWidth={active ? 2.1 : 1.8} />}
         {label}
       </p>
