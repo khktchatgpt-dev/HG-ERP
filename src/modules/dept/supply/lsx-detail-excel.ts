@@ -12,7 +12,6 @@ import {
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
 import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
-import { HAO_HUT_MAC_DINH, slDatHang } from '@/lib/po-waste'
 import {
   MONEY_FMT,
   PCT_FMT,
@@ -175,8 +174,6 @@ export type LsxExcelKind = 'bangke' | 'lsx'
 export async function buildLsxDetailExcel(
   report: LsxDetailReport,
   kind: LsxExcelKind = 'lsx',
-  /** Hao hụt (%) — khớp với ô trên màn bảng kê, xem lib/po-waste. */
-  hh = HAO_HUT_MAC_DINH,
 ): Promise<Buffer> {
   const { lsx, risk, today } = report
   const wb = new ExcelJS.Workbook()
@@ -321,9 +318,6 @@ export async function buildLsxDetailExcel(
       'Nháp/chờ ký',
       'Đã về',
       'Còn phải đặt',
-      // SL ĐẶT = còn phải đặt + hao hụt, làm tròn lên. Cột này có trong 12/12
-      // mẫu đơn giấy ("SL Đặt hàng hh 3%") — nó mới là số gửi nhà cung cấp.
-      `SL đặt (+${hh}%)`,
       // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
       // ước được tiền và biết gọi ai mà không phải mở tab khác.
       'Đơn giá gần nhất',
@@ -371,12 +365,9 @@ export async function buildLsxDetailExcel(
             r.draft + r.pending,
             r.received,
             r.suggest,
-            slDatHang(r.suggest, hh, r.unit) || '',
             r.last_price?.unit_price ?? '',
             r.last_price?.currency ?? '',
-            r.last_price && r.suggest > 0
-              ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
-              : '',
+            r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
             dateCell(r.last_price?.at ?? null),
             r.last_price?.supplier_name ?? '',
             BANG_KE_STATUS[r.status].label,
@@ -406,9 +397,9 @@ export async function buildLsxDetailExcel(
       {},
       2,
     )
-    const uocTien = estimateByCurrency(bk.rows, hh)
+    const uocTien = estimateByCurrency(bk.rows)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 16: cur, 17: tien }, 2)
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 15: cur, 16: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -418,25 +409,25 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14])
-    numberCols(sb, [15], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [17], MONEY_FMT)
+    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13])
+    numberCols(sb, [14], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [16], MONEY_FMT)
     // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
     // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
-    numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15], {
+    numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14], {
       from: bkHead.number + 1,
       to: bkLast,
       digits: 4,
     })
     // Cột nào cả lệnh không có số thì ẩn — xem hideEmptyCols.
-    hideEmptyCols(sb, [7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19], {
+    hideEmptyCols(sb, [7, 8, 9, 10, 11, 14, 15, 16, 17, 18], {
       from: bkHead.number + 1,
       to: bkLast,
     })
     if (anChuaXacNhan) sb.getColumn(7).hidden = true
-    if (anTinhTrang) sb.getColumn(20).hidden = true
-    if (anNguon) sb.getColumn(21).hidden = true
-    dateCols(sb, [18])
+    if (anTinhTrang) sb.getColumn(19).hidden = true
+    if (anNguon) sb.getColumn(20).hidden = true
+    dateCols(sb, [17])
     applyWidths(
       sb,
       [
@@ -494,13 +485,13 @@ export async function buildLsxDetailExcel(
       Cắt khối bằng ĐÚNG hàm lõi mà màn hình dùng, để file và màn không chia đơn
       khác nhau.
     */
-    const khoiNcc = groupBySupplier(bk.rows, hh)
+    const khoiNcc = groupBySupplier(bk.rows)
     if (khoiNcc.length > 0) {
       const sn = wb.addWorksheet('Đặt cho ai')
       titleRow(sn, `ĐẶT CHO AI — LSX ${lsx.code}`)
       noteRow(
         sn,
-        `Chỉ những mã CÒN PHẢI ĐẶT. Số đặt đã cộng hao hụt ${hh}% và làm tròn lên. Nhà cung cấp lấy theo lần mua gần nhất của chính mã đó.`,
+        'Chỉ những mã CÒN PHẢI ĐẶT. Nhà cung cấp lấy theo lần mua gần nhất của chính mã đó.',
       )
       sn.addRow([])
       const nHead = headerRow(sn, [
@@ -510,7 +501,6 @@ export async function buildLsxDetailExcel(
         'Quy cách',
         'ĐVT',
         'Còn thiếu',
-        `SL đặt (+${hh}%)`,
         'Đơn giá gần nhất',
         'Tiền tệ',
         'Tạm tính',
@@ -533,19 +523,16 @@ export async function buildLsxDetailExcel(
             r.spec ?? '',
             r.unit,
             r.suggest,
-            slDatHang(r.suggest, hh, r.unit),
             r.last_price?.unit_price ?? '',
             r.last_price?.currency ?? '',
-            r.last_price
-              ? slDatHang(r.suggest, hh, r.unit) * r.last_price.unit_price
-              : '',
+            r.last_price ? r.suggest * r.last_price.unit_price : '',
             dateCell(r.last_price?.at ?? null),
             r.last_price?.po_code ?? '',
           ])
         }
         // Cộng theo TỪNG khối: đây là số tiền của một tờ đơn, người ký nhìn nó.
         for (const [cur, tien] of b.tien) {
-          totalRow(sn, `Cộng (${cur})`, { 9: cur, 10: tien }, 2)
+          totalRow(sn, `Cộng (${cur})`, { 8: cur, 9: tien }, 2)
         }
         if (b.tien.size === 0) totalRow(sn, 'Cộng — chưa mã nào có giá', {}, 2)
         // Một dòng trống giữa hai tờ đơn: khối này hết, khối sau bắt đầu.

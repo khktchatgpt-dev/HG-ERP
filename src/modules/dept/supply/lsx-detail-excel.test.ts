@@ -233,14 +233,12 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const head = headRowOf(sb)
     const d = sb.getRow(head + 2)
     expect(d.getCell(4).value).toBe('D20 x 0.7mm x 6m') // quy cách
-    // SL đặt = 100 cây × 1,03 = 103 (làm tròn LÊN, xem lib/po-waste).
-    expect(d.getCell(14).value).toBe(103)
-    expect(d.getCell(15).value).toBe(41_000) // đơn giá gần nhất
-    expect(d.getCell(16).value).toBe('VND')
-    // Tiền tính theo SỐ ĐẶT chứ không theo số còn thiếu — phải khớp đơn gửi đi.
-    expect(d.getCell(17).value).toBe(103 * 41_000)
-    expect((d.getCell(18).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
-    expect(d.getCell(19).value).toBe('Kim Phát')
+    expect(d.getCell(14).value).toBe(41_000) // đơn giá gần nhất
+    expect(d.getCell(15).value).toBe('VND')
+    // Tạm tính = còn phải đặt × giá.
+    expect(d.getCell(16).value).toBe(100 * 41_000)
+    expect((d.getCell(17).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(d.getCell(18).value).toBe('Kim Phát')
     // Dòng tổng tiền phải nói rõ TIỀN TỆ — bảng có thể có cả VND lẫn USD.
     const text = sb
       .getSheetValues()
@@ -248,7 +246,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
       .filter((v) => v != null)
       .map(String)
       .join(' | ')
-    expect(text).toContain('Tạm tính theo SL đặt (VND)')
+    expect(text).toContain('Tạm tính phần còn phải đặt (VND)')
   })
 
   it('cột số giữ KIỂU SỐ, số 0 không bị đổi thành chuỗi rỗng', async () => {

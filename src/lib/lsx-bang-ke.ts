@@ -14,7 +14,6 @@
  */
 
 import { suggestForMaterial } from './po-suggestion'
-import { slDatHang } from './po-waste'
 
 export type BangKeSource = 'manual' | 'components' | 'bom' | 'bom_draft'
 
@@ -216,17 +215,14 @@ export type BangKeRow = {
  * Tiền TẠM TÍNH — gộp theo TỪNG TIỀN TỆ vì bảng kê có cả đơn VND lẫn USD, cộng
  * chung ra một con số không có nghĩa.
  *
- * Tính trên SỐ ĐẶT (đã cộng hao hụt, làm tròn lên), không trên số còn thiếu:
- * tiền phải khớp với đơn sắp gửi đi. Cộng theo số còn thiếu thì con số ở đầu
- * khối lệch với tổng các dòng ngay bên dưới nó.
+ * Tính trên số CÒN PHẢI ĐẶT — đúng con số người mua đang nhìn trên dòng.
  */
-export function estimateByCurrency(rows: BangKeRow[], hh = 0): Map<string, number> {
+export function estimateByCurrency(rows: BangKeRow[]): Map<string, number> {
   const out = new Map<string, number>()
   for (const r of rows) {
     if (!r.last_price || r.suggest <= 0) continue
     const cur = r.last_price.currency
-    const sl = slDatHang(r.suggest, hh, r.unit)
-    out.set(cur, (out.get(cur) ?? 0) + sl * r.last_price.unit_price)
+    out.set(cur, (out.get(cur) ?? 0) + r.suggest * r.last_price.unit_price)
   }
   return out
 }
@@ -436,7 +432,7 @@ export type NccBlock = {
   supplier_id: string | null
   supplier_name: string
   rows: BangKeRow[]
-  /** Tiền tạm tính theo SỐ ĐẶT, gộp theo từng tiền tệ. */
+  /** Tiền tạm tính cho phần còn phải đặt, gộp theo từng tiền tệ. */
   tien: Map<string, number>
 }
 
@@ -456,7 +452,7 @@ export const NCC_CHUA_BIET = 'Chưa biết mua ở đâu'
  * Ở LÕI THUẦN vì cả màn hình lẫn file Excel đều phải cắt y hệt nhau; hai bản
  * dựng riêng thì sớm muộn một bên đổi luật và hai bên chia đơn khác nhau.
  */
-export function groupBySupplier(rows: BangKeRow[], hh = 0): NccBlock[] {
+export function groupBySupplier(rows: BangKeRow[]): NccBlock[] {
   const map = new Map<string, NccBlock>()
   for (const r of rows) {
     if (r.suggest <= 0) continue
@@ -472,7 +468,7 @@ export function groupBySupplier(rows: BangKeRow[], hh = 0): NccBlock[] {
       })
   }
   return [...map.values()]
-    .map((b) => ({ ...b, tien: estimateByCurrency(b.rows, hh) }))
+    .map((b) => ({ ...b, tien: estimateByCurrency(b.rows) }))
     .sort((a, b) =>
       !a.supplier_id !== !b.supplier_id
         ? a.supplier_id

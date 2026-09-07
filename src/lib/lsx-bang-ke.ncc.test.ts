@@ -61,7 +61,7 @@ describe('groupBySupplier', () => {
     expect(out).toEqual([])
   })
 
-  it('tiền tính theo SỐ ĐẶT (đã cộng hao hụt), tách theo tiền tệ', () => {
+  it('tiền tính theo số CÒN PHẢI ĐẶT, tách theo tiền tệ', () => {
     const out = groupBySupplier(
       [
         row({ material_code: 'A', suggest: 100, last_price: gia('s1', 'KP', 1000) }),
@@ -70,11 +70,8 @@ describe('groupBySupplier', () => {
           suggest: 10,
           last_price: gia('s1', 'KP', 2, 'USD'),
         }),
-      ],
-      3,
-    )
-    // 100 cái ×1,03 → 103 (tròn lên) × 1.000 = 103.000 ; 10 → 11 × 2 = 22 USD
-    expect(out[0].tien.get('VND')).toBe(103_000)
-    expect(out[0].tien.get('USD')).toBe(22)
+    ])
+    expect(out[0].tien.get('VND')).toBe(100_000)
+    expect(out[0].tien.get('USD')).toBe(20)
   })
 })
