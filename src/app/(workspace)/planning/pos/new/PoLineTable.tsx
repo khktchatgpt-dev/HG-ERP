@@ -9,11 +9,7 @@ import {
   type PoTemplate,
 } from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import {
-  GridCellInput,
-  GridCellNumber,
-  GridCellSelect,
-} from '@/components/erp/GridCell'
+import { GridCellInput, GridCellNumber, GridCellSelect } from '@/components/erp/GridCell'
 import { Button } from '@/components/shadcn/button'
 import { cn } from '@/lib/utils'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
@@ -405,6 +401,26 @@ export function PoLineTable({
                 ...draftOf(l),
                 price_per: null,
               }).price_basis
+              /*
+                Giá tương đương ở đơn vị CÒN LẠI — chỉ dựng khi có đủ SL, giá và
+                số quy đổi; thiếu một thứ thì phép chia ra vô nghĩa.
+              */
+              const soLuong = l.qty === '' ? 0 : Number(l.qty)
+              const donGia = l.price === '' ? 0 : Number(l.price)
+              const quyDoi =
+                qty2 != null && qty2 > 0 && soLuong > 0 && donGia > 0 && unit2
+                  ? dan.price_basis === 'unit2'
+                    ? {
+                        gia: roundMoney((donGia * qty2) / soLuong, currency),
+                        nhan: l.unit,
+                        sang: 'unit' as const,
+                      }
+                    : {
+                        gia: roundMoney((donGia * soLuong) / qty2, currency),
+                        nhan: unit2,
+                        sang: 'unit2' as const,
+                      }
+                  : null
 
               return (
                 <tr key={l.material_id} data-line className="group hover:bg-accent">
@@ -695,6 +711,30 @@ export function PoLineTable({
                         <option value="unit">/ {l.unit}</option>
                         <option value="unit2">/ {unit2}</option>
                       </GridCellSelect>
+                    )}
+                    {/*
+                      GIÁ TƯƠNG ĐƯƠNG Ở ĐƠN VỊ CÒN LẠI — CHỈ ĐỂ ĐỌC, không bấm
+                      đổi được.
+
+                      Giá gốc của thép là đ/KG (19.620), con số đ/cây trên phiếu
+                      NCC là đã nhân barem rồi làm tròn (× 4,47 = 87.701 → phiếu
+                      ghi 87.700). Bày đ/kg ra để người mua so được với giá thị
+                      trường và với lần mua trước, vì đ/cây của cây 6m khác đ/cây
+                      của cây 4m còn đ/kg thì không đổi.
+
+                      CỐ Ý KHÔNG cho bấm để đổi luôn đơn giá: đổi 87.700 đ/cây
+                      thành 19.620 đ/kg làm tổng dòng nhảy từ 55.251.000 lên
+                      55.251.882 — lệch 882đ với hoá đơn NCC, vì giá kg đã bị làm
+                      tròn. Đơn phải khớp hoá đơn đến từng đồng; con số quy đổi
+                      chỉ để ĐỌC.
+                    */}
+                    {quyDoi && (
+                      <div
+                        className="text-muted-foreground mt-0.5 text-right text-[11px] whitespace-nowrap"
+                        title={`Tương đương ${num(quyDoi.gia)} / ${quyDoi.nhan} — số để so sánh giá, không dùng để tính tiền`}
+                      >
+                        ≈ {num(quyDoi.gia)} / {quyDoi.nhan}
+                      </div>
                     )}
                     {goiY != null && l.price !== goiY && (
                       <Button
