@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ClipboardPaste,
   Download,
+  FileWarning,
   FlaskConical,
   Package,
   PackageSearch,
@@ -128,6 +129,8 @@ export function BangKeScreen({
   const [showBlocked, setShowBlocked] = useState(false)
   /** Mã đang mở phần "dùng cho sản phẩm nào". */
   const [openRow, setOpenRow] = useState<string | null>(null)
+  /** Người dùng chủ động mở bảng dù chưa có định mức xác nhận nào. */
+  const [forceTable, setForceTable] = useState(false)
 
   const filtered = useMemo(() => {
     const nq = norm(q.trim())
@@ -182,6 +185,17 @@ export function BangKeScreen({
     () => data.products.filter((p) => !p.bom_confirmed && p.coded_parts > 0),
     [data.products],
   )
+
+  /**
+   * KHOÁ BẢNG khi chưa có mã nào dùng được: cột Cần toàn 0 thì bảng 106 dòng
+   * chỉ gây nhiễu và làm người mua tưởng đã có số (user chốt 06/09/2026 —
+   * "chưa xác nhận thì để trống, hiện nội dung cho nhân viên biết").
+   */
+  const blockedByBom =
+    !data.include_draft &&
+    summary.needed === 0 &&
+    summary.unconfirmed > 0 &&
+    !forceTable
 
   const manualDisabled = !canEdit || data.manual_error !== null
   const draftHref = `/planning/lsx/${lsx.id}/bang-ke${data.include_draft ? '' : '?nhap=1'}`
@@ -598,7 +612,66 @@ export function BangKeScreen({
         }
       />
 
-      {filtered.length === 0 ? (
+      {blockedByBom ? (
+        <section className="bg-card overflow-hidden rounded-lg border">
+          <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+            <span
+              className="grid size-12 place-items-center rounded-xl"
+              style={{
+                background: 'color-mix(in srgb, var(--warn) 14%, transparent)',
+                color: 'var(--warn)',
+              }}
+            >
+              <FileWarning className="size-6" strokeWidth={1.8} />
+            </span>
+            <h2 className="t-title">Chưa có định mức nào dùng được để mua</h2>
+            <p className="text-muted-foreground max-w-xl text-[13px]">
+              Cả <span className="t-data">{summary.unconfirmed}</span> mã vật tư của lệnh
+              này đều đến từ hồ sơ sản phẩm mà <b>Kỹ thuật chưa xác nhận BOM</b>. Bảng kê
+              để trống có chủ đích: mua theo bản nháp là mua sai số lượng.
+            </p>
+            <p className="text-muted-foreground max-w-xl text-[12.5px]">
+              Việc cần làm: Kỹ thuật mở hồ sơ từng sản phẩm bên dưới và đánh dấu
+              &ldquo;BOM đã kiểm tra&rdquo;. Xong bước đó, bảng kê tự có số ngay.
+            </p>
+            {unconfirmedProducts.length > 0 && (
+              <ul className="mt-1 flex max-w-2xl flex-wrap justify-center gap-1.5">
+                {unconfirmedProducts.map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      href={`/products/${p.id}/dinh-muc`}
+                      className="hover:bg-accent inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[12px]"
+                    >
+                      <DocChip>{p.code}</DocChip>
+                      <span className="max-w-[180px] truncate">{p.name}</span>
+                      <span className="text-muted-foreground t-data">
+                        {p.coded_parts} dòng
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="mt-2 flex flex-wrap justify-center gap-2">
+              <Button variant="outline" size="sm" asChild>
+                <Link href={draftHref} scroll={false}>
+                  <FlaskConical />
+                  Xem tạm số theo bản nháp
+                </Link>
+              </Button>
+              {canEdit && !data.manual_error && (
+                <Button variant="outline" size="sm" onClick={() => setPickOpen(true)}>
+                  <Plus />
+                  Tự nhập bảng kê
+                </Button>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setForceTable(true)}>
+                Vẫn xem bảng ({rows.length} mã)
+              </Button>
+            </div>
+          </div>
+        </section>
+      ) : filtered.length === 0 ? (
         <section className="bg-card rounded-lg border">
           <EmptyState
             icon={<ClipboardList className="size-5" />}
