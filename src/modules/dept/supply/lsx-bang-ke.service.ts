@@ -125,10 +125,15 @@ export async function loadLsxBangKe(
       qty_issued: 0,
       qty_remaining: 0,
       source: 'bom' as const,
+      kind: l.kind,
       from_products: [],
     }
     if (l.bom_confirmed) cur.qty_needed += l.qty_needed
     else cur.qty_needed_draft = (cur.qty_needed_draft ?? 0) + l.qty_needed
+    // Một mã có thể nằm ở nhiều SP; loại lấy của dòng ĐẦU TIÊN nói được. Cùng
+    // một con vít thì mọi hồ sơ đều xếp NGU_KIM, lệch nhau là lỗi nhập ở hồ sơ
+    // SP — bảng kê không phải chỗ sửa việc đó.
+    cur.kind = cur.kind ?? l.kind
     cur.from_products = [
       ...(cur.from_products ?? []),
       {
@@ -156,6 +161,7 @@ export async function loadLsxBangKe(
       qty_issued: 0,
       qty_remaining: 0,
       source: 'components' as const,
+      kind: byMat.get(c.material_id)?.kind ?? null,
       incomplete: c.incomplete,
       from_products: byMat.get(c.material_id)?.from_products ?? [],
     })
@@ -327,15 +333,23 @@ async function enrichRows(rows: BangKeRow[]): Promise<void> {
   if (ids.length === 0) return
   try {
     const [specs, prices] = await Promise.all([
-      db().from('warehouse_materials').select('id, spec').in('id', ids),
+      db().from('warehouse_materials').select('id, spec, sub_group').in('id', ids),
       pricesRepo.lastPurchases(ids),
     ])
-    const specById = new Map(
-      (specs.data ?? []).map((m) => [m.id as string, (m.spec as string | null) ?? null]),
+    const infoById = new Map(
+      (specs.data ?? []).map((m) => [
+        m.id as string,
+        {
+          spec: (m.spec as string | null) ?? null,
+          sub_group: (m.sub_group as string | null) ?? null,
+        },
+      ]),
     )
     const priceById = new Map(prices.map((p) => [p.material_id, p]))
     for (const r of rows) {
-      r.spec = specById.get(r.material_id) ?? null
+      const info = infoById.get(r.material_id)
+      r.spec = info?.spec ?? null
+      r.sub_group = info?.sub_group ?? null
       const p = priceById.get(r.material_id)
       r.last_price = p
         ? {

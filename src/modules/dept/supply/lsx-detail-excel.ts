@@ -3,6 +3,7 @@ import { PO_STATUS_LABEL, isPoStatus } from '@/lib/po-status'
 import type { MeetingRisk } from '@/lib/supply-meeting'
 import type { LsxSupplyDetail } from './lsx-supply.service'
 import { BANG_KE_STATUS, estimateByCurrency, type BangKeRow } from '@/lib/lsx-bang-ke'
+import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import {
   MONEY_FMT,
   PCT_FMT,
@@ -245,6 +246,9 @@ export async function buildLsxDetailExcel(
     sb.addRow([])
     const bkHead = headerRow(sb, [
       'STT',
+      // LOẠI theo định mức đứng TRƯỚC nhóm kho: đó là trục sổ tay của phòng
+      // dùng để tách bảng (ngũ kim / bao bì / gỗ…), nhóm kho chỉ là chỗ xếp kệ.
+      'Loại',
       'Nhóm vật tư',
       'Mã VT',
       'Tên vật tư',
@@ -274,12 +278,24 @@ export async function buildLsxDetailExcel(
       'Ghi chú',
     ])
     let i = 0
-    for (const r of bk.rows) {
+    // Xếp theo LOẠI rồi tới nhóm phụ: cột Loại mà nhảy cóc thì lọc trong Excel
+    // ra một rổ rời rạc, và in ra giấy thì không gom được khối nào.
+    const sorted = [...bk.rows].sort(
+      (a, b) =>
+        partGroupRank(a.kind) - partGroupRank(b.kind) ||
+        (a.sub_group ?? a.group_name ?? '').localeCompare(
+          b.sub_group ?? b.group_name ?? '',
+          'vi',
+        ) ||
+        a.material_code.localeCompare(b.material_code, 'vi'),
+    )
+    for (const r of sorted) {
       i++
       // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
       // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
       sb.addRow([
         i,
+        partGroupLabel(r.kind) ?? '',
         r.group_name ?? '',
         r.material_code,
         r.material_name,
@@ -316,7 +332,7 @@ export async function buildLsxDetailExcel(
     )
     const uocTien = estimateByCurrency(bk.rows)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 16: cur, 17: tien }, 2)
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 17: cur, 18: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -326,15 +342,15 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [7, 8, 9, 10, 11, 12, 13, 14])
-    numberCols(sb, [15], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [17], MONEY_FMT)
-    dateCols(sb, [18])
+    numberCols(sb, [8, 9, 10, 11, 12, 13, 14, 15])
+    numberCols(sb, [16], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [18], MONEY_FMT)
+    dateCols(sb, [19])
     applyWidths(sb, [
-      5, 22, 16, 38, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18, 20, 30,
-      24,
+      5, 14, 22, 16, 38, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 14, 8, 15, 13, 24, 18, 20,
+      30, 24,
     ])
-    for (const c of [4, 5, 19, 22, 23]) {
+    for (const c of [5, 6, 20, 23, 24]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
     finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 4 })

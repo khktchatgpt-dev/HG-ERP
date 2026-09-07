@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -51,6 +51,7 @@ import {
   type BangKeRow,
   type BangKeStatus,
 } from '@/lib/lsx-bang-ke'
+import { partGroupLabel, partGroupRank } from '@/lib/part-groups'
 import { cn } from '@/lib/utils'
 import type { LsxBangKe } from '@/modules/dept/supply/lsx-bang-ke.service'
 import { PasteLinesDialog, type PasteConfirm } from '../../../pos/new/PasteLinesDialog'
@@ -88,6 +89,35 @@ const SOURCE_LABEL: Record<BangKeRow['source'], string> = {
 
 /** Tối đa mã đưa vào một lượt "Soạn đơn cho dòng thiếu" — đơn dài hơn là đơn khó đọc. */
 const MAX_PREFILL = 40
+
+/**
+ * Khối KHÔNG có loại (mã chỉ có trên đơn, dòng nhập tay) luôn xuống cuối: đó là
+ * phần rìa của bảng kê, không phải ruột định mức.
+ */
+const NGOAI_DINH_MUC_RANK = 900
+
+/** Dưới ngưỡng này thì một khối đọc thẳng được, chia thêm tầng chỉ tổ rối. */
+const NGUONG_CHIA = 15
+
+/**
+ * Chia một khối thành các nhóm phụ. Trả về MỘT nhóm không tên khi khối còn
+ * ngắn, hoặc khi cả khối cùng một nhóm phụ — lúc đó dòng tiêu đề chỉ lặp lại
+ * tên khối ở ngay trên.
+ */
+function buildSubs(rows: BangKeRow[]): { name: string | null; rows: BangKeRow[] }[] {
+  if (rows.length <= NGUONG_CHIA) return [{ name: null, rows }]
+  const map = new Map<string, BangKeRow[]>()
+  for (const r of rows) {
+    const k = r.sub_group?.trim() || r.group_name?.trim() || 'Chưa có nhóm phụ'
+    const cur = map.get(k)
+    if (cur) cur.push(r)
+    else map.set(k, [r])
+  }
+  if (map.size < 2) return [{ name: null, rows }]
+  return [...map.entries()]
+    .map(([name, list]) => ({ name, rows: list }))
+    .sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name, 'vi'))
+}
 
 const fmt = (n: number) =>
   n === 0 ? '0' : n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
@@ -143,24 +173,47 @@ export function BangKeScreen({
     })
   }, [rows, status, group, q])
 
-  /** Gom theo nhóm vật tư, giữ thứ tự ưu tiên trong từng nhóm. */
+  /*
+    CHIA KHỐI THEO LOẠI TRONG ĐỊNH MỨC (07/09/2026), không theo nhóm kho nữa.
+
+    Sổ tay của phòng tách hẳn "BẢNG KÊ VẬT TƯ NGŨ KIM" khỏi "VẬT TƯ BAO BÌ" khỏi
+    khối gỗ/nệm/vải — đó mới là trục người mua dùng. Nhóm KHO quá thô để làm
+    tầng duy nhất: lệnh 01/26-27 - MX có 107 mã thì 66 mã dồn vào đúng một nhóm
+    "Bu lông - vít - đinh - liên kết", đọc như một khối liền không đầu đuôi.
+
+    Mã chỉ có trên đơn (ngoài định mức) và dòng nhập tay KHÔNG có loại — cho rơi
+    về nhóm kho như cũ chứ không đoán bừa một loại cho chúng.
+
+    Khối dài hơn NGUONG_CHIA thì chia tiếp một tầng theo nhóm phụ của danh mục
+    (phủ 91%, riêng nhóm bu lông 97%). Khối ngắn thì KHÔNG chia — thêm một tầng
+    tiêu đề cho sáu dòng là làm rối chứ không làm rõ.
+  */
   const sections = useMemo(() => {
-    const map = new Map<string, BangKeRow[]>()
+    const map = new Map<string, { rank: number; rows: BangKeRow[] }>()
     for (const r of filtered) {
-      const k = r.group_name ?? 'Chưa phân nhóm'
-      const list = map.get(k)
-      if (list) list.push(r)
-      else map.set(k, [r])
+      const loai = partGroupLabel(r.kind)
+      const name = loai ?? r.group_name ?? 'Chưa phân loại'
+      const cur = map.get(name)
+      if (cur) cur.rows.push(r)
+      else
+        map.set(name, {
+          rank: loai ? partGroupRank(r.kind) : NGOAI_DINH_MUC_RANK,
+          rows: [r],
+        })
     }
     return (
       [...map.entries()]
-        .map(([name, list]) => ({
+        .map(([name, { rank, rows: list }]) => ({
           name,
+          rank,
           rows: list,
-          short: list.filter((r) => r.suggest > 0).length,
+          short: list.filter((x) => x.suggest > 0).length,
+          subs: buildSubs(list),
         }))
-        // Nhóm còn phải đặt nhiều nhất lên trước — đó là cuộc gọi tiếp theo.
-        .sort((a, b) => b.short - a.short || a.name.localeCompare(b.name, 'vi'))
+        // Thứ tự khối theo biểu mẫu định mức (khung → gỗ → ngũ kim → … → bao bì),
+        // KHÔNG theo "khối nào thiếu nhiều nhất": trật tự nhảy theo dữ liệu thì
+        // mỗi lần mở lại thấy bảng khác nhau, người dùng mất luôn trí nhớ vị trí.
+        .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name, 'vi'))
     )
   }, [filtered])
 
@@ -204,10 +257,7 @@ export function BangKeScreen({
    * "chưa xác nhận thì để trống, hiện nội dung cho nhân viên biết").
    */
   const blockedByBom =
-    !data.include_draft &&
-    summary.needed === 0 &&
-    summary.unconfirmed > 0 &&
-    !forceTable
+    !data.include_draft && summary.needed === 0 && summary.unconfirmed > 0 && !forceTable
 
   const manualDisabled = !canEdit || data.manual_error !== null
   const draftHref = `/planning/lsx/${lsx.id}/bang-ke${data.include_draft ? '' : '?nhap=1'}`
@@ -326,7 +376,7 @@ export function BangKeScreen({
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a
-                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? "&nhap=1" : ""}`}
+                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? '&nhap=1' : ''}`}
                 download
               >
                 <Download />
@@ -500,9 +550,9 @@ export function BangKeScreen({
                   quy đổi được sang đơn vị mua
                 </h2>
                 <p className="text-muted-foreground mt-0.5 text-[12.5px]">
-                  Định mức đếm theo chi tiết, vật tư lại bán theo cây hoặc kg. Số của những
-                  dòng này <b>không được cộng vào cột Cần</b> — lấy số thanh làm số cây là
-                  mua thừa nhiều lần.
+                  Định mức đếm theo chi tiết, vật tư lại bán theo cây hoặc kg. Số của
+                  những dòng này <b>không được cộng vào cột Cần</b> — lấy số thanh làm số
+                  cây là mua thừa nhiều lần.
                 </p>
               </div>
             </div>
@@ -738,41 +788,71 @@ export function BangKeScreen({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sec.rows.map((r) => (
-                      <Row
-                        key={r.material_id}
-                        r={r}
-                        lsxId={lsx.id}
-                        open={openRow === r.material_id}
-                        onToggle={() =>
-                          setOpenRow(openRow === r.material_id ? null : r.material_id)
-                        }
-                        canEdit={canEdit}
-                        editable={!data.manual_error}
-                        busy={busy}
-                        onSaveQty={(v) =>
-                          saveRows(
-                            [{ material_id: r.material_id, qty_needed: v, note: r.note }],
-                            `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
-                          )
-                        }
-                        onSaveNote={(v) =>
-                          saveRows(
-                            [
-                              {
-                                material_id: r.material_id,
-                                qty_needed: r.qty_needed,
-                                note: v || null,
-                              },
-                            ],
-                            v
-                              ? `${r.material_code}: đã ghi chú`
-                              : `${r.material_code}: đã xoá ghi chú`,
-                          )
-                        }
-                        onOverride={() => override(r)}
-                        onRemove={() => removeManual(r)}
-                      />
+                    {sec.subs.map((sub) => (
+                      <React.Fragment key={sub.name ?? '_'}>
+                        {sub.name && (
+                          /*
+                            Tầng nhóm phụ: một dòng gạch ngang trong thân bảng,
+                            KHÔNG phải một bảng con. Bảng con thì mỗi nhóm một
+                            hàng tiêu đề riêng, cột lệch nhau và mất luôn cái
+                            lợi của bảng dài là dóng số theo cột.
+                          */
+                          <TableRow className="hover:bg-transparent">
+                            <TableCell className="p-0" />
+                            <TableCell
+                              colSpan={canEdit ? 9 : 8}
+                              className="bg-muted/40 text-muted-foreground py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"
+                            >
+                              {sub.name}
+                              <span className="t-data ml-2 font-normal normal-case">
+                                {sub.rows.length} mã
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {sub.rows.map((r) => (
+                          <Row
+                            key={r.material_id}
+                            r={r}
+                            lsxId={lsx.id}
+                            open={openRow === r.material_id}
+                            onToggle={() =>
+                              setOpenRow(openRow === r.material_id ? null : r.material_id)
+                            }
+                            canEdit={canEdit}
+                            editable={!data.manual_error}
+                            busy={busy}
+                            onSaveQty={(v) =>
+                              saveRows(
+                                [
+                                  {
+                                    material_id: r.material_id,
+                                    qty_needed: v,
+                                    note: r.note,
+                                  },
+                                ],
+                                `${r.material_code}: cần ${fmt(v)} ${r.unit}`,
+                              )
+                            }
+                            onSaveNote={(v) =>
+                              saveRows(
+                                [
+                                  {
+                                    material_id: r.material_id,
+                                    qty_needed: r.qty_needed,
+                                    note: v || null,
+                                  },
+                                ],
+                                v
+                                  ? `${r.material_code}: đã ghi chú`
+                                  : `${r.material_code}: đã xoá ghi chú`,
+                              )
+                            }
+                            onOverride={() => override(r)}
+                            onRemove={() => removeManual(r)}
+                          />
+                        ))}
+                      </React.Fragment>
                     ))}
                   </TableBody>
                 </Table>
@@ -916,7 +996,9 @@ function Row({
                 <span className="t-data">
                   {fmt(p.per)} × {fmt(p.qty)} SP = {fmt(p.per * p.qty)} {r.unit}
                 </span>
-                {p.explain && <span className="text-muted-foreground">({p.explain})</span>}
+                {p.explain && (
+                  <span className="text-muted-foreground">({p.explain})</span>
+                )}
                 {!p.confirmed && (
                   <span className="text-[var(--warn)]">BOM chưa xác nhận</span>
                 )}
@@ -1008,7 +1090,9 @@ function Row({
             </TooltipContent>
           </Tooltip>
         ) : (
-          <span className="text-muted-foreground text-[11px] italic">chưa mua bao giờ</span>
+          <span className="text-muted-foreground text-[11px] italic">
+            chưa mua bao giờ
+          </span>
         )}
       </TableCell>
 

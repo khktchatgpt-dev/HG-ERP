@@ -218,7 +218,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = sb.getRow(headRowOf(sb))
-    const conPhaiDat = head.getCell(14)
+    const conPhaiDat = head.getCell(15)
     expect(conPhaiDat.value).toBe('Còn phải đặt')
     expect(conPhaiDat.alignment?.wrapText).toBe(true)
     expect(conPhaiDat.alignment?.horizontal).toBe('center')
@@ -229,12 +229,12 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = headRowOf(sb)
     const d = sb.getRow(head + 1)
-    expect(d.getCell(5).value).toBe('D20 x 0.7mm x 6m') // quy cách
-    expect(d.getCell(15).value).toBe(41_000) // đơn giá gần nhất
-    expect(d.getCell(16).value).toBe('VND')
-    expect(d.getCell(17).value).toBe(100 * 41_000) // tạm tính = 100 cây × giá
-    expect((d.getCell(18).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
-    expect(d.getCell(19).value).toBe('Kim Phát')
+    expect(d.getCell(6).value).toBe('D20 x 0.7mm x 6m') // quy cách
+    expect(d.getCell(16).value).toBe(41_000) // đơn giá gần nhất
+    expect(d.getCell(17).value).toBe('VND')
+    expect(d.getCell(18).value).toBe(100 * 41_000) // tạm tính = 100 cây × giá
+    expect((d.getCell(19).value as Date).toISOString().slice(0, 10)).toBe('2026-07-15')
+    expect(d.getCell(20).value).toBe('Kim Phát')
     // Dòng tổng tiền phải nói rõ TIỀN TỆ — bảng có thể có cả VND lẫn USD.
     const text = sb
       .getSheetValues()
@@ -249,8 +249,8 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const sb = wb.getWorksheet('Bảng kê VT')!
     const head = headRowOf(sb)
-    // Dòng vật tư mẫu có "Đã về" = 0 (cột 13) — phải là số 0, không phải ''.
-    const c = sb.getRow(head + 1).getCell(13)
+    // Dòng vật tư mẫu có "Đã về" = 0 (cột 14) — phải là số 0, không phải ''.
+    const c = sb.getRow(head + 1).getCell(14)
     expect(typeof c.value).toBe('number')
     expect(c.value).toBe(0)
     expect(String(c.numFmt)).toContain('""')

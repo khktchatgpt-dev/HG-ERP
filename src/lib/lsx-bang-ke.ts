@@ -24,6 +24,8 @@ export type BangKeNeed = {
   material_name: string
   unit: string
   group_name?: string | null
+  /** LOẠI theo định mức — xem BangKeRow.kind. */
+  kind?: string | null
   /** Số cần từ định mức ĐÃ XÁC NHẬN (BOM đã kiểm tra hoặc hồ sơ đã khoá). */
   qty_needed: number
   /**
@@ -171,6 +173,14 @@ export type BangKeRow = {
   note: string | null
   pos: BangKePoRef[]
   /**
+   * LOẠI theo định mức (NGU_KIM / PACKAGING / WOOD…) — trục chia khối chính của
+   * bảng kê từ 07/09/2026. Rỗng với mã chỉ có trên đơn (ngoài định mức): những
+   * dòng đó rơi về nhóm kho.
+   */
+  kind?: string | null
+  /** Nhóm phụ trong danh mục kho — tầng chia thứ hai khi một loại quá dài. */
+  sub_group?: string | null
+  /**
    * Quy cách của mã trong danh mục vật tư. Đi hỏi giá mà chỉ có tên ("Nhôm hộp
    * 15x25x1li") thì nhà cung cấp vẫn hỏi lại độ dày / chiều dài cây.
    */
@@ -313,6 +323,9 @@ export function buildBangKe(input: {
       material_name: ref?.material_name ?? '',
       unit: ref?.unit ?? '',
       group_name: ref?.group_name ?? null,
+      // Loại chỉ đến từ định mức. Dòng nhập tay và mã chỉ có trên đơn không có
+      // loại — màn hình cho chúng rơi về nhóm kho chứ không đoán.
+      kind: a?.kind ?? null,
       deviates,
       auto_needed: autoNeeded,
       from_products: a?.from_products ?? [],
