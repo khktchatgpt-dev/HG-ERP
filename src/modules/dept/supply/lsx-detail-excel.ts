@@ -103,6 +103,12 @@ export type LsxDetailReport = {
   }
 }
 
+/** Vị trí lắp ráp gộp vào ghi chú — xem chú thích ở chỗ dựng dòng. */
+const viTri = (r: BangKeRow): string => {
+  const v = viTriLapRap(r)
+  return v.length > 0 ? `Lắp: ${v.join(', ')}` : ''
+}
+
 /** Nguồn số "Cần" — cùng chữ với màn hình để đọc file không phải đoán. */
 const NGUON: Record<BangKeRow['source'], string> = {
   manual: 'Cung ứng nhập tay',
@@ -272,9 +278,6 @@ export async function buildLsxDetailExcel(
       'Tên vật tư',
       // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
       'Quy cách',
-      // Vị trí lắp ráp: tên chi tiết dùng mã này. Có trong mọi bảng kê tay của
-      // phòng — mã và tên vật tư không nói được con vít này bắt vào đâu.
-      'Vị trí lắp ráp',
       'ĐVT',
       'Cần',
       // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
@@ -327,7 +330,6 @@ export async function buildLsxDetailExcel(
             r.material_code,
             r.material_name,
             r.spec ?? '',
-            viTriLapRap(r).join(' · '),
             r.unit,
             r.qty_needed,
             r.draft_needed,
@@ -348,7 +350,16 @@ export async function buildLsxDetailExcel(
             BANG_KE_STATUS[r.status].label,
             NGUON[r.source],
             r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
-            r.note ?? '',
+            /*
+              VỊ TRÍ LẮP RÁP nằm trong GHI CHÚ, không đứng riêng một cột.
+              Nguồn của nó là `part_name` — TÊN CHI TIẾT trong định mức, không
+              phải một trường vị trí thật: với khung/gỗ thì tên chi tiết tình cờ
+              mô tả vị trí ("Giang mặt cánh"), còn ngũ kim thì Kỹ thuật đặt tên
+              chi tiết bằng chính tên vật tư nên rỗng nghĩa. Đo 20 lệnh: chỉ
+              23/294 dòng (8%) có vị trí thật — giữ nguyên một cột cho thứ trống
+              92% thời gian là chép khuôn tờ giấy chứ không theo thực tế.
+            */
+            [r.note, viTri(r)].filter(Boolean).join(' · '),
           ])
         }
       }
@@ -365,7 +376,7 @@ export async function buildLsxDetailExcel(
     )
     const uocTien = estimateByCurrency(bk.rows, hh)
     for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 17: cur, 18: tien }, 2)
+      totalRow(sb, `Tạm tính theo SL đặt (${cur})`, { 16: cur, 17: tien }, 2)
     }
     const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
     if (chuaCoGia > 0) {
@@ -375,32 +386,32 @@ export async function buildLsxDetailExcel(
         'warn',
       )
     }
-    numberCols(sb, [7, 8, 9, 10, 11, 12, 13, 14, 15])
-    numberCols(sb, [16], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [18], MONEY_FMT)
+    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14])
+    numberCols(sb, [15], '#,##0.####;-#,##0.####;""')
+    numberCols(sb, [17], MONEY_FMT)
     // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
     // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
-    numberCells(sb, [7, 8, 9, 10, 11, 12, 13, 14, 15, 16], {
+    numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14, 15], {
       from: bkHead.number + 1,
       to: bkLast,
       digits: 4,
     })
     // Cột nào cả lệnh không có số thì ẩn — xem hideEmptyCols.
-    hideEmptyCols(sb, [8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20], {
+    hideEmptyCols(sb, [7, 8, 9, 10, 11, 12, 15, 16, 17, 18, 19], {
       from: bkHead.number + 1,
       to: bkLast,
     })
-    dateCols(sb, [19])
+    dateCols(sb, [18])
     applyWidths(
       sb,
       [
-        5, 15, 40, 20, 22, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16,
-        18, 28, 22,
+        5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18,
+        28, 30,
       ],
     )
     // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
     // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
-    for (const c of [23, 24]) {
+    for (const c of [22, 23]) {
       sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
     }
     // Lọc tự động TẮT: bảng có dòng tiêu đề khối, lọc sẽ giấu mất chúng và

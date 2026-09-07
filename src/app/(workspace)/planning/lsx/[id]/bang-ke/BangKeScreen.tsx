@@ -901,7 +901,6 @@ export function BangKeScreen({
                       <TableHead className={cn(GHIM, 'bg-muted/40 left-1 min-w-[220px]')}>
                         Vật tư
                       </TableHead>
-                      <TableHead className="min-w-[104px]">Vị trí lắp ráp</TableHead>
                       {spCols.map((p) => (
                         <TableHead key={p.id} className="min-w-[86px] text-right">
                           <span className="t-data block text-[11px] font-semibold">
@@ -943,7 +942,7 @@ export function BangKeScreen({
                           <TableRow className="hover:bg-transparent">
                             <TableCell className="bg-card sticky left-0 z-10 p-0" />
                             <TableCell
-                              colSpan={(canEdit ? 11 : 10) + spCols.length}
+                              colSpan={(canEdit ? 10 : 9) + spCols.length}
                               className="bg-muted/40 text-muted-foreground py-1.5 text-[11.5px] font-semibold tracking-wide uppercase"
                             >
                               {sub.name}
@@ -1096,6 +1095,23 @@ function Row({
               <span className="truncate">{r.spec}</span>
             </>
           )}
+          {/*
+            VỊ TRÍ LẮP RÁP đi cùng dòng phụ, KHÔNG đứng riêng một cột.
+            Nguồn của nó là tên chi tiết trong định mức, không phải một trường
+            vị trí thật: khung/gỗ thì tên chi tiết tình cờ mô tả vị trí, còn
+            ngũ kim thì Kỹ thuật đặt tên chi tiết bằng chính tên vật tư. Đo 20
+            lệnh: chỉ 23/294 dòng (8%) có vị trí thật — một cột trống 92% thời
+            gian là chép khuôn tờ giấy chứ không theo thực tế.
+          */}
+          {viTri.length > 0 && (
+            <>
+              <span>·</span>
+              <span className="truncate" title={viTri.join(' · ')}>
+                lắp {viTri.slice(0, 2).join(', ')}
+                {viTri.length > 2 ? '+' + (viTri.length - 2) : ''}
+              </span>
+            </>
+          )}
           <span>·</span>
           <span
             className={
@@ -1157,37 +1173,6 @@ function Row({
               </li>
             ))}
           </ul>
-        )}
-      </TableCell>
-
-      {/*
-        VỊ TRÍ LẮP RÁP — tên chi tiết dùng mã này. Cột có trong mọi bảng kê tay
-        của phòng: mã và tên vật tư không nói được con vít này bắt vào đâu, mà
-        đó lại là thứ người đi hỏi giá và người nhận hàng hỏi đầu tiên.
-      */}
-      <TableCell>
-        {viTri.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {viTri.slice(0, 2).map((p) => (
-              <span
-                key={p}
-                className="bg-muted text-muted-foreground max-w-[130px] truncate rounded-full border px-2 py-0.5 text-[11px]"
-                title={p}
-              >
-                {p}
-              </span>
-            ))}
-            {viTri.length > 2 && (
-              <span
-                className="text-muted-foreground text-[11px]"
-                title={viTri.join(' · ')}
-              >
-                +{viTri.length - 2}
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="text-muted-foreground text-[11px]">—</span>
         )}
       </TableCell>
 
