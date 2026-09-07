@@ -10,6 +10,7 @@ import {
   FileText,
   ClipboardList,
   Download,
+  MoreHorizontal,
   Package,
   PackageCheck,
   Plus,
@@ -28,6 +29,12 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Button } from '@/components/shadcn/button'
 import { Card, CardContent } from '@/components/shadcn/card'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/shadcn/dropdown-menu'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import {
@@ -323,32 +330,93 @@ export function LsxPoScreen({
         title={`LSX ${lsx.code}`}
         description={`${lsx.customer_name}${lsx.order_codes.length > 0 ? ` · ĐH ${lsx.order_codes.join(', ')}` : ''}`}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline">
-              {/* Bảng kê vật tư (B1 05/09/2026): cần / tồn / đã đặt / còn phải đặt từng mã */}
+          /*
+            HAI nút + một menu, không phải bốn nút bằng vai (rà 07/09/2026 —
+            "giao diện rất khó nhìn"). Bốn nút cùng cỡ thì mắt không biết nhìn
+            đâu, và "Hồ sơ lệnh" đứng cạnh "Xuất hồ sơ lệnh" đọc như một cặp
+            trùng. Giữ lại đúng hai việc làm hằng ngày; hai việc thi thoảng lùi
+            vào menu ⋯.
+          */
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" size="sm">
               <Link href={`/planning/lsx/${lsx.id}/bang-ke`}>
                 <ClipboardList /> Bảng kê vật tư
               </Link>
             </Button>
-            <Button asChild variant="outline">
-              {/* Hồ sơ cung ứng MỘT lệnh: lệnh → từng đơn → từng dòng vật tư (05/09/2026) */}
-              <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`} download>
-                <Download /> Xuất hồ sơ lệnh
-              </a>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href={`/planning/lsx/${lsx.id}/ho-so`}>
-                <FileText /> Hồ sơ lệnh
-              </Link>
-            </Button>
-            <Button asChild>
+            <Button asChild size="sm">
               <Link href={`/planning/pos/new?lsx=${lsx.id}`}>
                 <Plus /> Soạn đơn cho lệnh này
               </Link>
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" aria-label="Thao tác khác">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href={`/planning/lsx/${lsx.id}/ho-so`}>
+                    <FileText /> Mở hồ sơ lệnh
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`} download>
+                    <Download /> Xuất Excel hồ sơ lệnh
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         }
       />
+
+      {/*
+        DẢI DỮ KIỆN đứng ngay dưới tiêu đề (dời lên 07/09/2026): hạn vật tư,
+        ngày giao, sản phẩm, người đảm nhận là thứ nhận diện lệnh — phải đọc
+        TRƯỚC các con số tiến độ. Để nó nằm giữa khối cảnh báo và bảng đơn như
+        cũ thì trang có ba thẻ viền liên tiếp cùng trọng lượng, mắt không biết
+        nhìn đâu ("giao diện rất khó nhìn" — user 07/09).
+      */}
+      <div className="bg-muted/50 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border px-4 py-3 md:grid-cols-4">
+          {/*
+            "Hạn vật tư phải về" từng là một DẢI RIÊNG ngay dưới tiêu đề. Gộp về
+            đây 04/09/2026: nó cùng loại với ba ô bên cạnh — đều là dữ kiện của
+            LỆNH — nên tách ra thành khối thứ tư chỉ để nhét một ô nhập là ăn
+            thêm một thẻ, một đường viền và hai lần khoảng cách, đẩy bảng đơn
+            xuống quá nửa màn hình. Ô sửa được nằm lẫn giữa ô đọc vẫn phân biệt
+            đượcvì nó có viền input rõ ràng.
+          */}
+          <MaterialsDueFact
+            lsxId={lsx.id}
+            value={lsx.materials_due_at}
+            daysLeft={dueLeft}
+            canEdit={canEdit}
+          />
+          <Fact
+            icon={<CalendarDays />}
+            label="Ngày giao khách"
+            value={dmy(lsx.ship_date)}
+          />
+          <Fact
+            icon={<Package />}
+            label="Sản phẩm"
+            value={
+              lsx.products.length > 0 ? `${lsx.products.length} mã` : 'chưa có dòng SP'
+            }
+            hint={lsx.products
+              .slice(0, 3)
+              .map((p) => `${p.code}×${p.qty}`)
+              .join(' · ')}
+          />
+          <Fact
+            icon={<User />}
+            label="Người đảm nhận"
+            value={owners.length > 0 ? owners.join(', ') : 'chưa giao ai'}
+            tone={owners.length > 0 ? undefined : 'var(--warn)'}
+            hint={owners.length > 1 ? 'nhiều người cùng lo lệnh này' : undefined}
+          />
+      </div>
 
       {/* Bốn con số của lệnh — đọc, không lọc: bảng dưới chỉ có mấy dòng, lọc
           thêm một tầng nữa là thừa. Nên dùng thẻ ĐỌC chứ không phải thẻ bấm. */}
@@ -421,8 +489,11 @@ export function LsxPoScreen({
       */}
       {cov.missing > 0 && (
         // `py-0` — xem ghi chú ở thẻ dữ kiện bên dưới.
-        <Card className="py-0" style={{ borderColor: 'var(--warn)' }}>
-          <CardContent className="px-4 py-3.5">
+        <Card
+          className="overflow-hidden border-l-4 py-0"
+          style={{ borderLeftColor: 'var(--warn)' }}
+        >
+          <CardContent className="px-4 py-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <TriangleAlert
                 size={16}
@@ -469,47 +540,6 @@ export function LsxPoScreen({
         93px nội dung — thẻ cao 142px cho một dải bốn dòng chữ. Đây chính là chỗ
         "khoảng trống dư thừa" nhìn thấy trên trang.
       */}
-      <Card className="py-0">
-        <CardContent className="grid grid-cols-2 gap-4 px-4 py-3.5 md:grid-cols-4">
-          {/*
-            "Hạn vật tư phải về" từng là một DẢI RIÊNG ngay dưới tiêu đề. Gộp về
-            đây 04/09/2026: nó cùng loại với ba ô bên cạnh — đều là dữ kiện của
-            LỆNH — nên tách ra thành khối thứ tư chỉ để nhét một ô nhập là ăn
-            thêm một thẻ, một đường viền và hai lần khoảng cách, đẩy bảng đơn
-            xuống quá nửa màn hình. Ô sửa được nằm lẫn giữa ô đọc vẫn phân biệt
-            đượcvì nó có viền input rõ ràng.
-          */}
-          <MaterialsDueFact
-            lsxId={lsx.id}
-            value={lsx.materials_due_at}
-            daysLeft={dueLeft}
-            canEdit={canEdit}
-          />
-          <Fact
-            icon={<CalendarDays />}
-            label="Ngày giao khách"
-            value={dmy(lsx.ship_date)}
-          />
-          <Fact
-            icon={<Package />}
-            label="Sản phẩm"
-            value={
-              lsx.products.length > 0 ? `${lsx.products.length} mã` : 'chưa có dòng SP'
-            }
-            hint={lsx.products
-              .slice(0, 3)
-              .map((p) => `${p.code}×${p.qty}`)
-              .join(' · ')}
-          />
-          <Fact
-            icon={<User />}
-            label="Người đảm nhận"
-            value={owners.length > 0 ? owners.join(', ') : 'chưa giao ai'}
-            tone={owners.length > 0 ? undefined : 'var(--warn)'}
-            hint={owners.length > 1 ? 'nhiều người cùng lo lệnh này' : undefined}
-          />
-        </CardContent>
-      </Card>
 
       {/*
         PHÂN TRANG BẬT KHI LỆNH NHIỀU ĐƠN (04/09/2026).
