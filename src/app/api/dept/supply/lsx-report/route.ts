@@ -31,10 +31,25 @@ export const GET = handle(async (req: Request) => {
   const url = new URL(req.url)
   const lsxId = url.searchParams.get('lsx')
   if (lsxId) {
-    const report = await loadLsxDetailReport(user, lsxId, today, url.searchParams.get('nhap') === '1')
+    // Hai loại file riêng — xem LsxExcelKind. Thiếu tham số thì hiểu là hồ sơ
+    // lệnh (đường cũ, để link đã gửi cho ai đó vẫn tải được).
+    const kind = url.searchParams.get('loai') === 'bangke' ? 'bangke' : 'lsx'
+    const report = await loadLsxDetailReport(
+      user,
+      lsxId,
+      today,
+      url.searchParams.get('nhap') === '1',
+      kind,
+    )
     if (!report) throw NotFound('Không tìm thấy lệnh sản xuất')
-    const buf = await buildLsxDetailExcel(report)
-    return xlsx(buf, `ho-so-cung-ung_${report.lsx.code.replace(/[\/:*?"<>|]+/g, '-')}_${today}.xlsx`)
+    const buf = await buildLsxDetailExcel(report, kind)
+    const safe = report.lsx.code.replace(/[\/:*?"<>|]+/g, '-')
+    return xlsx(
+      buf,
+      kind === 'bangke'
+        ? `bang-ke-vat-tu_${safe}_${today}.xlsx`
+        : `ho-so-cung-ung_${safe}_${today}.xlsx`,
+    )
   }
 
   const rows = await buildLsxSupplyRows(user, today)

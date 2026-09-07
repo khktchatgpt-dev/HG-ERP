@@ -21,6 +21,8 @@ export async function loadLsxDetailReport(
   today: string,
   /** Xuất kèm cả định mức chưa xác nhận (khớp công tắc trên màn bảng kê). */
   includeDraft = false,
+  /** File bảng kê không cần dòng vật tư và đợt nhận của từng đơn. */
+  kind: 'bangke' | 'lsx' = 'lsx',
 ): Promise<LsxDetailReport | null> {
   const [lsx, bk] = await Promise.all([
     buildLsxSupplyDetail(user, lsxId, today),
@@ -59,6 +61,8 @@ export async function loadLsxDetailReport(
     },
     today,
   )
+
+  if (kind === 'bangke') return { today, lsx, risk, lines: {}, batches: {}, bangKe }
 
   const poIds = lsx.pos.map((p) => p.id)
   const lines: Record<string, LsxReportLine[]> = {}

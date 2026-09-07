@@ -137,7 +137,21 @@ export function sheetName(prefix: string, code: string, taken: Set<string>): str
   return name
 }
 
-export async function buildLsxDetailExcel(report: LsxDetailReport): Promise<Buffer> {
+/**
+ * HAI LOẠI FILE, KHÔNG GỘP (user chốt 06/09/2026): file gộp làm cả hai việc
+ * nửa vời — người cầm bảng kê phải cuộn qua các sheet đơn hàng, người rà đơn
+ * lại vướng bảng kê. Sheet "Lệnh" có ở cả hai vì đó là đầu sổ, nói file này
+ * của lệnh nào.
+ *
+ *   'bangke' → Lệnh · Bảng kê VT · Phân bổ theo SP
+ *   'lsx'    → Lệnh · Đơn mua · một sheet cho mỗi đơn (dòng vật tư, đợt nhận)
+ */
+export type LsxExcelKind = 'bangke' | 'lsx'
+
+export async function buildLsxDetailExcel(
+  report: LsxDetailReport,
+  kind: LsxExcelKind = 'lsx',
+): Promise<Buffer> {
   const { lsx, risk, today } = report
   const wb = new ExcelJS.Workbook()
   const taken = new Set<string>()
@@ -187,7 +201,7 @@ export async function buildLsxDetailExcel(report: LsxDetailReport): Promise<Buff
   // ── Sheet 2: BẢNG KÊ VẬT TƯ (khuôn "BK thép" của phòng) ───────────────
   // Đặt TRƯỚC sheet đơn mua: câu hỏi đầu tiên của người mua là "còn phải đặt
   // gì", không phải "đã đặt những đơn nào".
-  if (report.bangKe && report.bangKe.rows.length > 0) {
+  if (kind === 'bangke' && report.bangKe && report.bangKe.rows.length > 0) {
     const bk = report.bangKe
     const sb = wb.addWorksheet('Bảng kê VT')
     const t = sb.addRow([`BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`])
@@ -308,6 +322,11 @@ export async function buildLsxDetailExcel(report: LsxDetailReport): Promise<Buff
       })
       sp.views = [{ state: 'frozen', ySplit: 4 }]
     }
+  }
+
+  if (kind === 'bangke') {
+    const out = await wb.xlsx.writeBuffer()
+    return Buffer.from(out as ArrayBuffer)
   }
 
   // ── Sheet 2: ĐƠN MUA CỦA LỆNH (khuôn Thao_THĐH) ───────────────────────

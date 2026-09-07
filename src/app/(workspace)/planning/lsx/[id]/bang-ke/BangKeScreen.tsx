@@ -314,7 +314,7 @@ export function BangKeScreen({
             </Button>
             <Button variant="outline" size="sm" asChild>
               <a
-                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}${data.include_draft ? "&nhap=1" : ""}`}
+                href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke${data.include_draft ? "&nhap=1" : ""}`}
                 download
               >
                 <Download />

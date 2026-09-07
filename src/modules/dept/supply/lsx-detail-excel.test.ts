@@ -109,6 +109,86 @@ describe('sheetName', () => {
   })
 })
 
+describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
+  const r = () =>
+    report(lsx(), {
+      lines: {
+        p1: [
+          {
+            id: 'ln1',
+            material_code: 'T-HOP-20X40X0.8',
+            material_name: 'Hộp 20x40',
+            spec: null,
+            unit: 'cây',
+            qty_ordered: 1400,
+            qty_received: 0,
+            qty_rejected: 0,
+            qty_missing: 1400,
+            closed_short_at: null,
+            last_received_at: null,
+            unit_price: 4470,
+            qty2: null,
+            unit2: null,
+            note: null,
+          },
+        ],
+      },
+      bangKe: {
+        rows: [
+          {
+            material_id: 'm1',
+            material_code: 'T-VUO-20X0.7',
+            material_name: 'Vuông 20',
+            unit: 'cây',
+            group_name: 'Sắt thép',
+            source: 'bom',
+            deviates: false,
+            auto_needed: 100,
+            draft_needed: 0,
+            edited_by: null,
+            edited_at: null,
+            from_products: [],
+            incomplete: false,
+            qty_needed: 100,
+            qty_issued: 0,
+            qty_remaining: 100,
+            on_hand: 0,
+            reserved_others: 0,
+            available: 0,
+            ordered: 0,
+            pending: 0,
+            draft: 0,
+            received: 0,
+            suggest: 100,
+            status: 'none',
+            note: null,
+            pos: [],
+          },
+        ],
+        blocked: [],
+        include_draft: false,
+        unconfirmed_products: [],
+      },
+    })
+
+  it("loại 'bangke': chỉ Lệnh + Bảng kê VT, KHÔNG có sheet đơn hàng", async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
+    const names = wb.worksheets.map((w) => w.name)
+    expect(names).toContain('Bảng kê VT')
+    expect(names).not.toContain('Đơn mua')
+    expect(names.some((n) => n.startsWith('ĐH'))).toBe(false)
+  })
+
+  it("loại 'lsx': Lệnh + Đơn mua + sheet từng đơn, KHÔNG có bảng kê", async () => {
+    const wb = await open(await buildLsxDetailExcel(r(), 'lsx'))
+    const names = wb.worksheets.map((w) => w.name)
+    expect(names).toContain('Đơn mua')
+    expect(names.some((n) => n.startsWith('ĐH'))).toBe(true)
+    expect(names).not.toContain('Bảng kê VT')
+    expect(names).not.toContain('Phân bổ theo SP')
+  })
+})
+
 describe('buildLsxDetailExcel', () => {
   it('lệnh → đơn → dòng: đủ 3 tầng sheet, đợt nhận sinh theo phiếu, kết luận đúng', async () => {
     const r = report(lsx(), {

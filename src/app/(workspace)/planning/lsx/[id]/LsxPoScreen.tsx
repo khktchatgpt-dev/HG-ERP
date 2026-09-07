@@ -332,8 +332,8 @@ export function LsxPoScreen({
             </Button>
             <Button asChild variant="outline">
               {/* Hồ sơ cung ứng MỘT lệnh: lệnh → từng đơn → từng dòng vật tư (05/09/2026) */}
-              <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}`} download>
-                <Download /> Tải Excel lệnh này
+              <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`} download>
+                <Download /> Xuất hồ sơ lệnh
               </a>
             </Button>
             <Button asChild variant="outline">
