@@ -961,11 +961,12 @@ export function BangKeScreen({
                 mà không giấu mất dữ liệu.
               */}
               <header className="bg-muted/40 sticky top-14 z-20 flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 backdrop-blur">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() => doiKhoi(sec.name)}
                   aria-expanded={!dong.has(sec.name)}
-                  className="flex items-center gap-2 text-left hover:text-[var(--primary)]"
+                  className="h-auto justify-start gap-2 px-0 py-0 hover:bg-transparent hover:text-[var(--primary)]"
                 >
                   {dong.has(sec.name) ? (
                     <ChevronRight className="text-muted-foreground size-4" />
@@ -976,7 +977,7 @@ export function BangKeScreen({
                   <span className="t-data text-muted-foreground font-normal">
                     {sec.rows.length} mã
                   </span>
-                </button>
+                </Button>
                 {sec.short > 0 && (
                   <span className="text-[12px] font-medium text-[var(--stop)]">
                     {sec.short} mã còn phải đặt
@@ -1042,11 +1043,12 @@ export function BangKeScreen({
                                 13 nhóm phụ, gấp hết lại là 13 dòng nhìn hết —
                                 đó mới là thứ làm trang ngắn lại thật sự.
                               */}
-                              <button
-                                type="button"
+                              <Button
+                                variant="ghost"
+                                size="sm"
                                 onClick={() => doiKhoi(`${sec.name}/${sub.name}`)}
                                 aria-expanded={!dong.has(`${sec.name}/${sub.name}`)}
-                                className="text-muted-foreground flex w-full items-center gap-1.5 py-1.5 pl-2 text-left text-[11.5px] font-semibold tracking-wide uppercase hover:text-[var(--primary)]"
+                                className="text-muted-foreground h-auto w-full justify-start gap-1.5 rounded-none py-1.5 pl-2 text-[11.5px] font-semibold tracking-wide uppercase hover:bg-transparent hover:text-[var(--primary)]"
                               >
                                 {dong.has(`${sec.name}/${sub.name}`) ? (
                                   <ChevronRight className="size-3.5" />
@@ -1062,7 +1064,7 @@ export function BangKeScreen({
                                     {sub.rows.filter((x) => x.suggest > 0).length} thiếu
                                   </span>
                                 )}
-                              </button>
+                              </Button>
                             </TableCell>
                           </TableRow>
                         )}

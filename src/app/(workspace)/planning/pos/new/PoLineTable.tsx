@@ -2,15 +2,25 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
-import { poTemplateMeta, suggestOrderQty, type PoTemplate } from '@/lib/po-template'
+import {
+  deriveLine,
+  poTemplateMeta,
+  suggestOrderQty,
+  type PoTemplate,
+} from '@/lib/po-template'
 import { PO_FIELDS } from '@/lib/po-fields'
-import { GridCellInput, GridCellNumber } from '@/components/erp/GridCell'
+import {
+  GridCellInput,
+  GridCellNumber,
+  GridCellSelect,
+} from '@/components/erp/GridCell'
 import { Button } from '@/components/shadcn/button'
 import { cn } from '@/lib/utils'
 import { fmtMoney, packCount, roundMoney, roundUpToPack } from '@/lib/po-line'
 import { AutoGrowCell, LineCell, NoteCell, blurOnWheel, calc, cell } from './PoLineCells'
 import {
   cartonPriceSuggest,
+  draftOf,
   lineAmount,
   lineProblem,
   lineQty2,
@@ -387,6 +397,14 @@ export function PoLineTable({
               const qtyPacks = l.qty !== '' ? packCount(Number(l.qty), l.pack_size) : null
               const cap = capLeft?.get(l.material_id)
               const goiY = cartonPriceSuggest(template, l)
+              // Dòng có quy đổi thì mới có chuyện "giá theo cây hay theo kg".
+              const dan = deriveLine(template, draftOf(l))
+              const qty2 = dan.qty2
+              const unit2 = dan.unit2
+              const basisMacDinh = deriveLine(template, {
+                ...draftOf(l),
+                price_per: null,
+              }).price_basis
 
               return (
                 <tr key={l.material_id} data-line className="group hover:bg-accent">
@@ -649,6 +667,35 @@ export function PoLineTable({
                         aria-label={`Đơn giá ${l.name}`}
                       />
                     </div>
+                    {/*
+                      ĐƠN VỊ TÍNH GIÁ — chỉ hiện khi dòng CÓ quy đổi (mẫu tính
+                      theo kg/m²/m³). Mẫu quyết định được cách quy đổi nhưng
+                      không quyết định được NCC báo giá theo cái gì: đơn Visa
+                      Steel báo 87.700 đ/CÂY trong khi mẫu ép tính theo kg, ra
+                      sai 4,47 lần. Để người nhập nhìn thấy mình đang gõ giá
+                      theo đơn vị nào, ngay dưới ô giá.
+                    */}
+                    {qty2 != null && unit2 && (
+                      <GridCellSelect
+                        value={l.price_per || 'mac-dinh'}
+                        onChange={(e) =>
+                          onPatch(i, {
+                            price_per: (e.target.value === 'mac-dinh'
+                              ? ''
+                              : e.target.value) as Line['price_per'],
+                          })
+                        }
+                        aria-label={`Đơn giá tính theo đơn vị nào — ${l.name}`}
+                        className="mt-0.5 h-6 w-full px-1 text-[11px]"
+                        title="Nhà cung cấp báo giá theo đơn vị nào"
+                      >
+                        <option value="mac-dinh">
+                          / {basisMacDinh === 'unit2' ? unit2 : l.unit} (mẫu)
+                        </option>
+                        <option value="unit">/ {l.unit}</option>
+                        <option value="unit2">/ {unit2}</option>
+                      </GridCellSelect>
+                    )}
                     {goiY != null && l.price !== goiY && (
                       <Button
                         variant="link"

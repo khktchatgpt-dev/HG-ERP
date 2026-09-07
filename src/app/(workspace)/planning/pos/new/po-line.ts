@@ -78,6 +78,11 @@ export type Line = {
   unit2_per_unit: Num
   unit2_label: string
   /**
+   * Đơn giá theo ĐVT mua hay theo đơn vị quy đổi — rỗng = theo mặc định của
+   * mẫu. Xem PoLineDraft.price_per.
+   */
+  price_per: '' | 'unit' | 'unit2'
+  /**
    * Số DANH MỤC đưa ra lúc chọn vật tư, để biết người mua đã gõ đè hay chưa —
    * gõ đè thì mời lưu ngược về danh mục (0128). null = mở từ đơn đã lưu, không
    * biết danh mục đang để gì nên cứ mời lưu khi ô có số.
@@ -107,6 +112,7 @@ export function draftOf(l: Line) {
     carton_basis: l.carton_basis,
     unit2_per_unit: n(l.unit2_per_unit),
     unit2_label: l.unit2_label || null,
+    price_per: l.price_per || null,
   }
 }
 
@@ -273,6 +279,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     // chốt ở lần đặt trước, chỉ với mẫu dùng ô này.
     (t === 'glass' || t === 'carton' ? (last?.area_m2 ?? null) : null)
   return {
+    price_per: '',
     material_id: m.id,
     code: m.code,
     name: m.name,
@@ -449,6 +456,7 @@ export function newFreeLine(): Line {
     print_fee: '',
     carton_basis: 'ctn',
     unit2_per_unit: '',
+    price_per: '',
     unit2_label: '',
     pack_size: null,
     pack_unit: '',
@@ -490,6 +498,8 @@ export type PoLineDto = {
   price_per_m2: number | null
   print_fee: number | null
   carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
+  /** Đơn vị tính giá đã chốt lúc lập đơn — mở lại thì giữ nguyên. */
+  price_basis?: 'unit' | 'unit2' | null
   pack_size: number | null
   pack_unit: string | null
   /** 0182 — quy đổi giá tổng quát; unit2 mang NHÃN đơn-vị-giá server đã chốt. */
@@ -515,6 +525,9 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
   // (mở SỬA/NHÂN BẢN không đổi khóa giữa hai lần render).
   const isFree = l.material_id == null
   return {
+    // Mở lại đơn cũ: giữ nguyên đơn vị tính giá đã chốt lúc lập, không để
+    // deriveLine đoán lại theo mẫu rồi đổi tiền của một đơn đã ký.
+    price_per: l.price_basis ?? '',
     is_free: isFree,
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
