@@ -2,6 +2,7 @@
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Pencil, Trash2, TriangleAlert, Weight } from 'lucide-react'
+import { splitProblem } from '@/lib/po-lsx-split'
 import {
   deriveLine,
   poTemplateMeta,
@@ -20,6 +21,7 @@ import {
   lineAmount,
   lineProblem,
   lineQty2,
+  splitPayload,
   type Line,
   type Num,
 } from './po-line'
@@ -125,6 +127,7 @@ export function PoLineTable({
   suggestions,
   capLeft,
   currency,
+  lsxsOfPo = [],
   onPatch,
   onRemove,
   onSaveToCatalog,
@@ -138,6 +141,11 @@ export function PoLineTable({
   capLeft?: Map<string, number>
   lines: Line[]
   currency: string
+  /**
+   * Các lệnh của đơn (chính + phụ). CHỈ khi có từ 2 lệnh mới hiện cột chia SL —
+   * đơn một lệnh thì cả dòng đương nhiên thuộc lệnh đó.
+   */
+  lsxsOfPo?: { id: string; code: string }[]
   onPatch: (i: number, patch: Partial<Line>) => void
   onRemove: (i: number) => void
   onSaveToCatalog?: (
@@ -151,6 +159,12 @@ export function PoLineTable({
   onDoneRow?: () => void
 }) {
   const meta = poTemplateMeta(template)
+  /*
+    CHIA SL THEO LỆNH (0185): một đơn mua chung cho nhiều lệnh thì mỗi dòng phải
+    nói phần nào của lệnh nào — không thì bảng kê của cả hai lệnh cùng nhận trọn
+    số trên đơn. Đơn một lệnh không cần cột này.
+  */
+  const chiaTheoLenh = lsxsOfPo.length > 1
   const cols = PO_FIELDS[template]
   const priceLabel = meta.priceUnit ? `Đơn giá / ${meta.priceUnit}` : 'Đơn giá'
   const calcCol = cols.find((c) => c.kind === 'calc')
@@ -307,6 +321,15 @@ export function PoLineTable({
               <InputDot />
               {priceLabel}
             </th>
+            {chiaTheoLenh && (
+              <th
+                className={`${thBase} text-right`}
+                style={{ minWidth: 96 * lsxsOfPo.length, zIndex: 3 }}
+              >
+                <InputDot />
+                Chia cho lệnh
+              </th>
+            )}
             {calcCol && (
               <th className={`${thBase} text-right`} style={{ ...COL.calc, zIndex: 3 }}>
                 {calcCol.label}
@@ -407,6 +430,9 @@ export function PoLineTable({
               */
               const soLuong = l.qty === '' ? 0 : Number(l.qty)
               const donGia = l.price === '' ? 0 : Number(l.price)
+              const loiChia = chiaTheoLenh
+                ? splitProblem(l.qty === '' ? 0 : Number(l.qty), splitPayload(l))
+                : null
               const quyDoi =
                 qty2 != null && qty2 > 0 && soLuong > 0 && donGia > 0 && unit2
                   ? dan.price_basis === 'unit2'
@@ -748,6 +774,43 @@ export function PoLineTable({
                       </Button>
                     )}
                   </td>
+
+                  {/*
+                    CHIA SL CHO TỪNG LỆNH — mỗi lệnh một ô, cộng lại phải bằng
+                    SL đặt. Bỏ trống hết = cả dòng thuộc lệnh CHÍNH của đơn
+                    (quy ước 0185), nên đơn nào không cần chia thì không phải
+                    gõ gì. Lệch tổng thì báo ngay dưới ô, và server chặn lần
+                    nữa lúc lưu — sai chỗ này chỉ lộ ra ở bảng kê nhiều tuần sau.
+                  */}
+                  {chiaTheoLenh && (
+                    <td className={tdBase}>
+                      <div className="flex flex-wrap justify-end gap-1">
+                        {lsxsOfPo.map((lx) => (
+                          <label key={lx.id} className="flex flex-col items-end">
+                            <span className="text-muted-foreground text-[10px] whitespace-nowrap">
+                              {lx.code}
+                            </span>
+                            <GridCellNumber
+                              value={l.lsx_split?.[lx.id] ?? ''}
+                              onValueChange={(v) =>
+                                onPatch(i, {
+                                  lsx_split: { ...l.lsx_split, [lx.id]: v as Num },
+                                })
+                              }
+                              onWheel={blurOnWheel}
+                              className={`${cell} w-[84px] text-right text-[13px]`}
+                              aria-label={`Chia cho lệnh ${lx.code} — ${l.name}`}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      {loiChia && (
+                        <div className="mt-0.5 text-right text-[11px] text-[var(--stop)]">
+                          {loiChia}
+                        </div>
+                      )}
+                    </td>
+                  )}
 
                   {calcCol && (
                     <td className={tdBase}>

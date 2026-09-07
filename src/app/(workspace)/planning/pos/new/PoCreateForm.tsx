@@ -464,6 +464,19 @@ export function PoCreateForm({
     [needs],
   )
   const lsx = lsxs.find((l) => l.id === lsxId)
+  /*
+    Lệnh của đơn theo đúng thứ tự CHÍNH trước, PHỤ sau — cột "Chia cho lệnh"
+    trên bảng dòng bày theo thứ tự này, và người soạn quen đọc lệnh chính đầu.
+  */
+  const lsxsOfPo = useMemo(
+    () =>
+      [lsxId, ...extraLsxIds]
+        .filter(Boolean)
+        .map((id) => lsxs.find((l) => l.id === id))
+        .filter((l): l is LsxOption => !!l)
+        .map((l) => ({ id: l.id, code: l.code })),
+    [lsxId, extraLsxIds, lsxs],
+  )
   const extraLsxCodes = extraLsxIds.map(
     (id) => lsxs.find((l) => l.id === id)?.code ?? '?',
   )
@@ -1112,6 +1125,7 @@ export function PoCreateForm({
             suggestions={suggestions}
             capLeft={capLeft}
             currency={currency}
+            lsxsOfPo={lsxsOfPo}
             onPatch={patchLine}
             onRemove={removeLine}
             onSaveToCatalog={(id, f, v) => void saveToCatalog(id, f, v)}

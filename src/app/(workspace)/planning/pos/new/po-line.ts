@@ -83,6 +83,12 @@ export type Line = {
    */
   price_per: '' | 'unit' | 'unit2'
   /**
+   * CHIA SL CỦA DÒNG cho các lệnh của đơn (0185) — lệnh id → SL, để dạng chuỗi
+   * cho ô nhập gõ dở được. Rỗng hoặc dồn vào một lệnh = 100% thuộc lệnh chính,
+   * không gửi gì lên server.
+   */
+  lsx_split: Record<string, Num>
+  /**
    * Số DANH MỤC đưa ra lúc chọn vật tư, để biết người mua đã gõ đè hay chưa —
    * gõ đè thì mời lưu ngược về danh mục (0128). null = mở từ đơn đã lưu, không
    * biết danh mục đang để gì nên cứ mời lưu khi ô có số.
@@ -113,6 +119,7 @@ export function draftOf(l: Line) {
     unit2_per_unit: n(l.unit2_per_unit),
     unit2_label: l.unit2_label || null,
     price_per: l.price_per || null,
+    lsx_split: splitPayload(l),
   }
 }
 
@@ -280,6 +287,7 @@ export function newLine(t: PoTemplate, m: PoMaterial): Line {
     (t === 'glass' || t === 'carton' ? (last?.area_m2 ?? null) : null)
   return {
     price_per: '',
+    lsx_split: {},
     material_id: m.id,
     code: m.code,
     name: m.name,
@@ -457,6 +465,7 @@ export function newFreeLine(): Line {
     carton_basis: 'ctn',
     unit2_per_unit: '',
     price_per: '',
+    lsx_split: {},
     unit2_label: '',
     pack_size: null,
     pack_unit: '',
@@ -500,6 +509,8 @@ export type PoLineDto = {
   carton_basis: 'ctn' | 'm2' | 'm3' | 'kg' | null
   /** Đơn vị tính giá đã chốt lúc lập đơn — mở lại thì giữ nguyên. */
   price_basis?: 'unit' | 'unit2' | null
+  /** Phần chia SL theo lệnh đã lưu (0185). */
+  lsx_split?: { production_order_id: string; qty: number }[] | null
   pack_size: number | null
   pack_unit: string | null
   /** 0182 — quy đổi giá tổng quát; unit2 mang NHÃN đơn-vị-giá server đã chốt. */
@@ -528,6 +539,9 @@ export function lineFromPo(l: PoLineDto, onHand: number | null = null): Line {
     // Mở lại đơn cũ: giữ nguyên đơn vị tính giá đã chốt lúc lập, không để
     // deriveLine đoán lại theo mẫu rồi đổi tiền của một đơn đã ký.
     price_per: l.price_basis ?? '',
+    lsx_split: Object.fromEntries(
+      (l.lsx_split ?? []).map((sp) => [sp.production_order_id, sp.qty as Num]),
+    ),
     is_free: isFree,
     material_id: l.material_id ?? `free-${l.id ?? crypto.randomUUID()}`,
     code: l.material_code,
@@ -690,4 +704,20 @@ export function overridesCatalog(f: PoField, l: Line): boolean {
 export function recalcCartonArea(l: Line): Num {
   const a = cartonAreaM2(l.open_style, n(l.inner_l_mm), n(l.inner_w_mm), n(l.inner_h_mm))
   return a ?? l.area_m2
+}
+
+/**
+ * Phần chia SL theo lệnh gửi lên server — null khi không có gì để chia.
+ *
+ * Bỏ ô trống và ô ≤ 0. Nếu sau khi lọc chỉ còn MỘT lệnh thì cũng trả null: quy
+ * ước "dòng không có bản ghi = 100% thuộc LSX chính" đã nói đúng điều đó, ghi
+ * thêm một dòng vào bảng chỉ tổ đẻ rác.
+ */
+export function splitPayload(
+  l: Pick<Line, 'lsx_split'>,
+): { production_order_id: string; qty: number }[] | null {
+  const out = Object.entries(l.lsx_split ?? {})
+    .map(([id, v]) => ({ production_order_id: id, qty: v === '' ? 0 : Number(v) }))
+    .filter((x) => x.qty > 0)
+  return out.length > 1 ? out : null
 }
