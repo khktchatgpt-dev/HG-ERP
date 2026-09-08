@@ -368,3 +368,100 @@ export function ScreenFrame({ children }: { children: ReactNode }) {
     </div>
   )
 }
+
+/**
+ * Ô VIỆC trên trang chủ theo vai trò — mẫu SAP Fiori launchpad tile.
+ *
+ * "Con số trên ô là MỘT LỜI HỨA": bấm vào phải ra đúng chừng ấy dòng cần xử
+ * lý. Sai một dòng là hỏng niềm tin vào cả trang chủ, và người dùng quay lại
+ * cách cũ — mở từng danh sách rồi tự lọc.
+ *
+ * BA ĐIỀU KHÁC THẺ KPI thường gặp:
+ *
+ * 1. Ô là CỬA VÀO VIỆC, không phải chỉ số. Mỗi ô dẫn tới một danh sách đã lọc
+ *    sẵn đúng điều kiện nó vừa đếm — không phải "xem báo cáo".
+ *
+ * 2. SỐ 0 KHÔNG PHẢI LÚC NÀO CŨNG XẤU. "Đơn quá hạn: 0" là tin mừng, tô đỏ
+ *    số 0 làm người ta hoảng vô cớ. Chỉ tô màu khi CÓ việc.
+ *
+ * 3. Ô nói VIỆC PHẢI LÀM, không nói tên trạng thái. "Chờ Giám đốc ký" thay vì
+ *    "pending_approval".
+ */
+export function WorkTile({
+  label,
+  count,
+  hint,
+  href,
+  tone = 'neutral',
+  strong = false,
+}: {
+  label: string
+  count: number
+  /** Nói rõ đếm cái gì — người dùng phải kiểm được lời hứa của con số. */
+  hint: string
+  href: string
+  tone?: Tone
+  /** Ô của CHÍNH người đang xem — nổi hơn các ô còn lại. */
+  strong?: boolean
+}) {
+  // Hết việc thì về màu trung tính, dù ô khai tone gì.
+  const t = count === 0 ? 'neutral' : tone
+  return (
+    <a
+      href={href}
+      className={cn(
+        'group flex min-w-0 flex-col justify-between gap-2 rounded-[var(--radius)] border p-3 transition-colors',
+        strong
+          ? 'border-[var(--act)] bg-[var(--act-wash)]'
+          : 'border-[var(--line)] bg-[var(--surface-card)] hover:border-[var(--ink-3)]',
+      )}
+    >
+      <span className="text-[var(--fs-micro)] leading-tight font-semibold tracking-[.05em] text-[var(--ink-2)] uppercase">
+        {label}
+      </span>
+      <span className="flex items-baseline gap-1.5">
+        {/*
+          HẾT VIỆC THÌ HIỆN ✓, KHÔNG HIỆN SỐ 0.
+
+          Đo trên ảnh 09/09/2026: JetBrains Mono vẽ số 0 có gạch chéo bên
+          trong, ở cỡ 26px nó rối mắt và HÚT nhìn ngang với số 66 bên cạnh —
+          trong khi "0 việc" là thứ người dùng cần LƯỚT QUA, không cần đọc.
+          Dấu ✓ nói cùng một điều trong một nét.
+        */}
+        {count === 0 ? (
+          <span
+            className="text-[22px] leading-none text-[var(--done)]"
+            title="Không còn việc nào"
+          >
+            ✓
+          </span>
+        ) : (
+        <span
+          className={cn(
+            'num text-[26px] leading-none font-bold tracking-[-.02em]',
+            t === 'stop'
+              ? 'text-[var(--stop)]'
+              : t === 'warn'
+                ? 'text-[var(--warn)]'
+                : t === 'done'
+                  ? 'text-[var(--done)]'
+                  : count === 0
+                    ? 'text-[var(--ink-3)]'
+                    : 'text-[var(--ink)]',
+          )}
+        >
+          {count}
+        </span>
+        )}
+      </span>
+      <span className="text-[10.5px] leading-snug text-[var(--ink-3)]">{hint}</span>
+    </a>
+  )
+}
+
+/** Hàng ô việc — tự xuống dòng, không ép số cột. */
+export function WorkTiles({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">{children}</div>
+  )
+}
