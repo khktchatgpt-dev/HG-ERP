@@ -5,6 +5,7 @@ import { suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { MaterialsManager } from '@/app/(workspace)/warehouse/materials/MaterialsManager'
 import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
+import { MaterialsScreenV4 } from './MaterialsScreenV4'
 
 /**
  * Vật tư & giá mua — VIEW MUA HÀNG của danh mục vật tư dùng chung (không tách
@@ -16,7 +17,13 @@ import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
 export default async function PlanningMaterialsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string; page?: string; review?: string }>
+  searchParams: Promise<{
+    q?: string
+    group?: string
+    page?: string
+    review?: string
+    v4?: string
+  }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
@@ -39,6 +46,17 @@ export default async function PlanningMaterialsPage({
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     materialTaxonomy(),
   ])
+
+  if (sp.v4 === '1') {
+    return (
+      <MaterialsScreenV4
+        materials={rows}
+        suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+        counts={counts}
+        canEdit={canEdit}
+      />
+    )
+  }
 
   return (
     <MaterialsManager

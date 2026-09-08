@@ -29,10 +29,15 @@ export function Table({ children }: { children: ReactNode }) {
     `min-w-0` trên vùng cuộn là BẮT BUỘC trong flex row: thiếu nó thì bảng
     lấy chiều rộng nội dung làm chiều rộng tối thiểu, đẩy khay kiểm tra bị
     bóp và cắt chữ. Có nó thì bảng nhận đúng phần còn lại và tự cuộn ngang.
+
+    Bề rộng tối thiểu đặt qua biến `--table-min` để MÀN tự khai theo số cột
+    của mình. Đóng cứng một con số (đo 08/09/2026: 900px) thì ở 1280px mở
+    khay 316px, cột CUỐI luôn nằm ngoài vùng nhìn — người dùng không biết có
+    cột đó mà kéo. Mặc định 680px vừa đủ cho bảng 4-5 cột.
   */
   return (
     <div className="min-w-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-      <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[12.5px]">
+      <table className="w-full min-w-[var(--table-min,680px)] border-separate border-spacing-0 text-[12.5px]">
         {children}
       </table>
     </div>
