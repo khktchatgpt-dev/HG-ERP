@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { Lane, Tone } from './kit-core'
 
 /**
@@ -155,8 +156,15 @@ export function InspectPanel({
   children: ReactNode
   actions?: ReactNode
 }) {
+  /*
+    BẪY (08/09/2026): `shrink-0` một mình KHÔNG đủ. Trong flex row, phần tử
+    có chiều rộng cố định vẫn bị bóp nếu anh em của nó không khai `min-w-0`
+    — bảng 8 cột đẩy ngang, khay co lại và chữ trong khay bị cắt cụt
+    ("5 đơ...", "Bao l..."). Khoá cả `w` lẫn `min-w`/`max-w` để khay là
+    kích thước BẤT BIẾN, phần thừa dồn cho bảng tự cuộn ngang.
+  */
   return (
-    <aside className="hidden w-[316px] shrink-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)] xl:flex">
+    <aside className="hidden w-[316px] max-w-[316px] min-w-[316px] shrink-0 flex-col overflow-auto border-l border-[var(--line)] bg-[var(--surface-card)] xl:flex">
       <div className="border-b border-[var(--line)] bg-[var(--surface)] px-[15px] py-[13px]">
         <div className="font-[family-name:var(--font-mono)] text-[13px] font-bold text-[var(--act)]">
           {code}
@@ -296,5 +304,67 @@ export function ScreenHeader({
       </div>
       {children}
     </header>
+  )
+}
+
+/**
+ * KHUNG MÀN — chốt chiều cao đúng bằng phần màn hình còn lại.
+ *
+ * BẪY ĐÃ DÍNH (08/09/2026, màn NCC 164 dòng): shell của app dùng
+ * `min-h-screen` — chỉ đặt SÀN, không đặt TRẦN. Màn con đặt `min-h-...`
+ * nữa thì `flex-1` của <main> không có gì giới hạn, `overflow-auto` của
+ * bảng KHÔNG bao giờ kích hoạt, và bảng giãn hết chiều dài: trang cao
+ * 5.842px thay vì 1.000px. Hậu quả người dùng thấy: cuộn cả trang thay vì
+ * cuộn trong bảng, nên tiêu đề cột và chân bảng dính đều VÔ HIỆU — mất
+ * đúng hai thứ khiến bảng dài dùng được.
+ *
+ * KHÔNG hard-code `calc(100vh - 3.5rem)`: chiều cao thanh trên do shell
+ * quyết định và có thể đổi (topbar đo được 59px, không tròn số). Đo vị trí
+ * TOP của chính khung này rồi lấy phần còn lại — đúng với mọi shell, kể cả
+ * khi màn được nhúng ở chỗ khác.
+ *
+ * Dùng `100dvh` chứ không `100vh`: trên trình duyệt di động thanh địa chỉ
+ * thu vào/nhả ra làm 100vh sai lệch.
+ *
+ * KHUNG TỰ HUỶ PADDING CỦA CHA bằng lề âm đo được — màn con KHÔNG tự kéo
+ * `-m-4/-m-6` nữa. Đo 08/09/2026: hai bên cùng kéo âm thì khối con tràn ra
+ * ngoài khung cha 24px và bị cắt mất mép trái (cột "Mã" chỉ còn đuôi, tiêu
+ * đề trang cụt thành "UNG ỨNG"). Một chỗ giữ lề, một chỗ giữ chiều cao —
+ * gộp về cùng component thì không còn hai bên đánh nhau.
+ */
+export function ScreenFrame({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState<{ h: string; m: string } | null>(null)
+
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => {
+      const host = el.parentElement
+      const cs = host ? getComputedStyle(host) : null
+      const pt = cs ? parseFloat(cs.paddingTop) || 0 : 0
+      const pr = cs ? parseFloat(cs.paddingRight) || 0 : 0
+      const pb = cs ? parseFloat(cs.paddingBottom) || 0 : 0
+      const pl = cs ? parseFloat(cs.paddingLeft) || 0 : 0
+      // top ĐO TRƯỚC khi bù lề âm, nên trừ luôn padding-top để không tính hai lần.
+      const top = el.getBoundingClientRect().top - pt
+      setBox({
+        h: `calc(100dvh - ${Math.round(top)}px)`,
+        m: `${-pt}px ${-pr}px ${-pb}px ${-pl}px`,
+      })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [])
+
+  return (
+    <div
+      ref={ref}
+      style={{ height: box?.h ?? 'calc(100dvh - 60px)', margin: box?.m }}
+      className="flex flex-col overflow-hidden"
+    >
+      {children}
+    </div>
   )
 }

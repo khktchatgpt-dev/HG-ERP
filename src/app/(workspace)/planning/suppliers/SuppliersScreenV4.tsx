@@ -12,6 +12,7 @@ import {
   Menu,
   Num,
   Row,
+  ScreenFrame,
   SearchInput,
   Table,
   THead,
@@ -75,7 +76,13 @@ const STATUS: Record<string, { label: string; tone: Tone }> = {
 
 /** Ngày dạng dd/mm/yy — cột hẹp, và năm đầy đủ không nói thêm gì ở đây. */
 const dmy = (iso: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ''
+  iso
+    ? new Date(iso).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+      })
+    : ''
 
 /**
  * "Bao lâu chưa mua" — con số người mua thật sự cần khi rà lại danh sách NCC.
@@ -166,244 +173,279 @@ export function SuppliersScreenV4({
   const coKhoa = rows.some((r) => !r.can_order || !r.is_active || r.status !== 'active')
 
   return (
-    <div className="kit-v4 -m-4 flex min-h-[calc(100vh-3.5rem)] flex-col md:-m-6">
-      <div className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] pt-4">
-        <div className="flex items-start gap-4">
-          <div className="min-w-0 flex-1">
-            <div className="text-[var(--fs-micro)] font-semibold tracking-[.09em] text-[var(--ink-3)] uppercase">
-              Cung ứng
+    <ScreenFrame>
+      <div className="kit-v4 flex min-h-0 flex-1 flex-col">
+        <div className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] pt-4">
+          <div className="flex items-start gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold tracking-[.09em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
+                Cung ứng
+              </div>
+              <h1 className="mt-[3px] font-semibold tracking-[-.015em] text-[var(--fs-title)]">
+                Nhà cung cấp
+              </h1>
+              <p className="mt-1 text-[var(--fs-sm)] text-[var(--ink-2)]">
+                Mỗi đơn đặt vật tư gắn đúng một NCC. Xếp theo đơn đang treo, rồi tổng chi.
+              </p>
             </div>
-            <h1 className="mt-[3px] text-[var(--fs-title)] font-semibold tracking-[-.015em]">
-              Nhà cung cấp
-            </h1>
-            <p className="mt-1 text-[var(--fs-sm)] text-[var(--ink-2)]">
-              Mỗi đơn đặt vật tư gắn đúng một NCC. Xếp theo đơn đang treo, rồi tổng chi.
-            </p>
+            {canEdit && (
+              <div className="flex shrink-0 items-center gap-2">
+                <Btn primary>+ Thêm NCC</Btn>
+                <Menu
+                  items={[
+                    { label: 'Xuất Excel' },
+                    { label: 'Nhập từ file' },
+                    { label: 'Gộp NCC trùng', disabled: true },
+                  ]}
+                />
+              </div>
+            )}
           </div>
-          {canEdit && (
-            <div className="flex shrink-0 items-center gap-2">
-              <Btn primary>+ Thêm NCC</Btn>
-              <Menu
-                items={[
-                  { label: 'Xuất Excel' },
-                  { label: 'Nhập từ file' },
-                  { label: 'Gộp NCC trùng', disabled: true },
-                ]}
-              />
-            </div>
-          )}
+          <WorkLanes lanes={lanes} activeId={lane} onPick={setLane} />
         </div>
-        <WorkLanes lanes={lanes} activeId={lane} onPick={setLane} />
-      </div>
 
-      <FilterBar>
-        <SearchInput value={q} onChange={setQ} placeholder="Tìm tên, mã, mã số thuế…" />
-        {!coNhomHang && (
-          <Tip label="Chưa NCC nào được gắn nhóm hàng — cột tự hiện lại khi có dữ liệu" side="bottom">
-            <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">đã ẩn 1 cột rỗng</span>
-          </Tip>
-        )}
-        <div className="flex-1" />
-        {/* Tổng của phần ĐANG XEM, không phải của cả bảng — người dùng vừa lọc
+        <FilterBar>
+          <SearchInput value={q} onChange={setQ} placeholder="Tìm tên, mã, mã số thuế…" />
+          {!coNhomHang && (
+            <Tip
+              label="Chưa NCC nào được gắn nhóm hàng — cột tự hiện lại khi có dữ liệu"
+              side="bottom"
+            >
+              <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+                đã ẩn 1 cột rỗng
+              </span>
+            </Tip>
+          )}
+          <div className="flex-1" />
+          {/* Tổng của phần ĐANG XEM, không phải của cả bảng — người dùng vừa lọc
             xong thì con số phải nói về cái họ đang nhìn. */}
-        <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
-          <b className="num text-[var(--act)]">{rows.length}</b> NCC
-          {donTreo > 0 && (
-            <>
-              {' · '}
-              <b className="num text-[var(--warn)]">{donTreo}</b> đơn treo
-            </>
-          )}
-          {tongChi > 0 && (
-            <>
-              {' · '}
-              <b className="num text-[var(--ink)]">{showMoney(tongChi)}</b> ₫ đã chi
-            </>
-          )}
-        </span>
-      </FilterBar>
-
-      <div className="flex min-h-0 flex-1">
-        {rows.length === 0 ? (
-          <Empty
-            headline={q ? `Không có NCC nào khớp “${q}”` : 'Chưa có nhà cung cấp nào ở nhóm này'}
-            reason={
-              q
-                ? 'Tìm theo tên, mã NCC hoặc mã số thuế. Dấu tiếng Việt không bắt buộc gõ đúng.'
-                : 'Nhóm này chưa có NCC nào — thử nhóm khác hoặc thêm mới.'
-            }
-            next={
+          <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+            <b className="num text-[var(--act)]">{rows.length}</b> NCC
+            {donTreo > 0 && (
               <>
-                {q && <Btn onClick={() => setQ('')}>Xoá từ khoá</Btn>}
-                <Btn primary={!q} onClick={() => setLane('all')}>
-                  Xem tất cả {suppliers.length} NCC
-                </Btn>
+                {' · '}
+                <b className="num text-[var(--warn)]">{donTreo}</b> đơn treo
               </>
-            }
-          />
-        ) : (
-          <>
-            <Table>
-              <THead>
-                <th style={{ width: 92 }}>Mã</th>
-                <th>Tên nhà cung cấp</th>
-                {coNhomHang && <th style={{ width: 132 }}>Nhóm hàng</th>}
-                <th className="num" style={{ width: 74 }}>Đơn treo</th>
-                <th className="num" style={{ width: 68 }}>Đã mua</th>
-                <th className="num" style={{ width: 132 }}>Tổng chi</th>
-                <th style={{ width: 118 }}>Mua lần cuối</th>
-                {coKhoa && <th style={{ width: 104 }}>Tình trạng</th>}
-              </THead>
-              <tbody>
-                {rows.map((s) => {
-                  const st = STATUS[s.status] ?? { label: s.status, tone: 'neutral' as Tone }
-                  const im = daysSince(s.last_po_at)
-                  return (
-                    <Row key={s.id} selected={sel?.id === s.id} onClick={() => setSel(s)}>
-                      <Cell>
-                        {s.code ? <Code>{s.code}</Code> : <span className="text-[var(--ink-empty)]">—</span>}
-                      </Cell>
-                      <Cell grow>{s.name}</Cell>
-                      {coNhomHang && (
-                        <Cell muted>
-                          {s.groups.length > 1 ? (
-                            <Tip label={s.groups.join(' · ')} side="top">
-                              <span>
-                                {s.groups[0]}{' '}
-                                <span className="text-[var(--ink-3)]">+{s.groups.length - 1}</span>
-                              </span>
-                            </Tip>
-                          ) : (
-                            (s.groups[0] ?? <span className="text-[var(--ink-empty)]">—</span>)
-                          )}
-                        </Cell>
-                      )}
-                      <Cell num>
-                        {/* Đơn treo là VIỆC CÒN PHẢI THEO — tô cảnh báo, và 0
-                            hiện ✓ thay vì gạch ngang (hết việc ≠ thiếu số). */}
-                        {s.open_po_count > 0 ? (
-                          <span className="num text-[var(--fs-num)] font-bold text-[var(--warn)]">
-                            {s.open_po_count}
-                          </span>
-                        ) : (
-                          <Num value="" zero="done" />
-                        )}
-                      </Cell>
-                      <Cell num>
-                        <Num value={showNum(s.po_count)} zero="zero" />
-                      </Cell>
-                      <Cell num>
-                        <Num value={showMoney(s.total_spend)} strong zero="zero" />
-                      </Cell>
-                      <Cell muted>
-                        {s.last_po_at ? (
-                          <>
-                            {dmy(s.last_po_at)}
-                            {im != null && im > 90 && (
-                              <span className="ml-1.5 text-[var(--warn)]" title={`${im} ngày chưa mua`}>
-                                {Math.floor(im / 30)}th
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-[var(--ink-empty)]">chưa mua</span>
-                        )}
-                      </Cell>
-                      {coKhoa && (
+            )}
+            {tongChi > 0 && (
+              <>
+                {' · '}
+                <b className="num text-[var(--ink)]">{showMoney(tongChi)}</b> ₫ đã chi
+              </>
+            )}
+          </span>
+        </FilterBar>
+
+        <div className="flex min-h-0 flex-1">
+          {rows.length === 0 ? (
+            <Empty
+              headline={
+                q ? `Không có NCC nào khớp “${q}”` : 'Chưa có nhà cung cấp nào ở nhóm này'
+              }
+              reason={
+                q
+                  ? 'Tìm theo tên, mã NCC hoặc mã số thuế. Dấu tiếng Việt không bắt buộc gõ đúng.'
+                  : 'Nhóm này chưa có NCC nào — thử nhóm khác hoặc thêm mới.'
+              }
+              next={
+                <>
+                  {q && <Btn onClick={() => setQ('')}>Xoá từ khoá</Btn>}
+                  <Btn primary={!q} onClick={() => setLane('all')}>
+                    Xem tất cả {suppliers.length} NCC
+                  </Btn>
+                </>
+              }
+            />
+          ) : (
+            <>
+              <Table>
+                <THead>
+                  <th style={{ width: 92 }}>Mã</th>
+                  <th>Tên nhà cung cấp</th>
+                  {coNhomHang && <th style={{ width: 132 }}>Nhóm hàng</th>}
+                  <th className="num" style={{ width: 74 }}>
+                    Đơn treo
+                  </th>
+                  <th className="num" style={{ width: 68 }}>
+                    Đã mua
+                  </th>
+                  <th className="num" style={{ width: 132 }}>
+                    Tổng chi
+                  </th>
+                  <th style={{ width: 118 }}>Mua lần cuối</th>
+                  {coKhoa && <th style={{ width: 104 }}>Tình trạng</th>}
+                </THead>
+                <tbody>
+                  {rows.map((s) => {
+                    const st = STATUS[s.status] ?? {
+                      label: s.status,
+                      tone: 'neutral' as Tone,
+                    }
+                    const im = daysSince(s.last_po_at)
+                    return (
+                      <Row
+                        key={s.id}
+                        selected={sel?.id === s.id}
+                        onClick={() => setSel(s)}
+                      >
                         <Cell>
-                          {!s.can_order || !s.is_active ? (
-                            <Tag tone="stop">Khoá đặt hàng</Tag>
-                          ) : s.status !== 'active' ? (
-                            <Tag tone={st.tone}>{st.label}</Tag>
+                          {s.code ? (
+                            <Code>{s.code}</Code>
                           ) : (
                             <span className="text-[var(--ink-empty)]">—</span>
                           )}
                         </Cell>
-                      )}
-                    </Row>
-                  )
-                })}
-              </tbody>
-            </Table>
+                        <Cell grow>{s.name}</Cell>
+                        {coNhomHang && (
+                          <Cell muted>
+                            {s.groups.length > 1 ? (
+                              <Tip label={s.groups.join(' · ')} side="top">
+                                <span>
+                                  {s.groups[0]}{' '}
+                                  <span className="text-[var(--ink-3)]">
+                                    +{s.groups.length - 1}
+                                  </span>
+                                </span>
+                              </Tip>
+                            ) : (
+                              (s.groups[0] ?? (
+                                <span className="text-[var(--ink-empty)]">—</span>
+                              ))
+                            )}
+                          </Cell>
+                        )}
+                        <Cell num>
+                          {/* Đơn treo là VIỆC CÒN PHẢI THEO — tô cảnh báo, và 0
+                            hiện ✓ thay vì gạch ngang (hết việc ≠ thiếu số). */}
+                          {s.open_po_count > 0 ? (
+                            <span className="num font-bold text-[var(--fs-num)] text-[var(--warn)]">
+                              {s.open_po_count}
+                            </span>
+                          ) : (
+                            <Num value="" zero="done" />
+                          )}
+                        </Cell>
+                        <Cell num>
+                          <Num value={showNum(s.po_count)} zero="zero" />
+                        </Cell>
+                        <Cell num>
+                          <Num value={showMoney(s.total_spend)} strong zero="zero" />
+                        </Cell>
+                        <Cell muted>
+                          {s.last_po_at ? (
+                            <>
+                              {dmy(s.last_po_at)}
+                              {im != null && im > 90 && (
+                                <span
+                                  className="ml-1.5 text-[var(--warn)]"
+                                  title={`${im} ngày chưa mua`}
+                                >
+                                  {Math.floor(im / 30)}th
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[var(--ink-empty)]">chưa mua</span>
+                          )}
+                        </Cell>
+                        {coKhoa && (
+                          <Cell>
+                            {!s.can_order || !s.is_active ? (
+                              <Tag tone="stop">Khoá đặt hàng</Tag>
+                            ) : s.status !== 'active' ? (
+                              <Tag tone={st.tone}>{st.label}</Tag>
+                            ) : (
+                              <span className="text-[var(--ink-empty)]">—</span>
+                            )}
+                          </Cell>
+                        )}
+                      </Row>
+                    )
+                  })}
+                </tbody>
+              </Table>
 
-            {sel && (
-              <InspectPanel
-                code={sel.code ?? '—'}
-                title={sel.name}
-                subtitle={sel.tax_no ? `MST ${sel.tax_no}` : undefined}
-                actions={
-                  <>
-                    <Btn primary href={`/planning/pos/new?supplier=${sel.id}`}>
-                      Soạn đơn cho NCC này
-                    </Btn>
-                    <Btn href={`/planning/suppliers/${sel.id}`}>Mở hồ sơ đầy đủ</Btn>
-                    <Btn blockedBy={canEdit ? undefined : 'Cung ứng'}>Sửa bảng giá</Btn>
-                  </>
-                }
-              >
-                <InspectSection title="Làm ăn thế nào">
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Đã mua</span>
-                    <span className="num font-semibold">{sel.po_count} đơn</span>
-                  </div>
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Còn treo</span>
-                    <span
-                      className={`num font-semibold ${sel.open_po_count > 0 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
-                    >
-                      {sel.open_po_count > 0 ? `${sel.open_po_count} đơn` : 'không'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Tổng chi</span>
-                    <span className="num text-[15px] font-bold text-[var(--act)]">
-                      {showMoney(sel.total_spend) || '0'} ₫
-                    </span>
-                  </div>
-                  {sel.last_po && (
+              {sel && (
+                <InspectPanel
+                  code={sel.code ?? '—'}
+                  title={sel.name}
+                  subtitle={sel.tax_no ? `MST ${sel.tax_no}` : undefined}
+                  actions={
+                    <>
+                      <Btn primary href={`/planning/pos/new?supplier=${sel.id}`}>
+                        Soạn đơn cho NCC này
+                      </Btn>
+                      <Btn href={`/planning/suppliers/${sel.id}`}>Mở hồ sơ đầy đủ</Btn>
+                      <Btn blockedBy={canEdit ? undefined : 'Cung ứng'}>Sửa bảng giá</Btn>
+                    </>
+                  }
+                >
+                  <InspectSection title="Làm ăn thế nào">
                     <div className="flex justify-between py-[3px] text-[12.5px]">
-                      <span className="text-[var(--ink-2)]">Đơn gần nhất</span>
-                      <Code>{sel.last_po}</Code>
+                      <span className="text-[var(--ink-2)]">Đã mua</span>
+                      <span className="num font-semibold">{sel.po_count} đơn</span>
                     </div>
-                  )}
-                  {sel.last_po_at && (
-                    <p className="mt-2 text-[var(--fs-micro)] text-[var(--ink-3)]">
-                      Mua lần cuối {dmy(sel.last_po_at)}
-                      {(() => {
-                        const d = daysSince(sel.last_po_at)
-                        return d != null && d > 90 ? ` — đã ${Math.floor(d / 30)} tháng không đặt hàng.` : '.'
-                      })()}
-                    </p>
-                  )}
-                </InspectSection>
+                    <div className="flex justify-between py-[3px] text-[12.5px]">
+                      <span className="text-[var(--ink-2)]">Còn treo</span>
+                      <span
+                        className={`num font-semibold ${sel.open_po_count > 0 ? 'text-[var(--warn)]' : 'text-[var(--done)]'}`}
+                      >
+                        {sel.open_po_count > 0 ? `${sel.open_po_count} đơn` : 'không'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-[3px] text-[12.5px]">
+                      <span className="text-[var(--ink-2)]">Tổng chi</span>
+                      <span className="num text-[15px] font-bold text-[var(--act)]">
+                        {showMoney(sel.total_spend) || '0'} ₫
+                      </span>
+                    </div>
+                    {sel.last_po && (
+                      <div className="flex justify-between py-[3px] text-[12.5px]">
+                        <span className="text-[var(--ink-2)]">Đơn gần nhất</span>
+                        <Code>{sel.last_po}</Code>
+                      </div>
+                    )}
+                    {sel.last_po_at && (
+                      <p className="mt-2 text-[var(--fs-micro)] text-[var(--ink-3)]">
+                        Mua lần cuối {dmy(sel.last_po_at)}
+                        {(() => {
+                          const d = daysSince(sel.last_po_at)
+                          return d != null && d > 90
+                            ? ` — đã ${Math.floor(d / 30)} tháng không đặt hàng.`
+                            : '.'
+                        })()}
+                      </p>
+                    )}
+                  </InspectSection>
 
-                <InspectSection title="Hồ sơ">
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Loại</span>
-                    <span>{sel.type ?? '—'}</span>
-                  </div>
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Khu vực</span>
-                    <span>{sel.region ?? '—'}</span>
-                  </div>
-                  <div className="flex justify-between py-[3px] text-[12.5px]">
-                    <span className="text-[var(--ink-2)]">Nhóm hàng</span>
-                    <span className="text-right">
-                      {sel.groups.length > 0 ? sel.groups.join(', ') : '—'}
-                    </span>
-                  </div>
-                  {!sel.can_order && (
-                    <p className="mt-2 text-[var(--fs-micro)] leading-relaxed text-[var(--stop)]">
-                      NCC này đang bị khoá đặt hàng. Đơn mới sẽ bị chặn ở bước lưu — mở
-                      khoá trong hồ sơ trước khi soạn.
-                    </p>
-                  )}
-                </InspectSection>
-              </InspectPanel>
-            )}
-          </>
-        )}
+                  <InspectSection title="Hồ sơ">
+                    <div className="flex justify-between py-[3px] text-[12.5px]">
+                      <span className="text-[var(--ink-2)]">Loại</span>
+                      <span>{sel.type ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-[3px] text-[12.5px]">
+                      <span className="text-[var(--ink-2)]">Khu vực</span>
+                      <span>{sel.region ?? '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-[3px] text-[12.5px]">
+                      <span className="text-[var(--ink-2)]">Nhóm hàng</span>
+                      <span className="text-right">
+                        {sel.groups.length > 0 ? sel.groups.join(', ') : '—'}
+                      </span>
+                    </div>
+                    {!sel.can_order && (
+                      <p className="mt-2 leading-relaxed text-[var(--fs-micro)] text-[var(--stop)]">
+                        NCC này đang bị khoá đặt hàng. Đơn mới sẽ bị chặn ở bước lưu — mở
+                        khoá trong hồ sơ trước khi soạn.
+                      </p>
+                    )}
+                  </InspectSection>
+                </InspectPanel>
+              )}
+            </>
+          )}
+        </div>
       </div>
-    </div>
+    </ScreenFrame>
   )
 }

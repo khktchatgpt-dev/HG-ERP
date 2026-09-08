@@ -25,9 +25,16 @@ import { cn } from '@/lib/utils'
  */
 
 export function Table({ children }: { children: ReactNode }) {
+  /*
+    `min-w-0` trên vùng cuộn là BẮT BUỘC trong flex row: thiếu nó thì bảng
+    lấy chiều rộng nội dung làm chiều rộng tối thiểu, đẩy khay kiểm tra bị
+    bóp và cắt chữ. Có nó thì bảng nhận đúng phần còn lại và tự cuộn ngang.
+  */
   return (
     <div className="min-w-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-      <table className="w-full border-separate border-spacing-0 text-[12.5px]">{children}</table>
+      <table className="w-full min-w-[900px] border-separate border-spacing-0 text-[12.5px]">
+        {children}
+      </table>
     </div>
   )
 }
@@ -41,9 +48,22 @@ export function Table({ children }: { children: ReactNode }) {
  * cuộn (nó không cần cuộn), bảng tự cuộn riêng, tiêu đề cột dính top:0.
  * Không dùng offset thủ công — đổi chiều cao thanh lọc là lệch lại.
  */
-export function THead({ children }: { children: ReactNode }) {
+export function THead({
+  children,
+  pinFirst = false,
+}: {
+  children: ReactNode
+  /** Ghim ô tiêu đề ĐẦU TIÊN cả hai chiều — đi kèm `<Cell pin>` ở thân bảng. */
+  pinFirst?: boolean
+}) {
   return (
-    <thead className="[&_th]:sticky [&_th]:top-0 [&_th]:z-[var(--z-sticky)] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--surface-raised)] [&_th]:px-[var(--pad-x)] [&_th]:py-[7px] [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:tracking-[.04em] [&_th]:whitespace-nowrap [&_th]:text-[var(--ink-2)] [&_th]:uppercase">
+    <thead
+      className={cn(
+        '[&_th]:sticky [&_th]:top-0 [&_th]:z-[var(--z-sticky)] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--surface-raised)] [&_th]:px-[var(--pad-x)] [&_th]:py-[7px] [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:tracking-[.04em] [&_th]:whitespace-nowrap [&_th]:text-[var(--ink-2)] [&_th]:uppercase',
+        // Ô góc phải nằm TRÊN cả hai lớp sticky, không thì bị ô kia phủ.
+        pinFirst && '[&_th:first-child]:left-0 [&_th:first-child]:z-[calc(var(--z-sticky)+1)]',
+      )}
+    >
       <tr>{children}</tr>
     </thead>
   )
@@ -125,18 +145,27 @@ export function Row({
   )
 }
 
-/** Ô. `grow` cho cột co giãn (tên vật tư) — cần `max-w-0` để ellipsis chạy. */
+/**
+ * Ô. `grow` cho cột co giãn (tên vật tư) — cần `max-w-0` để ellipsis chạy.
+ *
+ * `pin` ghim cột vào mép trái khi bảng cuộn ngang. Dùng cho cột ĐỊNH DANH
+ * (mã đơn, mã vật tư): đo ở 1280px thì bảng 900px+ phải cuộn ngang và cột
+ * đầu trôi mất, người đọc nhìn một dòng số mà không biết nó của mã nào —
+ * cùng hạng lỗi với mất tiêu đề cột khi cuộn dọc.
+ */
 export function Cell({
   children,
   num = false,
   grow = false,
   muted = false,
+  pin = false,
   className,
 }: {
   children: ReactNode
   num?: boolean
   grow?: boolean
   muted?: boolean
+  pin?: boolean
   className?: string
 }) {
   return (
@@ -146,6 +175,9 @@ export function Cell({
         num && 'num',
         grow && 'w-1/3 max-w-0',
         muted && 'text-[11.5px] text-[var(--ink-3)]',
+        // Nền đặc bắt buộc: trong suốt thì nội dung cuộn qua hiện chồng lên.
+        pin &&
+          'sticky left-0 z-[2] bg-[var(--surface-card)] group-hover:bg-[var(--surface-hover)]',
         className,
       )}
     >
