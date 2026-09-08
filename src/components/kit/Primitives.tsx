@@ -165,11 +165,16 @@ export function CoverageBar({ ratio, label }: { ratio: number; label: string }) 
  * mới báo "không có quyền" là thiết kế tệ — đúng ca `min_stock` ngày
  * 08/09/2026, người dùng thấy lỗi về một ô mà hộp thoại không hề có.
  * Có `blockedBy` thì nút mờ đi và NÓI LUÔN ai giữ quyền đó.
+ *
+ * `href` biến nút thành LIÊN KẾT THẬT (thẻ <a>), không phải button gọi
+ * router.push: điều hướng phải mở được bằng chuột giữa / Ctrl+click và phải
+ * hiện URL ở thanh trạng thái. Ở màn ERP, người dùng mở đơn ra tab mới suốt.
  */
 export function Btn({
   children,
   primary = false,
   blockedBy,
+  href,
   className,
   ...rest
 }: {
@@ -177,20 +182,32 @@ export function Btn({
   primary?: boolean
   /** Tên bộ phận giữ quyền. Có giá trị = nút bị khoá và giải thích lý do. */
   blockedBy?: string
+  /** Có href = render thành <a>. Bị khoá thì vẫn là <span>, không điều hướng. */
+  href?: string
 } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const cls = cn(
+    'inline-flex h-[var(--ctl-h)] items-center gap-[7px] rounded-[var(--radius)]',
+    'border px-3 text-[12.5px] whitespace-nowrap',
+    primary
+      ? 'border-[var(--act)] bg-[var(--act)] font-semibold text-[var(--act-ink)] hover:bg-[var(--act-hover)]'
+      : 'border-[var(--line)] bg-[var(--surface-card)] font-medium text-[var(--ink)] hover:border-[var(--ink-3)] hover:bg-[var(--surface)]',
+    'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-[var(--line)]',
+    className,
+  )
+  const locked = !!blockedBy || rest.disabled
+
+  if (href && !locked) {
+    return (
+      <a href={href} className={cls} title={rest.title}>
+        {children}
+      </a>
+    )
+  }
   return (
     <button
-      disabled={!!blockedBy || rest.disabled}
-      title={blockedBy ? `Trường này do ${blockedBy} quản lý` : rest.title}
-      className={cn(
-        'inline-flex h-[var(--ctl-h)] items-center gap-[7px] rounded-[var(--radius)]',
-        'border px-3 text-[12.5px] whitespace-nowrap',
-        primary
-          ? 'border-[var(--act)] bg-[var(--act)] font-semibold text-[var(--act-ink)] hover:bg-[var(--act-hover)]'
-          : 'border-[var(--line)] bg-[var(--surface-card)] font-medium text-[var(--ink)] hover:border-[var(--ink-3)] hover:bg-[var(--surface)]',
-        'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-[var(--line)]',
-        className,
-      )}
+      disabled={locked}
+      title={blockedBy ? `Việc này do ${blockedBy} quản lý` : rest.title}
+      className={cls}
       {...rest}
     >
       {children}
