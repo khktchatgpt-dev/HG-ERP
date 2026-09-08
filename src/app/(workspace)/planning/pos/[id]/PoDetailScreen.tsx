@@ -275,6 +275,26 @@ export function PoDetailScreen({
     detail?: string | null
   }
   const marks: Mark[] = [
+    /*
+      MỐC GỐC — "ai soạn đơn, lúc nào".
+
+      Bảng `history` chỉ ghi các lần ĐỔI TRẠNG THÁI, nên đơn còn ở nháp trả
+      về rỗng và cả dòng thời gian hiện "0 mốc" (đo trên PO-2026-0065,
+      09/09/2026) — rồi empty state đổ lỗi "chưa phát sinh sự kiện nào".
+      Nhưng một chứng từ tồn tại thì ít nhất đã có người tạo ra nó: mốc đó
+      nằm sẵn ở `created_at`, chỉ là chưa ai đưa vào.
+    */
+    ...(po.created_at
+      ? [
+          {
+            key: 'created',
+            at: po.created_at,
+            label: 'Soạn đơn',
+            tone: 'blue' as const,
+            actor: po.assignee_name,
+          },
+        ]
+      : []),
     ...history.map((h) => ({
       key: `h-${h.id}`,
       at: h.created_at,
