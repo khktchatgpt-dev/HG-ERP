@@ -7,9 +7,12 @@ import {
   Chip,
   Code,
   CoverageBar,
+  Count,
   Empty,
   FilterBar,
   Loading,
+  Menu,
+  NavRail,
   GroupRow,
   InspectSection,
   NoticeBar,
@@ -22,6 +25,9 @@ import {
   THead,
   Table,
   Tag,
+  Tip,
+  TopBar,
+  UserCard,
   WhyBox,
   WorkLanes,
   coverage,
@@ -90,6 +96,7 @@ export default function KitGallery() {
   const [lane, setLane] = useState('mua')
   const [chip, setChip] = useState(true)
   const [dense, setDense] = useState(false)
+  const [railOpen, setRailOpen] = useState(false)
 
   const lanes = toLanes(DEMO, [
     { id: 'mua', label: 'Cần mua', test: (r) => r.need - r.covered > 0 },
@@ -117,6 +124,112 @@ export default function KitGallery() {
           <Btn primary>Nút chính</Btn>
         </div>
       </header>
+
+      {/* ── 00 VỎ ──────────────────────────────────────────────────── */}
+      <Spec
+        n="00"
+        name="Tầng vỏ — rail điều hướng, thanh trên, tooltip, số đếm"
+        why="Đo trên vỏ v3 (màn 1500x1000, khu Cung ứng): sidebar 240px = 16% bề ngang chỉ để nuôi 12 link, nửa dưới ~400px bỏ trống, breadcrumb lặp lại tên phòng đã in ở sidebar, thẻ người dùng bị cắt chữ khi màn thấp, tooltip là title='' của trình duyệt nên trễ 1-2 giây. Rail 52px giữ nguyên mọi đích đến, trả ~12% bề ngang cho bảng; nhãn ra tooltip sau 120ms."
+      >
+        <div className="flex h-[340px] overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
+          <NavRail
+            expanded={railOpen}
+            onToggle={() => setRailOpen(!railOpen)}
+            activeHref="/planning/viec-cua-toi"
+            brand={
+              railOpen ? (
+                <span className="text-[12.5px] font-bold">
+                  HOÀNG GIA <b className="text-[var(--act)]">ERP</b>
+                </span>
+              ) : (
+                <span className="grid size-[26px] place-items-center rounded-[var(--radius-sm)] bg-[var(--act)] text-[10.5px] font-bold text-white">
+                  CƯ
+                </span>
+              )
+            }
+            groups={[
+              {
+                heading: 'Nghiệp vụ',
+                items: [
+                  { href: '/planning', label: 'Tổng quan', icon: '◱' },
+                  { href: '/planning/pos', label: 'Phiếu mua', icon: '▤', count: 12 },
+                  { href: '/planning/materials', label: 'Vật tư & giá mua', icon: '◫' },
+                  { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: '◉' },
+                ],
+              },
+              {
+                heading: 'Theo dõi',
+                items: [
+                  { href: '/planning/viec-cua-toi', label: 'Chờ tôi xử lý', icon: '☑', count: 65 },
+                  { href: '/planning/hang-sap-ve', label: 'Hàng sắp về', icon: '⇥' },
+                  { href: '/planning/van-de', label: 'Vấn đề cần xử lý', icon: '⚠', count: 3, countTone: 'stop' as const },
+                ],
+              },
+            ]}
+            footer={
+              <UserCard
+                initials="NG"
+                name="Đặng Thị Thanh Nga"
+                sub="Cung ứng · supply_lead"
+                expanded={railOpen}
+                onSettings={() => {}}
+              />
+            }
+          />
+          <div className="flex min-w-0 flex-1 flex-col bg-[var(--surface)]">
+            <TopBar
+              crumbs={[
+                { label: 'Vật tư theo lệnh', href: '#' },
+                { label: '06/26-27 - MX' },
+              ]}
+              right={
+                <div className="flex items-center gap-2">
+                  <Tip label="9 thông báo chưa đọc" side="bottom">
+                    <span className="relative grid size-7 place-items-center text-[15px] text-[var(--ink-2)]">
+                      ⌾
+                      <span className="absolute -top-[1px] -right-[1px]">
+                        <Count n={9} tone="stop" />
+                      </span>
+                    </span>
+                  </Tip>
+                  <Menu
+                    items={[
+                      { label: 'Xuất Excel' },
+                      { label: 'In phiếu' },
+                      { label: 'Sửa định mức', disabled: true },
+                      { label: 'Huỷ đơn', danger: true },
+                    ]}
+                  />
+                </div>
+              }
+            />
+            <div className="flex flex-1 items-center justify-center px-6 text-center text-[var(--fs-sm)] text-[var(--ink-3)]">
+              Bấm « / » để thu gọn — rail giữ nguyên mọi đích đến ở 52px.
+              <br />
+              Rê chuột lên icon để xem tooltip (120ms, kèm số việc).
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap gap-8">
+          <V label="Số đếm">
+            <Count n={7} />
+            <Count n={65} tone="warn" />
+            <Count n={3} tone="stop" />
+            <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+              n=0 không hiện gì
+            </span>
+            <Count n={0} />
+            <Count n={1250} />
+          </V>
+          <V label="Tooltip">
+            <Tip label="Hiện sau 120ms, cả khi Tab tới" side="top">
+              <span className="rounded-[var(--radius-sm)] border border-[var(--line)] px-2 py-1 text-[var(--fs-sm)]">
+                Rê chuột lên đây
+              </span>
+            </Tip>
+          </V>
+        </div>
+      </Spec>
 
       {/* ── 01 MÀU ─────────────────────────────────────────────────── */}
       <Spec

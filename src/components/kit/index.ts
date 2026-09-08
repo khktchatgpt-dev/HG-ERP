@@ -6,5 +6,6 @@
  */
 export * from './kit-core'
 export * from './Primitives'
+export * from './Nav'
 export * from './Shell'
 export * from './Table'
