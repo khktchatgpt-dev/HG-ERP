@@ -30,7 +30,9 @@ const KIT = [
   'src/components/erp/**',
   'src/components/shadcn/**',
   'src/components/ui/**',
+  'src/components/kit/**',
   'src/app/design-lab/**',
+  'src/app/kit-lab/**',
 ]
 
 export default defineConfig([

@@ -1,5 +1,14 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/*
+ * KIT v4 — bảng token mới, sống trong `.kit-v4` nên KHÔNG đụng gì tới v3.
+ * Hai hệ chạy song song trong lúc chuyển dần: màn nào bọc `.kit-v4` thì ăn
+ * token mới, mọi màn còn lại nguyên vẹn. Xem src/components/kit/tokens.css.
+ *
+ * BẪY CSS: @import BẮT BUỘC đứng trước mọi rule khác, đặt ở cuối file thì
+ * trình duyệt bỏ qua im lặng — token không nạp mà không có lỗi nào.
+ */
+@import '../components/kit/tokens.css';
 
 /*
  * DARK MODE TẮT (chốt 06/08/2026 — chủ dự án: "bỏ chế độ dark mode").
