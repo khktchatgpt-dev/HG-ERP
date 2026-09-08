@@ -173,12 +173,18 @@ export function NoteStream({
         r.kind === 'mark' ? (
           <li
             key={`m-${r.key}-${r.at}`}
-            className="flex items-baseline gap-2 pl-1 text-[11.5px] text-[var(--ink-3)]"
+            /*
+              Mốc máy ghi phải MỜ HƠN ghi chú nhưng vẫn ĐỌC ĐƯỢC. Đo trên ảnh
+              09/09: dùng --ink-3 cho cả dòng thì nó chìm gần như vô hình trên
+              nền sáng, mà đây là thứ giải thích thứ tự sự việc. Nhãn lấy màu
+              mực thường, chỉ phần thời gian mới nhạt.
+            */
+            className="flex items-baseline gap-2 pl-1 text-[11.5px]"
           >
-            <span className="size-[5px] shrink-0 rounded-full bg-[var(--ink-empty)]" />
-            <span>{r.label}</span>
-            {r.actor && <span>· {r.actor}</span>}
-            <span className="num">{khiNao(r.at, now)}</span>
+            <span className="size-[5px] shrink-0 rounded-full bg-[var(--ink-3)]" />
+            <span className="font-medium text-[var(--ink-2)]">{r.label}</span>
+            {r.actor && <span className="text-[var(--ink-3)]">· {r.actor}</span>}
+            <span className="num text-[var(--ink-3)]">{khiNao(r.at, now)}</span>
           </li>
         ) : (
           <li
