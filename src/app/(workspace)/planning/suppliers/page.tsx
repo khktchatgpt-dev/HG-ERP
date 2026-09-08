@@ -4,9 +4,19 @@ import { materialGroupsRepo } from '@/modules/dept/supply/supply.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SuppliersManager } from './SuppliersManager'
+import { SuppliersScreenV4 } from './SuppliersScreenV4'
 
-export default async function PlanningSuppliersPage() {
+/**
+ * BẢN SONG SONG `?v4=1` — kit v4 chạy cạnh bản cũ trên CÙNG dữ liệu đã nạp,
+ * không thêm truy vấn nào. Bản cũ không bị đụng; gỡ về chỉ là bỏ tham số URL.
+ */
+export default async function PlanningSuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   const user = await authService.requirePageUser()
+  const v4 = (await searchParams).v4 === '1'
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
 
   const [{ rows: suppliers }, { rows: pos }, { rows: materials }] = await Promise.all([
@@ -46,17 +56,21 @@ export default async function PlanningSuppliersPage() {
     }
   }
 
+  const rows = suppliers.map((s) => ({
+    ...s,
+    po_count: poStats.get(s.id)?.count ?? 0,
+    open_po_count: poStats.get(s.id)?.open ?? 0,
+    last_po: poStats.get(s.id)?.last_code ?? null,
+    last_po_at: poStats.get(s.id)?.last_at ?? null,
+    total_spend: poStats.get(s.id)?.spend ?? 0,
+    groups: groupsBySupplier.get(s.id) ?? [],
+  }))
+
+  if (v4) return <SuppliersScreenV4 suppliers={rows} canEdit={!!canEdit} />
+
   return (
     <SuppliersManager
-      suppliers={suppliers.map((s) => ({
-        ...s,
-        po_count: poStats.get(s.id)?.count ?? 0,
-        open_po_count: poStats.get(s.id)?.open ?? 0,
-        last_po: poStats.get(s.id)?.last_code ?? null,
-        last_po_at: poStats.get(s.id)?.last_at ?? null,
-        total_spend: poStats.get(s.id)?.spend ?? 0,
-        groups: groupsBySupplier.get(s.id) ?? [],
-      }))}
+      suppliers={rows}
       materials={materials.map((m) => ({
         id: m.id,
         code: m.code,

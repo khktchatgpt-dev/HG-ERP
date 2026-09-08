@@ -28,10 +28,20 @@ export function showNum(v: number | null | undefined): string {
   return v.toLocaleString('vi-VN', { maximumFractionDigits: 4 })
 }
 
-/** Tiền: luôn có nhóm nghìn, không có phần lẻ trừ khi thật sự lẻ. */
-export function showMoney(v: number | null | undefined): string {
+/**
+ * Tiền: luôn có nhóm nghìn, KHÔNG phần lẻ.
+ *
+ * Đồng Việt Nam không có đơn vị nhỏ hơn đồng, nhưng tổng chi cộng dồn từ
+ * nhiều dòng đơn giá lẻ ra số như `6.570.693.696,79` — phần lẻ đó là rác
+ * của phép nhân, không phải tiền thật, và nó đẩy cột rộng thêm vô ích.
+ * Ngoại tệ có xu thì truyền `digits: 2`.
+ */
+export function showMoney(
+  v: number | null | undefined,
+  opts: { digits?: number } = {},
+): string {
   if (v == null || v === 0) return ''
-  return v.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
+  return v.toLocaleString('vi-VN', { maximumFractionDigits: opts.digits ?? 0 })
 }
 
 /**

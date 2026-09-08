@@ -32,6 +32,18 @@ describe('showMoney', () => {
     expect(showMoney(5482000)).toBe('5.482.000')
     expect(showMoney(0)).toBe('')
   })
+
+  it('VND KHÔNG có phần lẻ — xu là rác của phép nhân, không phải tiền', () => {
+    // Đo trên màn NCC 08/09/2026: tổng chi cộng dồn từ nhiều dòng đơn giá lẻ
+    // ra "6.570.693.696,79". Phần lẻ đó vô nghĩa với đồng Việt Nam và còn
+    // đẩy cột rộng thêm.
+    expect(showMoney(6570693696.79)).toBe('6.570.693.697')
+    expect(showMoney(180550.61)).toBe('180.551')
+  })
+
+  it('ngoại tệ có xu thì mở phần lẻ bằng digits', () => {
+    expect(showMoney(16830.9, { digits: 2 })).toBe('16.830,9')
+  })
 })
 
 describe('coverage', () => {

@@ -227,3 +227,48 @@ export function Chip({
     </button>
   )
 }
+
+/**
+ * Ô TÌM trên thanh lọc.
+ *
+ * Có mặt trong kit vì mọi màn danh sách đều cần, và vì thiếu nó thì nơi dùng
+ * buộc phải viết <input> thô — đúng thứ cổng ESLint chặn.
+ *
+ * Nút xoá hiện NGAY TRONG ô khi có chữ: đặt thành chip riêng bên cạnh thì
+ * người dùng phải tìm, mà xoá từ khoá là thao tác lặp nhiều nhất sau khi gõ.
+ */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder = 'Tìm…',
+  width = 260,
+}: {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+  width?: number
+}) {
+  return (
+    <div
+      className="flex h-7 items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-[10px] focus-within:border-[var(--act)]"
+      style={{ width }}
+    >
+      <span className="text-[var(--ink-3)]">⌕</span>
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full border-0 bg-transparent text-[12.5px] outline-0 placeholder:text-[var(--ink-3)]"
+      />
+      {value && (
+        <button
+          onClick={() => onChange('')}
+          aria-label="Xoá từ khoá"
+          className="shrink-0 text-[var(--ink-3)] hover:text-[var(--ink)]"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  )
+}
