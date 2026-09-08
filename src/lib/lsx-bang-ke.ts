@@ -360,6 +360,45 @@ export function buildBangKe(input: {
   return rows.sort(compareBangKe)
 }
 
+/**
+ * TÁCH BẢNG KÊ THÀNH VIỆC PHẢI LÀM và VIỆC KHÔNG PHẢI LÀM.
+ *
+ * Vì sao: đo trên LSX 06/26-27 (07/09/2026) thì bảng có 68 mã nhưng chỉ 16 mã
+ * thật sự còn phải mua — 52 mã còn lại là hàng đã mua đủ hoặc mã chỉ có trên
+ * đơn (ngoài định mức), cột Cần và Còn phải đặt đều bằng 0. Người cung ứng mở
+ * file ra phải lội qua 52 dòng vô ích để tìm 16 dòng cần làm, và 52 dòng đó
+ * cũng chính là thứ đẩy bảng dài quá một trang in.
+ *
+ * KHÔNG XOÁ chúng khỏi file: "vì sao mã này không phải mua" là câu hỏi có
+ * thật khi rà lại đơn, và người ký cần thấy hàng đã đặt rồi. Chúng chỉ chuyển
+ * sang tờ khác.
+ *
+ * Ranh giới là `suggest > 0` chứ không phải trạng thái: trạng thái nói tình
+ * hình (đang về, đơn chưa duyệt), còn `suggest` mới là số người mua phải hành
+ * động. Một mã "đặt chưa đủ" vẫn còn việc; một mã "đang về" thì hết việc.
+ *
+ * NGOẠI LỆ `unconfirmed`: BOM chưa xác nhận thì `suggest` bằng 0 vì chưa được
+ * phép mua, nhưng đó KHÔNG phải "không phải mua" — đó là việc đang mắc ở Kỹ
+ * thuật. Xếp nó vào nhóm phải làm thì người mua đi giục đúng chỗ, thay vì tưởng
+ * đã xong rồi để lệnh trễ.
+ *
+ * Ở LÕI THUẦN vì màn hình và file Excel phải tách y hệt nhau.
+ */
+export function splitBangKe(rows: BangKeRow[]): {
+  /** Còn việc: phải đặt, hoặc đang mắc ở Kỹ thuật. */
+  phaiMua: BangKeRow[]
+  /** Hết việc: đã đủ, đang về, hoặc mã ngoài định mức. */
+  khongPhaiMua: BangKeRow[]
+} {
+  const phaiMua: BangKeRow[] = []
+  const khongPhaiMua: BangKeRow[] = []
+  for (const r of rows) {
+    if (r.suggest > 0 || r.status === 'unconfirmed') phaiMua.push(r)
+    else khongPhaiMua.push(r)
+  }
+  return { phaiMua, khongPhaiMua }
+}
+
 /** Gấp lên đầu: theo trạng thái, rồi còn phải đặt nhiều trước, rồi mã. */
 export function compareBangKe(a: BangKeRow, b: BangKeRow): number {
   const so = BANG_KE_STATUS[a.status].order - BANG_KE_STATUS[b.status].order

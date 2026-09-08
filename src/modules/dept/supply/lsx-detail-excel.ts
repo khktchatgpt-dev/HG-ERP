@@ -8,6 +8,7 @@ import {
   estimateByCurrency,
   groupBySupplier,
   groupForBangKe,
+  splitBangKe,
   viTriLapRap,
   type BangKeRow,
 } from '@/lib/lsx-bang-ke'
@@ -171,6 +172,211 @@ export function sheetName(prefix: string, code: string, taken: Set<string>): str
  */
 export type LsxExcelKind = 'bangke' | 'lsx'
 
+/**
+ * MỘT TỜ BẢNG KÊ — dùng chung cho tờ "Cần mua" và tờ "Đã đủ".
+ *
+ * Hai tờ có CÙNG bộ cột và cùng cách chia khối, chỉ khác tập dòng và việc có
+ * cộng tiền hay không. Dựng riêng hai bản thì sớm muộn một bên thêm cột và hai
+ * tờ của cùng một file bày khác nhau — người đọc tưởng là hai loại dữ liệu.
+ *
+ * Cột nào cả tờ không có số thì tự ẩn (`hideEmptyCols`), nên tờ "Cần mua"
+ * không phải mang theo cột "Đã về" trống trơn của tờ kia.
+ */
+function bangKeSheet(
+  wb: ExcelJS.Workbook,
+  opts: {
+    name: string
+    title: string
+    notes: { text: string; tone: 'muted' | 'warn' }[]
+    rows: BangKeRow[]
+    includeDraft: boolean
+    /** Cộng tiền tạm tính cuối tờ — chỉ có nghĩa với tờ còn phải mua. */
+    tongTien: boolean
+  },
+): ExcelJS.Worksheet {
+  const { rows } = opts
+  const sb = wb.addWorksheet(opts.name)
+  titleRow(sb, opts.title)
+  for (const n of opts.notes) noteRow(sb, n.text, n.tone)
+
+  /*
+    CỘT KHÔNG NÓI THÊM GÌ THÌ ĐỪNG BÀY (user 07/09/2026, sau khi nhìn bản in).
+
+    Hai kiểu vô ích khác nhau:
+      · cột chỉ có MỘT giá trị cho cả bảng ("Tình trạng" = Chưa đặt ở 105/105
+        dòng) — nó là một câu về CẢ LỆNH, không phải một cột;
+      · cột TRÙNG KHÍT một cột khác ("Trong đó: chưa xác nhận" = "Cần" từng
+        dòng, vì chưa SP nào được xác nhận BOM).
+
+    Cả hai đều ẨN cột và nói giá trị đó một lần trên đầu sheet — giấu luôn thì
+    người đọc mất thông tin, còn bày ra là 105 dòng chép lại một câu.
+
+    KHÔNG nhét chúng vào cột Ghi chú: Ghi chú là chỗ NGƯỜI DÙNG viết, trộn
+    nhãn máy vào đó thì hai thứ đè nhau; và khi lệnh có SP đã xác nhận BOM,
+    mấy cột này lại khác nhau từng dòng và trở nên đáng đọc.
+  */
+  const motGiaTri = (lay: (r: BangKeRow) => string): string | null => {
+    const v = new Set(rows.map(lay))
+    return v.size === 1 ? [...v][0] : null
+  }
+  const anTinhTrang = motGiaTri((r) => BANG_KE_STATUS[r.status].label)
+  const anNguon = motGiaTri((r) => NGUON[r.source])
+  const anChuaXacNhan = rows.every((r) => r.draft_needed === r.qty_needed)
+  const daAn = [
+    anTinhTrang ? `Tình trạng: ${anTinhTrang}` : null,
+    anNguon ? `Nguồn số Cần: ${anNguon}` : null,
+    anChuaXacNhan ? 'Trong đó chưa xác nhận: đúng bằng cột Cần' : null,
+  ].filter(Boolean)
+  if (daAn.length > 0) {
+    noteRow(sb, `Cả bảng giống nhau nên đã ẩn cột — ${daAn.join(' · ')}`)
+  }
+  sb.addRow([])
+
+  const bkHead = headerRow(sb, [
+    'STT',
+    'Mã VT',
+    'Tên vật tư',
+    // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
+    'Quy cách',
+    'ĐVT',
+    'Cần',
+    // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
+    // thay vì để người đọc tự đoán đã cộng hay chưa.
+    opts.includeDraft ? 'Trong đó: chưa xác nhận' : 'Chưa xác nhận (chưa tính)',
+    'Đã xuất',
+    'Tồn khả dụng',
+    'Đã đặt',
+    'Nháp/chờ ký',
+    'Đã về',
+    'Còn phải đặt',
+    // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
+    // ước được tiền và biết gọi ai mà không phải mở tab khác.
+    'Đơn giá gần nhất',
+    'Tiền tệ',
+    'Tạm tính',
+    'Mua lần cuối',
+    'NCC đã mua',
+    'Tình trạng',
+    'Nguồn số Cần',
+    'Đơn mua',
+    'Ghi chú',
+  ])
+  let i = 0
+  const nCot = bkHead.cellCount
+  /*
+    DÒNG TIÊU ĐỀ KHỐI thay cho hai cột "Loại" + "Nhóm vật tư" lặp ở mọi dòng.
+    Chép "Bu lông - vít - đinh - liên kết" xuống 100 dòng làm tờ giấy đọc như
+    một bức tường chữ; sổ tay của phòng dùng dòng tiêu đề khối cho danh sách
+    dài (file LSX 06.26.27). Chia khối bằng ĐÚNG hàm lõi mà màn hình dùng.
+  */
+  for (const sec of groupForBangKe(rows, partGroupLabel, partGroupRank)) {
+    groupRow(
+      sb,
+      `${sec.name.toUpperCase()} · ${sec.rows.length} mã${sec.short > 0 ? ` · ${sec.short} mã còn phải đặt` : ''}`,
+      nCot,
+    )
+    for (const sub of sec.subs) {
+      if (sub.name) groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
+      for (const r of sub.rows) {
+        i++
+        // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
+        // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
+        sb.addRow([
+          i,
+          r.material_code,
+          r.material_name,
+          r.spec ?? '',
+          r.unit,
+          r.qty_needed,
+          r.draft_needed,
+          r.qty_issued,
+          r.available,
+          r.ordered,
+          r.draft + r.pending,
+          r.received,
+          r.suggest,
+          r.last_price?.unit_price ?? '',
+          r.last_price?.currency ?? '',
+          r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
+          dateCell(r.last_price?.at ?? null),
+          r.last_price?.supplier_name ?? '',
+          BANG_KE_STATUS[r.status].label,
+          NGUON[r.source],
+          r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
+          /*
+            VỊ TRÍ LẮP RÁP nằm trong GHI CHÚ, không đứng riêng một cột.
+            Nguồn của nó là `part_name` — TÊN CHI TIẾT trong định mức, không
+            phải một trường vị trí thật: với khung/gỗ thì tên chi tiết tình cờ
+            mô tả vị trí ("Giang mặt cánh"), còn ngũ kim thì Kỹ thuật đặt tên
+            chi tiết bằng chính tên vật tư nên rỗng nghĩa. Đo 20 lệnh: chỉ
+            23/294 dòng (8%) có vị trí thật — giữ nguyên một cột cho thứ trống
+            92% thời gian là chép khuôn tờ giấy chứ không theo thực tế.
+          */
+          [r.note, viTri(r)].filter(Boolean).join(' · '),
+        ])
+      }
+    }
+  }
+  const bkLast = sb.rowCount
+  // Dòng tổng: "bao nhiêu mã còn phải đặt" và "hết bao nhiêu tiền" là hai con
+  // số người đọc mang đi làm việc tiếp — đừng bắt họ tự lọc rồi cộng tay.
+  const conPhaiDat = rows.filter((r) => r.suggest > 0).length
+  totalRow(
+    sb,
+    conPhaiDat > 0
+      ? `Cộng ${rows.length} mã · ${conPhaiDat} mã còn phải đặt`
+      : `Cộng ${rows.length} mã`,
+    {},
+    2,
+  )
+  if (opts.tongTien) {
+    // Tiền gộp THEO TỪNG TIỀN TỆ: bảng có cả mã mua VND lẫn USD.
+    for (const [cur, tien] of estimateByCurrency(rows)) {
+      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 15: cur, 16: tien }, 2)
+    }
+    const chuaCoGia = rows.filter((r) => r.suggest > 0 && !r.last_price).length
+    if (chuaCoGia > 0) {
+      noteRow(
+        sb,
+        `${chuaCoGia} mã còn phải đặt CHƯA có giá mua lần nào — tiền tạm tính ở trên chưa gồm những mã đó.`,
+        'warn',
+      )
+    }
+  }
+  numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13])
+  numberCols(sb, [14], '#,##0.####;-#,##0.####;""')
+  numberCols(sb, [16], MONEY_FMT)
+  // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
+  // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
+  numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14], {
+    from: bkHead.number + 1,
+    to: bkLast,
+    digits: 4,
+  })
+  // Cột nào cả tờ không có số thì ẩn — xem hideEmptyCols.
+  hideEmptyCols(sb, [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18], {
+    from: bkHead.number + 1,
+    to: bkLast,
+  })
+  if (anChuaXacNhan) sb.getColumn(7).hidden = true
+  if (anTinhTrang) sb.getColumn(19).hidden = true
+  if (anNguon) sb.getColumn(20).hidden = true
+  dateCols(sb, [17])
+  applyWidths(sb, [
+    5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18, 28,
+    30,
+  ])
+  // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
+  // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
+  for (const c of [22, 23]) {
+    sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+  }
+  // Lọc tự động TẮT: bảng có dòng tiêu đề khối, lọc sẽ giấu mất chúng và
+  // người đọc mất ngữ cảnh. Muốn lọc thì lọc trên màn hình.
+  finishTable(sb, { head: bkHead, lastRow: bkLast, freezeCols: 3, autoFilter: false })
+  return sb
+}
+
 export async function buildLsxDetailExcel(
   report: LsxDetailReport,
   kind: LsxExcelKind = 'lsx',
@@ -234,22 +440,25 @@ export async function buildLsxDetailExcel(
   // Sheet bìa: hai bảng nhỏ nên không bật lọc, chỉ đặt trang in cho gọn.
   s1.pageSetup = { paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
 
-  // ── Sheet 2: BẢNG KÊ VẬT TƯ (khuôn "BK thép" của phòng) ───────────────
+  // ── Các tờ BẢNG KÊ ────────────────────────────────────────────────────
   // Đặt TRƯỚC sheet đơn mua: câu hỏi đầu tiên của người mua là "còn phải đặt
   // gì", không phải "đã đặt những đơn nào".
   if (kind === 'bangke' && report.bangKe && report.bangKe.rows.length > 0) {
     const bk = report.bangKe
-    const sb = wb.addWorksheet('Bảng kê VT')
-    titleRow(sb, `BẢNG KÊ VẬT TƯ — LSX ${lsx.code}`)
-    noteRow(
-      sb,
-      bk.include_draft
-        ? 'ĐANG TÍNH CẢ ĐỊNH MỨC CHƯA XÁC NHẬN — số Cần chỉ để tham khảo, không gửi đơn theo bản này.'
-        : 'Chỉ tính định mức đã được Kỹ thuật xác nhận.',
-      bk.include_draft ? 'warn' : 'muted',
-    )
-    noteRow(
-      sb,
+    /*
+      MỘT TỜ MỘT VIỆC (user 07/09/2026: file "khá thô").
+
+      Trước đó cả 68 mã của lệnh nằm chung một sheet, trong khi chỉ 16 mã còn
+      phải mua — người cung ứng mở ra là lội qua 52 dòng đã xong để tìm việc
+      của mình, và bảng dài quá một trang in vì chính 52 dòng đó.
+
+      Tách bằng hàm lõi `splitBangKe` chứ không lọc tại chỗ: màn hình rồi cũng
+      cần đúng ranh giới này, hai bên tự lọc thì sớm muộn lệch nhau.
+    */
+    const { phaiMua, khongPhaiMua } = splitBangKe(bk.rows)
+
+    /** Mấy dòng chú thích chung ở đầu mọi tờ bảng kê. */
+    const boiCanh = [
       // Ghép bằng filter(Boolean): lệnh chưa có ngày xuất thì đừng in "· ngày
       // xuất ·" với khoảng trống ở giữa — nhìn như file lỗi.
       [
@@ -259,228 +468,60 @@ export async function buildLsxDetailExcel(
       ]
         .filter(Boolean)
         .join(' · '),
-    )
-    /*
-      CỘT KHÔNG NÓI THÊM GÌ THÌ ĐỪNG BÀY (user 07/09/2026, sau khi nhìn bản in).
+    ]
 
-      Hai kiểu vô ích khác nhau:
-        · cột chỉ có MỘT giá trị cho cả bảng ("Tình trạng" = Chưa đặt ở 105/105
-          dòng) — nó là một câu về CẢ LỆNH, không phải một cột;
-        · cột TRÙNG KHÍT một cột khác ("Trong đó: chưa xác nhận" = "Cần" từng
-          dòng, vì chưa SP nào được xác nhận BOM).
-
-      Cả hai đều ẨN cột và nói giá trị đó một lần trên đầu sheet — giấu luôn thì
-      người đọc mất thông tin, còn bày ra là 105 dòng chép lại một câu.
-
-      KHÔNG nhét chúng vào cột Ghi chú: Ghi chú là chỗ NGƯỜI DÙNG viết, trộn
-      nhãn máy vào đó thì hai thứ đè nhau; và khi lệnh có SP đã xác nhận BOM,
-      mấy cột này lại khác nhau từng dòng và trở nên đáng đọc.
-    */
-    const motGiaTri = (lay: (r: BangKeRow) => string): string | null => {
-      const v = new Set(bk.rows.map(lay))
-      return v.size === 1 ? [...v][0] : null
-    }
-    const anTinhTrang = motGiaTri((r) => BANG_KE_STATUS[r.status].label)
-    const anNguon = motGiaTri((r) => NGUON[r.source])
-    const anChuaXacNhan =
-      bk.rows.length > 0 && bk.rows.every((r) => r.draft_needed === r.qty_needed)
-    const daAn = [
-      anTinhTrang ? `Tình trạng: ${anTinhTrang}` : null,
-      anNguon ? `Nguồn số Cần: ${anNguon}` : null,
-      anChuaXacNhan ? 'Trong đó chưa xác nhận: đúng bằng cột Cần' : null,
-    ].filter(Boolean)
-    if (daAn.length > 0) {
-      noteRow(sb, `Cả bảng giống nhau nên đã ẩn cột — ${daAn.join(' · ')}`)
+    // ── Sheet: CẦN MUA — tờ người cung ứng cầm đi làm việc ───────────────
+    const canhBao: { text: string; tone: 'muted' | 'warn' }[] = []
+    if (bk.include_draft) {
+      canhBao.push({
+        text: 'ĐANG TÍNH CẢ ĐỊNH MỨC CHƯA XÁC NHẬN — số Cần chỉ để tham khảo, không gửi đơn theo bản này.',
+        tone: 'warn',
+      })
     }
     if (bk.unconfirmed_products.length > 0) {
-      noteRow(
-        sb,
-        `${bk.unconfirmed_products.length} sản phẩm có định mức nhưng chưa xác nhận BOM: ` +
+      canhBao.push({
+        text:
+          `${bk.unconfirmed_products.length} sản phẩm có định mức nhưng chưa xác nhận BOM: ` +
           bk.unconfirmed_products.map((p) => p.code).join(', '),
-        'warn',
-      )
+        tone: 'warn',
+      })
     }
-    sb.addRow([])
-    const bkHead = headerRow(sb, [
-      'STT',
-      'Mã VT',
-      'Tên vật tư',
-      // Quy cách: đi hỏi giá mà chỉ có tên thì NCC vẫn hỏi lại độ dày/chiều dài.
-      'Quy cách',
-      'ĐVT',
-      'Cần',
-      // Cùng một con số, hai nghĩa khác nhau tuỳ chế độ — nói rõ ở tiêu đề
-      // thay vì để người đọc tự đoán đã cộng hay chưa.
-      bk.include_draft ? 'Trong đó: chưa xác nhận' : 'Chưa xác nhận (chưa tính)',
-      'Đã xuất',
-      'Tồn khả dụng',
-      'Đã đặt',
-      'Nháp/chờ ký',
-      'Đã về',
-      'Còn phải đặt',
-      // Khối GIÁ lấy từ dòng đơn thật (xem BangKeRow.last_price) — để người mua
-      // ước được tiền và biết gọi ai mà không phải mở tab khác.
-      'Đơn giá gần nhất',
-      'Tiền tệ',
-      'Tạm tính',
-      'Mua lần cuối',
-      'NCC đã mua',
-      'Tình trạng',
-      'Nguồn số Cần',
-      'Đơn mua',
-      'Ghi chú',
-    ])
-    let i = 0
-    const nCot = bkHead.cellCount
-    /*
-      DÒNG TIÊU ĐỀ KHỐI thay cho hai cột "Loại" + "Nhóm vật tư" lặp ở mọi dòng.
-      Chép "Bu lông - vít - đinh - liên kết" xuống 100 dòng làm tờ giấy đọc như
-      một bức tường chữ; sổ tay của phòng dùng dòng tiêu đề khối cho danh sách
-      dài (file LSX 06.26.27). Chia khối bằng ĐÚNG hàm lõi mà màn hình dùng.
-    */
-    for (const sec of groupForBangKe(bk.rows, partGroupLabel, partGroupRank)) {
-      groupRow(
-        sb,
-        `${sec.name.toUpperCase()} · ${sec.rows.length} mã${sec.short > 0 ? ` · ${sec.short} mã còn phải đặt` : ''}`,
-        nCot,
-      )
-      for (const sub of sec.subs) {
-        if (sub.name)
-          groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
-        for (const r of sub.rows) {
-          i++
-          // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
-          // (NUM_FMT). Nhét chuỗi rỗng vào cột số thì lọc và SUM đều lệch.
-          sb.addRow([
-            i,
-            r.material_code,
-            r.material_name,
-            r.spec ?? '',
-            r.unit,
-            r.qty_needed,
-            r.draft_needed,
-            r.qty_issued,
-            r.available,
-            r.ordered,
-            r.draft + r.pending,
-            r.received,
-            r.suggest,
-            r.last_price?.unit_price ?? '',
-            r.last_price?.currency ?? '',
-            r.last_price && r.suggest > 0 ? r.suggest * r.last_price.unit_price : '',
-            dateCell(r.last_price?.at ?? null),
-            r.last_price?.supplier_name ?? '',
-            BANG_KE_STATUS[r.status].label,
-            NGUON[r.source],
-            r.pos.map((p) => `${p.code} (${p.supplier_name})`).join('; '),
-            /*
-              VỊ TRÍ LẮP RÁP nằm trong GHI CHÚ, không đứng riêng một cột.
-              Nguồn của nó là `part_name` — TÊN CHI TIẾT trong định mức, không
-              phải một trường vị trí thật: với khung/gỗ thì tên chi tiết tình cờ
-              mô tả vị trí ("Giang mặt cánh"), còn ngũ kim thì Kỹ thuật đặt tên
-              chi tiết bằng chính tên vật tư nên rỗng nghĩa. Đo 20 lệnh: chỉ
-              23/294 dòng (8%) có vị trí thật — giữ nguyên một cột cho thứ trống
-              92% thời gian là chép khuôn tờ giấy chứ không theo thực tế.
-            */
-            [r.note, viTri(r)].filter(Boolean).join(' · '),
-          ])
-        }
-      }
-    }
-    const bkLast = sb.rowCount
-    // Dòng tổng: "bao nhiêu mã còn phải đặt" và "hết bao nhiêu tiền" là hai con
-    // số người đọc mang đi làm việc tiếp — đừng bắt họ tự lọc rồi cộng tay.
-    // Tiền gộp THEO TỪNG TIỀN TỆ: bảng có cả mã mua VND lẫn USD.
-    totalRow(
-      sb,
-      `Cộng ${bk.rows.length} mã · ${bk.rows.filter((r) => r.suggest > 0).length} mã còn phải đặt`,
-      {},
-      2,
-    )
-    const uocTien = estimateByCurrency(bk.rows)
-    for (const [cur, tien] of uocTien) {
-      totalRow(sb, `Tạm tính phần còn phải đặt (${cur})`, { 15: cur, 16: tien }, 2)
-    }
-    const chuaCoGia = bk.rows.filter((r) => r.suggest > 0 && !r.last_price).length
-    if (chuaCoGia > 0) {
-      noteRow(
-        sb,
-        `${chuaCoGia} mã còn phải đặt CHƯA có giá mua lần nào — tiền tạm tính ở trên chưa gồm những mã đó.`,
-        'warn',
-      )
-    }
-    numberCols(sb, [6, 7, 8, 9, 10, 11, 12, 13])
-    numberCols(sb, [14], '#,##0.####;-#,##0.####;""')
-    numberCols(sb, [16], MONEY_FMT)
-    // Số nguyên phải mang mã không có phần lẻ, không thì Excel in "297," —
-    // xem bẫy ở NUM_FMT. Chạy sau numberCols vì nó đặt theo CỘT.
-    numberCells(sb, [6, 7, 8, 9, 10, 11, 12, 13, 14], {
-      from: bkHead.number + 1,
-      to: bkLast,
-      digits: 4,
-    })
-    // Cột nào cả lệnh không có số thì ẩn — xem hideEmptyCols.
-    hideEmptyCols(sb, [7, 8, 9, 10, 11, 14, 15, 16, 17, 18], {
-      from: bkHead.number + 1,
-      to: bkLast,
-    })
-    if (anChuaXacNhan) sb.getColumn(7).hidden = true
-    if (anTinhTrang) sb.getColumn(19).hidden = true
-    if (anNguon) sb.getColumn(20).hidden = true
-    dateCols(sb, [17])
-    applyWidths(
-      sb,
-      [
-        5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18,
-        28, 30,
-      ],
-    )
-    // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
-    // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
-    for (const c of [22, 23]) {
-      sb.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
-    }
-    // Lọc tự động TẮT: bảng có dòng tiêu đề khối, lọc sẽ giấu mất chúng và
-    // người đọc mất ngữ cảnh. Muốn lọc thì lọc trên màn hình.
-    finishTable(sb, {
-      head: bkHead,
-      lastRow: bkLast,
-      freezeCols: 3,
-      autoFilter: false,
-    })
 
-    if (bk.blocked.length > 0) {
-      sb.addRow([])
-      sb.addRow([
-        `CHƯA QUY ĐỔI ĐƯỢC SANG ĐƠN VỊ MUA (${bk.blocked.length} dòng định mức) — số của những dòng này KHÔNG nằm trong bảng trên`,
+    if (phaiMua.length > 0) {
+      bangKeSheet(wb, {
+        name: 'Cần mua',
+        title: `CẦN MUA — LSX ${lsx.code}`,
+        notes: [
+          {
+            text: `${phaiMua.length} mã còn việc trên tổng ${bk.rows.length} mã của lệnh. Mã đã đủ / đã đặt xem tờ "Đã đủ".`,
+            tone: 'muted',
+          },
+          ...boiCanh.map((t) => ({ text: t, tone: 'muted' as const })),
+          ...canhBao,
+        ],
+        rows: phaiMua,
+        includeDraft: bk.include_draft,
+        tongTien: true,
+      })
+    } else {
+      // Không sinh sheet trắng: nói thẳng là hết việc, kèm số để tin được.
+      const sHet = wb.addWorksheet('Cần mua')
+      sHet.getColumn(1).width = 100
+      titleRow(sHet, `CẦN MUA — LSX ${lsx.code}`)
+      noteRow(sHet, boiCanh[0])
+      sHet.addRow([])
+      sHet.addRow([
+        `Không còn mã nào phải mua. Cả ${bk.rows.length} mã của lệnh đã đủ tồn, đã đặt hoặc đang về — xem tờ "Đã đủ".`,
       ]).font = { bold: true }
-      headerRow(sb, [
-        'Mã VT',
-        'Tên vật tư',
-        'ĐVT mua',
-        'Sản phẩm',
-        'Chi tiết',
-        'Vì sao chưa tính được',
-      ])
-      for (const b of bk.blocked) {
-        sb.addRow([
-          b.material_code,
-          b.material_name,
-          b.unit,
-          b.product_code,
-          b.part_name,
-          b.reason,
-        ])
-      }
     }
 
     // ── Sheet: ĐẶT CHO AI (nửa phải sổ tay của phòng) ────────────────────
     /*
       Sheet này là bảng CẮT ĐƠN: mỗi khối một nhà cung cấp, đúng khuôn nửa phải
       sheet BKVT của phòng ("STT | NCC | Tên vật tư | ĐVT | Tổng SL cần đặt").
-      Sheet "Bảng kê VT" trả lời "còn thiếu gì", sheet này trả lời "gọi ai, mỗi
-      người bao nhiêu" — hai câu khác nhau nên hai tờ khác nhau, không nhét
-      chung rồi bắt người đọc tự lọc.
+      Tờ "Cần mua" trả lời "còn thiếu gì", tờ này trả lời "gọi ai, mỗi người bao
+      nhiêu" — hai câu khác nhau nên hai tờ khác nhau, không nhét chung rồi bắt
+      người đọc tự lọc.
 
       Cắt khối bằng ĐÚNG hàm lõi mà màn hình dùng, để file và màn không chia đơn
       khác nhau.
@@ -558,6 +599,90 @@ export async function buildLsxDetailExcel(
       dateCols(sn, [11])
       applyWidths(sn, [5, 15, 40, 20, 7, 12, 12, 13, 8, 15, 12, 16])
       finishTable(sn, { head: nHead, freezeCols: 3, autoFilter: false })
+    }
+
+    // ── Sheet: KỸ THUẬT CẦN XỬ LÝ ────────────────────────────────────────
+    /*
+      Dòng định mức chưa quy đổi được sang đơn vị mua — trước đây nối vào ĐUÔI
+      sheet bảng kê như một phụ lục, nên nằm dưới 68 dòng dữ liệu và gần như
+      không ai cuộn tới.
+
+      Nó KHÔNG phải phụ lục: đây là việc đang mắc ở Kỹ thuật (định mức đếm theo
+      chi tiết — "Dọc tựa", "Tay vịn" — trong khi sắt bán theo cây/kg), và mỗi
+      dòng ở đây là một mã người mua CHƯA thể mua. Cho nó một tờ riêng thì gửi
+      thẳng được cho Kỹ thuật mà không phải cắt dán.
+    */
+    if (bk.blocked.length > 0) {
+      const sk = wb.addWorksheet('Kỹ thuật cần xử lý')
+      titleRow(sk, `KỸ THUẬT CẦN XỬ LÝ — LSX ${lsx.code}`)
+      noteRow(
+        sk,
+        `${bk.blocked.length} dòng định mức chưa quy đổi được sang đơn vị mua. Số của những dòng này KHÔNG nằm trong tờ "Cần mua" — chừng nào chưa khai quy đổi thì chưa mua được.`,
+        'warn',
+      )
+      noteRow(sk, boiCanh[0])
+      sk.addRow([])
+      const kHead = headerRow(sk, [
+        'Mã VT',
+        'Tên vật tư',
+        'ĐVT mua',
+        'Sản phẩm',
+        'Chi tiết',
+        'Vì sao chưa tính được',
+      ])
+      // Gộp theo MÃ VẬT TƯ: một mã sắt hỏng quy đổi kéo theo cả chục chi tiết
+      // (ST-0083 có 13 dòng), khai một lần là xong hết — bày phẳng thì người
+      // đọc tưởng 13 việc khác nhau.
+      const theoMa = new Map<string, typeof bk.blocked>()
+      for (const b of bk.blocked) {
+        const cur = theoMa.get(b.material_code)
+        if (cur) cur.push(b)
+        else theoMa.set(b.material_code, [b])
+      }
+      const nCotK = kHead.cellCount
+      for (const [ma, list] of [...theoMa.entries()].sort(
+        (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'vi'),
+      )) {
+        groupRow(sk, `${ma} · ${list[0].material_name} · ${list.length} dòng định mức`, nCotK)
+        for (const b of list) {
+          sk.addRow([
+            b.material_code,
+            b.material_name,
+            b.unit,
+            b.product_code,
+            b.part_name,
+            b.reason,
+          ])
+        }
+      }
+      applyWidths(sk, [15, 34, 10, 16, 26, 52])
+      for (const c of [2, 5, 6]) {
+        sk.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+      }
+      finishTable(sk, { head: kHead, freezeCols: 1, autoFilter: false })
+    }
+
+    // ── Sheet: ĐÃ ĐỦ — mã KHÔNG phải mua, để ra khỏi tờ việc ─────────────
+    /*
+      Giữ lại chứ không bỏ: "vì sao mã này không phải mua" là câu hỏi có thật
+      khi rà lại đơn, và người ký cần thấy hàng đã đặt rồi. Chỉ là nó không
+      được chen vào tờ mà người ta đang dùng để làm việc.
+    */
+    if (khongPhaiMua.length > 0) {
+      bangKeSheet(wb, {
+        name: 'Đã đủ',
+        title: `ĐÃ ĐỦ / KHÔNG PHẢI MUA — LSX ${lsx.code}`,
+        notes: [
+          {
+            text: `${khongPhaiMua.length} mã không còn việc: đã đủ tồn, đã đặt, đang về, hoặc mã chỉ có trên đơn (ngoài định mức).`,
+            tone: 'muted',
+          },
+          ...boiCanh.map((t) => ({ text: t, tone: 'muted' as const })),
+        ],
+        rows: khongPhaiMua,
+        includeDraft: bk.include_draft,
+        tongTien: false,
+      })
     }
 
     // ── Sheet phụ: VẬT TƯ DÙNG CHO SẢN PHẨM NÀO ──────────────────────────

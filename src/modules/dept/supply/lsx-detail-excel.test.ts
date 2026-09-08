@@ -181,10 +181,10 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
       },
     })
 
-  it("loại 'bangke': chỉ Lệnh + Bảng kê VT, KHÔNG có sheet đơn hàng", async () => {
+  it("loại 'bangke': chỉ Lệnh + các tờ bảng kê, KHÔNG có sheet đơn hàng", async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
     const names = wb.worksheets.map((w) => w.name)
-    expect(names).toContain('Bảng kê VT')
+    expect(names).toContain('Cần mua')
     expect(names).not.toContain('Đơn mua')
     expect(names.some((n) => n.startsWith('ĐH'))).toBe(false)
   })
@@ -194,7 +194,8 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     const names = wb.worksheets.map((w) => w.name)
     expect(names).toContain('Đơn mua')
     expect(names.some((n) => n.startsWith('ĐH'))).toBe(true)
-    expect(names).not.toContain('Bảng kê VT')
+    expect(names).not.toContain('Cần mua')
+    expect(names).not.toContain('Đã đủ')
     expect(names).not.toContain('Phân bổ theo SP')
   })
 
@@ -205,7 +206,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
    */
   it('bảng ghim tiêu đề và lặp tiêu đề khi in, KHÔNG bật lọc', async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
-    const sb = wb.getWorksheet('Bảng kê VT')!
+    const sb = wb.getWorksheet('Cần mua')!
     // Lọc tự động TẮT có chủ đích từ 07/09/2026: bảng có dòng tiêu đề khối,
     // lọc sẽ giấu mất chúng và người đọc mất ngữ cảnh (muốn lọc thì lọc trên màn).
     expect(sb.autoFilter).toBeFalsy()
@@ -219,7 +220,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     // exceljs cho `column.alignment` đè lên mọi ô đang có, kể cả ô tiêu đề —
     // đặt cột số căn phải là tiêu đề mất wrapText và bị cắt chữ.
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
-    const sb = wb.getWorksheet('Bảng kê VT')!
+    const sb = wb.getWorksheet('Cần mua')!
     const head = sb.getRow(headRowOf(sb))
     const conPhaiDat = head.getCell(13)
     expect(conPhaiDat.value).toBe('Còn phải đặt')
@@ -229,7 +230,7 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
 
   it('có giá mua gần nhất, tạm tính = còn phải đặt × giá, tổng theo tiền tệ', async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
-    const sb = wb.getWorksheet('Bảng kê VT')!
+    const sb = wb.getWorksheet('Cần mua')!
     const head = headRowOf(sb)
     const d = sb.getRow(head + 2)
     expect(d.getCell(4).value).toBe('D20 x 0.7mm x 6m') // quy cách
@@ -249,9 +250,102 @@ describe('hai loại file tách riêng (user chốt 06/09/2026)', () => {
     expect(text).toContain('Tạm tính phần còn phải đặt (VND)')
   })
 
+  /*
+   * MỘT TỜ MỘT VIỆC (user 07/09/2026: file "khá thô").
+   *
+   * Đo trên LSX 06/26-27: 68 mã trên một tờ nhưng chỉ 16 mã còn phải mua.
+   * Người cung ứng phải lội qua 52 dòng đã xong để tìm việc của mình.
+   */
+  const rHonHop = () => {
+    const base = r()
+    const bk = base.bangKe!
+    return {
+      ...base,
+      bangKe: {
+        ...bk,
+        rows: [
+          ...bk.rows,
+          // Mã đã mua đủ — hết việc, không được chen vào tờ "Cần mua".
+          {
+            ...bk.rows[0],
+            material_id: 'm2',
+            material_code: 'BAO0081',
+            material_name: 'Thùng carton 5 lớp',
+            qty_needed: 0,
+            suggest: 0,
+            received: 560,
+            status: 'extra' as const,
+            source: 'none' as const,
+            last_price: null,
+          },
+        ],
+        blocked: [
+          {
+            product_code: 'CH0238HG-IR',
+            material_code: 'ST-0083',
+            material_name: 'Sắt mẫu',
+            unit: 'Cây',
+            part_name: 'Dọc Tựa',
+            reason: 'Vật tư bán theo Cây nhưng chưa khai chiều dài một cây',
+          },
+        ],
+      },
+    }
+  }
+
+  it('tách tờ: mã còn phải mua và mã đã đủ KHÔNG nằm chung một sheet', async () => {
+    const wb = await open(await buildLsxDetailExcel(rHonHop(), 'bangke'))
+    const canMua = text(wb.getWorksheet('Cần mua')!)
+    const daDu = text(wb.getWorksheet('Đã đủ')!)
+    // Tờ việc chỉ có mã còn phải mua.
+    expect(canMua).toContain('T-VUO-20X0.7')
+    expect(canMua).not.toContain('BAO0081')
+    // Mã đã xong vẫn giữ trong file, chỉ sang tờ khác — "vì sao không phải
+    // mua" là câu hỏi có thật khi rà lại đơn.
+    expect(daDu).toContain('BAO0081')
+    expect(daDu).not.toContain('T-VUO-20X0.7')
+  })
+
+  it('tờ "Cần mua" nói rõ còn bao nhiêu mã trên tổng, và chỉ đường sang tờ kia', async () => {
+    const wb = await open(await buildLsxDetailExcel(rHonHop(), 'bangke'))
+    const t = text(wb.getWorksheet('Cần mua')!)
+    expect(t).toContain('1 mã còn việc trên tổng 2 mã')
+    expect(t).toContain('Đã đủ')
+  })
+
+  it('dòng định mức chưa quy đổi được có TỜ RIÊNG, không nối vào đuôi bảng', async () => {
+    // Trước đây nối vào đuôi sheet bảng kê nên nằm dưới hàng chục dòng dữ
+    // liệu và gần như không ai cuộn tới — trong khi đó là việc của Kỹ thuật.
+    const wb = await open(await buildLsxDetailExcel(rHonHop(), 'bangke'))
+    const sk = wb.getWorksheet('Kỹ thuật cần xử lý')!
+    const t = text(sk)
+    expect(t).toContain('ST-0083')
+    expect(t).toContain('Dọc Tựa')
+    // Và KHÔNG còn nằm trong tờ việc của người mua.
+    expect(text(wb.getWorksheet('Cần mua')!)).not.toContain('Dọc Tựa')
+  })
+
+  it('lệnh mua xong hết vẫn có tờ "Cần mua", nói thẳng là hết việc', async () => {
+    // Sinh sheet trắng thì người mở tưởng file lỗi; bỏ hẳn sheet thì họ đi
+    // tìm. Nói một câu có kèm số để tin được.
+    const base = r()
+    const bk = base.bangKe!
+    const xong = {
+      ...base,
+      bangKe: {
+        ...bk,
+        rows: [{ ...bk.rows[0], suggest: 0, status: 'done' as const }],
+      },
+    }
+    const wb = await open(await buildLsxDetailExcel(xong, 'bangke'))
+    const t = text(wb.getWorksheet('Cần mua')!)
+    expect(t).toContain('Không còn mã nào phải mua')
+    expect(wb.worksheets.map((w) => w.name)).toContain('Đã đủ')
+  })
+
   it('cột số giữ KIỂU SỐ, số 0 không bị đổi thành chuỗi rỗng', async () => {
     const wb = await open(await buildLsxDetailExcel(r(), 'bangke'))
-    const sb = wb.getWorksheet('Bảng kê VT')!
+    const sb = wb.getWorksheet('Cần mua')!
     const head = headRowOf(sb)
     // Dòng vật tư mẫu có "Đã về" = 0 (cột 12) — phải là số 0, không phải ''.
     const c = sb.getRow(head + 2).getCell(12)
