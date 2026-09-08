@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { PoNotesPanel } from './PoNotesPanel'
 import Link from 'next/link'
 import {
   AlertTriangle,
@@ -144,6 +145,7 @@ export function PoDetailScreen({
   canApprove,
   canReassign,
   staff,
+  me,
 }: {
   po: PoDetailPo
   lines: PoLine[]
@@ -166,6 +168,8 @@ export function PoDetailScreen({
   canApprove: boolean
   canReassign: boolean
   staff: { id: string; name: string }[]
+  /** Người đang xem — cho khối trao đổi biết ghi chú nào là của mình. */
+  me: { id: string; name: string }
 }) {
   const router = useRouter()
   const act = usePoActions({ onDone: () => router.refresh() })
@@ -1478,6 +1482,38 @@ export function PoDetailScreen({
 
         {/* ── TAB 4: DÒNG THỜI GIAN & LỊCH SỬ DUYỆT ─────────────────────────── */}
         <TabsContent value="timeline" className="flex flex-col gap-5">
+          {/*
+            TRAO ĐỔI đặt TRƯỚC dòng thời gian máy ghi.
+
+            Người mở tab này hỏi "vì sao đơn đứng im" — câu trả lời nằm ở lời
+            người viết, không nằm ở danh sách mốc trạng thái. Mốc máy ghi đã
+            được trộn vào chính dòng trao đổi bên dưới ô nhập, nên thẻ "Dòng
+            thời gian" phía dưới giữ lại cho ai muốn xem riêng phần máy ghi
+            kèm chi tiết đợt giao / phiếu nhập.
+          */}
+          <Card>
+            <CardHeader className="bg-muted/20 border-b py-3.5">
+              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <History className="text-primary size-4" />
+                Trao đổi về đơn này
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-5">
+              <PoNotesPanel
+                poId={po.id}
+                meId={me.id}
+                meName={me.name}
+                marks={marks.map((m) => ({
+                  key: m.key,
+                  at: m.at,
+                  label: m.label,
+                  actor: m.actor,
+                }))}
+                followerNames={[po.assignee_name].filter((x): x is string => !!x)}
+              />
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader className="bg-muted/20 border-b py-3.5">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">

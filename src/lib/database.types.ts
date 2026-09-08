@@ -2758,6 +2758,95 @@ export type Database = {
           },
         ]
       }
+      doc_followers: {
+        Row: {
+          created_at: string
+          doc_id: string
+          doc_type: string
+          muted_at: string | null
+          source: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_id: string
+          doc_type: string
+          muted_at?: string | null
+          source?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          doc_id?: string
+          doc_type?: string
+          muted_at?: string | null
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_followers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      doc_notes: {
+        Row: {
+          audience: string
+          author_id: string
+          body: string
+          created_at: string
+          deleted_at: string | null
+          deleted_by: string | null
+          doc_id: string
+          doc_type: string
+          id: string
+          reply_to: string | null
+        }
+        Insert: {
+          audience?: string
+          author_id: string
+          body: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          doc_id: string
+          doc_type: string
+          id?: string
+          reply_to?: string | null
+        }
+        Update: {
+          audience?: string
+          author_id?: string
+          body?: string
+          created_at?: string
+          deleted_at?: string | null
+          deleted_by?: string | null
+          doc_id?: string
+          doc_type?: string
+          id?: string
+          reply_to?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "doc_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "doc_notes_reply_to_fkey"
+            columns: ["reply_to"]
+            isOneToOne: false
+            referencedRelation: "doc_notes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       supply_po_line_lsx: {
         Row: {
           line_id: string

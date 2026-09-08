@@ -128,6 +128,7 @@ export default async function PoDetailPage({
       canApprove={canApprove}
       canReassign={manageAny || canApprove}
       staff={staff}
+      me={{ id: user.id, name: user.name ?? user.email }}
     />
   )
 }
