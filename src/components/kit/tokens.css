@@ -106,11 +106,18 @@
 
   --radius: 6px;
   --radius-sm: 4px;
+  /* Hộp thoại to hơn thẻ nên bo nhiều hơn — bo bằng nhau thì hộp trông như
+     một thẻ bị phóng to chứ không phải một tầng khác. */
+  --radius-lg: 9px;
 
   /* Tầng: chỉ 2 mức. Thêm mức thứ 3 là bắt đầu có bóng trang trí. */
   --z-sticky: 5;
   --z-bar: 6;
   --z-float: 40;
+  /* Trên --z-float: tooltip trong hộp thoại phải nổi hơn chính hộp. */
+  --z-modal: 60;
+  /* Bóng hộp thoại: sâu và mềm — nói "tầng khác", không phải "thẻ nổi". */
+  --shadow-modal: 0 18px 48px rgba(17, 24, 38, 0.22);
 
   color: var(--ink);
   background: var(--surface);
@@ -135,8 +142,13 @@
   text-align: right;
 }
 
-/* Ô focus thấy rõ: người dùng ERP đi bằng Tab qua hàng chục ô mỗi phút. */
-.kit-v4 :focus-visible {
+/* Ô focus thấy rõ: người dùng ERP đi bằng Tab qua hàng chục ô mỗi phút.
+
+   `:focus-visible` chứ không `:focus` — và loại trừ thứ nhận tiêu điểm bằng
+   mã (hộp thoại có tabIndex=-1). Vòng focus dành cho chỗ người dùng ĐI TỚI
+   bằng Tab; vẽ quanh cả hộp thoại thì nó trông như một ô nhập khổng lồ đang
+   được chọn (đo 09/09/2026). */
+.kit-v4 :focus-visible:not([tabindex='-1']) {
   outline: 2px solid var(--act);
   outline-offset: 1px;
 }

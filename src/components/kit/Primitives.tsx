@@ -173,6 +173,7 @@ export function CoverageBar({ ratio, label }: { ratio: number; label: string }) 
 export function Btn({
   children,
   primary = false,
+  danger = false,
   blockedBy,
   href,
   className,
@@ -180,6 +181,11 @@ export function Btn({
 }: {
   children: ReactNode
   primary?: boolean
+  /**
+   * Việc KHÔNG lùi lại được (xoá, huỷ đơn đã gửi). Đỏ chỉ dùng ở đây — dùng
+   * cho cả việc thường thì hết là tín hiệu, đúng lỗi badge đỏ của v3.
+   */
+  danger?: boolean
   /** Tên bộ phận giữ quyền. Có giá trị = nút bị khoá và giải thích lý do. */
   blockedBy?: string
   /** Có href = render thành <a>. Bị khoá thì vẫn là <span>, không điều hướng. */
@@ -188,9 +194,13 @@ export function Btn({
   const cls = cn(
     'inline-flex h-[var(--ctl-h)] items-center gap-[7px] rounded-[var(--radius)]',
     'border px-3 text-[12.5px] whitespace-nowrap',
-    primary
-      ? 'border-[var(--act)] bg-[var(--act)] font-semibold text-[var(--act-ink)] hover:bg-[var(--act-hover)]'
-      : 'border-[var(--line)] bg-[var(--surface-card)] font-medium text-[var(--ink)] hover:border-[var(--ink-3)] hover:bg-[var(--surface)]',
+    primary && danger
+      ? 'border-[var(--stop)] bg-[var(--stop)] font-semibold text-white hover:brightness-110'
+      : primary
+        ? 'border-[var(--act)] bg-[var(--act)] font-semibold text-[var(--act-ink)] hover:bg-[var(--act-hover)]'
+        : danger
+          ? 'border-[var(--stop)] bg-[var(--surface-card)] font-medium text-[var(--stop)] hover:bg-[var(--stop-wash)]'
+          : 'border-[var(--line)] bg-[var(--surface-card)] font-medium text-[var(--ink)] hover:border-[var(--ink-3)] hover:bg-[var(--surface)]',
     'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-[var(--line)]',
     className,
   )

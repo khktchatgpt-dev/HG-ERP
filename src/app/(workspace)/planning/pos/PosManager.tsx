@@ -188,6 +188,8 @@ export function PosManager({
             path: 'submit',
             title: 'Gửi Giám đốc duyệt',
             confirmLabel: 'Gửi duyệt',
+            consequence:
+              'Đơn rời bàn Cung ứng sang bàn Giám đốc. Gửi rồi thì hết sửa thoải mái — muốn sửa phải rút về nháp, và chỉ rút được khi GĐ chưa duyệt.',
           })
           .then(() => setPicked(new Set()))
     : null
@@ -199,6 +201,8 @@ export function PosManager({
             body: { decision: 'approve' },
             title: 'Duyệt',
             confirmLabel: 'Duyệt',
+            consequence:
+              'Duyệt xong Cung ứng mới gửi được cho NCC (BR-05). Đơn đã duyệt không sửa được giá hay số lượng.',
           })
           .then(() => setPicked(new Set()))
     : null
@@ -210,6 +214,8 @@ export function PosManager({
             body: { to: 'ordered' },
             title: 'Gửi NCC',
             confirmLabel: 'Gửi NCC',
+            consequence:
+              'Đơn tính là ĐÃ ĐẶT: bắt đầu đếm hẹn giao, và hàng về sẽ do Kho ghi nhận theo đơn này.',
           })
           .then(() => setPicked(new Set()))
     : null

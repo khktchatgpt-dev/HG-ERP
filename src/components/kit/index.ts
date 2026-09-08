@@ -7,5 +7,6 @@
 export * from './kit-core'
 export * from './Primitives'
 export * from './Nav'
+export * from './Sheet'
 export * from './Shell'
 export * from './Table'
