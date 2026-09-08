@@ -5,6 +5,7 @@ import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { canAction } from '@/modules/core/rbac/rbac.service'
+import { PosScreenV4 } from './PosScreenV4'
 import { PosManager } from './PosManager'
 
 export const dynamic = 'force-dynamic'
@@ -28,7 +29,7 @@ export const dynamic = 'force-dynamic'
 export default async function PlanningPosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ view?: string }>
+  searchParams: Promise<{ view?: string; v4?: string }>
 }) {
   const user = await authService.requirePageUser()
   const [supplyStaff, canManageAny, canApprove] = await Promise.all([
@@ -39,7 +40,7 @@ export default async function PlanningPosPage({
   const canEdit = user.role === 'admin' || supplyStaff
   // `?view=<id>`: form soạn đơn redirect về đây sau khi LƯU NHÁP (0116) — mở
   // ngay chi tiết đơn vừa tạo để người soạn kiểm tra rồi bấm "Gửi GĐ duyệt".
-  const { view } = await searchParams
+  const { view, v4 } = await searchParams
 
   /*
    * TRẦN SỐ ĐƠN NẠP MỘT LẦN.
@@ -71,6 +72,24 @@ export default async function PlanningPosPage({
    * trang chi tiết đơn (`/planning/pos/[id]`), nơi có đủ ngữ cảnh để quyết. Màn
    * danh sách vì thế bớt được hai truy vấn (rbac + users) trên MỌI lần mở trang.
    */
+
+  if (v4 === '1') {
+    return (
+      <PosScreenV4
+        pos={pos.map((p) => ({
+          ...p,
+          total: totals[p.id] ?? 0,
+          lines_done: lineDone.get(p.id)?.done ?? 0,
+          lines_total: lineDone.get(p.id)?.total ?? 0,
+        }))}
+        meId={user.id}
+        canApprove={canApprove}
+        // Tính Ở SERVER: đọc đồng hồ trong render là hàm không thuần, server
+        // và trình duyệt sẽ ra hai kết quả khác nhau quanh nửa đêm.
+        today={new Date().toISOString()}
+      />
+    )
+  }
 
   return (
     <PosManager

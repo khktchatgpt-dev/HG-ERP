@@ -28,6 +28,13 @@ export type Po = {
   // Mốc chuyển trạng thái (có ở detail API) — cho stepper. Optional để list row bỏ qua được.
   approved_at?: string | null
   ordered_at?: string | null
+  /** Mốc NCC xác nhận đã nhận đơn (0152) — NCC không đăng nhập, NV cung ứng ghi. */
+  confirmed_at?: string | null
+  /**
+   * Lần đổi gần nhất — dùng suy ra "nằm ở bước này từ bao giờ" cho các bước
+   * KHÔNG có cột mốc riêng (gửi duyệt, đang giao). Xem `poHolder` ở kit.
+   */
+  updated_at?: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền thao tác xét theo đây, không phải cả phòng. */
   assigned_to?: string | null
   assignee_name?: string | null
