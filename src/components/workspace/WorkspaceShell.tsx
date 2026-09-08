@@ -29,7 +29,13 @@ export async function WorkspaceShell({
     // stone/emerald): token xám-xanh + royal cobalt phủ cả sidebar + topbar +
     // nội dung. Kit dùng chung đã ăn token nên mọi màn tự khớp; trang cũ còn
     // gọi zinc trực tiếp vẫn đọc được (zinc ~ xám-xanh v3).
-    <div className="theme-v3 bg-background text-foreground flex min-h-screen">
+    // `h-screen` + `overflow-hidden` chứ KHÔNG `min-h-screen`: min-h chỉ đặt
+    // SÀN, nên trang dài bao nhiêu thì cả shell cao bấy nhiêu — sidebar kéo dài
+    // theo nội dung và cuộn mất khỏi tầm nhìn, đúng lỗi user báo 09/09/2026.
+    // Chốt trần ở chiều cao màn hình thì điều hướng LUÔN đứng yên, chỉ vùng
+    // nội dung cuộn — đúng nếp ERP: menu là mốc cố định, không phải phần đầu
+    // của một trang giấy dài.
+    <div className="theme-v3 bg-background text-foreground flex h-screen overflow-hidden">
       <WorkspaceSidebar workspace={workspace} />
       <div className="flex min-w-0 flex-1 flex-col">
         <WorkspaceTopbar
@@ -38,7 +44,9 @@ export async function WorkspaceShell({
           subtitle={subtitle}
           actions={actions}
         />
-        <main className="mx-auto w-full max-w-[1600px] flex-1 p-4 sm:px-6 sm:py-6">
+        {/* Vùng cuộn DUY NHẤT của app. Trang v3 cuộn trong đây y như trước;
+            trang v4 dùng ScreenFrame thì tự chốt chiều cao và cuộn trong bảng. */}
+        <main className="mx-auto w-full max-w-[1600px] flex-1 overflow-auto p-4 sm:px-6 sm:py-6">
           {children}
         </main>
       </div>
