@@ -1,6 +1,6 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
 
@@ -83,17 +83,43 @@ export function Code({
  * `strong` dành cho con số NGƯỜI DÙNG MANG ĐI LÀM VIỆC (còn phải đặt, thành
  * tiền). Trên một dòng có 6 con số, phải có đúng một số to hơn — không thì
  * mắt phải đọc cả 6 để tìm cái cần.
+ *
+ * BA TRẠNG THÁI RỖNG KHÁC NHAU, đừng gộp (lỗi phát hiện 08/09/2026 trên
+ * trang trưng bày: dòng "đã đủ" hiện dấu — ở cột Cần mua, đọc ra thành
+ * "thiếu dữ liệu" trong khi ý là "hết việc rồi"):
+ *
+ *   · `zero='dash'` (mặc định) — chưa có số. Dùng cho ô thật sự trống:
+ *     chưa ai nhập giá, chưa có ngày.
+ *   · `zero='zero'` — số 0 có nghĩa, hiện "0". Dùng khi 0 là một câu trả
+ *     lời: tồn kho 0, đã về 0.
+ *   · `zero='done'` — hết việc, hiện dấu ✓ mờ. Dùng cho cột "còn phải làm"
+ *     khi đã xong.
  */
 export function Num({
   value,
   strong = false,
   muted = false,
+  zero = 'dash',
 }: {
   value: string
   strong?: boolean
   muted?: boolean
+  zero?: 'dash' | 'zero' | 'done'
 }) {
-  if (!value) return <span className="text-[var(--ink-empty)]">—</span>
+  if (!value) {
+    if (zero === 'done')
+      return (
+        <span className="text-[var(--done)]" title="Không còn phải làm">
+          ✓
+        </span>
+      )
+    if (zero === 'zero') return <span className="num text-[var(--ink-3)]">0</span>
+    return (
+      <span className="text-[var(--ink-empty)]" title="Chưa có số">
+        —
+      </span>
+    )
+  }
   return (
     <span
       className={cn(
@@ -233,6 +259,116 @@ export function NoticeBar({
       >
         {action.label} →
       </button>
+    </div>
+  )
+}
+
+/**
+ * VẠCH VÒNG ĐỜI — chứng từ đang ở bậc nào.
+ *
+ * Khác `PoStatusStepper` của v3 ở hai chỗ:
+ *  · KHÔNG vẽ tròn + đường nối (chiếm hai hàng chiều cao cho một thông tin
+ *    một dòng). Ở đây là dải liền, đọc như thanh tiến độ;
+ *  · bậc đã qua KHÔNG tô đậm bằng màu hành động — chỉ bậc HIỆN TẠI mới có
+ *    màu. Tô hết bậc đã qua thì cả dải sáng rực và mắt không tìm ra đang ở
+ *    đâu, đúng lỗi của v3 trên đơn 8 bậc.
+ */
+export function StageBar({
+  stages,
+  current,
+}: {
+  stages: string[]
+  /** Chỉ số bậc hiện tại, 0-based. */
+  current: number
+}) {
+  return (
+    <div className="flex items-stretch gap-px overflow-hidden rounded-[var(--radius-sm)] border border-[var(--line)]">
+      {stages.map((s, i) => {
+        const past = i < current
+        const now = i === current
+        return (
+          <span
+            key={s}
+            className={cn(
+              'px-[9px] py-[3px] text-[11px] whitespace-nowrap',
+              now
+                ? 'bg-[var(--act)] font-semibold text-[var(--act-ink)]'
+                : past
+                  ? 'bg-[var(--surface-raised)] text-[var(--ink-2)]'
+                  : 'bg-[var(--surface-card)] text-[var(--ink-3)]',
+            )}
+          >
+            {past && <span className="mr-1 text-[var(--done)]">✓</span>}
+            {s}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Ô NHẬP SỐ trong lưới — gõ được số thập phân.
+ *
+ * BẪY đã dính hai lần ở v3 (commit 2c7e4e8, f6545e9): dùng `type="number"`
+ * với `onChange` ép về Number thì người dùng gõ "1." là mất luôn dấu chấm,
+ * không nhập nổi "1.5". Giữ CHUỖI trong lúc gõ, chỉ ép kiểu khi blur.
+ *
+ * `inputMode="decimal"` để điện thoại/máy tính bảng bật bàn phím số — quản
+ * đốc xưởng dùng tablet.
+ */
+export function NumInput({
+  value,
+  onCommit,
+  align = 'right',
+  ...rest
+}: {
+  value: string
+  /** Gọi khi rời ô, KHÔNG gọi mỗi lần gõ. */
+  onCommit: (v: string) => void
+  align?: 'right' | 'left'
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? value
+  return (
+    <input
+      inputMode="decimal"
+      value={shown}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        if (draft != null) onCommit(draft)
+        setDraft(null)
+      }}
+      className={cn(
+        'num h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)]',
+        'bg-[var(--surface-card)] px-2 text-[var(--fs-num-sm)]',
+        'hover:border-[var(--ink-3)] focus:border-[var(--act)]',
+        align === 'left' && 'text-left',
+      )}
+      {...rest}
+    />
+  )
+}
+
+/**
+ * KHỐI ĐANG TẢI — giữ đúng chỗ của nội dung sắp hiện.
+ *
+ * `rows` bằng số dòng bảng thật sẽ có. Khung xương ít dòng hơn nội dung thì
+ * trang nhảy giật khi dữ liệu về — người dùng đang định bấm sẽ bấm nhầm.
+ */
+export function Loading({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="animate-pulse">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex h-[var(--row-h)] items-center gap-3 border-b border-[var(--hair)] px-[var(--pad-x)]"
+        >
+          <span className="h-2.5 w-[90px] rounded bg-[var(--surface-raised)]" />
+          <span className="h-2.5 flex-1 rounded bg-[var(--surface-raised)]" />
+          <span className="h-2.5 w-[60px] rounded bg-[var(--surface-raised)]" />
+        </div>
+      ))}
     </div>
   )
 }
