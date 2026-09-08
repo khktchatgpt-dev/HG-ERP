@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { PO_STATUSES } from '@/lib/po-status'
 import { buildPoMarks, daysHeld, isStale, poHolder } from './flow-core'
 
 /*
@@ -45,20 +46,45 @@ describe('poHolder — ai đang giữ bóng', () => {
     expect(h.since).toBe('2026-09-05T02:00:00Z')
   })
 
-  it('đã gửi NCC: chưa xác nhận và đã xác nhận nói hai câu khác nhau', () => {
-    const chua = poHolder({ ...NHAP, status: 'ordered', ordered_at: 'x' }, 'u-nga')
-    const roi = poHolder(
-      { ...NHAP, status: 'ordered', ordered_at: 'x', confirmed_at: 'y' },
-      'u-nga',
-    )
-    expect(chua.who).toBe('Nhà cung cấp')
-    expect(chua.what).toContain('xác nhận')
-    expect(roi.what).toContain('chờ giao')
-    expect(roi.what).not.toBe(chua.what)
+  it('đã gửi NCC thì bóng ở nhà cung cấp, đang chờ họ xác nhận', () => {
+    // 'confirmed' là TRẠNG THÁI RIÊNG trong PO_STATUSES, không phải cột
+    // confirmed_at trên đơn 'ordered' — bản test đầu đoán sai chỗ này.
+    const h = poHolder({ ...NHAP, status: 'ordered', ordered_at: 'x' }, 'u-nga')
+    expect(h.who).toBe('Nhà cung cấp')
+    expect(h.what).toContain('xác nhận')
+    expect(h.since).toBe('x')
   })
 
   it('về một phần thì bóng ở Kho', () => {
-    expect(poHolder({ ...NHAP, status: 'partially_received' }, 'u-nga').who).toBe('Kho')
+    // Tên đúng là 'partial'. Bản đầu viết 'partially_received' theo trí nhớ,
+    // rơi vào default và hiện "—" rỗng — TypeScript không kêu vì lúc đó
+    // `status` khai là `string`.
+    expect(poHolder({ ...NHAP, status: 'partial' }, 'u-nga').who).toBe('Kho')
+  })
+
+  it('MỌI trạng thái trong PO_STATUSES đều trả lời được ai giữ', () => {
+    /*
+      Test canh: đây là thứ lẽ ra phải bắt được lỗi 'partially_received'.
+      Duyệt qua chính danh sách của hệ thống chứ không qua danh sách tôi tự
+      nhớ — thêm trạng thái mới mà quên khai ở đây là test đỏ ngay.
+    */
+    for (const st of PO_STATUSES) {
+      const h = poHolder({ ...NHAP, status: st }, 'u-nga')
+      expect(h.what, `trạng thái "${st}" không nói được việc phải làm`).not.toBe('')
+      // Chỉ đơn đã xong / đã huỷ mới được phép không có người giữ.
+      if (st !== 'received' && st !== 'cancelled') {
+        expect(h.who, `trạng thái "${st}" không nói được ai giữ`).not.toBe('—')
+      }
+    }
+  })
+
+  it('ba bước ở phía NCC nói ba câu khác nhau', () => {
+    // 'ordered' / 'confirmed' / 'in_transit' đều là "chờ NCC" nhưng người mua
+    // cần biết đang chờ CÁI GÌ: xác nhận, xếp hàng, hay xe đang chạy.
+    const cau = (['ordered', 'confirmed', 'in_transit'] as const).map(
+      (s) => poHolder({ ...NHAP, status: s }, 'u-nga').what,
+    )
+    expect(new Set(cau).size).toBe(3)
   })
 
   it('không ai giữ đơn đã xong hoặc đã huỷ', () => {
@@ -129,7 +155,14 @@ describe('buildPoMarks — dòng thời gian', () => {
 
   it('mốc theo đúng thứ tự quy trình', () => {
     const keys = buildPoMarks(NHAP).map((m) => m.key)
-    expect(keys).toEqual(['created', 'submitted', 'approved', 'ordered', 'confirmed'])
+    expect(keys).toEqual([
+      'created',
+      'submitted',
+      'approved',
+      'ordered',
+      'confirmed',
+      'in_transit',
+    ])
   })
 
   it('gắn được tên người soạn và người duyệt', () => {

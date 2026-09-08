@@ -1,3 +1,5 @@
+import type { PoStatus } from '@/lib/po-status'
+
 /**
  * LÕI LUỒNG — thuần, không React, test được.
  *
@@ -20,7 +22,19 @@ export type Holder = {
 }
 
 export type PoLike = {
-  status: string
+  /*
+    KIỂU CHẶT, KHÔNG PHẢI `string`.
+
+    Bản đầu khai `status: string` nên TypeScript không kêu gì khi tôi viết
+    'partially_received' — trong khi hệ thống dùng 'partial' — và bỏ sót hẳn
+    'confirmed' + 'in_transit'. Ba trạng thái đó rơi vào `default` và màn
+    hình hiện "—" rỗng thay vì nói ai đang giữ đơn. Lỗi câm, test tự viết
+    cũng không bắt được vì tôi bịa tên theo trí nhớ chứ không đọc
+    `PO_STATUSES`.
+
+    Dùng đúng kiểu của lib thì thiếu nhánh nào là `satisfies` chỉ ngay.
+  */
+  status: PoStatus | (string & {})
   created_at?: string | null
   created_by?: string | null
   assigned_to?: string | null
@@ -65,13 +79,27 @@ export function poHolder(po: PoLike, meId: string | null): Holder {
     case 'ordered':
       return {
         who: 'Nhà cung cấp',
-        what: po.confirmed_at
-          ? 'NCC đã xác nhận — chờ giao hàng'
-          : 'Chờ NCC xác nhận đã nhận đơn',
+        what: 'Chờ NCC xác nhận đã nhận đơn',
         since: po.ordered_at ?? null,
         mine: false,
       }
-    case 'partially_received':
+    case 'confirmed':
+      return {
+        who: 'Nhà cung cấp',
+        what: 'NCC đã nhận đơn — chờ xếp hàng giao',
+        since: po.confirmed_at ?? null,
+        mine: false,
+      }
+    case 'in_transit':
+      return {
+        who: 'Nhà cung cấp',
+        what: 'Hàng đang trên đường — Kho nhận khi xe tới',
+        since: po.updated_at ?? null,
+        mine: false,
+      }
+    // Tên đúng trong `PO_STATUSES` là 'partial', KHÔNG phải
+    // 'partially_received' — viết theo trí nhớ là rơi vào default.
+    case 'partial':
       return {
         who: 'Kho',
         what: 'Còn dòng chưa về — Kho nhận tiếp khi hàng tới',
@@ -160,6 +188,14 @@ export function buildPoMarks(
       at: po.confirmed_at ?? null,
       label: 'NCC xác nhận đơn',
       tone: 'done',
+    },
+    {
+      key: 'in_transit',
+      // Không có cột mốc riêng cho lúc hàng lên đường: khi đơn ĐANG ở
+      // 'in_transit' thì updated_at chính là lúc đó. Suy ra, không bịa cột.
+      at: po.status === 'in_transit' ? (po.updated_at ?? null) : null,
+      label: 'Hàng lên đường',
+      tone: 'act',
     },
     ...(huy
       ? [
