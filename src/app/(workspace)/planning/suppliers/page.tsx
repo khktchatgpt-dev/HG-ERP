@@ -33,9 +33,23 @@ export default async function PlanningSuppliersPage({
 
   // Lịch sử mua gọn: đếm PO + PO gần nhất + tổng chi theo NCC (FR-SUP-06).
   // open = chưa về đủ/chưa huỷ — cảnh báo khi Ngừng giao dịch NCC còn PO dở dang.
+  /*
+    TỔNG CHI TÁCH THEO LOẠI TIỀN (09/09/2026).
+
+    Trước đây cộng thẳng `cur.spend += spend` bất kể `p.currency`. Đo trong
+    DB: 44 đơn VND + 24 đơn USD. Cộng chung rồi dán đuôi "₫" ra một con số
+    KHÔNG TỒN TẠI — nguy hiểm hơn không hiện gì, vì nó nhìn vẫn như số thật
+    và người ta đem đi báo cáo.
+  */
   const poStats = new Map<
     string,
-    { count: number; open: number; last_code: string; last_at: string; spend: number }
+    {
+      count: number
+      open: number
+      last_code: string
+      last_at: string
+      spend: Record<string, number>
+    }
   >()
   for (const p of pos) {
     const open = p.status !== 'received' && p.status !== 'cancelled' ? 1 : 0
@@ -47,12 +61,12 @@ export default async function PlanningSuppliersPage({
         open,
         last_code: p.code,
         last_at: p.created_at,
-        spend,
+        spend: spend ? { [p.currency]: spend } : {},
       })
     } else {
       cur.count++
       cur.open += open
-      cur.spend += spend
+      if (spend) cur.spend[p.currency] = (cur.spend[p.currency] ?? 0) + spend
     }
   }
 
@@ -62,15 +76,26 @@ export default async function PlanningSuppliersPage({
     open_po_count: poStats.get(s.id)?.open ?? 0,
     last_po: poStats.get(s.id)?.last_code ?? null,
     last_po_at: poStats.get(s.id)?.last_at ?? null,
-    total_spend: poStats.get(s.id)?.spend ?? 0,
+    total_spend: poStats.get(s.id)?.spend ?? {},
     groups: groupsBySupplier.get(s.id) ?? [],
   }))
 
   if (v4) return <SuppliersScreenV4 suppliers={rows} canEdit={!!canEdit} />
 
+  /*
+    Màn v3 vẫn nhận `total_spend` là MỘT số. Không sửa nó ở lượt này (bản cũ
+    giữ nguyên là luật của nhánh kit v4), nên dồn về loại tiền LỚN NHẤT thay
+    vì cộng bừa các loại — hiển thị thiếu còn hơn hiển thị một con số không
+    tồn tại.
+  */
+  const rowsV3 = rows.map((r) => ({
+    ...r,
+    total_spend: Math.max(0, ...Object.values(r.total_spend)),
+  }))
+
   return (
     <SuppliersManager
-      suppliers={rows}
+      suppliers={rowsV3}
       materials={materials.map((m) => ({
         id: m.id,
         code: m.code,

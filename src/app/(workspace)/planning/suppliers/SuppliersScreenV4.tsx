@@ -64,7 +64,13 @@ export type SupplierRow = {
   open_po_count: number
   last_po: string | null
   last_po_at: string | null
-  total_spend: number
+  /**
+   * Tổng chi TÁCH THEO LOẠI TIỀN: { VND: 6570693697, USD: 326726 }.
+   *
+   * Không phải một số. DB có 44 đơn VND + 24 đơn USD; cộng chung rồi dán
+   * đuôi "₫" ra con số KHÔNG TỒN TẠI mà nhìn vẫn như số thật.
+   */
+  total_spend: Record<string, number>
   groups: string[]
 }
 
@@ -92,6 +98,42 @@ function daysSince(iso: string | null): number | null {
   if (!iso) return null
   const d = Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
   return d < 0 ? 0 : d
+}
+
+/**
+ * Thang so sánh THÔ để XẾP HẠNG, không bao giờ hiện ra màn hình.
+ *
+ * Muốn xếp "NCC chi nhiều nhất lên đầu" thì phải quy về một trục. Dùng tỉ giá
+ * xấp xỉ 25.000 — đủ để USD không bị xếp dưới một đơn VND lẻ, và vì con số
+ * này KHÔNG hiển thị nên sai vài phần trăm cũng không lừa được ai.
+ */
+const TY_GIA_XAP_XI: Record<string, number> = { VND: 1, USD: 25000 }
+
+function chiLonNhat(spend: Record<string, number>): number {
+  return Object.entries(spend).reduce(
+    (s, [cur, v]) => s + v * (TY_GIA_XAP_XI[cur] ?? 1),
+    0,
+  )
+}
+
+/** Tiền nhiều loại: mỗi loại một dòng, KHÔNG cộng gộp. */
+function TienNhieuLoai({ spend, to }: { spend: Record<string, number>; to?: boolean }) {
+  const ds = Object.entries(spend)
+    .filter(([, v]) => v > 0)
+    .sort((a, b) => b[1] - a[1])
+  if (ds.length === 0) return <Num value="" zero="zero" />
+  return (
+    <span className="inline-flex flex-col items-end">
+      {ds.map(([cur, v]) => (
+        <span key={cur} className="whitespace-nowrap">
+          <span className={to ? 'num text-[15px] font-bold' : 'num font-semibold'}>
+            {showMoney(v)}
+          </span>
+          <span className="ml-1 text-[10.5px] text-[var(--ink-3)]">{cur}</span>
+        </span>
+      ))}
+    </span>
+  )
 }
 
 export function SuppliersScreenV4({
@@ -155,12 +197,19 @@ export function SuppliersScreenV4({
     return [...list].sort(
       (a, b) =>
         b.open_po_count - a.open_po_count ||
-        b.total_spend - a.total_spend ||
+        chiLonNhat(b.total_spend) - chiLonNhat(a.total_spend) ||
         a.name.localeCompare(b.name, 'vi'),
     )
   }, [lanes, lane, q])
 
-  const tongChi = rows.reduce((s, r) => s + r.total_spend, 0)
+  // Tổng theo từng loại tiền, không gộp.
+  const tongChi = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const r of rows)
+      for (const [cur, v] of Object.entries(r.total_spend))
+        m.set(cur, (m.get(cur) ?? 0) + v)
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [rows])
   const donTreo = rows.reduce((s, r) => s + r.open_po_count, 0)
 
   /*
@@ -227,12 +276,13 @@ export function SuppliersScreenV4({
                 <b className="num text-[var(--warn)]">{donTreo}</b> đơn treo
               </>
             )}
-            {tongChi > 0 && (
-              <>
+            {tongChi.map(([cur, v]) => (
+              <span key={cur}>
                 {' · '}
-                <b className="num text-[var(--ink)]">{showMoney(tongChi)}</b> ₫ đã chi
-              </>
-            )}
+                <b className="num text-[var(--ink)]">{showMoney(v)}</b>{' '}
+                <span className="text-[11px]">{cur}</span>
+              </span>
+            ))}
           </span>
         </FilterBar>
 
@@ -329,7 +379,7 @@ export function SuppliersScreenV4({
                           <Num value={showNum(s.po_count)} zero="zero" />
                         </Cell>
                         <Cell num>
-                          <Num value={showMoney(s.total_spend)} strong zero="zero" />
+                          <TienNhieuLoai spend={s.total_spend} />
                         </Cell>
                         <Cell muted>
                           {s.last_po_at ? (
@@ -396,7 +446,7 @@ export function SuppliersScreenV4({
                     <div className="flex justify-between py-[3px] text-[12.5px]">
                       <span className="text-[var(--ink-2)]">Tổng chi</span>
                       <span className="num text-[15px] font-bold text-[var(--act)]">
-                        {showMoney(sel.total_spend) || '0'} ₫
+                        <TienNhieuLoai spend={sel.total_spend} to />
                       </span>
                     </div>
                     {sel.last_po && (

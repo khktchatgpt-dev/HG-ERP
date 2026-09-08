@@ -154,8 +154,20 @@ export function PosScreenV4({
     )
   }, [lanes, lane, q])
 
-  const tong = rows.reduce((s, p) => s + (p.total ?? 0), 0)
-  const motLoaiTien = new Set(rows.map((p) => p.currency)).size === 1
+  /*
+    CỘNG TIỀN THEO TỪNG LOẠI, không cộng chung.
+
+    Cộng 24 đơn USD với 44 đơn VND ra một con số vô nghĩa mà nhìn vẫn như số
+    thật — đúng thứ nguy hiểm hơn cả không hiện gì.
+  */
+  const tongTheoTien = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of rows) {
+      if (!p.total) continue
+      m.set(p.currency, (m.get(p.currency) ?? 0) + p.total)
+    }
+    return [...m.entries()].sort((a, b) => b[1] - a[1])
+  }, [rows])
 
   return (
     <ScreenFrame>
@@ -194,13 +206,13 @@ export function PosScreenV4({
           <div className="flex-1" />
           <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
             <b className="num text-[var(--act)]">{rows.length}</b> đơn
-            {tong > 0 && motLoaiTien && (
-              <>
+            {tongTheoTien.map(([cur, v]) => (
+              <span key={cur}>
                 {' · '}
-                <b className="num text-[var(--ink)]">{showMoney(tong)}</b>{' '}
-                {rows[0]?.currency}
-              </>
-            )}
+                <b className="num text-[var(--ink)]">{showMoney(v)}</b>{' '}
+                <span className="text-[11px]">{cur}</span>
+              </span>
+            ))}
           </span>
         </FilterBar>
 
@@ -267,8 +279,30 @@ export function PosScreenV4({
                             </Tip>
                           )}
                         </Cell>
+                        {/*
+                          ĐƠN VỊ TIỀN PHẢI ĐI KÈM SỐ.
+
+                          Đo 09/09/2026: 44 đơn VND + 24 đơn USD nằm chung
+                          một cột. Không ghi đơn vị thì 16.831 USD (~440
+                          triệu) trông NHỎ HƠN 82.400 VND — người mua đọc
+                          ngược hoàn toàn thứ tự lớn nhỏ.
+
+                          Ký hiệu để nhạt và nhỏ: con số vẫn là nhân vật
+                          chính, đơn vị chỉ cần đủ để mắt phân biệt hai hệ.
+                        */}
                         <Cell num>
-                          <Num value={showMoney(p.total ?? 0)} zero="zero" />
+                          {p.total ? (
+                            <span className="whitespace-nowrap">
+                              <span className="num font-semibold">
+                                {showMoney(p.total)}
+                              </span>
+                              <span className="ml-1 text-[10.5px] text-[var(--ink-3)]">
+                                {p.currency}
+                              </span>
+                            </span>
+                          ) : (
+                            <Num value="" zero="zero" />
+                          )}
                         </Cell>
                         {/*
                           CỘT THAY THẾ "Trạng thái".
