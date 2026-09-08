@@ -159,8 +159,27 @@ export const materialSimilarQuerySchema = z.object({
   group_name: z.string().trim().max(100).optional(),
 })
 
+/*
+ * BẪY ZOD 4: `.partial()` KHÔNG gỡ `.default()`.
+ *
+ * Trường có default vẫn tự hiện ra trong kết quả parse dù client không gửi —
+ * với POST thì đúng, với PATCH thì đó là GHI ĐÈ IM LẶNG. Đo được (08/09/2026):
+ * `materialUpdateSchema.parse({ name: 'Thép vuông 16x16x0.8' })` trả về
+ * `{ name, unit: 'cái', min_stock: 0 }` — hai khoá không ai gõ.
+ *
+ * Hậu quả thật:
+ *  · `min_stock` không nằm trong PURCHASING_EDITABLE_FIELDS nên mọi lượt sửa
+ *    vật tư của Cung ứng đều bị chặn: "Trường thuộc quản lý của Kho… min_stock".
+ *  · Nguy hơn: người có quyền Kho KHÔNG bị chặn — mỗi lượt PATCH thiếu hai ô
+ *    này là `min_stock` về 0 và `unit` về 'cái', không báo gì.
+ *
+ * Nên khai lại hai trường ở dạng optional thuần. Đừng gỡ default ở schema tạo:
+ * ở đó default là đúng ý.
+ */
 export const materialUpdateSchema = materialCreateSchema.partial().extend({
   is_active: z.boolean().optional(),
+  unit: z.string().trim().min(1).max(30).optional(),
+  min_stock: z.coerce.number().min(0).optional(),
 })
 
 export const materialListQuerySchema = z.object({

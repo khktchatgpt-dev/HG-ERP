@@ -81,6 +81,26 @@ describe('materialUpdateSchema', () => {
     const p = materialUpdateSchema.parse({ is_active: false })
     expect(p.is_active).toBe(false)
   })
+
+  /*
+   * BẪY ZOD 4 — `.partial()` không gỡ `.default()`, nên trường có default tự
+   * chui vào payload PATCH dù client không gửi. Hai hậu quả thật đã gặp:
+   * Cung ứng bị chặn vì `min_stock` (không nằm trong PURCHASING_EDITABLE_FIELDS),
+   * và người quyền Kho thì bị GHI ĐÈ IM LẶNG `unit` → 'cái', `min_stock` → 0.
+   * Test này canh đúng chỗ đó; đừng đổi hai trường về `.default()`.
+   */
+  it('KHÔNG tự thêm khoá cho trường không gửi (min_stock, unit)', () => {
+    const p = materialUpdateSchema.parse({ name: 'Thép vuông 16x16x0.8' })
+    expect(Object.keys(p)).toEqual(['name'])
+    expect('min_stock' in p).toBe(false)
+    expect('unit' in p).toBe(false)
+  })
+
+  it('vẫn nhận min_stock / unit khi CÓ gửi', () => {
+    const p = materialUpdateSchema.parse({ min_stock: 12, unit: 'Cây' })
+    expect(p.min_stock).toBe(12)
+    expect(p.unit).toBe('Cây')
+  })
 })
 
 describe('materialListQuerySchema', () => {
