@@ -114,6 +114,17 @@ const money = (n: number) => n.toLocaleString('vi-VN')
 
 /** Sáu bước của TRỤC ĐƠN. Nhận hàng là trục riêng — xem ghi chú ở docStepAt. */
 const DOC_STEPS = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã gửi NCC', 'NCC xác nhận', 'Đang về']
+
+/**
+ * Cắt ngắn cho dòng tóm tắt FastTab.
+ *
+ * Điều khoản thanh toán trên đơn thật là cả một đoạn; dòng tóm tắt cần một
+ * giá trị liếc là thấy. Cắt ở đây (nguồn) chứ không chỉ dựa vào CSS ở kit:
+ * CSS cắt bằng dấu ba chấm nên vẫn kéo cả đoạn vào DOM, còn màn hình hẹp thì
+ * ba chấm rơi ngay sau chữ đầu tiên.
+ */
+const short = (v: string | null | undefined, max = 28) =>
+  !v ? '—' : v.length <= max ? v : v.slice(0, max - 1).trimEnd() + '…'
 const day = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
 const stamp = (s: string) => new Date(s).toLocaleString('vi-VN')
 
@@ -1307,7 +1318,7 @@ export function PoDetailScreen({
         <FastTab
           title="Điều khoản & Hợp đồng"
           summary={[
-            ['Thanh toán', po.terms_payment ?? '—'],
+            ['Thanh toán', short(po.terms_payment)],
             ['Hạn giao', <span key="b" className="num">{day(po.expected_at)}</span>],
           ]}
         >

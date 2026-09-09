@@ -416,6 +416,18 @@
 .k-ft-sum b {
   color: var(--ink);
   font-weight: 600;
+  /* HÀNG RÀO: tóm tắt FastTab phải là GIÁ TRỊ QUÉT ĐƯỢC, không phải câu văn.
+     Đo 09/09/2026 trên đơn thật: điều khoản thanh toán nhả nguyên đoạn "Tạm
+     ứng 50% sau khi đặt hàng, thanh toán phần còn lại khi giao đủ" vào dòng
+     tiêu đề, đẩy nó cao gấp ba và làm hỏng đúng cái mà FastTab sinh ra để
+     làm. Nơi gọi vẫn nên cắt ngắn trước, nhưng chặn ở đây thì không màn nào
+     phá được khuôn. */
+  display: inline-block;
+  max-width: 30ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
 }
 .k-ft-b {
   border-top: 1px solid var(--hair);
