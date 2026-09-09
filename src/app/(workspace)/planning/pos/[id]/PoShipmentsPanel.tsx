@@ -204,7 +204,7 @@ export function PoConfirmDialog({
           </button>
         </label>
 
-        <div className="border-border overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead className="t-label text-muted-foreground bg-muted/50 border-b text-left">
               <tr>
@@ -430,7 +430,9 @@ export function PoShipmentsCard({
   const anyReceived = [...receivedByLine.values()].some((v) => v > 0)
 
   return (
-    <section className="border-border bg-card rounded-xl border">
+    <section>
+      {/* Khối này nằm TRONG FastTab, vốn đã là khung có viền và tiêu đề — nên
+          nó không được là một cái thẻ nữa (thẻ trong thẻ). */}
       <div className="border-border/70 flex flex-wrap items-center gap-2 border-b px-3.5 py-2.5 text-[13px]">
         <Truck className="text-muted-foreground size-4" strokeWidth={1.8} />
         <b>Kế hoạch giao</b>
