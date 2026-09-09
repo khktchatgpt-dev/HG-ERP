@@ -5,38 +5,41 @@ import { useRouter } from 'next/navigation'
 import { PoNotesPanel } from './PoNotesPanel'
 import Link from 'next/link'
 import {
-  AlertTriangle,
-  ArrowLeft,
   Ban,
-  CalendarClock,
   CalendarDays,
   Check,
   CheckCircle2,
-  Copy,
   FileText,
   History,
-  MoreHorizontal,
   Package,
   PackageCheck,
   PackageSearch,
   Paperclip,
   Pencil,
-  Printer,
   ScrollText,
   SendHorizontal,
-  Trash2,
   Truck,
-  UserCog,
 } from 'lucide-react'
+import {
+  Action,
+  ActionGroup,
+  ActionPane,
+  Checks,
+  Crumb,
+  DocHead,
+  HolderBar,
+  StatusTrack,
+  daysHeld,
+  poHolder,
+  type Check as KitCheck,
+} from '@/components/kit'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import { DocumentFiles } from '@/components/DocumentFiles'
-import { Breadcrumbs } from '@/components/erp/Breadcrumbs'
-import { RefChain, type ChainNode } from '@/components/erp/RefChain'
+import { type ChainNode } from '@/components/erp/RefChain'
 import { DocChip } from '@/components/erp/DocChip'
-import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Button } from '@/components/shadcn/button'
@@ -50,20 +53,12 @@ import {
   TableRow,
 } from '@/components/shadcn/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/shadcn/dropdown-menu'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import { PO_STATUS_LABEL, PO_STATUS_TONE, type PoStatus } from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
-import { PoStatusStepper } from '../PoStatusStepper'
 import {
   PoDialogs,
   ReasonDialog,
@@ -111,6 +106,9 @@ export type PoDetailPo = {
 }
 
 const money = (n: number) => n.toLocaleString('vi-VN')
+
+/** Sáu bước của TRỤC ĐƠN. Nhận hàng là trục riêng — xem ghi chú ở docStepAt. */
+const DOC_STEPS = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã gửi NCC', 'NCC xác nhận', 'Đang về']
 const day = (s: string | null) => (s ? new Date(s).toLocaleDateString('vi-VN') : '—')
 const stamp = (s: string) => new Date(s).toLocaleString('vi-VN')
 
@@ -433,357 +431,223 @@ export function PoDetailScreen({
     statusLines.every((l) => l.material_id == null || l.qty_open <= 0) &&
     ['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)
 
-  const stepDates: Partial<Record<PoStatus, string | null>> = {
-    draft: po.created_at,
-    pending_approval: history.find((h) => h.action === 'submitted')?.created_at ?? null,
-    approved: po.approved_at,
-    ordered: po.ordered_at,
-    confirmed: po.confirmed_at,
-    in_transit:
-      shipments.find((s) => s.status === 'arrived' || s.status === 'received')
-        ?.created_at ?? null,
-    partial: statusLines.some((l) => (l.qty_received ?? 0) > 0)
-      ? (warehouseDocs[0]?.at ?? null)
-      : null,
-    received: po.status === 'received' ? (warehouseDocs[0]?.at ?? null) : null,
+  /*
+    BƯỚC TRÊN HAI TRỤC TRẠNG THÁI.
+
+    Trục "đơn" dừng ở 'Đang về' — 'partial' và 'received' KHÔNG phải bước của
+    trục này mà của trục nhận hàng. Nhồi cả bảy vào một thanh là đúng cái lỗi
+    mà Dynamics tách ba trục để tránh: đơn về một phần trong khi vẫn đang chờ
+    NCC xác nhận lại giá thì một thanh không vẽ nổi.
+
+    'cancelled' cố ý trả 0: đơn huỷ không đứng ở bước nào cả, và tô sáng một
+    bước bất kỳ sẽ nói dối rằng nó còn đang chạy.
+  */
+  const docStepAt =
+    ({
+      draft: 0,
+      pending_approval: 1,
+      approved: 2,
+      ordered: 3,
+      confirmed: 4,
+      in_transit: 5,
+      partial: 5,
+      received: 5,
+      cancelled: 0,
+    } as Record<string, number>)[po.status] ?? 0
+  const recvStepAt = po.status === 'received' ? 2 : po.status === 'partial' ? 1 : 0
+
+  // AI ĐANG GIỮ — dùng chung lõi với màn danh sách và màn "Chờ tôi xử lý".
+  // Tính riêng ở đây thì ba chỗ sẽ lệch nhau, và đó đúng là thứ làm người dùng
+  // hết tin hệ thống.
+  const holder = poHolder(po, me.id)
+  const heldDays = daysHeld(holder.since)
+
+  /*
+    BẢNG KIỂM TRƯỚC KHI GỬI DUYỆT.
+
+    Chỉ dựng khi đơn còn ở tay Cung ứng — đơn đã duyệt rồi thì mấy điều này
+    không còn là việc của người đang xem, và một dải đỏ vô nghĩa trên đầu màn
+    làm người ta quen bỏ qua cảnh báo.
+  */
+  const checks: KitCheck[] = []
+  if (['draft', 'pending_approval'].includes(po.status)) {
+    const noPrice = lines.filter((l) => l.unit_price == null || l.unit_price <= 0)
+    if (noPrice.length > 0) {
+      checks.push({
+        level: 'stop',
+        what:
+          noPrice.length === 1
+            ? `Dòng "${noPrice[0].material_name ?? ''}" chưa có đơn giá`
+            : `${noPrice.length} dòng chưa có đơn giá`,
+        fix: 'Nhập giá, hoặc tách dòng đó sang đơn khác',
+      })
+    }
+    if (lines.length === 0) {
+      checks.push({ level: 'stop', what: 'Đơn chưa có dòng hàng nào', fix: 'Thêm ít nhất một dòng' })
+    }
+    if (!po.production_order_id && !po.lsx_code) {
+      checks.push({
+        level: 'warn',
+        what: 'Đơn chưa gắn với lệnh sản xuất nào',
+        fix: 'Gắn lệnh để Giám đốc biết chi tiền cho việc gì',
+      })
+    }
+    if (!po.expected_at) {
+      checks.push({ level: 'warn', what: 'Chưa có hạn giao', fix: 'Đặt hạn để hệ thống canh trễ' })
+    } else if (late === 'overdue') {
+      checks.push({
+        level: 'warn',
+        what: `Hạn giao ${day(po.expected_at)} đã qua`,
+        fix: 'Cập nhật hạn hoặc ghi lý do trễ',
+      })
+    }
   }
+  const blockers = checks.filter((c) => c.level === 'stop')
 
   return (
     <div className="theme-v3 text-foreground flex flex-col gap-5 pb-16">
       <TopProgressBar active={act.busy} />
 
-      {/* ── Breadcrumbs & Back Navigation ──────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Breadcrumbs
-          items={[
-            { label: 'Cung ứng', href: '/planning' },
-            { label: 'Đơn đặt vật tư', href: '/planning/pos' },
-            { label: po.code },
-          ]}
-        />
-        {/* Ẩn ở màn hẹp: nó trỏ đúng chỗ mà breadcrumb "Đơn đặt vật tư" ngay
-            bên trái đã trỏ, mà trên điện thoại nó lại xuống hàng riêng — tốn
-            một dòng cho một lối đi đã có. */}
-        <Link
-          href="/planning/pos"
-          className="text-muted-foreground hover:text-foreground hidden items-center gap-1.5 text-xs font-medium transition-colors sm:inline-flex"
-        >
-          <ArrowLeft className="size-3.5" />
-          Về danh sách đơn đặt
-        </Link>
-      </div>
-
       {/*
-        ── MỘT THẺ ĐẦU TRANG (04/09/2026) ───────────────────────────────────
-        Trước đây ba thẻ rời: RefChain / tiêu đề+hành động / stepper. Ba viền,
-        ba lần đổ bóng, hai khoảng cách 16px — 457px trước khi tới nội dung, và
-        chúng nói trùng nhau: đo trên đơn thật thì `PO-2026-0065` hiện 3 lần,
-        `Nháp` 3 lần, mã lệnh 3 lần.
+        ── VỎ CHỨNG TỪ THEO NGÔN NGỮ ERP (đợt 1, 09/09/2026) ───────────────
 
-        Gộp lại vì cả ba trả lời CÙNG một câu: "đơn này là đơn nào, thuộc về
-        đâu, đang ở bước nào". Đó là một khối nhận diện, không phải ba.
+        Thay khối nhận diện + dải 4 thẻ KPI + stepper của bản cũ. Mẫu tham
+        chiếu và lý do từng đặc trưng nằm ở /design-lab/mau-erp và trong
+        src/components/kit/Erp.tsx — không chép lại ở đây.
+
+        BỐN THỨ BẢN CŨ KHÔNG CÓ, và vì sao cần:
+
+        · ACTION PANE bày sẵn nút, chia nhóm có nhãn. Bản cũ giấu 6 thao tác
+          trong menu "⋯" — người mở màn này vài chục lần mỗi ngày phải mở menu
+          mới thấy "Đổi hẹn giao", trong khi ERP thật cho họ bấm bằng trí nhớ
+          vị trí.
+
+        · HAI TRỤC TRẠNG THÁI tách biệt. Một thanh tuyến tính không nói được
+          "hàng về một phần mà vẫn đang chờ sửa giá" — Dynamics tách ba trục
+          đúng vì lý do đó.
+
+        · DẢI "AI ĐANG GIỮ" + số ngày đã nằm ở bước hiện tại. Đây là thứ đắt
+          nhất: đo 09/09/2026 có 65 đơn nằm nháp trung bình 6,5 ngày và không
+          màn nào nói ra. Lõi tính dùng chung `poHolder` với màn danh sách để
+          hai chỗ không nói hai chuyện.
+
+        · BẢNG KIỂM TRƯỚC KHI GỬI DUYỆT. Bản cũ cho bấm rồi mới báo lỗi; ERP
+          nói trước, từ lúc mở màn, để người soạn đi xin cho đủ.
       */}
-      <div className="bg-card flex flex-col gap-3 rounded-xl border p-4 shadow-xs">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="font-mono text-2xl font-bold tracking-tight">{po.code}</h1>
-              <button
-                type="button"
-                onClick={copyCode}
-                title="Sao chép mã đơn"
-                className="text-muted-foreground hover:text-foreground hover:bg-muted inline-flex size-7 items-center justify-center rounded-md transition-colors"
-              >
-                {copied ? (
-                  <Check className="size-4 text-emerald-600" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
-              </button>
+      <Crumb path={['Cung ứng', 'Đơn đặt vật tư', po.code]} />
 
-              <Badge tone={PO_STATUS_TONE[po.status]}>{PO_STATUS_LABEL[po.status]}</Badge>
+      <ActionPane>
+        <ActionGroup label="Duy trì">
+          {canEdit && po.status === 'draft' && (
+            <Action strong onClick={() => router.push(`/planning/pos/${po.id}/edit`)}>
+              Sửa đơn
+            </Action>
+          )}
+          {isSupply && (
+            <Action
+              onClick={() => router.push(`/planning/pos/${po.id}/edit?duplicate=1`)}
+            >
+              {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
+            </Action>
+          )}
+          {canEdit && po.status === 'draft' && (
+            <Action onClick={() => void removeDraft()}>Xoá nháp</Action>
+          )}
+        </ActionGroup>
 
-              <Badge tone="gray" className="text-xs font-normal">
-                Mẫu {poTemplateMeta(po.template as PoTemplate).label.toLowerCase()}
-              </Badge>
+        <ActionGroup label="Luồng phê duyệt">
+          {primary && (
+            <Action
+              primary
+              onClick={primary.onClick}
+              disabled={act.busy || blockers.length > 0}
+              title={
+                blockers.length > 0
+                  ? `Còn ${blockers.length} lỗi chặn — xem bảng kiểm phía trên`
+                  : undefined
+              }
+            >
+              {primary.label}
+            </Action>
+          )}
+          {canEdit && canReschedule(po.status).ok && (
+            <Action
+              onClick={() =>
+                setRescheduling({
+                  po,
+                  date: po.expected_at?.slice(0, 10) ?? '',
+                  reason: '',
+                })
+              }
+            >
+              Đổi hẹn giao
+            </Action>
+          )}
+          {canReassign && !['received', 'cancelled'].includes(po.status) && (
+            <Action onClick={() => setReassigning({ po, toId: '' })}>
+              Bàn giao phụ trách
+            </Action>
+          )}
+          {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
+            <Action onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}>
+              Huỷ đơn
+            </Action>
+          )}
+        </ActionGroup>
 
-              {late === 'overdue' && (
-                <Badge tone="red" className="flex items-center gap-1 font-semibold">
-                  <AlertTriangle className="size-3" />
-                  Quá hạn giao
-                </Badge>
-              )}
-            </div>
+        <ActionGroup label="In &amp; xuất">
+          <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
+            In đơn đặt hàng
+          </Action>
+        </ActionGroup>
 
-            {/*
-              DẤU PHÂN CÁCH GẮN VÀO MỤC, KHÔNG ĐỨNG RIÊNG (04/09/2026).
-
-              Bản cũ chèn `<span>·</span>` rời giữa các mục. Hàng này chắc chắn
-              xuống dòng trên điện thoại, và khi đó dấu chấm — vốn là một phần
-              tử độc lập — trôi ra cuối dòng trên hoặc đầu dòng dưới, để lại
-              "· Ngày lập: 3/9/2026 ·" trông như câu bị cụt. Nay dấu là
-              `::before` của chính mục đứng sau nên không tách khỏi mục được
-              nữa; màn hẹp thì xếp dọc và bỏ dấu, vì mỗi mục đã một dòng riêng.
-            */}
-            <div className="text-muted-foreground sm:[&>span+span]:before:text-muted-foreground/60 flex flex-col gap-y-0.5 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:[&>span+span]:before:mr-3 sm:[&>span+span]:before:content-['·']">
-              <span>
-                Nhà cung cấp:{' '}
-                <Link
-                  href={`/planning/suppliers/${po.supplier_id}`}
-                  className="text-foreground font-semibold hover:underline"
-                >
-                  {po.supplier_name}
-                </Link>
-              </span>
-              <span>Ngày lập: {day(po.created_at)}</span>
-              {po.contract_no && (
-                <span>
-                  Hợp đồng: <b className="text-foreground font-mono">{po.contract_no}</b>
-                </span>
-              )}
-              {po.assignee_name && <span>Phụ trách: {po.assignee_name}</span>}
-            </div>
-          </div>
-
-          {/* Action buttons toolbar */}
-          <div className="flex flex-wrap items-center gap-2">
-            {canAcceptByHand && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void act.advance(po, 'received')}
-              >
-                <PackageCheck className="size-4" /> Đã nhận đủ
-              </Button>
-            )}
-
-            {canEdit && po.status === 'pending_approval' && (
-              <Button variant="outline" size="sm" onClick={() => void act.withdrawPo(po)}>
-                Rút về nháp
-              </Button>
-            )}
-
-            {canApprove && po.status === 'pending_approval' && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setReasoning({ po, kind: 'reject', reason: '' })}
-                className="border-destructive/40 text-destructive hover:bg-destructive/10"
-              >
-                Từ chối
-              </Button>
-            )}
-
-            <Button variant="outline" size="sm" asChild>
-              <a href={`/print/supply/${po.id}`} target="_blank" rel="noopener">
-                <Printer className="size-4" /> In phiếu
-              </a>
-            </Button>
-
-            {canEdit && po.status === 'draft' && (
-              <Button variant="outline" size="sm" asChild>
-                <Link href={`/planning/pos/${po.id}/edit`}>
-                  <Pencil className="size-4" /> Sửa đơn
-                </Link>
-              </Button>
-            )}
-
-            {primary && (
-              <Button
-                size="sm"
-                onClick={primary.onClick}
-                disabled={act.busy}
-                className={
-                  primary.isDoneTone
-                    ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                    : ''
-                }
-              >
-                {act.busy ? <Spinner size={14} /> : <primary.icon className="size-4" />}
-                {primary.label}
-              </Button>
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" aria-label="Thao tác khác">
-                  <MoreHorizontal className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem asChild>
-                  <a href={`/print/supply/${po.id}`} target="_blank" rel="noopener">
-                    <Printer className="size-4" /> In đơn đặt hàng
-                  </a>
-                </DropdownMenuItem>
-
-                {canEdit && po.status === 'draft' && (
-                  <DropdownMenuItem asChild>
-                    <Link href={`/planning/pos/${po.id}/edit`}>
-                      <Pencil className="size-4" /> Sửa đơn
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-
-                {canEdit && canReschedule(po.status).ok && (
-                  <DropdownMenuItem
-                    onSelect={() =>
-                      setRescheduling({
-                        po,
-                        date: po.expected_at?.slice(0, 10) ?? '',
-                        reason: '',
-                      })
-                    }
-                  >
-                    <CalendarClock className="size-4" /> Đổi hẹn giao
-                  </DropdownMenuItem>
-                )}
-
-                {canReassign && !['received', 'cancelled'].includes(po.status) && (
-                  <DropdownMenuItem onSelect={() => setReassigning({ po, toId: '' })}>
-                    <UserCog className="size-4" /> Bàn giao phụ trách
-                  </DropdownMenuItem>
-                )}
-
-                {isSupply && (
-                  <DropdownMenuItem asChild>
-                    <Link href={`/planning/pos/${po.id}/edit?duplicate=1`}>
-                      <Copy className="size-4" />
-                      {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-
-                {canEdit && po.status === 'draft' && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => void removeDraft()}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="size-4" /> Xoá nháp
-                    </DropdownMenuItem>
-                  </>
-                )}
-
-                {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Ban className="size-4" /> Huỷ đơn
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {!canEdit && !canApprove && (
-          <div className="bg-muted/60 text-muted-foreground rounded-md px-3 py-2 text-xs">
-            Bạn đang xem đơn của nhân sự khác — chế độ chỉ đọc.
-          </div>
+        {chain.filter((n) => !n.current && n.href).length > 0 && (
+          <ActionGroup label="Chứng từ liên quan">
+            {chain
+              .filter((n) => !n.current && n.href)
+              .map((n) => (
+                <Action key={n.href} onClick={() => router.push(n.href!)}>
+                  {n.label}
+                </Action>
+              ))}
+          </ActionGroup>
         )}
+      </ActionPane>
 
-        {/*
-          CHUỖI CHỨNG TỪ — nay nằm TRONG thẻ, ngay dưới tiêu đề, và BỎ mắt cuối
-          (chính đơn đang xem). Mắt đó lặp lại cái mã đang in to ngay phía trên
-          nó; giữ lại chỉ để đánh dấu "bạn đang ở đây" thì thừa, vì cả thẻ này
-          đã là "đây" rồi.
-        */}
-        {chain.length > 1 && (
-          <div className="border-t pt-3">
-            <RefChain nodes={chain.filter((n) => !n.current)} size="md" />
-          </div>
-        )}
+      <DocHead
+        kind="Đơn đặt vật tư"
+        code={po.code}
+        sub={
+          <>
+            {po.supplier_name ?? 'Chưa chọn nhà cung cấp'}
+            {po.assignee_name ? ` · phụ trách ${po.assignee_name}` : ''}
+            {po.created_at ? ` · lập ${day(po.created_at)}` : ''}
+          </>
+        }
+      >
+        <StatusTrack label="Trạng thái đơn" steps={DOC_STEPS} at={docStepAt} />
+        <StatusTrack
+          label="Nhận hàng"
+          steps={['Chưa nhận', 'Một phần', 'Đủ']}
+          at={recvStepAt}
+        />
+      </DocHead>
 
-        {/* Tiến trình vòng đời — cùng thẻ vì nó cũng đang tả CHÍNH đơn này. */}
-        <div className="w-full overflow-x-auto border-t pt-3">
-          <PoStatusStepper status={po.status} dates={stepDates} />
-        </div>
-      </div>
+      <HolderBar
+        mine={holder.mine}
+        who={holder.who}
+        what={holder.what}
+        age={heldDays == null ? undefined : `${heldDays} ngày`}
+      />
 
-      {/* ── 4 ERP Kit StatTiles ─────────────────────────────────────────── */}
-      <StatTiles>
-        {/*
-          Ô "Trạng thái" từng đứng đây, nay bỏ (04/09/2026): nó in đúng chữ mà
-          Badge cạnh tiêu đề và stepper ngay trên đã nói — ba chỗ cho một giá
-          trị. Tệ hơn, nó là CHỮ nằm trong lưới bốn thẻ SỐ: mắt quét hàng thẻ
-          tìm con số thì vấp phải một từ.
+      {!canEdit && !canApprove && (
+        <HolderBar
+          who="Chế độ chỉ đọc"
+          what="Bạn đang xem đơn của nhân sự khác"
+        />
+      )}
 
-          Thay bằng đợt giao — thứ chưa chỗ nào trên đầu trang nói, mà lại là
-          câu hỏi kế tiếp ngay sau "hạn giao khi nào".
-        */}
-        <StatTile
-          label="Đợt giao"
-          value={
-            liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'
-          }
-          tone={
-            liveShipments.length === 0
-              ? 'default'
-              : shipmentsDone >= liveShipments.length
-                ? 'done'
-                : 'warn'
-          }
-          hint={
-            liveShipments.length === 0
-              ? 'chưa chia đợt — giao trọn gói'
-              : shipmentsDone >= liveShipments.length
-                ? 'đã nhận đủ mọi đợt'
-                : `còn ${liveShipments.length - shipmentsDone} đợt chưa về`
-          }
-          icon={Truck}
-        />
-        <StatTile
-          label="Hạn giao hàng"
-          value={po.expected_at ? day(po.expected_at) : 'Chưa hẹn'}
-          tone={late === 'overdue' ? 'stop' : 'default'}
-          hint={
-            late === 'overdue'
-              ? `Quá hạn ${dueDays !== null ? -dueDays : ''} ngày`
-              : po.confirmed_at
-                ? `NCC xác nhận: ${day(po.confirmed_at)}`
-                : isMissingEta(po)
-                  ? 'Chưa cam kết ngày'
-                  : dueDays !== null && dueDays >= 0
-                    ? `Còn ${dueDays} ngày`
-                    : undefined
-          }
-          icon={CalendarDays}
-        />
-        <StatTile
-          label="Vật tư & Nhập kho"
-          value={
-            showReceived
-              ? `${money(totalReceivedStock)} / ${money(totalOrderedStock)}`
-              : `${lines.length} mặt hàng`
-          }
-          tone={
-            showReceived && pctReceived >= 100
-              ? 'done'
-              : showReceived && pctReceived > 0
-                ? 'warn'
-                : 'default'
-          }
-          hint={
-            showReceived
-              ? `Đã nhập ${pctReceived}% (${openStockLines.length > 0 ? `${openStockLines.length} dòng chờ` : 'đủ hàng'})`
-              : `Tổng ${money(lines.reduce((s, l) => s + l.qty_ordered, 0))} đơn vị`
-          }
-          icon={Package}
-        />
-        <StatTile
-          label="Tổng thanh toán"
-          value={cash(m.grandTotal)}
-          tone="primary"
-          hint={`Tiền tệ: ${po.currency}${m.vatAmount > 0 ? ` · VAT: ${cash(m.vatAmount)}` : ''}`}
-          icon={Truck}
-        />
-      </StatTiles>
+      <Checks title="Chưa gửi duyệt được" items={checks} />
 
       {/* ── Tabs nội dung chính ─────────────────────────────────────────── */}
       <Tabs defaultValue="overview" className="flex flex-col gap-4">
