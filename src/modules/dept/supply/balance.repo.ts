@@ -98,3 +98,35 @@ function toRow(d: Record<string, unknown>): BalanceRow {
     lsx_codes: (d.lsx_codes as string[] | null) ?? [],
   }
 }
+
+/**
+ * VỊ TRÍ CỦA MỘT ĐƠN TRONG DANH SÁCH — cho điều hướng bản ghi ‹14 / 68›.
+ *
+ * Thứ web hầu như không có, nhưng người ERP dùng liên tục: mở một đơn rồi bấm
+ * ‹ › duyệt hết cả tập mà không quay ra danh sách lần nào. Không có nó thì
+ * duyệt 68 đơn là 68 lần vào–ra, và mỗi lần ra là mất chỗ đang đứng.
+ *
+ * Đếm bằng truy vấn `head` (không kéo dòng nào về) thay vì nạp cả danh sách
+ * rồi tìm chỉ số: danh sách đơn có trần 1.000 dòng, mà vị trí thì chỉ cần hai
+ * con số.
+ */
+export async function poPosition(
+  poId: string,
+): Promise<{ index: number; total: number } | null> {
+  const cur = await db()
+    .from('supply_purchase_orders')
+    .select('created_at')
+    .eq('id', poId)
+    .single()
+  if (cur.error || !cur.data?.created_at) return null
+
+  const [{ count: total }, { count: after }] = await Promise.all([
+    db().from('supply_purchase_orders').select('id', { count: 'exact', head: true }),
+    // Danh sách xếp MỚI NHẤT TRƯỚC, nên số đơn mới hơn đơn này = số đứng trước.
+    db()
+      .from('supply_purchase_orders')
+      .select('id', { count: 'exact', head: true })
+      .gt('created_at', cur.data.created_at),
+  ])
+  return { index: (after ?? 0) + 1, total: total ?? 0 }
+}

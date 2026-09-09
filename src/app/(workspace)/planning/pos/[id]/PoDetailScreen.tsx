@@ -149,6 +149,7 @@ export function PoDetailScreen({
   po,
   lines,
   stock,
+  position,
   statusLines,
   shipmentReceipts,
   receiptBatches,
@@ -167,6 +168,8 @@ export function PoDetailScreen({
   lines: PoLine[]
   /** Tồn kho hiện tại theo material_id — xem ghi chú ở page.tsx. */
   stock: Record<string, number>
+  /** Vị trí đơn trong danh sách, cho điều hướng ‹n / tổng›. */
+  position: { index: number; total: number } | null
   statusLines: StatusLine[]
   shipmentReceipts: Record<string, Record<string, number>>
   /** Đợt về theo phiếu nhập — ma trận dòng × đợt (B3). */
@@ -527,8 +530,25 @@ export function PoDetailScreen({
   }
   const blockers = checks.filter((c) => c.level === 'stop')
 
+  /*
+    TỜ CHỨNG TỪ LIỀN MẠCH, TRÀN SÁT MÉP.
+
+    Khác biệt CẤU TRÚC giữa màn này và mẫu ở /design-lab/mau-erp — và là thứ
+    làm nó vẫn "trông như thiết kế cũ" dù từng khối đã đúng:
+
+    · `gap-5` đẩy mỗi khối cách nhau 20px trên nền xám, mắt đọc thành BẢY CÁI
+      THẺ xếp chồng — đúng ngôn ngữ web. ERP là MỘT tờ chứng từ: các phần ngăn
+      nhau bằng vạch kẻ của chính chúng (mỗi khối đã có border-bottom sẵn),
+      không bằng khoảng trống.
+    · `-m-6` khử đúng 24px padding của <main> để tờ chứng từ tràn sát mép như
+      mẫu. Chứng từ ERP dùng hết bề ngang; bảng 12 cột không có chỗ cho hai
+      dải lề 24px.
+
+    BẪY đã dính hai lần trong phiên: chú thích JSX đặt TRƯỚC phần tử gốc bên
+    trong `return (…)` làm hai con — phải viết bằng chú thích JS ở đây.
+  */
   return (
-    <div className="theme-v3 kit text-foreground flex flex-col gap-5 pb-16">
+      <div className="theme-v3 kit text-foreground -m-6 flex flex-col">
       <TopProgressBar active={act.busy} />
 
       {/*
@@ -557,7 +577,10 @@ export function PoDetailScreen({
         · BẢNG KIỂM TRƯỚC KHI GỬI DUYỆT. Bản cũ cho bấm rồi mới báo lỗi; ERP
           nói trước, từ lúc mở màn, để người soạn đi xin cho đủ.
       */}
-      <Crumb path={['Cung ứng', 'Đơn đặt vật tư', po.code]} />
+      <Crumb
+        path={['Cung ứng', 'Đơn đặt vật tư', po.code]}
+        position={position ? [position.index, position.total] : undefined}
+      />
 
       <ActionPane>
         <ActionGroup label="Duy trì">
