@@ -5589,6 +5589,37 @@ export type Database = {
       }
     }
     Views: {
+      v_supply_balance: {
+        Row: {
+          lsx_codes: string[] | null
+          lsx_count: number | null
+          material_code: string | null
+          material_id: string | null
+          material_name: string | null
+          need_by: string | null
+          qty_drafted: number | null
+          qty_incoming: number | null
+          qty_needed: number | null
+          qty_on_hand: number | null
+          qty_short: number | null
+          unit: string | null
+        }
+        Relationships: []
+      }
+      v_supply_demand: {
+        Row: {
+          lsx_code: string | null
+          lsx_status: string | null
+          material_code: string | null
+          material_id: string | null
+          material_name: string | null
+          need_by: string | null
+          production_order_id: string | null
+          qty_needed: number | null
+          unit: string | null
+        }
+        Relationships: []
+      }
       supply_po_line_status: {
         Row: {
           closed_short_at: string | null
