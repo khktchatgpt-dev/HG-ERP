@@ -26,8 +26,14 @@ import {
   ActionPane,
   Checks,
   Crumb,
+  DocBody,
   DocHead,
+  FactBox,
+  FactKv,
+  FactSection,
+  FastTab,
   HolderBar,
+  StatusBar,
   StatusTrack,
   daysHeld,
   poHolder,
@@ -52,7 +58,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn/tabs'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
@@ -469,6 +474,9 @@ export function PoDetailScreen({
     không còn là việc của người đang xem, và một dải đỏ vô nghĩa trên đầu màn
     làm người ta quen bỏ qua cảnh báo.
   */
+  // Số dòng chưa có giá — hiện trên dòng tiêu đề FastTab để gấp rồi vẫn thấy.
+  const noPriceCount = lines.filter((l) => l.unit_price == null || l.unit_price <= 0).length
+
   const checks: KitCheck[] = []
   if (['draft', 'pending_approval'].includes(po.status)) {
     const noPrice = lines.filter((l) => l.unit_price == null || l.unit_price <= 0)
@@ -505,7 +513,7 @@ export function PoDetailScreen({
   const blockers = checks.filter((c) => c.level === 'stop')
 
   return (
-    <div className="theme-v3 text-foreground flex flex-col gap-5 pb-16">
+    <div className="theme-v3 kit text-foreground flex flex-col gap-5 pb-16">
       <TopProgressBar active={act.busy} />
 
       {/*
@@ -650,43 +658,78 @@ export function PoDetailScreen({
       <Checks title="Chưa gửi duyệt được" items={checks} />
 
       {/* ── Tabs nội dung chính ─────────────────────────────────────────── */}
-      <Tabs defaultValue="overview" className="flex flex-col gap-4">
-        <TabsList className="bg-muted/60 h-auto flex-wrap p-1">
-          <TabsTrigger value="overview" className="gap-2">
-            <Package className="size-4" />
-            Tổng quan & Mặt hàng
-            <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
-              {lines.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="shipments" className="gap-2">
-            <Truck className="size-4" />
-            Kế hoạch giao & Đợt hàng
-            {shipments.length > 0 && (
-              <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
-                {shipments.length}
-              </Badge>
+      {/*
+        THÂN CHỨNG TỪ — FastTab bên trái, FactBox bên phải.
+
+        Bỏ Tabs vì tab PHẲNG chỉ cho xem MỘT khối một lúc: muốn biết đơn có mấy
+        đợt giao thì phải rời khối mặt hàng, quay lại là mất chỗ đang đọc.
+        FastTab giữ số liệu quan trọng nhất ngay TRÊN DÒNG TIÊU ĐỀ kể cả khi
+        khối đang gấp — đọc được cả năm khối cùng lúc mà không khối nào phải mở.
+
+        FactBox là DỮ KIỆN LIÊN QUAN, không phải chỗ điều hướng.
+      */}
+      <DocBody
+        aside={
+          <FactBox>
+            <FactSection title="Nhà cung cấp">
+              <div className="k-strong">{po.supplier_name ?? 'Chưa chọn'}</div>
+              <FactKv
+                rows={[
+                  ['Phụ trách', po.assignee_name ?? '—'],
+                  ['Hạn giao', day(po.expected_at)],
+                  ['Điều khoản TT', po.terms_payment ?? '—'],
+                ]}
+              />
+            </FactSection>
+
+            <FactSection title="Số liệu đơn">
+              <FactKv
+                rows={[
+                  ['Số dòng', <span key="l" className="num">{lines.length}</span>],
+                  ['Đã đặt', <span key="o" className="num">{money(totalOrderedStock)}</span>],
+                  ['Đã về', <span key="r" className="num">{money(totalReceivedStock)}</span>],
+                  [
+                    'Đợt giao',
+                    <span key="s" className="num">
+                      {liveShipments.length > 0
+                        ? `${shipmentsDone}/${liveShipments.length}`
+                        : '—'}
+                    </span>,
+                  ],
+                ]}
+              />
+            </FactSection>
+
+            {chain.filter((n) => !n.current).length > 0 && (
+              <FactSection title="Chứng từ liên quan">
+                <FactKv
+                  rows={chain
+                    .filter((n) => !n.current)
+                    .map((n) => [
+                      <span key={n.label} className="num">
+                        {n.label}
+                      </span>,
+                      '',
+                    ])}
+                />
+              </FactSection>
             )}
-          </TabsTrigger>
-          <TabsTrigger value="terms" className="gap-2">
-            <ScrollText className="size-4" />
-            Điều khoản & Hợp đồng
-          </TabsTrigger>
-          <TabsTrigger value="timeline" className="gap-2">
-            <History className="size-4" />
-            Dòng thời gian
-            <Badge tone="gray" className="px-1.5 py-0 text-[10px]">
-              {marks.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="docs" className="gap-2">
-            <Paperclip className="size-4" />
-            Tài liệu đính kèm
-          </TabsTrigger>
-        </TabsList>
+          </FactBox>
+        }
+      >
 
         {/* ── TAB 1: TỔNG QUAN & MẶT HÀNG ───────────────────────────────── */}
-        <TabsContent value="overview" className="flex flex-col gap-5">
+        <FastTab
+          title="Tổng quan & Mặt hàng"
+          defaultOpen
+          summary={[
+            ['Số dòng', <span key="a" className="num">{lines.length}</span>],
+            ...(noPriceCount > 0
+              ? [['Chưa có giá', <span key="b" className="num k-t-warn">{noPriceCount}</span>] as [string, React.ReactNode]]
+              : []),
+          ]}
+        >
+          <div className="flex flex-col gap-5">
           {/* Khối thông tin đối tác & logistics */}
           <Card>
             <CardHeader className="bg-muted/20 border-b py-3">
@@ -1083,10 +1126,23 @@ export function PoDetailScreen({
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
+          </div>
+        </FastTab>
 
         {/* ── TAB 2: KẾ HOẠCH GIAO & ĐỢT HÀNG ────────────────────────────── */}
-        <TabsContent value="shipments" className="flex flex-col gap-5">
+        <FastTab
+          title="Kế hoạch giao & Đợt hàng"
+          summary={[
+            ['Số đợt', <span key="a" className="num">{liveShipments.length}</span>],
+            [
+              'Đã nhận',
+              <span key="b" className="num">
+                {liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'}
+              </span>,
+            ],
+          ]}
+        >
+          <div className="flex flex-col gap-5">
           {po.status !== 'cancelled' ? (
             <PoShipmentsCard
               shipments={shipments}
@@ -1213,10 +1269,18 @@ export function PoDetailScreen({
               </CardContent>
             </Card>
           )}
-        </TabsContent>
+          </div>
+        </FastTab>
 
         {/* ── TAB 3: ĐIỀU KHOẢN & HỢP ĐỒNG ─────────────────────────────────── */}
-        <TabsContent value="terms" className="flex flex-col gap-5">
+        <FastTab
+          title="Điều khoản & Hợp đồng"
+          summary={[
+            ['Thanh toán', po.terms_payment ?? '—'],
+            ['Hạn giao', <span key="b" className="num">{day(po.expected_at)}</span>],
+          ]}
+        >
+          <div className="flex flex-col gap-5">
           <Card>
             <CardHeader className="bg-muted/20 border-b py-3.5">
               <div className="flex items-center justify-between">
@@ -1342,10 +1406,15 @@ export function PoDetailScreen({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+          </div>
+        </FastTab>
 
         {/* ── TAB 4: DÒNG THỜI GIAN & LỊCH SỬ DUYỆT ─────────────────────────── */}
-        <TabsContent value="timeline" className="flex flex-col gap-5">
+        <FastTab
+          title="Dòng thời gian"
+          summary={[['Số mốc', <span key="a" className="num">{marks.length}</span>]]}
+        >
+          <div className="flex flex-col gap-5">
           {/*
             TRAO ĐỔI đặt TRƯỚC dòng thời gian máy ghi.
 
@@ -1434,10 +1503,14 @@ export function PoDetailScreen({
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+          </div>
+        </FastTab>
 
         {/* ── TAB 5: TÀI LIỆU ĐÍNH KÈM ─────────────────────────────────────── */}
-        <TabsContent value="docs" className="flex flex-col gap-5">
+        <FastTab
+          title="Tài liệu đính kèm"
+        >
+          <div className="flex flex-col gap-5">
           <Card>
             <CardHeader className="bg-muted/20 border-b py-3.5">
               <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -1454,8 +1527,21 @@ export function PoDetailScreen({
               />
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+          </div>
+        </FastTab>
+      </DocBody>
+
+      {/* Thanh trạng thái đáy — SAP GUI. Nghe thừa với người quen web, nhưng ERP
+          chạy nhiều đơn vị trên cùng phần mềm và nhìn nhầm chỗ là hỏng sổ. */}
+      <StatusBar
+        left={[
+          <>
+            <b>{me.name}</b> · Cung ứng
+          </>,
+          po.supplier_name ?? 'Chưa chọn nhà cung cấp',
+        ]}
+        right={po.code}
+      />
 
       {/* ── Dialogs ──────────────────────────────────────────────────────── */}
       <PoTermsDialog
