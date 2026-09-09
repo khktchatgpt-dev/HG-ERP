@@ -85,6 +85,8 @@ import {
   type RescheduleState,
 } from '../PoDialogs'
 import { usePoActions } from '../usePoActions'
+import type { Supplier } from '@/modules/dept/supply/supply.repo'
+import type { SupplierFacts } from '@/modules/dept/supply/supplier-facts.repo'
 import { PoConfirmDialog, PoShipmentsCard, type ShipmentView } from './PoShipmentsPanel'
 import { PoReceiptMatrix } from './PoReceiptMatrix'
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
@@ -179,6 +181,8 @@ export function PoDetailScreen({
   lines,
   stock,
   position,
+  supplier,
+  facts,
   statusLines,
   shipmentReceipts,
   receiptBatches,
@@ -199,6 +203,10 @@ export function PoDetailScreen({
   stock: Record<string, number>
   /** Vị trí đơn trong danh sách, cho điều hướng ‹n / tổng›. */
   position: { index: number; total: number } | null
+  /** Hồ sơ NCC — cho FactBox và các trường pháp lý. */
+  supplier: Supplier | null
+  /** Lịch sử mua với NCC này. */
+  facts: SupplierFacts | null
   statusLines: StatusLine[]
   shipmentReceipts: Record<string, Record<string, number>>
   /** Đợt về theo phiếu nhập — ma trận dòng × đợt (B3). */
@@ -229,8 +237,6 @@ export function PoDetailScreen({
   const [confirming, setConfirming] = useState<'confirm' | 'add' | null>(null)
   const [editingTerms, setEditingTerms] = useState(false)
   const [copied, setCopied] = useState(false)
-  /* Tab của thanh hành động. Ba tab đều có nút thật — xem ghi chú ở chỗ dựng. */
-  const [paneTab, setPaneTab] = useState<'don' | 'nhan' | 'in'>('don')
   /* Dòng đang chọn trong lưới. Chỉ giữ vì nó DẪN tới một hành động thật
      (chốt phần thiếu cho đúng dòng), không phải để trang trí. */
   const [sel, setSel] = useState<string[]>([])
@@ -614,143 +620,135 @@ export function PoDetailScreen({
         thái thanh công cụ lại nhảy chỗ — thứ phá đúng cái trí nhớ vị trí mà
         Action Pane sinh ra để nuôi.
       */}
-      <ActionPane
-        tabs={[
-          { label: 'Đơn hàng', active: paneTab === 'don', onClick: () => setPaneTab('don') },
-          { label: 'Nhận hàng', active: paneTab === 'nhan', onClick: () => setPaneTab('nhan') },
-          { label: 'In & xuất', active: paneTab === 'in', onClick: () => setPaneTab('in') },
-        ]}
-      >
-        {paneTab === 'don' && (
-          <>
-            <ActionGroup label="Duy trì">
-              <Action
-                strong
-                disabled={!canEdit || po.status !== 'draft'}
-                title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
-                onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
-              >
-                Sửa đơn
-              </Action>
-              <Action
-                disabled={!isSupply}
-                onClick={() => router.push(`/planning/pos/${po.id}/edit?duplicate=1`)}
-              >
-                {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
-              </Action>
-              <Action
-                disabled={!canEdit || po.status !== 'draft'}
-                title={po.status !== 'draft' ? 'Chỉ xoá được đơn còn ở bước Nháp' : undefined}
-                onClick={() => void removeDraft()}
-              >
-                Xoá nháp
-              </Action>
-            </ActionGroup>
+      {/*
+        THANH HÀNH ĐỘNG — Dynamics 365 F&O.
 
-            <ActionGroup label="Luồng phê duyệt">
-              {primary && (
-                <Action
-                  primary
-                  onClick={primary.onClick}
-                  disabled={act.busy || blockers.length > 0}
-                  title={
-                    blockers.length > 0
-                      ? `Còn ${blockers.length} lỗi chặn — xem bảng kiểm phía trên`
-                      : undefined
-                  }
-                >
-                  {primary.label}
+        BÀY ĐỦ NĂM NHÓM CÙNG LÚC. Bản trước tôi cho tab LỌC nhóm, kết quả là
+        ẩn mất 9/16 nút — hỏng đúng thứ Action Pane sinh ra để làm: người dùng
+        mở màn này vài chục lần mỗi ngày và bấm bằng trí nhớ vị trí, mà vị trí
+        chỉ có nghĩa khi nút luôn ở đó.
+
+        Nút chưa dùng được thì HIỆN MỜ kèm `title` nói lý do, không ẩn — ẩn thì
+        thanh công cụ nhảy chỗ mỗi lần đổi trạng thái.
+      */}
+      <ActionPane>
+        <ActionGroup label="Duy trì">
+          <Action
+            strong
+            disabled={!canEdit || po.status !== 'draft'}
+            title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
+            onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
+          >
+            Sửa đơn
+          </Action>
+          <Action
+            disabled={!isSupply}
+            onClick={() => router.push(`/planning/pos/${po.id}/edit?duplicate=1`)}
+          >
+            {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
+          </Action>
+          <Action
+            disabled={!canEdit || po.status !== 'draft'}
+            title={po.status !== 'draft' ? 'Chỉ xoá được đơn còn ở bước Nháp' : undefined}
+            onClick={() => void removeDraft()}
+          >
+            Xoá nháp
+          </Action>
+        </ActionGroup>
+
+        <ActionGroup label="Luồng phê duyệt">
+          {primary && (
+            <Action
+              primary
+              onClick={primary.onClick}
+              disabled={act.busy || blockers.length > 0}
+              title={
+                blockers.length > 0
+                  ? `Còn ${blockers.length} lỗi chặn — xem bảng kiểm phía trên`
+                  : undefined
+              }
+            >
+              {primary.label}
+            </Action>
+          )}
+          <Action
+            disabled={!canEdit || !canReschedule(po.status).ok}
+            title={
+              canReschedule(po.status).ok
+                ? undefined
+                : 'Chỉ đổi hẹn được khi đơn đã gửi nhà cung cấp'
+            }
+            onClick={() =>
+              setRescheduling({ po, date: po.expected_at?.slice(0, 10) ?? '', reason: '' })
+            }
+          >
+            Đổi hẹn giao
+          </Action>
+          <Action
+            disabled={!canReassign || ['received', 'cancelled'].includes(po.status)}
+            onClick={() => setReassigning({ po, toId: '' })}
+          >
+            Bàn giao phụ trách
+          </Action>
+          <Action
+            disabled={!canEdit || ['draft', 'received', 'cancelled'].includes(po.status)}
+            title={po.status === 'draft' ? 'Đơn nháp thì xoá, không cần huỷ' : undefined}
+            onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+          >
+            Huỷ đơn
+          </Action>
+        </ActionGroup>
+
+        <ActionGroup label="Nhận hàng">
+          <Action
+            disabled={!canAcceptByHand}
+            title={
+              canAcceptByHand
+                ? undefined
+                : 'Chỉ dùng cho đơn có dòng ngoài sổ kho, khi đã gửi NCC'
+            }
+            onClick={() => setConfirming('add')}
+          >
+            Nghiệm thu ngoài sổ
+          </Action>
+          <Action
+            disabled={!canEdit || openStockLines.length === 0}
+            title={openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined}
+            onClick={() =>
+              setReasoning({
+                po,
+                kind: 'close_short',
+                reason: '',
+                lineId: null,
+                detail: `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
+              })
+            }
+          >
+            Chốt phần thiếu
+          </Action>
+        </ActionGroup>
+
+        <ActionGroup label="In &amp; xuất">
+          <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
+            Phiếu đặt hàng
+          </Action>
+        </ActionGroup>
+
+        <ActionGroup label="Chứng từ liên quan">
+          {chain.filter((n) => !n.current && n.href).length === 0 ? (
+            <Action disabled title="Đơn này chưa gắn với chứng từ nào">
+              Chưa có
+            </Action>
+          ) : (
+            chain
+              .filter((n) => !n.current && n.href)
+              .map((n) => (
+                <Action key={n.href} onClick={() => router.push(n.href!)}>
+                  {n.label}
                 </Action>
-              )}
-              <Action
-                disabled={!canEdit || !canReschedule(po.status).ok}
-                title={
-                  canReschedule(po.status).ok
-                    ? undefined
-                    : 'Chỉ đổi hẹn được khi đơn đã gửi nhà cung cấp'
-                }
-                onClick={() =>
-                  setRescheduling({
-                    po,
-                    date: po.expected_at?.slice(0, 10) ?? '',
-                    reason: '',
-                  })
-                }
-              >
-                Đổi hẹn giao
-              </Action>
-              <Action
-                disabled={!canReassign || ['received', 'cancelled'].includes(po.status)}
-                onClick={() => setReassigning({ po, toId: '' })}
-              >
-                Bàn giao phụ trách
-              </Action>
-              <Action
-                disabled={!canEdit || ['draft', 'received', 'cancelled'].includes(po.status)}
-                title={
-                  po.status === 'draft' ? 'Đơn nháp thì xoá, không cần huỷ' : undefined
-                }
-                onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
-              >
-                Huỷ đơn
-              </Action>
-            </ActionGroup>
-          </>
-        )}
-
-        {paneTab === 'nhan' && (
-          <ActionGroup label="Nhận hàng">
-            <Action
-              disabled={!canAcceptByHand}
-              title={
-                canAcceptByHand
-                  ? undefined
-                  : 'Chỉ dùng cho đơn có dòng ngoài sổ kho, khi đã gửi NCC'
-              }
-              onClick={() => setConfirming('add')}
-            >
-              Nghiệm thu ngoài sổ kho
-            </Action>
-            <Action
-              disabled={!canEdit || openStockLines.length === 0}
-              title={
-                openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined
-              }
-              onClick={() =>
-                setReasoning({
-                  po,
-                  kind: 'close_short',
-                  reason: '',
-                  lineId: null,
-                  detail: `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
-                })
-              }
-            >
-              Chốt phần thiếu
-            </Action>
-          </ActionGroup>
-        )}
-
-        {paneTab === 'in' && (
-          <>
-            <ActionGroup label="In & xuất">
-              <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
-                In đơn đặt hàng
-              </Action>
-            </ActionGroup>
-            {chain.filter((n) => !n.current && n.href).length > 0 && (
-              <ActionGroup label="Chứng từ liên quan">
-                {chain
-                  .filter((n) => !n.current && n.href)
-                  .map((n) => (
-                    <Action key={n.href} onClick={() => router.push(n.href!)}>
-                      {n.label}
-                    </Action>
-                  ))}
-              </ActionGroup>
-            )}
-          </>
-        )}
+              ))
+          )}
+        </ActionGroup>
       </ActionPane>
 
       <DocHead
@@ -793,40 +791,37 @@ export function PoDetailScreen({
               <div className="k-strong">{po.supplier_name ?? 'Chưa chọn'}</div>
               <FactKv
                 rows={[
-                  ['Người liên hệ', po.assignee_name ?? '—'],
-                  ['Hạn giao', <span key="h" className={late === 'overdue' ? 'k-t-stop' : undefined}>{day(po.expected_at)}</span>],
-                  ['Điều khoản TT', short(po.terms_payment, 22)],
-                  ['Loại tiền', <span key="c" className="num">{po.currency ?? 'VND'}</span>],
+                  [
+                    'Giao đúng hẹn',
+                    facts?.onTime ? (
+                      <span key="ot" className="num">
+                        {facts.onTime.hit} / {facts.onTime.of} đơn
+                      </span>
+                    ) : (
+                      // KHÔNG hiện "0/0" hay "100%": chưa đơn nào của NCC này
+                      // được nhận đủ nên chưa có mẫu để tính. Cả hai cách hiện
+                      // kia đều là nói dối, theo hai hướng ngược nhau.
+                      <span key="ot" className="k-t-warn">chưa có lịch sử</span>
+                    ),
+                  ],
+                  ['Đã đặt', <span key="n" className="num">{facts?.orders ?? 0} đơn</span>],
+                  ['Đã nhận đủ', <span key="r" className="num">{facts?.received ?? 0} đơn</span>],
+                  [
+                    'Mua gần nhất',
+                    <span key="l" className="num">
+                      {facts?.lastOrderAt ? day(facts.lastOrderAt) : '—'}
+                    </span>,
+                  ],
+                  ['Mã NCC', <span key="c" className="num">{supplier?.code ?? '—'}</span>],
+                  ['Mã số thuế', <span key="t" className="num">{supplier?.tax_no ?? '—'}</span>],
                 ]}
               />
             </FactSection>
 
-            <FactSection title="Số liệu đơn">
-              <FactKv
-                rows={[
-                  ['Số dòng', <span key="l" className="num">{lines.length}</span>],
-                  [
-                    'Chưa có giá',
-                    <span key="p" className={noPriceCount > 0 ? 'num k-t-warn' : 'num'}>
-                      {noPriceCount}
-                    </span>,
-                  ],
-                  ['Đã đặt', <span key="o" className="num">{money(totalOrderedStock)}</span>],
-                  ['Đã về', <span key="r" className="num">{money(totalReceivedStock)}</span>],
-                  [
-                    'Đợt giao',
-                    <span key="s" className="num">
-                      {liveShipments.length > 0
-                        ? `${shipmentsDone}/${liveShipments.length}`
-                        : '—'}
-                    </span>,
-                  ],
-                ]}
-              />
-            </FactSection>
-
-            {chain.filter((n) => !n.current).length > 0 && (
-              <FactSection title="Chứng từ liên quan">
+            <FactSection title="Chứng từ liên quan">
+              {chain.filter((n) => !n.current).length === 0 ? (
+                <div className="k-t-warn">Chưa gắn chứng từ nào</div>
+              ) : (
                 <FactKv
                   rows={chain
                     .filter((n) => !n.current)
@@ -837,8 +832,8 @@ export function PoDetailScreen({
                       '',
                     ])}
                 />
-              </FactSection>
-            )}
+              )}
+            </FactSection>
 
             <FactSection title="Người theo dõi">
               <FactKv
@@ -850,6 +845,21 @@ export function PoDetailScreen({
                     .map((h) => [h.actor_name as string, 'đã duyệt'] as [string, string]),
                 ]}
               />
+            </FactSection>
+
+            <FactSection title="Chứng từ kho">
+              {warehouseDocs.length === 0 ? (
+                <div className="k-t-warn">Chưa có phiếu nhập nào</div>
+              ) : (
+                <FactKv
+                  rows={warehouseDocs.slice(0, 5).map((d) => [
+                    <span key={d.code} className="num">
+                      {d.code}
+                    </span>,
+                    day(d.at),
+                  ])}
+                />
+              )}
             </FactSection>
           </FactBox>
         }
@@ -878,6 +888,13 @@ export function PoDetailScreen({
             }
           >
             <Field label="Nhà cung cấp">{po.supplier_name ?? '—'}</Field>
+            <Field label="Mã NCC">
+              <span className="num">{supplier?.code ?? '—'}</span>
+            </Field>
+            <Field label="Mã số thuế">
+              <span className="num">{supplier?.tax_no ?? '—'}</span>
+            </Field>
+            <Field label="Người liên hệ">{supplier?.phone ?? '—'}</Field>
             <Field label="Lệnh sản xuất">
               {lsxCodes ? (
                 <span className="num">
@@ -899,9 +916,11 @@ export function PoDetailScreen({
               <span className="num">{day(po.expected_at)}</span>
             </Field>
             <Field label="Loại tiền">
+              <span className="num">{po.currency ?? 'VND'}</span>
+            </Field>
+            <Field label="Thuế suất">
               <span className="num">
-                {po.currency ?? 'VND'} (VAT {po.vat_rate ?? 0}%
-                {po.price_includes_vat ? ', đã gồm' : ''})
+                {po.vat_rate ?? 0}%{po.price_includes_vat ? ' (đã gồm)' : ''}
               </span>
             </Field>
             <Field label="Số hợp đồng">
