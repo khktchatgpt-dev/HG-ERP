@@ -142,35 +142,6 @@
  * LƯU Ý: Radix portal (Dialog/Popover/DropdownMenu/Select) render ra <body>,
  * NGOÀI wrapper — phải gắn `theme-v2` vào cả className của *Content.
  */
-.theme-v2 {
-  --background: #fafaf9; /* stone-50 */
-  --foreground: #1c1917; /* stone-900 */
-  --card: #ffffff;
-  --card-foreground: #1c1917;
-  --popover: #ffffff;
-  --popover-foreground: #1c1917;
-  --primary: #047857; /* emerald-700 */
-  --primary-foreground: #ffffff;
-  --secondary: #f5f5f4; /* stone-100 */
-  --secondary-foreground: #292524; /* stone-800 */
-  --muted: #f5f5f4;
-  /* stone-600 chứ KHÔNG phải stone-500: phụ chú trong app toàn cỡ 11–12px, ở
-     stone-500 (#78716c) chữ mờ tới mức khó đọc trên nền trắng ngà. stone-600
-     đạt ~7:1 tương phản mà vẫn lùi sau chữ chính. */
-  --muted-foreground: #57534e; /* stone-600 */
-  /* Placeholder giữ NHẠT riêng (stone-400) — cùng màu với phụ chú thì ô trống
-     trông như đã có dữ liệu. */
-  --placeholder: #a8a29e; /* stone-400 */
-  --accent: #f5f5f4;
-  --accent-foreground: #292524;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: #e7e5e4; /* stone-200 */
-  --input: #d6d3d1; /* stone-300 */
-  --ring: #059669; /* emerald-600 — khớp primary */
-  --radius: 0.625rem;
-}
-
 /*
  * MÀU TÍN HIỆU — chỉ ba, và chỉ để mã hoá trạng thái.
  *
@@ -179,12 +150,6 @@
  * `primary` (emerald) là màu HÀNH ĐỘNG duy nhất, còn ba màu dưới đây là màu
  * TRẠNG THÁI. Không có màu trang trí.
  */
-.theme-v2 {
-  --warn: #b45309; /* amber-700 — cần để mắt tới, chưa hỏng */
-  --stop: #b42318; /* red-700  — đã hỏng / quá hẹn */
-  --done: #1f7a4c; /* green-700 — xong, đóng sổ */
-}
-
 /*
  * THANG CHỮ — 5 bậc, thay cho 391 chỗ đang gõ cỡ pixel tuỳ ý (9/10/11/12/13px
  * lẫn với text-xs/sm). Cỡ tuỳ ý làm mỗi bảng lệch nhau vài pixel, và mắt đọc ra
@@ -321,11 +286,6 @@
  * `placeholder:text-muted-foreground`, mà muted-foreground nay đã đậm lên cho
  * dễ đọc, dùng chung sẽ khiến ô trống trông như đã điền.
  */
-.theme-v2 ::placeholder {
-  color: var(--placeholder);
-  opacity: 1;
-}
-
 /* shadcn cần default border-color = --border (Tailwind v4 mặc định currentColor). */
 @layer base {
   *,

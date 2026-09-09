@@ -106,7 +106,7 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 - **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
 - **BẪY Radix portal — ĐÃ VÁ Ở PRIMITIVE (02/09/2026), không phải nhớ nữa**: Dialog/AlertDialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell nên token theme không phủ tới. Nay mỗi `*Content` tự gọi `usePortalTheme()` ([`src/components/shadcn/portal-theme.ts`](src/components/shadcn/portal-theme.ts)) — dò lớp theme đang phủ trong DOM rồi tự gắn lại. **Chỗ gọi KHÔNG cần gõ `theme-v3` nữa**; các chỗ đang gõ là thừa (vô hại, dọn dần). Dò theo DOM chứ không hằng số hoá nên đường lùi v2 vẫn nguyên. `Dialog`/`AlertDialog` cũng đã đổi nền mặc định `bg-background` → `bg-card`: dialog là thẻ trắng nổi trên nền đã tối, để màu canvas là ra hộp xám. `Modal` render inline nên vốn tự ăn theme.
 - **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
-- Rollback khẩn: đổi `theme-v3`→`theme-v2` ở `WorkspaceShell` (khối token v2 vẫn giữ trong globals.css).
+- **`theme-v2` đã XOÁ HẲN 09/09/2026** — không nơi nào gắn lớp đó nữa, khối token cũng đã bỏ khỏi globals.css. Đường lùi khẩn giờ là `git revert` một PR, không phải đổi một lớp CSS.
 
 ### Kit & pattern
 
