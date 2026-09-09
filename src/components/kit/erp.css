@@ -738,6 +738,19 @@
   padding: 6px var(--pad-x);
 }
 
+/* Khối ghi chú dài trong chứng từ: vạch bên trái thay cho thẻ nổi. Thẻ nói
+   "đây là một đối tượng riêng", còn ghi chú chỉ là chú thích của khối đang
+   đứng — dựng nó thành thẻ là nói sai cấp bậc. */
+.k-note {
+  border-left: 3px solid var(--line);
+  background: var(--surface-raised);
+  padding: 8px 12px;
+  font-size: var(--fs-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* ── 9. FactBox ──────────────────────────────────────────────────────── */
 .k-fact {
   background: var(--surface-card);

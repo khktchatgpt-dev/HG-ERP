@@ -1329,11 +1329,8 @@ export function PoDetailScreen({
               </div>
             </div>
             <div className="flex flex-col gap-6">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Điều 1 · Tiêu chuẩn chất lượng
-                  </span>
+              <FieldGrid>
+                <Field label="Điều 1 · Tiêu chuẩn chất lượng">
                   <span className="text-foreground text-sm font-medium">
                     {po.terms_quality || (
                       <span className="text-muted-foreground font-normal">
@@ -1341,12 +1338,9 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
+</Field>
 
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Điều 2 · Địa điểm giao hàng
-                  </span>
+                <Field label="Điều 2 · Địa điểm giao hàng">
                   <span className="text-foreground text-sm font-medium">
                     {po.terms_delivery_place || (
                       <span className="text-muted-foreground font-normal">
@@ -1354,12 +1348,9 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
+</Field>
 
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Điều 3 · Điều kiện thanh toán
-                  </span>
+                <Field label="Điều 3 · Điều kiện thanh toán">
                   <span className="text-foreground text-sm font-medium">
                     {po.terms_payment || (
                       <span className="text-muted-foreground font-normal">
@@ -1367,12 +1358,9 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
+</Field>
 
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Điều 4 · Hoá đơn & Chứng từ
-                  </span>
+                <Field label="Điều 4 · Hoá đơn & Chứng từ">
                   <span className="text-foreground text-sm font-medium">
                     {po.terms_invoice || (
                       <span className="text-muted-foreground font-normal">
@@ -1380,12 +1368,9 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
+</Field>
 
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Điều 5 · Thời hạn giao hàng
-                  </span>
+                <Field label="Điều 5 · Thời hạn giao hàng">
                   <span className="text-foreground text-sm font-medium">
                     {po.terms_lead_time || (
                       <span className="text-muted-foreground font-normal">
@@ -1393,12 +1378,9 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
+</Field>
 
-                <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
-                  <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                    Đại diện ký đơn (Chức danh)
-                  </span>
+                <Field label="Đại diện ký đơn (Chức danh)">
                   <span className="text-foreground text-sm font-medium">
                     {po.signer_role || (
                       <span className="text-muted-foreground font-normal">
@@ -1406,11 +1388,11 @@ export function PoDetailScreen({
                       </span>
                     )}
                   </span>
-                </div>
-              </div>
+</Field>
+              </FieldGrid>
 
               {(po.terms || po.note) && (
-                <div className="bg-muted/30 flex flex-col gap-2 rounded-lg border p-4 text-sm">
+                <div className="k-note">
                   {po.terms && (
                     <div>
                       <span className="text-foreground font-semibold">
