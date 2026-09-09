@@ -726,6 +726,21 @@ export function PoDetailScreen({
           >
             Nghiệm thu ngoài sổ
           </Action>
+          {/* Lập phiếu nhập là việc của KHO và màn đó đã có
+              (/warehouse/don-ncc/[id], góc nhìn thủ kho). Dựng lại một form
+              nhập hàng ở đây là hai đường ghi vào cùng một sổ — nguồn sai số
+              kinh điển. Nút này DẪN sang đúng chỗ, không tự làm. */}
+          <Action
+            disabled={!['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)}
+            title={
+              ['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)
+                ? 'Mở màn lập phiếu nhập bên Kho cho đơn này'
+                : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp'
+            }
+            onClick={() => router.push(`/warehouse/don-ncc/${po.id}`)}
+          >
+            Ghi nhận nhận hàng
+          </Action>
           <Action
             disabled={!canEdit || openStockLines.length === 0}
             title={openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined}
@@ -1021,6 +1036,7 @@ export function PoDetailScreen({
               <Th num>SL đặt</Th>
               <Th>ĐVT mua</Th>
               <Th num>Quy đổi kho</Th>
+              <Th num>Nhu cầu</Th>
               <Th num>Tồn</Th>
               <Th num>Đơn giá</Th>
               <Th num>Thành tiền</Th>
@@ -1051,6 +1067,16 @@ export function PoDetailScreen({
                     <Td num>{money(l.qty_ordered)}</Td>
                     <Td>{l.material_unit}</Td>
                     <Td num>{l.qty2 == null ? '—' : `${money(l.qty2)} ${l.unit2 ?? ''}`}</Td>
+                    {/* Đặt ÍT hơn nhu cầu thì tô hổ phách: đơn này không phủ
+                        hết lệnh, người duyệt cần thấy trước khi ký. */}
+                    <Td
+                      num
+                      tone={
+                        l.qty_demand != null && l.qty_ordered < l.qty_demand ? 'warn' : undefined
+                      }
+                    >
+                      {l.qty_demand == null ? '—' : money(l.qty_demand)}
+                    </Td>
                     <Td num tone={l.material_id != null && (stock[l.material_id] ?? 0) <= 0 ? 'stop' : undefined}>
                       {l.material_id == null ? '—' : money(stock[l.material_id] ?? 0)}
                     </Td>
@@ -1076,7 +1102,7 @@ export function PoDetailScreen({
               <Td />
               <Td colSpan={4}>Cộng {lines.length} dòng</Td>
               <Td num>{money(lines.reduce((s, l) => s + l.qty_ordered, 0))}</Td>
-              <Td colSpan={4} />
+              <Td colSpan={5} />
               <Td num>{money(totalAmount)}</Td>
               <Td colSpan={2} />
             </GridFoot>

@@ -67,6 +67,14 @@ export type PoLine = {
   qty2: number | null
   unit2: string | null
   note: string | null
+  /**
+   * NHU CẦU tính từ định mức × sản lượng lệnh, chốt lúc soạn đơn.
+   *
+   * Repo đã lấy sẵn cột này (`listLines`) nhưng kiểu cũ bỏ quên nên màn hình
+   * không đọc tới — số có trong tay mà không ai thấy. Đo 09/09/2026: 91/203
+   * dòng có giá trị. `null` = dòng soạn tay, không sinh từ cân đối.
+   */
+  qty_demand: number | null
   material_code: string
   material_name: string
   material_unit: string
