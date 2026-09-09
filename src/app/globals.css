@@ -9,6 +9,7 @@
  * trình duyệt bỏ qua im lặng — token không nạp mà không có lỗi nào.
  */
 @import '../components/kit/tokens.css';
+@import '../components/kit/erp.css';
 
 /*
  * DARK MODE TẮT (chốt 06/08/2026 — chủ dự án: "bỏ chế độ dark mode").

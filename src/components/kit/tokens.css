@@ -1,114 +1,131 @@
 /**
  * ═══════════════════════════════════════════════════════════════════════
- * KIT v4 — TOKEN
+ * KIT — TOKEN NGÔN NGỮ ERP
  * ═══════════════════════════════════════════════════════════════════════
  *
- * Vì sao làm lại chứ không vá v3 (chủ dự án chốt 08/09/2026: "thiết kế mới
- * hoàn toàn, không đi theo lối cũ"):
+ * Viết lại 09/09/2026 sau khi chủ dự án chê ĐÚNG rằng các bản trước "theo
+ * hướng web chứ không thiên về ERP".
  *
- *  1. `--primary` của v3 là #0f172a (slate-900) — TRÙNG màu chữ. Màu hành
- *     động mà bằng màu chữ thì trên màn 60 dòng không có gì nổi lên; mắt
- *     không biết bấm vào đâu. v4 tách hẳn: mực là mực, hành động là xanh.
+ * SAI LẦM CỦA BẢN TRƯỚC: chữa "khó nhìn" bằng phản xạ web — chữ to lên,
+ * thoáng ra, ít dòng trên màn. ERP thật đi ngược: DÀY, nhưng có KỶ LUẬT CĂN
+ * CHỈNH. Đọc được màn SAP 40 dòng không phải vì chữ to, mà vì mọi thứ nằm
+ * trong lưới nhãn–giá trị nghiêm ngặt, có khung khối rõ, thanh hành động luôn
+ * ở một chỗ. Nên thang chữ ở đây GIỮ 13px; cái đổi là cấu trúc và tương phản.
  *
- *  2. v3 CHỈ có token màu. Không có thang mật độ, thang chữ, thang tầng —
- *     nên mỗi màn tự chế `text-[13px]`, `h-[34px]`, và giao diện so le dù
- *     màu vẫn đúng token. v4 khai đủ bốn thang.
+ * BA THỨ ĐÃ SỬA SO VỚI BẢN v4:
  *
- *  3. v3 không có token DÀNH RIÊNG CHO SỐ. Trong ERP, số là nội dung chính:
- *     nó phải mono, tabular, căn phải, và số "người dùng mang đi làm việc"
- *     phải to hơn số phụ trợ. Đây là quy tắc bày dữ liệu, thuộc về token.
+ *  1. `--ink-3` cũ (#7b8798) chỉ đạt 3,40:1 trên nền — TRƯỢT WCAG AA (4,5:1)
+ *     trong khi nó là màu của NHÃN CỘT và chữ phụ, tức thứ đọc nhiều nhất.
+ *     `--ink-empty` cũ (#98a3b3) còn tệ hơn: 2,38:1. Cả hai kéo lên ≥ 4,5:1.
+ *     Đây là nguyên nhân đo được của lời chê "khó nhìn", không phải cỡ chữ.
  *
- * TÊN TOKEN NÓI VIỆC, KHÔNG NÓI HÌNH DẠNG. `--act` (hành động) chứ không
- * phải `--blue`; `--surface-raised` chứ không phải `--gray-100`. Đổi màu sau
- * này thì tên vẫn đúng.
+ *  2. Thêm tầng `--chrome` — nền THANH HỆ THỐNG (định vị, trạng thái đáy).
+ *     ERP phân biệt rõ "khung phần mềm" với "giấy dữ liệu"; bản cũ chỉ có ba
+ *     tầng giấy nên thanh hệ thống trôi lẫn vào nội dung.
  *
- * Cách dùng: bọc cây DOM trong `.kit-v4`. KHÔNG đụng `:root` — v3 vẫn phải
- * chạy nguyên vẹn cho 2.300 chỗ cũ trong lúc chuyển dần (xem ui-baseline).
+ *  3. Bo góc kéo xuống 3px. Bo 6–9px là ngôn ngữ thẻ SaaS; ERP dùng khối
+ *     vuông vức vì màn có 8–12 khối cạnh nhau, bo tròn nhiều thành ra rời rạc.
+ *
+ * TÊN TOKEN NÓI VIỆC, KHÔNG NÓI HÌNH DẠNG: `--act` (hành động) chứ không phải
+ * `--blue`; `--surface-raised` chứ không phải `--gray-100`.
+ *
+ * Cách dùng: bọc cây DOM trong `.kit`. KHÔNG đụng `:root` — theme v3 vẫn phải
+ * chạy nguyên vẹn cho các màn chưa chuyển (xem ui-baseline).
+ * `.kit-v4` giữ làm BÍ DANH để chỗ cũ không gãy trong lúc đổi tên dần.
  */
 
+.kit,
 .kit-v4 {
-  /* ── GIẤY ────────────────────────────────────────────────────────────
-     Ba tầng nền, chênh nhau vừa đủ để phân lớp mà không thành sọc.
+  /* ── KHUNG PHẦN MỀM ──────────────────────────────────────────────────
+     Thanh định vị và thanh trạng thái đáy màn. Tầng này KHÔNG phải giấy dữ
+     liệu — nó là vỏ chương trình, và ERP nào cũng tách bạch hai thứ đó. */
+  --chrome: #dde1e9;
 
+  /* ── GIẤY ────────────────────────────────────────────────────────────
      Nền trang KHÔNG phải #fff: người cung ứng ngồi trước màn này 6–8 tiếng
-     dưới đèn huỳnh quang xưởng, trắng tinh gây chói và mỏi mắt. Mặt bảng
-     mới là trắng — nhờ vậy bảng NỔI LÊN khỏi nền thay vì chìm vào nó. */
-  --surface: #f6f7f9;
+     dưới đèn huỳnh quang xưởng, trắng tinh gây chói. Mặt bảng mới là trắng —
+     nhờ vậy bảng NỔI LÊN khỏi nền thay vì chìm vào nó. */
+  --surface: #eef0f4;
   --surface-card: #ffffff;
-  --surface-raised: #eef1f5;
-  --surface-hover: #f4f7fb;
+  --surface-raised: #f3f5f8;
+  --surface-hover: #f6f8fc;
 
   /* ── MỰC ─────────────────────────────────────────────────────────────
-     Ba cấp, không hơn. v3 có 5 cấp xám và không ai phân biệt được cấp 3
-     với cấp 4 — thừa cấp thì người viết code chọn bừa. */
-  --ink: #111826;
-  --ink-2: #4a5568;
-  --ink-3: #7b8798;
+     Ba cấp, không hơn. Cấp 3 đã kéo từ #7b8798 lên #5d6675 để đạt 4,5:1 —
+     nó là màu nhãn cột, thứ mắt chạm nhiều nhất trên một màn ERP. */
+  --ink: #12161f;
+  --ink-2: #3f4756;
+  --ink-3: #5d6675;
 
   /* ── KẺ ──────────────────────────────────────────────────────────────
-     Hai cấp có nghĩa khác nhau: `line` là RANH GIỚI (hết vùng này sang
-     vùng khác), `hair` là VẠCH CHIA DÒNG trong cùng một bảng. Dùng lẫn
-     là bảng đọc thành từng mảng rời. */
-  --line: #d6dce5;
-  --hair: #e8ecf2;
-  /* Kẻ mờ nhất: dấu phân cách trong chuỗi chứng từ, ô rỗng, nền thanh phủ.
-     Tách token riêng vì mấy chỗ này KHÔNG phải kẻ bảng — dùng chung --hair
-     thì sau này chỉnh kẻ bảng sẽ vô tình đổi cả dấu → giữa các chip. */
-  --line-faint: #c3cbd7;
-  --track: #dfe4ec;
-  --ink-empty: #98a3b3;
+     `line` là RANH GIỚI (hết vùng này sang vùng khác), `hair` là VẠCH CHIA
+     DÒNG trong cùng một bảng. Dùng lẫn là bảng đọc thành từng mảng rời. */
+  --line: #c9d0db;
+  --hair: #e3e7ee;
+  --line-faint: #b9c2d0;
+  --track: #dde2ea;
+  /* Ô rỗng: cũng phải ĐỌC ĐƯỢC. #98a3b3 cũ chỉ 2,38:1 — nhìn như lỗi render. */
+  --ink-empty: #6b7484;
 
   /* ── HÀNH ĐỘNG ───────────────────────────────────────────────────────
-     MỘT màu duy nhất. Chỗ nào xanh là chỗ bấm được hoặc đang chọn — không
-     ngoại lệ. Hai màu hành động thì người dùng phải học xem cái nào quan
-     trọng hơn, và họ sẽ học sai. */
-  --act: #1c4ed8;
-  --act-hover: #1740b8;
+     MỘT màu duy nhất. Chỗ nào xanh là chỗ bấm được hoặc đang chọn. */
+  --act: #1f4bb8;
+  --act-hover: #17399140;
   --act-ink: #ffffff;
-  --act-wash: #e8eeff;
-  --act-line: #b9c9f5;
+  --act-wash: #e8eefb;
+  --act-line: #b3c5ee;
+  /* Chữ xanh trên nền nhạt — KHÁC `--act-ink` (chữ trắng trên nền xanh đặc). */
+  --act-text: #173b91;
 
   /* ── VÒNG ĐỜI DỮ LIỆU ────────────────────────────────────────────────
-     Ba trạng thái nghiệp vụ, mỗi cái một cặp (chữ + nền nhạt).
      TUYỆT ĐỐI không mượn mấy màu này cho trạng thái điều khiển (đang chọn,
-     đang hover) — luật này v3 đã đúng, giữ lại: mượn thì "đang chọn" trông
-     như "đang lỗi". */
-  --stop: #c02626;
-  --stop-wash: #fdeaea;
-  --stop-line: #f3cfcf;
-  --warn: #9a5b00;
-  --warn-wash: #fdf1de;
-  --warn-line: #efdcbb;
-  --done: #1a7a48;
-  --done-wash: #e6f5ec;
+     đang hover): mượn thì "đang chọn" trông như "đang lỗi". */
+  --stop: #b0241a;
+  --stop-wash: #fceceb;
+  --stop-line: #eec9c6;
+  --warn: #8a5200;
+  --warn-wash: #fbf2e2;
+  --warn-line: #e8d5b0;
+  --done: #15653d;
+  --done-wash: #e5f3ea;
+  --done-line: #bcdcc9;
 
   /* ── MẬT ĐỘ ──────────────────────────────────────────────────────────
-     Thang này v3 KHÔNG có, và đó là lý do mỗi bảng một chiều cao dòng.
-     Người quen Excel muốn dày, người mới muốn thưa — cho họ chọn bằng
-     `.kit-dense` thay vì bắt cả hai chịu một mức. */
-  --row-h: 34px;
-  --ctl-h: 30px;
-  --pad-x: 10px;
-  --gutter: 18px;
+     ERP mặc định DÀY. Người quen Excel bật `.kit-dense` để dày hơn nữa. */
+  --row-h: 30px;
+  --ctl-h: 28px;
+  --pad-x: 8px;
+  --gutter: 14px;
 
   /* ── CHỮ ─────────────────────────────────────────────────────────────
-     Thang hẹp có chủ ý: 4 cỡ. ERP không cần 9 cỡ chữ — thừa cỡ thì hierarchy
-     do cỡ chữ quyết định thay vì do bố cục, và mỗi màn lại chọn khác. */
-  --fs-title: 21px;
+     Thang hẹp có chủ ý. 13px là nền — GIỮ NGUYÊN độ dày của ERP; dễ đọc đến
+     từ căn chỉnh và tương phản, không từ việc phóng to chữ.
+
+     `--fs-doc` là bậc MỚI: số hiệu chứng từ. Nó là thứ duy nhất được to,
+     vì nó là danh tính của trang — mắt cần một chỗ đậu và chỉ một. */
+  --fs-doc: 24px;
+  --fs-title: 18px;
+  --fs-section: 13.5px;
   --fs-body: 13px;
-  --fs-sm: 12px;
+  --fs-sm: 12.5px;
   --fs-micro: 11px;
+  /* Nhãn cột và nhãn nhóm nút: nhỏ nhưng in hoa + giãn chữ nên vẫn đọc được. */
+  --fs-label: 10.5px;
 
-  /* SỐ có thang riêng: số CHÍNH là con số người dùng mang đi làm việc
-     (còn phải đặt, thành tiền) — nó phải to hơn số phụ trợ nửa cấp. */
-  --fs-num: 13.5px;
+  /* SỐ có thang riêng: số CHÍNH là con số người dùng mang đi làm việc. */
+  --fs-num: 13px;
   --fs-num-sm: 11.5px;
+  /* Số tóm tắt trên FactBox / chân bảng. */
+  --fs-num-lg: 15px;
 
-  --radius: 6px;
-  --radius-sm: 4px;
-  /* Hộp thoại to hơn thẻ nên bo nhiều hơn — bo bằng nhau thì hộp trông như
-     một thẻ bị phóng to chứ không phải một tầng khác. */
-  --radius-lg: 9px;
+  /* ── HÌNH ────────────────────────────────────────────────────────────
+     Vuông vức. Bo 6–9px là ngôn ngữ thẻ SaaS; màn ERP có 8–12 khối cạnh
+     nhau, bo nhiều thành ra rời rạc thay vì thành một mặt bảng. */
+  --radius: 3px;
+  --radius-sm: 2px;
+  /* Hộp thoại là TẦNG KHÁC nên được bo nhiều hơn — đó là tín hiệu duy nhất
+     phân biệt nó với một khối bình thường bị phóng to. */
+  --radius-lg: 6px;
 
   /* Tầng: chỉ 2 mức. Thêm mức thứ 3 là bắt đầu có bóng trang trí. */
   --z-sticky: 5;
@@ -116,8 +133,7 @@
   --z-float: 40;
   /* Trên --z-float: tooltip trong hộp thoại phải nổi hơn chính hộp. */
   --z-modal: 60;
-  /* Bóng hộp thoại: sâu và mềm — nói "tầng khác", không phải "thẻ nổi". */
-  --shadow-modal: 0 18px 48px rgba(17, 24, 38, 0.22);
+  --shadow-modal: 0 18px 48px rgba(17, 24, 38, 0.24);
 
   color: var(--ink);
   background: var(--surface);
@@ -126,16 +142,18 @@
 }
 
 /* Chế độ DÀY — cho người quen Excel. Chỉ đổi thang mật độ, không đổi gì khác. */
+.kit.kit-dense,
 .kit-v4.kit-dense {
-  --row-h: 27px;
-  --ctl-h: 26px;
-  --pad-x: 8px;
+  --row-h: 25px;
+  --ctl-h: 24px;
+  --pad-x: 6px;
 }
 
 /* ── SỐ ────────────────────────────────────────────────────────────────
    `tabular-nums` là bắt buộc, không phải tuỳ chọn: thiếu nó thì các chữ số
    rộng khác nhau và cột số căn phải vẫn nhấp nhô, mắt không so sánh được
    theo chiều dọc — hỏng đúng việc mà cột số sinh ra để làm. */
+.kit .num,
 .kit-v4 .num {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
@@ -148,6 +166,7 @@
    mã (hộp thoại có tabIndex=-1). Vòng focus dành cho chỗ người dùng ĐI TỚI
    bằng Tab; vẽ quanh cả hộp thoại thì nó trông như một ô nhập khổng lồ đang
    được chọn (đo 09/09/2026). */
+.kit :focus-visible:not([tabindex='-1']),
 .kit-v4 :focus-visible:not([tabindex='-1']) {
   outline: 2px solid var(--act);
   outline-offset: 1px;

@@ -1,0 +1,693 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * KIT — LỚP TRÌNH BÀY CHO KHUNG CHỨNG TỪ ERP (`Erp.tsx`)
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ * Tách khỏi `tokens.css` có chủ ý: tokens.css chỉ khai GIÁ TRỊ (màu, thang
+ * chữ, mật độ) và phải đọc được trong 2 phút; file này là cách BÀY. Trộn hai
+ * thứ thì mỗi lần chỉnh một khoảng đệm lại phải cuộn qua bảng màu.
+ *
+ * Mọi màu ở đây LẤY TỪ TOKEN, không có hằng số hex nào — trừ hai chỗ nền sọc
+ * bảng, ghi chú tại chỗ.
+ *
+ * Tiền tố `k-` (kit) thay vì `x-`: file mẫu dùng `x-` khi còn là bản nháp
+ * trong một trang; giờ là kit thật nên đổi cho khỏi lẫn với lớp tạm.
+ */
+
+.k-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.k-strong {
+  font-weight: 600;
+}
+.k-old {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+.k-t-stop {
+  color: var(--stop);
+}
+.k-t-warn {
+  color: var(--warn);
+}
+.k-t-done {
+  color: var(--done);
+}
+
+/* ── 1. Thanh định vị ────────────────────────────────────────────────── */
+.k-crumb {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 6px var(--gutter);
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.k-crumb-i {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.k-crumb-mod {
+  font-weight: 700;
+  color: var(--ink);
+}
+.k-crumb-sep {
+  color: var(--ink-3);
+}
+.k-view {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+}
+.k-view-k {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-view-b {
+  border: 1px solid var(--line);
+  background: var(--surface-card);
+  border-radius: var(--radius);
+  padding: 2px 8px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: inherit;
+  cursor: pointer;
+}
+.k-recnav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.k-recnav-b {
+  width: 22px;
+  height: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface-card);
+  border-radius: var(--radius);
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+}
+.k-recnav-p {
+  font-size: var(--fs-num-sm);
+  color: var(--ink-3);
+  padding: 0 4px;
+}
+
+/* ── 2. Action pane ──────────────────────────────────────────────────── */
+.k-pane {
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--line);
+}
+.k-pane-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--hair);
+  padding: 0 8px;
+}
+.k-pt {
+  border: 0;
+  background: transparent;
+  padding: 7px 13px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--ink-3);
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.k-pt.on {
+  color: var(--act);
+  border-bottom-color: var(--act);
+}
+.k-pane-groups {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 6px 8px 3px;
+}
+.k-grp {
+  padding: 0 12px;
+  border-right: 1px solid var(--hair);
+}
+.k-grp:last-child {
+  border-right: 0;
+}
+.k-grp-btns {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.k-grp-lab {
+  font-size: var(--fs-label);
+  color: var(--ink-3);
+  text-align: center;
+  padding: 3px 0 2px;
+}
+.k-act {
+  border: 1px solid var(--line);
+  background: var(--surface-card);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.k-act:hover:not(:disabled) {
+  background: var(--surface-raised);
+}
+.k-act:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.k-act-s {
+  font-weight: 600;
+}
+.k-act-p {
+  background: var(--act);
+  border-color: var(--act);
+  color: var(--act-ink);
+  font-weight: 600;
+}
+.k-act-p:hover:not(:disabled) {
+  background: var(--act);
+  filter: brightness(1.08);
+}
+
+/* ── 3. Đầu chứng từ + trục trạng thái ───────────────────────────────── */
+.k-doc {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--line);
+  padding: 11px var(--gutter) 12px;
+}
+.k-doc-kind {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-doc-no {
+  margin: 1px 0 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--fs-doc);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+}
+.k-doc-sub {
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.k-tracks {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.k-track-lab {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 3px;
+}
+.k-steps {
+  display: flex;
+}
+.k-step {
+  font: inherit;
+  font-size: var(--fs-micro);
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-right: 0;
+  background: var(--surface-raised);
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: default;
+}
+.k-step:not(:disabled) {
+  cursor: pointer;
+}
+.k-step:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+.k-step:last-child {
+  border-right: 1px solid var(--line);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+.k-step.on {
+  background: var(--act);
+  border-color: var(--act);
+  color: var(--act-ink);
+  font-weight: 600;
+}
+
+/* ── 4. Dải ai đang giữ ──────────────────────────────────────────────── */
+.k-hold {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding: 7px var(--gutter);
+  background: var(--warn-wash);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-sm);
+}
+.k-hold-mine {
+  background: var(--act-wash);
+}
+.k-hold-k {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--warn);
+}
+.k-hold-mine .k-hold-k {
+  color: var(--act-text);
+}
+.k-hold-what {
+  color: var(--ink-2);
+}
+.k-hold-age {
+  margin-left: auto;
+  font-weight: 700;
+  color: var(--stop);
+}
+
+/* ── 5. Bảng kiểm ────────────────────────────────────────────────────── */
+.k-check {
+  background: var(--stop-wash);
+  border-bottom: 1px solid var(--line);
+  padding: 8px var(--gutter) 10px;
+}
+.k-check-warn {
+  background: var(--warn-wash);
+}
+.k-check-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--fs-body);
+}
+.k-check-badge {
+  background: var(--stop);
+  color: var(--surface-card);
+  font-weight: 700;
+  font-size: var(--fs-sm);
+  border-radius: var(--radius-sm);
+  padding: 1px 7px;
+  text-align: center;
+}
+.k-check-warn .k-check-badge {
+  background: var(--warn);
+}
+.k-check-sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+.k-check-l {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.k-check-l li {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  gap: 10px;
+  align-items: baseline;
+  font-size: var(--fs-sm);
+  padding: 2px 0;
+}
+.k-check-lvl {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  border-radius: var(--radius-sm);
+  padding: 1px 0;
+  color: var(--surface-card);
+}
+.k-cs .k-check-lvl {
+  background: var(--stop);
+}
+.k-cw .k-check-lvl {
+  background: var(--warn);
+}
+.k-check-w {
+  color: var(--ink);
+}
+.k-check-f {
+  color: var(--ink-3);
+}
+
+/* ── 6. FastTab ──────────────────────────────────────────────────────── */
+.k-ft {
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 7px;
+}
+.k-ft-h {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.k-ft-h:hover {
+  background: var(--surface-raised);
+}
+.k-caret {
+  display: inline-block;
+  font-size: 10px;
+  color: var(--ink-3);
+  transition: transform 0.12s;
+}
+.k-caret.o {
+  transform: rotate(90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-caret {
+    transition: none;
+  }
+}
+.k-ft-t {
+  font-size: var(--fs-section);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.k-ft-sum {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.k-ft-sum b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.k-ft-b {
+  border-top: 1px solid var(--hair);
+  padding: 11px 12px;
+}
+.k-ft-flush {
+  padding: 0;
+}
+.k-ft-note {
+  border-top: 1px solid var(--hair);
+  padding: 7px 12px;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+/* ── 7. Lưới nhãn–giá trị ────────────────────────────────────────────── */
+.k-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 0;
+}
+@media (min-width: 640px) {
+  .k-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (min-width: 900px) {
+  .k-fields {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+.k-f {
+  display: grid;
+  grid-template-columns: 112px 1fr;
+  gap: 8px;
+  padding: 4px 10px 4px 0;
+  align-items: baseline;
+}
+.k-f dt {
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+.k-f dd {
+  margin: 0;
+  font-size: var(--fs-body);
+  font-weight: 500;
+}
+.k-inherit {
+  background: var(--surface-raised);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  border-bottom: 1px dotted var(--ink-3);
+}
+.k-fields-note {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid var(--hair);
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+
+/* ── 8. Thanh công cụ lưới + trạng thái dòng ─────────────────────────── */
+.k-gbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 5px 8px;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-raised);
+}
+.k-gb {
+  border: 1px solid var(--line);
+  background: var(--surface-card);
+  border-radius: var(--radius);
+  padding: 3px 9px;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: inherit;
+  cursor: pointer;
+}
+.k-gb:hover:not(:disabled) {
+  background: var(--act-wash);
+}
+.k-gb:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.k-gb-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--line);
+  margin: 0 4px;
+}
+.k-gbar-cnt {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.k-ls {
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+.k-ls-idle {
+  background: var(--surface-raised);
+  color: var(--ink-3);
+}
+.k-ls-part {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.k-ls-done {
+  background: var(--done-wash);
+  color: var(--done);
+}
+.k-ls-short {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+
+/* ── Lưới dữ liệu ────────────────────────────────────────────────────── */
+.k-gridwrap {
+  overflow-x: auto;
+}
+.k-grid {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.k-grid th {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--hair);
+  text-align: left;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--ink-3);
+  padding: 6px var(--pad-x);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.k-grid th.k-r,
+.k-grid td.k-r {
+  text-align: right;
+}
+.k-grid td {
+  border-bottom: 1px solid var(--hair);
+  border-right: 1px solid var(--hair);
+  padding: 5px var(--pad-x);
+  white-space: nowrap;
+  height: var(--row-h);
+}
+/* Sọc chẵn: cố ý dùng hex — đây là một sắc trắng-ngà chỉ dùng đúng ở đây,
+   nâng lên token thì tạo ra một token không ai dùng chỗ nào khác. */
+.k-grid tbody tr:nth-child(even) {
+  background: #fafbfd;
+}
+.k-grid tbody tr:hover,
+.k-grid tbody tr.k-on {
+  background: var(--act-wash);
+}
+.k-grid tfoot td {
+  background: var(--surface-raised);
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+  padding: 6px var(--pad-x);
+}
+.k-c-k {
+  width: 26px;
+  text-align: center;
+  padding: 0 4px;
+}
+.k-c-n {
+  width: 30px;
+  color: var(--ink-3);
+  text-align: right;
+}
+.k-zero {
+  color: var(--stop);
+  font-weight: 700;
+}
+.k-flag {
+  background: var(--warn-wash);
+  color: var(--warn);
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-num-sm);
+}
+
+/* ── 9. FactBox ──────────────────────────────────────────────────────── */
+.k-fact {
+  background: var(--surface-card);
+  border-top: 1px solid var(--line);
+  align-self: stretch;
+  min-width: 0;
+}
+@media (min-width: 1100px) {
+  .k-fact {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    margin: 10px var(--gutter) 12px 0;
+  }
+}
+.k-fact-sec {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hair);
+}
+.k-fact-sec:last-child {
+  border-bottom: 0;
+}
+.k-fact-h {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 5px;
+}
+.k-fact-kv {
+  margin: 0;
+}
+.k-fact-kv > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: var(--fs-sm);
+  padding: 2px 0;
+}
+.k-fact-kv dt {
+  color: var(--ink-3);
+}
+.k-fact-kv dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* ── 11. Bố cục thân + thanh trạng thái đáy ──────────────────────────── */
+.k-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: start;
+  flex: 1;
+}
+@media (min-width: 1100px) {
+  .k-body:not(.k-body-wide) {
+    grid-template-columns: 1fr 268px;
+  }
+}
+.k-main {
+  min-width: 0;
+  padding: 10px var(--gutter) 12px;
+}
+.k-sbar {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 5px var(--gutter);
+  background: var(--chrome);
+  border-top: 1px solid var(--line);
+  font-size: var(--fs-num-sm);
+  color: var(--ink-2);
+}
+.k-sbar-r {
+  margin-left: auto;
+}
