@@ -18,6 +18,7 @@ Nền tảng ERP nội bộ cho **Công ty SXTM Hoàng Gia** (sản xuất nội
 - 🏢 **Workspace theo phòng ban** — 10 bộ phận (Bán hàng, Kế toán, Kho, Kỹ thuật, Kế hoạch, QC, Sản xuất, Nhân sự, Ban Giám Đốc, Quản trị hệ thống), mỗi workspace có màu, sidebar, dashboard riêng. Đăng nhập tự đưa vào đúng workspace.
 - 🛡️ **Quản trị hệ thống (IT)** — CRUD người dùng đầy đủ: tạo / sửa / đổi vai trò / khoá / xoá mềm / khôi phục / **reset mật khẩu** / **import Excel hàng loạt**; nhật ký thao tác (audit log); kiểm tra sức khoẻ hệ thống; quản lý phòng ban + gán trưởng phòng.
 - 🔧 **Kỹ thuật** — thư viện sản phẩm (mã, danh mục, bản vẽ, BOM) với lọc, tìm kiếm, phân trang, export CSV.
+- ✂️ **Quy cắt phôi** — bản web của phần mềm Steel Cutting ở xưởng: nhập chi tiết cần cắt (không giới hạn dòng, dán từ Excel, xoá hàng loạt), tối ưu sơ đồ cắt trên cây tiêu chuẩn, xuất Excel.
 - ✅ **Quản lý công việc** — giao việc, báo cáo tiến độ, duyệt / từ chối, báo cáo tuần, kế hoạch, thông báo.
 - 🔐 **Xác thực tuỳ biến** — bcrypt + JWT cookie (httpOnly), phân quyền theo vai trò/phòng ban trong application layer.
 - ⚡ **UI/UX kiểu ERP** — bộ component dùng chung (bảng dữ liệu có sort/phân trang, thanh KPI, breadcrumb, command palette `Ctrl+K`, phản hồi loading xuyên suốt).
