@@ -601,3 +601,132 @@ export function StatusBar({ left, right }: { left: ReactNode[]; right?: ReactNod
 export function DocScreen({ children }: { children: ReactNode }) {
   return <div className="kit k-screen">{children}</div>
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   12. LƯỚI DỮ LIỆU — mảng kit còn thiếu, và là lý do màn thật không dựng
+   lại được đúng mẫu.
+
+   Trang mẫu `/design-lab/mau-erp` viết `<table className="k-grid">` thô vì
+   `design-lab` được MIỄN luật lint. Màn thật nằm trong `src/app`, nơi
+   `hg/no-raw-control` cấm thẻ `<table>` trần — nên không có bộ này thì mọi
+   màn nghiệp vụ đều buộc phải quay về `shadcn/table`, tức quay về diện mạo
+   cũ. Đây đúng là chỗ hổng chủ dự án chỉ ra 09/09/2026.
+
+   Khác `Table.tsx` của kit: bản kia dựng cho màn TOÀN TRANG (tự cuộn, chiếm
+   hết chiều cao còn lại). Bộ này dựng cho lưới NẰM TRONG khối — trong
+   FastTab, trong hộp thoại — nên chỉ cuộn ngang và cao theo nội dung.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export function Grid({
+  minWidth,
+  children,
+}: {
+  /** Bề rộng tối thiểu trước khi cuộn ngang. Khai theo SỐ CỘT của chính màn:
+   *  đóng cứng một con số thì lưới 14 cột luôn có cột cuối nằm ngoài tầm. */
+  minWidth?: number
+  children: ReactNode
+}) {
+  return (
+    <div className="k-gridwrap">
+      <table className="k-grid" style={minWidth ? { minWidth } : undefined}>
+        {children}
+      </table>
+    </div>
+  )
+}
+
+/** Tự bọc `<tr>` — hàng tiêu đề luôn là một dòng, không có ngoại lệ. */
+export function GridHead({ children }: { children: ReactNode }) {
+  return (
+    <thead>
+      <tr>{children}</tr>
+    </thead>
+  )
+}
+
+export function GridBody({ children }: { children: ReactNode }) {
+  return <tbody>{children}</tbody>
+}
+
+export function GridFoot({ children }: { children: ReactNode }) {
+  return (
+    <tfoot>
+      <tr>{children}</tr>
+    </tfoot>
+  )
+}
+
+export function GridRow({
+  selected,
+  onClick,
+  children,
+}: {
+  selected?: boolean
+  onClick?: () => void
+  children: ReactNode
+}) {
+  return (
+    <tr className={cx(selected && 'k-on')} onClick={onClick}>
+      {children}
+    </tr>
+  )
+}
+
+export function Th({
+  num,
+  width,
+  children,
+}: {
+  /** Cột số: căn phải, để tiêu đề thẳng hàng với con số bên dưới. */
+  num?: boolean
+  width?: number
+  children?: ReactNode
+}) {
+  return (
+    <th className={cx(num && 'k-r')} style={width ? { width } : undefined}>
+      {children}
+    </th>
+  )
+}
+
+export function Td({
+  num,
+  tone,
+  colSpan,
+  children,
+}: {
+  num?: boolean
+  /** Nhấn theo vòng đời dữ liệu — KHÔNG dùng cho trạng thái điều khiển. */
+  tone?: 'stop' | 'warn' | 'done'
+  colSpan?: number
+  children?: ReactNode
+}) {
+  return (
+    <td className={cx(num && 'k-r', num && 'num', tone && `k-t-${tone}`)} colSpan={colSpan}>
+      {children}
+    </td>
+  )
+}
+
+/**
+ * Ô tick chọn dòng.
+ *
+ * `aria-label` BẮT BUỘC chứ không tuỳ chọn: một cột toàn ô tick không nhãn là
+ * cột câm với trình đọc màn hình, và người dùng ERP đi bằng bàn phím rất
+ * nhiều. Nhãn phải nói chọn DÒNG NÀO, không phải "chọn".
+ */
+export function GridCheck({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean
+  onChange: () => void
+  label: string
+}) {
+  return (
+    <td className="k-c-k">
+      <input type="checkbox" checked={checked} onChange={onChange} aria-label={label} />
+    </td>
+  )
+}

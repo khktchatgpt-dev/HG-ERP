@@ -34,6 +34,18 @@ import {
   FastTab,
   Field,
   FieldGrid,
+  Grid,
+  GridBody,
+  GridBtn,
+  GridCheck,
+  GridFoot,
+  GridHead,
+  GridRow,
+  GridSep,
+  GridToolbar,
+  LineStatus,
+  Td,
+  Th,
   HolderBar,
   StatusBar,
   StatusTrack,
@@ -115,6 +127,23 @@ const money = (n: number) => n.toLocaleString('vi-VN')
 
 /** Sáu bước của TRỤC ĐƠN. Nhận hàng là trục riêng — xem ghi chú ở docStepAt. */
 const DOC_STEPS = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã gửi NCC', 'NCC xác nhận', 'Đang về']
+
+/** Trạng thái NHẬN HÀNG của một dòng — khác trạng thái của cả chứng từ. */
+type LineKind = 'idle' | 'part' | 'done' | 'short'
+const LINE_STATUS_TEXT: Record<LineKind, string> = {
+  idle: 'Chưa nhận',
+  part: 'Một phần',
+  done: 'Đủ',
+  short: 'Đóng thiếu',
+}
+function lineStatusOf(s?: { qty_received: number; qty_ordered: number; closed_short_at: string | null }): LineKind {
+  if (!s) return 'idle'
+  // Đóng thiếu xét TRƯỚC "đủ": dòng chốt thiếu vẫn có thể nhận gần đủ, nhưng
+  // điều người đọc cần biết là nó đã KHÉP, không phải nó gần đủ.
+  if (s.closed_short_at) return 'short'
+  if (s.qty_received >= s.qty_ordered && s.qty_ordered > 0) return 'done'
+  return s.qty_received > 0 ? 'part' : 'idle'
+}
 
 /**
  * Cắt ngắn cho dòng tóm tắt FastTab.
@@ -200,6 +229,13 @@ export function PoDetailScreen({
   const [confirming, setConfirming] = useState<'confirm' | 'add' | null>(null)
   const [editingTerms, setEditingTerms] = useState(false)
   const [copied, setCopied] = useState(false)
+  /* Tab của thanh hành động. Ba tab đều có nút thật — xem ghi chú ở chỗ dựng. */
+  const [paneTab, setPaneTab] = useState<'don' | 'nhan' | 'in'>('don')
+  /* Dòng đang chọn trong lưới. Chỉ giữ vì nó DẪN tới một hành động thật
+     (chốt phần thiếu cho đúng dòng), không phải để trang trí. */
+  const [sel, setSel] = useState<string[]>([])
+  const toggleLine = (id: string) =>
+    setSel((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]))
 
   const copyCode = () => {
     void navigator.clipboard.writeText(po.code)
@@ -530,6 +566,16 @@ export function PoDetailScreen({
   }
   const blockers = checks.filter((c) => c.level === 'stop')
 
+  /* Tổng tiền CHỈ cộng dòng đã có giá. Cộng cả dòng trống giá thì con số ra
+     nhỏ hơn thực tế mà không dấu hiệu gì — đúng loại "số nói dối" đã vá ở
+     chỗ tiền hai loại tiền tệ. Dòng thiếu giá được đếm riêng (noPriceCount)
+     và nói ra ngay dưới bảng. */
+  const totalAmount = lines.reduce((acc, l) => {
+    if (l.unit_price == null) return acc
+    const qty = l.price_basis === 'unit2' ? (l.qty2 ?? 0) : l.qty_ordered
+    return acc + qty * l.unit_price
+  }, 0)
+
   /*
     TỜ CHỨNG TỪ LIỀN MẠCH, TRÀN SÁT MÉP.
 
@@ -548,115 +594,162 @@ export function PoDetailScreen({
     trong `return (…)` làm hai con — phải viết bằng chú thích JS ở đây.
   */
   return (
-      <div className="theme-v3 kit text-foreground -m-6 flex flex-col">
+    <div className="theme-v3 kit text-foreground -m-6 flex flex-col">
       <TopProgressBar active={act.busy} />
 
-      {/*
-        ── VỎ CHỨNG TỪ THEO NGÔN NGỮ ERP (đợt 1, 09/09/2026) ───────────────
-
-        Thay khối nhận diện + dải 4 thẻ KPI + stepper của bản cũ. Mẫu tham
-        chiếu và lý do từng đặc trưng nằm ở /design-lab/mau-erp và trong
-        src/components/kit/Erp.tsx — không chép lại ở đây.
-
-        BỐN THỨ BẢN CŨ KHÔNG CÓ, và vì sao cần:
-
-        · ACTION PANE bày sẵn nút, chia nhóm có nhãn. Bản cũ giấu 6 thao tác
-          trong menu "⋯" — người mở màn này vài chục lần mỗi ngày phải mở menu
-          mới thấy "Đổi hẹn giao", trong khi ERP thật cho họ bấm bằng trí nhớ
-          vị trí.
-
-        · HAI TRỤC TRẠNG THÁI tách biệt. Một thanh tuyến tính không nói được
-          "hàng về một phần mà vẫn đang chờ sửa giá" — Dynamics tách ba trục
-          đúng vì lý do đó.
-
-        · DẢI "AI ĐANG GIỮ" + số ngày đã nằm ở bước hiện tại. Đây là thứ đắt
-          nhất: đo 09/09/2026 có 65 đơn nằm nháp trung bình 6,5 ngày và không
-          màn nào nói ra. Lõi tính dùng chung `poHolder` với màn danh sách để
-          hai chỗ không nói hai chuyện.
-
-        · BẢNG KIỂM TRƯỚC KHI GỬI DUYỆT. Bản cũ cho bấm rồi mới báo lỗi; ERP
-          nói trước, từ lúc mở màn, để người soạn đi xin cho đủ.
-      */}
       <Crumb
         path={['Cung ứng', 'Đơn đặt vật tư', po.code]}
         position={position ? [position.index, position.total] : undefined}
       />
 
-      <ActionPane>
-        <ActionGroup label="Duy trì">
-          {canEdit && po.status === 'draft' && (
-            <Action strong onClick={() => router.push(`/planning/pos/${po.id}/edit`)}>
-              Sửa đơn
-            </Action>
-          )}
-          {isSupply && (
-            <Action
-              onClick={() => router.push(`/planning/pos/${po.id}/edit?duplicate=1`)}
-            >
-              {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
-            </Action>
-          )}
-          {canEdit && po.status === 'draft' && (
-            <Action onClick={() => void removeDraft()}>Xoá nháp</Action>
-          )}
-        </ActionGroup>
+      {/*
+        THANH HÀNH ĐỘNG CÓ TAB — Dynamics 365 F&O.
 
-        <ActionGroup label="Luồng phê duyệt">
-          {primary && (
+        Ba tab, và cả ba đều CÓ NÚT THẬT. Mẫu ở /design-lab/mau-erp vẽ bốn tab
+        nhưng ở đây "Tài chính" chưa có phân hệ nên sẽ rỗng — bày một tab rỗng
+        là nói dối rằng có chức năng.
+
+        Nút KHÔNG bị ẩn khi chưa dùng được: hiện mờ kèm `title` nói lý do. Ẩn
+        đi thì người dùng không học được là nó tồn tại, và mỗi lần đổi trạng
+        thái thanh công cụ lại nhảy chỗ — thứ phá đúng cái trí nhớ vị trí mà
+        Action Pane sinh ra để nuôi.
+      */}
+      <ActionPane
+        tabs={[
+          { label: 'Đơn hàng', active: paneTab === 'don', onClick: () => setPaneTab('don') },
+          { label: 'Nhận hàng', active: paneTab === 'nhan', onClick: () => setPaneTab('nhan') },
+          { label: 'In & xuất', active: paneTab === 'in', onClick: () => setPaneTab('in') },
+        ]}
+      >
+        {paneTab === 'don' && (
+          <>
+            <ActionGroup label="Duy trì">
+              <Action
+                strong
+                disabled={!canEdit || po.status !== 'draft'}
+                title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
+                onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
+              >
+                Sửa đơn
+              </Action>
+              <Action
+                disabled={!isSupply}
+                onClick={() => router.push(`/planning/pos/${po.id}/edit?duplicate=1`)}
+              >
+                {po.status === 'cancelled' ? 'Tạo lại từ đơn' : 'Nhân bản đơn'}
+              </Action>
+              <Action
+                disabled={!canEdit || po.status !== 'draft'}
+                title={po.status !== 'draft' ? 'Chỉ xoá được đơn còn ở bước Nháp' : undefined}
+                onClick={() => void removeDraft()}
+              >
+                Xoá nháp
+              </Action>
+            </ActionGroup>
+
+            <ActionGroup label="Luồng phê duyệt">
+              {primary && (
+                <Action
+                  primary
+                  onClick={primary.onClick}
+                  disabled={act.busy || blockers.length > 0}
+                  title={
+                    blockers.length > 0
+                      ? `Còn ${blockers.length} lỗi chặn — xem bảng kiểm phía trên`
+                      : undefined
+                  }
+                >
+                  {primary.label}
+                </Action>
+              )}
+              <Action
+                disabled={!canEdit || !canReschedule(po.status).ok}
+                title={
+                  canReschedule(po.status).ok
+                    ? undefined
+                    : 'Chỉ đổi hẹn được khi đơn đã gửi nhà cung cấp'
+                }
+                onClick={() =>
+                  setRescheduling({
+                    po,
+                    date: po.expected_at?.slice(0, 10) ?? '',
+                    reason: '',
+                  })
+                }
+              >
+                Đổi hẹn giao
+              </Action>
+              <Action
+                disabled={!canReassign || ['received', 'cancelled'].includes(po.status)}
+                onClick={() => setReassigning({ po, toId: '' })}
+              >
+                Bàn giao phụ trách
+              </Action>
+              <Action
+                disabled={!canEdit || ['draft', 'received', 'cancelled'].includes(po.status)}
+                title={
+                  po.status === 'draft' ? 'Đơn nháp thì xoá, không cần huỷ' : undefined
+                }
+                onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}
+              >
+                Huỷ đơn
+              </Action>
+            </ActionGroup>
+          </>
+        )}
+
+        {paneTab === 'nhan' && (
+          <ActionGroup label="Nhận hàng">
             <Action
-              primary
-              onClick={primary.onClick}
-              disabled={act.busy || blockers.length > 0}
+              disabled={!canAcceptByHand}
               title={
-                blockers.length > 0
-                  ? `Còn ${blockers.length} lỗi chặn — xem bảng kiểm phía trên`
-                  : undefined
+                canAcceptByHand
+                  ? undefined
+                  : 'Chỉ dùng cho đơn có dòng ngoài sổ kho, khi đã gửi NCC'
               }
+              onClick={() => setConfirming('add')}
             >
-              {primary.label}
+              Nghiệm thu ngoài sổ kho
             </Action>
-          )}
-          {canEdit && canReschedule(po.status).ok && (
             <Action
+              disabled={!canEdit || openStockLines.length === 0}
+              title={
+                openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined
+              }
               onClick={() =>
-                setRescheduling({
+                setReasoning({
                   po,
-                  date: po.expected_at?.slice(0, 10) ?? '',
+                  kind: 'close_short',
                   reason: '',
+                  lineId: null,
+                  detail: `${openStockLines.length} dòng còn thiếu sẽ được chốt`,
                 })
               }
             >
-              Đổi hẹn giao
+              Chốt phần thiếu
             </Action>
-          )}
-          {canReassign && !['received', 'cancelled'].includes(po.status) && (
-            <Action onClick={() => setReassigning({ po, toId: '' })}>
-              Bàn giao phụ trách
-            </Action>
-          )}
-          {canEdit && !['draft', 'received', 'cancelled'].includes(po.status) && (
-            <Action onClick={() => setReasoning({ po, kind: 'cancel', reason: '' })}>
-              Huỷ đơn
-            </Action>
-          )}
-        </ActionGroup>
-
-        <ActionGroup label="In &amp; xuất">
-          <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
-            In đơn đặt hàng
-          </Action>
-        </ActionGroup>
-
-        {chain.filter((n) => !n.current && n.href).length > 0 && (
-          <ActionGroup label="Chứng từ liên quan">
-            {chain
-              .filter((n) => !n.current && n.href)
-              .map((n) => (
-                <Action key={n.href} onClick={() => router.push(n.href!)}>
-                  {n.label}
-                </Action>
-              ))}
           </ActionGroup>
+        )}
+
+        {paneTab === 'in' && (
+          <>
+            <ActionGroup label="In & xuất">
+              <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
+                In đơn đặt hàng
+              </Action>
+            </ActionGroup>
+            {chain.filter((n) => !n.current && n.href).length > 0 && (
+              <ActionGroup label="Chứng từ liên quan">
+                {chain
+                  .filter((n) => !n.current && n.href)
+                  .map((n) => (
+                    <Action key={n.href} onClick={() => router.push(n.href!)}>
+                      {n.label}
+                    </Action>
+                  ))}
+              </ActionGroup>
+            )}
+          </>
         )}
       </ActionPane>
 
@@ -677,6 +770,7 @@ export function PoDetailScreen({
           steps={['Chưa nhận', 'Một phần', 'Đủ']}
           at={recvStepAt}
         />
+        <StatusTrack label="Thanh toán" steps={['Chưa', 'Một phần', 'Xong']} at={0} />
       </DocHead>
 
       <HolderBar
@@ -687,25 +781,11 @@ export function PoDetailScreen({
       />
 
       {!canEdit && !canApprove && (
-        <HolderBar
-          who="Chế độ chỉ đọc"
-          what="Bạn đang xem đơn của nhân sự khác"
-        />
+        <HolderBar who="Chế độ chỉ đọc" what="Bạn đang xem đơn của nhân sự khác" />
       )}
 
       <Checks title="Chưa gửi duyệt được" items={checks} />
 
-      {/* ── Tabs nội dung chính ─────────────────────────────────────────── */}
-      {/*
-        THÂN CHỨNG TỪ — FastTab bên trái, FactBox bên phải.
-
-        Bỏ Tabs vì tab PHẲNG chỉ cho xem MỘT khối một lúc: muốn biết đơn có mấy
-        đợt giao thì phải rời khối mặt hàng, quay lại là mất chỗ đang đọc.
-        FastTab giữ số liệu quan trọng nhất ngay TRÊN DÒNG TIÊU ĐỀ kể cả khi
-        khối đang gấp — đọc được cả năm khối cùng lúc mà không khối nào phải mở.
-
-        FactBox là DỮ KIỆN LIÊN QUAN, không phải chỗ điều hướng.
-      */}
       <DocBody
         aside={
           <FactBox>
@@ -713,9 +793,10 @@ export function PoDetailScreen({
               <div className="k-strong">{po.supplier_name ?? 'Chưa chọn'}</div>
               <FactKv
                 rows={[
-                  ['Phụ trách', po.assignee_name ?? '—'],
-                  ['Hạn giao', day(po.expected_at)],
-                  ['Điều khoản TT', po.terms_payment ?? '—'],
+                  ['Người liên hệ', po.assignee_name ?? '—'],
+                  ['Hạn giao', <span key="h" className={late === 'overdue' ? 'k-t-stop' : undefined}>{day(po.expected_at)}</span>],
+                  ['Điều khoản TT', short(po.terms_payment, 22)],
+                  ['Loại tiền', <span key="c" className="num">{po.currency ?? 'VND'}</span>],
                 ]}
               />
             </FactSection>
@@ -724,6 +805,12 @@ export function PoDetailScreen({
               <FactKv
                 rows={[
                   ['Số dòng', <span key="l" className="num">{lines.length}</span>],
+                  [
+                    'Chưa có giá',
+                    <span key="p" className={noPriceCount > 0 ? 'num k-t-warn' : 'num'}>
+                      {noPriceCount}
+                    </span>,
+                  ],
                   ['Đã đặt', <span key="o" className="num">{money(totalOrderedStock)}</span>],
                   ['Đã về', <span key="r" className="num">{money(totalReceivedStock)}</span>],
                   [
@@ -752,433 +839,218 @@ export function PoDetailScreen({
                 />
               </FactSection>
             )}
+
+            <FactSection title="Người theo dõi">
+              <FactKv
+                rows={[
+                  [po.assignee_name ?? me.name, 'phụ trách'],
+                  ...history
+                    .filter((h) => h.action === 'approved' && h.actor_name)
+                    .slice(0, 1)
+                    .map((h) => [h.actor_name as string, 'đã duyệt'] as [string, string]),
+                ]}
+              />
+            </FactSection>
           </FactBox>
         }
       >
-
-        {/* ── TAB 1: TỔNG QUAN & MẶT HÀNG ───────────────────────────────── */}
         <FastTab
           title="Tổng quan & Mặt hàng"
           defaultOpen
           summary={[
             ['Số dòng', <span key="a" className="num">{lines.length}</span>],
             ...(noPriceCount > 0
-              ? [['Chưa có giá', <span key="b" className="num k-t-warn">{noPriceCount}</span>] as [string, React.ReactNode]]
+              ? [
+                  ['Chưa có giá', <span key="b" className="num k-t-warn">{noPriceCount}</span>] as [
+                    string,
+                    React.ReactNode,
+                  ],
+                ]
               : []),
           ]}
         >
-          <div className="flex flex-col gap-5">
-          {/* Khối thông tin đối tác & logistics */}
-          <>
-            <div className="k-sec">
-              <div className="k-sec-t">
-                Thông tin đơn hàng & Đối tác
-              </div>
-            </div>
-            <FieldGrid>
-              <Field label="Bên bán (Nhà cung cấp)">
-                <Link
-                  href={`/planning/suppliers/${po.supplier_id}`}
-                  className="text-primary text-sm font-semibold hover:underline"
-                >
-                  {po.supplier_name}
-                </Link>
-</Field>
-
-              <Field label="Lệnh sản xuất">
-                {lsxCodes ? (
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <Link
-                      href="/planning/lsx"
-                      className="text-primary font-mono text-sm font-medium hover:underline"
-                    >
-                      {lsxCodes}
-                    </Link>
-                    {extraLsx.length > 0 && (
-                      <Badge tone="blue" className="text-[10px]">
-                        Gộp {extraLsx.length + 1} lệnh
-                      </Badge>
-                    )}
-                  </div>
-                ) : (
-                  <span className="text-muted-foreground text-sm">Đơn ngoài lệnh</span>
-                )}
-</Field>
-
-              <Field label="Đơn hàng khách">
-                {po.order_code ? (
-                  <Link
-                    href="/sales/orders"
-                    className="text-primary font-mono text-sm font-medium hover:underline"
-                  >
-                    {po.order_code}
-                  </Link>
-                ) : (
-                  <span className="text-muted-foreground text-sm">—</span>
-                )}
-</Field>
-
-              <Field label="Người phụ trách">
-                <span className="text-sm font-medium">
-                  {po.assignee_name ?? (
-                    <span className="text-amber-600 dark:text-amber-400">Chưa giao</span>
-                  )}
+          <FieldGrid
+            note={
+              <>
+                Ô nền nhạt là <b>giá trị kế thừa từ hồ sơ nhà cung cấp</b> — sửa ở đây chỉ đổi
+                cho đơn này.
+              </>
+            }
+          >
+            <Field label="Nhà cung cấp">{po.supplier_name ?? '—'}</Field>
+            <Field label="Lệnh sản xuất">
+              {lsxCodes ? (
+                <span className="num">
+                  {lsxCodes}
+                  {extraLsx.length > 0 && ` (gộp ${extraLsx.length + 1} lệnh)`}
                 </span>
-</Field>
+              ) : (
+                'Đơn ngoài lệnh'
+              )}
+            </Field>
+            <Field label="Đơn hàng khách">
+              {po.order_code ? <span className="num">{po.order_code}</span> : '—'}
+            </Field>
+            <Field label="Người phụ trách">{po.assignee_name ?? '—'}</Field>
+            <Field label="Ngày đặt">
+              <span className="num">{day(po.created_at)}</span>
+            </Field>
+            <Field label="Hạn giao" tone={late === 'overdue' ? 'stop' : undefined}>
+              <span className="num">{day(po.expected_at)}</span>
+            </Field>
+            <Field label="Loại tiền">
+              <span className="num">
+                {po.currency ?? 'VND'} (VAT {po.vat_rate ?? 0}%
+                {po.price_includes_vat ? ', đã gồm' : ''})
+              </span>
+            </Field>
+            <Field label="Số hợp đồng">
+              {po.contract_no ? <span className="num">{po.contract_no}</span> : '—'}
+            </Field>
+            <Field label="Điều khoản TT">{po.terms_payment ?? '—'}</Field>
+            <Field label="Điều kiện giao">{po.terms_delivery_place ?? '—'}</Field>
+            <Field label="Chiết khấu">
+              {po.discount_amount ? (
+                <span className="num">{money(po.discount_amount)}</span>
+              ) : (
+                'Không có'
+              )}
+            </Field>
+            <Field label="Nguồn nhu cầu">
+              <span className="num">
+                {extraLsx.length + (po.lsx_code ? 1 : 0) || '—'}
+                {po.lsx_code ? ' lệnh sản xuất' : ''}
+              </span>
+            </Field>
+          </FieldGrid>
 
-              <Field label="Tiền tệ & Thuế VAT">
-                <span className="text-sm">
-                  {po.currency}
-                  {po.vat_rate != null && (
-                    <span className="text-muted-foreground ml-1 text-xs">
-                      (VAT {po.vat_rate}%, {po.price_includes_vat ? 'đã gồm' : 'chưa gồm'}
-                      )
-                    </span>
-                  )}
-                </span>
-</Field>
+          {po.note && <div className="k-note">{po.note}</div>}
 
-              <Field label="Số hợp đồng">
-                <div>
-                  {po.contract_no ? (
-                    <DocChip>{po.contract_no}</DocChip>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">—</span>
-                  )}
-                </div>
-</Field>
-
-              <Field label="Chiết khấu">
-                <span className="text-sm">
-                  {m.discountAmount > 0 ? cash(m.discountAmount) : 'Không có'}
-                </span>
-</Field>
-
-              <Field label="Điều kiện giao hàng">
-                <span className="truncate text-sm">
-                  {po.terms_delivery_place || 'Theo thoả thuận'}
-                </span>
-</Field>
-            </FieldGrid>
-            {po.note && (
-              <div className="bg-muted/20 text-muted-foreground border-t px-5 py-2.5 text-xs">
-                <span className="text-foreground font-semibold">Ghi chú: </span>
-                {po.note}
-              </div>
-            )}
-          </>
-
-          {/* Bảng danh mục vật tư */}
-          <>
-            <div className="k-sec">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="k-sec-t">
-                  <PackageSearch className="text-primary size-4" />
-                  Danh mục vật tư đặt hàng ({lines.length} dòng)
-                </div>
-                {canEdit && po.status === 'draft' && (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href={`/planning/pos/${po.id}/edit`}>
-                      <Pencil className="size-3.5" /> Chỉnh sửa vật tư
-                    </Link>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <Table className="min-w-[720px]">
-                <TableHeader className="bg-muted/40 sticky top-0 z-10">
-                  <TableRow>
-                    <TableHead className="w-12 text-center text-xs font-semibold tracking-wider uppercase">
-                      #
-                    </TableHead>
-                    <TableHead className="text-xs font-semibold tracking-wider uppercase">
-                      Vật tư
-                    </TableHead>
-                    <TableHead className="w-36 text-xs font-semibold tracking-wider uppercase">
-                      Quy cách
-                    </TableHead>
-                    <TableHead className="w-28 text-right text-xs font-semibold tracking-wider uppercase">
-                      SL đặt
-                    </TableHead>
-                    {/*
-                      TỒN KHO ngay trên dòng (đợt 1). Tồn 0 tô đỏ: nó nói thẳng
-                      "không mua thì sản xuất dừng", còn tồn dư nói "mua dự
-                      phòng, chưa gấp" — hai quyết định khác hẳn nhau mà bản cũ
-                      bắt người duyệt tự đi tra ở màn khác.
-                    */}
-                    <TableHead className="w-24 text-right text-xs font-semibold tracking-wider uppercase">
-                      Tồn kho
-                    </TableHead>
-                    {showReceived && (
-                      <TableHead className="w-48 text-right text-xs font-semibold tracking-wider uppercase">
-                        Về kho
-                      </TableHead>
-                    )}
-                    <TableHead className="w-32 text-right text-xs font-semibold tracking-wider uppercase">
-                      Đơn giá
-                    </TableHead>
-                    <TableHead className="w-36 text-right text-xs font-semibold tracking-wider uppercase">
-                      Thành tiền
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {lines.map((l, i) => {
-                    const st = receivedById.get(l.id)
-                    const pct =
-                      st && st.qty_ordered > 0
-                        ? Math.min((st.qty_received ?? 0) / st.qty_ordered, 1) * 100
-                        : 0
-
-                    return (
-                      <TableRow key={l.id} className="align-top">
-                        <TableCell className="text-muted-foreground text-center font-mono text-xs">
-                          {i + 1}
-                        </TableCell>
-                        <TableCell>
-                          {/*
-                            MÃ VÀ TÊN TRÊN CÙNG MỘT DÒNG (09/09/2026).
-
-                            Bản cũ xếp dọc ba tầng — chip mã, tên, dòng quy đổi
-                            — nên mỗi dòng bảng cao 67px và màn 6 dòng đã phải
-                            cuộn. Bảng ERP đọc theo chiều NGANG: mắt dò một dòng
-                            qua 8 cột số, mà dòng cao gấp ba thì mỗi lần liếc
-                            chỉ ôm được 4 dòng thay vì 12.
-
-                            Dòng quy đổi giữ riêng vì nó là số phụ, không phải
-                            danh tính — nhưng chỉ hiện khi thật sự có.
-                          */}
-                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                            {l.material_code && <DocChip>{l.material_code}</DocChip>}
-                            <span className="text-foreground font-medium">
-                              {l.material_name}
-                            </span>
-                          </div>
-                          {(l.qty2 != null || l.note) && (
-                            <div className="text-muted-foreground mt-0.5 text-xs">
-                              {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
-                              {l.qty2 != null && l.note && ' · '}
-                              {l.note}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                          {l.spec ?? '—'}
-                        </TableCell>
-                        <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-mono text-sm font-semibold">
-                            {money(l.qty_ordered)}
-                          </span>
-                          <span className="text-muted-foreground ml-1 text-xs">
-                            {l.material_unit}
-                          </span>
-                        </TableCell>
-
-                        <TableCell className="text-right whitespace-nowrap">
-                          {l.material_id == null ? (
-                            // Dòng tự do không đi vào sổ kho nên không có tồn
-                            // để tra — gạch ngang, KHÔNG phải số 0. "0" ở đây
-                            // sẽ đọc thành "kho hết hàng", tức nói sai.
-                            <span className="text-muted-foreground text-xs">—</span>
-                          ) : (
-                            <span
-                              className={
-                                (stock[l.material_id] ?? 0) <= 0
-                                  ? 'font-mono text-sm font-bold text-[var(--stop)]'
-                                  : 'font-mono text-sm'
-                              }
-                            >
-                              {money(stock[l.material_id] ?? 0)}
-                            </span>
-                          )}
-                        </TableCell>
-
-                        {showReceived && (
-                          <TableCell className="text-right">
-                            {l.material_id == null ? (
-                              <span
-                                className="text-muted-foreground text-xs"
-                                title="Nghiệm thu ngoài sổ kho"
-                              >
-                                Ngoài sổ kho
-                              </span>
-                            ) : (
-                              <div className="flex flex-col items-end gap-1">
-                                <span className="font-mono text-xs whitespace-nowrap">
-                                  <span
-                                    className={`font-semibold ${
-                                      st && st.qty_missing <= 0
-                                        ? 'text-emerald-600 dark:text-emerald-400'
-                                        : ''
-                                    }`}
-                                  >
-                                    {money(st?.qty_received ?? 0)}
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    /{money(l.qty_ordered)}
-                                  </span>
-                                </span>
-                                <div className="bg-muted h-1.5 w-20 overflow-hidden rounded-full">
-                                  <div
-                                    className="h-full rounded-full transition-all"
-                                    style={{
-                                      width: `${pct}%`,
-                                      backgroundColor:
-                                        pct >= 100
-                                          ? 'var(--done, #10b981)'
-                                          : 'var(--warn, #f59e0b)',
-                                    }}
-                                  />
-                                </div>
-                                {st?.closed_short_at ? (
-                                  <div className="flex flex-col items-end gap-0.5">
-                                    <Badge tone="gray" className="text-[10px]">
-                                      Chốt thiếu {money(st.qty_missing)}
-                                    </Badge>
-                                    {canEdit && po.status !== 'cancelled' && (
-                                      <button
-                                        type="button"
-                                        className="text-muted-foreground hover:text-foreground text-[11px] underline"
-                                        onClick={() => void act.reopenShort(po, st.id)}
-                                      >
-                                        Mở lại
-                                      </button>
-                                    )}
-                                  </div>
-                                ) : (
-                                  st &&
-                                  st.qty_missing > 0 && (
-                                    <div className="flex flex-col items-end gap-0.5">
-                                      <span className="font-mono text-[11px] font-medium text-amber-600 dark:text-amber-400">
-                                        Thiếu {money(st.qty_missing)}
-                                      </span>
-                                      {canEdit && canCloseShort && st.qty_open > 0 && (
-                                        <button
-                                          type="button"
-                                          className="text-muted-foreground hover:text-foreground text-[11px] underline"
-                                          onClick={() =>
-                                            setReasoning({
-                                              po,
-                                              kind: 'close_short',
-                                              reason: '',
-                                              lineId: st.id,
-                                              detail: `${st.material_name} — thiếu ${money(st.qty_missing)} ${st.material_unit}`,
-                                            })
-                                          }
-                                        >
-                                          Chốt thiếu
-                                        </button>
-                                      )}
-                                    </div>
-                                  )
-                                )}
-                              </div>
-                            )}
-                          </TableCell>
-                        )}
-
-                        <TableCell className="text-right whitespace-nowrap">
-                          {l.unit_price != null ? (
-                            <div className="flex flex-col items-end">
-                              <span className="font-mono text-sm">
-                                {cash(l.unit_price)}
-                              </span>
-                              {l.price_basis === 'unit2' && l.unit2 && (
-                                <span className="text-muted-foreground text-[11px]">
-                                  /{l.unit2}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-amber-600 dark:text-amber-400">
-                              Chưa có giá
-                            </span>
-                          )}
-                        </TableCell>
-
-                        <TableCell className="text-right whitespace-nowrap">
-                          <span className="font-mono text-sm font-semibold">
-                            {l.unit_price != null
-                              ? cash(roundMoney(poLineAmount(l), po.currency))
-                              : '—'}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                </TableBody>
-              </Table>
-
-              {/* Chân bảng: Tổng số lượng & Tổng thanh toán */}
-              <div className="bg-muted/10 grid gap-4 border-t p-5 sm:grid-cols-[1fr_auto]">
-                <div className="text-muted-foreground flex flex-col gap-1.5 text-xs">
-                  <span className="text-foreground font-semibold tracking-wider uppercase">
-                    Tổng số lượng theo đơn vị:
-                  </span>
-                  {qtyTotals(
-                    lines.some((l) => l.price_basis === 'unit2' && l.unit2),
-                    lines,
-                  ).map((t) => (
-                    <div key={t.label} className="flex items-center gap-2">
-                      <span>{t.label}:</span>
-                      <span className="text-foreground font-mono font-medium">
-                        {money(t.value)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex min-w-[280px] flex-col gap-2 text-sm">
-                  <div className="text-muted-foreground flex justify-between gap-6">
-                    <span>Tiền hàng</span>
-                    <span className="text-foreground font-mono font-medium">
-                      {cash(m.subtotal)}
-                    </span>
-                  </div>
-
-                  {m.discountAmount > 0 && (
-                    <div className="flex justify-between gap-6 text-emerald-600 dark:text-emerald-400">
-                      <span>Chiết khấu</span>
-                      <span className="font-mono font-medium">
-                        − {cash(m.discountAmount)}
-                      </span>
-                    </div>
-                  )}
-
-                  {po.vat_rate != null && (
-                    <div className="text-muted-foreground flex justify-between gap-6">
-                      <span>
-                        VAT ({po.vat_rate}%)
-                        <span className="ml-1 text-[11px]">
-                          {po.price_includes_vat ? '(đã gồm)' : '(chưa gồm)'}
-                        </span>
-                      </span>
-                      <span className="text-foreground font-mono font-medium">
-                        {cash(m.vatAmount)}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex items-baseline justify-between gap-6 border-t pt-2.5">
-                    <span className="text-foreground text-xs font-bold tracking-wider uppercase">
-                      Tổng thanh toán
-                    </span>
-                    <div className="text-right">
-                      <span className="text-primary font-mono text-xl font-bold">
-                        {cash(m.grandTotal)}
-                      </span>
-                      <span className="text-muted-foreground ml-1.5 text-xs font-normal">
-                        {po.currency}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
+          <div className="k-sec">
+            <div className="k-sec-t">Dòng đơn hàng ({lines.length} dòng)</div>
           </div>
+
+          {/*
+            THANH CÔNG CỤ LƯỚI — chỉ nút CÓ THẬT.
+
+            Mẫu vẽ "+ Thêm dòng / Xoá dòng / Sao chép" vì nó minh hoạ lưới sửa
+            tại chỗ. Màn này sửa dòng qua form riêng (`/edit`), nên bày ba nút
+            đó ở đây là vẽ chức năng không tồn tại. Ô tick giữ lại vì nó DẪN
+            tới một hành động thật: chốt phần thiếu cho đúng dòng đang chọn.
+          */}
+          <GridToolbar
+            count={sel.length > 0 ? `${sel.length} dòng đã chọn` : `${lines.length} dòng`}
+          >
+            <GridBtn
+              disabled={!canEdit || po.status !== 'draft'}
+              title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
+              onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
+            >
+              Chỉnh sửa vật tư
+            </GridBtn>
+            <GridSep />
+            <GridBtn
+              disabled={sel.length !== 1 || openStockLines.length === 0}
+              title={
+                sel.length !== 1
+                  ? 'Chọn đúng một dòng còn đang chờ về'
+                  : openStockLines.length === 0
+                    ? 'Không còn dòng nào đang chờ về'
+                    : undefined
+              }
+              onClick={() => {
+                const line = statusLines.find((l) => l.id === sel[0])
+                if (!line) return
+                setReasoning({
+                  po,
+                  kind: 'close_short',
+                  reason: '',
+                  lineId: line.id,
+                  detail: `${line.material_name} — thiếu ${money(line.qty_missing)} ${line.material_unit}`,
+                })
+              }}
+            >
+              Chốt phần thiếu
+            </GridBtn>
+          </GridToolbar>
+
+          <Grid minWidth={1100}>
+            <GridHead>
+              <Th width={26} />
+              <Th width={30}>#</Th>
+              <Th>Mã vật tư</Th>
+              <Th>Tên vật tư</Th>
+              <Th>Quy cách</Th>
+              <Th num>SL đặt</Th>
+              <Th>ĐVT mua</Th>
+              <Th num>Quy đổi kho</Th>
+              <Th num>Tồn</Th>
+              <Th num>Đơn giá</Th>
+              <Th num>Thành tiền</Th>
+              <Th>Trạng thái</Th>
+              <Th>Cho lệnh SX</Th>
+            </GridHead>
+            <GridBody>
+              {lines.map((l, i) => {
+                const st = statusLines.find((s) => s.id === l.id)
+                const kind = lineStatusOf(st)
+                const amount =
+                  l.unit_price == null
+                    ? null
+                    : (l.price_basis === 'unit2' ? (l.qty2 ?? 0) : l.qty_ordered) * l.unit_price
+                return (
+                  <GridRow key={l.id} selected={sel.includes(l.id)}>
+                    <GridCheck
+                      checked={sel.includes(l.id)}
+                      onChange={() => toggleLine(l.id)}
+                      label={`Chọn dòng ${l.material_code || l.material_name}`}
+                    />
+                    <Td num>{i + 1}</Td>
+                    <Td>
+                      {l.material_code ? <DocChip>{l.material_code}</DocChip> : '—'}
+                    </Td>
+                    <Td>{l.material_name}</Td>
+                    <Td>{l.spec ?? '—'}</Td>
+                    <Td num>{money(l.qty_ordered)}</Td>
+                    <Td>{l.material_unit}</Td>
+                    <Td num>{l.qty2 == null ? '—' : `${money(l.qty2)} ${l.unit2 ?? ''}`}</Td>
+                    <Td num tone={l.material_id != null && (stock[l.material_id] ?? 0) <= 0 ? 'stop' : undefined}>
+                      {l.material_id == null ? '—' : money(stock[l.material_id] ?? 0)}
+                    </Td>
+                    <Td num tone={l.unit_price == null ? 'warn' : undefined}>
+                      {l.unit_price == null ? '—' : money(l.unit_price)}
+                    </Td>
+                    <Td num>
+                      {amount == null ? (
+                        <span className="k-flag">chưa có giá</span>
+                      ) : (
+                        money(amount)
+                      )}
+                    </Td>
+                    <Td>
+                      <LineStatus kind={kind}>{LINE_STATUS_TEXT[kind]}</LineStatus>
+                    </Td>
+                    <Td>{po.lsx_code ? <span className="num">{po.lsx_code}</span> : '—'}</Td>
+                  </GridRow>
+                )
+              })}
+            </GridBody>
+            <GridFoot>
+              <Td />
+              <Td colSpan={4}>Cộng {lines.length} dòng</Td>
+              <Td num>{money(lines.reduce((s, l) => s + l.qty_ordered, 0))}</Td>
+              <Td colSpan={4} />
+              <Td num>{money(totalAmount)}</Td>
+              <Td colSpan={2} />
+            </GridFoot>
+          </Grid>
+
+          {noPriceCount > 0 && (
+            <div className="k-ft-note">
+              Tổng tiền <b>chưa gồm {noPriceCount} dòng chưa có giá</b>. Con số trên là tạm
+              tính, không dùng để duyệt chi.
+            </div>
+          )}
         </FastTab>
 
         {/* ── TAB 2: KẾ HOẠCH GIAO & ĐỢT HÀNG ────────────────────────────── */}
