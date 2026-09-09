@@ -32,6 +32,8 @@ import {
   FactKv,
   FactSection,
   FastTab,
+  Field,
+  FieldGrid,
   HolderBar,
   StatusBar,
   StatusTrack,
@@ -49,7 +51,6 @@ import { DocChip } from '@/components/erp/DocChip'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Button } from '@/components/shadcn/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/card'
 import {
   Table,
   TableBody,
@@ -745,29 +746,23 @@ export function PoDetailScreen({
         >
           <div className="flex flex-col gap-5">
           {/* Khối thông tin đối tác & logistics */}
-          <Card>
-            <CardHeader className="bg-muted/20 border-b py-3">
-              <CardTitle className="text-muted-foreground text-xs font-bold tracking-wider uppercase">
+          <>
+            <div className="k-sec">
+              <div className="k-sec-t">
                 Thông tin đơn hàng & Đối tác
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Bên bán (Nhà cung cấp)
-                </span>
+              </div>
+            </div>
+            <FieldGrid>
+              <Field label="Bên bán (Nhà cung cấp)">
                 <Link
                   href={`/planning/suppliers/${po.supplier_id}`}
                   className="text-primary text-sm font-semibold hover:underline"
                 >
                   {po.supplier_name}
                 </Link>
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Lệnh sản xuất
-                </span>
+              <Field label="Lệnh sản xuất">
                 {lsxCodes ? (
                   <div className="flex flex-wrap items-center gap-1.5">
                     <Link
@@ -785,12 +780,9 @@ export function PoDetailScreen({
                 ) : (
                   <span className="text-muted-foreground text-sm">Đơn ngoài lệnh</span>
                 )}
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Đơn hàng khách
-                </span>
+              <Field label="Đơn hàng khách">
                 {po.order_code ? (
                   <Link
                     href="/sales/orders"
@@ -801,23 +793,17 @@ export function PoDetailScreen({
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
                 )}
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Người phụ trách
-                </span>
+              <Field label="Người phụ trách">
                 <span className="text-sm font-medium">
                   {po.assignee_name ?? (
                     <span className="text-amber-600 dark:text-amber-400">Chưa giao</span>
                   )}
                 </span>
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Tiền tệ & Thuế VAT
-                </span>
+              <Field label="Tiền tệ & Thuế VAT">
                 <span className="text-sm">
                   {po.currency}
                   {po.vat_rate != null && (
@@ -827,12 +813,9 @@ export function PoDetailScreen({
                     </span>
                   )}
                 </span>
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Số hợp đồng
-                </span>
+              <Field label="Số hợp đồng">
                 <div>
                   {po.contract_no ? (
                     <DocChip>{po.contract_no}</DocChip>
@@ -840,42 +823,36 @@ export function PoDetailScreen({
                     <span className="text-muted-foreground text-sm">—</span>
                   )}
                 </div>
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Chiết khấu
-                </span>
+              <Field label="Chiết khấu">
                 <span className="text-sm">
                   {m.discountAmount > 0 ? cash(m.discountAmount) : 'Không có'}
                 </span>
-              </div>
+</Field>
 
-              <div className="flex flex-col gap-1">
-                <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-                  Điều kiện giao hàng
-                </span>
+              <Field label="Điều kiện giao hàng">
                 <span className="truncate text-sm">
                   {po.terms_delivery_place || 'Theo thoả thuận'}
                 </span>
-              </div>
-            </CardContent>
+</Field>
+            </FieldGrid>
             {po.note && (
               <div className="bg-muted/20 text-muted-foreground border-t px-5 py-2.5 text-xs">
                 <span className="text-foreground font-semibold">Ghi chú: </span>
                 {po.note}
               </div>
             )}
-          </Card>
+          </>
 
           {/* Bảng danh mục vật tư */}
-          <Card className="overflow-hidden">
-            <CardHeader className="bg-muted/20 border-b py-3.5">
+          <>
+            <div className="k-sec">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <div className="k-sec-t">
                   <PackageSearch className="text-primary size-4" />
                   Danh mục vật tư đặt hàng ({lines.length} dòng)
-                </CardTitle>
+                </div>
                 {canEdit && po.status === 'draft' && (
                   <Button variant="outline" size="sm" asChild>
                     <Link href={`/planning/pos/${po.id}/edit`}>
@@ -884,9 +861,9 @@ export function PoDetailScreen({
                   </Button>
                 )}
               </div>
-            </CardHeader>
+            </div>
 
-            <CardContent className="p-0">
+            <div>
               <Table className="min-w-[720px]">
                 <TableHeader className="bg-muted/40 sticky top-0 z-10">
                   <TableRow>
@@ -1166,8 +1143,8 @@ export function PoDetailScreen({
                   </div>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </>
           </div>
         </FastTab>
 
@@ -1260,14 +1237,14 @@ export function PoDetailScreen({
           )}
 
           {warehouseDocs.length > 0 && (
-            <Card>
-              <CardHeader className="bg-muted/20 border-b py-3.5">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+            <>
+              <div className="k-sec">
+                <div className="k-sec-t">
                   <FileText className="text-primary size-4" />
                   Chứng từ kho liên quan ({warehouseDocs.length} phiếu)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-0">
+                </div>
+              </div>
+              <div>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1308,8 +1285,8 @@ export function PoDetailScreen({
                     ))}
                   </TableBody>
                 </Table>
-              </CardContent>
-            </Card>
+              </div>
+            </>
           )}
           </div>
         </FastTab>
@@ -1323,13 +1300,13 @@ export function PoDetailScreen({
           ]}
         >
           <div className="flex flex-col gap-5">
-          <Card>
-            <CardHeader className="bg-muted/20 border-b py-3.5">
+          <>
+            <div className="k-sec">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                <div className="k-sec-t">
                   <ScrollText className="text-primary size-4" />
                   Điều khoản hợp đồng & Cam kết
-                </CardTitle>
+                </div>
                 {canEdit && po.status !== 'cancelled' && (
                   <Button
                     variant="outline"
@@ -1340,8 +1317,8 @@ export function PoDetailScreen({
                   </Button>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-6 p-6">
+            </div>
+            <div className="flex flex-col gap-6">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div className="bg-card flex flex-col gap-1 rounded-lg border p-4 shadow-2xs">
                   <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
@@ -1446,8 +1423,8 @@ export function PoDetailScreen({
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </>
           </div>
         </FastTab>
 
@@ -1466,14 +1443,14 @@ export function PoDetailScreen({
             thời gian" phía dưới giữ lại cho ai muốn xem riêng phần máy ghi
             kèm chi tiết đợt giao / phiếu nhập.
           */}
-          <Card>
-            <CardHeader className="bg-muted/20 border-b py-3.5">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <>
+            <div className="k-sec">
+              <div className="k-sec-t">
                 <History className="text-primary size-4" />
                 Trao đổi về đơn này
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-5">
+              </div>
+            </div>
+            <div>
               <PoNotesPanel
                 poId={po.id}
                 meId={me.id}
@@ -1486,17 +1463,17 @@ export function PoDetailScreen({
                 }))}
                 followerNames={[po.assignee_name].filter((x): x is string => !!x)}
               />
-            </CardContent>
-          </Card>
+            </div>
+          </>
 
-          <Card>
-            <CardHeader className="bg-muted/20 border-b py-3.5">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <>
+            <div className="k-sec">
+              <div className="k-sec-t">
                 <History className="text-primary size-4" />
                 Dòng thời gian & Nhật ký xử lý ({marks.length} mốc sự kiện)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
+              </div>
+            </div>
+            <div>
               {marks.length === 0 ? (
                 <EmptyState
                   icon={<History className="text-muted-foreground size-6" />}
@@ -1543,8 +1520,8 @@ export function PoDetailScreen({
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </>
           </div>
         </FastTab>
 
@@ -1553,22 +1530,22 @@ export function PoDetailScreen({
           title="Tài liệu đính kèm"
         >
           <div className="flex flex-col gap-5">
-          <Card>
-            <CardHeader className="bg-muted/20 border-b py-3.5">
-              <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+          <>
+            <div className="k-sec">
+              <div className="k-sec-t">
                 <Paperclip className="text-primary size-4" />
                 Hồ sơ & Tài liệu đính kèm
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-6">
+              </div>
+            </div>
+            <div>
               <DocumentFiles
                 kind="purchase_order"
                 id={po.id}
                 canEdit={isSupply || canApprove}
                 title="Báo giá NCC · Hợp đồng mua bán · Chứng từ giao nhận"
               />
-            </CardContent>
-          </Card>
+            </div>
+          </>
           </div>
         </FastTab>
       </DocBody>

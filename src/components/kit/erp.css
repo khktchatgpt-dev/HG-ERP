@@ -443,33 +443,85 @@
   color: var(--ink-3);
 }
 
+/* ── 6b. Tiêu đề KHỐI trong FastTab ──────────────────────────────────────
+   FastTab đã là khung có viền và có tiêu đề rồi. Khối con bên trong vì thế
+   KHÔNG được là một cái thẻ nữa: thẻ trong thẻ nghĩa là hai viền, hai lần
+   đổ bóng, hai tiêu đề cho một nội dung — đúng thứ làm màn trông như giao
+   diện web chồng lớp thay vì một tờ chứng từ. Chỉ còn một dòng nhãn và một
+   vạch kẻ. */
+.k-sec {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 2px 0 7px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 10px;
+}
+.k-sec-t {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* ── 7. Lưới nhãn–giá trị ────────────────────────────────────────────── */
+/* ĐO THEO CONTAINER, KHÔNG THEO CỬA SỔ.
+
+   Bẫy đã dính 09/09/2026: media query đo bề rộng CỬA SỔ, nhưng bề rộng thật
+   của lưới đã bị sidebar (240px) và FactBox (268px) ăn mất. Ở cửa sổ 1400px
+   media query cho 3 cột trong khi chỗ còn lại chỉ ~520px — mỗi ô còn ~170px,
+   nhãn chiếm 112px, và "CÔNG TY CỔ PHẦN THÉP ASIA" vỡ dọc từng chữ một.
+
+   Container query đo đúng chỗ lưới đang đứng nên không bao giờ lệch, kể cả
+   khi màn sau này đổi bố cục. */
+.k-ft-b,
+.k-fact {
+  container-type: inline-size;
+}
 .k-fields {
   display: grid;
   grid-template-columns: 1fr;
   margin: 0;
 }
-@media (min-width: 640px) {
+@container (min-width: 580px) {
   .k-fields {
     grid-template-columns: 1fr 1fr;
   }
 }
-@media (min-width: 900px) {
+@container (min-width: 840px) {
   .k-fields {
     grid-template-columns: 1fr 1fr 1fr;
   }
 }
 .k-f {
   display: grid;
-  grid-template-columns: 112px 1fr;
+  /* Nhãn co được: cột cứng 112px là quá rộng khi ô chỉ còn 170px. */
+  grid-template-columns: minmax(72px, 30%) 1fr;
   gap: 8px;
   padding: 4px 10px 4px 0;
   align-items: baseline;
 }
+/* `min-width: 0` BẮT BUỘC trong grid: thiếu nó thì ô lấy bề rộng nội dung làm
+   tối thiểu và chuỗi dài đẩy vỡ cả cột thay vì tự xuống dòng. */
+.k-f dt,
+.k-f dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .k-f dt {
   font-size: var(--fs-sm);
   color: var(--ink-3);
-  white-space: nowrap;
+  /* KHÔNG nowrap: nhãn nghiệp vụ tiếng Việt dài hơn nhãn tiếng Anh nhiều
+     ("Bên bán (Nhà cung cấp)", "Tiền tệ & Thuế VAT"). Ép một dòng thì nhãn
+     tràn ra đè lên giá trị — đo 09/09/2026 trên PO-2026-0068. Nhãn hai dòng
+     là bình thường trong ERP; giá trị tràn mới là lỗi. */
+  line-height: 1.35;
 }
 .k-f dd {
   margin: 0;
