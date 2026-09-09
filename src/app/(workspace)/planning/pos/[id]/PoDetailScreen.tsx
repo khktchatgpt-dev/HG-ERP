@@ -915,21 +915,31 @@ export function PoDetailScreen({
                           {i + 1}
                         </TableCell>
                         <TableCell>
-                          <div className="flex flex-col gap-1">
-                            <div className="flex items-center gap-1.5">
-                              {l.material_code && <DocChip>{l.material_code}</DocChip>}
-                            </div>
-                            <div className="text-foreground text-sm font-medium">
+                          {/*
+                            MÃ VÀ TÊN TRÊN CÙNG MỘT DÒNG (09/09/2026).
+
+                            Bản cũ xếp dọc ba tầng — chip mã, tên, dòng quy đổi
+                            — nên mỗi dòng bảng cao 67px và màn 6 dòng đã phải
+                            cuộn. Bảng ERP đọc theo chiều NGANG: mắt dò một dòng
+                            qua 8 cột số, mà dòng cao gấp ba thì mỗi lần liếc
+                            chỉ ôm được 4 dòng thay vì 12.
+
+                            Dòng quy đổi giữ riêng vì nó là số phụ, không phải
+                            danh tính — nhưng chỉ hiện khi thật sự có.
+                          */}
+                          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                            {l.material_code && <DocChip>{l.material_code}</DocChip>}
+                            <span className="text-foreground font-medium">
                               {l.material_name}
-                            </div>
-                            {(l.qty2 != null || l.note) && (
-                              <div className="text-muted-foreground text-xs">
-                                {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
-                                {l.qty2 != null && l.note && ' · '}
-                                {l.note}
-                              </div>
-                            )}
+                            </span>
                           </div>
+                          {(l.qty2 != null || l.note) && (
+                            <div className="text-muted-foreground mt-0.5 text-xs">
+                              {l.qty2 != null && `${money(l.qty2)} ${l.unit2 ?? ''}`}
+                              {l.qty2 != null && l.note && ' · '}
+                              {l.note}
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="text-muted-foreground text-xs">
                           {l.spec ?? '—'}

@@ -678,6 +678,66 @@
   font-size: var(--fs-num-sm);
 }
 
+/* ── 8b. BẢNG NẰM TRONG PHẠM VI KIT ──────────────────────────────────────
+   Màn chứng từ thật dựng bằng `shadcn/table` từ trước, và chuyển từng ô sang
+   `kit/Table` là sửa ~900 dòng JSX với rủi ro cao mà thu về đúng một thứ:
+   diện mạo. Nên kit KHAI LUẬT cho mọi bảng đứng trong phạm vi của nó — đúng
+   việc của một hệ thiết kế, và phủ được cả năm khối cùng lúc.
+
+   Loại trừ `.k-grid` vì lưới đó đã có luật riêng ở mục 8.
+
+   Đặc điểm bảng ERP, khác bảng web ở bốn chỗ:
+     · DÀY — dòng cao vừa đủ chạm, không "thoáng";
+     · CÓ VẠCH CHIA CỘT — mắt dò ngang 12 cột số cần đường ray;
+     · SỌC CHẴN rất nhạt — chống lạc dòng khi bảng dài;
+     · TIÊU ĐỀ DÍNH — bảng ERP luôn dài hơn màn hình.
+
+   Chọn `.kit table:not(.k-grid)` (0-1-1) để thắng tiện ích Tailwind mà
+   shadcn gắn sẵn (0-1-0) mà không phải dùng !important. */
+.kit table:not(.k-grid) {
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+.kit table:not(.k-grid) thead th {
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--hair);
+  color: var(--ink-3);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 6px var(--pad-x);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+}
+.kit table:not(.k-grid) tbody td {
+  border-bottom: 1px solid var(--hair);
+  border-right: 1px solid var(--hair);
+  padding: 5px var(--pad-x);
+  vertical-align: top;
+}
+.kit table:not(.k-grid) thead th:last-child,
+.kit table:not(.k-grid) tbody td:last-child {
+  border-right: 0;
+}
+/* Sọc chẵn: cố ý dùng màu pha trong suốt thay vì một token mới — nó là sắc
+   độ của chính mặt bảng, không phải một màu riêng ai đó cần chỉnh. */
+.kit table:not(.k-grid) tbody tr:nth-child(even) > td {
+  background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
+}
+.kit table:not(.k-grid) tbody tr:hover > td {
+  background: var(--act-wash);
+}
+.kit table:not(.k-grid) tfoot td {
+  background: var(--surface-raised);
+  border-top: 1px solid var(--line);
+  font-weight: 700;
+  padding: 6px var(--pad-x);
+}
+
 /* ── 9. FactBox ──────────────────────────────────────────────────────── */
 .k-fact {
   background: var(--surface-card);
