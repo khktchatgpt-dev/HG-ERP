@@ -23,19 +23,19 @@
  *     ERP phân biệt rõ "khung phần mềm" với "giấy dữ liệu"; bản cũ chỉ có ba
  *     tầng giấy nên thanh hệ thống trôi lẫn vào nội dung.
  *
- *  3. Bo góc kéo xuống 3px. Bo 6–9px là ngôn ngữ thẻ SaaS; ERP dùng khối
- *     vuông vức vì màn có 8–12 khối cạnh nhau, bo tròn nhiều thành ra rời rạc.
+ *  3. Bo góc TÁCH LÀM HAI: khối chứa bo vừa (6px) vì chúng xếp cạnh nhau,
+ *     còn điều khiển và nhãn trạng thái bo nhiều / tròn hẳn vì chúng là vật
+ *     thể độc lập. Xem mục HÌNH bên dưới.
  *
  * TÊN TOKEN NÓI VIỆC, KHÔNG NÓI HÌNH DẠNG: `--act` (hành động) chứ không phải
  * `--blue`; `--surface-raised` chứ không phải `--gray-100`.
  *
  * Cách dùng: bọc cây DOM trong `.kit`. KHÔNG đụng `:root` — theme v3 vẫn phải
  * chạy nguyên vẹn cho các màn chưa chuyển (xem ui-baseline).
- * `.kit-v4` giữ làm BÍ DANH để chỗ cũ không gãy trong lúc đổi tên dần.
+ * Tên `.kit-v4` đã XOÁ HẲN 09/09/2026 — một hệ, một tên.
  */
 
-.kit,
-.kit-v4 {
+.kit {
   /* ── KHUNG PHẦN MỀM ──────────────────────────────────────────────────
      Thanh định vị và thanh trạng thái đáy màn. Tầng này KHÔNG phải giấy dữ
      liệu — nó là vỏ chương trình, và ERP nào cũng tách bạch hai thứ đó. */
@@ -119,13 +119,23 @@
   --fs-num-lg: 15px;
 
   /* ── HÌNH ────────────────────────────────────────────────────────────
-     Vuông vức. Bo 6–9px là ngôn ngữ thẻ SaaS; màn ERP có 8–12 khối cạnh
-     nhau, bo nhiều thành ra rời rạc thay vì thành một mặt bảng. */
-  --radius: 3px;
-  --radius-sm: 2px;
-  /* Hộp thoại là TẦNG KHÁC nên được bo nhiều hơn — đó là tín hiệu duy nhất
-     phân biệt nó với một khối bình thường bị phóng to. */
-  --radius-lg: 6px;
+     ĐẢO LẠI 09/09/2026 theo yêu cầu chủ dự án: bản trước tôi tự kéo bo góc
+     xuống 3px với lập luận "ERP phải vuông vức". Nhìn thật thì nút và nhãn
+     trạng thái trông cứng và thô, nhất là nhãn nhỏ 2px — gần như vuông hẳn.
+
+     Phân biệt HAI loại bo, đây mới là chỗ có nghĩa:
+       · KHỐI CHỨA (thẻ, hộp thoại, lưới) bo VỪA — chúng xếp cạnh nhau nên
+         bo nhiều thì rời rạc.
+       · ĐIỀU KHIỂN và NHÃN (nút, chip trạng thái) bo NHIỀU hoặc bo tròn hẳn
+         — chúng là vật thể ĐỘC LẬP, mắt cần thấy ngay đâu là thứ bấm được. */
+  --radius: 6px;
+  --radius-sm: 4px;
+  /* Hộp thoại là TẦNG KHÁC nên bo nhiều hơn khối thường. */
+  --radius-lg: 10px;
+  /* Bo tròn hẳn — chỉ cho NHÃN TRẠNG THÁI. Nhãn vòng đời là thứ mắt quét
+     theo cột, hình viên thuốc tách nó khỏi chữ thường nhanh hơn hình chữ
+     nhật bo nhẹ. KHÔNG dùng cho nút: nút tròn hẳn trông như thẻ lọc. */
+  --radius-pill: 999px;
 
   /* Tầng: chỉ 2 mức. Thêm mức thứ 3 là bắt đầu có bóng trang trí. */
   --z-sticky: 5;
@@ -142,8 +152,7 @@
 }
 
 /* Chế độ DÀY — cho người quen Excel. Chỉ đổi thang mật độ, không đổi gì khác. */
-.kit.kit-dense,
-.kit-v4.kit-dense {
+.kit.kit-dense {
   --row-h: 25px;
   --ctl-h: 24px;
   --pad-x: 6px;
@@ -153,8 +162,7 @@
    `tabular-nums` là bắt buộc, không phải tuỳ chọn: thiếu nó thì các chữ số
    rộng khác nhau và cột số căn phải vẫn nhấp nhô, mắt không so sánh được
    theo chiều dọc — hỏng đúng việc mà cột số sinh ra để làm. */
-.kit .num,
-.kit-v4 .num {
+.kit .num {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -166,8 +174,7 @@
    mã (hộp thoại có tabIndex=-1). Vòng focus dành cho chỗ người dùng ĐI TỚI
    bằng Tab; vẽ quanh cả hộp thoại thì nó trông như một ô nhập khổng lồ đang
    được chọn (đo 09/09/2026). */
-.kit :focus-visible:not([tabindex='-1']),
-.kit-v4 :focus-visible:not([tabindex='-1']) {
+.kit :focus-visible:not([tabindex='-1']) {
   outline: 2px solid var(--act);
   outline-offset: 1px;
 }

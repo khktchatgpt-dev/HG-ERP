@@ -73,10 +73,10 @@ export function DesktopSidebar({
     .join('')
 
   return (
-    // `kit-v4` để tooltip của kit đọc được token của nó (--ink, --z-float);
+    // `kit` để tooltip của kit đọc được token của nó (--ink, --z-float);
     // rail vẫn ăn màu nền/chữ của theme-v3 nên không lệch với phần còn lại.
     <aside
-      className={`kit-v4 bg-card hidden h-full shrink-0 flex-col border-r pt-2.5 transition-[width] duration-150 lg:flex ${
+      className={`kit bg-card hidden h-full shrink-0 flex-col border-r pt-2.5 transition-[width] duration-150 lg:flex ${
         compact ? 'w-[52px] px-[7px]' : 'w-[212px] px-2.5'
       }`}
     >

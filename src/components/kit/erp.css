@@ -161,7 +161,7 @@
   border: 1px solid var(--line);
   background: var(--surface-card);
   border-radius: var(--radius);
-  padding: 5px 10px;
+  padding: 6px 12px;
   font: inherit;
   font-size: var(--fs-sm);
   color: inherit;
@@ -317,8 +317,8 @@
   color: var(--surface-card);
   font-weight: 700;
   font-size: var(--fs-sm);
-  border-radius: var(--radius-sm);
-  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  padding: 1px 9px;
   text-align: center;
 }
 .k-check-warn .k-check-badge {
@@ -349,8 +349,8 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   text-align: center;
-  border-radius: var(--radius-sm);
-  padding: 1px 0;
+  border-radius: var(--radius-pill);
+  padding: 2px 0;
   color: var(--surface-card);
 }
 .k-cs .k-check-lvl {
@@ -588,8 +588,8 @@
 .k-ls {
   font-size: var(--fs-micro);
   font-weight: 700;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
 }
 .k-ls-idle {
@@ -677,8 +677,8 @@
   background: var(--warn-wash);
   color: var(--warn);
   font-weight: 600;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   font-size: var(--fs-num-sm);
 }
 

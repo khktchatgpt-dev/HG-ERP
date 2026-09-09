@@ -89,7 +89,7 @@ export function PoNotesPanel({
   )
 
   return (
-    <div className="kit-v4 flex flex-col gap-3">
+    <div className="kit flex flex-col gap-3">
       <NoteComposer onSubmit={ghi} busy={busy} />
       {loi && (
         <p className="rounded-[var(--radius)] border border-[var(--stop)] bg-[var(--stop-wash)] px-3 py-2 text-[11.5px] text-[var(--stop)]">

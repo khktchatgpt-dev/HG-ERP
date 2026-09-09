@@ -75,7 +75,7 @@ export function Sheet({
 
   return (
     <div
-      className="kit-v4 fixed inset-0 z-[var(--z-modal)] flex items-start justify-center overflow-auto p-6 pt-[8vh]"
+      className="kit fixed inset-0 z-[var(--z-modal)] flex items-start justify-center overflow-auto p-6 pt-[8vh]"
       onMouseDown={(e) => {
         // Chỉ đóng khi bấm ĐÚNG lớp phủ. Việc nặng thì không cho đóng kiểu
         // này: người dùng kéo chọn chữ trong hộp rồi nhả tay ra ngoài là mất
