@@ -631,7 +631,19 @@ export function PoDetailScreen({
         Nút chưa dùng được thì HIỆN MỜ kèm `title` nói lý do, không ẩn — ẩn thì
         thanh công cụ nhảy chỗ mỗi lần đổi trạng thái.
       */}
-      <ActionPane>
+      <ActionPane
+        tabs={[
+          { label: 'Đơn hàng', active: true },
+          {
+            label: 'Nhận hàng',
+            disabled: true,
+            title:
+              'Ghi nhận nhập kho làm ở phân hệ Kho — thao tác nhận hàng của đơn nằm ở nhóm "Nhận hàng" bên dưới',
+          },
+          { label: 'Tài chính', disabled: true, title: 'Phân hệ Kế toán chưa mở' },
+          { label: 'Hiển thị', disabled: true, title: 'Tuỳ biến cột và khung nhìn chưa mở' },
+        ]}
+      >
         <ActionGroup label="Duy trì">
           <Action
             strong
@@ -640,6 +652,9 @@ export function PoDetailScreen({
             onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
           >
             Sửa đơn
+          </Action>
+          <Action disabled={!isSupply} onClick={() => router.push('/planning/pos/new')}>
+            Mới
           </Action>
           <Action
             disabled={!isSupply}
@@ -731,6 +746,9 @@ export function PoDetailScreen({
         <ActionGroup label="In &amp; xuất">
           <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
             Phiếu đặt hàng
+          </Action>
+          <Action onClick={() => window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')}>
+            Xuất Excel
           </Action>
         </ActionGroup>
 

@@ -140,6 +140,8 @@ export function ActionPane({
               role="tab"
               aria-selected={!!t.active}
               className={cx('k-pt', t.active && 'on')}
+              disabled={t.disabled}
+              title={t.title}
               onClick={t.onClick}
             >
               {t.label}
@@ -152,7 +154,19 @@ export function ActionPane({
   )
 }
 
-export type ActionTab = { label: string; active?: boolean; onClick?: () => void }
+export type ActionTab = {
+  label: string
+  active?: boolean
+  onClick?: () => void
+  /**
+   * Tab chưa có phân hệ. HIỆN MỜ kèm `title` chứ không giấu đi: người dùng
+   * cần biết phần mềm SẼ có mảng đó, và biết vì sao giờ chưa bấm được. Giấu
+   * thì mỗi lần bật thêm một phân hệ là thanh công cụ lại đổi hình, phá đúng
+   * trí nhớ vị trí mà Action Pane nuôi.
+   */
+  disabled?: boolean
+  title?: string
+}
 
 export function ActionGroup({ label, children }: { label: string; children: ReactNode }) {
   return (

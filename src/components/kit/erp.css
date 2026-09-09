@@ -130,6 +130,10 @@
   color: var(--act);
   border-bottom-color: var(--act);
 }
+.k-pt:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
 .k-pane-groups {
   display: flex;
   flex-wrap: wrap;
