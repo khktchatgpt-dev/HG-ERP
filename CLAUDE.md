@@ -276,6 +276,39 @@ Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** 
   phiên đăng nhập + `created_at`, không chép chữ ký giấy), kích thước mở, và ô
   "Khối lượng" (là tổng tính từ định mức — app tự tính, tránh hai nguồn một số).
 
+## Quy cắt phôi (`lib/cut-plan`, `/cat-phoi`)
+
+Bản web của phần mềm Delphi "Steel Cutting" xưởng đang dùng (Project / Item /
+Available Length → lưới Length+Qty → Run → Case #n × Number to Cut, Used,
+Diminish % → Export XLS). **Phạm vi ĐÚNG BẰNG bản gốc** (user chốt 09/09/2026),
+chỉ sửa ba nhược điểm: không giới hạn dòng, chọn nhiều để xoá / xoá tất cả,
+dán từ Excel — cộng tự lưu nháp `localStorage` (`cat-phoi-v2`). Đã GỠ theo yêu
+cầu: nạp từ LSX/hồ sơ SP, nhiều quy cách một lưới, mạch cắt, bỏ đầu/cuối cây,
+đoạn dư tái dùng, bảng đối chiếu, phiếu in, bộ mẫu — đừng thêm lại nếu user
+không hỏi. Trang DÙNG CHUNG `src/app/(shared)/cat-phoi/`, nav ở Kỹ thuật, Sản
+xuất, Kế hoạch SX, Tổ SX (không vào `SHARED_SECTION`).
+
+- **Thuật toán thuần** `src/lib/cut-plan/optimize.ts` (chạy trên trình duyệt,
+  có test): SHP (quy hoạch động tìm sơ đồ đầy nhất, lặp) so với FFD/BFD, lấy ít
+  cây → ít dư → ít sơ đồ. Engine vẫn hiểu kerf/trim/min_remnant (`CutParams`)
+  nhưng màn hình để 0 — muốn bật lại chỉ cần thêm ô nhập. Số lẻ làm tròn VỀ
+  PHÍA AN TOÀN cho bảng DP; số ghi ra luôn là số thật.
+- **BẪY hiệu năng**: bảng DP tốn công theo số CHIỀU DÀI KHÁC NHAU chứ không
+  theo số lượng (500 chiều dài ~1,3 s; 5000 chiều dài 21 s treo tab, đo
+  09/09/2026; 100.000 chi tiết cùng cỡ chỉ 0,5 s). SHP có ngân sách
+  `SHP_BUDGET_MS` (1,5 s), hết giờ giao phần đuôi cho FFD — kết quả vẫn hợp lệ.
+  Màn hình `setBusy` rồi mới tính trong `setTimeout` để thanh tiến trình kịp vẽ.
+- **Lưới** `CutLinesGrid`: Ctrl+V tại ô dán vùng bảng chạy sang phải/xuống
+  dưới (`applyPasteAt`); hộp "Dán từ Excel" nhận cột theo tiêu đề hoặc đoán
+  (`parseCutPaste`, chung luật số VN với `bom-paste`: "1.390" = 1390). Ô gõ tay
+  cũng đi qua `parseCell` (hook `vn-number.ts`) — KHÔNG dùng `GridCellNumber`
+  của kit ở đây vì nó hiểu "1.390" là 1,39. SL luôn là số NGUYÊN (làm tròn ở
+  lưới + dán, schema `.int()` là hàng rào cuối). Dòng chỉ có ghi chú không phải
+  chi tiết: `lineHasData` là hàm đếm chung cho đầu trang, "Xoá tất cả" và Excel.
+- **Excel** qua `POST /api/dept/production/cut-plan/export`: server TÍNH LẠI từ
+  dòng, không nhận kết quả client; in cả `errors` lẫn `skipped` (dòng thiếu số
+  liệu) thành cảnh báo trên sheet 1. Chưa lưu DB.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì
