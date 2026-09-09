@@ -136,6 +136,7 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
 export function PoDetailScreen({
   po,
   lines,
+  stock,
   statusLines,
   shipmentReceipts,
   receiptBatches,
@@ -152,6 +153,8 @@ export function PoDetailScreen({
 }: {
   po: PoDetailPo
   lines: PoLine[]
+  /** Tồn kho hiện tại theo material_id — xem ghi chú ở page.tsx. */
+  stock: Record<string, number>
   statusLines: StatusLine[]
   shipmentReceipts: Record<string, Record<string, number>>
   /** Đợt về theo phiếu nhập — ma trận dòng × đợt (B3). */
@@ -888,6 +891,15 @@ export function PoDetailScreen({
                     <TableHead className="w-28 text-right text-xs font-semibold tracking-wider uppercase">
                       SL đặt
                     </TableHead>
+                    {/*
+                      TỒN KHO ngay trên dòng (đợt 1). Tồn 0 tô đỏ: nó nói thẳng
+                      "không mua thì sản xuất dừng", còn tồn dư nói "mua dự
+                      phòng, chưa gấp" — hai quyết định khác hẳn nhau mà bản cũ
+                      bắt người duyệt tự đi tra ở màn khác.
+                    */}
+                    <TableHead className="w-24 text-right text-xs font-semibold tracking-wider uppercase">
+                      Tồn kho
+                    </TableHead>
                     {showReceived && (
                       <TableHead className="w-48 text-right text-xs font-semibold tracking-wider uppercase">
                         Về kho
@@ -941,6 +953,25 @@ export function PoDetailScreen({
                           <span className="text-muted-foreground ml-1 text-xs">
                             {l.material_unit}
                           </span>
+                        </TableCell>
+
+                        <TableCell className="text-right whitespace-nowrap">
+                          {l.material_id == null ? (
+                            // Dòng tự do không đi vào sổ kho nên không có tồn
+                            // để tra — gạch ngang, KHÔNG phải số 0. "0" ở đây
+                            // sẽ đọc thành "kho hết hàng", tức nói sai.
+                            <span className="text-muted-foreground text-xs">—</span>
+                          ) : (
+                            <span
+                              className={
+                                (stock[l.material_id] ?? 0) <= 0
+                                  ? 'font-mono text-sm font-bold text-[var(--stop)]'
+                                  : 'font-mono text-sm'
+                              }
+                            >
+                              {money(stock[l.material_id] ?? 0)}
+                            </span>
+                          )}
                         </TableCell>
 
                         {showReceived && (
