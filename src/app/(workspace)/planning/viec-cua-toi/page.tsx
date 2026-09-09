@@ -2,7 +2,6 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { loadWatchPos, todayIso } from '../_data/watch'
 import { TodoScreen } from './TodoScreen'
-import { TodoScreenV4 } from './TodoScreenV4'
 
 export const dynamic = 'force-dynamic'
 
@@ -16,13 +15,8 @@ export const dynamic = 'force-dynamic'
  * lõi phân loại (`groupTodos`). Người duyệt bấm qua lại so trực tiếp thay vì
  * so bằng trí nhớ; bản cũ không bị đụng nên gỡ về chỉ là bỏ tham số URL.
  */
-export default async function SupplyTodoPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
+export default async function SupplyTodoPage() {
   const user = await authService.requirePageUser()
-  const v4 = (await searchParams).v4 === '1'
   const [{ rows }, supplyStaff] = await Promise.all([
     loadWatchPos(user),
     isSupplyStaff(user),
@@ -33,5 +27,5 @@ export default async function SupplyTodoPage({
     today: todayIso(),
     canEdit: user.role === 'admin' || supplyStaff,
   }
-  return v4 ? <TodoScreenV4 {...props} /> : <TodoScreen {...props} />
+  return <TodoScreen {...props} />
 }

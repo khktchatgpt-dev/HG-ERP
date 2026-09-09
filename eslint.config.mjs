@@ -32,7 +32,6 @@ const KIT = [
   'src/components/ui/**',
   'src/components/kit/**',
   'src/app/design-lab/**',
-  'src/app/kit-lab/**',
 ]
 
 export default defineConfig([

@@ -16,8 +16,6 @@ import { buildAgenda } from '@/lib/supply-meeting'
 import { loadMeeting } from './_data/meeting'
 import { IssueRow, dmy } from './_components/IssueRow'
 import { KpiTiles } from './_components/KpiTiles'
-import { SupplyHomeV4 } from './_components/SupplyHomeV4'
-import { loadSupplyWork } from './_data/supply-work'
 
 export const dynamic = 'force-dynamic'
 
@@ -50,32 +48,11 @@ const TOP_ISSUES = 5
  *   Vấn đề cần xử lý → Vật tư theo lệnh → Hàng sắp về → Nhà cung cấp → Việc
  *   cần quyết định.
  */
-export default async function PlanningHomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ v4?: string }>
-}) {
+export default async function PlanningHomePage() {
   const user = await authService.requirePageUser()
-  const { v4 } = await searchParams
   const { today, rows, counts, issues } = await loadMeeting(user)
   const agenda = buildAgenda(rows)
 
-  if (v4 === '1') {
-    const work = await loadSupplyWork(user.id)
-    return (
-      <SupplyHomeV4
-        work={work}
-        today={`${WEEKDAY[new Date(`${today}T00:00:00Z`).getUTCDay()]} ${dmy(today)}/${today.slice(0, 4)}`}
-        activeLsx={rows.length}
-        issues={issues.map((it) => ({
-          code: it.row.code,
-          why: it.risk.reason,
-          owner: it.risk.owner,
-          next: it.risk.action,
-        }))}
-      />
-    )
-  }
   const top = issues.slice(0, TOP_ISSUES)
   const dateLabel = `${WEEKDAY[new Date(`${today}T00:00:00Z`).getUTCDay()]} ${dmy(today)}/${today.slice(0, 4)}`
 

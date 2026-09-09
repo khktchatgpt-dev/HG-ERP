@@ -4,19 +4,13 @@ import { materialGroupsRepo } from '@/modules/dept/supply/supply.repo'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { SuppliersManager } from './SuppliersManager'
-import { SuppliersScreenV4 } from './SuppliersScreenV4'
 
 /**
  * BẢN SONG SONG `?v4=1` — kit v4 chạy cạnh bản cũ trên CÙNG dữ liệu đã nạp,
  * không thêm truy vấn nào. Bản cũ không bị đụng; gỡ về chỉ là bỏ tham số URL.
  */
-export default async function PlanningSuppliersPage({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>
-}) {
+export default async function PlanningSuppliersPage() {
   const user = await authService.requirePageUser()
-  const v4 = (await searchParams).v4 === '1'
   const canEdit = user.role === 'admin' || (await isSupplyStaff(user))
 
   const [{ rows: suppliers }, { rows: pos }, { rows: materials }] = await Promise.all([
@@ -80,7 +74,6 @@ export default async function PlanningSuppliersPage({
     groups: groupsBySupplier.get(s.id) ?? [],
   }))
 
-  if (v4) return <SuppliersScreenV4 suppliers={rows} canEdit={!!canEdit} />
 
   /*
     Màn v3 vẫn nhận `total_spend` là MỘT số. Không sửa nó ở lượt này (bản cũ
