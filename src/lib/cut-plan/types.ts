@@ -36,26 +36,43 @@ export type CutLine = {
   length_mm: number | ''
   /** Số lượng chi tiết. '' = chưa nhập. */
   qty: number | ''
+  /**
+   * Quy cách vật liệu ("Nhôm hộp 20×40×1,2"). Mỗi quy cách là một bài toán cắt
+   * riêng với cây tiêu chuẩn riêng; để trống = nhóm "chưa ghi quy cách".
+   */
+  spec: string
   note: string
 }
 
-export const CUT_LINE_COLUMNS = ['part_name', 'length_mm', 'qty', 'note'] as const
+/** Thứ tự cột của lưới — cũng là thứ tự Ctrl+V chạy sang phải. */
+export const CUT_LINE_COLUMNS = ['part_name', 'length_mm', 'qty', 'spec', 'note'] as const
 export type CutLineColumn = (typeof CUT_LINE_COLUMNS)[number]
 
 export const CUT_LINE_LABEL: Record<CutLineColumn, string> = {
   part_name: 'Tên chi tiết',
   length_mm: 'Dài cắt (mm)',
   qty: 'SL (cái)',
+  spec: 'Quy cách',
   note: 'Ghi chú',
 }
 
 export function blankLine(key: number): CutLine {
-  return { key, part_name: '', length_mm: '', qty: '', note: '' }
+  return { key, part_name: '', length_mm: '', qty: '', spec: '', note: '' }
 }
 
 /** Dòng hoàn toàn trống (kể cả ghi chú) — lưới bỏ khi ghép thêm dòng dán. */
 export const isBlankLine = (l: CutLine) =>
-  !l.part_name && l.length_mm === '' && l.qty === '' && !l.note
+  !l.part_name && l.length_mm === '' && l.qty === '' && !l.spec && !l.note
+
+/**
+ * Khoá nhóm của một quy cách: gọn khoảng trắng, không phân biệt hoa thường —
+ * "Nhôm hộp 20×40" và "nhôm  hộp 20×40" là một loại cây. Nhãn hiển thị lấy
+ * theo chuỗi gặp đầu tiên.
+ */
+export const specKey = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase()
+
+/** Nhãn cho nhóm không ghi quy cách. */
+export const NO_SPEC_LABEL = 'Chưa ghi quy cách'
 
 /**
  * Dòng CÓ SỐ LIỆU cắt (tên / dài / SL). Ghi chú suông không phải một chi tiết:
@@ -114,21 +131,79 @@ export type CutGroupResult = {
   errors: string[]
 }
 
-export type CutPlanResult = {
+/** Kết quả của MỘT quy cách — một bài toán cắt trên một loại cây. */
+export type CutGroupPlan = {
+  /** Khoá nhóm (`specKey`). '' = chưa ghi quy cách. */
+  key: string
+  /** Nhãn hiển thị (chuỗi người dùng gõ, gặp đầu tiên). */
+  spec: string
+  stock_length_mm: number
+  /** Số dòng của lưới rơi vào nhóm. */
+  lines: number
   result: CutGroupResult
+}
+
+export type CutPlanResult = {
+  /** Theo thứ tự quy cách xuất hiện trong lưới. */
+  groups: CutGroupPlan[]
   /** Dòng bị bỏ khỏi tính toán (thiếu dài / SL) — bày cho người nhập. */
   skipped: { key: number; reason: string }[]
 }
 
+/** Tổng cả đợt qua mọi quy cách — dải KPI đầu trang và dòng tổng Excel. */
+export type CutPlanTotals = {
+  groups: number
+  bars: number
+  pieces_total: number
+  material_mm: number
+  scrap_mm: number
+  waste_pct: number
+  errors: number
+}
+
+export function planTotals(plan: Pick<CutPlanResult, 'groups'>): CutPlanTotals {
+  let bars = 0
+  let pieces = 0
+  let material = 0
+  let scrap = 0
+  let errors = 0
+  for (const g of plan.groups) {
+    bars += g.result.bars
+    pieces += g.result.pieces_total
+    material += g.result.material_mm
+    scrap += g.result.scrap_mm
+    errors += g.result.errors.length
+  }
+  return {
+    groups: plan.groups.length,
+    bars,
+    pieces_total: pieces,
+    material_mm: material,
+    scrap_mm: Math.round(scrap * 10) / 10,
+    waste_pct: material > 0 ? Math.round((scrap / material) * 1000) / 10 : 0,
+    errors,
+  }
+}
+
 /**
  * Toàn bộ một đợt cắt — thứ được tự lưu localStorage và gửi lên server để xuất
- * Excel. Đầu phiếu theo đúng bản gốc: Project → tên đợt, Item → mã hàng, cộng
- * thêm quy cách vật liệu để phiếu nói rõ cắt loại cây nào.
+ * Excel. Đầu phiếu theo bản gốc: Project → tên đợt, Item → mã hàng. Cây tiêu
+ * chuẩn có một giá trị mặc định và bảng riêng theo quy cách (`stock_by_spec`,
+ * khoá `specKey`): nhôm hộp thường 6000, thép có loại 12000, la 2440…
  */
 export type CutPlanDoc = {
   title: string
   item: string
-  spec: string
   stock_length_mm: number
+  stock_by_spec: Record<string, number>
   lines: CutLine[]
+}
+
+/** Cây tiêu chuẩn áp cho một nhóm: riêng theo quy cách, không có thì mặc định. */
+export function stockFor(
+  doc: Pick<CutPlanDoc, 'stock_length_mm' | 'stock_by_spec'>,
+  key: string,
+) {
+  const v = doc.stock_by_spec[key]
+  return typeof v === 'number' && v > 0 ? v : doc.stock_length_mm
 }

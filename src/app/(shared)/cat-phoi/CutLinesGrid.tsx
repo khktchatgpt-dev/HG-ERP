@@ -63,9 +63,10 @@ type Props = {
 }
 
 const COLS: { col: CutLineColumn; label: string; width: string; numeric?: boolean }[] = [
-  { col: 'part_name', label: 'Tên chi tiết', width: 'w-[34%]' },
-  { col: 'length_mm', label: 'Dài cắt (mm)', width: 'w-[16%]', numeric: true },
-  { col: 'qty', label: 'SL (cái)', width: 'w-[12%]', numeric: true },
+  { col: 'part_name', label: 'Tên chi tiết', width: 'w-[28%]' },
+  { col: 'length_mm', label: 'Dài cắt (mm)', width: 'w-[13%]', numeric: true },
+  { col: 'qty', label: 'SL (cái)', width: 'w-[10%]', numeric: true },
+  { col: 'spec', label: 'Quy cách', width: 'w-[22%]' },
   { col: 'note', label: 'Ghi chú', width: '' },
 ]
 
@@ -275,7 +276,11 @@ export function CutLinesGrid({
                         <GridCellInput
                           value={l[c.col] as string}
                           onChange={(e) =>
-                            update(l.key, c.col as 'part_name' | 'note', e.target.value)
+                            update(
+                              l.key,
+                              c.col as 'part_name' | 'spec' | 'note',
+                              e.target.value,
+                            )
                           }
                           onKeyDown={(e) => onKeyDown(e, i, c.col)}
                           data-row={i}

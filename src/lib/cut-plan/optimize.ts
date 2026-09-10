@@ -1,5 +1,8 @@
 import {
   DEFAULT_CUT_PARAMS,
+  specKey,
+  stockFor,
+  type CutGroupPlan,
   type CutGroupResult,
   type CutItem,
   type CutParams,
@@ -392,10 +395,12 @@ export function optimizeCut(
  * dài / SL bị bỏ và liệt kê ở `skipped`; dòng trống hoàn toàn lặng lẽ bỏ qua.
  */
 export function planCut(
-  doc: Pick<CutPlanDoc, 'stock_length_mm' | 'lines'>,
+  doc: Pick<CutPlanDoc, 'stock_length_mm' | 'stock_by_spec' | 'lines'>,
   opts: OptimizeOptions = {},
 ): CutPlanResult {
-  const items: CutItem[] = []
+  // Gom dòng theo quy cách, giữ thứ tự xuất hiện — mỗi nhóm là một bài toán
+  // cắt độc lập trên loại cây của nó.
+  const groups = new Map<string, { spec: string; items: CutItem[]; lines: number }>()
   const skipped: CutPlanResult['skipped'] = []
   for (const line of doc.lines) {
     const length = typeof line.length_mm === 'number' ? line.length_mm : NaN
@@ -409,12 +414,29 @@ export function planCut(
       skipped.push({ key: line.key, reason: 'Thiếu số lượng' })
       continue
     }
-    items.push({ id: line.key, length_mm: length, qty })
+    const key = specKey(line.spec ?? '')
+    let g = groups.get(key)
+    if (!g) {
+      g = { spec: line.spec.trim().replace(/\s+/g, ' '), items: [], lines: 0 }
+      groups.set(key, g)
+    }
+    g.items.push({ id: line.key, length_mm: length, qty })
+    g.lines += 1
   }
-  const result = optimizeCut(
-    items,
-    { ...DEFAULT_CUT_PARAMS, stock_length_mm: doc.stock_length_mm },
-    opts,
-  )
-  return { result, skipped }
+  // Ngân sách SHP chia đều cho các nhóm để cả đợt vẫn trả lời trong ~1,5 s.
+  const budget =
+    groups.size > 1 && opts.shp_budget_ms == null
+      ? { ...opts, shp_budget_ms: Math.max(200, Math.floor(SHP_BUDGET_MS / groups.size)) }
+      : opts
+  const out: CutGroupPlan[] = []
+  for (const [key, g] of groups) {
+    const stock = stockFor(doc, key)
+    const result = optimizeCut(
+      g.items,
+      { ...DEFAULT_CUT_PARAMS, stock_length_mm: stock },
+      budget,
+    )
+    out.push({ key, spec: g.spec, stock_length_mm: stock, lines: g.lines, result })
+  }
+  return { groups: out, skipped }
 }

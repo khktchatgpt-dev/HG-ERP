@@ -123,6 +123,7 @@ export function CutPasteDialog({
                   <TableHead>Tên chi tiết</TableHead>
                   <TableHead className="text-right">Dài (mm)</TableHead>
                   <TableHead className="text-right">SL</TableHead>
+                  <TableHead>Quy cách</TableHead>
                   <TableHead>Ghi chú</TableHead>
                 </TableRow>
               </TableHeader>
@@ -138,6 +139,7 @@ export function CutPasteDialog({
                     <TableCell className="t-data text-right">
                       {r.qty === '' ? '' : r.qty}
                     </TableCell>
+                    <TableCell className="whitespace-normal">{r.spec}</TableCell>
                     <TableCell className="text-muted-foreground whitespace-normal">
                       {r.note}
                     </TableCell>

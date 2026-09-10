@@ -280,13 +280,22 @@ Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** 
 
 Bản web của phần mềm Delphi "Steel Cutting" xưởng đang dùng (Project / Item /
 Available Length → lưới Length+Qty → Run → Case #n × Number to Cut, Used,
-Diminish % → Export XLS). **Phạm vi ĐÚNG BẰNG bản gốc** (user chốt 09/09/2026),
-chỉ sửa ba nhược điểm: không giới hạn dòng, chọn nhiều để xoá / xoá tất cả,
-dán từ Excel — cộng tự lưu nháp `localStorage` (`cat-phoi-v2`). Đã GỠ theo yêu
-cầu: nạp từ LSX/hồ sơ SP, nhiều quy cách một lưới, mạch cắt, bỏ đầu/cuối cây,
-đoạn dư tái dùng, bảng đối chiếu, phiếu in, bộ mẫu — đừng thêm lại nếu user
-không hỏi. Trang DÙNG CHUNG `src/app/(shared)/cat-phoi/`, nav ở Kỹ thuật, Sản
-xuất, Kế hoạch SX, Tổ SX (không vào `SHARED_SECTION`).
+Diminish % → Export XLS), sửa ba nhược điểm: không giới hạn dòng, chọn nhiều để
+xoá / xoá tất cả, dán từ Excel — cộng tự lưu nháp `localStorage` (`cat-phoi-v3`;
+đọc được `-v2` đời trước và đổ quy cách đầu phiếu xuống từng dòng).
+
+**Mở rộng 10/09/2026 (user chốt sau khi dùng thử)**: NHIỀU QUY CÁCH một lượt —
+mỗi dòng có cột `spec`, `planCut` gom theo `specKey` (gọn khoảng trắng, không
+phân biệt hoa thường) và chạy `optimizeCut` riêng từng nhóm với cây tiêu chuẩn
+riêng (`stock_by_spec`, thiếu thì dùng mặc định); kết quả là `groups[]` +
+`planTotals()`. NẠP TỪ HỒ SƠ SP: `GET cut-plan/from-product?product_id&qty`
+→ `cut-plan.service.fromProduct` → `lib/cut-plan/from-bom.ts` (thuần, có test):
+dòng định mức có `cut_length_mm` × số lượng đợt, dài = cắt + phi hao uốn, quy
+cách = vật liệu + dạng + tiết diện, cây gợi ý = `bar_length_m`. Vẫn CHƯA làm
+(đừng tự thêm): upload file BOM thẳng vào quy cắt, gộp nhiều mã SP một đợt, danh
+mục quy cách → cây dùng chung, mạch cắt, đoạn dư tái dùng, phiếu in, lưu DB.
+Trang DÙNG CHUNG `src/app/(shared)/cat-phoi/`, nav ở Kỹ thuật, Sản xuất, Kế hoạch
+SX, Tổ SX (không vào `SHARED_SECTION`).
 
 - **Thuật toán thuần** `src/lib/cut-plan/optimize.ts` (chạy trên trình duyệt,
   có test): SHP (quy hoạch động tìm sơ đồ đầy nhất, lặp) so với FFD/BFD, lấy ít
@@ -306,8 +315,9 @@ xuất, Kế hoạch SX, Tổ SX (không vào `SHARED_SECTION`).
   lưới + dán, schema `.int()` là hàng rào cuối). Dòng chỉ có ghi chú không phải
   chi tiết: `lineHasData` là hàm đếm chung cho đầu trang, "Xoá tất cả" và Excel.
 - **Excel** qua `POST /api/dept/production/cut-plan/export`: server TÍNH LẠI từ
-  dòng, không nhận kết quả client; in cả `errors` lẫn `skipped` (dòng thiếu số
-  liệu) thành cảnh báo trên sheet 1. Chưa lưu DB.
+  dòng, không nhận kết quả client; > 1 quy cách thì sheet "Tổng hợp" (cung ứng
+  cầm đi đặt cây) + một sheet MỖI quy cách (`sheetName`: bỏ ký tự cấm, 31 ký
+  tự, không trùng); in cả `errors` lẫn `skipped` thành cảnh báo. Chưa lưu DB.
 
 ## Tải file có dấu tiếng Việt
 
