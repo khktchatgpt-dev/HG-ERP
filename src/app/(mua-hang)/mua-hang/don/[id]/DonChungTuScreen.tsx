@@ -45,6 +45,7 @@ import {
   TextArea,
   TextInput,
   Th,
+  Tag,
   Tick,
   Timeline,
   poHolder,
@@ -273,7 +274,9 @@ export function DonChungTuScreen(p: Props) {
   const [enrichBusy, setEnrichBusy] = useState(false)
   const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
   /** Người dùng đã tự chỉnh VAT / tiền tệ — đổi mẫu / đổi NCC không áp đè lại. */
-  const dirty = useRef({ vat: !!po, currency: !!po })
+  const dirty = useRef({ vat: !!po || !!p.seedHeader, currency: !!po || !!p.seedHeader })
+  const [askCancel, setAskCancel] = useState(false)
+  const [headOpen, setHeadOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
   const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
@@ -304,9 +307,33 @@ export function DonChungTuScreen(p: Props) {
     const isNum = f.kind === 'number' || f.kind === 'area'
     patch(i, { [f.field]: isNum ? toNum(v) : v } as Partial<Line>)
   }
+  /** Con trỏ vào ô SL đặt của dòng thứ `i` — vòng nhập không rời bàn phím. */
+  const focusQty = (i: number) =>
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLInputElement>(`#dong-hang tbody tr:nth-child(${i + 1}) input[aria-label="SL đặt"]`)?.focus() // prettier-ignore
+    })
   const addMaterial = (m: PoMaterial) => {
     setLines((ls) => [...ls, newLine(template, m)])
     setPick(lines.length)
+    focusQty(lines.length)
+  }
+  /**
+   * ENTER ĐI TIẾP như Excel: SL đặt → Đơn giá → ô nhập kế tiếp trên dòng → dòng
+   * dưới; hết bảng thì về ô tìm vật tư để thêm dòng kế. Tab vẫn hoạt động như
+   * thường; Enter là phản xạ của người quen sổ.
+   */
+  function gridKeys(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    const t = e.target as HTMLElement
+    if (!(t instanceof HTMLInputElement) || t.closest('.k-gbar')) return
+    e.preventDefault()
+    t.blur()
+    const all = [...document.querySelectorAll<HTMLInputElement>('#dong-hang tbody input:not([type=checkbox]):not([disabled])')] // prettier-ignore
+    const next = all[all.indexOf(t) + 1]
+    if (next) return void requestAnimationFrame(() => next.focus())
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLInputElement>('#dong-hang .k-gbar input')?.focus(),
+    )
   }
   const addFree = () => {
     setLines((ls) => [...ls, newFreeLine()])
@@ -360,7 +387,14 @@ export function DonChungTuScreen(p: Props) {
       setBusy(false)
     }
   }
+  /** Đã khác bản gốc chưa — để Huỷ hỏi lại, và để chặn rời trang mất dữ liệu. */
+  const isDirty = () => baseline.current != null && draftSignature({ header, lines, shipCols }) !== baseline.current // prettier-ignore
+  function askCancelEdit() {
+    if (isDirty()) setAskCancel(true)
+    else cancelEdit()
+  }
   function cancelEdit() {
+    setAskCancel(false)
     clearDraft(draftKey)
     if (p.mode === 'create' || !po) {
       router.push('/mua-hang/don')
@@ -673,6 +707,25 @@ export function DonChungTuScreen(p: Props) {
     const t = setTimeout(() => writeDraft(draftKey, snap), 700)
     return () => clearTimeout(t)
   }, [editing, savedDraft, header, lines, shipCols, draftKey])
+  // Ctrl+S = Lưu (phản xạ Excel); rời trang bằng trình duyệt khi đang sửa dở thì hỏi.
+  useEffect(() => {
+    if (!editing) return
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        if (!problem && !busy) void save()
+      }
+    }
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (isDirty()) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('beforeunload', onLeave)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('beforeunload', onLeave)
+    }
+  })
   function restoreDraft(d: SavedDraft) {
     setHeader(d.header)
     setLines(d.lines)
@@ -711,12 +764,26 @@ export function DonChungTuScreen(p: Props) {
   const goOld = (hash: string) => po && router.push(`/planning/pos/${po.id}${hash}`)
   const goTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ block: 'start' })
+  /** "Chưa lưu được: …" BẤM ĐƯỢC — đưa thẳng tới chỗ phải sửa, không bắt tự cuộn tìm. */
+  function goToProblem(why: string) {
+    const field = /nhà cung cấp/i.test(why) ? 'Nhà cung cấp' : /lệnh|LSX/i.test(why) ? 'Lệnh sản xuất' : /mẫu/i.test(why) ? 'Mẫu đơn' : null // prettier-ignore
+    if (field) {
+      setHeadOpen(true)
+      goTo('dau-don')
+      requestAnimationFrame(() => document.querySelector<HTMLSelectElement>(`#dau-don select[aria-label="${field}"]`)?.focus()) // prettier-ignore
+      return
+    }
+    goTo('dong-hang')
+    requestAnimationFrame(() => {
+      const empty = [...document.querySelectorAll<HTMLInputElement>('#dong-hang tbody input[aria-label="SL đặt"], #dong-hang tbody input[aria-label="Đơn giá"]')].find((i) => i.value === '') // prettier-ignore
+      empty?.focus()
+    })
+  }
 
   return (
     <DocScreen dense={dense}>
       <Crumb
         path={['Đơn mua', code]}
-        view={editing ? (p.mode === 'create' ? 'đang tạo' : 'đang sửa') : undefined}
         position={p.position ? [p.position.index, p.position.total] : undefined}
       />
 
@@ -740,7 +807,7 @@ export function DonChungTuScreen(p: Props) {
               >
                 {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
               </Action>
-              <Action disabled={busy} onClick={cancelEdit}>
+              <Action disabled={busy} onClick={askCancelEdit}>
                 Huỷ
               </Action>
             </ActionGroup>
@@ -778,16 +845,6 @@ export function DonChungTuScreen(p: Props) {
                 {' '}
                 {/* prettier-ignore */}
                 Xem trước phiếu
-              </Action>
-            </ActionGroup>
-            <ActionGroup label="Dòng hàng">
-              <Action onClick={addFree}>+ Dòng tự do</Action>
-              <Action
-                disabled={sel.length === 0}
-                title="Chọn dòng trước"
-                onClick={removeSel}
-              >
-                Xoá dòng đã chọn
               </Action>
             </ActionGroup>
           </>
@@ -949,7 +1006,12 @@ export function DonChungTuScreen(p: Props) {
               {po.supplier_name} · soạn {dmy(po.created_at)} bởi {po.assignee_name ?? '—'}
             </>
           ) : (
-            <>Chưa lưu · {supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}</>
+            <>
+              <Tag tone="warn">
+                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa'}
+              </Tag>{' '}
+              {supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
+            </>
           )
         }
       >
@@ -1034,7 +1096,12 @@ export function DonChungTuScreen(p: Props) {
         <NoticeBar
           tone="warn"
           tag="Chưa lưu được"
-          action={{ label: 'Xem dòng hàng', onClick: () => goTo('dong-hang') }}
+          action={{
+            label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
+              ? 'Tới ô cần điền'
+              : 'Xem dòng hàng',
+            onClick: () => goToProblem(problem),
+          }}
         >
           {problem}. Sửa xong thì nút Lưu tự mở.
         </NoticeBar>
@@ -1047,16 +1114,32 @@ export function DonChungTuScreen(p: Props) {
               <div className="k-strong" style={{ marginBottom: 4 }}>
                 {p.supplier?.name ?? supplierOpt?.name ?? '—'}
               </div>
-              <FactKv
-                rows={[
-                  ['Giao đúng hẹn', p.facts?.onTime ? <span key="a" className="num k-t-done">{p.facts.onTime.hit} / {p.facts.onTime.of} đơn</span> : <span key="a" className="k-t-warn">chưa có lịch sử</span>], // prettier-ignore
-                  ['Đã đặt', <span key="b" className="num">{p.facts?.orders ?? 0} đơn</span>], // prettier-ignore
-                  ['Nhận đủ', <span key="c" className="num">{p.facts?.received ?? 0} đơn</span>], // prettier-ignore
-                  ['Mua gần nhất', <span key="d" className="num">{dmy(p.facts?.lastOrderAt) || '—'}</span>], // prettier-ignore
-                  ['Mã NCC', <span key="e" className="num">{p.supplier?.code ?? '—'}</span>], // prettier-ignore
-                  ['Mã số thuế', <span key="f" className="num">{p.supplier?.tax_no ?? '—'}</span>], // prettier-ignore
-                ]}
-              />
+              {!p.supplier && !supplierOpt ? (
+                <div className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                  Chọn nhà cung cấp ở Đầu đơn — tiền tệ và điều khoản thanh toán tự theo
+                  hồ sơ.
+                </div>
+              ) : !p.facts ? (
+                <FactKv
+                  rows={[
+                    ['Tiền tệ', <span key="a" className="num">{supplierOpt?.currency?.toUpperCase() ?? '—'}</span>], // prettier-ignore
+                    ['Thanh toán', <span key="b">{supplierOpt?.payment_terms ?? '—'}</span>], // prettier-ignore
+                    ['Lead time', <span key="c" className="num">{supplierOpt?.lead_time_days != null ? `${supplierOpt.lead_time_days} ngày` : '—'}</span>], // prettier-ignore
+                    ['Lịch sử mua', <span key="d" className="text-[var(--ink-3)]">hiện sau khi lưu đơn</span>], // prettier-ignore
+                  ]}
+                />
+              ) : (
+                <FactKv
+                  rows={[
+                    ['Giao đúng hẹn', p.facts.onTime ? <span key="a" className="num k-t-done">{p.facts.onTime.hit} / {p.facts.onTime.of} đơn</span> : <span key="a" className="k-t-warn">chưa có lịch sử</span>], // prettier-ignore
+                    ['Đã đặt', <span key="b" className="num">{p.facts.orders} đơn</span>], // prettier-ignore
+                    ['Nhận đủ', <span key="c" className="num">{p.facts.received} đơn</span>], // prettier-ignore
+                    ['Mua gần nhất', <span key="d" className="num">{dmy(p.facts.lastOrderAt) || '—'}</span>], // prettier-ignore
+                    ['Mã NCC', <span key="e" className="num">{p.supplier?.code ?? '—'}</span>], // prettier-ignore
+                    ['Mã số thuế', <span key="f" className="num">{p.supplier?.tax_no ?? '—'}</span>], // prettier-ignore
+                  ]}
+                />
+              )}
             </FactSection>
             <FactSection title="Tiền">
               <FactKv
@@ -1162,164 +1245,166 @@ export function DonChungTuScreen(p: Props) {
             </GridToolbar>
           )}
 
-          <Grid minWidth={640 + gridFields.length * 100}>
-            <GridHead>
-              <Th width={30} />
-              <Th width={36}>#</Th>
-              <Th>Mã · tên vật tư</Th>
-              {gridFields.map((f) => (
-                <Th key={f.key} num={f.align === 'right' || f.kind !== 'text'}>
-                  {f.label}
-                </Th>
-              ))}
-              <Th>ĐVT</Th>
-              <Th num>SL đặt</Th>
-              <Th num>Đơn giá</Th>
-              <Th num>Thành tiền</Th>
-              {!editing && <Th>Trạng thái</Th>}
-            </GridHead>
-            <GridBody>
-              {lines.map((l, i) => {
-                const why = issues.find((x) => x.index === i)?.why ?? null
-                const st = statusById.get(p.lines[i]?.id ?? '')
-                const kind: 'idle' | 'part' | 'done' | 'short' = !st
-                  ? 'idle'
-                  : st.closed_short_at
-                    ? 'short'
-                    : st.qty_open <= 0
-                      ? 'done'
-                      : st.qty_received > 0
-                        ? 'part'
-                        : 'idle'
-                return (
-                  <GridRow
-                    key={l.material_id}
-                    selected={i === curIdx}
-                    onClick={() => setPick(i)}
-                  >
-                    <GridCheck
-                      checked={sel.includes(l.material_id)}
-                      label={`Chọn dòng ${l.code || l.name}`}
-                      onChange={() =>
-                        setSel((s) =>
-                          s.includes(l.material_id)
-                            ? s.filter((x) => x !== l.material_id)
-                            : [...s, l.material_id],
-                        )
-                      }
-                    />
-                    <Td num tone={why ? 'warn' : undefined}>
-                      {i + 1}
-                    </Td>
-                    <Td>
-                      {l.is_free && editing ? (
-                        <TextInput
-                          label="Tên hàng"
-                          value={l.name}
-                          onCommit={(v) => patch(i, { name: v })}
-                          placeholder="Tên hàng (dòng tự do)"
-                        />
-                      ) : (
-                        <>
-                          <span className="num k-strong">{l.code}</span>
-                          {l.code ? ' · ' : ''}
-                          {l.name}
-                          {l.is_free && (
-                            <span className="text-[var(--ink-3)]"> · tự do</span>
-                          )}
-                        </>
-                      )}
-                    </Td>
-                    {gridFields.map((f) => (
-                      <Td key={f.key} num={f.kind !== 'text'}>
-                        {editing ? (
-                          <EditCell
-                            f={f}
-                            l={l}
-                            template={template}
-                            onField={(v) => setField(i, f, v)}
-                            onPatch={(part) => patch(i, part)}
+          <div onKeyDown={editing ? gridKeys : undefined}>
+            <Grid minWidth={640 + gridFields.length * 100}>
+              <GridHead>
+                <Th width={30} />
+                <Th width={36}>#</Th>
+                <Th>Mã · tên vật tư</Th>
+                {gridFields.map((f) => (
+                  <Th key={f.key} num={f.align === 'right' || f.kind !== 'text'}>
+                    {f.label}
+                  </Th>
+                ))}
+                <Th>ĐVT</Th>
+                <Th num>SL đặt</Th>
+                <Th num>Đơn giá</Th>
+                <Th num>Thành tiền</Th>
+                {!editing && <Th>Trạng thái</Th>}
+              </GridHead>
+              <GridBody>
+                {lines.map((l, i) => {
+                  const why = issues.find((x) => x.index === i)?.why ?? null
+                  const st = statusById.get(p.lines[i]?.id ?? '')
+                  const kind: 'idle' | 'part' | 'done' | 'short' = !st
+                    ? 'idle'
+                    : st.closed_short_at
+                      ? 'short'
+                      : st.qty_open <= 0
+                        ? 'done'
+                        : st.qty_received > 0
+                          ? 'part'
+                          : 'idle'
+                  return (
+                    <GridRow
+                      key={l.material_id}
+                      selected={i === curIdx}
+                      onClick={() => setPick(i)}
+                    >
+                      <GridCheck
+                        checked={sel.includes(l.material_id)}
+                        label={`Chọn dòng ${l.code || l.name}`}
+                        onChange={() =>
+                          setSel((s) =>
+                            s.includes(l.material_id)
+                              ? s.filter((x) => x !== l.material_id)
+                              : [...s, l.material_id],
+                          )
+                        }
+                      />
+                      <Td num tone={why ? 'warn' : undefined}>
+                        {i + 1}
+                      </Td>
+                      <Td>
+                        {l.is_free && editing ? (
+                          <TextInput
+                            label="Tên hàng"
+                            value={l.name}
+                            onCommit={(v) => patch(i, { name: v })}
+                            placeholder="Tên hàng (dòng tự do)"
                           />
                         ) : (
-                          <ViewCell f={f} l={l} template={template} />
+                          <>
+                            <span className="num k-strong">{l.code}</span>
+                            {l.code ? ' · ' : ''}
+                            {l.name}
+                            {l.is_free && (
+                              <span className="text-[var(--ink-3)]"> · tự do</span>
+                            )}
+                          </>
                         )}
                       </Td>
-                    ))}
-                    <Td>
-                      {editing && l.is_free ? (
-                        <TextInput
-                          label="ĐVT"
-                          value={l.unit}
-                          onCommit={(v) => patch(i, { unit: v })}
-                        />
-                      ) : (
-                        l.unit
-                      )}
-                    </Td>
-                    <Td num tone={why?.includes('SL') ? 'warn' : undefined}>
-                      {editing ? (
-                        <NumInput
-                          aria-label="SL đặt"
-                          value={numStr(l.qty)}
-                          onCommit={(v) => patch(i, { qty: toNum(v) })}
-                        />
-                      ) : (
-                        Number(l.qty || 0).toLocaleString('vi-VN')
-                      )}
-                    </Td>
-                    <Td num tone={why?.includes('giá') ? 'warn' : undefined}>
-                      {editing ? (
-                        <NumInput
-                          aria-label="Đơn giá"
-                          value={numStr(l.price)}
-                          onCommit={(v) => patch(i, { price: toNum(v) })}
-                        />
-                      ) : l.price === '' ? (
-                        <span className="k-t-warn">—</span>
-                      ) : (
-                        Number(l.price).toLocaleString('vi-VN')
-                      )}
-                    </Td>
-                    <Td num>
-                      {l.price === '' ? (
-                        <span className="k-flag">chưa có giá</span>
-                      ) : (
-                        lineAmount(template, l).toLocaleString('vi-VN')
-                      )}
-                    </Td>
-                    {!editing && (
+                      {gridFields.map((f) => (
+                        <Td key={f.key} num={f.kind !== 'text'}>
+                          {editing ? (
+                            <EditCell
+                              f={f}
+                              l={l}
+                              template={template}
+                              onField={(v) => setField(i, f, v)}
+                              onPatch={(part) => patch(i, part)}
+                            />
+                          ) : (
+                            <ViewCell f={f} l={l} template={template} />
+                          )}
+                        </Td>
+                      ))}
                       <Td>
-                        <LineStatus kind={kind}>
-                          {
-                            {
-                              idle: 'Chưa nhận',
-                              part: 'Một phần',
-                              done: 'Đủ',
-                              short: 'Đóng thiếu',
-                            }[kind]
-                          }
-                        </LineStatus>
+                        {editing && l.is_free ? (
+                          <TextInput
+                            label="ĐVT"
+                            value={l.unit}
+                            onCommit={(v) => patch(i, { unit: v })}
+                          />
+                        ) : (
+                          l.unit
+                        )}
                       </Td>
-                    )}
-                  </GridRow>
-                )
-              })}
-            </GridBody>
-            <GridFoot>
-              <Td colSpan={3 + gridFields.length + 1}>
-                Cộng {lines.length} dòng
-                {issues.length > 0 ? ` · ${issues.length} thiếu số` : ''}
-              </Td>
-              <Td num>
-                {lines
-                  .reduce((s, l) => s + Number(l.qty || 0), 0)
-                  .toLocaleString('vi-VN')}
-              </Td>
-              <Td />
-              <Td num>{totals.subtotal.toLocaleString('vi-VN')}</Td>
-              {!editing && <Td />}
-            </GridFoot>
-          </Grid>
+                      <Td num tone={why?.includes('SL') ? 'warn' : undefined}>
+                        {editing ? (
+                          <NumInput
+                            aria-label="SL đặt"
+                            value={numStr(l.qty)}
+                            onCommit={(v) => patch(i, { qty: toNum(v) })}
+                          />
+                        ) : (
+                          Number(l.qty || 0).toLocaleString('vi-VN')
+                        )}
+                      </Td>
+                      <Td num tone={why?.includes('giá') ? 'warn' : undefined}>
+                        {editing ? (
+                          <NumInput
+                            aria-label="Đơn giá"
+                            value={numStr(l.price)}
+                            onCommit={(v) => patch(i, { price: toNum(v) })}
+                          />
+                        ) : l.price === '' ? (
+                          <span className="k-t-warn">—</span>
+                        ) : (
+                          Number(l.price).toLocaleString('vi-VN')
+                        )}
+                      </Td>
+                      <Td num>
+                        {l.price === '' ? (
+                          <span className="k-flag">chưa có giá</span>
+                        ) : (
+                          lineAmount(template, l).toLocaleString('vi-VN')
+                        )}
+                      </Td>
+                      {!editing && (
+                        <Td>
+                          <LineStatus kind={kind}>
+                            {
+                              {
+                                idle: 'Chưa nhận',
+                                part: 'Một phần',
+                                done: 'Đủ',
+                                short: 'Đóng thiếu',
+                              }[kind]
+                            }
+                          </LineStatus>
+                        </Td>
+                      )}
+                    </GridRow>
+                  )
+                })}
+              </GridBody>
+              <GridFoot>
+                <Td colSpan={3 + gridFields.length + 1}>
+                  Cộng {lines.length} dòng
+                  {issues.length > 0 ? ` · ${issues.length} thiếu số` : ''}
+                </Td>
+                <Td num>
+                  {lines
+                    .reduce((s, l) => s + Number(l.qty || 0), 0)
+                    .toLocaleString('vi-VN')}
+                </Td>
+                <Td />
+                <Td num>{totals.subtotal.toLocaleString('vi-VN')}</Td>
+                {!editing && <Td />}
+              </GridFoot>
+            </Grid>
+          </div>
 
           {/* ══ CHI TIẾT DÒNG ĐANG CHỌN — Dynamics Line details ═══════════ */}
           {cur ? (
@@ -1355,7 +1440,7 @@ export function DonChungTuScreen(p: Props) {
                     })()}
                   </span>
                 </Field>
-                <Field label="Nhu cầu (định mức × SL lệnh)">
+                <Field label="Nhu cầu lệnh">
                   <span className="num">
                     {cur.qty_demand === ''
                       ? '—'
@@ -1591,8 +1676,10 @@ export function DonChungTuScreen(p: Props) {
 
         {/* ══ 2. ĐẦU ĐƠN — gấp, nhóm có tên, 3 cột ═══════════════════════ */}
         <FastTab
+          key={headOpen ? 'dau-don-mo' : editing ? 'dau-don-sua' : 'dau-don-xem'}
+          id="dau-don"
           title="Đầu đơn"
-          defaultOpen={p.mode === 'create'}
+          defaultOpen={editing || headOpen}
           flush
           summary={[
             ['NCC', po?.supplier_name ?? supplierOpt?.name ?? '—'],
@@ -1939,6 +2026,29 @@ export function DonChungTuScreen(p: Props) {
         }
       />
 
+      {askCancel && (
+        <Sheet
+          open
+          onClose={() => setAskCancel(false)}
+          stakes="nang"
+          title={p.mode === 'create' ? 'Bỏ đơn đang soạn?' : 'Bỏ các thay đổi?'}
+          subtitle={`${lines.length} dòng đang gõ sẽ mất. Bản nháp tự lưu cũng bị xoá.`}
+          footer={
+            <SheetActions
+              stakes="nang"
+              onCancel={() => setAskCancel(false)}
+              onConfirm={cancelEdit}
+              cancelLabel="Soạn tiếp"
+              confirmLabel={p.mode === 'create' ? 'Bỏ đơn' : 'Bỏ thay đổi'}
+            />
+          }
+        >
+          <Consequence>
+            Muốn giữ lại để làm tiếp sau thì bấm “Soạn tiếp” rồi Lưu — đơn lưu ở nháp,
+            chưa gửi ai.
+          </Consequence>
+        </Sheet>
+      )}
       {
         paste &&
         <DanExcelSheet allowFree={FREE_LINE_TEMPLATES.includes(template)} onClose={() => setPaste(false)} onConfirm={addFromPaste} /> // prettier-ignore
