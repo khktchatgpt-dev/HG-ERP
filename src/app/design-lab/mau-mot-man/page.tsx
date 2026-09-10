@@ -152,11 +152,18 @@ export default function Page() {
   const dongChon = dong != null ? (dongCua[dong] ?? null) : null
 
   /* Bố cục ba cột co giãn — đây là toàn bộ "phép thuật" của khuôn này. */
+  /*
+    Ba cột chỉ đủ chỗ từ 1100px. Hẹp hơn thì Fiori GIẤU CỘT DANH SÁCH chứ
+    không bóp cột giữa — đo 11/09/2026 ở 820px: giữ cả ba thì cột chứng từ
+    còn 184px, không đọc nổi tên vật tư. Danh sách là thứ hy sinh được vì nó
+    quay lại được bằng một cú bấm ✕; tờ đơn đang đọc thì không.
+  */
   const cot = rong
-    ? '0px 1fr'
+    ? 'grid-cols-[1fr]'
     : dongChon
-      ? 'minmax(260px,320px) 1fr minmax(240px,300px)'
-      : 'minmax(280px,360px) 1fr'
+      ? 'grid-cols-[1fr_minmax(240px,300px)] xl:grid-cols-[320px_1fr_300px]'
+      : 'grid-cols-[minmax(280px,360px)_1fr]'
+  const anCot1 = rong || dongChon
 
   function chonDon(id: string) {
     setSel((cu) => (cu === id ? null : id))
@@ -214,10 +221,10 @@ export default function Page() {
         </span>
       </div>
 
-      <div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: cot }}>
+      <div className={`grid min-h-0 flex-1 ${cot}`}>
         {/* ── CỘT 1 · DANH SÁCH ───────────────────────────────────────── */}
         <div
-          className={`flex min-w-0 flex-col border-r border-[var(--line)] ${rong ? 'hidden' : ''}`}
+          className={`min-w-0 flex-col border-r border-[var(--line)] ${rong ? 'hidden' : anCot1 ? 'hidden xl:flex' : 'flex'}`}
         >
           <FilterBar>
             <Chip
