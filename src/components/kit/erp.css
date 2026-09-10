@@ -516,7 +516,14 @@
    Container query đo đúng chỗ lưới đang đứng nên không bao giờ lệch, kể cả
    khi màn sau này đổi bố cục. */
 .k-ft-b,
-.k-fact {
+.k-fact,
+/* Lớp MỞ cho màn tự dựng khung — `FieldGrid` chỉ chia cột khi cha là một
+   container query. Trước 11/09/2026 chỉ hai chỗ trên là container, nên đặt
+   `FieldGrid` thẳng vào một màn (không qua FastTab/FactBox) thì nó rơi về MỘT
+   cột: nhãn dính mép trái, giá trị dạt mép phải, giữa là một khoảng trắng dài.
+   Lộ ra khi dựng `/design-lab/mau-odoo-chung-tu` — đúng vai trò của màn mẫu là
+   phép thử API kit. */
+.k-cq {
   container-type: inline-size;
 }
 .k-fields {

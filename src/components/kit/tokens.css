@@ -103,6 +103,28 @@
   --pad-y: 5px;
   --gutter: 14px;
 
+  /* ── THANG KHOẢNG CÁCH ────────────────────────────────────────────────
+     Bậc CÓ TÊN, chép cách làm của Fluent 2 (Dynamics 365): có bậc "nửa"
+     (6px, 12px) vì màn dày đôi khi cần nửa bậc, nhưng vẫn là BẬC, không
+     phải số gõ tuỳ ý.
+
+     Vì sao cần: đo 11/09/2026 trước khi có thang — 17 giá trị px khác nhau
+     dùng 75 lần trong .tsx, 9 trong đó là số lẻ (1,3,5,7,9,11,13,15). Một
+     khoảng 7px cạnh một khoảng 9px thì mắt thấy lệch mà không chỉ ra được
+     lệch ở đâu; đó đúng là "xấu, không cân đối" mà chủ dự án chấm nhiều lần.
+
+     KHÁC với nhóm mật độ ở trên: `--row-h`/`--pad-*` đổi theo chế độ dày;
+     thang này KHÔNG đổi. Fiori tách hai thứ này, và tách đúng — đổi mật độ
+     là đổi chiều cao hàng, không phải đổi khoảng cách giữa các khối. */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 24px;
+  --sp-8: 32px;
+
   /* ── CHỮ ─────────────────────────────────────────────────────────────
      Thang hẹp có chủ ý. 13px là nền — GIỮ NGUYÊN độ dày của ERP; dễ đọc đến
      từ căn chỉnh và tương phản, không từ việc phóng to chữ.

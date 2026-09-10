@@ -65,6 +65,15 @@ const PLANS: {
     done: true,
   },
   {
+    key: 'Khuôn D′',
+    name: 'Trang chứng từ — bản Odoo',
+    q: 'Cùng tờ đó, cùng bộ tính năng — xếp theo Odoo thì gọn hơn bao nhiêu?',
+    href: '/design-lab/mau-odoo-chung-tu',
+    must: '3 nút + menu · notebook tab · tiền ở chân lưới · trao đổi luôn hiện',
+    src: 'Odoo 17 form view',
+    done: true,
+  },
+  {
     key: 'Khuôn E',
     name: 'Hồ sơ danh mục',
     q: 'Đối tượng này là ai, làm ăn ra sao, đang được dùng ở đâu?',

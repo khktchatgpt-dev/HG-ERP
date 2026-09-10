@@ -255,9 +255,7 @@ export function NavRail({
         </button>
       )}
 
-      {footer && (
-        <div className="shrink-0 border-t border-[var(--line)]">{footer}</div>
-      )}
+      {footer && <div className="shrink-0 border-t border-[var(--line)]">{footer}</div>}
     </nav>
   )
 }
@@ -353,8 +351,14 @@ export function Menu({
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          'grid h-[var(--ctl-h)] w-[var(--ctl-h)] place-items-center rounded-[var(--radius)]',
-          'border border-[var(--line)] bg-[var(--surface-card)] text-[15px] text-[var(--ink-2)]',
+          /* Nút vuông chỉ đúng cho nhãn MỘT KÝ TỰ ("⋯"). Nhãn có chữ
+             ("Thao tác ▾") mà ép vào ô vuông --ctl-h thì gãy hai dòng — lộ ra
+             khi dựng /design-lab/mau-odoo-chung-tu (11/09/2026). */
+          'grid h-[var(--ctl-h)] place-items-center rounded-[var(--radius)] whitespace-nowrap',
+          [...label].length > 1
+            ? 'px-[10px] text-[12.5px]'
+            : 'w-[var(--ctl-h)] text-[15px]',
+          'border border-[var(--line)] bg-[var(--surface-card)] text-[var(--ink-2)]',
           'hover:border-[var(--ink-3)] hover:text-[var(--ink)]',
         )}
       >
@@ -367,7 +371,9 @@ export function Menu({
         >
           {items.map((it, i) => (
             <span key={i}>
-              {it.danger && i > 0 && <span className="my-1 block border-t border-[var(--hair)]" />}
+              {it.danger && i > 0 && (
+                <span className="my-1 block border-t border-[var(--hair)]" />
+              )}
               <button
                 role="menuitem"
                 disabled={it.disabled}
