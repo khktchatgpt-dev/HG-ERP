@@ -9,7 +9,7 @@ Purchase Order của Odoo 17. Mỗi tiêu chí phải ĐO ĐƯỢC, không thì 
 
 | # | Tiêu chí | Ngưỡng | Của ai | Màn trước khi sửa | Sau khi sửa |
 |---|---|---|---|---|---|
-| 1 | **Dòng hàng là nhân vật chính**: lưới dòng nhìn thấy ngay khi mở, chiếm phần lớn màn | Lưới bắt đầu trong 1/3 màn đầu ở 1080p; ≥ 50% chiều cao còn lại | Dynamics mở ở *Lines view* | ✗ Tiêu đề lưới ở 547px | ○ ĐẢO LẠI 10/09/2026 theo chủ dự án: Đầu đơn đứng ĐẦU như "Tổng quan" của màn mẫu, cố định khi soạn (không gấp), rồi mới tới lưới dòng; khối Điều khoản & thanh toán tách riêng ngay sau lưới. Tiêu chí này không còn áp cho màn đơn mua |
+| 1 | **Dòng hàng là nhân vật chính**: lưới dòng nhìn thấy ngay khi mở, chiếm phần lớn màn | Lưới bắt đầu trong 1/3 màn đầu ở 1080p; ≥ 50% chiều cao còn lại | Dynamics mở ở *Lines view* | ✗ Tiêu đề lưới ở 547px | ✓ ở 1080p: tiêu đề lưới ở **325px** (< 360), lưới + chi tiết dòng chiếm 70% phần còn lại. ○ ở 1280×860 thì 325 > 287 — chưa đạt ngưỡng 1/3 trên màn thấp |
 | 2 | **Dải nhận diện gọn**: số hiệu, đối tác, trạng thái, người giữ trong ≤ 2 hàng | ≤ 110px ở 1280 | Cả ba | ✗ 5 dải xếp chồng ≈ 289px | ○ ~135px: một hàng nhận diện (số hiệu 20px · đối tác · hai trục CÓ nhãn) + hàng nút thông minh + dải "đang chờ ai" nguyên hàng + bảng kiểm (hai tầng khi có lỗi chặn). Vượt 110px có chủ ý: chủ dự án muốn giữ điểm nhấn của màn mẫu (10/09/2026) |
 | 3 | **Trường xếp theo NHÓM có tên**, 3 cột ở ≥ 1280, nhãn trái cố định | ≥ 2 nhóm, mỗi nhóm ≤ 8 trường | Dynamics FastTab General / Delivery / Price | ✗ Một nhóm 12 trường | ✓ Chung · Giao hàng · Giá & thuế |
 | 4 | **Chi tiết dòng đang chọn** hiện dưới lưới, sửa được tại đó | Có khối "Chi tiết dòng" đổi theo dòng chọn | Dynamics *Line details* | ✗ Không có; ô đặc thù nhồi vào lưới | ✓ Có, 3 cột, sửa được |

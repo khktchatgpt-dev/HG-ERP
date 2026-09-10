@@ -386,17 +386,10 @@ export function FastTab({
   defaultOpen,
   flush,
   actions,
-  fixed,
   children,
 }: {
   /** Neo cuộn tới — nút thông minh "trao đổi" nhảy xuống đúng khối. */
   id?: string
-  /**
-   * CỐ ĐỊNH — luôn mở, không có nút gấp. Cho khối mà người dùng PHẢI điền
-   * trước khi làm gì khác (đầu đơn lúc soạn): gấp được là có người gấp rồi
-   * đi tìm "ô NCC ở đâu". Chủ dự án chốt 10/09/2026: đầu đơn lên đầu, cứng.
-   */
-  fixed?: boolean
   title: string
   /** Cặp [nhãn, giá trị] hiện trên dòng tiêu đề — kể cả khi đang gấp. */
   summary?: [string, ReactNode][]
@@ -411,23 +404,9 @@ export function FastTab({
   actions?: ReactNode
   children: ReactNode
 }) {
-  const [openState, setOpen] = useState(!!defaultOpen)
-  const open = fixed || openState
+  const [open, setOpen] = useState(!!defaultOpen)
   const id = useId()
-  const head = fixed ? (
-    <div className="k-ft-h k-ft-fixed">
-      <span className="k-ft-t">{title}</span>
-      {summary && summary.length > 0 && (
-        <span className="k-ft-sum">
-          {summary.map(([k, v]) => (
-            <span key={k}>
-              {k} <b>{v}</b>
-            </span>
-          ))}
-        </span>
-      )}
-    </div>
-  ) : (
+  const head = (
     <button
       type="button"
       className="k-ft-h"
