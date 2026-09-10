@@ -80,6 +80,7 @@ import {
   buildPoPayload,
   draftProblem,
   poTotals,
+  templateDefaults,
   type PoHeader,
 } from '@/app/(workspace)/planning/pos/new/po-draft'
 import {
@@ -253,6 +254,18 @@ function daysBetween(a: string, b: string): number {
  * (khuôn, cách mở, cơ sở tính tiền) xuống Chi tiết dòng — ở lưới chúng vừa
  * rộng vừa khó gõ. Tối đa 3 cột mẫu ở lưới; bảng tiêu chí đặt trần 11 cột.
  */
+/**
+ * NĂM ĐIỀU KHOẢN in nguyên văn lên phiếu gửi NCC — theo đúng thứ tự trên tờ
+ * đơn thật. Gợi ý chỗ trống lấy từ câu hay dùng nhất của phòng Cung ứng.
+ */
+const TERM_FIELDS = [
+  ['quality', 'Chất lượng', 'Hàng mới 100%, đúng quy cách đã duyệt'],
+  ['delivery_place', 'Nơi giao', 'Xưởng SX — Cụm CN…'],
+  ['lead_time', 'Thời gian giao', '15 ngày kể từ ngày đặt'],
+  ['payment', 'Thanh toán', 'Chuyển khoản 30 ngày kể từ ngày nhận đủ'],
+  ['invoice', 'Hoá đơn', 'Hoá đơn GTGT giao cùng hàng'],
+] as const
+
 const GRID_KINDS = new Set(['text', 'number', 'calc'])
 const GRID_MAX = 3
 
@@ -264,7 +277,7 @@ export function DonChungTuScreen(p: Props) {
   const [editing, setEditing] = useState(p.mode !== 'view')
   const [header, setHeader] = useState<PoHeader>(
     () =>
-    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId })), // prettier-ignore
+    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes })), // prettier-ignore
   )
   const [lines, setLines] = useState<Line[]>(() =>
     p.lines.map((l) =>
@@ -303,6 +316,9 @@ export function DonChungTuScreen(p: Props) {
 
   const template = header.template
   const meta = poTemplateMeta(template)
+  /** Mặc định của MẪU đang chọn — để tô ô "còn nguyên mặc định". */
+  const tplTerms = templateDefaults(template).terms
+  const tplSigner = templateDefaults(template).signerRole
   const allFields = useMemo(
     () => PO_FIELDS[template].filter((f) => !f.editHidden),
     [template],
@@ -1941,13 +1957,6 @@ export function DonChungTuScreen(p: Props) {
                     mono
                   />
                 </Field>
-                <Field label="Người ký">
-                  <TextInput
-                    label="Người ký"
-                    value={header.signerRole}
-                    onCommit={(v) => setHeader((h) => ({ ...h, signerRole: v }))}
-                  />
-                </Field>
               </>
             ) : (
               <>
@@ -1968,7 +1977,6 @@ export function DonChungTuScreen(p: Props) {
                 <Field label="Số hợp đồng">
                   <span className="num">{po?.contract_no ?? '—'}</span>
                 </Field>
-                <Field label="Người ký">{po?.signer_role ?? meta.signerRole}</Field>
               </>
             )}
           </FieldGroup>
@@ -1993,24 +2001,6 @@ export function DonChungTuScreen(p: Props) {
                 <span className="num">{dmy(po?.expected_at) || '—'}</span>
               </Field>
             )}
-            {(['delivery_place', 'lead_time'] as const).map((k) => (
-              <Field
-                key={k}
-                label={k === 'delivery_place' ? 'Nơi giao' : 'Thời gian giao'}
-              >
-                {editing ? (
-                  <TextInput
-                    label={k}
-                    value={header.terms[k]}
-                    onCommit={(v) =>
-                      setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))
-                    }
-                  />
-                ) : (
-                  header.terms[k] || '—'
-                )}
-              </Field>
-            ))}
             <Field label="Thời gian giao của NCC" inherited>
               <span className="num">
                 {supplierOpt?.lead_time_days != null
@@ -2074,30 +2064,75 @@ export function DonChungTuScreen(p: Props) {
                 </Field>
               </>
             )}
-            {(['payment', 'invoice', 'quality'] as const).map((k) => (
+            <Field label="Điều khoản TT của NCC" inherited>
+              {supplierOpt?.payment_terms ?? '—'}
+            </Field>
+          </FieldGroup>
+
+          {/* ══ ĐIỀU KHOẢN — nhóm RIÊNG, có tên ═══════════════════════════════
+              Năm điều khoản này in nguyên văn lên phiếu gửi NCC, nên chúng là
+              một khối nghiệp vụ chứ không phải vài ô lẻ. Bản đầu rải chúng vào
+              nhóm "Giao hàng" và "Giá & thuế" dưới nhãn chung chung ("Nơi giao",
+              "Thanh toán") — chữ "điều khoản" không xuất hiện ở đâu, nên người
+              soạn không tìm ra chỗ ghi (chủ dự án 10/09/2026). */}
+          <FieldGroup title="Điều khoản — in lên phiếu gửi NCC">
+            {TERM_FIELDS.map(([k, label, hint]) => (
               <Field
                 key={k}
-                label={
-                  { payment: 'Thanh toán', invoice: 'Hoá đơn', quality: 'Chất lượng' }[k]
-                }
+                label={label}
+                inherited={editing && header.terms[k] === tplTerms[k]}
               >
+                {' '}
+                {/* prettier-ignore */}
                 {editing ? (
-                  <TextInput
-                    label={k}
+                  <TextArea
+                    aria-label={label}
+                    rows={2}
+                    placeholder={hint}
                     value={header.terms[k]}
-                    onCommit={(v) =>
-                      setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))
-                    }
+                    onChange={(v) => setHeader((h) => ({ ...h, terms: { ...h.terms, [k]: v } }))} // prettier-ignore
                   />
                 ) : (
                   header.terms[k] || '—'
                 )}
               </Field>
             ))}
-            <Field label="Điều khoản TT của NCC" inherited>
-              {supplierOpt?.payment_terms ?? '—'}
+            <Field
+              label="Người ký"
+              inherited={editing && header.signerRole === tplSigner}
+            >
+              {editing ? (
+                <TextInput
+                  label="Người ký"
+                  value={header.signerRole}
+                  onCommit={(v) => setHeader((h) => ({ ...h, signerRole: v }))}
+                />
+              ) : (
+                (po?.signer_role ?? meta.signerRole)
+              )}
             </Field>
+            {editing && (
+              <div
+                style={{ gridColumn: '1 / -1' }}
+                className="flex flex-wrap items-center gap-2 pt-1 text-[var(--fs-sm)] text-[var(--ink-3)]"
+              >
+                <GridBtn
+                  title={`Nạp lại năm điều khoản và người ký theo mẫu ${meta.label.toLowerCase()}`}
+                  onClick={() => {
+                    const d = templateDefaults(template)
+                    setHeader((h) => ({ ...h, terms: d.terms, signerRole: d.signerRole }))
+                  }}
+                >
+                  Lấy lại theo mẫu
+                </GridBtn>
+                <span>
+                  Ô nền nhạt là mặc định của mẫu <b>{meta.label}</b> — sửa ở đây chỉ đổi
+                  cho đơn này.
+                </span>
+              </div>
+            )}
           </FieldGroup>
+
           <FieldGroup title="Ghi chú đơn">
             {editing ? (
               <div style={{ gridColumn: '1 / -1' }}>

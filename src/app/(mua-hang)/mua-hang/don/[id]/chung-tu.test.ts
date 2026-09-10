@@ -83,3 +83,16 @@ describe('poChecks — năm luật của màn chi tiết cũ', () => {
     ])
   })
 })
+
+describe('newHeader — loại đơn mặc định', () => {
+  it('mặc định THEO LỆNH: đơn nào của phòng cũng gắn lệnh, ô lệnh không được khoá sẵn', () => {
+    expect(newHeader({}).poType).toBe('lsx')
+    expect(newHeader({ supplierId: 's' }).poType).toBe('lsx')
+  })
+  it('mở từ dòng tồn kho mà không kèm lệnh = mua bù tồn → ngoài lệnh', () => {
+    expect(newHeader({ fromStock: true }).poType).toBe('standalone')
+  })
+  it('mở từ dòng tồn kho NHƯNG có lệnh trên URL thì vẫn theo lệnh', () => {
+    expect(newHeader({ fromStock: true, lsxId: 'l1' }).poType).toBe('lsx')
+  })
+})

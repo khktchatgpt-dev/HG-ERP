@@ -68,12 +68,20 @@ export function newHeader(opts: {
   lsxId?: string
   currency?: string
   template?: PoTemplate
+  /**
+   * Mở từ dòng TỒN KHO (mua bù tồn) — đơn ngoài lệnh ngay từ đầu.
+   *
+   * Mặc định còn lại là THEO LỆNH: gần như mọi đơn của phòng đều gắn lệnh sản
+   * xuất, và ô "Lệnh sản xuất" bị KHOÁ khi đơn ngoài lệnh — mặc định sai thì
+   * người soạn mở form ra thấy ô lệnh xám và không hiểu vì sao (đo 10/09/2026).
+   */
+  fromStock?: boolean
 }): PoHeader {
   const template = opts.template ?? 'simple'
   const d = templateDefaults(template)
   return {
     template,
-    poType: opts.lsxId ? 'lsx' : 'standalone',
+    poType: opts.fromStock && !opts.lsxId ? 'standalone' : 'lsx',
     lsxId: opts.lsxId ?? '',
     extraLsxIds: [],
     supplierId: opts.supplierId ?? '',
