@@ -95,6 +95,12 @@
   --row-h: 30px;
   --ctl-h: 28px;
   --pad-x: 8px;
+  /* Đệm DỌC của ô bảng. Trước đây ghi cứng 5px trong erp.css nên `.kit-dense`
+     đổi `--row-h` mà dòng không thấp đi: ô bảng coi `height` là TỐI THIỂU, còn
+     chiều cao thật = đệm trên + nhãn 19px + đệm dưới + viền = 30px. Đo
+     10/09/2026 trên màn Phiếu mua. Muốn dày thì phải thu đệm, không phải thu
+     `height`. */
+  --pad-y: 5px;
   --gutter: 14px;
 
   /* ── CHỮ ─────────────────────────────────────────────────────────────
@@ -156,6 +162,7 @@
   --row-h: 25px;
   --ctl-h: 24px;
   --pad-x: 6px;
+  --pad-y: 2px;
 }
 
 /* ── SỐ ────────────────────────────────────────────────────────────────

@@ -220,6 +220,7 @@ export function DocHead({
   code,
   sub,
   children,
+  compact,
 }: {
   /** Loại chứng từ, in hoa nhỏ phía trên số hiệu. */
   kind: string
@@ -228,9 +229,16 @@ export function DocHead({
   sub?: ReactNode
   /** Các `<StatusTrack>`. */
   children?: ReactNode
+  /**
+   * GỌN — số hiệu 18px trên MỘT dòng với loại và phụ đề, trục trạng thái
+   * cùng hàng bên phải, bỏ nhãn trục. Cho màn chứng từ thật, nơi lưới dòng
+   * phải hiện trong 1/3 màn đầu (tiêu chí 1). Mặc định (không gọn) cho
+   * màn mẫu và màn ít dòng.
+   */
+  compact?: boolean
 }) {
   return (
-    <div className="k-doc">
+    <div className={cx('k-doc', compact && 'k-doc-compact')}>
       <div>
         <div className="k-doc-kind">{kind}</div>
         <h1 className="k-doc-no">{code}</h1>
@@ -286,6 +294,7 @@ export function HolderBar({
   what,
   age,
   mine,
+  inline,
 }: {
   who: string
   what: string
@@ -293,9 +302,11 @@ export function HolderBar({
   age?: string
   /** Người đang xem chính là người giữ — đổi giọng sang ngôi thứ hai. */
   mine?: boolean
+  /** Dạng viên gọn để đặt cuối hàng nút thông minh (`SmartLinks trailing`). */
+  inline?: boolean
 }) {
   return (
-    <div className={cx('k-hold', mine && 'k-hold-mine')}>
+    <div className={cx('k-hold', mine && 'k-hold-mine', inline && 'k-hold-inline')}>
       <span className="k-hold-k">{mine ? 'Đang chờ bạn' : 'Đang chờ'}</span>
       <b className="k-hold-who">{who}</b>
       <span className="k-hold-what">{what}</span>
@@ -318,12 +329,27 @@ export type Check = {
   fix: string
 }
 
-export function Checks({ title, items }: { title: string; items: Check[] }) {
+export function Checks({
+  title,
+  items,
+  compact,
+}: {
+  title: string
+  items: Check[]
+  /** Một hàng: tiêu đề và các dòng nối tiếp nhau. Dùng khi chỉ có cảnh báo. */
+  compact?: boolean
+}) {
   if (items.length === 0) return null
   const stop = items.filter((c) => c.level === 'stop').length
   const warn = items.length - stop
   return (
-    <div className={cx('k-check', stop === 0 && 'k-check-warn')}>
+    <div
+      className={cx(
+        'k-check',
+        stop === 0 && 'k-check-warn',
+        compact && 'k-check-compact',
+      )}
+    >
       <div className="k-check-h">
         <span className="k-check-badge num">{stop || warn}</span>
         <b>{title}</b>
@@ -354,45 +380,65 @@ export function Checks({ title, items }: { title: string; items: Check[] }) {
    quan trọng nhất của cả 5.
    ══════════════════════════════════════════════════════════════════════ */
 export function FastTab({
+  id: sectionId,
   title,
   summary,
   defaultOpen,
   flush,
+  actions,
   children,
 }: {
+  /** Neo cuộn tới — nút thông minh "trao đổi" nhảy xuống đúng khối. */
+  id?: string
   title: string
   /** Cặp [nhãn, giá trị] hiện trên dòng tiêu đề — kể cả khi đang gấp. */
   summary?: [string, ReactNode][]
   defaultOpen?: boolean
   /** Nội dung tự lo padding (bảng chẳng hạn). */
   flush?: boolean
+  /**
+   * Hàng nút bên phải tiêu đề — nút của lưới ở chế độ xem. Nằm NGOÀI nút
+   * gấp/mở (nút không được lồng nút). Đo 10/09/2026: thanh công cụ lưới riêng
+   * một hàng ăn 32px trên lưới chỉ để chứa hai nút.
+   */
+  actions?: ReactNode
   children: ReactNode
 }) {
   const [open, setOpen] = useState(!!defaultOpen)
   const id = useId()
-  return (
-    <section className="k-ft">
-      <button
-        type="button"
-        className="k-ft-h"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={cx('k-caret', open && 'o')} aria-hidden>
-          ▸
+  const head = (
+    <button
+      type="button"
+      className="k-ft-h"
+      aria-expanded={open}
+      aria-controls={id}
+      onClick={() => setOpen((v) => !v)}
+    >
+      <span className={cx('k-caret', open && 'o')} aria-hidden>
+        ▸
+      </span>
+      <span className="k-ft-t">{title}</span>
+      {summary && summary.length > 0 && (
+        <span className="k-ft-sum">
+          {summary.map(([k, v]) => (
+            <span key={k}>
+              {k} <b>{v}</b>
+            </span>
+          ))}
         </span>
-        <span className="k-ft-t">{title}</span>
-        {summary && summary.length > 0 && (
-          <span className="k-ft-sum">
-            {summary.map(([k, v]) => (
-              <span key={k}>
-                {k} <b>{v}</b>
-              </span>
-            ))}
-          </span>
-        )}
-      </button>
+      )}
+    </button>
+  )
+  return (
+    <section className="k-ft" id={sectionId}>
+      {actions ? (
+        <div className="k-ft-hd">
+          {head}
+          <div className="k-ft-act">{actions}</div>
+        </div>
+      ) : (
+        head
+      )}
       {open && (
         <div id={id} className={cx('k-ft-b', flush && 'k-ft-flush')}>
           {children}
@@ -432,9 +478,7 @@ export function Field({
   return (
     <div className="k-f">
       <dt>{label}</dt>
-      <dd className={cx(tone && `k-t-${tone}`, inherited && 'k-inherit')}>
-        {children}
-      </dd>
+      <dd className={cx(tone && `k-t-${tone}`, inherited && 'k-inherit')}>{children}</dd>
     </div>
   )
 }
@@ -612,8 +656,11 @@ export function StatusBar({ left, right }: { left: ReactNode[]; right?: ReactNod
 }
 
 /** Bọc cả màn chứng từ — gắn lớp token và dựng cột dọc. */
-export function DocScreen({ children }: { children: ReactNode }) {
-  return <div className="kit k-screen">{children}</div>
+export function DocScreen({ children, dense }: { children: ReactNode; dense?: boolean }) {
+  // `dense` — chứng từ ERP mặc định dày (hàng 25px, ô 24px), xem tokens.css.
+  // Bố cục luôn PHẲNG (từ 10/09/2026): không thẻ nổi quanh FastTab/FactBox,
+  // lưới sát mép, ngăn bằng vạch mảnh — xem chú ở `.k-ft` trong erp.css.
+  return <div className={cx('kit k-screen', dense && 'kit-dense')}>{children}</div>
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -716,7 +763,10 @@ export function Td({
   children?: ReactNode
 }) {
   return (
-    <td className={cx(num && 'k-r', num && 'num', tone && `k-t-${tone}`)} colSpan={colSpan}>
+    <td
+      className={cx(num && 'k-r', num && 'num', tone && `k-t-${tone}`)}
+      colSpan={colSpan}
+    >
       {children}
     </td>
   )
@@ -742,5 +792,261 @@ export function GridCheck({
     <td className="k-c-k">
       <input type="checkbox" checked={checked} onChange={onChange} aria-label={label} />
     </td>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   13. HỒ SƠ DANH MỤC — mảng kit thiếu, lộ ra khi dựng màn nhà cung cấp
+   (Khuôn E) ngày 10/09/2026.
+
+   Chứng từ và hồ sơ danh mục KHÔNG dùng chung bộ đầu trang:
+
+     · chứng từ có vòng đời duyệt  → `StatusTrack` (đang ở bước nào);
+     · hồ sơ danh mục KHÔNG có     → `MetricStrip` (làm ăn ra sao).
+
+   Nhét hồ sơ vào khuôn chứng từ thì phải bịa ra một vòng đời cho nó, và
+   người dùng đi tìm nút "gửi duyệt" trên một thứ không ai duyệt bao giờ.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export function MetricStrip({ children }: { children: ReactNode }) {
+  return <div className="k-metrics">{children}</div>
+}
+
+/**
+ * MỘT Ô ĐO trên hồ sơ danh mục.
+ *
+ * `basis` BẮT BUỘC, không phải optional — cùng thủ pháp với `reason`/`next`
+ * của `Empty`. Lý do: một tỉ lệ không kèm mẫu số là con số KHÔNG KIỂM ĐƯỢC.
+ * "Giao đúng hẹn 89%" tính trên 9 đơn và trên 900 đơn là hai mức tin cậy
+ * khác hẳn nhau, mà hai cái ô thì trông y hệt. Người duyệt chi vài trăm
+ * triệu dựa vào ô đó, nên mẫu số phải nằm ngay dưới con số.
+ *
+ * `value = null` nghĩa là CHƯA ĐO ĐƯỢC, khác hẳn 0. Hiện "chưa đo được" chứ
+ * không hiện 0% — 0% đọc thành "làm ăn tệ" trong khi sự thật là "chưa có gì
+ * để chấm", và đó là hai kết luận trái ngược về cùng một nhà cung cấp.
+ */
+export function Metric({
+  label,
+  value,
+  basis,
+  tone,
+}: {
+  label: string
+  /** null = chưa đủ dữ liệu để tính. KHÔNG được thay bằng 0. */
+  value: string | null
+  /** Mẫu số / cỡ mẫu. Bắt buộc — xem docstring. */
+  basis: string
+  tone?: 'stop' | 'warn' | 'done'
+}) {
+  return (
+    <div
+      className={cx(
+        'k-metric',
+        value == null ? 'k-metric-none' : tone && `k-metric-${tone}`,
+      )}
+    >
+      <div className="k-metric-l">{label}</div>
+      <div className="k-metric-v">{value ?? 'chưa đo được'}</div>
+      <div className="k-metric-b">{basis}</div>
+    </div>
+  )
+}
+
+/**
+ * Dải cảnh báo "đây là BẢN GHI GỐC".
+ *
+ * Sửa một dòng trên chứng từ chỉ đổi tờ đó; sửa hồ sơ danh mục đổi cho MỌI
+ * chứng từ lập từ đây về sau. Người dùng không tự suy ra — họ mở hồ sơ với
+ * đúng tâm thế đang sửa một tờ giấy.
+ *
+ * `used` nói NƠI đang dùng, để người sửa ước lượng được sức công phá trước
+ * khi gõ, chứ không phải sau khi bấm Lưu.
+ */
+export function MasterWarn({ used }: { used: ReactNode }) {
+  return (
+    <div className="k-master-warn">
+      <b>Bản ghi gốc</b>
+      <span>
+        Sửa ở đây đổi cho <b>mọi chứng từ lập từ nay về sau</b>, không đổi chứng từ đã
+        lập. Đang dùng ở: {used}
+      </span>
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   14. BẢNG NHẬP LIỆU — mảng kit thiếu, lộ ra khi dựng màn soạn đơn
+   (Khuôn F) ngày 10/09/2026.
+
+   Khuôn D và Khuôn F đều có một lưới, nhưng vai của lưới ngược nhau:
+
+     · Khuôn D — người dùng ĐỌC một tờ. Lưới là một khối trong đó, đầu
+       chứng từ được phép chiếm 15 dòng lưới nhãn–giá trị;
+     · Khuôn F — người dùng GÕ 40 dòng. Mỗi hàng đầu trang là một hàng lưới
+       bị lấy mất, nên đầu đơn co thành dải chip và lưới chiếm phần còn lại.
+
+   Đo trên màn thật `/planning/pos/new`: đầu đơn thật đúng là một dải chip
+   (Mẫu · LSX · NCC · Hẹn giao · Khác), không phải lưới nhãn–giá trị. Bộ này
+   chỉ đặt tên cho thứ màn đó đã tự chế.
+   ══════════════════════════════════════════════════════════════════════ */
+
+export function HeadChips({ children }: { children: ReactNode }) {
+  return <div className="k-headchips">{children}</div>
+}
+
+/**
+ * MỘT Ô ĐẦU ĐƠN, thu về cỡ một chip.
+ *
+ * `value = null` nghĩa là CHƯA KHAI. Chip bắt buộc (`need`) tự đeo viền đỏ
+ * ngay lúc đó, không đợi bấm Lưu mới báo — người dùng đã gõ xong 40 dòng rồi
+ * mới biết thiếu nhà cung cấp là mất công vô ích, và đó là lỗi web kinh điển:
+ * cho làm rồi mới kiểm.
+ */
+export function HeadChip({
+  label,
+  value,
+  need = false,
+  muted = false,
+  onClick,
+}: {
+  label: string
+  /** null = chưa khai. */
+  value: ReactNode | null
+  /** Bắt buộc phải có trước khi lưu. */
+  need?: boolean
+  muted?: boolean
+  onClick?: () => void
+}) {
+  const trong = value == null || value === ''
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cx(
+        'k-headchip',
+        trong && need && 'k-headchip-need',
+        muted && !trong && 'k-headchip-muted',
+      )}
+      title={trong && need ? `Chưa khai ${label} — bắt buộc` : undefined}
+    >
+      <span>{label}</span>
+      <span>{trong ? (need ? 'chưa chọn' : '—') : value}</span>
+    </button>
+  )
+}
+
+/**
+ * THANH CHỐT — dính đáy màn nhập liệu.
+ *
+ * KHÁC `StatusBar`: thanh kia là vỏ chương trình (người dùng là ai, đơn vị
+ * nào, bản ghi thứ mấy). Thanh này là DỮ LIỆU của chứng từ cộng hành động
+ * chính, nên nó ở tầng giấy.
+ *
+ * `blocked` là câu nói VÌ SAO chưa lưu được và nó BẤM ĐƯỢC — nhảy tới đúng ô
+ * phải sửa. Một câu chặn không dẫn đi đâu thì người dùng phải tự dò 40 dòng
+ * tìm chỗ hỏng, và với bảng cuộn ngang thì chỗ hỏng còn đang nằm ngoài màn.
+ */
+export function CommitBar({
+  totals,
+  grand,
+  blocked,
+  onGoBlocked,
+  actions,
+}: {
+  totals: { label: string; value: ReactNode }[]
+  grand: { label: string; value: ReactNode }
+  /** Câu nói vì sao chưa lưu được. Bỏ trống = lưu được. */
+  blocked?: string
+  onGoBlocked?: () => void
+  actions?: ReactNode
+}) {
+  return (
+    <div className="k-commit">
+      {totals.map((t) => (
+        <span key={t.label} className="k-commit-t">
+          {t.label} <b>{t.value}</b>
+        </span>
+      ))}
+      {blocked && (
+        <button type="button" className="k-commit-block" onClick={onGoBlocked}>
+          Chưa lưu được: {blocked} →
+        </button>
+      )}
+      <span className="k-commit-g">
+        <span>{grand.label}</span>
+        <b>{grand.value}</b>
+      </span>
+      {actions}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   15. NHÓM TRƯỜNG, NÚT THÔNG MINH, CHI TIẾT DÒNG — ba mảng lộ ra ngày
+   10/09/2026 khi chấm màn Đơn mua theo bảng tiêu chí
+   `docs/tieu-chi-man-chung-tu-erp.md`. Cả ba đều là thứ Dynamics/Odoo có mà
+   màn mẫu không có: màn mẫu trưng thành phần, còn màn thật phải dồn diện tích
+   cho lưới và chi tiết dòng.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/** Nhóm trường có tên — Dynamics FastTab General / Delivery / Price. ≤ 8 trường mỗi nhóm. */
+export function FieldGroup({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="k-fgrp">
+      <h4 className="k-fgrp-h">{title}</h4>
+      <dl className="k-fields">{children}</dl>
+    </div>
+  )
+}
+
+/**
+ * Dải nút thông minh — chép Odoo: chứng từ liên quan hiện thành SỐ ĐẾM bấm
+ * được ngay dưới số hiệu. `count` null = không đếm được (chỉ là lối đi).
+ */
+export function SmartLinks({
+  items,
+  trailing,
+}: {
+  items: { label: string; count: number | null; onClick?: () => void; disabled?: boolean; title?: string }[] // prettier-ignore
+  /** Đuôi hàng, đẩy sát phải — chỗ của `<HolderBar inline>`. */
+  trailing?: ReactNode
+}) {
+  return (
+    <div className="k-smart">
+      {items.map((it) => (
+        <button
+          key={it.label}
+          type="button"
+          className="k-smart-b"
+          onClick={it.onClick}
+          disabled={it.disabled}
+          title={it.title}
+        >
+          {it.count != null && <span className="k-smart-n">{it.count}</span>}
+          {it.label}
+        </button>
+      ))}
+      {trailing && <span className="k-smart-trail">{trailing}</span>}
+    </div>
+  )
+}
+
+/** Khối "Chi tiết dòng" dưới lưới — Dynamics Line details. */
+export function LineDetail({
+  index,
+  code,
+  children,
+}: {
+  index: number
+  code: string
+  children: ReactNode
+}) {
+  return (
+    <div className="k-linedet">
+      <div className="k-linedet-h">
+        Chi tiết dòng {index} <b>{code}</b>
+      </div>
+      {children}
+    </div>
   )
 }

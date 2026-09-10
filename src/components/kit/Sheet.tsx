@@ -118,7 +118,7 @@ export function Sheet({
               {title}
             </h2>
             {subtitle && (
-              <p className="mt-1 text-[var(--fs-sm)] leading-relaxed text-[var(--ink-2)]">
+              <p className="mt-1 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
                 {subtitle}
               </p>
             )}
@@ -221,6 +221,7 @@ export function SheetActions({
   cancelLabel = 'Huỷ',
   stakes = 'vua',
   busy = false,
+  disabled = false,
 }: {
   onCancel: () => void
   onConfirm: () => void
@@ -228,11 +229,18 @@ export function SheetActions({
   cancelLabel?: string
   stakes?: Stakes
   busy?: boolean
+  /** Chưa đủ điều kiện (thiếu lý do, số sai) — khoá nút nhưng KHÔNG đổi nhãn thành "Đang chạy". */
+  disabled?: boolean
 }) {
   return (
     <>
       <Btn onClick={onCancel}>{cancelLabel}</Btn>
-      <Btn primary danger={stakes === 'nang'} onClick={onConfirm} disabled={busy}>
+      <Btn
+        primary
+        danger={stakes === 'nang'}
+        onClick={onConfirm}
+        disabled={busy || disabled}
+      >
         {busy ? 'Đang chạy…' : confirmLabel}
       </Btn>
     </>

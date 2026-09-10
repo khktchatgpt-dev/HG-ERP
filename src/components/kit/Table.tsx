@@ -128,14 +128,18 @@ export function GroupRow({
 export function Row({
   selected = false,
   onClick,
+  id,
   children,
 }: {
   selected?: boolean
   onClick?: () => void
+  /** Neo DOM — để màn cuộn tới đúng dòng khi mở bằng link (`?mo=`). */
+  id?: string
   children: ReactNode
 }) {
   return (
     <tr
+      id={id}
       onClick={onClick}
       className={cn(
         'group',

@@ -280,7 +280,7 @@ export function TopBar({
 }) {
   return (
     <div className="flex h-11 shrink-0 items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-3">
-      <nav className="flex min-w-0 items-center gap-[7px] text-[var(--fs-sm)]">
+      <nav className="flex min-w-0 shrink-0 items-center gap-[7px] whitespace-nowrap text-[var(--fs-sm)]">
         {crumbs.map((c, i) => (
           <span key={i} className="flex items-center gap-[7px]">
             {i > 0 && <span className="text-[var(--line-faint)]">/</span>}
@@ -300,9 +300,9 @@ export function TopBar({
 
       <button
         onClick={onSearch}
-        className="ml-auto flex h-7 w-[240px] items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-[10px] text-[var(--fs-sm)] text-[var(--ink-3)] hover:border-[var(--act)] hover:text-[var(--ink-2)]"
+        className="ml-auto flex h-7 w-full max-w-[240px] min-w-[120px] shrink items-center gap-2 rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-[10px] text-[var(--fs-sm)] text-[var(--ink-3)] hover:border-[var(--act)] hover:text-[var(--ink-2)]"
       >
-        Đi tới lệnh, đơn, vật tư…
+        <span className="truncate">Đi tới lệnh, đơn, vật tư…</span>
         <span className="ml-auto flex gap-1">
           <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">
             ⌘

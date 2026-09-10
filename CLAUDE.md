@@ -98,14 +98,97 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 
 ## Frontend & UI conventions (admin/workspace)
 
-### Theme v3 "HG Ledger" (áp toàn app 15/08/2026)
+### HAI HỆ GIAO DIỆN ĐANG SỐNG SONG SONG — đọc trước khi sửa file `.tsx` nào
+
+|           | Bộ kit ERP (MỚI)                         | Theme v3 + ERP kit cũ                         |
+| --------- | ---------------------------------------- | --------------------------------------------- |
+| Import từ | `@/components/kit`                       | `@/components/erp/*`, `@/components/shadcn/*` |
+| Lớp token | `.kit` (`src/components/kit/tokens.css`) | `.theme-v3` (`src/app/globals.css`)           |
+| Đang phủ  | 6 file (đo 10/09/2026)                   | 168 file                                      |
+| Dùng khi  | **mọi màn MỚI**                          | màn CŨ, sửa tại chỗ                           |
+
+**Đừng viết lại 168 file cho đều nhau** — đổi rất nhiều rủi ro lấy rất ít giá trị. Màn cũ
+chuyển sang kit mới khi có việc nghiệp vụ chạm vào nó, không chuyển vì lý do thẩm mỹ.
+Trong một file thì **chỉ dùng một hệ**; trộn hai hệ là hai bộ token đánh nhau.
+
+### Thiết kế theo hướng ERP — sổ ở `/design-lab`
+
+**Trước khi dựng màn mới, mở [`/design-lab`](src/app/design-lab/page.tsx) (public, không cần
+đăng nhập).** Việc đầu tiên không phải chọn thành phần, mà là **xác định màn thuộc khuôn
+nào** — khuôn đã chốt sẵn phần lớn quyết định bố cục.
+
+**Sáu khuôn màn.** Số loại màn trong một ERP là tập ĐÓNG; chốt khuôn là chốt luôn bố cục.
+Không chọn được khuôn nào nghĩa là câu hỏi nghiệp vụ chưa rõ, không phải cần khuôn thứ bảy —
+tập nở từ bốn lên sáu một lần duy nhất, khi rà 12 trang thật của phòng Cung ứng (mục 03b của
+sổ) lộ ra hai loại màn mà bốn khuôn đầu, vốn dựng từ mỗi luồng đơn mua, không chứa nổi.
+
+| Khuôn                  | Trả lời câu hỏi                                 | Mẫu chạy được               | Chép của                                                        |
+| ---------------------- | ----------------------------------------------- | --------------------------- | --------------------------------------------------------------- |
+| **A · Vào việc**       | Hôm nay tôi phải làm gì?                        | `/design-lab/mau-vao-viec`  | SAP Fiori launchpad, Dynamics workspace                         |
+| **B · Hộp thư**        | Việc nào chờ tôi, ở MỌI loại chứng từ?          | `/design-lab/mau-hop-thu`   | SAP My Inbox, Odoo activity                                     |
+| **C · Danh sách**      | Trong tập này, cái nào cần tôi động vào?        | `/design-lab/mau-danh-sach` | SAP List Report, Dynamics List page                             |
+| **D · Chứng từ**       | Tờ này ở đâu, ai giữ, vướng gì?                 | `/design-lab/mau-erp`       | SAP Object Page, Dynamics Details master                        |
+| **E · Hồ sơ danh mục** | Đối tượng này là ai, làm ăn ra sao, dùng ở đâu? | `/design-lab/mau-ho-so-ncc` | SAP Business Partner, Dynamics Vendor master, Odoo partner form |
+| **F · Bảng nhập liệu** | Khai 40 dòng nhanh như Excel mà không sai?      | `/design-lab/mau-soan-don`  | Dynamics journal entry, SAP mass entry, Odoo list sửa tại chỗ   |
+
+**Đừng nhầm D với E, hay D với F.** Hồ sơ danh mục KHÔNG có vòng đời duyệt — nhét nó vào
+khuôn chứng từ là phải bịa ra một vòng đời, rồi người dùng đi tìm nút "gửi duyệt" trên thứ
+không ai duyệt bao giờ; chỗ của ba trục trạng thái ở đó là **dải hiệu suất** (`MetricStrip`,
+mỗi ô bắt buộc kèm mẫu số). Màn nhập liệu thì lưới là nhân vật chính, đầu đơn co thành
+**dải chip** (`HeadChips`) vì mỗi hàng đầu trang là một hàng lưới bị lấy mất, và thanh chốt
+đáy (`CommitBar`) phải nói vì sao chưa lưu được bằng một câu **bấm được**.
+
+Sáu màn mẫu dựng **hoàn toàn bằng kit** và vừa là mẫu vừa là phép thử API: dựng một màn ERP
+đầy đủ mà phải chế thêm CSS tại chỗ thì kit còn thiếu, và chỗ thiếu lộ ra ngay ở đó. Đúng
+theo cách đó, Khuôn E và F đẻ ra bốn thành phần mới cho kit — `MetricStrip`/`Metric`,
+`MasterWarn`, `HeadChips`/`HeadChip`, `CommitBar`. Thư viện thành phần tra ở
+`/design-lab/thanh-phan`.
+
+**Bản đồ 12 trang thật của phòng Cung ứng → khuôn** ở mục 03b của sổ. Bảng đó là phép thử của
+bản đồ khuôn: một trang không xếp được vào khuôn nào thì bản đồ thiếu, chứ không phải trang
+đó đặc biệt.
+
+**Sáu nguyên tắc** (chi tiết + triệu chứng đo được ở mục 02 của sổ):
+
+1. **Một màn trả lời một câu hỏi nghiệp vụ** — không phải "một màn trưng một bảng".
+2. **Chứng từ tự kể chuyện đời nó** — đang ở bước nào / ai đang giữ / đã có chuyện gì.
+3. **Con số là một lời hứa** — badge, chip lọc, ô việc phải đếm bằng **đúng hàm trang đích
+   dùng**. Số 0 không phải lúc nào cũng xấu, đừng tô đỏ.
+4. **Dày, nhưng có kỷ luật căn chỉnh** — thang chữ nền giữ 13px. Chữa "khó nhìn" bằng cách
+   nới thoáng là phản xạ web; nguyên nhân thật thường là tương phản. **Không thẻ nổi**: khối
+   ngăn nhau bằng một vạch mảnh, lưới sát mép, FactBox một vạch dọc (kit mặc định phẳng từ
+   10/09/2026 — SAP GUI, Dynamics đều bày như vậy).
+5. **Một màu hành động, ba màu vòng đời** — `--act` cho thứ bấm được/đang chọn; `--stop`
+   `--warn` `--done` chỉ mã hoá vòng đời dữ liệu, **không bao giờ lên nút hay dòng đang chọn**.
+6. **Số nào không kiểm được thì không ai tin** — chân bảng nói tổng KHÔNG gồm gì; số suy ra
+   từ phép tính bày được phép tính nguyên văn (`WhyBox`).
+
+**Luật kiểm trước khi coi màn là xong** — bản đầy đủ 14 dòng ở mục 05 của sổ. Ba dòng hay
+trượt nhất:
+
+- Bảng dài phải có tiêu đề cột dính **và** chân tổng dính. Cha đặt `min-h-screen` thì bảng
+  không bao giờ cuộn trong khung và cả hai thứ dính đều vô hiệu — dùng `ScreenFrame`.
+- Hành động bị chặn phải nói vướng gì **và cách gỡ**, ngay tại chỗ. Không cho bấm rồi mới
+  báo lỗi.
+- Trạng thái rỗng phải nói lý do và việc làm tiếp (`Empty` bắt buộc `reason` + `next`).
+
+**Màn mẫu đã dựng thật theo phân tích riêng**: [`docs/mua-hang-phieu-mua.md`](docs/mua-hang-phieu-mua.md)
+— Phiếu mua (`/mua-hang/don`): đối chiếu SAP/Dynamics/Odoo/NetSuite, 8 lối mòn đo được của màn
+cũ, bản đồ tính năng cũ → mới. Làm màn danh sách khác thì chép cấu trúc tài liệu này.
+
+**Nền tảng đối chiếu**: [`docs/thiet-ke-huong-erp.md`](docs/thiet-ke-huong-erp.md) — đo
+HG-ERP với SAP/Odoo/Dynamics/NetSuite/Zoho trên mã nguồn + DB thật, và bốn lỗ hổng còn lại
+(hộp thư bị nhốt một phòng, chưa có nơi trao đổi trên chứng từ, chỉ có duyệt/từ chối, không
+ai biết đơn đang kẹt).
+
+### Theme v3 "HG Ledger" (màn CŨ — 168 file)
 
 - **Token là nguồn màu duy nhất** — khối `.theme-v3` trong `src/app/globals.css`, gắn ở gốc `WorkspaceShell`. KHÔNG gõ màu Tailwind cứng (zinc/sky/emerald/violet…) trong màn mới; dùng class token: `bg-background/bg-card/bg-muted`, `text-foreground/text-muted-foreground`, `border`/`border-input`, `text-[var(--primary)]` v.v.
 - **Một màu hành động**: royal cobalt `--primary` (#2743c4) cho nút chính/link/focus/tab đang chọn. Hover/selected dùng tint `--accent` (#eef1fc). **Ba màu trạng thái** `--warn/--stop/--done` chỉ mã hoá vòng đời (nhãn, vạch `spine`), không bao giờ dùng cho nút.
 - **Chữ**: thang 5 bậc `t-display/t-title/t-body/t-label/t-data` (globals.css). Mọi MÃ chứng từ, tiền, số lượng, ngày = `t-data` (JetBrains Mono, tabular-nums); mã phiếu hiển thị qua `DocChip`. KPI lớn: `font-mono tabular-nums`.
 - **Icon**: chỉ MỘT bộ **lucide-react** — 16px trong nút/menu (icon đứng TRƯỚC chữ), 20px ở sidebar/tab, stroke 1.8 (đang chọn 2.1). Icon đứng một mình bắt buộc `aria-label` + Tooltip. Icon không tự mang màu — màu theo chữ bên cạnh. Ánh xạ khái niệm→icon dùng cố định (xem mục Icon ở /design-lab).
 - **BẪY Radix portal — ĐÃ VÁ Ở PRIMITIVE (02/09/2026), không phải nhớ nữa**: Dialog/AlertDialog/Popover/Select/DropdownMenu render ra `<body>` NGOÀI shell nên token theme không phủ tới. Nay mỗi `*Content` tự gọi `usePortalTheme()` ([`src/components/shadcn/portal-theme.ts`](src/components/shadcn/portal-theme.ts)) — dò lớp theme đang phủ trong DOM rồi tự gắn lại. **Chỗ gọi KHÔNG cần gõ `theme-v3` nữa**; các chỗ đang gõ là thừa (vô hại, dọn dần). Dò theo DOM chứ không hằng số hoá nên đường lùi v2 vẫn nguyên. `Dialog`/`AlertDialog` cũng đã đổi nền mặc định `bg-background` → `bg-card`: dialog là thẻ trắng nổi trên nền đã tối, để màu canvas là ra hộp xám. `Modal` render inline nên vốn tự ăn theme.
-- **Sổ tham chiếu sống: `/design-lab`** (public, `src/app/design-lab/`) — 14 mục: token màu, thang chữ, từ vựng icon, màn hình mẫu, bảng, trang chi tiết, mobile (bottom tab bar ≤5 mục, chạm 44px, bảng→thẻ), và demo kit thật. Làm màn mới thì soi mẫu ở đây trước.
+- **Sổ tham chiếu cũ ĐÃ BỊ THAY** (09–10/09/2026): `design-lab/DesignLab.tsx` (14 mục token/chữ/icon của v3) và toàn bộ `kit-lab` đã xoá. `/design-lab` nay là sổ thiết kế hướng ERP — xem mục trên. Quy ước icon/chữ của v3 dưới đây vẫn đúng cho 168 màn cũ, nhưng không còn trang trưng bày riêng.
 - **`theme-v2` đã XOÁ HẲN 09/09/2026** — không nơi nào gắn lớp đó nữa, khối token cũng đã bỏ khỏi globals.css. Đường lùi khẩn giờ là `git revert` một PR, không phải đổi một lớp CSS.
 
 ### Kit & pattern
@@ -121,10 +204,10 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
   - `shadcn/tabs`: chia tab nghiệp vụ (Tổng quan, Đợt giao, Điều khoản, Dòng thời gian, Hồ sơ).
   - `Badge` (`@/components/Badge`): nhãn trạng thái theo token vòng đời (`primary`, `warn`, `done`, `stop`, `gray`).
 - **Mẫu tham chiếu chuẩn**:
-  - Chi tiết đơn đặt vật tư: `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
-  - Chi tiết đơn hàng: `src/components/sales/OrderDetailView.tsx`
-  - Chi tiết lệnh sản xuất: `src/components/production/LsxDetailView.tsx`
-  - Mẫu linh kiện: `src/app/design-lab/DesignLab.tsx` (/design-lab)
+  - Màn MỚI → bốn khuôn ở `/design-lab` (mục trên). Đừng chép từ màn cũ.
+  - Chi tiết đơn đặt vật tư (đã chuyển sang kit mới): `src/app/(workspace)/planning/pos/[id]/PoDetailScreen.tsx`
+  - Chi tiết đơn hàng (còn theme v3): `src/components/sales/OrderDetailView.tsx`
+  - Chi tiết lệnh sản xuất (còn theme v3): `src/components/production/LsxDetailView.tsx`
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
 - **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.

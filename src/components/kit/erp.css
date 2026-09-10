@@ -367,11 +367,13 @@
 }
 
 /* ── 6. FastTab ──────────────────────────────────────────────────────── */
+/* PHẲNG — mặc định từ 10/09/2026. FastTab là một khối ngăn bằng MỘT vạch mảnh
+   dưới đáy, không viền bốn phía, không bo góc, không lề: SAP GUI / Dynamics
+   bày chứng từ như vậy, lưới chạy sát mép khung. Thẻ bo góc có lề 7–14px là
+   ngôn ngữ web — chủ dự án chấm màn Đơn mua: "vẫn có khoảng rộng xung quanh". */
 .k-ft {
   background: var(--surface-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  margin-bottom: 7px;
+  border-bottom: 1px solid var(--line);
 }
 .k-ft-h {
   display: flex;
@@ -381,7 +383,7 @@
   text-align: left;
   border: 0;
   background: transparent;
-  padding: 8px 12px;
+  padding: 5px var(--gutter);
   flex-wrap: wrap;
   font: inherit;
   color: inherit;
@@ -389,6 +391,35 @@
 }
 .k-ft-h:hover {
   background: var(--surface-raised);
+}
+/* Tiêu đề FastTab kèm HÀNG HÀNH ĐỘNG bên phải (nút của lưới ở chế độ xem).
+   Nút không được nằm trong nút gấp/mở, nên bọc hai thứ trong một hàng flex. */
+.k-ft-hd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+/* Cơ sở flex = bề rộng nội dung, để flex bẻ dòng theo NỘI DUNG: tiêu đề +
+   tóm tắt giữ nguyên một hàng, hàng nút xuống dưới khi không đủ chỗ. Cơ sở
+   cố định 360px làm ngược lại — hàng nút được xếp trước rồi tóm tắt vỡ. */
+.k-ft-hd .k-ft-h {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+/* Hẹp thì cả hàng nút xuống dưới tiêu đề, thẳng mép trái với tiêu đề — không
+   chen vào giữa tóm tắt rồi đẩy tóm tắt vỡ ba tầng (đo 10/09/2026: 98px). */
+.k-ft-act {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 var(--gutter) 4px;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+.k-ft-sum > span {
+  white-space: nowrap;
 }
 .k-caret {
   display: inline-block;
@@ -435,7 +466,7 @@
 }
 .k-ft-b {
   border-top: 1px solid var(--hair);
-  padding: 11px 12px;
+  padding: 8px var(--gutter) 10px;
 }
 .k-ft-flush {
   padding: 0;
@@ -640,7 +671,7 @@
 .k-grid td {
   border-bottom: 1px solid var(--hair);
   border-right: 1px solid var(--hair);
-  padding: 5px var(--pad-x);
+  padding: var(--pad-y) var(--pad-x);
   white-space: nowrap;
   height: var(--row-h);
 }
@@ -720,7 +751,7 @@
 .kit table:not(.k-grid) tbody td {
   border-bottom: 1px solid var(--hair);
   border-right: 1px solid var(--hair);
-  padding: 5px var(--pad-x);
+  padding: var(--pad-y) var(--pad-x);
   vertical-align: top;
 }
 .kit table:not(.k-grid) thead th:last-child,
@@ -756,6 +787,8 @@
 }
 
 /* ── 9. FactBox ──────────────────────────────────────────────────────── */
+/* Panel dán vào cạnh phải, một vạch dọc ngăn với thân — Dynamics FactBox.
+   Dưới 1100px xuống dưới thân, vạch chuyển thành vạch ngang. */
 .k-fact {
   background: var(--surface-card);
   border-top: 1px solid var(--line);
@@ -764,13 +797,13 @@
 }
 @media (min-width: 1100px) {
   .k-fact {
-    border: 1px solid var(--line);
-    border-radius: var(--radius);
-    margin: 10px var(--gutter) 12px 0;
+    border-top: 0;
+    border-left: 1px solid var(--line);
+    height: 100%;
   }
 }
 .k-fact-sec {
-  padding: 9px 12px;
+  padding: 7px var(--gutter);
   border-bottom: 1px solid var(--hair);
 }
 .k-fact-sec:last-child {
@@ -816,7 +849,6 @@
 }
 .k-main {
   min-width: 0;
-  padding: 10px var(--gutter) 12px;
 }
 .k-sbar {
   display: flex;
@@ -831,4 +863,394 @@
 }
 .k-sbar-r {
   margin-left: auto;
+}
+
+/* ── 12. Dải hiệu suất — dành cho HỒ SƠ DANH MỤC (Khuôn E) ─────────────
+   Chứng từ nói "đang ở bước nào"; hồ sơ danh mục nói "làm ăn ra sao". Hai
+   câu khác nhau nên không dùng chung `StatusTrack`.
+
+   MỖI Ô BẮT BUỘC CÓ `basis` — mẫu số của chính nó. "Giao đúng hẹn 89%" là
+   con số không kiểm được: 89% của 9 đơn và 89% của 900 đơn là hai mức tin
+   cậy khác hẳn nhau, mà ô thì trông y hệt. Kiểu bắt buộc ở tầng TypeScript,
+   xem `Metric` trong Erp.tsx. */
+.k-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border-block: 1px solid var(--line);
+}
+.k-metric {
+  background: var(--surface-card);
+  padding: 9px var(--gutter);
+  min-width: 0;
+}
+.k-metric-l {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-metric-v {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-num-lg);
+  font-weight: 700;
+  line-height: 1.25;
+  margin-top: 3px;
+}
+.k-metric-stop .k-metric-v {
+  color: var(--stop);
+}
+.k-metric-warn .k-metric-v {
+  color: var(--warn);
+}
+.k-metric-done .k-metric-v {
+  color: var(--done);
+}
+/* Mẫu số luôn nhỏ hơn và luôn ngay dưới con số — đặt xa ra thì mắt đọc con
+   số rồi đi tiếp, và mẫu số thành trang trí. */
+.k-metric-b {
+  font-size: var(--fs-micro);
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+/* Ô KHÔNG ĐO ĐƯỢC: hồ sơ chưa đủ dữ liệu để tính. Khác hẳn ô bằng 0 — phải
+   nói ra "chưa đo được" chứ không được hiện 0%, vì 0% đọc thành "làm ăn tệ"
+   trong khi sự thật là "chưa có gì để chấm". */
+.k-metric-none .k-metric-v {
+  color: var(--ink-empty);
+  font-weight: 600;
+}
+
+/* ── 13. Dải cảnh báo SỬA BẢN GHI GỐC (Khuôn E) ────────────────────────
+   Sửa một dòng trên chứng từ chỉ đổi tờ đó. Sửa hồ sơ danh mục đổi cho MỌI
+   chứng từ lập từ đây về sau — người dùng không tự suy ra điều đó, và họ
+   sửa hồ sơ với đúng tâm thế đang sửa một tờ. */
+.k-master-warn {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  padding: 7px var(--gutter);
+  background: var(--warn-wash);
+  border-bottom: 1px solid var(--warn-line);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.k-master-warn > b {
+  color: var(--warn);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* ── 14. Dải chip đầu đơn + thanh chốt — BẢNG NHẬP LIỆU (Khuôn F) ───────
+   Ở Khuôn D, đầu chứng từ là một lưới nhãn–giá trị đầy đủ vì người đọc đang
+   ĐỌC tờ đó. Ở Khuôn F người dùng đang GÕ 40 dòng, và mỗi hàng đầu trang là
+   một hàng lưới bị lấy mất. Nên đầu đơn co lại thành một dải chip: vẫn thấy
+   giá trị, bấm vào mới mở ra sửa. */
+.k-headchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px var(--gutter);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--line);
+}
+.k-headchip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  height: var(--ctl-h);
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-card);
+  white-space: nowrap;
+}
+.k-headchip:hover {
+  border-color: var(--ink-3);
+}
+.k-headchip > span:first-child {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-headchip > span + span {
+  font-weight: 600;
+}
+/* Ô bắt buộc còn trống: viền đỏ NGAY LÚC NÀY, không đợi bấm Lưu. */
+.k-headchip-need {
+  border-color: var(--stop);
+  background: var(--stop-wash);
+}
+.k-headchip-need > span + span {
+  color: var(--stop);
+  font-weight: 700;
+}
+.k-headchip-muted > span + span {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+/* THANH CHỐT — dính đáy, khác `k-sbar` (thanh hệ thống, tầng chrome).
+   Thanh này là DỮ LIỆU của chứng từ cộng hành động chính, nên nó ở tầng
+   giấy và luôn nhìn thấy: người gõ dòng thứ 38 vẫn phải thấy tổng tiền và
+   thấy vì sao chưa lưu được. */
+.k-commit {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px var(--gutter);
+  background: var(--surface-card);
+  border-top: 1px solid var(--line);
+}
+.k-commit-t {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+}
+.k-commit-t b {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-num);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.k-commit-g {
+  margin-left: auto;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.k-commit-g > span {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-commit-g > b {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 19px;
+  font-weight: 700;
+}
+/* Câu chặn lưu BẤM ĐƯỢC — nhảy tới đúng ô phải sửa. Một câu chặn không dẫn
+   đi đâu thì người dùng phải tự dò 40 dòng tìm chỗ hỏng. */
+.k-commit-block {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--warn-wash);
+  border: 1px solid var(--warn-line);
+  color: var(--warn);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* ── 15. NHÓM TRƯỜNG CÓ TÊN + NÚT THÔNG MINH (chứng từ theo Dynamics/Odoo) ──
+   Dynamics xếp trường đầu đơn thành FastTab General / Delivery / Price…, mỗi
+   nhóm ≤ 8 trường, 3 cột. Một nhóm 12 trường không tên là bức tường nhãn. */
+.k-fgrp {
+  container-type: inline-size;
+  padding: 6px var(--gutter) 8px;
+}
+.k-fgrp + .k-fgrp {
+  border-top: 1px solid var(--hair);
+}
+.k-fgrp-h {
+  margin: 0 0 4px;
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+/* Nút thông minh — chép Odoo: chứng từ liên quan hiện thành SỐ ĐẾM bấm được
+   ngay dưới số hiệu. Người duyệt nhìn "Phiếu kho 0" là biết hàng chưa về mà
+   không phải mở tab nào. */
+.k-smart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px var(--gutter);
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--line);
+}
+.k-smart-b {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-card);
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.k-smart-b:hover:not(:disabled) {
+  border-color: var(--act);
+  color: var(--act-text);
+}
+.k-smart-b:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+.k-smart-n {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--ink);
+}
+/* Đuôi hàng nút thông minh — chỗ của dải "ai đang giữ" dạng gọn. Đo
+   10/09/2026: dải giữ riêng một hàng ăn 30px trên lưới dòng mà chỉ chứa một
+   câu; đặt nó cuối hàng nút thông minh thì cùng câu ấy không tốn hàng nào. */
+.k-smart-trail {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Viên lấp hết phần còn lại của hàng: cùng hàng với nút thì kéo dài tới mép
+   phải, rớt xuống hàng riêng thì thành một dải trọn hàng — không bao giờ
+   là một viên lẻ loi bên phải với khoảng trống bên trái. */
+.k-hold-inline {
+  display: inline-flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 2px 10px;
+  border: 1px solid var(--warn);
+  border-radius: var(--radius);
+}
+.k-hold-inline.k-hold-mine {
+  border-color: var(--act);
+}
+.k-hold-inline .k-hold-age {
+  margin-left: 4px;
+}
+/* Chi tiết dòng đang chọn — Dynamics "Line details": nằm NGAY DƯỚI lưới,
+   đổi theo dòng chọn. Cột hiếm dùng của lưới sống ở đây, lưới nhờ vậy gọn. */
+.k-linedet {
+  border-top: 2px solid var(--line);
+  background: var(--surface-raised);
+}
+.k-linedet-h {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px var(--gutter) 0;
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.k-linedet-h b {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--act-text);
+}
+
+/* ── 16. BIẾN THỂ GỌN cho đầu chứng từ và bảng kiểm ─────────────────────
+   Đo 10/09/2026 ở 1280: dải nhận diện (số hiệu + hai trục + người giữ + bảng
+   kiểm) cao 289px, lưới dòng bắt đầu ở 547px — rớt tiêu chí 1 và 2 của
+   `docs/tieu-chi-man-chung-tu-erp.md`. Dynamics dựng cùng thông tin trong
+   ~60px: số hiệu là một dòng chữ 18px, trạng thái là chip nằm cùng hàng. */
+.k-doc-compact {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 5px var(--gutter) 6px;
+}
+/* Nhóm số hiệu KHÔNG co dưới 320px: hẹp hơn thì trục trạng thái xuống hàng
+   dưới thay vì cắt "ĐƠN ĐẶT VẬT TƯ" thành "ĐƠN Đ" (đo 10/09/2026 ở 708px). */
+.k-doc-compact > div:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1 1 320px;
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+/* Phụ đề nhường chỗ cho trục trạng thái: cắt bằng dấu … thay vì xuống dòng.
+   Đối tác đầy đủ đã có ở FactBox; ở dải nhận diện chỉ cần nhận ra. */
+.k-doc-compact .k-doc-sub {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.k-doc-compact .k-doc-kind,
+.k-doc-compact .k-doc-no {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.k-doc-compact .k-tracks {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+.k-doc-compact .k-doc-kind {
+  margin: 0;
+}
+.k-doc-compact .k-doc-no {
+  font-size: var(--fs-title);
+  margin: 0;
+}
+.k-doc-compact .k-doc-sub {
+  margin: 0;
+}
+.k-doc-compact .k-tracks {
+  gap: 12px;
+}
+.k-doc-compact .k-track-lab {
+  display: none;
+}
+/* Bảng kiểm gọn: tiêu đề và các dòng cùng MỘT hàng, cuộn ngang nếu thiếu chỗ.
+   Hai hàng chỉ đáng khi có lỗi CHẶN; cảnh báo suông không được ăn 50px. */
+.k-check-compact {
+  padding: 5px var(--gutter);
+}
+.k-check-compact .k-check-h {
+  display: inline-flex;
+  margin-right: 12px;
+}
+.k-check-compact .k-check-l {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin: 0;
+}
+.k-check-compact .k-check-l li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+}
+.k-check-compact .k-check-f {
+  color: var(--ink-3);
+}
+.k-check-compact .k-check-f::before {
+  content: '→ ';
 }

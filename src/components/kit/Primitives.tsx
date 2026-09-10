@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
+import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
 
@@ -396,6 +397,432 @@ export function Loading({ rows = 6 }: { rows?: number }) {
           <span className="h-2.5 w-[60px] rounded bg-[var(--surface-raised)]" />
         </div>
       ))}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Ô NHẬP — mảng kit thiếu, lộ ra ngày 10/09/2026 khi dựng hộp thư việc.
+
+   Kit ra đời cho màn ĐỌC một tờ chứng từ, nên nó chỉ có `NumInput`. Vừa cho
+   người dùng LÀM VIỆC ngay trên màn danh sách là thiếu ngay ba thứ cơ bản:
+   ô tick, ô ngày, ô chữ nhiều dòng. Cổng `hg/no-raw-control` chặn thẻ thô nên
+   chỗ thiếu lộ ra lập tức — đúng việc mà cổng đó sinh ra để làm.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/**
+ * Ô TICK. Tên `Tick` chứ không `Check` — `Check` đã là type của MỘT DÒNG
+ * trong bảng kiểm (Erp.tsx), hai thứ không liên quan gì nhau. Tên  chứ không  —  đã là type của MỘT DÒNG
+ * trong bảng kiểm (Erp.tsx), và hai thứ đó không liên quan gì nhau.
+ *
+ * `label` BẮT BUỘC và phải nói chọn CÁI GÌ, không phải "chọn": một cột toàn ô
+ * tick không nhãn là cột câm với trình đọc màn hình, và người dùng ERP đi bằng
+ * bàn phím rất nhiều.
+ *
+ * Tự chặn nổi bọt sự kiện: ô tick gần như luôn nằm trong một dòng bấm được, và
+ * bấm vào ô tick mà dòng cũng mở theo là thao tác không ai muốn.
+ */
+export function Tick({
+  checked,
+  onChange,
+  label,
+  disabled,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  label: string
+  disabled?: boolean
+}) {
+  return (
+    <input
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      aria-label={label}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => onChange(e.target.checked)}
+      className="size-[13px] accent-[var(--act)] disabled:opacity-45"
+    />
+  )
+}
+
+/**
+ * Ô CHỮ NHIỀU DÒNG.
+ *
+ * Tự nở theo nội dung tới `maxRows` rồi mới cuộn: ghi chú xử lý việc thường
+ * dài 1–3 dòng, để ô cố định 3 dòng thì lúc nào cũng thừa hoặc thiếu.
+ */
+export function TextArea({
+  value,
+  onChange,
+  rows = 3,
+  placeholder,
+  disabled,
+  ...rest
+}: {
+  value: string
+  onChange: (v: string) => void
+  rows?: number
+  placeholder?: string
+  disabled?: boolean
+} & Omit<
+  React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+  'value' | 'onChange' | 'rows'
+>) {
+  return (
+    <textarea
+      value={value}
+      rows={rows}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+      className={cn(
+        'w-full resize-y rounded-[var(--radius-sm)] border border-[var(--line)]',
+        'bg-[var(--surface-card)] px-2 py-1.5 text-[var(--fs-body)] leading-relaxed',
+        'placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]',
+        'disabled:opacity-45',
+      )}
+      {...rest}
+    />
+  )
+}
+
+/**
+ * Ô NGÀY KIỂU VIỆT NAM.
+ *
+ * `<input type="date">` vẽ chữ theo NGÔN NGỮ TRÌNH DUYỆT chứ không theo app:
+ * máy cài Chrome tiếng Anh (đa số máy ở xưởng) hiện `mm/dd/yyyy`, trong khi
+ * mọi chứng từ giấy đọc `dd/mm/yyyy` — `03/08` với `08/03` là hai ngày khác
+ * nhau mà không nhìn ra ô đang nói kiểu nào.
+ *
+ * DÙNG LẠI `@/lib/date-vn`, không chép logic: bản `components/erp/DateField`
+ * của theme v3 cũng gọi đúng ba hàm này. Hai bản khác nhau ở LỚP VỎ, giống
+ * nhau ở cách hiểu ngày — sửa luật ngày là sửa một chỗ.
+ */
+export function DateInput({
+  value,
+  onChange,
+  disabled,
+  label,
+}: {
+  /** ISO `yyyy-mm-dd`, hoặc '' khi để trống. */
+  value: string
+  onChange: (iso: string) => void
+  disabled?: boolean
+  label?: string
+}) {
+  const [text, setText] = useState(() => isoToVn(value))
+  const picker = useRef<HTMLInputElement>(null)
+
+  // Giá trị đổi từ bên ngoài thì vẽ lại chữ — nhưng đừng giẫm lên tay người
+  // đang gõ. Chỉnh state ngay trong lượt render, không `useEffect`.
+  const [seen, setSeen] = useState(value)
+  if (seen !== value) {
+    setSeen(value)
+    if (vnToIso(text) !== (value || null)) setText(isoToVn(value))
+  }
+
+  return (
+    <span className="relative block">
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        maxLength={10}
+        placeholder="dd/mm/yyyy"
+        aria-label={label}
+        disabled={disabled}
+        value={text}
+        onChange={(e) => {
+          const next = maskVnDate(e.target.value)
+          setText(next)
+          const iso = vnToIso(next)
+          if (iso) onChange(iso)
+          else if (next === '') onChange('')
+        }}
+        onBlur={() => {
+          // Gõ dở hoặc ngày không có thật thì trả ô về giá trị đang giữ, không
+          // để người dùng tưởng đã nhập được.
+          const iso = vnToIso(text)
+          setText(text.trim() === '' ? '' : isoToVn(iso ?? value))
+        }}
+        className={cn(
+          'num h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)]',
+          'bg-[var(--surface-card)] px-2 pr-8 text-left text-[var(--fs-num-sm)]',
+          'hover:border-[var(--ink-3)] focus:border-[var(--act)] disabled:opacity-45',
+        )}
+      />
+      <button
+        type="button"
+        tabIndex={-1}
+        disabled={disabled}
+        aria-label="Mở lịch"
+        onClick={() => {
+          const el = picker.current
+          if (!el) return
+          try {
+            el.showPicker()
+          } catch {
+            el.focus() // trình duyệt cũ: ít nhất cũng nhảy vào ô lịch
+          }
+        }}
+        className="absolute top-1/2 right-2 -translate-y-1/2 text-[var(--ink-3)] hover:text-[var(--ink)] disabled:opacity-45"
+      >
+        ▦
+      </button>
+      {/* Ô lịch thật: trong suốt, nằm dưới nút. KHÔNG dùng `display:none` vì
+          `showPicker()` từ chối phần tử không được vẽ. */}
+      <input
+        ref={picker}
+        type="date"
+        tabIndex={-1}
+        aria-hidden
+        disabled={disabled}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value)
+          setText(isoToVn(e.target.value))
+        }}
+        className="pointer-events-none absolute top-1/2 right-2 size-4 -translate-y-1/2 opacity-0"
+      />
+    </span>
+  )
+}
+
+/**
+ * Ô CHỌN — `<select>` thật, không portal.
+ *
+ * Thanh lọc ERP cần bốn năm ô chọn nằm cạnh nhau, đi bằng bàn phím, không nhảy
+ * portal. `<select>` bản địa làm đúng cả ba mà không tốn một dòng JS; cái giá là
+ * không tự vẽ được menu — chấp nhận, vì đây là ô lọc chứ không phải ô tìm.
+ *
+ * `label` BẮT BUỘC: ô chọn không nhãn nhìn bằng mắt đoán được, đi bằng bàn phím
+ * thì không.
+ */
+export function Pick({
+  value,
+  onChange,
+  options,
+  label,
+  disabled,
+  width,
+}: {
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string; disabled?: boolean }[]
+  label: string
+  disabled?: boolean
+  width?: number
+}) {
+  return (
+    <select
+      value={value}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => onChange(e.target.value)}
+      style={width ? { width } : undefined}
+      className={cn(
+        'h-[var(--ctl-h)] rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)]',
+        'px-2 pr-6 text-[var(--fs-sm)] text-[var(--ink)]',
+        'hover:border-[var(--ink-3)] focus:border-[var(--act)] disabled:opacity-45',
+      )}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value} disabled={o.disabled}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+/**
+ * Ô CHỮ MỘT DÒNG — cho ô đầu đơn ở chế độ sửa và ô lưới kiểu `text`.
+ *
+ * Cùng cỡ với `NumInput` để một hàng lưới có ô số lẫn ô chữ không nhấp nhô.
+ * `onCommit` gọi khi rời ô hoặc Enter — cùng luật với ô số: gõ dở không ghi.
+ */
+export function TextInput({
+  value,
+  onCommit,
+  placeholder,
+  disabled,
+  mono = false,
+  label,
+  ...rest
+}: {
+  value: string
+  onCommit: (v: string) => void
+  placeholder?: string
+  disabled?: boolean
+  /** Mã, quy cách, kích thước → mono cho thẳng cột. */
+  mono?: boolean
+  label?: string
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange' | 'onBlur'>) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? value
+  const commit = () => {
+    if (draft != null && draft !== value) onCommit(draft)
+    setDraft(null)
+  }
+  return (
+    <input
+      type="text"
+      value={shown}
+      placeholder={placeholder}
+      disabled={disabled}
+      aria-label={label}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        if (e.key === 'Escape') setDraft(null)
+      }}
+      className={cn(
+        'h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)]',
+        'bg-[var(--surface-card)] px-2 text-[var(--fs-sm)]',
+        mono && 'font-[family-name:var(--font-mono)] text-[var(--fs-num-sm)]',
+        'placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)] disabled:opacity-45',
+      )}
+      {...rest}
+    />
+  )
+}
+
+/**
+ * Ô TRA CỨU — gõ để tìm ở server, chọn một dòng.
+ *
+ * Đây là ô người soạn đơn gõ nhiều nhất (mã vật tư), nên:
+ *  · con trỏ Ở LẠI ô sau khi chọn — thêm dòng thứ hai không phải bấm chuột;
+ *  · Enter chọn dòng đang sáng, mũi tên lên xuống đổi dòng, Escape đóng;
+ *  · tìm sau 180ms ngừng gõ, KHÔNG tìm mỗi phím — danh mục 13k dòng.
+ *
+ * Không portal: danh sách nằm ngay dưới ô, trong cùng cây DOM, nên token và
+ * cuộn của bảng cha vẫn đúng.
+ */
+export function Lookup<T>({
+  search,
+  onPick,
+  render,
+  keyOf,
+  placeholder = 'Gõ mã hoặc tên…',
+  label,
+  width,
+  disabled,
+}: {
+  search: (q: string) => Promise<T[]>
+  onPick: (item: T) => void
+  render: (item: T) => ReactNode
+  keyOf: (item: T) => string
+  placeholder?: string
+  label: string
+  width?: number
+  disabled?: boolean
+}) {
+  const [q, setQ] = useState('')
+  const [items, setItems] = useState<T[]>([])
+  const [open, setOpen] = useState(false)
+  const [idx, setIdx] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const seq = useRef(0)
+
+  const run = (text: string) => {
+    if (timer.current) clearTimeout(timer.current)
+    if (!text.trim()) {
+      setItems([])
+      setOpen(false)
+      return
+    }
+    timer.current = setTimeout(async () => {
+      const my = ++seq.current
+      setBusy(true)
+      try {
+        const r = await search(text.trim())
+        // Kết quả về muộn của từ khoá cũ thì bỏ — không để danh sách nhảy ngược.
+        if (my === seq.current) {
+          setItems(r)
+          setIdx(0)
+          setOpen(true)
+        }
+      } finally {
+        if (my === seq.current) setBusy(false)
+      }
+    }, 180)
+  }
+
+  const pick = (it: T) => {
+    onPick(it)
+    setQ('')
+    setItems([])
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative" style={width ? { width } : undefined}>
+      <input
+        type="text"
+        value={q}
+        placeholder={placeholder}
+        aria-label={label}
+        disabled={disabled}
+        autoComplete="off"
+        onChange={(e) => {
+          setQ(e.target.value)
+          run(e.target.value)
+        }}
+        onKeyDown={(e) => {
+          if (!open) return
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setIdx((i) => Math.min(i + 1, items.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setIdx((i) => Math.max(i - 1, 0))
+          } else if (e.key === 'Enter') {
+            e.preventDefault()
+            if (items[idx]) pick(items[idx])
+          } else if (e.key === 'Escape') {
+            setOpen(false)
+          }
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        className={cn(
+          'h-[var(--ctl-h)] w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface)] px-[10px] text-[var(--fs-sm)]',
+          'placeholder:text-[var(--ink-3)] focus:border-[var(--act)] disabled:opacity-45',
+        )}
+      />
+      {busy && (
+        <span className="absolute top-1/2 right-2 -translate-y-1/2 text-[11px] text-[var(--ink-3)]">…</span>
+      )}
+      {open && (
+        <div
+          role="listbox"
+          className="absolute top-[calc(100%+3px)] left-0 z-[var(--z-float)] max-h-[280px] w-full min-w-[320px] overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1 shadow-[0_8px_24px_rgba(17,24,38,.14)]"
+        >
+          {items.length === 0 ? (
+            <div className="px-3 py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">Không thấy mã nào khớp.</div>
+          ) : (
+            items.map((it, i) => (
+              <button
+                key={keyOf(it)}
+                type="button"
+                role="option"
+                aria-selected={i === idx}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => pick(it)}
+                onMouseEnter={() => setIdx(i)}
+                className={cn(
+                  'block w-full px-3 py-[5px] text-left text-[var(--fs-sm)]',
+                  i === idx ? 'bg-[var(--act-wash)] text-[var(--act-text)]' : 'text-[var(--ink)]',
+                )}
+              >
+                {render(it)}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   )
 }
