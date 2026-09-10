@@ -61,8 +61,17 @@ const cls = materialInputClass
 export function QuickAddMaterial({
   onCreated,
   template: soanTheoMau,
+  open: openProp,
+  onOpenChange,
 }: {
   onCreated: (m: CreatedMaterial) => void
+  /**
+   * ĐIỀU KHIỂN TỪ NGOÀI (màn Mua hàng mới, 10/09/2026): màn kit có nút riêng
+   * trong thanh công cụ lưới, nên truyền `open` + `onOpenChange` và nút mặc
+   * định ở đây tự ẩn. Không truyền thì hộp tự quản như cũ.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   /**
    * Mẫu đơn ĐANG SOẠN — chỉ dùng làm gợi ý cuối khi máy không đoán được từ tên.
    * KHÔNG gán cứng cho vật tư mới: người dùng hay tiện tay khai luôn món không
@@ -71,7 +80,12 @@ export function QuickAddMaterial({
   template: PoTemplate
 }) {
   const toast = useToast()
-  const [open, setOpen] = useState(false)
+  const [openSelf, setOpenSelf] = useState(false)
+  const open = openProp ?? openSelf
+  const setOpen = (v: boolean) => {
+    setOpenSelf(v)
+    onOpenChange?.(v)
+  }
   const [busy, setBusy] = useState(false)
   // Nhóm BẮT BUỘC ở form khai nhanh (0124): nhóm là phạm vi chặn trùng tên của
   // server — người đang vội soạn đơn hay bỏ trống nhất, và vật tư không nhóm
@@ -137,15 +151,17 @@ export function QuickAddMaterial({
 
   return (
     <>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => setOpen(true)}
-        className="text-muted-foreground h-[38px] gap-1.5 rounded-lg px-3 text-[13px]"
-        title="NCC chào loại chưa có trong danh mục — khai tại chỗ, vào thẳng dòng"
-      >
-        <Plus aria-hidden /> Khai vật tư mới
-      </Button>
+      {openProp === undefined && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          className="text-muted-foreground h-[38px] gap-1.5 rounded-lg px-3 text-[13px]"
+          title="NCC chào loại chưa có trong danh mục — khai tại chỗ, vào thẳng dòng"
+        >
+          <Plus aria-hidden /> Khai vật tư mới
+        </Button>
+      )}
       {open && (
         <Modal
           open={open}
@@ -171,7 +187,7 @@ export function QuickAddMaterial({
             </p>
             {/* Có tên gần giống → nút Thêm khoá tới khi xác nhận đã đối chiếu. */}
             {canSimilar && (
-              <label className="border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] flex items-start gap-2 rounded-md border px-3 py-2 text-xs text-[var(--warn)]">
+              <label className="flex items-start gap-2 rounded-md border border-[color-mix(in_srgb,var(--warn)_30%,transparent)] bg-[color-mix(in_srgb,var(--warn)_8%,transparent)] px-3 py-2 text-xs text-[var(--warn)]">
                 <Checkbox
                   checked={daDoiChieu}
                   onCheckedChange={(v) => setConfirmedFor(v === true ? core.f.name : '')}

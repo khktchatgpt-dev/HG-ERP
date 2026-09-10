@@ -8,6 +8,8 @@ import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { supplierFacts } from '@/modules/dept/supply/supplier-facts.repo'
 import { poPosition } from '@/modules/dept/supply/balance.repo'
 import { loadReceiptBatches } from '@/modules/dept/supply/po-receipts.service'
+import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { HttpError } from '@/server/http'
@@ -62,7 +64,7 @@ export default async function Page({
   }
   const { po, lines, status_lines, extra_lsx, warehouse_docs } = detail
 
-  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches] = // prettier-ignore
+  const [position, supplier, facts, stockRows, shipments, { rows: suppliers }, lsxs, shipmentReceipts, receiptBatches, company, tpl] = // prettier-ignore
     await Promise.all([
       poPosition(po.id),
       po.supplier_id ? suppliersRepo.findById(po.supplier_id) : Promise.resolve(null),
@@ -78,6 +80,9 @@ export default async function Page({
       posService.shipmentReceipts(user, po.id),
       // Đợt về theo PHIẾU cho ma trận dòng × đợt — cùng hàm với Excel lệnh.
       loadReceiptBatches([po.id]).then((r) => r[po.id] ?? []),
+      // Đầu phiếu + mẫu in cho "Xem trước phiếu" lúc sửa — settings có cache.
+      settingsService.getAll(),
+      docTemplatesService.get('PO'),
     ])
   const stock: Record<string, number> = {}
   for (const r of stockRows) stock[r.material_id] = r.on_hand
@@ -102,6 +107,8 @@ export default async function Page({
       shipments={shipments.map((s) => ({ id: s.id, seq: s.seq, expected_date: s.expected_date, status: s.status, note: s.note, lines: s.lines }))} // prettier-ignore
       shipmentReceipts={shipmentReceipts}
       receiptBatches={receiptBatches}
+      company={company}
+      tpl={tpl}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
       perms={{ canEdit, canApprove, isSupply }}

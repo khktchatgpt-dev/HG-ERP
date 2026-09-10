@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Action,
@@ -55,7 +55,12 @@ import { DocumentFiles } from '@/components/DocumentFiles'
 import { PoNotesPanel } from '@/app/(workspace)/planning/pos/[id]/PoNotesPanel'
 import { api, apiErrorText } from '@/lib/api'
 import { PO_FIELDS, type PoField } from '@/lib/po-fields'
-import { PO_TEMPLATE_META, poTemplateMeta, type PoTemplate } from '@/lib/po-template'
+import {
+  FREE_LINE_TEMPLATES,
+  PO_TEMPLATE_META,
+  poTemplateMeta,
+  type PoTemplate,
+} from '@/lib/po-template'
 import type { PoMaterial } from '@/lib/po-material.types'
 import { PO_CURRENCIES, poLineAmount } from '@/lib/po-line'
 import type { ShipmentInput } from '@/lib/po-shipments'
@@ -74,6 +79,7 @@ import {
   lineQty2,
   newFreeLine,
   newLine,
+  refreshLineFromMaterial,
   remapLinesForTemplate,
   type Line,
   type Num,
@@ -85,6 +91,22 @@ import { actionsFor, type Action as DocAction } from '../actions'
 import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
 import { ChungTuKhoGrid, DotGiaoGrid, DotSheet, NhanTheoDotGrid, XacNhanSheet } from './NhanHangPanel' // prettier-ignore
+import { CapNhatDanhMucSheet, ChiaDotSoanGrid, DanExcelSheet, NhuCauGrid, type PasteConfirm } from './SoanDonPanels' // prettier-ignore
+import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, readDraft, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
+import {
+  QuickAddMaterial,
+  type CreatedMaterial,
+} from '@/app/(workspace)/planning/pos/new/QuickAddMaterial'
+import { EditMaterialDialog } from '@/app/(workspace)/planning/pos/new/EditMaterialDialog'
+import { fetchMaterialByCode, fetchMaterialsByIds, invalidateMaterialPickCache } from '@/components/supply/MaterialPicker' // prettier-ignore
+import { allocationNote } from '@/lib/po-allocation'
+import type { CatalogSuggestion } from '@/lib/po-catalog-backfill'
+import { PoPrintSheet } from '@/app/print/supply/PoPrintSheet'
+import type { DocTemplate } from '@/lib/doc-templates'
+import {
+  previewHeaderFromDraft,
+  previewLinesFromDraft,
+} from '@/app/(workspace)/planning/pos/new/po-preview'
 
 /**
  * MÀN CHỨNG TỪ ĐƠN MUA HỢP NHẤT — xem / sửa / tạo cùng một bố cục.
@@ -184,6 +206,13 @@ type Props = {
   perms: { canEdit: boolean; canApprove: boolean; isSupply: boolean }
   me: { id: string; name: string }
   seed?: { supplierId?: string; lsxId?: string }
+  /** NHÂN BẢN: đầu đơn của đơn gốc (lines truyền qua `lines`, đã bỏ id). */
+  seedHeader?: PoHeader
+  /** Mở từ dòng tồn / bảng kê: mã vật tư + SL đề xuất cùng thứ tự — mồi thành dòng. */
+  seedCodes?: { codes: string[]; qtys: number[] }
+  /** Đầu phiếu + mẫu in cho "Xem trước phiếu" — từ Cài đặt, server nạp. */
+  company?: Record<string, string | null>
+  tpl?: DocTemplate
 }
 
 const dmy = (iso: string | null | undefined) =>
@@ -215,7 +244,7 @@ export function DonChungTuScreen(p: Props) {
   const [editing, setEditing] = useState(p.mode !== 'view')
   const [header, setHeader] = useState<PoHeader>(
     () =>
-    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId }), // prettier-ignore
+    po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId })), // prettier-ignore
   )
   const [lines, setLines] = useState<Line[]>(() =>
     p.lines.map((l) =>
@@ -229,6 +258,22 @@ export function DonChungTuScreen(p: Props) {
   const [paneTab, setPaneTab] = useState<'don' | 'nhan'>('don')
   const [xacNhan, setXacNhan] = useState<null | 'confirm' | 'add'>(null)
   const [dot, setDot] = useState<null | { kind: 'reschedule' | 'cancel'; s: ShipmentLite }>(null) // prettier-ignore
+  /* ── soạn đơn: đợt giao khai lúc soạn, nhu cầu lệnh, dán Excel, danh mục ── */
+  const [shipCols, setShipCols] = useState<PlanColumn[]>(
+    () =>
+    po && p.mode !== 'create' ? planColumnsFromShipments(p.shipments, p.lines.map((l) => l.id)) : [], // prettier-ignore
+  )
+  const [needs, setNeeds] = useState<Need[]>([])
+  const [needsLoading, setNeedsLoading] = useState(false)
+  const [paste, setPaste] = useState(false)
+  const [quickAdd, setQuickAdd] = useState(false)
+  const [editMaterial, setEditMaterial] = useState<string | null>(null)
+  const [preview, setPreview] = useState(false)
+  const [enrich, setEnrich] = useState<{ items: CatalogSuggestion[]; dest: string; poCode: string } | null>(null) // prettier-ignore
+  const [enrichBusy, setEnrichBusy] = useState(false)
+  const [savedDraft, setSavedDraft] = useState<SavedDraft | null>(null)
+  /** Người dùng đã tự chỉnh VAT / tiền tệ — đổi mẫu / đổi NCC không áp đè lại. */
+  const dirty = useRef({ vat: !!po, currency: !!po })
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
   const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
@@ -274,7 +319,12 @@ export function DonChungTuScreen(p: Props) {
   }
   const changeTemplate = (t: PoTemplate) => {
     setLines((ls) => remapLinesForTemplate(template, t, ls))
-    setHeader((h) => retemplate(h, t))
+    // VAT chỉ áp mặc định của mẫu khi người dùng CHƯA tự chỉnh — phòng CƯ
+    // phản hồi "nhiều NCC để 10%" mà đổi mẫu là bị áp lại 8%.
+    setHeader((h) => {
+      const r = retemplate(h, t)
+      return dirty.current.vat ? { ...r, vat: h.vat, inclVat: h.inclVat } : r
+    })
   }
 
   /* ── lưu / huỷ ─────────────────────────────────────────────────────── */
@@ -285,18 +335,25 @@ export function DonChungTuScreen(p: Props) {
     }
     setBusy(true)
     try {
-      const body = buildPoPayload(header, lines)
-      if (p.mode === 'create' || !po) {
-        const r = await api<{ po: { id: string; code: string } }>('/api/dept/supply/pos', { method: 'POST', body }) // prettier-ignore
-        toast.success(`Đã tạo ${r.po.code}`)
-        router.replace(`/mua-hang/don/${r.po.id}`)
-      } else {
-        await api(`/api/dept/supply/pos/${po.id}`, { method: 'PATCH', body })
-        toast.success(`Đã lưu ${po.code}`)
-        setEditing(false)
-        router.replace(`/mua-hang/don/${po.id}`)
-        router.refresh()
+      const body = buildPoPayload(header, lines, columnsToShipments(shipCols))
+      const isNew = p.mode === 'create' || !po
+      const r =
+        await api<{ po: { id: string; code: string }; catalog_suggestions?: CatalogSuggestion[] }> // prettier-ignore
+        (isNew ? '/api/dept/supply/pos' : `/api/dept/supply/pos/${po.id}`, {
+          method: isNew ? 'POST' : 'PATCH',
+          body,
+        })
+      clearDraft(draftKey)
+      toast.success(isNew ? `Đã tạo ${r.po.code}` : `Đã lưu ${r.po.code}`, isNew ? 'Kiểm tra lại rồi bấm "Gửi Giám đốc duyệt"' : undefined) // prettier-ignore
+      const dest = `/mua-hang/don/${r.po.id}`
+      if (!isNew) setEditing(false)
+      // Có thông số gõ trên dòng mà danh mục đang trống → hỏi trước khi rời.
+      if (r.catalog_suggestions && r.catalog_suggestions.length > 0) {
+        setEnrich({ items: r.catalog_suggestions, dest, poCode: r.po.code })
+        return
       }
+      router.replace(dest)
+      router.refresh()
     } catch (e) {
       toast.error('Không lưu được', apiErrorText(e))
     } finally {
@@ -304,6 +361,7 @@ export function DonChungTuScreen(p: Props) {
     }
   }
   function cancelEdit() {
+    clearDraft(draftKey)
     if (p.mode === 'create' || !po) {
       router.push('/mua-hang/don')
       return
@@ -445,6 +503,211 @@ export function DonChungTuScreen(p: Props) {
   const ACCEPT: DocAction = { id: 'accept', label: 'Nghiệm thu ngoài sổ', ui: 'sheet', stakes: 'nang', consequence: 'Đóng đơn KHÔNG qua phiếu kho — chỉ cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho. Đơn sang "Đã nhận đủ".', done: 'Đã nghiệm thu', build: () => [ADV('received')] } // prettier-ignore
   const CLOSE_SHORT: DocAction = { id: 'close_short', label: 'Chốt phần thiếu', ui: 'sheet', stakes: 'nang', needReason: true, reasonLabel: 'Vì sao NCC không giao nữa', reasonHint: 'Ghi vào vết của đơn. Phần thiếu không còn tính là "đang đặt" — Kho và kế hoạch thấy ngay.', consequence: `${openStockLines.length} dòng còn thiếu sẽ chốt. NCC đổi ý giao bù thì mở lại được từng dòng.`, done: 'Đã chốt phần thiếu', build: ({ id, reason }) => [{ path: `/api/dept/supply/pos/${id}/close-short`, method: 'POST', body: { action: 'close', line_id: null, reason } }] } // prettier-ignore
 
+  /* ── soạn đơn: nhu cầu lệnh · dán Excel · vật tư mới · danh mục · nháp ── */
+  const usedIds = useMemo(() => new Set(lines.map((l) => l.material_id)), [lines])
+  const pending = pendingNeeds(needs, lines)
+  const lsxsOfPo = useMemo(
+    () => (header.poType === 'lsx' ? [header.lsxId, ...header.extraLsxIds].filter(Boolean).flatMap((id) => { const l = p.lsxs.find((x) => x.id === id); return l ? [{ id: l.id, code: l.code }] : [] }) : []), // prettier-ignore
+    [header.poType, header.lsxId, header.extraLsxIds, p.lsxs],
+  )
+  const lsxLabel = header.poType === 'lsx' ? lsxJoinedLabel(header.lsxId, header.extraLsxIds, p.lsxs) : null // prettier-ignore
+
+  // Nhu cầu của CẢ BỘ lệnh (chính + phụ), gộp ở server — cộng từng lệnh ở
+  // client sẽ trừ tồn hai lần. Chỉ nạp khi đang soạn.
+  useEffect(() => {
+    if (!editing || header.poType !== 'lsx' || !header.lsxId) {
+      const t = setTimeout(() => setNeeds([]), 0)
+      return () => clearTimeout(t)
+    }
+    let gone = false
+    const t = setTimeout(() => setNeedsLoading(true), 0)
+    const qs =
+      header.extraLsxIds.length > 0
+        ? `&extra_lsx_ids=${header.extraLsxIds.join(',')}`
+        : ''
+    api<{ needs: Need[] }>(
+      `/api/dept/supply/needs?production_order_id=${header.lsxId}${qs}`,
+    )
+      .then((d) => !gone && setNeeds(d.needs))
+      .catch(
+        (e) => !gone && toast.error('Không tải được nhu cầu của lệnh', apiErrorText(e)),
+      )
+      .finally(() => !gone && setNeedsLoading(false))
+    return () => {
+      gone = true
+      clearTimeout(t)
+    }
+    // toast ổn định theo provider
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, header.poType, header.lsxId, header.extraLsxIds])
+
+  /** Thêm nhiều vật tư một lượt, kèm SL/giá/ghi chú (dán Excel, mồi từ URL). */
+  function addMaterials(
+    list: PoMaterial[],
+    extras?: Map<
+      string,
+      { qty?: number | null; price?: number | null; note?: string | null }
+    >,
+  ) {
+    // prettier-ignore
+    const seen = new Set<string>()
+    const add = list.filter(
+      (m) => !usedIds.has(m.id) && !seen.has(m.id) && (seen.add(m.id), true),
+    )
+    if (add.length === 0) return
+    setPick(lines.length)
+    setLines((ls) => [
+      ...ls,
+      ...add.map((m) => {
+        const l = newLine(template, m)
+        const e = extras?.get(m.id)
+        return e ? { ...l, qty: (e.qty ?? l.qty) as Line['qty'], price: (e.price ?? l.price) as Line['price'], note: e.note ?? l.note } : l // prettier-ignore
+      }),
+    ])
+  }
+  function addFromPaste(picked: PasteConfirm) {
+    addMaterials(picked.matched.map((x) => x.material), new Map(picked.matched.map((x) => [x.material.id, { qty: x.qty, price: x.price, note: x.note }]))) // prettier-ignore
+    if (picked.free.length > 0) {
+      setLines((ls) => [...ls, ...picked.free.map((f) => ({ ...newFreeLine(), name: f.name, qty: (f.qty ?? '') as Line['qty'], price: (f.price ?? '') as Line['price'], note: f.note ?? '' }))]) // prettier-ignore
+    }
+    const dup = picked.matched.filter((x) => usedIds.has(x.material.id)).length
+    const n = picked.matched.length - dup + picked.free.length
+    if (n > 0)
+      toast.success(
+        `Đã thêm ${n} dòng từ vùng dán`,
+        dup > 0 ? `${dup} mã đã có trên đơn, không thêm lại` : undefined,
+      )
+    else if (dup > 0)
+      toast.warning('Không thêm dòng nào', `${dup} mã trong vùng dán đã có trên đơn`)
+  }
+  /** Từ nhu cầu lệnh: nạp hồ sơ vật tư (kg/m, dài cây…) rồi mới thành dòng — thiếu thì dòng nhôm không tính được tiền. */
+  async function addFromNeeds(list: Need[]) {
+    const ids = list.map((n) => n.material_id).filter((id) => !usedIds.has(id))
+    if (ids.length === 0) return
+    try {
+      const mats = await fetchMaterialsByIds(ids)
+      const byId = new Map(mats.map((m) => [m.id, m]))
+      setLines((ls) => {
+        const have = new Set(ls.map((l) => l.material_id))
+        const add: Line[] = []
+        for (const n of list) {
+          const m = byId.get(n.material_id)
+          if (!m || have.has(n.material_id)) continue
+          // SL đặt để trống cho người mua quyết; nhu cầu và phân bổ theo SP đổ sẵn.
+          add.push({ ...newLine(template, m), qty_demand: n.qty_needed, note: allocationNote(n.breakdown ?? []).slice(0, 500) }) // prettier-ignore
+        }
+        return [...ls, ...add]
+      })
+    } catch (e) {
+      toast.error('Không thêm được vật tư', apiErrorText(e))
+    }
+  }
+  function onCreatedMaterial(m: CreatedMaterial) {
+    addMaterials([{ ...m, vat_rate: null, default_supplier_id: null, last_purchase_price: null, on_hand: null, last_line: null } as PoMaterial]) // prettier-ignore
+  }
+  /** Ghi số cân / quy cách về danh mục ngay từ dòng — khai một lần, mọi đơn sau tự điền. */
+  async function saveToCatalog(
+    materialId: string,
+    field: 'kgm' | 'kgunit' | 'spec',
+    value: number | string,
+  ) {
+    // prettier-ignore
+    const col = field === 'kgm' ? 'kg_per_m' : field === 'kgunit' ? 'kg_per_unit' : 'spec'
+    try {
+      await api(`/api/dept/warehouse/materials/${materialId}`, {
+        method: 'PATCH',
+        body: { [col]: value },
+      })
+      setLines((ls) => ls.map((l) => l.material_id === materialId ? { ...l, ...(field === 'kgm' ? { catalog_kg_m: Number(value) } : field === 'kgunit' ? { catalog_kg_unit: Number(value) } : { spec: String(value) }) } : l)) // prettier-ignore
+      invalidateMaterialPickCache()
+      toast.success('Đã lưu vào danh mục', `${col} = ${value}`)
+    } catch (e) {
+      toast.error('Không lưu được vào danh mục', apiErrorText(e))
+    }
+  }
+  function toggleExtraLsx(id: string, on: boolean) {
+    setHeader((h) => ({ ...h, extraLsxIds: on ? [...h.extraLsxIds.filter((e) => e !== id), id] : h.extraLsxIds.filter((e) => e !== id) })) // prettier-ignore
+  }
+
+  // MỒI DÒNG TỪ URL (?vt=A,B&sl=10,20): mở từ dòng tồn hoặc bảng kê vật tư.
+  const seeded = useRef(false)
+  useEffect(() => {
+    if (!p.seedCodes || seeded.current || !editing) return
+    seeded.current = true
+    const { codes, qtys } = p.seedCodes
+    void Promise.all(codes.map((c) => fetchMaterialByCode(c))).then((found) => {
+      const list: PoMaterial[] = []
+      const extras = new Map<string, { qty?: number | null }>()
+      const missing: string[] = []
+      found.forEach((m, i) => {
+        if (!m) return void missing.push(codes[i])
+        list.push(m)
+        if (Number.isFinite(qtys[i]) && qtys[i] > 0) extras.set(m.id, { qty: qtys[i] })
+      })
+      if (list.length > 0) addMaterials(list, extras)
+      if (missing.length > 0) toast.error(`Không thấy vật tư "${missing.join('", "')}"`)
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mồi một lần lúc mở
+  }, [])
+
+  // TỰ LƯU NHÁP: ghi sau mỗi nhịp gõ khi khác bản gốc; mở lại thì đề nghị khôi phục.
+  const draftKey = draftKeyFor(po?.id ?? null)
+  const baseline = useRef<string | null>(null)
+  useEffect(() => {
+    if (!editing) return
+    const t = setTimeout(() => setSavedDraft(readDraft(draftKey)), 0)
+    return () => clearTimeout(t)
+  }, [editing, draftKey])
+  useEffect(() => {
+    if (!editing || savedDraft) return
+    const snap = { header, lines, shipCols }
+    const sig = draftSignature(snap)
+    if (baseline.current == null) {
+      baseline.current = sig
+      return
+    }
+    if (sig === baseline.current) {
+      clearDraft(draftKey)
+      return
+    }
+    const t = setTimeout(() => writeDraft(draftKey, snap), 700)
+    return () => clearTimeout(t)
+  }, [editing, savedDraft, header, lines, shipCols, draftKey])
+  function restoreDraft(d: SavedDraft) {
+    setHeader(d.header)
+    setLines(d.lines)
+    setShipCols(d.shipCols ?? [])
+    dirty.current = { vat: true, currency: true }
+    setSavedDraft(null)
+  }
+
+  async function confirmEnrich(picked: CatalogSuggestion[]) {
+    if (!enrich) return
+    setEnrichBusy(true)
+    try {
+      const { updated } = await api<{ updated: number }>(
+        '/api/dept/warehouse/materials/enrich',
+        {
+          method: 'POST',
+          body: {
+            items: picked.map((s) => ({ material_id: s.material_id, set: Object.fromEntries(s.fields.filter((f) => !f.overwrite).map((f) => [f.field, f.value])), price: s.fields.find((f) => f.field === 'last_purchase_price')?.value as number | undefined })), // prettier-ignore
+            po_code: enrich.poCode,
+          },
+        },
+      )
+      invalidateMaterialPickCache()
+      toast.success(`Đã cập nhật ${updated} vật tư`, 'Lần đặt sau các ô này tự điền sẵn')
+    } catch (e) {
+      toast.error('Cập nhật danh mục thất bại', apiErrorText(e))
+    } finally {
+      setEnrichBusy(false)
+      const dest = enrich.dest
+      setEnrich(null)
+      router.replace(dest)
+      router.refresh()
+    }
+  }
+
   const goOld = (hash: string) => po && router.push(`/planning/pos/${po.id}${hash}`)
   const goTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ block: 'start' })
@@ -479,6 +742,42 @@ export function DonChungTuScreen(p: Props) {
               </Action>
               <Action disabled={busy} onClick={cancelEdit}>
                 Huỷ
+              </Action>
+            </ActionGroup>
+            <ActionGroup label="Nhập nhanh">
+              <Action
+                onClick={() => setPaste(true)}
+                title="Dán vùng bảng từ sổ Excel — máy khớp mã"
+              >
+                Dán từ Excel
+              </Action>
+              <Action
+                onClick={() => setQuickAdd(true)}
+                title="NCC chào loại chưa có trong danh mục — khai tại chỗ, vào thẳng dòng"
+              >
+                Khai vật tư mới
+              </Action>
+              <Action
+                disabled={pending.length === 0}
+                title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : undefined} // prettier-ignore
+                onClick={() => void addFromNeeds(pending)}
+              >
+                Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu của lệnh
+              </Action>
+            </ActionGroup>
+            <ActionGroup label="Kiểm">
+              <Action
+                disabled={!p.company}
+                title={
+                  p.company
+                    ? 'Dựng đúng tờ phiếu sẽ gửi NCC từ bản đang gõ'
+                    : 'Trang này chưa nạp đầu phiếu'
+                }
+                onClick={() => setPreview(true)}
+              >
+                {' '}
+                {/* prettier-ignore */}
+                Xem trước phiếu
               </Action>
             </ActionGroup>
             <ActionGroup label="Dòng hàng">
@@ -712,8 +1011,31 @@ export function DonChungTuScreen(p: Props) {
           items={checks}
         />
       )}
+      {editing && savedDraft && (
+        <NoticeBar
+          tone="warn"
+          tag="Bản nháp"
+          action={{ label: 'Khôi phục', onClick: () => restoreDraft(savedDraft) }}
+        >
+          Có bản gõ dở tự lưu lúc{' '}
+          <b className="num">{new Date(savedDraft.at).toLocaleString('vi-VN')}</b> (
+          {savedDraft.lines.length} dòng).{' '}
+          <GridBtn
+            onClick={() => {
+              clearDraft(draftKey)
+              setSavedDraft(null)
+            }}
+          >
+            Bỏ bản nháp
+          </GridBtn>
+        </NoticeBar>
+      )}
       {editing && problem && (
-        <NoticeBar tone="warn" tag="Chưa lưu được" action={{ label: 'Xem dòng hàng' }}>
+        <NoticeBar
+          tone="warn"
+          tag="Chưa lưu được"
+          action={{ label: 'Xem dòng hàng', onClick: () => goTo('dong-hang') }}
+        >
           {problem}. Sửa xong thì nút Lưu tự mở.
         </NoticeBar>
       )}
@@ -751,6 +1073,7 @@ export function DonChungTuScreen(p: Props) {
       >
         {/* ══ 1. LƯỚI DÒNG — mở đầu, nhân vật chính ═══════════════════════ */}
         <FastTab
+          id="dong-hang"
           title="Dòng đơn hàng"
           defaultOpen
           flush
@@ -826,12 +1149,14 @@ export function DonChungTuScreen(p: Props) {
                   Xoá dòng
                 </GridBtn>
                 <GridSep />
+                <GridBtn onClick={() => setPaste(true)} title="Dán vùng bảng từ sổ Excel">
+                  Dán từ Excel
+                </GridBtn>
                 <GridBtn
-                  onClick={() => po && router.push(`/planning/pos/${po.id}/edit`)}
-                  disabled={!po}
-                  title="Dán từ Excel, khai vật tư mới, chia lệnh — nửa sau bước 2"
+                  onClick={() => setQuickAdd(true)}
+                  title="Khai vật tư chưa có trong danh mục"
                 >
-                  Nhập hàng loạt (bản cũ)
+                  Khai vật tư mới
                 </GridBtn>
               </>
             </GridToolbar>
@@ -1068,6 +1393,41 @@ export function DonChungTuScreen(p: Props) {
                   </b>
                 </Field>
               </FieldGroup>
+              {lsxsOfPo.length > 1 && (
+                <FieldGroup title="Chia số lượng cho lệnh">
+                  {lsxsOfPo.map((lx) => (
+                    <Field key={lx.id} label={lx.code}>
+                      {editing ? (
+                        <NumInput value={cur.lsx_split?.[lx.id] === undefined || cur.lsx_split[lx.id] === '' ? '' : String(cur.lsx_split[lx.id])} aria-label={`SL cho ${lx.code}`} onCommit={(v) => patch(curIdx, { lsx_split: { ...cur.lsx_split, [lx.id]: (v.trim() === '' ? '' : Number(v.replace(',', '.'))) as Num } })} /> // prettier-ignore
+                      ) : (
+                        <span className="num">{cur.lsx_split?.[lx.id] === undefined || cur.lsx_split[lx.id] === '' ? '—' : Number(cur.lsx_split[lx.id]).toLocaleString('vi-VN')}</span> // prettier-ignore
+                      )}
+                    </Field>
+                  ))}
+                </FieldGroup>
+              )}
+              {editing && !cur.is_free && (
+                <FieldGroup title="Danh mục vật tư">
+                  <Field label="Hồ sơ">
+                    <span className="flex flex-wrap gap-1">
+                      <GridBtn
+                        onClick={() => setEditMaterial(cur.material_id)}
+                        title="Sửa quy cách, nhóm, barem của vật tư này trong danh mục"
+                      >
+                        Sửa danh mục vật tư
+                      </GridBtn>
+                      {
+                        cur.weight_per_m !== '' && cur.catalog_kg_m == null &&
+                        <GridBtn onClick={() => void saveToCatalog(cur.material_id, 'kgm', Number(cur.weight_per_m))}>Lưu kg/m vào danh mục</GridBtn> // prettier-ignore
+                      }
+                      {
+                        cur.weight_per_unit !== '' && cur.catalog_kg_unit == null &&
+                        <GridBtn onClick={() => void saveToCatalog(cur.material_id, 'kgunit', Number(cur.weight_per_unit))}>Lưu kg/đv vào danh mục</GridBtn> // prettier-ignore
+                      }
+                    </span>
+                  </Field>
+                </FieldGroup>
+              )}
               <FieldGroup title="Ghi chú dòng">
                 <Field label="Ghi chú">
                   {editing ? (
@@ -1095,20 +1455,61 @@ export function DonChungTuScreen(p: Props) {
           )}
         </FastTab>
 
+        {/* ══ 1a. NHU CẦU CỦA LỆNH — chỉ khi đang soạn đơn theo lệnh ═══════ */}
+        {editing && header.poType === 'lsx' && header.lsxId && (
+          <FastTab
+            id="nhu-cau"
+            title="Nhu cầu của lệnh"
+            flush
+            defaultOpen={pending.length > 0}
+            summary={[
+              ['Lệnh', <span key="a" className="num">{lsxLabel ?? '—'}</span>], // prettier-ignore
+              ['Còn thiếu', <span key="b" className={pending.length ? 'num k-t-warn' : 'num'}>{pending.length}</span>], // prettier-ignore
+            ]}
+            actions={
+              <GridBtn
+                disabled={pending.length === 0}
+                onClick={() => void addFromNeeds(pending)}
+              >
+                + Thêm tất cả còn thiếu
+              </GridBtn>
+            }
+          >
+            <NhuCauGrid
+              needs={needs}
+              loading={needsLoading}
+              usedIds={usedIds}
+              onAdd={(l) => void addFromNeeds(l)}
+            />
+          </FastTab>
+        )}
+
         {/* ══ 1b. GIAO & NHẬN HÀNG — hai sổ: NCC hẹn gì, Kho thực nhận gì ═══
             Mở sẵn khi đơn đã gửi NCC (từ đó trở đi đây là câu hỏi hằng ngày);
             trước đó gấp lại, chỉ tiêu đề nói "chưa có đợt". */}
-        {po && (
+        {(po || editing) && (
           <FastTab
             id="dot-giao"
-            title="Giao & nhận hàng"
+            title={editing ? 'Chia đợt giao' : 'Giao & nhận hàng'}
             flush
-            defaultOpen={sentToSupplier}
-            summary={[
-              ['Đợt giao', <span key="a" className="num">{liveShipments.length}</span>], // prettier-ignore
-              ['Đã nhận', <span key="b" className="num">{liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'}</span>], // prettier-ignore
-              ['Phiếu kho', <span key="c" className="num">{p.warehouseDocs.length}</span>], // prettier-ignore
-            ]}
+            defaultOpen={editing ? shipCols.length > 0 : sentToSupplier}
+            summary={
+              editing
+                ? [
+                    [
+                      'Đợt',
+                      <span key="a" className="num">
+                        {columnsToShipments(shipCols).length || '—'}
+                      </span>,
+                    ],
+                  ]
+                : [
+                    // prettier-ignore
+                    ['Đợt giao', <span key="a" className="num">{liveShipments.length}</span>], // prettier-ignore
+                    ['Đã nhận', <span key="b" className="num">{liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'}</span>], // prettier-ignore
+                    ['Phiếu kho', <span key="c" className="num">{p.warehouseDocs.length}</span>], // prettier-ignore
+                  ]
+            }
             actions={
               !editing ? (
                 <>
@@ -1123,7 +1524,7 @@ export function DonChungTuScreen(p: Props) {
                   <GridBtn
                     disabled={!recv.receive.ok}
                     title={recv.receive.why}
-                    onClick={() => router.push(`/warehouse/don-ncc/${po.id}`)}
+                    onClick={() => po && router.push(`/warehouse/don-ncc/${po.id}`)}
                   >
                     {' '}
                     {/* prettier-ignore */}
@@ -1133,7 +1534,9 @@ export function DonChungTuScreen(p: Props) {
               ) : undefined
             }
           >
-            {po.status === 'cancelled' ? (
+            {editing ? (
+              <ChiaDotSoanGrid lines={lines} columns={shipCols} onChange={setShipCols} />
+            ) : !po ? null : po.status === 'cancelled' ? (
               <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-2)]">
                 Đơn đã huỷ — kế hoạch giao và chứng từ kho không còn áp dụng.
               </div>
@@ -1244,6 +1647,37 @@ export function DonChungTuScreen(p: Props) {
                     ]}
                   />
                 </Field>
+                {header.poType === 'lsx' && (
+                  <Field label="Gộp thêm lệnh">
+                    <span className="flex flex-wrap items-center gap-1">
+                      {header.extraLsxIds.map((id) => (
+                        <GridBtn
+                          key={id}
+                          title="Bỏ lệnh này khỏi đơn"
+                          onClick={() => toggleExtraLsx(id, false)}
+                        >
+                          {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
+                        </GridBtn>
+                      ))}
+                      <span className="min-w-[180px]">
+                        <Pick
+                          label="Gộp thêm lệnh"
+                          value=""
+                          onChange={(v) => v && toggleExtraLsx(v, true)}
+                          options={[
+                            {
+                              value: '',
+                              label: header.extraLsxIds.length
+                                ? '+ thêm lệnh nữa'
+                                : '— một đơn mua cho nhiều lệnh —',
+                            },
+                            ...p.lsxs.filter((l) => l.id !== header.lsxId && !header.extraLsxIds.includes(l.id)).map((l) => ({ value: l.id, label: `${l.code} · ${l.customer_name}` })), // prettier-ignore
+                          ]}
+                        />
+                      </span>
+                    </span>
+                  </Field>
+                )}
                 <Field label="Nhà cung cấp">
                   <Pick
                     label="Nhà cung cấp"
@@ -1253,7 +1687,8 @@ export function DonChungTuScreen(p: Props) {
                       setHeader((h) => ({
                         ...h,
                         supplierId: v,
-                        currency: s?.currency ?? h.currency,
+                        // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
+                        currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
                       }))
                     }}
                     options={[
@@ -1355,7 +1790,10 @@ export function DonChungTuScreen(p: Props) {
                   <Pick
                     label="Tiền tệ"
                     value={header.currency}
-                    onChange={(v) => setHeader((h) => ({ ...h, currency: v }))}
+                    onChange={(v) => {
+                      dirty.current.currency = true
+                      setHeader((h) => ({ ...h, currency: v }))
+                    }}
                     options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
                   />
                 </Field>
@@ -1501,6 +1939,57 @@ export function DonChungTuScreen(p: Props) {
         }
       />
 
+      {
+        paste &&
+        <DanExcelSheet allowFree={FREE_LINE_TEMPLATES.includes(template)} onClose={() => setPaste(false)} onConfirm={addFromPaste} /> // prettier-ignore
+      }
+      {
+        editing &&
+        <QuickAddMaterial open={quickAdd} onOpenChange={setQuickAdd} template={template} onCreated={onCreatedMaterial} /> // prettier-ignore
+      }
+      {editing && (
+        <EditMaterialDialog
+          materialId={editMaterial}
+          onClose={() => setEditMaterial(null)}
+          onSaved={(id, m) => {
+            // Hút số mới vào các dòng đang mở cùng vật tư — đúng như bản cũ.
+            setLines((ls) =>
+              ls.map((l) =>
+                l.material_id === id ? refreshLineFromMaterial(template, l, m) : l,
+              ),
+            )
+            invalidateMaterialPickCache()
+            setEditMaterial(null)
+          }}
+        />
+      )}
+      {enrich && (
+        <CapNhatDanhMucSheet
+          items={enrich.items}
+          busy={enrichBusy}
+          onSkip={() => { const d = enrich.dest; setEnrich(null); router.replace(d); router.refresh() }} // prettier-ignore
+          onConfirm={(picked) => void confirmEnrich(picked)}
+        />
+      )}
+      {preview && p.company && (
+        <Sheet
+          open
+          onClose={() => setPreview(false)}
+          width={900}
+          title="Xem trước phiếu đặt hàng"
+          subtitle="Dựng từ bản đang gõ — chưa lưu, chưa có số phiếu."
+        >
+          {' '}
+          {/* prettier-ignore */}
+          <PoPrintSheet
+            company={p.company}
+            tpl={p.tpl}
+            po={previewHeaderFromDraft(header, { code: po?.code ?? '(cấp khi lưu)', supplierName: supplierOpt?.name ?? '—', lsxCode: lsxLabel, orderCode: header.poType === 'lsx' ? (lsx?.order_codes.join(', ') || null) : null, createdAt: po?.created_at ?? new Date().toISOString() })} // prettier-ignore
+            supplier={supplierOpt ? { name: supplierOpt.name } : null}
+            lines={previewLinesFromDraft(template, lines)}
+          />
+        </Sheet>
+      )}
       {xacNhan && po && (
         <XacNhanSheet
           mode={xacNhan}

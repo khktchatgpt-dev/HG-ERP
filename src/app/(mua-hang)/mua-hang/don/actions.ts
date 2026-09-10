@@ -67,7 +67,7 @@ export type Action = {
 
 const OPEN: Action = { id: 'open', label: 'Mở đơn đầy đủ', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}` } // prettier-ignore
 const EDIT = (blocked?: string): Action => ({ id: 'edit', label: 'Sửa đơn', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}?sua=1`, blocked }) // prettier-ignore
-const DUP: Action = { id: 'duplicate', label: 'Nhân bản', ui: 'link', stakes: 'nhe', href: (id) => `/planning/pos/${id}/edit?duplicate=1` } // prettier-ignore
+const DUP: Action = { id: 'duplicate', label: 'Nhân bản', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/moi?tu=${id}` } // prettier-ignore
 
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
