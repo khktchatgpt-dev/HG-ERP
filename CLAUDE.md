@@ -176,6 +176,13 @@ trượt nhất:
 — Phiếu mua (`/mua-hang/don`): đối chiếu SAP/Dynamics/Odoo/NetSuite, 8 lối mòn đo được của màn
 cũ, bản đồ tính năng cũ → mới. Làm màn danh sách khác thì chép cấu trúc tài liệu này.
 
+**LUỒNG chạy thế nào — đọc TRƯỚC khi chọn khuôn màn**:
+[`docs/tieu-chi-workflow-erp.md`](docs/tieu-chi-workflow-erp.md). Sổ `/design-lab` trả lời
+"màn trông thế nào"; tài liệu này trả lời câu đứng trước nó. Bốn nguyên lý nền (chứng từ là
+nguyên tử · danh mục ≠ chứng từ · ba dòng chảy · không xoá chỉ đảo), bảy tiêu chí luồng đo
+được, sáu lối mòn còn lại đo trên mã nguồn, và **sáu bước thiết kế một luồng mới** — bắt đầu
+bằng máy trạng thái, chọn khuôn màn là bước CUỐI.
+
 **Nền tảng đối chiếu**: [`docs/thiet-ke-huong-erp.md`](docs/thiet-ke-huong-erp.md) — đo
 HG-ERP với SAP/Odoo/Dynamics/NetSuite/Zoho trên mã nguồn + DB thật, và bốn lỗ hổng còn lại
 (hộp thư bị nhốt một phòng, chưa có nơi trao đổi trên chứng từ, chỉ có duyệt/từ chối, không
