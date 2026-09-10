@@ -392,6 +392,12 @@
 .k-ft-h:hover {
   background: var(--surface-raised);
 }
+.k-ft-fixed,
+.k-ft-fixed:hover {
+  cursor: default;
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--hair);
+}
 /* Tiêu đề FastTab kèm HÀNG HÀNH ĐỘNG bên phải (nút của lưới ở chế độ xem).
    Nút không được nằm trong nút gấp/mở, nên bọc hai thứ trong một hàng flex. */
 .k-ft-hd {
@@ -1070,6 +1076,14 @@
 }
 .k-fgrp + .k-fgrp {
   border-top: 1px solid var(--hair);
+}
+/* Ô nhập nhiều dòng (điều khoản): nhãn bám ĐỈNH ô, không rơi xuống đáy theo
+   baseline dòng cuối — đo 10/09/2026 ở khối Điều khoản. */
+.k-f:has(textarea) {
+  align-items: flex-start;
+}
+.k-f:has(textarea) dt {
+  padding-top: 5px;
 }
 .k-fgrp-h {
   margin: 0 0 4px;

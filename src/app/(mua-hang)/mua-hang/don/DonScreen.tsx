@@ -378,7 +378,7 @@ export function DonScreen({
         ]}
         actions={
           <>
-            <Btn href="/mua-hang/yeu-cau">Vật tư theo lệnh</Btn>
+            <Btn href="/planning/lsx">Vật tư theo lệnh</Btn>
             {canEdit && (
               <Btn primary href="/mua-hang/don/moi">
                 + Soạn đơn mua
@@ -523,7 +523,7 @@ export function DonScreen({
           tag="Lệnh trống"
           action={{
             label: 'Vật tư theo lệnh',
-            onClick: () => router.push('/mua-hang/yeu-cau'),
+            onClick: () => router.push('/planning/lsx'),
           }}
         >
           <b>{emptyLsx} lệnh đang chạy chưa có đơn mua nào.</b> Gom theo lệnh chỉ hiện

@@ -166,14 +166,14 @@ export function BanLamViecScreen({
               label="Nguy cơ dừng SX"
               count={riskCounts.stop}
               hint="Lệnh thiếu vật tư sát mốc · cả phòng"
-              href="/mua-hang/yeu-cau"
+              href="/planning/lsx"
               tone="stop"
             />
             <WorkTile
               label="Thiếu / chưa mua"
               count={riskCounts.warn}
               hint="Lệnh còn mã chưa có đơn · cả phòng"
-              href="/mua-hang/yeu-cau"
+              href="/planning/lsx"
               tone="warn"
             />
             <WorkTile
@@ -249,7 +249,7 @@ export function BanLamViecScreen({
 
             {tab === 'lenh' &&
               (issues.length === 0 ? (
-                <Empty headline="Không lệnh nào có nguy cơ" reason="Mọi lệnh đang chạy đều đủ vật tư hoặc hàng đang về." next={<Btn href="/mua-hang/yeu-cau">Xem yêu cầu mua</Btn>} /> // prettier-ignore
+                <Empty headline="Không lệnh nào có nguy cơ" reason="Mọi lệnh đang chạy đều đủ vật tư hoặc hàng đang về." next={<Btn href="/planning/lsx">Xem vật tư theo lệnh</Btn>} /> // prettier-ignore
               ) : (
                 <Table>
                   <THead>
@@ -335,7 +335,7 @@ export function BanLamViecScreen({
             <LinkRow href="/mua-hang/don">Tất cả đơn</LinkRow>
           </LinkGroup>
           <LinkGroup title="Nhu cầu & nhận hàng">
-            <LinkRow href="/mua-hang/yeu-cau">Yêu cầu mua · vật tư theo lệnh</LinkRow>
+            <LinkRow href="/planning/lsx">Vật tư theo lệnh</LinkRow>
             <LinkRow href="/mua-hang/nhan-hang">Nhận hàng</LinkRow>
             <LinkRow href="/mua-hang/ton">Tồn & cân đối</LinkRow>
           </LinkGroup>
