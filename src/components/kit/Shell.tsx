@@ -44,7 +44,10 @@ export function CommandBar({
           <span key={i} className="flex items-center gap-[7px]">
             {i > 0 && <span className="text-[var(--line-faint)]">/</span>}
             {c.href ? (
-              <a href={c.href} className="text-[var(--ink-2)] hover:text-[var(--act)] hover:underline">
+              <a
+                href={c.href}
+                className="text-[var(--ink-2)] hover:text-[var(--act)] hover:underline"
+              >
                 {c.label}
               </a>
             ) : (
@@ -60,8 +63,12 @@ export function CommandBar({
       >
         Đi tới lệnh, đơn, vật tư…
         <span className="ml-auto flex gap-1">
-          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">⌘</kbd>
-          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">K</kbd>
+          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">
+            ⌘
+          </kbd>
+          <kbd className="rounded-[3px] border border-[var(--line)] bg-[var(--surface-card)] px-[5px] font-[family-name:var(--font-mono)] text-[10.5px]">
+            K
+          </kbd>
         </span>
       </button>
       <div className="flex items-center gap-2 text-[var(--fs-sm)] text-[var(--ink-2)]">
@@ -94,7 +101,10 @@ export function WorkLanes<T>({
   onPick: (id: string) => void
 }) {
   return (
-    <div role="tablist" className="-mb-px flex items-end gap-[2px] px-[var(--gutter)] pt-[13px]">
+    <div
+      role="tablist"
+      className="-mb-px flex items-end gap-[2px] px-[var(--gutter)] pt-[13px]"
+    >
       {lanes.map((l) => {
         const on = l.id === activeId
         return (
@@ -185,7 +195,13 @@ export function InspectPanel({
 }
 
 /** Một khối trong khay. */
-export function InspectSection({ title, children }: { title: string; children: ReactNode }) {
+export function InspectSection({
+  title,
+  children,
+}: {
+  title: string
+  children: ReactNode
+}) {
   return (
     <div className="border-b border-[var(--hair)] px-[15px] py-3">
       <h4 className="mb-[9px] text-[10.5px] font-bold tracking-[.08em] text-[var(--ink-3)] uppercase">
@@ -236,7 +252,9 @@ export function Empty({
   return (
     <div className="mx-auto max-w-[560px] px-6 py-16 text-center">
       <div className="text-[15px] font-semibold text-[var(--ink)]">{headline}</div>
-      <p className="mt-2 text-[var(--fs-sm)] leading-relaxed text-[var(--ink-2)]">{reason}</p>
+      <p className="mt-2 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
+        {reason}
+      </p>
       <div className="mt-4 flex justify-center gap-2">{next}</div>
     </div>
   )
@@ -257,6 +275,7 @@ export function ScreenHeader({
   facts,
   actions,
   children,
+  compact = false,
 }: {
   eyebrow: string
   title: ReactNode
@@ -265,15 +284,63 @@ export function ScreenHeader({
   facts?: { label: string; value: ReactNode; tone?: Tone }[]
   actions?: ReactNode
   children?: ReactNode
+  /**
+   * MỘT HÀNG — SAP List Report / Dynamics list page: tiêu đề, dữ kiện và nút
+   * cùng hàng, cao ~38px. Đo 10/09/2026 ở 1366×768: đầu trang ba tầng (nhãn,
+   * tiêu đề, dữ kiện) + hai hàng lọc đẩy bảng xuống 253px — một phần ba màn
+   * trước khi thấy dòng đầu. Trang danh sách và bàn làm việc dùng biến thể này.
+   */
+  compact?: boolean
 }) {
+  if (compact) {
+    return (
+      <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)]">
+        <div className="flex min-h-[38px] flex-wrap items-center gap-x-[14px] gap-y-1 py-1">
+          <span className="font-semibold tracking-[.09em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
+            {eyebrow}
+          </span>
+          <h1 className="flex items-center gap-[9px] text-[15px] font-semibold tracking-[-.01em]">
+            {title}
+            {status}
+          </h1>
+          {chain && <span className="flex flex-wrap items-center gap-2">{chain}</span>}
+          {facts && (
+            <span className="flex flex-wrap gap-x-[16px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+              {facts.map((f, i) => (
+                <span key={i}>
+                  {f.label}{' '}
+                  <b
+                    className={cn(
+                      'num font-semibold',
+                      f.tone === 'stop'
+                        ? 'text-[var(--stop)]'
+                        : f.tone === 'warn'
+                          ? 'text-[var(--warn)]'
+                          : 'text-[var(--ink)]',
+                    )}
+                  >
+                    {f.value}
+                  </b>
+                </span>
+              ))}
+            </span>
+          )}
+          {actions && (
+            <span className="ml-auto flex shrink-0 items-center gap-2">{actions}</span>
+          )}
+        </div>
+        {children}
+      </header>
+    )
+  }
   return (
     <header className="border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] pt-[14px]">
       <div className="flex items-start gap-[18px]">
         <div className="min-w-0 flex-1">
-          <div className="text-[var(--fs-micro)] font-semibold tracking-[.09em] text-[var(--ink-3)] uppercase">
+          <div className="font-semibold tracking-[.09em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
             {eyebrow}
           </div>
-          <h1 className="mt-[3px] flex items-center gap-[11px] text-[var(--fs-title)] font-semibold tracking-[-.015em]">
+          <h1 className="mt-[3px] flex items-center gap-[11px] font-semibold tracking-[-.015em] text-[var(--fs-title)]">
             {title}
             {status}
           </h1>
@@ -416,7 +483,7 @@ export function WorkTile({
           : 'border-[var(--line)] bg-[var(--surface-card)] hover:border-[var(--ink-3)]',
       )}
     >
-      <span className="text-[var(--fs-micro)] leading-tight font-semibold tracking-[.05em] text-[var(--ink-2)] uppercase">
+      <span className="leading-tight font-semibold tracking-[.05em] text-[var(--fs-micro)] text-[var(--ink-2)] uppercase">
         {label}
       </span>
       <span className="flex items-baseline gap-1.5">
@@ -436,22 +503,22 @@ export function WorkTile({
             ✓
           </span>
         ) : (
-        <span
-          className={cn(
-            'num text-[26px] leading-none font-bold tracking-[-.02em]',
-            t === 'stop'
-              ? 'text-[var(--stop)]'
-              : t === 'warn'
-                ? 'text-[var(--warn)]'
-                : t === 'done'
-                  ? 'text-[var(--done)]'
-                  : count === 0
-                    ? 'text-[var(--ink-3)]'
-                    : 'text-[var(--ink)]',
-          )}
-        >
-          {count}
-        </span>
+          <span
+            className={cn(
+              'num text-[26px] leading-none font-bold tracking-[-.02em]',
+              t === 'stop'
+                ? 'text-[var(--stop)]'
+                : t === 'warn'
+                  ? 'text-[var(--warn)]'
+                  : t === 'done'
+                    ? 'text-[var(--done)]'
+                    : count === 0
+                      ? 'text-[var(--ink-3)]'
+                      : 'text-[var(--ink)]',
+            )}
+          >
+            {count}
+          </span>
         )}
       </span>
       <span className="text-[10.5px] leading-snug text-[var(--ink-3)]">{hint}</span>

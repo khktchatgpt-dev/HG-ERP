@@ -33,6 +33,7 @@ import { useLocalPref } from './use-local-pref'
  */
 
 const KEY = 'hg.mua-hang.rail'
+export const DENSE_KEY = 'hg.mua-hang.dense'
 
 /**
  * HỘP THƯ Ở VỎ — chép SAP My Inbox / Dynamics work items: một cửa cho mọi
@@ -45,7 +46,7 @@ function InboxButton({ count, active }: { count: number; active: boolean }) {
       href={INBOX_HREF}
       aria-label={count > 0 ? `Hộp thư việc, ${count} việc chờ` : 'Hộp thư việc'}
       className={
-        'flex h-7 items-center gap-2 rounded-[var(--radius)] border px-[10px] text-[var(--fs-sm)] font-medium ' +
+        'flex h-7 items-center gap-2 rounded-[var(--radius)] border px-[10px] font-medium text-[var(--fs-sm)] ' +
         (active
           ? 'border-[var(--act)] bg-[var(--act-wash)] text-[var(--act-text)]'
           : 'border-[var(--line)] bg-[var(--surface-card)] text-[var(--ink-2)] hover:border-[var(--act)] hover:text-[var(--ink)]')
@@ -72,6 +73,9 @@ export function SupplyShell({
   const pathname = usePathname()
   const router = useRouter()
   const [rail, setRail] = useLocalPref(KEY, '1')
+  // Mật độ là của NGƯỜI DÙNG, không của trang: một thang cho cả module (mặc
+  // định dày như ERP). Nút Dày/Thưa ở màn danh sách và chứng từ ghi cùng khoá.
+  const [dense] = useLocalPref(DENSE_KEY, '1')
   const expanded = rail === '1'
   const toggle = () => setRail(expanded ? '0' : '1')
 
@@ -90,7 +94,15 @@ export function SupplyShell({
   const crumbs = buildCrumbs(pathname)
 
   return (
-    <div className="kit flex h-dvh overflow-hidden">
+    <div
+      className={
+        dense === '1'
+          ? 'kit kit-dense flex h-dvh overflow-hidden'
+          : 'kit flex h-dvh overflow-hidden'
+      }
+    >
+      {' '}
+      {/* prettier-ignore */}
       <NavRail
         groups={groups}
         activeHref={active}
@@ -120,12 +132,13 @@ export function SupplyShell({
           />
         }
       />
-
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar
           crumbs={crumbs}
           onSearch={() => window.dispatchEvent(new Event('hg:open-command-palette'))}
-          right={<InboxButton count={inboxCount} active={pathname.startsWith(INBOX_HREF)} />}
+          right={
+            <InboxButton count={inboxCount} active={pathname.startsWith(INBOX_HREF)} />
+          }
         />
         {/*
           `min-h-0` bắt buộc trên vùng nội dung: thiếu nó thì `ScreenFrame` của
@@ -135,7 +148,6 @@ export function SupplyShell({
         */}
         <main className="min-h-0 flex-1 overflow-auto">{children}</main>
       </div>
-
       <CommandPalette />
     </div>
   )
@@ -163,8 +175,15 @@ function buildCrumbs(pathname: string): { label: string; href?: string }[] {
    * ngay dưới thanh này; in thêm lần nữa là thừa, in id thì là rác.
    */
   const tail = pathname.slice(item.href.length + 1).split('/')[0]
-  const human = tail === 'moi' ? 'Mới' : /^[0-9a-f-]{20,}$/i.test(tail) ? null : decodeURIComponent(tail)
-  return human ? [{ label: item.label, href: item.href }, { label: human }] : [{ label: item.label, href: item.href }]
+  const human =
+    tail === 'moi'
+      ? 'Mới'
+      : /^[0-9a-f-]{20,}$/i.test(tail)
+        ? null
+        : decodeURIComponent(tail)
+  return human
+    ? [{ label: item.label, href: item.href }, { label: human }]
+    : [{ label: item.label, href: item.href }]
 }
 
 function initials(name: string): string {

@@ -56,6 +56,7 @@ import {
 import { groupPosByLsx, type LsxRef } from '@/app/(workspace)/planning/pos/pos-groups'
 import type { Po } from '@/app/(workspace)/planning/pos/po-types'
 import { useLocalPref } from '../../_shell/use-local-pref'
+import { DENSE_KEY } from '../../_shell/SupplyShell'
 import { actionsFor, bulkActionFor, type Action } from './actions'
 import {
   GROUP_LABEL,
@@ -165,7 +166,7 @@ export function DonScreen({
   const [dueDraft, setDueDraft] = useState<string | null>(null)
 
   const [colsRaw, setColsRaw] = useLocalPref('hg.mua-hang.don.cols', '')
-  const [denseRaw, setDenseRaw] = useLocalPref('hg.mua-hang.don.dense', '0')
+  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
   const cols = useMemo<ColKey[]>(() => {
     const keep = new Set(COLS.map((c) => c.key))
     const list = colsRaw ? colsRaw.split(',').filter((k): k is ColKey => keep.has(k as ColKey)) : DEFAULT_COLS // prettier-ignore
@@ -232,7 +233,8 @@ export function DonScreen({
               </span>
             )}{' '}
             {/* prettier-ignore */}
-            {x.otherTotals.map((t) =>
+            {x.otherTotals.map(
+              (t) =>
               <span key={t.currency}> · <span className="num">{t.total.toLocaleString('vi-VN')} {t.currency}</span></span>, // prettier-ignore
             )}
             {x.late > 0 && (
@@ -349,7 +351,8 @@ export function DonScreen({
    * Chỉ chạm DOM, không đổi state — nên nằm trong effect là đúng chỗ.
    */
   useEffect(() => {
-    if (openId) document.getElementById(`po-${openId}`)?.scrollIntoView({ block: 'center' })
+    if (openId)
+      document.getElementById(`po-${openId}`)?.scrollIntoView({ block: 'center' })
   }, [openId])
 
   const sheetInvalid =
@@ -364,6 +367,7 @@ export function DonScreen({
   return (
     <ScreenFrame>
       <ScreenHeader
+        compact
         eyebrow="Mua hàng"
         title="Phiếu mua"
         facts={[
@@ -385,7 +389,7 @@ export function DonScreen({
       />
 
       {/* Hàng 1: khung nhìn + tìm + ba ô chọn */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[4px]">
         <Pick
           label="Khung nhìn"
           value={namedId ?? '@custom'}
@@ -439,7 +443,7 @@ export function DonScreen({
       </div>
 
       {/* Hàng 2: ba công tắc + gom + sắp + cột + mật độ */}
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[4px]">
         <Chip
           on={view.filter.mine}
           count={counts.mine}
@@ -527,9 +531,7 @@ export function DonScreen({
         </NoticeBar>
       )}
 
-      <div
-        className={`flex min-h-0 flex-1 border-t border-[var(--line)] ${dense ? 'kit kit-dense' : ''}`}
-      >
+      <div className="flex min-h-0 flex-1 border-t border-[var(--line)]">
         {shown.length === 0 ? (
           <div className="min-w-0 flex-1 bg-[var(--surface-card)]">
             <Empty

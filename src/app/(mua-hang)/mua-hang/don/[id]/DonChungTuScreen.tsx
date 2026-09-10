@@ -80,6 +80,7 @@ import {
   type PoLineDto,
 } from '@/app/(workspace)/planning/pos/new/po-line'
 import { useLocalPref } from '../../../_shell/use-local-pref'
+import { DENSE_KEY } from '../../../_shell/SupplyShell'
 import { actionsFor, type Action as DocAction } from '../actions'
 import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
@@ -230,7 +231,7 @@ export function DonChungTuScreen(p: Props) {
   const [dot, setDot] = useState<null | { kind: 'reschedule' | 'cancel'; s: ShipmentLite }>(null) // prettier-ignore
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
-  const [denseRaw, setDenseRaw] = useLocalPref('hg.mua-hang.don.dense', '1')
+  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
   const dense = denseRaw !== '0'
 
   const template = header.template

@@ -91,7 +91,8 @@ function firstLane(
   meId: string,
   asked: string | null,
 ): SupplyTodoKind {
-  if (asked && KIND_ORDER.includes(asked as SupplyTodoKind)) return asked as SupplyTodoKind
+  if (asked && KIND_ORDER.includes(asked as SupplyTodoKind))
+    return asked as SupplyTodoKind
   const seen = scope === 'toi' ? viec.filter((v) => v.assigned_to === meId) : viec
   return KIND_ORDER.find((k) => seen.some((v) => v.kind === k)) ?? KIND_ORDER[0]
 }
@@ -239,6 +240,7 @@ export function ViecScreen({
   return (
     <ScreenFrame>
       <ScreenHeader
+        compact
         eyebrow="Mua hàng · Hộp thư việc"
         title="Chờ tôi xử lý"
         facts={[
