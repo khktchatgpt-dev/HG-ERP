@@ -41,6 +41,7 @@ import {
   SmartLinks,
   StatusBar,
   StatusTrack,
+  CellHint,
   Td,
   TextArea,
   TextInput,
@@ -60,10 +61,18 @@ import {
   FREE_LINE_TEMPLATES,
   PO_TEMPLATE_META,
   poTemplateMeta,
+  suggestOrderQty,
   type PoTemplate,
 } from '@/lib/po-template'
 import type { PoMaterial } from '@/lib/po-material.types'
-import { PO_CURRENCIES, poLineAmount } from '@/lib/po-line'
+import {
+  PO_CURRENCIES,
+  fmtMoney,
+  packCount,
+  poLineAmount,
+  roundMoney,
+  roundUpToPack,
+} from '@/lib/po-line'
 import type { ShipmentInput } from '@/lib/po-shipments'
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
 import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
@@ -79,6 +88,7 @@ import {
   lineProblem,
   lineQty2,
   newFreeLine,
+  cartonPriceSuggest,
   newLine,
   refreshLineFromMaterial,
   remapLinesForTemplate,
@@ -218,8 +228,17 @@ type Props = {
 
 const dmy = (iso: string | null | undefined) =>
   iso ? iso.slice(0, 10).split('-').reverse().join('/') : ''
-const money = (v: number, cur: string) => `${v.toLocaleString('vi-VN')} ${cur}`
+/**
+ * TIỀN theo đúng loại tiền tệ — VND không lẻ, USD đủ 2 số lẻ.
+ *
+ * Bản đầu dùng `toLocaleString('vi-VN')` trơn: USD 16.830,9 đọc thành "9 xu"
+ * trong khi số thật là 90 xu, và VND thì đẻ ra phần lẻ không tồn tại. Dùng
+ * `fmtMoney`/`roundMoney` — đúng hàm phiếu in và Excel xuất ra đang dùng, nên
+ * ba nơi không bao giờ lệch nhau một đồng.
+ */
+const money = (v: number, cur: string) => `${fmtMoney(roundMoney(v, cur), cur)} ${cur}`
 const numStr = (v: Num) => (v === '' ? '' : String(v))
+const fmtNum = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 const toNum = (s: string): Num => (s.trim() === '' ? '' : Number(s.replace(',', '.')))
 function daysBetween(a: string, b: string): number {
   const t = (s: string) => Date.parse(s.slice(0, 10) + 'T00:00:00Z')
@@ -540,6 +559,16 @@ export function DonChungTuScreen(p: Props) {
   /* ── soạn đơn: nhu cầu lệnh · dán Excel · vật tư mới · danh mục · nháp ── */
   const usedIds = useMemo(() => new Set(lines.map((l) => l.material_id)), [lines])
   const pending = pendingNeeds(needs, lines)
+  /** Đề xuất mua theo mã, từ nhu cầu của lệnh — nuôi nút "dùng N ↩" trên ô SL. */
+  const suggestByMat = useMemo(() => new Map(needs.map((n) => [n.material_id, n.suggest])), [needs]) // prettier-ignore
+  /**
+   * Trần tồn còn đặt thêm được = max_stock − tồn − đã đặt. Chỉ NHẮC, không
+   * chặn: có lệnh lớn thì vượt trần là chủ đích, người mua tự cân.
+   */
+  const capLeft = useMemo(
+    () => new Map(needs.filter((n) => n.max_stock != null && n.max_stock > 0).map((n) => [n.material_id, Math.max((n.max_stock ?? 0) - (n.on_hand ?? 0) - (n.ordered ?? 0), 0)])), // prettier-ignore
+    [needs],
+  )
   const lsxsOfPo = useMemo(
     () => (header.poType === 'lsx' ? [header.lsxId, ...header.extraLsxIds].filter(Boolean).flatMap((id) => { const l = p.lsxs.find((x) => x.id === id); return l ? [{ id: l.id, code: l.code }] : [] }) : []), // prettier-ignore
     [header.poType, header.lsxId, header.extraLsxIds, p.lsxs],
@@ -1337,22 +1366,87 @@ export function DonChungTuScreen(p: Props) {
                       </Td>
                       <Td num tone={why?.includes('SL') ? 'warn' : undefined}>
                         {editing ? (
-                          <NumInput
-                            aria-label="SL đặt"
-                            value={numStr(l.qty)}
-                            onCommit={(v) => patch(i, { qty: toNum(v) })}
-                          />
+                          <>
+                            <NumInput
+                              aria-label="SL đặt"
+                              value={numStr(l.qty)}
+                              onCommit={(v) => patch(i, { qty: toNum(v) })}
+                            />
+                            {(() => {
+                              // Ô còn TRỐNG mới mời; đã gõ số thì gợi ý là nhiễu.
+                              if (l.qty !== '') return null
+                              const short = l.qty_demand !== '' ? suggestOrderQty(Number(l.qty_demand), Number(l.qty_on_hand) || 0) : null // prettier-ignore
+                              const raw = short ?? suggestByMat.get(l.material_id) ?? null
+                              if (raw == null || raw <= 0) return null
+                              const use = roundUpToPack(raw, l.pack_size)
+                              return (
+                                <CellHint
+                                  onClick={() => patch(i, { qty: use })}
+                                  title={`${short != null ? 'SL cần cho lệnh − tồn kho' : 'Đề xuất từ nhu cầu của lệnh'}${use !== raw ? ` (${fmtNum(raw)} làm tròn lên nguyên ${l.pack_unit || 'bao'})` : ''} — bấm để dùng`} // prettier-ignore
+                                >
+                                  dùng {fmtNum(use)} ↩
+                                </CellHint>
+                              )
+                            })()}
+                          </>
                         ) : (
                           Number(l.qty || 0).toLocaleString('vi-VN')
                         )}
+                        {(() => {
+                          const cap = capLeft.get(l.material_id)
+                          if (cap == null || l.qty === '' || Number(l.qty) <= cap)
+                            return null
+                          return (
+                            <CellHint
+                              tone="warn"
+                              title="Trần tồn trừ tồn hiện có và lượng đã đặt chưa về. Vượt trần là chủ đích thì cứ đặt — chỉ nhắc, không chặn."
+                            >
+                              {' '}
+                              {/* prettier-ignore */}⚠ vượt trần · thêm được {fmtNum(cap)}
+                            </CellHint>
+                          )
+                        })()}
+                        {(() => {
+                          // Quy đổi ĐÓNG GÓI MUA — đúng phép chia nhân viên vẫn
+                          // tự bấm trong Excel (13.596 con ÷ 500 → 28 bì).
+                          const packs =
+                            l.qty !== '' ? packCount(Number(l.qty), l.pack_size) : null
+                          if (packs == null) return null
+                          return (
+                            <CellHint
+                              title={`Đóng gói mua: 1 ${l.pack_unit} = ${fmtNum(l.pack_size ?? 0)} ${l.unit}`}
+                            >
+                              {' '}
+                              {/* prettier-ignore */}
+                              {Number.isInteger(packs) ? '=' : '≈'} {fmtNum(packs)}{' '}
+                              {l.pack_unit}
+                            </CellHint>
+                          )
+                        })()}
                       </Td>
                       <Td num tone={why?.includes('giá') ? 'warn' : undefined}>
                         {editing ? (
-                          <NumInput
-                            aria-label="Đơn giá"
-                            value={numStr(l.price)}
-                            onCommit={(v) => patch(i, { price: toNum(v) })}
-                          />
+                          <>
+                            <NumInput
+                              aria-label="Đơn giá"
+                              value={numStr(l.price)}
+                              onCommit={(v) => patch(i, { price: toNum(v) })}
+                            />
+                            {(() => {
+                              // Mẫu bao bì tính theo m²: máy dựng sẵn giá thùng
+                              // để người mua đối chiếu với giá NCC chào.
+                              const goi = cartonPriceSuggest(template, l)
+                              if (goi == null || goi <= 0 || Number(l.price) === goi) return null // prettier-ignore
+                              return (
+                                <CellHint
+                                  onClick={() => patch(i, { price: goi })}
+                                  title="m²/thùng × đơn giá/m² + phí bản in — bấm để dùng"
+                                >
+                                  dùng {fmtNum(goi)} ↩
+                                </CellHint>
+                              )
+                            })()}
+                          </>
                         ) : l.price === '' ? (
                           <span className="k-t-warn">—</span>
                         ) : (
@@ -1363,7 +1457,10 @@ export function DonChungTuScreen(p: Props) {
                         {l.price === '' ? (
                           <span className="k-flag">chưa có giá</span>
                         ) : (
-                          lineAmount(template, l).toLocaleString('vi-VN')
+                          fmtMoney(
+                            roundMoney(lineAmount(template, l), header.currency),
+                            header.currency,
+                          )
                         )}
                       </Td>
                       {!editing && (
@@ -1395,7 +1492,12 @@ export function DonChungTuScreen(p: Props) {
                     .toLocaleString('vi-VN')}
                 </Td>
                 <Td />
-                <Td num>{totals.subtotal.toLocaleString('vi-VN')}</Td>
+                <Td num>
+                  {fmtMoney(
+                    roundMoney(totals.subtotal, header.currency),
+                    header.currency,
+                  )}
+                </Td>
                 {!editing && <Td />}
               </GridFoot>
             </Grid>
@@ -1458,13 +1560,57 @@ export function DonChungTuScreen(p: Props) {
                     '—'
                   )}
                 </Field>
+                {/* NCC BÁO GIÁ THEO ĐƠN VỊ NÀO — chỗ quyết định tiền của dòng
+                    nhôm/sơn: cùng một con số 62.000 mà "theo cây" với "theo kg"
+                    lệch nhau vài lần. Bản cũ cho chọn ngay trên lưới; ở đây nằm
+                    tại chi tiết dòng để lưới giữ 11 cột. */}
                 <Field label="Giá theo">
-                  {cur.price_per === 'unit2'
-                    ? `đơn vị quy đổi (${cur.unit2_label || meta.priceUnit})`
-                    : cur.price_per === 'unit'
-                      ? 'ĐVT mua'
-                      : `mặc định của mẫu`}
+                  {editing && lineQty2(template, cur) != null ? (
+                    <Pick
+                      label="Giá theo đơn vị"
+                      value={cur.price_per || 'mac-dinh'}
+                      onChange={
+                        (v) =>
+                        patch(curIdx, { price_per: (v === 'mac-dinh' ? '' : v) as Line['price_per'] }) // prettier-ignore
+                      }
+                      options={[
+                        { value: 'mac-dinh', label: `Mặc định của mẫu ${meta.label.toLowerCase()}` }, // prettier-ignore
+                        { value: 'unit', label: `Theo ĐVT mua (${cur.unit || 'đvt'})` },
+                        { value: 'unit2', label: `Theo đơn vị quy đổi (${cur.unit2_label || meta.priceUnit})` }, // prettier-ignore
+                      ]}
+                    />
+                  ) : cur.price_per === 'unit2' ? (
+                    `đơn vị quy đổi (${cur.unit2_label || meta.priceUnit})`
+                  ) : cur.price_per === 'unit' ? (
+                    'ĐVT mua'
+                  ) : (
+                    'mặc định của mẫu'
+                  )}
                 </Field>
+                {/* Giá ở đơn vị CÒN LẠI — số để so với báo giá của NCC, không
+                    dùng để tính tiền. Chỉ dựng khi đủ SL, giá và hệ số quy đổi. */}
+                {(() => {
+                  const q2 = lineQty2(template, cur)
+                  const sl = cur.qty === '' ? 0 : Number(cur.qty)
+                  const gia = cur.price === '' ? 0 : Number(cur.price)
+                  if (q2 == null || q2 <= 0 || sl <= 0 || gia <= 0) return null
+                  const theoUnit2 = cur.price_per === 'unit2'
+                  const quy = theoUnit2 ? (gia * q2) / sl : (gia * sl) / q2
+                  const nhan = theoUnit2 ? cur.unit || 'đvt' : cur.unit2_label || meta.priceUnit // prettier-ignore
+                  return (
+                    <Field label="Tương đương">
+                      <span
+                        className="num"
+                        title="Số để đối chiếu báo giá của NCC — không dùng để tính tiền"
+                      >
+                        {' '}
+                        {/* prettier-ignore */}≈{' '}
+                        {fmtMoney(roundMoney(quy, header.currency), header.currency)} /{' '}
+                        {nhan}
+                      </span>
+                    </Field>
+                  )
+                })()}
                 <Field label="Thành tiền">
                   <b className="num">
                     {cur.price === ''
@@ -1504,6 +1650,14 @@ export function DonChungTuScreen(p: Props) {
                         cur.weight_per_unit !== '' && cur.catalog_kg_unit == null &&
                         <GridBtn onClick={() => void saveToCatalog(cur.material_id, 'kgunit', Number(cur.weight_per_unit))}>Lưu kg/đv vào danh mục</GridBtn> // prettier-ignore
                       }
+                      {cur.spec.trim() !== '' && (
+                        <GridBtn
+                          title="Ghi quy cách đang gõ vào hồ sơ vật tư — lần đặt sau tự điền"
+                          onClick={() => void saveToCatalog(cur.material_id, 'spec', cur.spec.trim())} // prettier-ignore
+                        >
+                          Lưu quy cách vào danh mục
+                        </GridBtn>
+                      )}
                     </span>
                   </Field>
                 </FieldGroup>

@@ -779,6 +779,39 @@ export function Td({
  * cột câm với trình đọc màn hình, và người dùng ERP đi bằng bàn phím rất
  * nhiều. Nhãn phải nói chọn DÒNG NÀO, không phải "chọn".
  */
+/**
+ * DÒNG GỢI Ý DƯỚI Ô LƯỚI — "dùng 1.400 ↩", "≈ 27,2 bì", "⚠ vượt trần".
+ *
+ * Chỗ duy nhất trong ERP mà một con số MÁY TÍNH RA được phép nằm cạnh ô người
+ * gõ: nó không tự điền, chỉ mời bấm. Bản cũ có ba dòng này dưới ô SL đặt và là
+ * thứ người soạn dùng nhiều nhất (đỡ bấm máy tính); kit mới thiếu nên màn mới
+ * bắt gõ tay lại từ đầu.
+ */
+export function CellHint({
+  tone = 'neutral',
+  title,
+  onClick,
+  children,
+}: {
+  tone?: 'neutral' | 'warn'
+  /** Nói RÕ số này từ đâu ra — số không kiểm được thì không ai bấm. */
+  title?: string
+  /** Có = bấm để dùng số đó. */
+  onClick?: () => void
+  children: ReactNode
+}) {
+  const cls = cx('k-cellhint', tone === 'warn' && 'k-cellhint-w')
+  return onClick ? (
+    <button type="button" className={cx(cls, 'k-cellhint-b')} title={title} onClick={onClick}>
+      {children}
+    </button>
+  ) : (
+    <div className={cls} title={title}>
+      {children}
+    </div>
+  )
+}
+
 export function GridCheck({
   checked,
   onChange,

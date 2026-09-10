@@ -367,6 +367,10 @@ export function NumInput({
         if (draft != null) onCommit(draft)
         setDraft(null)
       }}
+      // Lăn chuột trên ô số đang focus sẽ ĐỔI SỐ trong mọi trình duyệt. Nhả
+      // focus rồi để trang cuộn như thường — không preventDefault, kẻo người
+      // dùng tưởng trang treo.
+      onWheel={(e) => (e.target as HTMLInputElement).blur()}
       className={cn(
         'num h-[var(--ctl-h)] w-full rounded-[var(--radius-sm)] border border-[var(--line)]',
         'bg-[var(--surface-card)] px-2 text-[var(--fs-num-sm)]',
