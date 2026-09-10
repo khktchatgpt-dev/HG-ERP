@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { optimizeCut, planCut } from './optimize'
-import { DEFAULT_CUT_PARAMS, type CutItem, type CutParams } from './types'
+import { DEFAULT_CUT_PARAMS, planTotals, type CutItem, type CutParams } from './types'
 
 const P = (over: Partial<CutParams> = {}): CutParams => ({
   ...DEFAULT_CUT_PARAMS,
@@ -171,17 +171,21 @@ describe('planCut — từ lưới nhập', () => {
     part_name: string,
     length_mm: number | '',
     qty: number | '',
+    spec = '',
   ) => ({
     key,
     part_name,
     length_mm,
     qty,
+    spec,
     note: '',
   })
+  const one = (r: ReturnType<typeof planCut>) => r.groups[0].result
 
   it('dòng thiếu dữ liệu bị liệt kê, dòng trống hoàn toàn thì lặng lẽ bỏ', () => {
     const r = planCut({
       stock_length_mm: 6000,
+      stock_by_spec: {},
       lines: [
         line(1, '', '', ''),
         line(2, 'Chân', '', 2),
@@ -193,23 +197,50 @@ describe('planCut — từ lưới nhập', () => {
       { key: 2, reason: 'Thiếu chiều dài cắt' },
       { key: 3, reason: 'Thiếu số lượng' },
     ])
-    expect(r.result.pieces_total).toBe(1)
-    expect(r.result.bars).toBe(1)
+    expect(one(r).pieces_total).toBe(1)
+    expect(one(r).bars).toBe(1)
   })
 
   it('cây tiêu chuẩn từ đầu phiếu', () => {
     const r = planCut({
       stock_length_mm: 5900,
+      stock_by_spec: {},
       lines: [line(1, 'A', 2950, 2), line(2, 'B', 1000, 1)],
     })
-    expect(r.result.stock_length_mm).toBe(5900)
-    expect(r.result.bars).toBe(2)
+    expect(one(r).stock_length_mm).toBe(5900)
+    expect(one(r).bars).toBe(2)
   })
 
-  it('không có dòng nào → 0 cây, không lỗi', () => {
-    const r = planCut({ stock_length_mm: 6000, lines: [] })
-    expect(r.result.bars).toBe(0)
-    expect(r.result.errors).toEqual([])
+  it('không có dòng nào → không nhóm, tổng 0 cây', () => {
+    const r = planCut({ stock_length_mm: 6000, stock_by_spec: {}, lines: [] })
+    expect(r.groups).toEqual([])
+    expect(planTotals(r)).toMatchObject({ bars: 0, groups: 0, errors: 0 })
+  })
+
+  it('nhiều quy cách → mỗi quy cách một bài toán, cây riêng, tổng cộng lại', () => {
+    const r = planCut({
+      stock_length_mm: 6000,
+      stock_by_spec: { 'sắt hộp 25×25×1,2': 12000 },
+      lines: [
+        line(1, 'Chân sau', 1390, 8, 'Nhôm hộp 20×40×1,2'),
+        line(2, 'Chân trước', 390, 8, 'nhôm  hộp 20×40×1,2'), // cùng nhóm, khác cách gõ
+        line(3, 'Giằng', 2950, 4, 'Sắt hộp 25×25×1,2'),
+        line(4, 'Tay', 1000, 2), // chưa ghi quy cách → nhóm riêng
+      ],
+    })
+    expect(r.groups.map((g) => [g.key, g.stock_length_mm, g.lines])).toEqual([
+      ['nhôm hộp 20×40×1,2', 6000, 2],
+      ['sắt hộp 25×25×1,2', 12000, 1],
+      ['', 6000, 1],
+    ])
+    expect(r.groups[0].spec).toBe('Nhôm hộp 20×40×1,2') // nhãn theo dòng gặp đầu
+    // Nhôm: 8×1390 + 8×390 = 14240 → 3 cây 6 m; Sắt: 4×2950 = 11800 → 1 cây 12 m; Tay: 1 cây.
+    expect(r.groups.map((g) => g.result.bars)).toEqual([3, 1, 1])
+    const t = planTotals(r)
+    expect(t.bars).toBe(5)
+    expect(t.groups).toBe(3)
+    expect(t.pieces_total).toBe(22)
+    expect(t.material_mm).toBe(3 * 6000 + 12000 + 6000)
   })
 
   it('hết ngân sách SHP thì FFD xếp nốt — vẫn đủ mọi chi tiết, không treo', () => {
@@ -220,15 +251,18 @@ describe('planCut — từ lưới nhập', () => {
       line(i + 1, `CT${i}`, 100 + ((i * 7.5) % 2500), 1 + (i % 4)),
     )
     const t0 = Date.now()
-    const r = planCut({ stock_length_mm: 6000, lines }, { shp_budget_ms: 100 })
+    const r = planCut(
+      { stock_length_mm: 6000, stock_by_spec: {}, lines },
+      { shp_budget_ms: 100 },
+    )
     expect(Date.now() - t0).toBeLessThan(5000)
-    expect(r.result.errors).toEqual([])
-    for (const it of r.result.items) expect(it.planned).toBe(it.required)
-    for (const p of r.result.patterns) expect(p.remnant_mm).toBeGreaterThanOrEqual(0)
+    expect(one(r).errors).toEqual([])
+    for (const it of one(r).items) expect(it.planned).toBe(it.required)
+    for (const p of one(r).patterns) expect(p.remnant_mm).toBeGreaterThanOrEqual(0)
     const totalMm = lines.reduce(
       (a, l) => a + (l.length_mm as number) * (l.qty as number),
       0,
     )
-    expect(r.result.bars).toBeGreaterThanOrEqual(Math.ceil(totalMm / 6000))
+    expect(one(r).bars).toBeGreaterThanOrEqual(Math.ceil(totalMm / 6000))
   })
 })

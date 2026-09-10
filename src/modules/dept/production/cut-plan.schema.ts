@@ -14,14 +14,24 @@ export const cutLineSchema = z.object({
   part_name: z.string().max(200).default(''),
   length_mm: numOrBlank,
   qty: intOrBlank,
+  spec: z.string().max(200).default(''),
   note: z.string().max(500).default(''),
 })
 
 export const cutPlanDocSchema = z.object({
   title: z.string().max(200).default(''),
   item: z.string().max(200).default(''),
-  spec: z.string().max(200).default(''),
   stock_length_mm: z.number().positive().max(100_000),
+  /** Cây tiêu chuẩn riêng theo quy cách, khoá là `specKey`. */
+  stock_by_spec: z
+    .record(z.string().max(200), z.number().positive().max(100_000))
+    .default({}),
   lines: z.array(cutLineSchema).max(5000),
+})
+
+/** Nạp định mức từ hồ sơ SP: mã SP + số lượng sản phẩm của đợt. */
+export const cutPlanFromProductQuerySchema = z.object({
+  product_id: z.string().uuid(),
+  qty: z.coerce.number().int().min(1).max(1_000_000).default(1),
 })
 export type CutPlanDocInput = z.infer<typeof cutPlanDocSchema>

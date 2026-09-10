@@ -79,6 +79,7 @@ const HEADER_RULES: [RegExp, Field][] = [
   [/tong (chieu )?dai|tong dai/, 'skip'],
   [/chieu dai|dai cat|^dai|length|^l$|\(mm\)/, 'length_mm'],
   [/so luong|^sl$|^sl |qty|quantity|so cai/, 'qty'],
+  [/quy cach|^spec|vat lieu|material|loai cay|profile|tiet dien/, 'spec'],
   [/ghi chu|note|remark/, 'note'],
 ]
 
@@ -161,7 +162,13 @@ export function parseCutPaste(text: string): CutPasteResult {
   const skipped: CutPasteResult['skipped'] = []
   body.forEach((r, i) => {
     const lineNo = i + 1 + offset
-    const row: Omit<CutLine, 'key'> = { part_name: '', length_mm: '', qty: '', note: '' }
+    const row: Omit<CutLine, 'key'> = {
+      part_name: '',
+      length_mm: '',
+      qty: '',
+      spec: '',
+      note: '',
+    }
     fields.forEach((f, c) => {
       const v = r[c] ?? ''
       if (f === 'skip' || v === '') return
@@ -206,7 +213,14 @@ export function applyPasteAt(
   matrix.forEach((r, ri) => {
     const rowIdx = startRow + ri
     while (out.length <= rowIdx) {
-      out.push({ key: nextKey(), part_name: '', length_mm: '', qty: '', note: '' })
+      out.push({
+        key: nextKey(),
+        part_name: '',
+        length_mm: '',
+        qty: '',
+        spec: '',
+        note: '',
+      })
       added++
     }
     r.forEach((v, ci) => {

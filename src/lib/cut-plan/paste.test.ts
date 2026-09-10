@@ -69,9 +69,22 @@ describe('parseCutPaste — có dòng tiêu đề', () => {
       'note',
     ])
     expect(r.rows).toEqual([
-      { part_name: 'Chân sau', length_mm: 1390, qty: 4, note: 'uốn' },
-      { part_name: 'Chân trước', length_mm: 390, qty: 4, note: '' },
+      { part_name: 'Chân sau', length_mm: 1390, qty: 4, spec: '', note: 'uốn' },
+      { part_name: 'Chân trước', length_mm: 390, qty: 4, spec: '', note: '' },
     ])
+  })
+
+  it('cột "Quy cách" / "Vật liệu" theo tiêu đề → spec của dòng', () => {
+    const r = parseCutPaste(
+      'Tên\tDài\tSL\tQuy cách\nChân\t1390\t4\tNhôm hộp 20×40\nGiằng\t2950\t2\tSắt hộp 25×25',
+    )
+    expect(r.mapped.map((m) => m.field)).toEqual([
+      'part_name',
+      'length_mm',
+      'qty',
+      'spec',
+    ])
+    expect(r.rows.map((x) => x.spec)).toEqual(['Nhôm hộp 20×40', 'Sắt hộp 25×25'])
   })
 
   it('tiêu đề tiếng Anh', () => {
@@ -153,8 +166,14 @@ describe('applyPasteAt — dán tại ô đang đứng', () => {
   })
 
   it('cột vượt quá lưới bị bỏ, không lỗi', () => {
-    const r = applyPasteAt([blankLine(1)], 0, 'qty', [['4', 'ghi chú', 'thừa']], nextKey)
-    expect(r.lines[0]).toMatchObject({ qty: 4, note: 'ghi chú' })
-    expect(r.cells).toBe(2)
+    const r = applyPasteAt(
+      [blankLine(1)],
+      0,
+      'qty',
+      [['4', 'Nhôm hộp 20×40', 'ghi chú', 'thừa']],
+      nextKey,
+    )
+    expect(r.lines[0]).toMatchObject({ qty: 4, spec: 'Nhôm hộp 20×40', note: 'ghi chú' })
+    expect(r.cells).toBe(3)
   })
 })

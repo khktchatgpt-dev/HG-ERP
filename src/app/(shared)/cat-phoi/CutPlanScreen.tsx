@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Calculator, FileSpreadsheet } from 'lucide-react'
+import { Calculator, FileSpreadsheet, PackageOpen } from 'lucide-react'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
 import { Badge } from '@/components/Badge'
@@ -11,19 +11,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/shadcn/ca
 import { useToast } from '@/components/ui/Toast'
 import { ApiError, apiErrorText } from '@/lib/api'
 import { planCut } from '@/lib/cut-plan/optimize'
-import { CUT_PLAN_STORAGE_KEY } from '@/lib/cut-plan/storage'
+import { CUT_PLAN_STORAGE_KEY, CUT_PLAN_STORAGE_KEY_V2 } from '@/lib/cut-plan/storage'
 import {
   DEFAULT_STOCK_LENGTH_MM,
   blankLine,
   isBlankLine,
   lineHasData,
+  planTotals,
+  specKey,
   type CutLine,
   type CutPlanDoc,
   type CutPlanResult,
 } from '@/lib/cut-plan/types'
+import { CutBomDialog } from './CutBomDialog'
 import { CutLinesGrid } from './CutLinesGrid'
 import { CutPasteDialog, type PasteMode } from './CutPasteDialog'
 import { CutResults } from './CutResults'
+import { CutSpecTable } from './CutSpecTable'
 import { useVnNumber } from './vn-number'
 
 /**
@@ -45,9 +49,38 @@ function freshDoc(): CutPlanDoc {
   return {
     title: '',
     item: '',
-    spec: '',
     stock_length_mm: DEFAULT_STOCK_LENGTH_MM,
+    stock_by_spec: {},
     lines: Array.from({ length: 5 }, () => blankLine(nextKey())),
+  }
+}
+
+/** Bản nháp đã lưu — v3 (quy cách theo dòng) hoặc v2 (quy cách ở đầu phiếu). */
+type SavedDoc = Partial<CutPlanDoc> & { spec?: string; lines?: Partial<CutLine>[] }
+
+function readSavedDoc(): CutPlanDoc | null {
+  const v3 = localStorage.getItem(CUT_PLAN_STORAGE_KEY)
+  const raw = v3 ?? localStorage.getItem(CUT_PLAN_STORAGE_KEY_V2)
+  if (!raw) return null
+  const saved = JSON.parse(raw) as SavedDoc
+  if (!Array.isArray(saved.lines) || saved.lines.length === 0) return null
+  const legacySpec = v3 ? '' : (saved.spec ?? '')
+  const lines = saved.lines.map((l) => ({
+    ...blankLine(nextKey()),
+    ...l,
+    qty: intQty(l.qty ?? ''),
+    spec: l.spec ?? legacySpec,
+    key: nextKey(),
+  }))
+  return {
+    title: saved.title ?? '',
+    item: saved.item ?? '',
+    stock_length_mm: saved.stock_length_mm || DEFAULT_STOCK_LENGTH_MM,
+    stock_by_spec:
+      saved.stock_by_spec && typeof saved.stock_by_spec === 'object'
+        ? saved.stock_by_spec
+        : {},
+    lines,
   }
 }
 
@@ -57,7 +90,11 @@ function freshDoc(): CutPlanDoc {
  * quả đọc tên trực tiếp từ lưới), nên không được bật nhãn "tính lại".
  */
 const sigOf = (d: CutPlanDoc) =>
-  JSON.stringify([d.stock_length_mm, d.lines.map((l) => [l.key, l.length_mm, l.qty])])
+  JSON.stringify([
+    d.stock_length_mm,
+    d.stock_by_spec,
+    d.lines.map((l) => [l.key, l.length_mm, l.qty, specKey(l.spec)]),
+  ])
 
 /** SL trong bản nháp cũ (trước khi SL bị ép nguyên) có thể là 2,5 → làm tròn. */
 const intQty = (q: number | ''): number | '' =>
@@ -71,32 +108,16 @@ export function CutPlanScreen() {
   const [computedSig, setComputedSig] = useState('')
   const [busy, setBusy] = useState(false)
   const [pasteOpen, setPasteOpen] = useState(false)
+  const [bomOpen, setBomOpen] = useState(false)
   const loaded = useRef(false)
 
   // ── localStorage: nạp một lần sau khi mount, lưu mỗi khi đổi ─────────────
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(CUT_PLAN_STORAGE_KEY)
-      if (raw) {
-        const saved = JSON.parse(raw) as Partial<CutPlanDoc>
-        if (Array.isArray(saved.lines) && saved.lines.length) {
-          const lines = saved.lines.map((l) => ({
-            ...blankLine(nextKey()),
-            ...l,
-            qty: intQty(l.qty ?? ''),
-            key: nextKey(),
-          }))
-          // Đồng bộ state với localStorage bên ngoài — ngoại lệ hợp lệ của luật.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setDoc({
-            title: saved.title ?? '',
-            item: saved.item ?? '',
-            spec: saved.spec ?? '',
-            stock_length_mm: saved.stock_length_mm || DEFAULT_STOCK_LENGTH_MM,
-            lines,
-          })
-        }
-      }
+      const saved = readSavedDoc()
+      // Đồng bộ state với localStorage bên ngoài — ngoại lệ hợp lệ của luật.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (saved) setDoc(saved)
     } catch {
       // dữ liệu hỏng → dùng form trống
     }
@@ -147,7 +168,8 @@ export function CutPlanScreen() {
     setTimeout(() => {
       try {
         const r = planCut(doc)
-        if (r.result.pieces_total === 0 && r.result.errors.length === 0) {
+        const t = planTotals(r)
+        if (t.pieces_total === 0 && t.errors === 0) {
           setPlan(null)
           toast.error(
             'Chưa có chi tiết nào để tính',
@@ -160,10 +182,10 @@ export function CutPlanScreen() {
         setPlan(r)
         setComputedSig(sig)
         toast.success(
-          `${r.result.bars} cây · hao hụt ${r.result.waste_pct.toLocaleString('vi-VN')}%`,
-          r.result.errors.length > 0
-            ? `${r.result.errors.length} dòng không xếp được — xem cảnh báo bên dưới.`
-            : `${r.result.pieces_total} chi tiết đã bố trí.`,
+          `${t.bars} cây${t.groups > 1 ? ` · ${t.groups} quy cách` : ''} · hao hụt ${t.waste_pct.toLocaleString('vi-VN')}%`,
+          t.errors > 0
+            ? `${t.errors} dòng không xếp được — xem cảnh báo bên dưới.`
+            : `${t.pieces_total} chi tiết đã bố trí.`,
         )
       } finally {
         setBusy(false)
@@ -171,16 +193,35 @@ export function CutPlanScreen() {
     }, 0)
   }
 
-  function applyRows(rows: Omit<CutLine, 'key'>[], mode: PasteMode) {
+  function applyRows(
+    rows: Omit<CutLine, 'key'>[],
+    mode: PasteMode,
+    meta?: { item: string; title: string; stockBySpec: Record<string, number> },
+  ) {
     const fresh = rows.map((r) => ({ ...r, key: nextKey() }))
     setDoc((d) => ({
       ...d,
+      // Đầu phiếu: nạp từ hồ sơ SP thì điền mã hàng / tên đợt nếu đang trống.
+      item: meta && !d.item ? meta.item : d.item,
+      title: meta && !d.title ? meta.title : d.title,
+      // Cây BOM gợi ý chỉ điền cho quy cách CHƯA có cây riêng — không ghi đè
+      // con số người dùng đã chỉnh.
+      stock_by_spec: meta ? { ...meta.stockBySpec, ...d.stock_by_spec } : d.stock_by_spec,
       lines:
         mode === 'replace'
           ? fresh
           : [...d.lines.filter((l) => !isBlankLine(l)), ...fresh],
     }))
     setSelected(new Set())
+  }
+
+  function setStockFor(key: string, v: number | '') {
+    setDoc((d) => {
+      const next = { ...d.stock_by_spec }
+      if (v === '') delete next[key]
+      else next[key] = v
+      return { ...d, stock_by_spec: next }
+    })
   }
 
   async function exportExcel() {
@@ -238,7 +279,7 @@ export function CutPlanScreen() {
       <PageHeader
         breadcrumbs={[{ label: 'Quy cắt phôi' }]}
         title="Quy cắt phôi"
-        description="Nhập chi tiết cần cắt của một loại cây (gõ tay hoặc dán từ Excel), máy xếp sơ đồ cắt trên cây tiêu chuẩn để ít cây nhất, ít hao hụt nhất."
+        description="Nhập chi tiết cần cắt (gõ tay, dán từ Excel hoặc nạp từ hồ sơ sản phẩm), máy gom theo quy cách vật liệu và xếp sơ đồ cắt trên cây tiêu chuẩn của từng loại để ít cây nhất, ít hao hụt nhất."
         meta={
           <div className="flex flex-wrap items-center gap-2 text-sm">
             <span>
@@ -251,6 +292,9 @@ export function CutPlanScreen() {
         }
         actions={
           <>
+            <Button type="button" variant="outline" onClick={() => setBomOpen(true)}>
+              <PackageOpen aria-hidden /> Nạp từ hồ sơ SP
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -270,7 +314,7 @@ export function CutPlanScreen() {
         <CardHeader>
           <CardTitle className="t-title">Đầu phiếu</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="grid gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm">
             <span className="t-label">Tên đợt cắt</span>
             <Input
@@ -289,16 +333,11 @@ export function CutPlanScreen() {
             />
           </label>
           <label className="flex flex-col gap-1 text-sm">
-            <span className="t-label">Quy cách vật liệu</span>
-            <Input
-              value={doc.spec}
-              onChange={(e) => setDoc((d) => ({ ...d, spec: e.target.value }))}
-              placeholder="VD: Nhôm hộp 20×40×1,2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            <span className="t-label">Cây tiêu chuẩn (mm)</span>
+            <span className="t-label">Cây tiêu chuẩn mặc định (mm)</span>
             <Input {...stockBind} className="t-data text-right" />
+            <span className="text-muted-foreground text-xs">
+              Quy cách nào cây khác thì ghi riêng ở bảng quy cách bên dưới lưới.
+            </span>
           </label>
         </CardContent>
       </Card>
@@ -313,12 +352,20 @@ export function CutPlanScreen() {
         skipped={skippedMap}
       />
 
+      <CutSpecTable doc={doc} onStock={setStockFor} />
+
       {plan && <CutResults doc={doc} plan={plan} stale={stale} />}
 
       <CutPasteDialog
         open={pasteOpen}
         hasData={hasData}
         onClose={() => setPasteOpen(false)}
+        onConfirm={applyRows}
+      />
+      <CutBomDialog
+        open={bomOpen}
+        hasData={hasData}
+        onClose={() => setBomOpen(false)}
         onConfirm={applyRows}
       />
     </div>
