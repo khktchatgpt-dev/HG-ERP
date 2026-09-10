@@ -73,9 +73,10 @@ export function SupplyShell({
   const pathname = usePathname()
   const router = useRouter()
   const [rail, setRail] = useLocalPref(KEY, '1')
-  // Mật độ là của NGƯỜI DÙNG, không của trang: một thang cho cả module (mặc
-  // định dày như ERP). Nút Dày/Thưa ở màn danh sách và chứng từ ghi cùng khoá.
-  const [dense] = useLocalPref(DENSE_KEY, '1')
+  // Mật độ là của NGƯỜI DÙNG, không của trang: một thang cho cả module. Mặc
+  // định 30px như màn mẫu ở /design-lab (chủ dự án chấm bản 25px "khá nhạt",
+  // 10/09/2026); "Dày" 25px là tuỳ chọn cho người quen Excel.
+  const [dense] = useLocalPref(DENSE_KEY, '0')
   const expanded = rail === '1'
   const toggle = () => setRail(expanded ? '0' : '1')
 

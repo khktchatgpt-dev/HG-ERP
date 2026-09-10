@@ -279,7 +279,7 @@ export function DonChungTuScreen(p: Props) {
   const [headOpen, setHeadOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
-  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
+  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '0')
   const dense = denseRaw !== '0'
 
   const template = header.template
@@ -1041,19 +1041,6 @@ export function DonChungTuScreen(p: Props) {
       {/* Nút thông minh — chép Odoo. Số đếm là lời hứa: bấm ra đúng chừng ấy. */}
       {po && (
         <SmartLinks
-          trailing={
-            holder && !editing ? (
-              <HolderBar
-                inline
-                mine={holder.mine}
-                who={holder.who}
-                what={holder.what}
-                age={
-                  holder.since ? `${daysBetween(holder.since, today)} ngày` : undefined
-                }
-              />
-            ) : undefined
-          }
           items={[
             { label: 'đợt giao', count: liveShipments.length, onClick: () => goTo('dot-giao'), title: 'Kế hoạch giao NCC hẹn' }, // prettier-ignore
             { label: 'phiếu kho', count: p.warehouseDocs.length, onClick: () => goTo('kho'), title: 'Phiếu nhập / trả đã ghi vào đơn' }, // prettier-ignore
@@ -1064,9 +1051,17 @@ export function DonChungTuScreen(p: Props) {
         />
       )}
 
+      {holder && !editing && (
+        <HolderBar
+          mine={holder.mine}
+          who={holder.who}
+          what={holder.what}
+          age={holder.since ? `${daysBetween(holder.since, today)} ngày` : undefined}
+        />
+      )}
       {!editing && checks.length > 0 && (
         <Checks
-          compact
+          compact={blockers.length === 0}
           title={
             blockers.length > 0 ? 'Chưa gửi duyệt được' : 'Lưu ý trước khi gửi duyệt'
           }

@@ -1214,7 +1214,7 @@
   margin: 0;
 }
 .k-doc-compact .k-doc-no {
-  font-size: var(--fs-title);
+  font-size: 20px;
   margin: 0;
 }
 .k-doc-compact .k-doc-sub {
@@ -1223,8 +1223,16 @@
 .k-doc-compact .k-tracks {
   gap: 12px;
 }
+/* Nhãn trục nằm CÙNG HÀNG với các bước ("ĐƠN  Nháp › Chờ duyệt…"): giữ được
+   tên trục như màn mẫu mà không tốn hàng. Đo 10/09/2026: bỏ nhãn làm hai trục
+   dính thành một dải chip vô danh — chủ dự án chấm "nhạt". */
+.k-doc-compact .k-tracks > div {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
 .k-doc-compact .k-track-lab {
-  display: none;
+  margin: 0;
 }
 /* Bảng kiểm gọn: tiêu đề và các dòng cùng MỘT hàng, cuộn ngang nếu thiếu chỗ.
    Hai hàng chỉ đáng khi có lỗi CHẶN; cảnh báo suông không được ăn 50px. */

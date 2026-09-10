@@ -166,7 +166,7 @@ export function DonScreen({
   const [dueDraft, setDueDraft] = useState<string | null>(null)
 
   const [colsRaw, setColsRaw] = useLocalPref('hg.mua-hang.don.cols', '')
-  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '1')
+  const [denseRaw, setDenseRaw] = useLocalPref(DENSE_KEY, '0')
   const cols = useMemo<ColKey[]>(() => {
     const keep = new Set(COLS.map((c) => c.key))
     const list = colsRaw ? colsRaw.split(',').filter((k): k is ColKey => keep.has(k as ColKey)) : DEFAULT_COLS // prettier-ignore
