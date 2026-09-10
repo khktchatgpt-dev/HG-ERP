@@ -65,6 +65,15 @@ const PLANS: {
     done: true,
   },
   {
+    key: 'Khuôn G',
+    name: 'Một màn đa năng — cả phòng Cung ứng',
+    q: 'Cả phòng trong MỘT khung: danh sách không mất đi khi mở một tờ?',
+    href: '/design-lab/mau-mot-man',
+    must: 'Ba cột co giãn · đổi đối tượng không đổi màn · bàn làm việc là trạng thái rỗng',
+    src: 'SAP Fiori Flexible Column Layout · Odoo one-action-many-views',
+    done: true,
+  },
+  {
     key: 'Khuôn D′',
     name: 'Trang chứng từ — bản Odoo',
     q: 'Cùng tờ đó, cùng bộ tính năng — xếp theo Odoo thì gọn hơn bao nhiêu?',

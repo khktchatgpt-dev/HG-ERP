@@ -459,6 +459,8 @@ export function WorkTile({
   count,
   hint,
   href,
+  onClick,
+  on = false,
   tone = 'neutral',
   strong = false,
 }: {
@@ -466,18 +468,33 @@ export function WorkTile({
   count: number
   /** Nói rõ đếm cái gì — người dùng phải kiểm được lời hứa của con số. */
   hint: string
-  href: string
+  /**
+   * DẪN ĐI nơi khác. Loại trừ nhau với `onClick`.
+   *
+   * Trước 11/09/2026 đây là prop BẮT BUỘC và ô luôn là thẻ <a> — nghĩa là ô
+   * việc chỉ biết điều hướng, không bao giờ lọc được danh sách ngay tại chỗ.
+   * Đó chính là lý do bàn làm việc thành BỆ PHÓNG chứ không thành BÀN LÀM
+   * VIỆC: mọi ô đều bắn người dùng sang trang khác, mất bộ lọc, mất chỗ đứng.
+   */
+  href?: string
+  /** LỌC TẠI CHỖ. Dynamics workspace làm vậy: ô số là bộ lọc, không phải link. */
+  onClick?: () => void
+  /** Ô đang là bộ lọc hiện hành — chỉ có nghĩa khi dùng `onClick`. */
+  on?: boolean
   tone?: Tone
   /** Ô của CHÍNH người đang xem — nổi hơn các ô còn lại. */
   strong?: boolean
 }) {
   // Hết việc thì về màu trung tính, dù ô khai tone gì.
   const t = count === 0 ? 'neutral' : tone
+  const Box = href ? 'a' : 'button'
   return (
-    <a
-      href={href}
+    <Box
+      {...(href ? { href } : { type: 'button' as const, onClick })}
+      aria-pressed={href ? undefined : on}
       className={cn(
-        'group flex min-w-0 flex-col justify-between gap-2 rounded-[var(--radius)] border p-3 transition-colors',
+        'group flex min-w-0 flex-col justify-between gap-2 rounded-[var(--radius)] border p-3 text-left transition-colors',
+        on && 'ring-1 ring-[var(--act)]',
         strong
           ? 'border-[var(--act)] bg-[var(--act-wash)]'
           : 'border-[var(--line)] bg-[var(--surface-card)] hover:border-[var(--ink-3)]',
@@ -522,7 +539,7 @@ export function WorkTile({
         )}
       </span>
       <span className="text-[10.5px] leading-snug text-[var(--ink-3)]">{hint}</span>
-    </a>
+    </Box>
   )
 }
 
