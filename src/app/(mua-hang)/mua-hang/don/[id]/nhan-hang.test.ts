@@ -6,6 +6,7 @@ import {
   scheduleRows,
   shipmentBadge,
   shipmentEmptyHint,
+  lineShortAction,
 } from './nhan-hang'
 
 describe('batchesToShipments', () => {
@@ -96,5 +97,48 @@ describe('receiveActions', () => {
   it('gợi ý trống đổi theo bước', () => {
     expect(shipmentEmptyHint('ordered', true)).toMatch(/NCC xác nhận/)
     expect(shipmentEmptyHint('partial', false)).toMatch(/tự gõ/)
+  })
+})
+
+describe('lineShortAction — việc chốt thiếu của TỪNG dòng', () => {
+  const sent = { poStatus: 'partial', canEdit: true }
+
+  it('dòng còn thiếu trên đơn đã gửi → chốt được', () => {
+    expect(lineShortAction({ qty_open: 40, closed_short_at: null }, sent)).toEqual({
+      kind: 'close',
+    })
+  })
+
+  it('dòng ĐÃ chốt → đổi thành mở lại, không phải chốt tiếp', () => {
+    expect(
+      lineShortAction({ qty_open: 40, closed_short_at: '2026-09-01T00:00:00Z' }, sent),
+    ).toEqual({ kind: 'reopen' })
+  })
+
+  it('dòng về đủ thì không bày nút nào — nút chết còn tệ hơn không có nút', () => {
+    expect(lineShortAction({ qty_open: 0, closed_short_at: null }, sent).kind).toBe('none')
+    // Dòng dư (qty_open âm) cũng vậy.
+    expect(lineShortAction({ qty_open: -2, closed_short_at: null }, sent).kind).toBe('none')
+  })
+
+  it('đơn chưa gửi NCC: nút CÓ mặt nhưng khoá kèm lý do', () => {
+    const r = lineShortAction({ qty_open: 5, closed_short_at: null }, { poStatus: 'draft', canEdit: true }) // prettier-ignore
+    expect(r.kind).toBe('close')
+    expect(r.blocked).toMatch(/đã gửi NCC/)
+  })
+
+  it('đơn đã huỷ thì không mở lại dòng được — khớp chặn của service', () => {
+    const r = lineShortAction({ qty_open: 5, closed_short_at: '2026-09-01T00:00:00Z' }, { poStatus: 'cancelled', canEdit: true }) // prettier-ignore
+    expect(r.blocked).toMatch(/đã huỷ/)
+  })
+
+  it('không phải người phụ trách thì khoá cả hai chiều', () => {
+    const ctx = { poStatus: 'partial', canEdit: false }
+    expect(lineShortAction({ qty_open: 5, closed_short_at: null }, ctx).blocked).toMatch(/người phụ trách/) // prettier-ignore
+    expect(lineShortAction({ qty_open: 5, closed_short_at: '2026-09-01T00:00:00Z' }, ctx).blocked).toMatch(/người phụ trách/) // prettier-ignore
+  })
+
+  it('dòng không có trong sổ kho (dòng tự do) thì không có việc gì', () => {
+    expect(lineShortAction(undefined, sent).kind).toBe('none')
   })
 })

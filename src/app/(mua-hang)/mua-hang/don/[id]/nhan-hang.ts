@@ -138,6 +138,38 @@ export function shipmentEmptyHint(status: string, hasStockLines: boolean): strin
   }
 }
 
+/** Bước mà sổ kho còn ghi tiếp được — cùng tập service `closeShort` nhận. */
+const SENT = ['ordered', 'confirmed', 'in_transit', 'partial']
+
+/**
+ * VIỆC CHỐT THIẾU CỦA MỘT DÒNG — `close`, `reopen`, hay không có gì.
+ *
+ * Vì sao theo DÒNG chứ không chỉ cả đơn: một đơn 12 mã mà NCC báo hết đúng 1
+ * mã thì chốt cả đơn là nói dối sổ — 11 mã kia vẫn đang chờ về thật. Route
+ * `close-short` nhận `line_id` từ 0154, nhưng màn mới vẫn gửi `null` nên người
+ * mua chỉ có lựa chọn "được ăn cả", và KHÔNG có đường nào mở lại dòng đã chốt
+ * khi NCC đổi ý giao bù.
+ *
+ * Trả kèm `blocked` thay vì giấu nút: người dùng học vị trí nút, nút lúc có
+ * lúc không thì họ không học được.
+ */
+export function lineShortAction(
+  st: { qty_open: number; closed_short_at: string | null } | undefined,
+  ctx: { poStatus: string; canEdit: boolean },
+): { kind: 'close' | 'reopen' | 'none'; blocked?: string } {
+  if (!st) return { kind: 'none' }
+  const notOwn = ctx.canEdit ? undefined : 'Chỉ người phụ trách đơn mới làm được'
+  if (st.closed_short_at) {
+    // Mở lại là quay về hiện trạng thật nên không bắt lý do; đơn đã huỷ thì thôi.
+    return { kind: 'reopen', blocked: notOwn ?? (ctx.poStatus === 'cancelled' ? 'Đơn đã huỷ — không mở lại dòng được' : undefined) } // prettier-ignore
+  }
+  if (st.qty_open > 0.000001) {
+    return { kind: 'close', blocked: notOwn ?? (SENT.includes(ctx.poStatus) ? undefined : 'Chỉ chốt thiếu cho đơn đã gửi NCC và chưa kết thúc') } // prettier-ignore
+  }
+  // Về đủ (hoặc dư) thì không còn gì để chốt — bày nút ở đây là bày nút chết.
+  return { kind: 'none' }
+}
+
 /**
  * NÚT CỦA TAB NHẬN HÀNG — bày đủ, khoá kèm lý do (Dynamics Action Pane).
  * Mỗi cờ là một cặp [được không, vì sao không].
