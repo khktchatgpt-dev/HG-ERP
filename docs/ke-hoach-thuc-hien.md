@@ -15,21 +15,46 @@ Viết 11/09/2026, dựng từ [`tieu-chi-workflow-erp.md`](tieu-chi-workflow-er
 
 ---
 
-## Đợt 1 — Đóng nốt module Mua hàng · KHÔNG cần quyết gì
+## Đợt 1 — Đóng nốt module Mua hàng · ✅ XONG 11/09/2026
 
 **Mục tiêu đo được**: không còn nút nào trên màn đơn mua dẫn ngược về
 `/planning`. Người mua làm trọn một đơn trong module mới.
 
-| Việc                                                      | Đang thiếu vì                                          | Cỡ    |
-| --------------------------------------------------------- | ------------------------------------------------------ | ----- |
-| **Huỷ đơn đã gửi, bắt lý do**                             | Route `cancel` đã có, màn mới chưa gọi                 | nhỏ   |
-| **Bàn giao người phụ trách**                              | Route `reassign` đã có                                 | nhỏ   |
-| **Sửa điều khoản trên đơn đã duyệt**                      | Route `terms` đã có                                    | nhỏ   |
-| **Chốt thiếu theo TỪNG DÒNG + mở lại dòng đã chốt**       | Route `close-short` đã nhận `line_id`, màn mới gửi null | vừa   |
-| **Sửa lỗi từ chối ghi đè ghi chú** (lối mòn 2)            | Mất dữ liệu thật, đã có chip việc riêng                | nhỏ   |
+| Việc                                                | Trạng thái                    | Commit    |
+| --------------------------------------------------- | ----------------------------- | --------- |
+| **Huỷ đơn đã gửi, bắt lý do**                       | ✅ xong                       | `5b4d4b7` |
+| **Bàn giao người phụ trách**                        | ⏭ BỎ QUA — chủ dự án quyết   | —         |
+| **Sửa điều khoản trên đơn đã duyệt**                | ✅ xong                       | `5b4d4b7` |
+| **Chốt thiếu theo TỪNG DÒNG + mở lại dòng đã chốt** | ✅ xong                       | `3fc4852` + `5b4d4b7` |
+| **Sửa lỗi từ chối ghi đè ghi chú** (lối mòn 2)      | ✅ xong — `lib/po-note.ts`    | `362985e` |
 
-Bốn việc đầu đều là **nối màn vào route đã có**, không mở đường ghi mới, không
-migration. Rủi ro thấp nhất trong cả kế hoạch.
+Đúng như dự đoán, đây chỉ là **nối màn vào route đã có**: không đường ghi mới,
+không migration.
+
+**Đã chạy thật trọn vòng** trên đơn thử `PO-2026-0069` (soạn → gửi duyệt →
+duyệt → gửi NCC → chốt thiếu 1 trong 3 dòng → mở lại → huỷ đơn). Đây cũng là
+lần đầu có đơn đi quá bước "đã duyệt" trong toàn bộ CSDL.
+
+### Năm thứ chỉ lộ ra khi BẤM THỬ, test thuần không thấy
+
+Ghi lại vì đây là bài học về cách nghiệm thu, không phải danh sách lỗi vặt.
+
+1. **Sheet không khoá nút xác nhận khi thiếu lý do** — bấm được, rồi zod trả
+   400 và người dùng nhận toast "Không làm được". Đúng thứ luật kiểm mục 05 của
+   `/design-lab` cấm. Kit `SheetActions` vốn CÓ prop `disabled` kèm comment tả
+   đúng ca này; màn chỉ quên truyền. Ảnh hưởng cả Từ chối / Chốt thiếu / Ghi
+   việc đã giục / Đổi hẹn giao.
+2. **Ma trận theo dòng chỉ hiện khi đã có phiếu nhập** — tức đúng lúc cần nhất
+   (NCC báo hết một mã mà chưa về gì) thì bảng không hiện, và nút chốt-thiếu-
+   theo-dòng vô hình ở chính ca nó sinh ra để phục vụ.
+3. **`.k-note` không có `white-space`** nên vết lý do xếp lớp dồn hết về một
+   dòng. Không đặt `pre-wrap` thẳng lên nó được — nó là flex container.
+4. **Nút xác nhận nuốt cả tên vật tư** (`Chốt thiếu · ACQ0002 · Banh điện ắc
+   quy N150 GLOBE`). Nút đỏ phá huỷ mà đọc ra là tên hàng thì không còn đọc ra
+   là hành động gì → thêm `confirmLabel`.
+5. **Điều khoản của đơn thật phần lớn NULL trong DB** — màn bày ra là mặc định
+   của MẪU. Nên bấm "Lưu điều khoản" mà không gõ gì cũng chốt cứng bộ mặc định
+   vào đơn. Nhất quán với chế độ sửa đầy đủ và màn có nói ra, nhưng phải biết.
 
 **Xong đợt này thì**: module Mua hàng tự đứng được, đủ điều kiện chạy thử thật.
 
@@ -153,3 +178,46 @@ không phải đích đến.** Càng để lâu càng tốn công giữ hai bên
 ```
 
 Đợt 3 không phụ thuộc đợt 2, làm song song được. Chỉ đợt 4 là bị chặn thật.
+
+---
+
+## Trạng thái khi tạm dừng — 11/09/2026
+
+Nhánh `ui-mau`, **3 commit, chưa push**, working tree sạch, `npm run check` xanh
+(2.083 test). Từng commit đã kiểm riêng bằng worktree tạm — cả ba mốc đều
+typecheck + test xanh, không mốc nào tham chiếu thứ chưa tồn tại.
+
+```
+5b4d4b7  feat(mua hàng): ba hành động còn thiếu trên màn chứng từ đơn mua
+3fc4852  feat(mua hàng): lõi quyết định việc chốt thiếu của TỪNG dòng
+362985e  fix(mua hàng): lý do CỘNG THÊM vào ghi chú đơn, không ghi đè
+```
+
+**Dữ liệu để lại**: đơn thử `PO-2026-0069` đang ở trạng thái *Đã huỷ*, ghi chú
+nói rõ là đơn chạy thử (giống `PO-2026-0067` từ 06/09). Đơn đã gửi thì không
+xoá được, chỉ huỷ.
+
+### Làm gì tiếp — theo thứ tự
+
+1. **Đợt 2 · việc của chủ dự án** — chạy một đơn THẬT đi hết vòng đời, có phiếu
+   nhập của Kho gắn vào đơn. Chặn đợt 4. Không ai làm thay được.
+2. **Đợt 3 · bốn trang danh mục** — chạy song song được, không chờ đợt 2.
+3. **Đợt 4 · hoá đơn NCC** — chỉ bắt đầu sau đợt 2, và cần bốn câu trả lời
+   nghiệp vụ ở mục Đợt 4.
+
+### Hai quyết định vẫn đang treo
+
+- **Bàn giao người phụ trách**: chủ dự án bảo bỏ qua ngày 11/09. Route
+  `reassign` vẫn còn, chỉ là màn mới không có nút. Muốn bật lại thì cần thêm bộ
+  chọn người — không phải một dòng.
+- **Thống nhất từ vựng "từ chối"** (mục "Việc dọn vặt"): vẫn chưa chọn Hướng A
+  hay B.
+
+### Một việc dọn mới, phát sinh trong đợt này
+
+Trần **2000 ký tự** của `note` trong `poTermsPatchSchema` giờ là bẫy thật: vết
+`stampNote` xếp lớp dần nên đơn sống lâu có thể chạm trần **mà người sửa không
+gõ gì vào ô đó**. Đã chặn ở màn (đếm + khoá nút + chỉ cách gỡ), nhưng cách chữa
+đúng là tách vết máy ghi ra khỏi ghi chú người viết — cùng hướng với khối "Trao
+đổi" (`doc-notes`) đang có sẵn. Chưa làm, có chủ ý: chờ xem người dùng thật có
+chạm trần không.
