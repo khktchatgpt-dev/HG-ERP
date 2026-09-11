@@ -42,6 +42,86 @@ describe('lỗ hổng màn cũ được lấp', () => {
     ])
   })
 
+  /**
+   * `closeShort` đẩy người dùng sang "Huỷ đơn" bằng câu lỗi. Nút đó phải có
+   * thật ở đúng những bước mà service `cancel` nhận, không thì câu lỗi kia trỏ
+   * vào chỗ trống.
+   */
+  it('Huỷ đơn có mặt ở mọi bước service cancel nhận, kèm lý do và đúng route', () => {
+    for (const s of [
+      'pending_approval',
+      'approved',
+      'ordered',
+      'confirmed',
+      'in_transit',
+      'partial',
+    ] as const) {
+      // prettier-ignore
+      const c = actionsFor(s, own).find((a) => a.id === 'cancel')
+      expect(c, `bước ${s} phải có nút Huỷ đơn`).toBeTruthy()
+      expect(c!.blocked, `bước ${s} không được khoá với người phụ trách`).toBeUndefined()
+      expect(c!.needReason).toBe(true)
+      expect(c!.danger).toBe(true)
+      expect(c!.build!({ id: 'p', reason: 'NCC hết hàng', date: '' })).toEqual([
+        { path: '/api/dept/supply/pos/p/cancel', method: 'POST', body: { reason: 'NCC hết hàng' } }, // prettier-ignore
+      ])
+    }
+  })
+
+  it('nháp thì nút Huỷ có mặt nhưng KHOÁ — nháp là xoá hẳn, không huỷ', () => {
+    const c = actionsFor('draft', own).find((a) => a.id === 'cancel')!
+    expect(c.blocked).toMatch(/xoá hẳn/)
+    // Và nút đúng cho bước đó thì mở.
+    expect(
+      actionsFor('draft', own).find((a) => a.id === 'delete')!.blocked,
+    ).toBeUndefined()
+  })
+
+  it('đơn đã đóng thì không còn nút Huỷ — service cũng chặn', () => {
+    for (const s of ['received', 'cancelled'] as const) {
+      expect(actionsFor(s, own).some((a) => a.id === 'cancel')).toBe(false)
+    }
+  })
+
+  it('không phải người phụ trách thì Huỷ bị khoá, không bị giấu', () => {
+    const c = actionsFor('ordered', other).find((a) => a.id === 'cancel')!
+    expect(c.blocked).toMatch(/người khác phụ trách/)
+  })
+
+  /**
+   * Chữ trên phiếu (điều khoản, số HĐ, người ký, ghi chú) sửa được cả sau khi
+   * duyệt — đúng phạm vi `posService.updateTerms` mở. Không có nút này thì
+   * người mua phải huỷ đơn tạo lại chỉ vì NCC đổi nơi giao.
+   */
+  it('Sửa điều khoản có mặt ở mọi bước service updateTerms nhận', () => {
+    for (const s of [
+      'pending_approval',
+      'approved',
+      'ordered',
+      'confirmed',
+      'in_transit',
+      'partial',
+      'received',
+    ] as const) {
+      // prettier-ignore
+      const a = actionsFor(s, own).find((x) => x.id === 'edit_terms')
+      expect(a, `bước ${s} phải có nút Sửa điều khoản`).toBeTruthy()
+      expect(a!.blocked, `bước ${s} không được khoá với người phụ trách`).toBeUndefined()
+      // Không gọi route nào ngay — nó bật chế độ sửa hẹp tại màn.
+      expect(a!.build).toBeUndefined()
+    }
+  })
+
+  it('nháp thì Sửa điều khoản KHOÁ và chỉ sang "Sửa đơn"', () => {
+    const a = actionsFor('draft', own).find((x) => x.id === 'edit_terms')!
+    expect(a.blocked).toMatch(/Sửa đơn/)
+    expect(actionsFor('draft', own).find((x) => x.id === 'edit')!.blocked).toBeUndefined()
+  })
+
+  it('đơn đã huỷ thì không sửa điều khoản — service cũng chặn', () => {
+    expect(actionsFor('cancelled', own).some((a) => a.id === 'edit_terms')).toBe(false)
+  })
+
   it('Nhân bản có mặt ở nháp, đã duyệt, đang về, đã đóng', () => {
     for (const s of ['draft', 'approved', 'ordered', 'received', 'cancelled'] as const) {
       expect(actionsFor(s, own).some((a) => a.id === 'duplicate')).toBe(true)
@@ -59,6 +139,8 @@ describe('route — không mở đường ghi mới', () => {
       '/api/dept/supply/pos/p/decide',
       '/api/dept/supply/pos/p/advance',
       '/api/dept/supply/pos/p/reschedule',
+      // Màn cũ gọi ở `PoDetailScreen.tsx:711` — không phải đường ghi mới.
+      '/api/dept/supply/pos/p/cancel',
     ])
     for (const s of PO_STATUSES) {
       for (const a of actionsFor(s, boss)) {

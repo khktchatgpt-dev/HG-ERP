@@ -275,6 +275,16 @@ export function DonChungTuScreen(p: Props) {
   const { po, perms, me, today } = p
 
   const [editing, setEditing] = useState(p.mode !== 'view')
+  /**
+   * SỬA ĐIỀU KHOẢN — chế độ sửa HẸP cho đơn đã duyệt / đã gửi: chỉ chữ in lên
+   * phiếu (5 điều khoản + số hợp đồng + người ký + ghi chú), không đụng dòng
+   * hàng hay giá. Đi qua `PATCH …/terms`, không phải `PATCH …/pos/:id`.
+   *
+   * Dùng CHUNG đúng các ô của chế độ sửa đầy đủ chứ không dựng form thứ hai:
+   * hai form cùng ghi một bộ cột thì sớm muộn lệch nhau, và màn cũ đã trả giá
+   * đúng chỗ đó (`PoDetailScreen` có hộp thoại riêng, nhãn ô khác hẳn lưới).
+   */
+  const [termsEdit, setTermsEdit] = useState(false)
   const [header, setHeader] = useState<PoHeader>(
     () =>
     po ? headerFromPo(po, p.extraLsx.map((x) => x.id)) : (p.seedHeader ?? newHeader({ supplierId: p.seed?.supplierId, lsxId: p.seed?.lsxId, fromStock: !!p.seedCodes })), // prettier-ignore
@@ -327,7 +337,18 @@ export function DonChungTuScreen(p: Props) {
   const detailFields = useMemo(() => allFields.filter((f) => !gridFields.includes(f)), [allFields, gridFields]) // prettier-ignore
   const totals = poTotals(header, lines)
   const issues = lineIssues(template, lines, lineProblem)
+  /** Ô chữ-trên-phiếu mở ra khi sửa đầy đủ (nháp) HOẶC sửa hẹp (đơn đã gửi). */
+  const termsEditing = editing || termsEdit
   const problem = editing ? draftProblem(header, lines) : null
+  /**
+   * Ghi chú vượt trần của `poTermsPatchSchema` bao nhiêu ký tự (0 = còn trong
+   * mức). Phải đếm ở màn chứ không đợi zod: mỗi lượt từ chối / huỷ / dời hẹn
+   * `stampNote` lại xếp thêm một dòng lên đầu, nên đơn sống lâu có thể chạm
+   * trần mà người sửa không hề gõ gì vào ô này — bấm Lưu rồi mới ăn 400 thì
+   * không ai đoán ra vướng ở đâu.
+   */
+  const NOTE_MAX = 2000
+  const noteOver = Math.max(header.note.trim().length - NOTE_MAX, 0)
   const statusById = useMemo(() => new Map(p.statusLines.map((s) => [s.id, s])), [p.statusLines]) // prettier-ignore
   const checks = po ? poChecks(po, p.lines, today) : []
   const blockers = checks.filter((c) => c.level === 'stop')
@@ -422,6 +443,48 @@ export function DonChungTuScreen(p: Props) {
       setBusy(false)
     }
   }
+  /**
+   * Lưu CHỈ phần chữ trên phiếu — `PATCH …/terms`, service mở cho mọi trạng
+   * thái trừ đã huỷ. Không gửi dòng hàng, không gửi giá: chữ ký duyệt còn
+   * nguyên giá trị.
+   */
+  async function saveTerms() {
+    if (!po) return
+    if (noteOver > 0) {
+      toast.warning('Chưa lưu được', `Ghi chú dài hơn mức cho phép ${noteOver} ký tự`)
+      return
+    }
+    setBusy(true)
+    try {
+      const t = (v: string) => v.trim() || null
+      await api(`/api/dept/supply/pos/${po.id}/terms`, {
+        method: 'PATCH',
+        body: {
+          contract_no: t(header.contractNo),
+          terms_quality: t(header.terms.quality),
+          terms_delivery_place: t(header.terms.delivery_place),
+          terms_payment: t(header.terms.payment),
+          terms_invoice: t(header.terms.invoice),
+          terms_lead_time: t(header.terms.lead_time),
+          signer_role: t(header.signerRole),
+          note: t(header.note),
+        },
+      })
+      toast.success('Đã lưu điều khoản', 'Phiếu in và hồ sơ dùng bản vừa sửa')
+      setTermsEdit(false)
+      router.refresh()
+    } catch (e) {
+      toast.error('Không lưu được điều khoản', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  /** Bỏ sửa điều khoản: trả mọi ô về đúng bản đang lưu. */
+  function cancelTermsEdit() {
+    setTermsEdit(false)
+    if (po) setHeader(headerFromPo(po, p.extraLsx.map((x) => x.id))) // prettier-ignore
+  }
+
   /** Đã khác bản gốc chưa — để Huỷ hỏi lại, và để chặn rời trang mất dữ liệu. */
   const isDirty = () => baseline.current != null && draftSignature({ header, lines, shipCols }) !== baseline.current // prettier-ignore
   function askCancelEdit() {
@@ -473,6 +536,8 @@ export function DonChungTuScreen(p: Props) {
   function start(a: DocAction) {
     if (a.blocked || !po) return
     if (a.id === 'edit') return setEditing(true)
+    // Bật chế độ sửa hẹp tại chỗ — không rời trang, không gọi route nào ngay.
+    if (a.id === 'edit_terms') return setTermsEdit(true)
     if (a.id === 'open') return
     if (a.ui === 'link' && a.href) return router.push(a.href(po.id))
     if (a.ui === 'direct') return void runAction(a)
@@ -570,7 +635,20 @@ export function DonChungTuScreen(p: Props) {
   const CONFIRM_PLAIN: DocAction = { id: 'confirm', label: 'NCC xác nhận', ui: 'sheet', stakes: 'vua', consequence: `Ghi nhận ${po?.supplier_name ?? 'NCC'} đã nhận đơn. Đơn toàn dòng tự gõ nên không có đợt giao để khai.`, done: 'Đã ghi nhận NCC xác nhận', build: () => [ADV('confirmed')] } // prettier-ignore
   const TRANSIT: DocAction = { id: 'transit', label: 'Hàng đang trên đường', ui: 'sheet', stakes: 'vua', consequence: 'NCC báo đã xuất hàng. Đơn chuyển sang "Đang giao" để Kho biết mà chờ nhận — hẹn giao và số lượng không đổi.', done: 'Đã chuyển sang đang giao', build: () => [ADV('in_transit')] } // prettier-ignore
   const ACCEPT: DocAction = { id: 'accept', label: 'Nghiệm thu ngoài sổ', ui: 'sheet', stakes: 'nang', consequence: 'Đóng đơn KHÔNG qua phiếu kho — chỉ cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho. Đơn sang "Đã nhận đủ".', done: 'Đã nghiệm thu', build: () => [ADV('received')] } // prettier-ignore
-  const CLOSE_SHORT: DocAction = { id: 'close_short', label: 'Chốt phần thiếu', ui: 'sheet', stakes: 'nang', needReason: true, reasonLabel: 'Vì sao NCC không giao nữa', reasonHint: 'Ghi vào vết của đơn. Phần thiếu không còn tính là "đang đặt" — Kho và kế hoạch thấy ngay.', consequence: `${openStockLines.length} dòng còn thiếu sẽ chốt. NCC đổi ý giao bù thì mở lại được từng dòng.`, done: 'Đã chốt phần thiếu', build: ({ id, reason }) => [{ path: `/api/dept/supply/pos/${id}/close-short`, method: 'POST', body: { action: 'close', line_id: null, reason } }] } // prettier-ignore
+  /**
+   * CHỐT PHẦN THIẾU — cả đơn (`target` trống) hoặc ĐÚNG MỘT DÒNG.
+   *
+   * Route nhận `line_id` từ 0154 nhưng màn này vẫn gửi `null`, nên người mua
+   * chỉ có lựa chọn "được ăn cả": đơn 12 mã mà NCC hết đúng 1 mã thì chốt cả
+   * đơn là nói dối sổ — 11 mã kia vẫn đang chờ về thật.
+   */
+  const closeShortAct = (target?: { id: string; label: string; missing: number; unit: string }): DocAction => ({ id: 'close_short', label: target ? `Chốt thiếu · ${target.label}` : 'Chốt phần thiếu', ui: 'sheet', stakes: 'nang', needReason: true, reasonLabel: 'Vì sao NCC không giao nữa', reasonHint: 'Ghi vào vết của đơn. Phần thiếu không còn tính là "đang đặt" — Kho và kế hoạch thấy ngay.', consequence: target ? `Chốt ${fmtNum(target.missing)} ${target.unit} còn thiếu của dòng này. Các dòng khác của đơn không đổi. NCC đổi ý giao bù thì mở lại được.` : `${openStockLines.length} dòng còn thiếu sẽ chốt. NCC đổi ý giao bù thì mở lại được từng dòng.`, confirmLabel: 'Chốt phần thiếu', done: target ? 'Đã chốt thiếu dòng này' : 'Đã chốt phần thiếu', build: ({ id, reason }) => [{ path: `/api/dept/supply/pos/${id}/close-short`, method: 'POST', body: { action: 'close', line_id: target?.id ?? null, reason } }] }) // prettier-ignore
+  /**
+   * MỞ LẠI một dòng đã chốt — NCC đổi ý giao bù. Không bắt lý do: mở lại là
+   * quay về hiện trạng THẬT, không phải một quyết định cần biện minh.
+   */
+  const reopenAct = (target: { id: string; label: string }): DocAction => ({ id: 'close_short', label: `Mở lại · ${target.label}`, ui: 'sheet', stakes: 'vua', consequence: 'Dòng này chờ về trở lại: phần thiếu tính lại là "đang đặt", đơn đã "về đủ" sẽ quay về "về một phần". Chốt lại lúc nào cũng được.', confirmLabel: 'Mở lại dòng', done: 'Đã mở lại dòng', build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}/close-short`, method: 'POST', body: { action: 'reopen', line_id: target.id } }] }) // prettier-ignore
+  const CLOSE_SHORT = closeShortAct()
 
   /* ── soạn đơn: nhu cầu lệnh · dán Excel · vật tư mới · danh mục · nháp ── */
   const usedIds = useMemo(() => new Set(lines.map((l) => l.material_id)), [lines])
@@ -834,14 +912,33 @@ export function DonChungTuScreen(p: Props) {
 
       <ActionPane
         tabs={[
-          { label: 'Đơn hàng', active: editing || paneTab === 'don', onClick: () => setPaneTab('don') }, // prettier-ignore
-          { label: 'Nhận hàng', active: !editing && paneTab === 'nhan', disabled: editing || !po, title: editing ? 'Lưu hoặc huỷ sửa trước' : undefined, onClick: () => setPaneTab('nhan') }, // prettier-ignore
+          // `termsEditing` chứ không phải `editing`: đang sửa hẹp mà nhảy sang
+          // tab Nhận hàng thì ô điều khoản khuất, còn thanh trên vẫn bày "Lưu
+          // điều khoản" — không ai đoán được mình đang sửa cái gì.
+          { label: 'Đơn hàng', active: termsEditing || paneTab === 'don', onClick: () => setPaneTab('don') }, // prettier-ignore
+          { label: 'Nhận hàng', active: !termsEditing && paneTab === 'nhan', disabled: termsEditing || !po, title: termsEditing ? 'Lưu hoặc huỷ sửa trước' : undefined, onClick: () => setPaneTab('nhan') }, // prettier-ignore
           { label: 'Tài chính', disabled: true, title: 'Phân hệ Kế toán chưa mở' },
         ]}
       >
         {' '}
         {/* prettier-ignore */}
-        {editing ? (
+        {termsEdit && !editing ? (
+          /* Sửa hẹp: thanh hành động thu về đúng hai nút, để không ai tưởng
+             mình đang sửa được cả dòng hàng. */
+          <ActionGroup label="Đang sửa điều khoản">
+            <Action
+              primary
+              disabled={busy || noteOver > 0}
+              title={noteOver > 0 ? `Ghi chú dài hơn mức cho phép ${noteOver} ký tự` : undefined} // prettier-ignore
+              onClick={() => void saveTerms()}
+            >
+              Lưu điều khoản
+            </Action>
+            <Action disabled={busy} onClick={cancelTermsEdit}>
+              Huỷ
+            </Action>
+          </ActionGroup>
+        ) : editing ? (
           <>
             <ActionGroup label="Đang sửa">
               <Action
@@ -1810,15 +1907,28 @@ export function DonChungTuScreen(p: Props) {
                   onReschedule={(s) => setDot({ kind: 'reschedule', s })}
                   onCancel={(s) => setDot({ kind: 'cancel', s })}
                 />
-                {p.receiptBatches.length > 0 && (
+                {/* Bày sổ theo DÒNG từ lúc đơn rời tay mình, không đợi Kho lập
+                    phiếu đầu tiên. Bản trước gác bằng `receiptBatches.length > 0`
+                    nên đúng lúc cần nhất — NCC báo hết một mã mà chưa về gì —
+                    thì bảng không hiện, và người mua chỉ còn nút chốt CẢ ĐƠN. */}
+                {(p.receiptBatches.length > 0 || sentToSupplier) && (
                   <>
                     <div className="px-[var(--gutter)] pt-3">
-                      <h3 className="k-fgrp-h">Nhận theo đợt · sổ thực nhận của Kho</h3>
+                      <h3 className="k-fgrp-h">
+                        {p.receiptBatches.length > 0
+                          ? 'Nhận theo đợt · sổ thực nhận của Kho'
+                          : 'Theo dòng · Kho chưa lập phiếu nhập nào'}
+                      </h3>
                     </div>
                     <NhanTheoDotGrid
                       batches={p.receiptBatches}
                       lines={p.lines.flatMap((l) => (l.id ? [{ id: l.id, code: l.material_code, name: l.material_name, unit: l.material_unit, qty_ordered: l.qty_ordered }] : []))} // prettier-ignore
                       status={p.statusLines}
+                      poStatus={po?.status ?? 'draft'}
+                      canEdit={perms.canEdit}
+                      busy={busy}
+                      onCloseShort={(l) => start(closeShortAct(l))}
+                      onReopen={(l) => start(reopenAct(l))}
                     />
                   </>
                 )}
@@ -1974,8 +2084,19 @@ export function DonChungTuScreen(p: Props) {
                 <Field label="Ngày đặt">
                   <span className="num">{dmy(po?.created_at)}</span>
                 </Field>
+                {/* Số hợp đồng in lên phiếu nên nó thuộc bộ "chữ trên phiếu",
+                    sửa được cả khi đơn đã gửi — kế toán hay đòi ghi số HĐ sau. */}
                 <Field label="Số hợp đồng">
-                  <span className="num">{po?.contract_no ?? '—'}</span>
+                  {termsEdit ? (
+                    <TextInput
+                      label="Số hợp đồng"
+                      value={header.contractNo}
+                      onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
+                      mono
+                    />
+                  ) : (
+                    <span className="num">{po?.contract_no ?? '—'}</span>
+                  )}
                 </Field>
               </>
             )}
@@ -2080,11 +2201,11 @@ export function DonChungTuScreen(p: Props) {
               <Field
                 key={k}
                 label={label}
-                inherited={editing && header.terms[k] === tplTerms[k]}
+                inherited={termsEditing && header.terms[k] === tplTerms[k]}
               >
                 {' '}
                 {/* prettier-ignore */}
-                {editing ? (
+                {termsEditing ? (
                   <TextArea
                     aria-label={label}
                     rows={2}
@@ -2099,9 +2220,9 @@ export function DonChungTuScreen(p: Props) {
             ))}
             <Field
               label="Người ký"
-              inherited={editing && header.signerRole === tplSigner}
+              inherited={termsEditing && header.signerRole === tplSigner}
             >
-              {editing ? (
+              {termsEditing ? (
                 <TextInput
                   label="Người ký"
                   value={header.signerRole}
@@ -2111,7 +2232,7 @@ export function DonChungTuScreen(p: Props) {
                 (po?.signer_role ?? meta.signerRole)
               )}
             </Field>
-            {editing && (
+            {termsEditing && (
               <div
                 style={{ gridColumn: '1 / -1' }}
                 className="flex flex-wrap items-center gap-2 pt-1 text-[var(--fs-sm)] text-[var(--ink-3)]"
@@ -2134,7 +2255,7 @@ export function DonChungTuScreen(p: Props) {
           </FieldGroup>
 
           <FieldGroup title="Ghi chú đơn">
-            {editing ? (
+            {termsEditing ? (
               <div style={{ gridColumn: '1 / -1' }}>
                 <TextArea
                   value={header.note}
@@ -2142,9 +2263,15 @@ export function DonChungTuScreen(p: Props) {
                   rows={3}
                   placeholder="Ghi chú nội bộ — nhà cung cấp không thấy"
                 />
+                {noteOver > 0 && (
+                  <p className="mt-1 font-semibold text-[var(--fs-sm)] text-[var(--stop)]">
+                    Dài hơn mức cho phép {noteOver} ký tự — xoá bớt vết cũ ở cuối ghi chú
+                    rồi lưu lại.
+                  </p>
+                )}
               </div>
             ) : (
-              <div style={{ gridColumn: '1 / -1' }} className="k-note">
+              <div style={{ gridColumn: '1 / -1' }} className="k-note k-note-text">
                 {po?.note || 'Không có ghi chú.'}
               </div>
             )}
@@ -2323,7 +2450,15 @@ export function DonChungTuScreen(p: Props) {
               busy={busy}
               onCancel={() => setSheet(null)}
               onConfirm={() => void runAction(sheet.action)}
-              confirmLabel={sheet.action.label}
+              confirmLabel={sheet.action.confirmLabel ?? sheet.action.label}
+              /**
+               * `sheetInvalid` trước đây chỉ hiện DÒNG CHỮ nhắc mà không khoá
+               * nút: bấm được, rồi zod ở biên trả 400 và người dùng nhận toast
+               * "Không làm được". Đúng thứ luật kiểm của sổ thiết kế cấm —
+               * hành động bị chặn phải nói vướng gì NGAY TẠI CHỖ, không cho
+               * bấm rồi mới báo lỗi.
+               */
+              disabled={sheetInvalid}
             />
           }
         >

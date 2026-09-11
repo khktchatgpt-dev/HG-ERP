@@ -31,6 +31,7 @@ import {
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
 import {
   batchesToShipments,
+  lineShortAction,
   receiptVerdict,
   scheduleRows,
   shipmentBadge,
@@ -243,10 +244,22 @@ export function NhanTheoDotGrid({
   batches,
   lines,
   status,
+  poStatus,
+  canEdit,
+  busy,
+  onCloseShort,
+  onReopen,
 }: {
   batches: ReceiptBatch[]
   lines: { id: string; code: string; name: string; unit: string; qty_ordered: number }[]
-  status: { id: string; qty_received: number; qty_missing: number; closed_short_at: string | null }[] // prettier-ignore
+  status: { id: string; qty_received: number; qty_missing: number; qty_open: number; closed_short_at: string | null }[] // prettier-ignore
+  poStatus: string
+  canEdit: boolean
+  busy: boolean
+  /** Chốt phần thiếu của ĐÚNG dòng này (bắt lý do ở sheet của màn). */
+  onCloseShort: (line: { id: string; label: string; missing: number; unit: string }) => void // prettier-ignore
+  /** NCC đổi ý giao bù → mở lại dòng đã chốt. */
+  onReopen: (line: { id: string; label: string }) => void
 }) {
   const statusById = new Map(status.map((s) => [s.id, s]))
   // Chỉ dòng có vật tư kho mới có phiếu; dòng tự do không nằm ở đây.
@@ -268,6 +281,7 @@ export function NhanTheoDotGrid({
         <Th num>Tổng nhận</Th>
         <Th num>Còn thiếu</Th>
         <Th width={120}>Kết luận</Th>
+        <Th width={104}>Việc</Th>
       </GridHead>
       <GridBody>
         {rows.map((l) => {
@@ -301,6 +315,28 @@ export function NhanTheoDotGrid({
               </Td>
               <Td>
                 <LineStatus kind={v.kind}>{v.label}</LineStatus>
+              </Td>
+              <Td>
+                {/* Việc theo TỪNG dòng: đơn 12 mã mà NCC hết đúng 1 mã thì chốt
+                    cả đơn là nói dối sổ — 11 mã kia vẫn đang chờ về thật. */}
+                {(() => {
+                  const act = lineShortAction(statusById.get(l.id), { poStatus, canEdit }) // prettier-ignore
+                  if (act.kind === 'none') return null
+                  const label = `${l.code} · ${l.name}`
+                  return (
+                    <GridBtn
+                      disabled={busy || !!act.blocked}
+                      title={act.blocked}
+                      onClick={() =>
+                        act.kind === 'reopen'
+                          ? onReopen({ id: l.id, label })
+                          : onCloseShort({ id: l.id, label, missing: Math.max(v.missing, 0), unit: l.unit }) // prettier-ignore
+                      }
+                    >
+                      {act.kind === 'reopen' ? 'Mở lại' : 'Chốt thiếu'}
+                    </GridBtn>
+                  )
+                })()}
               </Td>
             </GridRow>
           )

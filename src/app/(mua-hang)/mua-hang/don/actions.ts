@@ -35,6 +35,8 @@ export type ActionId =
   | 'edit'
   | 'duplicate'
   | 'delete'
+  | 'cancel'
+  | 'edit_terms'
   | 'open'
   /** Tab Nhận hàng của màn chứng từ — định nghĩa tại màn, không qua actionsFor. */
   | 'confirm'
@@ -59,6 +61,14 @@ export type Action = {
   reasonLabel?: string
   reasonHint?: string
   consequence?: string
+  /**
+   * Nhãn NÚT XÁC NHẬN trong sheet, khi nó phải ngắn hơn `label`.
+   *
+   * Hành động theo dòng đặt tên dòng vào `label` để tiêu đề sheet nói rõ đang
+   * làm gì với dòng nào — nhưng nhét nguyên tên vật tư lên một cái nút đỏ thì
+   * nút không còn đọc ra là hành động gì nữa.
+   */
+  confirmLabel?: string
   done?: string
   build?: (i: { id: string; reason: string; date: string }) => ApiCall[]
   /** Chạy được hàng loạt khi mọi dòng cùng bước. */
@@ -68,6 +78,56 @@ export type Action = {
 const OPEN: Action = { id: 'open', label: 'Mở đơn đầy đủ', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}` } // prettier-ignore
 const EDIT = (blocked?: string): Action => ({ id: 'edit', label: 'Sửa đơn', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/${id}?sua=1`, blocked }) // prettier-ignore
 const DUP: Action = { id: 'duplicate', label: 'Nhân bản', ui: 'link', stakes: 'nhe', href: (id) => `/mua-hang/don/moi?tu=${id}` } // prettier-ignore
+
+/**
+ * HUỶ ĐƠN ĐÃ GỬI — hành động màn cũ CÓ (`PoDetailScreen.tsx:711`) mà màn mới
+ * KHÔNG CÓ NÚT nào, dù route `cancel` đã sẵn sàng từ lâu.
+ *
+ * Đây không phải thiếu sót thẩm mỹ: `closeShort` từ chối đơn chưa nhận được gì
+ * bằng câu *"NCC không giao gì nữa thì dùng Huỷ đơn"* — trỏ vào một cái nút
+ * không tồn tại trong module mới. Người mua đọc xong không còn đường nào đi,
+ * ngoài việc quay về `/planning`.
+ *
+ * `draft` vẫn bày nút nhưng KHOÁ, đúng lối Action Pane: nháp thì xoá hẳn
+ * (`remove`), không huỷ — nhưng người dùng phải học được vị trí của nút, và nút
+ * lúc có lúc không thì họ không học được.
+ */
+const CANCEL = (blocked?: string): Action => ({
+  id: 'cancel',
+  label: 'Huỷ đơn',
+  ui: 'sheet',
+  stakes: 'nang',
+  danger: true,
+  blocked,
+  needReason: true,
+  reasonLabel: 'Vì sao huỷ đơn',
+  reasonHint: 'Đơn đã gửi đi nên không xoá được — huỷ và ghi lại lý do. Chỉ cần sửa nội dung thì rút về nháp, đừng huỷ.', // prettier-ignore
+  consequence: 'Đơn đóng lại, phần chưa về thôi tính là "đang đặt" nên đề xuất mua sẽ giục mua lại chỗ khác. Không mở lại được — muốn mua tiếp thì nhân bản thành đơn mới.', // prettier-ignore
+  done: 'Đã huỷ đơn',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/cancel`, method: 'POST', body: { reason } },
+  ],
+})
+
+/**
+ * SỬA ĐIỀU KHOẢN — thao tác HẸP, mở cho đơn ĐÃ DUYỆT và đã gửi.
+ *
+ * Vì sao không mở lại "Sửa đơn": sau khi duyệt, giá và dòng hàng là cam kết với
+ * Giám đốc và là bản NCC đang cầm. Nhưng CHỮ TRÊN PHIẾU thì sửa thật — NCC đổi
+ * nơi giao, kế toán đòi ghi số hợp đồng, đổi người ký. Không có đường ghi lại
+ * thì người mua phải chọn giữa để phiếu in sai hoặc huỷ đơn tạo lại.
+ *
+ * Service (`posService.updateTerms`) mở cho MỌI trạng thái trừ đã huỷ — kể cả
+ * đã về đủ, vì ghi chú đối chiếu vẫn cần sửa. `ui: 'link'` chỉ để `start()` bắt
+ * lấy: nó bật CHẾ ĐỘ sửa hẹp trên chính màn này, không gọi route nào ngay.
+ */
+const EDIT_TERMS = (blocked?: string): Action => ({
+  id: 'edit_terms',
+  label: 'Sửa điều khoản',
+  ui: 'link',
+  stakes: 'nhe',
+  blocked,
+})
 
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
@@ -115,6 +175,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           done: 'Đã xoá nháp',
           build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
         },
+        EDIT_TERMS('Đơn nháp thì bấm "Sửa đơn" — sửa được cả dòng hàng lẫn điều khoản'),
+        CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,
       ]
 
@@ -167,6 +229,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
             { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'reject', reason } }, // prettier-ignore
           ],
         },
+        EDIT_TERMS(notOwn),
+        CANCEL(notOwn),
         OPEN,
       ]
 
@@ -186,7 +250,9 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         reschedule(status, notOwn),
+        EDIT_TERMS(notOwn),
         DUP,
+        CANCEL(notOwn),
         OPEN,
       ]
 
@@ -219,11 +285,13 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           },
         },
         reschedule(status, notOwn),
+        EDIT_TERMS(notOwn),
         DUP,
+        CANCEL(notOwn),
       ]
 
     case 'received':
-      return [{ ...OPEN, primary: true }, DUP]
+      return [{ ...OPEN, primary: true }, EDIT_TERMS(notOwn), DUP]
 
     case 'cancelled':
       return [
