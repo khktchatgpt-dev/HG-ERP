@@ -820,6 +820,19 @@
   gap: 6px;
 }
 
+/* Ghi chú in NGUYÊN VĂN một chuỗi của người dùng — gồm các vết `[Huỷ]`,
+   `[Từ chối]`, `[Dời hẹn giao]` mà `lib/po-note.ts` xếp lớp, mỗi vết một dòng.
+   Không giữ dấu xuống dòng thì cả lịch sử dồn thành một dòng dài, đúng cái mà
+   việc xếp lớp đang cố tránh.
+
+   ĐẶT RIÊNG, không nhét vào `.k-note`: `.k-note` là flex container và có chỗ
+   dùng với thẻ con. `white-space: pre-wrap` trên flex container làm khoảng
+   trắng giữa các thẻ con thôi co lại — nó thành flex item vô hình, chen thêm
+   khe giữa các khối. */
+.k-note-text {
+  white-space: pre-wrap;
+}
+
 /* ── 9. FactBox ──────────────────────────────────────────────────────── */
 /* Panel dán vào cạnh phải, một vạch dọc ngăn với thân — Dynamics FactBox.
    Dưới 1100px xuống dưới thân, vạch chuyển thành vạch ngang. */
