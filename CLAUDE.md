@@ -217,7 +217,7 @@ ai biết đơn đang kẹt).
   - Chi tiết lệnh sản xuất (còn theme v3): `src/components/production/LsxDetailView.tsx`
 - **Shell nằm ở layout, không ở page.** Mỗi workspace có `(<ws>)/layout.tsx` bọc `WorkspaceShell` + `(<ws>)/loading.tsx` dùng `ContentSkeleton`. Page trả nội dung trực tiếp. Sidebar tự highlight theo pathname (`NavLink` + `useLinkStatus`) — không truyền `current`.
 - **Gọi API từ client** qua `api()`/`ApiError` ở `@/lib/api` (JSON, tự redirect 401). Không `fetch` thủ công. Mutation: try/catch → `router.refresh()` → toast (`useToast`) → `TopProgressBar active={busy}`. Nút submit có `Spinner`. Form đóng + toast khi thành công.
-- **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`. Dùng skill `add-erp-page` để scaffold.
+- **Workspace mới**: bật `ready: true` trong `src/workspaces/workspaces.config.ts` + nav item; login tự redirect qua `resolveWorkspace`.
 - **Trang DÙNG CHUNG** (không thuộc phòng nào) đặt ở `src/app/(shared)/*` + thêm vào `SHARED_SECTION` của `workspaces.config.ts` để mọi sidebar đều có. Layout `(shared)` chỉ gác đăng nhập và render `WorkspaceShell` theo workspace NHÀ của người xem — người xem giữ sidebar phòng mình. Quyền SỬA vẫn do service/registry quyết + page truyền cờ `canEdit` xuống để ẩn nút. Hiện có: `/products` (hồ sơ SP — mọi phòng xem, chỉ Kỹ thuật/Bán hàng/Giám đốc sửa).
 - **Đổi chỗ route đã publish**: thêm cặp `[cũ, mới]` vào `MOVED_PREFIXES` ở `src/proxy.ts` (chạy trước gate đăng nhập) thay vì để page stub redirect — stub nằm trong layout cũ nên vẫn bị gác quyền của khu cũ.
 
@@ -270,14 +270,12 @@ workspace trượt khỏi baseline.
 
 ## Skills (`.claude/skills/`)
 
-Skill nội bộ (commit trong repo) — gọi khi hợp:
+Skill nội bộ (commit trong repo) — gọi khi hợp. (13/09/2026: đã gỡ TẠM hai skill làm UI `add-erp-page` và `frontend-design` theo yêu cầu chủ dự án — màn mới theo sổ `/design-lab`, cần lại thì `git revert`.)
 
 - `sync-types` — regen `database.types.ts` sau migration.
 - `add-module` — scaffold domain module 3 lớp + route.
 - `add-migration` — file SQL đúng chuẩn RLS + đánh số.
-- `add-erp-page` — trang workspace dùng ERP kit.
 - `check-rls` — rà RLS + Supabase security advisor.
-- `frontend-design` — hướng dẫn thiết kế UI có chủ đích (palette/typography/layout, copy), tránh mẫu rập khuôn. Nguồn: plugin `frontend-design` của claude-code (vendored).
 
 Skill ngoài (official Supabase, nguồn `.agents/skills/`, symlink vào `.claude/skills` theo máy — chạy `npx skills add supabase/agent-skills` sau khi clone):
 
