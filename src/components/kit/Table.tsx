@@ -66,7 +66,8 @@ export function THead({
       className={cn(
         '[&_th]:sticky [&_th]:top-0 [&_th]:z-[var(--z-sticky)] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--surface-raised)] [&_th]:px-[var(--pad-x)] [&_th]:py-[7px] [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:tracking-[.04em] [&_th]:whitespace-nowrap [&_th]:text-[var(--ink-2)] [&_th]:uppercase',
         // Ô góc phải nằm TRÊN cả hai lớp sticky, không thì bị ô kia phủ.
-        pinFirst && '[&_th:first-child]:left-0 [&_th:first-child]:z-[calc(var(--z-sticky)+1)]',
+        pinFirst &&
+          '[&_th:first-child]:left-0 [&_th:first-child]:z-[calc(var(--z-sticky)+1)]',
       )}
     >
       <tr>{children}</tr>
@@ -180,7 +181,7 @@ export function Cell({
   return (
     <td
       className={cn(
-        'h-[var(--row-h)] overflow-hidden border-b border-[var(--hair)] px-[var(--pad-x)] whitespace-nowrap text-ellipsis',
+        'h-[var(--row-h)] overflow-hidden border-b border-[var(--hair)] px-[var(--pad-x)] text-ellipsis whitespace-nowrap',
         num && 'num',
         grow && 'w-1/3 max-w-0',
         muted && 'text-[11.5px] text-[var(--ink-3)]',
@@ -234,7 +235,13 @@ export function TFoot({
  */
 export function FilterBar({ children }: { children: ReactNode }) {
   return (
-    <div className="z-[var(--z-bar)] flex shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
+    /*
+      `flex-wrap`: thanh lọc XUỐNG DÒNG khi hết chỗ thay vì bóp nát chip. Nó chỉ
+      thêm một hàng ở màn hẹp, còn ở màn rộng vẫn đúng một hàng như cũ — đắt hơn
+      hẳn phương án cuộn ngang, vì chip bị đẩy ra ngoài tầm nhìn là chip không ai
+      bấm, mà mỗi chip là một câu hỏi nghiệp vụ.
+    */
+    <div className="z-[var(--z-bar)] flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
       {children}
     </div>
   )
@@ -257,7 +264,13 @@ export function Chip({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        'inline-flex h-[26px] items-center gap-[6px] rounded-[13px] border px-[10px] text-[var(--fs-sm)]',
+        // `shrink-0 whitespace-nowrap`: chip là con của một hàng flex, mà flex
+        // MẶC ĐỊNH co con xuống dưới bề rộng nội dung. Thiếu hai lớp này thì ở
+        // màn hẹp chữ trong chip gãy đôi và TRÀN RA NGOÀI viền bo — chiều cao
+        // đã đóng cứng 26px nên không có chỗ cho dòng thứ hai (đo 13/09/2026 ở
+        // pane 705px: cả năm chip đều vỡ). Không co thì hàng tự xuống dòng, xem
+        // `flex-wrap` ở FilterBar.
+        'inline-flex h-[26px] shrink-0 items-center gap-[6px] rounded-[13px] border px-[10px] whitespace-nowrap text-[var(--fs-sm)]',
         on
           ? 'border-[var(--act-line)] bg-[var(--act-wash)] font-semibold text-[var(--act)]'
           : 'border-[var(--line)] bg-[var(--surface-card)] text-[var(--ink-2)] hover:border-[var(--ink-3)] hover:text-[var(--ink)]',

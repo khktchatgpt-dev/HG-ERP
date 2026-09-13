@@ -67,6 +67,8 @@ function parentColumns(input: InitUploadInput): FileParentColumns {
       return { purchase_order_id: input.parent.id }
     case 'sample':
       return { sample_id: input.parent.id }
+    case 'die':
+      return { die_id: input.parent.id }
     case 'none':
       return {}
   }
@@ -104,6 +106,13 @@ async function assertCanWriteParent(user: User, input: InitUploadInput): Promise
     if (!(await isTechnicalStaff(user))) {
       throw Forbidden('Chỉ phòng Kỹ thuật gắn ảnh mẫu showroom')
     }
+    return
+  }
+  if (input.parent.kind === 'die') {
+    // Ảnh mặt cắt khuôn (0190). Danh mục khuôn ở khu DÙNG CHUNG nên MỌI phòng
+    // XEM được — nhánh này phải gác đúng quyền SỬA, không thì rơi xuống 'any
+    // signed-in user' ở dưới và ai đăng nhập cũng thay được ảnh khuôn.
+    await assertAction(user, 'technical.die.update')
     return
   }
   if (input.parent.kind === 'product') {

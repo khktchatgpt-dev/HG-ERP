@@ -73,6 +73,8 @@ export const initUploadSchema = z
       z.object({ kind: z.literal('production_order'), id: z.uuid() }),
       z.object({ kind: z.literal('purchase_order'), id: z.uuid() }),
       z.object({ kind: z.literal('sample'), id: z.uuid() }),
+      // Ảnh mặt cắt khuôn nhôm (0190) — danh mục dùng chung ở /khuon.
+      z.object({ kind: z.literal('die'), id: z.uuid() }),
       z.object({ kind: z.literal('none') }),
     ]),
   })

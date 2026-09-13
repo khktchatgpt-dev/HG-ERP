@@ -642,6 +642,7 @@ export type Database = {
           created_at: string
           customer_id: string | null
           deleted_at: string | null
+          die_id: string | null
           doc_type: string | null
           filename: string
           finalized_at: string | null
@@ -669,6 +670,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          die_id?: string | null
           doc_type?: string | null
           filename: string
           finalized_at?: string | null
@@ -696,6 +698,7 @@ export type Database = {
           created_at?: string
           customer_id?: string | null
           deleted_at?: string | null
+          die_id?: string | null
           doc_type?: string | null
           filename?: string
           finalized_at?: string | null
@@ -729,6 +732,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "sales_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "files_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
             referencedColumns: ["id"]
           },
           {
@@ -4236,59 +4246,287 @@ export type Database = {
           },
         ]
       }
+      technical_die_events: {
+        Row: {
+          content: string | null
+          cost: number | null
+          created_at: string
+          created_by: string | null
+          die_id: string
+          event_date: string | null
+          event_type: string
+          from_holder: string | null
+          id: string
+          related_die_id: string | null
+          source: string | null
+          to_holder: string | null
+          updated_at: string
+          weight_after: number | null
+          weight_before: number | null
+        }
+        Insert: {
+          content?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          die_id: string
+          event_date?: string | null
+          event_type: string
+          from_holder?: string | null
+          id?: string
+          related_die_id?: string | null
+          source?: string | null
+          to_holder?: string | null
+          updated_at?: string
+          weight_after?: number | null
+          weight_before?: number | null
+        }
+        Update: {
+          content?: string | null
+          cost?: number | null
+          created_at?: string
+          created_by?: string | null
+          die_id?: string
+          event_date?: string | null
+          event_type?: string
+          from_holder?: string | null
+          id?: string
+          related_die_id?: string | null
+          source?: string | null
+          to_holder?: string | null
+          updated_at?: string
+          weight_after?: number | null
+          weight_before?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_die_events_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_events_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_events_related_die_id_fkey"
+            columns: ["related_die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      technical_die_materials: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          die_id: string
+          id: string
+          is_primary: boolean
+          match_source: string
+          material_id: string
+          note: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          die_id: string
+          id?: string
+          is_primary?: boolean
+          match_source?: string
+          material_id: string
+          note?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          die_id?: string
+          id?: string
+          is_primary?: boolean
+          match_source?: string
+          material_id?: string
+          note?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technical_die_materials_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_die_id_fkey"
+            columns: ["die_id"]
+            isOneToOne: false
+            referencedRelation: "technical_dies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_die_materials_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       technical_dies: {
         Row: {
+          alloy: string | null
+          bar_length_m: number | null
           code: string
           created_at: string
+          data_confidence: string
           die_price: number | null
+          duplicate_group: string | null
           effective_date: string | null
+          end_trim_mm: number | null
+          holder_name: string | null
+          holder_supplier_id: string | null
           id: string
+          image_file_id: string | null
           is_current: boolean
+          legacy_codes: string[]
+          marking: string | null
           name: string | null
           note: string | null
+          outer_diameter_mm: number | null
+          part_group: string | null
+          pcs_per_bundle: number | null
+          profile_shape: string | null
           profile_spec: string | null
+          review_note: string | null
+          rib_count: number | null
+          saw_kerf_mm: number | null
+          section_a_mm: number | null
+          section_b_mm: number | null
+          source_note: string | null
           status: string
           supplier_id: string | null
           supplier_name: string | null
+          surface_finish: string | null
           unit: string | null
           updated_at: string
+          wall_thickness_mm: number | null
           weight_per_m: number | null
+          weight_tolerance_pct: number | null
         }
         Insert: {
+          alloy?: string | null
+          bar_length_m?: number | null
           code: string
           created_at?: string
+          data_confidence?: string
           die_price?: number | null
+          duplicate_group?: string | null
           effective_date?: string | null
+          end_trim_mm?: number | null
+          holder_name?: string | null
+          holder_supplier_id?: string | null
           id?: string
+          image_file_id?: string | null
           is_current?: boolean
+          legacy_codes?: string[]
+          marking?: string | null
           name?: string | null
           note?: string | null
+          outer_diameter_mm?: number | null
+          part_group?: string | null
+          pcs_per_bundle?: number | null
+          profile_shape?: string | null
           profile_spec?: string | null
+          review_note?: string | null
+          rib_count?: number | null
+          saw_kerf_mm?: number | null
+          section_a_mm?: number | null
+          section_b_mm?: number | null
+          source_note?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
+          surface_finish?: string | null
           unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
           weight_per_m?: number | null
+          weight_tolerance_pct?: number | null
         }
         Update: {
+          alloy?: string | null
+          bar_length_m?: number | null
           code?: string
           created_at?: string
+          data_confidence?: string
           die_price?: number | null
+          duplicate_group?: string | null
           effective_date?: string | null
+          end_trim_mm?: number | null
+          holder_name?: string | null
+          holder_supplier_id?: string | null
           id?: string
+          image_file_id?: string | null
           is_current?: boolean
+          legacy_codes?: string[]
+          marking?: string | null
           name?: string | null
           note?: string | null
+          outer_diameter_mm?: number | null
+          part_group?: string | null
+          pcs_per_bundle?: number | null
+          profile_shape?: string | null
           profile_spec?: string | null
+          review_note?: string | null
+          rib_count?: number | null
+          saw_kerf_mm?: number | null
+          section_a_mm?: number | null
+          section_b_mm?: number | null
+          source_note?: string | null
           status?: string
           supplier_id?: string | null
           supplier_name?: string | null
+          surface_finish?: string | null
           unit?: string | null
           updated_at?: string
+          wall_thickness_mm?: number | null
           weight_per_m?: number | null
+          weight_tolerance_pct?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "technical_dies_holder_supplier_id_fkey"
+            columns: ["holder_supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supply_suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technical_dies_image_file_id_fkey"
+            columns: ["image_file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "technical_dies_supplier_id_fkey"
             columns: ["supplier_id"]

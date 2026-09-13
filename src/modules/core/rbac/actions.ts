@@ -120,6 +120,43 @@ export const ACTIONS: Action[] = [
     rule: perm('technical.edit'),
     rowLevel: 'Chặn nếu SP đang nằm trong báo giá/đơn/mẫu — dùng "Ngừng dùng".',
   },
+
+  /*
+   * KHUÔN NHÔM (0190) — danh mục DÙNG CHUNG ở `/khuon`.
+   *
+   * XEM mở cho mọi người đã đăng nhập, không gắn `technical.member`: Cung ứng
+   * tra để đặt hàng, Sản xuất tra để nhận dạng cây nhôm. Nhốt quyền xem vào
+   * phòng Kỹ thuật là hai phòng kia quay lại hỏi qua Zalo — đúng thứ danh mục
+   * này sinh ra để thay.
+   *
+   * SỬA thì chỉ Kỹ thuật (+ Giám đốc qua `technical.edit`), vì họ là chủ số liệu.
+   */
+  {
+    key: 'technical.die.view',
+    label: 'Xem danh mục khuôn nhôm',
+    domain: 'technical',
+    rule: role('admin', 'manager', 'employee'),
+  },
+  {
+    key: 'technical.die.create',
+    label: 'Thêm khuôn nhôm',
+    domain: 'technical',
+    rule: perm('technical.edit'),
+  },
+  {
+    key: 'technical.die.update',
+    label: 'Sửa hồ sơ khuôn nhôm',
+    domain: 'technical',
+    rule: perm('technical.edit'),
+  },
+  {
+    key: 'technical.die.remove',
+    label: 'Xoá khuôn nhôm',
+    domain: 'technical',
+    rule: perm('technical.edit'),
+    rowLevel:
+      'Chặn nếu còn dòng đơn mua / dòng định mức ghi mã này — dùng tình trạng "Đã bỏ".',
+  },
   {
     key: 'technical.product.attach_file',
     label: 'Đính tài liệu vào sản phẩm (bản vẽ / BOM / hướng dẫn)',

@@ -136,7 +136,12 @@ export const PERSONAL_SECTION: NavSection = {
 export const SHARED_SECTION: NavSection = {
   heading: 'Dùng chung',
   // Armchair — công ty làm bàn ghế ngoại thất, thư viện SP chính là ghế.
-  items: [{ href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' }],
+  items: [
+    { href: '/products', label: 'Thư viện sản phẩm', icon: 'armchair' },
+    // Khuôn nhôm: Kỹ thuật giữ, nhưng Cung ứng tra để đặt hàng và Sản xuất tra
+    // để nhận dạng cây nhôm — nên nó ở khu dùng chung, không nhốt trong /technical.
+    { href: '/khuon', label: 'Khuôn nhôm', icon: 'shapes' },
+  ],
 } as const
 
 // ── Config từng workspace ─────────────────────────────────────────────────

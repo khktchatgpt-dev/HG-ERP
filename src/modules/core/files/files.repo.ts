@@ -47,6 +47,7 @@ export type FileParentColumns = {
   production_order_id?: string | null
   purchase_order_id?: string | null
   sample_id?: string | null
+  die_id?: string | null
 }
 
 /** Cột parent cho phép list file gốc chứng từ (0016/0030) + ảnh mẫu (0061). */
