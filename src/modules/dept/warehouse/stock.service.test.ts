@@ -37,6 +37,9 @@ vi.mock('./warehouse.repo', () => ({ materialsRepo: { findById: vi.fn() } }))
 vi.mock('./warehouse.service', () => ({ isWarehouseUser: vi.fn() }))
 vi.mock('@/modules/dept/supply/supply.repo', () => ({
   RECEIVABLE: ['approved', 'ordered', 'confirmed', 'in_transit', 'partial'],
+  // Giá vốn dòng nhập lấy từ dòng đơn mua — mặc định rỗng để các ca cũ giữ
+  // nguyên hành vi (`unit_cost` NULL); ca nào cần giá thì tự mockResolvedValue.
+  poLineUnitCosts: vi.fn(async () => new Map<string, number>()),
   supplyRepo: {
     poIdsByLineIds: vi.fn(async () => []),
     listOpenPos: vi.fn(),
@@ -83,7 +86,7 @@ import { componentMaterialNeeds } from '@/modules/dept/production/components.ser
 import { lsxBomNeeds } from '@/modules/dept/supply/lsx-bom-needs.repo'
 import { materialsRepo } from './warehouse.repo'
 import { isWarehouseUser } from './warehouse.service'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { supplyRepo, poLineUnitCosts } from '@/modules/dept/supply/supply.repo'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -170,6 +173,46 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       doc_id: 'doc1',
     })
     expect(supplyRepo.refreshStatusFromReceipts).toHaveBeenCalledWith('po1')
+  })
+
+  /**
+   * GIÁ VỐN phải đi theo phiếu nhập. Thiếu nó thì giá trị tồn kho bằng 0 và
+   * công nợ tính theo phiếu nhập cũng bằng 0 — đo 11/09/2026: 139/142 movement
+   * gắn dòng PO không có giá, vì chưa nơi nào từng ghi cột này.
+   */
+  it('nhập theo PO: ghi unit_cost lấy từ dòng đơn mua', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0003')
+    vi.mocked(poLineUnitCosts).mockResolvedValue(new Map([['pl1', 52_000]]))
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1' }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].unit_cost).toBe(52_000)
+  })
+
+  /** NULL = "chưa biết giá", khác hẳn 0 = "hàng cho không". Màn công nợ đếm
+   *  "phiếu chưa có giá" dựa đúng vào phân biệt này, nên không được thay bằng 0. */
+  it('dòng đơn chưa có giá → unit_cost NULL, không phải 0', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0004')
+    vi.mocked(poLineUnitCosts).mockResolvedValue(new Map())
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].unit_cost).toBeNull()
+  })
+
+  it('mua ngoài không tra giá đơn mua — không có đơn nào để tra', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0005')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].unit_cost).toBeNull()
   })
 
   it('nhập theo PO mà dòng thiếu po_line_id → chặn', async () => {
@@ -479,8 +522,8 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
           material_name: 'Nhôm khung',
           unit: 'cây',
           group_name: null,
-        kind: null,
-        part_names: [],
+          kind: null,
+          part_names: [],
           // 2,08 m/SP ÷ 6 m mỗi cây — số đã QUY ĐỔI, không phải số thanh.
           qty_per_unit: 0.3467,
           qty_needed: 27.736,
@@ -554,8 +597,8 @@ describe('smartLsxNeeds — ưu tiên bảng chi tiết, fallback BOM (plan-lsx-
           material_name: 'x',
           unit: 'kg',
           group_name: null,
-        kind: null,
-        part_names: [],
+          kind: null,
+          part_names: [],
           qty_per_unit: 4,
           qty_needed: 12,
           basis: 'weight',

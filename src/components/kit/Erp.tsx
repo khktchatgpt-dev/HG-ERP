@@ -802,7 +802,12 @@ export function CellHint({
 }) {
   const cls = cx('k-cellhint', tone === 'warn' && 'k-cellhint-w')
   return onClick ? (
-    <button type="button" className={cx(cls, 'k-cellhint-b')} title={title} onClick={onClick}>
+    <button
+      type="button"
+      className={cx(cls, 'k-cellhint-b')}
+      title={title}
+      onClick={onClick}
+    >
       {children}
     </button>
   ) : (
@@ -965,6 +970,44 @@ export function HeadChip({
       <span>{label}</span>
       <span>{trong ? (need ? 'chưa chọn' : '—') : value}</span>
     </button>
+  )
+}
+
+/**
+ * Ô ĐẦU ĐƠN GÕ THẲNG — cùng hình dạng `HeadChip`, nhưng chứa ô nhập thật.
+ *
+ * VÌ SAO PHẢI CÓ CÁI THỨ HAI: `HeadChip` là một `<button>` — nó BÀY một giá trị
+ * và mở chỗ sửa khi bấm. Nhét ô nhập vào trong nó là **nút lồng nút**: HTML
+ * không hợp lệ và React hỏng hydration. Vấp thật 11/09/2026 khi dựng màn nhập
+ * hoá đơn NCC — `DateInput` có nút mở lịch bên trong, cả trang đổ.
+ *
+ * Dùng `HeadChip` cho giá trị KẾ THỪA (nhà cung cấp, đơn mua, tiền tệ — lấy từ
+ * chứng từ cha, bấm để đi tới). Dùng `HeadField` cho thứ người ta **gõ tại chỗ**
+ * (số hoá đơn, ngày, thuế suất). Là `<label>` nên bấm vào nhãn là con trỏ nhảy
+ * vào ô — thứ `HeadChip` không làm được.
+ */
+export function HeadField({
+  label,
+  children,
+  need = false,
+  empty = false,
+  width,
+}: {
+  label: string
+  children: ReactNode
+  /** Bắt buộc trước khi lưu — trống thì đeo viền đỏ NGAY, không đợi bấm Lưu. */
+  need?: boolean
+  /** Ô đang trống. Người gọi tự quyết vì "trống" của mỗi kiểu ô mỗi khác. */
+  empty?: boolean
+  width?: number
+}) {
+  return (
+    <label
+      className={cx('k-headchip', 'k-headfield', need && empty && 'k-headchip-need')}
+    >
+      <span>{label}</span>
+      <span style={width ? { width } : undefined}>{children}</span>
+    </label>
   )
 }
 

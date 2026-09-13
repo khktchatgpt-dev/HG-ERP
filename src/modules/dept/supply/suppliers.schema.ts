@@ -29,7 +29,14 @@ export const supplierCreateSchema = z.object({
   warehouse_address: optText(500),
   website: optText(200),
   // 4. Thanh toán
-  payment_terms: optText(100), // COD / NET30 / NET45 / NET60
+  payment_terms: optText(100), // COD / NET30 / NET45 / NET60 — chữ để IN lên phiếu
+  /**
+   * SỐ NGÀY công nợ, dạng MÁY DÙNG ĐƯỢC (0189). Tách khỏi `payment_terms` vì
+   * chữ tự do không suy ra hạn được — mà không có hạn thì không có tuổi nợ,
+   * không biết trả ai trước, không dự báo dòng tiền. 0 = trả ngay (COD),
+   * null = CHƯA KHAI (khác hẳn 0).
+   */
+  payment_net_days: z.coerce.number().int().min(0).max(365).optional().nullable(),
   currency: z.string().trim().toUpperCase().length(3).optional().nullable(),
   bank_name: optText(200),
   bank_account: optText(50),

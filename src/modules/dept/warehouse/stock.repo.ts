@@ -532,6 +532,11 @@ export async function insertMovements(
     warehouse_id: string
     po_line_id?: string | null
     production_order_id?: string | null
+    /**
+     * Giá vốn một đơn vị (0015). NULL = CHƯA BIẾT GIÁ, khác hẳn 0 = "cho không"
+     * — màn công nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
+     */
+    unit_cost?: number | null
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)

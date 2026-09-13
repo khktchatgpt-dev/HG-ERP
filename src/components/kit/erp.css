@@ -1033,6 +1033,18 @@
 .k-headchip > span + span {
   font-weight: 600;
 }
+/* Biến thể GÕ THẲNG: cao theo ô nhập bên trong. Ô nhập cũng cao --ctl-h, nên
+   giữ nguyên chiều cao cố định của chip là chữ bị cắt mất chân. */
+.k-headfield {
+  height: auto;
+  padding: 3px 4px 3px 10px;
+  align-items: center;
+  cursor: text;
+}
+.k-headfield > span + span {
+  display: inline-flex;
+  align-items: center;
+}
 /* Ô bắt buộc còn trống: viền đỏ NGAY LÚC NÀY, không đợi bấm Lưu. */
 .k-headchip-need {
   border-color: var(--stop);

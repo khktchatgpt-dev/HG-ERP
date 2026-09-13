@@ -66,6 +66,7 @@ export function PricingBoardScreen({ board }: { board: PricingBoard }) {
       return (
         l.order_code.toLowerCase().includes(needle) ||
         l.product_code.toLowerCase().includes(needle) ||
+        (l.customer_item_code?.toLowerCase().includes(needle) ?? false) ||
         l.product_name.toLowerCase().includes(needle) ||
         l.customer_name.toLowerCase().includes(needle)
       )
@@ -263,6 +264,17 @@ export function PricingBoardScreen({ board }: { board: PricingBoard }) {
                     </td>
                     <td className="px-3 py-2 align-top">
                       <div className="font-mono text-xs">{l.product_code}</div>
+                      {/*
+                        MÃ KHÁCH bày ngay dưới mã HG: file báo giá dán vào ghi mã
+                        này, nên người dán phải đối chiếu được bằng mắt. Thiếu mã
+                        thì nói THIẾU, không để trống — dòng trống trông y hệt
+                        dòng chưa kịp nhìn.
+                      */}
+                      <div className="text-muted-foreground font-mono text-xs">
+                        {l.customer_item_code ?? (
+                          <span className="text-[var(--warn)]">chưa có mã khách</span>
+                        )}
+                      </div>
                       <div className="text-muted-foreground max-w-72 truncate text-xs">
                         {l.product_name}
                       </div>
@@ -397,6 +409,8 @@ function PasteDialog({
           line_id: l.line_id,
           order_code: l.order_code,
           product_code: l.product_code,
+          // File dán vào là báo giá CỦA KHÁCH — khách ghi mã của họ.
+          customer_code: l.customer_item_code,
         })),
         parsed.rows,
       ),

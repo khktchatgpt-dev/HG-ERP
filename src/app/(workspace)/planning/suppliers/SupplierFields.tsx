@@ -54,6 +54,7 @@ export type SupplierFormValues = {
   warehouse_address?: string | null
   website?: string | null
   payment_terms?: string | null
+  payment_net_days?: number | null
   currency?: string | null
   bank_name?: string | null
   bank_account?: string | null
@@ -111,6 +112,7 @@ export function toSupplierPayload(v: SupplierFormValues): Record<string, unknown
     warehouse_address: s(v.warehouse_address),
     website: s(v.website),
     payment_terms: s(v.payment_terms),
+    payment_net_days: v.payment_net_days ?? null,
     currency: s(v.currency),
     bank_name: s(v.bank_name),
     bank_account: s(v.bank_account),
@@ -336,6 +338,27 @@ export function SupplierFields({
             options={PAYMENT_TERMS}
             listId={`${uid}-pay`}
             placeholder="COD / NET 30…"
+          />
+        </Field>
+        {/*
+          SỐ NGÀY tách khỏi dòng chữ ở trên có chủ ý: dòng chữ để IN lên phiếu,
+          số này để MÁY tính hạn. Thiếu nó thì cả 6,578 tỷ công nợ không khoản nào
+          có hạn — không có tuổi nợ, không biết trả ai trước, không dự báo được
+          dòng tiền. Để trống = chưa khai, KHÁC HẲN 0 = trả ngay.
+        */}
+        <Field
+          label="Số ngày công nợ"
+          hint="Máy tính hạn thanh toán từ số này. 0 = trả ngay; để trống = chưa khai."
+        >
+          <Input
+            inputMode="numeric"
+            className="t-data"
+            placeholder="30"
+            value={value.payment_net_days == null ? '' : String(value.payment_net_days)}
+            onChange={(e) => {
+              const d = e.target.value.replace(/[^\d]/g, '')
+              set('payment_net_days', d === '' ? null : Number(d))
+            }}
           />
         </Field>
         <Field label="Tiền tệ" hint="Chọn NCC là đơn tự chuyển sang tiền này.">

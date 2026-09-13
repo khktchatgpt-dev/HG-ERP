@@ -160,3 +160,70 @@ describe('matchPasteRows — khớp về dòng đơn thật', () => {
     expect(r.unmatched).toEqual([{ line: 1, product_code: 'SP-02', order_code: 'DH-9' }])
   })
 })
+
+/**
+ * File dán vào là BÁO GIÁ CỦA KHÁCH, và khách ghi mã của họ. Đo 11/09/2026:
+ * 78/101 sản phẩm trên đơn đang có mã khách — không khớp theo mã này thì dán
+ * file MERXX vào trượt gần hết.
+ */
+describe('matchPasteRows — khớp theo MÃ KHÁCH', () => {
+  const T = (
+    line_id: string,
+    order_code: string,
+    product_code: string,
+    customer_code?: string | null,
+  ): MatchTarget => ({ line_id, order_code, product_code, customer_code })
+  const targets = [
+    T('l1', 'DH-1', 'CH0170HG-AL', '22010-307'),
+    T('l2', 'DH-1', 'CH0171HG-AL', '22060-210'),
+    T('l3', 'DH-2', 'CH0172HG-AL', null), // chưa khai mã khách
+  ]
+
+  it('dán mã khách → khớp đúng dòng', () => {
+    const r = matchPasteRows(targets, parsePricePaste('22060-210\t29.59', '.').rows)
+    expect(r.matched).toEqual([{ line_id: 'l2', price: 29.59, from_line: 1 }])
+  })
+
+  it('mã đơn + mã khách → khớp đúng cặp', () => {
+    const r = matchPasteRows(targets, parsePricePaste('DH-1\t22010-307\t24.4', '.').rows)
+    expect(r.matched).toEqual([{ line_id: 'l1', price: 24.4, from_line: 1 }])
+  })
+
+  it('vẫn khớp mã HG như cũ — thêm đường mới không phá đường cũ', () => {
+    const r = matchPasteRows(targets, parsePricePaste('CH0172HG-AL\t5', '.').rows)
+    expect(r.matched).toEqual([{ line_id: 'l3', price: 5, from_line: 1 }])
+  })
+
+  /**
+   * Một chuỗi vừa là mã HG của SP này vừa là mã khách của SP khác. Luật phải là
+   * MỘT CÂU giải thích được: mã của MÌNH thắng. Dò song song rồi lấy cái khớp
+   * trước là hành vi đổi theo thứ tự dữ liệu.
+   */
+  it('mã trùng giữa hai hệ mã → mã HG thắng', () => {
+    const clash = [T('a', 'DH-1', 'X-9', 'Z-1'), T('b', 'DH-1', 'Y-1', 'X-9')]
+    const r = matchPasteRows(clash, parsePricePaste('X-9\t3', '.').rows)
+    expect(r.matched).toEqual([{ line_id: 'a', price: 3, from_line: 1 }])
+  })
+
+  it('một mã khách nằm ở hai đơn → AMBIGUOUS, không đoán', () => {
+    const dup = [T('a', 'DH-1', 'HG-1', 'K-9'), T('b', 'DH-2', 'HG-2', 'K-9')]
+    const r = matchPasteRows(dup, parsePricePaste('K-9\t3', '.').rows)
+    expect(r.matched).toEqual([])
+    expect(r.ambiguous).toEqual([
+      { line: 1, product_code: 'K-9', order_codes: ['DH-1', 'DH-2'] },
+    ])
+  })
+
+  /** Hai SP HG khác nhau gộp về một mã khách TRONG CÙNG MỘT ĐƠN: mã đơn không gỡ được. */
+  it('một mã khách nằm ở hai dòng CÙNG đơn → vẫn AMBIGUOUS dù có mã đơn', () => {
+    const dup = [T('a', 'DH-1', 'HG-1', 'K-9'), T('b', 'DH-1', 'HG-2', 'K-9')]
+    const r = matchPasteRows(dup, parsePricePaste('DH-1\tK-9\t3', '.').rows)
+    expect(r.matched).toEqual([])
+    expect(r.ambiguous).toEqual([{ line: 1, product_code: 'K-9', order_codes: ['DH-1'] }])
+  })
+
+  it('SP chưa khai mã khách không sinh khoá rỗng', () => {
+    const r = matchPasteRows(targets, parsePricePaste('\t7', '.').rows)
+    expect(r.matched).toEqual([])
+  })
+})

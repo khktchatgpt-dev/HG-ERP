@@ -54,6 +54,11 @@ export type PricingLine = {
   status: Order['status']
   due_date: string | null
   product_code: string
+  /**
+   * MÃ CỦA KHÁCH cho SP này. Cần trên bảng điền giá vì file dán vào là BÁO GIÁ
+   * CỦA KHÁCH — khách ghi mã của họ, không ghi mã HG (xem `matchPasteRows`).
+   */
+  customer_item_code: string | null
   product_name: string
   product_unit: string
   qty: number
@@ -371,6 +376,7 @@ export const ordersService = {
         status: o.status,
         due_date: o.due_date,
         product_code: l.product_code,
+        customer_item_code: l.customer_item_code,
         product_name: l.product_name,
         product_unit: l.product_unit,
         qty: l.qty,

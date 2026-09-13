@@ -52,10 +52,16 @@ export function PayablesManager({
   rows,
   grand,
   canManage,
+  awaiting,
 }: {
   rows: PayableSupplierRow[]
   grand: CurrencyTotal[]
   canManage: boolean
+  /**
+   * Phần công nợ ĐANG THIẾU CHỨNG TỪ (GR/IR) — đã nhận hàng, NCC chưa xuất hoá
+   * đơn. KHÔNG phải khoản cộng thêm: sổ này tính theo phiếu nhập nên đã gồm rồi.
+   */
+  awaiting: { by_currency: { currency: string; amount: number; line_count: number }[]; supplier_count: number } // prettier-ignore
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -239,6 +245,72 @@ export function PayablesManager({
           },
         ]}
       />
+
+      {/*
+        TUỔI NỢ là BÁO CÁO CỦA CHÍNH SỔ NÀY, không phải một chủ đề khác — nên nó
+        vào từ đây chứ không đứng riêng một mục nav. Hai mục cùng nói về công nợ
+        trong một phòng là đúng thứ dự án vẫn chống.
+      */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <a
+          href="/finance/tuoi-no"
+          className="font-medium text-[var(--primary)] underline"
+        >
+          Bảng tuổi nợ →
+        </a>
+        <span className="text-muted-foreground">
+          chia theo hạn thanh toán (0–30 / 31–60 / 61–90 / &gt;90) — biết nên trả ai trước
+        </span>
+      </div>
+
+      {/*
+        ĐƯỜNG VỀ SỔ CHÍNH. Màn này tính theo PHIẾU NHẬP nên ra con số KHÁC sổ TK
+        331 (tính theo hoá đơn) — chênh nhau đúng bằng phần GR/IR và phần VAT.
+        Không nói ra thì hai màn cùng tên "công nợ" cho hai số, và người đọc
+        không biết tin cái nào. Số lên báo cáo tài chính là số của TK 331.
+      */}
+      <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+        <a
+          href="/finance/so-cong-no"
+          className="font-medium text-[var(--primary)] underline"
+        >
+          Sổ công nợ TK 331 →
+        </a>
+        <span className="text-muted-foreground">
+          sổ theo KỲ (dư đầu → phát sinh → dư cuối), tính theo HOÁ ĐƠN nên gồm VAT — đó
+          mới là số lên báo cáo tài chính. Màn này là bản ghi nhận theo phiếu nhập và là
+          nơi ghi thanh toán.
+        </span>
+      </div>
+
+      {/*
+        DÒNG NÀY KHÔNG ĐỔI CON SỐ NÀO ở trên. Sổ công nợ đang tính theo phiếu
+        nhập, nên phần "chưa có hoá đơn" vốn đã nằm trong số đó rồi — đây chỉ
+        nói ra phần nào đang thiếu chứng từ, để kế toán biết đi đòi NCC xuất.
+        Cộng nó vào tổng là đếm hai lần.
+      */}
+      {awaiting.by_currency.length > 0 && (
+        <div className="border-input bg-muted/40 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border px-3 py-2 text-sm">
+          <Badge tone="amber">Thiếu chứng từ</Badge>
+          <span className="text-foreground font-semibold">
+            {awaiting.by_currency
+              .map((c) => `${fmtM(c.amount)} ${c.currency}`)
+              .join(' · ')}
+          </span>
+          <span className="text-muted-foreground">
+            đã nhận hàng nhưng NCC chưa xuất hoá đơn —{' '}
+            {awaiting.by_currency.reduce((n, c) => n + c.line_count, 0)} dòng ·{' '}
+            {awaiting.supplier_count} NCC. Số này ĐÃ nằm trong công nợ ở trên, không cộng
+            thêm.
+          </span>
+          <a
+            href="/finance/theo-lenh"
+            className="font-medium text-[var(--primary)] underline"
+          >
+            Xem đối chiếu →
+          </a>
+        </div>
+      )}
 
       <Toolbar
         left={

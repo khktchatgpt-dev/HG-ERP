@@ -33,7 +33,7 @@ import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
-import { supplyRepo, RECEIVABLE } from '@/modules/dept/supply/supply.repo'
+import { supplyRepo, RECEIVABLE, poLineUnitCosts } from '@/modules/dept/supply/supply.repo'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -541,6 +541,27 @@ export const stockService = {
       ...(input.doc_date ? { doc_date: input.doc_date } : {}),
       created_by: user.id,
     })
+    /*
+     * GIÁ VỐN DÒNG NHẬP — lấy từ chính dòng đơn mua.
+     *
+     * Thiếu chỗ này thì `unit_cost` để NULL, và hậu quả đi rất xa: giá trị tồn
+     * kho bằng 0, công nợ tính theo phiếu nhập bằng 0, cột "phiếu chưa có giá"
+     * của màn công nợ phình lên. Đo 11/09/2026: 139/142 movement gắn dòng PO
+     * đang không có giá — không phải Kho quên nhập, mà là **chưa ai từng ghi**.
+     *
+     * Giá QUY VỀ ĐVT ĐẶT HÀNG (`tiền dòng ÷ SL đặt`) chứ không lấy thẳng
+     * `unit_price`: dòng nhôm tính theo tổng kg (`price_basis: 'unit2'`) có tiền
+     * dòng khác hẳn `qty × đơn giá`. Cùng luật với `lib/invoice-draft.ts`, để
+     * phiếu nhập và hoá đơn không ra hai con số cho cùng một dòng.
+     *
+     * (Migration 0045 có sẵn FIFO `stock_cost_layers` + `fifo_receipt`, nhưng
+     * CHƯA được áp lên DB và chưa nơi nào gọi — khi áp thì thay chỗ này bằng
+     * lời gọi hàm đó, đừng ghi hai nơi.)
+     */
+    const costByLine = await poLineUnitCosts(
+      input.lines.map((l) => l.po_line_id).filter((v): v is string => !!v),
+    )
+
     await insertMovements(
       input.lines.map((l) => {
         // Vết dung sai (0156) dán vào note dòng — mỗi movement của dòng PO vượt
@@ -550,6 +571,7 @@ export const stockService = {
           material_id: l.material_id,
           direction: 'in' as const,
           qty: l.qty,
+          unit_cost: l.po_line_id ? (costByLine.get(l.po_line_id) ?? null) : null,
           qty_rejected: l.qty_rejected ?? 0,
           qc_status: l.qc_status ?? null,
           // 'lsx' = HOÀN KHO (K2) — issuedByLsx net trừ lại "đã cấp" của lệnh.

@@ -127,6 +127,75 @@ export const payablesRepo = {
   },
 
   /**
+   * TẠM TÍNH theo ĐƠN NCC ĐÃ XÁC NHẬN — cơ sở thay thế, KHÔNG phải công nợ thật.
+   *
+   * Vì sao có: sổ công nợ đúng đắn tính theo phiếu nhập kho, nhưng Kho chưa ghi
+   * nhận phiếu nào (đo 11/09/2026: 0 phiếu nhập gắn đơn có giá ngoài dữ liệu
+   * thử). Kết quả là công nợ ra 0 trong khi đã cam kết 5,68 tỷ, và Kế toán
+   * không có gì để nhìn. Cơ sở này cho họ một con số ƯỚC TÍNH trong lúc chờ Kho
+   * vào nhịp — màn hình BẮT BUỘC nói rõ đang xem theo cơ sở nào.
+   *
+   * ⚠ KHÔNG ghi sổ theo số này. Nợ phải trả phát sinh khi hàng về hoặc khi có
+   * hoá đơn; NCC gật đầu chưa phải là nợ.
+   *
+   * Trả về ĐÚNG hình dạng `ReceiptValueRow` để dùng lại `summarizePayables`
+   * (đã có test: tách tiền tệ, trừ đã trả). `qty = 1` và `unit_cost = tiền cả
+   * dòng` vì tiền của dòng phụ thuộc `price_basis`/`qty2` — nhân lại qty × giá
+   * ở đây là dựng nguồn số thứ hai.
+   */
+  async confirmedPoValues(): Promise<ReceiptValueRow[]> {
+    const { data } = await db()
+      .from('supply_purchase_order_lines')
+      .select(
+        'qty_ordered, unit_price, price_basis, qty2, po:supply_purchase_orders!inner(id, code, currency, status, created_at, supplier_id, supplier:supply_suppliers(name, short_name, payment_terms))',
+      )
+      .limit(50000)
+    type Raw = {
+      qty_ordered: unknown
+      unit_price: unknown
+      price_basis: 'unit' | 'unit2'
+      qty2: unknown
+      po: {
+        id: string
+        code: string
+        currency: string
+        status: string
+        created_at: string
+        supplier_id: string
+        supplier: { name: string; short_name: string | null; payment_terms: string | null } | null // prettier-ignore
+      } | null
+    }
+    const CONFIRMED_ON = ['confirmed', 'in_transit', 'partial', 'received']
+    const out: ReceiptValueRow[] = []
+    for (const r of (data ?? []) as unknown as Raw[]) {
+      const po = Array.isArray(r.po) ? r.po[0] : r.po
+      if (!po || !CONFIRMED_ON.includes(po.status)) continue
+      const price = r.unit_price == null ? 0 : Number(r.unit_price)
+      const amount =
+        r.price_basis === 'unit2' && r.qty2 != null
+          ? Number(r.qty2) * price
+          : Number(r.qty_ordered ?? 0) * price
+      if (!(amount > 0)) continue
+      out.push({
+        qty: 1,
+        unit_cost: Math.round(amount * 100) / 100,
+        direction: 'in',
+        created_at: po.created_at,
+        doc_code: po.code,
+        doc_date: po.created_at.slice(0, 10),
+        supplier_doc_no: null,
+        po_id: po.id,
+        po_code: po.code,
+        currency: po.currency || 'VND',
+        supplier_id: po.supplier_id,
+        supplier_name: po.supplier?.short_name || po.supplier?.name || '—',
+        payment_terms: po.supplier?.payment_terms ?? null,
+      })
+    }
+    return out
+  },
+
+  /**
    * Movement nhận gắn PO nhưng THIẾU GIÁ — phát sinh đang bị đếm hụt.
    * Trả per NCC để màn cảnh báo "n phiếu chưa có giá" thay vì ra số 0 im lặng.
    */
