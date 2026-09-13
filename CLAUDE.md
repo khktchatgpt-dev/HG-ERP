@@ -364,6 +364,49 @@ Trích định mức từ file BOM (.xlsx / PDF / ảnh) thành **bản nháp** 
   phiên đăng nhập + `created_at`, không chép chữ ký giấy), kích thước mở, và ô
   "Khối lượng" (là tổng tính từ định mức — app tự tính, tránh hai nguồn một số).
 
+## Quy cắt phôi (`lib/cut-plan`, `/cat-phoi`)
+
+Bản web của phần mềm Delphi "Steel Cutting" xưởng đang dùng (Project / Item /
+Available Length → lưới Length+Qty → Run → Case #n × Number to Cut, Used,
+Diminish % → Export XLS), sửa ba nhược điểm: không giới hạn dòng, chọn nhiều để
+xoá / xoá tất cả, dán từ Excel — cộng tự lưu nháp `localStorage` (`cat-phoi-v3`;
+đọc được `-v2` đời trước và đổ quy cách đầu phiếu xuống từng dòng).
+
+**Mở rộng 10/09/2026 (user chốt sau khi dùng thử)**: NHIỀU QUY CÁCH một lượt —
+mỗi dòng có cột `spec`, `planCut` gom theo `specKey` (gọn khoảng trắng, không
+phân biệt hoa thường) và chạy `optimizeCut` riêng từng nhóm với cây tiêu chuẩn
+riêng (`stock_by_spec`, thiếu thì dùng mặc định); kết quả là `groups[]` +
+`planTotals()`. NẠP TỪ HỒ SƠ SP: `GET cut-plan/from-product?product_id&qty`
+→ `cut-plan.service.fromProduct` → `lib/cut-plan/from-bom.ts` (thuần, có test):
+dòng định mức có `cut_length_mm` × số lượng đợt, dài = cắt + phi hao uốn, quy
+cách = vật liệu + dạng + tiết diện, cây gợi ý = `bar_length_m`. Vẫn CHƯA làm
+(đừng tự thêm): upload file BOM thẳng vào quy cắt, gộp nhiều mã SP một đợt, danh
+mục quy cách → cây dùng chung, mạch cắt, đoạn dư tái dùng, phiếu in, lưu DB.
+Trang DÙNG CHUNG `src/app/(shared)/cat-phoi/`, nav ở Kỹ thuật, Sản xuất, Kế hoạch
+SX, Tổ SX (không vào `SHARED_SECTION`).
+
+- **Thuật toán thuần** `src/lib/cut-plan/optimize.ts` (chạy trên trình duyệt,
+  có test): SHP (quy hoạch động tìm sơ đồ đầy nhất, lặp) so với FFD/BFD, lấy ít
+  cây → ít dư → ít sơ đồ. Engine vẫn hiểu kerf/trim/min_remnant (`CutParams`)
+  nhưng màn hình để 0 — muốn bật lại chỉ cần thêm ô nhập. Số lẻ làm tròn VỀ
+  PHÍA AN TOÀN cho bảng DP; số ghi ra luôn là số thật.
+- **BẪY hiệu năng**: bảng DP tốn công theo số CHIỀU DÀI KHÁC NHAU chứ không
+  theo số lượng (500 chiều dài ~1,3 s; 5000 chiều dài 21 s treo tab, đo
+  09/09/2026; 100.000 chi tiết cùng cỡ chỉ 0,5 s). SHP có ngân sách
+  `SHP_BUDGET_MS` (1,5 s), hết giờ giao phần đuôi cho FFD — kết quả vẫn hợp lệ.
+  Màn hình `setBusy` rồi mới tính trong `setTimeout` để thanh tiến trình kịp vẽ.
+- **Lưới** `CutLinesGrid`: Ctrl+V tại ô dán vùng bảng chạy sang phải/xuống
+  dưới (`applyPasteAt`); hộp "Dán từ Excel" nhận cột theo tiêu đề hoặc đoán
+  (`parseCutPaste`, chung luật số VN với `bom-paste`: "1.390" = 1390). Ô gõ tay
+  cũng đi qua `parseCell` (hook `vn-number.ts`) — KHÔNG dùng `GridCellNumber`
+  của kit ở đây vì nó hiểu "1.390" là 1,39. SL luôn là số NGUYÊN (làm tròn ở
+  lưới + dán, schema `.int()` là hàng rào cuối). Dòng chỉ có ghi chú không phải
+  chi tiết: `lineHasData` là hàm đếm chung cho đầu trang, "Xoá tất cả" và Excel.
+- **Excel** qua `POST /api/dept/production/cut-plan/export`: server TÍNH LẠI từ
+  dòng, không nhận kết quả client; > 1 quy cách thì sheet "Tổng hợp" (cung ứng
+  cầm đi đặt cây) + một sheet MỖI quy cách (`sheetName`: bỏ ký tự cấm, 31 ký
+  tự, không trùng); in cả `errors` lẫn `skipped` thành cảnh báo. Chưa lưu DB.
+
 ## Tải file có dấu tiếng Việt
 
 `GET /api/files/[id]?download=1` mới ép tải về kèm tên gốc; không có tham số thì

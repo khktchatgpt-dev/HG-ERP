@@ -314,6 +314,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // mọi workspace đều có, nên bỏ ở đây để khỏi hiện hai lần.
           { href: '/technical/showroom', label: 'Mẫu showroom', icon: 'store' },
           { href: '/technical/load-cont', label: 'Tính load cont', icon: 'container' },
+          // Trang DÙNG CHUNG (/cat-phoi, khu (shared)) — Kỹ thuật lập quy cắt,
+          // xưởng cắt theo. Không đưa vào SHARED_SECTION vì Kế toán/Nhân sự
+          // không có việc gì ở đó.
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
           {
             href: '/technical/dinh-muc',
             label: 'Sức khoẻ định mức',
@@ -407,7 +411,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     sections: [
       {
         heading: 'Điều hành xưởng',
-        items: [{ href: '/production', label: 'Toàn cảnh xưởng', icon: 'factory' }],
+        items: [
+          { href: '/production', label: 'Toàn cảnh xưởng', icon: 'factory' },
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+        ],
       },
     ],
   },
@@ -428,6 +435,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/to', label: 'Việc của tổ', icon: 'hammer' },
           { href: '/to/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
           { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: 'history' },
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
         ],
       },
     ],
@@ -475,6 +483,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/kehoach-sx/chi-tieu', label: 'Chỉ tiêu ngày', icon: 'list-todo' },
           { href: '/kehoach-sx/theo-to', label: 'Theo tổ', icon: 'users-round' },
           { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
+          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
         ],
       },
     ],
