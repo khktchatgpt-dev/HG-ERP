@@ -22,11 +22,20 @@ export function StartPanel({
   counts,
   customerNames,
   onPick,
+  compact = false,
 }: {
   counts: ProductCounts
   customerNames: CustomerNameOption[]
   /** Đặt tham số URL — cùng đường với thanh lọc, xem `applyParams`. */
   onPick: (patch: Record<string, string | undefined>) => void
+  /**
+   * GỌN — chỉ hàng lối tắt, bỏ vòng tròn biểu tượng và đoạn giải thích.
+   *
+   * Từ 13/09/2026 thư viện bày luôn trang đầu khi vào, nên khối này không còn
+   * là "màn mở đầu" thay chỗ lưới nữa mà đứng TRÊN lưới. Giữ nguyên khổ cũ ở đó
+   * là đẩy lưới xuống quá nửa màn — đúng thứ vừa sửa để tránh.
+   */
+  compact?: boolean
 }) {
   // Xếp theo SỐ SP giảm dần, không theo bảng chữ cái: `customerNames` trả về
   // theo tên nên lấy 4 mục đầu là ra ACE/AE/ALPHAMARTS — mấy khách 2–3 mã.
@@ -36,23 +45,40 @@ export function StartPanel({
     .slice(0, TOP_CUSTOMERS)
 
   return (
-    <div className="bg-card flex flex-col items-center gap-5 rounded-lg border px-6 py-12 text-center shadow-sm">
-      <div className="grid size-12 place-items-center rounded-full bg-[var(--accent)]">
-        <Search className="size-6 text-[var(--primary)]" strokeWidth={1.8} />
-      </div>
+    <div
+      className={
+        compact
+          ? 'flex flex-wrap items-center gap-2'
+          : 'bg-card flex flex-col items-center gap-5 rounded-lg border px-6 py-12 text-center shadow-sm'
+      }
+    >
+      {!compact && (
+        <>
+          <div className="grid size-12 place-items-center rounded-full bg-[var(--accent)]">
+            <Search className="size-6 text-[var(--primary)]" strokeWidth={1.8} />
+          </div>
 
-      <div className="flex flex-col gap-1.5">
-        <h2 className="t-title">
-          Tìm sản phẩm trong{' '}
-          <span className="font-mono tabular-nums">{counts.total}</span> hồ sơ
-        </h2>
-        <p className="text-muted-foreground max-w-md text-sm">
-          Gõ mã HG, tên, mã khách đặt hay tên khách vào ô tìm phía trên. Thư viện không
-          bày sẵn danh sách để trang mở nhanh và đỡ tải ảnh thừa.
-        </p>
-      </div>
+          <div className="flex flex-col gap-1.5">
+            <h2 className="t-title">
+              Tìm sản phẩm trong{' '}
+              <span className="font-mono tabular-nums">{counts.total}</span> hồ sơ
+            </h2>
+            <p className="text-muted-foreground max-w-md text-sm">
+              Gõ mã HG, tên, mã khách đặt hay tên khách vào ô tìm phía trên.
+            </p>
+          </div>
+        </>
+      )}
 
-      <div className="flex flex-wrap items-center justify-center gap-2">
+      {compact && <span className="text-muted-foreground text-xs">Lối tắt:</span>}
+
+      <div
+        className={
+          compact
+            ? 'flex flex-wrap items-center gap-2'
+            : 'flex flex-wrap items-center justify-center gap-2'
+        }
+      >
         <Shortcut
           icon={Clock}
           label="Vừa sửa gần đây"

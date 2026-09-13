@@ -201,8 +201,20 @@ export function ProductsManager({
    * bấm nút là chốt cứng cho tới khi rời trang. KHÔNG nhớ vào localStorage —
    * nhớ "bật" thì lần vào sau lại nổ 24 lượt, đúng thứ đang muốn tránh.
    */
+  /*
+   * ⭐ SỬA 13/09/2026: 'auto' nay là BẬT, không còn bám theo bộ lọc.
+   *
+   * Luật cũ ('auto' = chỉ hiện ảnh khi đang lọc) sinh ra từ thời màn mở đầu
+   * KHÔNG đổ lưới: lúc đó "vào trang trơn" nghĩa là không có thẻ nào, nên không
+   * có ảnh nào để bàn. Từ khi trang đầu hiện ngay 24 thẻ, giữ luật cũ nghĩa là
+   * mở thư viện SẢN PHẨM ra và thấy 24 ô xám — bỏ mất đúng thứ khiến nó là thư
+   * viện. Cái giá là 24 lượt gọi ảnh mỗi lượt mở, bằng đúng một lượt tìm; và
+   * ảnh đi đường dẫn tất định nên trình tối ưu giữ cache 31 ngày.
+   *
+   * Nút 🖼 vẫn còn để TẮT khi cần lướt nhanh trên mạng yếu.
+   */
   const [imagePref, setImagePref] = useState<'auto' | 'on' | 'off'>('auto')
-  const showImages = imagePref === 'auto' ? hasFilter : imagePref === 'on'
+  const showImages = imagePref !== 'off'
   const shownImageUrls = showImages ? imageUrls : EMPTY_IMAGE_URLS
   const imageCount = products.filter((p) => p.image_file_id).length
 
@@ -450,9 +462,24 @@ export function ProductsManager({
         </div>
       )}
 
-      {idle ? (
-        <StartPanel counts={counts} customerNames={customerNames} onPick={applyParams} />
-      ) : products.length === 0 ? (
+      {/*
+        LỐI TẮT đứng TRÊN lưới, không thay chỗ của lưới.
+
+        Trước 13/09/2026 khối này là cả một màn mở đầu chiếm trọn vùng nội dung,
+        và lưới chỉ hiện sau khi người dùng gõ hoặc lọc. Chủ dự án chốt bỏ: mở
+        thư viện ra mà không thấy thứ gì trong thư viện thì phải đoán trong đó
+        có gì. Nay trang đầu (24 SP) hiện ngay, lối tắt co thành một hàng chip.
+      */}
+      {idle && (
+        <StartPanel
+          compact
+          counts={counts}
+          customerNames={customerNames}
+          onPick={applyParams}
+        />
+      )}
+
+      {products.length === 0 ? (
         <EmptyState
           icon={<PackageSearch className="size-6 text-sky-500" />}
           title={hasFilter ? 'Không tìm thấy sản phẩm nào' : 'Chưa có sản phẩm nào'}
