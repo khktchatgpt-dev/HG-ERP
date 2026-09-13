@@ -17,6 +17,18 @@ export type PoRef = {
   code: string
   supplier_name: string
   lsx_code: string | null
+  /*
+    TIỀN VÀ SỐ DÒNG cho hộp thoại xác nhận hàng loạt (09/09/2026).
+
+    Hộp thoại CHE MẤT chính hàng người dùng vừa đọc ở bảng, nên nó phải chép
+    lại thứ nó che. Bản cũ chỉ liệt kê mã đơn — người duyệt phải nhớ NCC và
+    số tiền từ giây trước, hoặc bấm Huỷ để nhìn lại.
+
+    Cả hai là tuỳ chọn: `bulk` vẫn nhận PoRef gọn từ chỗ gọi khác.
+  */
+  total?: number
+  currency?: string
+  lines_total?: number
 }
 
 /**
@@ -76,16 +88,38 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
    */
   async function bulk(
     items: PoRef[],
-    step: { path: string; body?: unknown; title: string; confirmLabel: string },
+    step: {
+      path: string
+      body?: unknown
+      title: string
+      confirmLabel: string
+      /** Cái gì đổi sau khi bấm — hiện sát nút, xem `Consequence`. */
+      consequence?: string
+    },
   ) {
     if (items.length === 0) return false
+    const tong = items.reduce((s, p) => s + (p.total ?? 0), 0)
+    const tienTe = items.find((p) => p.currency)?.currency ?? 'VND'
+    // Nhiều loại tiền trong một lô thì KHÔNG cộng — cộng USD với VND ra một
+    // con số vô nghĩa mà nhìn vẫn như số thật.
+    const motLoaiTien = new Set(items.map((p) => p.currency ?? 'VND')).size === 1
+
     const ok = await confirm({
       title: `${step.title} ${items.length} đơn?`,
-      description: items
-        .slice(0, 8)
-        .map((p) => p.code)
-        .join(', ')
-        .concat(items.length > 8 ? `, … và ${items.length - 8} đơn nữa` : ''),
+      description:
+        motLoaiTien && tong > 0
+          ? `Tổng giá trị ${tong.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ${tienTe}.`
+          : undefined,
+      affected: items.map((p) => ({
+        code: p.code,
+        label: p.supplier_name,
+        note: p.lsx_code ? `LSX ${p.lsx_code}` : 'ngoài LSX',
+        amount:
+          p.total != null && p.total > 0
+            ? `${p.total.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} ${p.currency ?? 'VND'}`
+            : undefined,
+      })),
+      consequence: step.consequence,
       confirmLabel: step.confirmLabel,
     })
     if (!ok) return false

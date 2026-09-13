@@ -14,6 +14,8 @@
  * còn nguyên giá trị.
  */
 
+import { stampNote } from './po-note'
+
 /** Trạng thái cho phép dời hẹn — đơn đang chạy, chưa đóng. */
 const RESCHEDULABLE = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
 
@@ -38,9 +40,9 @@ const dmy = (iso: string | null): string =>
 /**
  * Dòng vết ghi vào `note` của đơn.
  *
- * Ghi ở đầu ghi chú và giữ nguyên phần cũ — mỗi lần dời thêm một dòng, đọc từ
- * trên xuống là ra lịch sử. Cùng lối với `[Huỷ]` mà `posService.cancel` đang
- * dùng, để người đọc đơn chỉ phải quen một quy ước.
+ * Phần riêng của việc dời hẹn là "ngày cũ → ngày mới"; việc xếp lớp lên ghi chú
+ * cũ thì dùng chung `stampNote` với `[Huỷ]` và `[Từ chối]` — người đọc đơn chỉ
+ * phải quen MỘT quy ước, và không chỗ nào tự ý ghi đè.
  */
 export function rescheduleNote(
   oldDate: string | null,
@@ -48,6 +50,8 @@ export function rescheduleNote(
   reason: string,
   prevNote: string | null,
 ): string {
-  const line = `[Dời hẹn giao] ${dmy(oldDate)} → ${dmy(newDate)} · ${reason.trim()}`
-  return prevNote?.trim() ? `${line}\n${prevNote.trim()}` : line
+  const what = `${dmy(oldDate)} → ${dmy(newDate)} · ${reason.trim()}`
+  // `what` không bao giờ rỗng — `dmy` luôn trả ít nhất 'chưa hẹn' — nên
+  // `stampNote` ở đây không có nhánh trả null.
+  return stampNote('Dời hẹn giao', what, prevNote) as string
 }

@@ -8,6 +8,10 @@ import { usersRepo } from '@/modules/core/users/users.repo'
 import { approvalEventsRepo } from '@/modules/core/approvals/approvals.repo'
 import { HttpError } from '@/server/http'
 import { loadReceiptBatches } from '@/modules/dept/supply/po-receipts.service'
+import { stockInfoMany } from '@/modules/dept/warehouse/stock.repo'
+import { poPosition } from '@/modules/dept/supply/balance.repo'
+import { supplierFacts } from '@/modules/dept/supply/supplier-facts.repo'
+import { suppliersRepo } from '@/modules/dept/supply/supply.repo'
 import { PoDetailScreen } from './PoDetailScreen'
 
 export const dynamic = 'force-dynamic'
@@ -63,6 +67,30 @@ export default async function PoDetailPage({
   ])
 
   /*
+   * TỒN KHO tại thời điểm xem, cho từng mã trên đơn.
+   *
+   * Người duyệt cần biết mua GẤP hay mua dự phòng, và đó là hai quyết định
+   * khác hẳn nhau. Bản cũ bắt họ mở màn Tồn kho ở tab khác rồi tra từng mã —
+   * nên thực tế không ai tra, và đơn được duyệt mà không ai biết kho còn gì.
+   *
+   * Dòng tự do (material_id null) không có tồn để tra: đó là đơn gỗ đặt theo
+   * mã sản phẩm, không đi vào sổ kho.
+   */
+  /* Hồ sơ NCC + lịch sử mua — FactBox cần chúng để người duyệt quyết ngay
+     tại chứng từ, không phải mở màn NCC ở tab khác. */
+  const [position, supplier, facts] = await Promise.all([
+    poPosition(po.id),
+    po.supplier_id ? suppliersRepo.findById(po.supplier_id) : Promise.resolve(null),
+    po.supplier_id ? supplierFacts(po.supplier_id, po.id) : Promise.resolve(null),
+  ])
+
+  const stockRows = await stockInfoMany(
+    lines.map((l) => l.material_id).filter((id): id is string => id != null),
+  )
+  const stock: Record<string, number> = {}
+  for (const r of stockRows) stock[r.material_id] = r.on_hand
+
+  /*
    * NV cung ứng nhận BÀN GIAO (0128) — chỉ nạp cho người bàn giao được. Loại
    * tài khoản `admin`: vai admin được seed ĐỦ mọi permission nên lọc thuần theo
    * quyền sẽ kéo cả IT lẫn Giám đốc vào ô chọn. Giống hệt màn danh sách.
@@ -116,6 +144,10 @@ export default async function PoDetailPage({
         created_at: po.created_at,
       }}
       lines={lines}
+      stock={stock}
+      position={position}
+      supplier={supplier}
+      facts={facts}
       statusLines={status_lines}
       extraLsx={extra_lsx}
       shipments={shipments}
@@ -128,6 +160,7 @@ export default async function PoDetailPage({
       canApprove={canApprove}
       canReassign={manageAny || canApprove}
       staff={staff}
+      me={{ id: user.id, name: user.name ?? user.email }}
     />
   )
 }

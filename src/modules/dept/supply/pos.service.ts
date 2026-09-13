@@ -24,6 +24,7 @@ import {
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
+import { stampNote } from '@/lib/po-note'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import {
   earliestExpectedDate,
@@ -84,10 +85,7 @@ function withDerived(template: PoTemplate, lines: PoLineInput[]): PoLineInput[] 
  *
  * Kèm chặn lệnh lạ: chỉ được chia cho LSX chính hoặc LSX phụ CỦA CHÍNH ĐƠN NÀY.
  */
-function assertSplits(
-  lines: PoLineInput[],
-  lsxIds: (string | null | undefined)[],
-): void {
+function assertSplits(lines: PoLineInput[], lsxIds: (string | null | undefined)[]): void {
   const hopLe = new Set(lsxIds.filter(Boolean) as string[])
   lines.forEach((l, i) => {
     const sp = l.lsx_split ?? []
@@ -598,7 +596,10 @@ export const posService = {
             approved_by: user.id,
             approved_at: new Date().toISOString(),
           }
-        : { status: 'draft', note: reason ? `[Từ chối] ${reason}` : before.note },
+        : // Lý do từ chối CỘNG THÊM vào ghi chú, không thay chỗ nó. Bản trước
+          // ghi đè nên câu người soạn viết cho Kho ("giao cổng B") biến mất khi
+          // Giám đốc từ chối — lối mòn #2 của tieu-chi-workflow-erp.md.
+          { status: 'draft', note: stampNote('Từ chối', reason, before.note) },
     )
     await emit({
       name: 'po.decided',
@@ -1049,7 +1050,10 @@ export const posService = {
     }
     return posRepo.patch(id, {
       status: 'cancelled',
-      note: `[Huỷ] ${reason}${before.note ? ` · ${before.note}` : ''}`,
+      // Cùng lối xếp lớp với `[Từ chối]` / `[Dời hẹn giao]`: vết mới lên đầu,
+      // ghi chú cũ xuống dòng dưới. Bản trước nối bằng ` · ` nên đơn qua vài
+      // lượt là ra một dòng dài không ai đọc nổi.
+      note: stampNote('Huỷ', reason, before.note),
     })
   },
 

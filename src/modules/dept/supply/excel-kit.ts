@@ -117,9 +117,11 @@ export function applyWidths(
   widths: number[],
   fallback = 14,
 ): void {
-  ws.columns.forEach((c, i) => {
-    c.width = widths[i] ?? fallback
-  })
+  // BẪY: `ws.columns` là null khi tờ CHƯA có dòng nào — mà đặt bề rộng
+  // TRƯỚC khi đổ dữ liệu là cách đúng khi phần đầu tờ xếp theo lưới cột của
+  // bảng (13/09/2026). getColumn() tạo cột khi cần nên chạy được ở cả hai lúc.
+  const n = Math.max(widths.length, ws.columns?.length ?? 0)
+  for (let i = 0; i < n; i++) ws.getColumn(i + 1).width = widths[i] ?? fallback
 }
 
 /**

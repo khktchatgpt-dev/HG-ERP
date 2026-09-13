@@ -5,7 +5,7 @@ import { assessPoLate } from '@/lib/late-risk'
 import { buildLsxSupplyDetail } from './lsx-supply.service'
 import { loadReceiptBatches } from './po-receipts.service'
 import { loadLsxBangKe } from './lsx-bang-ke.service'
-import type { LsxDetailReport, LsxReportLine } from './lsx-detail-excel'
+import type { LsxDetailReport, LsxReportBatch, LsxReportLine } from './lsx-detail-excel'
 
 /**
  * NẠP DỮ LIỆU cho hồ sơ cung ứng một lệnh (`lsx-detail-excel`): lệnh + đơn đã
@@ -64,10 +64,22 @@ export async function loadLsxDetailReport(
 
   if (kind === 'bangke') return { today, lsx, risk, lines: {}, batches: {}, bangKe }
 
-  const poIds = lsx.pos.map((p) => p.id)
+  const { lines, batches } = await loadPoLinesAndBatches(lsx.pos.map((p) => p.id))
+  return { today, lsx, risk, lines, batches, bangKe }
+}
+
+/**
+ * TỪNG DÒNG vật tư + TỪNG ĐỢT nhận của một tập đơn — ba truy vấn gộp, không
+ * N+1. Tách ra (13/09/2026) để báo cáo đơn hàng gộp mọi lệnh dùng chung với
+ * hồ sơ một lệnh; số dòng đọc từ view `supply_po_line_status` (BR-08).
+ */
+export async function loadPoLinesAndBatches(poIds: string[]): Promise<{
+  lines: Record<string, LsxReportLine[]>
+  batches: Record<string, LsxReportBatch[]>
+}> {
   const lines: Record<string, LsxReportLine[]> = {}
   for (const id of poIds) lines[id] = []
-  if (poIds.length === 0) return { today, lsx, risk, lines, batches: {}, bangKe }
+  if (poIds.length === 0) return { lines, batches: {} }
 
   const [{ data: statusRows }, { data: lineRows }] = await Promise.all([
     db()
@@ -139,9 +151,9 @@ export async function loadLsxDetailReport(
       note: s.note,
     })
   }
-  if (lineIds.length === 0) return { today, lsx, risk, lines, batches: {}, bangKe }
+  if (lineIds.length === 0) return { lines, batches: {} }
 
   // ĐỢT NHẬN = phiếu nhập kho — cùng hàm với tab Đợt giao của chi tiết đơn.
   const batches = await loadReceiptBatches(poIds)
-  return { today, lsx, risk, lines, batches, bangKe }
+  return { lines, batches }
 }

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Building2,
   CheckCircle2,
+  Download,
   Factory,
   Gavel,
   Plus,
@@ -52,6 +53,7 @@ export default async function PlanningHomePage() {
   const user = await authService.requirePageUser()
   const { today, rows, counts, issues } = await loadMeeting(user)
   const agenda = buildAgenda(rows)
+
   const top = issues.slice(0, TOP_ISSUES)
   const dateLabel = `${WEEKDAY[new Date(`${today}T00:00:00Z`).getUTCDay()]} ${dmy(today)}/${today.slice(0, 4)}`
 
@@ -69,6 +71,12 @@ export default async function PlanningHomePage() {
         }
         actions={
           <>
+            <Button size="sm" variant="outline" asChild>
+              <a href="/api/dept/supply/hop-report" download>
+                <Download />
+                Tải Excel họp
+              </a>
+            </Button>
             <Button size="sm" asChild>
               <Link href="/planning/pos/new">
                 <Plus />

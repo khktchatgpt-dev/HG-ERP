@@ -1,0 +1,404 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════
+ * SỔ THIẾT KẾ — lớp vỏ của riêng khu `/design-lab`
+ * ═══════════════════════════════════════════════════════════════════════
+ *
+ * Đây là CSS của TÀI LIỆU, không phải của sản phẩm. Mọi màu vẫn lấy từ token
+ * `.kit` (tokens.css) để trang tài liệu không tự trôi khỏi hệ màu nó đang mô
+ * tả — sổ mà lệch màu với hàng thật thì người đọc tin sổ, làm ra màn sai.
+ *
+ * Vì sao khu này có CSS riêng thay vì dùng kit: kit dựng cho MÀN NGHIỆP VỤ
+ * (dày, lưới nhãn–giá trị, bảng dài). Tài liệu cần cột chữ hẹp và khoảng thở
+ * — đúng thứ ERP không được phép có. Trộn hai mục đích vào một bộ thì kit
+ * phình ra vì nhu cầu của trang giới thiệu về chính nó.
+ *
+ * Tiền tố `lab-` để không bao giờ đụng `k-` của kit.
+ */
+
+/* ── Thanh điều hướng của sổ ─────────────────────────────────────────────
+   Nằm ở tầng KHUNG PHẦN MỀM (`--chrome`), không phải tầng giấy: nó là vỏ của
+   sổ tra cứu, và các màn mẫu bên dưới phải nhìn ra ngay đâu là mẫu, đâu là
+   thanh của trang tài liệu đang bọc nó. */
+.lab-bar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-bar);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 0 var(--gutter);
+  min-height: 42px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--line);
+}
+.lab-brand {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.lab-brand span {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lab-nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.lab-nav a {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.lab-nav a:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.lab-nav a[aria-current='page'] {
+  background: var(--act-wash);
+  color: var(--act-text);
+  font-weight: 600;
+}
+
+/* ── Cột tài liệu ────────────────────────────────────────────────────────
+   66ch cho đoạn văn là ngưỡng đọc thoải mái; khối demo được phép rộng hơn vì
+   nó mô phỏng màn thật. */
+.lab-doc {
+  max-width: 1180px;
+  padding: 0 var(--gutter) 72px;
+}
+.lab-hero {
+  padding: 40px 0 26px;
+}
+.lab-eyebrow {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lab-title {
+  margin: 10px 0 0;
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+.lab-deck {
+  margin: 12px 0 0;
+  font-size: 15px;
+  line-height: 1.62;
+  color: var(--ink-2);
+  max-width: 66ch;
+}
+.lab-deck b {
+  color: var(--ink);
+}
+
+/* ── Mục có số ───────────────────────────────────────────────────────────
+   Số mục không phải trang trí: sổ này được nhắc tới trong CLAUDE.md và trong
+   review theo dạng "luật 04", nên số phải nhìn thấy và ổn định. */
+.lab-sec {
+  padding-top: 34px;
+  scroll-margin-top: 54px;
+}
+.lab-h {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+.lab-n {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--act);
+  border: 1.5px solid var(--act-line);
+  background: var(--act-wash);
+  border-radius: var(--radius);
+  padding: 2px 7px;
+  margin-top: 2px;
+  text-align: center;
+}
+.lab-t {
+  margin: 0;
+  font-size: var(--fs-title);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.lab-w {
+  margin: 3px 0 0;
+  font-size: var(--fs-body);
+  color: var(--ink-2);
+  max-width: 74ch;
+  line-height: 1.55;
+}
+
+/* ── Khối demo ───────────────────────────────────────────────────────────
+   Nền `--surface` chứ không trắng: thành phần kit vốn sống trên nền xám, đặt
+   lên nền trắng thì thẻ trắng của nó biến mất và người đọc tưởng kit không
+   có khung. */
+.lab-demo {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--surface);
+}
+.lab-card {
+  background: var(--surface-card);
+  border-bottom: 1px solid var(--line);
+}
+.lab-card:last-child {
+  border-bottom: 0;
+}
+.lab-pad {
+  padding: 12px;
+}
+.lab-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+}
+
+/* ── Nguyên tắc ──────────────────────────────────────────────────────────
+   Mỗi nguyên tắc buộc phải nói được "hỏng thì thấy gì" — nguyên tắc không có
+   triệu chứng quan sát được thì không kiểm được, và thứ không kiểm được thì
+   review nào cũng bỏ qua. */
+.lab-rules {
+  display: grid;
+  gap: 10px;
+}
+.lab-rule {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  padding: 13px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.lab-rule-n {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: var(--fs-num-lg);
+  font-weight: 700;
+  color: var(--act);
+  line-height: 1.2;
+}
+.lab-rule h3 {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 700;
+}
+.lab-rule p {
+  margin: 5px 0 0;
+  color: var(--ink-2);
+  line-height: 1.55;
+  max-width: 78ch;
+}
+.lab-symptom {
+  margin-top: 7px;
+  padding-left: 9px;
+  border-left: 3px solid var(--stop-line);
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+}
+.lab-symptom b {
+  color: var(--stop);
+  font-weight: 700;
+}
+
+/* ── Bản đồ khuôn màn ────────────────────────────────────────────────── */
+.lab-plans {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+}
+.lab-plan {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 14px;
+  background: var(--surface-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.lab-plan-k {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.lab-plan h3 {
+  margin: 0;
+  font-size: var(--fs-section);
+  font-weight: 700;
+}
+.lab-plan-q {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.lab-plan-q b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.lab-plan dl {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 3px 8px;
+  font-size: var(--fs-sm);
+}
+.lab-plan dt {
+  color: var(--ink-3);
+}
+.lab-plan dd {
+  margin: 0;
+  color: var(--ink-2);
+}
+.lab-plan a {
+  margin-top: auto;
+  padding-top: 8px;
+  font-weight: 600;
+  color: var(--act);
+}
+.lab-plan[data-todo='1'] {
+  background: var(--surface-raised);
+  border-style: dashed;
+}
+
+/* ── Bảng trong tài liệu ─────────────────────────────────────────────────
+   Không dùng bảng của kit: bảng kit dựng cho số liệu dày và tự cuộn, còn ở
+   đây là bảng đối chiếu vài dòng chữ. */
+.lab-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-card);
+  font-size: var(--fs-sm);
+}
+.lab-tbl th,
+.lab-tbl td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--hair);
+  line-height: 1.5;
+}
+.lab-tbl th {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.lab-tbl tr:last-child td {
+  border-bottom: 0;
+}
+.lab-tbl td b {
+  font-weight: 600;
+}
+
+/* ── Danh sách kiểm ──────────────────────────────────────────────────── */
+.lab-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--surface-card);
+}
+.lab-checks li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hair);
+  line-height: 1.5;
+}
+.lab-checks li:last-child {
+  border-bottom: 0;
+}
+.lab-checks li::before {
+  content: '☐';
+  color: var(--act);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.lab-checks b {
+  font-weight: 600;
+}
+.lab-checks em {
+  display: block;
+  font-style: normal;
+  font-size: var(--fs-sm);
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* ── Ghi chú trong màn mẫu ───────────────────────────────────────────────
+   Màn mẫu là màn THẬT về mặt hình ảnh; chú thích phải nhìn ra ngay là lời của
+   sổ chứ không phải một khối giao diện, nếu không người ta chép cả chú thích
+   vào màn nghiệp vụ. */
+.lab-note {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  padding: 9px var(--gutter);
+  background: var(--act-wash);
+  border-bottom: 1px solid var(--act-line);
+  font-size: var(--fs-sm);
+  color: var(--act-text);
+  line-height: 1.5;
+}
+.lab-note::before {
+  content: 'SỔ';
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+  height: fit-content;
+  border-radius: var(--radius-sm);
+  background: var(--act);
+  color: var(--act-ink);
+}
+.lab-note b {
+  font-weight: 700;
+}
+
+/* Mã nguồn trong câu văn: tên lớp, tên hàm, tên luật lint. Không dùng `.num`
+   của kit — `.num` căn phải vì nó dựng cho CỘT SỐ, dán vào giữa câu là chữ
+   nhảy chỗ. */
+.lab-doc code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.92em;
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  border: 1px solid var(--hair);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.lab-src > div {
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--hair);
+}
+.lab-src > div:last-child {
+  border-bottom: 0;
+}

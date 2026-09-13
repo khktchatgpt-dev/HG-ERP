@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { poLineAmount, type PriceBasis } from '@/lib/po-line'
 
 /**
  * Repo phần giao Kho ↔ Cung ứng: đọc PO đang mở để nhập theo đơn (FR-WMS-02)
@@ -991,4 +992,44 @@ export const materialGroupsRepo = {
       .insert(groupIds.map((group_id) => ({ supplier_id: supplierId, group_id })))
     if (error) throw new Error(error.message)
   },
+}
+
+/**
+ * ĐƠN GIÁ VỐN của từng dòng đơn mua, quy về ĐVT ĐẶT HÀNG.
+ *
+ * Dùng khi lập phiếu nhập kho: `warehouse_movements.unit_cost` phải mang giá,
+ * nếu không thì giá trị tồn kho bằng 0 và công nợ tính theo phiếu nhập cũng
+ * bằng 0. Đo 11/09/2026: 139/142 movement gắn dòng PO đang KHÔNG có giá — không
+ * phải Kho quên nhập, mà là chưa nơi nào từng ghi cột này.
+ *
+ * `tiền dòng ÷ SL đặt`, KHÔNG lấy thẳng `unit_price`: dòng tính theo tổng kg
+ * (`price_basis: 'unit2'`) có tiền dòng khác hẳn `qty × đơn giá`. `poLineAmount`
+ * là nơi duy nhất biết luật đó — nhân lại tại chỗ là dựng nguồn số thứ hai.
+ *
+ * Dòng chưa có giá thì KHÔNG có khoá trong map, để movement giữ `unit_cost`
+ * NULL. NULL nghĩa là "chưa biết giá", khác hẳn 0 ("hàng cho không") — màn công
+ * nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
+ */
+export async function poLineUnitCosts(lineIds: string[]): Promise<Map<string, number>> {
+  const ids = [...new Set(lineIds)]
+  if (ids.length === 0) return new Map()
+  const { data } = await db()
+    .from('supply_purchase_order_lines')
+    .select('id, qty_ordered, unit_price, price_basis, qty2')
+    .in('id', ids)
+  type L = { id: string; qty_ordered: unknown; unit_price: unknown; price_basis: PriceBasis | null; qty2: unknown } // prettier-ignore
+  const out = new Map<string, number>()
+  for (const l of (data ?? []) as L[]) {
+    const qty = Number(l.qty_ordered ?? 0)
+    if (!(qty > 0) || l.unit_price == null) continue
+    const amount = poLineAmount({
+      qty_ordered: qty,
+      unit_price: Number(l.unit_price),
+      price_basis: l.price_basis,
+      qty2: l.qty2 == null ? null : Number(l.qty2),
+    })
+    if (!(amount > 0)) continue
+    out.set(l.id, Math.round((amount / qty) * 100) / 100)
+  }
+  return out
 }

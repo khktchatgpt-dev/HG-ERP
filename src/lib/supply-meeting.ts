@@ -102,7 +102,7 @@ const PO_ALIVE_NOT_DONE = new Set([
 ])
 
 /** Đơn ĐÃ RA KHỎI NHÀ — chỉ những đơn này mới đòi hẹn giao được. */
-const PO_SENT = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
+export const PO_SENT = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
 
 /** dd/mm từ yyyy-mm-dd — để câu lý do đọc như người Việt đọc. */
 function dmy(iso: string): string {
@@ -348,4 +348,16 @@ export function buildAgenda<T extends MeetingRiskInput>(
   return [...map.values()].sort(
     (a, b) => a.rank - b.rank || b.rows.length - a.rows.length,
   )
+}
+
+/**
+ * Thứ tự đọc bộ phận trong họp: người QUYẾT trước, người LÀM sau. Dùng chung
+ * cho trang Việc cần quyết định và sheet cùng tên trong file họp — hai nơi mà
+ * xếp khác nhau thì biên bản chép từ file không khớp màn hình.
+ */
+export const AGENDA_DEPT_ORDER = ['Sản xuất', 'Giám đốc', 'Cung ứng', 'Nhà cung cấp', 'Kho']
+
+export function agendaDeptRank(dept: string): number {
+  const i = AGENDA_DEPT_ORDER.indexOf(dept)
+  return i === -1 ? AGENDA_DEPT_ORDER.length : i
 }

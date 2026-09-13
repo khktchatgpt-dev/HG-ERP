@@ -3,6 +3,7 @@ import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { quotesRepo } from '@/modules/dept/sales/quotes.repo'
 import { countIncomingSoon, countMyTodos } from '@/lib/supply-watch'
+import { countMeetingIssues } from '@/modules/dept/supply/lsx-supply.service'
 import type { User } from '@/modules/core/users/users.repo'
 import type { WorkspaceId } from './workspaces.config'
 
@@ -51,12 +52,18 @@ async function execBadges(user: User): Promise<Record<string, number>> {
  * trách): badge chạy trên MỌI lần mở trang của khu này, không đáng ba cú join.
  */
 async function supplyBadges(user: User): Promise<Record<string, number>> {
-  const rows = await posRepo.listWatchFields()
   const today = new Date().toISOString().slice(0, 10)
+  // "Vấn đề cần xử lý" đếm bằng đúng phép tính của trang (countMeetingIssues →
+  // buildMeeting.issues), đường nhẹ không join — thêm 13/09/2026.
+  const [rows, issues] = await Promise.all([
+    posRepo.listWatchFields(),
+    countMeetingIssues(today),
+  ])
   const todo = countMyTodos(rows, user.id, today)
   const soon = countIncomingSoon(rows, today)
   const out: Record<string, number> = {}
   if (todo > 0) out['/planning/viec-cua-toi'] = todo
   if (soon > 0) out['/planning/hang-sap-ve'] = soon
+  if (issues > 0) out['/planning/van-de'] = issues
   return out
 }

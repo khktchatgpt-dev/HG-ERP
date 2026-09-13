@@ -361,6 +361,11 @@ export function LsxPoScreen({
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <a href={`/api/dept/supply/hop-report?lsx=${lsx.id}`} download>
+                    <Download /> Báo cáo đơn hàng lệnh này (Excel)
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <a href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`} download>
                     <Download /> Xuất Excel hồ sơ lệnh
                   </a>
@@ -379,7 +384,7 @@ export function LsxPoScreen({
         nhìn đâu ("giao diện rất khó nhìn" — user 07/09).
       */}
       <div className="bg-muted/50 grid grid-cols-2 gap-x-4 gap-y-3 rounded-lg border px-4 py-3 md:grid-cols-4">
-          {/*
+        {/*
             "Hạn vật tư phải về" từng là một DẢI RIÊNG ngay dưới tiêu đề. Gộp về
             đây 04/09/2026: nó cùng loại với ba ô bên cạnh — đều là dữ kiện của
             LỆNH — nên tách ra thành khối thứ tư chỉ để nhét một ô nhập là ăn
@@ -387,35 +392,35 @@ export function LsxPoScreen({
             xuống quá nửa màn hình. Ô sửa được nằm lẫn giữa ô đọc vẫn phân biệt
             đượcvì nó có viền input rõ ràng.
           */}
-          <MaterialsDueFact
-            lsxId={lsx.id}
-            value={lsx.materials_due_at}
-            daysLeft={dueLeft}
-            canEdit={canEdit}
-          />
-          <Fact
-            icon={<CalendarDays />}
-            label="Ngày giao khách"
-            value={dmy(lsx.ship_date)}
-          />
-          <Fact
-            icon={<Package />}
-            label="Sản phẩm"
-            value={
-              lsx.products.length > 0 ? `${lsx.products.length} mã` : 'chưa có dòng SP'
-            }
-            hint={lsx.products
-              .slice(0, 3)
-              .map((p) => `${p.code}×${p.qty}`)
-              .join(' · ')}
-          />
-          <Fact
-            icon={<User />}
-            label="Người đảm nhận"
-            value={owners.length > 0 ? owners.join(', ') : 'chưa giao ai'}
-            tone={owners.length > 0 ? undefined : 'var(--warn)'}
-            hint={owners.length > 1 ? 'nhiều người cùng lo lệnh này' : undefined}
-          />
+        <MaterialsDueFact
+          lsxId={lsx.id}
+          value={lsx.materials_due_at}
+          daysLeft={dueLeft}
+          canEdit={canEdit}
+        />
+        <Fact
+          icon={<CalendarDays />}
+          label="Ngày giao khách"
+          value={dmy(lsx.ship_date)}
+        />
+        <Fact
+          icon={<Package />}
+          label="Sản phẩm"
+          value={
+            lsx.products.length > 0 ? `${lsx.products.length} mã` : 'chưa có dòng SP'
+          }
+          hint={lsx.products
+            .slice(0, 3)
+            .map((p) => `${p.code}×${p.qty}`)
+            .join(' · ')}
+        />
+        <Fact
+          icon={<User />}
+          label="Người đảm nhận"
+          value={owners.length > 0 ? owners.join(', ') : 'chưa giao ai'}
+          tone={owners.length > 0 ? undefined : 'var(--warn)'}
+          hint={owners.length > 1 ? 'nhiều người cùng lo lệnh này' : undefined}
+        />
       </div>
 
       {/* Bốn con số của lệnh — đọc, không lọc: bảng dưới chỉ có mấy dòng, lọc

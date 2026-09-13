@@ -12,6 +12,8 @@
  * giữ bóng — người mua mở màn này để biết hôm nay gọi cho ai.
  */
 
+import { assessPoLate } from './late-risk'
+
 export type LsxSupplyGateKey = 'none' | 'unsent' | 'late' | 'inflight' | 'done'
 
 export type LsxSupplyOwner = 'Cung ứng' | 'Nhà cung cấp' | 'Kho' | '—'
@@ -222,6 +224,65 @@ export function suggestMaterialsDue(
   if (Number.isNaN(d.getTime())) return null
   d.setUTCDate(d.getUTCDate() - leadDays)
   const iso = d.toISOString().slice(0, 10)
-  if (todayIso && iso < todayIso) return shipDateIso.slice(0, 10) < todayIso ? null : todayIso
+  if (todayIso && iso < todayIso)
+    return shipDateIso.slice(0, 10) < todayIso ? null : todayIso
   return iso
+}
+
+// ── Gom đơn mua theo lệnh ────────────────────────────────────────────
+
+/** Trường tối thiểu của một đơn để gom theo lệnh và tính bốn số đếm. */
+export type PoForLsx = {
+  id: string
+  status: string
+  expected_at: string | null
+  production_order_id: string | null
+}
+
+/**
+ * Gom đơn mua theo LỆNH — đơn mua chung (0125) gắn vào CẢ các lệnh nó phục vụ,
+ * cờ `shared` đánh dấu lệnh phụ; `late` = đã qua hẹn giao (assessPoLate — cố ý
+ * tính cả đơn nháp, xem lsx-supply.service về nhãn "NCC trễ").
+ *
+ * Thuần và dùng chung cho màn Vật tư theo lệnh, file họp và badge sidebar
+ * (13/09/2026): trước đó phần gom nằm trong service, thêm một chỗ đếm là thêm
+ * một chỗ lệch.
+ */
+export function groupPosByLsx<T extends PoForLsx>(
+  pos: T[],
+  extraLsx: Map<string, { id: string }[]>,
+  todayIso: string,
+): Map<string, (T & { shared: boolean; late: boolean })[]> {
+  const out = new Map<string, (T & { shared: boolean; late: boolean })[]>()
+  const attach = (lsxId: string, p: T, shared: boolean) => {
+    const list = out.get(lsxId) ?? []
+    list.push({ ...p, shared, late: assessPoLate(p, todayIso) === 'overdue' })
+    out.set(lsxId, list)
+  }
+  for (const p of pos) {
+    if (p.production_order_id) attach(p.production_order_id, p, false)
+    for (const ex of extraLsx.get(p.id) ?? []) {
+      if (ex.id !== p.production_order_id) attach(ex.id, p, true)
+    }
+  }
+  return out
+}
+
+/** Bốn số đếm của lệnh từ danh sách đơn đã gom — đơn huỷ không tính. */
+export function summarizePos(
+  list: { status: string; late: boolean }[],
+): Pick<LsxSupplyInput, 'posTotal' | 'posUnsent' | 'posOpen' | 'posLate'> {
+  const live = list.filter((p) => p.status !== 'cancelled')
+  return {
+    posTotal: live.length,
+    posUnsent: live.filter((p) => p.status === 'draft' || p.status === 'pending_approval')
+      .length,
+    posOpen: live.filter(
+      (p) =>
+        p.status !== 'draft' &&
+        p.status !== 'pending_approval' &&
+        p.status !== 'received',
+    ).length,
+    posLate: live.filter((p) => p.late).length,
+  }
 }

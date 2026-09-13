@@ -16,7 +16,12 @@ import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
 export default async function PlanningMaterialsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; group?: string; page?: string; review?: string }>
+  searchParams: Promise<{
+    q?: string
+    group?: string
+    page?: string
+    review?: string
+  }>
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()

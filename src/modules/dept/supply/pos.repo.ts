@@ -323,6 +323,33 @@ export const posRepo = {
   },
 
   /**
+   * CỘT NHẸ cho badge "Vấn đề cần xử lý" (13/09/2026) — đủ để chạy
+   * `groupPosByLsx` + `assessMeetingRisk` mà không join gì. Khác
+   * `listWatchFields`: GIỮ đơn `received`, vì mức "Đủ vật tư" của lệnh cần
+   * biết mọi đơn đã nhận xong; chỉ bỏ đơn huỷ.
+   */
+  async listMeetingFields(): Promise<
+    {
+      id: string
+      status: string
+      expected_at: string | null
+      production_order_id: string | null
+    }[]
+  > {
+    const { data } = await db()
+      .from('supply_purchase_orders')
+      .select('id, status, expected_at, production_order_id')
+      .neq('status', 'cancelled')
+      .limit(2000)
+    return (data ?? []) as {
+      id: string
+      status: string
+      expected_at: string | null
+      production_order_id: string | null
+    }[]
+  },
+
+  /**
    * BỐN CỘT NHẸ để đếm badge sidebar (`workspaces/nav-badges`) — không join
    * NCC / LSX / người phụ trách như `list()`.
    *
@@ -384,7 +411,9 @@ export const posRepo = {
     if (poIds.length === 0) return out
     const { data } = await db()
       .from('supply_po_line_lsx')
-      .select('line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)')
+      .select(
+        'line_id, production_order_id, qty, line:supply_purchase_order_lines!inner(po_id)',
+      )
       .in('line.po_id', poIds)
     for (const r of (data ?? []) as {
       line_id: string
@@ -394,6 +423,26 @@ export const posRepo = {
       const cur = out.get(r.line_id) ?? []
       cur.push({ production_order_id: r.production_order_id, qty: Number(r.qty) || 0 })
       out.set(r.line_id, cur)
+    }
+    return out
+  },
+
+  /**
+   * TOÀN BỘ liên kết đơn ↔ lệnh phụ (0125), không lọc theo id — để badge
+   * sidebar chạy song song với hai truy vấn kia thay vì đợi danh sách đơn về
+   * rồi mới hỏi (đo 13/09/2026: nối tiếp 706ms, bảng nhỏ nên lấy cả rẻ hơn).
+   * Không join mã lệnh: badge chỉ cần id.
+   */
+  async listAllExtraLsx(): Promise<Map<string, { id: string }[]>> {
+    const out = new Map<string, { id: string }[]>()
+    const { data } = await db()
+      .from('supply_po_extra_lsx')
+      .select('po_id, production_order_id')
+      .limit(5000)
+    for (const r of (data ?? []) as { po_id: string; production_order_id: string }[]) {
+      const list = out.get(r.po_id) ?? []
+      list.push({ id: r.production_order_id })
+      out.set(r.po_id, list)
     }
     return out
   },
@@ -427,7 +476,10 @@ export const posRepo = {
    * Chỉ tính đơn từ 'ordered' trở đi: giá trên đơn nháp/chờ duyệt chưa phải giá
    * chốt (cùng ranh giới với lúc ghi `last_purchase_price`). Đơn huỷ bị loại.
    */
-  async priceHistoryByMaterial(materialId: string, limit = 50): Promise<MaterialPricePoint[]> {
+  async priceHistoryByMaterial(
+    materialId: string,
+    limit = 50,
+  ): Promise<MaterialPricePoint[]> {
     const { data } = await db()
       .from('supply_purchase_order_lines')
       .select(

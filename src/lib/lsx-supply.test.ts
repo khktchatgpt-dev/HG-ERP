@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   compareForSupply,
+  groupPosByLsx,
+  summarizePos,
   daysUntilDue,
   dueLevel,
   lsxSupplyGate,
@@ -136,5 +138,54 @@ describe('suggestMaterialsDue', () => {
   it('không có ngày xuất / ngày hỏng thì không gợi ý', () => {
     expect(suggestMaterialsDue(null)).toBeNull()
     expect(suggestMaterialsDue('abc')).toBeNull()
+  })
+})
+
+describe('groupPosByLsx + summarizePos (gom đơn theo lệnh, dùng chung ba nơi)', () => {
+  const po = (
+    id: string,
+    lsx: string | null,
+    status: string,
+    expected_at: string | null = null,
+  ) => ({
+    id,
+    status,
+    expected_at,
+    production_order_id: lsx,
+  })
+
+  it('đơn mua chung gắn vào cả lệnh phụ với cờ shared, không gắn trùng lệnh chính', () => {
+    const extra = new Map([['p1', [{ id: 'L1' }, { id: 'L2' }]]])
+    const g = groupPosByLsx([po('p1', 'L1', 'ordered')], extra, TODAY)
+    expect(g.get('L1')?.map((p) => p.shared)).toEqual([false])
+    expect(g.get('L2')?.map((p) => p.shared)).toEqual([true])
+  })
+
+  it('đơn không gắn lệnh nào thì không xuất hiện; late tính theo hẹn giao đã qua', () => {
+    const g = groupPosByLsx(
+      [
+        po('a', null, 'ordered', '2026-08-01'),
+        po('b', 'L1', 'ordered', '2026-08-01'),
+        po('c', 'L1', 'ordered', '2026-08-30'),
+      ],
+      new Map(),
+      TODAY,
+    )
+    expect(g.size).toBe(1)
+    expect(g.get('L1')?.map((p) => [p.id, p.late])).toEqual([
+      ['b', true],
+      ['c', false],
+    ])
+  })
+
+  it('summarizePos: bỏ đơn huỷ; nháp/chờ ký = chưa gửi; received không phải đơn mở', () => {
+    const s = summarizePos([
+      { status: 'draft', late: false },
+      { status: 'pending_approval', late: true },
+      { status: 'ordered', late: true },
+      { status: 'received', late: false },
+      { status: 'cancelled', late: true },
+    ])
+    expect(s).toEqual({ posTotal: 4, posUnsent: 2, posOpen: 1, posLate: 2 })
   })
 })

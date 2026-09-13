@@ -118,17 +118,38 @@ export function summarizePayables(
     })
 }
 
+/**
+ * CƠ SỞ TÍNH công nợ.
+ *
+ * `receipt` — ĐÚNG ĐẮN: nợ phát sinh khi hàng vào kho có giá. Đây là mặc định
+ *   và là con số được ghi sổ.
+ * `confirmed_po` — TẠM TÍNH: lấy theo đơn NCC đã xác nhận, dùng khi Kho chưa
+ *   ghi phiếu nhập nên sổ thật ra 0. Màn BẮT BUỘC nói rõ đang xem cơ sở nào;
+ *   tuyệt đối không ghi sổ theo số này.
+ */
+export type PayableBasis = 'receipt' | 'confirmed_po'
+
 export const payablesService = {
   /** Sổ công nợ per NCC. */
-  async list(user: User): Promise<{
+  async list(
+    user: User,
+    opts: { basis?: PayableBasis } = {},
+  ): Promise<{
     rows: PayableSupplierRow[]
     grand: CurrencyTotal[]
+    basis: PayableBasis
   }> {
     await assertAction(user, 'accounting.payable.view')
+    const basis: PayableBasis = opts.basis ?? 'receipt'
     const [receipts, payments, missing] = await Promise.all([
-      payablesRepo.receiptValues(),
+      basis === 'confirmed_po'
+        ? payablesRepo.confirmedPoValues()
+        : payablesRepo.receiptValues(),
       payablesRepo.listPayments(),
-      payablesRepo.receiptsMissingPrice(),
+      // Cảnh báo "phiếu chưa có giá" chỉ có nghĩa với cơ sở phiếu nhập.
+      basis === 'confirmed_po'
+        ? Promise.resolve([])
+        : payablesRepo.receiptsMissingPrice(),
     ])
     const rows = summarizePayables(receipts, payments, missing)
     const grand = new Map<string, CurrencyTotal>()
@@ -146,7 +167,7 @@ export const payablesService = {
         grand.set(t.currency, g)
       }
     }
-    return { rows, grand: [...grand.values()] }
+    return { rows, grand: [...grand.values()], basis }
   },
 
   /** Chi tiết 1 NCC: phát sinh per PO (kèm phiếu nhập) + lịch sử thanh toán. */

@@ -491,6 +491,30 @@ export const ACTIONS: Action[] = [
     domain: 'accounting',
     rule: perm('accounting.member'),
   },
+  /*
+   * HOÁ ĐƠN NCC (0188) mở cho CẢ HAI PHÒNG, khác `accounting.invoice.*` ở trên.
+   *
+   * Hoá đơn GTGT đi kèm hàng (điều khoản mặc định trên đơn mua ghi vậy), nên
+   * Cung ứng là người CẦM tờ giấy trước; còn sổ công nợ là sổ của Kế toán. Bắt
+   * một bên chờ bên kia thì tờ hoá đơn nằm trên bàn không ai nhập.
+   *
+   * Mở trước, siết sau: nới quyền thì dễ, thu quyền đã phát ra thì phải đi giải
+   * thích với người đang dùng. Muốn chỉ Kế toán nhập thì bỏ `supply.member`
+   * khỏi `manage` — một dòng, không migration.
+   */
+  {
+    key: 'accounting.supplier_invoice.view',
+    label: 'Xem hoá đơn nhà cung cấp',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+  },
+  {
+    key: 'accounting.supplier_invoice.manage',
+    label: 'Nhập / sửa hoá đơn nhà cung cấp',
+    domain: 'accounting',
+    rule: anyOf(perm('accounting.member'), perm('supply.member')),
+    rowLevel: 'Hoá đơn đã vào sổ (posted) chỉ sửa được sau khi mở lại.',
+  },
   {
     key: 'accounting.payable.view',
     label: 'Xem công nợ NCC',

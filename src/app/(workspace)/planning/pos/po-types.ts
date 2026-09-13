@@ -28,6 +28,13 @@ export type Po = {
   // Mốc chuyển trạng thái (có ở detail API) — cho stepper. Optional để list row bỏ qua được.
   approved_at?: string | null
   ordered_at?: string | null
+  /** Mốc NCC xác nhận đã nhận đơn (0152) — NCC không đăng nhập, NV cung ứng ghi. */
+  confirmed_at?: string | null
+  /**
+   * Lần đổi gần nhất — dùng suy ra "nằm ở bước này từ bao giờ" cho các bước
+   * KHÔNG có cột mốc riêng (gửi duyệt, đang giao). Xem `poHolder` ở kit.
+   */
+  updated_at?: string | null
   /** Người PHỤ TRÁCH đơn (0128) — quyền thao tác xét theo đây, không phải cả phòng. */
   assigned_to?: string | null
   assignee_name?: string | null
@@ -60,6 +67,14 @@ export type PoLine = {
   qty2: number | null
   unit2: string | null
   note: string | null
+  /**
+   * NHU CẦU tính từ định mức × sản lượng lệnh, chốt lúc soạn đơn.
+   *
+   * Repo đã lấy sẵn cột này (`listLines`) nhưng kiểu cũ bỏ quên nên màn hình
+   * không đọc tới — số có trong tay mà không ai thấy. Đo 09/09/2026: 91/203
+   * dòng có giá trị. `null` = dòng soạn tay, không sinh từ cân đối.
+   */
+  qty_demand: number | null
   material_code: string
   material_name: string
   material_unit: string

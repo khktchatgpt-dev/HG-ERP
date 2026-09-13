@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { AlertTriangle, Gavel } from 'lucide-react'
+import { AlertTriangle, Download, Gavel } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { DocChip } from '@/components/erp/DocChip'
@@ -14,15 +14,12 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn/table'
-import { buildAgenda, type AgendaItem } from '@/lib/supply-meeting'
+import { agendaDeptRank, buildAgenda, type AgendaItem } from '@/lib/supply-meeting'
 import type { LsxSupplyRow } from '@/modules/dept/supply/lsx-supply.service'
 import { loadMeeting } from '../_data/meeting'
 import { LEVEL_BADGE, dmy } from '../_components/IssueRow'
 
 export const dynamic = 'force-dynamic'
-
-/** Thứ tự đọc trong họp: người quyết trước, người làm sau. */
-const DEPT_ORDER = ['Sản xuất', 'Giám đốc', 'Cung ứng', 'Nhà cung cấp', 'Kho']
 
 /**
  * VIỆC CẦN QUYẾT ĐỊNH — trang cuối của bảng họp: "Cung ứng phải làm gì, Sản
@@ -40,7 +37,7 @@ export default async function HopPage() {
   const byDept = new Map<string, AgendaItem<LsxSupplyRow>[]>()
   for (const it of agenda) byDept.set(it.dept, [...(byDept.get(it.dept) ?? []), it])
   const depts = [...byDept.keys()].sort(
-    (a, b) => rank(a) - rank(b) || a.localeCompare(b, 'vi'),
+    (a, b) => agendaDeptRank(a) - agendaDeptRank(b) || a.localeCompare(b, 'vi'),
   )
 
   return (
@@ -64,6 +61,12 @@ export default async function HopPage() {
         }
         actions={
           <>
+            <Button variant="outline" size="sm" asChild>
+              <a href="/api/dept/supply/hop-report" download>
+                <Download />
+                Tải Excel họp
+              </a>
+            </Button>
             <Button variant="outline" size="sm" asChild>
               <Link href="/planning/van-de">
                 <AlertTriangle />
@@ -154,7 +157,3 @@ export default async function HopPage() {
   )
 }
 
-function rank(dept: string): number {
-  const i = DEPT_ORDER.indexOf(dept)
-  return i === -1 ? DEPT_ORDER.length : i
-}

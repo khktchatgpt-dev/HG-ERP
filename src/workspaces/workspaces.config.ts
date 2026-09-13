@@ -200,12 +200,45 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Kế toán',
         items: [
           { href: '/finance', label: 'Trang chủ', icon: 'home' },
+          /*
+           * CỬA VÀO công nợ là SỔ THEO KỲ, không phải ảnh chụp "tại thời điểm
+           * này": chỉ sổ theo kỳ mới chốt được và lên được báo cáo tài chính.
+           * Màn ghi thanh toán (`/finance/cong-no-ncc`) vào TỪ đây — cho nó một
+           * mục ngang hàng là dựng hai chỗ cùng nói "công nợ" trong một phòng,
+           * rồi hai chỗ ra hai con số.
+           */
           {
-            href: '/finance/cong-no-ncc',
+            href: '/finance/so-cong-no',
             label: 'Công nợ NCC',
             icon: 'circle-dollar-sign',
           },
           { href: '/finance/invoices', label: 'Hoá đơn', icon: 'receipt' },
+          /*
+           * Điều khoản thanh toán là DANH MỤC, không phải chứng từ — nhưng nó
+           * đứng riêng ở nav vì đang là chốt chặn: 0/164 NCC khai số ngày, nên
+           * 6,578 tỷ công nợ không khoản nào có hạn. Khai xong hết thì mục này
+           * gập vào hồ sơ NCC được.
+           */
+          {
+            href: '/finance/dieu-khoan-ncc',
+            label: 'Hạn thanh toán',
+            icon: 'calendar-check',
+          },
+          /*
+           * Đối chiếu hoá đơn ↔ đơn mua KHÔNG đứng riêng ở nav: nó là bước soi
+           * chi tiết, vào từ một lệnh hoặc một đơn cụ thể. Cho nó một mục ngang
+           * hàng "Hoá đơn" là dựng hai chỗ cùng nói về hoá đơn trong một phòng.
+           */
+          {
+            href: '/finance/theo-lenh',
+            label: 'Tiền theo lệnh',
+            icon: 'chart-column',
+          },
+          {
+            href: '/finance/bao-cao',
+            label: 'Báo cáo mua hàng',
+            icon: 'chart-pie',
+          },
         ],
       },
       {
