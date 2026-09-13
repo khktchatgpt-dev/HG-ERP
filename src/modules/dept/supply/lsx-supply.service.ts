@@ -1,4 +1,6 @@
 import { assessPoLate } from '@/lib/late-risk'
+import { groupPosByLsx, summarizePos } from '@/lib/lsx-supply'
+import { buildMeeting } from '@/lib/supply-meeting'
 import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
 import {
@@ -427,35 +429,31 @@ export async function buildLsxSupplyRows(
    * ĐƠN HÀNG một dòng nên lệnh gộp nhiều đơn bị cộng trùng, và view chỉ nhìn
    * cột `production_order_id` nên bỏ sót đơn mua chung nhiều lệnh (0125).
    */
-  type PoBrief = LsxSupplyRow['pos'][number]
-  const posByLsx = new Map<string, PoBrief[]>()
-  const attach = (lsxId: string, p: (typeof pos)[number], shared: boolean) => {
-    const list = posByLsx.get(lsxId) ?? []
-    list.push({
-      id: p.id,
-      code: p.code,
-      supplier_name: p.supplier_name,
-      status: p.status,
-      expected_at: p.expected_at,
-      currency: p.currency,
-      ordered_at: p.ordered_at,
-      note: p.note,
-      assignee_name: p.assignee_name,
-      shared,
-      late: assessPoLate(p, today) === 'overdue',
-    })
-    posByLsx.set(lsxId, list)
-  }
-  for (const p of pos) {
-    if (p.production_order_id) attach(p.production_order_id, p, false)
-    for (const ex of extraLsx.get(p.id) ?? []) {
-      if (ex.id !== p.production_order_id) attach(ex.id, p, true)
-    }
+  // Gom đơn theo LỆNH bằng helper thuần (dùng chung với badge sidebar) rồi
+  // rút về bộ cột màn hình cần.
+  const grouped = groupPosByLsx(pos, extraLsx, today)
+  const posByLsx = new Map<string, LsxSupplyRow['pos'][number][]>()
+  for (const [lsxId, list] of grouped) {
+    posByLsx.set(
+      lsxId,
+      list.map((p) => ({
+        id: p.id,
+        code: p.code,
+        supplier_name: p.supplier_name,
+        status: p.status,
+        expected_at: p.expected_at,
+        currency: p.currency,
+        ordered_at: p.ordered_at,
+        note: p.note,
+        assignee_name: p.assignee_name,
+        shared: p.shared,
+        late: p.late,
+      })),
+    )
   }
 
   return lsxs.map((l) => {
     const list = posByLsx.get(l.id) ?? []
-    const live = list.filter((p) => p.status !== 'cancelled')
     return {
       id: l.id,
       code: l.code,
@@ -467,17 +465,38 @@ export async function buildLsxSupplyRows(
       priority: l.priority,
       products: productsByLsx.get(l.id) ?? [],
       pos: list,
-      posTotal: live.length,
-      posUnsent: live.filter(
-        (p) => p.status === 'draft' || p.status === 'pending_approval',
-      ).length,
-      posOpen: live.filter(
-        (p) =>
-          p.status !== 'draft' &&
-          p.status !== 'pending_approval' &&
-          p.status !== 'received',
-      ).length,
-      posLate: live.filter((p) => p.late).length,
+      ...summarizePos(list),
     }
   })
+}
+
+/**
+ * SỐ LỆNH CẦN NÊU TRONG HỌP — cho badge sidebar "Vấn đề cần xử lý" (13/09/2026).
+ *
+ * Cùng phép tính với ba trang họp (`buildMeeting`.issues: mọi mức trừ Đang về
+ * và Đủ) nhưng đi đường NHẸ: không join NCC/người phụ trách, không nạp dòng
+ * sản phẩm — badge chạy trên mọi lần mở trang của khu Cung ứng. Không nhận
+ * `user` vì sidebar chỉ hiện trong khu này và số đếm không tuỳ người xem.
+ */
+export async function countMeetingIssues(today: string): Promise<number> {
+  // Ba truy vấn SONG SONG (không đợi id đơn rồi mới hỏi lệnh phụ) — badge
+  // trả về trong một vòng mạng thay vì hai.
+  const [lsxs, pos, extraLsx] = await Promise.all([
+    productionRepo.listActive(),
+    posRepo.listMeetingFields(),
+    posRepo.listAllExtraLsx(),
+  ])
+  const grouped = groupPosByLsx(pos, extraLsx, today)
+  const inputs = lsxs.map((l) => {
+    const list = grouped.get(l.id) ?? []
+    return {
+      code: l.code,
+      materials_received_at: l.materials_received_at,
+      materials_due_at: l.materials_due_at,
+      ship_date: l.ship_date,
+      pos: list.map((p) => ({ status: p.status, expected_at: p.expected_at })),
+      ...summarizePos(list),
+    }
+  })
+  return buildMeeting(inputs, today).issues.length
 }

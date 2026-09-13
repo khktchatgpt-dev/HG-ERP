@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   AlertTriangle,
   Building2,
@@ -21,7 +21,6 @@ import {
   Package,
   Plus,
   Search,
-  Send,
   Truck,
   UserRound,
 } from 'lucide-react'
@@ -32,7 +31,13 @@ import { StatTile, StatTiles } from '@/components/erp/StatTile'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/shadcn/button'
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/shadcn/card'
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/shadcn/card'
 import {
   Table,
   TableBody,
@@ -48,16 +53,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn/dropdown-menu'
+import { daysUntilDue, dueLevel } from '@/lib/lsx-supply'
 import {
-  LSX_SUPPLY_GATES,
-  compareForSupply,
-  daysUntilDue,
-  dueLevel,
-  lsxSupplyGate,
-  type DueLevel,
-  type LsxSupplyGateKey,
-} from '@/lib/lsx-supply'
-import type { BadgeTone } from '@/components/Badge'
+  MEETING_LEVEL,
+  MEETING_LEVELS,
+  MEETING_STOP_DAYS,
+  assessMeetingRisk,
+  compareMeeting,
+  type MeetingRiskLevel,
+} from '@/lib/supply-meeting'
+import { LEVEL_BADGE } from '../_components/IssueRow'
 import type { LsxSupplyRow } from '@/modules/dept/supply/lsx-supply.service'
 import { useToast } from '@/components/ui/Toast'
 import { apiErrorText } from '@/lib/api'
@@ -66,20 +71,17 @@ import { LsxDueEditor, saveMaterialsDue } from './LsxDueEditor'
 
 export type { LsxSupplyRow }
 
-const GATE_TONE: Record<LsxSupplyGateKey, BadgeTone> = {
-  none: 'amber',
-  unsent: 'amber',
-  late: 'red',
-  inflight: 'blue',
-  done: 'green',
-}
+/**
+ * MỘT THANG MỨC cho cả phòng (13/09/2026): danh sách này, ba trang họp
+ * (Tổng quan · Vấn đề · Việc cần quyết định) và file Excel họp đều đọc
+ * `assessMeetingRisk`. Trước đó danh sách dùng thang bậc cũ (Chưa lập đơn /
+ * Đơn chưa gửi / NCC trễ…) nên cùng một lệnh mang hai nhãn ở hai trang.
+ * Lọc `?muc=<mức>` để ô KPI ở Tổng quan dẫn thẳng tới đây đã lọc sẵn.
+ */
+type LevelFilter = MeetingRiskLevel | 'mine' | 'all'
 
-const GATE_LABEL: Record<LsxSupplyGateKey, string> = {
-  none: 'Chưa lập đơn',
-  unsent: 'Đơn chưa gửi',
-  late: 'NCC trễ hẹn',
-  inflight: 'Vật tư đang về',
-  done: 'Về đủ',
+function isLevel(v: string | null): v is MeetingRiskLevel {
+  return !!v && v in MEETING_LEVEL
 }
 
 const DUE_FILTER_OPTIONS: { value: string; label: string }[] = [
@@ -117,14 +119,16 @@ export function LsxSupplyScreen({
   today: string
   canEdit: boolean
 }) {
-  const [gate, setGate] = useState<LsxSupplyGateKey | 'mine' | 'all'>('all')
+  const muc = useSearchParams().get('muc')
+  const [gate, setGate] = useState<LevelFilter>(isLevel(muc) ? muc : 'all')
 
   const router = useRouter()
   const toast = useToast()
   const [filling, setFilling] = useState(false)
   // Lệnh chưa có hạn nhưng có ngày xuất — điền gợi ý "ngày xuất − 30" một lượt.
   const fillable = useMemo(
-    () => rows.filter((r) => !r.materials_due_at && suggestMaterialsDue(r.ship_date, today)),
+    () =>
+      rows.filter((r) => !r.materials_due_at && suggestMaterialsDue(r.ship_date, today)),
     [rows, today],
   )
   async function fillSuggested() {
@@ -154,25 +158,22 @@ export function LsxSupplyScreen({
       rows
         .map((r) => ({
           row: r,
-          gate: lsxSupplyGate(r),
+          risk: assessMeetingRisk(r, today),
           due: dueLevel(r.materials_due_at, today),
           daysLeft: daysUntilDue(r.materials_due_at, today),
           owners: ownersOf(r),
         }))
-        .sort((a, b) =>
-          compareForSupply(
-            { gate: a.gate, due: a.due, code: a.row.code },
-            { gate: b.gate, due: b.due, code: b.row.code },
-          ),
-        ),
+        // Cùng thứ tự với ba trang họp: khẩn trước, cùng mức thì mốc gần trước.
+        .sort(compareMeeting),
     [rows, today],
   )
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { mine: 0, all: enriched.length }
     for (const e of enriched) {
-      c[e.gate.key] = (c[e.gate.key] ?? 0) + 1
-      if (e.gate.mine) c.mine++
+      c[e.risk.level] = (c[e.risk.level] ?? 0) + 1
+      // "Việc của tôi" = lệnh mà bóng đang ở Cung ứng (chưa lập/chưa gửi đơn).
+      if (e.risk.owner === 'Cung ứng') c.mine++
     }
     return c
   }, [enriched])
@@ -188,8 +189,8 @@ export function LsxSupplyScreen({
   const visible = useMemo(() => {
     const ql = q.trim().toLowerCase()
     return enriched.filter((e) => {
-      if (gate === 'mine' && !e.gate.mine) return false
-      if (gate !== 'mine' && gate !== 'all' && e.gate.key !== gate) return false
+      if (gate === 'mine' && e.risk.owner !== 'Cung ứng') return false
+      if (gate !== 'mine' && gate !== 'all' && e.risk.level !== gate) return false
       if (customer && e.row.customer_name !== customer) return false
       if (dueFilter && e.due !== dueFilter) return false
       if (!ql) return true
@@ -201,7 +202,7 @@ export function LsxSupplyScreen({
     })
   }, [enriched, gate, customer, dueFilter, q])
 
-  const toggle = (k: LsxSupplyGateKey | 'mine') => setGate(gate === k ? 'all' : k)
+  const toggle = (k: MeetingRiskLevel | 'mine') => setGate(gate === k ? 'all' : k)
 
   return (
     <div className="theme-v3 text-foreground flex flex-col gap-5 pb-16">
@@ -212,17 +213,23 @@ export function LsxSupplyScreen({
           { label: 'Vật tư theo lệnh' },
         ]}
         title="Vật tư theo lệnh"
-        description="Theo dõi tiến độ vật tư và tình trạng đơn mua của các lệnh sản xuất đang chạy. Xếp theo việc cần xử lý trước."
+        description="Từng lệnh đang chạy: vật tư ở mức nào, vì sao, ai đang cầm bóng. Cùng thang mức với bảng họp và file Excel họp — khẩn xếp trước."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" asChild>
-              <a href="/api/dept/supply/lsx-report" download>
-                <Download className="size-4" /> Xuất Excel (mọi lệnh)
+              <a href="/api/dept/supply/hop-report" download>
+                <Download className="size-4" /> Báo cáo đơn hàng (Excel)
               </a>
             </Button>
             {canEdit && fillable.length > 0 && (
-              <Button size="sm" variant="outline" disabled={filling} onClick={() => void fillSuggested()}>
-                <CalendarClock className="size-4" /> Điền hạn gợi ý cho {fillable.length} lệnh
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={filling}
+                onClick={() => void fillSuggested()}
+              >
+                <CalendarClock className="size-4" /> Điền hạn gợi ý cho {fillable.length}{' '}
+                lệnh
               </Button>
             )}
             {canEdit && (
@@ -248,39 +255,39 @@ export function LsxSupplyScreen({
           onClick={() => toggle('mine')}
         />
         <StatTile
-          label="Chưa lập đơn"
-          value={counts.none ?? 0}
-          icon={Package}
-          tone="warn"
-          hint="lệnh chưa có PO nào"
-          active={gate === 'none'}
-          onClick={() => toggle('none')}
-          title="Lệnh chưa có đơn mua nào"
-        />
-        <StatTile
-          label="Đơn chưa gửi NCC"
-          value={counts.unsent ?? 0}
-          icon={Send}
-          tone="warn"
-          hint="còn nháp hoặc chờ duyệt"
-          active={gate === 'unsent'}
-          onClick={() => toggle('unsent')}
-          title="Còn đơn nháp hoặc chờ ký — chưa ra khỏi nhà"
-        />
-        <StatTile
-          label="NCC trễ hẹn"
-          value={counts.late ?? 0}
+          label="Nguy cơ dừng SX"
+          value={counts.stop ?? 0}
           icon={AlertTriangle}
           tone="stop"
-          hint="đơn quá hạn cam kết"
-          active={gate === 'late'}
-          onClick={() => toggle('late')}
-          title="Đơn đã gửi mà quá hẹn giao"
+          hint={`vật tư chưa đủ, mốc còn ≤ ${MEETING_STOP_DAYS} ngày`}
+          active={gate === 'stop'}
+          onClick={() => toggle('stop')}
+          title="Vật tư chưa đủ mà mốc (hạn vật tư hoặc ngày xuất) còn rất gần hoặc đã qua"
+        />
+        <StatTile
+          label="Thiếu / chưa mua"
+          value={counts.warn ?? 0}
+          icon={Package}
+          tone="warn"
+          hint="chưa lập đơn, đơn chưa gửi, NCC trễ"
+          active={gate === 'warn'}
+          onClick={() => toggle('warn')}
+          title="Chưa lập đơn, đơn còn nháp/chờ ký, hoặc nhà cung cấp đã trễ hẹn"
+        />
+        <StatTile
+          label="Chưa có mốc"
+          value={counts.watch ?? 0}
+          icon={CalendarClock}
+          tone="default"
+          hint="không hạn vật tư, không ngày xuất"
+          active={gate === 'watch'}
+          onClick={() => toggle('watch')}
+          title="Lệnh không có hạn vật tư lẫn ngày xuất — chưa đo được rủi ro"
         />
       </StatTiles>
 
-      {/* ── Gate Tabs: Phân loại theo bậc cung ứng ────────────────────────── */}
-      <Tabs value={gate} onValueChange={(v) => setGate(v as LsxSupplyGateKey | 'all')}>
+      {/* ── Tabs mức: đúng 5 mức của bảng họp ─────────────────────────────── */}
+      <Tabs value={gate} onValueChange={(v) => setGate(v as LevelFilter)}>
         <TabsList className="bg-muted/60 h-auto flex-wrap p-1">
           <TabsTrigger value="all" className="gap-2">
             Tất cả
@@ -288,26 +295,15 @@ export function LsxSupplyScreen({
               {counts.all}
             </Badge>
           </TabsTrigger>
-          {LSX_SUPPLY_GATES.map((k) => (
+          {MEETING_LEVELS.map((k) => (
             <TabsTrigger
               key={k}
               value={k}
               disabled={(counts[k] ?? 0) === 0}
               className="gap-2"
             >
-              {GATE_LABEL[k]}
-              <Badge
-                tone={
-                  k === 'late'
-                    ? 'red'
-                    : k === 'none' || k === 'unsent'
-                      ? 'amber'
-                      : k === 'done'
-                        ? 'green'
-                        : 'blue'
-                }
-                className="px-1.5 py-0 text-[10px]"
-              >
+              {MEETING_LEVEL[k].label}
+              <Badge tone={LEVEL_BADGE[k]} className="px-1.5 py-0 text-[10px]">
                 {counts[k] ?? 0}
               </Badge>
             </TabsTrigger>
@@ -323,7 +319,7 @@ export function LsxSupplyScreen({
               <ToolbarInput
                 value={q}
                 onChange={setQ}
-                icon={<Search className="size-4 text-muted-foreground" />}
+                icon={<Search className="text-muted-foreground size-4" />}
                 placeholder="Tìm mã lệnh, khách hàng, mã đơn, mã sản phẩm…"
                 className="w-72 sm:w-80"
               />
@@ -351,7 +347,7 @@ export function LsxSupplyScreen({
               <span className="text-muted-foreground text-xs font-medium">
                 {visible.length} / {enriched.length} lệnh
               </span>
-              <div className="bg-muted flex items-center rounded-lg p-0.5 border">
+              <div className="bg-muted flex items-center rounded-lg border p-0.5">
                 <Button
                   size="icon"
                   variant={viewMode === 'table' ? 'default' : 'ghost'}
@@ -380,7 +376,7 @@ export function LsxSupplyScreen({
           <Card>
             <CardContent className="p-0">
               <EmptyState
-                icon={<Factory className="size-8 text-muted-foreground" />}
+                icon={<Factory className="text-muted-foreground size-8" />}
                 title={
                   rows.length === 0
                     ? 'Không có lệnh nào đang chạy'
@@ -411,185 +407,225 @@ export function LsxSupplyScreen({
             </CardContent>
           </Card>
         ) : viewMode === 'table' ? (
-          /* ── BẢNG DỮ LIỆU CHUẨN ERP (TABLE VIEW) ────────────────────────── */
+          /* ── BẢNG DỮ LIỆU CHUẨN ERP (TABLE VIEW) ──────────────────────────
+             Làm lại 13/09/2026 (user: "thông tin đơn hàng nhiều gây khó nhìn"):
+             mỗi lệnh TỐI ĐA HAI DÒNG. Sản phẩm và mã đơn hàng rút thành một
+             đoạn tóm tắt (đủ danh sách ở tooltip và ở trang lệnh); cột Mức
+             tách riêng để mắt quét dọc; mốc vật tư, đơn mua, người theo dõi mỗi
+             thứ một cột hẹp. Câu hỏi của bảng là "lệnh nào cần tôi động vào" —
+             chi tiết để dành cho trang lệnh. */
           <Card className="overflow-hidden">
-            <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[900px] w-full">
+            <CardContent className="overflow-x-auto p-0">
+              <Table className="w-full min-w-[960px] text-[12.5px]">
                 <TableHeader className="bg-muted/40 sticky top-0 z-10">
                   <TableRow>
-                    <TableHead className="w-8 text-center font-semibold text-xs uppercase tracking-wider">#</TableHead>
-                    <TableHead className="font-semibold text-xs uppercase tracking-wider">Lệnh SX & Khách hàng</TableHead>
-                    <TableHead className="w-[260px] font-semibold text-xs uppercase tracking-wider">Sản phẩm & Đơn hàng</TableHead>
-                    <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Tiến độ vật tư</TableHead>
-                    <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Hạn & Giao khách</TableHead>
-                    <TableHead className="w-44 font-semibold text-xs uppercase tracking-wider">Đơn mua (PO)</TableHead>
-                    <TableHead className="w-20 text-right font-semibold text-xs uppercase tracking-wider">Thao tác</TableHead>
+                    <TableHead className="w-32 text-xs font-semibold tracking-wider uppercase">
+                      Mức
+                    </TableHead>
+                    <TableHead className="text-xs font-semibold tracking-wider uppercase">
+                      Lệnh · khách hàng
+                    </TableHead>
+                    <TableHead className="w-[34%] text-xs font-semibold tracking-wider uppercase">
+                      Vì sao · việc phải làm
+                    </TableHead>
+                    <TableHead className="w-36 text-xs font-semibold tracking-wider uppercase">
+                      Hạn vật tư · xuất
+                    </TableHead>
+                    <TableHead className="w-36 text-xs font-semibold tracking-wider uppercase">
+                      Đơn mua
+                    </TableHead>
+                    <TableHead className="w-36 text-xs font-semibold tracking-wider uppercase">
+                      Người theo dõi
+                    </TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {visible.map(({ row, gate: g, due, daysLeft, owners }, idx) => (
-                    <TableRow key={row.id} className="align-top hover:bg-muted/40 transition-colors group">
-                      {/* # */}
-                      <TableCell className="font-mono text-muted-foreground text-center text-xs pt-3.5">
-                        {idx + 1}
-                      </TableCell>
+                  {visible.map(({ row, risk, due, daysLeft, owners }) => {
+                    const spTitle = row.products
+                      .map(
+                        (p) => `${p.code} — ${p.name} × ${p.qty.toLocaleString('vi-VN')}`,
+                      )
+                      .join('\n')
+                    const tomTat = [
+                      row.customer_name,
+                      row.products.length > 0 ? `${row.products.length} mã SP` : null,
+                      row.order_codes.length > 0
+                        ? row.order_codes.length === 1
+                          ? `ĐH ${row.order_codes[0]}`
+                          : `${row.order_codes.length} đơn hàng`
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')
+                    const hanText =
+                      due === 'overdue' && daysLeft !== null
+                        ? `quá ${-daysLeft} ngày`
+                        : due === 'today'
+                          ? 'đến hạn hôm nay'
+                          : (due === 'soon' || due === 'later') && daysLeft !== null
+                            ? `còn ${daysLeft} ngày`
+                            : null
+                    const hanTone =
+                      due === 'overdue'
+                        ? 'var(--stop)'
+                        : due === 'today' || due === 'soon'
+                          ? 'var(--warn)'
+                          : undefined
+                    const poParts = [
+                      row.posUnsent > 0 ? (
+                        <span key="u" style={{ color: 'var(--warn)' }}>
+                          {row.posUnsent} chưa gửi
+                        </span>
+                      ) : null,
+                      row.posLate > 0 ? (
+                        <span key="l" style={{ color: 'var(--stop)' }}>
+                          {row.posLate} quá hẹn
+                        </span>
+                      ) : null,
+                      row.posOpen > 0 ? (
+                        <span key="o" className="text-muted-foreground">
+                          {row.posOpen} đang về
+                        </span>
+                      ) : null,
+                    ].filter((x) => x !== null)
+                    return (
+                      <TableRow
+                        key={row.id}
+                        className="hover:bg-muted/40 align-top transition-colors"
+                      >
+                        {/* Mức */}
+                        <TableCell className="py-2">
+                          <Badge tone={LEVEL_BADGE[risk.level]} className="w-fit">
+                            {risk.label}
+                          </Badge>
+                        </TableCell>
 
-                      {/* Lệnh SX & Khách hàng */}
-                      <TableCell className="py-3">
-                        <div className="flex flex-col gap-1.5">
-                          <Link href={`/planning/lsx/${row.id}`} className="hover:opacity-80 w-fit">
-                            <DocChip>{row.code}</DocChip>
-                          </Link>
-                          <div className="flex items-center gap-1.5 font-semibold text-sm">
-                            <Building2 className="size-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate max-w-[180px]">{row.customer_name}</span>
-                          </div>
-                          {owners.length > 0 && (
-                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                              <UserRound className="size-3 shrink-0" />
-                              <span className="truncate max-w-[170px]">{owners.join(', ')}</span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/*
-                        Sản phẩm & Đơn hàng — CÓ TRẦN BỀ NGANG (07/09/2026).
-                        TableCell mặc định whitespace-nowrap, nên một lệnh nhiều
-                        đơn thổi ô này lên 1434px và đẩy bốn cột quan trọng
-                        (tiến độ, hạn, PO, thao tác) ra ngoài màn 1440. Cắt bằng
-                        truncate + title để vẫn xem được đủ khi rê chuột.
-                      */}
-                      <TableCell className="max-w-[260px] py-3">
-                        <div className="flex flex-col gap-1">
-                          {row.order_codes.length > 0 && (
-                            <div
-                              className="font-mono text-xs text-muted-foreground truncate"
-                              title={row.order_codes.join(', ')}
-                            >
-                              ĐH: {row.order_codes.join(', ')}
-                            </div>
-                          )}
-                          <div className="flex flex-col gap-0.5 text-xs">
-                            {row.products.slice(0, 3).map((p) => (
-                              <div key={p.code} className="flex items-baseline gap-2">
-                                <span className="font-medium text-foreground font-mono truncate">{p.code}</span>
-                                <span className="font-mono text-muted-foreground ml-auto shrink-0">{p.qty.toLocaleString('vi-VN')}</span>
-                              </div>
-                            ))}
-                            {row.products.length > 3 && (
-                              <span className="text-muted-foreground text-[10.5px]">
-                                +{row.products.length - 3} mã khác
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      {/* Tiến độ vật tư */}
-                      <TableCell className="py-3">
-                        <div className="flex flex-col gap-1.5">
-                          <Badge tone={GATE_TONE[g.key]} className="w-fit">{g.label}</Badge>
-                          <p className="text-muted-foreground text-[11px] leading-relaxed line-clamp-2">
-                            {g.detail}
-                          </p>
-                        </div>
-                      </TableCell>
-
-                      {/* Hạn & Giao khách */}
-                      <TableCell className="py-3">
-                        <div className="flex flex-col gap-2">
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                              <CalendarClock className="size-3" /> Hạn vật tư
-                            </span>
-                            {canEdit ? (
-                              <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} />
-                            ) : (
-                              <span className="font-mono font-semibold text-sm">{dmy(row.materials_due_at)}</span>
-                            )}
-                            {due === 'overdue' && daysLeft !== null ? (
-                              <Badge tone="red" className="w-fit text-[10px]">Quá {-daysLeft} ngày</Badge>
-                            ) : due === 'today' ? (
-                              <Badge tone="amber" className="w-fit text-[10px]">Đến hạn hôm nay</Badge>
-                            ) : due === 'soon' && daysLeft !== null ? (
-                              <span className="text-[11px] font-semibold" style={{ color: 'var(--warn)' }}>Còn {daysLeft} ngày</span>
-                            ) : due === 'later' && daysLeft !== null ? (
-                              <span className="text-muted-foreground text-[11px]">Còn {daysLeft} ngày</span>
-                            ) : (
-                              <span className="text-muted-foreground text-[11px] italic">Chưa đặt hạn</span>
-                            )}
-                          </div>
-                          <div className="flex flex-col gap-0.5">
-                            <span className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                              <CalendarDays className="size-3" /> Giao khách
-                            </span>
-                            <span className="font-mono text-xs font-medium">{dmy(row.ship_date)}</span>
-                          </div>
-                        </div>
-                      </TableCell>
-
-                      {/* Đơn mua (PO) */}
-                      <TableCell className="py-3">
-                        <div className="flex flex-col gap-1.5">
+                        {/* Lệnh · khách · tóm tắt SP/ĐH */}
+                        <TableCell className="py-2">
                           <Link
                             href={`/planning/lsx/${row.id}`}
-                            className="font-mono font-bold text-sm hover:underline"
-                            style={{ color: 'var(--primary)' }}
+                            className="w-fit hover:opacity-80"
                           >
-                            {row.posTotal} đơn mua
+                            <DocChip>{row.code}</DocChip>
                           </Link>
-                          <div className="flex flex-wrap gap-1">
-                            {row.posTotal === 0 ? (
-                              <Badge tone="amber" className="text-[10px]">Chưa lập PO</Badge>
-                            ) : (
-                              <>
-                                {row.posUnsent > 0 && (
-                                  <Badge tone="amber" className="text-[10px]">{row.posUnsent} chưa gửi</Badge>
-                                )}
-                                {row.posLate > 0 && (
-                                  <Badge tone="red" className="text-[10px]">{row.posLate} quá hẹn</Badge>
-                                )}
-                                {row.posOpen > 0 && row.posUnsent === 0 && row.posLate === 0 && (
-                                  <Badge tone="blue" className="text-[10px]">{row.posOpen} đang về</Badge>
-                                )}
-                                {row.posTotal > 0 && row.posOpen === 0 && row.posUnsent === 0 && row.posLate === 0 && (
-                                  <Badge tone="green" className="text-[10px]">Hoàn tất</Badge>
-                                )}
-                              </>
-                            )}
+                          <div
+                            className="text-muted-foreground mt-1 max-w-[260px] truncate text-[11.5px]"
+                            title={[
+                              row.customer_name,
+                              spTitle,
+                              row.order_codes.join(', '),
+                            ]
+                              .filter(Boolean)
+                              .join('\n')}
+                          >
+                            {tomTat}
                           </div>
-                          {owners.length === 0 && row.posTotal > 0 && (
-                            <span className="text-[11px] flex items-center gap-1" style={{ color: 'var(--warn)' }}>
-                              <UserRound className="size-3" /> Chưa giao ai
+                        </TableCell>
+
+                        {/* Vì sao · việc phải làm — cùng câu chữ với trang Vấn đề */}
+                        <TableCell className="py-2">
+                          <p className="line-clamp-1" title={risk.reason}>
+                            {risk.reason}
+                          </p>
+                          {risk.action ? (
+                            <p className="mt-0.5 text-[11.5px]">
+                              <span className="text-muted-foreground">{risk.owner}:</span>{' '}
+                              <span className="font-medium">{risk.action}</span>
+                            </p>
+                          ) : (
+                            <p className="text-muted-foreground mt-0.5 text-[11.5px]">
+                              Không có việc phải làm
+                            </p>
+                          )}
+                        </TableCell>
+
+                        {/* Hạn vật tư · xuất */}
+                        <TableCell className="py-2">
+                          {canEdit ? (
+                            <LsxDueEditor
+                              lsxId={row.id}
+                              value={row.materials_due_at}
+                              shipDate={row.ship_date}
+                              today={today}
+                              compact
+                            />
+                          ) : (
+                            <span className="font-mono text-xs font-semibold">
+                              {dmy(row.materials_due_at)}
                             </span>
                           )}
-                        </div>
-                      </TableCell>
+                          <div className="text-muted-foreground mt-0.5 text-[11.5px]">
+                            {hanText ? (
+                              <span className="font-medium" style={{ color: hanTone }}>
+                                {hanText}
+                              </span>
+                            ) : (
+                              <span className="italic">chưa đặt hạn</span>
+                            )}
+                            {' · '}xuất{' '}
+                            <span className="font-mono">{dmy(row.ship_date)}</span>
+                          </div>
+                        </TableCell>
 
-                      {/* Thao tác */}
-                      <TableCell className="text-right py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <Button size="sm" variant="ghost" asChild title="Xem chi tiết">
-                            <Link href={`/planning/lsx/${row.id}`}>
-                              <Eye className="size-4" />
-                            </Link>
-                          </Button>
+                        {/* Đơn mua */}
+                        <TableCell className="py-2">
+                          <Link
+                            href={`/planning/lsx/${row.id}`}
+                            className="font-mono font-semibold hover:underline"
+                            style={{ color: 'var(--primary)' }}
+                          >
+                            {row.posTotal} đơn
+                          </Link>
+                          <div className="mt-0.5 text-[11.5px]">
+                            {row.posTotal === 0 ? (
+                              <span style={{ color: 'var(--warn)' }}>chưa lập đơn</span>
+                            ) : poParts.length > 0 ? (
+                              poParts.flatMap((el, i) => (i === 0 ? [el] : [' · ', el]))
+                            ) : (
+                              <span style={{ color: 'var(--done)' }}>đã nhận đủ</span>
+                            )}
+                          </div>
+                        </TableCell>
+
+                        {/* Người theo dõi */}
+                        <TableCell className="py-2">
+                          {owners.length > 0 ? (
+                            <span className="block truncate" title={owners.join(', ')}>
+                              {owners.slice(0, 2).join(', ')}
+                              {owners.length > 2 && ` +${owners.length - 2}`}
+                            </span>
+                          ) : row.posTotal > 0 ? (
+                            <span
+                              className="text-[11.5px]"
+                              style={{ color: 'var(--warn)' }}
+                            >
+                              chưa giao ai
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Thao tác */}
+                        <TableCell className="py-1.5 text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button size="icon" variant="ghost" className="size-8">
                                 <MoreHorizontal className="size-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuContent align="end" className="w-52">
                               <DropdownMenuItem asChild>
                                 <Link href={`/planning/lsx/${row.id}`}>
-                                  <Package className="size-4" /> Xem đơn mua ({row.posTotal})
+                                  <Eye className="size-4" /> Xem đơn mua ({row.posTotal})
                                 </Link>
                               </DropdownMenuItem>
                               {canEdit && (
                                 <DropdownMenuItem asChild>
-                                  <Link href={`/planning/pos/new?production_order_id=${row.id}`}>
+                                  <Link
+                                    href={`/planning/pos/new?production_order_id=${row.id}`}
+                                  >
                                     <Plus className="size-4" /> Tạo đơn mua mới
                                   </Link>
                                 </DropdownMenuItem>
@@ -599,12 +635,20 @@ export function LsxSupplyScreen({
                                   <Factory className="size-4" /> Mở hồ sơ lệnh
                                 </Link>
                               </DropdownMenuItem>
+                              <DropdownMenuItem asChild>
+                                <a
+                                  href={`/api/dept/supply/hop-report?lsx=${row.id}`}
+                                  download
+                                >
+                                  <Download className="size-4" /> Báo cáo đơn hàng (Excel)
+                                </a>
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -612,15 +656,18 @@ export function LsxSupplyScreen({
         ) : (
           /* ── CHẾ ĐỘ THẺ TRỰC QUAN (CARDS VIEW) ───────────────────────────── */
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {visible.map(({ row, gate: g, due, daysLeft, owners }) => (
-              <Card key={row.id} className="flex flex-col justify-between hover:border-primary/50 transition-colors shadow-2xs">
-                <CardHeader className="border-b bg-muted/20 pb-3">
+            {visible.map(({ row, risk, due, daysLeft, owners }) => (
+              <Card
+                key={row.id}
+                className="hover:border-primary/50 flex flex-col justify-between shadow-2xs transition-colors"
+              >
+                <CardHeader className="bg-muted/20 border-b pb-3">
                   <div className="flex items-center justify-between gap-2">
                     <DocChip>{row.code}</DocChip>
-                    <Badge tone={GATE_TONE[g.key]}>{g.label}</Badge>
+                    <Badge tone={LEVEL_BADGE[risk.level]}>{risk.label}</Badge>
                   </div>
-                  <CardTitle className="text-base font-bold flex items-center gap-1.5 mt-2">
-                    <Building2 className="size-4 text-muted-foreground shrink-0" />
+                  <CardTitle className="mt-2 flex items-center gap-1.5 text-base font-bold">
+                    <Building2 className="text-muted-foreground size-4 shrink-0" />
                     <span className="truncate">{row.customer_name}</span>
                   </CardTitle>
                   {row.order_codes.length > 0 && (
@@ -632,21 +679,34 @@ export function LsxSupplyScreen({
 
                 <CardContent className="flex flex-col gap-3.5 p-4 text-sm">
                   {/* Trạng thái chi tiết */}
-                  <div className="bg-muted/40 rounded-lg p-2.5 text-xs text-muted-foreground leading-relaxed">
-                    {g.detail}
+                  <div className="bg-muted/40 text-muted-foreground rounded-lg p-2.5 text-xs leading-relaxed">
+                    {risk.reason}
+                    {risk.action && (
+                      <>
+                        {' '}
+                        <span className="text-foreground font-medium">
+                          → {risk.action}
+                        </span>
+                      </>
+                    )}
                   </div>
 
                   {/* Sản phẩm */}
                   {row.products.length > 0 && (
                     <div className="flex flex-col gap-1">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
                         Sản phẩm ({row.products.length} mã)
                       </span>
                       <div className="flex flex-col gap-1 text-xs">
                         {row.products.slice(0, 2).map((p) => (
-                          <div key={p.code} className="flex justify-between items-baseline gap-2">
-                            <span className="font-medium truncate">{p.code}</span>
-                            <span className="font-mono text-muted-foreground">{p.qty.toLocaleString('vi-VN')}</span>
+                          <div
+                            key={p.code}
+                            className="flex items-baseline justify-between gap-2"
+                          >
+                            <span className="truncate font-medium">{p.code}</span>
+                            <span className="text-muted-foreground font-mono">
+                              {p.qty.toLocaleString('vi-VN')}
+                            </span>
                           </div>
                         ))}
                         {row.products.length > 2 && (
@@ -661,48 +721,72 @@ export function LsxSupplyScreen({
                   {/* Các mốc thời gian */}
                   <div className="grid grid-cols-2 gap-3 border-t pt-3">
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <span className="text-muted-foreground flex items-center gap-1 text-[11px] font-semibold tracking-wider uppercase">
                         <CalendarClock className="size-3" /> Hạn vật tư
                       </span>
                       {canEdit ? (
-                        <LsxDueEditor lsxId={row.id} value={row.materials_due_at} shipDate={row.ship_date} today={today} compact />
+                        <LsxDueEditor
+                          lsxId={row.id}
+                          value={row.materials_due_at}
+                          shipDate={row.ship_date}
+                          today={today}
+                          compact
+                        />
                       ) : (
-                        <span className="font-mono text-xs font-semibold">{dmy(row.materials_due_at)}</span>
+                        <span className="font-mono text-xs font-semibold">
+                          {dmy(row.materials_due_at)}
+                        </span>
                       )}
                       {due === 'overdue' && daysLeft !== null ? (
-                        <span className="text-[11px] font-semibold text-destructive">Quá {-daysLeft} ngày</span>
+                        <span className="text-destructive text-[11px] font-semibold">
+                          Quá {-daysLeft} ngày
+                        </span>
                       ) : due === 'today' ? (
-                        <span className="text-[11px] font-semibold text-amber-600">Đến hạn hôm nay</span>
+                        <span className="text-[11px] font-semibold text-amber-600">
+                          Đến hạn hôm nay
+                        </span>
                       ) : due === 'soon' && daysLeft !== null ? (
-                        <span className="text-[11px] text-amber-600">Còn {daysLeft} ngày</span>
+                        <span className="text-[11px] text-amber-600">
+                          Còn {daysLeft} ngày
+                        </span>
                       ) : null}
                     </div>
 
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                      <span className="text-muted-foreground flex items-center gap-1 text-[11px] font-semibold tracking-wider uppercase">
                         <CalendarDays className="size-3" /> Giao khách
                       </span>
-                      <span className="font-mono text-xs font-semibold">{dmy(row.ship_date)}</span>
+                      <span className="font-mono text-xs font-semibold">
+                        {dmy(row.ship_date)}
+                      </span>
                     </div>
                   </div>
 
                   {/* Đơn mua và người theo dõi */}
                   <div className="flex items-center justify-between border-t pt-3 text-xs">
                     <div className="flex flex-col">
-                      <span className="text-muted-foreground text-[10.5px] uppercase font-semibold">Đơn mua</span>
+                      <span className="text-muted-foreground text-[10.5px] font-semibold uppercase">
+                        Đơn mua
+                      </span>
                       <span className="font-mono font-medium">{row.posTotal} đơn</span>
                     </div>
 
                     <div className="flex flex-col text-right">
-                      <span className="text-muted-foreground text-[10.5px] uppercase font-semibold">Người theo dõi</span>
-                      <span className="font-medium truncate max-w-[130px]">
-                        {owners.length > 0 ? owners.join(', ') : <span className="text-muted-foreground">—</span>}
+                      <span className="text-muted-foreground text-[10.5px] font-semibold uppercase">
+                        Người theo dõi
+                      </span>
+                      <span className="max-w-[130px] truncate font-medium">
+                        {owners.length > 0 ? (
+                          owners.join(', ')
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </span>
                     </div>
                   </div>
                 </CardContent>
 
-                <CardFooter className="border-t bg-muted/20 px-4 py-2.5 flex items-center justify-between">
+                <CardFooter className="bg-muted/20 flex items-center justify-between border-t px-4 py-2.5">
                   <Button size="sm" variant="outline" asChild>
                     <Link href={`/planning/lsx/${row.id}`} className="gap-1.5">
                       Xem đơn mua <ChevronRight className="size-3.5" />
@@ -710,7 +794,10 @@ export function LsxSupplyScreen({
                   </Button>
                   {canEdit && (
                     <Button size="sm" variant="ghost" asChild>
-                      <Link href={`/planning/pos/new?production_order_id=${row.id}`} title="Tạo đơn mua mới">
+                      <Link
+                        href={`/planning/pos/new?production_order_id=${row.id}`}
+                        title="Tạo đơn mua mới"
+                      >
                         <Plus className="size-4" /> Tạo PO
                       </Link>
                     </Button>

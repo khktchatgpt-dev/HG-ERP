@@ -276,7 +276,8 @@ function bangKeSheet(
       nCot,
     )
     for (const sub of sec.subs) {
-      if (sub.name) groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
+      if (sub.name)
+        groupRow(sb, `${sub.name} · ${sub.rows.length} mã`, nCot, { sub: true })
       for (const r of sub.rows) {
         i++
         // Số 0 để NGUYÊN LÀ SỐ — hiện thành ô trống là việc của định dạng
@@ -362,10 +363,13 @@ function bangKeSheet(
   if (anTinhTrang) sb.getColumn(19).hidden = true
   if (anNguon) sb.getColumn(20).hidden = true
   dateCols(sb, [17])
-  applyWidths(sb, [
-    5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18, 28,
-    30,
-  ])
+  applyWidths(
+    sb,
+    [
+      5, 15, 42, 20, 7, 11, 12, 10, 12, 10, 12, 10, 13, 12, 13, 8, 15, 12, 24, 16, 18, 28,
+      30,
+    ],
+  )
   // CHỈ ô ghi chú dài mới xuống dòng. Cho tên vật tư wrap thì mỗi dòng cao
   // một kiểu và bảng đọc lởm chởm — thà cột rộng ra.
   for (const c of [22, 23]) {
@@ -643,7 +647,11 @@ export async function buildLsxDetailExcel(
       for (const [ma, list] of [...theoMa.entries()].sort(
         (a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], 'vi'),
       )) {
-        groupRow(sk, `${ma} · ${list[0].material_name} · ${list.length} dòng định mức`, nCotK)
+        groupRow(
+          sk,
+          `${ma} · ${list[0].material_name} · ${list.length} dòng định mức`,
+          nCotK,
+        )
         for (const b of list) {
           sk.addRow([
             b.material_code,
@@ -833,120 +841,177 @@ export async function buildLsxDetailExcel(
 
   // ── Sheet 3..n: TỪNG ĐƠN, từng dòng vật tư, nhận theo đợt ─────────────
   for (const p of lsx.pos) {
-    const ws = wb.addWorksheet(sheetName('ĐH', p.code, taken))
-    const lines = report.lines[p.id] ?? []
-    const batches = report.batches[p.id] ?? []
-
-    titleRow(ws, `ĐƠN ĐẶT HÀNG ${p.code} — ${p.supplier_name}`)
-    noteRow(ws, `Cho LSX ${lsx.code} · ${lsx.customer_name}`)
-    kv(ws, 'Số ĐH của NCC', p.supplier_doc_no ?? '')
-    kv(ws, 'Trạng thái', statusLabel(p.status))
-    kv(ws, 'Ngày đặt', fmtD(p.ordered_at))
-    kv(ws, 'Hẹn giao', fmtD(p.expected_at))
-    kv(ws, 'Về thực tế (gần nhất)', fmtD(p.received_at))
-    kv(ws, 'Người theo dõi', p.assignee_name ?? '')
-    kv(ws, 'Tiền hàng', `${p.amount.toLocaleString('vi-VN')} ${p.currency}`)
-    if (p.shared_with.length > 0) kv(ws, 'Mua chung với', p.shared_with.join(', '))
-    if (p.note) kv(ws, 'Ghi chú', p.note)
-    ws.addRow([])
-
-    const fixed = [
-      'STT',
-      'Mã VT',
-      'Tên vật tư',
-      'Quy cách',
-      'ĐVT',
-      'SL đặt',
-      'SL2',
-      'ĐVT2',
-      'Đơn giá',
-      'Thành tiền',
-    ]
-    const batchCols = batches.flatMap((b, i) => [
-      `Đợt ${i + 1} (${fmtD(b.date)})${b.supplier_doc_no ? ` · ${b.supplier_doc_no}` : ''} — nhận`,
-      `Đợt ${i + 1} — loại QC`,
-    ])
-    const tail = [
-      'Tổng đã nhận',
-      'Loại QC',
-      'Còn thiếu',
-      'Kết luận',
-      'Nhận gần nhất',
-      'Ghi chú',
-    ]
-    const head = headerRow(ws, [...fixed, ...batchCols, ...tail])
-
-    let i = 0
-    for (const l of lines) {
-      i++
-      const perBatch = batches.flatMap((b) => {
-        const r = b.by_line[l.id]
-        return [r?.qty ?? '', r?.rejected ? r.rejected : '']
-      })
-      const ketLuan =
-        l.closed_short_at != null
-          ? `Chốt thiếu ${l.qty_missing}`
-          : l.qty_missing > 0
-            ? l.qty_received > 0
-              ? `Thiếu ${l.qty_missing}`
-              : 'Chưa về'
-            : l.qty_missing < 0
-              ? `Dư ${-l.qty_missing}`
-              : 'Đủ'
-      ws.addRow([
-        i,
-        l.material_code,
-        l.material_name,
-        l.spec ?? '',
-        l.unit,
-        l.qty_ordered,
-        l.qty2 ?? '',
-        l.unit2 ?? '',
-        l.unit_price ?? '',
-        l.unit_price != null ? l.unit_price * l.qty_ordered : '',
-        ...perBatch,
-        l.qty_received,
-        l.qty_rejected,
-        l.qty_missing,
-        ketLuan,
-        dateCell(l.last_received_at),
-        l.note ?? '',
-      ])
-    }
-    if (lines.length === 0) ws.addRow(['— Đơn chưa có dòng vật tư —'])
-    const lineLast = ws.rowCount
-    if (lines.length > 0) {
-      // Tổng cộng — cộng các cột số lượng khác đơn vị đếm là vô nghĩa (500 con
-      // + 3 kg), nên chỉ SUM tiền.
-      totalRow(
-        ws,
-        `Cộng tiền hàng (${p.currency})`,
-        {
-          10: lines.reduce(
-            (s, l) => s + (l.unit_price != null ? l.unit_price * l.qty_ordered : 0),
-            0,
-          ),
-        },
-        3,
-      )
-    }
-    const nCols = head.cellCount
-    numberCols(ws, [6, 7])
-    numberCols(ws, [9], '#,##0.##')
-    numberCols(ws, [10], MONEY_FMT)
-    // Cột đợt nhận + tổng nhận/loại/thiếu: từ 11 tới hết, trừ ba cột chữ cuối.
-    numberCols(
-      ws,
-      Array.from({ length: nCols - 3 - 10 }, (_, k) => 11 + k),
+    addPoDetailSheet(
+      wb,
+      taken,
+      p,
+      lsx,
+      report.lines[p.id] ?? [],
+      report.batches[p.id] ?? [],
     )
-    dateCols(ws, [nCols - 1])
-    applyWidths(ws, [5, 14, 34, 22, 7, 9, 9, 7, 12, 14], 12)
-    for (const c of [3, 4, nCols]) {
-      ws.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
-    }
-    finishTable(ws, { head, lastRow: lineLast, freezeCols: 3 })
   }
 
   const out = await wb.xlsx.writeBuffer()
   return Buffer.from(out as ArrayBuffer)
+}
+
+/** Trường của một đơn mà tờ "ĐH <mã>" cần — đủ cho cả hồ sơ lệnh lẫn báo cáo gộp. */
+export type PoSheetInput = {
+  code: string
+  supplier_name: string
+  supplier_doc_no: string | null
+  status: string
+  ordered_at: string | null
+  expected_at: string | null
+  received_at: string | null
+  assignee_name: string | null
+  amount: number
+  currency: string
+  shared_with: string[]
+  note: string | null
+}
+
+/**
+ * MỘT TỜ CHO MỘT ĐƠN: khối nhãn–giá trị đầu tờ, rồi từng dòng vật tư với cột
+ * ĐỢT NHẬN sinh động theo số phiếu nhập thật (khuôn Thao_Visa). Tách thành hàm
+ * (13/09/2026) để báo cáo đơn hàng gộp mọi lệnh (`supply-orders-excel`) dùng
+ * lại nguyên tờ này — một khuôn cho mọi file, người đọc không phải học hai kiểu.
+ */
+export function addPoDetailSheet(
+  wb: ExcelJS.Workbook,
+  taken: Set<string>,
+  p: PoSheetInput,
+  lsx: { code: string; customer_name: string },
+  lines: LsxReportLine[],
+  batches: LsxReportBatch[],
+): ExcelJS.Worksheet {
+  const ws = wb.addWorksheet(sheetName('ĐH', p.code, taken))
+
+  /*
+    Khối đầu tờ RÚT CÒN 2–3 DÒNG kéo ngang bảng (user 13/09/2026: "nội dung
+    đều bị đẩy xuống rất khó xem" — bản cũ 9 dòng nhãn/giá trị đẩy bảng vật tư
+    xuống dòng 12). Mỗi dòng là một câu, gộp ô qua 10 cột cố định của bảng nên
+    không bị bề rộng cột STT cắt.
+  */
+  const wide = (text: string, font: Partial<ExcelJS.Font>) => {
+    const r = ws.addRow([text])
+    ws.mergeCells(r.number, 1, r.number, 10)
+    r.getCell(1).font = font
+    return r
+  }
+  const hoacTrong = (v: string | null) => (v && v.length > 0 ? v : '—')
+  wide(`ĐƠN ĐẶT HÀNG ${p.code} — ${p.supplier_name}`, { bold: true, size: 13 })
+  wide(
+    `Cho LSX ${lsx.code} · ${lsx.customer_name} · Trạng thái: ${statusLabel(p.status)} · Ngày đặt: ${hoacTrong(fmtD(p.ordered_at))} · Hẹn giao: ${hoacTrong(fmtD(p.expected_at))} · Về thực tế: ${hoacTrong(fmtD(p.received_at))}`,
+    { size: 10 },
+  )
+  wide(
+    [
+      `Người theo dõi: ${hoacTrong(p.assignee_name)}`,
+      `Số ĐH của NCC: ${hoacTrong(p.supplier_doc_no)}`,
+      `Tiền hàng: ${p.amount.toLocaleString('vi-VN')} ${p.currency}`,
+      p.shared_with.length > 0 ? `Mua chung với: ${p.shared_with.join(', ')}` : '',
+      p.note ? `Ghi chú: ${p.note}` : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    { size: 10 },
+  )
+
+  const fixed = [
+    'STT',
+    'Mã VT',
+    'Tên vật tư',
+    'Quy cách',
+    'ĐVT',
+    'SL đặt',
+    'SL2',
+    'ĐVT2',
+    'Đơn giá',
+    'Thành tiền',
+  ]
+  const batchCols = batches.flatMap((b, i) => [
+    `Đợt ${i + 1} (${fmtD(b.date)})${b.supplier_doc_no ? ` · ${b.supplier_doc_no}` : ''} — nhận`,
+    `Đợt ${i + 1} — loại QC`,
+  ])
+  const tail = [
+    'Tổng đã nhận',
+    'Loại QC',
+    'Còn thiếu',
+    'Kết luận',
+    'Nhận gần nhất',
+    'Ghi chú',
+  ]
+  const head = headerRow(ws, [...fixed, ...batchCols, ...tail])
+
+  let i = 0
+  for (const l of lines) {
+    i++
+    const perBatch = batches.flatMap((b) => {
+      const r = b.by_line[l.id]
+      return [r?.qty ?? '', r?.rejected ? r.rejected : '']
+    })
+    const ketLuan =
+      l.closed_short_at != null
+        ? `Chốt thiếu ${l.qty_missing}`
+        : l.qty_missing > 0
+          ? l.qty_received > 0
+            ? `Thiếu ${l.qty_missing}`
+            : 'Chưa về'
+          : l.qty_missing < 0
+            ? `Dư ${-l.qty_missing}`
+            : 'Đủ'
+    ws.addRow([
+      i,
+      l.material_code,
+      l.material_name,
+      l.spec ?? '',
+      l.unit,
+      l.qty_ordered,
+      l.qty2 ?? '',
+      l.unit2 ?? '',
+      l.unit_price ?? '',
+      l.unit_price != null ? l.unit_price * l.qty_ordered : '',
+      ...perBatch,
+      l.qty_received,
+      l.qty_rejected,
+      l.qty_missing,
+      ketLuan,
+      dateCell(l.last_received_at),
+      l.note ?? '',
+    ])
+  }
+  if (lines.length === 0) ws.addRow(['— Đơn chưa có dòng vật tư —'])
+  const lineLast = ws.rowCount
+  if (lines.length > 0) {
+    // Tổng cộng — cộng các cột số lượng khác đơn vị đếm là vô nghĩa (500 con
+    // + 3 kg), nên chỉ SUM tiền.
+    totalRow(
+      ws,
+      `Cộng tiền hàng (${p.currency})`,
+      {
+        10: lines.reduce(
+          (s, l) => s + (l.unit_price != null ? l.unit_price * l.qty_ordered : 0),
+          0,
+        ),
+      },
+      3,
+    )
+  }
+  const nCols = head.cellCount
+  numberCols(ws, [6, 7])
+  numberCols(ws, [9], '#,##0.##')
+  numberCols(ws, [10], MONEY_FMT)
+  // Cột đợt nhận + tổng nhận/loại/thiếu: từ 11 tới hết, trừ ba cột chữ cuối.
+  numberCols(
+    ws,
+    Array.from({ length: nCols - 3 - 10 }, (_, k) => 11 + k),
+  )
+  dateCols(ws, [nCols - 1])
+  applyWidths(ws, [5, 14, 34, 22, 7, 9, 9, 7, 12, 14], 12)
+  for (const c of [3, 4, nCols]) {
+    ws.getColumn(c).alignment = { wrapText: true, vertical: 'top' }
+  }
+  finishTable(ws, { head, lastRow: lineLast, freezeCols: 3 })
+  return ws
 }
