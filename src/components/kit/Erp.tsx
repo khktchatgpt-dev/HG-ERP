@@ -1137,18 +1137,53 @@ export function SmartLinks({
 export function LineDetail({
   index,
   code,
+  summary,
+  open = true,
+  onToggle,
   children,
 }: {
   index: number
   code: string
+  /** Một dòng nói trong khay có gì, để lúc gấp vẫn biết có nên mở không. */
+  summary?: ReactNode
+  /**
+   * GẤP GỌN ĐƯỢC — thêm 14/09/2026.
+   *
+   * Khay này luôn mở vì lúc nào cũng có một dòng đang chọn. Đo trên đơn 17
+   * dòng, khung 694px: khay chiếm **459px = 66% màn hình** cho 4 ô nhập, nằm
+   * DƯỚI lưới nên nó đẩy mọi thứ xuống và phải cuộn qua nó mới tới phần còn
+   * lại của chứng từ. Chủ dự án báo: "mở nhiều dòng nhìn rất rối, chi tiết
+   * dòng chiếm quá nhiều".
+   *
+   * Gấp lại còn một vạch 24px. Trạng thái là của NGƯỜI DÙNG, không của dòng:
+   * mở một lần thì đổi dòng vẫn mở, không phải bấm lại mỗi lần chọn dòng.
+   */
+  open?: boolean
+  onToggle?: () => void
   children: ReactNode
 }) {
+  const head = (
+    <>
+      {onToggle && <span className="k-linedet-c">{open ? '▾' : '▸'}</span>}
+      Chi tiết dòng {index} <b>{code}</b>
+      {summary && <span className="k-linedet-s">{summary}</span>}
+    </>
+  )
   return (
     <div className="k-linedet">
-      <div className="k-linedet-h">
-        Chi tiết dòng {index} <b>{code}</b>
-      </div>
-      {children}
+      {onToggle ? (
+        <button
+          type="button"
+          className="k-linedet-h k-linedet-b"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          {head}
+        </button>
+      ) : (
+        <div className="k-linedet-h">{head}</div>
+      )}
+      {open && children}
     </div>
   )
 }

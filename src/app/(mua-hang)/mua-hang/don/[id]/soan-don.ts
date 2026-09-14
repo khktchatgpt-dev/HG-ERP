@@ -164,3 +164,20 @@ export function splitLineFields<T extends { kind: string }>(
   const inGrid = new Set(grid)
   return { grid, detail: all.filter((f) => !inGrid.has(f)) }
 }
+
+/* ── TÓM TẮT KHAY CHI TIẾT DÒNG lúc gấp ──────────────────────────────────────
+   "2/4 thông số đã điền" — đủ để biết có cần mở ra không. Không có nó thì khay
+   gấp là hộp kín và người dùng mở ở mọi dòng để kiểm, tệ hơn lúc chưa gấp. */
+export function lineDetailSummary(
+  line: Record<string, unknown> | null,
+  fields: { field?: string }[],
+): string {
+  if (fields.length === 0) return 'mẫu này không có thông số riêng'
+  if (!line) return ''
+  const filled = fields.filter((f) => {
+    if (!f.field) return false
+    const v = line[f.field]
+    return v !== null && v !== undefined && v !== ''
+  }).length
+  return `${filled}/${fields.length} thông số đã điền`
+}

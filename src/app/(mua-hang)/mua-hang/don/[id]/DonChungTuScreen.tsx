@@ -104,7 +104,7 @@ import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chu
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
 import { ChungTuKhoGrid, DotGiaoGrid, DotSheet, NhanTheoDotGrid, XacNhanSheet } from './NhanHangPanel' // prettier-ignore
 import { CapNhatDanhMucSheet, ChiaDotSoanGrid, DanExcelSheet, NhuCauGrid, type PasteConfirm } from './SoanDonPanels' // prettier-ignore
-import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, readDraft, splitLineFields, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
+import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, lineDetailSummary, readDraft, splitLineFields, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
 import {
   QuickAddMaterial,
   type CreatedMaterial,
@@ -266,7 +266,6 @@ const TERM_FIELDS = [
   ['invoice', 'Hoá đơn', 'Hoá đơn GTGT giao cùng hàng'],
 ] as const
 
-
 export function DonChungTuScreen(p: Props) {
   const router = useRouter()
   const toast = useToast()
@@ -331,7 +330,22 @@ export function DonChungTuScreen(p: Props) {
     () => PO_FIELDS[template].filter((f) => !f.editHidden),
     [template],
   )
-  const { grid: gridFields, detail: detailFields } = useMemo(() => splitLineFields(allFields), [allFields])
+  const { grid: gridFields, detail: detailFields } = useMemo(() => splitLineFields(allFields), [allFields]) // prettier-ignore
+  /*
+    KHAY CHI TIẾT DÒNG — MẶC ĐỊNH GẤP.
+
+    Đo 14/09/2026 trên đơn 17 dòng, khung 694px: khay chiếm 459px = 66% màn
+    hình cho 4 ô nhập, và vì lúc nào cũng có một dòng đang chọn nên nó KHÔNG
+    BAO GIỜ biến mất. Nó nằm dưới lưới, nên phải cuộn qua hết mới tới phần
+    còn lại của chứng từ.
+
+    Trạng thái nhớ theo MÁY, không theo dòng: ai hay dùng ô đặc thù thì mở
+    một lần rồi thôi, ai không dùng thì không bao giờ phải thấy. Đổi dòng
+    KHÔNG đóng lại — đóng/mở theo từng dòng là bắt bấm 17 lần trên đơn này.
+  */
+  const [detailOpenRaw, setDetailOpenRaw] = useLocalPref('hg.mua-hang.don.chi-tiet-dong', '0') // prettier-ignore
+  const detailOpen = detailOpenRaw === '1'
+  const setDetailOpen = (v: boolean) => setDetailOpenRaw(v ? '1' : '0')
   const totals = poTotals(header, lines)
   const issues = lineIssues(template, lines, lineProblem)
   /** Ô chữ-trên-phiếu mở ra khi sửa đầy đủ (nháp) HOẶC sửa hẹp (đơn đã gửi). */
@@ -950,27 +964,22 @@ export function DonChungTuScreen(p: Props) {
                 Huỷ
               </Action>
             </ActionGroup>
-            <ActionGroup label="Nhập nhanh">
-              <Action
-                onClick={() => setPaste(true)}
-                title="Dán vùng bảng từ sổ Excel — máy khớp mã"
-              >
-                Dán từ Excel
-              </Action>
-              <Action
-                onClick={() => setQuickAdd(true)}
-                title="NCC chào loại chưa có trong danh mục — khai tại chỗ, vào thẳng dòng"
-              >
-                Khai vật tư mới
-              </Action>
-              <Action
-                disabled={pending.length === 0}
-                title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : undefined} // prettier-ignore
-                onClick={() => void addFromNeeds(pending)}
-              >
-                Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu của lệnh
-              </Action>
-            </ActionGroup>
+            {/*
+              NHÓM "NHẬP NHANH" ĐÃ BỎ KHỎI ĐÂY (14/09/2026).
+
+              Ba nút của nó là thao tác trên DÒNG, không phải trên chứng từ —
+              và hai trong ba ("Dán từ Excel", "Khai vật tư mới") đã nằm sẵn ở
+              thanh lưới, ngay trên bảng. Tức thanh hành động đang in lại cùng
+              một nút ở chỗ xa bảng hơn.
+
+              Đo trên đơn 17 dòng, khung 694px: thanh hành động cao 201px =
+              37% của toàn bộ 542px nằm trên dòng đầu tiên, và chỉ 3/17 dòng
+              nhìn thấy được. Bỏ nhóm này trả lại ~108px cho bảng — thứ duy
+              nhất người dùng thật sự nhìn.
+
+              Nút thứ ba ("Thêm … còn thiếu của lệnh") chuyển xuống thanh lưới
+              cùng hai nút kia: cả ba đều đẻ ra dòng, nên phải đứng cạnh nhau.
+            */}
             <ActionGroup label="Kiểm">
               <Action
                 disabled={!p.company}
@@ -1375,6 +1384,15 @@ export function DonChungTuScreen(p: Props) {
                 >
                   Khai vật tư mới
                 </GridBtn>
+                {/* Chuyển xuống từ thanh hành động: nó đẻ ra dòng, nên đứng
+                    cạnh hai nút kia chứ không nằm trên đầu chứng từ. */}
+                <GridBtn
+                  disabled={pending.length === 0}
+                  title={pending.length === 0 ? (header.poType === 'lsx' && header.lsxId ? 'Lệnh không còn nhu cầu nào chưa lên đơn' : 'Chọn lệnh sản xuất trước') : 'Thêm mọi mã lệnh còn thiếu vào đơn'} // prettier-ignore
+                  onClick={() => void addFromNeeds(pending)}
+                >
+                  Thêm {pending.length > 0 ? `${pending.length} mã ` : ''}còn thiếu
+                </GridBtn>
               </>
             </GridToolbar>
           )}
@@ -1615,7 +1633,16 @@ export function DonChungTuScreen(p: Props) {
 
           {/* ══ CHI TIẾT DÒNG ĐANG CHỌN — Dynamics Line details ═══════════ */}
           {cur ? (
-            <LineDetail index={curIdx + 1} code={cur.code || cur.name || '(dòng tự do)'}>
+            <LineDetail
+              index={curIdx + 1}
+              code={cur.code || cur.name || '(dòng tự do)'}
+              open={detailOpen}
+              onToggle={() => setDetailOpen(!detailOpen)}
+              // Lúc gấp vẫn phải biết bên trong có gì — không có câu này thì
+              // khay thành hộp kín và người dùng mở ra ở MỌI dòng để kiểm,
+              // tức tệ hơn lúc chưa gấp.
+              summary={detailOpen ? null : lineDetailSummary(cur, detailFields)}
+            >
               <FieldGroup title="Thông số theo mẫu">
                 {detailFields.length === 0 && (
                   <Field label="—">Mẫu này không có thông số riêng</Field>
