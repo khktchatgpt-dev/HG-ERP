@@ -15,6 +15,7 @@ import {
   GroupRow,
   InspectPanel,
   InspectSection,
+  Lookup,
   NextAction,
   NoticeBar,
   Num,
@@ -126,6 +127,62 @@ const COLS: { key: ColKey; label: string; num?: boolean }[] = [
   { key: 'tao', label: 'Ngày tạo' },
 ]
 const DEFAULT_COLS: ColKey[] = ['ncc', 'chuoi', 'trang_thai', 've_kho', 'hen', 'kip', 'phu_trach', 'gia_tri'] // prettier-ignore
+
+/**
+ * Ô LỌC GÕ-TÌM cho danh mục dài (NCC, lệnh SX).
+ *
+ * Hai trạng thái, không bao giờ cùng lúc: CHƯA CHỌN thì là ô gõ tìm; ĐÃ CHỌN
+ * thì là một chip mang đúng cái tên đang lọc, bấm vào là bỏ. Bày cả hai cùng
+ * lúc tốn một hàng lọc mà không thêm thông tin nào.
+ *
+ * Tìm trên mảng ĐÃ NẠP SẴN nên không có vòng server; bọc trong Promise vì
+ * `Lookup` của kit khai `search` là bất đồng bộ (nó dựng cho danh mục 13k
+ * dòng phải hỏi server). Trần 20 dòng: danh sách gợi ý dài hơn thế thì người
+ * dùng gõ thêm chữ nhanh hơn là đọc.
+ */
+function LocLookup<T>({
+  label,
+  placeholder,
+  selected,
+  onClear,
+  items,
+  textOf,
+  keyOf,
+  onPick,
+  render,
+}: {
+  label: string
+  placeholder: string
+  selected: string | null
+  onClear: () => void
+  items: T[]
+  textOf: (x: T) => string
+  keyOf: (x: T) => string
+  onPick: (x: T) => void
+  render?: (x: T) => React.ReactNode
+}) {
+  if (selected !== null) {
+    return (
+      <Chip on onClick={onClear}>
+        {label}: {selected} ✕
+      </Chip>
+    )
+  }
+  return (
+    <Lookup<T>
+      label={label}
+      placeholder={placeholder}
+      width={210}
+      keyOf={keyOf}
+      render={render ?? ((x) => textOf(x))}
+      onPick={onPick}
+      search={async (q) => {
+        const n = q.trim().toLowerCase()
+        return items.filter((x) => textOf(x).toLowerCase().includes(n)).slice(0, 20)
+      }}
+    />
+  )
+}
 
 export function DonScreen({
   today,
@@ -423,12 +480,54 @@ export function DonScreen({
             })),
           ]}
         />
-        <Pick
+        {/*
+          NCC VÀ LỆNH SX: GÕ TÌM, KHÔNG PHẢI CUỘN CHỌN.
+
+          Trước 14/09/2026 ô NCC là `<select>` trần với 164 lựa chọn (và còn
+          tăng) — không gõ tìm được, phải cuộn một danh sách dài để chọn một
+          cái tên mình đã biết sẵn. Lệnh SX thì trước đây chỉ GOM được chứ
+          không lọc được. Chủ dự án báo đúng chỗ này: "số lượng LSX và đơn đặt
+          NCC nhiều thì các phần lọc không đáp ứng được".
+
+          Chọn xong thì ô tìm nhường chỗ cho một chip mang đúng cái tên đang
+          lọc — nhìn là biết đang lọc gì, bấm là bỏ. Ô `<select>` không làm
+          được điều đó khi danh sách dài: nhãn bị cắt và không ai chắc mình
+          đang đứng ở đâu trong danh sách.
+        */}
+        <LocLookup
           label="Nhà cung cấp"
-          value={view.filter.supplierId}
-          onChange={(supplierId) => patchFilter({ supplierId })}
-          width={200}
-          options={[{ value: 'all', label: 'Mọi NCC' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} // prettier-ignore
+          placeholder="Gõ tên nhà cung cấp…"
+          selected={
+            view.filter.supplierId === 'all'
+              ? null
+              : (suppliers.find((s) => s.id === view.filter.supplierId)?.name ??
+                'NCC không còn trong danh mục')
+          }
+          onClear={() => patchFilter({ supplierId: 'all' })}
+          items={suppliers}
+          textOf={(s) => s.name}
+          keyOf={(s) => s.id}
+          onPick={(s) => patchFilter({ supplierId: s.id })}
+        />
+        <LocLookup
+          label="Lệnh sản xuất"
+          placeholder="Gõ mã lệnh hoặc khách…"
+          selected={
+            view.filter.lsxId === 'all'
+              ? null
+              : (lsxs.find((l) => l.id === view.filter.lsxId)?.code ?? 'Lệnh không còn')
+          }
+          onClear={() => patchFilter({ lsxId: 'all' })}
+          items={lsxs}
+          textOf={(l) => `${l.code} ${l.customer_name ?? ''}`}
+          keyOf={(l) => l.id}
+          onPick={(l) => patchFilter({ lsxId: l.id })}
+          render={(l) => (
+            <span className="flex items-baseline gap-2">
+              <span className="num">{l.code}</span>
+              <span className="text-[var(--ink-3)]">{l.customer_name ?? ''}</span>
+            </span>
+          )}
         />
         <Pick
           label="Loại đơn"
@@ -475,6 +574,7 @@ export function DonScreen({
                   q: '',
                   bucket: 'all',
                   supplierId: 'all',
+                  lsxId: 'all',
                   type: 'all',
                   mine: false,
                   late: false,
@@ -600,7 +700,29 @@ export function DonScreen({
                               p.status === 'cancelled' ? 'opacity-60' : undefined
                             }
                           >
-                            <Code>{p.code}</Code>
+                            {/*
+                              MÃ ĐƠN LÀ LINK THẬT tới chứng từ đầy đủ.
+
+                              Trước 14/09/2026 nó là `<Code>` trần: mono + màu
+                              hành động nên ĐỌC RA là bấm được, mà bấm thì chỉ
+                              chọn dòng. Đường duy nhất tới chứng từ là bấm
+                              dòng → khay bên phải → "Mở đơn đầy đủ" — ba bước,
+                              và ở màn hẹp khay nằm ngoài tầm nhìn nên bước ba
+                              không thấy đâu. Chủ dự án báo đúng triệu chứng:
+                              "tạo đơn xong, vào xem chi tiết ở đâu không thấy".
+
+                              `stopPropagation` để bấm mã thì ĐI, bấm chỗ khác
+                              trong dòng thì vẫn chỉ chọn — hai ý định khác
+                              nhau trên cùng một dòng.
+                            */}
+                            <Code
+                              as="a"
+                              href={`/mua-hang/don/${p.id}`}
+                              title={`Mở chứng từ ${p.code}`}
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            >
+                              {p.code}
+                            </Code>
                             {borrowed && <Tag tone="neutral">mua chung</Tag>}
                             {!borrowed && (p.extra_lsx?.length ?? 0) > 0 && (
                               <Tag tone="neutral">

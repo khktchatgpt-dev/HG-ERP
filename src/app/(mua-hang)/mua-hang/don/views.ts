@@ -132,6 +132,7 @@ function sameState(a: ViewState, b: ViewState): boolean {
     f.q.trim() === g.q.trim() &&
     f.bucket === g.bucket &&
     f.supplierId === g.supplierId &&
+    f.lsxId === g.lsxId &&
     f.type === g.type &&
     f.mine === g.mine &&
     f.late === g.late &&
@@ -155,6 +156,7 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     q: sp.q ?? '',
     bucket: (BUCKETS.has(sp.trang_thai ?? '') ? sp.trang_thai : 'all') as PoBucket,
     supplierId: sp.ncc ?? 'all',
+    lsxId: sp.lsx ?? 'all',
     type: sp.loai === 'lsx' || sp.loai === 'standalone' ? sp.loai : 'all',
     mine: sp.toi === '1',
     late: sp.tre === '1',
@@ -178,6 +180,7 @@ export function encodeView(s: ViewState): string {
   if (f.q.trim()) p.set('q', f.q.trim())
   if (f.bucket !== 'all') p.set('trang_thai', f.bucket)
   if (f.supplierId !== 'all') p.set('ncc', f.supplierId)
+  if (f.lsxId !== 'all') p.set('lsx', f.lsxId)
   if (f.type !== 'all') p.set('loai', f.type)
   if (f.mine) p.set('toi', '1')
   if (f.late) p.set('tre', '1')
