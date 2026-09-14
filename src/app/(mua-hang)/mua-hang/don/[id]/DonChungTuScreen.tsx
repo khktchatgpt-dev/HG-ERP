@@ -914,7 +914,6 @@ export function DonChungTuScreen(p: Props) {
     }
   }
 
-  const goOld = (hash: string) => po && router.push(`/planning/pos/${po.id}${hash}`)
   const goTo = (id: string) =>
     document.getElementById(id)?.scrollIntoView({ block: 'start' })
   /** "Chưa lưu được: …" BẤM ĐƯỢC — đưa thẳng tới chỗ phải sửa, không bắt tự cuộn tìm. */
@@ -1211,7 +1210,7 @@ export function DonChungTuScreen(p: Props) {
           items={[
             { label: 'đợt giao', count: liveShipments.length, onClick: () => goTo('dot-giao'), title: 'Kế hoạch giao NCC hẹn' }, // prettier-ignore
             { label: 'phiếu kho', count: p.warehouseDocs.length, onClick: () => goTo('kho'), title: 'Phiếu nhập / trả đã ghi vào đơn' }, // prettier-ignore
-            { label: 'lệnh SX', count: (po.production_order_id ? 1 : 0) + p.extraLsx.length, onClick: () => po.production_order_id && router.push(`/planning/lsx/${po.production_order_id}`), disabled: !po.production_order_id }, // prettier-ignore
+            { label: 'lệnh SX', count: (po.production_order_id ? 1 : 0) + p.extraLsx.length, onClick: () => po.production_order_id && router.push(`/mua-hang/yeu-cau/${po.production_order_id}`), disabled: !po.production_order_id }, // prettier-ignore
             { label: 'trao đổi', count: null, onClick: () => goTo('trao-doi'), title: 'Ghi chú và mốc máy ghi trên đơn này' }, // prettier-ignore
             { label: 'tài liệu', count: null, onClick: () => goTo('tai-lieu'), title: 'Báo giá, hợp đồng, chứng từ giao nhận' }, // prettier-ignore
           ]}

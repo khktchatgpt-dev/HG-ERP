@@ -283,7 +283,7 @@ export function NccScreen({
       <StatusBar
         left={[
           chip === 'all' && !q.trim() ? 'Khung nhìn: tất cả' : 'Khung nhìn: đang lọc',
-          'Hồ sơ chi tiết mở ở khu Cung ứng cũ',
+          'Bấm tên để mở hồ sơ nhà cung cấp',
         ]}
         right={`${kept.length} / ${rows.length} NCC`}
       />

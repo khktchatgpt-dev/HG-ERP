@@ -77,6 +77,7 @@ export default async function Page({
       status: p.status,
       supplier: p.supplier_name ?? '—',
       lsx: p.lsx_code ?? null,
+      lsx_id: p.production_order_id ?? null,
       assignee: p.assignee_name ?? null,
       assigned_to: p.assigned_to ?? null,
       expected_at: p.expected_at ?? null,

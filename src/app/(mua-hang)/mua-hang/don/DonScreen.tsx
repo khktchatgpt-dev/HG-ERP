@@ -1099,7 +1099,7 @@ export function DonScreen({
                               label: 'Lệnh SX',
                               code: sel.lsx_code,
                               href: sel.production_order_id
-                                ? `/planning/lsx/${sel.production_order_id}`
+                                ? `/mua-hang/yeu-cau/${sel.production_order_id}`
                                 : undefined,
                             },
                           ]
@@ -1107,7 +1107,7 @@ export function DonScreen({
                       {
                         label: 'Đơn mua',
                         code: sel.code,
-                        href: `/planning/pos/${sel.id}`,
+                        href: `/mua-hang/don/${sel.id}`,
                         muted: true,
                       },
                     ]}
