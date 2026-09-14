@@ -204,9 +204,15 @@ export function YeuCauScreen({
                 <Row key={r.id}>
                   <Cell pin>
                     <span className="flex items-center gap-2">
+                      {/*
+                        Ở LẠI TRONG KHU MỚI. Trước 15/09/2026 link này trỏ
+                        `/planning/lsx/[id]` — người mua đang đi một mạch trong
+                        khu Mua hàng thì bị đá về vỏ cũ, mất cả thanh điều hướng
+                        lẫn mạch việc. Chủ dự án báo đúng chỗ này.
+                      */}
                       <Code
                         as="a"
-                        href={`/planning/lsx/${r.id}`}
+                        href={`/mua-hang/yeu-cau/${r.id}`}
                         title={`Mở lệnh ${r.code}`}
                       >
                         {r.code}
