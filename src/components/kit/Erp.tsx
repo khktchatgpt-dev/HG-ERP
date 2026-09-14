@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 
 /**
  * Ghép class. Dùng HÀM chứ không phải chuỗi mẫu `${cond ? ' x' : ''}`.
@@ -93,9 +94,11 @@ export function Crumb({
           <span key={p + i} className="k-crumb-i">
             {i > 0 && <span className="k-crumb-sep">›</span>}
             {href && !cuoi ? (
-              <a href={href} className="hover:text-[var(--act)] hover:underline">
+              // `next/link`: quay ra danh sách là điều hướng trong app, không
+              // phải tải lại tài liệu — giữ được bộ lọc đang đặt ở màn danh sách.
+              <Link href={href} className="hover:text-[var(--act)] hover:underline">
                 {noiDung}
-              </a>
+              </Link>
             ) : (
               noiDung
             )}

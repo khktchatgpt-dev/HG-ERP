@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
@@ -39,7 +40,13 @@ const TONE_WASH: Record<Tone, string> = {
  * Không có tone 'primary': màu hành động không được dùng cho nhãn đọc, nếu
  * không thì cái bấm được và cái chỉ để đọc trông giống hệt nhau.
  */
-export function Tag({ tone = 'neutral', children }: { tone?: Tone; children: ReactNode }) {
+export function Tag({
+  tone = 'neutral',
+  children,
+}: {
+  tone?: Tone
+  children: ReactNode
+}) {
   return (
     <span
       className={cn(
@@ -68,11 +75,24 @@ export function Code({
   children: ReactNode
   as?: 'span' | 'a' | 'button'
 } & Record<string, unknown>) {
+  const cls =
+    'font-[family-name:var(--font-mono)] text-[11.5px] font-semibold text-[var(--act)] tabular-nums'
+  /*
+    `as="a"` + href nội bộ thì đi bằng `next/link`, không phải `<a>` trần: mã
+    chứng từ là đường vào chứng từ dùng nhiều nhất trên màn danh sách, mà `<a>`
+    trần là tải lại cả tài liệu — trắng màn và mất bộ lọc đang đặt. Giữ `<a>`
+    cho href ngoài miền và cho chỗ gọi không truyền href.
+  */
+  if (As === 'a' && typeof rest.href === 'string' && rest.href.startsWith('/')) {
+    const { href, ...r } = rest as { href: string } & Record<string, unknown>
+    return (
+      <Link href={href} className={cls} {...r}>
+        {children}
+      </Link>
+    )
+  }
   return (
-    <As
-      className="font-[family-name:var(--font-mono)] text-[11.5px] font-semibold text-[var(--act)] tabular-nums"
-      {...rest}
-    >
+    <As className={cls} {...rest}>
       {children}
     </As>
   )
@@ -126,7 +146,7 @@ export function Num({
       className={cn(
         'num',
         strong
-          ? 'text-[var(--fs-num)] font-bold text-[var(--ink)]'
+          ? 'font-bold text-[var(--fs-num)] text-[var(--ink)]'
           : 'text-[var(--fs-num-sm)] text-[var(--ink-2)]',
         muted && 'text-[var(--ink-3)]',
       )}
@@ -208,10 +228,16 @@ export function Btn({
   const locked = !!blockedBy || rest.disabled
 
   if (href && !locked) {
+    /*
+      `next/link` chứ không `<a>`: trong App Router thẻ `<a>` là tải lại cả
+      tài liệu — trắng màn một nhịp, mất trạng thái vỏ, và `loading.tsx` không
+      bao giờ được chạy. Link ngoài miền (http…) thì Link tự trả về điều hướng
+      thường, nên không phải tách nhánh.
+    */
     return (
-      <a href={href} className={cls} title={rest.title}>
+      <Link href={href} className={cls} title={rest.title}>
         {children}
-      </a>
+      </Link>
     )
   }
   return (
@@ -234,7 +260,7 @@ export function Btn({
  */
 export function PermHint({ owner, children }: { owner: string; children?: ReactNode }) {
   return (
-    <p className="text-center text-[var(--fs-micro)] leading-relaxed text-[var(--ink-3)]">
+    <p className="text-center leading-relaxed text-[var(--fs-micro)] text-[var(--ink-3)]">
       {children ?? (
         <>
           Việc này do <b className="text-[var(--ink-2)]">{owner}</b> giữ. Nhờ bộ phận{' '}
@@ -283,7 +309,10 @@ export function NoticeBar({
       <span className="text-[var(--ink-2)]">{children}</span>
       <button
         onClick={action.onClick}
-        className={cn('ml-auto text-[12px] font-semibold whitespace-nowrap hover:underline', TONE_TEXT[tone])}
+        className={cn(
+          'ml-auto text-[12px] font-semibold whitespace-nowrap hover:underline',
+          TONE_TEXT[tone],
+        )}
       >
         {action.label} →
       </button>
@@ -482,7 +511,7 @@ export function TextArea({
       onChange={(e) => onChange(e.target.value)}
       className={cn(
         'w-full resize-y rounded-[var(--radius-sm)] border border-[var(--line)]',
-        'bg-[var(--surface-card)] px-2 py-1.5 text-[var(--fs-body)] leading-relaxed',
+        'bg-[var(--surface-card)] px-2 py-1.5 leading-relaxed text-[var(--fs-body)]',
         'placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)] focus:border-[var(--act)]',
         'disabled:opacity-45',
       )}
@@ -797,7 +826,9 @@ export function Lookup<T>({
         )}
       />
       {busy && (
-        <span className="absolute top-1/2 right-2 -translate-y-1/2 text-[11px] text-[var(--ink-3)]">…</span>
+        <span className="absolute top-1/2 right-2 -translate-y-1/2 text-[11px] text-[var(--ink-3)]">
+          …
+        </span>
       )}
       {open && (
         <div
@@ -805,7 +836,9 @@ export function Lookup<T>({
           className="absolute top-[calc(100%+3px)] left-0 z-[var(--z-float)] max-h-[280px] w-full min-w-[320px] overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1 shadow-[0_8px_24px_rgba(17,24,38,.14)]"
         >
           {items.length === 0 ? (
-            <div className="px-3 py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">Không thấy mã nào khớp.</div>
+            <div className="px-3 py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+              Không thấy mã nào khớp.
+            </div>
           ) : (
             items.map((it, i) => (
               <button
@@ -818,7 +851,9 @@ export function Lookup<T>({
                 onMouseEnter={() => setIdx(i)}
                 className={cn(
                   'block w-full px-3 py-[5px] text-left text-[var(--fs-sm)]',
-                  i === idx ? 'bg-[var(--act-wash)] text-[var(--act-text)]' : 'text-[var(--ink)]',
+                  i === idx
+                    ? 'bg-[var(--act-wash)] text-[var(--act-text)]'
+                    : 'text-[var(--ink)]',
                 )}
               >
                 {render(it)}
