@@ -212,8 +212,18 @@ export function TFoot({
   cells: ReactNode
   caveat?: ReactNode
 }) {
+  /*
+    z-index của chân bảng phải CAO HƠN cột ghim trái.
+
+    `Cell pin` dán z-[2] lên ô đầu mỗi dòng để nó không bị nội dung cuộn ngang
+    đè. Chân bảng trước đây sticky mà KHÔNG khai z, nên ở bảng dài ô ghim của
+    dòng cuối vẽ chồng lên chữ trong chân bảng — đọc ra "Cá nhân — Mận ung cấp
+    đang hiện" (đo 14/09/2026 trên màn Nhà cung cấp 164 dòng). Cùng hạng lỗi
+    với bẫy hai lớp sticky ở `THead`, chỉ khác trục. Chân bảng thắng cả hai lớp
+    kia; chúng không bao giờ chồng chỗ nhau nên không sinh xung đột mới.
+  */
   return (
-    <tfoot className="[&_td]:sticky [&_td]:bottom-0 [&_td]:h-9 [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold">
+    <tfoot className="[&_td]:sticky [&_td]:bottom-0 [&_td]:z-[calc(var(--z-sticky)+2)] [&_td]:h-9 [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold">
       <tr>
         {label}
         {cells}

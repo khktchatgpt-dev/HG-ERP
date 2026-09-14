@@ -55,8 +55,19 @@ export function Crumb({
   onPrev,
   onNext,
 }: {
-  /** Đường dẫn nghiệp vụ. Phần tử cuối là chứng từ đang mở. */
-  path: string[]
+  /**
+   * Đường dẫn nghiệp vụ. Phần tử cuối là chứng từ đang mở.
+   *
+   * MẢNH CÓ `href` THÌ BẤM ĐƯỢC. Tới 14/09/2026 `path` chỉ nhận `string[]`,
+   * nên dải này trông y hệt một breadcrumb mà không mảnh nào đi đâu được —
+   * chủ dự án báo đúng chỗ: "Đơn mua › PO-2026-0067, phần này không hoạt động
+   * để quay lại trang". Nó là thứ GIỐNG đường dẫn nhất trên màn chứng từ và
+   * nằm ngay cạnh mã đơn, nên là chỗ đầu tiên người ta bấm để quay ra.
+   *
+   * Vẫn nhận chuỗi trần để 6 chỗ gọi cũ không phải sửa; mảnh CUỐI (chứng từ
+   * đang mở) thì không bao giờ là link — nó là trang hiện tại.
+   */
+  path: (string | { label: string; href: string })[]
   /** Nhãn khung nhìn đang chọn. Bỏ trống thì không hiện khối này. */
   view?: string
   onView?: () => void
@@ -67,18 +78,30 @@ export function Crumb({
 }) {
   return (
     <div className="k-crumb">
-      {path.map((p, i) => (
-        <span key={p + i} className="k-crumb-i">
-          {i > 0 && <span className="k-crumb-sep">›</span>}
-          {i === 0 ? (
-            <span className="k-crumb-mod">{p}</span>
-          ) : i === path.length - 1 ? (
-            <b>{p}</b>
-          ) : (
-            <span>{p}</span>
-          )}
-        </span>
-      ))}
+      {path.map((raw, i) => {
+        const p = typeof raw === 'string' ? raw : raw.label
+        const href = typeof raw === 'string' ? null : raw.href
+        const cuoi = i === path.length - 1
+        const noiDung = i === 0 ? (
+          <span className="k-crumb-mod">{p}</span>
+        ) : cuoi ? (
+          <b>{p}</b>
+        ) : (
+          <span>{p}</span>
+        ) // prettier-ignore
+        return (
+          <span key={p + i} className="k-crumb-i">
+            {i > 0 && <span className="k-crumb-sep">›</span>}
+            {href && !cuoi ? (
+              <a href={href} className="hover:text-[var(--act)] hover:underline">
+                {noiDung}
+              </a>
+            ) : (
+              noiDung
+            )}
+          </span>
+        )
+      })}
 
       {view && (
         <span className="k-view">

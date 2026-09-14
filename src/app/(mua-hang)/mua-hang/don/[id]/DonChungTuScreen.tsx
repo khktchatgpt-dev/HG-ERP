@@ -906,7 +906,7 @@ export function DonChungTuScreen(p: Props) {
   return (
     <DocScreen dense={dense}>
       <Crumb
-        path={['Đơn mua', code]}
+        path={[{ label: 'Đơn mua', href: '/mua-hang/don' }, code]}
         position={p.position ? [p.position.index, p.position.total] : undefined}
       />
 

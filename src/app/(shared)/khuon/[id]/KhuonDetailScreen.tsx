@@ -96,7 +96,7 @@ export function KhuonDetailScreen({
 
   return (
     <DocScreen>
-      <Crumb path={['Dùng chung', 'Khuôn nhôm', die.code]} />
+      <Crumb path={['Dùng chung', { label: 'Khuôn nhôm', href: '/khuon' }, die.code]} />
 
       <DocHead
         compact

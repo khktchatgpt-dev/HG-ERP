@@ -604,7 +604,7 @@ export function PoDetailScreen({
       <TopProgressBar active={act.busy} />
 
       <Crumb
-        path={['Cung ứng', 'Đơn đặt vật tư', po.code]}
+        path={['Cung ứng', { label: 'Đơn đặt vật tư', href: '/planning/pos' }, po.code]}
         position={position ? [position.index, position.total] : undefined}
       />
 
