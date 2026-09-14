@@ -329,8 +329,27 @@ export function ChiaDotSoanGrid({
   columns: PlanColumn[]
   onChange: (next: PlanColumn[]) => void
 }) {
-  // Dòng tự do (gỗ/gia công) nghiệm thu ngoài sổ kho — không đi theo đợt.
-  const rows = lines.map((l, i) => ({ l, i })).filter(({ l }) => !l.is_free)
+  /*
+    MỌI DÒNG ĐỀU CHIA ĐỢT ĐƯỢC, KỂ CẢ DÒNG TỰ DO (chốt 14/09/2026).
+
+    Trước đó lọc bỏ `is_free` với lý do "nghiệm thu ngoài sổ kho". Lý do ấy chỉ
+    đúng cho MỘT trong hai công dụng của đợt giao:
+
+      · đối chiếu phiếu nhập kho — dòng tự do không có, đúng là không dùng được;
+      · IN LỊCH GIAO LÊN PHIẾU GỬI NCC — dùng được, và đây mới là lý do khối
+        này ra đời (28/08/2026): tờ giấy NCC ký phải nói được "1.200 tấm xin
+        giao 700 ngày 10 + 500 ngày 20".
+
+    NCC gỗ cũng giao theo chuyến. Đo 14/09/2026: 21/67 đơn (31%) toàn dòng tự
+    do — tức gần một phần ba số đơn bị cấm ghi lịch giao vì một lý do chỉ đúng
+    một nửa.
+
+    Vòng đời không đổi: server vẫn cho đơn toàn dòng tự do chốt thẳng sang
+    'received' (nghiệm thu ngoài sổ), nên đợt của chúng không kẹt đơn ở
+    'đang giao'. `validateShipments` không phân biệt loại dòng.
+  */
+  const rows = lines.map((l, i) => ({ l, i }))
+  const soTuDo = lines.filter((l) => l.is_free).length
   const qtyOf = (l: Line) => (typeof l.qty === 'number' ? l.qty : 0)
   const setCol = (ci: number, patch: Partial<PlanColumn>) => onChange(columns.map((c, j) => (j === ci ? { ...c, ...patch } : c))) // prettier-ignore
   const setQty = (ci: number, li: number, v: number | '') => onChange(columns.map((c, j) => (j === ci ? { ...c, qty: { ...c.qty, [li]: v } } : c))) // prettier-ignore
@@ -341,24 +360,13 @@ export function ChiaDotSoanGrid({
     rows.map(({ l, i }) => ({ id: String(i), qty_ordered: qtyOf(l), name: l.name })),
   )
 
-  /*
-    TRẠNG THÁI RỖNG PHẢI NÓI LÝ DO VÀ VIỆC LÀM TIẾP (luật kiểm màn, mục 05 của
-    sổ thiết kế). Câu cũ — "Chưa có dòng vật tư kho nào để chia đợt" — nói một
-    sự kiện chứ không nói vì sao, trong khi đơn đang có đủ dòng ngay phía trên.
-    Người dùng đọc ra là TÍNH NĂNG HỎNG; chủ dự án báo đúng như vậy 14/09/2026.
-
-    Đo cùng ngày: 21/67 đơn (31%) toàn dòng tự do — tất cả mẫu gỗ — nên khối
-    này vô hiệu với gần một phần ba số đơn mà không giải thích lời nào.
-  */
+  /* Trạng thái rỗng phải nói lý do VÀ việc làm tiếp (luật kiểm màn, mục 05). */
   if (rows.length === 0) {
     return (
       <div className="px-[var(--gutter)] py-3 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
-        <b className="text-[var(--ink)]">Đơn này không chia đợt được.</b> Cả{' '}
-        {lines.length} dòng đều là <b>dòng tự do</b> (gỗ / gia công) — nghiệm thu ngoài sổ
-        kho, không có phiếu nhập theo đợt để đối chiếu.
+        <b className="text-[var(--ink)]">Chưa có dòng hàng nào để chia đợt.</b>
         <div className="mt-1 text-[var(--ink-3)]">
-          Lịch giao của đơn ghi ở <b>Đầu đơn › Hạn giao</b>; cần nhiều mốc thì ghi vào
-          điều khoản <b>Thời gian giao</b> — chữ đó in lên phiếu gửi NCC.
+          Thêm dòng ở khối <b>Dòng đơn hàng</b> phía trên, rồi quay lại đây xếp lịch giao.
         </div>
       </div>
     )
@@ -377,16 +385,15 @@ export function ChiaDotSoanGrid({
           </span>
         )}
         {/*
-          ĐƠN HỖN HỢP: nói ra số dòng bị giấu. Lưới chỉ bày dòng có mã kho, nên
-          trên đơn vừa có mã vừa có dòng tự do sẽ thiếu dòng mà không lời nào —
-          người soạn cộng số theo đợt rồi tưởng đã phủ hết đơn. Hiện chưa đơn
-          nào như vậy (đo 14/09/2026: 0/67), nhưng im lặng thì đến lúc có sẽ
-          không ai phát hiện.
+          ĐỢT CỦA DÒNG TỰ DO CHỈ ĐỂ IN, không đối chiếu phiếu nhập được (hàng
+          gỗ/gia công nghiệm thu ngoài sổ kho). Nói ra ngay đây, nếu không người
+          soạn xếp lịch rồi chờ hệ thống tự tick "đã về" — thứ sẽ không bao giờ
+          tới. Đơn chốt bằng "Nghiệm thu ngoài sổ" như trước.
         */}
-        {lines.length > rows.length && (
-          <span className="text-[var(--warn)]">
-            {lines.length - rows.length} dòng tự do không nằm trong bảng này — chúng
-            nghiệm thu ngoài sổ kho.
+        {soTuDo > 0 && (
+          <span className="text-[var(--ink-3)]">
+            {soTuDo === lines.length ? 'Đơn hàng gỗ/gia công' : `${soTuDo} dòng tự do`}:
+            đợt chỉ in lên phiếu, không tự đối chiếu phiếu nhập kho.
           </span>
         )}
         <span className="ml-auto">

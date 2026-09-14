@@ -246,8 +246,13 @@
   white-space: nowrap;
   cursor: default;
 }
-.k-step:not(:disabled) {
+.k-step:not(:disabled):not(.k-step-ro) {
   cursor: pointer;
+}
+/* Dải chỉ-đọc: là <span>, không phải nút. Bày bằng inline-block để giữ nguyên
+   hình dạng viền liền mạch của dải bước. */
+.k-step-ro {
+  display: inline-block;
 }
 .k-step:first-child {
   border-radius: var(--radius) 0 0 var(--radius);

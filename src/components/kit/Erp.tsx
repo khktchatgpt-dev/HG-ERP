@@ -290,19 +290,43 @@ export function StatusTrack({
   return (
     <div>
       <div className="k-track-lab">{label}</div>
-      <div className="k-steps">
-        {steps.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            className={cx('k-step', i === at && 'on')}
-            onClick={onPick ? () => onPick(i) : undefined}
-            disabled={!onPick}
-            aria-current={i === at ? 'step' : undefined}
-          >
-            {s}
-          </button>
-        ))}
+      {/*
+        KHÔNG CÓ `onPick` THÌ KHÔNG PHẢI NÚT.
+
+        Tới 14/09/2026 dải này luôn dựng `<button disabled>`, kể cả khi không
+        ai truyền `onPick` — tức 9 nút xám câm trông y như một điều khiển đổi
+        trạng thái. Người dùng bấm, không có gì xảy ra, và kết luận là "chi
+        tiết đơn không cập nhật được tình trạng" (chủ dự án báo đúng vậy) —
+        trong khi nút thật (`Gửi Giám đốc duyệt`) nằm ở thanh hành động phía
+        trên. Chính kit cũng cấm điều này ở `Action`: nút khoá mà không nói lý
+        do là lỗi UX.
+
+        Chỉ-đọc thì render `<span>`: mắt vẫn thấy đang ở bước nào, mà không hứa
+        một thao tác không tồn tại.
+      */}
+      <div className="k-steps" role={onPick ? undefined : 'list'}>
+        {steps.map((s, i) =>
+          onPick ? (
+            <button
+              key={s}
+              type="button"
+              className={cx('k-step', i === at && 'on')}
+              onClick={() => onPick(i)}
+              aria-current={i === at ? 'step' : undefined}
+            >
+              {s}
+            </button>
+          ) : (
+            <span
+              key={s}
+              role="listitem"
+              className={cx('k-step', 'k-step-ro', i === at && 'on')}
+              aria-current={i === at ? 'step' : undefined}
+            >
+              {s}
+            </span>
+          ),
+        )}
       </div>
     </div>
   )
