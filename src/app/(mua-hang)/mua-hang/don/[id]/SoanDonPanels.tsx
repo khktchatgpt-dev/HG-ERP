@@ -341,8 +341,27 @@ export function ChiaDotSoanGrid({
     rows.map(({ l, i }) => ({ id: String(i), qty_ordered: qtyOf(l), name: l.name })),
   )
 
+  /*
+    TRẠNG THÁI RỖNG PHẢI NÓI LÝ DO VÀ VIỆC LÀM TIẾP (luật kiểm màn, mục 05 của
+    sổ thiết kế). Câu cũ — "Chưa có dòng vật tư kho nào để chia đợt" — nói một
+    sự kiện chứ không nói vì sao, trong khi đơn đang có đủ dòng ngay phía trên.
+    Người dùng đọc ra là TÍNH NĂNG HỎNG; chủ dự án báo đúng như vậy 14/09/2026.
+
+    Đo cùng ngày: 21/67 đơn (31%) toàn dòng tự do — tất cả mẫu gỗ — nên khối
+    này vô hiệu với gần một phần ba số đơn mà không giải thích lời nào.
+  */
   if (rows.length === 0) {
-    return <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-2)]">Chưa có dòng vật tư kho nào để chia đợt.</div> // prettier-ignore
+    return (
+      <div className="px-[var(--gutter)] py-3 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
+        <b className="text-[var(--ink)]">Đơn này không chia đợt được.</b> Cả{' '}
+        {lines.length} dòng đều là <b>dòng tự do</b> (gỗ / gia công) — nghiệm thu ngoài sổ
+        kho, không có phiếu nhập theo đợt để đối chiếu.
+        <div className="mt-1 text-[var(--ink-3)]">
+          Lịch giao của đơn ghi ở <b>Đầu đơn › Hạn giao</b>; cần nhiều mốc thì ghi vào
+          điều khoản <b>Thời gian giao</b> — chữ đó in lên phiếu gửi NCC.
+        </div>
+      </div>
+    )
   }
   return (
     <>
@@ -355,6 +374,19 @@ export function ChiaDotSoanGrid({
         ) : (
           <span>
             Tuỳ chọn — hàng về nhiều chuyến thì thêm cột, mỗi cột một ngày giao.
+          </span>
+        )}
+        {/*
+          ĐƠN HỖN HỢP: nói ra số dòng bị giấu. Lưới chỉ bày dòng có mã kho, nên
+          trên đơn vừa có mã vừa có dòng tự do sẽ thiếu dòng mà không lời nào —
+          người soạn cộng số theo đợt rồi tưởng đã phủ hết đơn. Hiện chưa đơn
+          nào như vậy (đo 14/09/2026: 0/67), nhưng im lặng thì đến lúc có sẽ
+          không ai phát hiện.
+        */}
+        {lines.length > rows.length && (
+          <span className="text-[var(--warn)]">
+            {lines.length - rows.length} dòng tự do không nằm trong bảng này — chúng
+            nghiệm thu ngoài sổ kho.
           </span>
         )}
         <span className="ml-auto">

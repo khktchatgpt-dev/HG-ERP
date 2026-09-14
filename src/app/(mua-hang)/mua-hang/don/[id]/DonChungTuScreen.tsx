@@ -379,7 +379,26 @@ export function DonChungTuScreen(p: Props) {
     requestAnimationFrame(() => {
       document.querySelector<HTMLInputElement>(`#dong-hang tbody tr:nth-child(${i + 1}) input[aria-label="SL đặt"]`)?.focus() // prettier-ignore
     })
+  /**
+   * THÊM MỘT VẬT TƯ từ ô tìm — đường thêm dòng dùng nhiều nhất.
+   *
+   * MÃ ĐÃ CÓ TRÊN ĐƠN THÌ NHẢY TỚI DÒNG ĐÓ, không thêm dòng thứ hai. Tới
+   * 14/09/2026 hàm này không kiểm gì (bản gộp `addMaterials` thì có), nên gõ
+   * lại một mã là đơn có hai dòng cùng mã: React kêu trùng key, và tới lúc bấm
+   * Lưu mới ăn 400 "Vật tư bị trùng dòng" từ zod — sau khi đã gõ xong cả đơn.
+   * Màn cũ chặn ngay lúc thêm; đây là bước lùi, không phải thiết kế.
+   *
+   * Nhảy tới dòng cũ chứ không im lặng bỏ qua: bấm mà không thấy gì xảy ra thì
+   * người dùng bấm lại lần nữa, rồi đi tìm xem mình gõ sai ở đâu.
+   */
   const addMaterial = (m: PoMaterial) => {
+    const cu = lines.findIndex((l) => l.material_id === m.id)
+    if (cu >= 0) {
+      setPick(cu)
+      focusQty(cu)
+      toast.info(`${m.code} đã có ở dòng ${cu + 1}`, 'Sửa số lượng ngay trên dòng đó.')
+      return
+    }
     setLines((ls) => [...ls, newLine(template, m)])
     setPick(lines.length)
     focusQty(lines.length)
