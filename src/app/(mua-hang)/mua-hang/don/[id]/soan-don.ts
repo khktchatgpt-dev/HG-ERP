@@ -141,3 +141,26 @@ export function lsxJoinedLabel(
   if (!primary) return null
   return [code(primary), ...extras.map(code)].join(' + ')
 }
+
+/* ── CHIA Ô NHẬP: LƯỚI vs KHAY CHI TIẾT DÒNG ─────────────────────────────────
+   Mẫu đơn khai tới 5 ô đặc thù (nhôm: mã khuôn, kg/m, dài cây, SL đơn hàng,
+   tổng kg). Nhét hết vào lưới thì bảng rộng 12 cột và cột tiền — thứ luôn phải
+   thấy — bị đẩy ra ngoài màn. Nên lưới giữ TỐI ĐA 3 ô, phần còn lại xuống khay
+   "Chi tiết dòng" mở kèm dòng đang chọn.
+
+   HÀM NÀY TÁCH RA KHỎI MÀN để có thể test. Trước 14/09/2026 nó là hai dòng
+   `useMemo` với hai hằng private trong file 2.600 dòng: đổi `kind` của một ô,
+   hoặc đổi danh sách `GRID_KINDS`, là ô đó BIẾN MẤT KHỎI FORM trong im lặng —
+   test bộ cột phiếu in không bắt được, vì thứ tự in là danh sách khác. */
+
+/** Ô có kiểu nằm ngoài tập này luôn xuống khay, dù đứng đầu danh sách. */
+export const GRID_KINDS: ReadonlySet<string> = new Set(['text', 'number', 'calc'])
+export const GRID_MAX = 3
+
+export function splitLineFields<T extends { kind: string }>(
+  all: T[],
+): { grid: T[]; detail: T[] } {
+  const grid = all.filter((f) => GRID_KINDS.has(f.kind)).slice(0, GRID_MAX)
+  const inGrid = new Set(grid)
+  return { grid, detail: all.filter((f) => !inGrid.has(f)) }
+}

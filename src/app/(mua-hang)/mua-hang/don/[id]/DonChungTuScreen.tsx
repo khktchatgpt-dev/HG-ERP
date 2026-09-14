@@ -104,7 +104,7 @@ import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chu
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
 import { ChungTuKhoGrid, DotGiaoGrid, DotSheet, NhanTheoDotGrid, XacNhanSheet } from './NhanHangPanel' // prettier-ignore
 import { CapNhatDanhMucSheet, ChiaDotSoanGrid, DanExcelSheet, NhuCauGrid, type PasteConfirm } from './SoanDonPanels' // prettier-ignore
-import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, readDraft, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
+import { clearDraft, columnsToShipments, draftKeyFor, draftSignature, lsxJoinedLabel, pendingNeeds, planColumnsFromShipments, readDraft, splitLineFields, writeDraft, type Need, type PlanColumn, type SavedDraft } from './soan-don' // prettier-ignore
 import {
   QuickAddMaterial,
   type CreatedMaterial,
@@ -266,8 +266,6 @@ const TERM_FIELDS = [
   ['invoice', 'Hoá đơn', 'Hoá đơn GTGT giao cùng hàng'],
 ] as const
 
-const GRID_KINDS = new Set(['text', 'number', 'calc'])
-const GRID_MAX = 3
 
 export function DonChungTuScreen(p: Props) {
   const router = useRouter()
@@ -333,8 +331,7 @@ export function DonChungTuScreen(p: Props) {
     () => PO_FIELDS[template].filter((f) => !f.editHidden),
     [template],
   )
-  const gridFields = useMemo(() => allFields.filter((f) => GRID_KINDS.has(f.kind)).slice(0, GRID_MAX), [allFields]) // prettier-ignore
-  const detailFields = useMemo(() => allFields.filter((f) => !gridFields.includes(f)), [allFields, gridFields]) // prettier-ignore
+  const { grid: gridFields, detail: detailFields } = useMemo(() => splitLineFields(allFields), [allFields])
   const totals = poTotals(header, lines)
   const issues = lineIssues(template, lines, lineProblem)
   /** Ô chữ-trên-phiếu mở ra khi sửa đầy đủ (nháp) HOẶC sửa hẹp (đơn đã gửi). */
