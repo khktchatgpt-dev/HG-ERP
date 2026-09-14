@@ -1,5 +1,6 @@
 'use client'
 
+import { todayVn } from '@/lib/date-vn'
 import { useCallback, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
@@ -97,7 +98,7 @@ export function SupplyStockScreen({
   const sp = useSearchParams()
   const [navigating, startTransition] = useTransition()
   const [q, setQ] = useState(filters.q)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
 
   const pushFilter = useCallback(
     (patch: Record<string, string>) => {

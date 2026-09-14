@@ -265,7 +265,7 @@ export function BanLamViecScreen({
                     {issues.slice(0, 12).map((i) => (
                       <Row key={i.id}>
                         <Cell>
-                          <Code as="a" href={`/planning/lsx/${i.id}`}>
+                          <Code as="a" href={`/mua-hang/yeu-cau/${i.id}`}>
                             {i.code}
                           </Code>
                         </Cell>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useId, useState, type ReactNode } from 'react'
+import Link from 'next/link'
 
 /**
  * Ghép class. Dùng HÀM chứ không phải chuỗi mẫu `${cond ? ' x' : ''}`.
@@ -55,8 +56,19 @@ export function Crumb({
   onPrev,
   onNext,
 }: {
-  /** Đường dẫn nghiệp vụ. Phần tử cuối là chứng từ đang mở. */
-  path: string[]
+  /**
+   * Đường dẫn nghiệp vụ. Phần tử cuối là chứng từ đang mở.
+   *
+   * MẢNH CÓ `href` THÌ BẤM ĐƯỢC. Tới 14/09/2026 `path` chỉ nhận `string[]`,
+   * nên dải này trông y hệt một breadcrumb mà không mảnh nào đi đâu được —
+   * chủ dự án báo đúng chỗ: "Đơn mua › PO-2026-0067, phần này không hoạt động
+   * để quay lại trang". Nó là thứ GIỐNG đường dẫn nhất trên màn chứng từ và
+   * nằm ngay cạnh mã đơn, nên là chỗ đầu tiên người ta bấm để quay ra.
+   *
+   * Vẫn nhận chuỗi trần để 6 chỗ gọi cũ không phải sửa; mảnh CUỐI (chứng từ
+   * đang mở) thì không bao giờ là link — nó là trang hiện tại.
+   */
+  path: (string | { label: string; href: string })[]
   /** Nhãn khung nhìn đang chọn. Bỏ trống thì không hiện khối này. */
   view?: string
   onView?: () => void
@@ -67,18 +79,32 @@ export function Crumb({
 }) {
   return (
     <div className="k-crumb">
-      {path.map((p, i) => (
-        <span key={p + i} className="k-crumb-i">
-          {i > 0 && <span className="k-crumb-sep">›</span>}
-          {i === 0 ? (
-            <span className="k-crumb-mod">{p}</span>
-          ) : i === path.length - 1 ? (
-            <b>{p}</b>
-          ) : (
-            <span>{p}</span>
-          )}
-        </span>
-      ))}
+      {path.map((raw, i) => {
+        const p = typeof raw === 'string' ? raw : raw.label
+        const href = typeof raw === 'string' ? null : raw.href
+        const cuoi = i === path.length - 1
+        const noiDung = i === 0 ? (
+          <span className="k-crumb-mod">{p}</span>
+        ) : cuoi ? (
+          <b>{p}</b>
+        ) : (
+          <span>{p}</span>
+        ) // prettier-ignore
+        return (
+          <span key={p + i} className="k-crumb-i">
+            {i > 0 && <span className="k-crumb-sep">›</span>}
+            {href && !cuoi ? (
+              // `next/link`: quay ra danh sách là điều hướng trong app, không
+              // phải tải lại tài liệu — giữ được bộ lọc đang đặt ở màn danh sách.
+              <Link href={href} className="hover:text-[var(--act)] hover:underline">
+                {noiDung}
+              </Link>
+            ) : (
+              noiDung
+            )}
+          </span>
+        )
+      })}
 
       {view && (
         <span className="k-view">
@@ -264,19 +290,43 @@ export function StatusTrack({
   return (
     <div>
       <div className="k-track-lab">{label}</div>
-      <div className="k-steps">
-        {steps.map((s, i) => (
-          <button
-            key={s}
-            type="button"
-            className={cx('k-step', i === at && 'on')}
-            onClick={onPick ? () => onPick(i) : undefined}
-            disabled={!onPick}
-            aria-current={i === at ? 'step' : undefined}
-          >
-            {s}
-          </button>
-        ))}
+      {/*
+        KHÔNG CÓ `onPick` THÌ KHÔNG PHẢI NÚT.
+
+        Tới 14/09/2026 dải này luôn dựng `<button disabled>`, kể cả khi không
+        ai truyền `onPick` — tức 9 nút xám câm trông y như một điều khiển đổi
+        trạng thái. Người dùng bấm, không có gì xảy ra, và kết luận là "chi
+        tiết đơn không cập nhật được tình trạng" (chủ dự án báo đúng vậy) —
+        trong khi nút thật (`Gửi Giám đốc duyệt`) nằm ở thanh hành động phía
+        trên. Chính kit cũng cấm điều này ở `Action`: nút khoá mà không nói lý
+        do là lỗi UX.
+
+        Chỉ-đọc thì render `<span>`: mắt vẫn thấy đang ở bước nào, mà không hứa
+        một thao tác không tồn tại.
+      */}
+      <div className="k-steps" role={onPick ? undefined : 'list'}>
+        {steps.map((s, i) =>
+          onPick ? (
+            <button
+              key={s}
+              type="button"
+              className={cx('k-step', i === at && 'on')}
+              onClick={() => onPick(i)}
+              aria-current={i === at ? 'step' : undefined}
+            >
+              {s}
+            </button>
+          ) : (
+            <span
+              key={s}
+              role="listitem"
+              className={cx('k-step', 'k-step-ro', i === at && 'on')}
+              aria-current={i === at ? 'step' : undefined}
+            >
+              {s}
+            </span>
+          ),
+        )}
       </div>
     </div>
   )
@@ -1111,18 +1161,53 @@ export function SmartLinks({
 export function LineDetail({
   index,
   code,
+  summary,
+  open = true,
+  onToggle,
   children,
 }: {
   index: number
   code: string
+  /** Một dòng nói trong khay có gì, để lúc gấp vẫn biết có nên mở không. */
+  summary?: ReactNode
+  /**
+   * GẤP GỌN ĐƯỢC — thêm 14/09/2026.
+   *
+   * Khay này luôn mở vì lúc nào cũng có một dòng đang chọn. Đo trên đơn 17
+   * dòng, khung 694px: khay chiếm **459px = 66% màn hình** cho 4 ô nhập, nằm
+   * DƯỚI lưới nên nó đẩy mọi thứ xuống và phải cuộn qua nó mới tới phần còn
+   * lại của chứng từ. Chủ dự án báo: "mở nhiều dòng nhìn rất rối, chi tiết
+   * dòng chiếm quá nhiều".
+   *
+   * Gấp lại còn một vạch 24px. Trạng thái là của NGƯỜI DÙNG, không của dòng:
+   * mở một lần thì đổi dòng vẫn mở, không phải bấm lại mỗi lần chọn dòng.
+   */
+  open?: boolean
+  onToggle?: () => void
   children: ReactNode
 }) {
+  const head = (
+    <>
+      {onToggle && <span className="k-linedet-c">{open ? '▾' : '▸'}</span>}
+      Chi tiết dòng {index} <b>{code}</b>
+      {summary && <span className="k-linedet-s">{summary}</span>}
+    </>
+  )
   return (
     <div className="k-linedet">
-      <div className="k-linedet-h">
-        Chi tiết dòng {index} <b>{code}</b>
-      </div>
-      {children}
+      {onToggle ? (
+        <button
+          type="button"
+          className="k-linedet-h k-linedet-b"
+          aria-expanded={open}
+          onClick={onToggle}
+        >
+          {head}
+        </button>
+      ) : (
+        <div className="k-linedet-h">{head}</div>
+      )}
+      {open && children}
     </div>
   )
 }

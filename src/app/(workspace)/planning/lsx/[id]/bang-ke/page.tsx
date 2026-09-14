@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
@@ -25,7 +26,7 @@ export default async function LsxBangKePage({
   const [{ id }, { nhap }] = await Promise.all([params, searchParams])
   const includeDraft = nhap === '1'
   const user = await authService.requirePageUser()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const [data, supplyStaff] = await Promise.all([
     loadLsxBangKe(user, id, today, includeDraft),
     isSupplyStaff(user),

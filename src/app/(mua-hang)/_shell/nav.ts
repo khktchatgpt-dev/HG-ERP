@@ -30,30 +30,111 @@ export const SUPPLY_NAV: SupplyNavGroup[] = [
   {
     heading: 'Mua hàng',
     items: [
-      { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home', plan: 'A', q: 'Hôm nay tôi bắt đầu từ đâu?' },
+      {
+        href: '/mua-hang',
+        label: 'Bàn làm việc',
+        icon: 'home',
+        plan: 'A',
+        q: 'Hôm nay tôi bắt đầu từ đâu?',
+      },
     ],
   },
   {
     heading: 'Chứng từ',
     items: [
-      { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory', plan: 'C', q: 'Lệnh nào còn thiếu đồ, cần đặt gì?' },
-      { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart', plan: 'C', q: 'Đơn nào cần tôi động vào?' },
-      { href: '/mua-hang/nhan-hang', label: 'Nhận hàng', icon: 'truck', plan: 'C', q: 'Hàng về tới đâu?' },
-      { href: '/mua-hang/hoa-don', label: 'Hoá đơn NCC', icon: 'receipt', plan: 'C', q: 'Còn nợ nhà cung cấp bao nhiêu?' },
+      {
+        href: '/mua-hang/yeu-cau',
+        label: 'Yêu cầu mua',
+        icon: 'factory',
+        plan: 'C',
+        q: 'Lệnh nào còn thiếu đồ, cần đặt gì?',
+      },
+      {
+        href: '/mua-hang/don',
+        label: 'Đơn mua',
+        icon: 'shopping-cart',
+        plan: 'C',
+        q: 'Đơn nào cần tôi động vào?',
+      },
+      {
+        href: '/mua-hang/nhan-hang',
+        label: 'Nhận hàng',
+        icon: 'truck',
+        plan: 'C',
+        q: 'Hàng về tới đâu?',
+      },
+      {
+        href: '/mua-hang/hoa-don',
+        label: 'Hoá đơn NCC',
+        icon: 'receipt',
+        plan: 'C',
+        q: 'Còn nợ nhà cung cấp bao nhiêu?',
+      },
     ],
   },
   {
     heading: 'Danh mục',
     items: [
-      { href: '/mua-hang/ncc', label: 'Nhà cung cấp', icon: 'building-2', plan: 'E', q: 'Mua của ai, họ làm ăn ra sao?' },
-      { href: '/mua-hang/vat-tu', label: 'Vật tư', icon: 'package', plan: 'E', q: 'Mã này là gì, mua của ai?' },
-      { href: '/mua-hang/bang-gia', label: 'Bảng giá', icon: 'circle-dollar-sign', plan: 'C', q: 'Ai chào giá bao nhiêu, còn hiệu lực không?' },
+      {
+        href: '/mua-hang/ncc',
+        label: 'Nhà cung cấp',
+        icon: 'building-2',
+        plan: 'E',
+        q: 'Mua của ai, họ làm ăn ra sao?',
+      },
+      {
+        href: '/mua-hang/vat-tu',
+        label: 'Vật tư',
+        icon: 'package',
+        plan: 'E',
+        q: 'Mã này là gì, mua của ai?',
+      },
+      {
+        href: '/mua-hang/bang-gia',
+        label: 'Bảng giá',
+        icon: 'circle-dollar-sign',
+        plan: 'C',
+        q: 'Ai chào giá bao nhiêu, còn hiệu lực không?',
+      },
     ],
   },
   {
     heading: 'Tra cứu',
     items: [
-      { href: '/mua-hang/ton', label: 'Tồn & cân đối', icon: 'boxes', plan: 'C', q: 'Còn bao nhiêu, có phải mua không?' },
+      {
+        href: '/mua-hang/ton',
+        label: 'Tồn & cân đối',
+        icon: 'boxes',
+        plan: 'C',
+        q: 'Còn bao nhiêu, có phải mua không?',
+      },
+    ],
+  },
+  /*
+    LỐI RA — bắt buộc trong lúc hai bản chạy song song (14/09/2026).
+
+    Từ hôm nay mục "Phiếu mua" của sidebar Cung ứng dẫn thẳng vào đây, nên
+    người mua vào khu này bằng đường chính chứ không phải tự gõ URL nữa. Mà
+    vào rồi thì KHÔNG có đường ra: rail chỉ có menu của module, ⌘K mới chỉ
+    biết các trang /admin, và ba màn không có bản mới tương ứng — Tổng quan,
+    hai trang Họp — thì không link nào trỏ tới. Bảy trang tạm có nút "Mở bản
+    cũ" của riêng chúng, ba màn đó thì không.
+
+    Người dùng còn nút Back của trình duyệt, nhưng bắt cả một phòng điều hướng
+    bằng Back là cách chắc chắn để họ kết luận "bản mới làm mất đồ của tôi".
+
+    XOÁ MỤC NÀY khi khu cũ ngừng phục vụ — nó là cầu tạm, không phải thiết kế.
+  */
+  {
+    heading: 'Bản cũ',
+    items: [
+      {
+        href: '/planning',
+        label: 'Khu Cung ứng cũ',
+        icon: 'arrow-left-right',
+        plan: 'A',
+        q: 'Tổng quan, trang Họp, các màn chưa dựng lại',
+      },
     ],
   },
 ]

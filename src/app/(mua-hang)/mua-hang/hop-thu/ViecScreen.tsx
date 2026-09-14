@@ -42,6 +42,8 @@ export type Viec = {
   status: string
   supplier: string
   lsx: string | null
+  /** Id của lệnh — để chuỗi chứng từ mở ĐÚNG lệnh, không đổ về danh sách. */
+  lsx_id: string | null
   assignee: string | null
   assigned_to: string | null
   expected_at: string | null
@@ -457,7 +459,20 @@ export function ViecScreen({
               <DocChain
                 links={[
                   ...(sel.lsx
-                    ? [{ label: 'Lệnh SX', code: sel.lsx, href: '/planning/lsx' }]
+                    ? [
+                        {
+                          label: 'Lệnh SX',
+                          code: sel.lsx,
+                          /*
+                            Ở LẠI TRONG KHU MỚI. Link này từng trỏ
+                            `/planning/lsx` — vừa đá người mua về vỏ cũ, vừa đổ
+                            họ ra DANH SÁCH chứ không mở đúng lệnh đang xem.
+                          */
+                          href: sel.lsx_id
+                            ? `/mua-hang/yeu-cau/${sel.lsx_id}`
+                            : undefined,
+                        },
+                      ]
                     : []),
                   { label: 'Đơn mua', code: sel.code, href: `/mua-hang/don/${sel.id}`, muted: true }, // prettier-ignore
                 ]}

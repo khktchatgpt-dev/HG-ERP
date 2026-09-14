@@ -1,5 +1,6 @@
 'use client'
 
+import { todayVn } from '@/lib/date-vn'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -89,7 +90,7 @@ export function PosManager({
   }, [openId, router])
 
   // PO quá hẹn giao NCC — chỉ hiển thị (notification đẩy để GĐ2, xem late-risk.ts).
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
 
   const filtered = useMemo(
     () => pos.filter((p) => poMatches(p, filter, { meId, today })),

@@ -1,30 +1,30 @@
-import { Btn, Empty, ScreenHeader } from '@/components/kit'
+import { authService } from '@/modules/core/auth/auth.service'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { loadPriceBook } from '@/modules/dept/supply/pos.repo'
+import { BangGiaScreen } from './BangGiaScreen'
 
 export const metadata = { title: 'Mua hàng · Bảng giá' }
+export const dynamic = 'force-dynamic'
 
 /**
- * TRANG TẠM trong cây module Mua hàng. Bước 5: bảng giá chào tách khỏi hồ sơ NCC thành danh mục riêng.
+ * BẢNG GIÁ — Khuôn C, dựng bằng kit (Đợt 3, 15/09/2026). Thay trang tạm.
  *
- * Tồn tại để thanh điều hướng không prefetch vào 404 (đo 10/09/2026: 200 lượt
- * gọi một trang chưa có trong một phiên) và để người bấm vào có đường đi tiếp.
- * Dựng xong trang thật thì XOÁ file này.
+ * Câu trang trả lời: "Ai chào giá bao nhiêu, còn hiệu lực không?"
+ *
+ * NGUỒN LÀ LỊCH SỬ ĐƠN, KHÔNG PHẢI BẢNG GIÁ KHAI TAY. Đo 15/09/2026:
+ * `supply_supplier_prices` mới có **10 dòng**, trong khi dòng đơn đã gửi NCC
+ * có giá là **192**. Dựng trên bảng khai tay thì ra một trang gần như trống,
+ * còn giá THẬT thì nằm ngay trong đơn — và nó là giá đã ký, không phải giá
+ * chào suông. Khi nào phòng khai bảng giá tử tế thì trộn thêm nguồn đó vào,
+ * không phải dựng lại màn.
+ *
+ * Một dòng = MỘT VẬT TƯ MUA CỦA MỘT NCC, giữ giá lần gần nhất + giá lần trước
+ * để nói được "8.200 → 8.500".
  */
-export default function Page() {
+export default async function Page() {
+  const user = await authService.requirePageUser()
+  const [rows, supplyStaff] = await Promise.all([loadPriceBook(), isSupplyStaff(user)])
   return (
-    <div className="flex min-h-full flex-col">
-      <ScreenHeader eyebrow="Mua hàng" title="Bảng giá" />
-      <div className="flex-1 bg-[var(--surface-card)]">
-        <Empty
-          headline="Chưa dựng theo sổ thiết kế mới"
-          reason="Câu hỏi trang này sẽ trả lời: “Mã này nhà cung cấp nào chào giá bao nhiêu, hiệu lực tới khi nào?” Trong lúc chờ, bản cũ vẫn đầy đủ tính năng."
-          next={
-            <>
-              <Btn primary href="/planning/suppliers">Mở bản cũ</Btn>
-              <Btn href="/design-lab">Xem sổ thiết kế</Btn>
-            </>
-          }
-        />
-      </div>
-    </div>
+    <BangGiaScreen rows={rows} canEdit={user.role === 'admin' || supplyStaff} />
   )
 }

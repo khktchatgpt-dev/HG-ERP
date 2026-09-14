@@ -246,8 +246,13 @@
   white-space: nowrap;
   cursor: default;
 }
-.k-step:not(:disabled) {
+.k-step:not(:disabled):not(.k-step-ro) {
   cursor: pointer;
+}
+/* Dải chỉ-đọc: là <span>, không phải nút. Bày bằng inline-block để giữ nguyên
+   hình dạng viền liền mạch của dải bước. */
+.k-step-ro {
+  display: inline-block;
 }
 .k-step:first-child {
   border-radius: var(--radius) 0 0 var(--radius);
@@ -1220,6 +1225,31 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.k-linedet-b {
+  width: 100%;
+  padding-bottom: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+.k-linedet-b:hover {
+  color: var(--ink);
+}
+/* Mũi tên giữ chỗ cố định — không thì chữ nhảy ngang mỗi lần gấp/mở. */
+.k-linedet-c {
+  display: inline-block;
+  width: 9px;
+  color: var(--ink-3);
+}
+/* Câu tóm tắt lúc gấp: chữ thường, không hoa, để không tranh với tiêu đề. */
+.k-linedet-s {
+  margin-left: auto;
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--ink-3);
 }
 .k-linedet-h b {

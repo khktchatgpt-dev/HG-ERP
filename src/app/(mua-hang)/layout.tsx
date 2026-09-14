@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canEnterWorkspace } from '@/workspaces/access'
@@ -42,7 +43,7 @@ export default async function CungUngLayout({ children }: { children: React.Reac
   let inboxCount = 0
   try {
     const rows = await posRepo.listWatchFields()
-    inboxCount = countMyTodos(rows, user.id, new Date().toISOString().slice(0, 10))
+    inboxCount = countMyTodos(rows, user.id, todayVn())
   } catch {
     inboxCount = 0
   }

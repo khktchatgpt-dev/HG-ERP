@@ -1,8 +1,32 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
+import Link, { useLinkStatus } from 'next/link'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
+
+/**
+ * ĐIỀU HƯỚNG PHẢI LÀ `next/link`, KHÔNG PHẢI `<a>` TRẦN.
+ *
+ * Tới 14/09/2026 rail dùng `<a href>`: trong App Router đó là TẢI LẠI CẢ
+ * TRANG — không prefetch, không dùng được `loading.tsx`, mất trạng thái vỏ
+ * (rail đang mở rộng, vị trí cuộn), và màn trắng một nhịp trước khi dựng lại
+ * từ đầu. Chủ dự án báo "chuyển trang không có loading": đúng là không có,
+ * vì full reload thì Suspense của Next không bao giờ được chạy.
+ *
+ * `NavPending` đọc cờ pending của `Link` gần nhất nên spinner mọc ngay tại
+ * item vừa bấm, thay chỗ icon của nó — không chiếm thêm chỗ trên rail 52px.
+ */
+function NavPending({ fallback }: { fallback: ReactNode }) {
+  const { pending } = useLinkStatus()
+  if (!pending) return <>{fallback}</>
+  return (
+    <span
+      aria-label="Đang mở"
+      className="size-[13px] animate-spin rounded-full border-[1.5px] border-current border-t-transparent opacity-70"
+    />
+  )
+}
 
 /**
  * ═══════════════════════════════════════════════════════════════════════
@@ -181,8 +205,9 @@ export function NavRail({
             {g.items.map((it) => {
               const on = activeHref === it.href || activeHref.startsWith(`${it.href}/`)
               const body = (
-                <a
+                <Link
                   href={it.href}
+                  prefetch
                   aria-current={on ? 'page' : undefined}
                   className={cn(
                     'relative mx-2 flex h-[30px] items-center rounded-[var(--radius-sm)]',
@@ -193,7 +218,15 @@ export function NavRail({
                   )}
                 >
                   <span className="relative grid w-4 shrink-0 place-items-center">
-                    {it.icon}
+                    {/*
+                      ĐANG ĐI THÌ PHẢI NÓI. `useLinkStatus` (Next 16) trả cờ
+                      pending của CHÍNH `Link` cha, nên spinner mọc đúng chỗ
+                      vừa bấm — không phải một thanh chạy ở đâu đó trên đỉnh
+                      màn. Trang danh sách của module này dựng ở server và có
+                      trang mất một nhịp; không có tín hiệu nào thì người dùng
+                      bấm lại lần hai, rồi lần ba.
+                    */}
+                    <NavPending fallback={it.icon} />{' '}
                     {/* Thu gọn: số đếm co thành chấm — con số không đọc được
                         ở 17px cạnh icon 16px, nhưng "có việc" thì thấy được. */}
                     {!expanded && !!it.count && (
@@ -215,7 +248,7 @@ export function NavRail({
                       </span>
                     </>
                   )}
-                </a>
+                </Link>
               )
               return expanded ? (
                 <div key={it.href}>{body}</div>

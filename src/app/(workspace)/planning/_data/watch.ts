@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
@@ -43,5 +44,5 @@ export async function loadWatchPos(
 
 /** Hôm nay dạng yyyy-mm-dd — mọi so sánh hạn dùng chung một mốc. */
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+  return todayVn()
 }

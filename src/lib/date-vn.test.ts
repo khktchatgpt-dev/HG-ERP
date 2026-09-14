@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isoToVn, maskVnDate, vnToIso } from './date-vn'
+import { isoToVn, maskVnDate, todayVn, vnToIso } from './date-vn'
 
 describe('isoToVn', () => {
   it('đổi ISO sang kiểu VN', () => {
@@ -52,5 +52,28 @@ describe('maskVnDate', () => {
   })
   it('cắt phần thừa', () => {
     expect(maskVnDate('030820261')).toBe('03/08/2026')
+  })
+})
+
+describe('todayVn — hôm nay theo giờ Việt Nam', () => {
+  it('00:45 giờ VN vẫn là NGÀY HÔM ĐÓ, không lùi về hôm qua như UTC', () => {
+    // 2026-09-14T17:45Z = 2026-09-15 00:45 giờ VN.
+    const t = new Date('2026-09-14T17:45:00Z')
+    expect(t.toISOString().slice(0, 10)).toBe('2026-09-14') // cái sai
+    expect(todayVn(t)).toBe('2026-09-15') // cái đúng
+  })
+
+  it('16:59Z vẫn là hôm sau; 17:00Z là ranh giới', () => {
+    expect(todayVn(new Date('2026-09-14T16:59:00Z'))).toBe('2026-09-14')
+    expect(todayVn(new Date('2026-09-14T17:00:00Z'))).toBe('2026-09-15')
+  })
+
+  it('giữa trưa giờ VN thì trùng UTC, không đổi gì', () => {
+    const t = new Date('2026-09-15T05:00:00Z') // 12:00 giờ VN
+    expect(todayVn(t)).toBe(t.toISOString().slice(0, 10))
+  })
+
+  it('luôn ra dạng yyyy-mm-dd để so chuỗi được', () => {
+    expect(todayVn(new Date('2026-01-02T00:00:00Z'))).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 })

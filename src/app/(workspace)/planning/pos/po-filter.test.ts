@@ -87,6 +87,72 @@ describe('poMatches — công tắc cộng dồn với nhóm', () => {
     expect(poMatches(cancelled, f({ noEta: true }), ctx)).toBe(false)
   })
 
+  describe('lọc theo lệnh sản xuất', () => {
+    it('giữ đơn của đúng lệnh, loại đơn của lệnh khác', () => {
+      expect(poMatches(po(), f({ lsxId: 'lsx1' }), ctx)).toBe(true)
+      expect(poMatches(po(), f({ lsxId: 'lsx9' }), ctx)).toBe(false)
+    })
+
+    it('ĐƠN GỘP lọt khi lọc theo lệnh PHỤ của nó', () => {
+      /*
+        Đây là ca dễ sai nhất và là lý do nhánh lọc phải xét `extra_lsx`
+        (0125 — một đơn mua chung cho nhiều lệnh). Chỉ so
+        `production_order_id` thì đơn mua chung biến mất khỏi lệnh nó đang
+        phục vụ, và người mua kết luận nhầm rằng lệnh đó chưa đặt gì.
+      */
+      const gop = po({
+        production_order_id: 'lsx1',
+        extra_lsx: [{ id: 'lsx2', code: '03/26-27' }],
+      })
+      expect(poMatches(gop, f({ lsxId: 'lsx2' }), ctx)).toBe(true)
+      expect(poMatches(gop, f({ lsxId: 'lsx3' }), ctx)).toBe(false)
+    })
+
+    it('đơn ngoài lệnh rớt khi lọc theo bất kỳ lệnh nào', () => {
+      const ngoai = po({ production_order_id: null, lsx_code: null })
+      expect(poMatches(ngoai, f({ lsxId: 'lsx1' }), ctx)).toBe(false)
+      // …nhưng vẫn lọt khi KHÔNG lọc lệnh.
+      expect(poMatches(ngoai, EMPTY_FILTER, ctx)).toBe(true)
+    })
+
+    it('đếm là bộ lọc đang hoạt động — nếu không nút "Bỏ lọc" không hiện ra', () => {
+      expect(isFilterActive(f({ lsxId: 'lsx1' }))).toBe(true)
+      expect(isFilterActive(f({ lsxId: 'all' }))).toBe(false)
+    })
+  })
+
+  describe('lọc theo khoảng ngày lập đơn', () => {
+    const p1 = po({ created_at: '2026-08-01T09:00:00+00:00' })
+
+    it('hai đầu BAO GỒM ngày biên — gõ "đến 01/08" thì đơn ngày 01/08 phải lọt', () => {
+      expect(poMatches(p1, f({ fromDate: '2026-08-01' }), ctx)).toBe(true)
+      expect(poMatches(p1, f({ toDate: '2026-08-01' }), ctx)).toBe(true)
+      expect(poMatches(p1, f({ fromDate: '2026-08-01', toDate: '2026-08-01' }), ctx)).toBe(true) // prettier-ignore
+    })
+
+    it('ngoài khoảng thì rớt', () => {
+      expect(poMatches(p1, f({ fromDate: '2026-08-02' }), ctx)).toBe(false)
+      expect(poMatches(p1, f({ toDate: '2026-07-31' }), ctx)).toBe(false)
+    })
+
+    it('chỉ khai một đầu thì đầu kia không chặn', () => {
+      expect(poMatches(p1, f({ fromDate: '2026-01-01' }), ctx)).toBe(true)
+      expect(poMatches(p1, f({ toDate: '2026-12-31' }), ctx)).toBe(true)
+    })
+
+    it('so CHUỖI, không parse Date — giờ trong ngày không đẩy đơn sang ngày khác', () => {
+      // 23:30 giờ UTC vẫn phải nằm trong ngày 01/08 khi lọc theo chuỗi.
+      const khuya = po({ created_at: '2026-08-01T23:30:00+00:00' })
+      expect(poMatches(khuya, f({ fromDate: '2026-08-01', toDate: '2026-08-01' }), ctx)).toBe(true) // prettier-ignore
+    })
+
+    it('là bộ lọc đang hoạt động — nếu không nút "Bỏ lọc" không hiện', () => {
+      expect(isFilterActive(f({ fromDate: '2026-08-01' }))).toBe(true)
+      expect(isFilterActive(f({ toDate: '2026-08-01' }))).toBe(true)
+      expect(isFilterActive(f({ fromDate: '', toDate: '' }))).toBe(false)
+    })
+  })
+
   it('lọc NCC / loại đơn / ô tìm', () => {
     expect(poMatches(po(), f({ supplierId: 's2' }), ctx)).toBe(false)
     expect(poMatches(po({ lsx_code: null }), f({ type: 'lsx' }), ctx)).toBe(false)

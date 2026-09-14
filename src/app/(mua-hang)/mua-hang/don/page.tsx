@@ -7,7 +7,7 @@ import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { DonScreen } from './DonScreen'
-import { DEFAULT_VIEW_ID, decodeView, namedView } from './views'
+import { DEFAULT_VIEW_ID, PARAM_KEYS, decodeView, namedView } from './views'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Mua hàng · Phiếu mua' }
@@ -66,11 +66,19 @@ export default async function Page({
    */
   const openId = sp.mo ?? sp.view ?? null
   const asked = sp.nhin ?? (openId ? 'tat-ca' : DEFAULT_VIEW_ID)
-  const hasCustom = Object.keys(sp).some((k) =>
-    ['q', 'trang_thai', 'ncc', 'loai', 'toi', 'tre', 'chua_hen', 'gom', 'sap'].includes(
-      k,
-    ),
-  )
+  /*
+    DANH SÁCH THAM SỐ LẤY TỪ CHÍNH BỘ MÃ HOÁ, không gõ tay.
+
+    Trước 15/09/2026 đây là một mảng gõ cứng, và nó đã lỗi thời hai lần trong
+    hai ngày: thiếu `lsx` (thêm 14/09) rồi thiếu `tu`/`den` (thêm 15/09). Hậu
+    quả im lặng và khó thấy: bấm chip thì lọc chạy (đổi state, `replaceState`
+    không tải lại), nhưng DÁN LINK cho đồng nghiệp hoặc F5 thì tham số bị coi
+    là "không có gì lạ" và màn rớt về khung nhìn mặc định — đúng thứ khung
+    nhìn-trên-URL sinh ra để tránh.
+
+    `PARAM_KEYS` suy từ `encodeView` nên thêm bộ lọc mới là tự có mặt ở đây.
+  */
+  const hasCustom = Object.keys(sp).some((k) => PARAM_KEYS.has(k))
   const initial = hasCustom ? decodeView(sp) : (namedView(asked)?.state ?? decodeView(sp))
 
   return (

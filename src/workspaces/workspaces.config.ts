@@ -349,7 +349,27 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Nghiệp vụ',
         items: [
           { href: '/planning', label: 'Tổng quan', icon: 'home' },
-          { href: '/planning/pos', label: 'Phiếu mua', icon: 'shopping-cart' },
+          /*
+            CHUYỂN TỪNG PHẦN SANG MODULE MUA HÀNG MỚI (14/09/2026).
+
+            Đây là mục DUY NHẤT đã trỏ sang `/mua-hang`, và cố ý chỉ một mục.
+            Bảy trong chín mục của cây menu mới còn là trang tạm ("Chưa dựng
+            theo sổ thiết kế mới" → dẫn ngược về bản cũ), nên bật cả cây là
+            giao cho phòng Cung ứng một menu mà phần lớn mở ra chỗ trống. Ba
+            màn đã dựng THẬT — Bàn làm việc, Phiếu mua, Hộp thư việc — thì
+            Phiếu mua là màn người mua ở lì cả ngày, và nó đã đủ logic bản cũ
+            (soạn đơn, duyệt, chốt thiếu, đợt giao). Đưa đúng nó vào luồng
+            chính trước.
+
+            Vì sao phải chuyển chứ không để nút "thử bản mới": khu Tài chính
+            ĐÃ link thẳng `/mua-hang/don/[id]` từ 11/09. Để nguyên thì kế toán
+            và cung ứng nhìn hai màn khác nhau cho cùng một đơn — và người
+            phát hiện lệch sẽ là người dùng, không phải chúng ta.
+
+            `/planning/pos` VẪN SỐNG (bookmark, link cũ trong các màn khác vào
+            được) — chỉ rút khỏi nav. Lùi lại = đổi href này về chỗ cũ.
+          */
+          { href: '/mua-hang/don', label: 'Phiếu mua', icon: 'shopping-cart' },
           { href: '/planning/materials', label: 'Vật tư & giá mua', icon: 'package' },
           // building-2 chứ không phải truck: từ vựng icon (/design-lab mục 05)
           // để truck cho GIAO NHẬN — "Hàng sắp về" bên dưới mới là xe hàng.

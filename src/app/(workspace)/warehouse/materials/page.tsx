@@ -38,7 +38,12 @@ export default async function MaterialsPage({
       page_size: PAGE_SIZE,
       active_only: false,
     }),
-    materialsService.counts(user, { q, group_name: group }),
+    materialsService.counts(user, {
+      q,
+      group_name: group,
+      // Cùng bộ lọc với `list`, nếu không phân trang/StatsBar nói dối khi bật ?review=1.
+      needs_review: sp.review === '1' ? true : undefined,
+    }),
     // NCC đang hoạt động — cho ô "NCC mặc định" của vật tư (tự-điền lên đơn).
     suppliersService.list(user, { active_only: true, page: 1, page_size: 500 }),
     materialTaxonomy(),

@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { authService } from '@/modules/core/auth/auth.service'
 import { buildLsxSupplyRows } from '@/modules/dept/supply/lsx-supply.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
@@ -23,7 +24,7 @@ export const dynamic = 'force-dynamic'
  */
 export default async function PlanningLsxPage() {
   const user = await authService.requirePageUser()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
 
   const [rows, supplyStaff] = await Promise.all([
     buildLsxSupplyRows(user, today),

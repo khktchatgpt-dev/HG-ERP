@@ -835,3 +835,91 @@ export const posRepo = {
     if (error) throw new Error(error.message)
   },
 }
+
+/* ── SỔ GIÁ MUA — gom từ LỊCH SỬ ĐƠN, không phải bảng giá khai tay ──────────
+   `supply_supplier_prices` mới có 10 dòng (đo 15/09/2026) trong khi dòng đơn đã
+   gửi NCC có giá là 192 — sổ giá dựng trên bảng khai tay sẽ là một trang gần
+   như trống, còn giá THẬT thì nằm ngay trong đơn. Cùng ranh giới với
+   `priceHistoryByMaterial`: chỉ đơn từ 'ordered' trở đi, giá trên đơn nháp
+   chưa phải giá chốt. */
+export type PriceBookRow = {
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  group_name: string | null
+  supplier_id: string
+  supplier_name: string
+  currency: string
+  /** Giá của lần mua GẦN NHẤT. */
+  price: number
+  price_unit: string | null
+  at: string
+  po_code: string
+  /** Số lần đã mua mã này của NCC này. */
+  times: number
+  /** Giá lần mua trước đó — null khi mới mua một lần. */
+  prev: number | null
+}
+
+export async function loadPriceBook(limit = 5000): Promise<PriceBookRow[]> {
+  const { data, error } = await db()
+    .from('supply_purchase_order_lines')
+    .select(
+      'material_id, unit_price, price_basis, unit2, po:supply_purchase_orders!inner(code, currency, status, ordered_at, created_at, supplier_id, supplier:supply_suppliers(name)), mat:warehouse_materials!inner(code, name, unit, group_name)',
+    )
+    .not('material_id', 'is', null)
+    .gt('unit_price', 0)
+    .in('po.status', ['ordered', 'confirmed', 'in_transit', 'partial', 'received'])
+    .limit(limit)
+  if (error) throw new Error(error.message)
+
+  type One<T> = T | T[] | null
+  const first = <T>(v: One<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v)
+  const acc = new Map<string, PriceBookRow & { _all: { at: string; price: number }[] }>()
+
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const po = first(r.po as One<Record<string, unknown>>)
+    const mat = first(r.mat as One<Record<string, unknown>>)
+    if (!po || !mat) continue
+    const sup = first(po.supplier as One<{ name: string }>)
+    const at = String(po.ordered_at ?? po.created_at).slice(0, 10)
+    const price = Number(r.unit_price)
+    const key = `${r.material_id}|${po.supplier_id}`
+    const cur = acc.get(key)
+    if (!cur) {
+      acc.set(key, {
+        material_id: String(r.material_id),
+        code: String(mat.code),
+        name: String(mat.name),
+        unit: String(mat.unit),
+        group_name: (mat.group_name as string) ?? null,
+        supplier_id: String(po.supplier_id),
+        supplier_name: sup?.name ?? '—',
+        currency: String(po.currency),
+        price,
+        price_unit: r.price_basis === 'unit2' ? ((r.unit2 as string) ?? null) : null,
+        at,
+        po_code: String(po.code),
+        times: 1,
+        prev: null,
+        _all: [{ at, price }],
+      })
+      continue
+    }
+    cur.times++
+    cur._all.push({ at, price })
+    if (at > cur.at) {
+      cur.at = at
+      cur.price = price
+      cur.po_code = String(po.code)
+      cur.price_unit = r.price_basis === 'unit2' ? ((r.unit2 as string) ?? null) : null
+    }
+  }
+
+  return [...acc.values()].map(({ _all, ...row }) => {
+    // Giá LẦN TRƯỚC = mốc mới thứ hai. Có nó thì màn nói được "8.200 → 8.500".
+    const sorted = _all.sort((a, b) => (a.at < b.at ? 1 : -1))
+    return { ...row, prev: sorted.length > 1 ? sorted[1].price : null }
+  })
+}

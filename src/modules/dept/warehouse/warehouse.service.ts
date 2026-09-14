@@ -182,7 +182,10 @@ export const materialsService = {
   },
 
   /** Số liệu StatsBar — đếm ở DB theo bộ lọc, không cộng từ trang đang xem. */
-  async counts(user: User, opts: { q?: string; group_name?: string }) {
+  async counts(
+    user: User,
+    opts: { q?: string; group_name?: string; needs_review?: boolean },
+  ) {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
     return materialsRepo.counts(opts)
   },

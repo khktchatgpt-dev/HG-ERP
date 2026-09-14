@@ -15,6 +15,7 @@ import {
   GroupRow,
   InspectPanel,
   InspectSection,
+  Lookup,
   NextAction,
   NoticeBar,
   Num,
@@ -27,6 +28,7 @@ import {
   SheetActions,
   StatusBar,
   StatusTrack,
+  TFoot,
   THead,
   Table,
   Tag,
@@ -127,6 +129,62 @@ const COLS: { key: ColKey; label: string; num?: boolean }[] = [
 ]
 const DEFAULT_COLS: ColKey[] = ['ncc', 'chuoi', 'trang_thai', 've_kho', 'hen', 'kip', 'phu_trach', 'gia_tri'] // prettier-ignore
 
+/**
+ * Ô LỌC GÕ-TÌM cho danh mục dài (NCC, lệnh SX).
+ *
+ * Hai trạng thái, không bao giờ cùng lúc: CHƯA CHỌN thì là ô gõ tìm; ĐÃ CHỌN
+ * thì là một chip mang đúng cái tên đang lọc, bấm vào là bỏ. Bày cả hai cùng
+ * lúc tốn một hàng lọc mà không thêm thông tin nào.
+ *
+ * Tìm trên mảng ĐÃ NẠP SẴN nên không có vòng server; bọc trong Promise vì
+ * `Lookup` của kit khai `search` là bất đồng bộ (nó dựng cho danh mục 13k
+ * dòng phải hỏi server). Trần 20 dòng: danh sách gợi ý dài hơn thế thì người
+ * dùng gõ thêm chữ nhanh hơn là đọc.
+ */
+function LocLookup<T>({
+  label,
+  placeholder,
+  selected,
+  onClear,
+  items,
+  textOf,
+  keyOf,
+  onPick,
+  render,
+}: {
+  label: string
+  placeholder: string
+  selected: string | null
+  onClear: () => void
+  items: T[]
+  textOf: (x: T) => string
+  keyOf: (x: T) => string
+  onPick: (x: T) => void
+  render?: (x: T) => React.ReactNode
+}) {
+  if (selected !== null) {
+    return (
+      <Chip on onClick={onClear}>
+        {label}: {selected} ✕
+      </Chip>
+    )
+  }
+  return (
+    <Lookup<T>
+      label={label}
+      placeholder={placeholder}
+      width={210}
+      keyOf={keyOf}
+      render={render ?? ((x) => textOf(x))}
+      onPick={onPick}
+      search={async (q) => {
+        const n = q.trim().toLowerCase()
+        return items.filter((x) => textOf(x).toLowerCase().includes(n)).slice(0, 20)
+      }}
+    />
+  )
+}
+
 export function DonScreen({
   today,
   pos,
@@ -202,6 +260,29 @@ export function DonScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pos, view, meId, today],
   )
+  /*
+    TỔNG CỦA DANH SÁCH ĐANG HIỆN — tính trên `shown` (sau lọc), không trên cả
+    sổ: người mua lọc rồi mới hỏi tổng, tổng của thứ họ không nhìn thấy là số
+    gây hiểu nhầm. Đơn ĐÃ HUỶ không cộng tiền nhưng vẫn đếm để chân bảng nói
+    ra — giấu chúng đi thì số dòng và số tiền lệch nhau mà không ai biết vì sao.
+  */
+  const tongHien = useMemo(() => {
+    const m: Record<string, number> = {}
+    let huy = 0
+    for (const p of shown) {
+      if (p.status === 'cancelled') {
+        huy++
+        continue
+      }
+      m[p.currency] = (m[p.currency] ?? 0) + (p.total ?? 0)
+    }
+    return {
+      huy,
+      tien: Object.entries(m)
+        .filter(([, v]) => v > 0)
+        .map(([c, v]) => `${v.toLocaleString('vi-VN', { maximumFractionDigits: c === 'VND' ? 0 : 2 })} ${c === 'VND' ? '₫' : c}`), // prettier-ignore
+    }
+  }, [shown])
   const lsxDue = useMemo(
     () => new Map(lsxs.map((l) => [l.id, l.materials_due_at])),
     [lsxs],
@@ -379,6 +460,23 @@ export function DonScreen({
         actions={
           <>
             <Btn href="/mua-hang/yeu-cau">Vật tư theo lệnh</Btn>
+            {/*
+              XUẤT ĐÚNG CÁI ĐANG NHÌN. Chuyển nguyên bộ lọc hiện hành sang
+              route, và route lọc lại bằng chính `decodeView` + `poMatches` mà
+              màn này dùng — nên file luôn bằng đúng danh sách trên màn.
+
+              Không dùng `Btn href` tĩnh: bộ lọc đổi theo state, href tính lúc
+              render sẽ là bộ lọc của lần render trước.
+            */}
+            <Btn
+              onClick={() => {
+                const qs = encodeView(view)
+                window.open(`/api/dept/supply/pos/export-list${qs ? `?${qs}` : ''}`, '_blank') // prettier-ignore
+              }}
+              title={`Xuất ${shown.length} đơn đang hiện ra Excel`}
+            >
+              Xuất danh sách
+            </Btn>
             {canEdit && (
               <Btn primary href="/mua-hang/don/moi">
                 + Soạn đơn mua
@@ -423,13 +521,74 @@ export function DonScreen({
             })),
           ]}
         />
-        <Pick
+        {/*
+          NCC VÀ LỆNH SX: GÕ TÌM, KHÔNG PHẢI CUỘN CHỌN.
+
+          Trước 14/09/2026 ô NCC là `<select>` trần với 164 lựa chọn (và còn
+          tăng) — không gõ tìm được, phải cuộn một danh sách dài để chọn một
+          cái tên mình đã biết sẵn. Lệnh SX thì trước đây chỉ GOM được chứ
+          không lọc được. Chủ dự án báo đúng chỗ này: "số lượng LSX và đơn đặt
+          NCC nhiều thì các phần lọc không đáp ứng được".
+
+          Chọn xong thì ô tìm nhường chỗ cho một chip mang đúng cái tên đang
+          lọc — nhìn là biết đang lọc gì, bấm là bỏ. Ô `<select>` không làm
+          được điều đó khi danh sách dài: nhãn bị cắt và không ai chắc mình
+          đang đứng ở đâu trong danh sách.
+        */}
+        <LocLookup
           label="Nhà cung cấp"
-          value={view.filter.supplierId}
-          onChange={(supplierId) => patchFilter({ supplierId })}
-          width={200}
-          options={[{ value: 'all', label: 'Mọi NCC' }, ...suppliers.map((s) => ({ value: s.id, label: s.name }))]} // prettier-ignore
+          placeholder="Gõ tên nhà cung cấp…"
+          selected={
+            view.filter.supplierId === 'all'
+              ? null
+              : (suppliers.find((s) => s.id === view.filter.supplierId)?.name ??
+                'NCC không còn trong danh mục')
+          }
+          onClear={() => patchFilter({ supplierId: 'all' })}
+          items={suppliers}
+          textOf={(s) => s.name}
+          keyOf={(s) => s.id}
+          onPick={(s) => patchFilter({ supplierId: s.id })}
         />
+        <LocLookup
+          label="Lệnh sản xuất"
+          placeholder="Gõ mã lệnh hoặc khách…"
+          selected={
+            view.filter.lsxId === 'all'
+              ? null
+              : (lsxs.find((l) => l.id === view.filter.lsxId)?.code ?? 'Lệnh không còn')
+          }
+          onClear={() => patchFilter({ lsxId: 'all' })}
+          items={lsxs}
+          textOf={(l) => `${l.code} ${l.customer_name ?? ''}`}
+          keyOf={(l) => l.id}
+          onPick={(l) => patchFilter({ lsxId: l.id })}
+          render={(l) => (
+            <span className="flex items-baseline gap-2">
+              <span className="num">{l.code}</span>
+              <span className="text-[var(--ink-3)]">{l.customer_name ?? ''}</span>
+            </span>
+          )}
+        />
+        {/*
+          KHOẢNG NGÀY LẬP ĐƠN. Câu dùng nhiều nhất khi sổ dài — "đơn tháng
+          này", "đơn quý 3" — mà chip trạng thái không thay được: chúng lọc
+          theo VÒNG ĐỜI, không phải theo trục thời gian.
+        */}
+        <span className="flex items-center gap-1 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          Lập từ
+          <DateInput
+            value={view.filter.fromDate}
+            onChange={(v) => patchFilter({ fromDate: v })}
+            label="Lập từ ngày"
+          />
+          đến
+          <DateInput
+            value={view.filter.toDate}
+            onChange={(v) => patchFilter({ toDate: v })}
+            label="Lập đến ngày"
+          />
+        </span>
         <Pick
           label="Loại đơn"
           value={view.filter.type}
@@ -475,6 +634,9 @@ export function DonScreen({
                   q: '',
                   bucket: 'all',
                   supplierId: 'all',
+                  lsxId: 'all',
+                  fromDate: '',
+                  toDate: '',
                   type: 'all',
                   mine: false,
                   late: false,
@@ -600,7 +762,29 @@ export function DonScreen({
                               p.status === 'cancelled' ? 'opacity-60' : undefined
                             }
                           >
-                            <Code>{p.code}</Code>
+                            {/*
+                              MÃ ĐƠN LÀ LINK THẬT tới chứng từ đầy đủ.
+
+                              Trước 14/09/2026 nó là `<Code>` trần: mono + màu
+                              hành động nên ĐỌC RA là bấm được, mà bấm thì chỉ
+                              chọn dòng. Đường duy nhất tới chứng từ là bấm
+                              dòng → khay bên phải → "Mở đơn đầy đủ" — ba bước,
+                              và ở màn hẹp khay nằm ngoài tầm nhìn nên bước ba
+                              không thấy đâu. Chủ dự án báo đúng triệu chứng:
+                              "tạo đơn xong, vào xem chi tiết ở đâu không thấy".
+
+                              `stopPropagation` để bấm mã thì ĐI, bấm chỗ khác
+                              trong dòng thì vẫn chỉ chọn — hai ý định khác
+                              nhau trên cùng một dòng.
+                            */}
+                            <Code
+                              as="a"
+                              href={`/mua-hang/don/${p.id}`}
+                              title={`Mở chứng từ ${p.code}`}
+                              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            >
+                              {p.code}
+                            </Code>
                             {borrowed && <Tag tone="neutral">mua chung</Tag>}
                             {!borrowed && (p.extra_lsx?.length ?? 0) > 0 && (
                               <Tag tone="neutral">
@@ -710,6 +894,26 @@ export function DonScreen({
                   </Fragment>
                 ))}
               </tbody>
+              {/*
+                CHÂN BẢNG — số nào không kiểm được thì không ai tin (luật 6 của
+                sổ thiết kế). Màn này có cột tiền và lọc được xuống 23 đơn, mà
+                tới 15/09/2026 KHÔNG có dòng tổng nào: câu đầu tiên người mua
+                hỏi khi lọc "nháp chưa gửi" là "tổng bao nhiêu tiền đang chờ",
+                và họ phải tự cộng. Màn cũ cũng thiếu — không phải bước lùi,
+                là khoảng trống của cả hai bản.
+
+                TIỀN CỘNG RIÊNG TỪNG LOẠI, không quy đổi — cùng luật với ba
+                màn kia của khu. Chân bảng nói luôn phần KHÔNG gồm: đơn đã huỷ.
+              */}
+              <TFoot
+                label={<td colSpan={Math.max(1, 2 + cols.length - 3)}>Cộng {shown.length} đơn đang hiện</td>} // prettier-ignore
+                cells={<td className="num">{tongHien.tien.join(' · ') || ''}</td>}
+                caveat={
+                  tongHien.huy > 0
+                    ? `Chưa gồm ${tongHien.huy} đơn đã huỷ đang hiện trong danh sách.`
+                    : 'Cộng riêng từng loại tiền, KHÔNG quy đổi.'
+                }
+              />
             </Table>
 
             {ticked.length > 0 && (
@@ -895,7 +1099,7 @@ export function DonScreen({
                               label: 'Lệnh SX',
                               code: sel.lsx_code,
                               href: sel.production_order_id
-                                ? `/planning/lsx/${sel.production_order_id}`
+                                ? `/mua-hang/yeu-cau/${sel.production_order_id}`
                                 : undefined,
                             },
                           ]
@@ -903,7 +1107,7 @@ export function DonScreen({
                       {
                         label: 'Đơn mua',
                         code: sel.code,
-                        href: `/planning/pos/${sel.id}`,
+                        href: `/mua-hang/don/${sel.id}`,
                         muted: true,
                       },
                     ]}
