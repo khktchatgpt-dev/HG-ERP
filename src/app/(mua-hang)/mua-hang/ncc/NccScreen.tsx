@@ -40,8 +40,8 @@ export type NccRow = {
   spend: Record<string, number>
 }
 
-/** Hồ sơ NCC bản mới (Khuôn E) chưa dựng — tạm dẫn sang hồ sơ bản cũ. */
-const profileHref = (id: string) => `/planning/suppliers/${id}`
+/** Hồ sơ NCC — Khuôn E, dựng 15/09/2026. Ở lại trong khu mới. */
+const profileHref = (id: string) => `/mua-hang/ncc/${id}`
 
 const ngung = (r: NccRow) => r.status !== 'active' || !r.is_active
 
