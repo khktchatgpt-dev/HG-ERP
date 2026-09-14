@@ -153,10 +153,22 @@ export const materialsRepo = {
   async counts(filter: {
     q?: string
     group_name?: string
+    /**
+     * PHẢI nhận cùng bộ lọc với `list`, nếu không `total` nói dối.
+     *
+     * Thiếu nó (tới 14/09/2026): bật lọc "chờ Kho rà" thì danh sách trả 52 mã
+     * nhưng `total` vẫn đếm cả 13.226 — chân bảng ghi "1–50 trong 13.226 mã ·
+     * Trang 1/265" trong khi bấm sang trang 2 là hết dòng. Cả
+     * `/planning/materials` lẫn `/mua-hang/vat-tu` cùng dính, vì cùng gọi hàm
+     * này. Đúng nguyên tắc 3 của sổ thiết kế: con số là một lời hứa, và nó
+     * phải đếm bằng ĐÚNG bộ lọc mà trang đang áp.
+     */
+    needs_review?: boolean
   }): Promise<{ total: number; active: number; noShelf: number; needsReview: number }> {
     const base = () => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      if (filter.needs_review) q = q.eq('needs_review', true)
       // Cùng luật tìm không dấu với list — hai nơi lệch nhau là StatsBar nói dối.
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
@@ -286,7 +298,9 @@ export const materialsRepo = {
   async regroup(
     ids: string[],
     patch: { group_name?: string; sub_group?: string | null },
-  ): Promise<{ id: string; code: string; group_name: string | null; sub_group: string | null }[]> {
+  ): Promise<
+    { id: string; code: string; group_name: string | null; sub_group: string | null }[]
+  > {
     if (ids.length === 0) return []
     const { data: before, error: e1 } = await db()
       .from('warehouse_materials')
