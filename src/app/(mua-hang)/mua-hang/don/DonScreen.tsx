@@ -529,6 +529,25 @@ export function DonScreen({
             </span>
           )}
         />
+        {/*
+          KHOẢNG NGÀY LẬP ĐƠN. Câu dùng nhiều nhất khi sổ dài — "đơn tháng
+          này", "đơn quý 3" — mà chip trạng thái không thay được: chúng lọc
+          theo VÒNG ĐỜI, không phải theo trục thời gian.
+        */}
+        <span className="flex items-center gap-1 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          Lập từ
+          <DateInput
+            value={view.filter.fromDate}
+            onChange={(v) => patchFilter({ fromDate: v })}
+            label="Lập từ ngày"
+          />
+          đến
+          <DateInput
+            value={view.filter.toDate}
+            onChange={(v) => patchFilter({ toDate: v })}
+            label="Lập đến ngày"
+          />
+        </span>
         <Pick
           label="Loại đơn"
           value={view.filter.type}
@@ -575,6 +594,8 @@ export function DonScreen({
                   bucket: 'all',
                   supplierId: 'all',
                   lsxId: 'all',
+                  fromDate: '',
+                  toDate: '',
                   type: 'all',
                   mine: false,
                   late: false,

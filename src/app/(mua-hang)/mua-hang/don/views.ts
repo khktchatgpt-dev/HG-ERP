@@ -133,6 +133,8 @@ function sameState(a: ViewState, b: ViewState): boolean {
     f.bucket === g.bucket &&
     f.supplierId === g.supplierId &&
     f.lsxId === g.lsxId &&
+    f.fromDate === g.fromDate &&
+    f.toDate === g.toDate &&
     f.type === g.type &&
     f.mine === g.mine &&
     f.late === g.late &&
@@ -149,6 +151,17 @@ const BUCKETS = new Set<string>(['all', ...PO_BUCKETS.map((b) => b.key)])
 const GROUPS = new Set<string>(Object.keys(GROUP_LABEL))
 const SORTS = new Set<string>(Object.keys(SORT_LABEL))
 
+/**
+ * Ngày hợp lệ trên URL — chỉ yyyy-mm-dd.
+ *
+ * Viết bằng `String.raw` vì regex này từng bị công cụ sửa file nuốt mất dấu
+ * `\`, thành `/^d{4}-d{2}-d{2}$/` — không khớp gì và HỎNG IM LẶNG: bộ lọc ngày
+ * trên URL luôn bị coi là rỗng, không lỗi nào nổi lên. Cùng hạng bẫy đã ghi
+ * trong CLAUDE.md cho regex của luật ESLint.
+ */
+const YMD = new RegExp(String.raw`^\d{4}-\d{2}-\d{2}$`)
+const isYmd = (v?: string): boolean => !!v && YMD.test(v)
+
 export function decodeView(sp: Record<string, string | undefined>): ViewState {
   const named = namedView(sp.nhin)
   if (named) return named.state
@@ -158,6 +171,10 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     supplierId: sp.ncc ?? 'all',
     lsxId: sp.lsx ?? 'all',
     type: sp.loai === 'lsx' || sp.loai === 'standalone' ? sp.loai : 'all',
+    // Chỉ nhận yyyy-mm-dd; rác trên thanh địa chỉ thì coi như không lọc, đừng
+    // để một tham số hỏng làm màn trống trơn mà không nói gì.
+    fromDate: isYmd(sp.tu) ? sp.tu! : '',
+    toDate: isYmd(sp.den) ? sp.den! : '',
     mine: sp.toi === '1',
     late: sp.tre === '1',
     noEta: sp.chua_hen === '1',
@@ -182,6 +199,8 @@ export function encodeView(s: ViewState): string {
   if (f.supplierId !== 'all') p.set('ncc', f.supplierId)
   if (f.lsxId !== 'all') p.set('lsx', f.lsxId)
   if (f.type !== 'all') p.set('loai', f.type)
+  if (f.fromDate) p.set('tu', f.fromDate)
+  if (f.toDate) p.set('den', f.toDate)
   if (f.mine) p.set('toi', '1')
   if (f.late) p.set('tre', '1')
   if (f.noEta) p.set('chua_hen', '1')
@@ -315,3 +334,36 @@ const STATUS_ORDER: string[] = [
   'received',
   'cancelled',
 ]
+
+/**
+ * MỌI TÊN THAM SỐ mà `encodeView` có thể sinh ra — suy từ chính nó.
+ *
+ * Trang dùng tập này để biết URL có mang bộ lọc riêng hay không. Suy ra thay
+ * vì gõ tay, vì mảng gõ tay đã lỗi thời hai lần trong hai ngày (thiếu `lsx`,
+ * rồi thiếu `tu`/`den`) và hỏng IM LẶNG: bấm chip thì chạy, dán link thì mất
+ * bộ lọc.
+ *
+ * Cách suy: mã hoá một trạng thái đã bật MỌI bộ lọc rồi lấy tên khoá. Bộ lọc
+ * mới quên thêm vào đây là không thể — trừ khi nó cũng quên vào `encodeView`,
+ * mà lúc đó thì URL vốn đã không mang nó rồi.
+ */
+export const PARAM_KEYS: ReadonlySet<string> = new Set(
+  new URLSearchParams(
+    encodeView({
+      filter: {
+        q: 'x',
+        bucket: 'draft',
+        supplierId: 'x',
+        lsxId: 'x',
+        type: 'lsx',
+        fromDate: '2026-01-01',
+        toDate: '2026-12-31',
+        mine: true,
+        late: true,
+        noEta: true,
+      },
+      groupBy: 'ncc',
+      sortBy: 'ma',
+    }),
+  ).keys(),
+)

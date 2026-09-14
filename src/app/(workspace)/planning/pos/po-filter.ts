@@ -79,6 +79,20 @@ export type PoFilterState = {
    */
   lsxId: string
   type: 'all' | 'lsx' | 'standalone'
+  /**
+   * KHOẢNG NGÀY LẬP ĐƠN (yyyy-mm-dd, rỗng = không chặn đầu đó).
+   *
+   * Thêm 15/09/2026. Trước đó màn không hỏi được câu dùng nhiều nhất khi sổ
+   * dài: "đơn tháng này", "đơn quý 3", "đơn từ lúc đổi giá thép". Chip trạng
+   * thái lọc theo VÒNG ĐỜI, không thay được trục thời gian — 69 đơn thì cuộn
+   * qua được, vài trăm đơn một năm thì không.
+   *
+   * Lọc theo NGÀY LẬP chứ không phải hẹn giao: người mua tra lại việc mình đã
+   * làm ("tháng trước tôi đặt những gì"), còn hẹn giao đã có màn Nhận hàng lo,
+   * và ở đó trục thời gian là hẹn giao. Hai màn hai câu hỏi.
+   */
+  fromDate: string
+  toDate: string
   /** Ba công tắc dưới đây CỘNG DỒN với nhau và với `bucket`. */
   mine: boolean
   late: boolean
@@ -91,6 +105,8 @@ export const EMPTY_FILTER: PoFilterState = {
   supplierId: 'all',
   lsxId: 'all',
   type: 'all',
+  fromDate: '',
+  toDate: '',
   mine: false,
   late: false,
   noEta: false,
@@ -103,6 +119,8 @@ export function isFilterActive(f: PoFilterState): boolean {
     f.supplierId !== 'all' ||
     f.lsxId !== 'all' ||
     f.type !== 'all' ||
+    f.fromDate !== '' ||
+    f.toDate !== '' ||
     f.mine ||
     f.late ||
     f.noEta
@@ -130,6 +148,18 @@ export function poMatches(
     !(p.extra_lsx ?? []).some((x) => x.id === f.lsxId)
   )
     return false
+  /*
+    KHOẢNG NGÀY LẬP — so CHUỖI yyyy-mm-dd, không parse Date.
+
+    `created_at` là timestamptz ("2026-09-15T03:12:44.123+00:00"), cắt 10 ký tự
+    đầu là ngày theo UTC. Ở đây so chuỗi với chuỗi nên hai đầu cùng một hệ quy
+    chiếu; parse thành Date rồi so mốc thì lại đẻ đúng lỗi lệch múi giờ vừa vá
+    hôm nay. Hai đầu BAO GỒM cả ngày biên — người dùng gõ "từ 01/09 đến 30/09"
+    thì mong có cả đơn ngày 30.
+  */
+  const at = p.created_at?.slice(0, 10) ?? ''
+  if (f.fromDate && at < f.fromDate) return false
+  if (f.toDate && at > f.toDate) return false
   if (f.type === 'lsx' && !p.lsx_code) return false
   if (f.type === 'standalone' && p.lsx_code) return false
   const ql = f.q.trim().toLowerCase()
