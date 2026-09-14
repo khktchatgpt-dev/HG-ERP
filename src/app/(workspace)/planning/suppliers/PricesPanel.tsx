@@ -1,5 +1,6 @@
 'use client'
 
+import { todayVn } from '@/lib/date-vn'
 import { useEffect, useState } from 'react'
 import { Badge } from '@/components/Badge'
 import { useToast } from '@/components/ui/Toast'
@@ -77,7 +78,7 @@ export function PricesPanel({
   }, [supplier.id])
 
   // Bản ghi hiện hành per vật tư: valid_from lớn nhất ≤ hôm nay.
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const currentIds = new Set<string>()
   const currentRows: PriceRow[] = []
   if (rows) {
@@ -340,7 +341,7 @@ function BulkQuoteForm({
     unit: string
     price: number | ''
   }
-  const [validFrom, setValidFrom] = useState(new Date().toISOString().slice(0, 10))
+  const [validFrom, setValidFrom] = useState(todayVn())
   const [currency, setCurrency] = useState(current[0]?.currency ?? 'VND')
   const [lines, setLines] = useState<BLine[]>(
     current.map((r) => ({

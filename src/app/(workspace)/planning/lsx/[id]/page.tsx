@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { notFound } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
@@ -22,7 +23,7 @@ export default async function PlanningLsxPoPage({
 }) {
   const { id } = await params
   const user = await authService.requirePageUser()
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const [detail, canEdit] = await Promise.all([
     buildLsxSupplyDetail(user, id, today),
     // Cùng quyền mà `lsxService.setMaterialsDue` kiểm ở server — ô ngày chỉ để

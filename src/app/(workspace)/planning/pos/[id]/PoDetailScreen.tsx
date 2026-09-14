@@ -1,5 +1,6 @@
 'use client'
 
+import { todayVn } from '@/lib/date-vn'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PoNotesPanel } from './PoNotesPanel'
@@ -295,7 +296,7 @@ export function PoDetailScreen({
     currency: po.currency,
   })
   const cash = (n: number) => fmtMoney(n, po.currency)
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const late = assessPoLate(po, today)
   const lsxCodes = po.lsx_code
     ? [po.lsx_code, ...extraLsx.map((l) => l.code)].join(' + ')

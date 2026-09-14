@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import {
   buildLsxSupplyRows,
   type LsxSupplyRow,
@@ -21,7 +22,7 @@ export type MeetingData = {
 }
 
 export async function loadMeeting(user: User): Promise<MeetingData> {
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
   const rows = await buildLsxSupplyRows(user, today)
   const m = buildMeeting(rows, today)
   return { today, rows: m.rows, counts: m.counts, issues: m.issues }

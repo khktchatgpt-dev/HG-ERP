@@ -1,30 +1,55 @@
-import { Btn, Empty, ScreenHeader } from '@/components/kit'
+import { authService } from '@/modules/core/auth/auth.service'
+import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
+import { incomingBucket, isIncoming } from '@/lib/supply-watch'
+import { loadWatchPos, todayIso } from '@/app/(workspace)/planning/_data/watch'
+import { NhanHangScreen } from './NhanHangScreen'
 
 export const metadata = { title: 'Mua hàng · Nhận hàng' }
+export const dynamic = 'force-dynamic'
 
 /**
- * TRANG TẠM trong cây module Mua hàng. Bước 4: đọc phiếu nhập từ Kho, đối chiếu với đơn.
+ * NHẬN HÀNG — Khuôn C, dựng bằng kit (Đợt 3, 15/09/2026). Thay trang tạm.
  *
- * Tồn tại để thanh điều hướng không prefetch vào 404 (đo 10/09/2026: 200 lượt
- * gọi một trang chưa có trong một phiên) và để người bấm vào có đường đi tiếp.
- * Dựng xong trang thật thì XOÁ file này.
+ * Câu trang trả lời: "Hàng về tới đâu?" — nên TRỤC LÀ THỜI GIAN, không phải
+ * trạng thái đơn. Người mua mở màn này để biết tuần này có gì về và có gì phải
+ * giục; Kho đọc để xếp chỗ trước.
+ *
+ * ĐƠN CHƯA GỬI NCC CỐ Ý KHÔNG CÓ MẶT (`isIncoming` loại `approved`): chưa ai
+ * chuẩn bị hàng thì xếp nó vào lịch giao là tự trấn an sai. Nó thuộc danh sách
+ * việc ở Bàn làm việc — đúng chỗ để bị thúc.
+ *
+ * KHÔNG VIẾT SERVICE MỚI: `loadWatchPos` + `incomingBucket` là đúng thứ màn
+ * `/planning/hang-sap-ve` và badge sidebar đang dùng, nên ba chỗ không thể
+ * đếm khác nhau.
  */
-export default function Page() {
+export default async function Page() {
+  const user = await authService.requirePageUser()
+  const today = todayIso()
+  const [{ rows, truncatedAt }, supplyStaff] = await Promise.all([
+    loadWatchPos(user),
+    isSupplyStaff(user),
+  ])
+
+  const enRoute = rows.filter(isIncoming)
   return (
-    <div className="flex min-h-full flex-col">
-      <ScreenHeader eyebrow="Mua hàng" title="Nhận hàng" />
-      <div className="flex-1 bg-[var(--surface-card)]">
-        <Empty
-          headline="Chưa dựng theo sổ thiết kế mới"
-          reason="Câu hỏi trang này sẽ trả lời: “Hàng về tới đâu, phiếu nhập nào của đơn nào?” Trong lúc chờ, bản cũ vẫn đầy đủ tính năng."
-          next={
-            <>
-              <Btn primary href="/warehouse/docs">Mở bản cũ</Btn>
-              <Btn href="/design-lab">Xem sổ thiết kế</Btn>
-            </>
-          }
-        />
-      </div>
-    </div>
+    <NhanHangScreen
+      today={today}
+      truncatedAt={truncatedAt}
+      canEdit={user.role === 'admin' || supplyStaff}
+      rows={enRoute.map((p) => ({
+        id: p.id,
+        code: p.code,
+        supplier_name: p.supplier_name,
+        lsx_code: p.lsx_code,
+        status: p.status,
+        expected_at: p.expected_at,
+        currency: p.currency,
+        total: p.total,
+        assignee_name: p.assignee_name,
+        lines_done: p.lines_done ?? 0,
+        lines_total: p.lines_total ?? 0,
+        bucket: incomingBucket(p, today) ?? 'no_eta',
+      }))}
+    />
   )
 }

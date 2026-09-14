@@ -1,3 +1,4 @@
+import { todayVn } from '@/lib/date-vn'
 import { Forbidden } from '@/server/http'
 import type { User } from '@/modules/core/users/users.repo'
 import { balanceRepo, type BalanceQuery } from './balance.repo'
@@ -42,7 +43,7 @@ export const balanceService = {
    */
   async view(user: User, q: BalanceQuery = {}): Promise<BalanceView> {
     await assertCanRead(user)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = todayVn()
     const { rows, total } = await balanceRepo.list(q)
     return {
       buckets: bucketBalance(rows, today),
@@ -68,6 +69,6 @@ export const balanceService = {
   async countShort(user: User): Promise<number> {
     await assertCanRead(user)
     const { rows } = await balanceRepo.list({ short_only: true, page_size: 1000 })
-    return summarise(rows, new Date().toISOString().slice(0, 10)).total
+    return summarise(rows, todayVn()).total
   },
 }

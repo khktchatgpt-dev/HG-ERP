@@ -59,3 +59,28 @@ export function maskVnDate(raw: string): string {
   if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`
   return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`
 }
+
+/**
+ * HÔM NAY THEO GIỜ VIỆT NAM (yyyy-mm-dd).
+ *
+ * `new Date().toISOString().slice(0, 10)` là hôm nay theo **UTC**, tức từ
+ * 00:00 đến 07:00 giờ Việt Nam nó trả về NGÀY HÔM QUA. Mọi so sánh hạn dựng
+ * trên mốc đó đều lệch một ngày trong khung giờ ấy: "quá hẹn" đếm thiếu, "còn
+ * N ngày" dư một, "đến hẹn hôm nay" bày đơn của hôm qua. Đo 15/09/2026 lúc
+ * 00:45 giờ VN: Bàn làm việc ghi "Hôm nay 14/09/2026".
+ *
+ * Xưởng bắt đầu ca lúc 7h30 nên khung giờ hỏng đúng vào lúc người ta mở máy.
+ *
+ * Dùng `en-CA` vì nó cho sẵn dạng yyyy-mm-dd; `timeZone` để Intl tự lo lệch
+ * giờ thay vì cộng tay 7 tiếng (cộng tay thì sai khi máy chủ đổi múi).
+ */
+export const TZ_VN = 'Asia/Ho_Chi_Minh'
+
+export function todayVn(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ_VN,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
