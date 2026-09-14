@@ -86,14 +86,28 @@ export function LenhScreen({
           { label: 'Đơn mua', value: String(lsx.pos.length) },
         ]}
         actions={
-          canEdit ? (
-            <>
-              <Btn href={`/mua-hang/don?lsx=${lsx.id}`}>Lọc đơn của lệnh</Btn>
-              <Btn primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
-                + Đặt thêm
-              </Btn>
-            </>
-          ) : undefined
+          <>
+            {/*
+              BÁO CÁO CỦA RIÊNG LỆNH NÀY — `lsx-report` đã có sẵn 6 sheet (Lệnh ·
+              Cần mua · Đặt cho ai · Kỹ thuật cần xử lý · Phân bổ theo SP · Đơn
+              mua) cộng một sheet mỗi đơn. Khu mới trước nay không có nút nào
+              dẫn tới, nên phần công phu nhất của phòng nằm ngoài tầm với.
+            */}
+            <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
+              Báo cáo lệnh
+            </Btn>
+            <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke`}>
+              Bảng kê vật tư
+            </Btn>
+            {canEdit && (
+              <>
+                <Btn href={`/mua-hang/don?lsx=${lsx.id}`}>Lọc đơn của lệnh</Btn>
+                <Btn primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
+                  + Đặt thêm
+                </Btn>
+              </>
+            )}
+          </>
         }
       />
 

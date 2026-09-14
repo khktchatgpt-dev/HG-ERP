@@ -282,7 +282,6 @@ export function DonScreen({
         .filter(([, v]) => v > 0)
         .map(([c, v]) => `${v.toLocaleString('vi-VN', { maximumFractionDigits: c === 'VND' ? 0 : 2 })} ${c === 'VND' ? '₫' : c}`), // prettier-ignore
     }
-     
   }, [shown])
   const lsxDue = useMemo(
     () => new Map(lsxs.map((l) => [l.id, l.materials_due_at])),
@@ -461,6 +460,23 @@ export function DonScreen({
         actions={
           <>
             <Btn href="/mua-hang/yeu-cau">Vật tư theo lệnh</Btn>
+            {/*
+              XUẤT ĐÚNG CÁI ĐANG NHÌN. Chuyển nguyên bộ lọc hiện hành sang
+              route, và route lọc lại bằng chính `decodeView` + `poMatches` mà
+              màn này dùng — nên file luôn bằng đúng danh sách trên màn.
+
+              Không dùng `Btn href` tĩnh: bộ lọc đổi theo state, href tính lúc
+              render sẽ là bộ lọc của lần render trước.
+            */}
+            <Btn
+              onClick={() => {
+                const qs = encodeView(view)
+                window.open(`/api/dept/supply/pos/export-list${qs ? `?${qs}` : ''}`, '_blank') // prettier-ignore
+              }}
+              title={`Xuất ${shown.length} đơn đang hiện ra Excel`}
+            >
+              Xuất danh sách
+            </Btn>
             {canEdit && (
               <Btn primary href="/mua-hang/don/moi">
                 + Soạn đơn mua

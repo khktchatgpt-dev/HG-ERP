@@ -137,7 +137,22 @@ export function YeuCauScreen({
             tone: (dem.stop ?? 0) > 0 ? 'stop' : 'neutral',
           },
         ]}
-        actions={canEdit ? <Btn href="/mua-hang/don/moi">+ Soạn đơn mua</Btn> : undefined}
+        actions={
+          <>
+            {/*
+              HAI BÁO CÁO ĐÃ CÓ SẴN, khu mới chỉ thiếu nút. `hop-report` (Tổng
+              hợp · Tình trạng lệnh · Việc cần quyết định) là file phòng cầm đi
+              họp sản xuất — trước 15/09/2026 nó chỉ gọi được từ khu cũ, nên ai
+              chuyển sang khu mới là mất luôn thứ họ dùng hằng tuần.
+            */}
+            <Btn href="/api/dept/supply/hop-report">Excel họp</Btn>
+            {canEdit && (
+              <Btn primary href="/mua-hang/don/moi">
+                + Soạn đơn mua
+              </Btn>
+            )}
+          </>
+        }
       />
 
       <FilterBar>
