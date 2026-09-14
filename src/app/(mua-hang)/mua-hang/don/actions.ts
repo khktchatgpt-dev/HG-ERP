@@ -1,5 +1,5 @@
 import { canReschedule } from '@/lib/po-reschedule'
-import type { PoStatus } from '@/lib/po-status'
+import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
  * HÀNH ĐỘNG THEO BƯỚC — chép Action Pane của Dynamics 365: bày ĐỦ hành động của
@@ -336,7 +336,16 @@ export function bulkActionFor(
   const status = rows[0].status
   const own = rows.every((r) => r.own)
   const a = actionsFor(status, { own, approve: perm.approve }).find((x) => x.bulk)
-  if (!a) return { reason: `Bước "${status}" không có việc làm hàng loạt` }
+  /*
+    NHÃN TIẾNG VIỆT, không phải mã trong DB. Trước 15/09/2026 câu này in thẳng
+    `status` nên người dùng đọc ra 'Bước "received" không có việc làm hàng
+    loạt' — một chữ tiếng Anh giữa màn toàn tiếng Việt, và là từ vựng của bảng
+    dữ liệu chứ không phải của người mua.
+  */
+  if (!a)
+    return {
+      reason: `Bước "${PO_STATUS_LABEL[status] ?? status}" không có việc làm hàng loạt`,
+    }
   if (a.blocked) return { reason: a.blocked }
   return { action: a }
 }

@@ -28,6 +28,7 @@ import {
   SheetActions,
   StatusBar,
   StatusTrack,
+  TFoot,
   THead,
   Table,
   Tag,
@@ -259,6 +260,30 @@ export function DonScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [pos, view, meId, today],
   )
+  /*
+    TỔNG CỦA DANH SÁCH ĐANG HIỆN — tính trên `shown` (sau lọc), không trên cả
+    sổ: người mua lọc rồi mới hỏi tổng, tổng của thứ họ không nhìn thấy là số
+    gây hiểu nhầm. Đơn ĐÃ HUỶ không cộng tiền nhưng vẫn đếm để chân bảng nói
+    ra — giấu chúng đi thì số dòng và số tiền lệch nhau mà không ai biết vì sao.
+  */
+  const tongHien = useMemo(() => {
+    const m: Record<string, number> = {}
+    let huy = 0
+    for (const p of shown) {
+      if (p.status === 'cancelled') {
+        huy++
+        continue
+      }
+      m[p.currency] = (m[p.currency] ?? 0) + (p.total ?? 0)
+    }
+    return {
+      huy,
+      tien: Object.entries(m)
+        .filter(([, v]) => v > 0)
+        .map(([c, v]) => `${v.toLocaleString('vi-VN', { maximumFractionDigits: c === 'VND' ? 0 : 2 })} ${c === 'VND' ? '₫' : c}`), // prettier-ignore
+    }
+     
+  }, [shown])
   const lsxDue = useMemo(
     () => new Map(lsxs.map((l) => [l.id, l.materials_due_at])),
     [lsxs],
@@ -853,6 +878,26 @@ export function DonScreen({
                   </Fragment>
                 ))}
               </tbody>
+              {/*
+                CHÂN BẢNG — số nào không kiểm được thì không ai tin (luật 6 của
+                sổ thiết kế). Màn này có cột tiền và lọc được xuống 23 đơn, mà
+                tới 15/09/2026 KHÔNG có dòng tổng nào: câu đầu tiên người mua
+                hỏi khi lọc "nháp chưa gửi" là "tổng bao nhiêu tiền đang chờ",
+                và họ phải tự cộng. Màn cũ cũng thiếu — không phải bước lùi,
+                là khoảng trống của cả hai bản.
+
+                TIỀN CỘNG RIÊNG TỪNG LOẠI, không quy đổi — cùng luật với ba
+                màn kia của khu. Chân bảng nói luôn phần KHÔNG gồm: đơn đã huỷ.
+              */}
+              <TFoot
+                label={<td colSpan={Math.max(1, 2 + cols.length - 3)}>Cộng {shown.length} đơn đang hiện</td>} // prettier-ignore
+                cells={<td className="num">{tongHien.tien.join(' · ') || ''}</td>}
+                caveat={
+                  tongHien.huy > 0
+                    ? `Chưa gồm ${tongHien.huy} đơn đã huỷ đang hiện trong danh sách.`
+                    : 'Cộng riêng từng loại tiền, KHÔNG quy đổi.'
+                }
+              />
             </Table>
 
             {ticked.length > 0 && (
