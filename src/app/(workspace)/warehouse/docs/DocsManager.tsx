@@ -37,6 +37,21 @@ type Doc = {
   supplier_doc_no: string | null
   created_by_name: string | null
   created_at: string
+  /**
+   * TÓM TẮT nội dung phiếu (0193) — số mã, số lượng, QC loại, giá trị, và đơn/
+   * lệnh mà phiếu phục vụ. Null khi phiếu chưa có dòng chuyển động nào.
+   */
+  summary: {
+    dong: number
+    ma: number
+    sl: number
+    loai: number
+    tien: number | null
+    thieuGia: boolean
+    po_codes: string[]
+    lsx_codes: string[]
+    ten_dau: string | null
+  } | null
 }
 
 type DocLine = {
@@ -340,8 +355,81 @@ export function DocsManager({
       ),
     },
     {
+      /*
+        NỘI DUNG PHIẾU — cột quan trọng nhất mà sổ này thiếu tới 15/09/2026.
+
+        Người giữ kho nhìn 46 phiếu nhập giống hệt nhau, không cột nào nói phiếu
+        nào chứa gì: muốn biết phải mở từng cái. Một dòng "3 mã · 12.404 Cái ·
+        2/2026-HG/STP" trả lời ngay mà không tốn thêm một lượt bấm.
+
+        Tên vật tư ĐẦU TIÊN kèm theo vì phiếu một mã là ca phổ biến nhất — lúc
+        đó "1 mã" không nói gì, mà "Nút chân vuông 50" thì nói đủ.
+      */
+      key: 'noi_dung',
+      header: 'Nội dung',
+      cell: (d) => {
+        const t = d.summary
+        if (!t || t.dong === 0) return <span className="text-zinc-400">—</span>
+        return (
+          <span className="block">
+            <span className="block truncate">
+              {t.ma === 1 && t.ten_dau ? (
+                t.ten_dau
+              ) : (
+                <>
+                  <b className="t-data">{t.ma}</b> mã
+                </>
+              )}
+              <span className="text-muted-foreground">
+                {' · '}
+                <span className="t-data">{t.sl.toLocaleString('vi-VN')}</span>
+                {t.loai > 0 && (
+                  <>
+                    {' · '}
+                    <span className="t-data text-amber-700 dark:text-amber-500">
+                      loại {t.loai.toLocaleString('vi-VN')}
+                    </span>
+                  </>
+                )}
+              </span>
+            </span>
+            {(t.po_codes.length > 0 || t.lsx_codes.length > 0) && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {[...t.po_codes, ...t.lsx_codes].join(' · ')}
+              </span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      /*
+        GIÁ TRỊ — "chưa biết giá" bày dấu —, KHÔNG bày 0.
+
+        Bịa số 0 là nói "phiếu này không đáng đồng nào". Thiếu giá một phần dòng
+        thì bày "≥" để kế toán biết con số chưa đủ, đừng mang đi đối chiếu rồi
+        đi tìm nguyên nhân lệch ở chỗ khác.
+      */
+      key: 'tien',
+      header: 'Giá trị',
+      width: '130px',
+      align: 'right',
+      cell: (d) =>
+        d.summary?.tien == null ? (
+          <span className="text-zinc-400" title="Chưa có giá vốn trên dòng phiếu">
+            —
+          </span>
+        ) : (
+          <span className="t-data" title={d.summary.thieuGia ? 'Một số dòng chưa có giá — số này còn thiếu' : undefined}>
+            {d.summary.thieuGia && '≥ '}
+            {Math.round(d.summary.tien).toLocaleString('vi-VN')}
+          </span>
+        ),
+    },
+    {
       key: 'counterparty',
-      header: 'Người giao / nhận',
+      header: 'Giao / nhận',
+      width: '140px',
       cell: (d) => d.counterparty ?? <span className="text-zinc-400">—</span>,
     },
     {

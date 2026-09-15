@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
 
 export type StockRow = {
   material_id: string
@@ -223,6 +224,107 @@ const DOC_COLS =
  */
 const DOC_JOINS =
   'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name)'
+
+/**
+ * TÓM TẮT + NGUỒN của một loạt phiếu — hai truy vấn phụ cho cả trang.
+ *
+ * Sổ chứng từ trước đây chỉ có số phiếu, loại, ngày, người lập. Người giữ kho
+ * nhìn 46 phiếu nhập mà không biết phiếu nào chứa gì — phải mở từng cái.
+ *
+ * Gom theo LÔ (`in(doc_id, …)`) chứ không hỏi từng phiếu: một trang 50 phiếu mà
+ * hỏi riêng từng cái là 50 lượt đi về, đúng cái bẫy N+1 mà repo này tránh ở mọi
+ * chỗ khác.
+ */
+export async function docSummaries(docIds: string[]): Promise<
+  Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >
+> {
+  const out = new Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >()
+  if (docIds.length === 0) return out
+
+  const { data: mvRows } = await db()
+    .from('warehouse_movements')
+    .select(
+      'doc_id, material_id, direction, qty, qty_rejected, unit_cost, po_line_id, production_order_id',
+    )
+    .in('doc_id', docIds)
+    .limit(5000)
+  type Mv = {
+    doc_id: string
+    material_id: string
+    direction: 'in' | 'out'
+    qty: unknown
+    qty_rejected: unknown
+    unit_cost: unknown
+    po_line_id: string | null
+    production_order_id: string | null
+  }
+  const mvs = (mvRows ?? []) as Mv[]
+  if (mvs.length === 0) return out
+
+  // Tên vật tư + mã đơn + mã lệnh: mỗi thứ MỘT truy vấn cho cả trang.
+  const matIds = [...new Set(mvs.map((m) => m.material_id))]
+  const lineIds = [...new Set(mvs.map((m) => m.po_line_id).filter((x): x is string => !!x))] // prettier-ignore
+  const lsxIds = [...new Set(mvs.map((m) => m.production_order_id).filter((x): x is string => !!x))] // prettier-ignore
+
+  const [mats, poLines, lsxs] = await Promise.all([
+    matIds.length
+      ? db().from('warehouse_materials').select('id, name').in('id', matIds)
+      : Promise.resolve({ data: [] }),
+    lineIds.length
+      ? db()
+          .from('supply_purchase_order_lines')
+          .select('id, po:supply_purchase_orders(code)')
+          .in('id', lineIds)
+      : Promise.resolve({ data: [] }),
+    lsxIds.length
+      ? db().from('production_orders').select('id, code').in('id', lsxIds)
+      : Promise.resolve({ data: [] }),
+  ])
+  const tenVt = new Map(
+    ((mats.data ?? []) as { id: string; name: string }[]).map((r) => [r.id, r.name]),
+  )
+  const maDon = new Map<string, string>()
+  for (const r of (poLines.data ?? []) as {
+    id: string
+    po: { code: string } | { code: string }[] | null
+  }[]) {
+    const po = Array.isArray(r.po) ? r.po[0] : r.po
+    if (po?.code) maDon.set(r.id, po.code)
+  }
+  const maLenh = new Map(
+    ((lsxs.data ?? []) as { id: string; code: string }[]).map((r) => [r.id, r.code]),
+  )
+
+  const theoDoc = new Map<string, Mv[]>()
+  for (const m of mvs) {
+    if (!theoDoc.has(m.doc_id)) theoDoc.set(m.doc_id, [])
+    theoDoc.get(m.doc_id)!.push(m)
+  }
+  for (const [docId, rows] of theoDoc) {
+    const tt = summariseDoc(
+      rows.map((r) => ({
+        direction: r.direction,
+        material_id: r.material_id,
+        qty: num(r.qty),
+        qty_rejected: num(r.qty_rejected),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })),
+    )
+    out.set(docId, {
+      ...tt,
+      po_codes: [...new Set(rows.map((r) => (r.po_line_id ? maDon.get(r.po_line_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      lsx_codes: [...new Set(rows.map((r) => (r.production_order_id ? maLenh.get(r.production_order_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      ten_dau: tenVt.get(rows[0].material_id) ?? null,
+    })
+  }
+  return out
+}
 
 /** Điền reversal_of_code cho các phiếu đảo trong danh sách — 1 truy vấn phụ. */
 async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> {

@@ -12,6 +12,7 @@ import {
   lsxNeeds as lsxNeedsRepo,
   bomAllocationByCode,
   stocktakeRepo,
+  docSummaries,
   type LsxNeed,
   type StockRow,
   type DocKind,
@@ -304,9 +305,23 @@ export const stockService = {
 
   // ── Phiếu kho nhiều dòng (0017) ──
 
+  /**
+   * SỔ CHỨNG TỪ — kèm TÓM TẮT từng phiếu.
+   *
+   * Trước 15/09/2026 chỉ trả đầu phiếu, nên màn bày 46 phiếu nhập mà không cột
+   * nào nói phiếu nào chứa gì, bao nhiêu, đáng bao nhiêu tiền — muốn biết phải
+   * mở từng cái (chủ dự án: "nhập kho chẳng biết đã nhập những gì").
+   *
+   * Tóm tắt lấy MỘT LƯỢT cho cả trang, không hỏi từng phiếu.
+   */
   async listDocs(user: User, opts: { kind?: DocKind; page: number; page_size: number }) {
     if (!(await canViewWarehouse(user))) throw Forbidden()
-    return docsRepo.list(opts)
+    const { rows, total } = await docsRepo.list(opts)
+    const tt = await docSummaries(rows.map((r) => r.id))
+    return {
+      rows: rows.map((r) => ({ ...r, summary: tt.get(r.id) ?? null })),
+      total,
+    }
   },
 
   async docDetail(user: User, id: string) {
