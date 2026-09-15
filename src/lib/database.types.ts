@@ -5729,6 +5729,7 @@ export type Database = {
           kind: string
           note: string | null
           reason: string | null
+          reason_code: string | null
           reject_reason: string | null
           reversal_of_doc_id: string | null
           shipment_id: string | null
@@ -5749,6 +5750,7 @@ export type Database = {
           kind: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
@@ -5769,6 +5771,7 @@ export type Database = {
           kind?: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null

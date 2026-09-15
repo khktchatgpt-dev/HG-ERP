@@ -188,6 +188,8 @@ export type WarehouseDoc = {
   /** Tổ NHẬN vật tư (0194) — null = phiếu không xuất cho tổ nào. */
   team_department_id: string | null
   team_name: string | null
+  /** Mã lý do xuất (0195) — nhãn tra bằng `nhanLyDo`. */
+  reason_code: string | null
   reason: string | null
   note: string | null
   /**
@@ -217,7 +219,7 @@ export type DocLine = Movement & {
 }
 
 const DOC_COLS =
-  'id, code, kind, doc_date, counterparty, team_department_id, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
+  'id, code, kind, doc_date, counterparty, team_department_id, reason_code, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
 /*
  * warehouse_docs nay có HAI FK sang users (created_by + approved_by 0157) —
  * embed `users(name)` trần là mơ hồ, PostgREST trả lỗi. Hint đích danh.
@@ -362,6 +364,7 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     counterparty: r.counterparty ?? null,
     team_department_id: (r.team_department_id as string | null) ?? null,
     team_name: (tm as { name?: string } | null)?.name ?? null,
+    reason_code: (r.reason_code as string | null) ?? null,
     reason: r.reason ?? null,
     note: r.note ?? null,
     status: (r.status as WarehouseDoc['status']) ?? 'posted',
@@ -446,6 +449,8 @@ export const docsRepo = {
     counterparty?: string | null
     /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
     team_department_id?: string | null
+    /** Mã lý do xuất (0195). */
+    reason_code?: string | null
     reason?: string | null
     note?: string | null
     /** PNK nhận cho đợt giao nào (0153) — null = không theo đợt. */

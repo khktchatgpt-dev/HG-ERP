@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { LY_DO_XUAT, lyDoMacDinh, nhanLyDo } from '@/lib/ly-do-xuat'
 import { api, ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
@@ -25,6 +26,8 @@ type Doc = {
   counterparty: string | null
   /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
   team_name: string | null
+  /** Mã lý do xuất (0195) — nhãn tra bằng `nhanLyDo`. */
+  reason_code: string | null
   reason: string | null
   note: string | null
   /** Vòng duyệt kiểm kê (0157) — nhập/xuất luôn 'posted'. */
@@ -444,6 +447,25 @@ export function DocsManager({
             {Math.round(d.summary.tien).toLocaleString('vi-VN')}
           </span>
         ),
+    },
+    {
+      key: 'ly_do',
+      header: 'Lý do',
+      width: '140px',
+      cell: (d) => {
+        const nhan = nhanLyDo(d.reason_code)
+        if (!nhan && !d.reason) return <span className="text-zinc-400">—</span>
+        return (
+          <span className="block">
+            {nhan && <span className="block truncate">{nhan}</span>}
+            {d.reason && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {d.reason}
+              </span>
+            )}
+          </span>
+        )
+      },
     },
     {
       key: 'counterparty',
@@ -1553,6 +1575,9 @@ function IssueForm({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<'daily' | 'lsx'>(initialLsxId ? 'lsx' : 'daily')
+  /* Xuất theo lệnh thì gần như luôn là cấp cho sản xuất — điền sẵn để khỏi chọn
+     lại mỗi lần. Xuất thường ngày KHÔNG đoán hộ, bắt người dùng chọn. */
+  const [reasonCode, setReasonCode] = useState<string>(lyDoMacDinh(initialLsxId ? 'lsx' : 'daily'))
   const [lsxId, setLsxId] = useState('')
   const [rows, setRows] = useState<Row[]>([])
 
@@ -1672,6 +1697,7 @@ function IssueForm({
       production_order_id: kind === 'lsx' ? lsxId : null,
       counterparty: String(fd.get('counterparty') ?? '').trim() || null,
       team_department_id: String(fd.get('team_department_id') ?? '') || null,
+      reason_code: reasonCode || null,
       reason: String(fd.get('reason') ?? '').trim() || null,
       doc_date: String(fd.get('doc_date') ?? '') || null, // K3
       note: String(fd.get('note') ?? '').trim() || null,
@@ -1738,9 +1764,11 @@ function IssueForm({
           <select
             value={kind}
             onChange={(e) => {
-              setKind(e.target.value as 'daily' | 'lsx')
+              const k = e.target.value as 'daily' | 'lsx'
+              setKind(k)
               setLsxId('')
               setRows([])
+              setReasonCode(lyDoMacDinh(k))
             }}
             className={inputCls}
           >
@@ -1980,10 +2008,45 @@ function IssueForm({
         + Thêm dòng
       </button>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {/* LÝ DO CÓ MÃ (0195) thay ô chữ tự do.
+
+            Lý do quyết định tiền đi về đâu: cấp SX vào giá thành lệnh, sửa máy
+            / nội bộ là chi phí chung, huỷ là tổn thất. Chữ tự do thì không nhóm
+            được — "cấp SX" và "xuất cho tổ phôi" là một việc mà báo cáo đếm
+            thành hai loại.
+
+            Ô chữ GIỮ LẠI bên cạnh: mã nói LOẠI, chữ nói CHI TIẾT ("hỏng do ẩm
+            kho B"). Bỏ nó là mất phần duy nhất người sau đọc hiểu được. */}
         <label className="flex flex-col gap-1 text-sm">
           Lý do xuất
-          <input name="reason" maxLength={500} placeholder="Cấp vật tư sản xuất / sửa chữa…" className={inputCls} />
+          <select
+            name="reason_code"
+            value={reasonCode}
+            onChange={(e) => setReasonCode(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— chọn lý do —</option>
+            {LY_DO_XUAT.map((x) => (
+              <option key={x.ma} value={x.ma}>
+                {x.nhan}
+              </option>
+            ))}
+          </select>
+          {reasonCode && (
+            <span className="text-[11px] text-zinc-400">
+              {LY_DO_XUAT.find((x) => x.ma === reasonCode)?.goiY}
+            </span>
+          )}
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Diễn giải {reasonCode === 'khac' && <b className="text-amber-600">*</b>}
+          <input
+            name="reason"
+            maxLength={500}
+            placeholder={reasonCode === 'khac' ? 'Bắt buộc — ghi rõ lý do' : 'Chi tiết thêm (không bắt buộc)'}
+            className={inputCls}
+          />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Ghi chú phiếu

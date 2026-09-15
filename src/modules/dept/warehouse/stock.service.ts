@@ -744,6 +744,8 @@ export const stockService = {
       counterparty?: string | null
       /** Tổ NHẬN vật tư (0194) — trỏ `departments`, cùng khái niệm với LSX job. */
       team_department_id?: string | null
+      /** Mã lý do xuất (0195) — lib/ly-do-xuat.ts. */
+      reason_code?: string | null
       reason?: string | null
       /** Ngày chứng từ (K3) — xuất chiều tối, sáng sau mới nhập máy. */
       doc_date?: string | null
@@ -835,6 +837,7 @@ export const stockService = {
       kind: 'issue',
       counterparty: input.counterparty ?? null,
       team_department_id: input.team_department_id ?? null,
+      reason_code: input.reason_code ?? null,
       reason: input.reason ?? null,
       note,
       ...(input.doc_date ? { doc_date: input.doc_date } : {}),
