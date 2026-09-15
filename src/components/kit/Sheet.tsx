@@ -73,20 +73,43 @@ export function Sheet({
 
   if (!open) return null
 
+  /*
+    BẢNG BÊN PHẢI, KHÔNG PHẢI HỘP GIỮA MÀN (đổi 15/09/2026).
+
+    Bản trước là hộp 480px đặt giữa, nền sau phủ đen .55. Chủ dự án dùng thật rồi
+    báo: "nhấn vào thì mở modal che hết màn hình… rất nguy hiểm". Đúng, và lý do
+    sâu hơn một chuyện thẩm mỹ: hộp thoại ở đây gần như luôn hỏi một câu VỀ CHỨNG
+    TỪ ĐANG MỞ — xác nhận đợt giao, hạ đơn về nháp, huỷ đơn. Che mất chứng từ là
+    bắt người dùng trả lời bằng TRÍ NHỚ. Chính vì thế `Affected` mới phải ra đời
+    hồi 09/09 để chép lại thứ hộp che mất; nay không cần chép nữa vì không che.
+
+    Bám mép phải thì chứng từ vẫn đọc được bên trái, mà bảng vẫn là một lớp riêng
+    có tiêu điểm và Escape — không mất tính "phải trả lời xong mới đi tiếp".
+
+    ĐỘ MỜ THEO BẬC HỆ QUẢ. Lần chỉnh 09/09/2026 kéo nền từ .34 lên .55 vì hộp
+    giữa màn nhạt quá trông như "một thẻ rơi giữa bảng". Bảng bám mép không mắc
+    lỗi đó — nó có mép màn, vạch bậc và bóng đổ để tự tách. Nên việc thường để
+    nền nhạt cho đọc được chứng từ; việc KHÔNG LÙI ĐƯỢC vẫn phủ đậm, vì lúc đó
+    cắt đứt mọi thứ khác mới là điều mình muốn.
+  */
+  const namViec = stakes === 'nang'
   return (
     <div
-      className="kit fixed inset-0 z-[var(--z-modal)] flex items-start justify-center overflow-auto p-6 pt-[8vh]"
+      className="kit fixed inset-0 z-[var(--z-modal)] flex justify-end"
       onMouseDown={(e) => {
         // Chỉ đóng khi bấm ĐÚNG lớp phủ. Việc nặng thì không cho đóng kiểu
-        // này: người dùng kéo chọn chữ trong hộp rồi nhả tay ra ngoài là mất
+        // này: người dùng kéo chọn chữ trong bảng rồi nhả tay ra ngoài là mất
         // sạch — không thể để một cú trượt tay huỷ mất việc đang khai.
-        if (e.target === e.currentTarget && stakes !== 'nang') onClose()
+        if (e.target === e.currentTarget && !namViec) onClose()
       }}
     >
-      {/* Nền mờ phải ĐỦ TỐI để hộp tách hẳn khỏi trang. Đo 09/09/2026: .34
-          trên nền sáng gần như không thấy, hộp trông như một thẻ rơi giữa
-          bảng — mắt không biết phần nào đang chờ mình trả lời. */}
-      <div className="fixed inset-0 bg-[rgba(17,24,38,.55)]" aria-hidden />
+      <div
+        className={cn(
+          'fixed inset-0 transition-[background-color] duration-150',
+          namViec ? 'bg-[rgba(17,24,38,.5)]' : 'bg-[rgba(17,24,38,.14)]',
+        )}
+        aria-hidden
+      />
       <div
         ref={ref}
         tabIndex={-1}
@@ -94,12 +117,24 @@ export function Sheet({
         aria-modal="true"
         aria-label={title}
         /*
-          `focus:outline-none` chứ không chỉ `outline-none`: hộp có tabIndex=-1
+          `focus:outline-none` chứ không chỉ `outline-none`: bảng có tabIndex=-1
           nên khi nhận tiêu điểm, luật focus toàn cục vẽ vòng 2px quanh NÓ và
           trông y như một ô nhập đang được chọn (đo 09/09/2026). Vòng focus
-          phải dành cho thứ người dùng đi tới bằng Tab, không phải cho cả hộp.
+          phải dành cho thứ người dùng đi tới bằng Tab, không phải cho cả bảng.
         */
-        className="relative max-w-full rounded-[var(--radius-lg)] bg-[var(--surface-card)] outline-none focus:outline-none"
+        className={cn(
+          /*
+            Chặn 72% bề ngang: mấy bảng có lưới truyền `width` tới 760px, ở màn
+            1024 là chứng từ chỉ còn một sợi 264px — tức lại che gần hết, đúng
+            thứ vừa đi sửa. Luôn chừa ít nhất hơn một phần tư màn cho chứng từ.
+          */
+          'k-sheet-in relative flex h-full flex-col',
+          // Trần 72% để chứng từ luôn còn chỗ; SÀN 360px để ở màn hẹp bảng
+          // không co thành một sợi không khai nổi (min-width thắng max-width).
+          'max-w-[min(100%,72vw)] min-w-[min(100%,360px)]',
+          'rounded-l-[var(--radius-lg)] border-l border-[var(--line)]',
+          'bg-[var(--surface-card)] outline-none focus:outline-none',
+        )}
         style={{ width, boxShadow: 'var(--shadow-modal)' }}
       >
         {/* Vạch trên nói bậc hệ quả TRƯỚC KHI đọc chữ — mắt bắt màu nhanh
@@ -107,12 +142,12 @@ export function Sheet({
         {stakes !== 'nhe' && (
           <div
             className={cn(
-              'h-[3px] rounded-t-[var(--radius-lg)]',
-              stakes === 'nang' ? 'bg-[var(--stop)]' : 'bg-[var(--act)]',
+              'h-[3px] shrink-0 rounded-tl-[var(--radius-lg)]',
+              namViec ? 'bg-[var(--stop)]' : 'bg-[var(--act)]',
             )}
           />
         )}
-        <div className="flex items-start gap-3 px-5 pt-4 pb-3">
+        <div className="flex shrink-0 items-start gap-3 border-b border-[var(--hair)] px-5 pt-4 pb-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-[15px] leading-snug font-semibold tracking-[-.01em]">
               {title}
@@ -132,9 +167,12 @@ export function Sheet({
             ✕
           </button>
         </div>
-        {children && <div className="px-5 pb-4">{children}</div>}
+        {/* CHỈ PHẦN THÂN CUỘN. Hộp giữa màn trước đây cuộn cả cụm, nên bảng kê
+            dài là nút bấm trôi xuống dưới màn và người dùng phải cuộn đi tìm
+            thứ mình vừa định bấm. Bảng dọc thì đầu và chân đứng yên. */}
+        {children && <div className="min-h-0 flex-1 overflow-auto px-5 py-4">{children}</div>}
         {footer && (
-          <div className="flex items-center justify-end gap-2 border-t border-[var(--hair)] bg-[var(--surface)] px-5 py-3">
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-5 py-3">
             {footer}
           </div>
         )}

@@ -1374,3 +1374,25 @@
 .k-check-compact .k-check-f::before {
   content: '→ ';
 }
+
+/* ── BẢNG BÊN PHẢI: trượt vào, không nhảy xịch ────────────────────────────
+   Bảng bám mép phải xuất hiện đột ngột thì mắt không kịp nhận ra nó ĐẾN TỪ
+   ĐÂU, và trông y như cả trang vừa đổi. 140ms đủ để mắt bắt được hướng mà
+   chưa kịp thấy chậm.
+
+   Ai tắt hiệu ứng chuyển động trong hệ điều hành thì không chạy — chuyển động
+   trượt là thứ gây chóng mặt rõ nhất với người nhạy cảm tiền đình. */
+@keyframes k-sheet-slide {
+  from {
+    transform: translateX(16px);
+    opacity: 0.6;
+  }
+}
+.k-sheet-in {
+  animation: k-sheet-slide 140ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .k-sheet-in {
+    animation: none;
+  }
+}
