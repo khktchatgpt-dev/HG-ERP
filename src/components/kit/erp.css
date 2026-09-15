@@ -590,6 +590,17 @@
 }
 
 /* ── 8. Thanh công cụ lưới + trạng thái dòng ─────────────────────────── */
+/* MẶT GIẤY, KHÔNG PHẢI DẢI TÔ.
+
+   Thanh này nằm ĐÈ NGAY TRÊN hàng tiêu đề cột của lưới, mà hàng đó cũng
+   `--surface-raised`. Hai dải cùng một màu dán liền nhau đọc ra MỘT mảng xám
+   dày, không còn thấy đâu là nút bấm đâu là tên cột — chủ dự án báo 15/09/2026
+   "một số màu nền bị trùng rất khó nhìn"; đo ra chênh lệch đúng 1.00.
+
+   Trong một bảng chỉ ĐƯỢC PHÉP MỘT dải tô, và suất đó thuộc về hàng tiêu đề
+   cột: nó dính khi cuộn nên phải đọc được đè lên dòng dữ liệu chạy dưới. Thanh
+   công cụ là hành động chứ không phải dữ liệu, để trên mặt giấy và ngăn bằng
+   vạch — đúng luật "khối ngăn nhau bằng một vạch mảnh, không thẻ nổi". */
 .k-gbar {
   display: flex;
   align-items: center;
@@ -598,7 +609,7 @@
   padding: 5px 8px;
   border-top: 1px solid var(--hair);
   border-bottom: 1px solid var(--line);
-  background: var(--surface-raised);
+  background: var(--surface-card);
 }
 .k-gb {
   border: 1px solid var(--line);
