@@ -403,7 +403,10 @@ export const stockService = {
 
   // ── Phiếu kho nhiều dòng (0017) ──
 
-  async listDocs(user: User, opts: { kind?: DocKind; page: number; page_size: number }) {
+  async listDocs(
+    user: User,
+    opts: { kind?: DocKind; reason_code?: string; page: number; page_size: number },
+  ) {
     if (!(await canViewWarehouse(user))) throw Forbidden()
     return docsRepo.list(opts)
   },

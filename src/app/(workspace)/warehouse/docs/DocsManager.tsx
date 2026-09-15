@@ -12,6 +12,15 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Spinner, TopProgressBar } from '@/components/erp/Spinner'
+import {
+  MA_LY_DO_KHO,
+  canDuyet,
+  doiUngBatBuoc,
+  maTheoHuong,
+  nhanLyDo,
+  suyMaTuLichSu,
+  vaoGiaThanhLenh,
+} from '@/lib/kho-ma-ly-do'
 
 type DocKind = 'receipt' | 'issue' | 'transfer' | 'stocktake'
 
@@ -44,6 +53,8 @@ type DocLine = {
   qty_rejected: number
   qc_status: string | null
   ref_type: string
+  /** Mã lý do (0197). Null = dòng trước Đợt 3 → suy từ ref_type+direction. */
+  reason_code: string | null
   shelf_location: string | null
   note: string | null
   material_code: string | null
@@ -201,12 +212,42 @@ function withinTolerancePct(r: Row): number | null {
   return r.qty_ordered > 0 ? ((cumulative - r.qty_ordered) / r.qty_ordered) * 100 : 0
 }
 
+/**
+ * Nhãn mã lý do của MỘT DÒNG sổ (0197).
+ *
+ * 265 dòng ghi trước Đợt 3 để `reason_code` null — suy từ `ref_type` +
+ * `direction` thay vì bày ô trống, nếu không sổ tháng 8 trông như không phiếu
+ * nào có lý do. Suy được thì ghi chữ nhạt để người đọc biết đây là số SUY RA,
+ * không phải số người lập đã chọn; không suy được (`adjust`, `daily` cũ) thì
+ * nói thẳng là "—", đừng đoán bừa.
+ */
+function maDong(l: { reason_code: string | null; ref_type: string; direction: 'in' | 'out' }) {
+  if (l.reason_code) {
+    return (
+      <span title={nhanLyDo(l.reason_code) ?? ''}>
+        <span className="font-mono text-xs">{l.reason_code}</span>
+      </span>
+    )
+  }
+  const suy = suyMaTuLichSu(l.ref_type, l.direction)
+  if (!suy) return <span className="text-muted-foreground">—</span>
+  return (
+    <span
+      className="text-muted-foreground"
+      title={`Suy từ "${l.ref_type}" — dòng này ghi trước khi có mã lý do`}
+    >
+      <span className="font-mono text-xs">({suy})</span>
+    </span>
+  )
+}
+
 const inputCls =
   'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
 
 export function DocsManager({
   initial = null,
   initialKind = null,
+  initialReason = null,
   docs,
   total,
   page,
@@ -225,6 +266,8 @@ export function DocsManager({
   } | null
   /** Lọc loại phiếu — SERVER lọc (?kind=), select chỉ đẩy URL. */
   initialKind?: DocKind | null
+  /** Mã lý do đang lọc (0197) — SERVER lọc, select chỉ đẩy URL. */
+  initialReason?: string | null
   docs: Doc[]
   /** Tổng phiếu KHỚP BỘ LỌC hiện tại (server đếm) — nuôi phân trang. */
   total: number
@@ -424,6 +467,22 @@ export function DocsManager({
                   // 0157: dashboard deep-link ?kind=stocktake — thiếu option thì
                   // select hiện "Mọi loại" trong khi bảng đang lọc Kiểm kê.
                   { value: 'stocktake' as const, label: 'Kiểm kê' },
+                ]}
+              />
+              {/*
+                MÃ LÝ DO là bộ lọc CHÍNH của sổ phiếu, không phải bộ lọc phụ:
+                người đi soát hỏi "tháng này có bao nhiêu phiếu huỷ", không hỏi
+                "phiếu ngày 12/09". Lọc ở SERVER vì mã nằm trên dòng.
+              */}
+              <ToolbarSelect
+                value={initialReason ?? 'all'}
+                onChange={(v) => pushFilter({ ly_do: v })}
+                options={[
+                  { value: 'all', label: 'Mọi lý do' },
+                  ...MA_LY_DO_KHO.map((m) => ({
+                    value: m.ma,
+                    label: `${m.ma} · ${m.nhan}`,
+                  })),
                 ]}
               />
             </>
@@ -1463,10 +1522,23 @@ function IssueForm({
     ])
   }
 
+  /*
+   * MÃ LÝ DO (0197) — xuất LẺ phải chọn; xuất theo LỆNH luôn là X1 nên service
+   * tự gán và form không hỏi. Giữ ở state chứ không đọc từ FormData vì phần
+   * gợi ý bên dưới (vào giá thành lệnh hay không, có phải duyệt không) phải
+   * đổi ngay lúc chọn — người dùng cần biết hệ quả TRƯỚC khi bấm lập.
+   */
+  const [maLyDo, setMaLyDo] = useState('')
+  const [reason, setReason] = useState('')
+  const thieuDienGiai =
+    kind === 'daily' && doiUngBatBuoc(maLyDo).includes('reason') && !reason.trim()
+
   const invalid =
     rows.length === 0 ||
     rows.some((r) => !r.material_id || r.qty === '' || Number(r.qty) <= 0) ||
-    (kind === 'lsx' && !lsxId)
+    (kind === 'lsx' && !lsxId) ||
+    (kind === 'daily' && !maLyDo) ||
+    thieuDienGiai
 
   // Xuất lấn phần đang GIỮ cho LSX khác → server trả 409 RESERVED_CONFLICT.
   // Không chặn cứng: hiện cảnh báo + bắt nhập lý do rồi gửi lại kèm cờ override.
@@ -1503,7 +1575,8 @@ function IssueForm({
       kind,
       production_order_id: kind === 'lsx' ? lsxId : null,
       counterparty: String(fd.get('counterparty') ?? '').trim() || null,
-      reason: String(fd.get('reason') ?? '').trim() || null,
+      reason: reason.trim() || null,
+      reason_code: kind === 'daily' ? maLyDo || null : null,
       doc_date: String(fd.get('doc_date') ?? '') || null, // K3
       note: String(fd.get('note') ?? '').trim() || null,
       lines: rows.map((r) => ({
@@ -1739,10 +1812,72 @@ function IssueForm({
         + Thêm dòng
       </button>
 
+      {/*
+        MÃ LÝ DO (0197) — chỉ hiện cho xuất LẺ. Xuất theo lệnh luôn là X1 nên
+        bày một ô chọn chỉ có một đáp án là bắt người dùng xác nhận thứ hệ
+        thống đã biết.
+
+        Mã quyết định tiền đi về đâu: cấp SX vào giá thành LỆNH, sửa máy và
+        dùng nội bộ là chi phí chung, huỷ là tổn thất. Ô chữ tự do bên cạnh
+        vẫn còn — mã nói LOẠI, chữ nói CHI TIẾT ("hỏng do ẩm kho B").
+      */}
+      {kind === 'daily' && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-sm">
+            Mã lý do <span className="text-[var(--stop)]">*</span>
+            <select
+              value={maLyDo}
+              onChange={(e) => setMaLyDo(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">— Chọn lý do xuất —</option>
+              {maTheoHuong('out').map((m) => (
+                <option key={m.ma} value={m.ma}>
+                  {m.ma} · {m.nhan}
+                </option>
+              ))}
+            </select>
+          </label>
+          {maLyDo && (
+            <div className="flex flex-col justify-end gap-1 text-xs text-muted-foreground">
+              <span>
+                {vaoGiaThanhLenh(maLyDo)
+                  ? 'Tiền vào giá thành lệnh sản xuất.'
+                  : 'Tiền vào chi phí chung, không thuộc lệnh nào.'}
+              </span>
+              {canDuyet(maLyDo) && (
+                <span className="text-[var(--warn)]">Phiếu này cần duyệt.</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="flex flex-col gap-1 text-sm">
-          Lý do xuất
-          <input name="reason" maxLength={500} placeholder="Cấp vật tư sản xuất / sửa chữa…" className={inputCls} />
+          Diễn giải
+          {/*
+            Mã đòi diễn giải (X4 huỷ · X7 khác) thì đây là trường BẮT BUỘC —
+            cùng luật với zod ở biên API. Không đòi thì "Khác" thành thùng rác
+            nuốt mọi phiếu và cả bộ mã mất tác dụng.
+          */}
+          <input
+            name="reason"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={500}
+            placeholder={
+              thieuDienGiai
+                ? 'Bắt buộc với mã lý do này — ghi rõ vì sao'
+                : 'Cấp vật tư sản xuất / sửa chữa…'
+            }
+            className={inputCls}
+          />
+          {thieuDienGiai && (
+            <span className="text-xs text-[var(--stop)]">
+              Mã {maLyDo} bắt buộc ghi rõ diễn giải.
+            </span>
+          )}
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Ghi chú phiếu
@@ -2191,6 +2326,7 @@ function DocDetail({
                 {doc.kind === 'receipt' ? 'Thực nhập' : 'Thực xuất'}
               </th>
               {doc.kind === 'receipt' && <th className="w-20 py-2 pr-2 text-right">QC loại</th>}
+              <th className="w-28 py-2 pr-2">Lý do</th>
               <th className="w-16 py-2 pr-2">Kệ</th>
               <th className="py-2">Ghi chú</th>
             </tr>
@@ -2217,6 +2353,7 @@ function DocDetail({
                     )}
                   </td>
                 )}
+                <td className="py-1.5 pr-2">{maDong(l)}</td>
                 <td className="py-1.5 pr-2">{l.shelf_location ?? '—'}</td>
                 <td className="py-1.5 text-zinc-500">{l.note ?? ''}</td>
               </tr>

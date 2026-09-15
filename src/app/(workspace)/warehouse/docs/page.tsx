@@ -1,3 +1,4 @@
+import { laMaLyDo } from '@/lib/kho-ma-ly-do'
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { stockService } from '@/modules/dept/warehouse/stock.service'
@@ -24,6 +25,8 @@ export default async function WarehouseDocsPage({
     shipment?: string
     lsx?: string
     kind?: string
+    /** Mã lý do (0197) — bộ lọc CHÍNH của sổ phiếu. */
+    ly_do?: string
     page?: string
   }>
 }) {
@@ -47,11 +50,15 @@ export default async function WarehouseDocsPage({
     user.role === 'admin' || (await canAction(user, 'warehouse.stock.write'))
 
   // Phân trang + lọc loại Ở SERVER: sổ vượt 100 phiếu là bản cũ âm thầm cắt đuôi.
+  // Mã lý do: kiểm ở đây chứ không tin URL — mã lạ thì bỏ lọc, không trả rỗng
+  // im lặng làm người dùng tưởng sổ trống.
+  const initialReason = laMaLyDo(sp.ly_do ?? '') ? sp.ly_do : undefined
   const page = Math.max(1, Number(sp.page) || 1)
   const [{ rows: docs, total }, kindCounts, { rows: materials }, pos, { rows: lsxAll }] =
     await Promise.all([
       stockService.listDocs(user, {
         kind: initialKind ?? undefined,
+        reason_code: initialReason,
         page,
         page_size: 50,
       }),
@@ -74,6 +81,7 @@ export default async function WarehouseDocsPage({
           : null
       }
       initialKind={initialKind}
+      initialReason={initialReason ?? null}
       docs={docs}
       total={total}
       page={page}

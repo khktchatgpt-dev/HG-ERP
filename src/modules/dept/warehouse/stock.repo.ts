@@ -180,9 +180,9 @@ export const stockRepo = {
 
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
     // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
-      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
-      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
-      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
+    // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+    // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+    for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
     if (filter.ids) q = q.in('material_id', filter.ids)
     if (filter.bucket === 'has') q = q.gt('on_hand', 0)
     else if (filter.bucket === 'low') q = q.eq('is_low', true)
@@ -527,14 +527,45 @@ export const docsRepo = {
 
   async list(filter: {
     kind?: DocKind
+    /**
+     * Lọc theo MÃ LÝ DO (0197) — bộ lọc CHÍNH của sổ phiếu: người đi soát hỏi
+     * "tháng này có bao nhiêu phiếu huỷ", không hỏi "phiếu ngày 12/09".
+     *
+     * Mã nằm trên DÒNG, danh sách là PHIẾU, nên phải lấy tập doc_id trước rồi
+     * mới lọc phiếu — PostgREST không lọc ngược qua quan hệ một-nhiều được.
+     * Hai lượt truy vấn, chấp nhận: sổ phiếu là màn tra cứu, không phải màn
+     * mở 20 lần/ngày, và tập doc_id của một mã trong một kỳ là nhỏ.
+     */
+    reason_code?: string
     page: number
     page_size: number
   }): Promise<{ rows: WarehouseDoc[]; total: number }> {
+    let docIds: string[] | null = null
+    if (filter.reason_code) {
+      const { data } = await db()
+        .from('warehouse_movements')
+        .select('doc_id')
+        .eq('reason_code', filter.reason_code)
+        .not('doc_id', 'is', null)
+        .limit(20000)
+      docIds = [
+        ...new Set(
+          ((data as { doc_id: string | null }[] | null) ?? [])
+            .map((r) => r.doc_id)
+            .filter((v): v is string => !!v),
+        ),
+      ]
+      // Không phiếu nào mang mã này → trả rỗng NGAY. Bỏ qua bước này thì `.in`
+      // với mảng rỗng và PostgREST trả về TOÀN BỘ sổ — đúng ngược ý người lọc.
+      if (docIds.length === 0) return { rows: [], total: 0 }
+    }
+
     let q = db()
       .from('warehouse_docs')
       .select(`${DOC_COLS}, ${DOC_JOINS}`, { count: 'exact' })
       .order('created_at', { ascending: false })
     if (filter.kind) q = q.eq('kind', filter.kind)
+    if (docIds) q = q.in('id', docIds)
     const from = (filter.page - 1) * filter.page_size
     q = q.range(from, from + filter.page_size - 1)
     const { data, count } = await q
