@@ -3,41 +3,54 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Btn,
-  Cell,
-  Code,
+  Action,
+  ActionGroup,
+  ActionPane,
+  type Check,
+  Checks,
   CoverageBar,
-  Empty,
-  NoticeBar,
-  Num,
+  Crumb,
+  DocBody,
+  DocHead,
+  DocScreen,
+  FactBox,
+  FactKv,
+  FactSection,
+  FastTab,
+  Field,
+  FieldGrid,
+  Grid,
+  GridBody,
+  GridFoot,
+  GridHead,
+  GridRow,
+  HolderBar,
   NumInput,
-  Row,
-  ScreenHeader,
   Sheet,
   SheetActions,
+  StatusBar,
   StatusTrack,
-  THead,
-  Table,
-  Tag,
+  Td,
   TextArea,
-  WhyBox,
+  Th,
 } from '@/components/kit'
 import { useToast } from '@/components/ui/Toast'
 import { api, ApiError } from '@/lib/api'
 import type { Stocktake, TakeLine } from '@/modules/dept/warehouse/stocktakes.repo'
 
 /**
- * MỘT ĐỢT KIỂM KÊ — Khuôn D + F.
+ * MỘT ĐỢT KIỂM KÊ — Khuôn D + F, dựng theo mẫu `/design-lab/kho/kiem-ke`.
  *
- * Lưới là nhân vật chính (khuôn F), đầu đợt co thành một dải chip, và thanh
- * chốt đáy nói VÌ SAO chưa gửi được bằng một câu bấm được.
+ * Bản đầu (15/09/2026) dựng bằng `ScreenHeader` + `Table` — tức khuôn DANH
+ * SÁCH, không phải khuôn CHỨNG TỪ. Chủ dự án chỉ ra ngay: không giống mẫu.
+ * Đúng, và sai ở chỗ nền: đợt kiểm kê CÓ vòng đời, có người giữ, có bảng
+ * kiểm trước khi gửi — ba thứ mà khuôn danh sách không có chỗ để bày.
  *
- * Số sổ: server đã giấu nếu đợt đang đếm mù, nên `book_qty_frozen` null ở đây
- * có hai nghĩa — chưa chốt sổ, hoặc đang mù. Cả hai đều dẫn tới cùng một cách
- * bày (không có cột Sổ), nên màn không cần phân biệt.
+ * Số sổ: server đã giấu nếu đợt đang đếm mù, nên `book_qty_frozen` null ở
+ * đây có hai nghĩa (chưa chốt sổ, hoặc đang mù). Cả hai cùng một cách bày.
  */
 
-const BUOC = ['Mở', 'Đang đếm', 'Đối chiếu', 'Đã duyệt'] as const
+const BUOC = ['Mở', 'Đang đếm', 'Đối chiếu', 'Đã duyệt']
 const BUOC_AT: Record<Stocktake['status'], number> = {
   open: 0,
   counting: 1,
@@ -45,6 +58,18 @@ const BUOC_AT: Record<Stocktake['status'], number> = {
   approved: 3,
   cancelled: 0,
 }
+
+const gio = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : null
+
+const so = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
 
 export function DotScreen({
   take,
@@ -70,9 +95,8 @@ export function DotScreen({
   const [tuChoi, setTuChoi] = useState(false)
   const [lyDo, setLyDo] = useState('')
 
-  /** Đợt mù + đang đếm thì KHÔNG có cột Sổ và cột Lệch — server không gửi số. */
+  /** Đợt mù + đang đếm thì KHÔNG có cột Sổ — server không gửi số xuống. */
   const baySo = lines.some((l) => l.book_qty_frozen != null) || take.status === 'approved'
-
   const chuaLuu = Object.keys(nhap).length
   const chuaDem = progress.remaining
 
@@ -83,6 +107,54 @@ export function DotScreen({
       return s + (l.counted_qty - l.book_qty_frozen)
     }, 0)
   }, [lines, baySo])
+
+  /*
+   * BẢNG KIỂM TRƯỚC KHI GỬI — nói vướng gì VÀ cách gỡ, ngay từ lúc mở màn.
+   * Web hay làm ngược: cho bấm rồi mới báo lỗi.
+   */
+  const checks = useMemo<Check[]>(() => {
+    const out: Check[] = []
+    if (take.status === 'open') {
+      out.push({
+        level: 'stop',
+        what: 'Sổ chưa đóng băng — chưa có danh sách đếm',
+        fix: 'Bấm “Chốt sổ & bắt đầu đếm” NGAY TRƯỚC khi ra kho. Chốt sớm rồi để cách vài tiếng thì mọi phiếu trong khoảng đó thành chênh lệch giả.',
+      })
+    }
+    if (take.status === 'counting') {
+      if (chuaLuu > 0) {
+        out.push({
+          level: 'stop',
+          what: `${chuaLuu} dòng vừa gõ chưa lưu`,
+          fix: 'Bấm “Lưu số đếm” ở nhóm Chốt — số chỉ vào sổ khi đã lưu.',
+        })
+      }
+      if (chuaDem > 0) {
+        out.push({
+          level: 'stop',
+          what: `Còn ${chuaDem}/${progress.total} mã chưa đếm`,
+          fix: 'Đếm nốt, hoặc ghi 0 cho mã thật sự không còn hàng — bỏ trống KHÔNG phải là số không.',
+        })
+      }
+      if (take.blind_count) {
+        out.push({
+          level: 'warn',
+          what: 'Đợt này đếm mù — cột Sổ bị giữ lại ở máy chủ',
+          fix: 'Gõ đúng số đếm được ngoài kệ. Số sổ chỉ hiện sau khi gửi đối chiếu.',
+        })
+      }
+    }
+    if (take.status === 'review' && (progress.diff_count ?? 0) > 0) {
+      out.push({
+        level: 'warn',
+        what: `${progress.diff_count} mã lệch so với sổ chốt`,
+        fix: 'Duyệt sẽ sinh phiếu điều chỉnh: mã thừa → dòng nhập N4, mã thiếu → dòng xuất X5.',
+      })
+    }
+    return out
+  }, [take.status, take.blind_count, chuaLuu, chuaDem, progress])
+
+  const chanGui = chuaLuu > 0 || chuaDem > 0
 
   async function goi<T>(url: string, body?: unknown): Promise<T | null> {
     setBusy(true)
@@ -155,278 +227,359 @@ export function DotScreen({
     }
   }
 
+  const phamVi =
+    take.scope_kind === 'group'
+      ? ((take.scope_ref as { groups?: string[] }).groups ?? []).join(' · ')
+      : take.scope_kind === 'bin'
+        ? `${((take.scope_ref as { bin_ids?: string[] }).bin_ids ?? []).length} khu`
+        : `Danh sách ${((take.scope_ref as { material_ids?: string[] }).material_ids ?? []).length} mã`
+
   /*
-   * THANH CHỐT ĐÁY phải nói VÌ SAO chưa gửi được, bằng một câu BẤM ĐƯỢC —
-   * không cho bấm rồi mới báo lỗi (luật kiểm của /design-lab).
-   */
-  const vuong =
-    take.status !== 'counting'
-      ? null
-      : chuaLuu > 0
-        ? `Còn ${chuaLuu} dòng vừa gõ chưa lưu`
-        : chuaDem > 0
-          ? `Còn ${chuaDem}/${progress.total} mã chưa đếm — bỏ trống không phải là số không`
-          : null
-
+    Vỏ khu Kho là theme v3; `DocScreen` tự gắn lớp `kit`. `-m-6` khử padding
+    của <main> để tờ chứng từ tràn sát mép — cùng cách `PoDetailScreen` làm.
+  */
   return (
-    /*
-      VỎ CỦA KHU KHO LÀ THEME V3, KHÔNG PHẢI VỎ KIT.
+    <div className="theme-v3 text-foreground -m-6">
+      <DocScreen>
+        <Crumb
+          path={['Kho', { label: 'Đợt kiểm kê', href: '/warehouse/kiem-ke' }, take.code]}
+        />
 
-      Không dùng `ScreenFrame`: nó đo padding của cha rồi kéo lề âm + đặt
-      chiều cao 100dvh, và trong `WorkspaceShell` v3 nó bóp luôn sidebar —
-      nhãn menu cụt thành "T.", "N.", "C." (đo 15/09/2026). ScreenFrame chỉ
-      chạy đúng dưới vỏ kit của khu (mua-hang).
+        <ActionPane>
+          <ActionGroup label="Đợt">
+            <Action
+              strong
+              disabled={!canEdit || take.status !== 'open' || busy}
+              title={take.status !== 'open' ? 'Đợt đã chốt sổ — phạm vi không đổi được nữa' : undefined} // prettier-ignore
+              onClick={chotSo}
+            >
+              Chốt sổ &amp; bắt đầu đếm
+            </Action>
+            <Action
+              disabled={!canEdit || take.status === 'approved' || busy}
+              title={take.status === 'approved' ? 'Đợt đã duyệt — sai thì đảo phiếu KK' : undefined} // prettier-ignore
+              onClick={() => router.push('/warehouse/kiem-ke')}
+            >
+              Danh sách đợt
+            </Action>
+          </ActionGroup>
 
-      Lớp `kit` là BẮT BUỘC: token của bộ kit (--line, --act, --ink…) khai
-      trong lớp đó. Thiếu nó thì mọi `var(--…)` ở đây rỗng và màn mất màu mà
-      không báo gì. Cùng cách `PoDetailScreen` làm — màn kit đầu tiên sống
-      trong khu v3.
-    */
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-[calc(100dvh-4rem)] flex-col">
-      <ScreenHeader
-        compact
-        eyebrow="Kho · Đợt kiểm kê"
-        title={<Code>{take.code}</Code>}
-        status={
-          <StatusTrack label="Vòng đời" steps={[...BUOC]} at={BUOC_AT[take.status]} />
-        }
-        facts={[
-          { label: 'Phạm vi', value: `${take.scope_count} mã` },
-          { label: 'Đã đếm', value: `${progress.counted}/${progress.total}` },
-          {
-            label: 'Dòng lệch',
-            // Đang mù thì server trả null — bày "—" chứ không bày 0, vì 0 ở
-            // đây là một lời nói dối có tính thuyết phục cao.
-            value: progress.diff_count == null ? '—' : String(progress.diff_count),
-            tone:
-              progress.diff_count != null && progress.diff_count > 0 ? 'warn' : undefined,
-          },
-          {
-            label: 'Chốt sổ',
-            value: take.freeze_at
-              ? new Date(take.freeze_at).toLocaleString('vi-VN', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })
-              : 'chưa chốt',
-          },
-        ]}
-        actions={
-          <>
-            <Btn href="/warehouse/kiem-ke">← Danh sách đợt</Btn>
-            {canEdit && take.status === 'open' && (
-              <Btn primary onClick={chotSo}>
-                Chốt sổ &amp; bắt đầu đếm
-              </Btn>
-            )}
-            {canEdit && take.status === 'review' && (
-              <>
-                <Btn onClick={() => setTuChoi(true)}>Trả về đếm lại</Btn>
-                <Btn primary onClick={duyet}>
-                  Duyệt &amp; áp chênh lệch
-                </Btn>
-              </>
-            )}
-          </>
-        }
-      />
+          <ActionGroup label="Chốt">
+            <Action
+              disabled={!canEdit || take.status !== 'counting' || chuaLuu === 0 || busy}
+              title={chuaLuu === 0 ? 'Chưa gõ thêm số nào' : undefined}
+              onClick={luuSoDem}
+            >
+              Lưu số đếm{chuaLuu > 0 ? ` (${chuaLuu})` : ''}
+            </Action>
+            <Action
+              primary
+              disabled={!canEdit || take.status !== 'counting' || chanGui || busy}
+              title={chanGui ? 'Còn lỗi chặn — xem bảng kiểm phía trên' : undefined}
+              onClick={guiDoiChieu}
+            >
+              Gửi đối chiếu
+            </Action>
+            <Action
+              disabled={!canEdit || take.status !== 'review' || busy}
+              title={take.status !== 'review' ? 'Chỉ duyệt được sau bước đối chiếu' : undefined} // prettier-ignore
+              onClick={duyet}
+            >
+              Duyệt đợt
+            </Action>
+          </ActionGroup>
 
-      {take.status === 'open' && (
-        <NoticeBar
-          tone="warn"
-          tag="Chưa chốt sổ"
-          action={{ label: 'Chốt sổ ngay', onClick: chotSo }}
-        >
-          Sổ CHƯA đóng băng. Bấm “Chốt sổ &amp; bắt đầu đếm” ngay trước khi ra kho — chốt
-          sớm rồi để cách vài tiếng thì mọi phiếu trong khoảng đó biến thành chênh lệch
-          giả.
-        </NoticeBar>
-      )}
-      {take.status === 'counting' && take.blind_count && (
-        <NoticeBar
-          tone="neutral"
-          tag="Đếm mù"
-          action={{
-            label: 'Xem danh sách đợt',
-            onClick: () => router.push('/warehouse/kiem-ke'),
-          }}
-        >
-          Đợt này ĐẾM MÙ: số sổ được giữ lại ở máy chủ, không gửi xuống màn hình. Gõ đúng
-          số đếm được ngoài kệ.
-        </NoticeBar>
-      )}
-      {take.reject_reason && take.status === 'counting' && (
-        <NoticeBar tone="stop" tag="Bị trả về" action={{ label: 'Đếm lại từ lưới dưới' }}>
-          {take.reject_reason}
-        </NoticeBar>
-      )}
-      {take.status === 'approved' && take.doc_code && (
-        <NoticeBar
-          tone="done"
-          tag="Đã duyệt"
-          action={{
-            label: `Mở phiếu ${take.doc_code}`,
-            onClick: () => router.push(`/warehouse/docs?q=${take.doc_code}`),
-          }}
-        >
-          Tồn đã đổi theo đợt này. Sai thì đảo phiếu đó, không sửa đợt.
-        </NoticeBar>
-      )}
+          <ActionGroup label="Khi không thuận">
+            <Action
+              disabled={!canEdit || take.status !== 'review' || busy}
+              title={take.status !== 'review' ? 'Chỉ trả về được khi đang chờ đối chiếu' : undefined} // prettier-ignore
+              onClick={() => setTuChoi(true)}
+            >
+              Trả về đếm lại
+            </Action>
+            {/* Tab/nút CHƯA có phân hệ hiện MỜ kèm lý do, không giấu đi. */}
+            <Action disabled title="Chưa làm — phân công người đếm theo dòng">
+              Chuyển người đếm
+            </Action>
+            <Action disabled title="Chưa làm — tách mã sang đợt sau">
+              Tách mã sang đợt sau
+            </Action>
+          </ActionGroup>
 
-      {take.status !== 'open' && progress.total > 0 && (
-        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
-          <CoverageBar
-            ratio={progress.total > 0 ? progress.counted / progress.total : 0}
-            label={`Đã đếm ${progress.counted}/${progress.total}`}
-          />
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 border-t border-[var(--line)]">
-        {lines.length === 0 ? (
-          <div className="min-w-0 flex-1 bg-[var(--surface-card)]">
-            <Empty
-              headline="Chưa có dòng đếm nào"
-              reason={
-                take.status === 'open'
-                  ? `Đợt đã chốt phạm vi ${take.scope_count} mã nhưng chưa chốt sổ — danh sách đếm chỉ sinh ra khi bấm bắt đầu.`
-                  : 'Phạm vi của đợt này không còn mã nào.'
+          <ActionGroup label="In &amp; xuất">
+            <Action disabled title="Chưa làm — phiếu đếm giấy cho người ra kho">
+              Phiếu đếm giấy
+            </Action>
+            <Action
+              disabled={!take.doc_code}
+              title={take.doc_code ? undefined : 'Có sau khi duyệt'}
+              onClick={() =>
+                take.doc_code &&
+                router.push(`/warehouse/docs?q=${encodeURIComponent(take.doc_code)}`)
               }
-              next={
-                canEdit && take.status === 'open' ? (
-                  <Btn primary onClick={chotSo}>
-                    Chốt sổ &amp; bắt đầu đếm
-                  </Btn>
-                ) : (
-                  <Btn href="/warehouse/kiem-ke">← Danh sách đợt</Btn>
-                )
-              }
-            />
-          </div>
-        ) : (
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Table>
-              <THead pinFirst>
-                <th>Mã</th>
-                <th>Tên vật tư</th>
-                {baySo && <th style={{ textAlign: 'right' }}>Sổ (chốt)</th>}
-                <th style={{ textAlign: 'right', width: 110 }}>Đếm</th>
-                {baySo && <th style={{ textAlign: 'right' }}>Lệch</th>}
-                <th>ĐVT</th>
-              </THead>
-              <tbody>
-                {lines.map((l) => {
-                  const dangGo = nhap[l.id]
-                  const so = dangGo != null ? Number(dangGo) : l.counted_qty
-                  const lech =
-                    baySo && so != null && l.book_qty_frozen != null
-                      ? so - l.book_qty_frozen
-                      : null
-                  return (
-                    <Row key={l.id}>
-                      <Cell pin>
-                        <Code>{l.material_code ?? '—'}</Code>
-                      </Cell>
-                      <Cell grow>{l.material_name ?? '—'}</Cell>
-                      {baySo && (
-                        <Cell num muted>
-                          <Num value={fmt(l.book_qty_frozen)} />
-                        </Cell>
-                      )}
-                      <Cell num>
-                        {canEdit && take.status === 'counting' ? (
-                          <NumInput
-                            value={dangGo ?? (l.counted_qty == null ? '' : String(l.counted_qty))} // prettier-ignore
-                            onCommit={(v) =>
-                              setNhap((s) => {
-                                // Xoá trắng = huỷ sửa, KHÔNG phải gõ 0.
-                                if (v.trim() === '') {
-                                  const { [l.id]: _bo, ...con } = s
-                                  return con
-                                }
-                                return { ...s, [l.id]: v }
-                              })
-                            }
-                            aria-label={`Số đếm ${l.material_code ?? l.material_id}`}
-                          />
-                        ) : l.counted_qty == null ? (
-                          <span className="text-[var(--ink-3)]">chưa đếm</span>
-                        ) : (
-                          <Num value={String(l.counted_qty)} strong />
-                        )}
-                      </Cell>
-                      {baySo && (
-                        <Cell num>
-                          {lech == null ? (
-                            <span className="text-[var(--ink-3)]">—</span>
-                          ) : lech === 0 ? (
-                            <Num value="0" zero="done" muted />
-                          ) : (
-                            <span
-                              className={
-                                lech > 0 ? 'text-[var(--warn)]' : 'text-[var(--stop)]'
-                              }
-                            >
-                              {lech > 0 ? '+' : ''}
-                              {lech.toLocaleString('vi-VN')}
-                            </span>
-                          )}
-                        </Cell>
-                      )}
-                      <Cell muted>{l.material_unit ?? ''}</Cell>
-                    </Row>
-                  )
-                })}
-              </tbody>
-            </Table>
+            >
+              Biên bản kiểm kê
+            </Action>
+          </ActionGroup>
+        </ActionPane>
 
-            {/*
-              THANH CHỐT ĐÁY — nói vướng gì và gỡ thế nào, ngay tại chỗ.
-              Chỉ hiện khi còn việc để chốt; đợt đã duyệt thì nó là rác.
-            */}
-            {canEdit && take.status === 'counting' && (
-              <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-2">
-                <span className="text-[var(--fs-sm)] text-[var(--ink-2)]">
-                  {vuong ?? 'Đã đếm đủ phạm vi — gửi được rồi.'}
-                </span>
-                <div className="flex items-center gap-2">
-                  <Btn onClick={luuSoDem} disabled={busy || chuaLuu === 0}>
-                    Lưu {chuaLuu > 0 ? `${chuaLuu} dòng` : 'số đếm'}
-                  </Btn>
-                  <Btn
-                    primary
-                    onClick={guiDoiChieu}
-                    disabled={busy || chuaLuu > 0 || chuaDem > 0}
-                  >
-                    Gửi đối chiếu
-                  </Btn>
-                </div>
-              </div>
-            )}
+        <DocHead
+          compact
+          kind="Đợt kiểm kê"
+          code={take.code}
+          sub={
+            <>
+              {phamVi} · <span className="num">{take.scope_count}</span> mã ·{' '}
+              {take.blind_count ? 'đếm mù' : 'đếm mở'} · mở {gio(take.created_at) ?? '—'}
+              {take.created_by_name ? ` bởi ${take.created_by_name}` : ''}
+            </>
+          }
+        >
+          <StatusTrack label="Đợt" steps={BUOC} at={BUOC_AT[take.status]} />
+        </DocHead>
 
-            {take.status === 'review' && baySo && tongLech != null && (
-              <div className="shrink-0 border-t border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-2">
-                <WhyBox
-                  lines={[
-                    `${progress.diff_count ?? 0} mã lệch so với sổ chốt lúc ${
-                      take.freeze_at
-                        ? new Date(take.freeze_at).toLocaleString('vi-VN')
-                        : '—'
-                    }`,
-                    'Mã thừa → dòng nhập N4 · Mã thiếu → dòng xuất X5',
-                    'Chênh áp là HIỆU so với sổ chốt, không phải đặt tồn = số đếm — hàng nhập trong lúc đếm không bị xoá',
+        <HolderBar
+          mine={canEdit}
+          who={
+            take.status === 'review'
+              ? 'Quản lý kho'
+              : (take.assigned_to_name ?? 'Kho — chưa phân người đếm')
+          }
+          what={
+            take.status === 'open'
+              ? 'Chốt sổ rồi ra kệ đếm'
+              : take.status === 'counting'
+                ? chanGui
+                  ? `Đếm nốt ${chuaDem} mã${chuaLuu > 0 ? ` và lưu ${chuaLuu} dòng vừa gõ` : ''}`
+                  : 'Gửi đối chiếu để quản lý kho duyệt'
+                : take.status === 'review'
+                  ? 'Đối chiếu chênh lệch rồi duyệt'
+                  : 'Đã xong — không còn việc'
+          }
+          age={gio(take.freeze_at) ? `chốt ${gio(take.freeze_at)}` : undefined}
+        />
+
+        <Checks
+          title={
+            checks.some((c) => c.level === 'stop')
+              ? 'Chưa gửi đối chiếu được'
+              : 'Đọc kỹ phần này trước'
+          }
+          items={checks}
+        />
+
+        <DocBody
+          aside={
+            <FactBox>
+              <FactSection title="Phạm vi đợt">
+                <FactKv
+                  rows={[
+                    ['Kiểu phạm vi', take.scope_kind === 'bin' ? 'Theo khu kệ' : take.scope_kind === 'group' ? 'Theo nhóm vật tư' : 'Danh sách mã'], // prettier-ignore
+                    ['Phạm vi', phamVi],
+                    ['Số mã', <span key="n" className="num">{take.scope_count}</span>], // prettier-ignore
+                    ['Cách đếm', take.blind_count ? 'Mù (giấu số sổ)' : 'Mở'],
                   ]}
-                  result={`${progress.diff_count ?? 0} bút toán điều chỉnh, tổng chênh ${
-                    tongLech > 0 ? '+' : ''
-                  }${tongLech.toLocaleString('vi-VN')}`}
                 />
-              </div>
+              </FactSection>
+              <FactSection title="Mốc thời gian">
+                <FactKv
+                  rows={[
+                    ['Mở đợt', gio(take.created_at) ?? '—'],
+                    ['Chốt sổ', gio(take.freeze_at) ?? 'chưa chốt'],
+                    ['Duyệt', gio(take.approved_at) ?? '—'],
+                  ]}
+                />
+              </FactSection>
+              <FactSection title="Người">
+                <FactKv
+                  rows={[
+                    ['Người mở', take.created_by_name ?? '—'],
+                    ['Người đếm', take.assigned_to_name ?? 'chưa phân'],
+                  ]}
+                />
+              </FactSection>
+              {take.doc_code && (
+                <FactSection title="Chứng từ sinh ra">
+                  <FactKv
+                    rows={[
+                      [
+                        <span key="k" className="num">{take.doc_code}</span>, // prettier-ignore
+                        'Biên bản kiểm kê',
+                      ],
+                    ]}
+                  />
+                </FactSection>
+              )}
+            </FactBox>
+          }
+        >
+          <FastTab
+            title="Thông tin đợt"
+            defaultOpen
+            summary={[
+              ['Trạng thái', BUOC[BUOC_AT[take.status]]],
+              ['Đã đếm', `${progress.counted}/${progress.total}`],
+            ]}
+          >
+            <FieldGrid>
+              <Field label="Mã đợt">
+                <span className="num">{take.code}</span>
+              </Field>
+              <Field label="Kiểu phạm vi">
+                {take.scope_kind === 'bin'
+                  ? 'Theo khu kệ'
+                  : take.scope_kind === 'group'
+                    ? 'Theo nhóm vật tư'
+                    : 'Danh sách mã'}
+              </Field>
+              <Field label="Phạm vi">{phamVi}</Field>
+              <Field label="Số mã trong phạm vi">
+                <span className="num">{take.scope_count}</span>
+              </Field>
+              <Field label="Chốt sổ lúc" tone={take.freeze_at ? undefined : 'warn'}>
+                {gio(take.freeze_at) ?? 'chưa chốt'}
+              </Field>
+              <Field label="Cách đếm" tone={take.blind_count ? undefined : 'warn'}>
+                {take.blind_count ? 'Mù — giấu số sổ' : 'Mở — bày số sổ'}
+              </Field>
+              <Field label="Người mở">{take.created_by_name ?? '—'}</Field>
+              <Field label="Người đếm">{take.assigned_to_name ?? 'chưa phân'}</Field>
+              {take.reject_reason && (
+                <Field label="Bị trả về" tone="stop">
+                  {take.reject_reason}
+                </Field>
+              )}
+              {take.note && <Field label="Ghi chú">{take.note}</Field>}
+            </FieldGrid>
+          </FastTab>
+
+          <FastTab
+            title="Lưới đếm"
+            defaultOpen
+            flush
+            summary={[
+              ['Đã đếm', `${progress.counted}/${progress.total}`],
+              [
+                'Dòng lệch',
+                progress.diff_count == null ? '—' : String(progress.diff_count),
+              ],
+            ]}
+            actions={
+              progress.total > 0 ? (
+                <CoverageBar
+                  ratio={progress.total > 0 ? progress.counted / progress.total : 0}
+                  label={`${progress.counted}/${progress.total}`}
+                />
+              ) : undefined
+            }
+          >
+            {lines.length === 0 ? (
+              <p className="px-[var(--gutter)] py-3 text-[12.5px] text-[var(--ink-3)]">
+                Đợt đã chốt phạm vi {take.scope_count} mã nhưng chưa chốt sổ — danh sách
+                đếm chỉ sinh ra khi bấm “Chốt sổ &amp; bắt đầu đếm”.
+              </p>
+            ) : (
+              <Grid minWidth={baySo ? 900 : 760}>
+                <GridHead>
+                  <Th width={110}>Mã</Th>
+                  <Th>Tên vật tư</Th>
+                  {baySo && (
+                    <Th num width={110}>
+                      Sổ (chốt)
+                    </Th>
+                  )}
+                  <Th num width={110}>
+                    Đếm
+                  </Th>
+                  {baySo && (
+                    <Th num width={90}>
+                      Lệch
+                    </Th>
+                  )}
+                  <Th width={70}>ĐVT</Th>
+                </GridHead>
+                <GridBody>
+                  {lines.map((l) => {
+                    const dangGo = nhap[l.id]
+                    const n = dangGo != null ? Number(dangGo) : l.counted_qty
+                    const lech =
+                      baySo && n != null && l.book_qty_frozen != null
+                        ? n - l.book_qty_frozen
+                        : null
+                    return (
+                      <GridRow key={l.id}>
+                        <Td>
+                          <span className="num">{l.material_code ?? '—'}</span>
+                        </Td>
+                        <Td>{l.material_name ?? '—'}</Td>
+                        {baySo && <Td num>{so(l.book_qty_frozen ?? 0)}</Td>}
+                        <Td num>
+                          {canEdit && take.status === 'counting' ? (
+                            <NumInput
+                              value={dangGo ?? (l.counted_qty == null ? '' : String(l.counted_qty))} // prettier-ignore
+                              onCommit={(v) =>
+                                setNhap((s) => {
+                                  // Xoá trắng = huỷ sửa, KHÔNG phải gõ 0.
+                                  if (v.trim() === '') {
+                                    const { [l.id]: _bo, ...con } = s
+                                    return con
+                                  }
+                                  return { ...s, [l.id]: v }
+                                })
+                              }
+                              aria-label={`Số đếm ${l.material_code ?? l.material_id}`}
+                            />
+                          ) : l.counted_qty == null ? (
+                            <span className="text-[var(--ink-3)]">chưa đếm</span>
+                          ) : (
+                            so(l.counted_qty)
+                          )}
+                        </Td>
+                        {baySo && (
+                          <Td
+                            num
+                            tone={lech == null || lech === 0 ? undefined : lech > 0 ? 'warn' : 'stop'} // prettier-ignore
+                          >
+                            {lech == null
+                              ? '—'
+                              : lech === 0
+                                ? '0'
+                                : `${lech > 0 ? '+' : ''}${so(lech)}`}
+                          </Td>
+                        )}
+                        <Td>{l.material_unit ?? ''}</Td>
+                      </GridRow>
+                    )
+                  })}
+                </GridBody>
+                {baySo && tongLech != null && (
+                  <GridFoot>
+                    <Td colSpan={2}>Tổng chênh lệch</Td>
+                    <Td num />
+                    <Td num />
+                    <Td num tone={tongLech === 0 ? undefined : 'warn'}>
+                      {tongLech > 0 ? '+' : ''}
+                      {so(tongLech)}
+                    </Td>
+                    <Td />
+                  </GridFoot>
+                )}
+              </Grid>
             )}
-          </div>
-        )}
-      </div>
+          </FastTab>
+        </DocBody>
+
+        <StatusBar
+          left={[
+            `Đợt ${take.code}`,
+            BUOC[BUOC_AT[take.status]],
+            `${progress.counted}/${progress.total} đã đếm`,
+            take.blind_count ? 'đếm mù' : 'đếm mở',
+            chuaLuu > 0 ? `${chuaLuu} dòng chưa lưu` : 'đã lưu hết',
+          ]}
+          right={take.freeze_at ? `sổ chốt ${gio(take.freeze_at)}` : 'sổ chưa đóng băng'}
+        />
+      </DocScreen>
 
       <Sheet
         open={tuChoi}
@@ -457,8 +610,4 @@ export function DotScreen({
       </Sheet>
     </div>
   )
-}
-
-function fmt(v: number | null): string {
-  return v == null ? '' : String(v)
 }
