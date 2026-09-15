@@ -36,6 +36,7 @@ import {
   withinToleranceNote,
 } from '@/lib/po-receipt'
 import { componentsRepo } from '@/modules/dept/production/components.repo'
+import { phanLoaiDong, type KetQuaCap } from '@/lib/cap-vat-tu'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
@@ -445,6 +446,54 @@ export const stockService = {
   async lsxNeeds(user: User, productionOrderId: string): Promise<LsxNeed[]> {
     if (!(await canViewWarehouse(user))) throw Forbidden()
     return smartLsxNeeds(productionOrderId)
+  },
+
+  /**
+   * NHU CẦU MỘT LỆNH, ĐỐI CHIẾU VỚI KHO (sổ §4.1).
+   *
+   * Khác `lsxNeeds` ở đúng một điều, và đó là cả vấn đề: bản cũ nói "còn phải
+   * cấp 40 cây" mà KHÔNG nói kho có 40 cây không. Người đứng ở quầy cầm con
+   * số đó đi ra kệ rồi mới biết là không có — và không biết vì sao không có.
+   *
+   * Ghép ba nguồn:
+   *   ① định mức còn phải cấp (`smartLsxNeeds`)
+   *   ② tồn theo BA RỔ (`qty_ok` / `qty_qc` / `qty_blocked`, từ 0194)
+   *   ③ phần đã hứa cho các lệnh KHÁC (`reservedByOtherLsx`)
+   *
+   * Luật phân loại nằm ở `lib/cap-vat-tu.ts` — thuần và có test, vì đây là
+   * chỗ dễ sai theo cách chỉ lộ ra khi tổ bên kia ra lấy hàng không còn.
+   */
+  async lsxNeedsWithStock(
+    user: User,
+    productionOrderId: string,
+  ): Promise<
+    (LsxNeed & KetQuaCap & { qty_ok: number; qty_qc: number; qty_blocked: number })[]
+  > {
+    if (!(await canViewWarehouse(user))) throw Forbidden()
+    const needs = await smartLsxNeeds(productionOrderId)
+    if (needs.length === 0) return []
+
+    const matIds = needs.map((n) => n.material_id)
+    const [rows, reserved] = await Promise.all([
+      stockRepo.page({ bucket: 'all', ids: matIds, page: 1, page_size: matIds.length }),
+      reservedByOtherLsx([productionOrderId], matIds),
+    ])
+    const byId = new Map(rows.rows.map((r) => [r.material_id, r]))
+
+    return needs.map((n) => {
+      const s = byId.get(n.material_id)
+      const qty_ok = s?.qty_ok ?? 0
+      const qty_qc = s?.qty_qc ?? 0
+      const qty_blocked = s?.qty_blocked ?? 0
+      const kq = phanLoaiDong({
+        conPhaiCap: n.qty_remaining,
+        dungDuoc: qty_ok,
+        choKiem: qty_qc,
+        dangKhoa: qty_blocked,
+        giuChoLenhKhac: reserved.get(n.material_id) ?? 0,
+      })
+      return { ...n, ...kq, qty_ok, qty_qc, qty_blocked }
+    })
   },
 
   /** Dữ liệu cho form nhập theo đơn: PO đang mở + dòng còn thiếu (FR-WMS-02). */

@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Factory,
 } from 'lucide-react'
+import { moTaVuong, viecTiepTheo, type NhanCap, type VuongMac } from '@/lib/cap-vat-tu'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { DocChip } from '@/components/erp/DocChip'
 import { Badge } from '@/components/Badge'
@@ -25,7 +26,10 @@ type LsxRow = {
   materials_received_at: string | null
 }
 
-/** Một dòng nhu cầu từ `/api/dept/warehouse/lsx-needs` (BOM×SL − đã xuất). */
+/**
+ * Một dòng nhu cầu từ `/api/dept/warehouse/lsx-needs` — định mức ĐÃ ĐỐI CHIẾU
+ * với kho (sổ §4.1). Phần phân loại do `lib/cap-vat-tu` tính ở server.
+ */
 type Need = {
   material_id: string
   material_code: string
@@ -35,6 +39,10 @@ type Need = {
   qty_issued: number
   qty_remaining: number
   incomplete?: boolean
+  nhan: NhanCap
+  capNgay: number
+  conThieu: number
+  vuong: { loai: VuongMac; luong: number }[]
 }
 
 const num = (n: number) => n.toLocaleString('vi-VN', { maximumFractionDigits: 2 })
@@ -175,6 +183,17 @@ export function IssueScreen({ lsxs, canEdit }: { lsxs: LsxRow[]; canEdit: boolea
 function NeedsTable({ needs }: { needs: Need[] }) {
   const remaining = needs.filter((n) => n.qty_remaining > 0)
   const done = needs.length - remaining.length
+  /*
+   * BA CON SỐ ĐẦU BẢNG, và chúng phải TÁCH NHAU.
+   *
+   * "12 vật tư còn phải cấp" là câu cũ, và nó trộn hai thứ khác hẳn: thứ ra
+   * kệ lấy được ngay, và thứ phải đi hỏi người khác. Người đứng ở quầy cần
+   * biết mình đi lấy được mấy dòng TRƯỚC khi ra kho.
+   */
+  const capDuoc = remaining.filter((n) => n.nhan === 'cap-duoc').length
+  const vuongGi = remaining.filter(
+    (n) => n.nhan === 'mot-phan' || n.nhan === 'khong-cap-duoc',
+  ).length
   return (
     <div className="flex flex-col gap-2">
       <div className="text-muted-foreground flex flex-wrap gap-x-3 text-[11.5px]">
@@ -183,6 +202,12 @@ function NeedsTable({ needs }: { needs: Need[] }) {
             ? `${remaining.length} vật tư còn phải cấp`
             : 'Đã cấp đủ theo định mức'}
         </span>
+        {capDuoc > 0 && (
+          <span className="text-[var(--done)]">· {capDuoc} dòng lấy được ngay</span>
+        )}
+        {vuongGi > 0 && (
+          <span className="font-medium text-[var(--stop)]">· {vuongGi} dòng vướng</span>
+        )}
         {done > 0 && <span>· {done} vật tư đã đủ</span>}
         {needs.some((n) => n.incomplete) && (
           <span className="inline-flex items-center gap-1 text-[var(--warn)]">
@@ -198,6 +223,8 @@ function NeedsTable({ needs }: { needs: Need[] }) {
               <th className="w-24 px-3 py-2 text-right font-medium">Cần</th>
               <th className="w-24 px-3 py-2 text-right font-medium">Đã cấp</th>
               <th className="w-28 px-3 py-2 text-right font-medium">Còn thiếu</th>
+              <th className="w-28 px-3 py-2 text-right font-medium">Lấy được</th>
+              <th className="px-3 py-2 font-medium">Vướng gì · gỡ ở đâu</th>
             </tr>
           </thead>
           <tbody className="divide-border/60 divide-y">
@@ -223,6 +250,48 @@ function NeedsTable({ needs }: { needs: Need[] }) {
                       </span>
                     ) : (
                       <span className="font-medium text-[var(--done)]">Đủ</span>
+                    )}
+                  </td>
+                  <td className="t-data px-3 py-1.5 text-right">
+                    {n.qty_remaining <= 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : n.capNgay > 0 ? (
+                      <span className="font-semibold text-[var(--done)]">
+                        {num(n.capNgay)}
+                      </span>
+                    ) : (
+                      <span className="font-semibold text-[var(--stop)]">0</span>
+                    )}
+                  </td>
+                  {/*
+                    CỘT NÀY LÀ CẢ ĐIỂM CỦA MÀN. "Không đủ tồn" đúng về dữ liệu
+                    và vô dụng về nghiệp vụ — nó không nói người đứng ở quầy
+                    phải làm gì tiếp. Mỗi vướng mắc nói THIẾU BAO NHIÊU, MẮC Ở
+                    ĐÂU, và kèm đường đi tới chỗ gỡ.
+                  */}
+                  <td className="px-3 py-1.5">
+                    {n.vuong.length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {n.vuong.map((v) => {
+                          const viec = viecTiepTheo(v.loai)
+                          return (
+                            <span key={v.loai} className="inline-flex items-center gap-1">
+                              <span className="t-data">{num(v.luong)}</span>
+                              <span className="text-muted-foreground">
+                                {moTaVuong(v.loai)}
+                              </span>
+                              <Link
+                                href={viec.href}
+                                className="text-[var(--primary)] hover:underline"
+                              >
+                                {viec.label} ›
+                              </Link>
+                            </span>
+                          )
+                        })}
+                      </span>
                     )}
                   </td>
                 </tr>
