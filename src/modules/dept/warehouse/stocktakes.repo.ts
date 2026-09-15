@@ -312,17 +312,27 @@ export async function materialsInScope(scope: StocktakeScope): Promise<string[]>
   }
 
   /*
-   * Phạm vi THEO KHU: mã nào đang CÓ LƯỢNG ở khu đó — đọc từ dòng sổ chứ
-   * không từ `warehouse_materials.shelf_location`.
+   * Phạm vi THEO KHU: mã nào ĐANG CÓ LƯỢNG ở khu đó.
    *
-   * Cột `shelf_location` là kệ GỢI Ý trên danh mục, không phải nơi hàng đang
-   * nằm. Đếm theo nó là đi tới kệ A tìm những mã "lẽ ra ở A", trong khi thứ
-   * thật sự nằm ở A lại không có trong danh sách — kiểm kê kiểu đó không phát
-   * hiện được đúng loại sai mà nó sinh ra để phát hiện.
+   * KHÔNG đọc `warehouse_materials.shelf_location` — cột đó là kệ GỢI Ý trên
+   * danh mục, không phải nơi hàng đang nằm. Đếm theo nó là đi tới kệ A tìm
+   * những mã "lẽ ra ở A", trong khi thứ thật sự nằm ở A lại không có trong
+   * danh sách.
+   *
+   * VÀ KHÔNG đọc thẳng `warehouse_movements` (bản đầu làm vậy, sai): nó lấy
+   * mọi mã TỪNG đi qua khu, kể cả đã hết sạch. Sau một năm mỗi khu có hàng
+   * nghìn mã lịch sử và danh sách đếm thành vô dụng. Tệ hơn: hộp mở đợt bày
+   * số mã lấy từ `binsRepo.materialCountByBin` (đọc view by_bin) — hai nguồn
+   * lệch nhau thì con số trên hộp không phải con số sẽ đếm, đúng thứ nguyên
+   * tắc "con số là một lời hứa" cấm. Một nguồn: view.
+   *
+   * HẠN CHẾ CÓ THẬT, ghi để đừng ngạc nhiên: mã mà sổ nói 0 nhưng ngoài kệ
+   * còn hàng sẽ KHÔNG vào danh sách đếm theo khu. Muốn bắt loại lệch đó thì
+   * đếm theo NHÓM (lấy cả mã tồn 0), hoặc thủ kho báo để thêm tay.
    */
   for (let from = 0; ; from += 1000) {
     const { data } = await db()
-      .from('warehouse_movements')
+      .from('v_warehouse_stock_by_bin')
       .select('material_id')
       .in('bin_id', scope.bin_ids)
       .range(from, from + 999)

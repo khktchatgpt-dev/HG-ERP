@@ -33,10 +33,22 @@ export default async function KiemKePage({
     user.role === 'admin' || (await canAction(user, 'warehouse.stock.write'))
 
   const warehouseId = await warehousesRepo.mainId()
-  const [{ rows, total }, bins, taxonomy] = await Promise.all([
+  const [{ rows, total }, bins, taxonomy, soMaTheoKhu] = await Promise.all([
     stocktakesService.list(user, { status, page, page_size: 50 }),
     binsRepo.list(warehouseId, { active_only: true }),
     materialTaxonomy(),
+    /*
+     * SỐ MÃ TỪNG KHU — bày ngay cạnh tên trong hộp mở đợt.
+     *
+     * Thiếu nó thì người dùng tích một khu rỗng, bấm, rồi mới ăn lỗi 400 —
+     * đúng thứ luật kiểm cấm (hành động bị chặn phải nói vướng gì TRƯỚC khi
+     * bấm). Đo 15/09/2026: tồn đang 0 trên cả 13.229 mã nên MỌI khu đều rỗng,
+     * và không có con số này thì màn mời người dùng vào một ngõ cụt 13 lần.
+     *
+     * Cùng nguồn với `materialsInScope` (view by_bin) — hai nguồn lệch nhau
+     * thì số trên hộp không phải số sẽ đếm.
+     */
+    binsRepo.materialCountByBin(),
   ])
 
   return (
@@ -50,7 +62,12 @@ export default async function KiemKePage({
          kho, đó là xem hàng đang mắc ở đâu — việc của màn Hàng mắc. */
       bins={bins
         .filter((b) => b.kind === 'store')
-        .map((b) => ({ id: b.id, code: b.code, name: b.name }))}
+        .map((b) => ({
+          id: b.id,
+          code: b.code,
+          name: b.name,
+          count: soMaTheoKhu.get(b.id) ?? 0,
+        }))}
       groups={taxonomy.groups.map((g) => g.name)}
     />
   )

@@ -66,7 +66,7 @@ export function KiemKeScreen({
   page: number
   status: StocktakeStatus | null
   canEdit: boolean
-  bins: { id: string; code: string; name: string | null }[]
+  bins: { id: string; code: string; name: string | null; count: number }[]
   groups: string[]
 }) {
   const router = useRouter()
@@ -297,14 +297,27 @@ export function KiemKeScreen({
                     Dùng trần ở đây thì ra 13 ô vuông trống, không ai biết đang
                     chọn khu nào (đo 15/09/2026). Bọc nhãn là việc của chỗ gọi.
                   */
+                  /*
+                    SỐ MÃ ĐI KÈM TỪNG KHU, và khu rỗng thì KHÔNG TÍCH ĐƯỢC.
+
+                    Bản đầu cho tích mọi khu rồi trả 400 "phạm vi không có mã
+                    nào" — người dùng bấm xong mới biết. Với tồn đang 0 trên
+                    cả 13.229 mã thì MỌI khu đều rỗng, nên màn mời người ta
+                    vào ngõ cụt đúng 13 lần. Chặn ở đây, nói lý do ở dưới.
+                  */
                   bins.map((b) => (
                     <label
                       key={b.id}
-                      className="flex cursor-pointer items-center gap-2 text-[var(--fs-sm)]"
+                      className={
+                        b.count > 0
+                          ? 'flex cursor-pointer items-center gap-2 text-[var(--fs-sm)]'
+                          : 'flex items-center gap-2 text-[var(--fs-sm)] opacity-45'
+                      }
                     >
                       <Tick
                         checked={binIds.includes(b.id)}
-                        label={`${b.code}${b.name ? ` · ${b.name}` : ''}`}
+                        disabled={b.count === 0}
+                        label={`${b.code}${b.name ? ` · ${b.name}` : ''} — ${b.count} mã`}
                         onChange={() =>
                           setBinIds((s) =>
                             s.includes(b.id) ? s.filter((x) => x !== b.id) : [...s, b.id],
@@ -315,13 +328,18 @@ export function KiemKeScreen({
                         {b.code}
                       </span>
                       {b.name && <span className="text-[var(--ink-3)]">{b.name}</span>}
+                      <span className="ml-auto font-[family-name:var(--font-mono)] text-[var(--ink-3)]">
+                        {b.count > 0 ? `${b.count} mã` : 'trống'}
+                      </span>
                     </label>
                   ))
                 )}
               </div>
               <span className="text-[11.5px] text-[var(--ink-3)]">
                 Đếm theo khu lấy mã đang CÓ LƯỢNG ở khu đó, không lấy theo kệ gợi ý trên
-                danh mục — thứ thật sự nằm ở đó mới là thứ phải đếm.
+                danh mục — thứ thật sự nằm ở đó mới là thứ phải đếm. Khu “trống” không
+                tích được vì không có gì để đếm; muốn kiểm cả mã tồn 0 thì chọn phạm vi
+                theo NHÓM.
               </span>
             </div>
           )}
@@ -389,7 +407,7 @@ export function KiemKeScreen({
 /** Phạm vi nói bằng TÊN người đọc hiểu, không bằng id. */
 function moTaPhamVi(
   t: Stocktake,
-  bins: { id: string; code: string; name: string | null }[],
+  bins: { id: string; code: string }[],
 ): string {
   const ref = t.scope_ref as Record<string, unknown>
   if (t.scope_kind === 'group') {
