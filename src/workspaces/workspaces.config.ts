@@ -298,7 +298,7 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
           { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },
           { href: '/warehouse/xuat', label: 'Cấp vật tư SX', icon: 'arrow-up-from-line' },
-          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: 'clipboard-check' },
+          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
         ],
       },
       {
