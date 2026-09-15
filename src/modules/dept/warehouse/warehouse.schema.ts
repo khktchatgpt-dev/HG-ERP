@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { doiUngBatBuoc, laMaLyDo, timMaLyDo } from '@/lib/kho-ma-ly-do'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const materialCreateSchema = z.object({
@@ -308,6 +309,19 @@ export const issueDocSchema = z
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
     reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
+    /**
+     * Mã lý do (0197) cho xuất LẺ. Xuất theo lệnh luôn là X1 nên service bỏ
+     * qua trường này ở đường đó. Còn optional vì màn soạn phiếu chưa có ô
+     * chọn — khi có thì đổi thành bắt buộc cho `kind='daily'`.
+     */
+    reason_code: z
+      .string()
+      .trim()
+      .refine((v) => laMaLyDo(v) && timMaLyDo(v)?.huong === 'out', {
+        message: 'Mã lý do không hợp lệ hoặc không phải mã xuất',
+      })
+      .optional()
+      .nullable(),
     /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
     doc_date: z.string().date().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
@@ -319,6 +333,15 @@ export const issueDocSchema = z
   })
   .refine((d) => d.kind !== 'lsx' || !!d.production_order_id, {
     message: 'BR-09: xuất theo LSX phải chọn LSX',
+  })
+  /*
+   * MÃ QUYẾT ĐỊNH TRƯỜNG NÀO BẮT BUỘC (0197) — đây là chỗ luật đó có hiệu lực
+   * lần đầu. X4 (huỷ) và X7 (khác) đòi diễn giải; không đòi thì "Khác" thành
+   * cái thùng rác nuốt mọi phiếu và cả bộ mã mất tác dụng.
+   */
+  .refine((d) => !doiUngBatBuoc(d.reason_code).includes('reason') || !!d.reason?.trim(), {
+    message: 'Mã lý do này bắt buộc ghi rõ diễn giải',
+    path: ['reason'],
   })
   .refine((d) => !d.override_reserved || !!d.override_reason?.trim(), {
     message: 'Xuất vượt khả dụng phải kèm lý do',

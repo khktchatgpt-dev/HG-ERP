@@ -12,13 +12,22 @@
 -- (`affects_cost`). Cột thứ tư — lưới soạn phiếu hiện cột nào — suy ra từ
 -- `requires`, không cần cột riêng.
 --
--- ĐẶT TRÊN DÒNG SỔ, KHÔNG TRÊN PHIẾU. Chủ dự án chốt 15/09/2026. Lý do đo được
--- chứ không phải theo chuẩn suông: `stock.service.ts` tính `ref_type` THEO
--- TỪNG DÒNG cho phiếu nhập (`l.po_line_id ? 'po' : … : 'external'`), nên một
--- phiếu nhập hôm nay ĐÃ trộn được dòng mua theo đơn và dòng mua ngoài đơn. Mã
--- đặt trên phiếu thì cặp dòng đó chỉ mang được một mã — hoặc phải cấm trộn,
--- tức đổi hành vi một form đang chạy thật. SAP đặt BWART trên MSEG (dòng), header
--- MKPF không có; Dynamics đặt trên journal line. Cùng một lý do.
+-- ĐẶT TRÊN DÒNG SỔ, KHÔNG TRÊN PHIẾU. Chủ dự án chốt 15/09/2026.
+--
+-- ĐÍNH CHÍNH (bổ sung cùng ngày, sau khi viết test). Lý do đưa ra lúc chốt là
+-- "phiếu nhập hôm nay đã trộn được dòng theo đơn và dòng ngoài đơn". SAI:
+-- `createReceiptDoc` có HAI GUARD ĐỐI XỨNG chặn đúng việc đó — có `po_id` thì
+-- mọi dòng phải gắn dòng PO, không có `po_id` thì không dòng nào được gắn. Trên
+-- đường nhập, một phiếu chỉ mang một mã.
+--
+-- BẰNG CHỨNG THẬT là PHIẾU KIỂM KÊ: một đợt duyệt sinh cả dòng thừa (N4, vào)
+-- lẫn dòng thiếu (X5, ra) trong CÙNG một phiếu — không chỉ hai mã mà hai HƯỚNG
+-- ngược nhau. Mã trên phiếu không biểu diễn nổi, và đây là đường đang chạy
+-- thật chứ không phải khả năng lý thuyết. Có test canh (`stock.service.test.ts`
+-- → 'kiểm kê: thừa → N4, thiếu → X5').
+--
+-- Chuẩn ngoài đồng ý: SAP đặt BWART trên MSEG (dòng), header MKPF không có;
+-- Dynamics đặt trên journal line.
 --
 -- VA CHẠM ĐÃ BIẾT: một phiên khác đã thêm `warehouse_docs.reason_code` (7 mã,
 -- chỉ cho xuất) lên cùng DB này. Migration NÀY KHÔNG GỠ CỘT ĐÓ — nhánh kia

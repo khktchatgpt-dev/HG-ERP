@@ -78,7 +78,7 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
   rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
 }))
 
-import { stockService, smartLsxNeeds } from './stock.service'
+import { stockService, smartLsxNeeds, createTransferDoc } from './stock.service'
 import {
   binsRepo,
   docsRepo,
@@ -88,6 +88,7 @@ import {
   lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
   onHandMany,
+  stockByBin,
   stockInfoMany,
   stocktakeRepo,
   warehousesRepo,
@@ -1297,5 +1298,279 @@ describe('createReceiptDoc — HOÀN KHO từ LSX (K2)', () => {
         lines: [{ material_id: 'm1', qty: 1 }],
       }),
     ).rejects.toMatchObject({ status: 400 })
+  })
+})
+/**
+ * MÃ LÝ DO TRÊN DÒNG SỔ (0197, Đợt 3 §2.1).
+ *
+ * Canh MỌI đường ghi dòng sổ đều gắn mã — vì một đường bị bỏ sót không làm
+ * test nào đỏ, chỉ làm báo cáo kế toán thiếu im lặng. Đó đúng là hạng lỗi mà
+ * cột `reason_code` sinh ra để dẹp, nên nó phải có hàng rào tự động.
+ */
+describe('mã lý do trên dòng sổ (0197)', () => {
+  const maCua = (call = 0) =>
+    vi.mocked(insertMovements).mock.calls[call][0].map((r) => r.reason_code)
+
+  it('nhập theo PO → N1', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0100')
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+    })
+    expect(maCua()).toEqual(['N1'])
+  })
+
+  it('mua ngoài đơn → N2', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0101')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    expect(maCua()).toEqual(['N2'])
+  })
+
+  it('hoàn kho từ LSX → N3', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0102')
+    await stockService.createReceiptDoc(admin, {
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 4 }],
+    })
+    expect(maCua()).toEqual(['N3'])
+  })
+
+  /**
+   * ĐÍNH CHÍNH một lập luận sai (15/09/2026). Khi chốt đặt mã trên DÒNG, lý do
+   * đưa ra là "phiếu nhập hôm nay đã trộn được dòng N1 và N2". SAI: hai guard
+   * đối xứng ở `createReceiptDoc` chặn đúng việc đó — có `po_id` thì MỌI dòng
+   * phải gắn dòng PO, không có `po_id` thì KHÔNG dòng nào được gắn. Trên đường
+   * nhập, một phiếu chỉ mang một mã.
+   *
+   * Ca này canh chính cái guard ấy, để lần sau không ai lập luận lại từ một
+   * khả năng không tồn tại. Bằng chứng THẬT cho "mã nằm trên dòng" là phiếu
+   * KIỂM KÊ — xem ca N4/X5 dưới: một phiếu, hai mã, và hai HƯỚNG ngược nhau.
+   */
+  it('phiếu nhập KHÔNG trộn được N1 với N2 — guard chặn từ trước khi ghi dòng nào', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0103')
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [
+          { material_id: 'm1', qty: 10, po_line_id: 'pl1' },
+          { material_id: 'm1', qty: 3 }, // mua thêm ngoài đơn, cùng chuyến xe
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('xuất theo lệnh → X1', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0100')
+    await stockService.createIssueDoc(admin, {
+      kind: 'lsx',
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+    expect(maCua()).toEqual(['X1'])
+  })
+
+  it('xuất theo lệnh BỎ QUA mã người gửi — đường này luôn là X1', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0101')
+    await stockService.createIssueDoc(admin, {
+      kind: 'lsx',
+      production_order_id: 'lsx1',
+      reason_code: 'X4',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+    expect(maCua()).toEqual(['X1'])
+  })
+
+  it('xuất lẻ có chọn mã → ghi đúng mã đó', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0102')
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      reason_code: 'X6',
+      lines: [{ material_id: 'm1', qty: 2 }],
+    })
+    expect(maCua()).toEqual(['X6'])
+  })
+
+  /**
+   * KHÔNG bịa mã cho xuất lẻ chưa chọn. "daily" chỉ nói xuất ngoài lệnh,
+   * không nói xuất cho việc gì — mà sửa máy, làm mẫu và huỷ đi về ba đầu chi
+   * phí khác nhau. Dán X7 lên là cho kế toán một con số không ai kiểm được.
+   */
+  it('xuất lẻ CHƯA chọn mã → để null, không bịa X7', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0103')
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 2 }],
+    })
+    expect(maCua()).toEqual([null])
+  })
+
+  it('trả hàng NCC → X3', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0104')
+    // Trả hàng đòi PO ĐÃ CÓ HÀNG VỀ — beforeEach chung để 'ordered'.
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+      code: 'PO-2026-0001',
+      status: 'partial',
+      assigned_to: 'u-mua',
+      created_by: 'u-mua',
+    })
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc9',
+      code: 'PXK-2026-0104',
+    })
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      {
+        id: 'pl1',
+        po_id: 'po1',
+        material_id: 'm1',
+        qty_ordered: 100,
+        qty_received: 10,
+        qty_rejected: 0,
+        qty_missing: 90,
+        qty_open: 90,
+        closed_short_at: null,
+        over_tolerance_pct: 0,
+        material_code: 'VT-001',
+        material_name: 'Kính 5mm',
+        material_unit: 'tấm',
+      },
+    ])
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 50]]))
+    await stockService.createReturnDoc(admin, {
+      po_id: 'po1',
+      reason: 'Kính trầy mặt',
+      lines: [{ material_id: 'm1', po_line_id: 'pl1', qty: 4 }],
+    })
+    expect(maCua()).toEqual(['X3'])
+  })
+
+  it('kiểm kê: thừa → N4, thiếu → X5 (hai chiều trong cùng một đợt)', async () => {
+    const manager = {
+      id: 'u-qlkho',
+      role: 'manager',
+      department_id: 'd-kho',
+    } as never
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-kk',
+      code: 'KK-2026-0009',
+      kind: 'stocktake',
+      status: 'pending',
+      created_by: 'u-staff',
+    } as never)
+    vi.mocked(stocktakeRepo.listByDoc).mockResolvedValue([
+      { id: 's1', material_id: 'm1', system_qty: 10, counted_qty: 14, diff: 4 }, // thừa
+      { id: 's2', material_id: 'm2', system_qty: 10, counted_qty: 7, diff: -3 }, // thiếu
+    ] as never)
+    vi.mocked(onHandMany).mockResolvedValue(
+      new Map([
+        ['m1', 10],
+        ['m2', 10],
+      ]),
+    )
+    await stockService.approveStocktake(manager, 'doc-kk')
+    expect(maCua()).toEqual(['N4', 'X5'])
+  })
+
+  it('chuyển kệ → C1 trên CẢ HAI chân của cặp', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('DCK-2026-0001')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-dc',
+      code: 'DCK-2026-0001',
+    })
+    vi.mocked(stockByBin).mockResolvedValue([
+      { material_id: 'm1', bin_id: 'b1', stock_status: 'ok', qty: 50 },
+    ] as never)
+    await createTransferDoc(admin, {
+      lines: [
+        {
+          material_id: 'm1',
+          qty: 10,
+          from_bin_id: 'b1',
+          to_bin_id: 'b2',
+          stock_status: 'ok',
+        },
+      ],
+    })
+    expect(maCua()).toEqual(['C1', 'C1'])
+  })
+
+  /**
+   * Dòng đảo mang ĐÚNG mã của dòng gốc, không một mã "đảo" riêng: báo cáo phải
+   * NET được. Huỷ 100 rồi đảo thì con số huỷ của tháng bằng 0 — cho dòng đảo
+   * mã khác là báo cáo vẫn thấy 100 đã huỷ và thêm 100 ở một rổ khác.
+   */
+  it('phiếu đảo: mang lại mã của dòng gốc, direction lật', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-g',
+      code: 'PNK-2026-0009',
+      kind: 'receipt',
+      status: 'posted',
+      reversal_of_doc_id: null,
+      created_by: 'u-kho',
+    } as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      {
+        id: 'mv1',
+        material_id: 'm1',
+        direction: 'in',
+        qty: 100,
+        qty_rejected: 0,
+        reason_code: 'N1',
+        po_line_id: 'pl1',
+        production_order_id: null,
+      },
+    ] as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0199')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-rev',
+      code: 'PXK-2026-0199',
+    })
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue([])
+
+    await stockService.reverseDoc(admin, 'doc-g', 'Gõ nhầm 100 thay vì 10')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({ direction: 'out', reason_code: 'N1' })
+  })
+
+  it('phiếu đảo của dòng KHÔNG có mã (dữ liệu trước 0197) → vẫn null, không bịa', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-g2',
+      code: 'PXK-2026-0005',
+      kind: 'issue',
+      status: 'posted',
+      reversal_of_doc_id: null,
+      created_by: 'u-kho',
+    } as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      {
+        id: 'mv9',
+        material_id: 'm1',
+        direction: 'out',
+        qty: 5,
+        qty_rejected: 0,
+        reason_code: null,
+        po_line_id: null,
+        production_order_id: null,
+      },
+    ] as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0199')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-rev2',
+      code: 'PNK-2026-0199',
+    })
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue([])
+
+    await stockService.reverseDoc(admin, 'doc-g2', 'Xuất nhầm')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({ direction: 'in', reason_code: null })
   })
 })

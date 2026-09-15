@@ -84,14 +84,35 @@ sao và cái gì còn phải dọn.
 RLS bật · `movements.reason_code` nullable có index một phần · **265 dòng sổ cũ
 đều null**, đúng chủ ý không backfill.
 
-**Bước 2 — CÒN LẠI**: zod bắt `reason_code` cho dòng mới · service ghi mã ·
-lưới soạn phiếu đổi cột theo `doiUng` của mã · sổ phiếu lọc theo mã (§2.5) ·
-`needsApproval` nối vào đường duyệt.
+**Bước 2a — backend ghi mã: XONG.** Cả sáu đường tạo dòng sổ đều gắn mã, có
+test canh từng đường (một đường bị bỏ sót không làm test nào đỏ, chỉ làm báo
+cáo kế toán thiếu im lặng):
 
-Chừng nào bước 2 chưa xong thì "vì sao có dòng sổ này" **vẫn tán ra ba chỗ**:
-`docs.kind` (4 giá trị) + `movements.ref_type` (6 giá trị) + ô `reason` tự do.
-Bảng mã đã có nhưng chưa nơi nào GHI vào — cột `reason_code` hôm nay rỗng trên
-mọi dòng, nên đừng đọc nó như một nguồn số cho tới khi bước 2 xong.
+| Đường | Mã |
+| --- | --- |
+| nhập theo đơn / hoàn kho SX / mua ngoài | `N1` / `N3` / `N2` (suy theo dòng) |
+| xuất theo lệnh | `X1` — bỏ qua mã người gửi, đường này luôn là X1 |
+| xuất lẻ | mã người chọn, **chưa chọn thì null** — không bịa `X7` |
+| trả hàng NCC | `X3` |
+| duyệt kiểm kê | `N4` (thừa) / `X5` (thiếu) — hai hướng, cùng phiếu |
+| chuyển kệ | `C1` trên cả hai chân |
+| phiếu đảo | **mã của dòng gốc**, direction lật — để báo cáo NET được |
+
+Zod nhận `reason_code` ở phiếu xuất lẻ, chặn mã không thuộc hướng 'out', và
+**mã đòi diễn giải thì bắt có diễn giải** (X4 huỷ, X7 khác) — đây là chỗ luật
+"mã quyết định trường nào bắt buộc" có hiệu lực lần đầu.
+
+`C2`/`C3` (đổi trạng thái) chưa có mã nào ghi vì **chưa có đường ghi**: chúng
+thuộc màn Hàng mắc (§2.3), chưa dựng.
+
+**Bước 2b — CÒN LẠI (UI)**: ô chọn mã ở màn soạn phiếu xuất (và bắt buộc cho
+xuất lẻ) · lưới đổi cột theo `doiUng` của mã · sổ phiếu lọc theo mã (§2.5) ·
+`canDuyet` nối vào đường duyệt · bày nhãn mã trên phiếu và sổ.
+
+Chừng nào 2b chưa xong thì "vì sao có dòng sổ này" **vẫn tán ra ba chỗ** ở tầng
+hiển thị: `docs.kind` + `movements.ref_type` + ô `reason` tự do. Và **265 dòng
+trước 0197 vẫn null** — chỗ nào đếm theo mã phải gọi `suyMaTuLichSu` để lấp,
+nếu không báo cáo sẽ nói tháng 8 không có phiếu nào.
 
 Thiết kế đầy đủ ở [`thiet-ke-kho.md` §5.3](thiet-ke-kho.md) và bảng 12 mã ở
 [`thiet-ke-kho-ui.md` §2.2](thiet-ke-kho-ui.md).
@@ -308,15 +329,25 @@ chạy). Hai hệ quả:
 **① `warehouse_docs.reason_code` TRÙNG KHÁI NIỆM với Đợt 3 §2.1 — ĐÃ CHỐT
 15/09/2026: MÃ NẰM TRÊN DÒNG SỔ.**
 
-Họ đặt mã lý do trên **PHIẾU**; bản thiết kế đặt trên **DÒNG SỔ**. Lập luận
-quyết định không phải "chuẩn SAP" mà là một dòng mã đo được:
-[`stock.service.ts:725`](../src/modules/dept/warehouse/stock.service.ts:725)
-tính `ref_type` **theo từng dòng** cho phiếu nhập
-(`l.po_line_id ? 'po' : … : 'external'`) — nên một phiếu nhập **hôm nay đã trộn
-được** dòng mua theo đơn và dòng mua ngoài đơn. Mã trên phiếu thì cặp dòng đó
-chỉ mang được một mã, hoặc phải cấm trộn, tức đổi hành vi một form đang chạy
-thật. Đường xuất thì `ref_type: input.kind` theo phiếu, nên phiên kia **không
-sai với phần họ chạm** — chỉ là chỗ đặt không phủ nổi đường nhập.
+Họ đặt mã lý do trên **PHIẾU**; bản thiết kế đặt trên **DÒNG SỔ**.
+
+> **ĐÍNH CHÍNH.** Lập luận đưa ra lúc chốt là "phiếu nhập hôm nay đã trộn được
+> dòng theo đơn (N1) và dòng ngoài đơn (N2)". **Sai** — phát hiện khi viết test
+> cùng ngày. `createReceiptDoc` có hai guard đối xứng chặn đúng việc đó: có
+> `po_id` thì MỌI dòng phải gắn dòng PO, không có `po_id` thì KHÔNG dòng nào
+> được gắn. Trên đường nhập, một phiếu chỉ mang một mã.
+
+**Bằng chứng thật** là phiếu **KIỂM KÊ**: một đợt duyệt sinh cả dòng thừa (N4,
+hướng vào) lẫn dòng thiếu (X5, hướng ra) trong **cùng một phiếu** — không chỉ
+hai mã mà hai **hướng** ngược nhau, thứ mã-trên-phiếu không biểu diễn nổi. Đây
+là đường đang chạy thật, không phải khả năng lý thuyết, và có test canh
+(`stock.service.test.ts` → *kiểm kê: thừa → N4, thiếu → X5*). Ca canh chính cái
+guard nhập cũng đã thêm, để lần sau không ai lập luận lại từ một khả năng không
+tồn tại.
+
+Kết luận **không đổi**, chỉ lý do đổi. Đường xuất thì `ref_type: input.kind`
+theo phiếu, nên phiên kia **không sai với phần họ chạm** — chỗ đặt của họ chỉ
+không phủ nổi kiểm kê.
 
 **Còn phải dọn** (KHÔNG làm trong `0197`, cố ý):
 

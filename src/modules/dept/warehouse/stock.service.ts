@@ -723,6 +723,15 @@ export const stockService = {
           qc_status: l.qc_status ?? null,
           // 'lsx' = HOÀN KHO (K2) — issuedByLsx net trừ lại "đã cấp" của lệnh.
           ref_type: l.po_line_id ? 'po' : input.production_order_id ? 'lsx' : 'external',
+          /*
+           * Mã lý do (0197) suy từ CHÍNH dòng đó, cùng luật với `ref_type`
+           * ngay trên. Thực tế hai guard phía trên bắt cả phiếu đồng nhất —
+           * có `po_id` thì mọi dòng gắn PO, không thì không dòng nào — nên
+           * hôm nay mọi dòng của một phiếu ra cùng một mã. Viết theo dòng vẫn
+           * đúng hơn viết theo phiếu: nếu sau này nới guard cho nhận gộp một
+           * chuyến xe, chỗ này không phải sửa.
+           */
+          reason_code: l.po_line_id ? 'N1' : input.production_order_id ? 'N3' : 'N2',
           shelf_location: l.shelf_location ?? null,
           note: tol ? `${l.note ? `${l.note} · ` : ''}${tol}` : (l.note ?? null),
           created_by: user.id,
@@ -798,6 +807,12 @@ export const stockService = {
       production_order_id?: string | null
       counterparty?: string | null
       reason?: string | null
+      /**
+       * Mã lý do (0197) cho xuất LẺ — `lib/kho-ma-ly-do.ts`, hướng 'out'. Xuất
+       * theo lệnh không nhận trường này: nó luôn là X1. Còn optional vì màn
+       * soạn phiếu chưa có ô chọn; bắt buộc là việc của bước UI.
+       */
+      reason_code?: string | null
       /** Ngày chứng từ (K3) — xuất chiều tối, sáng sau mới nhập máy. */
       doc_date?: string | null
       note?: string | null
@@ -898,6 +913,14 @@ export const stockService = {
         direction: 'out' as const,
         qty: l.qty,
         ref_type: input.kind,
+        /*
+         * Xuất theo LỆNH suy chắc chắn là X1 — đối ứng lệnh đã có, không đoán
+         * gì. Xuất LẺ thì KHÔNG suy: "daily" chỉ nói xuất ngoài lệnh, không nói
+         * xuất cho việc gì (sửa máy? làm mẫu? huỷ?), và mỗi mã đi về một đầu
+         * chi phí khác nhau. Để null cho tới khi màn soạn phiếu có ô chọn —
+         * cùng lối với `suyMaTuLichSu`: thà thiếu còn hơn bịa số cho kế toán.
+         */
+        reason_code: input.kind === 'lsx' ? 'X1' : (input.reason_code ?? null),
         shelf_location: l.shelf_location ?? null,
         note: l.note ?? null,
         created_by: user.id,
@@ -1011,6 +1034,10 @@ export const stockService = {
           direction: l.apply > 0 ? ('in' as const) : ('out' as const),
           qty: Math.abs(l.apply),
           ref_type: 'adjust',
+          // N4/X5 — hai mã DUY NHẤT của kiểm kê, và cả hai đều cần duyệt. Đây
+          // là chỗ `ref_type='adjust'` gộp nhiều việc: mã lý do tách được
+          // "lệch do đếm" khỏi "sửa sổ bằng tay", `adjust` thì không.
+          reason_code: l.apply > 0 ? 'N4' : 'X5',
           note: `Kiểm kê ${doc.code}: đếm ${l.counted_qty}, sổ lúc duyệt ${l.now}${
             l.now !== l.system_qty ? ` (lúc đếm ${l.system_qty})` : ''
           }`,
@@ -1139,6 +1166,7 @@ export const stockService = {
         direction: 'out' as const,
         qty: l.qty,
         ref_type: 'po', // out + po_line_id = trả NCC (nhập theo PO luôn là in)
+        reason_code: 'X3',
         note: l.note ?? null,
         created_by: user.id,
         doc_id: doc.id,
@@ -1252,6 +1280,16 @@ export const stockService = {
         qty: l.qty,
         // ref 'adjust': đây là bút toán sửa sổ, không phải nghiệp vụ nhận/cấp mới.
         ref_type: 'adjust',
+        /*
+         * Dòng đảo mang ĐÚNG MÃ CỦA DÒNG GỐC, không một mã "đảo" riêng.
+         *
+         * Vì báo cáo phải NET được: huỷ 100 rồi đảo là con số huỷ của tháng
+         * bằng 0. Cho dòng đảo một mã khác thì báo cáo vẫn thấy 100 đã huỷ và
+         * thêm 100 ở một rổ nào đó — sai cả hai đầu. `direction` đã lật nên
+         * dấu tự đúng. SAP cũng vậy: mã đảo là mã đối ứng của cùng nhóm
+         * (201/202, 261/262), không phải một mã "reversal" dùng chung.
+         */
+        reason_code: l.reason_code ?? null,
         shelf_location: l.shelf_location ?? null,
         note: `Đảo ${doc.code}`,
         created_by: user.id,
@@ -1625,6 +1663,9 @@ export async function createTransferDoc(
         material_id: l.material_id,
         qty: l.qty,
         ref_type: 'transfer' as const,
+        // C1 — chuyển kệ. C2/C3 (đổi TRẠNG THÁI) chưa có đường ghi nào: chúng
+        // thuộc màn Hàng mắc, sổ §2.3, chưa dựng.
+        reason_code: 'C1',
         stock_status: l.stock_status,
         transfer_group: group,
         note: l.note ?? null,

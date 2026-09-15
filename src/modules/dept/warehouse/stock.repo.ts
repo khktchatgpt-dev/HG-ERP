@@ -56,6 +56,12 @@ export type Movement = {
   qty_rejected: number
   qc_status: string | null
   ref_type: string
+  /**
+   * Mã lý do của dòng (0197). Null = dòng ghi trước Đợt 3, HOẶC đường ghi chưa
+   * suy được mã chắc chắn. Chỗ hiển thị/lọc gọi `suyMaTuLichSu(ref_type,
+   * direction)` để lấp, đừng coi null là "không có lý do".
+   */
+  reason_code: string | null
   ref_no: string | null
   shelf_location: string | null
   note: string | null
@@ -70,7 +76,7 @@ const STOCK_COLS =
   'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low, qty_ok, qty_qc, qty_blocked'
 
 const MV_COLS =
-  'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, ref_no, shelf_location, note, created_by, created_at'
+  'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, reason_code, ref_no, shelf_location, note, created_by, created_at'
 
 function num(v: unknown): number {
   return Number(v ?? 0)
@@ -293,6 +299,7 @@ export const movementsRepo = {
         qty_rejected: num(r.qty_rejected),
         qc_status: (r.qc_status as string | null) ?? null,
         ref_type: r.ref_type as string,
+        reason_code: (r.reason_code as string | null) ?? null,
         ref_no: (r.ref_no as string | null) ?? null,
         shelf_location: (r.shelf_location as string | null) ?? null,
         note: (r.note as string | null) ?? null,
@@ -559,6 +566,7 @@ export const docsRepo = {
         qty_rejected: num(r.qty_rejected),
         qc_status: (r.qc_status as string | null) ?? null,
         ref_type: r.ref_type as string,
+        reason_code: (r.reason_code as string | null) ?? null,
         ref_no: (r.ref_no as string | null) ?? null,
         shelf_location: (r.shelf_location as string | null) ?? null,
         note: (r.note as string | null) ?? null,
@@ -789,6 +797,13 @@ export async function insertMovements(
      * — màn công nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
      */
     unit_cost?: number | null
+    /**
+     * Mã lý do của DÒNG (0197, `lib/kho-ma-ly-do.ts`). Bỏ trống khi không suy
+     * được chắc chắn từ dữ liệu đã có — để null giống 265 dòng cũ, đừng dán
+     * một mã "khác" lên rồi báo cáo kế toán đếm phải con số bịa. Bắt buộc là
+     * việc của UI soạn phiếu khi màn đó có ô chọn.
+     */
+    reason_code?: string | null
     /** Khu/kệ lượng này nằm (0193). Dòng mới luôn có — service ép. */
     bin_id?: string | null
     /** Trạng thái của lượng (0194): dùng được / chờ kiểm / khoá. */
