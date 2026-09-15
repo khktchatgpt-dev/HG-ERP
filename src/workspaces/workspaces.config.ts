@@ -72,6 +72,17 @@ export type WorkspaceConfig = {
   short: string
   /** Route base. Home dashboard = `${route}/`. */
   route: string
+  /**
+   * CỬA VÀO — nơi người dùng rơi xuống khi BƯỚC VÀO workspace (đăng nhập, bấm
+   * ở ô chuyển phòng). Mặc định là `route`.
+   *
+   * Tách khỏi `route` vì `route` còn là DẤU NHẬN DẠNG: `resolveWorkspaceFromPath`
+   * dựa vào nó để biết một đường dẫn thuộc phòng nào (tô màu, sáng mục menu).
+   * Đổi `route` để dời cửa vào là làm cả khu cũ mất danh tính. Cung ứng đang
+   * cần đúng việc này: cửa vào đã sang khu Mua hàng mới, nhưng `/planning` vẫn
+   * phải là Cung ứng vì nó còn phục vụ.
+   */
+  home?: string
   /** Tailwind color name — dùng để tô accent bar, badge, hover. */
   accent:
     | 'orange'
@@ -336,6 +347,25 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     label: 'Cung ứng',
     short: 'Cung ứng',
     route: '/planning',
+    /*
+      CỬA VÀO ĐÃ DỜI SANG KHU MUA HÀNG MỚI (15/09/2026).
+
+      Đăng nhập hay bấm ô chuyển phòng giờ rơi vào `/mua-hang` — màn "Bàn làm
+      việc" dựng bằng kit mới theo Khuôn A của sổ `/design-lab`. Nó là bản GỘP
+      của bốn trang cũ (Tổng quan, Chờ tôi xử lý, Vấn đề, Việc cần quyết định),
+      đúng như chủ dự án chốt 10/09: bốn trang cho một vai là dashboard kiểu
+      web, không hệ ERP nào làm thế.
+
+      VÌ SAO GIỜ MỚI DỜI. Ghi chú 14/09 bên dưới hoãn việc này với lý do "bảy
+      trên chín mục còn là trang tạm". Đo lại 15/09: chỉ còn HAI — Yêu cầu mua
+      và Hoá đơn NCC — và cả hai đều là trang nói thẳng chưa dựng cùng lý do,
+      không phải trang trắng. Chủ dự án chốt tạm bỏ qua, dựng sau.
+
+      `route` GIỮ NGUYÊN `/planning`: nó là dấu nhận dạng, không phải cửa vào.
+      Khu cũ vẫn phục vụ (menu khu mới có mục "Khu Cung ứng cũ" dẫn về), và đổi
+      `route` là làm mọi đường `/planning/*` mất danh tính phòng.
+    */
+    home: '/mua-hang',
     accent: 'violet',
     logoText: 'CƯ',
     ready: true,
@@ -348,7 +378,13 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
       {
         heading: 'Nghiệp vụ',
         items: [
-          { href: '/planning', label: 'Tổng quan', icon: 'home' },
+          /*
+            Mục đầu tiên dẫn sang khu mới, cùng lý do với `home` ở trên: ai đang
+            ở trong vỏ cũ bấm mục này cũng ra đúng màn mở đầu mới. Trang
+            `/planning` VẪN SỐNG và vẫn là Cung ứng — vào được từ mục "Khu Cung
+            ứng cũ" của menu mới.
+          */
+          { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
           /*
             CHUYỂN TỪNG PHẦN SANG MODULE MUA HÀNG MỚI (14/09/2026).
 

@@ -52,7 +52,8 @@ export async function resolveDefaultWorkspace(
 /** URL redirect sau login. */
 export async function resolveDefaultRoute(user: User): Promise<string> {
   const ws = await resolveDefaultWorkspace(user)
-  if (ws) return `${ws.route}/`
+  // `home` chứ không `route`: xem chú thích `home` ở workspaces.config.ts.
+  if (ws) return `${ws.home ?? ws.route}/`
   return '/tasks'
 }
 
