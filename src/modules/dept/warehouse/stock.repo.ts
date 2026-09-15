@@ -9,12 +9,44 @@ export type StockRow = {
   min_stock: number
   shelf_location: string | null
   is_active: boolean
+  /** TỔNG mọi trạng thái — giữ nghĩa cũ, mọi nơi đang đọc không gãy. */
   on_hand: number
   /** on_hand < min_stock (FR-WMS-08). */
   is_low: boolean
+  /**
+   * DÙNG ĐƯỢC (0194) — số DUY NHẤT được phép dùng để tính đủ/thiếu.
+   *
+   * Lấy `on_hand` để tính là hứa hộ nhà kho một thứ nó không giao nổi: 2.400
+   * con bulon đang chờ kiểm vẫn nằm trong `on_hand` nhưng cấp đi không được.
+   */
+  qty_ok: number
+  /** Đã nhận, chưa được phép dùng — chờ người kiểm hàng. */
+  qty_qc: number
+  /** Hỏng / sai quy cách, chờ quyết trả NCC hay huỷ. */
+  qty_blocked: number
 }
 
 export type Direction = 'in' | 'out'
+
+/** Trạng thái của LƯỢNG (0194) — xem chú ở `StockRow.qty_ok`. */
+export type StockStatus = 'ok' | 'qc' | 'blocked'
+
+/**
+ * Loại khu (0193). Ba loại sau là KHU ẢO — không phải chỗ thật nào cả:
+ *   receiving  hàng vừa nhận, chưa cất → chính là hàng đợi "Chờ cất"
+ *   blocked    đã vào sổ nhưng chưa được dùng
+ *   scrap      chờ thanh lý
+ * Nhờ chúng, mọi lượng luôn ở một chỗ CÓ TÊN — không lượng nào "biến mất".
+ */
+export type BinKind = 'store' | 'receiving' | 'blocked' | 'scrap'
+
+export type Bin = {
+  id: string
+  code: string
+  name: string | null
+  kind: BinKind
+  is_active: boolean
+}
 
 export type Movement = {
   id: string
@@ -35,7 +67,7 @@ export type Movement = {
 }
 
 const STOCK_COLS =
-  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low'
+  'material_id, code, name, unit, group_name, min_stock, shelf_location, is_active, on_hand, is_low, qty_ok, qty_qc, qty_blocked'
 
 const MV_COLS =
   'id, material_id, direction, qty, qty_rejected, qc_status, ref_type, ref_no, shelf_location, note, created_by, created_at'
@@ -55,7 +87,7 @@ function num(v: unknown): number {
  * `short` KHÔNG lọc được bằng SQL: nó cần `reserved` (nhu cầu LSX đã cam kết),
  * không nằm trong view. Service xử riêng — xem `listStockPage`.
  */
-export type StockBucket = 'has' | 'low' | 'out' | 'short' | 'all'
+export type StockBucket = 'has' | 'low' | 'out' | 'qc' | 'blocked' | 'short' | 'all'
 
 function rowOf(r: Record<string, unknown>): StockRow {
   return {
@@ -71,6 +103,9 @@ function rowOf(r: Record<string, unknown>): StockRow {
     // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với sweep
     // quét sáng + notifyLowStock, và là cột SQL lọc được.
     is_low: Boolean(r.is_low),
+    qty_ok: num(r.qty_ok),
+    qty_qc: num(r.qty_qc),
+    qty_blocked: num(r.qty_blocked),
   }
 }
 
@@ -138,7 +173,11 @@ export const stockRepo = {
     if (filter.ids) q = q.in('material_id', filter.ids)
     if (filter.bucket === 'has') q = q.gt('on_hand', 0)
     else if (filter.bucket === 'low') q = q.eq('is_low', true)
-    else if (filter.bucket === 'out') q = q.eq('on_hand', 0)
+    // "Hết hàng" đo trên DÙNG ĐƯỢC, không trên tổng: mã còn 2.400 con đang chờ
+    // kiểm thì với người đi cấp hàng nó vẫn là hết — và đó là câu hỏi của rổ này.
+    else if (filter.bucket === 'out') q = q.eq('qty_ok', 0)
+    else if (filter.bucket === 'qc') q = q.gt('qty_qc', 0)
+    else if (filter.bucket === 'blocked') q = q.gt('qty_blocked', 0)
 
     const from = (filter.page - 1) * filter.page_size
     const { data, count } = await q.range(from, from + filter.page_size - 1)
@@ -159,6 +198,8 @@ export const stockRepo = {
     has: number
     low: number
     out: number
+    qc: number
+    blocked: number
   }> {
     const base = () => {
       let q = db()
@@ -169,17 +210,21 @@ export const stockRepo = {
       if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
       return q
     }
-    const [all, has, low, out] = await Promise.all([
+    const [all, has, low, out, qc, blocked] = await Promise.all([
       base(),
       base().gt('on_hand', 0),
       base().eq('is_low', true),
-      base().eq('on_hand', 0),
+      base().eq('qty_ok', 0),
+      base().gt('qty_qc', 0),
+      base().gt('qty_blocked', 0),
     ])
     return {
       all: all.count ?? 0,
       has: has.count ?? 0,
       low: low.count ?? 0,
       out: out.count ?? 0,
+      qc: qc.count ?? 0,
+      blocked: blocked.count ?? 0,
     }
   },
 
@@ -603,6 +648,125 @@ export const warehousesRepo = {
   },
 }
 
+const BIN_COLS = 'id, code, name, kind, is_active'
+
+export const binsRepo = {
+  /** Mọi khu của kho, kể cả đã ngừng dùng — màn Sơ đồ kệ cần thấy cả hai. */
+  async list(warehouseId: string, opts: { active_only?: boolean } = {}): Promise<Bin[]> {
+    let q = db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('warehouse_id', warehouseId)
+      .order('kind', { ascending: true })
+      .order('code', { ascending: true })
+    if (opts.active_only) q = q.eq('is_active', true)
+    const { data } = await q
+    return ((data as Bin[] | null) ?? []).map((b) => ({ ...b, kind: b.kind as BinKind }))
+  },
+
+  /**
+   * Khu ảo theo LOẠI — `receiving` cho hàng vừa nhận, `blocked` cho hàng khoá.
+   *
+   * Tra theo `kind` chứ KHÔNG hằng số hoá mã 'TIEP-NHAN' / 'KHOA-01': mã là
+   * nhãn người đọc, đổi được; loại là hợp đồng của hệ thống. Hằng số hoá mã thì
+   * ai đó đổi tên khu cho dễ đọc là luồng nhận hàng gãy im lặng.
+   */
+  async byKind(warehouseId: string, kind: BinKind): Promise<Bin | null> {
+    const { data } = await db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('warehouse_id', warehouseId)
+      .eq('kind', kind)
+      .eq('is_active', true)
+      .order('code', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    return data ? { ...(data as Bin), kind: (data as Bin).kind as BinKind } : null
+  },
+
+  async findById(id: string): Promise<Bin | null> {
+    const { data } = await db()
+      .from('warehouse_bins')
+      .select(BIN_COLS)
+      .eq('id', id)
+      .maybeSingle()
+    return data ? { ...(data as Bin), kind: (data as Bin).kind as BinKind } : null
+  },
+
+  async insert(row: {
+    warehouse_id: string
+    code: string
+    name: string | null
+    kind: BinKind
+  }): Promise<Bin> {
+    const { data, error } = await db()
+      .from('warehouse_bins')
+      .insert(row)
+      .select(BIN_COLS)
+      .single()
+    if (error || !data) throw new Error(error?.message ?? 'Tạo khu thất bại')
+    return { ...(data as Bin), kind: (data as Bin).kind as BinKind }
+  },
+
+  async patch(
+    id: string,
+    patch: { name?: string | null; is_active?: boolean },
+  ): Promise<void> {
+    const { error } = await db().from('warehouse_bins').update(patch).eq('id', id)
+    if (error) throw new Error(error.message)
+  },
+
+  /** Số mã đang nằm ở từng khu — nuôi cột "Mã đang nằm" của Sơ đồ kệ. */
+  async materialCountByBin(): Promise<Map<string, number>> {
+    const { data } = await db()
+      .from('v_warehouse_stock_by_bin')
+      .select('bin_id, material_id')
+      .limit(20000)
+    const out = new Map<string, Set<string>>()
+    for (const r of (data as { bin_id: string | null; material_id: string }[] | null) ??
+      []) {
+      if (!r.bin_id) continue
+      const set = out.get(r.bin_id) ?? new Set<string>()
+      set.add(r.material_id)
+      out.set(r.bin_id, set)
+    }
+    return new Map([...out].map(([k, v]) => [k, v.size]))
+  },
+}
+
+export type StockByBin = {
+  material_id: string
+  bin_id: string | null
+  bin_code: string | null
+  bin_name: string | null
+  bin_kind: BinKind | null
+  stock_status: StockStatus
+  qty: number
+}
+
+/**
+ * Tồn theo (vật tư × khu × trạng thái) — nguồn của màn Chờ cất và tab "Tồn
+ * theo kệ" trên hồ sơ vật tư. View đã bỏ các cặp tổng bằng 0.
+ */
+export async function stockByBin(filter: {
+  bin_kind?: BinKind
+  material_ids?: string[]
+}): Promise<StockByBin[]> {
+  let q = db().from('v_warehouse_stock_by_bin').select('*').limit(5000)
+  if (filter.bin_kind) q = q.eq('bin_kind', filter.bin_kind)
+  if (filter.material_ids) q = q.in('material_id', filter.material_ids)
+  const { data } = await q
+  return ((data as Record<string, unknown>[] | null) ?? []).map((r) => ({
+    material_id: r.material_id as string,
+    bin_id: (r.bin_id as string | null) ?? null,
+    bin_code: (r.bin_code as string | null) ?? null,
+    bin_name: (r.bin_name as string | null) ?? null,
+    bin_kind: (r.bin_kind as BinKind | null) ?? null,
+    stock_status: r.stock_status as StockStatus,
+    qty: num(r.qty),
+  }))
+}
+
 /** Insert nhiều movement 1 lần (các dòng của 1 phiếu). */
 export async function insertMovements(
   rows: {
@@ -625,6 +789,10 @@ export async function insertMovements(
      * — màn công nợ đếm "phiếu chưa có giá" dựa đúng vào phân biệt này.
      */
     unit_cost?: number | null
+    /** Khu/kệ lượng này nằm (0193). Dòng mới luôn có — service ép. */
+    bin_id?: string | null
+    /** Trạng thái của lượng (0194): dùng được / chờ kiểm / khoá. */
+    stock_status?: StockStatus
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)

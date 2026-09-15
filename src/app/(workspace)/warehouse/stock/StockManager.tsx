@@ -24,8 +24,15 @@ type Stock = {
   group_name: string | null
   min_stock: number
   shelf_location: string | null
+  /** TỔNG mọi trạng thái. KHÔNG dùng để tính đủ/thiếu — xem `qty_ok`. */
   on_hand: number
   is_low: boolean
+  /** Dùng được — số duy nhất cấp đi được ngay (0194). */
+  qty_ok: number
+  /** Đã nhận, chưa được phép dùng. */
+  qty_qc: number
+  /** Hỏng / sai quy cách, chờ quyết trả hay huỷ. */
+  qty_blocked: number
   /** Giữ chỗ cho các LSX đã duyệt/đang SX (bước 2 Kho). */
   reserved: number
   /** on_hand − reserved; âm = thiếu cho LSX. */
@@ -46,13 +53,17 @@ type Movement = {
 }
 
 /** Cùng bộ rổ với `StockBucket` của repo — đổi một bên là chip nói dối. */
-type Bucket = 'has' | 'low' | 'out' | 'short' | 'all'
+type Bucket = 'has' | 'low' | 'out' | 'qc' | 'blocked' | 'short' | 'all'
 
 const BUCKETS: { id: Bucket; label: string }[] = [
   { id: 'has', label: 'Đang có tồn' },
   { id: 'low', label: 'Dưới mức tối thiểu' },
-  { id: 'out', label: 'Hết hàng' },
-  { id: 'short', label: 'Thiếu cho LSX' },
+  { id: 'out', label: 'Hết hàng (không còn dùng được)' },
+  // Hai rổ của trạng thái lượng (0194) — chúng trả lời "lô nào đang mắc, ai
+  // phải quyết", câu mà một cột tồn duy nhất không bao giờ trả lời được.
+  { id: 'qc', label: 'Có lô chờ kiểm' },
+  { id: 'blocked', label: 'Có lô khoá' },
+  { id: 'short', label: 'Đã hứa quá số dùng được' },
   { id: 'all', label: 'Cả danh mục' },
 ]
 
@@ -80,7 +91,15 @@ export function StockManager({
   /** Số dòng khớp bộ lọc hiện tại, để phân trang nói đúng. */
   total: number
   /** Đếm từng rổ, tính bằng CÙNG bộ lọc q/group với trang đang xem. */
-  counts: { all: number; has: number; low: number; out: number; short: number }
+  counts: {
+    all: number
+    has: number
+    low: number
+    out: number
+    qc: number
+    blocked: number
+    short: number
+  }
   /** Danh sách nhóm CHỐT từ taxonomy, không lấy từ trang kết quả. */
   groups: string[]
   bucket: Bucket
@@ -196,15 +215,27 @@ export function StockManager({
       { key: 'code', header: 'Mã' },
       { key: 'name', header: 'Tên' },
       { key: 'unit', header: 'ĐVT' },
-      { key: 'on_hand', header: 'Tồn hiện có', get: (s) => String(s.on_hand) },
-      { key: 'reserved', header: 'Đặt trước (LSX)', get: (s) => String(s.reserved) },
-      { key: 'available', header: 'Khả dụng', get: (s) => String(s.available) },
+      { key: 'qty_ok', header: 'Dùng được', get: (s) => String(s.qty_ok) },
+      { key: 'qty_qc', header: 'Chờ kiểm', get: (s) => String(s.qty_qc) },
+      { key: 'qty_blocked', header: 'Khoá', get: (s) => String(s.qty_blocked) },
+      { key: 'on_hand', header: 'Tổng mọi trạng thái', get: (s) => String(s.on_hand) },
+      { key: 'reserved', header: 'Giữ cho lệnh', get: (s) => String(s.reserved) },
+      { key: 'available', header: 'Còn dùng', get: (s) => String(s.available) },
       { key: 'min_stock', header: 'Tồn tối thiểu', get: (s) => String(s.min_stock) },
       { key: 'shelf_location', header: 'Vị trí kệ', get: (s) => s.shelf_location ?? '' },
       {
         key: 'is_low',
         header: 'Trạng thái',
-        get: (s) => (s.on_hand === 0 ? 'Hết' : s.is_low ? 'Thấp' : 'Đủ'),
+        get: (s) =>
+          s.qty_blocked > 0
+            ? 'Có lô khoá'
+            : s.qty_qc > 0
+              ? 'Có lô chờ kiểm'
+              : s.qty_ok === 0
+                ? 'Hết'
+                : s.is_low
+                  ? 'Thấp'
+                  : 'Đủ',
       },
     ])
     toast.success(`Đã xuất ${rows.length} dòng CSV`)
@@ -222,21 +253,65 @@ export function StockManager({
         </div>
       ),
     },
+    /*
+      BỐN CỘT LƯỢNG thay cho một cột "Tồn hiện có" (0194).
+      Một cột tổng là con số ĐÚNG mà VÔ DỤNG: 2.400 con bulon nằm trong kho mà
+      chưa kiểm thì cấp đi không được, và một hệ thống nói "tồn 2.400" là hứa
+      hộ nhà kho một thứ nó không giao nổi.
+      Cột "Chờ kiểm" và "Khoá" để TRỐNG khi bằng 0 — bảng đầy số 0 thì mắt phải
+      lọc thủ công để tìm dòng có chuyện, mà dòng có chuyện mới là thứ cần nhìn.
+    */
     {
-      key: 'on_hand',
-      header: 'Tồn hiện có',
-      width: '130px',
+      key: 'qty_ok',
+      header: 'Dùng được',
+      width: '120px',
       align: 'right',
-      sortValue: (s) => s.on_hand,
+      sortValue: (s) => s.qty_ok,
       cell: (s) => (
         <span
           className={`font-semibold tabular-nums ${
-            s.on_hand === 0 ? 'text-red-600' : s.is_low ? 'text-amber-600' : ''
+            s.qty_ok === 0 ? 'text-[var(--stop)]' : s.is_low ? 'text-[var(--warn)]' : ''
           }`}
         >
-          {s.on_hand} <span className="text-xs font-normal text-zinc-400">{s.unit}</span>
+          {s.qty_ok} <span className="text-xs font-normal text-zinc-400">{s.unit}</span>
         </span>
       ),
+    },
+    {
+      key: 'qty_qc',
+      header: 'Chờ kiểm',
+      width: '95px',
+      align: 'right',
+      sortValue: (s) => s.qty_qc,
+      cell: (s) =>
+        s.qty_qc > 0 ? (
+          <span
+            className="text-[var(--warn)] tabular-nums"
+            title="Đã nhận nhưng chưa được phép dùng — chờ người kiểm hàng mở khoá"
+          >
+            {s.qty_qc}
+          </span>
+        ) : (
+          <span className="text-zinc-300 dark:text-zinc-600">—</span>
+        ),
+    },
+    {
+      key: 'qty_blocked',
+      header: 'Khoá',
+      width: '95px',
+      align: 'right',
+      sortValue: (s) => s.qty_blocked,
+      cell: (s) =>
+        s.qty_blocked > 0 ? (
+          <span
+            className="font-semibold text-[var(--stop)] tabular-nums"
+            title="Hỏng / sai quy cách — chờ Cung ứng quyết trả NCC hay huỷ"
+          >
+            {s.qty_blocked}
+          </span>
+        ) : (
+          <span className="text-zinc-300 dark:text-zinc-600">—</span>
+        ),
     },
     {
       key: 'reserved',
@@ -258,7 +333,7 @@ export function StockManager({
     },
     {
       key: 'available',
-      header: 'Khả dụng',
+      header: 'Còn dùng',
       width: '110px',
       align: 'right',
       sortValue: (s) => s.available,
@@ -266,7 +341,7 @@ export function StockManager({
         s.available < 0 ? (
           <span
             className="font-semibold text-red-600 tabular-nums dark:text-red-400"
-            title="Tồn không đủ cho nhu cầu còn lại của các LSX đã cam kết"
+            title="Đã hứa cho LSX nhiều hơn số DÙNG ĐƯỢC đang có"
           >
             thiếu {Math.abs(s.available)}
           </span>
@@ -301,9 +376,18 @@ export function StockManager({
       key: 'status',
       header: 'Trạng thái',
       width: '110px',
-      sortValue: (s) => (s.on_hand === 0 ? 0 : s.is_low ? 1 : 2),
+      sortValue: (s) =>
+        s.qty_blocked > 0 ? 0 : s.qty_qc > 0 ? 1 : s.qty_ok === 0 ? 2 : s.is_low ? 3 : 4,
+      /* Thứ tự ưu tiên là thứ tự VIỆC PHẢI LÀM, không phải mức nghiêm trọng:
+         lô khoá cần người quyết → lô chờ kiểm cần người kiểm → rồi mới tới
+         chuyện đủ/thiếu. Gộp cả bốn thành "Hết hàng" là mất đúng thông tin
+         quyết định bước tiếp theo. */
       cell: (s) =>
-        s.on_hand === 0 ? (
+        s.qty_blocked > 0 ? (
+          <Badge tone="red">Có lô khoá</Badge>
+        ) : s.qty_qc > 0 ? (
+          <Badge tone="amber">Chờ kiểm</Badge>
+        ) : s.qty_ok === 0 ? (
           <Badge tone="red">Hết hàng</Badge>
         ) : s.is_low ? (
           <Badge tone="amber">Tồn thấp</Badge>
@@ -364,7 +448,12 @@ export function StockManager({
           { label: 'Đang dùng', value: counts.all, tone: 'default' },
           { label: 'Đang có tồn', value: counts.has, tone: 'green' },
           { label: 'Tồn thấp', value: counts.low, tone: counts.low ? 'amber' : 'gray' },
-          { label: 'Hết hàng', value: counts.out, tone: counts.out ? 'red' : 'gray' },
+          { label: 'Chờ kiểm', value: counts.qc, tone: counts.qc ? 'amber' : 'gray' },
+          {
+            label: 'Có lô khoá',
+            value: counts.blocked,
+            tone: counts.blocked ? 'red' : 'gray',
+          },
           {
             label: 'Thiếu cho LSX',
             value: counts.short,

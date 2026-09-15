@@ -3332,6 +3332,7 @@ export type Database = {
       }
       supply_po_shipments: {
         Row: {
+          code: string | null
           created_at: string
           created_by: string | null
           expected_date: string
@@ -3345,6 +3346,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date: string
@@ -3358,6 +3360,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date?: string
@@ -5713,6 +5716,47 @@ export type Database = {
           },
         ]
       }
+      warehouse_bins: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string | null
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_bins_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_docs: {
         Row: {
           approved_at: string | null
@@ -5726,11 +5770,13 @@ export type Database = {
           kind: string
           note: string | null
           reason: string | null
+          reason_code: string | null
           reject_reason: string | null
           reversal_of_doc_id: string | null
           shipment_id: string | null
           status: string
           supplier_doc_no: string | null
+          team_department_id: string | null
           updated_at: string
         }
         Insert: {
@@ -5745,11 +5791,13 @@ export type Database = {
           kind: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -5764,11 +5812,13 @@ export type Database = {
           kind?: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -5798,6 +5848,13 @@ export type Database = {
             columns: ["shipment_id"]
             isOneToOne: false
             referencedRelation: "supply_po_shipments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_docs_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -6013,6 +6070,7 @@ export type Database = {
       }
       warehouse_movements: {
         Row: {
+          bin_id: string | null
           created_at: string
           created_by: string | null
           direction: string
@@ -6029,11 +6087,13 @@ export type Database = {
           ref_no: string | null
           ref_type: string
           shelf_location: string | null
+          stock_status: string
           transfer_group: string | null
           unit_cost: number | null
           warehouse_id: string | null
         }
         Insert: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction: string
@@ -6050,11 +6110,13 @@ export type Database = {
           ref_no?: string | null
           ref_type: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Update: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction?: string
@@ -6071,11 +6133,19 @@ export type Database = {
           ref_no?: string | null
           ref_type?: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_movements_created_by_fkey"
             columns: ["created_by"]
@@ -6455,6 +6525,47 @@ export type Database = {
           },
         ]
       }
+      v_warehouse_stock_by_bin: {
+        Row: {
+          bin_code: string | null
+          bin_id: string | null
+          bin_kind: string | null
+          bin_name: string | null
+          material_id: string | null
+          qty: number | null
+          stock_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouse_stock: {
         Row: {
           code: string | null
@@ -6465,6 +6576,9 @@ export type Database = {
           min_stock: number | null
           name: string | null
           on_hand: number | null
+          qty_blocked: number | null
+          qty_ok: number | null
+          qty_qc: number | null
           shelf_location: string | null
           unit: string | null
         }

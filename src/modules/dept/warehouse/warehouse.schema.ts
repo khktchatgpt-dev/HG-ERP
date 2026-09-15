@@ -219,15 +219,35 @@ export const issueSchema = z.object({
 // ── Phiếu kho nhiều dòng (0017 warehouse_docs) ─────────────────────────────
 
 /** Dòng phiếu nhập: theo dòng PO (po_line_id) hoặc mua ngoài (không có). */
-export const receiptDocLineSchema = z.object({
-  material_id: z.string().uuid(),
-  qty: z.coerce.number().positive(), // số ĐẠT vào tồn
-  qty_rejected: z.coerce.number().min(0).default(0), // QC loại — KHÔNG vào tồn (BR-10)
-  qc_status: z.enum(['pass', 'partial', 'fail']).optional(),
-  po_line_id: z.string().uuid().optional().nullable(),
-  shelf_location: z.string().trim().max(60).optional().nullable(),
-  note: z.string().trim().max(500).optional().nullable(),
-})
+export const receiptDocLineSchema = z
+  .object({
+    material_id: z.string().uuid(),
+    qty: z.coerce.number().positive(), // số ĐẠT vào tồn
+    qty_rejected: z.coerce.number().min(0).default(0), // QC loại — KHÔNG vào tồn (BR-10)
+    qc_status: z.enum(['pass', 'partial', 'fail']).optional(),
+    po_line_id: z.string().uuid().optional().nullable(),
+    shelf_location: z.string().trim().max(60).optional().nullable(),
+    note: z.string().trim().max(500).optional().nullable(),
+    /**
+     * Trạng thái của lượng (0194) — 'ok' dùng được ngay · 'qc' chờ kiểm · 'blocked'
+     * sai quy cách. Bỏ trống = 'ok'.
+     *
+     * ĐÂY LÀ ĐƯỜNG MỚI CHO HÀNG KHÔNG ĐẠT, thay cho việc từ chối nhận ngoài hệ
+     * thống. `qty_rejected` GIỮ NGUYÊN và không dùng nữa ở luồng mới: nó có 1 dòng
+     * trong toàn DB nhưng 20+ chỗ ở Cung ứng đọc (qty_received = qty + qty_rejected),
+     * nên gỡ nó là một lượt riêng. Hai đường không đánh nhau — hàng khoá vẫn là
+     * `direction='in'` với `qty > 0` nên "NCC đã chở tới" vẫn đếm đủ.
+     */
+    stock_status: z.enum(['ok', 'qc', 'blocked']).optional(),
+    /** Khu/kệ hàng vào (0193). Bỏ trống → service chọn theo trạng thái. */
+    bin_id: z.string().uuid().optional().nullable(),
+  })
+  // Lý do đi theo lô suốt đời nó — Cung ứng đọc đúng câu này để quyết trả NCC
+  // hay nhận giá giảm. Chặn ở schema LẪN service: form có thể bỏ qua, API thì không.
+  .refine((l) => l.stock_status !== 'blocked' || !!l.note?.trim(), {
+    message: 'Dòng khai "khoá" phải ghi lý do',
+    path: ['note'],
+  })
 
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
 export const receiptDocSchema = z

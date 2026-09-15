@@ -27,7 +27,7 @@ import { PAGE_SIZE } from './constants'
  * `?low=1` / `?short=1`: deep-link từ dashboard + thông báo "Quét sáng" — vào
  * là mở đúng rổ đang được nói tới.
  */
-const BUCKETS: StockBucket[] = ['has', 'low', 'out', 'short', 'all']
+const BUCKETS: StockBucket[] = ['has', 'low', 'out', 'qc', 'blocked', 'short', 'all']
 
 export default async function StockPage({
   searchParams,

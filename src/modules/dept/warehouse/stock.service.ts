@@ -15,6 +15,9 @@ import {
   type LsxNeed,
   type StockRow,
   type StockBucket,
+  type StockStatus,
+  type BinKind,
+  binsRepo,
   type DocKind,
   type StocktakeLine,
 } from './stock.repo'
@@ -217,7 +220,13 @@ export async function reservedByOtherLsx(
   return out
 }
 
-/** Dòng tồn kho kèm đặt trước/khả dụng (bước 2 Kho). available âm = thiếu cho LSX. */
+/**
+ * Dòng tồn kho kèm đặt trước/khả dụng. `available` âm = ĐÃ HỨA NHIỀU HƠN SỐ CÓ.
+ *
+ * Nền tính là `qty_ok` (DÙNG ĐƯỢC), KHÔNG phải `on_hand` (0194). Lô đang chờ
+ * kiểm hay đang khoá có mặt trong sổ và đếm được, nhưng cấp đi không được —
+ * cộng nó vào khả dụng là hệ thống hứa một thứ nhà kho không giao nổi.
+ */
 export type StockRowAvail = StockRow & {
   reserved: number
   available: number
@@ -239,7 +248,7 @@ export const stockService = {
     ])
     return rows.map((r) => {
       const res = reserved.get(r.material_id) ?? 0
-      return { ...r, reserved: res, available: r.on_hand - res }
+      return { ...r, reserved: res, available: r.qty_ok - res }
     })
   },
 
@@ -266,14 +275,22 @@ export const stockService = {
   ): Promise<{
     rows: StockRowAvail[]
     total: number
-    counts: { all: number; has: number; low: number; out: number; short: number }
+    counts: {
+      all: number
+      has: number
+      low: number
+      out: number
+      qc: number
+      blocked: number
+      short: number
+    }
   }> {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
 
     const reserved = await reservedByCommittedLsx()
     const withRes = (r: StockRow): StockRowAvail => {
       const res = reserved.get(r.material_id) ?? 0
-      return { ...r, reserved: res, available: r.on_hand - res }
+      return { ...r, reserved: res, available: r.qty_ok - res }
     }
 
     // Tập có giữ chỗ — nền để đếm rổ `short` VÀ để lọc nó, cùng một nguồn.
@@ -505,6 +522,20 @@ export const stockService = {
         po_line_id?: string | null
         shelf_location?: string | null
         note?: string | null
+        /**
+         * Trạng thái của lượng (0194). Bỏ trống = 'ok'.
+         *
+         * 'blocked' BẮT BUỘC kèm `note`: lý do đi theo lô suốt đời nó và là thứ
+         * Cung ứng đọc để quyết trả NCC hay nhận giá giảm. "blocked" trần thì
+         * không quyết được gì.
+         */
+        stock_status?: StockStatus
+        /**
+         * Khu/kệ hàng vào (0193). Bỏ trống thì service tự chọn theo trạng thái:
+         * khoá → kệ hàng khoá, còn lại → khu tiếp nhận (rồi đi qua bước Cất).
+         * Khai thẳng kệ thật = nhận một bước, bỏ qua bước cất.
+         */
+        bin_id?: string | null
       }[]
     },
   ): Promise<{ id: string; code: string; po_status: string | null }> {
@@ -601,10 +632,45 @@ export const stockService = {
       )
     }
 
+    /*
+     * HÀNG KHOÁ PHẢI CÓ LÝ DO — chặn ở service, không chỉ ở form.
+     *
+     * Đây là chỗ vá lối mòn ⑤ của `docs/thiet-ke-kho.md`: trước 0194 hàng sai
+     * quy cách hoặc bị từ chối ngoài hệ thống (biến mất khỏi sổ trong khi nằm
+     * thật ngoài sân), hoặc bị nhận bừa vào tồn dùng được. Nay nó VÀO SỔ ở
+     * trạng thái khoá — đếm được, có tuổi, có người phải quyết.
+     */
+    const noReason = input.lines.filter(
+      (l) => l.stock_status === 'blocked' && !l.note?.trim(),
+    )
+    if (noReason.length > 0) {
+      throw BadRequest(
+        `Dòng khoá phải ghi lý do: ${noReason.map((l) => l.material_id).join(', ')}`,
+      )
+    }
+
     const [code, warehouseId] = await Promise.all([
       docsRepo.nextCode('PNK'),
       warehousesRepo.mainId(),
     ])
+
+    /*
+     * KHU MẶC ĐỊNH tra theo LOẠI, không theo mã. Mã khu là nhãn người đọc và
+     * đổi được; loại là hợp đồng của hệ thống (xem `binsRepo.byKind`).
+     *
+     * Thiếu khu ảo thì KHÔNG chặn nhận hàng — `bin_id` để null và dòng sổ vẫn
+     * đúng về lượng. Chặn cả luồng nhận hàng vì thiếu một dòng danh mục là đổi
+     * một thiếu sót thành một sự cố.
+     */
+    const needBins =
+      input.lines.some((l) => !l.bin_id) &&
+      (await Promise.all([
+        binsRepo.byKind(warehouseId, 'receiving'),
+        binsRepo.byKind(warehouseId, 'blocked'),
+      ]))
+    const [recvBin, blockedBin] = needBins || [null, null]
+    const binFor = (l: { bin_id?: string | null; stock_status?: StockStatus }) =>
+      l.bin_id ?? (l.stock_status === 'blocked' ? blockedBin?.id : recvBin?.id) ?? null
     // Ghi vết khi cố ý nhận vượt số còn thiếu — để hậu kiểm đối chiếu với NCC.
     const docNote = input.allow_over
       ? `${input.note ? `${input.note} · ` : ''}[Nhận vượt] ${input.over_reason ?? ''}`.trim()
@@ -659,6 +725,8 @@ export const stockService = {
           created_by: user.id,
           doc_id: doc.id,
           warehouse_id: warehouseId,
+          stock_status: l.stock_status ?? 'ok',
+          bin_id: binFor(l),
           po_line_id: l.po_line_id ?? null,
           production_order_id: input.production_order_id ?? null,
         }

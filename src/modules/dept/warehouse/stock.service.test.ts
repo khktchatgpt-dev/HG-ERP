@@ -15,6 +15,17 @@ vi.mock('./stock.repo', () => ({
     countPending: vi.fn(),
   },
   warehousesRepo: { mainId: vi.fn() },
+  // Khu ảo (0193): mặc định trả null = "kho chưa khai khu nào". Luồng nhận hàng
+  // PHẢI vẫn chạy trong trạng thái đó — ca `khu mặc định` dưới canh chính điều ấy.
+  binsRepo: {
+    byKind: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    findById: vi.fn(async () => null),
+    insert: vi.fn(),
+    patch: vi.fn(),
+    materialCountByBin: vi.fn(async () => new Map()),
+  },
+  stockByBin: vi.fn(async () => []),
   stocktakeRepo: { insertLines: vi.fn(), listByDoc: vi.fn() },
   insertMovements: vi.fn(),
   onHandMany: vi.fn(),
@@ -69,6 +80,7 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
 
 import { stockService, smartLsxNeeds } from './stock.service'
 import {
+  binsRepo,
   docsRepo,
   insertMovements,
   issuedByLsx,
@@ -1086,6 +1098,148 @@ describe('reverseDoc — phiếu đảo (K1)', () => {
       stockService.reverseDoc(admin, 'doc-g', 'gõ nhầm'),
     ).rejects.toMatchObject({ status: 409, code: 'REVERSAL_STOCK_SHORT' })
     expect(insertMovements).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * NƠI CHỐN + TRẠNG THÁI CỦA LƯỢNG (0193/0194 — Đợt 2).
+ *
+ * Bốn ca dưới đây canh đúng bốn quyết định của đợt này, và mỗi ca là một lối
+ * mòn đã đo được chứ không phải một nhánh if cho đủ:
+ *
+ *  1. Hàng không đạt VẪN VÀO SỔ ở trạng thái khoá, không biến mất khỏi hệ thống
+ *     trong khi nằm thật ngoài sân (lối mòn ⑤ của docs/thiet-ke-kho.md).
+ *  2. Khoá BẮT BUỘC kèm lý do — "blocked" trần thì Cung ứng không quyết được gì.
+ *  3. Khu mặc định tra theo LOẠI, và THIẾU khu ảo thì KHÔNG chặn nhận hàng:
+ *     đổi một thiếu sót danh mục thành một sự cố dây chuyền là sai người sai việc.
+ *  4. Khai thẳng kệ thật = nhận một bước, bỏ qua bước cất.
+ */
+describe('createReceiptDoc — nơi chốn & trạng thái của lượng (0193/0194)', () => {
+  it('mặc định: trạng thái ok, hàng vào KHU TIẾP NHẬN để còn đi qua bước cất', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0101')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : ({
+            id: 'bin-lock',
+            code: 'KHOA-01',
+            name: null,
+            kind,
+            is_active: true,
+          } as never),
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ stock_status: 'ok', bin_id: 'bin-recv' })
+  })
+
+  it('dòng khoá: vào SỔ với qty > 0 ở kệ hàng khoá, không biến mất', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0102')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : ({
+            id: 'bin-lock',
+            code: 'KHOA-01',
+            name: null,
+            kind,
+            is_active: true,
+          } as never),
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [
+        { material_id: 'm1', qty: 40, po_line_id: 'pl1' },
+        {
+          material_id: 'm1',
+          qty: 20,
+          po_line_id: 'pl1',
+          stock_status: 'blocked',
+          note: 'Giao sai mã hợp kim — hồ sơ 6063 T5, hàng về dập 6061',
+        },
+      ],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    // Cả hai dòng đều direction 'in' với qty > 0 — nên "NCC đã chở tới" vẫn đếm
+    // đủ 60, đúng như trước khi có trạng thái lượng.
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ stock_status: 'ok', bin_id: 'bin-recv', qty: 40 })
+    expect(rows[1]).toMatchObject({
+      direction: 'in',
+      stock_status: 'blocked',
+      bin_id: 'bin-lock',
+      qty: 20,
+    })
+  })
+
+  it('khoá mà không ghi lý do → chặn, kèm mã vật tư trong câu lỗi', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0103')
+
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [
+          { material_id: 'm1', qty: 20, po_line_id: 'pl1', stock_status: 'blocked' },
+        ],
+      }),
+    ).rejects.toThrow(/lý do/i)
+    // Chặn TRƯỚC khi ghi bất cứ dòng sổ nào — nửa phiếu vào sổ là sổ nói dối.
+    expect(docsRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('kho CHƯA khai khu ảo nào → vẫn nhận được, bin_id để null', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0104')
+    vi.mocked(binsRepo.byKind).mockResolvedValue(null)
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ bin_id: null, stock_status: 'ok' })
+  })
+
+  it('khai thẳng kệ thật → nhận một bước, không đi qua khu tiếp nhận', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0105')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : null,
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1', bin_id: 'bin-nhom-a1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ bin_id: 'bin-nhom-a1' })
   })
 })
 
