@@ -13,6 +13,7 @@ import {
   bomAllocationByCode,
   stocktakeRepo,
   docSummaries,
+  giaVonNhap,
   type LsxNeed,
   type StockRow,
   type DocKind,
@@ -32,6 +33,7 @@ import { componentsRepo } from '@/modules/dept/production/components.repo'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
+import { giaTriTon } from '@/lib/ton-kho-gia-tri'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import { supplyRepo, RECEIVABLE, poLineUnitCosts } from '@/modules/dept/supply/supply.repo'
@@ -217,6 +219,10 @@ export async function reservedByOtherLsx(
 export type StockRowAvail = StockRow & {
   reserved: number
   available: number
+  /** Đơn giá bình quân gia quyền. Null = chưa lần nhập nào có giá. */
+  don_gia_bq: number | null
+  /** Tồn × đơn giá bình quân. Null khi chưa có đơn giá. */
+  gia_tri: number | null
 }
 
 export const stockService = {
@@ -233,9 +239,26 @@ export const stockService = {
       }),
       reservedByCommittedLsx(),
     ])
+    /*
+      GIÁ TRỊ TỒN (0193) — kế toán hỏi mỗi cuối kỳ "tồn này bao nhiêu tiền", mà
+      màn tới nay chỉ trả lời được số LƯỢNG. Bình quân gia quyền theo các lần
+      NHẬP CÓ GIÁ; vì sao không FIFO xem `lib/ton-kho-gia-tri.ts`.
+
+      Đơn giá tính cho MỌI mã từng nhập, kể cả mã tồn đang 0: "lần mua gần đây
+      bình quân bao nhiêu" vẫn là con số có nghĩa, và ngay sau đợt kiểm kê đưa
+      tồn về 0 thì cả danh mục rơi vào diện đó.
+    */
+    const nhapTheoMa = await giaVonNhap()
     return rows.map((r) => {
       const res = reserved.get(r.material_id) ?? 0
-      return { ...r, reserved: res, available: r.on_hand - res }
+      const gv = giaTriTon(r.on_hand, (nhapTheoMa.get(r.material_id) ?? []).map((m) => ({ direction: 'in' as const, qty: m.qty, unit_cost: m.unit_cost }))) // prettier-ignore
+      return {
+        ...r,
+        reserved: res,
+        available: r.on_hand - res,
+        don_gia_bq: gv.donGia,
+        gia_tri: gv.giaTri,
+      }
     })
   },
 

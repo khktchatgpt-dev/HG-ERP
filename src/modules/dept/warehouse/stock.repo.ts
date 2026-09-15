@@ -372,6 +372,46 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
   } as WarehouseDoc
 }
 
+/**
+ * MỌI LẦN NHẬP CÓ SỐ LƯỢNG, gom theo vật tư — nuôi cột đơn giá bình quân.
+ *
+ * QUÉT CẢ BẢNG, KHÔNG LỌC THEO DANH SÁCH MÃ. Bản đầu lọc theo "mã đang có tồn"
+ * cho rẻ, nhưng sai hai đường:
+ *
+ *   · mất đơn giá của mã tồn 0 — mà đó vẫn là con số có nghĩa ("lần mua gần
+ *     đây bình quân bao nhiêu"), và ngay sau đợt kiểm kê đưa tồn về 0 thì CẢ
+ *     danh mục rơi vào diện này;
+ *   · `in(...)` với hàng nghìn id làm URL vượt mức PostgREST nhận, và lỗi đó
+ *     IM LẶNG — trả rỗng chứ không báo.
+ *
+ * Bảng chuyển động bị chặn bởi số phiếu kho thật, không theo kích thước danh
+ * mục: đo 15/09/2026 là 265 dòng cho 13.229 mã. Khi nào nó lên hàng chục nghìn
+ * thì mới đáng gom sẵn theo vật tư ở tầng DB.
+ */
+export async function giaVonNhap(): Promise<
+  Map<string, { qty: number; unit_cost: number | null }[]>
+> {
+  const out = new Map<string, { qty: number; unit_cost: number | null }[]>()
+  for (let from = 0; ; from += 1000) {
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('material_id, qty, unit_cost')
+      .eq('direction', 'in')
+      .range(from, from + 999)
+    const rows = (data as Record<string, unknown>[] | null) ?? []
+    for (const r of rows) {
+      const id = r.material_id as string
+      if (!out.has(id)) out.set(id, [])
+      out.get(id)!.push({
+        qty: num(r.qty),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })
+    }
+    if (rows.length < 1000) break
+  }
+  return out
+}
+
 export const docsRepo = {
   /** Số phiếu lập HÔM NAY theo loại — nuôi ô "Nhập/Xuất hôm nay" của dashboard. */
   async countTodayByKind(): Promise<Record<string, number>> {
