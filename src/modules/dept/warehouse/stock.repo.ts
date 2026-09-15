@@ -793,6 +793,14 @@ export async function insertMovements(
     bin_id?: string | null
     /** Trạng thái của lượng (0194): dùng được / chờ kiểm / khoá. */
     stock_status?: StockStatus
+    /**
+     * Nối HAI CHÂN của một lần điều chuyển (0015). Ràng buộc DB:
+     * `ref_type = 'transfer'` thì cột này BẮT BUỘC có.
+     *
+     * Chuyển kệ và đổi trạng thái đều là "ra khỏi chỗ cũ, vào chỗ mới" — hai
+     * dòng sổ, không phải một UPDATE tại chỗ. Sổ chỉ cộng thêm, không sửa lùi.
+     */
+    transfer_group?: string | null
   }[],
 ): Promise<void> {
   const { error } = await db().from('warehouse_movements').insert(rows)
@@ -814,6 +822,49 @@ export async function onHandMany(materialIds: string[]): Promise<Map<string, num
 }
 
 /** Tồn + min_stock (check cảnh báo sau xuất — FR-WMS-08). */
+/**
+ * Mô tả gọn của nhiều vật tư — mã, tên, ĐVT, kệ gợi ý. Cho màn Chờ cất.
+ *
+ * Không dùng `stockInfoMany`: bản kia đọc view TỒN và trả về số tồn, còn ở đây
+ * chỉ cần nhãn để hiện dòng. Nhét thêm cột vào bản kia là bắt mọi nơi gọi nó
+ * kéo theo hai cột không dùng.
+ *
+ * `shelf_location` sau 0193 mang nghĩa "KỆ GỢI Ý MẶC ĐỊNH" — điền sẵn lúc cất,
+ * sửa được. Nó không còn là nơi hàng đang nằm; nơi thật là `bin_id` trên sổ.
+ */
+export async function materialLabels(
+  materialIds: string[],
+): Promise<
+  Map<string, { code: string; name: string; unit: string; shelf: string | null }>
+> {
+  if (materialIds.length === 0) return new Map()
+  const { data } = await db()
+    .from('warehouse_materials')
+    .select('id, code, name, unit, shelf_location')
+    .in('id', materialIds)
+  const out = new Map<
+    string,
+    { code: string; name: string; unit: string; shelf: string | null }
+  >()
+  for (const r of (data as
+    | {
+        id: string
+        code: string
+        name: string
+        unit: string
+        shelf_location: string | null
+      }[]
+    | null) ?? []) {
+    out.set(r.id, {
+      code: r.code,
+      name: r.name,
+      unit: r.unit,
+      shelf: r.shelf_location ?? null,
+    })
+  }
+  return out
+}
+
 export async function stockInfoMany(materialIds: string[]): Promise<
   {
     material_id: string

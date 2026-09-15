@@ -433,7 +433,10 @@ export function StockManager({
       <PageHeader
         breadcrumbs={[{ label: 'Kho', href: '/warehouse' }, { label: 'Tồn kho' }]}
         title="Tồn kho"
-        description={`${total.toLocaleString('vi-VN')} vật tư khớp lọc trên ${counts.all.toLocaleString('vi-VN')} mã đang dùng. Tồn realtime = tổng nhập (đạt) − tổng xuất. Khả dụng = tồn − đặt trước cho LSX đã duyệt.`}
+        /* Mô tả nói ĐÚNG NỀN TÍNH sau 0194: "Còn dùng" trừ trên DÙNG ĐƯỢC,
+           không trên tổng tồn. Câu cũ ("Khả dụng = tồn − đặt trước") giờ sai,
+           và một dòng mô tả sai còn hại hơn không có dòng nào. */
+        description={`${total.toLocaleString('vi-VN')} vật tư khớp lọc trên ${counts.all.toLocaleString('vi-VN')} mã trong danh mục. Tồn tự tính từ phiếu nhập/xuất. Dùng được = chưa trừ phần chờ kiểm và phần khoá. Còn dùng = dùng được − đã hứa cho LSX đã duyệt.`}
         actions={
           <button onClick={exportCsv} className={btnSecondary}>
             Export CSV
@@ -445,7 +448,7 @@ export function StockManager({
           đếm trên trang thì con số đổi mỗi lần bấm sang trang sau. */}
       <StatsBar
         stats={[
-          { label: 'Đang dùng', value: counts.all, tone: 'default' },
+          { label: 'Cả danh mục', value: counts.all, tone: 'default' },
           { label: 'Đang có tồn', value: counts.has, tone: 'green' },
           { label: 'Tồn thấp', value: counts.low, tone: counts.low ? 'amber' : 'gray' },
           { label: 'Chờ kiểm', value: counts.qc, tone: counts.qc ? 'amber' : 'gray' },

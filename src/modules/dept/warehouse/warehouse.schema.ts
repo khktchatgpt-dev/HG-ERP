@@ -404,3 +404,31 @@ export const binUpdateSchema = z
   .refine((d) => d.name !== undefined || d.is_active !== undefined, {
     message: 'Không có gì để sửa',
   })
+
+/**
+ * Phiếu ĐIỀU CHUYỂN (DCK — 0193). Cất hàng và đổi trạng thái đi chung đường:
+ * cả hai đều là "ra khỏi chỗ cũ, vào chỗ mới".
+ */
+export const transferDocSchema = z.object({
+  reason: z.string().trim().max(500).optional().nullable(),
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z
+    .array(
+      z
+        .object({
+          material_id: z.string().uuid(),
+          qty: z.coerce.number().positive(),
+          from_bin_id: z.string().uuid(),
+          to_bin_id: z.string().uuid(),
+          stock_status: z.enum(['ok', 'qc', 'blocked']).default('ok'),
+          note: z.string().trim().max(500).optional().nullable(),
+        })
+        // Chặn ở BIÊN chứ không chỉ ở service: form có thể bỏ sót, API thì không.
+        .refine((l) => l.from_bin_id !== l.to_bin_id, {
+          message: 'Kệ đi và kệ đến trùng nhau',
+          path: ['to_bin_id'],
+        }),
+    )
+    .min(1, 'Phiếu chuyển phải có ít nhất 1 dòng')
+    .max(200),
+})

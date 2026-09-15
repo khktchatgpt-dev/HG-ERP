@@ -19,6 +19,8 @@ import {
   type BinKind,
   type Bin,
   binsRepo,
+  stockByBin,
+  materialLabels,
   type DocKind,
   type StocktakeLine,
 } from './stock.repo'
@@ -1535,4 +1537,159 @@ export const BIN_KIND_LABEL: Record<BinKind, string> = {
   receiving: 'Khu tiếp nhận',
   blocked: 'Kệ hàng khoá',
   scrap: 'Khu phế liệu',
+}
+
+/** Một chân của lệnh chuyển: lượng này, đang ở đâu, đi đâu. */
+export type TransferLine = {
+  material_id: string
+  qty: number
+  from_bin_id: string
+  to_bin_id: string
+  /** Trạng thái lượng đang mang. Chuyển kệ KHÔNG đổi trạng thái. */
+  stock_status: StockStatus
+  note?: string | null
+}
+
+/**
+ * ĐIỀU CHUYỂN — chuyển kệ (cất hàng) và đổi trạng thái đi chung một đường.
+ *
+ * MỘT LẦN CHUYỂN = HAI DÒNG SỔ nối bằng `transfer_group`: ra khỏi chỗ cũ, vào
+ * chỗ mới. Không có cột nào bị UPDATE tại chỗ — sổ chỉ cộng thêm, không sửa
+ * lùi, nên tổng sổ luôn cộng lại đúng bằng những gì đã xảy ra.
+ *
+ * CẤT HÀNG CHÍNH LÀ MỘT LẦN CHUYỂN từ khu tiếp nhận sang kệ thật. Nhờ vậy
+ * "chờ cất" không cần một cờ trạng thái nào để nuôi — nó là câu truy vấn "còn
+ * gì đang nằm ở khu `receiving`", và dòng tự rời hàng đợi khi được chuyển đi.
+ */
+export async function createTransferDoc(
+  user: User,
+  input: { lines: TransferLine[]; reason?: string | null; note?: string | null },
+): Promise<{ id: string; code: string }> {
+  await assertAction(user, 'warehouse.stock.write')
+  if (input.lines.length === 0) throw BadRequest('Phiếu chuyển phải có ít nhất 1 dòng')
+
+  const bad = input.lines.find((l) => l.from_bin_id === l.to_bin_id)
+  if (bad) throw BadRequest('Kệ đi và kệ đến trùng nhau — không có gì để chuyển')
+
+  /*
+   * KIỂM TỒN THEO ĐÚNG Ô (vật tư × kệ × trạng thái), không theo tổng của mã.
+   *
+   * Kiểm trên tổng thì chuyển được 500 cây ra khỏi một kệ chỉ có 200 — sổ vẫn
+   * cân ở mức mã nhưng kệ đó thành ÂM, và "hàng để đâu" hết là câu trả lời
+   * được. Đây đúng là thứ mà việc đưa nơi chốn xuống lượng sinh ra để tránh.
+   */
+  const rows = await stockByBin({
+    material_ids: [...new Set(input.lines.map((l) => l.material_id))],
+  })
+  const key = (m: string, b: string | null, st: StockStatus) => `${m}|${b ?? ''}|${st}`
+  const have = new Map<string, number>()
+  for (const r of rows) have.set(key(r.material_id, r.bin_id, r.stock_status), r.qty)
+
+  // Cộng dồn theo Ô trước khi so: hai dòng cùng lấy từ một kệ thì tổng mới là
+  // thứ phải đủ, so từng dòng riêng là lọt.
+  const want = new Map<string, number>()
+  for (const l of input.lines) {
+    const k = key(l.material_id, l.from_bin_id, l.stock_status)
+    want.set(k, (want.get(k) ?? 0) + l.qty)
+  }
+  const short: string[] = []
+  for (const [k, need] of want) {
+    const [materialId] = k.split('|')
+    const avail = have.get(k) ?? 0
+    if (need > avail + 1e-6) {
+      short.push(`${materialId}: cần ${need}, ô đó chỉ có ${avail}`)
+    }
+  }
+  if (short.length > 0) {
+    throw BadRequest(`Không đủ hàng ở kệ nguồn — ${short.join(' · ')}`)
+  }
+
+  const [code, warehouseId] = await Promise.all([
+    docsRepo.nextCode('DCK'),
+    warehousesRepo.mainId(),
+  ])
+  const doc = await docsRepo.insert({
+    code,
+    kind: 'transfer',
+    reason: input.reason ?? null,
+    note: input.note ?? null,
+    created_by: user.id,
+  })
+
+  await insertMovements(
+    input.lines.flatMap((l) => {
+      // Một uuid cho mỗi CẶP — ràng buộc DB bắt `ref_type='transfer'` phải có
+      // nó, và nó là thứ duy nhất nối hai chân lại khi tra ngược sau này.
+      const group = crypto.randomUUID()
+      const common = {
+        material_id: l.material_id,
+        qty: l.qty,
+        ref_type: 'transfer' as const,
+        stock_status: l.stock_status,
+        transfer_group: group,
+        note: l.note ?? null,
+        created_by: user.id,
+        doc_id: doc.id,
+        warehouse_id: warehouseId,
+      }
+      return [
+        { ...common, direction: 'out' as const, bin_id: l.from_bin_id },
+        { ...common, direction: 'in' as const, bin_id: l.to_bin_id },
+      ]
+    }),
+  )
+  return { id: doc.id, code: doc.code }
+}
+
+/**
+ * HÀNG ĐỢI "CHỜ CẤT" — còn gì đang nằm ở khu tiếp nhận.
+ *
+ * Không đọc một bảng trạng thái nào: đây là một CÂU TRUY VẤN trên chính sổ.
+ * Cất xong là dòng rời khu tiếp nhận và tự biến khỏi hàng đợi — không có cờ
+ * nào phải nhớ bật/tắt, nên cũng không có cờ nào lệch được với sự thật.
+ */
+export const putawayService = {
+  async list(user: User): Promise<{
+    rows: {
+      material_id: string
+      code: string
+      name: string
+      unit: string
+      qty: number
+      stock_status: StockStatus
+      /** Kệ gợi ý theo `shelf_location` của danh mục — điền sẵn, sửa được. */
+      suggest_bin_code: string | null
+    }[]
+    fromBinId: string | null
+    bins: Bin[]
+  }> {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    const warehouseId = await warehousesRepo.mainId()
+    const [recv, bins] = await Promise.all([
+      binsRepo.byKind(warehouseId, 'receiving'),
+      binsRepo.list(warehouseId, { active_only: true }),
+    ])
+    if (!recv) return { rows: [], fromBinId: null, bins }
+
+    const inRecv = (await stockByBin({ bin_kind: 'receiving' })).filter((r) => r.qty > 0)
+    if (inRecv.length === 0) return { rows: [], fromBinId: recv.id, bins }
+
+    const info = await materialLabels([...new Set(inRecv.map((r) => r.material_id))])
+    return {
+      rows: inRecv.map((r) => {
+        const m = info.get(r.material_id)
+        return {
+          material_id: r.material_id,
+          code: m?.code ?? r.material_id,
+          name: m?.name ?? '',
+          unit: m?.unit ?? '',
+          qty: r.qty,
+          stock_status: r.stock_status,
+          suggest_bin_code: m?.shelf ?? null,
+        }
+      }),
+      fromBinId: recv.id,
+      bins,
+    }
+  },
 }

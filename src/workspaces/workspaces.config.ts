@@ -290,6 +290,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         items: [
           { href: '/warehouse', label: 'Tổng quan', icon: 'home' },
           { href: '/warehouse/nhap', label: 'Nhập kho', icon: 'arrow-down-to-line' },
+          // Cất hàng (0193) — bước RIÊNG sau nhận, vì nhận và cất là hai lần
+          // đi lại, hai thời điểm, có khi hai người. Đứng ngay sau Nhập kho vì
+          // đó là thứ tự hàng đi qua tay thủ kho.
+          { href: '/warehouse/cat-hang', label: 'Cất hàng', icon: 'container' },
           // Đơn NCC góc nhìn Kho (16/08): tra tiến độ về hàng theo ĐƠN/LSX +
           // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
           { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },

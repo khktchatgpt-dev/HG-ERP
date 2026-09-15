@@ -100,6 +100,18 @@ type Row = {
   qty: number | ''
   qty_rejected: number | ''
   qc_status: '' | 'pass' | 'partial' | 'fail'
+  /**
+   * TRẠNG THÁI CỦA LƯỢNG (0194) — Đạt / Chờ kiểm / Sai quy cách.
+   *
+   * Thay ô "QC" (pass/partial/fail) làm điều khiển: ô cũ chỉ GHI NHẬN một nhận
+   * xét, không đổi được gì — hàng "không đạt" vẫn rơi vào tồn dùng được y như
+   * hàng đạt. Ô này quyết định lượng đi vào đâu, và `qc_status` được suy ra từ
+   * nó để dữ liệu cũ vẫn đọc được: đạt → pass, sai quy cách → fail.
+   *
+   * Không đụng `qty_rejected` (ô "QC loại"): nó có 1 dòng trong toàn DB nhưng
+   * 20+ chỗ ở Cung ứng đọc, gỡ là một lượt riêng.
+   */
+  stock_status: 'ok' | 'qc' | 'blocked'
   po_line_id: string | null
   /**
    * CÒN THIẾU của dòng PO (không phải SL đặt). Cột trên form vẫn ghi "Còn thiếu"
@@ -705,6 +717,7 @@ function ReceiptForm({
           qty,
           qty_rejected: '' as const,
           qc_status: '' as const,
+          stock_status: 'ok' as const,
           po_line_id: l.id,
           qty_missing: l.qty_missing,
           qty_ordered: l.qty_ordered,
@@ -786,6 +799,7 @@ function ReceiptForm({
           qty: '' as const, // SL TRẢ người kiểm gõ — không prefill (trả hết là ca hiếm)
           qty_rejected: '' as const,
           qc_status: '' as const,
+          stock_status: 'ok' as const,
           po_line_id: null,
           qty_missing: it.issued, // cột hiện "Đã cấp (tối đa trả)"
           qty_ordered: null,
@@ -817,6 +831,7 @@ function ReceiptForm({
         qty: '',
         qty_rejected: '',
         qc_status: '',
+        stock_status: 'ok',
         po_line_id: null,
         qty_missing: null,
         qty_ordered: null,
@@ -865,8 +880,27 @@ function ReceiptForm({
     }
   }
 
+  /**
+   * Dòng khai "Sai quy cách" mà chưa ghi lý do.
+   *
+   * Server chặn (schema + service), nhưng để server chặn LÀ ĐÃ MUỘN: người
+   * dùng bấm Ghi sổ rồi mới biết mình thiếu gì. Chặn ở đây kèm câu chỉ đích
+   * danh dòng nào — nút xám câm là lỗi UX, nút xám kèm câu chỉ đường mới là
+   * thiết kế.
+   */
+  const blockedNoReason = rows.filter((r) => r.stock_status === 'blocked' && !r.note.trim()) // prettier-ignore
+
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    if (blockedNoReason.length > 0) {
+      toast.error(
+        'Dòng khoá phải ghi lý do',
+        `Lý do đi theo lô suốt đời nó — Cung ứng đọc đúng câu đó để quyết trả NCC hay nhận giá giảm. Còn thiếu ở: ${blockedNoReason
+          .map((r) => r.material_code ?? r.material_id)
+          .join(', ')}`,
+      )
+      return
+    }
     const fd = new FormData(e.currentTarget)
     const shipment = shipments.find((s) => s.id === shipmentId) ?? null
     await post({
@@ -898,7 +932,16 @@ function ReceiptForm({
           qty: Number(r.qty),
           // Hoàn kho không có QC loại (server chặn) — ép 0 cho chắc tay.
           qty_rejected: isLsxReturn || r.qty_rejected === '' ? 0 : Number(r.qty_rejected),
-          qc_status: isLsxReturn ? undefined : r.qc_status || undefined,
+          // `qc_status` SUY RA từ trạng thái lượng — một điều khiển, hai cột
+          // luôn khớp nhau. Hoàn kho từ LSX không có khái niệm QC (service chặn).
+          qc_status: isLsxReturn
+            ? undefined
+            : r.stock_status === 'blocked'
+              ? 'fail'
+              : r.stock_status === 'ok'
+                ? 'pass'
+                : undefined,
+          stock_status: isLsxReturn ? undefined : r.stock_status,
           po_line_id: r.po_line_id,
           shelf_location: r.shelf_location.trim() || null,
           note: note || null,
@@ -1075,7 +1118,7 @@ function ReceiptForm({
               )}
               <th className="w-24 py-2 pr-2">{isLsxReturn ? 'SL trả về' : 'Thực nhập (đạt)'}</th>
               <th className="w-24 py-2 pr-2">QC loại</th>
-              <th className="w-24 py-2 pr-2">QC</th>
+              <th className="w-32 py-2 pr-2">Tình trạng</th>
               <th className="w-20 py-2 pr-2">Kệ</th>
               <th className="py-2 pr-2">Ghi chú</th>
               <th className="w-8 py-2" />
@@ -1213,23 +1256,44 @@ function ReceiptForm({
                       className={inputCls}
                     />
                   </td>
+                  {/*
+                    TÌNH TRẠNG quyết định lượng đi VÀO ĐÂU (0194), không phải
+                    một nhận xét ghi cho có. Ô "QC" cũ chỉ ghi nhận: hàng khai
+                    "không đạt" vẫn rơi vào tồn dùng được y như hàng đạt.
+                    "Sai quy cách" ĐƯA HÀNG VÀO SỔ ở trạng thái khoá — đếm được,
+                    có tuổi, có người phải quyết — thay cho việc từ chối nhận
+                    ngoài hệ thống rồi hàng nằm ngoài sân mà sổ không biết.
+                  */}
                   <td className="py-1.5 pr-2">
                     <select
-                      value={r.qc_status}
+                      value={r.stock_status}
                       onChange={(e) =>
                         setRows((rs) =>
                           rs.map((x, idx) =>
-                            idx === i ? { ...x, qc_status: e.target.value as Row['qc_status'] } : x,
+                            idx === i
+                              ? { ...x, stock_status: e.target.value as Row['stock_status'] }
+                              : x,
                           ),
                         )
                       }
                       className={inputCls}
+                      title={
+                        r.stock_status === 'blocked'
+                          ? 'Hàng vào sổ ở trạng thái KHOÁ — không tính vào tồn dùng được, và bắt buộc ghi lý do'
+                          : r.stock_status === 'qc'
+                            ? 'Hàng vào sổ nhưng CHƯA được phép dùng cho tới khi có người kiểm'
+                            : undefined
+                      }
                     >
-                      <option value="">—</option>
-                      <option value="pass">Đạt</option>
-                      <option value="partial">Đạt 1 phần</option>
-                      <option value="fail">Không đạt</option>
+                      <option value="ok">Đạt</option>
+                      <option value="qc">Chờ kiểm</option>
+                      <option value="blocked">Sai quy cách</option>
                     </select>
+                    {r.stock_status === 'blocked' && !r.note.trim() && (
+                      <div className="mt-0.5 text-[11px] text-[var(--stop)]">
+                        Ghi lý do ở cột Ghi chú
+                      </div>
+                    )}
                   </td>
                   <td className="py-1.5 pr-2">
                     <input
@@ -1354,6 +1418,7 @@ function IssueForm({
             qty: n.qty_remaining, // gợi ý = còn phải xuất theo BOM
             qty_rejected: '',
             qc_status: '' as const,
+          stock_status: 'ok' as const,
             po_line_id: null,
             // K5: nhớ "còn phải cấp" để cảnh báo khi người gõ vượt (không chặn).
             qty_missing: n.qty_remaining,
@@ -1383,6 +1448,7 @@ function IssueForm({
         qty: '',
         qty_rejected: '',
         qc_status: '',
+        stock_status: 'ok',
         po_line_id: null,
         qty_missing: null,
         qty_ordered: null,
