@@ -3870,6 +3870,7 @@ export type Database = {
           type: string | null
           updated_at: string
           updated_by: string | null
+          vat_rate: number | null
           warehouse_address: string | null
           warranty_policy: string | null
           website: string | null
@@ -3925,6 +3926,7 @@ export type Database = {
           type?: string | null
           updated_at?: string
           updated_by?: string | null
+          vat_rate?: number | null
           warehouse_address?: string | null
           warranty_policy?: string | null
           website?: string | null
@@ -3980,6 +3982,7 @@ export type Database = {
           type?: string | null
           updated_at?: string
           updated_by?: string | null
+          vat_rate?: number | null
           warehouse_address?: string | null
           warranty_policy?: string | null
           website?: string | null

@@ -94,6 +94,7 @@ export default async function EditPoPage({
         name: s.name,
         rating: s.rating,
         lead_time_days: s.lead_time_days,
+        vat_rate: s.vat_rate,
         payment_terms: s.payment_terms,
         address: s.address,
         tax_no: s.tax_no,
