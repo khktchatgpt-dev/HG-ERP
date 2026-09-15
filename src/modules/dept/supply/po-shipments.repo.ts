@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { shipmentWaitingReceipt } from '@/lib/po-shipments'
 
 /**
  * ĐỢT GIAO của đơn đặt vật tư (0152 — plan-po-giao-nhan GĐ1).
@@ -187,8 +188,16 @@ export const poShipmentsRepo = {
         supplier: { name: string } | { name: string }[] | null
       } | null
     }
+    /*
+      LỌC BẰNG LUẬT DÙNG CHUNG (`shipmentWaitingReceipt`), không tự chế.
+
+      Bản cũ chỉ loại đơn ĐÃ HUỶ, trong khi form lập phiếu lại chỉ nạp đơn CHƯA
+      VỀ ĐỦ — hai luật khác nhau cho cùng một câu hỏi. Hệ quả đo được: đơn
+      02/26HG/BT đã VỀ ĐỦ mà 4 đợt `planned` bỏ quên vẫn nằm trong danh sách, ba
+      lô còn bị tô "quá hẹn", và bấm Lập phiếu nhập từ đó là vào ngõ cụt.
+    */
     const heads = ((data ?? []) as unknown as Raw[]).filter(
-      (r) => r.po && r.po.status !== 'cancelled',
+      (r) => r.po && shipmentWaitingReceipt(r.po.status, r.status),
     )
     const counts = new Map<string, { line_count: number; total_qty: number }>()
     if (heads.length > 0) {

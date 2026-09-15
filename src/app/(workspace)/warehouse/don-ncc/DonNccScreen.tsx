@@ -19,6 +19,7 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { poStatusLabel, poStatusTone } from '@/lib/po-status'
+import { tomTatLenh } from './tom-tat-lenh'
 
 type PoRow = {
   id: string
@@ -412,57 +413,38 @@ export function DonNccScreen({
                   {/* TÓM TẮT CẢ LỆNH, không chỉ đếm đơn.
 
                       Kho mở màn này để hỏi "hàng của lệnh này về tới đâu, ngày
-                      nào" — "3 đơn" không trả lời câu nào trong hai câu đó, phải
-                      bung từng đơn ra cộng nhẩm. Ba con số dưới đây trả lời
-                      thẳng: còn bao nhiêu dòng chưa về, lô gần nhất ngày nào, và
-                      có lô nào quá hẹn không. */}
+                      nào" — "3 đơn" không trả lời câu nào trong hai câu đó,
+                      phải bung từng đơn ra cộng nhẩm.
+
+                      Phép đếm nằm ở `tom-tat-lenh.ts` (thuần, 11 test): đếm sai
+                      thì cả màn nói dối mà không ai biết, và luật "đợt giao
+                      trước, hạn đơn sau" phải đọc được ở MỘT chỗ. */}
                   {(() => {
-                    const con = rows.reduce(
-                      (a, r) => a + Math.max(0, r.lines_total - r.lines_done),
-                      0,
-                    )
-                    const ngay = rows
-                      .map((r) => r.next_shipment?.date ?? r.expected_at?.slice(0, 10) ?? null)
-                      .filter((d): d is string => !!d)
-                      .sort()
-                    const som = ngay[0] ?? null
-                    const tre = ngay.filter((d) => d < today).length
+                    const t = tomTatLenh(rows, today)
                     return (
                       <>
                         <span className="text-muted-foreground text-xs">
-                          {rows.length} đơn
+                          {t.don} đơn
                         </span>
                         <span className="text-muted-foreground text-xs">
                           ·{' '}
-                          {con > 0 ? (
+                          {t.conLai > 0 ? (
                             <>
-                              còn <b className="t-data">{con}</b> dòng chưa về
+                              còn <b className="t-data">{t.conLai}</b> dòng chưa về
                             </>
                           ) : (
                             'đã về đủ'
                           )}
                         </span>
-                        {som && (
+                        {t.ganNhat && (
                           <span className="text-muted-foreground text-xs">
-                            · gần nhất <span className="t-data">{dmy(som)}</span>
+                            · gần nhất <span className="t-data">{dmy(t.ganNhat)}</span>
                           </span>
                         )}
-                        {tre > 0 && (
-                          <Badge tone="red">
-                            {tre} lô quá hẹn
-                          </Badge>
-                        )}
+                        {t.quaHen > 0 && <Badge tone="red">{t.quaHen} lô quá hẹn</Badge>}
                       </>
                     )
                   })()}
-                  {lsx !== 'Ngoài LSX' && (
-                    <Link
-                      href="/warehouse/xuat"
-                      className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
-                    >
-                      Cấp vật tư lệnh này →
-                    </Link>
-                  )}
                 </header>
                 <div className="divide-border/60 divide-y">
                   {rows.map((p) => rowOf(p, `${lsx}-`))}

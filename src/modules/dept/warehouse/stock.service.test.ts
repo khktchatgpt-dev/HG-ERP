@@ -143,6 +143,72 @@ beforeEach(() => {
 })
 
 describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
+  /*
+    TỒN SAU KHI GHI (0193) — trả lời câu người giữ kho hỏi ngay sau khi bấm:
+    "tồn đã cộng vào chưa?". Số này đọc lại từ sổ SAU khi ghi movement, nên nó
+    vừa là câu trả lời vừa là phép kiểm. Ba thứ dễ sai, canh cả ba.
+  */
+  describe('stock_after — tồn sau khi ghi phiếu', () => {
+    it('trả về tồn ĐỌC LẠI TỪ SỔ, không phải số tự cộng nhẩm', async () => {
+      vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0090')
+      vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
+      vi.mocked(stockInfoMany).mockResolvedValue([
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 2400, min_stock: 0 }, // prettier-ignore
+      ])
+
+      const r = await stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm1', qty: 600, po_line_id: 'pl1' }],
+      })
+
+      expect(r.stock_after).toEqual([
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 2400, received: 600 }, // prettier-ignore
+      ])
+    })
+
+    it('MỘT VẬT TƯ NHIỀU DÒNG thì cộng lại — không bày hai dòng cùng mã', async () => {
+      vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0091')
+      vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
+      vi.mocked(stockInfoMany).mockResolvedValue([
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 500, min_stock: 0 }, // prettier-ignore
+      ])
+      // Cùng một MÃ VẬT TƯ nằm ở hai dòng đơn khác nhau — ca thật khi Cung ứng
+      // tách dòng theo lệnh sản xuất.
+      vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+        { id: 'pl1', po_id: 'po1', material_id: 'm1', qty_ordered: 1000, qty_received: 0, qty_rejected: 0, qty_missing: 1000, qty_open: 1000, closed_short_at: null, over_tolerance_pct: 0, material_code: 'VT-001', material_name: 'Nút chân', material_unit: 'Cái' }, // prettier-ignore
+        { id: 'pl2', po_id: 'po1', material_id: 'm1', qty_ordered: 1000, qty_received: 0, qty_rejected: 0, qty_missing: 1000, qty_open: 1000, closed_short_at: null, over_tolerance_pct: 0, material_code: 'VT-001', material_name: 'Nút chân', material_unit: 'Cái' }, // prettier-ignore
+      ] as never)
+
+      const r = await stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [
+          { material_id: 'm1', qty: 200, po_line_id: 'pl1' },
+          { material_id: 'm1', qty: 300, po_line_id: 'pl2' },
+        ],
+      })
+
+      expect(r.stock_after).toHaveLength(1)
+      expect(r.stock_after[0].received).toBe(500)
+    })
+
+    it('QC LOẠI không cộng vào "vừa nhập" — nó không vào tồn (BR-10)', async () => {
+      vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0092')
+      vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
+      vi.mocked(stockInfoMany).mockResolvedValue([
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 60, min_stock: 0 }, // prettier-ignore
+      ])
+
+      const r = await stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [{ material_id: 'm1', qty: 60, qty_rejected: 5, po_line_id: 'pl1' }],
+      })
+
+      // 60 đạt vào tồn; 5 loại tính là "NCC đã giao" nhưng KHÔNG vào sổ tồn.
+      expect(r.stock_after[0].received).toBe(60)
+      expect(r.stock_after[0].on_hand).toBe(60)
+    })
+  })
+
   it('nhập theo PO: gắn po_line_id, ref_type=po, tính lại trạng thái PO', async () => {
     vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0001')
     vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('received')

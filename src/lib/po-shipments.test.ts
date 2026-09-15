@@ -8,6 +8,7 @@ import {
   validateShipments,
   type PoLineForShipment,
   type ShipmentInput,
+  shipmentWaitingReceipt,
 } from './po-shipments'
 
 const LINES: PoLineForShipment[] = [
@@ -312,5 +313,35 @@ describe('mapDraftShipments — đợt khai trong form (dòng chưa có id)', ()
       ids,
     )
     expect(r[0].lines).toEqual([{ po_line_id: 'line-a', qty: 150 }])
+  })
+})
+
+describe('shipmentWaitingReceipt — đợt còn chờ Kho nhận', () => {
+  it('đơn đang chạy + đợt còn sống thì chờ nhận', () => {
+    for (const po of ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']) {
+      for (const dot of ['planned', 'arrived']) {
+        expect(shipmentWaitingReceipt(po, dot), `${po}/${dot}`).toBe(true)
+      }
+    }
+  })
+
+  it('CHÍNH LỖI CŨ: đơn ĐÃ VỀ ĐỦ thì đợt bỏ quên không còn chờ nhận nữa', () => {
+    // 02/26HG/BT: status 'received' mà vẫn còn 4 đợt 'planned'.
+    expect(shipmentWaitingReceipt('received', 'planned')).toBe(false)
+    expect(shipmentWaitingReceipt('received', 'arrived')).toBe(false)
+  })
+
+  it('đơn huỷ thì thôi — không ai chờ hàng của đơn đã huỷ', () => {
+    expect(shipmentWaitingReceipt('cancelled', 'planned')).toBe(false)
+  })
+
+  it('đơn chưa gửi NCC thì chưa có gì để chờ', () => {
+    expect(shipmentWaitingReceipt('draft', 'planned')).toBe(false)
+    expect(shipmentWaitingReceipt('pending_approval', 'planned')).toBe(false)
+  })
+
+  it('đợt đã nhận xong / đã huỷ thì không chờ, dù đơn còn chạy', () => {
+    expect(shipmentWaitingReceipt('partial', 'received')).toBe(false)
+    expect(shipmentWaitingReceipt('partial', 'cancelled')).toBe(false)
   })
 })
