@@ -281,19 +281,26 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'amber',
     logoText: 'KH',
     /*
-     * TẠM TẮT 16/09/2026 theo lệnh chủ dự án: màn khu Kho đã gỡ khỏi mã
-     * (xuất/nhập/tồn/danh mục sẽ dựng lại). `ready: false` nên login KHÔNG
-     * tự đưa ai vào đây nữa — xem chú ở khai báo `ready`.
+     * DỰNG LẠI TỪNG MÀN MỘT (từ 16/09/2026, `docs/kho-buoc-1-nhap-kho.md`).
+     * Khu Kho bị gỡ sạch màn ngày 16/09 (commit 20033fb) sau đợt dựng 31 màn
+     * trong 10 giờ mà không ai nghiệm thu giữa chừng. Lần này mỗi bước một
+     * màn, chạy thật xong mới thêm mục kế: Nhập → Xuất → Tồn → Danh mục.
      *
-     * GIỮ NGUYÊN: module `dept/warehouse`, ba nhóm API dùng chung
-     * (materials · material-groups · material-taxonomy) và toàn bộ dữ liệu
-     * DB. Khu Mua hàng / Kế hoạch / Thư viện SP gọi thẳng service nên không
-     * bị ảnh hưởng.
+     * `home` trỏ thẳng vào màn đầu tiên: KHÔNG dựng trang chủ khu Kho ở bước
+     * này — bàn làm việc là màn phụ, dựng sau khi bốn màn chính chạy thật.
+     * Mục nav chỉ có thứ ĐÃ CÓ route; để mục trỏ vào route chưa dựng là dẫn
+     * người dùng vào 404.
      */
-    ready: false,
-    // Menu rỗng: mọi route /warehouse/* đã gỡ, để lại mục nav là trỏ vào 404.
-    // Dựng lại màn nào thì thêm lại mục đó.
-    sections: [],
+    ready: true,
+    home: '/warehouse/nhap',
+    sections: [
+      {
+        heading: 'Nghiệp vụ',
+        items: [
+          { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
+        ],
+      },
+    ],
   },
 
   technical: {
