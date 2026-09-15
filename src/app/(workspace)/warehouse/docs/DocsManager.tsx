@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
@@ -125,6 +127,23 @@ type Row = {
   note: string
 }
 
+/**
+ * TỒN SAU KHI GHI PHIẾU — trả từ route nhập kho (0193).
+ *
+ * `warehouse_stock` là VIEW cộng từ phiếu, không phải bảng ai gõ tay. Người giữ
+ * kho không có lý do gì để TIN là nó tự cộng, nên bấm xong họ hỏi ngay "tồn vào
+ * chưa?" (chủ dự án 15/09/2026). Số này đọc lại SAU khi ghi movement, nên nó là
+ * tồn thật — sai thì hiện ra ngay tại đây chứ không im lặng.
+ */
+export type StockAfter = {
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  on_hand: number
+  received: number
+}
+
 /** Đợt giao còn nhận được của PO (0153) — từ /api/dept/supply/pos/[id]/shipments. */
 type ReceiptShipment = {
   id: string
@@ -230,6 +249,12 @@ export function DocsManager({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [openReceipt, setOpenReceipt] = useState(canEdit && initial?.form === 'receipt')
+  /** Bảng "đã vào sổ" sau khi lập phiếu — đứng yên tới khi người dùng đóng. */
+  const [receiptDone, setReceiptDone] = useState<{
+    code: string
+    poStatus: string | null
+    stockAfter: StockAfter[]
+  } | null>(null)
   const [openIssue, setOpenIssue] = useState(canEdit && initial?.form === 'issue')
   const [openReturn, setOpenReturn] = useState(canEdit && initial?.form === 'return')
   const [viewing, setViewing] = useState<{
@@ -487,8 +512,14 @@ export function DocsManager({
             lsxs={lsxs}
             initialPoId={initial?.form === 'receipt' ? initial.poId : null}
             initialShipmentId={initial?.form === 'receipt' ? initial.shipmentId : null}
-            onDone={(code, poStatus) => {
+            onDone={(code, poStatus, stockAfter) => {
               setOpenReceipt(false)
+              /*
+                Toast vẫn giữ (nó là tín hiệu "xong rồi"), nhưng toast TỰ TẮT —
+                không mang nổi thứ người giữ kho cần đọc kỹ: tồn của từng mã
+                vừa nhập giờ là bao nhiêu. Nên mở thêm một bảng ĐỨNG YÊN, họ
+                đóng khi nào đọc xong.
+              */
               toast.success(
                 `Đã lập ${code}`,
                 poStatus === 'received'
@@ -497,9 +528,84 @@ export function DocsManager({
                     ? 'Đơn đặt về một phần'
                     : undefined,
               )
+              setReceiptDone({ code, poStatus, stockAfter })
               router.refresh()
             }}
           />
+        )}
+      </Modal>
+
+      {/* KẾT QUẢ NHẬP KHO — trả lời "tồn đã cộng vào chưa?".
+
+          Đây là câu người giữ kho hỏi ngay sau khi bấm, và tới 15/09/2026 hệ
+          thống không trả lời: chỉ có một toast "Đã lập PNK-…" rồi tự tắt. Tồn
+          là VIEW cộng từ phiếu nên không ai gõ số tồn — nhưng chính vì thế
+          người dùng cũng không có cách nào tự kiểm, trừ khi mở màn Tồn kho tra
+          từng mã.
+
+          Bảng này đọc tồn SAU khi ghi, nên nó vừa là câu trả lời vừa là phép
+          kiểm: số ở đây sai thì lộ ra ngay tại chỗ. */}
+      <Modal
+        open={!!receiptDone}
+        onClose={() => setReceiptDone(null)}
+        title={receiptDone ? `Đã vào sổ · ${receiptDone.code}` : ''}
+        maxWidth="sm:max-w-2xl"
+      >
+        {receiptDone && (
+          <div className="space-y-3">
+            <p className="text-muted-foreground text-[13px]">
+              Phiếu đã ghi vào sổ kho.{' '}
+              {receiptDone.poStatus === 'received'
+                ? 'Đơn đặt chuyển sang ĐÃ VỀ ĐỦ.'
+                : receiptDone.poStatus === 'partial'
+                  ? 'Đơn đặt còn dòng chưa về — vẫn ở VỀ MỘT PHẦN.'
+                  : ''}
+            </p>
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full text-[13px]">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Vật tư</th>
+                    <th className="px-3 py-2 text-right font-medium">Vừa nhập</th>
+                    <th className="px-3 py-2 text-right font-medium">Tồn sau nhập</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receiptDone.stockAfter.map((r) => (
+                    <tr key={r.material_id} className="border-t">
+                      <td className="px-3 py-1.5">
+                        <span className="t-data text-muted-foreground mr-1.5 text-[11px]">
+                          {r.code}
+                        </span>
+                        {r.name}
+                      </td>
+                      <td className="t-data px-3 py-1.5 text-right">
+                        +{r.received.toLocaleString('vi-VN')} {r.unit}
+                      </td>
+                      <td className="t-data px-3 py-1.5 text-right font-semibold">
+                        {r.on_hand.toLocaleString('vi-VN')} {r.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Link
+                href="/warehouse/stock"
+                className="border-input hover:bg-accent inline-flex items-center rounded-md border px-3 py-1.5 text-[13px]"
+              >
+                Mở sổ tồn kho
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReceiptDone(null)}
+                className="bg-primary text-primary-foreground inline-flex items-center rounded-md px-3 py-1.5 text-[13px] font-medium"
+              >
+                Xong
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -669,7 +775,7 @@ function ReceiptForm({
   /** Deep-link: chọn sẵn đơn (+ đợt) khi mở từ màn "Nhập kho · Chờ nhận". */
   initialPoId?: string | null
   initialShipmentId?: string | null
-  onDone: (code: string, poStatus: string | null) => void
+  onDone: (code: string, poStatus: string | null, stockAfter: StockAfter[]) => void
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -848,12 +954,13 @@ function ReceiptForm({
   async function post(body: Record<string, unknown>) {
     setBusy(true)
     try {
-      const result = await api<{ code: string; po_status: string | null }>(
-        '/api/dept/warehouse/docs/receipt',
-        { method: 'POST', body },
-      )
+      const result = await api<{
+        code: string
+        po_status: string | null
+        stock_after: StockAfter[]
+      }>('/api/dept/warehouse/docs/receipt', { method: 'POST', body })
       setConflict(null)
-      onDone(result.code, result.po_status)
+      onDone(result.code, result.po_status, result.stock_after ?? [])
     } catch (err) {
       if (err instanceof ApiError && err.code === 'OVER_RECEIPT') {
         setConflict({ message: err.message, body })

@@ -429,7 +429,20 @@ export const stockService = {
         note?: string | null
       }[]
     },
-  ): Promise<{ id: string; code: string; po_status: string | null }> {
+  ): Promise<{
+    id: string
+    code: string
+    po_status: string | null
+    /** Tồn SAU KHI ghi phiếu, đúng những vật tư vừa nhập. */
+    stock_after: {
+      material_id: string
+      code: string
+      name: string
+      unit: string
+      on_hand: number
+      received: number
+    }[]
+  }> {
     await assertAction(user, 'warehouse.stock.write')
     if (input.po_id && input.production_order_id) {
       throw BadRequest(
@@ -635,7 +648,36 @@ export const stockService = {
       created_by: user.id,
       notify_ids: [...notifyIds],
     })
-    return { id: doc.id, code: doc.code, po_status: poStatus }
+    /*
+      ĐỌC LẠI TỒN SAU KHI GHI — để màn lập phiếu TRẢ LỜI ĐƯỢC câu người giữ kho
+      hỏi ngay sau khi bấm: "tồn đã cộng vào chưa?".
+
+      Trước đây route chỉ trả mã phiếu, nên giao diện báo "Đã lập PNK-…" rồi
+      thôi. Người dùng không có cách nào biết số đã vào sổ trừ khi tự đi mở màn
+      Tồn kho tra từng mã — và vì `warehouse_stock` là VIEW cộng từ phiếu, họ
+      cũng không có lý do gì để tin là nó tự cộng (chủ dự án hỏi đúng câu này
+      ngày 15/09/2026).
+
+      Đọc SAU khi `insertMovements` xong nên con số này là tồn thật, không phải
+      số mình tự cộng nhẩm rồi đoán — nếu view có sai thì nó hiện ra ở đây chứ
+      không im lặng.
+    */
+    const idsNhap = [...new Set(input.lines.map((l) => l.material_id))]
+    const nhan = new Map<string, number>()
+    for (const l of input.lines) {
+      nhan.set(l.material_id, (nhan.get(l.material_id) ?? 0) + l.qty)
+    }
+    const ton = await stockInfoMany(idsNhap)
+    const stock_after = ton.map((r) => ({
+      material_id: r.material_id,
+      code: r.code,
+      name: r.name,
+      unit: r.unit,
+      on_hand: r.on_hand,
+      received: nhan.get(r.material_id) ?? 0,
+    }))
+
+    return { id: doc.id, code: doc.code, po_status: poStatus, stock_after }
   },
 
   /**

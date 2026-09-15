@@ -444,7 +444,7 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
   it('FR-WMS-08: tồn rơi dưới min sau xuất → emit warehouse.stock.low cho admin/manager + phòng Cung ứng', async () => {
     vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
     vi.mocked(stockInfoMany).mockResolvedValue([
-      { material_id: 'm1', code: 'VT-01', name: 'Nhôm', on_hand: 3, min_stock: 20 },
+      { material_id: 'm1', code: 'VT-01', name: 'Nhôm', unit: 'Kg', on_hand: 3, min_stock: 20 },
     ])
     vi.mocked(departmentsRepo.list).mockResolvedValue([
       { id: 'd-sup', name: 'Cung Ứng - Mua Hàng' },

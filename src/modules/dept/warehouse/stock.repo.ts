@@ -563,6 +563,8 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     material_id: string
     code: string
     name: string
+    /** ĐVT — để chỗ gọi in "còn 2.400 Cái" mà không phải tra thêm bảng vật tư. */
+    unit: string
     on_hand: number
     min_stock: number
   }[]
@@ -570,13 +572,14 @@ export async function stockInfoMany(materialIds: string[]): Promise<
   if (materialIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_stock')
-    .select('material_id, code, name, on_hand, min_stock')
+    .select('material_id, code, name, unit, on_hand, min_stock')
     .in('material_id', materialIds)
   return (
     (data as
       | {
           material_id: string
           code: string
+          unit: string
           name: string
           on_hand: unknown
           min_stock: unknown
@@ -586,6 +589,7 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     material_id: r.material_id,
     code: r.code,
     name: r.name,
+    unit: r.unit ?? '',
     on_hand: num(r.on_hand),
     min_stock: num(r.min_stock),
   }))
