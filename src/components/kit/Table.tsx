@@ -287,7 +287,19 @@ export function Chip({
       )}
     >
       {children}
-      {count != null && <span className="num text-[11px] opacity-80">{count}</span>}
+      {/*
+        NHÓM NGHÌN CHO SỐ ĐẾM (15/09/2026). Lộ ra ở màn mẫu Tồn kho của phân
+        hệ Kho: rổ "Cả danh mục" đếm 13.229 mã và chip in ra `13229` — chuỗi
+        năm chữ số liền không đọc được bằng mắt lướt, đúng thứ chip sinh ra để
+        làm. Chip khác trong hệ đang đếm 1–68 nên lỗi này ẩn cho tới lúc có
+        một rổ lớn. Không dùng `showNum` vì nó trả chuỗi rỗng cho 0, mà chip
+        đếm 0 phải hiện số 0 — "rổ này trống" cũng là một câu trả lời.
+      */}
+      {count != null && (
+        <span className="num text-[11px] opacity-80">
+          {count.toLocaleString('vi-VN')}
+        </span>
+      )}
     </button>
   )
 }
