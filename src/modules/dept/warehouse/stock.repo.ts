@@ -44,6 +44,36 @@ function num(v: unknown): number {
   return Number(v ?? 0)
 }
 
+/**
+ * RỔ của màn Tồn kho (Đợt 1 — `docs/thiet-ke-kho.md` §6).
+ *
+ * `has` là MẶC ĐỊNH, không phải `all`: danh mục 13.229 mã nhưng tập làm việc
+ * thật là số mã đang có tồn. Mặc định `all` thì mỗi lần mở màn là kéo cả danh
+ * mục xuống trình duyệt để lọc bằng tay — đúng lối mòn "màn hình = một cái
+ * bảng" mà bản thiết kế chỉ ra.
+ *
+ * `short` KHÔNG lọc được bằng SQL: nó cần `reserved` (nhu cầu LSX đã cam kết),
+ * không nằm trong view. Service xử riêng — xem `listStockPage`.
+ */
+export type StockBucket = 'has' | 'low' | 'out' | 'short' | 'all'
+
+function rowOf(r: Record<string, unknown>): StockRow {
+  return {
+    material_id: r.material_id as string,
+    code: r.code as string,
+    name: r.name as string,
+    unit: r.unit as string,
+    group_name: (r.group_name as string | null) ?? null,
+    min_stock: num(r.min_stock),
+    shelf_location: (r.shelf_location as string | null) ?? null,
+    is_active: r.is_active as boolean,
+    on_hand: num(r.on_hand),
+    // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với sweep
+    // quét sáng + notifyLowStock, và là cột SQL lọc được.
+    is_low: Boolean(r.is_low),
+  }
+}
+
 export const stockRepo = {
   async list(filter: {
     q?: string
@@ -74,25 +104,83 @@ export const stockRepo = {
       data.push(...rows)
       if (rows.length < 1000) break
     }
-    const rows = data.map((r) => {
-      const on_hand = num(r.on_hand)
-      const min_stock = num(r.min_stock)
-      return {
-        material_id: r.material_id as string,
-        code: r.code as string,
-        name: r.name as string,
-        unit: r.unit as string,
-        group_name: (r.group_name as string | null) ?? null,
-        min_stock,
-        shelf_location: (r.shelf_location as string | null) ?? null,
-        is_active: r.is_active as boolean,
-        on_hand,
-        // Cột view (0160): min_stock > 0 && on_hand < min — đồng nhất với
-        // sweep quét sáng + notifyLowStock, và là cột SQL đã lọc ở trên.
-        is_low: Boolean(r.is_low),
-      } satisfies StockRow
-    })
-    return rows
+    return data.map(rowOf)
+  },
+
+  /**
+   * MỘT TRANG tồn kho — lọc, xếp và ĐẾM Ở SERVER (Đợt 1).
+   *
+   * Thay `list()` cho màn Tồn kho. `list()` giữ nguyên cho các nơi thật sự cần
+   * quét hết (mua bù tồn, bảng tổng hợp, xuất Excel) — chúng chạy nền, không
+   * phải là màn người dùng mở 20 lần/ngày.
+   *
+   * TÌM theo `code`/`name` CÓ DẤU: view `warehouse_stock` không có cột
+   * `search_text` không dấu như bảng `warehouse_materials`. Gõ "vit" không ra
+   * "vít". Vá được bằng cách thêm cột vào view — để Đợt 2 cùng lượt sửa view
+   * chứ không đẻ một migration chỉ cho một cột.
+   */
+  async page(filter: {
+    q?: string
+    group_name?: string
+    bucket: Exclude<StockBucket, 'short'>
+    ids?: string[]
+    page: number
+    page_size: number
+  }): Promise<{ rows: StockRow[]; total: number }> {
+    let q = db()
+      .from('warehouse_stock')
+      .select(STOCK_COLS, { count: 'exact' })
+      .eq('is_active', true)
+      .order('code', { ascending: true })
+
+    if (filter.group_name) q = q.eq('group_name', filter.group_name)
+    if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+    if (filter.ids) q = q.in('material_id', filter.ids)
+    if (filter.bucket === 'has') q = q.gt('on_hand', 0)
+    else if (filter.bucket === 'low') q = q.eq('is_low', true)
+    else if (filter.bucket === 'out') q = q.eq('on_hand', 0)
+
+    const from = (filter.page - 1) * filter.page_size
+    const { data, count } = await q.range(from, from + filter.page_size - 1)
+    return {
+      rows: ((data as Record<string, unknown>[] | null) ?? []).map(rowOf),
+      total: count ?? 0,
+    }
+  },
+
+  /**
+   * Đếm từng rổ — CÙNG bộ lọc q/group với `page`.
+   *
+   * Hai nơi lệch nhau là chip nói 5 mà mở ra thấy 7, và nguyên tắc "con số là
+   * một lời hứa" hỏng ngay ở màn hay mở nhất của Kho.
+   */
+  async counts(filter: { q?: string; group_name?: string }): Promise<{
+    all: number
+    has: number
+    low: number
+    out: number
+  }> {
+    const base = () => {
+      let q = db()
+        .from('warehouse_stock')
+        .select('material_id', { count: 'exact', head: true })
+        .eq('is_active', true)
+      if (filter.group_name) q = q.eq('group_name', filter.group_name)
+      if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+      return q
+    }
+    const [all, has, low, out] = await Promise.all([
+      base(),
+      base().gt('on_hand', 0),
+      base().eq('is_low', true),
+      base().eq('on_hand', 0),
+    ])
+    return {
+      all: all.count ?? 0,
+      has: has.count ?? 0,
+      low: low.count ?? 0,
+      out: out.count ?? 0,
+    }
   },
 
   /** Tồn hiện tại của 1 vật tư (để kiểm khi xuất). */

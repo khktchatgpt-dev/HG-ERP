@@ -34,11 +34,14 @@ const num = (n: number) => n.toLocaleString('vi-VN')
  */
 export function StocktakeScreen({
   stock,
+  scoped,
   groups,
   initialQ = '',
   initialGroup = 'all',
 }: {
   stock: Stock[]
+  /** Đã chọn phạm vi chưa. Chưa chọn thì `stock` rỗng CÓ CHỦ Ý, không phải lỗi. */
+  scoped: boolean
   /** Đủ 14 nhóm từ taxonomy — lấy từ trang kết quả thì lọc xong hết đường chuyển nhóm. */
   groups: string[]
   initialQ?: string
@@ -213,189 +216,235 @@ export function StocktakeScreen({
         ]}
       />
 
-      <div>
-        <Toolbar
-          left={
-            <>
-              <ToolbarInput
-                value={q}
-                onChange={setQ}
-                onEnter={() => pushFilter({ q })}
-                placeholder="Tìm mã, tên… (Enter — tìm cả 13k mã)"
-                icon="⌕"
-                className="w-64"
-              />
-              <ToolbarSelect
-                value={groupFilter}
-                onChange={(v) => {
-                  setGroupFilter(v)
-                  pushFilter({ group: v })
+      {/*
+        CHỌN PHẠM VI TRƯỚC — màn không nạp dòng nào cho tới khi có phạm vi.
+        Không phải một trạng thái rỗng "cho đẹp": nó thay cho một biểu mẫu
+        13.229 dòng, và là thứ đã đẻ ra biên bản xoá sạch kho về 0.
+      */}
+      {!scoped && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+          <h2 className="text-base font-semibold">Chọn phạm vi trước khi đếm</h2>
+          <p className="mt-1 max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
+            Danh mục có 13.229 mã. Một đợt kiểm kê thật luôn có phạm vi — một nhóm hàng
+            hoặc một nhóm mã cụ thể — vì người đếm phải đi tới chỗ hàng nằm. Chọn nhóm bên
+            dưới, hoặc gõ mã/tên rồi Enter.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {groups.map((g) => (
+              <button
+                key={g}
+                className={btnSecondary}
+                onClick={() => {
+                  setGroupFilter(g)
+                  pushFilter({ group: g })
                 }}
-                options={[
-                  { value: 'all', label: 'Mọi nhóm' },
-                  ...groups.map((g) => ({ value: g, label: g })),
-                ]}
-              />
-              {navigating && <Spinner size={14} />}
-              <ToolbarSelect
-                value={onlyCounted}
-                onChange={(v) => setOnlyCounted(v)}
-                options={[
-                  { value: 'all' as const, label: 'Tất cả dòng' },
-                  { value: 'counted' as const, label: 'Đã nhập đếm' },
-                  { value: 'diff' as const, label: 'Lệch sổ' },
-                ]}
-              />
-            </>
-          }
-          right={
-            <button type="button" onClick={fillFromSystem} className={btnSecondary}>
-              Điền theo sổ ({filtered.length} dòng lọc)
-            </button>
-          }
-        />
-
-        <div className="overflow-x-auto rounded-b-xl border border-t-0 border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon="▧"
-              title={stock.length === 0 ? 'Chưa có vật tư' : 'Không khớp bộ lọc'}
-              description={
-                stock.length === 0
-                  ? 'Thêm vật tư ở Danh mục vật tư trước.'
-                  : 'Thử điều chỉnh bộ lọc.'
-              }
+              >
+                {g}
+              </button>
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <ToolbarInput
+              value={q}
+              onChange={setQ}
+              onEnter={() => pushFilter({ q })}
+              placeholder="…hoặc gõ mã / tên rồi Enter"
+              icon="⌕"
+              className="w-72"
             />
-          ) : (
-            <table className="w-full min-w-[840px] text-[13px] tabular-nums">
-              <thead className="bg-zinc-50 dark:bg-zinc-900/50">
-                <tr className="text-left text-[10px] text-zinc-500 uppercase">
-                  <th className="min-w-[220px] py-2 pl-3">Vật tư</th>
-                  <th className="w-[90px] py-2 pr-2">Kệ</th>
-                  <th className="w-[110px] py-2 pr-2 text-right">Tồn sổ</th>
-                  <th className="w-[130px] py-2 pr-2 text-right">Đếm thực tế</th>
-                  <th className="w-[120px] py-2 pr-2 text-right">Chênh lệch</th>
-                  <th className="w-[180px] py-2 pr-3">Ghi chú dòng</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((s) => {
-                  const c = counts[s.material_id]
-                  const d = diffOf(s)
-                  return (
-                    <tr
-                      key={s.material_id}
-                      className="border-t border-zinc-100 dark:border-zinc-900"
-                    >
-                      <td className="py-1.5 pl-3">
-                        <div className="flex min-w-0 flex-col">
-                          <span className="font-mono text-xs text-zinc-400">
-                            {s.code}
-                          </span>
-                          <span className="truncate font-medium">{s.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-1.5 pr-2 font-mono text-xs text-zinc-500">
-                        {s.shelf_location ?? '—'}
-                      </td>
-                      <td className="py-1.5 pr-2 text-right font-medium">
-                        {num(s.on_hand)}{' '}
-                        <span className="text-xs font-normal text-zinc-400">
-                          {s.unit}
-                        </span>
-                      </td>
-                      <td className="py-1.5 pr-2">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={c?.counted ?? ''}
-                          onChange={(e) =>
-                            setCount(s.material_id, {
-                              counted:
-                                e.target.value === '' ? '' : Number(e.target.value),
-                            })
-                          }
-                          className={`${inputCls} text-right font-medium`}
-                          aria-label={`Đếm thực tế ${s.name}`}
-                        />
-                      </td>
-                      <td className="py-1.5 pr-2 text-right">
-                        {d === null ? (
-                          <span className="text-zinc-300 dark:text-zinc-600">—</span>
-                        ) : d === 0 ? (
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            khớp ✓
-                          </span>
-                        ) : (
-                          <span
-                            className={
-                              'font-semibold ' +
-                              (d > 0
-                                ? 'text-amber-600 dark:text-amber-500'
-                                : 'text-red-600 dark:text-red-400')
-                            }
-                          >
-                            {d > 0 ? `+${num(d)}` : num(d)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1.5 pr-3">
-                        <input
-                          value={c?.note ?? ''}
-                          maxLength={500}
-                          placeholder="lý do lệch…"
-                          onChange={(e) =>
-                            setCount(s.material_id, { note: e.target.value })
-                          }
-                          className={inputCls}
-                          aria-label={`Ghi chú ${s.name}`}
-                        />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          )}
+            {navigating && <Spinner size={14} />}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Chốt phiếu */}
-      <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:flex-row sm:items-end dark:border-zinc-800 dark:bg-zinc-900">
-        <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-500">
-          Lý do kiểm kê
-          <input
-            value={reason}
-            maxLength={500}
-            onChange={(e) => setReason(e.target.value)}
-            className={inputCls}
+      {scoped && (
+        <div>
+          <Toolbar
+            left={
+              <>
+                <ToolbarInput
+                  value={q}
+                  onChange={setQ}
+                  onEnter={() => pushFilter({ q })}
+                  placeholder="Thu hẹp thêm trong phạm vi…"
+                  icon="⌕"
+                  className="w-64"
+                />
+                <ToolbarSelect
+                  value={groupFilter}
+                  onChange={(v) => {
+                    setGroupFilter(v)
+                    pushFilter({ group: v })
+                  }}
+                  options={[
+                    { value: 'all', label: 'Mọi nhóm' },
+                    ...groups.map((g) => ({ value: g, label: g })),
+                  ]}
+                />
+                {navigating && <Spinner size={14} />}
+                <ToolbarSelect
+                  value={onlyCounted}
+                  onChange={(v) => setOnlyCounted(v)}
+                  options={[
+                    { value: 'all' as const, label: 'Tất cả dòng' },
+                    { value: 'counted' as const, label: 'Đã nhập đếm' },
+                    { value: 'diff' as const, label: 'Lệch sổ' },
+                  ]}
+                />
+              </>
+            }
+            right={
+              <button type="button" onClick={fillFromSystem} className={btnSecondary}>
+                Điền theo sổ ({filtered.length} dòng lọc)
+              </button>
+            }
           />
-        </label>
-        <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-500">
-          Ghi chú phiếu
-          <input
-            value={note}
-            maxLength={2000}
-            onChange={(e) => setNote(e.target.value)}
-            className={inputCls}
-          />
-        </label>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-zinc-400">
-            {summary.counted} dòng đếm · {summary.over + summary.short} lệch
-          </span>
-          <button
-            type="button"
-            disabled={busy || summary.counted === 0}
-            onClick={() => void submit()}
-            className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {busy && <Spinner size={14} />}
-            {busy ? 'Đang ghi…' : 'Ghi phiếu kiểm kê'}
-          </button>
+
+          <div className="overflow-x-auto rounded-b-xl border border-t-0 border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+            {filtered.length === 0 ? (
+              <EmptyState
+                icon="▧"
+                title={stock.length === 0 ? 'Chưa có vật tư' : 'Không khớp bộ lọc'}
+                description={
+                  stock.length === 0
+                    ? 'Thêm vật tư ở Danh mục vật tư trước.'
+                    : 'Thử điều chỉnh bộ lọc.'
+                }
+              />
+            ) : (
+              <table className="w-full min-w-[840px] text-[13px] tabular-nums">
+                <thead className="bg-zinc-50 dark:bg-zinc-900/50">
+                  <tr className="text-left text-[10px] text-zinc-500 uppercase">
+                    <th className="min-w-[220px] py-2 pl-3">Vật tư</th>
+                    <th className="w-[90px] py-2 pr-2">Kệ</th>
+                    <th className="w-[110px] py-2 pr-2 text-right">Tồn sổ</th>
+                    <th className="w-[130px] py-2 pr-2 text-right">Đếm thực tế</th>
+                    <th className="w-[120px] py-2 pr-2 text-right">Chênh lệch</th>
+                    <th className="w-[180px] py-2 pr-3">Ghi chú dòng</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s) => {
+                    const c = counts[s.material_id]
+                    const d = diffOf(s)
+                    return (
+                      <tr
+                        key={s.material_id}
+                        className="border-t border-zinc-100 dark:border-zinc-900"
+                      >
+                        <td className="py-1.5 pl-3">
+                          <div className="flex min-w-0 flex-col">
+                            <span className="font-mono text-xs text-zinc-400">
+                              {s.code}
+                            </span>
+                            <span className="truncate font-medium">{s.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-1.5 pr-2 font-mono text-xs text-zinc-500">
+                          {s.shelf_location ?? '—'}
+                        </td>
+                        <td className="py-1.5 pr-2 text-right font-medium">
+                          {num(s.on_hand)}{' '}
+                          <span className="text-xs font-normal text-zinc-400">
+                            {s.unit}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={c?.counted ?? ''}
+                            onChange={(e) =>
+                              setCount(s.material_id, {
+                                counted:
+                                  e.target.value === '' ? '' : Number(e.target.value),
+                              })
+                            }
+                            className={`${inputCls} text-right font-medium`}
+                            aria-label={`Đếm thực tế ${s.name}`}
+                          />
+                        </td>
+                        <td className="py-1.5 pr-2 text-right">
+                          {d === null ? (
+                            <span className="text-zinc-300 dark:text-zinc-600">—</span>
+                          ) : d === 0 ? (
+                            <span className="font-medium text-green-600 dark:text-green-400">
+                              khớp ✓
+                            </span>
+                          ) : (
+                            <span
+                              className={
+                                'font-semibold ' +
+                                (d > 0
+                                  ? 'text-amber-600 dark:text-amber-500'
+                                  : 'text-red-600 dark:text-red-400')
+                              }
+                            >
+                              {d > 0 ? `+${num(d)}` : num(d)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-1.5 pr-3">
+                          <input
+                            value={c?.note ?? ''}
+                            maxLength={500}
+                            placeholder="lý do lệch…"
+                            onChange={(e) =>
+                              setCount(s.material_id, { note: e.target.value })
+                            }
+                            className={inputCls}
+                            aria-label={`Ghi chú ${s.name}`}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* Chốt phiếu — chỉ hiện khi ĐÃ đếm được dòng nào. Bày một nút "Ghi phiếu"
+          xám trên màn chưa có dòng nào là mời người dùng đi tìm xem nó hỏng ở đâu. */}
+      {summary.counted > 0 && (
+        <div className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4 sm:flex-row sm:items-end dark:border-zinc-800 dark:bg-zinc-900">
+          <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-500">
+            Lý do kiểm kê
+            <input
+              value={reason}
+              maxLength={500}
+              onChange={(e) => setReason(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1 text-xs text-zinc-500">
+            Ghi chú phiếu
+            <input
+              value={note}
+              maxLength={2000}
+              onChange={(e) => setNote(e.target.value)}
+              className={inputCls}
+            />
+          </label>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-400">
+              {summary.counted} dòng đếm · {summary.over + summary.short} lệch
+            </span>
+            <button
+              type="button"
+              disabled={busy || summary.counted === 0}
+              onClick={() => void submit()}
+              className="inline-flex items-center gap-2 rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {busy && <Spinner size={14} />}
+              {busy ? 'Đang ghi…' : 'Ghi phiếu kiểm kê'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

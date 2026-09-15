@@ -515,13 +515,48 @@ tư và cột "đủ tới ngày nào" trên màn cấp vật tư.
 Xếp theo **lợi ích / công sức**, mỗi đợt đứng một mình được (dừng giữa chừng vẫn dùng
 được).
 
-### Đợt 1 — Chữa cái đau ngay, không đụng mô hình  *(~1 ngày)*
-
-1. `/warehouse/ton`: lọc + phân trang **ở server**, mặc định chỉ mã có phát sinh.
-2. `/warehouse/stocktake`: **bỏ** đường "đếm cả danh mục" — bắt chọn phạm vi trước.
-3. Tách `DocsManager.tsx` thành sổ / chi tiết / soạn.
+### Đợt 1 — Chữa cái đau ngay, không đụng mô hình — **XONG 15/09/2026**
 
 Không cần quyết gì. Đây là sửa lỗi, không phải thiết kế lại.
+
+**1. `/warehouse/stock` — lọc, đếm và phân trang Ở SERVER.** ✅
+
+Đo trước khi sửa: mỗi lần mở màn là **3,35 MB · 13.229 dòng · 6,9 giây**. Sau: một
+trang 50 dòng, ~160 KB.
+
+- Năm rổ, mỗi rổ đeo số đếm: *Đang có tồn · Dưới mức tối thiểu · Hết hàng · Thiếu
+  cho LSX · Cả danh mục*. Mặc định là **Đang có tồn**, không phải cả danh mục; rổ
+  "Cả danh mục" vẫn còn và **ghi rõ 13.229** nên không ai tưởng bị giấu hàng.
+- Rổ `short` đi đường riêng: `available` cần `reserved`, không nằm trong view SQL.
+  Nó KHÔNG quét cả danh mục — tập có giữ chỗ bị chặn bởi số dòng định mức của các
+  lệnh đang cam kết.
+- Bộ lọc **sống trên URL**, không trong `useState`: F5 không mất lọc, gửi link ra
+  đúng danh sách đó, nút Lùi chạy đúng. Deep-link cũ `?low=1` / `?short=1` giữ
+  nguyên.
+- Xuất CSV vẫn xuất **cả tập khớp lọc** chứ không mỗi trang đang xem — xuất 50 dòng
+  rồi đặt tên tệp "ton-kho" là một tệp nói dối.
+- Tắt phân trang trong `DataTable` (mặc định 25 dòng/trang ở client): để cả hai thì
+  có hai thanh phân trang lồng nhau và không ai biết mình đang ở đâu.
+
+**2. `/warehouse/stocktake` — bắt chọn phạm vi trước.** ✅
+
+Vào thẳng giờ **0,06 MB · 0 dòng** thay vì 3,35 MB · 13.229 dòng, và hiện màn chọn
+phạm vi (14 nhóm, hoặc gõ mã/tên). Nút *Ghi phiếu kiểm kê* chỉ hiện khi đã đếm được
+dòng nào.
+
+Đây không phải trạng thái rỗng cho đẹp: nó thay cho một biểu mẫu 13.229 dòng giữ
+state đếm từng dòng, và biên bản DUY NHẤT từng lập bằng màn đó là `KK-2026-0004`
+ngày 15/09/2026 — xoá sạch 116 mã về 0.
+
+**3. Tách `DocsManager.tsx` — KHÔNG LÀM, có lý do.** ⏸
+
+Đo lại thì `/warehouse/docs` chỉ **0,28 MB**: 2.225 dòng là vấn đề *bảo trì*, không
+phải vấn đề dữ liệu — khác hẳn hai màn trên. Và Đợt 2–3 **thay hẳn màn này**: phiếu
+nhập thành Khuôn D có kệ + trạng thái lượng, soạn phiếu thành Khuôn F chạy theo mã
+lý do. Tách bây giờ rồi viết lại ở Đợt 2 là làm hai lần một việc.
+
+Việc này gộp vào Đợt 3, lúc mã lý do quyết định bộ cột của lưới — khi đó tách file
+là hệ quả tự nhiên của việc dựng lại, không phải một lượt refactor riêng.
 
 ### Đợt 2 — Nơi chốn + trạng thái của lượng  *(~3 ngày)* ⭐ đợt quan trọng nhất
 

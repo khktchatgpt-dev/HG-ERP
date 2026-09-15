@@ -14,6 +14,7 @@ import {
   stocktakeRepo,
   type LsxNeed,
   type StockRow,
+  type StockBucket,
   type DocKind,
   type StocktakeLine,
 } from './stock.repo'
@@ -33,7 +34,11 @@ import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
-import { supplyRepo, RECEIVABLE, poLineUnitCosts } from '@/modules/dept/supply/supply.repo'
+import {
+  supplyRepo,
+  RECEIVABLE,
+  poLineUnitCosts,
+} from '@/modules/dept/supply/supply.repo'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { SUPPLY_DEPT_NAMES } from '@/modules/dept/supply/suppliers.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -236,6 +241,79 @@ export const stockService = {
       const res = reserved.get(r.material_id) ?? 0
       return { ...r, reserved: res, available: r.on_hand - res }
     })
+  },
+
+  /**
+   * MỘT TRANG tồn kho cho màn `/warehouse/stock` (Đợt 1).
+   *
+   * Thay `listStock` ở màn hình. Bản cũ nạp CẢ 13.229 dòng xuống trình duyệt
+   * rồi lọc bằng `useMemo` — mỗi lần mở màn là vài MB và một danh sách không
+   * ai đọc hết. `listStock` giữ nguyên cho các đường quét hết chạy nền.
+   *
+   * RỔ `short` đi đường riêng vì `reserved` không nằm trong view SQL. Nó KHÔNG
+   * phải quét cả danh mục: tập có giữ chỗ bị chặn bởi số dòng định mức của các
+   * lệnh đang cam kết (vài trăm), nên lọc trong bộ nhớ ở đây là đúng chỗ.
+   */
+  async listStockPage(
+    user: User,
+    opts: {
+      q?: string
+      group_name?: string
+      bucket: StockBucket
+      page: number
+      page_size: number
+    },
+  ): Promise<{
+    rows: StockRowAvail[]
+    total: number
+    counts: { all: number; has: number; low: number; out: number; short: number }
+  }> {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+
+    const reserved = await reservedByCommittedLsx()
+    const withRes = (r: StockRow): StockRowAvail => {
+      const res = reserved.get(r.material_id) ?? 0
+      return { ...r, reserved: res, available: r.on_hand - res }
+    }
+
+    // Tập có giữ chỗ — nền để đếm rổ `short` VÀ để lọc nó, cùng một nguồn.
+    const heldIds = [...reserved.keys()]
+    const shortAll =
+      heldIds.length === 0
+        ? []
+        : (
+            await stockRepo.page({
+              q: opts.q,
+              group_name: opts.group_name,
+              bucket: 'all',
+              ids: heldIds,
+              page: 1,
+              page_size: Math.min(heldIds.length, 1000),
+            })
+          ).rows
+            .map(withRes)
+            .filter((r) => r.available < 0)
+
+    const base = await stockRepo.counts({ q: opts.q, group_name: opts.group_name })
+    const counts = { ...base, short: shortAll.length }
+
+    if (opts.bucket === 'short') {
+      const from = (opts.page - 1) * opts.page_size
+      return {
+        rows: shortAll.slice(from, from + opts.page_size),
+        total: shortAll.length,
+        counts,
+      }
+    }
+
+    const { rows, total } = await stockRepo.page({
+      q: opts.q,
+      group_name: opts.group_name,
+      bucket: opts.bucket,
+      page: opts.page,
+      page_size: opts.page_size,
+    })
+    return { rows: rows.map(withRes), total, counts }
   },
 
   /** Nhập kho (FR-WMS-02/04). qty = số ĐẠT; qty_rejected (QC không đạt) không vào tồn (BR-10). */
