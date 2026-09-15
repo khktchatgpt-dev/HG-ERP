@@ -21,6 +21,7 @@ import {
   suyMaTuLichSu,
   vaoGiaThanhLenh,
 } from '@/lib/kho-ma-ly-do'
+import { moTaVuong, viecTiepTheo, type VuongMac } from '@/lib/cap-vat-tu'
 
 type DocKind = 'receipt' | 'issue' | 'transfer' | 'stocktake'
 
@@ -103,6 +104,10 @@ type LsxNeed = {
   material_name: string
   unit: string
   qty_remaining: number
+  /** Lấy được ngay — đã trừ phần chờ kiểm / khoá / hứa cho lệnh khác (§4.1). */
+  capNgay: number
+  conThieu: number
+  vuong: { loai: VuongMac; luong: number }[]
 }
 
 /** Dòng đang biên tập trong form phiếu. */
@@ -1464,6 +1469,17 @@ function IssueForm({
   const [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<'daily' | 'lsx'>(initialLsxId ? 'lsx' : 'daily')
   const [lsxId, setLsxId] = useState('')
+  /** Dòng nhu cầu KHÔNG lấy đủ được — nuôi thanh cảnh báo dưới lưới (§4.1). */
+  const [vuong, setVuong] = useState<
+    {
+      code: string
+      name: string
+      unit: string
+      capNgay: number
+      conThieu: number
+      vuong: { loai: VuongMac; luong: number }[]
+    }[]
+  >([])
   const [rows, setRows] = useState<Row[]>([])
 
   // Deep-link từ màn "Cấp vật tư SX" — nạp nhu cầu lệnh đúng một lần lúc mở.
@@ -1479,18 +1495,31 @@ function IssueForm({
     setLsxId(id)
     if (!id) {
       setRows([])
+      setVuong([])
       return
     }
     try {
       const { needs } = await api<{ needs: LsxNeed[] }>(
         `/api/dept/warehouse/lsx-needs?production_order_id=${id}`,
       )
+      /*
+       * ĐIỀN SẴN SỐ LẤY ĐƯỢC, không phải số còn phải cấp theo định mức.
+       *
+       * Bản cũ điền `qty_remaining`: định mức còn thiếu 40 cây thì form điền
+       * 40, thủ kho bấm lưu, và server chặn vì kho chỉ có 20. Cho bấm rồi mới
+       * báo lỗi — đúng thứ luật kiểm của /design-lab cấm, và đúng hạng lỗi mà
+       * §4.1 sinh ra để dẹp.
+       *
+       * Dòng KHÔNG LẤY ĐƯỢC GAM NÀO vẫn giữ lại với số 0, không lọc đi: biến
+       * mất khỏi form là thủ kho tưởng lệnh không cần mã đó. Thanh cảnh báo
+       * dưới nói chúng vướng gì.
+       */
       setRows(
         needs
           .filter((n) => n.qty_remaining > 0)
           .map((n) => ({
             material_id: n.material_id,
-            qty: n.qty_remaining, // gợi ý = còn phải xuất theo BOM
+            qty: n.capNgay > 0 ? n.capNgay : ('' as const),
             qty_rejected: '',
             qc_status: '' as const,
           stock_status: 'ok' as const,
@@ -1505,6 +1534,20 @@ function IssueForm({
             material_unit: n.unit,
             shelf_location: materialById.get(n.material_id)?.shelf_location ?? '',
             note: '',
+          })),
+      )
+      // Giữ phần "vướng gì" để thanh cảnh báo dưới lưới nói được lý do —
+      // không thì form điền 0 mà không ai biết vì sao.
+      setVuong(
+        needs
+          .filter((n) => n.qty_remaining > 0 && n.vuong.length > 0)
+          .map((n) => ({
+            code: n.material_code,
+            name: n.material_name,
+            unit: n.unit,
+            capNgay: n.capNgay,
+            conThieu: n.conThieu,
+            vuong: n.vuong,
           })),
       )
       if (needs.length === 0) {
@@ -1827,6 +1870,56 @@ function IssueForm({
       >
         + Thêm dòng
       </button>
+
+      {/*
+        VƯỚNG GÌ · GỠ Ở ĐÂU (§4.1) — đặt NGAY TRÊN nút lập phiếu.
+
+        Form điền sẵn số LẤY ĐƯỢC, nên một dòng có thể ra 0 hoặc ra ít hơn
+        định mức. Không nói lý do thì thủ kho tưởng hệ thống tính sai. Mỗi
+        dòng nói thiếu bao nhiêu, mắc ở đâu, và dẫn thẳng tới chỗ gỡ.
+      */}
+      {kind === 'lsx' && vuong.length > 0 && (
+        <div className="rounded-md border border-[var(--warn)]/40 bg-[var(--warn)]/5 px-3 py-2">
+          <p className="text-sm font-medium">
+            {vuong.length} vật tư không lấy đủ được theo định mức
+          </p>
+          <ul className="mt-1 flex flex-col gap-0.5 text-xs">
+            {vuong.slice(0, 8).map((v) => (
+              <li key={v.code} className="flex flex-wrap items-center gap-x-2">
+                <span className="font-mono text-[11px] text-zinc-500">{v.code}</span>
+                <span>{v.name}</span>
+                <span className="text-zinc-500">
+                  — lấy được {v.capNgay.toLocaleString('vi-VN')}, thiếu{' '}
+                  {v.conThieu.toLocaleString('vi-VN')} {v.unit}:
+                </span>
+                {v.vuong.map((x) => (
+                  <span key={x.loai} className="inline-flex items-center gap-1">
+                    <span>
+                      {x.luong.toLocaleString('vi-VN')} {moTaVuong(x.loai)}
+                    </span>
+                    <a
+                      href={viecTiepTheo(x.loai).href}
+                      className="text-[var(--primary)] hover:underline"
+                    >
+                      {viecTiepTheo(x.loai).label} ›
+                    </a>
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+          {vuong.length > 8 && (
+            <p className="mt-1 text-xs text-zinc-500">
+              …và {vuong.length - 8} vật tư nữa — xem đủ ở màn Cấp vật tư SX.
+            </p>
+          )}
+          {/* Cấp thiếu VẪN LẬP ĐƯỢC PHIẾU: xưởng cần hàng hôm nay, phần còn
+              lại cấp bù sau. Chặn ở đây là đẩy người ta ra ngoài hệ thống. */}
+          <p className="mt-1.5 text-xs text-zinc-500">
+            Vẫn lập phiếu được với phần lấy được — phần còn lại cấp bù sau khi gỡ.
+          </p>
+        </div>
+      )}
 
       {/*
         MÃ LÝ DO (0197) — chỉ hiện cho xuất LẺ. Xuất theo lệnh luôn là X1 nên
