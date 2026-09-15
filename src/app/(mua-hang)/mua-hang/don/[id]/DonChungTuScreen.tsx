@@ -1218,17 +1218,28 @@ export function DonChungTuScreen(p: Props) {
         compact
         kind="Đơn đặt vật tư"
         code={code}
+        /*
+          NHÃN "ĐANG SỬA" BẮT THEO VIỆC, KHÔNG BẮT THEO "ĐÃ CÓ ĐƠN LƯU".
+
+          Bản cũ viết `po ? (tiêu đề thường) : (<Tag>Đang sửa</Tag>)` — tức nhãn
+          chỉ hiện khi CHƯA có đơn nào lưu, nghĩa là chỉ ở màn tạo mới. Sửa một
+          đơn nháp ĐÃ LƯU thì `po` có giá trị nên rơi vào nhánh đầu và đầu chứng
+          từ trông y hệt lúc đọc: cùng tiêu đề, cùng trục trạng thái, chỉ khác ở
+          chỗ các ô đã thành ô nhập. Chủ dự án báo 15/09/2026 "không rõ cảnh báo
+          rằng đang trong trạng thái chỉnh sửa" — đúng, và đây là dòng gây ra.
+        */
         sub={
-          po ? (
+          editing ? (
             <>
-              {po.supplier_name} · soạn {dmy(po.created_at)} bởi {po.assignee_name ?? '—'}
+              <Tag tone="warn">
+                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa · chưa lưu'}
+              </Tag>{' '}
+              {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
             </>
           ) : (
             <>
-              <Tag tone="warn">
-                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa'}
-              </Tag>{' '}
-              {supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
+              {po?.supplier_name} · soạn {dmy(po?.created_at)} bởi{' '}
+              {po?.assignee_name ?? '—'}
             </>
           )
         }
@@ -1331,20 +1342,42 @@ export function DonChungTuScreen(p: Props) {
           </GridBtn>
         </NoticeBar>
       )}
-      {editing && problem && (
-        <NoticeBar
-          tone="warn"
-          tag="Chưa lưu được"
-          action={{
-            label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
-              ? 'Tới ô cần điền'
-              : 'Xem dòng hàng',
-            onClick: () => goToProblem(problem),
-          }}
-        >
-          {problem}. Sửa xong thì nút Lưu tự mở.
-        </NoticeBar>
-      )}
+      {/* THANH ĐANG SỬA — CÓ MẶT SUỐT chế độ sửa, không chỉ khi có lỗi.
+
+          Bản cũ chỉ bày thanh này khi đơn còn thiếu thông tin. Nghĩa là đơn khai
+          ĐÚNG và ĐỦ thì tuyệt nhiên không có dòng nào nói người dùng đang sửa dở
+          — đúng lúc nguy hiểm nhất, vì lúc đó nút Lưu mở và mọi thứ trông như
+          màn đọc bình thường.
+
+          Nay một thanh, hai trạng thái: còn vướng thì nói vướng gì và chỉ tới ô;
+          hết vướng thì nói "còn thay đổi chưa lưu" và cho Lưu ngay tại chỗ. Nút
+          Lưu trên thanh hành động vẫn còn — người dùng cuộn xuống giữa lưới 40
+          dòng thì thanh này là chỗ gần tay nhất. */}
+      {editing &&
+        (problem ? (
+          <NoticeBar
+            tone="warn"
+            tag="Chưa lưu được"
+            action={{
+              label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
+                ? 'Tới ô cần điền'
+                : 'Xem dòng hàng',
+              onClick: () => goToProblem(problem),
+            }}
+          >
+            {problem}. Sửa xong thì nút Lưu tự mở.
+          </NoticeBar>
+        ) : (
+          <NoticeBar
+            tone="warn"
+            tag="Đang sửa"
+            action={{ label: busy ? 'Đang lưu…' : 'Lưu', onClick: () => void save() }}
+          >
+            {p.mode === 'create'
+              ? 'Đơn chưa được tạo — rời trang là mất.'
+              : 'Thay đổi chưa lưu. Rời trang khi chưa lưu thì đơn giữ nguyên bản cũ.'}
+          </NoticeBar>
+        ))}
 
       <DocBody
         aside={
