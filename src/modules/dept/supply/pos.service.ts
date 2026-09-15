@@ -24,6 +24,7 @@ import {
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
+import { canReopenForEdit, reopenNote } from '@/lib/po-reopen'
 import { stampNote } from '@/lib/po-note'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import {
@@ -1037,6 +1038,62 @@ export const posService = {
         before.note,
       ),
     })
+  },
+
+  /**
+   * HẠ ĐƠN ĐÃ GỬI VỀ NHÁP ĐỂ SỬA — đường sửa sai dữ liệu, không phải đường tắt.
+   *
+   * Luật gốc (`update` chỉ mở ở nháp) giả định mọi đơn sinh ra trong hệ thống và
+   * đi tuần tự từ nháp. Đợt nhập lại dữ liệu 09/2026 phá giả định đó: 19 đơn của
+   * tháng 6–9 vào thẳng trạng thái "đã gửi" vì ngoài đời đã gửi rồi, và khi đối
+   * chiếu tìm ra số gõ sai thì không còn đường nào sửa ngoài huỷ đơn tạo lại —
+   * mất số PO thật đã gửi NCC.
+   *
+   * Bốn hàng rào ở `lib/po-reopen.ts` (thuần, 14 test). Cứng nhất: ĐÃ CÓ PHIẾU
+   * NHẬP KHO THÌ KHÔNG, vì `update` xoá rồi ghi lại dòng nên phiếu nhập trỏ
+   * `po_line_id` sẽ mồ côi.
+   *
+   * Dùng lại event `po.withdrawn`: với người duyệt thì hai việc này giống nhau —
+   * bản họ đã gật không còn hiệu lực, đừng xử lý thông báo cũ nữa.
+   */
+  async reopenForEdit(user: User, id: string, reason: string): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    if (!reason.trim()) throw BadRequest('Phải ghi lý do hạ đơn về nháp')
+
+    const privileged =
+      user.role === 'admin' ||
+      (await canAction(user, 'supply.po.manage_any')) ||
+      (await canAction(user, 'supply.po.approve'))
+    const [status, docs] = await Promise.all([
+      supplyRepo.lineStatus(id),
+      supplyRepo.docsByPo(id),
+    ])
+    const guard = canReopenForEdit({
+      status: before.status,
+      receivedQty: status.reduce((a, l) => a + Number(l.qty_received ?? 0), 0),
+      warehouseDocs: docs.length,
+      privileged,
+    })
+    if (!guard.ok) throw BadRequest(guard.reason)
+
+    const po = await posRepo.patch(id, {
+      status: 'draft',
+      approved_by: null,
+      approved_at: null,
+      ordered_at: null,
+      confirmed_at: null,
+      note: reopenNote(before.status, reason.trim(), before.note),
+    })
+    await emit({
+      name: 'po.withdrawn',
+      po_id: po.id,
+      code: po.code,
+      withdrawn_by: user.id,
+      approver_ids: await approverIds(user.id),
+    })
+    return po
   },
 
   /** Huỷ (trước khi nhận hàng) — kèm lý do. Nháp thì dùng `remove` (xoá hẳn). */

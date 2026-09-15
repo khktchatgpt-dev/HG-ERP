@@ -21,6 +21,7 @@ import {
   Field,
   FieldGroup,
   Grid,
+  Btn,
   GridBody,
   GridBtn,
   GridCheck,
@@ -216,7 +217,13 @@ type Props = {
   receiptBatches: ReceiptBatch[]
   suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null }[] // prettier-ignore
   lsxs: { id: string; code: string; customer_name: string; order_codes: string[] }[]
-  perms: { canEdit: boolean; canApprove: boolean; isSupply: boolean }
+  perms: {
+    canEdit: boolean
+    canApprove: boolean
+    isSupply: boolean
+    /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp để sửa. */
+    privileged?: boolean
+  }
   me: { id: string; name: string }
   seed?: { supplierId?: string; lsxId?: string }
   /** NHÂN BẢN: đầu đơn của đơn gốc (lines truyền qua `lines`, đã bỏ id). */
@@ -545,7 +552,15 @@ export function DonChungTuScreen(p: Props) {
   }
 
   /* ── hành động theo bước (chế độ xem) ──────────────────────────────── */
-  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove }) : [] // prettier-ignore
+  /*
+    `hasReceipts` chặn đường hạ-về-nháp NGAY TRÊN NÚT thay vì để người dùng bấm
+    rồi ăn lỗi từ server: có phiếu kho, hoặc đã nhận dù chỉ một phần, là sửa
+    dòng sẽ làm phiếu nhập mồ côi. Server vẫn kiểm lại — đây chỉ là nói trước.
+  */
+  const hasReceipts =
+    p.warehouseDocs.length > 0 ||
+    p.statusLines.some((l) => Number(l.qty_received ?? 0) > 1e-6)
+  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove, privileged: perms.privileged, hasReceipts }) : [] // prettier-ignore
   async function runAction(a: DocAction) {
     if (!po || !a.build) return
     setBusy(true)
@@ -641,6 +656,22 @@ export function DonChungTuScreen(p: Props) {
   const shipmentsDone = liveShipments.filter((s) => s.status === 'received').length
   const openStockLines = p.statusLines.filter((s) => s.material_id != null && s.qty_open > 0 && !s.closed_short_at) // prettier-ignore
   const recv = receiveActions({ status: po?.status ?? 'draft', canEdit: perms.canEdit, hasStockLines: shipLines.length > 0, openStockLines: openStockLines.length }) // prettier-ignore
+  /*
+    BƯỚC KẾ TIẾP của đơn — một hàm, dùng cho cả dấu chỉ đường ở đầu chứng từ.
+    Chỉ những bước mà nút thật nằm ở TAB KHÁC mới cần chỉ đường; bước nào đã có
+    nút trên thanh hành động chính (gửi duyệt, duyệt, gửi NCC) thì để yên, thêm
+    nữa là hai nút cùng việc.
+  */
+  const buocKeTiep: { label: string; why?: string; go: () => void } | null = !po
+    ? null
+    : po.status === 'ordered' && recv.confirm.ok
+      ? { label: 'NCC xác nhận', go: () => { setPaneTab('nhan'); shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN) } } // prettier-ignore
+      : po.status === 'confirmed' && recv.transit.ok
+        ? { label: 'Hàng đang trên đường', go: () => { setPaneTab('nhan'); start(TRANSIT) } } // prettier-ignore
+        : ['in_transit', 'partial'].includes(po.status) && recv.receive.ok
+          ? { label: 'Ghi nhận hàng về', why: 'Mở khu Nhận hàng để lập phiếu nhập kho', go: () => setPaneTab('nhan') } // prettier-ignore
+          : null
+
   const sentToSupplier = ['ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po?.status ?? '') // prettier-ignore
 
   async function call(
@@ -1221,6 +1252,32 @@ export function DonChungTuScreen(p: Props) {
               steps={['Chưa', 'Một phần', 'Đủ']}
               at={recvIdx}
             />
+            {/* BƯỚC KẾ TIẾP — đứng NGAY CẠNH trục trạng thái.
+
+                Lỗi chủ dự án báo 15/09/2026: "không có chuyển trạng thái". Đo
+                lại thì có, nhưng nằm ở TAB KHÁC — trục trạng thái vẽ ở tab Đơn
+                hàng, còn nút "NCC xác nhận" / "Hàng đang trên đường" nằm ở tab
+                Nhận hàng. Nhìn chỗ này, bấm chỗ kia, không một dấu chỉ đường.
+                Lộ rõ hơn nữa vì bước TRƯỚC nó (Đã duyệt → "Gửi nhà cung cấp")
+                lại nằm ngay trên thanh hành động chính: cùng một loại việc mà
+                hai chỗ khác nhau.
+
+                KHÔNG chép nút sang đây. Bước "NCC xác nhận" mở phiếu khai lịch
+                giao NCC hẹn; dựng một bản rút gọn ở đây là đẻ ra đường thứ hai
+                bỏ qua việc khai lịch. Nút này ĐƯA NGƯỜI DÙNG TỚI đúng nút thật
+                — một chỗ làm việc, một dấu chỉ đường. */}
+            {buocKeTiep && (
+              <span className="flex items-center gap-2">
+                <Btn
+                  primary
+                  disabled={busy}
+                  title={buocKeTiep.why}
+                  onClick={buocKeTiep.go}
+                >
+                  {buocKeTiep.label} →
+                </Btn>
+              </span>
+            )}
           </>
         )}
       </DocHead>

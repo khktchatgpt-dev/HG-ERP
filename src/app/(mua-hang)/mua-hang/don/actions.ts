@@ -22,11 +22,16 @@ export type Perm = {
   /** Đúng người phụ trách, hoặc trưởng phòng / admin. */
   own: boolean
   approve: boolean
+  /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp. */
+  privileged?: boolean
+  /** Đơn đã có phiếu nhập kho: chặn cứng đường hạ về nháp. */
+  hasReceipts?: boolean
 }
 
 export type ActionId =
   | 'submit'
   | 'withdraw'
+  | 'reopen'
   | 'approve'
   | 'reject'
   | 'send'
@@ -129,6 +134,33 @@ const EDIT_TERMS = (blocked?: string): Action => ({
   blocked,
 })
 
+/**
+ * HẠ VỀ NHÁP ĐỂ SỬA — đường sửa sai DỮ LIỆU của đơn đã gửi.
+ *
+ * Khác `withdraw` ở chỗ dùng cho ai và khi nào: `withdraw` là người soạn tự rút
+ * bản mình vừa gửi duyệt, còn cái này là trưởng phòng / Giám đốc mở lại một đơn
+ * đã đi xa hơn, để sửa số nhập sai. Vì nó VÔ HIỆU HOÁ CHỮ KÝ DUYỆT nên bắt lý
+ * do, và service chặn cứng khi đơn đã có phiếu nhập kho.
+ *
+ * Nút vẫn BÀY khi bị khoá, đúng lối Action Pane — nói rõ vướng gì thay vì biến
+ * mất để người dùng đi tìm.
+ */
+const REOPEN = (blocked?: string): Action => ({
+  id: 'reopen',
+  label: 'Hạ về nháp để sửa',
+  ui: 'sheet',
+  stakes: 'nang',
+  blocked,
+  needReason: true,
+  reasonLabel: 'Vì sao phải sửa lại đơn',
+  reasonHint: 'Ghi rõ sai ở đâu — lý do được đóng dấu vào ghi chú đơn để người sau đọc lại hiểu.', // prettier-ignore
+  consequence: 'Đơn quay về NHÁP và mất dấu duyệt: Giám đốc phải duyệt lại từ đầu. Chỉ dùng khi số trên đơn nhập sai, không dùng để đổi ý.', // prettier-ignore
+  done: 'Đã hạ về nháp — sửa xong nhớ gửi duyệt lại',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/reopen`, method: 'POST', body: { reason } },
+  ],
+})
+
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
   method: 'POST',
@@ -144,6 +176,16 @@ const NOTE = (id: string, body: string): ApiCall => ({
  */
 export function actionsFor(status: PoStatus, perm: Perm): Action[] {
   const notOwn = perm.own ? undefined : 'Đơn này do người khác phụ trách'
+  /*
+    Hai hàng rào client BIẾT được thì nói ngay tại nút; hàng rào còn lại (trạng
+    thái) do chính chỗ gọi quyết định bằng cách có bày nút hay không. Server vẫn
+    kiểm đủ cả bốn — đây chỉ là để người dùng không bấm rồi mới biết.
+  */
+  const notReopen = !perm.privileged
+    ? 'Chỉ Giám đốc hoặc trưởng phòng Cung ứng hạ đơn về nháp được'
+    : perm.hasReceipts
+      ? 'Đơn đã có phiếu nhập kho — sửa dòng sẽ làm phiếu nhập mồ côi'
+      : notOwn
 
   switch (status) {
     case 'draft':
@@ -230,6 +272,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         EDIT_TERMS(notOwn),
+        REOPEN(notReopen),
         CANCEL(notOwn),
         OPEN,
       ]
@@ -251,6 +294,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         },
         reschedule(status, notOwn),
         EDIT_TERMS(notOwn),
+        REOPEN(notReopen),
         DUP,
         CANCEL(notOwn),
         OPEN,
@@ -286,6 +330,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         },
         reschedule(status, notOwn),
         EDIT_TERMS(notOwn),
+        REOPEN(notReopen),
         DUP,
         CANCEL(notOwn),
       ]

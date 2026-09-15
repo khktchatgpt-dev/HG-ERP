@@ -3,7 +3,7 @@ import { PO_STATUSES } from '@/lib/po-status'
 import { actionsFor, bulkActionFor } from './actions'
 
 const own = { own: true, approve: false }
-const boss = { own: true, approve: true }
+const boss = { own: true, approve: true, privileged: true }
 const other = { own: false, approve: false }
 
 describe('actionsFor — mỗi bước đúng một nút chính, luôn có đường mở đơn', () => {
@@ -141,6 +141,8 @@ describe('route — không mở đường ghi mới', () => {
       '/api/dept/supply/pos/p/reschedule',
       // Màn cũ gọi ở `PoDetailScreen.tsx:711` — không phải đường ghi mới.
       '/api/dept/supply/pos/p/cancel',
+      // Đường MỚI 15/09/2026: hạ đơn đã gửi về nháp để sửa số nhập sai.
+      '/api/dept/supply/pos/p/reopen',
     ])
     for (const s of PO_STATUSES) {
       for (const a of actionsFor(s, boss)) {
@@ -204,5 +206,42 @@ describe('bulkActionFor — cùng bước mới làm hàng loạt', () => {
   it('đang về không có việc hàng loạt', () => {
     const r = bulkActionFor([{ status: 'ordered', own: true }], boss)
     expect('reason' in r).toBe(true)
+  })
+})
+
+describe('hạ về nháp để sửa — đường sửa sai dữ liệu của đơn đã gửi', () => {
+  const buoc = ['pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit', 'partial'] as const // prettier-ignore
+
+  it.each(buoc)('có mặt ở bước %s và gọi đúng route reopen', (s) => {
+    const a = actionsFor(s, boss).find((x) => x.id === 'reopen')
+    expect(a).toBeDefined()
+    expect(a!.blocked).toBeUndefined()
+    expect(a!.needReason).toBe(true)
+    expect(a!.build?.({ id: 'p', reason: 'gõ nhầm SL', date: '' })).toEqual([
+      { path: '/api/dept/supply/pos/p/reopen', method: 'POST', body: { reason: 'gõ nhầm SL' } }, // prettier-ignore
+    ])
+  })
+
+  it('người thường thấy nút nhưng BỊ KHOÁ, kèm lý do — không giấu', () => {
+    const a = actionsFor('ordered', own).find((x) => x.id === 'reopen')
+    expect(a).toBeDefined()
+    expect(a!.blocked).toMatch(/Giám đốc hoặc trưởng phòng/)
+  })
+
+  it('đơn đã có phiếu nhập kho thì khoá, nói rõ vì sao', () => {
+    const a = actionsFor('partial', { ...boss, hasReceipts: true }).find((x) => x.id === 'reopen') // prettier-ignore
+    expect(a!.blocked).toMatch(/phiếu nhập kho/)
+  })
+
+  it('không bày ở nháp, đã về đủ và đã huỷ — service cũng chặn ba chỗ đó', () => {
+    for (const s of ['draft', 'received', 'cancelled'] as const) {
+      expect(actionsFor(s, boss).some((x) => x.id === 'reopen')).toBe(false)
+    }
+  })
+
+  it('là việc NẶNG và nói trước hậu quả mất dấu duyệt', () => {
+    const a = actionsFor('ordered', boss).find((x) => x.id === 'reopen')!
+    expect(a.stakes).toBe('nang')
+    expect(a.consequence).toMatch(/duyệt lại/)
   })
 })

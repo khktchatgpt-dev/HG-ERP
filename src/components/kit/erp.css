@@ -1306,9 +1306,21 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
+/* ĐẦU CHỨNG TỪ GỌN: hai trục trạng thái nằm cùng hàng với số hiệu đơn.
+
+   `nowrap` là để hai trục không tách nhau ra hai dòng khi còn thừa chỗ. Nhưng
+   nó KHÔNG được cấm bẻ dòng khi THIẾU chỗ: ở khung hẹp, hàng dài ra quá mép rồi
+   bị cắt cụt — trục "Nhận hàng" mất hẳn ba bước Chưa/Một phần/Đủ, và bất cứ thứ
+   gì đặt sau nó biến mất không dấu vết (đo 15/09/2026: hàng rộng 918px trong
+   khung 715px). Người dùng không biết là mình đang không nhìn thấy gì.
+
+   `min-width: 0` + cho bẻ dòng khi chật: còn chỗ thì vẫn một hàng như cũ, chật
+   thì xuống dòng thay vì mất chữ. */
 .k-doc-compact .k-tracks {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 .k-doc-compact .k-doc-kind {
   margin: 0;

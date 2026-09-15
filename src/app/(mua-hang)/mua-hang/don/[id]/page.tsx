@@ -111,7 +111,7 @@ export default async function Page({
       tpl={tpl}
       suppliers={suppliers.map((s) => ({ id: s.id, name: s.name, currency: s.currency ?? null, payment_terms: s.payment_terms ?? null, lead_time_days: s.lead_time_days ?? null }))} // prettier-ignore
       lsxs={lsxs.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name, order_codes: l.order_codes }))} // prettier-ignore
-      perms={{ canEdit, canApprove, isSupply }}
+      perms={{ canEdit, canApprove, isSupply, privileged: manageAny || canApprove }}
       me={{ id: user.id, name: user.name ?? user.email }}
     />
   )
