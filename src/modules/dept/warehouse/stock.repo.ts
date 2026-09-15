@@ -762,6 +762,12 @@ export type LsxNeed = {
   source?: 'components' | 'bom'
   /** Có phần định mức từ SP chưa xác nhận BOM — màn hình phải cảnh báo. */
   unconfirmed?: boolean
+  /**
+   * TỒN HIỆN CÓ của vật tư (0194) — người lập phiếu xuất phải thấy kho còn bao
+   * nhiêu NGAY TẠI DÒNG. Không có nó thì họ gõ số mù rồi bấm Lưu mới biết
+   * không đủ, đúng lỗi "không cho bấm rồi mới báo" mà sổ thiết kế cấm.
+   */
+  on_hand?: number
 }
 
 /** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */

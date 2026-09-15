@@ -113,7 +113,13 @@ type LsxNeed = {
   material_code: string
   material_name: string
   unit: string
+  /** Nhu cầu BOM của cả lệnh. */
+  qty_needed: number
+  /** Đã cấp cho lệnh tới giờ. */
+  qty_issued: number
   qty_remaining: number
+  /** Tồn hiện có lúc mở phiếu (0194) — null với dữ liệu cũ. */
+  on_hand?: number | null
 }
 
 /** Dòng đang biên tập trong form phiếu. */
@@ -145,6 +151,12 @@ type Row = {
   material_unit: string | null
   shelf_location: string
   note: string
+  /** Nhu cầu BOM của lệnh — chỉ dòng sinh từ LSX mới có. */
+  qty_needed?: number | null
+  /** Đã cấp cho lệnh tới giờ. */
+  qty_issued?: number | null
+  /** Tồn hiện có của vật tư lúc mở phiếu. */
+  on_hand?: number | null
 }
 
 /**
@@ -1574,6 +1586,11 @@ function IssueForm({
             po_line_id: null,
             // K5: nhớ "còn phải cấp" để cảnh báo khi người gõ vượt (không chặn).
             qty_missing: n.qty_remaining,
+            // Dòng phiếu xuất là một PHÉP SO SÁNH, không phải ô trống: cần bao
+            // nhiêu · đã cấp bao nhiêu · kho còn bao nhiêu · lần này cấp mấy.
+            qty_needed: n.qty_needed,
+            qty_issued: n.qty_issued,
+            on_hand: n.on_hand ?? null,
             qty_ordered: null,
             over_tolerance_pct: null,
             ship_qty: null,
@@ -1783,7 +1800,14 @@ function IssueForm({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+              {/* CỘT THEO LỐI PHIẾU LĨNH CỦA ERP (SAP MIGO 261 · Dynamics
+                  picking list · Odoo MO components): dòng bày ĐỦ BỐN SỐ để
+                  người lấy hàng quyết định ngay — cần · đã cấp · kho còn · lần
+                  này cấp mấy. Chỉ ô cuối phải gõ, và nó đã được đề xuất sẵn. */}
               <th className="py-2 pr-2">Vật tư</th>
+              {kind === 'lsx' && <th className="w-20 py-2 pr-2 text-right">Cần</th>}
+              {kind === 'lsx' && <th className="w-20 py-2 pr-2 text-right">Đã cấp</th>}
+              <th className="w-20 py-2 pr-2 text-right">Kho còn</th>
               <th className="w-28 py-2 pr-2">SL xuất</th>
               <th className="w-20 py-2 pr-2">Kệ</th>
               <th className="py-2 pr-2">Ghi chú</th>
@@ -1793,7 +1817,7 @@ function IssueForm({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-zinc-400">
+                <td colSpan={kind === 'lsx' ? 8 : 6} className="py-6 text-center text-zinc-400">
                   {kind === 'lsx'
                     ? 'Chọn LSX để gợi ý theo BOM, hoặc quét mã thêm dòng.'
                     : 'Quét mã hoặc thêm dòng vật tư.'}
@@ -1803,31 +1827,79 @@ function IssueForm({
             {rows.map((r, i) => (
               <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
                 <td className="py-1.5 pr-2">
-                  <select
-                    value={r.material_id}
-                    onChange={(e) => {
-                      const m = materialById.get(e.target.value)
-                      setRows((rs) =>
-                        rs.map((x, idx) =>
-                          idx === i
-                            ? {
-                                ...x,
-                                material_id: e.target.value,
-                                shelf_location: m?.shelf_location ?? x.shelf_location,
-                              }
-                            : x,
-                        ),
-                      )
-                    }}
-                    className={inputCls}
-                  >
-                    <option value="">— chọn vật tư —</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.code} — {m.name}
-                      </option>
-                    ))}
-                  </select>
+                  {/* DÒNG SINH TỪ BOM thì vật tư là SỰ THẬT, không phải lựa chọn.
+                      Bày nó thành ô chọn 13.229 mã vừa nặng vừa mời người dùng
+                      đổi nhầm đúng thứ hệ thống vừa tính ra. Dòng tự thêm (quét
+                      mã / + Thêm dòng) mới cần ô chọn. */}
+                  {r.qty_needed != null ? (
+                    <span className="block">
+                      <span className="block truncate">
+                        <span className="font-mono text-[11px] text-zinc-500">
+                          {r.material_code}
+                        </span>{' '}
+                        {r.material_name}
+                      </span>
+                      <span className="text-[11px] text-zinc-400">{r.material_unit}</span>
+                    </span>
+                  ) : (
+                    <select
+                      value={r.material_id}
+                      onChange={(e) => {
+                        const m = materialById.get(e.target.value)
+                        setRows((rs) =>
+                          rs.map((x, idx) =>
+                            idx === i
+                              ? {
+                                  ...x,
+                                  material_id: e.target.value,
+                                  shelf_location: m?.shelf_location ?? x.shelf_location,
+                                }
+                              : x,
+                          ),
+                        )
+                      }}
+                      className={inputCls}
+                    >
+                      <option value="">— chọn vật tư —</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.code} — {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </td>
+                {kind === 'lsx' && (
+                  <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-500">
+                    {r.qty_needed ?? '—'}
+                  </td>
+                )}
+                {kind === 'lsx' && (
+                  <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-500">
+                    {r.qty_issued ?? '—'}
+                  </td>
+                )}
+                <td className="py-1.5 pr-2 text-right tabular-nums">
+                  {/* KHO CÒN — đỏ khi không đủ cho số đang gõ. Người lấy hàng
+                      thấy ngay tại dòng thay vì bấm Lưu mới biết. */}
+                  {r.on_hand == null ? (
+                    <span className="text-zinc-300">—</span>
+                  ) : (
+                    <span
+                      className={
+                        r.qty !== '' && Number(r.qty) > r.on_hand
+                          ? 'font-semibold text-red-600 dark:text-red-400'
+                          : 'text-zinc-500'
+                      }
+                      title={
+                        r.qty !== '' && Number(r.qty) > r.on_hand
+                          ? 'Kho không đủ cho số đang xuất'
+                          : undefined
+                      }
+                    >
+                      {r.on_hand.toLocaleString('vi-VN')}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2">
                   <input

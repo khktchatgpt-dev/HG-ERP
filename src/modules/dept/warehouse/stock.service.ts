@@ -126,6 +126,18 @@ async function bomLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   })
 }
 
+/**
+ * Gắn TỒN HIỆN CÓ vào từng dòng nhu cầu (0194) — một lượt cho cả danh sách.
+ *
+ * Người lập phiếu xuất phải thấy kho còn bao nhiêu ngay tại dòng; thiếu nó thì
+ * họ gõ số mù rồi bấm Lưu mới ăn lỗi, đúng lỗi "không cho bấm rồi mới báo".
+ */
+async function kemTonKho(needs: LsxNeed[]): Promise<LsxNeed[]> {
+  if (needs.length === 0) return needs
+  const ton = await onHandMany([...new Set(needs.map((n) => n.material_id))])
+  return needs.map((n) => ({ ...n, on_hand: ton.get(n.material_id) ?? 0 }))
+}
+
 export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   const comp = await componentMaterialNeeds(productionOrderId)
   /*
@@ -136,10 +148,11 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
    * view định mức có mã cho 7 lệnh → mọi màn nhu cầu trống suốt từ 23/08.
    * Bảng định hình chỉ THAY định mức khi nó thật sự nói được cần vật tư gì.
    */
-  if (!comp || comp.length === 0) return bomLsxNeeds(productionOrderId)
+  if (!comp || comp.length === 0) return kemTonKho(await bomLsxNeeds(productionOrderId))
 
   const issued = await issuedByLsx(productionOrderId)
-  return comp.map((c) => {
+  return kemTonKho(
+    comp.map((c) => {
     const qtyNeeded = c.bars_needed ?? c.kg_needed ?? c.total_components
     const qtyIssued = issued.get(c.material_id) ?? 0
     return {
@@ -156,7 +169,8 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
       incomplete: c.incomplete,
       source: 'components' as const,
     }
-  })
+      }),
+  )
 }
 
 /**
