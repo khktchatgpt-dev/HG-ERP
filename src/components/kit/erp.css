@@ -261,11 +261,29 @@
   border-right: 1px solid var(--line);
   border-radius: 0 var(--radius) var(--radius) 0;
 }
+/* ĐÃ QUA: sắc hoàn thành NHẠT + dấu ✓. Không dùng màu hành động — tô hết bước
+   đã qua bằng màu hành động thì cả dải sáng rực và mắt không tìm ra đang ở đâu. */
+.k-step.past {
+  background: var(--done-wash);
+  border-color: var(--done-line, var(--line));
+  color: var(--ink-2);
+}
+/* CHƯA TỚI: lùi xuống nền thẻ, nhạt hơn bước đã qua — nhờ vậy hướng đi vẫn đọc
+   được cả khi không còn bước nào "đang" (đơn đã về đủ, đã huỷ). */
+.k-step:not(.past):not(.on) {
+  background: var(--surface-card);
+}
 .k-step.on {
   background: var(--act);
   border-color: var(--act);
   color: var(--act-ink);
   font-weight: 600;
+}
+/* Vòng đời DỪNG giữa chừng (đơn huỷ): cùng hình dạng, đổi màu. */
+.k-step.on.stop {
+  background: var(--stop);
+  border-color: var(--stop);
+  color: #fff;
 }
 
 /* ── 4. Dải ai đang giữ ──────────────────────────────────────────────── */

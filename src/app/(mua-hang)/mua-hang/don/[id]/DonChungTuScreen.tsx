@@ -9,6 +9,7 @@ import {
   Affected,
   Checks,
   Consequence,
+  CoverageBar,
   Crumb,
   DateInput,
   DocBody,
@@ -77,7 +78,7 @@ import {
 } from '@/lib/po-line'
 import type { ShipmentInput } from '@/lib/po-shipments'
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
-import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus, PO_TRACK_STEPS, poTrackStep } from '@/lib/po-status'
 import {
   buildPoPayload,
   draftProblem,
@@ -598,8 +599,21 @@ export function DonChungTuScreen(p: Props) {
 
   /* ── dữ kiện đầu trang ─────────────────────────────────────────────── */
   const holder = po ? poHolder(po, me.id) : null
-  const stepIdx = po ? ['draft', 'pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit'].indexOf(po.status) : 0 // prettier-ignore
+  const track = poTrackStep((po?.status ?? 'draft') as PoStatus)
   const recvIdx = po?.status === 'received' ? 2 : po?.status === 'partial' ? 1 : 0
+  /*
+    ĐỘ PHỦ VỀ KHO — chỉ tính DÒNG VẬT TƯ KHO, cùng luật với `refreshStatusFromReceipts`.
+    Dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ nên không bao giờ có phiếu
+    nhập; đếm cả chúng thì đơn hỗn hợp không bao giờ đạt 100%.
+  */
+  const veKho = (() => {
+    const DA_GUI = ['ordered', 'confirmed', 'in_transit', 'partial', 'received']
+    if (!po || !DA_GUI.includes(po.status)) return null
+    const kho = p.statusLines.filter((l) => l.material_id != null)
+    if (kho.length === 0) return null
+    const du = kho.filter((l) => Number(l.qty_open ?? 0) <= 1e-6).length
+    return { du, tong: kho.length, ratio: du / kho.length }
+  })()
   const lsx = p.lsxs.find((l) => l.id === header.lsxId)
   const supplierOpt = p.suppliers.find((s) => s.id === header.supplierId)
 
@@ -1248,21 +1262,33 @@ export function DonChungTuScreen(p: Props) {
           <>
             <StatusTrack
               label="Trạng thái đơn"
-              steps={[
-                'Nháp',
-                'Chờ duyệt',
-                'Đã duyệt',
-                'Đã gửi',
-                'NCC xác nhận',
-                'Đang giao',
-              ]}
-              at={Math.max(0, stepIdx)}
+              steps={[...PO_TRACK_STEPS]}
+              at={track.at}
+              tone={track.tone}
+              terminal={track.terminal}
             />
             <StatusTrack
               label="Nhận hàng"
               steps={['Chưa', 'Một phần', 'Đủ']}
               at={recvIdx}
             />
+            {/* VỀ ĐƯỢC BAO NHIÊU — con số, không phải ba cái chip.
+
+                Trục "Nhận hàng" chỉ nói Chưa / Một phần / Đủ. "Một phần" là 1
+                trong 4 dòng hay 39 trong 40 dòng thì cũng cùng một chữ, mà hai
+                tình huống đó quyết định khác hẳn nhau: một cái phải gọi NCC
+                ngay, một cái chờ nốt là xong. Chủ dự án hỏi đúng câu này —
+                "có về hàng chưa, về được bao nhiêu".
+
+                Đếm theo DÒNG chứ không theo số lượng cộng dồn: cộng 1.950 cái
+                nút với 8.504 con sò ra một con số vô nghĩa. Dòng đã chốt thiếu
+                tính là xong, cùng luật với `qty_open` mà sổ kho dùng. */}
+            {veKho && (
+              <div>
+                <div className="k-track-lab">Về kho</div>
+                <CoverageBar ratio={veKho.ratio} label={`${veKho.du}/${veKho.tong} dòng`} />
+              </div>
+            )}
             {/* BƯỚC KẾ TIẾP — đứng NGAY CẠNH trục trạng thái.
 
                 Lỗi chủ dự án báo 15/09/2026: "không có chuyển trạng thái". Đo
