@@ -6782,6 +6782,13 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      warehouse_book_qty_at: {
+        Args: { p_at: string; p_material_ids: string[] }
+        Returns: {
+          material_id: string
+          qty: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never
