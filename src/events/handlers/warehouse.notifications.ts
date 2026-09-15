@@ -80,7 +80,7 @@ export function registerWarehouseNotificationHandlers(): void {
           actorId: e.caused_by,
           type: 'wh_stock_low',
           payload: {
-            title: `${e.material_code} — ${e.material_name}: còn ${e.on_hand} (min ${e.min_stock})`,
+            title: `${e.material_code} — ${e.material_name}: còn dùng được ${e.qty_ok} (min ${e.min_stock})`,
           },
         }),
       ),

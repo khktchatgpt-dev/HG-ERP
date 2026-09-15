@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { searchTokens } from '@/lib/search-text'
 
 export type StockRow = {
   material_id: string
@@ -129,7 +130,10 @@ export const stockRepo = {
         .order('code', { ascending: true })
 
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
-      if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+      // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       // is_low (0160) lọc Ở SQL: PostgREST trần 1000 dòng/lượt — lọc client thì
       // vật tư dưới min ngoài 1000 mã đầu không bao giờ về tới nơi.
       if (filter.low_only) q = q.eq('is_low', true)
@@ -175,7 +179,10 @@ export const stockRepo = {
       .order('code', { ascending: true })
 
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
-    if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+    // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
     if (filter.ids) q = q.in('material_id', filter.ids)
     if (filter.bucket === 'has') q = q.gt('on_hand', 0)
     else if (filter.bucket === 'low') q = q.eq('is_low', true)
@@ -213,7 +220,10 @@ export const stockRepo = {
         .select('material_id', { count: 'exact', head: true })
         .eq('is_active', true)
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
-      if (filter.q) q = q.or(`code.ilike.%${filter.q}%,name.ilike.%${filter.q}%`)
+      // Tìm KHÔNG DẤU trên search_text (0198 mang cột 0127 ra view) — AND
+      // từng từ, nên gõ "vit 4x15" hay "4x15 vit" đều trúng. Trước đây lọc
+      // code/name CÓ DẤU: gõ "vit" không bao giờ ra "vít".
+      for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
     const [all, has, low, out, qc, blocked] = await Promise.all([
@@ -885,6 +895,8 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     material_id: string
     code: string
     name: string
+    /** DÙNG ĐƯỢC — nền tính "dưới mức" từ 0198, xem header migration. */
+    qty_ok: number
     on_hand: number
     min_stock: number
   }[]
@@ -892,7 +904,7 @@ export async function stockInfoMany(materialIds: string[]): Promise<
   if (materialIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_stock')
-    .select('material_id, code, name, on_hand, min_stock')
+    .select('material_id, code, name, qty_ok, on_hand, min_stock')
     .in('material_id', materialIds)
   return (
     (data as
@@ -900,6 +912,7 @@ export async function stockInfoMany(materialIds: string[]): Promise<
           material_id: string
           code: string
           name: string
+          qty_ok: unknown
           on_hand: unknown
           min_stock: unknown
         }[]
@@ -908,6 +921,7 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     material_id: r.material_id,
     code: r.code,
     name: r.name,
+    qty_ok: num(r.qty_ok),
     on_hand: num(r.on_hand),
     min_stock: num(r.min_stock),
   }))
@@ -1109,6 +1123,32 @@ export async function bomAllocationByCode(
       })
       out.set(materialCode, list)
     }
+  }
+  return out
+}
+
+/**
+ * Nhóm vật tư có bật "cần kiểm hàng" — `catalog_items.meta->>'needs_inspection'`
+ * (khai ở 0194, type `material_group`). Trả về tập TÊN NHÓM để so thẳng với
+ * `warehouse_materials.group_name`, vốn giữ nhãn chứ không giữ mã.
+ *
+ * 0194 khai cờ này rồi để đó — sổ §4.4 gọi đúng tên nó là "một lời hứa treo".
+ * Đây là chỗ đọc nó. Mặc định KHÔNG nhóm nào bật: chủ dự án chốt 15/09/2026
+ * rằng thủ kho vừa nhận vừa kiểm, nên tập này rỗng và hệ thống hành xử y hệt
+ * phương án hai trạng thái. Bật một nhóm là sửa một dòng dữ liệu, không phải
+ * sửa mã — đó là lý do cờ đáng giữ dù hôm nay không ai dùng.
+ */
+export async function inspectionGroups(): Promise<Set<string>> {
+  const { data } = await db()
+    .from('catalog_items')
+    .select('label, meta')
+    .eq('type', 'material_group')
+    .eq('is_active', true)
+  const out = new Set<string>()
+  for (const r of (data as { label: string; meta: unknown }[] | null) ?? []) {
+    const meta = (r.meta ?? {}) as Record<string, unknown>
+    const v = meta.needs_inspection
+    if (v === true || v === 'true') out.add(r.label)
   }
   return out
 }

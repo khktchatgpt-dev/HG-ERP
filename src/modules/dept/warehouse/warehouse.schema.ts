@@ -249,6 +249,23 @@ export const receiptDocLineSchema = z
     message: 'Dòng khai "khoá" phải ghi lý do',
     path: ['note'],
   })
+  /*
+   * HAI CÁCH NÓI "hàng này hỏng" PHẢI KHỚP NHAU (sổ §5.2).
+   *
+   * Form phiếu nhập suy `qc_status` TỪ `stock_status` nên đường đó luôn khớp,
+   * nhưng API thì chưa chặn: gọi thẳng route vẫn gửi được `qc_status:'fail'`
+   * kèm `stock_status:'ok'` — hàng vừa "không đạt" ở đối chiếu NCC vừa "dùng
+   * được" ở kho. Không ai đọc được cặp đó, và nó chỉ lộ ra khi báo cáo chất
+   * lượng NCC lệch với tồn.
+   *
+   * Luật đúng một chiều: `fail` thì lượng KHÔNG được ở trạng thái dùng được.
+   * `partial` không ràng buộc — dòng đạt một phần thì phần vào sổ là phần đạt.
+   */
+  .refine((l) => l.qc_status !== 'fail' || (l.stock_status ?? 'ok') !== 'ok', {
+    message:
+      'Dòng khai QC "không đạt" thì không thể vào trạng thái dùng được — chọn "Chờ kiểm" hoặc "Khoá"',
+    path: ['stock_status'],
+  })
 
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
 export const receiptDocSchema = z

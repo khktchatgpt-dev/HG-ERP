@@ -30,6 +30,7 @@ vi.mock('./stock.repo', () => ({
   insertMovements: vi.fn(),
   onHandMany: vi.fn(),
   stockInfoMany: vi.fn(),
+  inspectionGroups: vi.fn(async () => new Set()),
   issuedByLsx: vi.fn(),
   issuedByLsxIds: vi.fn(),
   lsxRemainingByIds: vi.fn(),
@@ -90,6 +91,7 @@ import {
   onHandMany,
   stockByBin,
   stockInfoMany,
+  inspectionGroups,
   stocktakeRepo,
   warehousesRepo,
 } from './stock.repo'
@@ -457,7 +459,16 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
   it('FR-WMS-08: tồn rơi dưới min sau xuất → emit warehouse.stock.low cho admin/manager + phòng Cung ứng', async () => {
     vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
     vi.mocked(stockInfoMany).mockResolvedValue([
-      { material_id: 'm1', code: 'VT-01', name: 'Nhôm', on_hand: 3, min_stock: 20 },
+      // qty_ok là nền tính "dưới mức" từ 0198 — on_hand giữ để thấy rõ hai số
+      // có thể khác nhau (ở đây 3 dùng được / 5 tổng, 2 đang khoá).
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        qty_ok: 3,
+        on_hand: 5,
+        min_stock: 20,
+      },
     ])
     vi.mocked(departmentsRepo.list).mockResolvedValue([
       { id: 'd-sup', name: 'Cung Ứng - Mua Hàng' },
@@ -478,11 +489,11 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
       .mocked(emit)
       .mock.calls.map((c) => c[0])
       .find((e) => e.name === 'warehouse.stock.low') as {
-      on_hand: number
+      qty_ok: number
       notify_ids: string[]
     }
     expect(evt).toBeTruthy()
-    expect(evt.on_hand).toBe(3)
+    expect(evt.qty_ok).toBe(3)
     // manager + nhân viên phòng Cung ứng; NV phòng khác bị loại. Không dùng excludeId.
     expect(evt.notify_ids).toEqual(['boss', 'sup1'])
   })
@@ -1572,5 +1583,115 @@ describe('mã lý do trên dòng sổ (0197)', () => {
     await stockService.reverseDoc(admin, 'doc-g2', 'Xuất nhầm')
     const rows = vi.mocked(insertMovements).mock.calls[0][0]
     expect(rows[0]).toMatchObject({ direction: 'in', reason_code: null })
+  })
+})
+/**
+ * CỜ "CẦN KIỂM" THEO NHÓM (0194 khai, 0198-đợt nối vào — sổ §4.4).
+ *
+ * Trước đây cờ được khai trong header migration rồi để đó: một lời hứa treo.
+ * Ba ca dưới canh đúng ba điều khiến nó đáng giữ — mặc định vô hình, bật được
+ * bằng dữ liệu, và ý người nhận thắng cờ cấu hình.
+ */
+describe('cờ cần kiểm theo nhóm vật tư (§4.4)', () => {
+  it('không nhóm nào bật → mọi dòng vào "dùng được", y hệt trước', async () => {
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set())
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0201')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('ok')
+  })
+
+  it('nhóm của vật tư có bật cờ → dòng chưa khai vào "chờ kiểm"', async () => {
+    vi.mocked(materialsRepo.findById).mockResolvedValue({
+      ...MAT,
+      group_name: 'Nhôm định hình - tấm',
+    } as never)
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set(['Nhôm định hình - tấm']))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0202')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('qc')
+  })
+
+  /**
+   * Người nhận đang đứng trước lô hàng, cờ cấu hình thì không. Khai rồi thì ý
+   * họ thắng — nếu không, thủ kho thấy hàng đạt mà hệ thống vẫn nhốt vào chờ
+   * kiểm, và lần sau họ thôi khai.
+   */
+  it('dòng ĐÃ KHAI trạng thái → cờ không đè lên', async () => {
+    vi.mocked(materialsRepo.findById).mockResolvedValue({
+      ...MAT,
+      group_name: 'Nhôm định hình - tấm',
+    } as never)
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set(['Nhôm định hình - tấm']))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0203')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10, stock_status: 'ok' }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('ok')
+  })
+})
+
+/**
+ * DƯỚI MỨC đo trên hàng DÙNG ĐƯỢC (0198, sổ §5.3). Ba nơi phải cùng công thức
+ * — view, cron quét sáng, và chỗ này. Ca dưới canh chỗ thứ ba.
+ */
+describe('cảnh báo dưới mức tính trên qty_ok (§5.3)', () => {
+  it('tổng còn nhiều nhưng DÙNG ĐƯỢC dưới min → vẫn cảnh báo', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0301')
+    vi.mocked(stockInfoMany).mockResolvedValue([
+      // 50 tổng nhưng chỉ 3 dùng được (47 đang khoá chờ trả NCC) — mua thay
+      // được chỉ là 3, nên đây PHẢI là cảnh báo.
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        qty_ok: 3,
+        on_hand: 50,
+        min_stock: 20,
+      },
+    ])
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'boss', role: 'manager', department_id: null },
+    ] as never)
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 1 }],
+    })
+    const lowEvents = vi
+      .mocked(emit)
+      .mock.calls.map((c) => c[0])
+      .filter((e) => e.name === 'warehouse.stock.low')
+    expect(lowEvents.length).toBeGreaterThan(0)
+  })
+
+  it('dùng được vẫn trên min dù tổng thấp hơn trước → KHÔNG cảnh báo', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0302')
+    vi.mocked(stockInfoMany).mockResolvedValue([
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        qty_ok: 30,
+        on_hand: 30,
+        min_stock: 20,
+      },
+    ])
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 1 }],
+    })
+    const lowEvents = vi
+      .mocked(emit)
+      .mock.calls.map((c) => c[0])
+      .filter((e) => e.name === 'warehouse.stock.low')
+    expect(lowEvents).toHaveLength(0)
   })
 })

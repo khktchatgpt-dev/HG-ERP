@@ -6628,6 +6628,7 @@ export type Database = {
           qty_blocked: number | null
           qty_ok: number | null
           qty_qc: number | null
+          search_text: string | null
           shelf_location: string | null
           unit: string | null
         }

@@ -42,18 +42,25 @@ phải việc phần mềm. Không có biển thật thì `bin_id` chỉ là m�
 **cố ý không đè**. Chúng không khớp khu nào trong 13 khu mới nên lúc cất hàng sẽ
 không có gợi ý, phải chọn tay. Vô hại, và là dấu hiệu để biết 5 mã đó cần rà.
 
-### 1.3 Ba câu nghiệp vụ còn treo
+### 1.3 Ba câu nghiệp vụ — ĐÃ CHỐT 15/09/2026
 
-| # | Câu | Chặn cái gì |
-| --- | --- | --- |
-| **a** | **Xưởng lấy vật tư thế nào ngoài thực địa?** Ai ra kho lấy · theo giấy gì · ký ở đâu | **Màn Cấp vật tư** — câu rủi ro nhất, xem §4.1 |
-| b | Có ai kiểm hàng trước khi nhập không, và là ai? | Có thể bỏ hẳn trạng thái `qc` — xem §5.4 |
-| c | Kiểm kê đếm mù hay đếm mở? | Mặc định của Đợt 3 §2.2 (đang tạm chọn **mù**) |
+| # | Câu | Chủ dự án trả lời | Kéo theo |
+| --- | --- | --- | --- |
+| **a** | Xưởng lấy vật tư thế nào ngoài thực địa? | **Tổ tự ra kho lấy, thủ kho ghi sổ sau** | Màn Cấp vật tư dựng cho THỦ KHO, không có phiếu yêu cầu — §4.1 |
+| b | Có ai kiểm hàng trước khi nhập không? | **Thủ kho vừa nhận vừa kiểm** | Giữ ba trạng thái, KHÔNG bật nhóm nào — §5.4 |
+| c | Kiểm kê đếm mù hay đếm mở? | **Đếm mù**, có công tắc cho quản lý kho | §2.2 |
 
-Câu **a** là câu quan trọng nhất trong cả sổ này. Sổ ghi `ref_type='lsx'` đúng
-**1 dòng trong 2 tháng**, nghĩa là việc cấp vật tư — mục đích chính của phân hệ
-— đang chạy hoàn toàn ngoài hệ thống. Mọi thứ khác trong sổ đúng dù trả lời thế
-nào; riêng màn Cấp vật tư thì không.
+**Câu a — hệ quả thiết kế.** Không có phiếu yêu cầu nghĩa là **không có chứng
+từ nào ghi "ai xin gì"**: sổ chỉ biết thủ kho đã xuất cho lệnh nào, không biết
+ai đứng ở quầy. Đó là đánh đổi có chủ ý (khai thêm một chứng từ nữa thì xưởng
+không dùng), nhưng phải biết mình đang mất gì: tranh chấp "tổ tôi không lấy
+chỗ đó" sau này không có chỗ tra. Bù lại bằng ô **người nhận** trên phiếu xuất
+— không bằng một vòng đời mới.
+
+**Câu b — KHÔNG bỏ hẳn `qc`.** Chủ dự án chọn "vừa nhận vừa kiểm", và chiều rẻ
+hơn là GIỮ trạng thái mà không bật nhóm nào (§5.4): chi phí bằng 0, hành xử y
+hệt phương án hai trạng thái, cần lại thì bật một cờ dữ liệu. Bỏ hẳn rồi cần
+lại là phải chia lại số dư từng mã bằng tay.
 
 ---
 
@@ -218,7 +225,7 @@ Thiếu làn thứ tư: **NCC không nhận hẹn ngày, "giao khi có xe"** —
 ngoài không có mà NCC Việt Nam bắt buộc phải có. Giấu tập đó đi thì thủ kho phải
 nhớ bằng đầu.
 
-### 4.4 Cờ `needs_inspection` theo nhóm — khai rồi, CHƯA ĐỌC
+### 4.4 ~~Cờ `needs_inspection` khai rồi chưa đọc~~ — XONG 15/09/2026
 
 `0194` khai trong header rằng cờ nằm ở `catalog_items.meta->>'needs_inspection'`
 (type `material_group`), mặc định tắt. **Chưa nơi nào đọc nó.**
@@ -245,14 +252,14 @@ thứ gây nhầm mà cả bản thiết kế chê.
 Việc cần làm: bỏ ô "QC loại" khỏi form, chuyển mọi nơi đọc `qty_rejected` sang
 đếm dòng `stock_status='blocked'`.
 
-### 5.2 `qc_status` chỉ nhất quán ở ĐƯỜNG FORM
+### 5.2 ~~`qc_status` chỉ nhất quán ở ĐƯỜNG FORM~~ — XONG 15/09/2026
 
 Form phiếu nhập suy `qc_status` từ `stock_status` (đạt→pass, sai quy cách→fail)
 nên một điều khiển, hai cột luôn khớp. Nhưng **API vẫn nhận hai trường rời nhau**
 — gọi thẳng `/api/dept/warehouse/docs/receipt` vẫn gửi được `qc_status: 'fail'`
 kèm `stock_status: 'ok'`. Service chưa chặn.
 
-### 5.3 `is_low` vẫn tính trên `on_hand`, không trên `qty_ok`
+### 5.3 ~~`is_low` tính trên `on_hand`~~ — XONG 15/09/2026 (0198)
 
 **Cố ý**, ghi lý do trong header `0194`: nó là ngưỡng đặt lại hàng, và `0160` ghi
 rõ ba nơi phải đồng nhất (view + cron `0159` + `notifyLowStock`). Đổi nền tính là
@@ -262,7 +269,7 @@ rõ ba nơi phải đồng nhất (view + cron `0159` + `notifyLowStock`). Đổ
 Lập luận cho việc đổi: hàng khoá sắp trả NCC thì không nên tính vào "tôi có đủ
 chưa để khỏi phải mua".
 
-### 5.4 Trạng thái `qc` có thể thừa
+### 5.4 ~~Trạng thái `qc` có thể thừa~~ — GIỮ, chủ dự án chốt 15/09/2026
 
 Chờ câu §1.3b. Thủ kho vừa nhận vừa kiểm → bỏ `qc`, còn `ok`/`blocked`: phiếu
 nhập còn hai lựa chọn thay vì ba, màn Tồn bớt một cột, bớt một rổ.
@@ -270,7 +277,7 @@ nhập còn hai lựa chọn thay vì ba, màn Tồn bớt một cột, bớt m�
 **Giữ là chiều rẻ hơn**: không bật nhóm nào thì trạng thái đó không bao giờ xuất
 hiện — chi phí bằng 0. Bỏ hẳn rồi cần lại thì phải chia lại số dư từng mã bằng tay.
 
-### 5.5 Tìm ở màn Tồn kho CÓ DẤU
+### 5.5 ~~Tìm ở màn Tồn kho CÓ DẤU~~ — XONG 15/09/2026 (0198)
 
 View `warehouse_stock` không có cột `search_text` không dấu như bảng
 `warehouse_materials`, nên gõ "vit" không ra "vít". Vá bằng cách thêm cột vào

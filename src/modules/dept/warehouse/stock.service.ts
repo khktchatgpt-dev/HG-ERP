@@ -6,6 +6,7 @@ import {
   insertMovements,
   onHandMany,
   stockInfoMany,
+  inspectionGroups,
   issuedByLsx,
   issuedByLsxIds,
   lsxRemainingByIds,
@@ -599,10 +600,13 @@ export const stockService = {
       }
     }
     const matIds = [...new Set(input.lines.map((l) => l.material_id))]
+    /** material_id → tên nhóm, để biết nhóm nào phải qua kiểm (0194 §4.4). */
+    const groupOf = new Map<string, string | null>()
     for (const id of matIds) {
       const mat = await materialsRepo.findById(id)
       if (!mat) throw NotFound('Vật tư không tồn tại')
       if (!mat.is_active) throw BadRequest(`Vật tư "${mat.name}" đã ngừng sử dụng`)
+      groupOf.set(id, mat.group_name ?? null)
     }
     if (input.po_id && input.lines.some((l) => !l.po_line_id)) {
       throw BadRequest('Nhập theo đơn đặt: mỗi dòng phải gắn dòng PO tương ứng')
@@ -674,6 +678,20 @@ export const stockService = {
     const [recvBin, blockedBin] = needBins || [null, null]
     const binFor = (l: { bin_id?: string | null; stock_status?: StockStatus }) =>
       l.bin_id ?? (l.stock_status === 'blocked' ? blockedBin?.id : recvBin?.id) ?? null
+
+    /*
+     * TRẠNG THÁI MẶC ĐỊNH theo cờ "cần kiểm" của NHÓM (0194, sổ §4.4).
+     *
+     * Chỉ áp cho dòng NGƯỜI DÙNG KHÔNG KHAI: khai rồi thì ý người nhận thắng
+     * cờ cấu hình — họ đang đứng trước lô hàng, cờ thì không.
+     *
+     * Không nhóm nào bật (mặc định hôm nay) thì tập rỗng và mọi dòng vào 'ok',
+     * y hệt trước. Một truy vấn danh mục nhỏ mỗi phiếu nhập, không theo dòng.
+     */
+    const needQc = await inspectionGroups()
+    const statusFor = (l: { material_id: string; stock_status?: StockStatus }) =>
+      l.stock_status ??
+      (needQc.size > 0 && needQc.has(groupOf.get(l.material_id) ?? '') ? 'qc' : 'ok')
     // Ghi vết khi cố ý nhận vượt số còn thiếu — để hậu kiểm đối chiếu với NCC.
     const docNote = input.allow_over
       ? `${input.note ? `${input.note} · ` : ''}[Nhận vượt] ${input.over_reason ?? ''}`.trim()
@@ -737,7 +755,7 @@ export const stockService = {
           created_by: user.id,
           doc_id: doc.id,
           warehouse_id: warehouseId,
-          stock_status: l.stock_status ?? 'ok',
+          stock_status: statusFor(l),
           bin_id: binFor(l),
           po_line_id: l.po_line_id ?? null,
           production_order_id: input.production_order_id ?? null,
@@ -932,7 +950,9 @@ export const stockService = {
     )
 
     const after = await stockInfoMany([...need.keys()])
-    const lows = after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0)
+    // DƯỚI MỨC đo trên hàng DÙNG ĐƯỢC (0198) — cùng công thức với view và
+    // cron quét sáng; ba nơi lệch nhau là ba tập vật tư khác nhau.
+    const lows = after.filter((r) => r.qty_ok < r.min_stock && r.min_stock > 0)
     await notifyLowStock(user, lows)
     return { id: doc.id, code: doc.code }
   },
@@ -1057,7 +1077,7 @@ export const stockService = {
       const after = await stockInfoMany(adjusts.map((l) => l.material_id))
       await notifyLowStock(
         user,
-        after.filter((r) => r.on_hand < r.min_stock && r.min_stock > 0),
+        after.filter((r) => r.qty_ok < r.min_stock && r.min_stock > 0),
       )
     }
     if (doc.created_by && doc.created_by !== user.id) {
@@ -1445,7 +1465,8 @@ async function notifyLowStock(
     material_id: string
     code: string
     name: string
-    on_hand: number
+    /** DÙNG ĐƯỢC — nền tính "dưới mức" từ 0198. */
+    qty_ok: number
     min_stock: number
   }[],
 ): Promise<void> {
@@ -1468,7 +1489,7 @@ async function notifyLowStock(
       material_id: low.material_id,
       material_code: low.code,
       material_name: low.name,
-      on_hand: low.on_hand,
+      qty_ok: low.qty_ok,
       min_stock: low.min_stock,
       caused_by: user.id,
       notify_ids: recipientIds,

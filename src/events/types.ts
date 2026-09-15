@@ -87,7 +87,12 @@ export type DomainEvent =
       material_id: string
       material_code: string
       material_name: string
-      on_hand: number
+      /**
+       * DÙNG ĐƯỢC, không phải tổng (0198). Thông báo phải bày CHÍNH con số đã
+       * quyết có cảnh báo hay không — nói "còn 50" trong khi quyết theo 3 thì
+       * người đọc tưởng hệ thống lỗi.
+       */
+      qty_ok: number
       min_stock: number
       caused_by: string
       notify_ids: string[]
