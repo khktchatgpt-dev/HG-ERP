@@ -6276,36 +6276,55 @@ export type Database = {
       }
       warehouse_stocktake_lines: {
         Row: {
-          counted_qty: number
+          book_qty_frozen: number | null
+          counted_at: string | null
+          counted_by: string | null
+          counted_qty: number | null
           created_at: string
-          diff: number
-          doc_id: string
+          diff: number | null
+          doc_id: string | null
           id: string
           material_id: string
           note: string | null
+          stocktake_id: string | null
           system_qty: number
         }
         Insert: {
-          counted_qty: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff: number
-          doc_id: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty: number
         }
         Update: {
-          counted_qty?: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff?: number
-          doc_id?: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id?: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktake_lines_counted_by_fkey"
+            columns: ["counted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_stocktake_lines_doc_id_fkey"
             columns: ["doc_id"]
@@ -6333,6 +6352,102 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "warehouse_stock"
             referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_stocktake_id_fkey"
+            columns: ["stocktake_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stocktakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_stocktakes: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          assigned_to: string | null
+          blind_count: boolean
+          code: string
+          created_at: string
+          created_by: string
+          doc_id: string | null
+          freeze_at: string | null
+          id: string
+          note: string | null
+          reject_reason: string | null
+          scope_count: number
+          scope_kind: string
+          scope_ref: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code: string
+          created_at?: string
+          created_by: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind?: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktakes_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
+            referencedColumns: ["id"]
           },
         ]
       }
