@@ -3332,6 +3332,7 @@ export type Database = {
       }
       supply_po_shipments: {
         Row: {
+          code: string | null
           created_at: string
           created_by: string | null
           expected_date: string
@@ -3345,6 +3346,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date: string
@@ -3358,6 +3360,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date?: string

@@ -125,12 +125,19 @@ export default async function WarehouseInboundPage() {
                       <CalendarDays className="size-3.5" strokeWidth={1.8} />
                       {dmy(s.expected_date)}
                     </span>
-                    <DocChip className="text-[11px]">{s.po_code}</DocChip>
+                    {/* MÃ ĐỢT đứng TRƯỚC mã đơn (0193). Kho làm việc trên lô
+                        hàng trước mặt, không trên đơn: gọi tài xế, ghi lên
+                        thùng, tra lại sau — đều cần một cái tên riêng. "đợt 2"
+                        thì phải hỏi tiếp "đợt 2 của đơn nào". Mã đơn lùi xuống
+                        làm chú thích vì nó là chiều truy ngược, không phải
+                        chiều làm việc. */}
+                    <DocChip className="text-[11px]">{s.code ?? `đợt ${s.seq}`}</DocChip>
                     <span className="t-body min-w-0 flex-1 truncate font-medium">
                       {s.supplier_name}
                     </span>
                     <span className="text-muted-foreground shrink-0 text-[11.5px]">
-                      đợt {s.seq} · {s.line_count} dòng ·{' '}
+                      <span className="t-data">{s.po_code}</span> · đợt {s.seq} ·{' '}
+                      {s.line_count} dòng ·{' '}
                       <span className="t-data">
                         {s.total_qty.toLocaleString('vi-VN')}
                       </span>
