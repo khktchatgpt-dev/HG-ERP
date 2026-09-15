@@ -1,7 +1,7 @@
 import { todayVn } from '@/lib/date-vn'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { canEnterWorkspace } from '@/workspaces/access'
+import { canEnterWorkspace, listAccessibleWorkspaces } from '@/workspaces/access'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { countMyTodos } from '@/lib/supply-watch'
 import { SupplyShell } from './_shell/SupplyShell'
@@ -48,8 +48,22 @@ export default async function CungUngLayout({ children }: { children: React.Reac
     inboxCount = 0
   }
 
+  /*
+    Khu người này vào được — CÙNG NGUỒN với vỏ cũ (`listAccessibleWorkspaces`),
+    không khai tập quyền thứ hai. Thiếu nó thì admin và người xem chéo vào đây
+    là kẹt: rail không còn đường sang phòng khác ngoài gõ URL.
+  */
+  const switchable = (await listAccessibleWorkspaces(user)).map((a) => ({
+    id: a.workspace.id,
+    readonly: a.readonly,
+  }))
+
   return (
-    <SupplyShell user={{ name: user.name ?? user.email, role: 'Mua hàng' }} inboxCount={inboxCount}>
+    <SupplyShell
+      user={{ name: user.name ?? user.email, role: 'Mua hàng' }}
+      switchable={switchable}
+      inboxCount={inboxCount}
+    >
       {children}
     </SupplyShell>
   )
