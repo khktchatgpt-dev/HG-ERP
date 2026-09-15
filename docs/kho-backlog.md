@@ -79,8 +79,10 @@ sao và cái gì còn phải dọn.
 - **Nguồn luật là file TS, bảng DB giữ toàn vẹn FK.** Có test đọc thẳng file SQL
   seed so với danh sách TS, nên hai bên không lệch mà không ai biết.
 
-**⚠️ `0197` CHƯA APPLY lên DB remote** (phiên này không có quyền MCP Supabase).
-Phải apply trước khi làm bước 2, và `sync types` ngay sau đó.
+**`0197` ĐÃ APPLY lên DB remote 15/09/2026** (version `20260915124609`), types
+đã sync. Kiểm chứng trên DB thật: 14 mã · 4 mã cần duyệt · 6 mã vào giá thành ·
+RLS bật · `movements.reason_code` nullable có index một phần · **265 dòng sổ cũ
+đều null**, đúng chủ ý không backfill.
 
 **Bước 2 — CÒN LẠI**: zod bắt `reason_code` cho dòng mới · service ghi mã ·
 lưới soạn phiếu đổi cột theo `doiUng` của mã · sổ phiếu lọc theo mã (§2.5) ·

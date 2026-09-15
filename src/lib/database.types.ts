@@ -6084,6 +6084,7 @@ export type Database = {
           qty: number
           qty_rejected: number
           qty2_actual: number | null
+          reason_code: string | null
           ref_no: string | null
           ref_type: string
           shelf_location: string | null
@@ -6107,6 +6108,7 @@ export type Database = {
           qty: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type: string
           shelf_location?: string | null
@@ -6130,6 +6132,7 @@ export type Database = {
           qty?: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type?: string
           shelf_location?: string | null
@@ -6217,6 +6220,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "warehouse_movements_reason_code_fkey"
+            columns: ["reason_code"]
+            isOneToOne: false
+            referencedRelation: "warehouse_reason_codes"
+            referencedColumns: ["code"]
+          },
+          {
             foreignKeyName: "warehouse_movements_warehouse_id_fkey"
             columns: ["warehouse_id"]
             isOneToOne: false
@@ -6224,6 +6234,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      warehouse_reason_codes: {
+        Row: {
+          active: boolean
+          affects_cost: boolean
+          code: string
+          created_at: string
+          direction: string
+          name: string
+          needs_approval: boolean
+          requires: string[]
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          affects_cost?: boolean
+          code: string
+          created_at?: string
+          direction: string
+          name: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          affects_cost?: boolean
+          code?: string
+          created_at?: string
+          direction?: string
+          name?: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       warehouse_stocktake_lines: {
         Row: {
