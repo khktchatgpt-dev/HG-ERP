@@ -501,10 +501,26 @@ export function DocsManager({
           columns={columns}
           storageKey="warehouse-docs"
           emptyState={
+            /*
+              TRẠNG THÁI RỖNG PHẢI NÓI LÝ DO, không nói một câu chung.
+              "Chưa có phiếu nào · Lập phiếu nhập khi hàng về" là SAI khi sổ có
+              49 phiếu mà chỉ là không phiếu nào mang mã đang lọc — người đọc
+              tưởng sổ trống. Ba ngữ cảnh, ba câu khác nhau.
+            */
             <EmptyState
               icon="▥"
-              title={docs.length === 0 ? 'Chưa có phiếu nào' : 'Không khớp bộ lọc'}
-              description="Lập phiếu nhập khi hàng về, phiếu xuất khi cấp vật tư cho xưởng."
+              title={
+                initialReason
+                  ? `Không phiếu nào mang mã ${initialReason}`
+                  : docs.length === 0
+                    ? 'Chưa có phiếu nào'
+                    : 'Không khớp bộ lọc'
+              }
+              description={
+                initialReason
+                  ? `${nhanLyDo(initialReason)} — sổ vẫn còn ${stats.total} phiếu ở các mã khác. Dòng ghi trước 15/09/2026 chưa có mã lý do nên không lọt bộ lọc này.`
+                  : 'Lập phiếu nhập khi hàng về, phiếu xuất khi cấp vật tư cho xưởng.'
+              }
             />
           }
         />
@@ -1824,7 +1840,9 @@ function IssueForm({
       {kind === 'daily' && (
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1 text-sm">
-            Mã lý do <span className="text-[var(--stop)]">*</span>
+            <span>
+              Mã lý do <span className="text-[var(--stop)]">*</span>
+            </span>
             <select
               value={maLyDo}
               onChange={(e) => setMaLyDo(e.target.value)}

@@ -483,7 +483,7 @@ export function StockManager({
                 value={q}
                 onChange={setQ}
                 onEnter={() => pushFilter({ q })}
-                placeholder="Mã hoặc tên (có dấu), Enter để tìm…"
+                placeholder="Mã hoặc tên — gõ không dấu cũng được, Enter để tìm…"
                 icon="⌕"
                 className="w-72"
               />
