@@ -407,9 +407,54 @@ export function DonNccScreen({
           ) : groups ? (
             groups.map(([lsx, rows]) => (
               <section key={lsx}>
-                <header className="bg-muted/40 border-border/60 flex items-center gap-2 border-b px-4 py-2">
+                <header className="bg-muted/40 border-border/60 flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2">
                   <b className="t-data text-[12.5px]">{lsx}</b>
-                  <span className="text-muted-foreground text-xs">{rows.length} đơn</span>
+                  {/* TÓM TẮT CẢ LỆNH, không chỉ đếm đơn.
+
+                      Kho mở màn này để hỏi "hàng của lệnh này về tới đâu, ngày
+                      nào" — "3 đơn" không trả lời câu nào trong hai câu đó, phải
+                      bung từng đơn ra cộng nhẩm. Ba con số dưới đây trả lời
+                      thẳng: còn bao nhiêu dòng chưa về, lô gần nhất ngày nào, và
+                      có lô nào quá hẹn không. */}
+                  {(() => {
+                    const con = rows.reduce(
+                      (a, r) => a + Math.max(0, r.lines_total - r.lines_done),
+                      0,
+                    )
+                    const ngay = rows
+                      .map((r) => r.next_shipment?.date ?? r.expected_at?.slice(0, 10) ?? null)
+                      .filter((d): d is string => !!d)
+                      .sort()
+                    const som = ngay[0] ?? null
+                    const tre = ngay.filter((d) => d < today).length
+                    return (
+                      <>
+                        <span className="text-muted-foreground text-xs">
+                          {rows.length} đơn
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          ·{' '}
+                          {con > 0 ? (
+                            <>
+                              còn <b className="t-data">{con}</b> dòng chưa về
+                            </>
+                          ) : (
+                            'đã về đủ'
+                          )}
+                        </span>
+                        {som && (
+                          <span className="text-muted-foreground text-xs">
+                            · gần nhất <span className="t-data">{dmy(som)}</span>
+                          </span>
+                        )}
+                        {tre > 0 && (
+                          <Badge tone="red">
+                            {tre} lô quá hẹn
+                          </Badge>
+                        )}
+                      </>
+                    )
+                  })()}
                   {lsx !== 'Ngoài LSX' && (
                     <Link
                       href="/warehouse/xuat"
