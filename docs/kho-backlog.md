@@ -124,10 +124,35 @@ nếu không báo cáo sẽ nói tháng 8 không có phiếu nào.
 Thiết kế đầy đủ ở [`thiet-ke-kho.md` §5.3](thiet-ke-kho.md) và bảng 12 mã ở
 [`thiet-ke-kho-ui.md` §2.2](thiet-ke-kho-ui.md).
 
-### 2.2 Đợt kiểm kê có phạm vi và sổ đóng băng
+### 2.2 ~~Đợt kiểm kê có phạm vi và sổ đóng băng~~ — XONG 15/09/2026
 
 Bảng `warehouse_stocktakes` + `warehouse_stocktake_lines.book_qty_frozen`.
 Xem [`thiet-ke-kho.md` §5.4](thiet-ke-kho.md).
+
+**Đã làm** (0199 + 0200, service + API + hai màn, 21 test):
+
+- `warehouse_stocktakes`: phạm vi lưu được (bin/group/list, KHÔNG có "all"),
+  `scope_count` chốt lúc mở, `blind_count`, vòng đời Mở → Đang đếm → Đối chiếu
+  → Đã duyệt, phân người đếm.
+- **Sổ đóng băng**: `freeze_at` là một MỐC THỜI GIAN, không phải cờ. Tồn đóng
+  băng = cộng dồn dòng sổ có `created_at <= mốc` (RPC 0200). Sổ vẫn chỉ cộng
+  thêm — không sao chép số dư đi đâu, chỉ ghi nhớ cắt ở đâu.
+- **Chênh áp là DELTA** so với sổ chốt, không phải "đặt tồn = số đếm". Khác
+  `approveStocktake` đời cũ, và khác có lý do: đặt tồn = số đếm sẽ xoá sạch mọi
+  phiếu phát sinh sau lúc chốt — đúng quãng người ta đang đếm.
+- **Đếm mù thực thi Ở SERVER**, kể cả số DÒNG LỆCH (gõ thử rồi xem "0 dòng
+  lệch" là suy ra được số sổ).
+- **"Chưa đếm" khác "đếm được 0"** — không cho gửi đối chiếu khi còn mã chưa
+  đếm.
+- Hai màn: `/warehouse/kiem-ke` (Khuôn C) + `/warehouse/kiem-ke/[id]` (D+F),
+  dựng bằng kit, lint mức error sạch.
+
+**CÒN LẠI**: chạy nốt nửa sau của luồng trên giao diện (chốt sổ → đếm → gửi
+đối chiếu → duyệt). Mở đợt đã chạy thật: `KK-2026-0005` (nhóm Dây mây, 254 mã,
+open). Màn cũ `/warehouse/stocktake` còn URL nhưng đã rút khỏi menu — gỡ hẳn
+sau khi đợt chạy thật một lần.
+
+<details><summary>Ghi chép gốc của mục này</summary>
 
 Đợt 1 đã chặn đường "đếm cả danh mục" (bắt chọn phạm vi trước) — đó là hàng rào
 tạm, dựng được ngay, không cần migration. Cái thật còn thiếu:
@@ -142,10 +167,27 @@ tạm, dựng được ngay, không cần migration. Cái thật còn thiếu:
 
 Mẫu chạy được: [`/design-lab/kho/kiem-ke`](../src/app/design-lab/kho/kiem-ke/page.tsx).
 
-### 2.3 Màn Hàng mắc
+</details>
 
-[`/design-lab/kho/hang-khoa`](../src/app/design-lab/kho/hang-khoa/page.tsx) đã
-dựng mẫu; màn thật chưa có.
+### 2.3 ~~Màn Hàng mắc~~ — XONG 15/09/2026
+
+Màn thật: [`/warehouse/hang-mac`](../src/app/(workspace)/warehouse/hang-mac/page.tsx)
+(mẫu cũ ở [`/design-lab/kho/hang-khoa`](../src/app/design-lab/kho/hang-khoa/page.tsx)).
+
+**Đây cũng là ĐƯỜNG GHI ĐẦU TIÊN cho C2/C3** — trước đó hai mã chuyển trạng
+thái là lời hứa treo: bảng khai, lib khai luật, nhưng không hành động nào sinh
+ra dòng mang mã đó.
+
+- Đổi trạng thái = một CẶP dòng sổ nối `transfer_group`, cùng kệ (luật 0194).
+  Mã suy từ CHIỀU, không nhận từ client.
+- Lý do bắt buộc CẢ HAI CHIỀU — mở khoá cũng phải có người ký tên.
+- Dòng huỷ mang `stock_status=blocked`, không phải `ok`.
+- Cột tuổi đổi màu theo hai mốc, bảng xếp GIÀ TRƯỚC.
+
+**CÒN LẠI của mục này**: gộp nhiều lô CÙNG NCC vào MỘT phiếu trả. Hiện nút
+"Trả NCC" dẫn sang trang đơn mua và trả từng dòng — đúng nghiệp vụ nhưng chưa
+gom được một chuyến xe. Và X4 đang siết bằng VAI thay vì vòng duyệt (xem
+dưới).
 
 Màn này **chỉ tồn tại được vì hàng không đạt nay vào sổ** (Đợt 2). Cột **tuổi**
 là lý do nó tồn tại: hàng mắc không ai nhắc thì nằm hết tháng. Người phải quyết
