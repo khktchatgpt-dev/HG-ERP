@@ -59,19 +59,40 @@ nào; riêng màn Cấp vật tư thì không.
 
 ## 2. Đợt 3 — mã lý do + kiểm kê có phạm vi
 
-### 2.1 Mười hai mã lý do ⚠️ CÓ VA CHẠM, ĐỌC §6.1 TRƯỚC
+### 2.1 Mười hai mã lý do — ĐÃ CHỐT ĐƯỜNG, NỀN DỮ LIỆU XONG
 
-Bảng `warehouse_reason_codes` + `warehouse_movements.reason_code`. Thiết kế đầy
-đủ ở [`thiet-ke-kho.md` §5.3](thiet-ke-kho.md) và bảng 12 mã ở
+**Va chạm §6.1 đã chốt 15/09/2026: mã nằm trên DÒNG SỔ.** Xem §6.1 để biết vì
+sao và cái gì còn phải dọn.
+
+**Bước 1 — nền dữ liệu: XONG** (`0197_warehouse_reason_codes.sql` +
+[`src/lib/kho-ma-ly-do.ts`](../src/lib/kho-ma-ly-do.ts) + 22 test).
+
+- Bảng `warehouse_reason_codes` (14 mã, không phải 12 — xem dưới) +
+  `warehouse_movements.reason_code` nullable có FK.
+- **Bộ 12 gốc nở thành 14**: nuốt trọn 7 mã của phiên kia, thêm `X6` (xuất dùng
+  chung · sửa chữa) và `X7` (xuất khác). Bộ 12 gốc gộp chúng vào `X2`, mà `X2`
+  vào giá thành LỆNH còn hai cái này là chi phí chung — gộp là mất đúng chỗ kế
+  toán cần tách.
+- **Không backfill 265 dòng cũ.** Sổ chỉ cộng thêm (luật 0194); chỗ đọc suy mã
+  qua `suyMaTuLichSu(ref_type, direction)`. `adjust` và `daily` **trả null có
+  chủ ý** — chúng không suy được, và đoán bừa thành `X7` là bịa số cho báo cáo.
+- **Nguồn luật là file TS, bảng DB giữ toàn vẹn FK.** Có test đọc thẳng file SQL
+  seed so với danh sách TS, nên hai bên không lệch mà không ai biết.
+
+**⚠️ `0197` CHƯA APPLY lên DB remote** (phiên này không có quyền MCP Supabase).
+Phải apply trước khi làm bước 2, và `sync types` ngay sau đó.
+
+**Bước 2 — CÒN LẠI**: zod bắt `reason_code` cho dòng mới · service ghi mã ·
+lưới soạn phiếu đổi cột theo `doiUng` của mã · sổ phiếu lọc theo mã (§2.5) ·
+`needsApproval` nối vào đường duyệt.
+
+Chừng nào bước 2 chưa xong thì "vì sao có dòng sổ này" **vẫn tán ra ba chỗ**:
+`docs.kind` (4 giá trị) + `movements.ref_type` (6 giá trị) + ô `reason` tự do.
+Bảng mã đã có nhưng chưa nơi nào GHI vào — cột `reason_code` hôm nay rỗng trên
+mọi dòng, nên đừng đọc nó như một nguồn số cho tới khi bước 2 xong.
+
+Thiết kế đầy đủ ở [`thiet-ke-kho.md` §5.3](thiet-ke-kho.md) và bảng 12 mã ở
 [`thiet-ke-kho-ui.md` §2.2](thiet-ke-kho-ui.md).
-
-Ý đáng chép của movement type SAP không phải con số 200 mã, mà là **mã lý do
-quyết định ba thứ cùng lúc**: trường đối ứng nào bắt buộc · có phải duyệt không
-· lưới soạn phiếu hiện cột nào.
-
-Hôm nay ba thứ đó tán ra ba chỗ rời nhau: `docs.kind` (4 giá trị) +
-`movements.ref_type` (6 giá trị) + ô `reason` văn bản tự do. Không chỗ nào ràng
-buộc nổi "xuất huỷ thì bắt buộc có lý do".
 
 ### 2.2 Đợt kiểm kê có phạm vi và sổ đóng băng
 
@@ -282,11 +303,30 @@ nhánh này**:
 Chúng do **phiên khác** apply lên cùng một DB remote (còn hai worktree khác đang
 chạy). Hai hệ quả:
 
-**① `warehouse_docs.reason_code` TRÙNG KHÁI NIỆM với Đợt 3 §2.1.** Họ đặt mã lý
-do trên **PHIẾU**; bản thiết kế đặt trên **DÒNG SỔ** (`warehouse_movements`) vì
-một phiếu có thể có dòng nhập mua và dòng nhập trả lẫn nhau. **Phải chốt một
-đường trước khi làm Đợt 3** — làm cả hai là hai bộ từ vựng đánh nhau, đúng thứ
-`tieu-chi-workflow-erp.md` §2.1 cấm.
+**① `warehouse_docs.reason_code` TRÙNG KHÁI NIỆM với Đợt 3 §2.1 — ĐÃ CHỐT
+15/09/2026: MÃ NẰM TRÊN DÒNG SỔ.**
+
+Họ đặt mã lý do trên **PHIẾU**; bản thiết kế đặt trên **DÒNG SỔ**. Lập luận
+quyết định không phải "chuẩn SAP" mà là một dòng mã đo được:
+[`stock.service.ts:725`](../src/modules/dept/warehouse/stock.service.ts:725)
+tính `ref_type` **theo từng dòng** cho phiếu nhập
+(`l.po_line_id ? 'po' : … : 'external'`) — nên một phiếu nhập **hôm nay đã trộn
+được** dòng mua theo đơn và dòng mua ngoài đơn. Mã trên phiếu thì cặp dòng đó
+chỉ mang được một mã, hoặc phải cấm trộn, tức đổi hành vi một form đang chạy
+thật. Đường xuất thì `ref_type: input.kind` theo phiếu, nên phiên kia **không
+sai với phần họ chạm** — chỉ là chỗ đặt không phủ nổi đường nhập.
+
+**Còn phải dọn** (KHÔNG làm trong `0197`, cố ý):
+
+- `warehouse_docs.reason_code` vẫn còn trên DB và **nhánh kia đang chạy trên
+  nó**. Drop một cột đang có code đọc là làm hỏng worktree người khác.
+- Sau khi nhánh `feat/cung-ung-nap-du-lieu-va-soan-don` merge: chuyển 69 dòng
+  UI + schema + repo của họ sang ghi `movements.reason_code`, ánh xạ 7 mã → mã
+  mới (`sx`→X1 · `bu-hao`→X2 · `sua-may`/`mau`/`noi-bo`→X6 · `huy`→X4 ·
+  `khac`→X7), rồi **một migration riêng** drop cột trên phiếu. Chừng nào chưa
+  drop thì đúng là hai đường cùng sống — đây là **nợ có hạn**, không phải thiết
+  kế.
+- `src/lib/ly-do-xuat.ts` của họ bị `kho-ma-ly-do.ts` thay; xoá cùng lượt đó.
 
 **② `database.types.ts` trong nhánh này là SIÊU TẬP.** Nó sync từ DB thật nên
 chứa cả cột của họ, trong khi `supabase/migrations/` ở đây không tạo những cột
@@ -300,3 +340,24 @@ migrations của nhánh này sẽ thiếu ba thứ trên.
 được merge**. Nghĩa là các nhánh khác đang thấy schema mới mà không có file.
 Bình thường với cách làm hiện tại, nhưng nếu ai revert nhánh này thì phải **gỡ
 schema bằng tay** — `git revert` không đụng tới DB.
+
+### 6.3 TRÙNG SỐ MIGRATION 0193 · 0194 · 0195 ⚠️ CHẶN MERGE
+
+Phát hiện 15/09/2026, sổ trước chưa ghi. **Hai nhánh dùng cùng ba số cho sáu
+việc khác nhau**, và cả sáu đã apply lên DB remote:
+
+| Số | Nhánh này (`feat/thiet-ke-kho`) | Nhánh kia (`feat/cung-ung-nap-du-lieu-va-soan-don`) |
+| --- | --- | --- |
+| `0193` | `warehouse_bins` | `dot_giao_co_ma` |
+| `0194` | `warehouse_stock_status` | `phieu_kho_ghi_to_nhan` |
+| `0195` | `warehouse_bins_seed_thuc_te` | `phieu_xuat_ly_do_co_ma` |
+
+Vi phạm quy ước CLAUDE.md ("Never reuse a number"). Merge cả hai vào `main` thì
+thư mục có hai `0193`, hai `0194`, hai `0195` — và ai dựng DB mới từ thư mục
+này sẽ chạy chúng theo thứ tự chữ cái, không theo thứ tự đã chạy thật.
+
+**Cách gỡ**: nhánh này ff được lên `main` nên **merge trước và giữ số**; nhánh
+kia đánh lại thành `0198/0199/0200` (`0197` đã dùng). Đổi TÊN FILE không đụng
+DB — `supabase_migrations.schema_migrations` ghi version theo dấu thời gian
+(`20260915061650`…), không theo tên file trong repo. **Việc đổi số là của phiên
+đang giữ nhánh kia**, đừng sửa chéo worktree.
