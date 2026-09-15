@@ -71,7 +71,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-view-b {
   border: 1px solid var(--line);
@@ -153,7 +153,7 @@
 }
 .k-grp-lab {
   font-size: var(--fs-label);
-  color: var(--ink-3);
+  color: var(--ink-label);
   text-align: center;
   padding: 3px 0 2px;
 }
@@ -204,7 +204,7 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-doc-no {
   margin: 1px 0 0;
@@ -229,7 +229,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   margin-bottom: 3px;
 }
 .k-steps {
@@ -504,7 +504,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -590,6 +590,17 @@
 }
 
 /* ── 8. Thanh công cụ lưới + trạng thái dòng ─────────────────────────── */
+/* MẶT GIẤY, KHÔNG PHẢI DẢI TÔ.
+
+   Thanh này nằm ĐÈ NGAY TRÊN hàng tiêu đề cột của lưới, mà hàng đó cũng
+   `--surface-raised`. Hai dải cùng một màu dán liền nhau đọc ra MỘT mảng xám
+   dày, không còn thấy đâu là nút bấm đâu là tên cột — chủ dự án báo 15/09/2026
+   "một số màu nền bị trùng rất khó nhìn"; đo ra chênh lệch đúng 1.00.
+
+   Trong một bảng chỉ ĐƯỢC PHÉP MỘT dải tô, và suất đó thuộc về hàng tiêu đề
+   cột: nó dính khi cuộn nên phải đọc được đè lên dòng dữ liệu chạy dưới. Thanh
+   công cụ là hành động chứ không phải dữ liệu, để trên mặt giấy và ngăn bằng
+   vạch — đúng luật "khối ngăn nhau bằng một vạch mảnh, không thẻ nổi". */
 .k-gbar {
   display: flex;
   align-items: center;
@@ -598,7 +609,7 @@
   padding: 5px 8px;
   border-top: 1px solid var(--hair);
   border-bottom: 1px solid var(--line);
-  background: var(--surface-raised);
+  background: var(--surface-card);
 }
 .k-gb {
   border: 1px solid var(--line);
@@ -696,7 +707,7 @@
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: var(--ink-3);
+  color: var(--ink-label);
   padding: 6px var(--pad-x);
   white-space: nowrap;
   position: sticky;
@@ -776,7 +787,7 @@
   background: var(--surface-raised);
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--hair);
-  color: var(--ink-3);
+  color: var(--ink-label);
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -866,7 +877,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   margin-bottom: 5px;
 }
 .k-fact-kv {
@@ -942,7 +953,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-metric-v {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1082,7 +1093,7 @@
   align-items: baseline;
   gap: 7px;
   font-size: var(--fs-sm);
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-commit-t b {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1141,7 +1152,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 /* Nút thông minh — chép Odoo: chứng từ liên quan hiện thành SỐ ĐẾM bấm được
    ngay dưới số hiệu. Người duyệt nhìn "Phiếu kho 0" là biết hàng chưa về mà

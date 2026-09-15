@@ -82,7 +82,7 @@ export function WorkspaceSwitcher({
   if (single) {
     return (
       <Link
-        href={`${currentWs.route}/`}
+        href={`${currentWs.home ?? currentWs.route}/`}
         title={collapsed ? `Hoàng Gia ERP — ${currentWs.label}` : undefined}
         className={`hover:bg-accent flex items-center gap-2.5 rounded-lg py-1.5 transition-colors ${
           collapsed ? 'justify-center px-0' : 'px-2'
@@ -121,7 +121,7 @@ export function WorkspaceSwitcher({
             return (
               <Link
                 key={ws.id}
-                href={`${ws.route}/`}
+                href={`${ws.home ?? ws.route}/`}
                 onClick={() => setOpen(false)}
                 className={`hover:bg-accent flex items-center gap-2 px-3 py-1.5 text-xs transition-colors ${
                   active ? 'text-foreground font-medium' : 'text-muted-foreground'

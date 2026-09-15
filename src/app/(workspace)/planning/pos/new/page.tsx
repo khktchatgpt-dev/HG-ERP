@@ -53,6 +53,7 @@ export default async function NewPoPage({
         name: s.name,
         rating: s.rating,
         lead_time_days: s.lead_time_days,
+        vat_rate: s.vat_rate,
         payment_terms: s.payment_terms,
         // Tiền tệ mặc định của NCC — chọn NCC là form tự chuyển (gỗ báo USD).
         currency: s.currency,

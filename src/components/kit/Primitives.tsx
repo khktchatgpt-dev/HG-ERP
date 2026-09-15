@@ -3,6 +3,7 @@
 import { useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
+import { normalizeSearch, searchTokens } from '@/lib/search-text'
 import { cn } from '@/lib/utils'
 import type { Tone } from './kit-core'
 
@@ -669,6 +670,202 @@ export function Pick({
   )
 }
 
+/*
+  NEO DANH SÁCH THẢ XUỐNG. Danh sách nổi rộng hơn ô nhập, nên ô nằm sát mép
+  phải màn hình sẽ đẩy danh sách ra ngoài khung — và vì nó vẫn nằm trong luồng
+  bố cục, CẢ TRANG trượt ngang. Luật kiểm của sổ thiết kế nói thẳng: thân trang
+  không bao giờ được cuộn ngang.
+
+  Đo Ô NEO chứ không đo danh sách. Đo danh sách rồi lật là vòng lặp: lật xong
+  nó hết tràn, lại lật về.
+*/
+function neoPhai(anchor: HTMLElement | null, rong: number) {
+  if (!anchor || typeof window === 'undefined') return false
+  return anchor.getBoundingClientRect().left + rong > window.innerWidth - 8
+}
+
+/**
+ * Ô CHỌN CÓ TÌM — `Pick` khi danh sách dài tới mức cuộn không còn là cách chọn.
+ *
+ * VÌ SAO KHÔNG DÙNG `Pick` Ở ĐÂY. `<select>` bản địa đúng cho ô LỌC vài chục
+ * lựa chọn. Ô "Nhà cung cấp" trên màn soạn đơn có 168 hồ sơ xếp theo bảng chữ
+ * cái, trong đó 15 dòng mở đầu bằng "Cá nhân — ". Người mua biết thừa mình cần
+ * "Sơn Tín Phát" nhưng vẫn phải cuộn qua cả trăm dòng để trỏ vào — và gõ chữ
+ * trong `<select>` chỉ nhảy theo KÝ TỰ ĐẦU, nên nhớ "Tín Phát" cũng không giúp
+ * được gì. Đây là ca chủ dự án báo ngày 15/09/2026.
+ *
+ * Khác `Lookup` ở chỗ: `Lookup` hỏi SERVER (danh mục 13k vật tư, không tải về
+ * được), còn ô này lọc TẠI CHỖ trên danh sách đã có sẵn trong trang. Đừng gộp
+ * hai cái làm một — gộp là hoặc phải mở API cho thứ đã nằm trong bộ nhớ, hoặc
+ * phải tải 13k dòng xuống trình duyệt.
+ *
+ * Lọc BỎ DẤU và AND từng từ (`searchTokens`, dùng chung với tìm vật tư): gõ
+ * "son tin" ra "CÔNG TY NHỰA SƠN TÍN PHÁT", gõ "tin phat son" cũng vậy.
+ */
+export function PickFind({
+  value,
+  onChange,
+  options,
+  label,
+  placeholder = 'Gõ để tìm…',
+  disabled,
+  width,
+  emptyLabel = '— chưa chọn —',
+}: {
+  value: string
+  onChange: (v: string) => void
+  /** `hint` là dòng phụ: mã, mã số thuế, tên khách — thứ phân biệt hai dòng trùng tên. */
+  options: { value: string; label: string; hint?: string }[]
+  label: string
+  placeholder?: string
+  disabled?: boolean
+  width?: number
+  /** Chữ hiện khi chưa chọn gì. Cũng là dòng đầu danh sách để bỏ chọn. */
+  emptyLabel?: string
+}) {
+  const [q, setQ] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [idx, setIdx] = useState(0)
+  const [phai, setPhai] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  const moRa = () => {
+    setPhai(neoPhai(box.current, Math.max(width ?? 0, 300)))
+    setOpen(true)
+  }
+
+  const chosen = options.find((o) => o.value === value) ?? null
+  // Đang gõ thì hiện chữ đang gõ; không thì hiện tên đã chọn. Một ô, hai vai.
+  const shown = q ?? chosen?.label ?? ''
+
+  const tokens = searchTokens(q ?? '')
+  const hits =
+    tokens.length === 0
+      ? options
+      : options.filter((o) => {
+          const hay = normalizeSearch(`${o.label} ${o.hint ?? ''}`)
+          return tokens.every((t) => hay.includes(t))
+        })
+  const rows = [{ value: '', label: emptyLabel, hint: undefined }, ...hits]
+
+  const pick = (v: string) => {
+    onChange(v)
+    setQ(null)
+    setOpen(false)
+  }
+
+  return (
+    <div className="relative" style={width ? { width } : undefined} ref={box}>
+      <input
+        type="text"
+        role="combobox"
+        aria-expanded={open}
+        aria-label={label}
+        autoComplete="off"
+        disabled={disabled}
+        value={shown}
+        placeholder={chosen ? undefined : placeholder}
+        onFocus={(e) => {
+          moRa()
+          setIdx(0)
+          e.currentTarget.select()
+        }}
+        onChange={(e) => {
+          setQ(e.target.value)
+          moRa()
+          setIdx(0)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            moRa()
+            setIdx((i) => Math.min(i + 1, rows.length - 1))
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setIdx((i) => Math.max(i - 1, 0))
+          } else if (e.key === 'Enter') {
+            if (!open) return
+            e.preventDefault()
+            if (rows[idx]) pick(rows[idx].value)
+          } else if (e.key === 'Escape') {
+            e.preventDefault()
+            setQ(null)
+            setOpen(false)
+          }
+        }}
+        // Rời ô mà đang gõ dở thì TRẢ VỀ giá trị đang giữ, không xoá lựa chọn cũ:
+        // gõ nửa chừng rồi bấm ra ngoài là thao tác bỏ dở, không phải xoá.
+        onBlur={() =>
+          setTimeout(() => {
+            setQ(null)
+            setOpen(false)
+          }, 120)
+        }
+        className={cn(
+          'h-[var(--ctl-h)] w-full rounded-[var(--radius)] border border-[var(--line)]',
+          'bg-[var(--surface-card)] px-2 pr-7 text-[var(--fs-sm)] text-[var(--ink)]',
+          'placeholder:text-[var(--ink-3)] hover:border-[var(--ink-3)]',
+          'focus:border-[var(--act)] disabled:opacity-45',
+        )}
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[10px] text-[var(--ink-3)]"
+      >
+        ▾
+      </span>
+      {open && (
+        <div
+          role="listbox"
+          aria-label={label}
+          className={cn(
+            'absolute top-[calc(100%+3px)] z-[var(--z-float)] max-h-[300px] overflow-auto',
+            phai ? 'right-0' : 'left-0',
+            'w-[max(100%,300px)] max-w-[calc(100vw-2rem)] rounded-[var(--radius)]',
+            'border border-[var(--line)] bg-[var(--surface-card)] py-1',
+            'shadow-[0_8px_24px_rgba(17,24,38,.14)]',
+          )}
+        >
+          {hits.length === 0 && (
+            <div className="px-3 py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+              Không có dòng nào khớp “{q}”.
+            </div>
+          )}
+          {rows.map((o, i) => (
+            <button
+              key={o.value || '__none'}
+              type="button"
+              role="option"
+              aria-selected={i === idx}
+              ref={
+                i === idx ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined
+              }
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setIdx(i)}
+              onClick={() => pick(o.value)}
+              className={cn(
+                'block w-full px-3 py-[5px] text-left text-[var(--fs-sm)]',
+                i === idx
+                  ? 'bg-[var(--act-wash)] text-[var(--act-text)]'
+                  : o.value
+                    ? 'text-[var(--ink)]'
+                    : 'text-[var(--ink-3)]',
+                o.value === value && 'font-semibold',
+              )}
+            >
+              <span className="block truncate">{o.label}</span>
+              {o.hint && (
+                <span className="block truncate text-[var(--fs-micro)] text-[var(--ink-3)]">
+                  {o.hint}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /**
  * Ô CHỮ MỘT DÒNG — cho ô đầu đơn ở chế độ sửa và ô lưới kiểu `text`.
  *
@@ -757,6 +954,8 @@ export function Lookup<T>({
   const [open, setOpen] = useState(false)
   const [idx, setIdx] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [phai, setPhai] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const seq = useRef(0)
 
@@ -776,6 +975,7 @@ export function Lookup<T>({
         if (my === seq.current) {
           setItems(r)
           setIdx(0)
+          setPhai(neoPhai(box.current, 560))
           setOpen(true)
         }
       } finally {
@@ -792,7 +992,7 @@ export function Lookup<T>({
   }
 
   return (
-    <div className="relative" style={width ? { width } : undefined}>
+    <div className="relative" style={width ? { width } : undefined} ref={box}>
       <input
         type="text"
         value={q}
@@ -833,7 +1033,17 @@ export function Lookup<T>({
       {open && (
         <div
           role="listbox"
-          className="absolute top-[calc(100%+3px)] left-0 z-[var(--z-float)] max-h-[280px] w-full min-w-[320px] overflow-auto rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1 shadow-[0_8px_24px_rgba(17,24,38,.14)]"
+          className={cn(
+            'absolute top-[calc(100%+3px)] z-[var(--z-float)] max-h-[340px] overflow-auto',
+            phai ? 'right-0' : 'left-0',
+            // Rộng hơn ô nhập: dòng kết quả mang mã + tên + quy cách + ĐVT +
+            // nhóm. Ép bằng bề ngang ô (340px) là tên vật tư bị cắt đúng chỗ
+            // phân biệt hai mã gần giống nhau. Chặn theo bề ngang MÀN HÌNH để
+            // ở cửa sổ hẹp danh sách không tràn ra ngoài rồi bị cắt mất.
+            'w-[max(100%,560px)] max-w-[calc(100vw-2rem)]',
+            'rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-card)] py-1',
+            'shadow-[0_8px_24px_rgba(17,24,38,.14)]',
+          )}
         >
           {items.length === 0 ? (
             <div className="px-3 py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
@@ -850,7 +1060,8 @@ export function Lookup<T>({
                 onClick={() => pick(it)}
                 onMouseEnter={() => setIdx(i)}
                 className={cn(
-                  'block w-full px-3 py-[5px] text-left text-[var(--fs-sm)]',
+                  'block w-full border-b border-[var(--hair)] px-3 py-[6px] text-left last:border-b-0',
+                  'text-[var(--fs-sm)] leading-[1.45]',
                   i === idx
                     ? 'bg-[var(--act-wash)] text-[var(--act-text)]'
                     : 'text-[var(--ink)]',

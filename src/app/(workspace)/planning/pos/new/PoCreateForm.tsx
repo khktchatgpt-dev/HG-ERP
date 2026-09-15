@@ -75,6 +75,11 @@ type SupplierOption = {
   payment_terms: string | null
   /** Tiền tệ mặc định của NCC — chọn NCC là ô tiền tệ tự chuyển theo. */
   currency?: string | null
+  /**
+   * Thuế suất thoả thuận với NCC (0192) — chọn NCC là ô VAT tự lấy mức này,
+   * trừ khi người soạn đã tự chỉnh. null = NCC chưa khai, rơi về mức của mẫu.
+   */
+  vat_rate?: number | null
   /** Chỉ dùng cho khối "Kính gửi" của phiếu xem trước. */
   address?: string | null
   tax_no?: string | null
@@ -271,7 +276,13 @@ export function PoCreateForm({
   // VAT và điều khoản đi theo mẫu, nhưng phải sửa được: cùng mẫu vẫn có NCC chào
   // khác. Đổi mẫu thì nạp lại mặc định của mẫu mới (xem selectTemplate). Mở đơn có
   // sẵn thì giữ nguyên số đã chốt với NCC, không áp lại mặc định của mẫu.
-  const [vat, setVat] = useState<number | ''>(start?.vat_rate ?? startMeta.vatRate ?? '')
+  const [vat, setVat] = useState<number | ''>(
+    start?.vat_rate ??
+      // Vào form với NCC chọn sẵn (?supplier=…) thì VAT theo NCC luôn (0192).
+      suppliers.find((x) => x.id === defaultSupplierId)?.vat_rate ??
+      startMeta.vatRate ??
+      '',
+  )
   const [inclVat, setInclVat] = useState(
     start?.price_includes_vat ?? startMeta.priceIncludesVat,
   )
@@ -1077,11 +1088,19 @@ export function PoCreateForm({
           supplierId={supplierId}
           onSupplier={(id) => {
             setSupplierId(id)
+            const picked = suppliers.find((s) => s.id === id)
             // Tiền tệ đi theo NCC (gỗ báo USD/m³) — trừ khi người soạn đã tự chọn.
             if (!currencyDirty) {
-              const cur = suppliers.find((s) => s.id === id)?.currency?.toUpperCase()
+              const cur = picked?.currency?.toUpperCase()
               if (cur) setCurrency(cur)
             }
+            /*
+              THUẾ theo NCC (0192), cùng lối với tiền tệ. Thuế là thoả thuận với
+              từng NCC chứ không phải thuộc tính của loại hàng: đơn gỗ Đức Toàn
+              Phú Tài ghi 8% trong khi mẫu gỗ khai 10%. NCC chưa khai thì giữ
+              nguyên mức đang có (mẫu đơn), không ép về rỗng.
+            */
+            if (!vatDirty && picked?.vat_rate != null) setVat(picked.vat_rate)
           }}
           suppliers={suppliers}
           expectedAt={expectedAt}

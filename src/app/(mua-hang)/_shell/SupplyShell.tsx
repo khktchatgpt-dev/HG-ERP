@@ -3,6 +3,8 @@
 import { usePathname, useRouter } from 'next/navigation'
 import { CommandPalette } from '@/components/erp/CommandPalette'
 import { NavIcon } from '@/components/workspace/nav-icons'
+import type { WorkspaceId } from '@/workspaces/workspaces.config'
+import { SupplySwitcher } from './SupplySwitcher'
 import { NavRail, TopBar, UserCard, type NavGroup } from '@/components/kit'
 import { INBOX_HREF, SUPPLY_NAV, activeSupplyHref } from './nav'
 import { Count } from '@/components/kit'
@@ -59,11 +61,14 @@ function InboxButton({ count, active }: { count: number; active: boolean }) {
 }
 export function SupplyShell({
   user,
+  switchable,
   badges,
   inboxCount = 0,
   children,
 }: {
   user: { name: string; role: string }
+  /** Khu người này vào được — cho ô chuyển khu ở rail. Server tính. */
+  switchable: { id: WorkspaceId; readonly: boolean }[]
   /** Số việc sống theo href. Đếm bằng ĐÚNG hàm mà trang đích dùng. */
   badges?: Record<string, number>
   /** Số việc đang chờ chính người này — hiện trên nút hộp thư ở thanh trên. */
@@ -110,18 +115,7 @@ export function SupplyShell({
         expanded={expanded}
         onToggle={toggle}
         brand={
-          expanded ? (
-            <span className="flex items-baseline gap-2">
-              <span className="grid size-[22px] place-items-center rounded-[var(--radius-sm)] bg-[var(--act)] text-[10px] font-bold text-[var(--act-ink)]">
-                MH
-              </span>
-              <span className="text-[13px] font-bold tracking-[-.01em]">Mua hàng</span>
-            </span>
-          ) : (
-            <span className="grid size-[22px] place-items-center rounded-[var(--radius-sm)] bg-[var(--act)] text-[10px] font-bold text-[var(--act-ink)]">
-              MH
-            </span>
-          )
+          <SupplySwitcher current="planning" switchable={switchable} expanded={expanded} />
         }
         footer={
           <UserCard

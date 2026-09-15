@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { poLineAmount } from './po-line'
+import { poLineAmount, roundMoney } from './po-line'
 import {
   FREE_LINE_TEMPLATES,
   PO_TEMPLATES,
@@ -199,6 +199,27 @@ describe('deriveLine — gỗ theo m³ (ĐH gỗ Minh Đạt, USD)', () => {
       unit2: null,
       price_basis: 'unit',
     })
+  })
+
+  /*
+   * ĐƠN THẬT 05 HG/ĐT (Đức Toàn Phú Tài, LSX 05/26-27 - MX, ngày 03/08/2026).
+   * Đây là ca đã lộ ra lỗi tròn 4 lẻ: 0,0063988 × 100 = 0,63988 m³, tròn 4 lẻ
+   * thành 0,6399 rồi × $1.500 ra $959,85 trong khi đơn NCC ghi $959,82.
+   */
+  it('05 HG/ĐT: 100 ghế × 0,0063988 m³ × $1.500/m³ = $959,82 đúng như đơn NCC', () => {
+    const d = deriveLine('wood', { qty_ordered: 100, m3_per_unit: 0.0063988 })
+    expect(d).toEqual({ qty2: 0.63988, unit2: 'm³', price_basis: 'unit2' })
+    const amount = poLineAmount({ qty_ordered: 100, unit_price: 1500, ...d })
+    expect(roundMoney(amount, 'USD')).toBe(959.82)
+  })
+
+  it('giữ 6 số lẻ cho m³ — tròn 4 lẻ là lệch cent với hoá đơn', () => {
+    // 50 bàn × 0,044221 m³ = 2,211050 m³; tròn 4 lẻ thành 2,2111 → lệch $0,07.
+    const d = deriveLine('wood', { qty_ordered: 50, m3_per_unit: 0.044221 })
+    expect(d.qty2).toBe(2.21105)
+    expect(
+      roundMoney(poLineAmount({ qty_ordered: 50, unit_price: 1400, ...d }), 'USD'),
+    ).toBe(3095.47)
   })
 })
 

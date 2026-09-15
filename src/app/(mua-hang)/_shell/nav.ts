@@ -16,6 +16,8 @@
  * chứng từ Yêu cầu mua. Không mất câu hỏi nào, chỉ mất bốn mục menu.
  */
 
+import { SHARED_SECTION } from '@/workspaces/workspaces.config'
+
 export type SupplyNavItem = {
   href: string
   label: string
@@ -25,6 +27,16 @@ export type SupplyNavItem = {
   q: string
 }
 export type SupplyNavGroup = { heading: string; items: SupplyNavItem[] }
+
+/**
+ * Khuôn màn + câu hỏi cho các trang DÙNG CHUNG. Khai ở đây chứ không nhét vào
+ * `SHARED_SECTION`: hai trường này là từ vựng của sổ thiết kế khu Mua hàng,
+ * vỏ cũ không dùng tới và cũng không nên phải biết.
+ */
+const SHARED_META: Record<string, { plan: SupplyNavItem['plan']; q: string }> = {
+  '/products': { plan: 'C', q: 'Sản phẩm này là gì, làm bằng những gì?' },
+  '/khuon': { plan: 'C', q: 'Cây nhôm này đi khuôn nào, nặng bao nhiêu mỗi mét?' },
+}
 
 export const SUPPLY_NAV: SupplyNavGroup[] = [
   {
@@ -109,6 +121,31 @@ export const SUPPLY_NAV: SupplyNavGroup[] = [
         q: 'Còn bao nhiêu, có phải mua không?',
       },
     ],
+  },
+  /*
+    DÙNG CHUNG — hai trang không thuộc phòng nào (15/09/2026).
+
+    Vỏ cũ tự nối `SHARED_SECTION` vào sidebar của MỌI phòng
+    (`resolveNavSections`), nên người Cung ứng luôn có Thư viện sản phẩm và
+    Khuôn nhôm. Vỏ mới tự khai cây menu nên không được thừa hưởng — từ lúc
+    cửa vào phòng dời sang khu này, hai trang đó biến mất khỏi tầm tay họ.
+
+    LẤY TỪ ĐÚNG MỘT NGUỒN, không chép tay: thêm trang dùng chung thứ ba thì cả
+    hai vỏ cùng nhận. Đây cũng là lý do `SHARED_META` chỉ khai phần vỏ mới cần
+    thêm (khuôn màn + câu hỏi), chứ không khai lại href/nhãn/icon.
+
+    Hai trang này render trong VỎ CŨ (khu `(shared)` dựng WorkspaceShell theo
+    phòng nhà của người xem), nên bấm vào là bước ra khỏi khu này. Đường về:
+    mục đầu sidebar cũ nay trỏ thẳng `/mua-hang`.
+  */
+  {
+    heading: SHARED_SECTION.heading,
+    items: SHARED_SECTION.items.map((i) => ({
+      href: i.href,
+      label: i.label,
+      icon: i.icon,
+      ...(SHARED_META[i.href] ?? { plan: 'C' as const, q: '' }),
+    })),
   },
   /*
     LỐI RA — bắt buộc trong lúc hai bản chạy song song (14/09/2026).

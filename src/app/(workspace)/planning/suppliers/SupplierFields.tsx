@@ -56,6 +56,7 @@ export type SupplierFormValues = {
   payment_terms?: string | null
   payment_net_days?: number | null
   currency?: string | null
+  vat_rate?: number | null
   bank_name?: string | null
   bank_account?: string | null
   swift_code?: string | null
@@ -114,6 +115,7 @@ export function toSupplierPayload(v: SupplierFormValues): Record<string, unknown
     payment_terms: s(v.payment_terms),
     payment_net_days: v.payment_net_days ?? null,
     currency: s(v.currency),
+    vat_rate: v.vat_rate ?? null,
     bank_name: s(v.bank_name),
     bank_account: s(v.bank_account),
     swift_code: s(v.swift_code),
@@ -371,6 +373,30 @@ export function SupplierFields({
               { value: '', label: '— VND (mặc định) —' },
               ...PO_CURRENCIES.map((c) => ({ value: c, label: c })),
             ]}
+          />
+        </Field>
+        {/*
+          THUẾ SUẤT THEO NCC (0192). Trước đó thuế mặc định do MẪU ĐƠN quyết
+          bằng hằng số trong mã (gỗ 10%, phụ kiện 8%…), nhưng thuế là thoả thuận
+          với từng NCC: đơn gỗ Đức Toàn Phú Tài ghi 8% trong khi mẫu gỗ khai 10%,
+          người soạn phải nhớ gõ đè mỗi lần. Khai ở đây một lần, đơn mới tự lấy.
+          Để trống = chưa khai (rơi về mức của mẫu), KHÁC HẲN 0 = không chịu thuế.
+        */}
+        <Field
+          label="Thuế suất VAT (%)"
+          hint="Đơn mua mới lấy mức này, vẫn sửa được từng đơn. Để trống = theo mẫu đơn; 0 = không chịu thuế."
+        >
+          <Input
+            inputMode="decimal"
+            className="t-data"
+            placeholder="8"
+            value={value.vat_rate == null ? '' : String(value.vat_rate)}
+            onChange={(e) => {
+              const d = e.target.value.replace(/[^\d.,]/g, '').replace(',', '.')
+              if (d === '') return set('vat_rate', null)
+              const n = Number(d)
+              set('vat_rate', Number.isFinite(n) && n >= 0 && n <= 100 ? n : null)
+            }}
           />
         </Field>
         <Field label="Ngân hàng">

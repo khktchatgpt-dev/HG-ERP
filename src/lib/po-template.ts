@@ -394,6 +394,17 @@ function round4(n: number): number {
 }
 
 /**
+ * Sáu số lẻ cho MỌI tổng tính bằng m³ (gỗ, xốp). m³ là đại lượng bé mà đơn giá
+ * lại lớn — ghế gỗ 0,0063988 m³/cái × 100 cái = 0,63988 m³; tròn 4 lẻ thành
+ * 0,6399 rồi nhân $1.500/m³ ra $959,85 trong khi đơn NCC ghi $959,82. Lệch vài
+ * cent nhưng là lệch với hoá đơn, đối chiếu ba bên sẽ kêu. Đo 15/09/2026: 25
+ * dòng đơn mua đang lệch từ −$0,07 đến +$0,07 vì đúng chỗ này.
+ */
+function round6(n: number): number {
+  return Math.round(n * 1e6) / 1e6
+}
+
+/**
  * Dịch ô nhập của mẫu → (qty2, unit2, price_basis) cho `poLineAmount`.
  *
  * Thiếu thông số quy đổi (chưa khai kg/m, chưa nhập dài cây) thì trả 'unit' chứ
@@ -437,7 +448,9 @@ function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       // tinh. Cột riêng từ 0139, hết mượn weight_per_unit của mẫu inox.
       const m3 = Number(l.m3_per_unit) || 0
       if (m3 <= 0) return { qty2: null, unit2: null, price_basis: 'unit' }
-      return { qty2: round4(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
+      // round6 chứ không round4 — xem chú thích ở `round6`, tròn 4 lẻ là lệch
+      // cent với hoá đơn NCC.
+      return { qty2: round6(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
     }
     case 'foam': {
       // Xốp tấm theo KHỐI: D×R×Dày (mm) → m³/tấm × SL tấm × đơn giá/m³.
@@ -446,18 +459,15 @@ function deriveByTemplate(t: PoTemplate, l: PoLineDraft): PoLineDerived {
       if (l.carton_basis !== 'm3') return { qty2: null, unit2: null, price_basis: 'unit' }
       const m3 = foamM3PerSheet(l.inner_l_mm, l.inner_w_mm, l.inner_h_mm)
       if (m3 == null) return { qty2: null, unit2: null, price_basis: 'unit' }
-      return {
-        qty2: Math.round(m3 * qty * 1e6) / 1e6,
-        unit2: 'm³',
-        price_basis: 'unit2',
-      }
+      return { qty2: round6(m3 * qty), unit2: 'm³', price_basis: 'unit2' }
     }
     default: {
       // Quy đổi tổng quát: 1 ĐVT = per × đơn-vị-giá. Thiếu một nửa cặp thì rơi
       // về SL × giá — cùng triết lý "sai rõ ràng hơn im lặng ra 0" ở trên.
       const per = Number(l.unit2_per_unit) || 0
       const label = (l.unit2_label ?? '').trim()
-      if (per <= 0 || label === '') return { qty2: null, unit2: null, price_basis: 'unit' }
+      if (per <= 0 || label === '')
+        return { qty2: null, unit2: null, price_basis: 'unit' }
       return { qty2: round4(per * qty), unit2: label, price_basis: 'unit2' }
     }
   }
