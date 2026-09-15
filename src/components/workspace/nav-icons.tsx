@@ -21,6 +21,7 @@ import {
   Factory,
   Gavel,
   FileText,
+  Grid3x3,
   Hammer,
   HeartPulse,
   History,
@@ -69,6 +70,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   'users-round': UsersRound,
   'file-text': FileText,
   'circle-dollar-sign': CircleDollarSign,
+  // Sơ đồ kệ (0193) — ô lưới là hình gần nhất với "khu trong kho".
+  'grid-3x3': Grid3x3,
   'clipboard-list': ClipboardList,
   'clipboard-check': ClipboardCheck,
   factory: Factory,

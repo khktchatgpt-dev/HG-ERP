@@ -380,3 +380,27 @@ export const movementListQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(200).default(50),
 })
+
+/**
+ * Khu/kệ (0193). Mã VIẾT HOA, không dấu, không khoảng trắng — nó hiện trên
+ * biển hiệu ngoài kho và trên phiếu in, nên phải gõ lại được không nhầm.
+ */
+export const binCreateSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Mã khu không được để trống')
+    .max(20)
+    .regex(/^[A-Za-z0-9-]+$/, 'Mã khu chỉ gồm chữ, số và dấu gạch ngang'),
+  name: z.string().trim().max(120).optional().nullable(),
+  kind: z.enum(['store', 'receiving', 'blocked', 'scrap']).default('store'),
+})
+
+export const binUpdateSchema = z
+  .object({
+    name: z.string().trim().max(120).optional().nullable(),
+    is_active: z.coerce.boolean().optional(),
+  })
+  .refine((d) => d.name !== undefined || d.is_active !== undefined, {
+    message: 'Không có gì để sửa',
+  })

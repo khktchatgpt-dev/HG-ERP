@@ -303,6 +303,9 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
           { href: '/warehouse/docs', label: 'Sổ chứng từ', icon: 'receipt-text' },
           { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
+          // Sơ đồ kệ (0193) — họ NỀN: thủ kho gần như không vào, mở một lần
+          // mỗi tháng. Đứng cuối nhóm Sổ sách chứ không lẫn vào Nghiệp vụ.
+          { href: '/warehouse/ke', label: 'Sơ đồ kệ', icon: 'grid-3x3' },
         ],
       },
     ],

@@ -17,6 +17,7 @@ import {
   type StockBucket,
   type StockStatus,
   type BinKind,
+  type Bin,
   binsRepo,
   type DocKind,
   type StocktakeLine,
@@ -1433,4 +1434,105 @@ async function notifyLowStock(
       notify_ids: recipientIds,
     })
   }
+}
+
+/**
+ * KHU/KỆ — danh mục nền của Kho (0193).
+ *
+ * Đây là DANH MỤC, không phải chứng từ: sửa tại chỗ, có vết, không có vòng đời
+ * duyệt. Quyền ghi bám `warehouse.stock.write` — ai được lập phiếu kho thì được
+ * khai chỗ để hàng; tách thêm một quyền nữa cho một bảng 12 dòng là phình ma
+ * trận quyền để đổi lấy không gì.
+ */
+export const binsService = {
+  async list(user: User): Promise<(Bin & { material_count: number })[]> {
+    if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
+    const warehouseId = await warehousesRepo.mainId()
+    const [bins, counts] = await Promise.all([
+      binsRepo.list(warehouseId),
+      binsRepo.materialCountByBin(),
+    ])
+    return bins.map((b) => ({ ...b, material_count: counts.get(b.id) ?? 0 }))
+  },
+
+  async create(
+    user: User,
+    input: { code: string; name?: string | null; kind: BinKind },
+  ): Promise<Bin> {
+    await assertAction(user, 'warehouse.stock.write')
+    const warehouseId = await warehousesRepo.mainId()
+    const code = input.code.trim().toUpperCase()
+    if (!code) throw BadRequest('Mã khu không được để trống')
+
+    /*
+     * MỖI LOẠI KHU ẢO CHỈ ĐƯỢC MỘT. `binsRepo.byKind` tra theo loại và lấy mã
+     * đầu bảng chữ cái — có hai khu `receiving` thì hàng nhận vào rơi vào cái
+     * nào là chuyện của thứ tự chữ cái, tức là không ai đoán được. Kệ thật thì
+     * bao nhiêu cũng được.
+     */
+    if (input.kind !== 'store') {
+      const existing = await binsRepo.byKind(warehouseId, input.kind)
+      if (existing) {
+        throw Conflict(
+          `Đã có khu ${BIN_KIND_LABEL[input.kind]} rồi (${existing.code}) — mỗi kho chỉ một. Sửa khu đang có thay vì thêm khu mới.`,
+        )
+      }
+    }
+
+    try {
+      return await binsRepo.insert({
+        warehouse_id: warehouseId,
+        code,
+        name: input.name?.trim() || null,
+        kind: input.kind,
+      })
+    } catch (e) {
+      // 23505 = unique (warehouse_id, code). Dịch sang câu người đọc được thay
+      // vì để lộ thông báo Postgres ra màn hình.
+      if (e instanceof Error && /duplicate key|23505/.test(e.message)) {
+        throw Conflict(`Mã khu "${code}" đã có trong kho này`)
+      }
+      throw e
+    }
+  },
+
+  async update(
+    user: User,
+    id: string,
+    patch: { name?: string | null; is_active?: boolean },
+  ): Promise<void> {
+    await assertAction(user, 'warehouse.stock.write')
+    const bin = await binsRepo.findById(id)
+    if (!bin) throw NotFound('Khu không tồn tại')
+
+    /*
+     * KHÔNG CHO NGỪNG DÙNG KHU ĐANG CÓ HÀNG, và không cho ngừng khu ẢO.
+     *
+     * Ngừng khu còn hàng thì lượng đó biến khỏi mọi ô chọn nhưng vẫn nằm trong
+     * sổ — đúng hạng lỗi "hàng nằm ngoài hệ thống" mà cả Đợt 2 sinh ra để vá.
+     * Khu ảo thì luồng nhận hàng đang tra theo loại, ngừng nó là gãy im lặng.
+     */
+    if (patch.is_active === false) {
+      if (bin.kind !== 'store') {
+        throw BadRequest(
+          `Khu ${BIN_KIND_LABEL[bin.kind]} là khu hệ thống — luồng nhận hàng đang tra theo loại này, không ngừng được.`,
+        )
+      }
+      const counts = await binsRepo.materialCountByBin()
+      const n = counts.get(id) ?? 0
+      if (n > 0) {
+        throw BadRequest(
+          `Khu ${bin.code} đang giữ ${n} mã — chuyển hết sang khu khác rồi mới ngừng dùng được.`,
+        )
+      }
+    }
+    await binsRepo.patch(id, patch)
+  },
+}
+
+export const BIN_KIND_LABEL: Record<BinKind, string> = {
+  store: 'Kệ thật',
+  receiving: 'Khu tiếp nhận',
+  blocked: 'Kệ hàng khoá',
+  scrap: 'Khu phế liệu',
 }
