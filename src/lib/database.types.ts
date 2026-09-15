@@ -5734,6 +5734,7 @@ export type Database = {
           shipment_id: string | null
           status: string
           supplier_doc_no: string | null
+          team_department_id: string | null
           updated_at: string
         }
         Insert: {
@@ -5753,6 +5754,7 @@ export type Database = {
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -5772,6 +5774,7 @@ export type Database = {
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Relationships: [

@@ -728,6 +728,8 @@ export const stockService = {
       kind: 'lsx' | 'daily'
       production_order_id?: string | null
       counterparty?: string | null
+      /** Tổ NHẬN vật tư (0194) — trỏ `departments`, cùng khái niệm với LSX job. */
+      team_department_id?: string | null
       reason?: string | null
       /** Ngày chứng từ (K3) — xuất chiều tối, sáng sau mới nhập máy. */
       doc_date?: string | null
@@ -818,6 +820,7 @@ export const stockService = {
       code,
       kind: 'issue',
       counterparty: input.counterparty ?? null,
+      team_department_id: input.team_department_id ?? null,
       reason: input.reason ?? null,
       note,
       ...(input.doc_date ? { doc_date: input.doc_date } : {}),

@@ -23,6 +23,8 @@ type Doc = {
   kind: DocKind
   doc_date: string
   counterparty: string | null
+  /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
+  team_name: string | null
   reason: string | null
   note: string | null
   /** Vòng duyệt kiểm kê (0157) — nhập/xuất luôn 'posted'. */
@@ -86,6 +88,9 @@ type PoOption = {
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
 }
+/** Tổ SX nhận vật tư (0194) — lấy từ `departments`, cùng nguồn với LSX job. */
+export type TeamOption = { id: string; name: string }
+
 type LsxOption = { id: string; code: string; customer_name: string }
 
 type PoLine = {
@@ -236,6 +241,7 @@ export function DocsManager({
   materials,
   pos,
   lsxs,
+  teams,
   canEdit,
 }: {
   /** Deep-link từ màn nghiệp vụ: mở sẵn form + chọn sẵn đơn/đợt/lệnh. */
@@ -256,6 +262,7 @@ export function DocsManager({
   materials: MaterialOption[]
   pos: PoOption[]
   lsxs: LsxOption[]
+  teams: TeamOption[]
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -429,8 +436,20 @@ export function DocsManager({
     {
       key: 'counterparty',
       header: 'Giao / nhận',
-      width: '140px',
-      cell: (d) => d.counterparty ?? <span className="text-zinc-400">—</span>,
+      width: '150px',
+      cell: (d) =>
+        d.team_name || d.counterparty ? (
+          <span className="block">
+            {d.team_name && <span className="block truncate font-medium">{d.team_name}</span>}
+            {d.counterparty && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {d.counterparty}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
     },
     {
       key: 'creator',
@@ -708,6 +727,7 @@ export function DocsManager({
           <IssueForm
             materials={materials}
             lsxs={lsxs}
+            teams={teams}
             initialLsxId={initial?.form === 'issue' ? initial.lsxId : null}
             onDone={(code) => {
               setOpenIssue(false)
@@ -1507,11 +1527,13 @@ function ReceiptForm({
 function IssueForm({
   materials,
   lsxs,
+  teams,
   initialLsxId = null,
   onDone,
 }: {
   materials: MaterialOption[]
   lsxs: LsxOption[]
+  teams: TeamOption[]
   /** Deep-link: chọn sẵn lệnh khi mở từ màn "Cấp vật tư SX". */
   initialLsxId?: string | null
   onDone: (code: string) => void
@@ -1632,6 +1654,7 @@ function IssueForm({
       kind,
       production_order_id: kind === 'lsx' ? lsxId : null,
       counterparty: String(fd.get('counterparty') ?? '').trim() || null,
+      team_department_id: String(fd.get('team_department_id') ?? '') || null,
       reason: String(fd.get('reason') ?? '').trim() || null,
       doc_date: String(fd.get('doc_date') ?? '') || null, // K3
       note: String(fd.get('note') ?? '').trim() || null,
@@ -1721,6 +1744,23 @@ function IssueForm({
             </select>
           </label>
         )}
+        {/* TỔ NHẬN (0194) — đứng TRƯỚC "Người nhận" vì nó là câu hỏi chính.
+
+            Người lĩnh hàng thay đổi từng ca; TỔ thì không. Ghi "anh Tuấn" xong
+            tháng sau không ai biết anh Tuấn thuộc tổ nào, và không cộng nổi
+            "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô bổ sung nhau: tổ để đối
+            chiếu, tên người để ký nhận trên mẫu 02-VT. */}
+        <label className="flex flex-col gap-1 text-sm">
+          Tổ nhận
+          <select name="team_department_id" className={inputCls} defaultValue="">
+            <option value="">— chưa xác định —</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm">
           Người nhận
           <input name="counterparty" maxLength={200} className={inputCls} />

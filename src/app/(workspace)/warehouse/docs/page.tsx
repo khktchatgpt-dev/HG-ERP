@@ -5,6 +5,7 @@ import { docsRepo } from '@/modules/dept/warehouse/stock.repo'
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
 import { DocsManager } from './DocsManager'
 
 /**
@@ -48,7 +49,7 @@ export default async function WarehouseDocsPage({
 
   // Phân trang + lọc loại Ở SERVER: sổ vượt 100 phiếu là bản cũ âm thầm cắt đuôi.
   const page = Math.max(1, Number(sp.page) || 1)
-  const [{ rows: docs, total }, kindCounts, { rows: materials }, pos, { rows: lsxAll }] =
+  const [{ rows: docs, total }, kindCounts, { rows: materials }, pos, { rows: lsxAll }, depts] =
     await Promise.all([
       stockService.listDocs(user, {
         kind: initialKind ?? undefined,
@@ -59,6 +60,12 @@ export default async function WarehouseDocsPage({
       materialsRepo.list({ active_only: true, page: 1, page_size: 1000 }),
       supplyRepo.listOpenPos(),
       productionRepo.list({ page: 1, page_size: 200 }),
+      /*
+        TỔ NHẬN (0194) — lấy từ danh mục phòng ban, cùng nguồn mà LSX dùng cho
+        `production_jobs.team_department_id`. Không đẻ danh mục tổ thứ hai: hai
+        danh mục cho một khái niệm là sớm muộn lệch nhau.
+      */
+      departmentsRepo.list(),
     ])
 
   return (
@@ -91,6 +98,12 @@ export default async function WarehouseDocsPage({
         // Chỉ LSX xuất vật tư được: đã duyệt / đang SX (service cũng guard).
         .filter((l) => l.status === 'approved' || l.status === 'in_progress')
         .map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name }))}
+      /* Chỉ TỔ SẢN XUẤT, không phải mọi phòng ban: phiếu xuất vật tư cho tổ
+         làm hàng, không ai lĩnh thép về phòng Kế toán. Lọc theo tên vì tổ ở đây
+         là phòng ban chứ không có cờ riêng — khi nào có cờ thì đổi một dòng. */
+      teams={depts
+        .filter((d) => /^(tổ|to)\s|cắt vải|^qc$/i.test(d.name))
+        .map((d) => ({ id: d.id, name: d.name }))}
       canEdit={canEdit}
     />
   )

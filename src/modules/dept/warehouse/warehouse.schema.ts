@@ -287,6 +287,12 @@ export const issueDocSchema = z
     kind: z.enum(['lsx', 'daily']),
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
+    /*
+      TỔ NHẬN (0194) — `counterparty` là TÊN người, tổ là ĐƠN VỊ. Gõ "anh Tuấn"
+      thì tháng sau không ai biết anh Tuấn thuộc tổ nào, và không cộng được
+      "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô này bổ sung nhau, không thay thế.
+    */
+    team_department_id: z.string().uuid().optional().nullable(),
     reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
     /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
     doc_date: z.string().date().optional().nullable(),

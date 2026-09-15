@@ -185,6 +185,9 @@ export type WarehouseDoc = {
   kind: DocKind
   doc_date: string
   counterparty: string | null
+  /** Tổ NHẬN vật tư (0194) — null = phiếu không xuất cho tổ nào. */
+  team_department_id: string | null
+  team_name: string | null
   reason: string | null
   note: string | null
   /**
@@ -214,7 +217,7 @@ export type DocLine = Movement & {
 }
 
 const DOC_COLS =
-  'id, code, kind, doc_date, counterparty, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
+  'id, code, kind, doc_date, counterparty, team_department_id, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
 /*
  * warehouse_docs nay có HAI FK sang users (created_by + approved_by 0157) —
  * embed `users(name)` trần là mơ hồ, PostgREST trả lỗi. Hint đích danh.
@@ -223,7 +226,7 @@ const DOC_COLS =
  * tra bằng truy vấn phụ (fillReversalCodes), không embed.
  */
 const DOC_JOINS =
-  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name)'
+  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name), team:departments(name)'
 
 /**
  * TÓM TẮT + NGUỒN của một loạt phiếu — hai truy vấn phụ cho cả trang.
@@ -349,6 +352,7 @@ async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> 
 function toDoc(r: Record<string, unknown>): WarehouseDoc {
   const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
   const ap = Array.isArray(r.approver) ? r.approver[0] : r.approver
+  const tm = Array.isArray(r.team) ? r.team[0] : r.team
   const rev = null as { code?: string } | null
   return {
     id: r.id,
@@ -356,6 +360,8 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     kind: r.kind,
     doc_date: r.doc_date,
     counterparty: r.counterparty ?? null,
+    team_department_id: (r.team_department_id as string | null) ?? null,
+    team_name: (tm as { name?: string } | null)?.name ?? null,
     reason: r.reason ?? null,
     note: r.note ?? null,
     status: (r.status as WarehouseDoc['status']) ?? 'posted',
@@ -438,6 +444,8 @@ export const docsRepo = {
     code: string
     kind: DocKind
     counterparty?: string | null
+    /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
+    team_department_id?: string | null
     reason?: string | null
     note?: string | null
     /** PNK nhận cho đợt giao nào (0153) — null = không theo đợt. */
