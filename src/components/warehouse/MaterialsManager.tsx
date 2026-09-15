@@ -34,7 +34,7 @@ import {
 } from '@/lib/material-group-fields'
 import { codeWarning } from '@/lib/material-form-guards'
 import type { MaterialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
-import { PAGE_SIZE } from './constants'
+import { PAGE_SIZE } from './materials-constants'
 import { InlineGroupCell } from './InlineGroupCell'
 
 type Material = {

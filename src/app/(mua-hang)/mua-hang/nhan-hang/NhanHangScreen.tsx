@@ -132,9 +132,9 @@ export function NhanHangScreen({
             tone: (dem.no_eta ?? 0) > 0 ? 'warn' : 'neutral',
           },
         ]}
-        actions={
-          canEdit ? <Btn href="/warehouse/don-ncc">Lập phiếu nhập</Btn> : undefined
-        }
+        /* Nút "Lập phiếu nhập" gỡ 16/09/2026 cùng khu Kho. Màn này vẫn
+           dùng được để THEO DÕI hàng về; việc ghi phiếu quay lại khi Kho
+           dựng xong. */
       />
 
       {truncatedAt != null && (

@@ -46,11 +46,8 @@ export default async function IncomingGoodsPage() {
         breadcrumbs={[{ label: 'Cung ứng', href: '/planning' }, { label: 'Hàng sắp về' }]}
         title="Hàng sắp về"
         description="Đơn đã gửi nhà cung cấp, xếp theo ngày hẹn giao. Đơn chưa gửi nằm ở mục Chờ tôi xử lý."
-        actions={
-          <Button variant="outline" size="sm" asChild>
-            <Link href="/warehouse/docs">Phiếu nhập kho</Link>
-          </Button>
-        }
+        /* Nút "Phiếu nhập kho" gỡ 16/09/2026 cùng khu Kho — dẫn vào 404 thì
+           tệ hơn là không có nút. Thêm lại khi sổ chứng từ dựng xong. */
         meta={
           <span className="text-muted-foreground text-[12px]">
             {enRoute.length} đơn đang trên đường ·{' '}

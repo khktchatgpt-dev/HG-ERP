@@ -32,7 +32,9 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
       for (const id of [
         'sales',
         'technical',
-        'warehouse',
+        // 'warehouse' BỎ KHỎI DANH SÁCH 16/09/2026: khu Kho đang `ready: false`
+        // (màn đã gỡ, sẽ dựng lại), và khu chưa sẵn sàng thì chặn TRƯỚC cả
+        // bước hỏi quyền. Ca riêng ngay dưới canh đúng điều đó.
         'planning',
         'production',
         'team',
@@ -43,6 +45,19 @@ describe('canEnterWorkspaceSync — 0086: xem chéo phải có quyền', () => {
           'need-permission',
         )
       }
+    }
+  })
+
+  /**
+   * Khu CHƯA SẴN SÀNG chặn trước cả bước hỏi quyền — kể cả người nhà.
+   *
+   * Nếu không, người có home = khu đó đăng nhập xong rơi vào một khu không
+   * còn màn nào và nhận 404, thay vì được đưa về chỗ dùng được.
+   */
+  it('workspace ready:false → false cho mọi vai, kể cả người nhà', () => {
+    for (const who of [employee, manager]) {
+      expect(canEnterWorkspaceSync(who, 'warehouse', 'warehouse')).toBe(false)
+      expect(canEnterWorkspaceSync(who, 'warehouse', 'hr')).toBe(false)
     }
   })
 

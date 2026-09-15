@@ -280,40 +280,20 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/warehouse',
     accent: 'amber',
     logoText: 'KH',
-    ready: true,
-    // Chia theo NGHIỆP VỤ (plan-kho-redesign GĐ1): nhập / cấp SX là hai luồng
-    // riêng thay vì một màn "Phiếu nhập / xuất" gộp. Sổ chứng từ vẫn giữ —
-    // nơi tra mọi phiếu đã lập + form gốc (các màn nghiệp vụ deep-link vào).
-    sections: [
-      {
-        heading: 'Nghiệp vụ',
-        items: [
-          { href: '/warehouse', label: 'Tổng quan', icon: 'home' },
-          { href: '/warehouse/nhap', label: 'Nhập kho', icon: 'arrow-down-to-line' },
-          // Cất hàng (0193) — bước RIÊNG sau nhận, vì nhận và cất là hai lần
-          // đi lại, hai thời điểm, có khi hai người. Đứng ngay sau Nhập kho vì
-          // đó là thứ tự hàng đi qua tay thủ kho.
-          { href: '/warehouse/cat-hang', label: 'Cất hàng', icon: 'container' },
-          // Đơn NCC góc nhìn Kho (16/08): tra tiến độ về hàng theo ĐƠN/LSX +
-          // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
-          { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },
-          { href: '/warehouse/xuat', label: 'Cấp vật tư SX', icon: 'arrow-up-from-line' },
-          { href: '/warehouse/hang-mac', label: 'Hàng mắc', icon: 'shield-alert' },
-          { href: '/warehouse/kiem-ke', label: 'Kiểm kê', icon: 'clipboard-check' },
-        ],
-      },
-      {
-        heading: 'Sổ sách',
-        items: [
-          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
-          { href: '/warehouse/docs', label: 'Sổ chứng từ', icon: 'receipt-text' },
-          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
-          // Sơ đồ kệ (0193) — họ NỀN: thủ kho gần như không vào, mở một lần
-          // mỗi tháng. Đứng cuối nhóm Sổ sách chứ không lẫn vào Nghiệp vụ.
-          { href: '/warehouse/ke', label: 'Sơ đồ kệ', icon: 'grid-3x3' },
-        ],
-      },
-    ],
+    /*
+     * TẠM TẮT 16/09/2026 theo lệnh chủ dự án: màn khu Kho đã gỡ khỏi mã
+     * (xuất/nhập/tồn/danh mục sẽ dựng lại). `ready: false` nên login KHÔNG
+     * tự đưa ai vào đây nữa — xem chú ở khai báo `ready`.
+     *
+     * GIỮ NGUYÊN: module `dept/warehouse`, ba nhóm API dùng chung
+     * (materials · material-groups · material-taxonomy) và toàn bộ dữ liệu
+     * DB. Khu Mua hàng / Kế hoạch / Thư viện SP gọi thẳng service nên không
+     * bị ảnh hưởng.
+     */
+    ready: false,
+    // Menu rỗng: mọi route /warehouse/* đã gỡ, để lại mục nav là trỏ vào 404.
+    // Dựng lại màn nào thì thêm lại mục đó.
+    sections: [],
   },
 
   technical: {
