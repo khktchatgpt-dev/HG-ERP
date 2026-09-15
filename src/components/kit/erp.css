@@ -71,7 +71,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-view-b {
   border: 1px solid var(--line);
@@ -153,7 +153,7 @@
 }
 .k-grp-lab {
   font-size: var(--fs-label);
-  color: var(--ink-3);
+  color: var(--ink-label);
   text-align: center;
   padding: 3px 0 2px;
 }
@@ -204,7 +204,7 @@
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-doc-no {
   margin: 1px 0 0;
@@ -229,7 +229,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   margin-bottom: 3px;
 }
 .k-steps {
@@ -504,7 +504,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -696,7 +696,7 @@
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.03em;
-  color: var(--ink-3);
+  color: var(--ink-label);
   padding: 6px var(--pad-x);
   white-space: nowrap;
   position: sticky;
@@ -776,7 +776,7 @@
   background: var(--surface-raised);
   border-bottom: 1px solid var(--line);
   border-right: 1px solid var(--hair);
-  color: var(--ink-3);
+  color: var(--ink-label);
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -866,7 +866,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
   margin-bottom: 5px;
 }
 .k-fact-kv {
@@ -942,7 +942,7 @@
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-metric-v {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1082,7 +1082,7 @@
   align-items: baseline;
   gap: 7px;
   font-size: var(--fs-sm);
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 .k-commit-t b {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1141,7 +1141,7 @@
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--ink-3);
+  color: var(--ink-label);
 }
 /* Nút thông minh — chép Odoo: chứng từ liên quan hiện thành SỐ ĐẾM bấm được
    ngay dưới số hiệu. Người duyệt nhìn "Phiếu kho 0" là biết hàng chưa về mà

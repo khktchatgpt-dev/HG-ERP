@@ -51,11 +51,28 @@
   --surface-hover: #f6f8fc;
 
   /* ── MỰC ─────────────────────────────────────────────────────────────
-     Ba cấp, không hơn. Cấp 3 đã kéo từ #7b8798 lên #5d6675 để đạt 4,5:1 —
-     nó là màu nhãn cột, thứ mắt chạm nhiều nhất trên một màn ERP. */
+     Ba cấp, không hơn. Cấp 3 đã kéo từ #7b8798 lên #5d6675 để đạt 4,5:1. */
   --ink: #12161f;
   --ink-2: #3f4756;
   --ink-3: #5d6675;
+
+  /* NHÃN CẤU TRÚC — tên cột lưới, tiêu đề nhóm ô, tên khối trên khay.
+
+     Tách khỏi `--ink-3` ngày 15/09/2026, sau khi chủ dự án báo "một số tiêu
+     đề màu xám rất khó nhìn do nền trắng" trên màn soạn đơn. Đo lại thì
+     `--ink-3` trên nền trắng đúng 5,31:1 — QUA chuẩn AA, nên lần kéo màu
+     trước không sai. Cái sai là gộp hai việc vào một token:
+
+       · chữ PHỤ (ghi chú, đơn vị, nhóm) — 12,5px thường, đọc lướt. 5,3:1 đủ.
+       · NHÃN CẤU TRÚC — 10,5–11px, ĐẬM, VIẾT HOA, giãn chữ 0,09em. Ba thứ đó
+         cộng lại làm nét chữ mảnh đi và mắt mất mốc chữ thường để bám, nên
+         cùng một tỉ lệ tương phản đọc ra mờ hơn hẳn.
+
+     WCAG đo theo nền/chữ chứ không đo viết hoa hay giãn chữ, nên nó không bắt
+     được ca này — phải nghe người ngồi 8 tiếng trước màn. Nhãn cấu trúc là
+     BỘ KHUNG người đọc dùng để định vị, không phải chữ phụ, nên cho nó mực
+     đậm gần như chữ chính: 8,6:1. */
+  --ink-label: #3a4252;
 
   /* ── KẺ ──────────────────────────────────────────────────────────────
      `line` là RANH GIỚI (hết vùng này sang vùng khác), `hair` là VẠCH CHIA

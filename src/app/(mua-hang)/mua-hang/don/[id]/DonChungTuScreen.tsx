@@ -36,6 +36,7 @@ import {
   NoticeBar,
   NumInput,
   Pick,
+  PickFind,
   Sheet,
   SheetActions,
   SmartLinks,
@@ -586,6 +587,26 @@ export function DonChungTuScreen(p: Props) {
   const recvIdx = po?.status === 'received' ? 2 : po?.status === 'partial' ? 1 : 0
   const lsx = p.lsxs.find((l) => l.id === header.lsxId)
   const supplierOpt = p.suppliers.find((s) => s.id === header.supplierId)
+
+  /*
+    Hai danh sách này đi vào ô chọn CÓ TÌM (`PickFind`), nên tên khách và mã
+    đơn hàng phải nằm ở `hint` chứ không nối hết vào `label`: `hint` cũng được
+    lọc, mà dòng trên vẫn ngắn để đọc lướt. Trước đây mọi thứ nối bằng dấu "·"
+    thành một dòng dài, cuộn trong `<select>` 168 dòng.
+  */
+  const lsxOptions = useMemo(
+    () =>
+      p.lsxs.map((l) => ({
+        value: l.id,
+        label: l.code,
+        hint: [l.customer_name, l.order_codes?.join(', ')].filter(Boolean).join(' · '),
+      })),
+    [p.lsxs],
+  )
+  const supplierOptions = useMemo(
+    () => p.suppliers.map((s) => ({ value: s.id, label: s.name })),
+    [p.suppliers],
+  )
   const marks: Mark[] = po
     ? [
         { key: 'tao', at: po.created_at, label: 'Tạo đơn', actor: po.assignee_name },
@@ -1315,6 +1336,111 @@ export function DonChungTuScreen(p: Props) {
           </FactBox>
         }
       >
+        {/* ══ 0. DẢI QUYẾT ĐỊNH — bốn ô mà LƯỚI PHỤ THUỘC VÀO ════════════
+            Khuôn F nói đầu đơn co thành dải chip vì lưới là nhân vật chính, và
+            điều đó đúng khi ĐỌC một đơn đã soạn. Lúc SOẠN thì ngược: bốn ô này
+            không phải thông tin đi kèm, chúng là ĐIỀU KIỆN của lưới —
+
+              · Mẫu đơn  quyết định lưới có những CỘT nào;
+              · Lệnh SX  quyết định nút "Thêm còn thiếu" lấy nhu cầu ở đâu;
+              · NCC      quyết định tiền tệ và giá mua gần nhất gợi lên dòng;
+              · Hạn giao là thứ NCC hỏi đầu tiên.
+
+            Để chúng dưới lưới thì người soạn gõ xong 20 dòng mới biết mình chọn
+            nhầm mẫu và cả 20 dòng phải làm lại — chính dải vàng "CHƯA LƯU ĐƯỢC:
+            chưa chọn LSX" đang phải tồn tại để vá chuyện đó. Chủ dự án báo ngày
+            15/09/2026: "phần đầu trang tôi nhớ UI tách thành phần lên trên".
+            Phần CÒN LẠI của đầu đơn (số hợp đồng, điều khoản in phiếu, thuế)
+            vẫn ở khối "Đầu đơn" bên dưới — chúng không chặn việc gõ lưới. */}
+        {editing && (
+          <div className="flex flex-wrap items-end gap-x-5 gap-y-2.5 border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[10px]">
+            <HeadField label="Mẫu đơn" hint="quyết định bộ cột của lưới">
+              <Pick
+                label="Mẫu đơn"
+                width={176}
+                value={template}
+                onChange={(t) => changeTemplate(t as PoTemplate)}
+                options={Object.values(PO_TEMPLATE_META).map((m) => ({ value: m.key, label: m.label }))} // prettier-ignore
+              />
+            </HeadField>
+            <HeadField label="Loại đơn">
+              <Pick
+                label="Loại đơn"
+                width={160}
+                value={header.poType}
+                onChange={(v) =>
+                  setHeader((h) => ({
+                    ...h,
+                    poType: v as PoHeader['poType'],
+                    lsxId: v === 'standalone' ? '' : h.lsxId,
+                  }))
+                }
+                options={[
+                  { value: 'lsx', label: 'Theo lệnh sản xuất' },
+                  { value: 'standalone', label: 'Ngoài lệnh (mua bù tồn)' },
+                ]}
+              />
+            </HeadField>
+            <HeadField
+              label="Lệnh sản xuất"
+              need={header.poType === 'lsx' && !header.lsxId}
+            >
+              <PickFind
+                label="Lệnh sản xuất"
+                width={230}
+                disabled={header.poType !== 'lsx'}
+                value={header.lsxId}
+                onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
+                emptyLabel="— chọn lệnh —"
+                placeholder="Gõ số lệnh hoặc tên khách…"
+                options={lsxOptions}
+              />
+            </HeadField>
+            <HeadField label="Nhà cung cấp" need={!header.supplierId}>
+              <PickFind
+                label="Nhà cung cấp"
+                width={260}
+                value={header.supplierId}
+                onChange={(v) => {
+                  const s = p.suppliers.find((x) => x.id === v)
+                  setHeader((h) => ({
+                    ...h,
+                    supplierId: v,
+                    currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
+                  }))
+                }}
+                emptyLabel="— chọn NCC —"
+                placeholder="Gõ tên nhà cung cấp…"
+                options={supplierOptions}
+              />
+            </HeadField>
+            <HeadField label="Hạn giao">
+              <span className="inline-block w-[136px]">
+                <DateInput
+                  label="Hạn giao"
+                  value={header.expectedAt}
+                  onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
+                />
+              </span>
+            </HeadField>
+            {/* Nút của chính bộ kit, không phải <button> tự vẽ: cổng
+                `hg/no-raw-control` chặn thẻ thô, mà gợi ý của nó
+                (shadcn/button) sẽ TRỘN hai hệ token trong cùng một file —
+                điều CLAUDE.md cấm. `GridBtn` là nút phụ sẵn có của kit. */}
+            <span className="ml-auto self-center">
+              <GridBtn
+                title="Số hợp đồng, thuế suất, điều khoản in lên phiếu gửi NCC"
+                onClick={() => {
+                  setHeadOpen(true)
+                  goTo('dau-don')
+                }}
+              >
+                Điều khoản, thuế, hợp đồng →
+              </GridBtn>
+            </span>
+          </div>
+        )}
+
         {/* ══ 1. LƯỚI DÒNG — mở đầu, nhân vật chính ═══════════════════════ */}
         <FastTab
           id="dong-hang"
@@ -1360,8 +1486,8 @@ export function DonChungTuScreen(p: Props) {
               <>
                 <Lookup<PoMaterial>
                   label="Thêm vật tư"
-                  placeholder="Gõ mã hoặc tên vật tư, Enter để thêm dòng…"
-                  width={340}
+                  placeholder="Gõ mã, tên hoặc quy cách (50x50, 8x15…) rồi Enter"
+                  width={400}
                   search={async (q) =>
                     (
                       await api<{ materials: PoMaterial[] }>(
@@ -1370,15 +1496,48 @@ export function DonChungTuScreen(p: Props) {
                     ).materials
                   }
                   keyOf={(m) => m.id}
+                  /*
+                    HAI DÒNG, QUY CÁCH ĐỨNG RIÊNG. Trước đây một dòng "mã · tên ·
+                    ĐVT · nhóm" và KHÔNG có quy cách — trong khi quy cách chính là
+                    thứ người mua dùng để phân biệt: danh mục có 8 mã "Inox hộp
+                    50x50" khác nhau ở độ dày, và 131 mã "Nút chân" khác nhau ở
+                    kích thước. Chọn nhầm là cả đơn sai hàng.
+
+                    Tồn kho đi kèm luôn: biết còn 2.000 cái trong kho thì người
+                    mua đặt 500 chứ không đặt 2.500.
+                  */
                   render={(m) => (
                     <>
-                      <span className="num font-semibold text-[var(--act)]">
-                        {m.code}
-                      </span>{' '}
-                      · {m.name}{' '}
-                      <span className="text-[var(--ink-3)]">
-                        · {m.unit}
-                        {m.group_name ? ` · ${m.group_name}` : ''}
+                      <span className="flex items-baseline gap-2">
+                        <span className="num shrink-0 font-semibold text-[var(--act)]">
+                          {m.code}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                      </span>
+                      <span className="flex flex-wrap items-baseline gap-x-2.5 text-[var(--fs-micro)]">
+                        {m.spec ? (
+                          <span className="num font-semibold text-[var(--ink-2)]">
+                            {m.spec}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--ink-empty)]">
+                            chưa có quy cách
+                          </span>
+                        )}
+                        <span className="text-[var(--ink-3)]">{m.unit}</span>
+                        {m.on_hand != null && m.on_hand !== 0 && (
+                          <span className="num text-[var(--ink-3)]">tồn {m.on_hand}</span>
+                        )}
+                        {m.last_purchase_price != null && (
+                          <span className="num text-[var(--ink-3)]">
+                            giá gần nhất {m.last_purchase_price.toLocaleString('vi-VN')}
+                          </span>
+                        )}
+                        {m.group_name && (
+                          <span className="truncate text-[var(--ink-3)]">
+                            {m.group_name}
+                          </span>
+                        )}
                       </span>
                     </>
                   )}
@@ -2008,49 +2167,11 @@ export function DonChungTuScreen(p: Props) {
           <FieldGroup title="Chung">
             {editing ? (
               <>
-                <Field label="Mẫu đơn">
-                  <Pick
-                    label="Mẫu đơn"
-                    value={template}
-                    onChange={(t) => changeTemplate(t as PoTemplate)}
-                    options={Object.values(PO_TEMPLATE_META).map((m) => ({
-                      value: m.key,
-                      label: m.label,
-                    }))}
-                  />
-                </Field>
-                <Field label="Loại đơn">
-                  <Pick
-                    label="Loại đơn"
-                    value={header.poType}
-                    onChange={(v) =>
-                      setHeader((h) => ({
-                        ...h,
-                        poType: v as PoHeader['poType'],
-                        lsxId: v === 'standalone' ? '' : h.lsxId,
-                      }))
-                    }
-                    options={[
-                      { value: 'lsx', label: 'Theo lệnh sản xuất' },
-                      { value: 'standalone', label: 'Ngoài lệnh (mua bù tồn)' },
-                    ]}
-                  />
-                </Field>
-                <Field label="Lệnh sản xuất">
-                  <Pick
-                    label="Lệnh sản xuất"
-                    disabled={header.poType !== 'lsx'}
-                    value={header.lsxId}
-                    onChange={(v) => setHeader((h) => ({ ...h, lsxId: v }))}
-                    options={[
-                      { value: '', label: '— chọn lệnh —' },
-                      ...p.lsxs.map((l) => ({
-                        value: l.id,
-                        label: `${l.code} · ${l.customer_name}`,
-                      })),
-                    ]}
-                  />
-                </Field>
+                {/* Mẫu đơn / Loại đơn / Lệnh / NCC KHÔNG lặp lại ở đây khi đang
+                    sửa — chúng đã ở DẢI QUYẾT ĐỊNH trên đầu lưới. Hai chỗ sửa
+                    cùng một ô là người dùng phải tự hỏi chỗ nào mới thật. Lúc
+                    ĐỌC (không sửa) thì vẫn hiện đủ ở đây, vì khi đó không có
+                    dải nào cả. */}
                 {header.poType === 'lsx' && (
                   <Field label="Gộp thêm lệnh">
                     <span className="flex flex-wrap items-center gap-1">
@@ -2064,43 +2185,18 @@ export function DonChungTuScreen(p: Props) {
                         </GridBtn>
                       ))}
                       <span className="min-w-[180px]">
-                        <Pick
+                        <PickFind
                           label="Gộp thêm lệnh"
                           value=""
                           onChange={(v) => v && toggleExtraLsx(v, true)}
-                          options={[
-                            {
-                              value: '',
-                              label: header.extraLsxIds.length
-                                ? '+ thêm lệnh nữa'
-                                : '— một đơn mua cho nhiều lệnh —',
-                            },
-                            ...p.lsxs.filter((l) => l.id !== header.lsxId && !header.extraLsxIds.includes(l.id)).map((l) => ({ value: l.id, label: `${l.code} · ${l.customer_name}` })), // prettier-ignore
-                          ]}
+                          emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn mua cho nhiều lệnh —'} // prettier-ignore
+                          placeholder="Gõ số lệnh hoặc tên khách…"
+                          options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
                         />
                       </span>
                     </span>
                   </Field>
                 )}
-                <Field label="Nhà cung cấp">
-                  <Pick
-                    label="Nhà cung cấp"
-                    value={header.supplierId}
-                    onChange={(v) => {
-                      const s = p.suppliers.find((x) => x.id === v)
-                      setHeader((h) => ({
-                        ...h,
-                        supplierId: v,
-                        // Tiền tệ theo NCC (gỗ báo USD) — trừ khi đã tự chọn.
-                        currency: !dirty.current.currency && s?.currency ? s.currency.toUpperCase() : h.currency, // prettier-ignore
-                      }))
-                    }}
-                    options={[
-                      { value: '', label: '— chọn NCC —' },
-                      ...p.suppliers.map((s) => ({ value: s.id, label: s.name })),
-                    ]}
-                  />
-                </Field>
                 <Field label="Số hợp đồng">
                   <TextInput
                     label="Số hợp đồng"
@@ -2144,15 +2240,8 @@ export function DonChungTuScreen(p: Props) {
             )}
           </FieldGroup>
           <FieldGroup title="Giao hàng">
-            {editing ? (
-              <Field label="Hạn giao">
-                <DateInput
-                  label="Hạn giao"
-                  value={header.expectedAt}
-                  onChange={(v) => setHeader((h) => ({ ...h, expectedAt: v }))}
-                />
-              </Field>
-            ) : (
+            {editing ? /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */
+            null : (
               <Field
                 label="Hạn giao"
                 tone={
@@ -2672,4 +2761,44 @@ function EditCell({
         />
       )
   }
+}
+
+/**
+ * Ô trên DẢI QUYẾT ĐỊNH — nhãn trên, điều khiển dưới.
+ *
+ * Không dùng `Field` của kit: `Field` là một hàng lưới nhãn–giá trị hai cột cho
+ * form dọc, còn ở đây năm ô nằm NGANG nên nhãn phải đứng trên. `need` bật khi ô
+ * còn trống mà không lưu được nếu thiếu — chấm màu cảnh báo ngay tại ô, thay vì
+ * bắt người dùng đọc dải vàng ở đầu trang rồi tự đoán ô nào.
+ */
+function HeadField({
+  label,
+  hint,
+  need,
+  children,
+}: {
+  label: string
+  hint?: string
+  need?: boolean
+  children: React.ReactNode
+}) {
+  return (
+    <label className="flex flex-col gap-[3px]">
+      <span className="flex items-center gap-1.5 font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+        {label}
+        {need && (
+          <span
+            title="Chưa điền — đơn chưa lưu được"
+            className="inline-block size-[6px] rounded-full bg-[var(--warn)]"
+          />
+        )}
+        {hint && (
+          <span className="font-normal tracking-normal text-[var(--ink-3)] normal-case">
+            {hint}
+          </span>
+        )}
+      </span>
+      {children}
+    </label>
+  )
 }
