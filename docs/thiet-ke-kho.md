@@ -2,6 +2,10 @@
 
 Viết 15/09/2026. Đo trên mã nguồn + **DB thật** (project `pcbfvrapknzykhtntuwg`).
 
+> **Việc CÒN LẠI của phân hệ Kho ghi ở [`kho-backlog.md`](kho-backlog.md)** —
+> gồm cả ba câu nghiệp vụ còn treo, nợ kỹ thuật đã biết, và một va chạm cần chốt
+> trước khi làm Đợt 3 (phiên khác đã thêm `warehouse_docs.reason_code`).
+
 Tài liệu này đứng sau hai tài liệu nền và không lặp lại chúng:
 
 - [`tieu-chi-workflow-erp.md`](tieu-chi-workflow-erp.md) — luồng chạy thế nào (4 nguyên
