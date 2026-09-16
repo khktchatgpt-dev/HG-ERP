@@ -1,31 +1,46 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { Btn, Empty, ScreenHeader } from '@/components/kit'
+import { canAction } from '@/modules/core/rbac/rbac.service'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { todayVn } from '@/lib/date-vn'
+import { XuatScreen } from './XuatScreen'
 
 export const metadata = { title: 'Kho · Xuất kho' }
 export const dynamic = 'force-dynamic'
 
 /**
- * XUẤT KHO — Bước 2 Kho, việc 1: VỎ (`docs/kho-buoc-2-xuat-kho.md`).
+ * XUẤT KHO THEO THỰC TẾ LẤY — `/warehouse/xuat` (Bước 2 Kho,
+ * `docs/kho-buoc-2-xuat-kho.md`). Chủ dự án chốt 16/09/2026: không so định
+ * mức; thủ kho ghi mã, số lượng, lệnh hoặc tổ nhận.
  *
- * Bước 2 là xuất theo THỰC TẾ LẤY (chủ dự án chốt 16/09/2026): thủ kho ghi
- * mã, số lượng, lệnh hoặc tổ nhận — không so định mức. Màn thật là một form
- * Khuôn F (dải chip + lưới + ô tìm vật tư), dựng ở việc 2–4. Ở việc 1 chỉ
- * mở route, mục nav và route API để người vai Kho có chỗ vào, không 404.
+ * Trang nạp ba danh mục nhỏ cho dải chip: lệnh đang chạy (đã duyệt / đang
+ * SX — đúng tập service cho xuất), tên tổ để gợi ý ô người nhận, và quyền
+ * ghi sổ. Vật tư KHÔNG nạp trước (13.229 mã) — tìm từng mã qua API lúc thêm
+ * dòng, tồn dùng được tra cùng lúc.
  */
 export default async function WarehouseIssuePage() {
-  await authService.requirePageUser()
+  const user = await authService.requirePageUser()
+  const [lsx, deps, canEdit] = await Promise.all([
+    productionRepo.listActive(),
+    departmentsRepo.list(),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
+  ])
+
+  // Tổ nhận vật tư: các phòng tên "Tổ …" + hai tổ đặt tên khác (Cắt Vải, Xưởng).
+  const to = deps
+    .map((d) => d.name)
+    .filter((n) => /^tổ\b/i.test(n) || /cắt vải|xưởng/i.test(n))
+    .sort((a, b) => a.localeCompare(b, 'vi'))
+
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
-      <ScreenHeader compact eyebrow="Kho" title="Xuất kho" />
-      <Empty
-        headline="Phiếu xuất đang dựng"
-        reason="Bước 2 của khu Kho: ghi sổ vật tư tổ vừa lấy — chọn lệnh sản xuất hoặc lý do xuất lẻ, tìm mã, gõ số lượng, ghi sổ. Không so định mức ở bước này."
-        next={
-          <Btn primary href="/warehouse/nhap">
-            Về Hàng về
-          </Btn>
-        }
-      />
-    </div>
+    <XuatScreen
+      lsx={lsx.map((l) => ({ id: l.id, code: l.code, customer_name: l.customer_name }))}
+      to={to}
+      today={todayVn()}
+      nguoiLap={user.name ?? user.email}
+      canEdit={canEdit}
+    />
   )
 }

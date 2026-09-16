@@ -244,6 +244,30 @@ export const stockRepo = {
     }
   },
 
+  /**
+   * Tồn theo BA RỔ của một tập mã — cho form phiếu xuất (Bước 2 Kho): tra
+   * `qty_ok` ngay lúc thêm dòng để ô Lần này nói được "tồn 120, xuất 150".
+   * Mã không có dòng sổ nào vẫn có trong view (0 hết) nên thiếu = 0, không
+   * phải "không tìm thấy".
+   */
+  async byIds(
+    ids: string[],
+  ): Promise<
+    { material_id: string; on_hand: number; qty_ok: number; qty_blocked: number }[]
+  > {
+    if (ids.length === 0) return []
+    const { data } = await db()
+      .from('warehouse_stock')
+      .select('material_id, on_hand, qty_ok, qty_blocked')
+      .in('material_id', ids.slice(0, 500))
+    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      material_id: String(r.material_id),
+      on_hand: num(r.on_hand),
+      qty_ok: num(r.qty_ok),
+      qty_blocked: num(r.qty_blocked),
+    }))
+  },
+
   /** Tồn hiện tại của 1 vật tư (để kiểm khi xuất). */
   async onHand(materialId: string): Promise<number> {
     const { data } = await db()
