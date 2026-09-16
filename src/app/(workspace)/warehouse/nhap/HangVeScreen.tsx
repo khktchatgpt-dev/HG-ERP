@@ -208,7 +208,9 @@ export function HangVeScreen({
                     <Row key={r.key}>
                       <Cell pin>
                         {r.date ? (
-                          <span className={`num font-semibold ${TONE_TEXT[laneTone]}`}>
+                          <span
+                            className={`num ${laneTone === 'stop' || laneTone === 'warn' ? TONE_TEXT[laneTone] : ''}`}
+                          >
                             {isoToVn(r.date).slice(0, 5)}
                           </span>
                         ) : (
