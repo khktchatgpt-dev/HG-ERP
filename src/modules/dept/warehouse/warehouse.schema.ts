@@ -276,6 +276,12 @@ export const receiptDocSchema = z
     /** HOÀN KHO từ LSX (K2) — loại trừ với po_id (service enforce). */
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+    /**
+     * VÌ SAO có phiếu này (A2) — chỉ có nghĩa với phiếu MUA NGOÀI: nhập theo
+     * đơn thì lý do chính là đơn mua, ghi thêm một câu là hai nguồn một sự
+     * thật. Cột `warehouse_docs.reason` có sẵn, phiếu nhập trước nay bỏ trống.
+     */
+    reason: z.string().trim().max(200).optional().nullable(),
     /** Số phiếu giao / hoá đơn NCC (K3) — chìa khoá đối chiếu 3 chiều. */
     supplier_doc_no: z.string().trim().max(60).optional().nullable(),
     /** Ngày chứng từ (K3) — lùi tối đa 7 ngày, xa hơn là bất thường. */

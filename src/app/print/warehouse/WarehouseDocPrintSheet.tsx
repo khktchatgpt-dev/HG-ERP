@@ -106,7 +106,11 @@ export function WarehouseDocPrintSheet({
             head.counterparty || '……………………………',
           ],
           ...(isReceipt
-            ? []
+            ? // Phiếu nhập THEO ĐƠN không có lý do (lý do là đơn mua) — không
+              // thêm một dòng chấm chấm trống vào mẫu đã dùng 47 lần.
+              head.reason
+              ? ([['— Lý do nhập kho:', head.reason]] as [string, string][])
+              : []
             : ([['— Lý do xuất kho:', head.reason || '……………………………']] as [
                 string,
                 string,

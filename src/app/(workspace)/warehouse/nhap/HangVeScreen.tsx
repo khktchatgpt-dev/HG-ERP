@@ -183,7 +183,16 @@ export function HangVeScreen({
               tone: dem.no_eta > 0 ? 'warn' : 'neutral',
             },
           ]}
-          actions={<Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>}
+          actions={
+            <>
+              {/* Hàng về KHÔNG có đơn (mã N2) — việc có thật nhưng trước nay
+                  không màn nào ghi được, nên ba dòng cũ trong sổ đều trống
+                  NCC lẫn lý do. Nút phụ, không phải nút chính: có đơn thì
+                  vẫn phải nhận theo đơn. */}
+              <Btn href="/warehouse/nhap/ngoai-don">Nhận không theo đơn</Btn>
+              <Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>
+            </>
+          }
         />
 
         {vuaGhi && vuaGhiMa && (

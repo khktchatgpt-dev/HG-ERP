@@ -562,6 +562,8 @@ export const stockService = {
       /** HOÀN KHO từ LSX (K2) — loại trừ với po_id. */
       production_order_id?: string | null
       counterparty?: string | null
+      /** Vì sao có phiếu này — chỉ ghi cho phiếu MUA NGOÀI (A2). */
+      reason?: string | null
       /** Số phiếu giao / hoá đơn NCC (K3) — đối chiếu 3 chiều. */
       supplier_doc_no?: string | null
       /** Ngày chứng từ (K3) — hàng về chiều tối, sáng sau mới nhập máy. */
@@ -752,6 +754,9 @@ export const stockService = {
       code,
       kind: 'receipt',
       counterparty: input.counterparty ?? null,
+      // Nhập THEO ĐƠN thì lý do chính là đơn mua — ghi thêm một câu ở đây là
+      // dựng hai nguồn cho một sự thật. Chỉ phiếu mua ngoài mới mang lý do.
+      reason: input.po_id ? null : input.reason?.trim() || null,
       note: docNote,
       shipment_id: shipment?.id ?? null,
       supplier_doc_no: input.supplier_doc_no?.trim() || null,

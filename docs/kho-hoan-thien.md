@@ -83,7 +83,7 @@ KK-2026-0004 bị chặn đảo kèm câu chỉ sang vòng duyệt kiểm kê; P
 mở được hộp đảo (CHƯA bấm ghi — đó là việc của chủ dự án).
 
 
-### A2. Nhập hàng KHÔNG theo đơn `/warehouse/nhap` → phiếu N2
+### A2. Nhập hàng KHÔNG theo đơn `/warehouse/nhap/ngoai-don` ✅ XONG 16/09/2026
 
 Màn Hàng về hiện chỉ nhận được hàng **có đơn mua**. Hàng về không có đơn
 (mua lẻ, NCC giao kèm, hàng mượn) thì thủ kho không có đường ghi nào — mà sổ
@@ -91,6 +91,45 @@ Màn Hàng về hiện chỉ nhận được hàng **có đơn mua**. Hàng về
 
 `createReceiptDoc` nhận `po_id: null` sẵn. Cần một form nhẹ: NCC + lý do +
 lưới mã / số lượng. Dùng lại đúng khung của phiếu nhập theo đơn.
+**Đã dựng.** Đúng như dự tính: không migration, không service mới.
+
+| Việc                                  | Ở đâu                                   |
+| ------------------------------------- | --------------------------------------- |
+| Form (Khuôn F)                        | `warehouse/nhap/ngoai-don/`             |
+| Luật đầu phiếu + tổng, thuần, 23 test | `lib/kho-nhap-ngoai-don.ts`             |
+| Ô `reason` cho phiếu nhập             | schema + service + mẫu in               |
+| Lối vào                               | nút "Nhận không theo đơn" ở màn Hàng về |
+
+**Điểm thiết kế quan trọng nhất không phải là bỏ hai cột Đặt / Đã về.** Đường
+này dễ bị lạm dụng: nhẹ tay hơn nhận theo đơn thì người ta dùng nó để né mở
+đơn mua, và Cung ứng mất dấu công nợ. Nên form làm ba việc ngược lại:
+
+- **Bắt CHỌN vì sao không có đơn** — bốn lựa chọn, không phải ô gõ tự do. Hai
+  người gõ "mua ngoài" và "mua lẻ" là cùng một việc mà báo cáo đếm thành hai
+  loại, đúng cái lỗi mà bộ mã lý do sinh ra để dẹp. Mỗi lựa chọn kèm một câu
+  nói HỆ QUẢ, vì người chọn cần biết tờ này rồi ai đọc.
+- **NCC vừa gõ mà đang có đơn mở thì nói ngay**, kèm mã đơn và đường sang đó.
+  Khớp theo tên, ĐÚNG TUYỆT ĐỐI chứ không gần đúng: cảnh báo nhầm NCC một lần
+  là người dùng học cách bỏ qua dải đó mãi mãi.
+- **Chân màn nói thẳng cái giá**: không gắn đơn mua nên Cung ứng KHÔNG đối
+  chiếu công nợ tờ này.
+
+Đầu phiếu dựng y hệt màn nhận theo đơn (FastTab + FieldGrid). Bản thiết kế
+đầu tiên vẽ dải chip theo Khuôn F, nhưng thủ kho đi lại giữa hai màn suốt —
+đầu phiếu khác hình là bắt họ học hai lần. Artboard đã sửa theo.
+
+Cột Kệ cũng bỏ, cùng lý do với màn nhận theo đơn: service tự đặt hàng đạt vào
+khu tiếp nhận, hàng khoá vào kệ khoá. Cất vào kệ thật là B3.
+
+Mẫu in 01-VT nay có dòng "— Lý do nhập kho", nhưng CHỈ khi phiếu có lý do:
+phiếu nhập theo đơn để trống `reason` nên 47 tờ cũ in ra không đổi một nét.
+
+Nghiệm thu trên dữ liệu thật 16/09/2026: gõ "CÔNG TY TNHH VẠN VI THÀNH" hiện
+đúng dải cảnh báo kèm mã đơn 1/2026-HG/VVT; thêm mã BUL0230, số 500, tổng ra
+"500 dùng được"; bản xem trước in đúng mẫu 01-VT kèm dòng lý do. **CHƯA bấm
+Ghi sổ** — tờ thử sẽ nằm vĩnh viễn trong sổ thật (sổ chỉ cộng thêm), nên lượt
+ghi đầu tiên để chủ dự án tự chạy.
+
 
 ## B. Đáng làm, chưa chặn
 
@@ -129,7 +168,7 @@ nhận nhiều chuyến một ngày.
 ## Thứ tự đề nghị
 
 ```
-A1 Sổ phiếu + đảo phiếu ✅  →  A2 Nhập ngoài đơn  →  B1 Hoàn kho SX  →  B2 Bàn làm việc
+A1 Sổ phiếu + đảo phiếu ✅  →  A2 Nhập ngoài đơn ✅  →  B1 Hoàn kho SX  →  B2 Bàn làm việc
 ```
 
 A1 làm trước vì nó vừa bịt lỗ "đá người dùng ra khu khác", vừa mở đường chữa
