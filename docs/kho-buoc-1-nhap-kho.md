@@ -148,6 +148,19 @@ Chủ dự án (hoặc thủ kho) nhận thật **một đợt giao** trên máy
 / confirmed / partial). Nếu toàn bộ đơn đang là nháp thì Cung ứng phải gửi một
 đơn thật trước — việc của người, không phải phần mềm.
 
+## 6b. Mẫu in — yêu cầu chủ dự án 16/09/2026
+
+**Mọi phiếu nhập / xuất đều phải in được.** Bản in đã có từ trước và còn
+sống sau đợt gỡ: `/print/warehouse/[id]` in 01-VT (nhập) · 02-VT (xuất) ·
+05-VT (kiểm kê) theo TT200, tiêu đề / mẫu số / cột ký lấy từ
+`/admin/doc-templates` (0164). Phiếu do form mới ghi vào cùng bảng nên in
+được ngay, chỉ **thiếu cửa vào**: link in duy nhất đang nằm ở sổ chứng từ cũ.
+
+Việc 7 của Bước 1: sau Ghi sổ, toast có nút **In phiếu** mở
+`/print/warehouse/{id}` tab mới; sổ phiếu (`/planning/docs`) giữ link in như
+cũ. Bản in xem lại cùng chủ dự án trước khi coi là xong — nếu mẫu cần đổi thì
+sửa ở `/admin/doc-templates`, không sửa mã.
+
 ## 7. Cố ý chưa làm
 
 Nhập ngoài đơn (N2) · hoàn kho từ LSX (N3) · trả NCC (X3) · cất hàng vào kệ
