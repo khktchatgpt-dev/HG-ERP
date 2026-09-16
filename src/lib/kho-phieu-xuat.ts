@@ -75,6 +75,97 @@ export function tinhTongXuat(rows: DongXuat[]): { so_dong: number; tong: number 
   return { so_dong, tong }
 }
 
+export type DauPhieuXuat = {
+  loai: LoaiXuat
+  lsx_id: string
+  ly_do: string
+  /** Tổ lấy (cho lệnh) hoặc bộ phận nhận (xuất lẻ). */
+  to: string
+  nguoi_lay: string
+  doc_date: string
+}
+
+export type KiemXuat =
+  | { ok: true }
+  | {
+      ok: false
+      reason:
+        | 'thieu_lenh'
+        | 'thieu_ly_do'
+        | 'thieu_to'
+        | 'khong_dong'
+        | 'so_khong_hop_le'
+        | 'vuot_ton'
+      message: string
+      /** Ô phải sửa: tên ô đầu phiếu, hoặc chỉ số dòng. */
+      focus: 'lenh' | 'ly_do' | 'to' | number
+    }
+
+/**
+ * Vì sao CHƯA ghi sổ được — theo thứ tự câu hỏi của đầu phiếu (1 xuất cho →
+ * 2 lệnh / lý do → 3 tổ) rồi tới lưới. Câu nào cũng chỉ được tới ô phải sửa.
+ * Vượt tồn chặn ở đây vì server cũng chặn (không có đường "xuất âm").
+ */
+export function kiemTruocGhiSoXuat(head: DauPhieuXuat, rows: DongXuat[]): KiemXuat {
+  if (head.loai === 'daily' && !head.ly_do) {
+    return {
+      ok: false,
+      reason: 'thieu_ly_do',
+      message: 'Chưa chọn lý do xuất lẻ',
+      focus: 'ly_do',
+    }
+  }
+  if (head.loai === 'lsx' || lyDoCanLenh(head.ly_do)) {
+    if (!head.lsx_id) {
+      return {
+        ok: false,
+        reason: 'thieu_lenh',
+        message: 'Chưa chọn lệnh sản xuất',
+        focus: 'lenh',
+      }
+    }
+  }
+  if (!head.to.trim()) {
+    return {
+      ok: false,
+      reason: 'thieu_to',
+      message: head.loai === 'lsx' ? 'Chưa chọn tổ lấy' : 'Chưa chọn bộ phận nhận',
+      focus: 'to',
+    }
+  }
+  const iSai = rows.findIndex((r) => !Number.isFinite(r.qty) || r.qty < 0)
+  if (iSai >= 0) {
+    return {
+      ok: false,
+      reason: 'so_khong_hop_le',
+      message: `Dòng ${iSai + 1} ${rows[iSai].code}: số Lần này không hợp lệ`,
+      focus: iSai,
+    }
+  }
+  if (!rows.some((r) => r.qty > 0)) {
+    return {
+      ok: false,
+      reason: 'khong_dong',
+      message:
+        rows.length === 0
+          ? 'Chưa có dòng nào — tìm mã ở ô cuối lưới'
+          : 'Chưa dòng nào có số Lần này',
+      focus: rows.length === 0 ? -1 : 0,
+    }
+  }
+  const iVuot = rows.findIndex((r) => thieuTon(r) != null)
+  if (iVuot >= 0) {
+    const r = rows[iVuot]
+    return {
+      ok: false,
+      reason: 'vuot_ton',
+      message: `${r.code} xuất ${r.qty} nhưng tồn dùng được ${r.qty_ok} — sửa số hoặc bỏ dòng`,
+      focus: iVuot,
+    }
+  }
+  return { ok: true }
+}
+
 /** Xuất quá tồn dùng được — trả phần thiếu, null khi đủ hoặc chưa tra được tồn. */
 export function thieuTon(r: Pick<DongXuat, 'qty' | 'qty_ok'>): number | null {
   if (r.qty_ok == null) return null

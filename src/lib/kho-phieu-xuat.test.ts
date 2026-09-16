@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   LY_DO_XUAT_LE,
+  kiemTruocGhiSoXuat,
+  type DauPhieuXuat,
   lyDoCanLenh,
   themDong,
   thieuTon,
@@ -58,4 +60,39 @@ describe('thieuTon', () => {
     expect(thieuTon({ qty: 120, qty_ok: 120 })).toBeNull()
     expect(thieuTon({ qty: 150, qty_ok: null })).toBeNull()
   })
+})
+
+
+const head = (p: Partial<DauPhieuXuat> = {}): DauPhieuXuat => ({
+  loai: 'lsx',
+  lsx_id: 'lsx-1',
+  ly_do: '',
+  to: 'Tổ Hàn',
+  nguoi_lay: '',
+  doc_date: '2026-09-16',
+  ...p,
+})
+
+describe('kiemTruocGhiSoXuat — theo thứ tự câu hỏi của đầu phiếu', () => {
+  it('cho lệnh mà chưa chọn lệnh → thieu_lenh', () =>
+    expect(kiemTruocGhiSoXuat(head({ lsx_id: '' }), [row('a', 1)])).toMatchObject({
+      reason: 'thieu_lenh',
+      focus: 'lenh',
+    }))
+  it('xuất lẻ chưa chọn lý do → thieu_ly_do; X2 vẫn đòi lệnh', () => {
+    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: '' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_ly_do' })
+    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X2', lsx_id: '' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_lenh' })
+    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', lsx_id: '' }), [row('a', 1)])).toEqual({ ok: true })
+  })
+  it('thiếu tổ → thieu_to, câu khác nhau cho lệnh / lẻ', () => {
+    expect(kiemTruocGhiSoXuat(head({ to: ' ' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_to', message: 'Chưa chọn tổ lấy' })
+    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', to: '' }), [row('a', 1)])).toMatchObject({ message: 'Chưa chọn bộ phận nhận' })
+  })
+  it('chưa có dòng / chưa dòng nào có số → khong_dong', () => {
+    expect(kiemTruocGhiSoXuat(head(), [])).toMatchObject({ reason: 'khong_dong', focus: -1 })
+    expect(kiemTruocGhiSoXuat(head(), [row('a', 0)])).toMatchObject({ reason: 'khong_dong', focus: 0 })
+  })
+  it('vượt tồn → vuot_ton trỏ đúng dòng', () =>
+    expect(kiemTruocGhiSoXuat(head(), [row('a', 5), row('b', 150, 120)])).toMatchObject({ reason: 'vuot_ton', focus: 1 }))
+  it('đủ → ok', () => expect(kiemTruocGhiSoXuat(head(), [row('a', 5)])).toEqual({ ok: true }))
 })
