@@ -1,6 +1,7 @@
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
+import { withProductImage } from '@/modules/dept/production/lsx-lines.service'
 import { ordersRepo } from '@/modules/dept/sales/orders.repo'
 import { quotesRepo, lastPricesForCustomer } from '@/modules/dept/sales/quotes.repo'
 import { usersRepo } from '@/modules/core/users/users.repo'
@@ -116,7 +117,10 @@ export async function loadPendingLsxDetail(
 
   const [orderLines, printLines, orders, issuedByName] = await Promise.all([
     ordersRepo.listLinesByOrders(lsx.order_ids),
-    lsxLinesRepo.listLines(lsx.id),
+    // Ảnh trên dòng lệnh chỉ là BẢN CHỤP lúc phát lệnh — hồ sơ SP có ảnh sau đó
+    // thì dòng vẫn trống. Giám đốc duyệt lệnh mà không thấy hàng trông thế nào
+    // là mất đúng thứ đáng nhìn nhất trên tờ trình.
+    lsxLinesRepo.listLines(lsx.id).then(withProductImage),
     ordersRepo.listByProductionOrder(lsx.id),
     lsx.issued_by
       ? usersRepo

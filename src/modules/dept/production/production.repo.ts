@@ -420,20 +420,33 @@ export const productionRepo = {
  * gom về từng lệnh. Màn "Vật tư theo lệnh" cần SP của mọi lệnh đang chạy; gọi
  * hàm dưới theo từng lệnh là 30 truy vấn cho một lần mở trang.
  */
+export type OrderLineProduct = {
+  order_id: string
+  /** Id hồ sơ SP — để màn dẫn thẳng sang thư viện sản phẩm. */
+  product_id: string
+  code: string
+  name: string
+  qty: number
+  /** Ảnh SP (nếu hồ sơ có) — người đọc nhận ra món hàng nhanh hơn mọi mã. */
+  image_file_id: string | null
+}
+
 export async function listOrderLineProducts(
   salesOrderIds: string[],
-): Promise<{ order_id: string; code: string; name: string; qty: number }[]> {
+): Promise<OrderLineProduct[]> {
   if (!salesOrderIds.length) return []
   const { data } = await db()
     .from('sales_order_lines')
-    .select('order_id, qty, sort_order, product:technical_products(code, name)')
+    .select(
+      'order_id, qty, sort_order, product:technical_products(id, code, name, image_file_id)',
+    )
     .in('order_id', salesOrderIds.slice(0, 500))
     .order('sort_order')
     .limit(3000)
 
-  type P = { code: string; name: string }
+  type P = { id: string; code: string; name: string; image_file_id: string | null }
   type Row = { order_id: string; qty: unknown; product: P | P[] | null }
-  const out: { order_id: string; code: string; name: string; qty: number }[] = []
+  const out: OrderLineProduct[] = []
   for (const r of (data as Row[] | null) ?? []) {
     const p = Array.isArray(r.product) ? r.product[0] : r.product
     if (!p?.code) continue
@@ -443,9 +456,11 @@ export async function listOrderLineProducts(
     else
       out.push({
         order_id: r.order_id,
+        product_id: p.id,
         code: p.code,
         name: p.name,
         qty: Number(r.qty ?? 0),
+        image_file_id: p.image_file_id ?? null,
       })
   }
   return out

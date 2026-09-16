@@ -1,5 +1,6 @@
 import { jobsRepo, type Job } from './jobs.repo'
 import { lsxLinesRepo } from './lsx-lines.repo'
+import { withProductImage } from './lsx-lines.service'
 import { productionRepo, type ProductionOrderWithOrders } from './production.repo'
 import { componentsRepo } from './components.repo'
 import { entriesRepo } from './entries.repo'
@@ -357,7 +358,10 @@ export const jobsService = {
     await Promise.all(
       lsxOfTeam.map(async (id) => {
         const [lines, groups] = await Promise.all([
-          lsxLinesRepo.listLines(id),
+          // Thẻ việc của tổ là chỗ ảnh SP có giá trị nhất — công nhân đối chiếu
+          // hàng trên tay với ảnh. Dòng lệnh chỉ giữ BẢN CHỤP lúc phát lệnh, nên
+          // phải lùi về hồ sơ SP khi bản chụp trống.
+          lsxLinesRepo.listLines(id).then(withProductImage),
           lsxLinesRepo.listGroups(id),
         ])
         const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
