@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api'
 import { downloadCsv } from '@/lib/csv'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
+import { tongGiaTri } from '@/lib/ton-kho-gia-tri'
 import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
@@ -29,6 +30,10 @@ type Stock = {
   reserved: number
   /** on_hand − reserved; âm = thiếu cho LSX. */
   available: number
+  /** Đơn giá bình quân gia quyền (0193). Null = chưa lần nhập nào ghi giá. */
+  don_gia_bq: number | null
+  /** Tồn × đơn giá bình quân. Null khi chưa có đơn giá. */
+  gia_tri: number | null
 }
 
 type Movement = {
@@ -120,7 +125,17 @@ export function StockManager({
       if (s.is_low) low++
       if (s.available < 0) short++
     }
-    return { low, out, has, short }
+    /*
+      TỔNG GIÁ TRỊ TỒN — và ĐẾM LUÔN số mã chưa tính được.
+
+      Bày mỗi con tổng thì người đọc tưởng đó là tổng đủ. Sổ thiết kế nói thẳng:
+      "số nào không kiểm được thì không ai tin" — nên tổng đi kèm phần mẫu số.
+      Chỉ đếm mã ĐANG CÓ TỒN: mã tồn 0 không thiếu giá, nó chỉ không có gì.
+    */
+    const { tong, thieu } = tongGiaTri(
+      stock.filter((s) => s.on_hand !== 0).map((s) => ({ giaTri: s.gia_tri })),
+    )
+    return { low, out, has, short, giaTri: tong, thieuGia: thieu }
   }, [stock])
 
   async function post(url: string, body: unknown, okMsg: string): Promise<boolean> {
@@ -225,6 +240,46 @@ export function StockManager({
         ),
     },
     {
+      /*
+        ĐƠN GIÁ BÌNH QUÂN + GIÁ TRỊ (0193) — câu kế toán hỏi mỗi cuối kỳ mà màn
+        này tới nay chỉ trả lời được số LƯỢNG.
+
+        "Chưa có giá" bày dấu —, KHÔNG bày 0: tồn 2.400 cái mà ghi 0 đồng là nói
+        kho đang giữ hàng không đáng tiền. Đơn giá còn thiếu căn cứ (có lần nhập
+        không mang giá) thì chấm mờ + mách nước ở tooltip.
+      */
+      key: 'don_gia_bq',
+      header: 'Đơn giá BQ',
+      width: '110px',
+      align: 'right',
+      sortValue: (s) => s.don_gia_bq ?? -1,
+      cell: (s) =>
+        s.don_gia_bq == null ? (
+          <span className="text-zinc-300 dark:text-zinc-600" title="Chưa lần nhập nào ghi giá vốn">
+            —
+          </span>
+        ) : (
+          <span className="tabular-nums text-zinc-600 dark:text-zinc-300">
+            {Math.round(s.don_gia_bq).toLocaleString('vi-VN')}
+          </span>
+        ),
+    },
+    {
+      key: 'gia_tri',
+      header: 'Giá trị',
+      width: '130px',
+      align: 'right',
+      sortValue: (s) => s.gia_tri ?? -1,
+      cell: (s) =>
+        s.gia_tri == null ? (
+          <span className="text-zinc-300 dark:text-zinc-600">—</span>
+        ) : (
+          <span className="font-semibold tabular-nums">
+            {Math.round(s.gia_tri).toLocaleString('vi-VN')}
+          </span>
+        ),
+    },
+    {
       key: 'min_stock',
       header: 'Tối thiểu',
       width: '100px',
@@ -319,6 +374,13 @@ export function StockManager({
             label: 'Thiếu cho LSX',
             value: stats.short,
             tone: stats.short ? 'red' : 'gray',
+          },
+          {
+            label: stats.thieuGia
+              ? `Giá trị tồn (${stats.thieuGia} mã chưa có giá)`
+              : 'Giá trị tồn',
+            value: Math.round(stats.giaTri).toLocaleString('vi-VN'),
+            tone: 'default',
           },
         ]}
       />

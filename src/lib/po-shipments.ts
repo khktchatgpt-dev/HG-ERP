@@ -260,3 +260,29 @@ export function mapDraftShipments(
   }
   return out
 }
+
+/**
+ * ĐỢT NÀY CÒN CHỜ KHO NHẬN KHÔNG — luật DÙNG CHUNG cho danh sách và cho form.
+ *
+ * Lỗi tìm ra 15/09/2026: màn "Nhập kho — chờ nhận" lọc đợt bằng cách LOẠI ĐƠN
+ * ĐÃ HUỶ, còn form lập phiếu lại chỉ nạp đơn CHƯA VỀ ĐỦ. Hai luật khác nhau cho
+ * cùng một câu hỏi, nên đơn `02/26HG/BT` đã VỀ ĐỦ mà 4 đợt `planned` bỏ quên
+ * của nó vẫn nằm chình ình trong danh sách, ba lô còn bị tô "quá hẹn".
+ *
+ * Người dùng bấm "Lập phiếu nhập" từ đó thì rơi vào NGÕ CỤT im lặng: đơn không
+ * có trong ô "Nguồn nhập" nên trình duyệt đá ô đó về rỗng, form trông vẫn bình
+ * thường — điền xong bấm Lưu mới ăn lỗi "Đợt giao không thuộc đơn đặt đang
+ * chọn", nói về một ô họ không hề động vào.
+ *
+ * Nên gom về MỘT hàm: đợt còn sống VÀ đơn còn nhận được. Hai chỗ gọi cùng một
+ * luật thì không lệch lại được nữa.
+ */
+export function shipmentWaitingReceipt(
+  poStatus: string,
+  shipmentStatus: string,
+): boolean {
+  // Giống `RECEIVABLE` ở supply.repo — đã đặt trở đi, chưa về đủ, chưa huỷ.
+  const NHAN_DUOC = ['approved', 'ordered', 'confirmed', 'in_transit', 'partial']
+  const DOT_SONG = ['planned', 'arrived']
+  return NHAN_DUOC.includes(poStatus) && DOT_SONG.includes(shipmentStatus)
+}

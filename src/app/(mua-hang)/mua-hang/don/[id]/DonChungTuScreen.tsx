@@ -9,6 +9,7 @@ import {
   Affected,
   Checks,
   Consequence,
+  CoverageBar,
   Crumb,
   DateInput,
   DocBody,
@@ -21,6 +22,7 @@ import {
   Field,
   FieldGroup,
   Grid,
+  Btn,
   GridBody,
   GridBtn,
   GridCheck,
@@ -76,7 +78,7 @@ import {
 } from '@/lib/po-line'
 import type { ShipmentInput } from '@/lib/po-shipments'
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
-import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus, PO_TRACK_STEPS, poTrackStep } from '@/lib/po-status'
 import {
   buildPoPayload,
   draftProblem,
@@ -216,7 +218,13 @@ type Props = {
   receiptBatches: ReceiptBatch[]
   suppliers: { id: string; name: string; currency: string | null; payment_terms: string | null; lead_time_days: number | null }[] // prettier-ignore
   lsxs: { id: string; code: string; customer_name: string; order_codes: string[] }[]
-  perms: { canEdit: boolean; canApprove: boolean; isSupply: boolean }
+  perms: {
+    canEdit: boolean
+    canApprove: boolean
+    isSupply: boolean
+    /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp để sửa. */
+    privileged?: boolean
+  }
   me: { id: string; name: string }
   seed?: { supplierId?: string; lsxId?: string }
   /** NHÂN BẢN: đầu đơn của đơn gốc (lines truyền qua `lines`, đã bỏ id). */
@@ -545,7 +553,15 @@ export function DonChungTuScreen(p: Props) {
   }
 
   /* ── hành động theo bước (chế độ xem) ──────────────────────────────── */
-  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove }) : [] // prettier-ignore
+  /*
+    `hasReceipts` chặn đường hạ-về-nháp NGAY TRÊN NÚT thay vì để người dùng bấm
+    rồi ăn lỗi từ server: có phiếu kho, hoặc đã nhận dù chỉ một phần, là sửa
+    dòng sẽ làm phiếu nhập mồ côi. Server vẫn kiểm lại — đây chỉ là nói trước.
+  */
+  const hasReceipts =
+    p.warehouseDocs.length > 0 ||
+    p.statusLines.some((l) => Number(l.qty_received ?? 0) > 1e-6)
+  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove, privileged: perms.privileged, hasReceipts }) : [] // prettier-ignore
   async function runAction(a: DocAction) {
     if (!po || !a.build) return
     setBusy(true)
@@ -583,8 +599,21 @@ export function DonChungTuScreen(p: Props) {
 
   /* ── dữ kiện đầu trang ─────────────────────────────────────────────── */
   const holder = po ? poHolder(po, me.id) : null
-  const stepIdx = po ? ['draft', 'pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit'].indexOf(po.status) : 0 // prettier-ignore
+  const track = poTrackStep((po?.status ?? 'draft') as PoStatus)
   const recvIdx = po?.status === 'received' ? 2 : po?.status === 'partial' ? 1 : 0
+  /*
+    ĐỘ PHỦ VỀ KHO — chỉ tính DÒNG VẬT TƯ KHO, cùng luật với `refreshStatusFromReceipts`.
+    Dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ nên không bao giờ có phiếu
+    nhập; đếm cả chúng thì đơn hỗn hợp không bao giờ đạt 100%.
+  */
+  const veKho = (() => {
+    const DA_GUI = ['ordered', 'confirmed', 'in_transit', 'partial', 'received']
+    if (!po || !DA_GUI.includes(po.status)) return null
+    const kho = p.statusLines.filter((l) => l.material_id != null)
+    if (kho.length === 0) return null
+    const du = kho.filter((l) => Number(l.qty_open ?? 0) <= 1e-6).length
+    return { du, tong: kho.length, ratio: du / kho.length }
+  })()
   const lsx = p.lsxs.find((l) => l.id === header.lsxId)
   const supplierOpt = p.suppliers.find((s) => s.id === header.supplierId)
 
@@ -641,6 +670,22 @@ export function DonChungTuScreen(p: Props) {
   const shipmentsDone = liveShipments.filter((s) => s.status === 'received').length
   const openStockLines = p.statusLines.filter((s) => s.material_id != null && s.qty_open > 0 && !s.closed_short_at) // prettier-ignore
   const recv = receiveActions({ status: po?.status ?? 'draft', canEdit: perms.canEdit, hasStockLines: shipLines.length > 0, openStockLines: openStockLines.length }) // prettier-ignore
+  /*
+    BƯỚC KẾ TIẾP của đơn — một hàm, dùng cho cả dấu chỉ đường ở đầu chứng từ.
+    Chỉ những bước mà nút thật nằm ở TAB KHÁC mới cần chỉ đường; bước nào đã có
+    nút trên thanh hành động chính (gửi duyệt, duyệt, gửi NCC) thì để yên, thêm
+    nữa là hai nút cùng việc.
+  */
+  const buocKeTiep: { label: string; why?: string; go: () => void } | null = !po
+    ? null
+    : po.status === 'ordered' && recv.confirm.ok
+      ? { label: 'NCC xác nhận', go: () => { setPaneTab('nhan'); shipLines.length > 0 ? setXacNhan('confirm') : start(CONFIRM_PLAIN) } } // prettier-ignore
+      : po.status === 'confirmed' && recv.transit.ok
+        ? { label: 'Hàng đang trên đường', go: () => { setPaneTab('nhan'); start(TRANSIT) } } // prettier-ignore
+        : ['in_transit', 'partial'].includes(po.status) && recv.receive.ok
+          ? { label: 'Ghi nhận hàng về', why: 'Mở khu Nhận hàng để lập phiếu nhập kho', go: () => setPaneTab('nhan') } // prettier-ignore
+          : null
+
   const sentToSupplier = ['ordered', 'confirmed', 'in_transit', 'partial', 'received'].includes(po?.status ?? '') // prettier-ignore
 
   async function call(
@@ -1187,17 +1232,28 @@ export function DonChungTuScreen(p: Props) {
         compact
         kind="Đơn đặt vật tư"
         code={code}
+        /*
+          NHÃN "ĐANG SỬA" BẮT THEO VIỆC, KHÔNG BẮT THEO "ĐÃ CÓ ĐƠN LƯU".
+
+          Bản cũ viết `po ? (tiêu đề thường) : (<Tag>Đang sửa</Tag>)` — tức nhãn
+          chỉ hiện khi CHƯA có đơn nào lưu, nghĩa là chỉ ở màn tạo mới. Sửa một
+          đơn nháp ĐÃ LƯU thì `po` có giá trị nên rơi vào nhánh đầu và đầu chứng
+          từ trông y hệt lúc đọc: cùng tiêu đề, cùng trục trạng thái, chỉ khác ở
+          chỗ các ô đã thành ô nhập. Chủ dự án báo 15/09/2026 "không rõ cảnh báo
+          rằng đang trong trạng thái chỉnh sửa" — đúng, và đây là dòng gây ra.
+        */
         sub={
-          po ? (
+          editing ? (
             <>
-              {po.supplier_name} · soạn {dmy(po.created_at)} bởi {po.assignee_name ?? '—'}
+              <Tag tone="warn">
+                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa · chưa lưu'}
+              </Tag>{' '}
+              {po?.supplier_name ?? supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
             </>
           ) : (
             <>
-              <Tag tone="warn">
-                {p.mode === 'create' ? 'Đang tạo · chưa lưu' : 'Đang sửa'}
-              </Tag>{' '}
-              {supplierOpt?.name ?? 'chưa chọn nhà cung cấp'}
+              {po?.supplier_name} · soạn {dmy(po?.created_at)} bởi{' '}
+              {po?.assignee_name ?? '—'}
             </>
           )
         }
@@ -1206,21 +1262,59 @@ export function DonChungTuScreen(p: Props) {
           <>
             <StatusTrack
               label="Trạng thái đơn"
-              steps={[
-                'Nháp',
-                'Chờ duyệt',
-                'Đã duyệt',
-                'Đã gửi',
-                'NCC xác nhận',
-                'Đang giao',
-              ]}
-              at={Math.max(0, stepIdx)}
+              steps={[...PO_TRACK_STEPS]}
+              at={track.at}
+              tone={track.tone}
+              terminal={track.terminal}
             />
             <StatusTrack
               label="Nhận hàng"
               steps={['Chưa', 'Một phần', 'Đủ']}
               at={recvIdx}
             />
+            {/* VỀ ĐƯỢC BAO NHIÊU — con số, không phải ba cái chip.
+
+                Trục "Nhận hàng" chỉ nói Chưa / Một phần / Đủ. "Một phần" là 1
+                trong 4 dòng hay 39 trong 40 dòng thì cũng cùng một chữ, mà hai
+                tình huống đó quyết định khác hẳn nhau: một cái phải gọi NCC
+                ngay, một cái chờ nốt là xong. Chủ dự án hỏi đúng câu này —
+                "có về hàng chưa, về được bao nhiêu".
+
+                Đếm theo DÒNG chứ không theo số lượng cộng dồn: cộng 1.950 cái
+                nút với 8.504 con sò ra một con số vô nghĩa. Dòng đã chốt thiếu
+                tính là xong, cùng luật với `qty_open` mà sổ kho dùng. */}
+            {veKho && (
+              <div>
+                <div className="k-track-lab">Về kho</div>
+                <CoverageBar ratio={veKho.ratio} label={`${veKho.du}/${veKho.tong} dòng`} />
+              </div>
+            )}
+            {/* BƯỚC KẾ TIẾP — đứng NGAY CẠNH trục trạng thái.
+
+                Lỗi chủ dự án báo 15/09/2026: "không có chuyển trạng thái". Đo
+                lại thì có, nhưng nằm ở TAB KHÁC — trục trạng thái vẽ ở tab Đơn
+                hàng, còn nút "NCC xác nhận" / "Hàng đang trên đường" nằm ở tab
+                Nhận hàng. Nhìn chỗ này, bấm chỗ kia, không một dấu chỉ đường.
+                Lộ rõ hơn nữa vì bước TRƯỚC nó (Đã duyệt → "Gửi nhà cung cấp")
+                lại nằm ngay trên thanh hành động chính: cùng một loại việc mà
+                hai chỗ khác nhau.
+
+                KHÔNG chép nút sang đây. Bước "NCC xác nhận" mở phiếu khai lịch
+                giao NCC hẹn; dựng một bản rút gọn ở đây là đẻ ra đường thứ hai
+                bỏ qua việc khai lịch. Nút này ĐƯA NGƯỜI DÙNG TỚI đúng nút thật
+                — một chỗ làm việc, một dấu chỉ đường. */}
+            {buocKeTiep && (
+              <span className="flex items-center gap-2">
+                <Btn
+                  primary
+                  disabled={busy}
+                  title={buocKeTiep.why}
+                  onClick={buocKeTiep.go}
+                >
+                  {buocKeTiep.label} →
+                </Btn>
+              </span>
+            )}
           </>
         )}
       </DocHead>
@@ -1274,20 +1368,42 @@ export function DonChungTuScreen(p: Props) {
           </GridBtn>
         </NoticeBar>
       )}
-      {editing && problem && (
-        <NoticeBar
-          tone="warn"
-          tag="Chưa lưu được"
-          action={{
-            label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
-              ? 'Tới ô cần điền'
-              : 'Xem dòng hàng',
-            onClick: () => goToProblem(problem),
-          }}
-        >
-          {problem}. Sửa xong thì nút Lưu tự mở.
-        </NoticeBar>
-      )}
+      {/* THANH ĐANG SỬA — CÓ MẶT SUỐT chế độ sửa, không chỉ khi có lỗi.
+
+          Bản cũ chỉ bày thanh này khi đơn còn thiếu thông tin. Nghĩa là đơn khai
+          ĐÚNG và ĐỦ thì tuyệt nhiên không có dòng nào nói người dùng đang sửa dở
+          — đúng lúc nguy hiểm nhất, vì lúc đó nút Lưu mở và mọi thứ trông như
+          màn đọc bình thường.
+
+          Nay một thanh, hai trạng thái: còn vướng thì nói vướng gì và chỉ tới ô;
+          hết vướng thì nói "còn thay đổi chưa lưu" và cho Lưu ngay tại chỗ. Nút
+          Lưu trên thanh hành động vẫn còn — người dùng cuộn xuống giữa lưới 40
+          dòng thì thanh này là chỗ gần tay nhất. */}
+      {editing &&
+        (problem ? (
+          <NoticeBar
+            tone="warn"
+            tag="Chưa lưu được"
+            action={{
+              label: /nhà cung cấp|lệnh|LSX|mẫu/i.test(problem)
+                ? 'Tới ô cần điền'
+                : 'Xem dòng hàng',
+              onClick: () => goToProblem(problem),
+            }}
+          >
+            {problem}. Sửa xong thì nút Lưu tự mở.
+          </NoticeBar>
+        ) : (
+          <NoticeBar
+            tone="warn"
+            tag="Đang sửa"
+            action={{ label: busy ? 'Đang lưu…' : 'Lưu', onClick: () => void save() }}
+          >
+            {p.mode === 'create'
+              ? 'Đơn chưa được tạo — rời trang là mất.'
+              : 'Thay đổi chưa lưu. Rời trang khi chưa lưu thì đơn giữ nguyên bản cũ.'}
+          </NoticeBar>
+        ))}
 
       <DocBody
         aside={

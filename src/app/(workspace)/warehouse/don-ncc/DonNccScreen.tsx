@@ -19,6 +19,7 @@ import { Toolbar, ToolbarInput, ToolbarSelect } from '@/components/erp/Toolbar'
 import { api, ApiError } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import { poStatusLabel, poStatusTone } from '@/lib/po-status'
+import { tomTatLenh } from './tom-tat-lenh'
 
 type PoRow = {
   id: string
@@ -407,17 +408,43 @@ export function DonNccScreen({
           ) : groups ? (
             groups.map(([lsx, rows]) => (
               <section key={lsx}>
-                <header className="bg-muted/40 border-border/60 flex items-center gap-2 border-b px-4 py-2">
+                <header className="bg-muted/40 border-border/60 flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2">
                   <b className="t-data text-[12.5px]">{lsx}</b>
-                  <span className="text-muted-foreground text-xs">{rows.length} đơn</span>
-                  {lsx !== 'Ngoài LSX' && (
-                    <Link
-                      href="/warehouse/xuat"
-                      className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
-                    >
-                      Cấp vật tư lệnh này →
-                    </Link>
-                  )}
+                  {/* TÓM TẮT CẢ LỆNH, không chỉ đếm đơn.
+
+                      Kho mở màn này để hỏi "hàng của lệnh này về tới đâu, ngày
+                      nào" — "3 đơn" không trả lời câu nào trong hai câu đó,
+                      phải bung từng đơn ra cộng nhẩm.
+
+                      Phép đếm nằm ở `tom-tat-lenh.ts` (thuần, 11 test): đếm sai
+                      thì cả màn nói dối mà không ai biết, và luật "đợt giao
+                      trước, hạn đơn sau" phải đọc được ở MỘT chỗ. */}
+                  {(() => {
+                    const t = tomTatLenh(rows, today)
+                    return (
+                      <>
+                        <span className="text-muted-foreground text-xs">
+                          {t.don} đơn
+                        </span>
+                        <span className="text-muted-foreground text-xs">
+                          ·{' '}
+                          {t.conLai > 0 ? (
+                            <>
+                              còn <b className="t-data">{t.conLai}</b> dòng chưa về
+                            </>
+                          ) : (
+                            'đã về đủ'
+                          )}
+                        </span>
+                        {t.ganNhat && (
+                          <span className="text-muted-foreground text-xs">
+                            · gần nhất <span className="t-data">{dmy(t.ganNhat)}</span>
+                          </span>
+                        )}
+                        {t.quaHen > 0 && <Badge tone="red">{t.quaHen} lô quá hẹn</Badge>}
+                      </>
+                    )
+                  })()}
                 </header>
                 <div className="divide-border/60 divide-y">
                   {rows.map((p) => rowOf(p, `${lsx}-`))}

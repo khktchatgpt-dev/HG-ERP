@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { laMaLyDoXuat, thieuDienGiai } from '@/lib/ly-do-xuat'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const materialCreateSchema = z.object({
@@ -287,7 +288,19 @@ export const issueDocSchema = z
     kind: z.enum(['lsx', 'daily']),
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
-    reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
+    /*
+      TỔ NHẬN (0194) — `counterparty` là TÊN người, tổ là ĐƠN VỊ. Gõ "anh Tuấn"
+      thì tháng sau không ai biết anh Tuấn thuộc tổ nào, và không cộng được
+      "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô này bổ sung nhau, không thay thế.
+    */
+    team_department_id: z.string().uuid().optional().nullable(),
+    /*
+      LÝ DO CÓ MÃ (0195) — quyết định tiền đi về đâu: cấp SX vào giá thành lệnh,
+      sửa máy / nội bộ là chi phí chung, huỷ là tổn thất. `reason` giữ phần diễn
+      giải tự do: mã nói LOẠI, chữ nói CHI TIẾT.
+    */
+    reason_code: z.string().trim().max(32).optional().nullable(),
+    reason: z.string().trim().max(500).optional().nullable(), // diễn giải lý do
     /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
     doc_date: z.string().date().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
@@ -303,6 +316,16 @@ export const issueDocSchema = z
   .refine((d) => !d.override_reserved || !!d.override_reason?.trim(), {
     message: 'Xuất vượt khả dụng phải kèm lý do',
     path: ['override_reason'],
+  })
+  .refine((d) => !d.reason_code || laMaLyDoXuat(d.reason_code), {
+    message: 'Mã lý do xuất không hợp lệ',
+    path: ['reason_code'],
+  })
+  // "Khác" mà bỏ trống diễn giải thì nó thành thùng rác nuốt mọi phiếu, và bộ
+  // mã mất luôn tác dụng phân loại.
+  .refine((d) => !thieuDienGiai(d.reason_code, d.reason), {
+    message: 'Chọn "Khác" thì phải ghi rõ lý do',
+    path: ['reason'],
   })
 
 /** Dòng phiếu TRẢ HÀNG NCC (0080): gắn dòng PO đã về, trả ≤ số đã về. */

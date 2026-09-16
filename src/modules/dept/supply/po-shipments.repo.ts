@@ -1,4 +1,5 @@
 import { db } from '@/server/db'
+import { shipmentWaitingReceipt } from '@/lib/po-shipments'
 
 /**
  * ĐỢT GIAO của đơn đặt vật tư (0152 — plan-po-giao-nhan GĐ1).
@@ -13,6 +14,8 @@ export type PoShipmentStatus = 'planned' | 'arrived' | 'received' | 'cancelled'
 export type PoShipment = {
   id: string
   po_id: string
+  /** Mã chứng từ GH-YYYY-NNNN. Null = đợt cũ tạo trước 0193. */
+  code: string | null
   seq: number
   expected_date: string
   method: string | null
@@ -32,7 +35,8 @@ export type PoShipmentInsert = {
   lines: { po_line_id: string; qty: number }[]
 }
 
-const COLS = 'id, po_id, seq, expected_date, method, place, note, status, created_at'
+const COLS =
+  'id, po_id, code, seq, expected_date, method, place, note, status, created_at'
 
 export const poShipmentsRepo = {
   async listByPo(poId: string): Promise<PoShipment[]> {
@@ -91,11 +95,27 @@ export const poShipmentsRepo = {
     createdBy: string,
   ): Promise<void> {
     if (shipments.length === 0) return
+    /*
+      CẤP MÃ TRƯỚC KHI CHÈN (0193). Đợt giao là chứng từ Kho mở ra làm việc, nên
+      phải có danh tính riêng — `seq` chỉ đánh số trong phạm vi một đơn, "đợt 2"
+      không nói được là đợt 2 của đơn nào.
+
+      Gọi `next_doc_code` từng cái một chứ không sinh hàng loạt: hàm đó đếm
+      NGUYÊN TỬ trong `doc_counters`, hai người cùng khai đợt một lúc vẫn ra hai
+      mã khác nhau. Tốn vài lượt gọi cho một thao tác hiếm — đổi lấy việc không
+      bao giờ có hai đợt trùng mã.
+    */
+    const codes: (string | null)[] = []
+    for (let i = 0; i < shipments.length; i++) {
+      const { data: c } = await db().rpc('next_doc_code', { p_kind: 'GH' })
+      codes.push(typeof c === 'string' ? c : null)
+    }
     const { data, error } = await db()
       .from('supply_po_shipments')
       .insert(
-        shipments.map((s) => ({
+        shipments.map((s, i) => ({
           po_id: poId,
+          code: codes[i],
           seq: s.seq,
           expected_date: s.expected_date,
           method: s.method ?? null,
@@ -168,8 +188,16 @@ export const poShipmentsRepo = {
         supplier: { name: string } | { name: string }[] | null
       } | null
     }
+    /*
+      LỌC BẰNG LUẬT DÙNG CHUNG (`shipmentWaitingReceipt`), không tự chế.
+
+      Bản cũ chỉ loại đơn ĐÃ HUỶ, trong khi form lập phiếu lại chỉ nạp đơn CHƯA
+      VỀ ĐỦ — hai luật khác nhau cho cùng một câu hỏi. Hệ quả đo được: đơn
+      02/26HG/BT đã VỀ ĐỦ mà 4 đợt `planned` bỏ quên vẫn nằm trong danh sách, ba
+      lô còn bị tô "quá hẹn", và bấm Lập phiếu nhập từ đó là vào ngõ cụt.
+    */
     const heads = ((data ?? []) as unknown as Raw[]).filter(
-      (r) => r.po && r.po.status !== 'cancelled',
+      (r) => r.po && shipmentWaitingReceipt(r.po.status, r.status),
     )
     const counts = new Map<string, { line_count: number; total_qty: number }>()
     if (heads.length > 0) {
@@ -193,6 +221,7 @@ export const poShipmentsRepo = {
       return {
         id: r.id,
         po_id: r.po_id,
+        code: r.code,
         seq: r.seq,
         expected_date: r.expected_date,
         method: r.method,

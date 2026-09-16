@@ -279,12 +279,25 @@ export function StatusTrack({
   label,
   steps,
   at,
+  tone = 'act',
+  terminal,
   onPick,
 }: {
   label: string
   steps: string[]
-  /** Chỉ số bước hiện tại. */
+  /**
+   * Chỉ số bước hiện tại. Bằng hoặc lớn hơn `steps.length` = ĐÃ QUA HẾT trục,
+   * không bước nào đang chạy (đơn đã về / đã huỷ thì trục phát hành xong rồi).
+   */
   at: number
+  /** Màu bước đang ở. `stop` cho vòng đời dừng giữa chừng (huỷ). */
+  tone?: 'act' | 'stop'
+  /**
+   * BẬC KẾT THÚC ngoài trục — chứng từ dừng hẳn ở một chỗ không nằm trong dãy
+   * bước (đơn huỷ). Đi kèm `at: -1` thì cả trục lùi về nhạt: nó không còn nghĩa
+   * nữa, và nói vậy trung thực hơn là tick xanh những bước đơn chưa hề đi qua.
+   */
+  terminal?: string
   onPick?: (i: number) => void
 }) {
   return (
@@ -305,27 +318,61 @@ export function StatusTrack({
         một thao tác không tồn tại.
       */}
       <div className="k-steps" role={onPick ? undefined : 'list'}>
-        {steps.map((s, i) =>
-          onPick ? (
+        {/*
+          BA TRẠNG THÁI BƯỚC, KHÔNG PHẢI HAI.
+
+          Tới 15/09/2026 dải chỉ biết "đang ở đây" và "không phải đây" — bước ĐÃ
+          QUA và bước CHƯA TỚI tô y hệt nhau (`--surface-raised` + `--ink-3`).
+          Nên cả dải đọc ra một mảng xám có đúng một ô xanh, và không nói được
+          điều quan trọng nhất: đi tới đâu rồi. Chủ dự án báo đúng vậy — "trạng
+          thái 1 màu duy nhất, rất khó nhận biết".
+
+          Bước đã qua mang sắc HOÀN THÀNH nhạt + dấu ✓, KHÔNG mang màu hành
+          động: tô hết bằng màu hành động thì cả dải sáng rực và mắt lại không
+          tìm ra đang ở đâu (đúng lỗi của v3 trên đơn 8 bậc). Bước chưa tới lùi
+          xuống nền thẻ — nhạt hơn bước đã qua, nên hướng đi đọc được ngay cả
+          khi không còn bước nào "đang" (đơn đã về đủ).
+        */}
+        {steps.map((s, i) => {
+          const qua = i < at
+          const dang = i === at
+          const cls = cx(
+            'k-step',
+            !onPick && 'k-step-ro',
+            qua && 'past',
+            dang && (tone === 'stop' ? 'on stop' : 'on'),
+          )
+          const noi = (
+            <>
+              {qua && <span aria-hidden>✓ </span>}
+              {s}
+            </>
+          )
+          return onPick ? (
             <button
               key={s}
               type="button"
-              className={cx('k-step', i === at && 'on')}
+              className={cls}
               onClick={() => onPick(i)}
-              aria-current={i === at ? 'step' : undefined}
+              aria-current={dang ? 'step' : undefined}
             >
-              {s}
+              {noi}
             </button>
           ) : (
             <span
               key={s}
               role="listitem"
-              className={cx('k-step', 'k-step-ro', i === at && 'on')}
-              aria-current={i === at ? 'step' : undefined}
+              className={cls}
+              aria-current={dang ? 'step' : undefined}
             >
-              {s}
+              {noi}
             </span>
-          ),
+          )
+        })}
+        {terminal && (
+          <span role="listitem" className="k-step k-step-ro on stop" aria-current="step">
+            {terminal}
+          </span>
         )}
       </div>
     </div>

@@ -1,10 +1,13 @@
 'use client'
 
+import Link from 'next/link'
+
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Badge } from '@/components/Badge'
 import { Modal } from '@/components/Modal'
 import { useToast } from '@/components/ui/Toast'
+import { LY_DO_XUAT, lyDoMacDinh, nhanLyDo } from '@/lib/ly-do-xuat'
 import { api, ApiError } from '@/lib/api'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { StatsBar } from '@/components/erp/StatsBar'
@@ -21,6 +24,10 @@ type Doc = {
   kind: DocKind
   doc_date: string
   counterparty: string | null
+  /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
+  team_name: string | null
+  /** Mã lý do xuất (0195) — nhãn tra bằng `nhanLyDo`. */
+  reason_code: string | null
   reason: string | null
   note: string | null
   /** Vòng duyệt kiểm kê (0157) — nhập/xuất luôn 'posted'. */
@@ -35,6 +42,21 @@ type Doc = {
   supplier_doc_no: string | null
   created_by_name: string | null
   created_at: string
+  /**
+   * TÓM TẮT nội dung phiếu (0193) — số mã, số lượng, QC loại, giá trị, và đơn/
+   * lệnh mà phiếu phục vụ. Null khi phiếu chưa có dòng chuyển động nào.
+   */
+  summary: {
+    dong: number
+    ma: number
+    sl: number
+    loai: number
+    tien: number | null
+    thieuGia: boolean
+    po_codes: string[]
+    lsx_codes: string[]
+    ten_dau: string | null
+  } | null
 }
 
 type DocLine = {
@@ -69,6 +91,9 @@ type PoOption = {
   /** null = PO ngoài LSX (0076). */
   lsx_code: string | null
 }
+/** Tổ SX nhận vật tư (0194) — lấy từ `departments`, cùng nguồn với LSX job. */
+export type TeamOption = { id: string; name: string }
+
 type LsxOption = { id: string; code: string; customer_name: string }
 
 type PoLine = {
@@ -91,7 +116,13 @@ type LsxNeed = {
   material_code: string
   material_name: string
   unit: string
+  /** Nhu cầu BOM của cả lệnh. */
+  qty_needed: number
+  /** Đã cấp cho lệnh tới giờ. */
+  qty_issued: number
   qty_remaining: number
+  /** Tồn hiện có lúc mở phiếu (0194) — null với dữ liệu cũ. */
+  on_hand?: number | null
 }
 
 /** Dòng đang biên tập trong form phiếu. */
@@ -123,6 +154,29 @@ type Row = {
   material_unit: string | null
   shelf_location: string
   note: string
+  /** Nhu cầu BOM của lệnh — chỉ dòng sinh từ LSX mới có. */
+  qty_needed?: number | null
+  /** Đã cấp cho lệnh tới giờ. */
+  qty_issued?: number | null
+  /** Tồn hiện có của vật tư lúc mở phiếu. */
+  on_hand?: number | null
+}
+
+/**
+ * TỒN SAU KHI GHI PHIẾU — trả từ route nhập kho (0193).
+ *
+ * `warehouse_stock` là VIEW cộng từ phiếu, không phải bảng ai gõ tay. Người giữ
+ * kho không có lý do gì để TIN là nó tự cộng, nên bấm xong họ hỏi ngay "tồn vào
+ * chưa?" (chủ dự án 15/09/2026). Số này đọc lại SAU khi ghi movement, nên nó là
+ * tồn thật — sai thì hiện ra ngay tại đây chứ không im lặng.
+ */
+export type StockAfter = {
+  material_id: string
+  code: string
+  name: string
+  unit: string
+  on_hand: number
+  received: number
 }
 
 /** Đợt giao còn nhận được của PO (0153) — từ /api/dept/supply/pos/[id]/shipments. */
@@ -202,6 +256,7 @@ export function DocsManager({
   materials,
   pos,
   lsxs,
+  teams,
   canEdit,
 }: {
   /** Deep-link từ màn nghiệp vụ: mở sẵn form + chọn sẵn đơn/đợt/lệnh. */
@@ -222,6 +277,7 @@ export function DocsManager({
   materials: MaterialOption[]
   pos: PoOption[]
   lsxs: LsxOption[]
+  teams: TeamOption[]
   canEdit: boolean
 }) {
   const router = useRouter()
@@ -230,6 +286,12 @@ export function DocsManager({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [openReceipt, setOpenReceipt] = useState(canEdit && initial?.form === 'receipt')
+  /** Bảng "đã vào sổ" sau khi lập phiếu — đứng yên tới khi người dùng đóng. */
+  const [receiptDone, setReceiptDone] = useState<{
+    code: string
+    poStatus: string | null
+    stockAfter: StockAfter[]
+  } | null>(null)
   const [openIssue, setOpenIssue] = useState(canEdit && initial?.form === 'issue')
   const [openReturn, setOpenReturn] = useState(canEdit && initial?.form === 'return')
   const [viewing, setViewing] = useState<{
@@ -315,9 +377,113 @@ export function DocsManager({
       ),
     },
     {
+      /*
+        NỘI DUNG PHIẾU — cột quan trọng nhất mà sổ này thiếu tới 15/09/2026.
+
+        Người giữ kho nhìn 46 phiếu nhập giống hệt nhau, không cột nào nói phiếu
+        nào chứa gì: muốn biết phải mở từng cái. Một dòng "3 mã · 12.404 Cái ·
+        2/2026-HG/STP" trả lời ngay mà không tốn thêm một lượt bấm.
+
+        Tên vật tư ĐẦU TIÊN kèm theo vì phiếu một mã là ca phổ biến nhất — lúc
+        đó "1 mã" không nói gì, mà "Nút chân vuông 50" thì nói đủ.
+      */
+      key: 'noi_dung',
+      header: 'Nội dung',
+      cell: (d) => {
+        const t = d.summary
+        if (!t || t.dong === 0) return <span className="text-zinc-400">—</span>
+        return (
+          <span className="block">
+            <span className="block truncate">
+              {t.ma === 1 && t.ten_dau ? (
+                t.ten_dau
+              ) : (
+                <>
+                  <b className="t-data">{t.ma}</b> mã
+                </>
+              )}
+              <span className="text-muted-foreground">
+                {' · '}
+                <span className="t-data">{t.sl.toLocaleString('vi-VN')}</span>
+                {t.loai > 0 && (
+                  <>
+                    {' · '}
+                    <span className="t-data text-amber-700 dark:text-amber-500">
+                      loại {t.loai.toLocaleString('vi-VN')}
+                    </span>
+                  </>
+                )}
+              </span>
+            </span>
+            {(t.po_codes.length > 0 || t.lsx_codes.length > 0) && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {[...t.po_codes, ...t.lsx_codes].join(' · ')}
+              </span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      /*
+        GIÁ TRỊ — "chưa biết giá" bày dấu —, KHÔNG bày 0.
+
+        Bịa số 0 là nói "phiếu này không đáng đồng nào". Thiếu giá một phần dòng
+        thì bày "≥" để kế toán biết con số chưa đủ, đừng mang đi đối chiếu rồi
+        đi tìm nguyên nhân lệch ở chỗ khác.
+      */
+      key: 'tien',
+      header: 'Giá trị',
+      width: '130px',
+      align: 'right',
+      cell: (d) =>
+        d.summary?.tien == null ? (
+          <span className="text-zinc-400" title="Chưa có giá vốn trên dòng phiếu">
+            —
+          </span>
+        ) : (
+          <span className="t-data" title={d.summary.thieuGia ? 'Một số dòng chưa có giá — số này còn thiếu' : undefined}>
+            {d.summary.thieuGia && '≥ '}
+            {Math.round(d.summary.tien).toLocaleString('vi-VN')}
+          </span>
+        ),
+    },
+    {
+      key: 'ly_do',
+      header: 'Lý do',
+      width: '140px',
+      cell: (d) => {
+        const nhan = nhanLyDo(d.reason_code)
+        if (!nhan && !d.reason) return <span className="text-zinc-400">—</span>
+        return (
+          <span className="block">
+            {nhan && <span className="block truncate">{nhan}</span>}
+            {d.reason && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {d.reason}
+              </span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
       key: 'counterparty',
-      header: 'Người giao / nhận',
-      cell: (d) => d.counterparty ?? <span className="text-zinc-400">—</span>,
+      header: 'Giao / nhận',
+      width: '150px',
+      cell: (d) =>
+        d.team_name || d.counterparty ? (
+          <span className="block">
+            {d.team_name && <span className="block truncate font-medium">{d.team_name}</span>}
+            {d.counterparty && (
+              <span className="text-muted-foreground block truncate text-[11px]">
+                {d.counterparty}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span className="text-zinc-400">—</span>
+        ),
     },
     {
       key: 'creator',
@@ -487,8 +653,14 @@ export function DocsManager({
             lsxs={lsxs}
             initialPoId={initial?.form === 'receipt' ? initial.poId : null}
             initialShipmentId={initial?.form === 'receipt' ? initial.shipmentId : null}
-            onDone={(code, poStatus) => {
+            onDone={(code, poStatus, stockAfter) => {
               setOpenReceipt(false)
+              /*
+                Toast vẫn giữ (nó là tín hiệu "xong rồi"), nhưng toast TỰ TẮT —
+                không mang nổi thứ người giữ kho cần đọc kỹ: tồn của từng mã
+                vừa nhập giờ là bao nhiêu. Nên mở thêm một bảng ĐỨNG YÊN, họ
+                đóng khi nào đọc xong.
+              */
               toast.success(
                 `Đã lập ${code}`,
                 poStatus === 'received'
@@ -497,9 +669,84 @@ export function DocsManager({
                     ? 'Đơn đặt về một phần'
                     : undefined,
               )
+              setReceiptDone({ code, poStatus, stockAfter })
               router.refresh()
             }}
           />
+        )}
+      </Modal>
+
+      {/* KẾT QUẢ NHẬP KHO — trả lời "tồn đã cộng vào chưa?".
+
+          Đây là câu người giữ kho hỏi ngay sau khi bấm, và tới 15/09/2026 hệ
+          thống không trả lời: chỉ có một toast "Đã lập PNK-…" rồi tự tắt. Tồn
+          là VIEW cộng từ phiếu nên không ai gõ số tồn — nhưng chính vì thế
+          người dùng cũng không có cách nào tự kiểm, trừ khi mở màn Tồn kho tra
+          từng mã.
+
+          Bảng này đọc tồn SAU khi ghi, nên nó vừa là câu trả lời vừa là phép
+          kiểm: số ở đây sai thì lộ ra ngay tại chỗ. */}
+      <Modal
+        open={!!receiptDone}
+        onClose={() => setReceiptDone(null)}
+        title={receiptDone ? `Đã vào sổ · ${receiptDone.code}` : ''}
+        maxWidth="sm:max-w-2xl"
+      >
+        {receiptDone && (
+          <div className="space-y-3">
+            <p className="text-muted-foreground text-[13px]">
+              Phiếu đã ghi vào sổ kho.{' '}
+              {receiptDone.poStatus === 'received'
+                ? 'Đơn đặt chuyển sang ĐÃ VỀ ĐỦ.'
+                : receiptDone.poStatus === 'partial'
+                  ? 'Đơn đặt còn dòng chưa về — vẫn ở VỀ MỘT PHẦN.'
+                  : ''}
+            </p>
+            <div className="overflow-hidden rounded-lg border">
+              <table className="w-full text-[13px]">
+                <thead className="bg-muted/50">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Vật tư</th>
+                    <th className="px-3 py-2 text-right font-medium">Vừa nhập</th>
+                    <th className="px-3 py-2 text-right font-medium">Tồn sau nhập</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {receiptDone.stockAfter.map((r) => (
+                    <tr key={r.material_id} className="border-t">
+                      <td className="px-3 py-1.5">
+                        <span className="t-data text-muted-foreground mr-1.5 text-[11px]">
+                          {r.code}
+                        </span>
+                        {r.name}
+                      </td>
+                      <td className="t-data px-3 py-1.5 text-right">
+                        +{r.received.toLocaleString('vi-VN')} {r.unit}
+                      </td>
+                      <td className="t-data px-3 py-1.5 text-right font-semibold">
+                        {r.on_hand.toLocaleString('vi-VN')} {r.unit}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Link
+                href="/warehouse/stock"
+                className="border-input hover:bg-accent inline-flex items-center rounded-md border px-3 py-1.5 text-[13px]"
+              >
+                Mở sổ tồn kho
+              </Link>
+              <button
+                type="button"
+                onClick={() => setReceiptDone(null)}
+                className="bg-primary text-primary-foreground inline-flex items-center rounded-md px-3 py-1.5 text-[13px] font-medium"
+              >
+                Xong
+              </button>
+            </div>
+          </div>
         )}
       </Modal>
 
@@ -514,6 +761,7 @@ export function DocsManager({
           <IssueForm
             materials={materials}
             lsxs={lsxs}
+            teams={teams}
             initialLsxId={initial?.form === 'issue' ? initial.lsxId : null}
             onDone={(code) => {
               setOpenIssue(false)
@@ -669,7 +917,7 @@ function ReceiptForm({
   /** Deep-link: chọn sẵn đơn (+ đợt) khi mở từ màn "Nhập kho · Chờ nhận". */
   initialPoId?: string | null
   initialShipmentId?: string | null
-  onDone: (code: string, poStatus: string | null) => void
+  onDone: (code: string, poStatus: string | null, stockAfter: StockAfter[]) => void
 }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
@@ -848,12 +1096,13 @@ function ReceiptForm({
   async function post(body: Record<string, unknown>) {
     setBusy(true)
     try {
-      const result = await api<{ code: string; po_status: string | null }>(
-        '/api/dept/warehouse/docs/receipt',
-        { method: 'POST', body },
-      )
+      const result = await api<{
+        code: string
+        po_status: string | null
+        stock_after: StockAfter[]
+      }>('/api/dept/warehouse/docs/receipt', { method: 'POST', body })
       setConflict(null)
-      onDone(result.code, result.po_status)
+      onDone(result.code, result.po_status, result.stock_after ?? [])
     } catch (err) {
       if (err instanceof ApiError && err.code === 'OVER_RECEIPT') {
         setConflict({ message: err.message, body })
@@ -1312,11 +1561,13 @@ function ReceiptForm({
 function IssueForm({
   materials,
   lsxs,
+  teams,
   initialLsxId = null,
   onDone,
 }: {
   materials: MaterialOption[]
   lsxs: LsxOption[]
+  teams: TeamOption[]
   /** Deep-link: chọn sẵn lệnh khi mở từ màn "Cấp vật tư SX". */
   initialLsxId?: string | null
   onDone: (code: string) => void
@@ -1324,6 +1575,9 @@ function IssueForm({
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [kind, setKind] = useState<'daily' | 'lsx'>(initialLsxId ? 'lsx' : 'daily')
+  /* Xuất theo lệnh thì gần như luôn là cấp cho sản xuất — điền sẵn để khỏi chọn
+     lại mỗi lần. Xuất thường ngày KHÔNG đoán hộ, bắt người dùng chọn. */
+  const [reasonCode, setReasonCode] = useState<string>(lyDoMacDinh(initialLsxId ? 'lsx' : 'daily'))
   const [lsxId, setLsxId] = useState('')
   const [rows, setRows] = useState<Row[]>([])
 
@@ -1357,6 +1611,11 @@ function IssueForm({
             po_line_id: null,
             // K5: nhớ "còn phải cấp" để cảnh báo khi người gõ vượt (không chặn).
             qty_missing: n.qty_remaining,
+            // Dòng phiếu xuất là một PHÉP SO SÁNH, không phải ô trống: cần bao
+            // nhiêu · đã cấp bao nhiêu · kho còn bao nhiêu · lần này cấp mấy.
+            qty_needed: n.qty_needed,
+            qty_issued: n.qty_issued,
+            on_hand: n.on_hand ?? null,
             qty_ordered: null,
             over_tolerance_pct: null,
             ship_qty: null,
@@ -1437,6 +1696,8 @@ function IssueForm({
       kind,
       production_order_id: kind === 'lsx' ? lsxId : null,
       counterparty: String(fd.get('counterparty') ?? '').trim() || null,
+      team_department_id: String(fd.get('team_department_id') ?? '') || null,
+      reason_code: reasonCode || null,
       reason: String(fd.get('reason') ?? '').trim() || null,
       doc_date: String(fd.get('doc_date') ?? '') || null, // K3
       note: String(fd.get('note') ?? '').trim() || null,
@@ -1503,9 +1764,11 @@ function IssueForm({
           <select
             value={kind}
             onChange={(e) => {
-              setKind(e.target.value as 'daily' | 'lsx')
+              const k = e.target.value as 'daily' | 'lsx'
+              setKind(k)
               setLsxId('')
               setRows([])
+              setReasonCode(lyDoMacDinh(k))
             }}
             className={inputCls}
           >
@@ -1526,6 +1789,23 @@ function IssueForm({
             </select>
           </label>
         )}
+        {/* TỔ NHẬN (0194) — đứng TRƯỚC "Người nhận" vì nó là câu hỏi chính.
+
+            Người lĩnh hàng thay đổi từng ca; TỔ thì không. Ghi "anh Tuấn" xong
+            tháng sau không ai biết anh Tuấn thuộc tổ nào, và không cộng nổi
+            "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô bổ sung nhau: tổ để đối
+            chiếu, tên người để ký nhận trên mẫu 02-VT. */}
+        <label className="flex flex-col gap-1 text-sm">
+          Tổ nhận
+          <select name="team_department_id" className={inputCls} defaultValue="">
+            <option value="">— chưa xác định —</option>
+            {teams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="flex flex-col gap-1 text-sm">
           Người nhận
           <input name="counterparty" maxLength={200} className={inputCls} />
@@ -1548,7 +1828,14 @@ function IssueForm({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-left text-xs uppercase text-zinc-500 dark:border-zinc-800">
+              {/* CỘT THEO LỐI PHIẾU LĨNH CỦA ERP (SAP MIGO 261 · Dynamics
+                  picking list · Odoo MO components): dòng bày ĐỦ BỐN SỐ để
+                  người lấy hàng quyết định ngay — cần · đã cấp · kho còn · lần
+                  này cấp mấy. Chỉ ô cuối phải gõ, và nó đã được đề xuất sẵn. */}
               <th className="py-2 pr-2">Vật tư</th>
+              {kind === 'lsx' && <th className="w-20 py-2 pr-2 text-right">Cần</th>}
+              {kind === 'lsx' && <th className="w-20 py-2 pr-2 text-right">Đã cấp</th>}
+              <th className="w-20 py-2 pr-2 text-right">Kho còn</th>
               <th className="w-28 py-2 pr-2">SL xuất</th>
               <th className="w-20 py-2 pr-2">Kệ</th>
               <th className="py-2 pr-2">Ghi chú</th>
@@ -1558,7 +1845,7 @@ function IssueForm({
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-zinc-400">
+                <td colSpan={kind === 'lsx' ? 8 : 6} className="py-6 text-center text-zinc-400">
                   {kind === 'lsx'
                     ? 'Chọn LSX để gợi ý theo BOM, hoặc quét mã thêm dòng.'
                     : 'Quét mã hoặc thêm dòng vật tư.'}
@@ -1568,31 +1855,79 @@ function IssueForm({
             {rows.map((r, i) => (
               <tr key={i} className="border-b border-zinc-100 dark:border-zinc-900">
                 <td className="py-1.5 pr-2">
-                  <select
-                    value={r.material_id}
-                    onChange={(e) => {
-                      const m = materialById.get(e.target.value)
-                      setRows((rs) =>
-                        rs.map((x, idx) =>
-                          idx === i
-                            ? {
-                                ...x,
-                                material_id: e.target.value,
-                                shelf_location: m?.shelf_location ?? x.shelf_location,
-                              }
-                            : x,
-                        ),
-                      )
-                    }}
-                    className={inputCls}
-                  >
-                    <option value="">— chọn vật tư —</option>
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.code} — {m.name}
-                      </option>
-                    ))}
-                  </select>
+                  {/* DÒNG SINH TỪ BOM thì vật tư là SỰ THẬT, không phải lựa chọn.
+                      Bày nó thành ô chọn 13.229 mã vừa nặng vừa mời người dùng
+                      đổi nhầm đúng thứ hệ thống vừa tính ra. Dòng tự thêm (quét
+                      mã / + Thêm dòng) mới cần ô chọn. */}
+                  {r.qty_needed != null ? (
+                    <span className="block">
+                      <span className="block truncate">
+                        <span className="font-mono text-[11px] text-zinc-500">
+                          {r.material_code}
+                        </span>{' '}
+                        {r.material_name}
+                      </span>
+                      <span className="text-[11px] text-zinc-400">{r.material_unit}</span>
+                    </span>
+                  ) : (
+                    <select
+                      value={r.material_id}
+                      onChange={(e) => {
+                        const m = materialById.get(e.target.value)
+                        setRows((rs) =>
+                          rs.map((x, idx) =>
+                            idx === i
+                              ? {
+                                  ...x,
+                                  material_id: e.target.value,
+                                  shelf_location: m?.shelf_location ?? x.shelf_location,
+                                }
+                              : x,
+                          ),
+                        )
+                      }}
+                      className={inputCls}
+                    >
+                      <option value="">— chọn vật tư —</option>
+                      {materials.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.code} — {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </td>
+                {kind === 'lsx' && (
+                  <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-500">
+                    {r.qty_needed ?? '—'}
+                  </td>
+                )}
+                {kind === 'lsx' && (
+                  <td className="py-1.5 pr-2 text-right tabular-nums text-zinc-500">
+                    {r.qty_issued ?? '—'}
+                  </td>
+                )}
+                <td className="py-1.5 pr-2 text-right tabular-nums">
+                  {/* KHO CÒN — đỏ khi không đủ cho số đang gõ. Người lấy hàng
+                      thấy ngay tại dòng thay vì bấm Lưu mới biết. */}
+                  {r.on_hand == null ? (
+                    <span className="text-zinc-300">—</span>
+                  ) : (
+                    <span
+                      className={
+                        r.qty !== '' && Number(r.qty) > r.on_hand
+                          ? 'font-semibold text-red-600 dark:text-red-400'
+                          : 'text-zinc-500'
+                      }
+                      title={
+                        r.qty !== '' && Number(r.qty) > r.on_hand
+                          ? 'Kho không đủ cho số đang xuất'
+                          : undefined
+                      }
+                    >
+                      {r.on_hand.toLocaleString('vi-VN')}
+                    </span>
+                  )}
                 </td>
                 <td className="py-1.5 pr-2">
                   <input
@@ -1673,10 +2008,45 @@ function IssueForm({
         + Thêm dòng
       </button>
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {/* LÝ DO CÓ MÃ (0195) thay ô chữ tự do.
+
+            Lý do quyết định tiền đi về đâu: cấp SX vào giá thành lệnh, sửa máy
+            / nội bộ là chi phí chung, huỷ là tổn thất. Chữ tự do thì không nhóm
+            được — "cấp SX" và "xuất cho tổ phôi" là một việc mà báo cáo đếm
+            thành hai loại.
+
+            Ô chữ GIỮ LẠI bên cạnh: mã nói LOẠI, chữ nói CHI TIẾT ("hỏng do ẩm
+            kho B"). Bỏ nó là mất phần duy nhất người sau đọc hiểu được. */}
         <label className="flex flex-col gap-1 text-sm">
           Lý do xuất
-          <input name="reason" maxLength={500} placeholder="Cấp vật tư sản xuất / sửa chữa…" className={inputCls} />
+          <select
+            name="reason_code"
+            value={reasonCode}
+            onChange={(e) => setReasonCode(e.target.value)}
+            className={inputCls}
+          >
+            <option value="">— chọn lý do —</option>
+            {LY_DO_XUAT.map((x) => (
+              <option key={x.ma} value={x.ma}>
+                {x.nhan}
+              </option>
+            ))}
+          </select>
+          {reasonCode && (
+            <span className="text-[11px] text-zinc-400">
+              {LY_DO_XUAT.find((x) => x.ma === reasonCode)?.goiY}
+            </span>
+          )}
+        </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Diễn giải {reasonCode === 'khac' && <b className="text-amber-600">*</b>}
+          <input
+            name="reason"
+            maxLength={500}
+            placeholder={reasonCode === 'khac' ? 'Bắt buộc — ghi rõ lý do' : 'Chi tiết thêm (không bắt buộc)'}
+            className={inputCls}
+          />
         </label>
         <label className="flex flex-col gap-1 text-sm">
           Ghi chú phiếu

@@ -3332,6 +3332,7 @@ export type Database = {
       }
       supply_po_shipments: {
         Row: {
+          code: string | null
           created_at: string
           created_by: string | null
           expected_date: string
@@ -3345,6 +3346,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date: string
@@ -3358,6 +3360,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           created_by?: string | null
           expected_date?: string
@@ -5726,11 +5729,13 @@ export type Database = {
           kind: string
           note: string | null
           reason: string | null
+          reason_code: string | null
           reject_reason: string | null
           reversal_of_doc_id: string | null
           shipment_id: string | null
           status: string
           supplier_doc_no: string | null
+          team_department_id: string | null
           updated_at: string
         }
         Insert: {
@@ -5745,11 +5750,13 @@ export type Database = {
           kind: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Update: {
@@ -5764,11 +5771,13 @@ export type Database = {
           kind?: string
           note?: string | null
           reason?: string | null
+          reason_code?: string | null
           reject_reason?: string | null
           reversal_of_doc_id?: string | null
           shipment_id?: string | null
           status?: string
           supplier_doc_no?: string | null
+          team_department_id?: string | null
           updated_at?: string
         }
         Relationships: [
