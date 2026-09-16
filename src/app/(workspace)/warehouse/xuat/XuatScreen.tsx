@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import { useToast } from '@/components/ui/Toast'
+import { DaGhiSoBar } from '@/components/warehouse/DaGhiSoBar'
 import {
   WarehouseDocPrintSheet,
   type WarehousePrintLine,
@@ -408,40 +409,14 @@ export function XuatScreen({
           </ActionGroup>
         </ActionPane>
 
-        {/*
-          Dải "vừa ghi sổ" thay cho toast: ghi xong thường phải IN NGAY đưa tổ
-          ký, mà toast tự tắt sau vài giây. Dải ở lại tới khi người dùng đóng.
-          `NoticeBar` của kit chỉ có nền cảnh báo nên dải mừng dựng tại chỗ,
-          vẫn bằng token vòng đời.
-        */}
         {vuaGhi && (
-          <div className="flex items-center gap-[11px] border-b border-[var(--done-line)] bg-[var(--done-wash)] px-[var(--gutter)] py-[9px] text-[12.5px]">
-            <span className="shrink-0 text-[10.5px] font-bold tracking-[.06em] text-[var(--done)] uppercase">
-              Đã ghi sổ
-            </span>
-            <span className="text-[var(--ink-2)]">
-              <b className="num">{vuaGhi.code}</b> · {vuaGhi.dong} dòng · {vuaGhi.to} —
-              tồn đã trừ.
-            </span>
-            <Btn
-              href={`/print/warehouse/${vuaGhi.id}`}
-              className="h-[24px] px-[9px] text-[12px]"
-            >
-              In phiếu
-            </Btn>
-            <Btn
-              href="/planning/docs?kind=issue"
-              className="h-[24px] px-[9px] text-[12px]"
-            >
-              Xem ở sổ phiếu
-            </Btn>
-            <Btn
-              onClick={() => setVuaGhi(null)}
-              className="ml-auto h-[24px] border-0 bg-transparent px-[9px] text-[12px]"
-            >
-              Đóng
-            </Btn>
-          </div>
+          <DaGhiSoBar
+            code={vuaGhi.code}
+            docId={vuaGhi.id}
+            detail={`${vuaGhi.dong} dòng · ${vuaGhi.to} — tồn đã trừ.`}
+            soPhieuHref="/planning/docs?kind=issue"
+            onClose={() => setVuaGhi(null)}
+          />
         )}
         <DocHead
           compact

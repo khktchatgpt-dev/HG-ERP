@@ -62,7 +62,6 @@ describe('thieuTon', () => {
   })
 })
 
-
 const head = (p: Partial<DauPhieuXuat> = {}): DauPhieuXuat => ({
   loai: 'lsx',
   lsx_id: 'lsx-1',
@@ -80,19 +79,40 @@ describe('kiemTruocGhiSoXuat — theo thứ tự câu hỏi của đầu phiếu
       focus: 'lenh',
     }))
   it('xuất lẻ chưa chọn lý do → thieu_ly_do; X2 vẫn đòi lệnh', () => {
-    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: '' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_ly_do' })
-    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X2', lsx_id: '' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_lenh' })
-    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', lsx_id: '' }), [row('a', 1)])).toEqual({ ok: true })
+    expect(
+      kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: '' }), [row('a', 1)]),
+    ).toMatchObject({ reason: 'thieu_ly_do' })
+    expect(
+      kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X2', lsx_id: '' }), [row('a', 1)]),
+    ).toMatchObject({ reason: 'thieu_lenh' })
+    expect(
+      kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', lsx_id: '' }), [row('a', 1)]),
+    ).toEqual({ ok: true })
   })
   it('thiếu tổ → thieu_to, câu khác nhau cho lệnh / lẻ', () => {
-    expect(kiemTruocGhiSoXuat(head({ to: ' ' }), [row('a', 1)])).toMatchObject({ reason: 'thieu_to', message: 'Chưa chọn tổ lấy' })
-    expect(kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', to: '' }), [row('a', 1)])).toMatchObject({ message: 'Chưa chọn bộ phận nhận' })
+    expect(kiemTruocGhiSoXuat(head({ to: ' ' }), [row('a', 1)])).toMatchObject({
+      reason: 'thieu_to',
+      message: 'Chưa chọn tổ lấy',
+    })
+    expect(
+      kiemTruocGhiSoXuat(head({ loai: 'daily', ly_do: 'X6', to: '' }), [row('a', 1)]),
+    ).toMatchObject({ message: 'Chưa chọn bộ phận nhận' })
   })
   it('chưa có dòng / chưa dòng nào có số → khong_dong', () => {
-    expect(kiemTruocGhiSoXuat(head(), [])).toMatchObject({ reason: 'khong_dong', focus: -1 })
-    expect(kiemTruocGhiSoXuat(head(), [row('a', 0)])).toMatchObject({ reason: 'khong_dong', focus: 0 })
+    expect(kiemTruocGhiSoXuat(head(), [])).toMatchObject({
+      reason: 'khong_dong',
+      focus: -1,
+    })
+    expect(kiemTruocGhiSoXuat(head(), [row('a', 0)])).toMatchObject({
+      reason: 'khong_dong',
+      focus: 0,
+    })
   })
   it('vượt tồn → vuot_ton trỏ đúng dòng', () =>
-    expect(kiemTruocGhiSoXuat(head(), [row('a', 5), row('b', 150, 120)])).toMatchObject({ reason: 'vuot_ton', focus: 1 }))
-  it('đủ → ok', () => expect(kiemTruocGhiSoXuat(head(), [row('a', 5)])).toEqual({ ok: true }))
+    expect(kiemTruocGhiSoXuat(head(), [row('a', 5), row('b', 150, 120)])).toMatchObject({
+      reason: 'vuot_ton',
+      focus: 1,
+    }))
+  it('đủ → ok', () =>
+    expect(kiemTruocGhiSoXuat(head(), [row('a', 5)])).toEqual({ ok: true }))
 })

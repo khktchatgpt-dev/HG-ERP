@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
 import { tomTatMa } from '@/lib/kho-dot-giao'
+import { DaGhiSoBar } from '@/components/warehouse/DaGhiSoBar'
 import {
   HANG_VE_LANE,
   HANG_VE_LANES,
@@ -74,6 +75,21 @@ export function HangVeScreen({
   const lanUrl = params.get(LANE_PARAM)
   const lan: HangVeLane | 'all' = laMaLan(lanUrl) ? lanUrl : 'all'
   const [q, setQ] = useState('')
+  /*
+    Phiếu VỪA GHI ở màn nhận hàng — form đẩy mã phiếu sang đây qua URL để dải
+    "Đã ghi sổ" (có nút In) sống qua lần điều hướng. Đóng dải = xoá tham số,
+    nên F5 hay gửi link ra cũng không mang theo dải của người khác.
+  */
+  const vuaGhi = params.get('vua_ghi')
+  const vuaGhiMa = params.get('ma')
+  const dongVuaGhi = () => {
+    const p = new URLSearchParams(params.toString())
+    p.delete('vua_ghi')
+    p.delete('ma')
+    p.delete('chi_tiet')
+    const qs = p.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
   // Gom theo ĐƠN (việc 6): nhìn cả lịch một đơn nhiều đợt trong một khối,
   // thay vì các đợt rải ở ba làn. Cũng sống trên URL.
   const gomDon = params.get('gom') === 'don'
@@ -169,6 +185,16 @@ export function HangVeScreen({
           ]}
           actions={<Btn href="/planning/docs">Xem sổ phiếu ›</Btn>}
         />
+
+        {vuaGhi && vuaGhiMa && (
+          <DaGhiSoBar
+            code={vuaGhiMa}
+            docId={vuaGhi}
+            detail={`${params.get('chi_tiet') ?? 'đã vào sổ'} — tồn đã cộng.`}
+            soPhieuHref="/planning/docs?kind=receipt"
+            onClose={dongVuaGhi}
+          />
+        )}
 
         {truncated && (
           <NoticeBar tone="warn" tag="Cắt đuôi" action={{ label: 'Thu hẹp bằng ô tìm' }}>

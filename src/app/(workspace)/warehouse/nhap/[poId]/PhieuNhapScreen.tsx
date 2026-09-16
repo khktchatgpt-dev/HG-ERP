@@ -193,12 +193,17 @@ export function PhieuNhapScreen({
           },
         },
       )
-      toast.success(
-        `Đã ghi sổ ${res.code}`,
-        `${tong.so_dong_nhan} dòng · ${fmt(tong.lan_nay)} đơn vị${tong.vao_khoa > 0 ? ` · ${fmt(tong.vao_khoa)} vào khoá` : ''} — xem lại ở Sổ phiếu`,
-      )
-      // Không ở lại form: ở lại là mời ghi sổ hai lần.
-      router.push('/warehouse/nhap')
+      /*
+        Không ở lại form (ở lại là mời ghi sổ hai lần) NHƯNG phải giữ đường
+        IN: mang mã phiếu về màn Hàng về qua URL, dải "Đã ghi sổ" ở đó có nút
+        In phiếu. Toast tự tắt sau vài giây, không đủ để với tới chuột.
+      */
+      const q = new URLSearchParams({
+        vua_ghi: res.id,
+        ma: res.code,
+        chi_tiet: `${tong.so_dong_nhan} dòng · ${fmt(tong.lan_nay)} đơn vị${tong.vao_khoa > 0 ? ` · ${fmt(tong.vao_khoa)} vào khoá` : ''}`,
+      })
+      router.push(`/warehouse/nhap?${q}`)
       router.refresh()
     } catch (e) {
       // Server là người quyết: OVER_RECEIPT (409) tới đây khi dung sai server
@@ -261,9 +266,9 @@ export function PhieuNhapScreen({
             </Action>
           </ActionGroup>
           <ActionGroup label="Bản in">
-          <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
-        </ActionGroup>
-        <ActionGroup label="Đơn">
+            <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
+          </ActionGroup>
+          <ActionGroup label="Đơn">
             <Action onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
               Mở đơn mua
             </Action>
@@ -617,42 +622,42 @@ export function PhieuNhapScreen({
             </Consequence>
           </Sheet>
         )}
-      {xemIn && (
-        <Sheet
-          open
-          onClose={() => setXemIn(false)}
-          width={900}
-          title="Xem trước phiếu nhập kho"
-          subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 01-VT sẽ in ra."
-        >
-          <WarehouseDocPrintSheet
-            head={{
-              kind: 'receipt',
-              code: null,
-              date: new Date(docDate),
-              supplier_doc_no: supplierDocNo.trim() || null,
-              counterparty: counterparty.trim() || null,
-              creator_name: nguoiNhan,
-            }}
-            lines={rows
-              .filter((r) => r.qty > 0)
-              .map<WarehousePrintLine>((r) => ({
-                id: r.po_line_id,
-                material_code: r.code,
-                material_name: r.name,
-                material_unit: r.unit,
-                qty_doc: r.qty_ordered,
-                qty: r.qty,
-                note:
-                  r.status === 'blocked'
-                    ? [`Sai quy cách`, r.note].filter(Boolean).join(' · ')
-                    : r.note || null,
-              }))}
-            company={company}
-            tpl={tpl}
-          />
-        </Sheet>
-      )}
+        {xemIn && (
+          <Sheet
+            open
+            onClose={() => setXemIn(false)}
+            width={900}
+            title="Xem trước phiếu nhập kho"
+            subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 01-VT sẽ in ra."
+          >
+            <WarehouseDocPrintSheet
+              head={{
+                kind: 'receipt',
+                code: null,
+                date: new Date(docDate),
+                supplier_doc_no: supplierDocNo.trim() || null,
+                counterparty: counterparty.trim() || null,
+                creator_name: nguoiNhan,
+              }}
+              lines={rows
+                .filter((r) => r.qty > 0)
+                .map<WarehousePrintLine>((r) => ({
+                  id: r.po_line_id,
+                  material_code: r.code,
+                  material_name: r.name,
+                  material_unit: r.unit,
+                  qty_doc: r.qty_ordered,
+                  qty: r.qty,
+                  note:
+                    r.status === 'blocked'
+                      ? [`Sai quy cách`, r.note].filter(Boolean).join(' · ')
+                      : r.note || null,
+                }))}
+              company={company}
+              tpl={tpl}
+            />
+          </Sheet>
+        )}
       </ScreenFrame>
     </div>
   )
