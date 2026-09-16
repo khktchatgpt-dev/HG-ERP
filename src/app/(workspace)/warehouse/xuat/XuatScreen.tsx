@@ -427,7 +427,7 @@ export function XuatScreen({
             <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
           </ActionGroup>
           <ActionGroup label="Sổ">
-            <Action onClick={() => router.push('/planning/docs?kind=issue')}>
+            <Action onClick={() => router.push('/warehouse/phieu?ro=issue')}>
               Sổ phiếu xuất
             </Action>
           </ActionGroup>
@@ -438,7 +438,7 @@ export function XuatScreen({
             code={vuaGhi.code}
             docId={vuaGhi.id}
             detail={`${vuaGhi.dong} dòng · ${vuaGhi.to} — tồn đã trừ.`}
-            soPhieuHref="/planning/docs?kind=issue"
+            soPhieuHref="/warehouse/phieu?ro=issue"
             onClose={() => setVuaGhi(null)}
           />
         )}

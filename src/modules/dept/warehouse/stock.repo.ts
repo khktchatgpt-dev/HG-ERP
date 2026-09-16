@@ -520,6 +520,53 @@ export const docsRepo = {
   },
 
   /** Phiếu ĐẢO của một phiếu (K1) — null = chưa bị đảo. Mỗi phiếu tối đa một. */
+  /**
+   * MÃ LÝ DO của từng phiếu — cho Sổ phiếu kho. Mã nằm trên DÒNG (0197) nên
+   * một phiếu có thể mang nhiều mã (kiểm kê sinh cả N4 lẫn X5); trả về danh
+   * sách mã DUY NHẤT theo thứ tự gặp, màn bày mã đầu + "+n".
+   *
+   * Dòng trước 0197 để `reason_code` null — người gọi suy lại bằng
+   * `suyMaTuLichSu(ref_type, direction)`, nếu không sổ sẽ nói "tháng 8 không
+   * có phiếu nào" khi lọc theo mã.
+   */
+  async reasonsByDocIds(
+    ids: string[],
+  ): Promise<
+    Map<string, { code: string | null; ref_type: string; direction: Direction }[]>
+  > {
+    const out = new Map<
+      string,
+      { code: string | null; ref_type: string; direction: Direction }[]
+    >()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('doc_id, reason_code, ref_type, direction')
+      .in('doc_id', ids.slice(0, 200))
+      .limit(20000)
+    type Raw = {
+      doc_id: string
+      reason_code: string | null
+      ref_type: string
+      direction: Direction
+    }
+    for (const r of (data ?? []) as Raw[]) {
+      const cur = out.get(r.doc_id) ?? []
+      if (
+        !cur.some(
+          (x) =>
+            x.code === r.reason_code &&
+            x.ref_type === r.ref_type &&
+            x.direction === r.direction,
+        )
+      ) {
+        cur.push({ code: r.reason_code, ref_type: r.ref_type, direction: r.direction })
+      }
+      out.set(r.doc_id, cur)
+    }
+    return out
+  },
+
   async findReversalOf(docId: string): Promise<{ id: string; code: string } | null> {
     const { data } = await db()
       .from('warehouse_docs')
@@ -527,6 +574,27 @@ export const docsRepo = {
       .eq('reversal_of_doc_id', docId)
       .maybeSingle()
     return (data as { id: string; code: string } | null) ?? null
+  },
+
+  /**
+   * Tập phiếu ĐÃ BỊ ĐẢO — đọc ngược cột `reversal_of_doc_id`.
+   *
+   * Cột đó nói phiếu NÀY LÀ phiếu đảo; câu hỏi của sổ là ngược lại ("tờ này
+   * còn hiệu lực không"). Không có cột nào trả lời trực tiếp, nhưng tập phiếu
+   * đảo trên toàn sổ rất nhỏ (đo 16/09/2026: 1) nên lấy hết một lượt rẻ hơn
+   * thêm cột hay dựng view.
+   */
+  async reversedDocIds(): Promise<Set<string>> {
+    const { data } = await db()
+      .from('warehouse_docs')
+      .select('reversal_of_doc_id')
+      .not('reversal_of_doc_id', 'is', null)
+      .limit(5000)
+    return new Set(
+      ((data as { reversal_of_doc_id: string | null }[] | null) ?? [])
+        .map((r) => r.reversal_of_doc_id)
+        .filter((v): v is string => !!v),
+    )
   },
 
   /** Đếm phiếu theo loại trên TOÀN SỔ — stats của Sổ chứng từ khi đã phân trang. */

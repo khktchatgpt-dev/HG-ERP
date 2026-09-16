@@ -302,6 +302,10 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
           // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
           { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
+          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO. Ba màn trên từng
+          // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
+          // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
+          { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
           // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
           // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
           // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.

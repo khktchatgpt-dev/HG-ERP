@@ -138,7 +138,7 @@ export function TonKhoScreen({
               tone: counts.short > 0 ? 'stop' : 'neutral',
             },
           ]}
-          actions={<Btn href="/planning/docs">Xem sổ phiếu ›</Btn>}
+          actions={<Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>}
         />
 
         <FilterBar>

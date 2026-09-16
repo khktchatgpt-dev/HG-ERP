@@ -30,6 +30,7 @@ import {
   Library,
   ListTodo,
   NotebookPen,
+  BookOpenText,
   Package,
   Receipt,
   ReceiptText,
@@ -93,6 +94,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   hammer: Hammer,
   history: History,
   'notebook-pen': NotebookPen,
+  // Sổ phiếu kho — sổ đã ghi, chỉ đọc; khác 'notebook-pen' là sổ đang viết.
+  'book-open': BookOpenText,
   'arrow-right-to-line': ArrowRightToLine,
   'arrow-left-right': ArrowLeftRight,
   'arrow-down-to-line': ArrowDownToLine,

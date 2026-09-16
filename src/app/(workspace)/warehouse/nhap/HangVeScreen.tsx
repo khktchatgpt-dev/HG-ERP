@@ -183,7 +183,7 @@ export function HangVeScreen({
               tone: dem.no_eta > 0 ? 'warn' : 'neutral',
             },
           ]}
-          actions={<Btn href="/planning/docs">Xem sổ phiếu ›</Btn>}
+          actions={<Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>}
         />
 
         {vuaGhi && vuaGhiMa && (
@@ -191,7 +191,7 @@ export function HangVeScreen({
             code={vuaGhiMa}
             docId={vuaGhi}
             detail={`${params.get('chi_tiet') ?? 'đã vào sổ'} — tồn đã cộng.`}
-            soPhieuHref="/planning/docs?kind=receipt"
+            soPhieuHref="/warehouse/phieu?ro=receipt"
             onClose={dongVuaGhi}
           />
         )}

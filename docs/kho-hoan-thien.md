@@ -27,7 +27,7 @@ Luật xếp hạng, đúng ba luật của `docs/ke-hoach-thuc-hien.md`:
 
 ## A. Đang chặn — làm trước
 
-### A1. Sổ phiếu kho `/warehouse/phieu` ⚠️ hạng nhất
+### A1. Sổ phiếu kho `/warehouse/phieu` ✅ XONG 16/09/2026
 
 **Hai lỗi cùng một chỗ.**
 
@@ -47,6 +47,41 @@ và phiếu gốc nằm cạnh nhau, phiếu gốc gạch ngang.
 
 Service đã có đủ: `listDocs` · `docDetail` · `reverseDoc`. **Không migration,
 không service mới.**
+
+**Đã dựng.** Đúng như dự tính: không migration, không service mới.
+
+| Việc                           | Ở đâu                                            |
+| ------------------------------ | ------------------------------------------------ |
+| Danh sách (Khuôn C)            | `warehouse/phieu/page.tsx` + `SoPhieuScreen.tsx` |
+| Chi tiết (Khuôn D)             | `warehouse/phieu/[id]/`                          |
+| Luật chặn đảo — thuần, 11 test | `lib/kho-dao-phieu.ts`                           |
+| Đọc ngược quan hệ đảo          | `docsRepo.reversedDocIds()`                      |
+| 5 liên kết cũ                  | đã trỏ về `/warehouse/phieu`                     |
+
+Ba điểm đáng ghi lại, vì đều là chỗ suýt làm sai:
+
+- **Luật chặn đảo ra khỏi service.** `reverseDoc` có sáu chốt nhưng chúng chỉ
+  lên tiếng SAU khi bấm. Tách thành `canDao` để màn biết luật TRƯỚC khi vẽ nút
+  — nút xám phải nói vướng gì và gỡ thế nào. Một chốt ở lại server: đảo phiếu
+  nhập còn phải đủ tồn, cái đó phụ thuộc tồn hiện tại nên chỉ server trả lời được.
+
+- **Mã lý do của phiếu cũ suy tại chỗ ĐỌC.** 0197 chỉ bật mã từ 15/09 và không
+  ghi lùi. Lọc theo mã mà không suy thì sổ nói "tháng 8 không có phiếu nào".
+  `adjust` và `daily` cố ý KHÔNG suy được — bày "chưa có mã" là câu trả lời
+  đúng, đoán thành X7 là bịa một con số cho báo cáo kế toán.
+
+- **Dải cảnh báo chỉ hiện khi đang lọc.** Bản đầu treo nó thường trực làm lời
+  giải thích; vàng mã hoá vòng đời dữ liệu, treo vĩnh viễn thì nó thành hình
+  nền và lần có cảnh báo thật không ai thấy. Câu giải thích xuống chân màn.
+
+Còn cắt chủ đích: rổ "Đã bị đảo" ĐẾM theo trang đang xem — cờ từng dòng thì
+luôn đúng vì `reversedDocIds` đọc toàn sổ. Toàn sổ mới có 1 phiếu đảo.
+
+Nghiệm thu trên dữ liệu thật 16/09/2026: PNK-2026-0010 hiện "đã bị đảo" và
+gạch ngang, nằm ngay trên PXK-2026-0003 "đảo của PNK-2026-0010"; biên bản
+KK-2026-0004 bị chặn đảo kèm câu chỉ sang vòng duyệt kiểm kê; PNK-2026-0055
+mở được hộp đảo (CHƯA bấm ghi — đó là việc của chủ dự án).
+
 
 ### A2. Nhập hàng KHÔNG theo đơn `/warehouse/nhap` → phiếu N2
 
@@ -94,7 +129,7 @@ nhận nhiều chuyến một ngày.
 ## Thứ tự đề nghị
 
 ```
-A1 Sổ phiếu + đảo phiếu  →  A2 Nhập ngoài đơn  →  B1 Hoàn kho SX  →  B2 Bàn làm việc
+A1 Sổ phiếu + đảo phiếu ✅  →  A2 Nhập ngoài đơn  →  B1 Hoàn kho SX  →  B2 Bàn làm việc
 ```
 
 A1 làm trước vì nó vừa bịt lỗ "đá người dùng ra khu khác", vừa mở đường chữa
