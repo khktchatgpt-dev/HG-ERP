@@ -156,9 +156,13 @@ sống sau đợt gỡ: `/print/warehouse/[id]` in 01-VT (nhập) · 02-VT (xu�
 `/admin/doc-templates` (0164). Phiếu do form mới ghi vào cùng bảng nên in
 được ngay, chỉ **thiếu cửa vào**: link in duy nhất đang nằm ở sổ chứng từ cũ.
 
-Việc 7 của Bước 1: sau Ghi sổ, toast có nút **In phiếu** mở
-`/print/warehouse/{id}` tab mới; sổ phiếu (`/planning/docs`) giữ link in như
-cũ. Bản in xem lại cùng chủ dự án trước khi coi là xong — nếu mẫu cần đổi thì
+Việc 7 của Bước 1: (a) nút **Xem bản in** ngay trên form, TRƯỚC khi ghi sổ —
+mở `Sheet` vẽ đúng mẫu 01-VT từ bản đang gõ, chưa có số phiếu, ghi rõ "bản
+xem trước" (yêu cầu chủ dự án 16/09: "phải có tính năng cho xem phiếu in
+trước"); (b) sau Ghi sổ có nút **In phiếu** mở `/print/warehouse/{id}`; sổ
+phiếu (`/planning/docs`) giữ link in như cũ. Cách làm: tách bản in trong
+`/print/warehouse/[id]` thành thành phần dùng chung, như `PoPrintSheet` của
+đơn mua đang được dùng cho cả trang in lẫn "Xem trước phiếu đặt hàng". Bản in xem lại cùng chủ dự án trước khi coi là xong — nếu mẫu cần đổi thì
 sửa ở `/admin/doc-templates`, không sửa mã.
 
 ## 7. Cố ý chưa làm

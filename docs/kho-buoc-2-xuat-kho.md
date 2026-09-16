@@ -91,7 +91,7 @@ tồn, guard giữ chỗ, mã X1 tự gắn cho lệnh, `reason_code` bắt bu�
 | 2 | Dải chip + lưới + ô tìm vật tư (chưa ghi) | thêm 3 mã bằng ô tìm, tồn dùng được hiện đúng `/planning/stock` |
 | 3 | Cảnh báo tại chỗ + thanh chốt | 3 ca: chưa có dòng · vượt tồn · xuất lẻ thiếu lý do |
 | 4 | Ghi sổ + sheet lấn phần giữ chỗ | ghi sổ thật 1 phiếu thử trên mã có tồn |
-| 5 | **In phiếu** (yêu cầu 16/09): sau Ghi sổ toast có nút In mở `/print/warehouse/{id}` (02-VT sẵn có) | in thử một phiếu vừa ghi, đủ tổ nhận · lệnh · dòng · chữ ký |
+| 5 | **Xem trước bản in + In phiếu** (yêu cầu 16/09): nút "Xem bản in" TRƯỚC khi ghi sổ mở `Sheet` vẽ đúng mẫu 02-VT từ bản đang gõ (chưa số phiếu, ghi rõ "bản xem trước"); sau Ghi sổ có nút In mở `/print/warehouse/{id}`. Cách làm: tách bản in 01-VT/02-VT trong `/print/warehouse/[id]` thành thành phần dùng chung `WarehouseDocPrintSheet` (như `PoPrintSheet` của đơn mua) | xem trước khớp bản in thật từng cột; in thử một phiếu vừa ghi |
 | 6 | Chủ dự án ghi sổ thật một lượt tổ lấy | mục 5 |
 
 ## 5. Nghiệm thu
