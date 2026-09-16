@@ -1,6 +1,6 @@
 'use client'
 
-import { useId, useState, type ReactNode } from 'react'
+import { createContext, useContext, useId, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 
 /**
@@ -148,6 +148,22 @@ export function Crumb({
    "⋯": người dùng ERP mở màn này vài chục lần mỗi ngày và bấm bằng trí nhớ
    vị trí, nên nút phải đứng yên một chỗ.
    ══════════════════════════════════════════════════════════════════════ */
+/**
+ * NÚT BỊ KHOÁ NÓI LÝ DO Ở ĐÂU.
+ *
+ * Trước 16/09/2026 lý do chỉ nằm trong `title` — tức phải RÊ CHUỘT và đợi
+ * khoảng một giây mới hiện, không có trên bàn phím, không có trên cảm ứng. Đo
+ * trên màn đơn mua: 7/16 nút bị khoá, cả 7 giấu lý do trong tooltip, và nút
+ * khoá lại mờ 50% trên nền trắng nên gần như biến mất. Người dùng thấy một
+ * thanh công cụ nửa tàng hình, bấm không được, không biết vì sao.
+ *
+ * Luật kiểm của sổ thiết kế nói thẳng: "Hành động bị chặn phải nói vướng gì và
+ * CÁCH GỠ, ngay tại chỗ. Không cho bấm rồi mới báo lỗi." Nên nút khoá nay là
+ * `aria-disabled` chứ không phải `disabled`: vẫn bấm được, bấm thì lý do
+ * hiện thành một dòng ngay dưới thanh — tại chỗ, đọc được, không cần chuột.
+ */
+const LockCtx = createContext<((why: string) => void) | null>(null)
+
 export function ActionPane({
   tabs,
   children,
@@ -155,6 +171,7 @@ export function ActionPane({
   tabs?: ActionTab[]
   children: ReactNode
 }) {
+  const [why, setWhy] = useState<string | null>(null)
   return (
     <div className="k-pane">
       {tabs && tabs.length > 0 && (
@@ -175,7 +192,23 @@ export function ActionPane({
           ))}
         </div>
       )}
-      <div className="k-pane-groups">{children}</div>
+      <LockCtx.Provider value={setWhy}>
+        <div className="k-pane-groups">{children}</div>
+      </LockCtx.Provider>
+      {why && (
+        <div className="k-pane-why" role="status">
+          <span className="k-pane-why-k">Chưa bấm được</span>
+          <span>{why}</span>
+          <button
+            type="button"
+            className="k-pane-why-x"
+            onClick={() => setWhy(null)}
+            aria-label="Đóng lý do"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -221,13 +254,33 @@ export function Action({
   title?: string
   onClick?: () => void
 }) {
+  const tellWhy = useContext(LockCtx)
+  /*
+    KHOÁ MỀM khi có chỗ nói lý do. `disabled` thật thì trình duyệt NUỐT luôn
+    sự kiện bấm, nên không cách nào trả lời "vì sao không bấm được" — đó là lý
+    do cũ khiến lý do phải trốn vào tooltip. `aria-disabled` giữ nguyên nghĩa
+    cho trình đọc màn hình và vẫn cho phép bấm để hỏi.
+
+    Không có lý do (hoặc Action dùng ngoài ActionPane) thì khoá cứng như cũ —
+    thà một nút chết còn hơn một nút bấm vào im lặng.
+  */
+  const soft = disabled && !!title && !!tellWhy
   return (
     <button
       type="button"
-      className={cx('k-act', primary && 'k-act-p', strong && 'k-act-s')}
-      disabled={disabled}
+      className={cx(
+        'k-act',
+        primary && 'k-act-p',
+        strong && 'k-act-s',
+        disabled && 'k-act-off',
+      )}
+      disabled={disabled && !soft}
+      aria-disabled={disabled || undefined}
       title={title}
-      onClick={onClick}
+      onClick={() => {
+        if (!disabled) return onClick?.()
+        if (soft && title) tellWhy(title)
+      }}
     >
       {children}
     </button>
@@ -275,16 +328,41 @@ export function DocHead({
   )
 }
 
+/**
+ * NGHĨA của bước đang đứng — quyết định MÀU của dải.
+ *
+ * Tới 16/09/2026 dải trạng thái luôn tô `--act` cho bước hiện tại, tức cùng
+ * một màu xanh với nút chính. Đo trên màn đơn mua: nền nút "Duyệt đơn đặt" và
+ * nền chip "Đã gửi NCC" đều là `rgb(31,75,184)`, cùng bo góc 10px. Chủ dự án
+ * báo đúng triệu chứng đó — "chỉ có mỗi màu xanh trắng rất khó phân biệt".
+ *
+ * Gốc là nguyên tắc 5 của sổ thiết kế bị phá: MỘT màu hành động, BA màu vòng
+ * đời. Ba màu vòng đời có sẵn trong token nhưng dải trạng thái không dùng cái
+ * nào, nên xanh phải gánh cả hai nghĩa "bấm được" và "đang ở bước này".
+ *
+ *   idle — chưa đi đâu cả (nháp, chưa nhận, chưa trả)   → xám đậm
+ *   wait — ĐANG CHỜ AI ĐÓ (chờ duyệt, về một phần)      → `--warn`
+ *   run  — đã chốt, đang chạy đúng đường                → `--act`
+ *   done — xong                                          → `--done`
+ *   stop — đã huỷ / đã dừng                              → `--stop`
+ *
+ * Mặc định `run` để mọi chỗ gọi cũ giữ nguyên hình; chỗ nào có nghĩa thật thì
+ * khai (xem `poTrackTone` ở màn đơn mua).
+ */
+export type TrackTone = 'idle' | 'wait' | 'run' | 'done' | 'stop'
+
 export function StatusTrack({
   label,
   steps,
   at,
+  tone = 'run',
   onPick,
 }: {
   label: string
   steps: string[]
   /** Chỉ số bước hiện tại. */
   at: number
+  tone?: TrackTone
   onPick?: (i: number) => void
 }) {
   return (
@@ -304,13 +382,21 @@ export function StatusTrack({
         Chỉ-đọc thì render `<span>`: mắt vẫn thấy đang ở bước nào, mà không hứa
         một thao tác không tồn tại.
       */}
-      <div className="k-steps" role={onPick ? undefined : 'list'}>
+      {/*
+        BƯỚC ĐÃ QUA phải khác BƯỚC CHƯA TỚI. Trước đây cả hai cùng nền xám nên
+        dải không có chiều: nhìn "Nháp · Chờ duyệt · [Đã gửi NCC] · NCC xác
+        nhận" không đọc ra được đơn đã đi qua đâu, chỉ thấy nó đang ở đâu.
+      */}
+      <div
+        className={cx('k-steps', `k-steps-${tone}`)}
+        role={onPick ? undefined : 'list'}
+      >
         {steps.map((s, i) =>
           onPick ? (
             <button
               key={s}
               type="button"
-              className={cx('k-step', i === at && 'on')}
+              className={cx('k-step', i < at && 'past', i === at && 'on')}
               onClick={() => onPick(i)}
               aria-current={i === at ? 'step' : undefined}
             >
@@ -320,7 +406,7 @@ export function StatusTrack({
             <span
               key={s}
               role="listitem"
-              className={cx('k-step', 'k-step-ro', i === at && 'on')}
+              className={cx('k-step', 'k-step-ro', i < at && 'past', i === at && 'on')}
               aria-current={i === at ? 'step' : undefined}
             >
               {s}

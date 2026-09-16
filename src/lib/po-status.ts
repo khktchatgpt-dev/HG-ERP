@@ -120,6 +120,45 @@ export function poStatusOptions(): { value: PoStatus; label: string }[] {
 }
 
 /**
+ * NGHĨA CỦA BƯỚC ĐANG ĐỨNG trên dải `StatusTrack` — quyết định màu dải.
+ *
+ * Cùng bốn nghĩa với `poSpineColor` bên dưới, và cố ý trùng: vạch mép dòng ở
+ * màn danh sách với dải bước ở màn chứng từ đang nói về CÙNG một chuyện, nên
+ * chúng phải cùng màu. Khác nhau thì người dùng học hai bảng màu cho một khái
+ * niệm.
+ *
+ * Vì sao cần: tới 16/09/2026 dải bước luôn tô xanh `--act` — cùng màu với nút
+ * chính — nên xanh mang hai nghĩa "bấm được" và "đang ở bước này", và cả màn
+ * chỉ còn xanh với trắng. Xem `TrackTone` trong `components/kit/Erp.tsx`.
+ */
+export type PoTrackTone = 'idle' | 'wait' | 'run' | 'done' | 'stop'
+
+export function poTrackTone(status: string): PoTrackTone {
+  switch (status) {
+    case 'draft':
+      return 'idle' // chưa ra khỏi nhà
+    case 'pending_approval':
+    case 'approved':
+    case 'partial':
+      return 'wait' // đang chờ ai đó: chờ GĐ gật, chờ gửi NCC, chờ hàng về nốt
+    case 'received':
+      return 'done'
+    case 'cancelled':
+      return 'stop'
+    default:
+      return 'run' // ordered / confirmed / in_transit — đã chốt, đang chạy
+  }
+}
+
+/**
+ * Dải NHẬN HÀNG (Chưa nhận · Một phần · Đủ) — tính theo BƯỚC, không theo trạng
+ * thái đơn: đơn có thể đang 'in_transit' mà đã nhận một phần.
+ */
+export function receiptTrackTone(at: number): PoTrackTone {
+  return at >= 2 ? 'done' : at === 1 ? 'wait' : 'idle'
+}
+
+/**
  * MÀU VẠCH TRẠNG THÁI ở mép trái mỗi dòng (xem `.spine` trong globals.css).
  *
  * Không dùng lại `PO_STATUS_TONE`: pill trong dòng phân biệt 9 trạng thái, còn

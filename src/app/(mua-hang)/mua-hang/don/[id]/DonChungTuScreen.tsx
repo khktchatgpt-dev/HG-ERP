@@ -76,7 +76,13 @@ import {
 } from '@/lib/po-line'
 import type { ShipmentInput } from '@/lib/po-shipments'
 import type { ReceiptBatch } from '@/modules/dept/supply/po-receipts.service'
-import { PO_NEXT_HINT, PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import {
+  PO_NEXT_HINT,
+  PO_STATUS_LABEL,
+  poTrackTone,
+  receiptTrackTone,
+  type PoStatus,
+} from '@/lib/po-status'
 import {
   buildPoPayload,
   draftProblem,
@@ -99,7 +105,7 @@ import {
   type PoLineDto,
 } from '@/app/(workspace)/planning/pos/new/po-line'
 import { useLocalPref } from '../../../_shell/use-local-pref'
-import { DENSE_KEY } from '../../../_shell/SupplyShell'
+import { DENSE_KEY } from '../../../_shell/KitFrame'
 import { actionsFor, type Action as DocAction } from '../actions'
 import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'
 import { receiveActions, shipmentEmptyHint, type ShipmentLineRef, type ShipmentLite } from './nhan-hang' // prettier-ignore
@@ -578,7 +584,7 @@ export function DonChungTuScreen(p: Props) {
   }
   const sheetInvalid =
     sheet != null &&
-    ((sheet.action.needReason && reason.trim().length === 0) ||
+    ((sheet.action.needReason && reason.trim().length < (sheet.action.minReason ?? 1)) ||
       (sheet.action.needDate && !date))
 
   /* ── dữ kiện đầu trang ─────────────────────────────────────────────── */
@@ -1215,11 +1221,13 @@ export function DonChungTuScreen(p: Props) {
                 'Đang giao',
               ]}
               at={Math.max(0, stepIdx)}
+              tone={poTrackTone(po.status)}
             />
             <StatusTrack
               label="Nhận hàng"
               steps={['Chưa', 'Một phần', 'Đủ']}
               at={recvIdx}
+              tone={receiptTrackTone(recvIdx)}
             />
           </>
         )}
@@ -1400,7 +1408,7 @@ export function DonChungTuScreen(p: Props) {
                       options={lsxOptions}
                     />
                     {header.poType === 'lsx' && !header.lsxId && (
-                      <span className="k-t-warn shrink-0 text-[var(--fs-micro)] whitespace-nowrap">
+                      <span className="k-t-warn shrink-0 whitespace-nowrap text-[var(--fs-micro)]">
                         bắt buộc
                       </span>
                     )}
@@ -1453,7 +1461,7 @@ export function DonChungTuScreen(p: Props) {
                       options={supplierOptions}
                     />
                     {!header.supplierId && (
-                      <span className="k-t-warn shrink-0 text-[var(--fs-micro)] whitespace-nowrap">
+                      <span className="k-t-warn shrink-0 whitespace-nowrap text-[var(--fs-micro)]">
                         bắt buộc
                       </span>
                     )}
@@ -2269,10 +2277,10 @@ export function DonChungTuScreen(p: Props) {
             editing
               ? []
               : [
-            ['NCC', po?.supplier_name ?? supplierOpt?.name ?? '—'],
-            ['Lệnh', <span key="l" className="num">{po?.lsx_code ?? lsx?.code ?? 'ngoài LSX'}</span>], // prettier-ignore
-            ['Hạn giao', header.expectedAt ? <span key="h" className={`num ${header.expectedAt < today ? 'k-t-stop' : ''}`}>{dmy(header.expectedAt)}</span> : <span key="h" className="k-t-warn">chưa có</span>], // prettier-ignore
-            ['Mẫu', meta.label],
+                  ['NCC', po?.supplier_name ?? supplierOpt?.name ?? '—'],
+                  ['Lệnh', <span key="l" className="num">{po?.lsx_code ?? lsx?.code ?? 'ngoài LSX'}</span>], // prettier-ignore
+                  ['Hạn giao', header.expectedAt ? <span key="h" className={`num ${header.expectedAt < today ? 'k-t-stop' : ''}`}>{dmy(header.expectedAt)}</span> : <span key="h" className="k-t-warn">chưa có</span>], // prettier-ignore
+                  ['Mẫu', meta.label],
                 ]
           }
         >
@@ -2281,162 +2289,166 @@ export function DonChungTuScreen(p: Props) {
               la nguoi dung phai tu hoi cho nao moi that. */}
           {!editing && (
             <>
-          <FieldGroup title="Chung">
-            {editing ? (
-              <>
-                {/* Mẫu đơn / Loại đơn / Lệnh / NCC KHÔNG lặp lại ở đây khi đang
+              <FieldGroup title="Chung">
+                {editing ? (
+                  <>
+                    {/* Mẫu đơn / Loại đơn / Lệnh / NCC KHÔNG lặp lại ở đây khi đang
                     sửa — chúng đã ở DẢI QUYẾT ĐỊNH trên đầu lưới. Hai chỗ sửa
                     cùng một ô là người dùng phải tự hỏi chỗ nào mới thật. Lúc
                     ĐỌC (không sửa) thì vẫn hiện đủ ở đây, vì khi đó không có
                     dải nào cả. */}
-                {header.poType === 'lsx' && (
-                  <Field label="Gộp thêm lệnh">
-                    <span className="flex flex-wrap items-center gap-1">
-                      {header.extraLsxIds.map((id) => (
-                        <GridBtn
-                          key={id}
-                          title="Bỏ lệnh này khỏi đơn"
-                          onClick={() => toggleExtraLsx(id, false)}
-                        >
-                          {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
-                        </GridBtn>
-                      ))}
-                      <span className="min-w-[180px]">
-                        <PickFind
-                          label="Gộp thêm lệnh"
-                          value=""
-                          onChange={(v) => v && toggleExtraLsx(v, true)}
-                          emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn mua cho nhiều lệnh —'} // prettier-ignore
-                          placeholder="Gõ số lệnh hoặc tên khách…"
-                          options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
-                        />
-                      </span>
-                    </span>
-                  </Field>
-                )}
-                <Field label="Số hợp đồng">
-                  <TextInput
-                    label="Số hợp đồng"
-                    value={header.contractNo}
-                    onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
-                    mono
-                  />
-                </Field>
-              </>
-            ) : (
-              <>
-                <Field label="Mẫu đơn">{meta.label}</Field>
-                <Field label="Nhà cung cấp">{po?.supplier_name}</Field>
-                <Field label="Lệnh sản xuất">
-                  <span className="num">{po?.lsx_code ?? 'Ngoài LSX'}</span>
-                </Field>
-                <Field label="Đơn khách">
-                  <span className="num">{po?.order_code ?? '—'}</span>
-                </Field>
-                <Field label="Người phụ trách">
-                  {po?.assignee_name ?? 'chưa giao ai'}
-                </Field>
-                <Field label="Ngày đặt">
-                  <span className="num">{dmy(po?.created_at)}</span>
-                </Field>
-                {/* Số hợp đồng in lên phiếu nên nó thuộc bộ "chữ trên phiếu",
+                    {header.poType === 'lsx' && (
+                      <Field label="Gộp thêm lệnh">
+                        <span className="flex flex-wrap items-center gap-1">
+                          {header.extraLsxIds.map((id) => (
+                            <GridBtn
+                              key={id}
+                              title="Bỏ lệnh này khỏi đơn"
+                              onClick={() => toggleExtraLsx(id, false)}
+                            >
+                              {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
+                            </GridBtn>
+                          ))}
+                          <span className="min-w-[180px]">
+                            <PickFind
+                              label="Gộp thêm lệnh"
+                              value=""
+                              onChange={(v) => v && toggleExtraLsx(v, true)}
+                              emptyLabel={header.extraLsxIds.length ? '+ thêm lệnh nữa' : '— một đơn mua cho nhiều lệnh —'} // prettier-ignore
+                              placeholder="Gõ số lệnh hoặc tên khách…"
+                              options={lsxOptions.filter((o) => o.value !== header.lsxId && !header.extraLsxIds.includes(o.value))} // prettier-ignore
+                            />
+                          </span>
+                        </span>
+                      </Field>
+                    )}
+                    <Field label="Số hợp đồng">
+                      <TextInput
+                        label="Số hợp đồng"
+                        value={header.contractNo}
+                        onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
+                        mono
+                      />
+                    </Field>
+                  </>
+                ) : (
+                  <>
+                    <Field label="Mẫu đơn">{meta.label}</Field>
+                    <Field label="Nhà cung cấp">{po?.supplier_name}</Field>
+                    <Field label="Lệnh sản xuất">
+                      <span className="num">{po?.lsx_code ?? 'Ngoài LSX'}</span>
+                    </Field>
+                    <Field label="Đơn khách">
+                      <span className="num">{po?.order_code ?? '—'}</span>
+                    </Field>
+                    <Field label="Người phụ trách">
+                      {po?.assignee_name ?? 'chưa giao ai'}
+                    </Field>
+                    <Field label="Ngày đặt">
+                      <span className="num">{dmy(po?.created_at)}</span>
+                    </Field>
+                    {/* Số hợp đồng in lên phiếu nên nó thuộc bộ "chữ trên phiếu",
                     sửa được cả khi đơn đã gửi — kế toán hay đòi ghi số HĐ sau. */}
-                <Field label="Số hợp đồng">
-                  {termsEdit ? (
-                    <TextInput
-                      label="Số hợp đồng"
-                      value={header.contractNo}
-                      onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
-                      mono
-                    />
-                  ) : (
-                    <span className="num">{po?.contract_no ?? '—'}</span>
-                  )}
-                </Field>
-              </>
-            )}
-          </FieldGroup>
-          <FieldGroup title="Giao hàng">
-            {editing ? /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */
-            null : (
-              <Field
-                label="Hạn giao"
-                tone={
-                  po?.expected_at && po.expected_at.slice(0, 10) < today
-                    ? 'stop'
-                    : undefined
-                }
-              >
-                <span className="num">{dmy(po?.expected_at) || '—'}</span>
-              </Field>
-            )}
-            <Field label="Thời gian giao của NCC" inherited>
-              <span className="num">
-                {supplierOpt?.lead_time_days != null
-                  ? `${supplierOpt.lead_time_days} ngày`
-                  : '—'}
-              </span>
-            </Field>
-          </FieldGroup>
-          <FieldGroup title="Giá &amp; thuế">
-            {editing ? (
-              <>
-                <Field label="Tiền tệ">
-                  <Pick
-                    label="Tiền tệ"
-                    value={header.currency}
-                    onChange={(v) => {
-                      dirty.current.currency = true
-                      setHeader((h) => ({ ...h, currency: v }))
-                    }}
-                    options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
-                  />
-                </Field>
-                <Field label="Thuế suất %">
-                  <NumInput
-                    aria-label="Thuế suất"
-                    value={numStr(header.vat)}
-                    onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
-                  />
-                </Field>
-                <Field label="Giá đã gồm VAT">
-                  <Tick
-                    label="Đơn giá đã gồm VAT"
-                    checked={header.inclVat}
-                    onChange={(v) => setHeader((h) => ({ ...h, inclVat: v }))}
-                  />
-                </Field>
-                {meta.hasDiscount && (
-                  <Field label="Chiết khấu">
-                    <NumInput
-                      aria-label="Chiết khấu"
-                      value={numStr(header.discount)}
-                      onCommit={(v) => setHeader((h) => ({ ...h, discount: toNum(v) }))}
-                    />
+                    <Field label="Số hợp đồng">
+                      {termsEdit ? (
+                        <TextInput
+                          label="Số hợp đồng"
+                          value={header.contractNo}
+                          onCommit={(v) => setHeader((h) => ({ ...h, contractNo: v }))}
+                          mono
+                        />
+                      ) : (
+                        <span className="num">{po?.contract_no ?? '—'}</span>
+                      )}
+                    </Field>
+                  </>
+                )}
+              </FieldGroup>
+              <FieldGroup title="Giao hàng">
+                {editing /* Hạn giao nằm trên DẢI QUYẾT ĐỊNH ở đầu lưới — không lặp ở đây. */ ? null : (
+                  <Field
+                    label="Hạn giao"
+                    tone={
+                      po?.expected_at && po.expected_at.slice(0, 10) < today
+                        ? 'stop'
+                        : undefined
+                    }
+                  >
+                    <span className="num">{dmy(po?.expected_at) || '—'}</span>
                   </Field>
                 )}
-              </>
-            ) : (
-              <>
-                <Field label="Tiền tệ">
-                  <span className="num">{po?.currency}</span>
-                </Field>
-                <Field label="Thuế suất">
+                <Field label="Thời gian giao của NCC" inherited>
                   <span className="num">
-                    {po?.vat_rate ?? 0}%{po?.price_includes_vat ? ' · giá đã gồm' : ''}
+                    {supplierOpt?.lead_time_days != null
+                      ? `${supplierOpt.lead_time_days} ngày`
+                      : '—'}
                   </span>
                 </Field>
-                <Field label="Chiết khấu">
-                  <span className="num">
-                    {po?.discount_amount ? money(po.discount_amount, po.currency) : '—'}
-                  </span>
+              </FieldGroup>
+              <FieldGroup title="Giá &amp; thuế">
+                {editing ? (
+                  <>
+                    <Field label="Tiền tệ">
+                      <Pick
+                        label="Tiền tệ"
+                        value={header.currency}
+                        onChange={(v) => {
+                          dirty.current.currency = true
+                          setHeader((h) => ({ ...h, currency: v }))
+                        }}
+                        options={PO_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                      />
+                    </Field>
+                    <Field label="Thuế suất %">
+                      <NumInput
+                        aria-label="Thuế suất"
+                        value={numStr(header.vat)}
+                        onCommit={(v) => setHeader((h) => ({ ...h, vat: toNum(v) }))}
+                      />
+                    </Field>
+                    <Field label="Giá đã gồm VAT">
+                      <Tick
+                        label="Đơn giá đã gồm VAT"
+                        checked={header.inclVat}
+                        onChange={(v) => setHeader((h) => ({ ...h, inclVat: v }))}
+                      />
+                    </Field>
+                    {meta.hasDiscount && (
+                      <Field label="Chiết khấu">
+                        <NumInput
+                          aria-label="Chiết khấu"
+                          value={numStr(header.discount)}
+                          onCommit={(v) =>
+                            setHeader((h) => ({ ...h, discount: toNum(v) }))
+                          }
+                        />
+                      </Field>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <Field label="Tiền tệ">
+                      <span className="num">{po?.currency}</span>
+                    </Field>
+                    <Field label="Thuế suất">
+                      <span className="num">
+                        {po?.vat_rate ?? 0}%
+                        {po?.price_includes_vat ? ' · giá đã gồm' : ''}
+                      </span>
+                    </Field>
+                    <Field label="Chiết khấu">
+                      <span className="num">
+                        {po?.discount_amount
+                          ? money(po.discount_amount, po.currency)
+                          : '—'}
+                      </span>
+                    </Field>
+                  </>
+                )}
+                <Field label="Điều khoản TT của NCC" inherited>
+                  {supplierOpt?.payment_terms ?? '—'}
                 </Field>
-              </>
-            )}
-            <Field label="Điều khoản TT của NCC" inherited>
-              {supplierOpt?.payment_terms ?? '—'}
-            </Field>
-          </FieldGroup>
+              </FieldGroup>
             </>
           )}
 
@@ -2881,6 +2893,3 @@ function EditCell({
       )
   }
 }
-
-
-

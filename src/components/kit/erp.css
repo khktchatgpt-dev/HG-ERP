@@ -134,14 +134,54 @@
   cursor: not-allowed;
   opacity: 0.45;
 }
+/* BỀ NGANG QUYẾT ĐỊNH THANH NÀY BÀY KIỂU GÌ.
+   Đo 16/09/2026 trên màn đơn mua, 16 nút, tổng bề ngang dải ~1900px:
+     · 1440px — 148px (2 hàng nhóm), thấy ĐỦ 16 nút;
+     · 708px  — 288px = 41% chiều cao khung nhìn, 5 hàng, lưới mặt hàng bị
+                đẩy xuống dưới mép màn.
+   Nên KHÔNG có một cách bày đúng cho cả hai. Rộng thì xuống hàng, vì luật
+   của Action Pane là bày SẴN, không giấu — 40px thêm rẻ hơn một nút biến
+   mất. Hẹp thì xuống hàng là tự sát: thanh ăn gần nửa màn, nên chuyển sang
+   dải NGANG cuộn được như Dynamics — chiều cao cố định, thứ tự nút không
+   đổi nên trí nhớ vị trí còn nguyên, mép có bóng khi còn nút chưa thấy
+   (thủ thuật background-attachment: local so với scroll). */
+.k-pane {
+  container-type: inline-size;
+}
 .k-pane-groups {
   display: flex;
   flex-wrap: wrap;
   padding: 6px 8px 3px;
 }
 .k-grp {
+  flex: 0 0 auto;
   padding: 0 12px;
   border-right: 1px solid var(--hair);
+}
+@container (max-width: 1100px) {
+  .k-pane-groups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+    background:
+      linear-gradient(to right, var(--surface-card) 40%, transparent) left / 28px 100%
+        no-repeat local,
+      linear-gradient(to left, var(--surface-card) 40%, transparent) right / 28px 100%
+        no-repeat local,
+      linear-gradient(
+          to right,
+          color-mix(in srgb, var(--ink-1) 14%, transparent),
+          transparent
+        )
+        left / 12px 100% no-repeat scroll,
+      linear-gradient(
+          to left,
+          color-mix(in srgb, var(--ink-1) 14%, transparent),
+          transparent
+        )
+        right / 12px 100% no-repeat scroll;
+  }
 }
 .k-grp:last-child {
   border-right: 0;
@@ -149,13 +189,19 @@
 .k-grp-btns {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
+/* Nhãn nhóm căn TRÁI, thẳng mép nút đầu của nhóm. Căn giữa thì nhóm rộng
+   (5 nút) đẩy nhãn ra xa cả hai nút đầu–cuối, mắt không gắn được nhãn với
+   cụm nào — nhất là khi các nhóm đứng liền nhau trên một dải ngang. */
 .k-grp-lab {
   font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink-label);
-  text-align: center;
-  padding: 3px 0 2px;
+  padding: 4px 0 2px;
+  white-space: nowrap;
 }
 .k-act {
   border: 1px solid var(--line);
@@ -171,9 +217,29 @@
 .k-act:hover:not(:disabled) {
   background: var(--surface-raised);
 }
-.k-act:disabled {
+/* Nút khoá.
+   Trước 16/09/2026 là `opacity: .5` trên nền trắng: chữ tụt xuống ~2,2:1, viền
+   gần như mất, nút trông như một mẩu tiêu đề chứ không phải nút. Nay tô NỀN
+   thay vì làm mờ — vẫn đọc được là nút, vẫn thấy rõ là đang tắt. Dùng
+   `aria-disabled` (khoá mềm) nên phải bắt cả hai dạng. */
+.k-act:disabled,
+.k-act-off {
   cursor: not-allowed;
-  opacity: 0.5;
+  background: var(--surface-raised);
+  border-color: var(--line-faint);
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.k-act-off:hover {
+  background: var(--surface-raised);
+}
+/* Khoá mềm: bấm được để HỎI lý do, nên phải có phản hồi khi rê chuột. */
+.k-act-off:not(:disabled) {
+  cursor: help;
+}
+.k-act-off:not(:disabled):hover {
+  border-color: var(--line);
+  color: var(--ink-2);
 }
 .k-act-s {
   font-weight: 600;
@@ -187,6 +253,39 @@
 .k-act-p:hover:not(:disabled) {
   background: var(--act);
   filter: brightness(1.08);
+}
+
+/* Lý do nút bị khoá — hiện TẠI CHỖ khi bấm vào nút mờ, thay cho tooltip. */
+.k-pane-why {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px var(--gutter);
+  border-top: 1px solid var(--warn-line);
+  background: var(--warn-wash);
+  font-size: var(--fs-sm);
+  color: var(--ink-1);
+}
+.k-pane-why-k {
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--warn);
+  white-space: nowrap;
+}
+.k-pane-why-x {
+  margin-left: auto;
+  border: 0;
+  background: none;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0 2px;
+}
+.k-pane-why-x:hover {
+  color: var(--ink-1);
 }
 
 /* ── 3. Đầu chứng từ + trục trạng thái ───────────────────────────────── */
@@ -232,40 +331,108 @@
   color: var(--ink-label);
   margin-bottom: 3px;
 }
+/* DẢI BƯỚC KHÔNG ĐƯỢC TRÔNG NHƯ MỘT HÀNG NÚT.
+   Tới 16/09/2026 mỗi bước là một ô có viền, bo góc `--radius`, nền
+   `--surface-raised` — tức đúng hình dạng của `.k-act`, chỉ nhỏ hơn. Đo được
+   trên màn đơn mua: nút và chip cùng bo góc 10px, và bước đang đứng còn tô
+   cùng màu nền với nút chính. Chủ dự án chấm "khó phân biệt" là chuyện tất
+   yếu — không có tín hiệu nào để biết cái nào bấm được.
+   Nên bỏ hẳn hộp: các bước là CHỮ, ngăn nhau bằng một vạch tóc, bước đang
+   đứng có nền nhạt + CHẤM TRÒN màu vòng đời phía trước. Chấm là thứ không
+   nút nào trong kit có, nên "bạn đang ở đây" đọc được bằng khoé mắt mà
+   không phải mượn hình dạng của nút. */
 .k-steps {
   display: flex;
+  align-items: center;
 }
 .k-step {
+  position: relative;
   font: inherit;
   font-size: var(--fs-micro);
-  padding: 3px 9px;
-  border: 1px solid var(--line);
-  border-right: 0;
-  background: var(--surface-raised);
+  padding: 2px 9px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--ink-3);
   white-space: nowrap;
   cursor: default;
 }
+/* Vạch tóc ngăn hai bước — thay cho viền ô. Ngắn hơn chiều cao chữ để dải
+   đọc ra là một câu liền mạch, không phải một hàng hộp. */
+.k-step + .k-step::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  bottom: 25%;
+  width: 1px;
+  background: var(--line-faint);
+}
 .k-step:not(:disabled):not(.k-step-ro) {
   cursor: pointer;
 }
-/* Dải chỉ-đọc: là <span>, không phải nút. Bày bằng inline-block để giữ nguyên
-   hình dạng viền liền mạch của dải bước. */
+.k-step:not(:disabled):not(.k-step-ro):hover {
+  background: var(--surface-raised);
+}
+/* Dải chỉ-đọc: là <span>, không phải nút. */
 .k-step-ro {
   display: inline-block;
 }
-.k-step:first-child {
-  border-radius: var(--radius) 0 0 var(--radius);
+/* Bước ĐÃ QUA đậm hơn bước CHƯA TỚI — dải có chiều đi, đọc được đơn đã qua
+   những đâu chứ không chỉ đang ở đâu. */
+.k-step.past {
+  color: var(--ink-2);
 }
-.k-step:last-child {
-  border-right: 1px solid var(--line);
-  border-radius: 0 var(--radius) var(--radius) 0;
-}
+
+/* BƯỚC ĐANG ĐỨNG — màu theo NGHĨA, và KHÔNG BAO GIỜ nền đặc.
+   Hai luật, cùng một mục đích là để xanh `--act` chỉ mang MỘT nghĩa:
+   1. Màu nói nghĩa (xám/hổ phách/lam/lục/đỏ), không mặc định xanh.
+   2. NỀN ĐẶC = BẤM ĐƯỢC. Dải trạng thái là chữ chỉ-đọc, nên nó lấy nền NHẠT
+      + chữ đậm màu + chấm tròn. Xem `TrackTone` trong Erp.tsx. */
 .k-step.on {
+  padding-left: 20px;
+  font-weight: 700;
+  background: var(--act-wash);
+  color: var(--act-text);
+}
+.k-step.on::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
   background: var(--act);
-  border-color: var(--act);
-  color: var(--act-ink);
-  font-weight: 600;
+}
+.k-steps-idle .k-step.on {
+  background: var(--surface-raised);
+  color: var(--ink-1);
+}
+.k-steps-idle .k-step.on::after {
+  background: var(--ink-2);
+}
+.k-steps-wait .k-step.on {
+  background: var(--warn-wash);
+  color: var(--warn);
+}
+.k-steps-wait .k-step.on::after {
+  background: var(--warn);
+}
+.k-steps-done .k-step.on {
+  background: var(--done-wash);
+  color: var(--done);
+}
+.k-steps-done .k-step.on::after {
+  background: var(--done);
+}
+.k-steps-stop .k-step.on {
+  background: var(--stop-wash);
+  color: var(--stop);
+}
+.k-steps-stop .k-step.on::after {
+  background: var(--stop);
 }
 
 /* ── 4. Dải ai đang giữ ──────────────────────────────────────────────── */

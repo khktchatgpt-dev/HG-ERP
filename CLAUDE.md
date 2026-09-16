@@ -104,7 +104,7 @@ node scripts/create-user.mjs --email someone@hg.com --promote --role admin
 | --------- | ---------------------------------------- | --------------------------------------------- |
 | Import từ | `@/components/kit`                       | `@/components/erp/*`, `@/components/shadcn/*` |
 | Lớp token | `.kit` (`src/components/kit/tokens.css`) | `.theme-v3` (`src/app/globals.css`)           |
-| Đang phủ  | 6 file (đo 10/09/2026)                   | 168 file                                      |
+| Đang phủ  | 67 file (đo 16/09/2026)                  | 168 file                                      |
 | Dùng khi  | **mọi màn MỚI**                          | màn CŨ, sửa tại chỗ                           |
 
 **Đừng viết lại 168 file cho đều nhau** — đổi rất nhiều rủi ro lấy rất ít giá trị. Màn cũ
@@ -160,6 +160,13 @@ bản đồ khuôn: một trang không xếp được vào khuôn nào thì bả
    10/09/2026 — SAP GUI, Dynamics đều bày như vậy).
 5. **Một màu hành động, ba màu vòng đời** — `--act` cho thứ bấm được/đang chọn; `--stop`
    `--warn` `--done` chỉ mã hoá vòng đời dữ liệu, **không bao giờ lên nút hay dòng đang chọn**.
+   **Và NỀN ĐẶC = BẤM ĐƯỢC** (siết 16/09/2026, sau khi chủ dự án chấm "chỉ có mỗi màu xanh
+   trắng, rất khó phân biệt"): dải `StatusTrack` từng tô `--act` đặc cho bước đang đứng,
+   tức cùng nền và cùng bo góc với nút chính — đo được `rgb(31,75,184)` ở cả hai. Nay dải
+   bước là CHỮ (không hộp, ngăn bằng vạch tóc), bước đang đứng có nền NHẠT + chấm tròn màu
+   theo `poTrackTone`/`TrackTone` (idle·wait·run·done·stop). Nút khoá cũng bỏ `opacity`
+   (chữ 2,2:1 — trượt AA) đổi sang nền xám đặc (5,31:1), và bấm vào thì hiện lý do TẠI CHỖ
+   dưới thanh thay vì giấu trong tooltip.
 6. **Số nào không kiểm được thì không ai tin** — chân bảng nói tổng KHÔNG gồm gì; số suy ra
    từ phép tính bày được phép tính nguyên văn (`WhyBox`).
 
