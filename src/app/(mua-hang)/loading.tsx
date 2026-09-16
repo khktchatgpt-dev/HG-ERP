@@ -19,9 +19,15 @@ export default function MuaHangLoading() {
         <span className="block h-3 w-[190px] rounded bg-[var(--surface-raised)]" />
       </div>
       <div className="flex shrink-0 items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
-        {[300, 110, 110, 90].map((w) => (
+        {/*
+          KEY THEO VỊ TRÍ, không theo bề rộng: hai ô lọc giữa cùng rộng 110px
+          nên `key={w}` sinh ra hai key `110` trùng nhau — React cảnh báo và
+          có quyền nhập/bỏ bớt ô. Danh sách này cố định, không sắp xếp lại và
+          không thêm bớt, nên chỉ số LÀ danh tính đúng của từng ô.
+        */}
+        {[300, 110, 110, 90].map((w, i) => (
           <span
-            key={w}
+            key={i}
             style={{ width: w }}
             className="h-[26px] animate-pulse rounded-[13px] bg-[var(--surface-raised)]"
           />
