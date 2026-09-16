@@ -39,6 +39,7 @@ import {
   NumInput,
   Pick,
   PickFind,
+  ScreenFrame,
   StatusBar,
   StatusTrack,
   Tag,
@@ -288,310 +289,332 @@ export function XuatScreen({
         }
       }}
     >
-      <Crumb
-        path={[{ label: 'Kho', href: '/warehouse/nhap' }, 'Xuất kho', 'Phiếu mới']}
-      />
-      <ActionPane>
-        <ActionGroup label="Phiếu">
-          <Action primary onClick={ghiSo} disabled={!canEdit} title={blocked}>
-            Ghi sổ
-          </Action>
-          <Action
-            onClick={lamMoi}
-            disabled={rows.length === 0 && !head.to && !head.lsx_id}
-          >
-            Làm mới
-          </Action>
-        </ActionGroup>
-        <ActionGroup label="Sổ">
-          <Action onClick={() => router.push('/planning/docs?kind=issue')}>
-            Sổ phiếu xuất
-          </Action>
-        </ActionGroup>
-      </ActionPane>
-      <DocHead
-        compact
-        kind="Phiếu xuất kho"
-        code={tieuDe}
-        sub={`thủ kho ghi sổ sau khi tổ lấy · số phiếu PXK cấp khi ghi sổ · người lập ${nguoiLap}`}
-      >
-        <StatusTrack label="Phiếu" steps={['Đang lập', 'Đã ghi sổ']} at={0} />
-      </DocHead>
-
-      {/* ── Đầu phiếu, hàng 1: xuất cho → lệnh / lý do → ngày ───────────── */}
-      <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
-        <span className="inline-flex items-center gap-2">
-          <Buoc n={1}>Xuất cho</Buoc>
-          <Seg<LoaiXuat>
-            value={head.loai}
-            label="Xuất cho"
-            options={[
-              { value: 'lsx', label: 'Lệnh sản xuất' },
-              { value: 'daily', label: 'Xuất lẻ' },
-            ]}
-            onChange={(v) => setH({ loai: v, ly_do: '', to: '' })}
-          />
-        </span>
-
-        {head.loai === 'daily' && (
-          <span className="inline-flex items-center gap-2">
-            <Buoc n={2} need={thieu('ly_do')}>
-              Lý do
-            </Buoc>
-            <span id="xuat-ly_do" tabIndex={-1}>
-              <Pick
-                value={head.ly_do}
-                onChange={(v) => setH({ ly_do: v })}
-                options={[
-                  { value: '', label: '— chọn lý do —' },
-                  ...LY_DO_XUAT_LE.map((x) => ({
-                    value: x.ma,
-                    label: `${x.ma} · ${x.nhan}`,
-                  })),
-                ]}
-                label="Lý do xuất lẻ"
-                width={300}
-              />
-            </span>
-          </span>
-        )}
-
-        {canLenh && (
-          <span className="inline-flex min-w-0 flex-1 basis-[420px] items-center gap-2">
-            <Buoc n={head.loai === 'daily' ? '2b' : 2} need={thieu('lenh')}>
-              Lệnh
-            </Buoc>
-            <span id="xuat-lenh" tabIndex={-1} className="min-w-0 flex-1">
-              <PickFind
-                value={head.lsx_id}
-                onChange={(v) => setH({ lsx_id: v })}
-                options={lsx.map((l) => ({
-                  value: l.id,
-                  label: l.code,
-                  hint: `${l.customer_name}${l.order_codes.length ? ` · ${l.order_codes.join(', ')}` : ''} · ${l.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}`,
-                }))}
-                label="Lệnh sản xuất"
-                placeholder="gõ số lệnh hoặc tên khách…"
-                width={560}
-                emptyLabel="— chọn lệnh đang chạy —"
-              />
-            </span>
-            {lsxChon && (
-              <Tag tone={lsxChon.status === 'in_progress' ? 'neutral' : 'done'}>
-                {lsxChon.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}
-              </Tag>
-            )}
-          </span>
-        )}
-
-        <span className="ml-auto inline-flex items-center gap-2">
-          <Buoc n={4} dim>
-            Ngày
-          </Buoc>
-          {suaNgay ? (
-            <DateInput
-              value={head.doc_date}
-              onChange={(v) => setH({ doc_date: v })}
-              label="Ngày chứng từ"
-            />
-          ) : (
-            <span className="inline-flex items-center gap-[6px] text-[var(--fs-sm)] text-[var(--ink-2)]">
-              {head.doc_date === today ? 'hôm nay · ' : ''}
-              <b className="num font-semibold text-[var(--ink)]">
-                {isoToVn(head.doc_date)}
-              </b>
-              <Btn
-                className="h-[22px] border-0 bg-transparent px-1 text-[11px] text-[var(--act-text)]"
-                onClick={() => setSuaNgay(true)}
-              >
-                sửa
-              </Btn>
-            </span>
-          )}
-        </span>
-      </div>
-
-      {/* ── Đầu phiếu, hàng 2: tổ lấy / bộ phận nhận → người lấy ────────── */}
-      <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
-        <span className="inline-flex items-center gap-2" id="xuat-to" tabIndex={-1}>
-          <Buoc n={3} need={thieu('to')}>
-            {head.loai === 'lsx' ? 'Tổ lấy' : 'Bộ phận nhận'}
-          </Buoc>
-          {head.loai === 'lsx' ? (
-            <Seg<string>
-              value={head.to}
-              label="Tổ lấy"
-              need={thieu('to')}
-              options={to.map((t) => ({ value: t, label: tenTo(t) }))}
-              onChange={(v) => setH({ to: v })}
-            />
-          ) : (
-            <PickFind
-              value={head.to}
-              onChange={(v) => setH({ to: v })}
-              options={phong.map((p) => ({ value: p, label: p }))}
-              label="Bộ phận nhận"
-              placeholder="gõ tên phòng / tổ…"
-              width={240}
-              emptyLabel="— chọn bộ phận —"
-            />
-          )}
-        </span>
-        <span className="inline-flex items-center gap-2">
-          <span className="font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
-            Người lấy
-          </span>
-          <TextInput
-            value={head.nguoi_lay}
-            onCommit={(v) => setH({ nguoi_lay: v })}
-            placeholder="tên người lấy (không bắt buộc)"
-            label="Người lấy"
-            style={{ width: 200 }}
-          />
-        </span>
-        <span className="ml-auto text-[var(--fs-micro)] text-[var(--ink-3)]">
-          Thêm dòng: gõ ở ô cuối lưới · Enter chọn · Tab sang số
-        </span>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-        <Grid minWidth={900}>
-          <GridHead>
-            <Th width={30}>#</Th>
-            <Th width={110}>Mã</Th>
-            <Th>Tên vật tư</Th>
-            <Th width={56}>ĐVT</Th>
-            <Th num width={110}>
-              Tồn dùng được
-            </Th>
-            <Th num width={110}>
-              Lần này
-            </Th>
-            <Th width={300}>Ghi chú</Th>
-            <Th width={60}></Th>
-          </GridHead>
-          <GridBody>
-            {rows.map((r, i) => {
-              const th = thieuTon(r)
-              return (
-                <GridRow key={r.id}>
-                  <td className="k-c-n">{i + 1}</td>
-                  <td>
-                    <Code>{r.code}</Code>
-                  </td>
-                  <td className="max-w-0 truncate" title={r.name}>
-                    {r.name}
-                  </td>
-                  <td className="text-[var(--ink-3)]">{r.unit}</td>
-                  <td className="k-r num">
-                    {r.qty_ok == null ? (
-                      <span className="text-[var(--ink-empty)]">?</span>
-                    ) : (
-                      fmt(r.qty_ok)
-                    )}
-                  </td>
-                  <td className="k-r">
-                    <NumInput
-                      id={`xuat-qty-${i}`}
-                      value={String(r.qty)}
-                      onCommit={(v) =>
-                        patch(i, {
-                          qty: Number(v.replace(/\./g, '').replace(',', '.')) || 0,
-                        })
-                      }
-                      aria-label={`Lần này ${r.code}`}
-                    />
-                    {th != null && (
-                      <CellHint tone="warn">
-                        tồn {fmt(r.qty_ok ?? 0)} — thiếu {fmt(th)}
-                      </CellHint>
-                    )}
-                  </td>
-                  <td>
-                    <TextInput
-                      value={r.note}
-                      onCommit={(v) => patch(i, { note: v })}
-                      placeholder="ghi chú (không bắt buộc)"
-                      label={`Ghi chú ${r.code}`}
-                    />
-                  </td>
-                  <td>
-                    <GridBtn
-                      onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
-                    >
-                      Xoá
-                    </GridBtn>
-                  </td>
-                </GridRow>
-              )
-            })}
-            <tr className="bg-[var(--surface-hover)]">
-              <td className="k-c-n font-bold text-[var(--act)]">+</td>
-              <td colSpan={7} className="!py-[3px]">
-                <Lookup<VatTuChon>
-                  search={timVatTu}
-                  onPick={(vt) => void chonVatTu(vt)}
-                  keyOf={(m) => m.id}
-                  render={(m) => (
-                    <span className="flex items-baseline gap-2">
-                      <Code>{m.code}</Code>
-                      <span className="truncate">{m.name}</span>
-                      <span className="ml-auto text-[var(--ink-3)]">{m.unit}</span>
-                    </span>
-                  )}
-                  placeholder={
-                    dangTra
-                      ? 'Đang tra tồn…'
-                      : 'Gõ mã hoặc tên vật tư · Enter để thêm dòng'
-                  }
-                  label="Tìm vật tư để thêm dòng"
-                  width={440}
-                  disabled={dangTra}
-                />
-              </td>
-            </tr>
-          </GridBody>
-          <GridFoot>
-            <td colSpan={5}>Tổng</td>
-            <td className="k-r num">{fmt(tong.tong)}</td>
-            <td colSpan={2} className="font-normal text-[var(--ink-3)]">
-              {tong.so_dong} dòng có số · tổng chỉ để đếm, nhiều đơn vị khác nhau
-            </td>
-          </GridFoot>
-        </Grid>
-      </div>
-
-      <CommitBar
-        totals={[
-          { label: 'Dòng', value: rows.length },
-          ...(lsxChon ? [{ label: 'Lệnh', value: lsxChon.code }] : []),
-          ...(head.to
-            ? [{ label: head.loai === 'lsx' ? 'Tổ' : 'Nhận', value: head.to }]
-            : []),
-        ]}
-        grand={{ label: 'Tổng lượng', value: fmt(tong.tong) }}
-        blocked={blocked}
-        onGoBlocked={daThu && !kiem.ok ? ghiSo : undefined}
-        actions={
-          <>
-            <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-              Ctrl + Enter
-            </span>
+      {/*
+        ScreenFrame chốt chiều cao bằng phần màn còn lại: thiếu nó thì wrapper
+        không có trần, lưới co theo nội dung (đo 16/09: một hàng + thanh cuộn,
+        nửa dưới cửa sổ trống) và danh sách gợi ý bị khung cuộn cắt.
+      */}
+      <ScreenFrame>
+        <Crumb
+          path={[{ label: 'Kho', href: '/warehouse/nhap' }, 'Xuất kho', 'Phiếu mới']}
+        />
+        <ActionPane>
+          <ActionGroup label="Phiếu">
             <Action primary onClick={ghiSo} disabled={!canEdit} title={blocked}>
               Ghi sổ
             </Action>
-          </>
-        }
-      />
-      <StatusBar
-        left={[
-          head.loai === 'lsx'
-            ? 'Mã lý do X1 tự gắn · tiền vào giá thành lệnh · tồn chỉ đổi khi ghi sổ'
-            : 'Xuất lẻ: mã lý do người chọn, không vào giá thành lệnh · tồn chỉ đổi khi ghi sổ',
-          'Ghi sổ xong: phiếu mới trống, ghi tiếp cho tổ khác',
-        ]}
-        right={`${rows.length} dòng`}
-      />
+            <Action
+              onClick={lamMoi}
+              disabled={rows.length === 0 && !head.to && !head.lsx_id}
+            >
+              Làm mới
+            </Action>
+          </ActionGroup>
+          <ActionGroup label="Sổ">
+            <Action onClick={() => router.push('/planning/docs?kind=issue')}>
+              Sổ phiếu xuất
+            </Action>
+          </ActionGroup>
+        </ActionPane>
+        <DocHead
+          compact
+          kind="Phiếu xuất kho"
+          code={tieuDe}
+          sub={`thủ kho ghi sổ sau khi tổ lấy · số phiếu PXK cấp khi ghi sổ · người lập ${nguoiLap}`}
+        >
+          <StatusTrack label="Phiếu" steps={['Đang lập', 'Đã ghi sổ']} at={0} />
+        </DocHead>
+
+        {/* ── Đầu phiếu, hàng 1: xuất cho → lệnh / lý do → ngày ───────────── */}
+        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+          <span className="inline-flex items-center gap-2">
+            <Buoc n={1}>Xuất cho</Buoc>
+            <Seg<LoaiXuat>
+              value={head.loai}
+              label="Xuất cho"
+              options={[
+                { value: 'lsx', label: 'Lệnh sản xuất' },
+                { value: 'daily', label: 'Xuất lẻ' },
+              ]}
+              onChange={(v) => setH({ loai: v, ly_do: '', to: '' })}
+            />
+          </span>
+
+          {head.loai === 'daily' && (
+            <span className="inline-flex items-center gap-2">
+              <Buoc n={2} need={thieu('ly_do')}>
+                Lý do
+              </Buoc>
+              <span id="xuat-ly_do" tabIndex={-1}>
+                <Pick
+                  value={head.ly_do}
+                  onChange={(v) => setH({ ly_do: v })}
+                  options={[
+                    { value: '', label: '— chọn lý do —' },
+                    ...LY_DO_XUAT_LE.map((x) => ({
+                      value: x.ma,
+                      label: `${x.ma} · ${x.nhan}`,
+                    })),
+                  ]}
+                  label="Lý do xuất lẻ"
+                  width={300}
+                />
+              </span>
+            </span>
+          )}
+
+          {canLenh && (
+            <span className="inline-flex min-w-0 flex-1 basis-[420px] items-center gap-2">
+              <Buoc n={head.loai === 'daily' ? '2b' : 2} need={thieu('lenh')}>
+                Lệnh
+              </Buoc>
+              <span id="xuat-lenh" tabIndex={-1} className="min-w-0 flex-1">
+                <PickFind
+                  value={head.lsx_id}
+                  onChange={(v) => setH({ lsx_id: v })}
+                  options={lsx.map((l) => ({
+                    value: l.id,
+                    label: l.code,
+                    hint: `${l.customer_name}${l.order_codes.length ? ` · ${l.order_codes.join(', ')}` : ''} · ${l.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}`,
+                  }))}
+                  label="Lệnh sản xuất"
+                  placeholder="gõ số lệnh hoặc tên khách…"
+                  width={560}
+                  emptyLabel="— chọn lệnh đang chạy —"
+                />
+              </span>
+              {lsxChon && (
+                <Tag tone={lsxChon.status === 'in_progress' ? 'neutral' : 'done'}>
+                  {lsxChon.status === 'in_progress' ? 'đang SX' : 'đã duyệt'}
+                </Tag>
+              )}
+            </span>
+          )}
+
+          <span className="ml-auto inline-flex items-center gap-2">
+            <Buoc n={4} dim>
+              Ngày
+            </Buoc>
+            {suaNgay ? (
+              <DateInput
+                value={head.doc_date}
+                onChange={(v) => setH({ doc_date: v })}
+                label="Ngày chứng từ"
+              />
+            ) : (
+              <span className="inline-flex items-center gap-[6px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+                {head.doc_date === today ? 'hôm nay · ' : ''}
+                <b className="num font-semibold text-[var(--ink)]">
+                  {isoToVn(head.doc_date)}
+                </b>
+                <Btn
+                  className="h-[22px] border-0 bg-transparent px-1 text-[11px] text-[var(--act-text)]"
+                  onClick={() => setSuaNgay(true)}
+                >
+                  sửa
+                </Btn>
+              </span>
+            )}
+          </span>
+        </div>
+
+        {/* ── Đầu phiếu, hàng 2: tổ lấy / bộ phận nhận → người lấy ────────── */}
+        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+          <span className="inline-flex items-center gap-2" id="xuat-to" tabIndex={-1}>
+            <Buoc n={3} need={thieu('to')}>
+              {head.loai === 'lsx' ? 'Tổ lấy' : 'Bộ phận nhận'}
+            </Buoc>
+            {head.loai === 'lsx' ? (
+              <Seg<string>
+                value={head.to}
+                label="Tổ lấy"
+                need={thieu('to')}
+                options={to.map((t) => ({ value: t, label: tenTo(t) }))}
+                onChange={(v) => setH({ to: v })}
+              />
+            ) : (
+              <PickFind
+                value={head.to}
+                onChange={(v) => setH({ to: v })}
+                options={phong.map((p) => ({ value: p, label: p }))}
+                label="Bộ phận nhận"
+                placeholder="gõ tên phòng / tổ…"
+                width={240}
+                emptyLabel="— chọn bộ phận —"
+              />
+            )}
+          </span>
+          <span className="inline-flex items-center gap-2">
+            <span className="font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              Người lấy
+            </span>
+            <TextInput
+              value={head.nguoi_lay}
+              onCommit={(v) => setH({ nguoi_lay: v })}
+              placeholder="tên người lấy (không bắt buộc)"
+              label="Người lấy"
+              style={{ width: 200 }}
+            />
+          </span>
+          <span className="ml-auto text-[var(--fs-micro)] text-[var(--ink-3)]">
+            Thêm dòng: gõ ở ô ngay trên lưới · Enter chọn · Tab sang số
+          </span>
+        </div>
+
+        {/*
+          Ô tìm đứng NGOÀI khung cuộn của lưới: đặt nó làm dòng cuối lưới thì
+          danh sách gợi ý (absolute) bị `overflow:auto` của khung cắt, chỉ lộ
+          một dòng đè lên hàng Tổng — chủ dự án chụp màn 16/09. Ở đây gợi ý
+          rơi xuống lưới, không bị cắt; dòng mới vẫn vào cuối lưới, focus ô số.
+        */}
+        <div className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[5px]">
+          <span className="font-bold tracking-[.07em] text-[var(--act-text)] text-[var(--fs-label)] uppercase">
+            + Thêm dòng
+          </span>
+          <Lookup<VatTuChon>
+            search={timVatTu}
+            onPick={(vt) => void chonVatTu(vt)}
+            keyOf={(m) => m.id}
+            render={(m) => (
+              <span className="flex items-baseline gap-2">
+                <Code>{m.code}</Code>
+                <span className="truncate">{m.name}</span>
+                <span className="ml-auto text-[var(--ink-3)]">{m.unit}</span>
+              </span>
+            )}
+            placeholder={
+              dangTra ? 'Đang tra tồn…' : 'Gõ mã hoặc tên vật tư · Enter để thêm dòng'
+            }
+            label="Tìm vật tư để thêm dòng"
+            width={460}
+            disabled={dangTra}
+          />
+          <span className="ml-auto text-[var(--fs-sm)] text-[var(--ink-3)]">
+            {rows.length} dòng
+          </span>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
+          <Grid minWidth={900}>
+            <GridHead>
+              <Th width={30}>#</Th>
+              <Th width={110}>Mã</Th>
+              <Th>Tên vật tư</Th>
+              <Th width={56}>ĐVT</Th>
+              <Th num width={110}>
+                Tồn dùng được
+              </Th>
+              <Th num width={110}>
+                Lần này
+              </Th>
+              <Th width={300}>Ghi chú</Th>
+              <Th width={60}></Th>
+            </GridHead>
+            <GridBody>
+              {rows.map((r, i) => {
+                const th = thieuTon(r)
+                return (
+                  <GridRow key={r.id}>
+                    <td className="k-c-n">{i + 1}</td>
+                    <td>
+                      <Code>{r.code}</Code>
+                    </td>
+                    <td className="max-w-0 truncate" title={r.name}>
+                      {r.name}
+                    </td>
+                    <td className="text-[var(--ink-3)]">{r.unit}</td>
+                    <td className="k-r num">
+                      {r.qty_ok == null ? (
+                        <span className="text-[var(--ink-empty)]">?</span>
+                      ) : (
+                        fmt(r.qty_ok)
+                      )}
+                    </td>
+                    <td className="k-r">
+                      <NumInput
+                        id={`xuat-qty-${i}`}
+                        value={String(r.qty)}
+                        onCommit={(v) =>
+                          patch(i, {
+                            qty: Number(v.replace(/\./g, '').replace(',', '.')) || 0,
+                          })
+                        }
+                        aria-label={`Lần này ${r.code}`}
+                      />
+                      {th != null && (
+                        <CellHint tone="warn">
+                          tồn {fmt(r.qty_ok ?? 0)} — thiếu {fmt(th)}
+                        </CellHint>
+                      )}
+                    </td>
+                    <td>
+                      <TextInput
+                        value={r.note}
+                        onCommit={(v) => patch(i, { note: v })}
+                        placeholder="ghi chú (không bắt buộc)"
+                        label={`Ghi chú ${r.code}`}
+                      />
+                    </td>
+                    <td>
+                      <GridBtn
+                        onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))}
+                      >
+                        Xoá
+                      </GridBtn>
+                    </td>
+                  </GridRow>
+                )
+              })}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-4 text-center text-[var(--ink-3)]">
+                    Chưa có dòng nào — gõ mã hoặc tên vật tư ở ô “Thêm dòng” phía trên.
+                  </td>
+                </tr>
+              )}
+            </GridBody>
+            <GridFoot>
+              <td colSpan={5}>Tổng</td>
+              <td className="k-r num">{fmt(tong.tong)}</td>
+              <td colSpan={2} className="font-normal text-[var(--ink-3)]">
+                {tong.so_dong} dòng có số · tổng chỉ để đếm, nhiều đơn vị khác nhau
+              </td>
+            </GridFoot>
+          </Grid>
+        </div>
+
+        <CommitBar
+          totals={[
+            { label: 'Dòng', value: rows.length },
+            ...(lsxChon ? [{ label: 'Lệnh', value: lsxChon.code }] : []),
+            ...(head.to
+              ? [{ label: head.loai === 'lsx' ? 'Tổ' : 'Nhận', value: head.to }]
+              : []),
+          ]}
+          grand={{ label: 'Tổng lượng', value: fmt(tong.tong) }}
+          blocked={blocked}
+          onGoBlocked={daThu && !kiem.ok ? ghiSo : undefined}
+          actions={
+            <>
+              <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+                Ctrl + Enter
+              </span>
+              <Action primary onClick={ghiSo} disabled={!canEdit} title={blocked}>
+                Ghi sổ
+              </Action>
+            </>
+          }
+        />
+        <StatusBar
+          left={[
+            head.loai === 'lsx'
+              ? 'Mã lý do X1 tự gắn · tiền vào giá thành lệnh · tồn chỉ đổi khi ghi sổ'
+              : 'Xuất lẻ: mã lý do người chọn, không vào giá thành lệnh · tồn chỉ đổi khi ghi sổ',
+            'Ghi sổ xong: phiếu mới trống, ghi tiếp cho tổ khác',
+          ]}
+          right={`${rows.length} dòng`}
+        />
+      </ScreenFrame>
     </div>
   )
 }
