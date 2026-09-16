@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { api, apiErrorText } from '@/lib/api'
+import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import { useToast } from '@/components/ui/Toast'
 import {
@@ -41,15 +41,18 @@ import {
   GridFoot,
   GridHead,
   GridRow,
+  Consequence,
   Lookup,
   NumInput,
   Pick,
   PickFind,
-  Sheet,
   ScreenFrame,
+  Sheet,
+  SheetActions,
   StatusBar,
   StatusTrack,
   Tag,
+  TextArea,
   TextInput,
   Th,
 } from '@/components/kit'
@@ -159,8 +162,12 @@ const tenTo = (n: string) => n.replace(/^tổ\s+/i, '')
  * bấm "sửa" mới đổi). Ô bắt buộc chỉ đỏ SAU KHI bấm Ghi sổ mà còn trống —
  * đỏ lúc form mới mở là mắng người chưa làm gì.
  *
- * Lưới: thêm dòng bằng ô tìm ở cuối lưới, tồn dùng được tra lúc thêm. Một mã
- * một dòng. Ghi sổ (việc 4) chưa nối: nút bấm được để CHỈ chỗ còn thiếu.
+ * Lưới: thêm dòng bằng ô tìm TRÊN lưới, tồn dùng được tra lúc thêm. Một mã
+ * một dòng.
+ *
+ * GHI SỔ = một POST `docs/issue`. Server vẫn là người quyết (guard trạng thái
+ * lệnh, tồn, giữ chỗ; mã X1 tự gắn). Ghi xong: dải xanh có nút In phiếu và
+ * phiếu mới trống — thủ kho thường ghi liền cho mấy tổ.
  */
 export function XuatScreen({
   lsx,
@@ -200,6 +207,20 @@ export function XuatScreen({
   const [daThu, setDaThu] = useState(false)
   /** Xem bản in TRƯỚC khi ghi sổ — vẽ bằng ĐÚNG component của trang in. */
   const [xemIn, setXemIn] = useState(false)
+  const [busy, setBusy] = useState(false)
+  /** Câu của server khi lấn phần giữ cho LSX khác — mở hộp xin lý do. */
+  const [lanSheet, setLanSheet] = useState<string | null>(null)
+  const [lanDraft, setLanDraft] = useState('')
+  /**
+   * Phiếu VỪA GHI — dải trên đầu màn, có nút In. Không dùng toast: người ghi
+   * sổ xong thường phải in ngay đưa tổ ký, mà toast tự tắt sau vài giây.
+   */
+  const [vuaGhi, setVuaGhi] = useState<{
+    id: string
+    code: string
+    dong: number
+    to: string
+  } | null>(null)
 
   const setH = (p: Partial<DauPhieuXuat>) => setHead((h) => ({ ...h, ...p }))
   const patch = (i: number, p: Partial<DongXuat>) =>
@@ -247,22 +268,6 @@ export function XuatScreen({
     el?.select()
   }
 
-  /** Bấm Ghi sổ: chưa nối route (việc 4) — nhưng đã CHỈ được chỗ thiếu. */
-  const ghiSo = () => {
-    setDaThu(true)
-    if (!kiem.ok) {
-      if (typeof kiem.focus === 'number') {
-        if (kiem.focus >= 0) focusQty(kiem.focus)
-        else document.getElementById('xuat-tim')?.focus()
-      } else document.getElementById(`xuat-${kiem.focus}`)?.focus()
-      return
-    }
-    toast.error(
-      'Ghi sổ nối ở việc số 4 của Bước 2',
-      'Form đã đủ dữ liệu — đường ghi chưa mở.',
-    )
-  }
-
   const lamMoi = () => {
     setRows([])
     setHead({
@@ -277,6 +282,74 @@ export function XuatScreen({
     setSuaNgay(false)
   }
 
+  /**
+   * Ghi sổ — một POST `docs/issue`. Server vẫn là người quyết: guard trạng
+   * thái lệnh, guard tồn, guard giữ chỗ, mã X1 tự gắn cho đường theo lệnh.
+   *
+   * `lan` = xác nhận lấn phần đang giữ cho LSX khác (409 RESERVED_CONFLICT) —
+   * gửi lại kèm lý do, service ghi vết "[Vượt khả dụng] …" vào ghi chú phiếu.
+   */
+  async function guiPhieu(lan?: string) {
+    setBusy(true)
+    try {
+      const res = await api<{ id: string; code: string }>(
+        '/api/dept/warehouse/docs/issue',
+        {
+          method: 'POST',
+          body: {
+            kind: head.loai,
+            production_order_id:
+              head.loai === 'lsx' || lyDoCanLenh(head.ly_do) ? head.lsx_id : null,
+            // Người NHẬN trên mẫu 02-VT: tổ, kèm tên người lấy nếu có khai.
+            counterparty: [head.to, head.nguoi_lay.trim()].filter(Boolean).join(' · '),
+            // Xuất theo lệnh luôn là X1 — service bỏ qua reason_code ở đường đó.
+            reason_code: head.loai === 'daily' ? head.ly_do : null,
+            reason:
+              head.loai === 'daily' && lyDoChon
+                ? `${lyDoChon.ma} · ${lyDoChon.nhan}`
+                : null,
+            doc_date: head.doc_date || null,
+            override_reserved: !!lan,
+            override_reason: lan ?? null,
+            lines: rows
+              .filter((r) => r.qty > 0)
+              .map((r) => ({
+                material_id: r.id,
+                qty: r.qty,
+                note: r.note.trim() || null,
+              })),
+          },
+        },
+      )
+      setVuaGhi({ id: res.id, code: res.code, dong: tong.so_dong, to: head.to })
+      setLanSheet(null)
+      setLanDraft('')
+      lamMoi()
+      router.refresh()
+    } catch (e) {
+      // Lấn phần giữ cho lệnh khác: mở hộp xin lý do, mang nguyên câu server
+      // nói (mã nào, cần bao nhiêu, khả dụng bao nhiêu) — không diễn giải lại.
+      if (e instanceof ApiError && e.code === 'RESERVED_CONFLICT') {
+        setLanSheet(e.message)
+        setLanDraft('')
+      } else toast.error('Chưa ghi sổ được', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const ghiSo = () => {
+    setDaThu(true)
+    if (!kiem.ok) {
+      if (typeof kiem.focus === 'number') {
+        if (kiem.focus >= 0) focusQty(kiem.focus)
+        else document.getElementById('xuat-tim')?.focus()
+      } else document.getElementById(`xuat-${kiem.focus}`)?.focus()
+      return
+    }
+    void guiPhieu()
+  }
+
   const lyDoChon = LY_DO_XUAT_LE.find((x) => x.ma === head.ly_do)
   const tieuDe =
     head.loai === 'lsx'
@@ -288,9 +361,11 @@ export function XuatScreen({
         : 'Xuất lẻ'
   const blocked = !canEdit
     ? 'Tài khoản này không có quyền ghi sổ kho'
-    : daThu && !kiem.ok
-      ? kiem.message
-      : undefined
+    : busy
+      ? 'Đang ghi sổ…'
+      : daThu && !kiem.ok
+        ? kiem.message
+        : undefined
 
   return (
     <div
@@ -313,12 +388,12 @@ export function XuatScreen({
         />
         <ActionPane>
           <ActionGroup label="Phiếu">
-            <Action primary onClick={ghiSo} disabled={!canEdit} title={blocked}>
-              Ghi sổ
+            <Action primary onClick={ghiSo} disabled={!canEdit || busy} title={blocked}>
+              {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
             <Action
               onClick={lamMoi}
-              disabled={rows.length === 0 && !head.to && !head.lsx_id}
+              disabled={busy || (rows.length === 0 && !head.to && !head.lsx_id)}
             >
               Làm mới
             </Action>
@@ -332,6 +407,42 @@ export function XuatScreen({
             </Action>
           </ActionGroup>
         </ActionPane>
+
+        {/*
+          Dải "vừa ghi sổ" thay cho toast: ghi xong thường phải IN NGAY đưa tổ
+          ký, mà toast tự tắt sau vài giây. Dải ở lại tới khi người dùng đóng.
+          `NoticeBar` của kit chỉ có nền cảnh báo nên dải mừng dựng tại chỗ,
+          vẫn bằng token vòng đời.
+        */}
+        {vuaGhi && (
+          <div className="flex items-center gap-[11px] border-b border-[var(--done-line)] bg-[var(--done-wash)] px-[var(--gutter)] py-[9px] text-[12.5px]">
+            <span className="shrink-0 text-[10.5px] font-bold tracking-[.06em] text-[var(--done)] uppercase">
+              Đã ghi sổ
+            </span>
+            <span className="text-[var(--ink-2)]">
+              <b className="num">{vuaGhi.code}</b> · {vuaGhi.dong} dòng · {vuaGhi.to} —
+              tồn đã trừ.
+            </span>
+            <Btn
+              href={`/print/warehouse/${vuaGhi.id}`}
+              className="h-[24px] px-[9px] text-[12px]"
+            >
+              In phiếu
+            </Btn>
+            <Btn
+              href="/planning/docs?kind=issue"
+              className="h-[24px] px-[9px] text-[12px]"
+            >
+              Xem ở sổ phiếu
+            </Btn>
+            <Btn
+              onClick={() => setVuaGhi(null)}
+              className="ml-auto h-[24px] border-0 bg-transparent px-[9px] text-[12px]"
+            >
+              Đóng
+            </Btn>
+          </div>
+        )}
         <DocHead
           compact
           kind="Phiếu xuất kho"
@@ -630,43 +741,83 @@ export function XuatScreen({
           ]}
           right={`${rows.length} dòng`}
         />
-      {xemIn && (
-        <Sheet
-          open
-          onClose={() => setXemIn(false)}
-          width={900}
-          title="Xem trước phiếu xuất kho"
-          subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 02-VT sẽ in ra."
-        >
-          <WarehouseDocPrintSheet
-            head={{
-              kind: 'issue',
-              code: null,
-              date: new Date(head.doc_date),
-              counterparty:
-                [head.to, head.nguoi_lay.trim()].filter(Boolean).join(' · ') || null,
-              reason:
-                head.loai === 'lsx'
-                  ? `Cấp cho lệnh ${lsxChon?.code ?? ''}`.trim()
-                  : lyDoChon
-                    ? `${lyDoChon.ma} · ${lyDoChon.nhan}`
-                    : null,
-              creator_name: nguoiLap,
-            }}
-            lines={rows.map<WarehousePrintLine>((r) => ({
-              id: r.id,
-              material_code: r.code,
-              material_name: r.name,
-              material_unit: r.unit,
-              qty_doc: null,
-              qty: r.qty,
-              note: r.note || null,
-            }))}
-            company={company}
-            tpl={tpl}
-          />
-        </Sheet>
-      )}
+        {lanSheet && (
+          <Sheet
+            open
+            onClose={() => setLanSheet(null)}
+            stakes="nang"
+            title="Xuất lấn phần đang giữ cho lệnh khác"
+            subtitle="Tồn còn đủ, nhưng phần này đã hứa cho lệnh sản xuất khác đã duyệt."
+            footer={
+              <SheetActions
+                stakes="nang"
+                onCancel={() => setLanSheet(null)}
+                onConfirm={() => void guiPhieu(lanDraft.trim())}
+                cancelLabel="Quay lại sửa số"
+                confirmLabel="Vẫn xuất"
+                busy={busy}
+                disabled={lanDraft.trim() === ''}
+              />
+            }
+          >
+            {/* Câu NGUYÊN VĂN của server: mã nào, cần bao nhiêu, khả dụng bao nhiêu. */}
+            <div className="k-note k-note-text">{lanSheet}</div>
+            <div className="mt-3">
+              <div className="mb-1 font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+                Lý do vẫn xuất · bắt buộc
+              </div>
+              <TextArea
+                value={lanDraft}
+                onChange={setLanDraft}
+                rows={3}
+                placeholder="ví dụ: lệnh kia chưa vào chuyền, tổ trưởng hai bên đã thống nhất"
+                aria-label="Lý do xuất lấn phần đang giữ"
+              />
+            </div>
+            <Consequence>
+              Lý do ghi vào ghi chú phiếu để hậu kiểm biết ai lấy của ai. Lệnh bị lấn sẽ
+              thiếu đúng phần này khi tới lượt cấp.
+            </Consequence>
+          </Sheet>
+        )}
+
+        {xemIn && (
+          <Sheet
+            open
+            onClose={() => setXemIn(false)}
+            width={900}
+            title="Xem trước phiếu xuất kho"
+            subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 02-VT sẽ in ra."
+          >
+            <WarehouseDocPrintSheet
+              head={{
+                kind: 'issue',
+                code: null,
+                date: new Date(head.doc_date),
+                counterparty:
+                  [head.to, head.nguoi_lay.trim()].filter(Boolean).join(' · ') || null,
+                reason:
+                  head.loai === 'lsx'
+                    ? `Cấp cho lệnh ${lsxChon?.code ?? ''}`.trim()
+                    : lyDoChon
+                      ? `${lyDoChon.ma} · ${lyDoChon.nhan}`
+                      : null,
+                creator_name: nguoiLap,
+              }}
+              lines={rows.map<WarehousePrintLine>((r) => ({
+                id: r.id,
+                material_code: r.code,
+                material_name: r.name,
+                material_unit: r.unit,
+                qty_doc: null,
+                qty: r.qty,
+                note: r.note || null,
+              }))}
+              company={company}
+              tpl={tpl}
+            />
+          </Sheet>
+        )}
       </ScreenFrame>
     </div>
   )
