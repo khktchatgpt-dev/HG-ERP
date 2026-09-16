@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState, type ReactNode } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import { useToast } from '@/components/ui/Toast'
@@ -192,6 +192,7 @@ export function XuatScreen({
   tpl: DocTemplate
 }) {
   const router = useRouter()
+  const params = useSearchParams()
   const toast = useToast()
   const [head, setHead] = useState<DauPhieuXuat>({
     loai: 'lsx',
@@ -268,6 +269,29 @@ export function XuatScreen({
     el?.focus()
     el?.select()
   }
+
+  /*
+    MỞ TỪ MÀN TỒN KHO (`?ma=`): thêm sẵn mã đó thành dòng đầu. Người đứng ở
+    Tồn kho thấy "mã này còn 380" rồi bấm Xuất — bắt họ gõ lại mã ở form là
+    bắt làm hai lần một việc.
+
+    Chạy ĐÚNG MỘT LẦN cho mỗi mã: `useRef` canh, vì `chonVatTu` gọi API nên
+    effect chạy lại là thêm dòng trùng (`themDong` chặn trùng, nhưng vẫn tốn
+    một lượt gọi và một toast "đã có ở dòng 1" vô cớ).
+  */
+  const maUrl = params.get('ma')
+  const daPrefill = useRef<string | null>(null)
+  useEffect(() => {
+    if (!maUrl || daPrefill.current === maUrl) return
+    daPrefill.current = maUrl
+    void (async () => {
+      const found = await timVatTu(maUrl)
+      const vt = found.find((m) => m.code === maUrl) ?? found[0]
+      if (vt) await chonVatTu(vt)
+      else toast.error(`Không thấy mã ${maUrl}`, 'Gõ lại ở ô Thêm dòng.')
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chạy theo mã trên URL, các hàm kia ổn định trong lượt
+  }, [maUrl])
 
   const lamMoi = () => {
     setRows([])

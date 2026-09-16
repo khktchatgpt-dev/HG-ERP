@@ -300,6 +300,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
           // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
           { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
+          // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
+          { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
         ],
       },
     ],
