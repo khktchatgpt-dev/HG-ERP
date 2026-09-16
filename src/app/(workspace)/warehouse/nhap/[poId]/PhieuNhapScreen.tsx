@@ -3,6 +3,8 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
+import { api, apiErrorText } from '@/lib/api'
+import { useToast } from '@/components/ui/Toast'
 import {
   danhGiaVuot,
   kiemTruocGhiSo,
@@ -14,9 +16,11 @@ import {
   Action,
   ActionGroup,
   ActionPane,
+  Affected,
   CellHint,
   Code,
   CommitBar,
+  Consequence,
   Crumb,
   DateInput,
   DocHead,
@@ -33,8 +37,11 @@ import {
   NoticeBar,
   NumInput,
   Pick,
+  Sheet,
+  SheetActions,
   StatusBar,
   StatusTrack,
+  TextArea,
   TextInput,
   Th,
 } from '@/components/kit'
@@ -48,18 +55,19 @@ const fmt = (n: number) => n.toLocaleString('vi-VN')
 
 /**
  * PHIẾU NHẬP THEO ĐƠN — màn chứng từ + lưới (Bước 1 Kho). Bản thiết kế:
- * https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf (artboard 2).
+ * https://claude.ai/artifact/G9Zso3vzCHUYpNGRp9o7Nf (artboard 2 + 2b).
  *
  * Ba cột số Đặt · Đã về · Lần này (SAP MIGO / BC). Tình trạng chỉ HAI giá trị
  * vì thủ kho vừa nhận vừa kiểm (chốt 15/09): Đạt → tồn dùng được; Sai quy
  * cách → vào kệ khoá, bắt ghi chú — lý do đi theo lô suốt đời nó.
  *
  * Cảnh báo hiện NGAY DƯỚI Ô khi gõ (CellHint), thanh chốt nói vì sao chưa ghi
- * sổ được bằng câu bấm được (nhảy tới ô phải sửa). Không lưu nháp: phiếu lập
- * trong ba phút, nháp là chỗ quên.
+ * sổ được bằng câu bấm được (nhảy tới ô phải sửa, hoặc mở hộp lý do nhận
+ * vượt). Không lưu nháp: phiếu lập trong ba phút, nháp là chỗ quên.
  *
- * VIỆC 3 dừng ở form: nút Ghi sổ còn khoá kèm lý do. Việc 4 nối POST
- * `docs/receipt` + hộp lý do nhận vượt.
+ * GHI SỔ = một POST `docs/receipt` (route 12 dòng khôi phục ở việc 1) —
+ * server vẫn là người quyết: khớp dòng đơn, dung sai cộng dồn, khoá bắt ghi
+ * chú, đợt giao → received, trạng thái đơn tính lại. Màn chỉ nói trước.
  */
 export function PhieuNhapScreen({
   po,
@@ -85,21 +93,44 @@ export function PhieuNhapScreen({
   canEdit: boolean
 }) {
   const router = useRouter()
+  const toast = useToast()
   const [rows, setRows] = useState(initialRows)
   const [docDate, setDocDate] = useState(today)
   const [supplierDocNo, setSupplierDocNo] = useState('')
   const [counterparty, setCounterparty] = useState('')
+  const [overReason, setOverReason] = useState('')
+  const [overDraft, setOverDraft] = useState('')
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
 
   const patch = (i: number, p: Partial<DongNhan>) =>
     setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...p } : r)))
 
   const tong = useMemo(() => tinhTong(rows), [rows])
-  const kiem = useMemo(() => kiemTruocGhiSo(rows), [rows])
+  const coLyDoVuot = overReason.trim() !== ''
+  const kiem = useMemo(() => kiemTruocGhiSo(rows, coLyDoVuot), [rows, coLyDoVuot])
+  const dongVuot = useMemo(
+    () =>
+      rows
+        .map((r) => ({ r, v: r.editable ? danhGiaVuot(r) : null }))
+        .filter(
+          (x): x is { r: DongNhan; v: NonNullable<ReturnType<typeof danhGiaVuot>> } =>
+            x.v != null && !x.v.trong_dung_sai,
+        ),
+    [rows],
+  )
+
+  const moHopLyDo = () => {
+    setOverDraft(overReason)
+    setSheetOpen(true)
+  }
 
   // Nhảy tới ô phải sửa bằng id: kit `NumInput`/`TextInput` là hàm thường,
   // không forwardRef, mà `id` thì đi qua `...rest` xuống <input>.
   const nhayToi = () => {
-    if (kiem.ok || kiem.line == null || kiem.line < 0) return
+    if (kiem.ok) return
+    if (kiem.reason === 'vuot_dung_sai') return moHopLyDo()
+    if (kiem.line == null || kiem.line < 0) return
     const el = document.getElementById(
       `${kiem.reason === 'thieu_ghi_chu' ? 'ghi-chu' : 'lan-nay'}-${kiem.line}`,
     ) as HTMLInputElement | null
@@ -111,7 +142,53 @@ export function PhieuNhapScreen({
     ? 'Tài khoản này không có quyền ghi sổ kho'
     : !kiem.ok
       ? kiem.message
-      : 'Ghi sổ nối ở việc số 4 của Bước 1 — form đã đủ dữ liệu'
+      : busy
+        ? 'Đang ghi sổ…'
+        : undefined
+  const ghiDuoc = blocked == null
+
+  async function ghiSo() {
+    if (!ghiDuoc) return
+    setBusy(true)
+    try {
+      const res = await api<{ id: string; code: string; po_status: string | null }>(
+        '/api/dept/warehouse/docs/receipt',
+        {
+          method: 'POST',
+          body: {
+            po_id: po.id,
+            shipment_id: dot?.id ?? null,
+            counterparty: counterparty.trim() || null,
+            supplier_doc_no: supplierDocNo.trim() || null,
+            doc_date: docDate || null,
+            allow_over: dongVuot.length > 0 && coLyDoVuot,
+            over_reason: dongVuot.length > 0 && coLyDoVuot ? overReason.trim() : null,
+            lines: rows
+              .filter((r) => r.qty > 0)
+              .map((r) => ({
+                material_id: r.material_id,
+                po_line_id: r.po_line_id,
+                qty: r.qty,
+                stock_status: r.status,
+                note: r.note.trim() || null,
+              })),
+          },
+        },
+      )
+      toast.success(
+        `Đã ghi sổ ${res.code}`,
+        `${tong.so_dong_nhan} dòng · ${fmt(tong.lan_nay)} đơn vị${tong.vao_khoa > 0 ? ` · ${fmt(tong.vao_khoa)} vào khoá` : ''} — xem lại ở Sổ phiếu`,
+      )
+      // Không ở lại form: ở lại là mời ghi sổ hai lần.
+      router.push('/warehouse/nhap')
+      router.refresh()
+    } catch (e) {
+      // Server là người quyết: OVER_RECEIPT (409) tới đây khi dung sai server
+      // khác số màn đoán — câu của server nói rõ dòng nào, vượt bao nhiêu.
+      toast.error('Chưa ghi sổ được', apiErrorText(e))
+      setBusy(false)
+    }
+  }
 
   const dotLabel = dot
     ? `đợt ${dot.seq}/${dot.total} · hẹn ${isoToVn(dot.expected_date)}`
@@ -120,7 +197,16 @@ export function PhieuNhapScreen({
       : 'không theo đợt · chưa hẹn ngày'
 
   return (
-    <div className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col">
+    <div
+      className="theme-v3 kit text-foreground -m-6 flex min-h-0 flex-col"
+      onKeyDown={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault()
+          if (ghiDuoc) void ghiSo()
+          else nhayToi()
+        }
+      }}
+    >
       <Crumb
         path={[
           { label: 'Kho', href: '/warehouse/nhap' },
@@ -130,10 +216,17 @@ export function PhieuNhapScreen({
       />
       <ActionPane>
         <ActionGroup label="Phiếu">
-          <Action primary disabled title={blocked}>
-            Ghi sổ
+          <Action
+            primary
+            disabled={!ghiDuoc}
+            title={blocked}
+            onClick={() => void ghiSo()}
+          >
+            {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
           </Action>
-          <Action onClick={() => router.push('/warehouse/nhap')}>Huỷ</Action>
+          <Action disabled={busy} onClick={() => router.push('/warehouse/nhap')}>
+            Huỷ
+          </Action>
         </ActionGroup>
         <ActionGroup label="Đơn">
           <Action onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
@@ -201,6 +294,17 @@ export function PhieuNhapScreen({
         </NoticeBar>
       )}
 
+      {dongVuot.length > 0 && coLyDoVuot && (
+        <NoticeBar
+          tone="warn"
+          tag="Nhận vượt"
+          action={{ label: 'Sửa lý do', onClick: moHopLyDo }}
+        >
+          {dongVuot.map((x) => x.r.code).join(', ')} nhận vượt dung sai — lý do:{' '}
+          <b>{overReason.trim()}</b>. Ghi vào ghi chú phiếu, Cung ứng thấy khi đối chiếu.
+        </NoticeBar>
+      )}
+
       <GridToolbar
         count={`${rows.length} dòng · ${rows.filter((r) => !r.editable).length} đã đủ`}
       >
@@ -250,6 +354,7 @@ export function PhieuNhapScreen({
                         <NumInput
                           id={`lan-nay-${i}`}
                           value={String(r.qty)}
+                          disabled={busy}
                           onCommit={(v) =>
                             patch(i, {
                               qty: Number(v.replace(/\./g, '').replace(',', '.')) || 0,
@@ -262,14 +367,23 @@ export function PhieuNhapScreen({
                             {fmt(r.qty)} {r.unit} vào KHOÁ
                           </CellHint>
                         )}
-                        {vuot && (
-                          <CellHint tone={vuot.trong_dung_sai ? 'neutral' : 'warn'}>
-                            vượt {vuot.pct.toFixed(0)}% ·{' '}
-                            {vuot.trong_dung_sai
-                              ? `trong dung sai ${r.over_tolerance_pct}%`
-                              : `dung sai ${r.over_tolerance_pct}% · cần lý do`}
-                          </CellHint>
-                        )}
+                        {vuot &&
+                          (vuot.trong_dung_sai ? (
+                            <CellHint tone="neutral">
+                              vượt {vuot.pct.toFixed(0)}% · trong dung sai{' '}
+                              {r.over_tolerance_pct}%
+                            </CellHint>
+                          ) : (
+                            <CellHint
+                              tone="warn"
+                              onClick={moHopLyDo}
+                              title="Vượt ngưỡng của mã — bấm để ghi lý do nhận vượt"
+                            >
+                              vượt {vuot.pct.toFixed(0)}% · dung sai{' '}
+                              {r.over_tolerance_pct}% ·{' '}
+                              {coLyDoVuot ? 'đã có lý do' : 'ghi lý do'}
+                            </CellHint>
+                          ))}
                       </>
                     ) : (
                       <LineStatus kind={r.closed_short ? 'short' : 'done'}>
@@ -285,6 +399,7 @@ export function PhieuNhapScreen({
                         options={TINH_TRANG}
                         label={`Tình trạng ${r.code}`}
                         width={130}
+                        disabled={busy}
                       />
                     ) : (
                       <span className="text-[var(--ink-empty)]">—</span>
@@ -296,6 +411,7 @@ export function PhieuNhapScreen({
                         id={`ghi-chu-${i}`}
                         value={r.note}
                         onCommit={(v) => patch(i, { note: v })}
+                        disabled={busy}
                         placeholder={
                           r.status === 'blocked'
                             ? 'bắt buộc: vì sao sai quy cách'
@@ -334,9 +450,19 @@ export function PhieuNhapScreen({
         blocked={blocked}
         onGoBlocked={kiem.ok ? undefined : nhayToi}
         actions={
-          <Action primary disabled title={blocked}>
-            Ghi sổ
-          </Action>
+          <>
+            <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+              Ctrl + Enter
+            </span>
+            <Action
+              primary
+              disabled={!ghiDuoc}
+              title={blocked}
+              onClick={() => void ghiSo()}
+            >
+              {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
+            </Action>
+          </>
         }
       />
       <StatusBar
@@ -346,6 +472,53 @@ export function PhieuNhapScreen({
         ]}
         right={`${rows.length} dòng`}
       />
+
+      {sheetOpen && (
+        <Sheet
+          open
+          onClose={() => setSheetOpen(false)}
+          stakes="vua"
+          title="Nhận vượt dung sai"
+          subtitle={`${dongVuot.length} dòng nhận nhiều hơn phần còn mở, quá ngưỡng của mã. Lý do đi vào ghi chú phiếu.`}
+          footer={
+            <SheetActions
+              onCancel={() => setSheetOpen(false)}
+              onConfirm={() => {
+                setOverReason(overDraft)
+                setSheetOpen(false)
+              }}
+              confirmLabel="Xác nhận nhận vượt"
+              cancelLabel="Quay lại sửa số"
+              disabled={overDraft.trim() === ''}
+            />
+          }
+        >
+          <Affected
+            items={dongVuot.map(({ r, v }) => ({
+              code: r.code,
+              label: r.name,
+              amount: `+${fmt(v.vuot)} ${r.unit} · ${v.pct.toFixed(0)}%`,
+              note: `đặt ${fmt(r.qty_ordered)} · còn mở ${fmt(r.qty_open)} · lần này ${fmt(r.qty)} · dung sai ${r.over_tolerance_pct}%`,
+            }))}
+          />
+          <div className="mt-3">
+            <div className="mb-1 font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+              Lý do nhận vượt · bắt buộc
+            </div>
+            <TextArea
+              value={overDraft}
+              onChange={setOverDraft}
+              rows={3}
+              placeholder="ví dụ: NCC gộp phần thiếu của đợt trước, Cung ứng đã đồng ý"
+              aria-label="Lý do nhận vượt"
+            />
+          </div>
+          <Consequence>
+            Đơn mua sẽ hiện phần nhận vượt cho Cung ứng đối chiếu hoá đơn. Không muốn nhận
+            vượt thì sửa số Lần này về bằng phần còn mở.
+          </Consequence>
+        </Sheet>
+      )}
     </div>
   )
 }
