@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PO_STATUSES, PO_TRACK_STEPS, poTrackStep } from './po-status'
+import { PO_STATUSES, PO_TRACK_STEPS, poTrackStep, receiptTrackTone } from './po-status'
 
 /*
   Lỗi thật đã xảy ra: bản cũ tính bước bằng `indexOf` trên một danh sách THIẾU
@@ -45,9 +45,55 @@ describe('poTrackStep', () => {
     }
   })
 
+  /*
+    ĐỔI LUẬT 16/09/2026: trước đây mọi bước đang chạy đều là 'act', nên bảy
+    trên chín trạng thái ra cùng một màu xanh với nút chính — chủ dự án chấm
+    "chỉ có mỗi màu xanh trắng". Nay tone nói nghĩa vòng đời, nên ca này chỉ
+    còn canh MỘT chiều: 'stop' là của riêng đơn huỷ, không trạng thái nào khác
+    được mượn màu dừng.
+  */
   it('chỉ đơn huỷ mới mang màu dừng', () => {
     for (const s of PO_STATUSES) {
-      expect(poTrackStep(s).tone, s).toBe(s === 'cancelled' ? 'stop' : 'act')
+      if (s === 'cancelled') expect(poTrackStep(s).tone, s).toBe('stop')
+      else expect(poTrackStep(s).tone, s).not.toBe('stop')
     }
+  })
+})
+
+/*
+  MÀU DẢI BƯỚC PHẢI NÓI NGHĨA (16/09/2026).
+
+  `poTrackStep` bản 15/09 chỉ có hai màu — `act` cho mọi bước đang chạy và
+  `stop` cho đơn huỷ — nên bảy trên chín trạng thái ra CÙNG một màu xanh với
+  nút chính, và chủ dự án chấm "chỉ có mỗi màu xanh trắng, rất khó phân biệt".
+  Test canh cho cái đó không quay lại: tô hết về một tone là đỏ ngay.
+*/
+describe('poTrackStep — tone nói nghĩa vòng đời, không dồn về một màu', () => {
+  it('nháp xám · chờ duyệt và đã duyệt hổ phách · đã gửi trở đi lam', () => {
+    expect(poTrackStep('draft').tone).toBe('idle')
+    expect(poTrackStep('pending_approval').tone).toBe('wait')
+    expect(poTrackStep('approved').tone).toBe('wait')
+    for (const s of ['ordered', 'confirmed', 'in_transit'] as const) {
+      expect(poTrackStep(s).tone).toBe('run')
+    }
+  })
+
+  it('về đủ là lục, về một phần vẫn là đang chờ, huỷ là đỏ', () => {
+    expect(poTrackStep('received').tone).toBe('done')
+    expect(poTrackStep('partial').tone).toBe('wait')
+    expect(poTrackStep('cancelled').tone).toBe('stop')
+  })
+
+  it('9 trạng thái không được dồn hết vào một màu', () => {
+    const tones = new Set(PO_STATUSES.map((s) => poTrackStep(s).tone))
+    expect(tones.size).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('receiptTrackTone — trục nhận hàng theo BƯỚC, không theo trạng thái đơn', () => {
+  it('chưa nhận xám · một phần hổ phách · đủ lục', () => {
+    expect(receiptTrackTone(0)).toBe('idle')
+    expect(receiptTrackTone(1)).toBe('wait')
+    expect(receiptTrackTone(2)).toBe('done')
   })
 })

@@ -3,10 +3,9 @@ import { groupPosByLsx, summarizePos } from '@/lib/lsx-supply'
 import { buildMeeting } from '@/lib/supply-meeting'
 import { db } from '@/server/db'
 import type { User } from '@/modules/core/users/users.repo'
-import {
-  productionRepo,
-  listOrderLineProducts,
-} from '@/modules/dept/production/production.repo'
+import { productionRepo } from '@/modules/dept/production/production.repo'
+import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
+import { withProductImage } from '@/modules/dept/production/lsx-lines.service'
 import { posService } from './pos.service'
 import { posRepo } from './pos.repo'
 import { supplyRepo } from './supply.repo'
@@ -226,7 +225,18 @@ export type LsxSupplyDetail = {
   ship_date: string | null
   materials_due_at: string | null
   materials_received_at: string | null
-  products: { code: string; name: string; qty: number }[]
+  /**
+   * SẢN PHẨM PHẢI LÀM — mang theo id + ảnh (15/09/2026). Bản trước chỉ có
+   * mã/tên/số lượng, nên màn chi tiết lệnh chỉ đếm được "17 SP" mà không bày
+   * ra được cái gì; chủ dự án báo thiếu ảnh đúng chỗ này.
+   */
+  products: {
+    product_id: string | null
+    code: string
+    name: string
+    qty: number
+    image_file_id: string | null
+  }[]
   pos: {
     id: string
     code: string
@@ -328,7 +338,16 @@ export async function buildLsxSupplyDetail(
 
   const [{ rows: pos }, productLines, coverage] = await Promise.all([
     posService.list(user, { production_order_id: lsxId, page: 1, page_size: 200 }),
-    listOrderLineProducts(lsx.order_ids),
+    /*
+      SẢN PHẨM LẤY TỪ DÒNG LỆNH, KHÔNG TỪ DÒNG ĐƠN HÀNG (15/09/2026).
+
+      Dòng lệnh là thứ Bán hàng soạn ra và là thứ Sale / Sản xuất / phiếu in
+      đều đọc. Lấy từ đơn hàng thì hai màn nói khác nhau về CÙNG một lệnh: đo
+      được 5 lệnh đang chạy chưa gắn đơn khách nào — Sale bày 6 sản phẩm, còn
+      màn này bày 0 và đổ lỗi cho Bán hàng. `withProductImage` cũng chỉ có
+      nghĩa trên dòng lệnh.
+    */
+    lsxLinesRepo.listLines(lsxId).then(withProductImage),
     buildCoverage(lsxId),
   ])
 
@@ -339,9 +358,17 @@ export async function buildLsxSupplyDetail(
 
   const products: LsxSupplyDetail['products'] = []
   for (const pl of productLines) {
-    const hit = products.find((x) => x.code === pl.code)
+    // Một mã SP nằm nhiều dòng (tách đợt xuất) — cộng dồn, như màn cũ vẫn làm.
+    const hit = products.find((x) => x.code === pl.product_code)
     if (hit) hit.qty += pl.qty
-    else products.push({ code: pl.code, name: pl.name, qty: pl.qty })
+    else
+      products.push({
+        product_id: pl.product_id,
+        code: pl.product_code,
+        name: pl.name_vi ?? pl.product_code,
+        qty: pl.qty,
+        image_file_id: pl.image_file_id,
+      })
   }
 
   return {
@@ -406,22 +433,25 @@ export async function buildLsxSupplyRows(
   ])
 
   const [productLines, extraLsx] = await Promise.all([
-    listOrderLineProducts(lsxs.flatMap((l) => l.order_ids)),
+    // Cùng nguồn với màn chi tiết — DÒNG LỆNH, không phải dòng đơn hàng. Hai
+    // nơi đếm "lệnh này làm mấy mã" mà đọc hai bảng là sớm muộn lệch nhau.
+    lsxLinesRepo.listLinesBulk(lsxs.map((l) => l.id)),
     posRepo.extraLsxByPoIds(pos.map((p) => p.id)),
   ])
 
   // Sản phẩm về theo LỆNH: một lệnh gộp nhiều đơn (0113) nên cộng dồn cùng mã.
-  const lsxIdByOrderId = new Map<string, string>()
-  for (const l of lsxs) for (const oid of l.order_ids) lsxIdByOrderId.set(oid, l.id)
   const productsByLsx = new Map<string, { code: string; name: string; qty: number }[]>()
   for (const pl of productLines) {
-    const lsxId = lsxIdByOrderId.get(pl.order_id)
-    if (!lsxId) continue
-    const list = productsByLsx.get(lsxId) ?? []
-    const hit = list.find((x) => x.code === pl.code)
+    const list = productsByLsx.get(pl.production_order_id) ?? []
+    const hit = list.find((x) => x.code === pl.product_code)
     if (hit) hit.qty += pl.qty
-    else list.push({ code: pl.code, name: pl.name, qty: pl.qty })
-    productsByLsx.set(lsxId, list)
+    else
+      list.push({
+        code: pl.product_code,
+        name: pl.name_vi ?? pl.product_code,
+        qty: pl.qty,
+      })
+    productsByLsx.set(pl.production_order_id, list)
   }
 
   /*

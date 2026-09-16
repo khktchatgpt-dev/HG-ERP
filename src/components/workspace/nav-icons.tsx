@@ -21,6 +21,7 @@ import {
   Factory,
   Gavel,
   FileText,
+  Grid3x3,
   Hammer,
   HeartPulse,
   History,
@@ -29,6 +30,7 @@ import {
   Library,
   ListTodo,
   NotebookPen,
+  BookOpenText,
   Package,
   Receipt,
   ReceiptText,
@@ -69,6 +71,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   'users-round': UsersRound,
   'file-text': FileText,
   'circle-dollar-sign': CircleDollarSign,
+  // Sơ đồ kệ (0193) — ô lưới là hình gần nhất với "khu trong kho".
+  'grid-3x3': Grid3x3,
   'clipboard-list': ClipboardList,
   'clipboard-check': ClipboardCheck,
   factory: Factory,
@@ -90,6 +94,8 @@ const REGISTRY: Record<string, LucideIcon> = {
   hammer: Hammer,
   history: History,
   'notebook-pen': NotebookPen,
+  // Sổ phiếu kho — sổ đã ghi, chỉ đọc; khác 'notebook-pen' là sổ đang viết.
+  'book-open': BookOpenText,
   'arrow-right-to-line': ArrowRightToLine,
   'arrow-left-right': ArrowLeftRight,
   'arrow-down-to-line': ArrowDownToLine,

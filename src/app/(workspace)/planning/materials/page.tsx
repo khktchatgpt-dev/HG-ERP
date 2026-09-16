@@ -3,8 +3,8 @@ import { materialsService } from '@/modules/dept/warehouse/warehouse.service'
 import { materialTaxonomy } from '@/modules/dept/warehouse/taxonomy.service'
 import { suppliersService } from '@/modules/dept/supply/suppliers.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
-import { MaterialsManager } from '@/app/(workspace)/warehouse/materials/MaterialsManager'
-import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
+import { MaterialsManager } from '@/components/warehouse/MaterialsManager'
+import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
 
 /**
  * Vật tư & giá mua — VIEW MUA HÀNG của danh mục vật tư dùng chung (không tách

@@ -87,7 +87,12 @@ export type DomainEvent =
       material_id: string
       material_code: string
       material_name: string
-      on_hand: number
+      /**
+       * DÙNG ĐƯỢC, không phải tổng (0198). Thông báo phải bày CHÍNH con số đã
+       * quyết có cảnh báo hay không — nói "còn 50" trong khi quyết theo 3 thì
+       * người đọc tưởng hệ thống lỗi.
+       */
+      qty_ok: number
       min_stock: number
       caused_by: string
       notify_ids: string[]
@@ -152,6 +157,20 @@ export type DomainEvent =
       po_id: string
       code: string
       withdrawn_by: string
+      approver_ids: string[]
+    }
+  /**
+   * MỞ LẠI ĐƠN ĐÃ DUYỆT để sửa (16/09/2026): dấu duyệt bị xoá, đơn về nháp.
+   * Báo người duyệt — họ vừa ký lên một bản sắp không còn tồn tại.
+   */
+  | {
+      name: 'po.reopened'
+      po_id: string
+      code: string
+      /** Bước đơn đang đứng lúc bị mở lại — vào thông báo để GĐ biết đã đi xa tới đâu. */
+      from_status: string
+      reopened_by: string
+      reason: string
       approver_ids: string[]
     }
   // Bàn giao đơn giữa nhân viên cung ứng (0128): đổi người phụ trách.

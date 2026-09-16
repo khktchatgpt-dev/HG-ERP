@@ -5716,6 +5716,47 @@ export type Database = {
           },
         ]
       }
+      warehouse_bins: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          kind: string
+          name: string | null
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          name?: string | null
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_bins_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       warehouse_docs: {
         Row: {
           approved_at: string | null
@@ -5807,6 +5848,13 @@ export type Database = {
             columns: ["shipment_id"]
             isOneToOne: false
             referencedRelation: "supply_po_shipments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_docs_team_department_id_fkey"
+            columns: ["team_department_id"]
+            isOneToOne: false
+            referencedRelation: "departments"
             referencedColumns: ["id"]
           },
         ]
@@ -6022,6 +6070,7 @@ export type Database = {
       }
       warehouse_movements: {
         Row: {
+          bin_id: string | null
           created_at: string
           created_by: string | null
           direction: string
@@ -6035,14 +6084,17 @@ export type Database = {
           qty: number
           qty_rejected: number
           qty2_actual: number | null
+          reason_code: string | null
           ref_no: string | null
           ref_type: string
           shelf_location: string | null
+          stock_status: string
           transfer_group: string | null
           unit_cost: number | null
           warehouse_id: string | null
         }
         Insert: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction: string
@@ -6056,14 +6108,17 @@ export type Database = {
           qty: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Update: {
+          bin_id?: string | null
           created_at?: string
           created_by?: string | null
           direction?: string
@@ -6077,14 +6132,23 @@ export type Database = {
           qty?: number
           qty_rejected?: number
           qty2_actual?: number | null
+          reason_code?: string | null
           ref_no?: string | null
           ref_type?: string
           shelf_location?: string | null
+          stock_status?: string
           transfer_group?: string | null
           unit_cost?: number | null
           warehouse_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_movements_created_by_fkey"
             columns: ["created_by"]
@@ -6156,6 +6220,13 @@ export type Database = {
             referencedColumns: ["production_order_id"]
           },
           {
+            foreignKeyName: "warehouse_movements_reason_code_fkey"
+            columns: ["reason_code"]
+            isOneToOne: false
+            referencedRelation: "warehouse_reason_codes"
+            referencedColumns: ["code"]
+          },
+          {
             foreignKeyName: "warehouse_movements_warehouse_id_fkey"
             columns: ["warehouse_id"]
             isOneToOne: false
@@ -6164,38 +6235,96 @@ export type Database = {
           },
         ]
       }
+      warehouse_reason_codes: {
+        Row: {
+          active: boolean
+          affects_cost: boolean
+          code: string
+          created_at: string
+          direction: string
+          name: string
+          needs_approval: boolean
+          requires: string[]
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          affects_cost?: boolean
+          code: string
+          created_at?: string
+          direction: string
+          name: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          affects_cost?: boolean
+          code?: string
+          created_at?: string
+          direction?: string
+          name?: string
+          needs_approval?: boolean
+          requires?: string[]
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       warehouse_stocktake_lines: {
         Row: {
-          counted_qty: number
+          book_qty_frozen: number | null
+          counted_at: string | null
+          counted_by: string | null
+          counted_qty: number | null
           created_at: string
-          diff: number
-          doc_id: string
+          diff: number | null
+          doc_id: string | null
           id: string
           material_id: string
           note: string | null
+          stocktake_id: string | null
           system_qty: number
         }
         Insert: {
-          counted_qty: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff: number
-          doc_id: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty: number
         }
         Update: {
-          counted_qty?: number
+          book_qty_frozen?: number | null
+          counted_at?: string | null
+          counted_by?: string | null
+          counted_qty?: number | null
           created_at?: string
-          diff?: number
-          doc_id?: string
+          diff?: number | null
+          doc_id?: string | null
           id?: string
           material_id?: string
           note?: string | null
+          stocktake_id?: string | null
           system_qty?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktake_lines_counted_by_fkey"
+            columns: ["counted_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "warehouse_stocktake_lines_doc_id_fkey"
             columns: ["doc_id"]
@@ -6223,6 +6352,102 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "warehouse_stock"
             referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktake_lines_stocktake_id_fkey"
+            columns: ["stocktake_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stocktakes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouse_stocktakes: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          assigned_to: string | null
+          blind_count: boolean
+          code: string
+          created_at: string
+          created_by: string
+          doc_id: string | null
+          freeze_at: string | null
+          id: string
+          note: string | null
+          reject_reason: string | null
+          scope_count: number
+          scope_kind: string
+          scope_ref: Json
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code: string
+          created_at?: string
+          created_by: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          assigned_to?: string | null
+          blind_count?: boolean
+          code?: string
+          created_at?: string
+          created_by?: string
+          doc_id?: string | null
+          freeze_at?: string | null
+          id?: string
+          note?: string | null
+          reject_reason?: string | null
+          scope_count?: number
+          scope_kind?: string
+          scope_ref?: Json
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_stocktakes_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_assigned_to_fkey"
+            columns: ["assigned_to"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_stocktakes_doc_id_fkey"
+            columns: ["doc_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_docs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -6464,6 +6689,47 @@ export type Database = {
           },
         ]
       }
+      v_warehouse_stock_by_bin: {
+        Row: {
+          bin_code: string | null
+          bin_id: string | null
+          bin_kind: string | null
+          bin_name: string | null
+          material_id: string | null
+          qty: number | null
+          stock_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouse_movements_bin_id_fkey"
+            columns: ["bin_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_bins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "v_supply_demand"
+            referencedColumns: ["material_id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_materials"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouse_movements_material_id_fkey"
+            columns: ["material_id"]
+            isOneToOne: false
+            referencedRelation: "warehouse_stock"
+            referencedColumns: ["material_id"]
+          },
+        ]
+      }
       warehouse_stock: {
         Row: {
           code: string | null
@@ -6474,6 +6740,10 @@ export type Database = {
           min_stock: number | null
           name: string | null
           on_hand: number | null
+          qty_blocked: number | null
+          qty_ok: number | null
+          qty_qc: number | null
+          search_text: string | null
           shelf_location: string | null
           unit: string | null
         }
@@ -6512,6 +6782,13 @@ export type Database = {
         }[]
       }
       unaccent: { Args: { "": string }; Returns: string }
+      warehouse_book_qty_at: {
+        Args: { p_at: string; p_material_ids: string[] }
+        Returns: {
+          material_id: string
+          qty: number
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

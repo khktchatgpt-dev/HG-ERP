@@ -6,7 +6,7 @@ import { canAction } from '@/modules/core/rbac/rbac.service'
 // mọi export của file đó thành client-reference và server đọc ra `undefined`
 // → `range(0, NaN)` → danh sách rỗng mà không báo lỗi (bẫy đã ghi trong
 // `warehouse/materials/constants.ts`, dùng lại luôn hằng đó cho khỏi lệch).
-import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
+import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
 import { VatTuScreen } from './VatTuScreen'
 
 export const metadata = { title: 'Mua hàng · Vật tư' }

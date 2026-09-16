@@ -59,7 +59,12 @@ export function StatsBar({ stats }: { stats: Stat[] }) {
             <span className="t-label text-muted-foreground truncate">{s.label}</span>
           </div>
           <div className="mt-1 font-mono text-2xl font-semibold tracking-tight tabular-nums">
-            {s.value}
+            {/* NHÓM NGHÌN cho số đếm (15/09/2026). Lộ ra ở màn Tồn kho — ô
+                "Cả danh mục" in ra `13229`, một chuỗi năm chữ số liền không đọc
+                được bằng mắt lướt, đúng thứ dải chỉ số sinh ra để làm. Ô khác
+                trong hệ đang đếm 1–70 nên lỗi này ẩn cho tới lúc có một ô lớn.
+                `string` truyền vào thì giữ nguyên — nơi dùng đã tự định dạng. */}
+            {typeof s.value === 'number' ? s.value.toLocaleString('vi-VN') : s.value}
           </div>
           {s.hint && <div className="text-muted-foreground mt-0.5 text-xs">{s.hint}</div>}
         </div>

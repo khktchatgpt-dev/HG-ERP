@@ -166,6 +166,9 @@ export const materialsService = {
       active_only?: boolean
       /** true = chỉ vật tư "chờ Kho rà" (khai nhanh từ form đơn — 0136). */
       needs_review?: boolean
+      /** Hai rổ việc của màn danh mục bản Kho (Bước 4). */
+      no_min_stock?: boolean
+      no_shelf?: boolean
       page: number
       page_size: number
     },
@@ -176,6 +179,8 @@ export const materialsService = {
       group_name: opts.group_name,
       active_only: opts.active_only ?? false,
       needs_review: opts.needs_review,
+      no_min_stock: opts.no_min_stock,
+      no_shelf: opts.no_shelf,
       page: opts.page,
       page_size: opts.page_size,
     })

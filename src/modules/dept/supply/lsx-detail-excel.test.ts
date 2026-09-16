@@ -57,7 +57,15 @@ const lsx = (over: Partial<LsxSupplyDetail> = {}): LsxSupplyDetail => ({
     missing: 1,
     missing_top: [{ code: 'T-VUO-20X0.7', name: 'Vuông 20x0.7', unit: 'cây', qty: 15 }],
   },
-  products: [{ code: '2722875', name: 'IBIZA Ghế xoay', qty: 8816 }],
+  products: [
+    {
+      product_id: 'p1',
+      code: '2722875',
+      name: 'IBIZA Ghế xoay',
+      qty: 8816,
+      image_file_id: null,
+    },
+  ],
   pos: [po()],
   ...over,
 })

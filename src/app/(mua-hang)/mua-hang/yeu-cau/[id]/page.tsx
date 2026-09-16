@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { fileImageSrcMap } from '@/server/file-image'
 import { authService } from '@/modules/core/auth/auth.service'
 import { isSupplyStaff } from '@/modules/dept/supply/suppliers.service'
 import { buildLsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
@@ -41,10 +42,19 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     isSupplyStaff(user),
   ])
   if (!detail) notFound()
+  /*
+    ẢNH SP ĐI QUA ĐƯỜNG DẪN CỐ ĐỊNH `/api/files/<id>/img?s=<chữ ký>`, KHÔNG
+    phải URL ký của Storage: URL ký đổi mỗi lần render, nên trình duyệt lẫn
+    Vercel coi mỗi lượt xem là một ảnh mới và tối ưu lại từ đầu — đúng cái đã
+    đốt hạn mức ở màn thư viện sản phẩm. Chữ ký HMAC ở đây bám theo id nên
+    đường dẫn đứng yên qua các lượt vào trang.
+  */
+  const imageUrls = fileImageSrcMap(detail.products.map((p) => p.image_file_id))
   return (
     <LenhScreen
       lsx={detail}
       today={today}
+      imageUrls={imageUrls}
       canEdit={user.role === 'admin' || supplyStaff}
     />
   )

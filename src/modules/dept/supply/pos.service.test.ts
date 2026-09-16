@@ -19,7 +19,12 @@ vi.mock('./pos.repo', () => ({
 vi.mock('./supply.repo', () => ({
   suppliersRepo: { findById: vi.fn() },
   // advance('received') nay đọc sổ đối chiếu (lineStatus) thay vì listLines.
-  supplyRepo: { lineStatus: vi.fn(async () => []), refreshStatusFromReceipts: vi.fn() },
+  supplyRepo: {
+    lineStatus: vi.fn(async () => []),
+    refreshStatusFromReceipts: vi.fn(),
+    // reopenForEdit chặn cứng khi đơn đã có phiếu kho — kể cả phiếu ghi 0.
+    docsByPo: vi.fn(async () => []),
+  },
 }))
 // Chốt thiếu (0154) đụng đợt giao + danh bạ phòng (notify Kho).
 vi.mock('./po-shipments.repo', () => ({
@@ -329,6 +334,107 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
     await expect(posService.decide(boss, 'po1', 'approve')).rejects.toMatchObject({
       status: 400,
     })
+  })
+})
+
+describe('posService.reopenForEdit — hạ đơn đã duyệt về nháp để sửa', () => {
+  const approved = { ...PO, status: 'approved', approved_by: 'u-boss', approved_at: '2026-08-10T02:00:00Z' } // prettier-ignore
+
+  it('approved → draft: GỠ dấu duyệt + dấu gửi/xác nhận NCC, ghi vết lý do', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...approved, status: 'draft' } as never)
+
+    await posService.reopenForEdit(lead, 'po1', 'Sai đơn giá dòng thép hộp')
+
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('draft')
+    /*
+      Bất biến "số Giám đốc gật = số trên phiếu": bản vừa mở ra để sửa KHÔNG
+      được mang theo chữ ký nào. Sót một trong bốn cột này là đơn nháp vẫn hiện
+      "đã duyệt lúc …" và stepper nhảy lung tung.
+    */
+    expect(patch.approved_by).toBeNull()
+    expect(patch.approved_at).toBeNull()
+    expect(patch.ordered_at).toBeNull()
+    expect(patch.confirmed_at).toBeNull()
+    expect(String(patch.note)).toContain('Sai đơn giá dòng thép hộp')
+    expect(String(patch.note)).toContain('Hạ về nháp từ "approved"')
+
+    const evt = vi.mocked(emit).mock.calls[0][0] as { name: string; from_status: string }
+    expect(evt.name).toBe('po.reopened')
+    expect(evt.from_status).toBe('approved')
+  })
+
+  it('đơn đã gửi NCC / NCC xác nhận / đang giao đều mở lại được', async () => {
+    for (const st of ['ordered', 'confirmed', 'in_transit']) {
+      vi.clearAllMocks()
+      vi.mocked(assertAction).mockImplementation(
+        makeFakeAssertAction((id) => DEPTS[id] ?? null),
+      )
+      /* clearAllMocks xoá luôn quyền supply_lead dựng ở beforeEach — dựng lại,
+         không thì vòng lặp này chỉ đo được câu "thiếu quyền". */
+      const fake = makeFakeCanAction((id) => DEPTS[id] ?? null)
+      vi.mocked(canAction).mockImplementation(async (u, key) =>
+        u.id === 'u-lead' && key === 'supply.po.manage_any' ? true : fake(u, key),
+      )
+      vi.mocked(supplyRepo.docsByPo).mockResolvedValue([] as never)
+      vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+      vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
+      vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'draft' } as never)
+
+      await posService.reopenForEdit(lead, 'po1', 'NCC đổi quy cách')
+      expect(vi.mocked(posRepo.patch).mock.calls[0][1]).toMatchObject({ status: 'draft' })
+    }
+  })
+
+  /*
+    ĐƠN NHÁP thì vô nghĩa — sửa thẳng được rồi. Còn CHỜ DUYỆT thì mở ĐƯỢC:
+    người soạn tự rút bằng "Rút về nháp", nhưng trưởng phòng / Giám đốc vẫn
+    cần đường này cho đơn của người khác.
+  */
+  it('đơn nháp thì chặn — sửa thẳng được rồi', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    await expect(posService.reopenForEdit(lead, 'po1', 'gõ nhầm giá')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  /*
+    TẦNG CHẶN THEO SỔ KHO — không theo trạng thái đơn. Đơn hỗn hợp (có dòng tự
+    do) nhận hàng một phần vẫn có thể đứng ở 'in_transit', vì
+    syncReceivedStatus chỉ xét dòng vật tư kho. Chỉ hỏi thẳng sổ mới chắc.
+  */
+  it('đã có phiếu nhập dù chỉ MỘT dòng → chặn, dù trạng thái vẫn "đang giao"', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...PO,
+      status: 'in_transit',
+    } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', material_id: 'm1', qty_ordered: 10, qty_received: 4, qty_open: 6 },
+      { id: 'l2', material_id: 'm2', qty_ordered: 5, qty_received: 0, qty_open: 5 },
+    ] as never)
+
+    await expect(posService.reopenForEdit(lead, 'po1', 'sai quy cách')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  /*
+    QUYỀN, không phải quyền-sở-hữu: hạ về nháp là gỡ chữ ký duyệt, nên nhân
+    viên phụ trách đơn KHÔNG tự làm được — phải trưởng phòng CƯ / người duyệt /
+    admin. Service trả 400 kèm câu chỉ đường (hàng rào nằm ở canReopenForEdit),
+    không phải 403.
+  */
+  it('nhân viên thường không hạ được, dù đang phụ trách chính đơn đó', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
+    await expect(posService.reopenForEdit(staff, 'po1', 'sai giá')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
   })
 })
 

@@ -83,6 +83,14 @@ export type ListFilter = {
    * rỗng = không có ứng viên nào → trả rỗng, KHÔNG âm thầm bỏ điều kiện.
    */
   ids?: string[]
+  /**
+   * Hai rổ VIỆC CỦA KHO (Bước 4 — màn danh mục bản Kho). Đo 16/09/2026: chỉ
+   * 5/13.229 mã khai ngưỡng tồn, nên cảnh báo "sắp hết" của cả phân hệ gần
+   * như không chạy — "chưa khai ngưỡng" là một hàng đợi việc, không phải một
+   * bộ lọc cho vui.
+   */
+  no_min_stock?: boolean
+  no_shelf?: boolean
   page: number
   page_size: number
 }
@@ -126,6 +134,8 @@ export const materialsRepo = {
     if (filter.active_only) q = q.eq('is_active', true)
     if (filter.group_name) q = q.eq('group_name', filter.group_name)
     if (filter.needs_review) q = q.eq('needs_review', true)
+    if (filter.no_min_stock) q = q.eq('min_stock', 0)
+    if (filter.no_shelf) q = q.is('shelf_location', null)
     // `in` chịu được vài nghìn id qua POST-style filter của PostgREST; tập gọi
     // thực tế là số mã đang có đơn mở nên nhỏ hơn thế nhiều.
     if (filter.ids) q = q.in('id', filter.ids)
@@ -164,7 +174,13 @@ export const materialsRepo = {
      * phải đếm bằng ĐÚNG bộ lọc mà trang đang áp.
      */
     needs_review?: boolean
-  }): Promise<{ total: number; active: number; noShelf: number; needsReview: number }> {
+  }): Promise<{
+    total: number
+    active: number
+    noShelf: number
+    needsReview: number
+    noMinStock: number
+  }> {
     const base = () => {
       let q = db().from('warehouse_materials').select('*', { count: 'exact', head: true })
       if (filter.group_name) q = q.eq('group_name', filter.group_name)
@@ -173,18 +189,21 @@ export const materialsRepo = {
       for (const t of searchTokens(filter.q ?? '')) q = q.ilike('search_text', `%${t}%`)
       return q
     }
-    const [all, act, shelf, review] = await Promise.all([
+    const [all, act, shelf, review, noMin] = await Promise.all([
       base(),
       base().eq('is_active', true),
       base().is('shelf_location', null),
       // Khai nhanh từ form đơn, chờ Kho rà (0136) — ô đếm để Kho khỏi quên.
       base().eq('needs_review', true),
+      // Chưa khai ngưỡng tồn tối thiểu — rổ việc của màn danh mục bản Kho.
+      base().eq('min_stock', 0),
     ])
     return {
       total: all.count ?? 0,
       active: act.count ?? 0,
       noShelf: shelf.count ?? 0,
       needsReview: review.count ?? 0,
+      noMinStock: noMin.count ?? 0,
     }
   },
 

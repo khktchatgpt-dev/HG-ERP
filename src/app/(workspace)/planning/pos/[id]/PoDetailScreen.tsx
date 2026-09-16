@@ -75,8 +75,15 @@ import {
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
+import { canReopenForEdit } from '@/lib/po-reopen'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import { PO_STATUS_LABEL, PO_STATUS_TONE, type PoStatus } from '@/lib/po-status'
+import {
+  PO_STATUS_LABEL,
+  PO_STATUS_TONE,
+  poTrackStep,
+  receiptTrackTone,
+  type PoStatus,
+} from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
 import {
   PoDialogs,
@@ -129,7 +136,14 @@ export type PoDetailPo = {
 const money = (n: number) => n.toLocaleString('vi-VN')
 
 /** Sáu bước của TRỤC ĐƠN. Nhận hàng là trục riêng — xem ghi chú ở docStepAt. */
-const DOC_STEPS = ['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã gửi NCC', 'NCC xác nhận', 'Đang về']
+const DOC_STEPS = [
+  'Nháp',
+  'Chờ duyệt',
+  'Đã duyệt',
+  'Đã gửi NCC',
+  'NCC xác nhận',
+  'Đang về',
+]
 
 /** Trạng thái NHẬN HÀNG của một dòng — khác trạng thái của cả chứng từ. */
 type LineKind = 'idle' | 'part' | 'done' | 'short'
@@ -139,7 +153,11 @@ const LINE_STATUS_TEXT: Record<LineKind, string> = {
   done: 'Đủ',
   short: 'Đóng thiếu',
 }
-function lineStatusOf(s?: { qty_received: number; qty_ordered: number; closed_short_at: string | null }): LineKind {
+function lineStatusOf(s?: {
+  qty_received: number
+  qty_ordered: number
+  closed_short_at: string | null
+}): LineKind {
   if (!s) return 'idle'
   // Đóng thiếu xét TRƯỚC "đủ": dòng chốt thiếu vẫn có thể nhận gần đủ, nhưng
   // điều người đọc cần biết là nó đã KHÉP, không phải nó gần đủ.
@@ -167,6 +185,7 @@ const HISTORY_LABEL: Record<ApprovalEvent['action'], string> = {
   rejected: 'Giám đốc từ chối',
   withdrawn: 'Rút về nháp',
   reassigned: 'Bàn giao người phụ trách',
+  reopened: 'Mở lại để sửa (gỡ dấu duyệt)',
 }
 const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> =
   {
@@ -175,6 +194,7 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
     rejected: 'red',
     withdrawn: 'gray',
     reassigned: 'gray',
+    reopened: 'amber',
   }
 
 export function PoDetailScreen({
@@ -433,6 +453,21 @@ export function PoDetailScreen({
     }),
   ].sort((a, b) => b.at.localeCompare(a.at))
 
+  /*
+    Bốn hàng rào của canReopenForEdit (lib thuần, có test) — màn này phải đưa
+    đủ bốn dữ kiện, không được đoán ba rồi để service chặn nốt: nút khoá phải
+    nói ĐÚNG lý do ngay tại chỗ, không phải chờ bấm rồi mới ăn lỗi.
+
+    canReassign là đúng tập "admin / trưởng phòng CƯ / người duyệt" mà service
+    gọi là privileged (xem page.tsx: manageAny || canApprove).
+  */
+  const reopenGuard = canReopenForEdit({
+    status: po.status,
+    receivedQty: statusLines.reduce((a, l) => a + (l.qty_received ?? 0), 0),
+    warehouseDocs: warehouseDocs.length,
+    privileged: canReassign,
+  })
+
   async function removeDraft() {
     if (await act.deleteDraft(po)) router.push('/planning/pos')
   }
@@ -509,17 +544,19 @@ export function PoDetailScreen({
     bước bất kỳ sẽ nói dối rằng nó còn đang chạy.
   */
   const docStepAt =
-    ({
-      draft: 0,
-      pending_approval: 1,
-      approved: 2,
-      ordered: 3,
-      confirmed: 4,
-      in_transit: 5,
-      partial: 5,
-      received: 5,
-      cancelled: 0,
-    } as Record<string, number>)[po.status] ?? 0
+    (
+      {
+        draft: 0,
+        pending_approval: 1,
+        approved: 2,
+        ordered: 3,
+        confirmed: 4,
+        in_transit: 5,
+        partial: 5,
+        received: 5,
+        cancelled: 0,
+      } as Record<string, number>
+    )[po.status] ?? 0
   const recvStepAt = po.status === 'received' ? 2 : po.status === 'partial' ? 1 : 0
 
   // AI ĐANG GIỮ — dùng chung lõi với màn danh sách và màn "Chờ tôi xử lý".
@@ -536,7 +573,9 @@ export function PoDetailScreen({
     làm người ta quen bỏ qua cảnh báo.
   */
   // Số dòng chưa có giá — hiện trên dòng tiêu đề FastTab để gấp rồi vẫn thấy.
-  const noPriceCount = lines.filter((l) => l.unit_price == null || l.unit_price <= 0).length
+  const noPriceCount = lines.filter(
+    (l) => l.unit_price == null || l.unit_price <= 0,
+  ).length
 
   const checks: KitCheck[] = []
   if (['draft', 'pending_approval'].includes(po.status)) {
@@ -552,7 +591,11 @@ export function PoDetailScreen({
       })
     }
     if (lines.length === 0) {
-      checks.push({ level: 'stop', what: 'Đơn chưa có dòng hàng nào', fix: 'Thêm ít nhất một dòng' })
+      checks.push({
+        level: 'stop',
+        what: 'Đơn chưa có dòng hàng nào',
+        fix: 'Thêm ít nhất một dòng',
+      })
     }
     if (!po.production_order_id && !po.lsx_code) {
       checks.push({
@@ -562,7 +605,11 @@ export function PoDetailScreen({
       })
     }
     if (!po.expected_at) {
-      checks.push({ level: 'warn', what: 'Chưa có hạn giao', fix: 'Đặt hạn để hệ thống canh trễ' })
+      checks.push({
+        level: 'warn',
+        what: 'Chưa có hạn giao',
+        fix: 'Đặt hạn để hệ thống canh trễ',
+      })
     } else if (late === 'overdue') {
       checks.push({
         level: 'warn',
@@ -642,14 +689,20 @@ export function PoDetailScreen({
               'Ghi nhận nhập kho làm ở phân hệ Kho — thao tác nhận hàng của đơn nằm ở nhóm "Nhận hàng" bên dưới',
           },
           { label: 'Tài chính', disabled: true, title: 'Phân hệ Kế toán chưa mở' },
-          { label: 'Hiển thị', disabled: true, title: 'Tuỳ biến cột và khung nhìn chưa mở' },
+          {
+            label: 'Hiển thị',
+            disabled: true,
+            title: 'Tuỳ biến cột và khung nhìn chưa mở',
+          },
         ]}
       >
         <ActionGroup label="Duy trì">
           <Action
             strong
             disabled={!canEdit || po.status !== 'draft'}
-            title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
+            title={
+              po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined
+            }
             onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
           >
             Sửa đơn
@@ -687,6 +740,40 @@ export function PoDetailScreen({
               {primary.label}
             </Action>
           )}
+          {/*
+            RÚT VỀ NHÁP — hàm `withdrawPo` có từ 0128 nhưng màn này CHƯA BAO GIỜ
+            có nút gọi nó (đo 16/09/2026): người gửi nhầm phải đi nhờ Giám đốc
+            từ chối, tức là mượn một hành động mang nghĩa khác để làm việc của
+            mình. Nút hiện MỜ ngoài bước "Chờ duyệt" chứ không giấu, theo đúng
+            lối Action Pane của cả thanh này.
+          */}
+          <Action
+            disabled={!canEdit || po.status !== 'pending_approval' || act.busy}
+            title={
+              po.status === 'pending_approval'
+                ? 'Đơn rời bàn Giám đốc, về nháp để sửa — gửi lại thì xếp hàng từ đầu'
+                : 'Chỉ rút được đơn đang chờ Giám đốc duyệt'
+            }
+            onClick={() => void act.withdrawPo(po)}
+          >
+            Rút về nháp
+          </Action>
+          {/*
+            MỞ LẠI ĐỂ SỬA — lối duy nhất sửa được dòng hàng/giá sau khi duyệt.
+            Trước 16/09/2026 người mua phát hiện sai một dòng trên đơn đã duyệt
+            thì chỉ còn "huỷ rồi nhân bản" (mất số PO đã gửi NCC).
+          */}
+          <Action
+            disabled={!canEdit || !reopenGuard.ok}
+            title={
+              reopenGuard.ok
+                ? 'Đưa đơn về nháp để sửa — dấu duyệt bị gỡ, phải gửi duyệt lại'
+                : reopenGuard.reason
+            }
+            onClick={() => setReasoning({ po, kind: 'reopen', reason: '' })}
+          >
+            Hạ về nháp để sửa
+          </Action>
           <Action
             disabled={!canEdit || !canReschedule(po.status).ok}
             title={
@@ -695,7 +782,11 @@ export function PoDetailScreen({
                 : 'Chỉ đổi hẹn được khi đơn đã gửi nhà cung cấp'
             }
             onClick={() =>
-              setRescheduling({ po, date: po.expected_at?.slice(0, 10) ?? '', reason: '' })
+              setRescheduling({
+                po,
+                date: po.expected_at?.slice(0, 10) ?? '',
+                reason: '',
+              })
             }
           >
             Đổi hẹn giao
@@ -727,24 +818,21 @@ export function PoDetailScreen({
           >
             Nghiệm thu ngoài sổ
           </Action>
-          {/* Lập phiếu nhập là việc của KHO và màn đó đã có
-              (/warehouse/don-ncc/[id], góc nhìn thủ kho). Dựng lại một form
-              nhập hàng ở đây là hai đường ghi vào cùng một sổ — nguồn sai số
-              kinh điển. Nút này DẪN sang đúng chỗ, không tự làm. */}
+          {/* Lập phiếu nhập là việc của KHO. Màn đó (/warehouse/don-ncc/[id])
+              TẠM GỠ 16/09/2026 cùng cả khu Kho, nên nút này tắt và nói rõ lý
+              do thay vì dẫn vào 404. Vẫn KHÔNG dựng form nhập hàng ở đây —
+              hai đường ghi vào cùng một sổ là nguồn sai số kinh điển. */}
           <Action
-            disabled={!['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)}
-            title={
-              ['ordered', 'confirmed', 'in_transit', 'partial'].includes(po.status)
-                ? 'Mở màn lập phiếu nhập bên Kho cho đơn này'
-                : 'Chỉ nhận hàng được sau khi đơn đã gửi nhà cung cấp'
-            }
-            onClick={() => router.push(`/warehouse/don-ncc/${po.id}`)}
+            disabled
+            title="Khu Kho tạm gỡ (16/09/2026) — màn lập phiếu nhập sẽ dựng lại. Nút hiện MỜ chứ không giấu: người dùng cần biết việc này vẫn thuộc về Kho, chỉ là chưa bấm được."
           >
             Ghi nhận nhận hàng
           </Action>
           <Action
             disabled={!canEdit || openStockLines.length === 0}
-            title={openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined}
+            title={
+              openStockLines.length === 0 ? 'Không còn dòng nào đang chờ về' : undefined
+            }
             onClick={() =>
               setReasoning({
                 po,
@@ -763,7 +851,9 @@ export function PoDetailScreen({
           <Action onClick={() => window.open(`/print/supply/${po.id}`, '_blank')}>
             Phiếu đặt hàng
           </Action>
-          <Action onClick={() => window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')}>
+          <Action
+            onClick={() => window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')}
+          >
             Xuất Excel
           </Action>
         </ActionGroup>
@@ -796,13 +886,30 @@ export function PoDetailScreen({
           </>
         }
       >
-        <StatusTrack label="Trạng thái đơn" steps={DOC_STEPS} at={docStepAt} />
+        {/*
+          MÀU BA TRỤC NÓI NGHĨA, không phải trang trí: hổ phách = đang chờ ai
+          đó, lam = đang chạy, lục = xong, đỏ = huỷ, xám = chưa đi đâu. Trước
+          16/09/2026 cả ba trục đều tô xanh `--act` — cùng màu nút chính — nên
+          không phân biệt được cái nào bấm được, cái nào chỉ để đọc.
+        */}
+        <StatusTrack
+          label="Trạng thái đơn"
+          steps={DOC_STEPS}
+          at={docStepAt}
+          tone={poTrackStep(po.status).tone}
+        />
         <StatusTrack
           label="Nhận hàng"
           steps={['Chưa nhận', 'Một phần', 'Đủ']}
           at={recvStepAt}
+          tone={receiptTrackTone(recvStepAt)}
         />
-        <StatusTrack label="Thanh toán" steps={['Chưa', 'Một phần', 'Xong']} at={0} />
+        <StatusTrack
+          label="Thanh toán"
+          steps={['Chưa', 'Một phần', 'Xong']}
+          at={0}
+          tone="idle"
+        />
       </DocHead>
 
       <HolderBar
@@ -835,19 +942,41 @@ export function PoDetailScreen({
                       // KHÔNG hiện "0/0" hay "100%": chưa đơn nào của NCC này
                       // được nhận đủ nên chưa có mẫu để tính. Cả hai cách hiện
                       // kia đều là nói dối, theo hai hướng ngược nhau.
-                      <span key="ot" className="k-t-warn">chưa có lịch sử</span>
+                      <span key="ot" className="k-t-warn">
+                        chưa có lịch sử
+                      </span>
                     ),
                   ],
-                  ['Đã đặt', <span key="n" className="num">{facts?.orders ?? 0} đơn</span>],
-                  ['Đã nhận đủ', <span key="r" className="num">{facts?.received ?? 0} đơn</span>],
+                  [
+                    'Đã đặt',
+                    <span key="n" className="num">
+                      {facts?.orders ?? 0} đơn
+                    </span>,
+                  ],
+                  [
+                    'Đã nhận đủ',
+                    <span key="r" className="num">
+                      {facts?.received ?? 0} đơn
+                    </span>,
+                  ],
                   [
                     'Mua gần nhất',
                     <span key="l" className="num">
                       {facts?.lastOrderAt ? day(facts.lastOrderAt) : '—'}
                     </span>,
                   ],
-                  ['Mã NCC', <span key="c" className="num">{supplier?.code ?? '—'}</span>],
-                  ['Mã số thuế', <span key="t" className="num">{supplier?.tax_no ?? '—'}</span>],
+                  [
+                    'Mã NCC',
+                    <span key="c" className="num">
+                      {supplier?.code ?? '—'}
+                    </span>,
+                  ],
+                  [
+                    'Mã số thuế',
+                    <span key="t" className="num">
+                      {supplier?.tax_no ?? '—'}
+                    </span>,
+                  ],
                 ]}
               />
             </FactSection>
@@ -902,13 +1031,20 @@ export function PoDetailScreen({
           title="Tổng quan & Mặt hàng"
           defaultOpen
           summary={[
-            ['Số dòng', <span key="a" className="num">{lines.length}</span>],
+            [
+              'Số dòng',
+              <span key="a" className="num">
+                {lines.length}
+              </span>,
+            ],
             ...(noPriceCount > 0
               ? [
-                  ['Chưa có giá', <span key="b" className="num k-t-warn">{noPriceCount}</span>] as [
-                    string,
-                    React.ReactNode,
-                  ],
+                  [
+                    'Chưa có giá',
+                    <span key="b" className="num k-t-warn">
+                      {noPriceCount}
+                    </span>,
+                  ] as [string, React.ReactNode],
                 ]
               : []),
           ]}
@@ -916,8 +1052,8 @@ export function PoDetailScreen({
           <FieldGrid
             note={
               <>
-                Ô nền nhạt là <b>giá trị kế thừa từ hồ sơ nhà cung cấp</b> — sửa ở đây chỉ đổi
-                cho đơn này.
+                Ô nền nhạt là <b>giá trị kế thừa từ hồ sơ nhà cung cấp</b> — sửa ở đây chỉ
+                đổi cho đơn này.
               </>
             }
           >
@@ -996,7 +1132,9 @@ export function PoDetailScreen({
           >
             <GridBtn
               disabled={!canEdit || po.status !== 'draft'}
-              title={po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined}
+              title={
+                po.status !== 'draft' ? 'Chỉ sửa được khi đơn còn ở bước Nháp' : undefined
+              }
               onClick={() => router.push(`/planning/pos/${po.id}/edit`)}
             >
               Chỉnh sửa vật tư
@@ -1051,7 +1189,8 @@ export function PoDetailScreen({
                 const amount =
                   l.unit_price == null
                     ? null
-                    : (l.price_basis === 'unit2' ? (l.qty2 ?? 0) : l.qty_ordered) * l.unit_price
+                    : (l.price_basis === 'unit2' ? (l.qty2 ?? 0) : l.qty_ordered) *
+                      l.unit_price
                 return (
                   <GridRow key={l.id} selected={sel.includes(l.id)}>
                     <GridCheck
@@ -1067,18 +1206,29 @@ export function PoDetailScreen({
                     <Td>{l.spec ?? '—'}</Td>
                     <Td num>{money(l.qty_ordered)}</Td>
                     <Td>{l.material_unit}</Td>
-                    <Td num>{l.qty2 == null ? '—' : `${money(l.qty2)} ${l.unit2 ?? ''}`}</Td>
+                    <Td num>
+                      {l.qty2 == null ? '—' : `${money(l.qty2)} ${l.unit2 ?? ''}`}
+                    </Td>
                     {/* Đặt ÍT hơn nhu cầu thì tô hổ phách: đơn này không phủ
                         hết lệnh, người duyệt cần thấy trước khi ký. */}
                     <Td
                       num
                       tone={
-                        l.qty_demand != null && l.qty_ordered < l.qty_demand ? 'warn' : undefined
+                        l.qty_demand != null && l.qty_ordered < l.qty_demand
+                          ? 'warn'
+                          : undefined
                       }
                     >
                       {l.qty_demand == null ? '—' : money(l.qty_demand)}
                     </Td>
-                    <Td num tone={l.material_id != null && (stock[l.material_id] ?? 0) <= 0 ? 'stop' : undefined}>
+                    <Td
+                      num
+                      tone={
+                        l.material_id != null && (stock[l.material_id] ?? 0) <= 0
+                          ? 'stop'
+                          : undefined
+                      }
+                    >
                       {l.material_id == null ? '—' : money(stock[l.material_id] ?? 0)}
                     </Td>
                     <Td num tone={l.unit_price == null ? 'warn' : undefined}>
@@ -1094,7 +1244,9 @@ export function PoDetailScreen({
                     <Td>
                       <LineStatus kind={kind}>{LINE_STATUS_TEXT[kind]}</LineStatus>
                     </Td>
-                    <Td>{po.lsx_code ? <span className="num">{po.lsx_code}</span> : '—'}</Td>
+                    <Td>
+                      {po.lsx_code ? <span className="num">{po.lsx_code}</span> : '—'}
+                    </Td>
                   </GridRow>
                 )
               })}
@@ -1111,8 +1263,8 @@ export function PoDetailScreen({
 
           {noPriceCount > 0 && (
             <div className="k-ft-note">
-              Tổng tiền <b>chưa gồm {noPriceCount} dòng chưa có giá</b>. Con số trên là tạm
-              tính, không dùng để duyệt chi.
+              Tổng tiền <b>chưa gồm {noPriceCount} dòng chưa có giá</b>. Con số trên là
+              tạm tính, không dùng để duyệt chi.
             </div>
           )}
         </FastTab>
@@ -1121,142 +1273,149 @@ export function PoDetailScreen({
         <FastTab
           title="Kế hoạch giao & Đợt hàng"
           summary={[
-            ['Số đợt', <span key="a" className="num">{liveShipments.length}</span>],
+            [
+              'Số đợt',
+              <span key="a" className="num">
+                {liveShipments.length}
+              </span>,
+            ],
             [
               'Đã nhận',
               <span key="b" className="num">
-                {liveShipments.length > 0 ? `${shipmentsDone}/${liveShipments.length}` : '—'}
+                {liveShipments.length > 0
+                  ? `${shipmentsDone}/${liveShipments.length}`
+                  : '—'}
               </span>,
             ],
           ]}
         >
           <div className="flex flex-col gap-5">
-          {po.status !== 'cancelled' ? (
-            <PoShipmentsCard
-              shipments={shipments}
-              linesById={shipmentLinesById}
-              currency={po.currency ?? 'VND'}
-              receivedByLine={
-                new Map(statusLines.map((s) => [s.id, s.qty_received ?? 0]))
-              }
-              linkedReceipts={
-                new Map(
-                  Object.entries(shipmentReceipts).map(([sid, per]) => [
-                    sid,
-                    new Map(Object.entries(per)),
-                  ]),
-                )
-              }
-              confirmedNote={po.confirmed_note}
-              canEdit={canEdit}
-              canAddMore={
-                shipmentLines.length > 0 &&
-                ['confirmed', 'in_transit', 'partial'].includes(po.status)
-              }
-              emptyHint={
-                po.status === 'draft'
-                  ? 'Chia đợt ngay trong màn “Sửa đơn” — tab Chia đợt giao; lịch đó in lên phiếu gửi NCC.'
-                  : po.status === 'pending_approval'
-                    ? 'Đơn đang chờ duyệt nên khoá sửa — bấm “Thu hồi về nháp” rồi chia đợt trong màn Sửa đơn.'
-                    : po.status === 'approved'
-                      ? 'Đơn đã duyệt nên khoá sửa. Lịch giao sẽ ghi ở bước “NCC xác nhận” sau khi gửi đơn.'
-                      : po.status === 'ordered'
-                        ? 'Bấm “NCC đã xác nhận” ở thanh công cụ để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
-                        : shipmentLines.length === 0
-                          ? 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt được.'
-                          : null
-              }
-              busy={act.busy}
-              today={today}
-              onArrived={(id) =>
-                void act.shipmentAction(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')
-              }
-              onReschedule={(id, date, reason) =>
-                act.shipmentAction(
-                  id,
-                  { action: 'reschedule', expected_date: date, reason },
-                  'Đã dời ngày đợt giao',
-                )
-              }
-              onCancel={(id, reason) =>
-                act.shipmentAction(id, { action: 'cancel', reason }, 'Đã huỷ đợt giao')
-              }
-              onAdd={() => setConfirming('add')}
-            />
-          ) : (
-            <EmptyState
-              icon={<Ban className="text-destructive size-6" />}
-              title="Đơn hàng đã huỷ"
-              description="Kế hoạch giao nhận và chứng từ kho không còn áp dụng cho đơn này."
-            />
-          )}
+            {po.status !== 'cancelled' ? (
+              <PoShipmentsCard
+                shipments={shipments}
+                linesById={shipmentLinesById}
+                currency={po.currency ?? 'VND'}
+                receivedByLine={
+                  new Map(statusLines.map((s) => [s.id, s.qty_received ?? 0]))
+                }
+                linkedReceipts={
+                  new Map(
+                    Object.entries(shipmentReceipts).map(([sid, per]) => [
+                      sid,
+                      new Map(Object.entries(per)),
+                    ]),
+                  )
+                }
+                confirmedNote={po.confirmed_note}
+                canEdit={canEdit}
+                canAddMore={
+                  shipmentLines.length > 0 &&
+                  ['confirmed', 'in_transit', 'partial'].includes(po.status)
+                }
+                emptyHint={
+                  po.status === 'draft'
+                    ? 'Chia đợt ngay trong màn “Sửa đơn” — tab Chia đợt giao; lịch đó in lên phiếu gửi NCC.'
+                    : po.status === 'pending_approval'
+                      ? 'Đơn đang chờ duyệt nên khoá sửa — bấm “Thu hồi về nháp” rồi chia đợt trong màn Sửa đơn.'
+                      : po.status === 'approved'
+                        ? 'Đơn đã duyệt nên khoá sửa. Lịch giao sẽ ghi ở bước “NCC xác nhận” sau khi gửi đơn.'
+                        : po.status === 'ordered'
+                          ? 'Bấm “NCC đã xác nhận” ở thanh công cụ để ghi lịch NCC hẹn — mỗi dòng tách được nhiều đợt.'
+                          : shipmentLines.length === 0
+                            ? 'Đơn toàn dòng tự gõ (không gắn vật tư kho) nên không chia đợt được.'
+                            : null
+                }
+                busy={act.busy}
+                today={today}
+                onArrived={(id) =>
+                  void act.shipmentAction(id, { action: 'arrived' }, 'Đã ghi nhận xe tới')
+                }
+                onReschedule={(id, date, reason) =>
+                  act.shipmentAction(
+                    id,
+                    { action: 'reschedule', expected_date: date, reason },
+                    'Đã dời ngày đợt giao',
+                  )
+                }
+                onCancel={(id, reason) =>
+                  act.shipmentAction(id, { action: 'cancel', reason }, 'Đã huỷ đợt giao')
+                }
+                onAdd={() => setConfirming('add')}
+              />
+            ) : (
+              <EmptyState
+                icon={<Ban className="text-destructive size-6" />}
+                title="Đơn hàng đã huỷ"
+                description="Kế hoạch giao nhận và chứng từ kho không còn áp dụng cho đơn này."
+              />
+            )}
 
-          {po.status !== 'cancelled' && receiptBatches.length > 0 && (
-            <PoReceiptMatrix
-              batches={receiptBatches}
-              lines={lines.map((l) => ({
-                id: l.id,
-                material_code: l.material_code,
-                material_name: l.material_name,
-                unit: l.material_unit,
-                qty_ordered: l.qty_ordered,
-              }))}
-              status={statusLines}
-            />
-          )}
+            {po.status !== 'cancelled' && receiptBatches.length > 0 && (
+              <PoReceiptMatrix
+                batches={receiptBatches}
+                lines={lines.map((l) => ({
+                  id: l.id,
+                  material_code: l.material_code,
+                  material_name: l.material_name,
+                  unit: l.material_unit,
+                  qty_ordered: l.qty_ordered,
+                }))}
+                status={statusLines}
+              />
+            )}
 
-          {warehouseDocs.length > 0 && (
-            <>
-              <div className="k-sec">
-                <div className="k-sec-t">
-                  <FileText className="text-primary size-4" />
-                  Chứng từ kho liên quan ({warehouseDocs.length} phiếu)
+            {warehouseDocs.length > 0 && (
+              <>
+                <div className="k-sec">
+                  <div className="k-sec-t">
+                    <FileText className="text-primary size-4" />
+                    Chứng từ kho liên quan ({warehouseDocs.length} phiếu)
+                  </div>
                 </div>
-              </div>
-              <div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="text-xs font-semibold uppercase">
-                        Mã chứng từ
-                      </TableHead>
-                      <TableHead className="text-xs font-semibold uppercase">
-                        Loại nghiệp vụ
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-semibold uppercase">
-                        Tổng số lượng
-                      </TableHead>
-                      <TableHead className="text-right text-xs font-semibold uppercase">
-                        Thời gian ghi nhận
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {warehouseDocs.map((doc) => (
-                      <TableRow key={doc.doc_id}>
-                        <TableCell className="font-mono text-sm font-medium">
-                          <DocChip>{doc.code}</DocChip>
-                        </TableCell>
-                        <TableCell>
-                          <Badge tone={doc.kind === 'receipt' ? 'green' : 'red'}>
-                            {doc.kind === 'receipt'
-                              ? 'Phiếu nhập kho (PNK)'
-                              : 'Phiếu xuất trả NCC'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">
-                          {money(doc.qty_total)}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-right font-mono text-xs">
-                          {stamp(doc.at)}
-                        </TableCell>
+                <div>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs font-semibold uppercase">
+                          Mã chứng từ
+                        </TableHead>
+                        <TableHead className="text-xs font-semibold uppercase">
+                          Loại nghiệp vụ
+                        </TableHead>
+                        <TableHead className="text-right text-xs font-semibold uppercase">
+                          Tổng số lượng
+                        </TableHead>
+                        <TableHead className="text-right text-xs font-semibold uppercase">
+                          Thời gian ghi nhận
+                        </TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </>
-          )}
+                    </TableHeader>
+                    <TableBody>
+                      {warehouseDocs.map((doc) => (
+                        <TableRow key={doc.doc_id}>
+                          <TableCell className="font-mono text-sm font-medium">
+                            <DocChip>{doc.code}</DocChip>
+                          </TableCell>
+                          <TableCell>
+                            <Badge tone={doc.kind === 'receipt' ? 'green' : 'red'}>
+                              {doc.kind === 'receipt'
+                                ? 'Phiếu nhập kho (PNK)'
+                                : 'Phiếu xuất trả NCC'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {money(doc.qty_total)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground text-right font-mono text-xs">
+                            {stamp(doc.at)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </>
+            )}
           </div>
         </FastTab>
 
@@ -1265,127 +1424,139 @@ export function PoDetailScreen({
           title="Điều khoản & Hợp đồng"
           summary={[
             ['Thanh toán', short(po.terms_payment)],
-            ['Hạn giao', <span key="b" className="num">{day(po.expected_at)}</span>],
+            [
+              'Hạn giao',
+              <span key="b" className="num">
+                {day(po.expected_at)}
+              </span>,
+            ],
           ]}
         >
           <div className="flex flex-col gap-5">
-          <>
-            <div className="k-sec">
-              <div className="flex items-center justify-between">
-                <div className="k-sec-t">
-                  <ScrollText className="text-primary size-4" />
-                  Điều khoản hợp đồng & Cam kết
+            <>
+              <div className="k-sec">
+                <div className="flex items-center justify-between">
+                  <div className="k-sec-t">
+                    <ScrollText className="text-primary size-4" />
+                    Điều khoản hợp đồng & Cam kết
+                  </div>
+                  {canEdit && po.status !== 'cancelled' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setEditingTerms(true)}
+                    >
+                      <Pencil className="size-3.5" /> Sửa điều khoản
+                    </Button>
+                  )}
                 </div>
-                {canEdit && po.status !== 'cancelled' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setEditingTerms(true)}
-                  >
-                    <Pencil className="size-3.5" /> Sửa điều khoản
-                  </Button>
+              </div>
+              <div className="flex flex-col gap-6">
+                <FieldGrid>
+                  <Field label="Điều 1 · Tiêu chuẩn chất lượng">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.terms_quality || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+
+                  <Field label="Điều 2 · Địa điểm giao hàng">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.terms_delivery_place || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+
+                  <Field label="Điều 3 · Điều kiện thanh toán">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.terms_payment || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+
+                  <Field label="Điều 4 · Hoá đơn & Chứng từ">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.terms_invoice || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+
+                  <Field label="Điều 5 · Thời hạn giao hàng">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.terms_lead_time || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+
+                  <Field label="Đại diện ký đơn (Chức danh)">
+                    <span className="text-foreground text-sm font-medium">
+                      {po.signer_role || (
+                        <span className="text-muted-foreground font-normal">
+                          Chưa khai báo
+                        </span>
+                      )}
+                    </span>
+                  </Field>
+                </FieldGrid>
+
+                {(po.terms || po.note) && (
+                  <div className="k-note">
+                    {po.terms && (
+                      <div>
+                        <span className="text-foreground font-semibold">
+                          Điều khoản bổ sung:{' '}
+                        </span>
+                        <span className="text-muted-foreground leading-relaxed">
+                          {po.terms}
+                        </span>
+                      </div>
+                    )}
+                    {po.note && (
+                      <div>
+                        <span className="text-foreground font-semibold">
+                          Ghi chú chung:{' '}
+                        </span>
+                        <span className="text-muted-foreground leading-relaxed">
+                          {po.note}
+                        </span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-            </div>
-            <div className="flex flex-col gap-6">
-              <FieldGrid>
-                <Field label="Điều 1 · Tiêu chuẩn chất lượng">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.terms_quality || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-
-                <Field label="Điều 2 · Địa điểm giao hàng">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.terms_delivery_place || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-
-                <Field label="Điều 3 · Điều kiện thanh toán">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.terms_payment || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-
-                <Field label="Điều 4 · Hoá đơn & Chứng từ">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.terms_invoice || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-
-                <Field label="Điều 5 · Thời hạn giao hàng">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.terms_lead_time || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-
-                <Field label="Đại diện ký đơn (Chức danh)">
-                  <span className="text-foreground text-sm font-medium">
-                    {po.signer_role || (
-                      <span className="text-muted-foreground font-normal">
-                        Chưa khai báo
-                      </span>
-                    )}
-                  </span>
-</Field>
-              </FieldGrid>
-
-              {(po.terms || po.note) && (
-                <div className="k-note">
-                  {po.terms && (
-                    <div>
-                      <span className="text-foreground font-semibold">
-                        Điều khoản bổ sung:{' '}
-                      </span>
-                      <span className="text-muted-foreground leading-relaxed">
-                        {po.terms}
-                      </span>
-                    </div>
-                  )}
-                  {po.note && (
-                    <div>
-                      <span className="text-foreground font-semibold">
-                        Ghi chú chung:{' '}
-                      </span>
-                      <span className="text-muted-foreground leading-relaxed">
-                        {po.note}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
+            </>
           </div>
         </FastTab>
 
         {/* ── TAB 4: DÒNG THỜI GIAN & LỊCH SỬ DUYỆT ─────────────────────────── */}
         <FastTab
           title="Dòng thời gian"
-          summary={[['Số mốc', <span key="a" className="num">{marks.length}</span>]]}
+          summary={[
+            [
+              'Số mốc',
+              <span key="a" className="num">
+                {marks.length}
+              </span>,
+            ],
+          ]}
         >
           <div className="flex flex-col gap-5">
-          {/*
+            {/*
             TRAO ĐỔI đặt TRƯỚC dòng thời gian máy ghi.
 
             Người mở tab này hỏi "vì sao đơn đứng im" — câu trả lời nằm ở lời
@@ -1394,109 +1565,107 @@ export function PoDetailScreen({
             thời gian" phía dưới giữ lại cho ai muốn xem riêng phần máy ghi
             kèm chi tiết đợt giao / phiếu nhập.
           */}
-          <>
-            <div className="k-sec">
-              <div className="k-sec-t">
-                <History className="text-primary size-4" />
-                Trao đổi về đơn này
-              </div>
-            </div>
-            <div>
-              <PoNotesPanel
-                poId={po.id}
-                meId={me.id}
-                meName={me.name}
-                marks={marks.map((m) => ({
-                  key: m.key,
-                  at: m.at,
-                  label: m.label,
-                  actor: m.actor,
-                }))}
-                followerNames={[po.assignee_name].filter((x): x is string => !!x)}
-              />
-            </div>
-          </>
-
-          <>
-            <div className="k-sec">
-              <div className="k-sec-t">
-                <History className="text-primary size-4" />
-                Dòng thời gian & Nhật ký xử lý ({marks.length} mốc sự kiện)
-              </div>
-            </div>
-            <div>
-              {marks.length === 0 ? (
-                <EmptyState
-                  icon={<History className="text-muted-foreground size-6" />}
-                  title="Chưa có mốc nhật ký"
-                  description="Phiếu còn nằm ở người soạn hoặc chưa phát sinh sự kiện nào."
-                />
-              ) : (
-                <div className="border-border relative ml-3 space-y-6 border-l-2 pl-6">
-                  {marks.map((mk) => (
-                    <div key={mk.key} className="group relative">
-                      <div
-                        className={`border-background absolute top-1 -left-[31px] size-3.5 rounded-full border-2 ring-4 ${
-                          mk.tone === 'green'
-                            ? 'bg-emerald-500 ring-emerald-500/15'
-                            : mk.tone === 'blue'
-                              ? 'bg-primary ring-primary/15'
-                              : mk.tone === 'amber'
-                                ? 'bg-amber-500 ring-amber-500/15'
-                                : mk.tone === 'red'
-                                  ? 'bg-rose-500 ring-rose-500/15'
-                                  : 'bg-muted-foreground ring-muted/20'
-                        }`}
-                      />
-                      <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <span className="text-foreground text-sm font-semibold">
-                          {mk.label}
-                        </span>
-                        <span className="text-muted-foreground font-mono text-xs">
-                          {stamp(mk.at)}
-                        </span>
-                      </div>
-                      {(mk.actor || mk.detail) && (
-                        <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
-                          {mk.actor && (
-                            <span className="text-foreground font-medium">
-                              {mk.actor}
-                            </span>
-                          )}
-                          {mk.actor && mk.detail && ' · '}
-                          {mk.detail && <span>{mk.detail}</span>}
-                        </p>
-                      )}
-                    </div>
-                  ))}
+            <>
+              <div className="k-sec">
+                <div className="k-sec-t">
+                  <History className="text-primary size-4" />
+                  Trao đổi về đơn này
                 </div>
-              )}
-            </div>
-          </>
+              </div>
+              <div>
+                <PoNotesPanel
+                  poId={po.id}
+                  meId={me.id}
+                  meName={me.name}
+                  marks={marks.map((m) => ({
+                    key: m.key,
+                    at: m.at,
+                    label: m.label,
+                    actor: m.actor,
+                  }))}
+                  followerNames={[po.assignee_name].filter((x): x is string => !!x)}
+                />
+              </div>
+            </>
+
+            <>
+              <div className="k-sec">
+                <div className="k-sec-t">
+                  <History className="text-primary size-4" />
+                  Dòng thời gian & Nhật ký xử lý ({marks.length} mốc sự kiện)
+                </div>
+              </div>
+              <div>
+                {marks.length === 0 ? (
+                  <EmptyState
+                    icon={<History className="text-muted-foreground size-6" />}
+                    title="Chưa có mốc nhật ký"
+                    description="Phiếu còn nằm ở người soạn hoặc chưa phát sinh sự kiện nào."
+                  />
+                ) : (
+                  <div className="border-border relative ml-3 space-y-6 border-l-2 pl-6">
+                    {marks.map((mk) => (
+                      <div key={mk.key} className="group relative">
+                        <div
+                          className={`border-background absolute top-1 -left-[31px] size-3.5 rounded-full border-2 ring-4 ${
+                            mk.tone === 'green'
+                              ? 'bg-emerald-500 ring-emerald-500/15'
+                              : mk.tone === 'blue'
+                                ? 'bg-primary ring-primary/15'
+                                : mk.tone === 'amber'
+                                  ? 'bg-amber-500 ring-amber-500/15'
+                                  : mk.tone === 'red'
+                                    ? 'bg-rose-500 ring-rose-500/15'
+                                    : 'bg-muted-foreground ring-muted/20'
+                          }`}
+                        />
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="text-foreground text-sm font-semibold">
+                            {mk.label}
+                          </span>
+                          <span className="text-muted-foreground font-mono text-xs">
+                            {stamp(mk.at)}
+                          </span>
+                        </div>
+                        {(mk.actor || mk.detail) && (
+                          <p className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                            {mk.actor && (
+                              <span className="text-foreground font-medium">
+                                {mk.actor}
+                              </span>
+                            )}
+                            {mk.actor && mk.detail && ' · '}
+                            {mk.detail && <span>{mk.detail}</span>}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
           </div>
         </FastTab>
 
         {/* ── TAB 5: TÀI LIỆU ĐÍNH KÈM ─────────────────────────────────────── */}
-        <FastTab
-          title="Tài liệu đính kèm"
-        >
+        <FastTab title="Tài liệu đính kèm">
           <div className="flex flex-col gap-5">
-          <>
-            <div className="k-sec">
-              <div className="k-sec-t">
-                <Paperclip className="text-primary size-4" />
-                Hồ sơ & Tài liệu đính kèm
+            <>
+              <div className="k-sec">
+                <div className="k-sec-t">
+                  <Paperclip className="text-primary size-4" />
+                  Hồ sơ & Tài liệu đính kèm
+                </div>
               </div>
-            </div>
-            <div>
-              <DocumentFiles
-                kind="purchase_order"
-                id={po.id}
-                canEdit={isSupply || canApprove}
-                title="Báo giá NCC · Hợp đồng mua bán · Chứng từ giao nhận"
-              />
-            </div>
-          </>
+              <div>
+                <DocumentFiles
+                  kind="purchase_order"
+                  id={po.id}
+                  canEdit={isSupply || canApprove}
+                  title="Báo giá NCC · Hợp đồng mua bán · Chứng từ giao nhận"
+                />
+              </div>
+            </>
           </div>
         </FastTab>
       </DocBody>
@@ -1567,7 +1736,9 @@ export function PoDetailScreen({
               ? await act.reject(st.po, st.reason)
               : st.kind === 'close_short'
                 ? await act.closeShort(st.po, st.reason, st.lineId)
-                : await act.cancelPo(st.po, st.reason)
+                : st.kind === 'reopen'
+                  ? await act.reopenPo(st.po, st.reason)
+                  : await act.cancelPo(st.po, st.reason)
           if (ok) setReasoning(null)
         }}
         busy={act.busy}

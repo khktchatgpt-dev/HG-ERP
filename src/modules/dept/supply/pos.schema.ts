@@ -225,6 +225,21 @@ export const poAdvanceSchema = z.object({
   to: z.enum(['ordered', 'confirmed', 'in_transit', 'received']),
 })
 
+/**
+ * MỞ LẠI ĐƠN ĐÃ DUYỆT ĐỂ SỬA (16/09/2026) — LÝ DO BẮT BUỘC, tối thiểu 5 ký tự.
+ *
+ * Dài hơn mức 1 ký tự của `poCancelSchema` là cố ý: lý do này đi thẳng vào
+ * thông báo gửi Giám đốc ("đơn ông vừa duyệt bị mở lại vì …"). Một dấu chấm cho
+ * qua cửa thì thông báo ấy không nói được gì, và người duyệt phải đi hỏi lại.
+ */
+export const poReopenSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, 'Mở lại đơn đã duyệt phải nói rõ vì sao — Giám đốc đọc câu này')
+    .max(1000),
+})
+
 export const poCancelSchema = z.object({
   reason: z.string().trim().min(1, 'Huỷ đơn phải kèm lý do').max(1000),
 })

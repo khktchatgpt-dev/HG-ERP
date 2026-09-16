@@ -1,70 +1,42 @@
-import { todayVn } from '@/lib/date-vn'
 import { redirect } from 'next/navigation'
 import { authService } from '@/modules/core/auth/auth.service'
-import { canEnterWorkspace, listAccessibleWorkspaces } from '@/workspaces/access'
-import { posRepo } from '@/modules/dept/supply/pos.repo'
-import { countMyTodos } from '@/lib/supply-watch'
-import { SupplyShell } from './_shell/SupplyShell'
+import { canEnterWorkspace } from '@/workspaces/access'
+import { WorkspaceShell } from '@/components/workspace/WorkspaceShell'
+import { WORKSPACES } from '@/workspaces/workspaces.config'
+import { KitFrame } from './_shell/KitFrame'
 
 /**
- * MODULE MUA HÀNG — BẢN MỚI, dựng theo sổ thiết kế `/design-lab`.
+ * MODULE MUA HÀNG — các màn dựng theo sổ thiết kế `/design-lab`.
  *
- * Xếp theo dòng chảy Procure-to-Pay, không theo phòng (xem `_shell/nav.ts`).
- * Bản cũ ở `/planning` VẪN CHẠY NGUYÊN VẸN. Hai bên không đụng route nhau và
- * không đụng file nhau; khu này chỉ có tầng GIAO DIỆN.
+ * VỎ DÙNG CHUNG VỚI CẢ APP (16/09/2026). Khu này từng có vỏ riêng: rail 52px
+ * thu gọn được, cây menu riêng, thanh trên riêng. Nó giải đúng một vấn đề thật
+ * (sidebar 240px ăn 15% bề ngang của bảng), nhưng đổi lại phòng Cung ứng phải
+ * sống với HAI thanh điều hướng cùng lúc — sidebar cũ ở `/planning/*`, rail
+ * mới ở `/mua-hang/*` — với hai cây menu khác nhau. Chủ dự án gọi đúng tên:
+ * "lẫn lộn", và chốt giữ sidebar cũ.
  *
- * ĐIỀU KIỆN SỐNG SÓT CỦA VIỆC NUÔI HAI BẢN. Ngày 09/09/2026 dự án đã cố ý gỡ
- * cơ chế chạy song song `?v4=1` với lý do đúng: nuôi hai bản nghĩa là mọi sửa
- * lỗi phải làm hai lần, và bản cũ không bao giờ chết. Lần này chấp nhận lại
- * cái giá đó, nhưng chỉ ở đúng một tầng:
+ * Nên giờ chỉ còn MỘT cây menu, khai ở `workspaces.config.ts` (phòng
+ * `planning`), và khu này chỉ đóng góp tầng nội dung. Đường lùi là `git
+ * revert`, không phải một lớp CSS.
  *
- *   · TẦNG GIAO DIỆN nhân đôi — chỉ ở đây, có chủ ý;
- *   · SERVICE / API / REPO / QUYỀN DÙNG CHUNG, tuyệt đối không sao chép.
- *     Sửa nghiệp vụ vẫn là sửa một chỗ, và cả hai bản cùng nhận.
+ * `bare`: vùng nội dung không đệm, không chặn bề ngang, có `min-h-0` — màn kit
+ * tự lo mép và tự chốt chiều cao bằng `ScreenFrame`.
  *
- * Nên: KHÔNG viết service mới trong khu này. Cần gì thì gọi đúng route
- * `/api/dept/supply/*` mà bản cũ đang gọi. Thiếu API thì bổ sung vào module
- * `src/modules/dept/supply/`, không dựng đường vòng riêng.
- *
- * Quyền vào: dùng lại `canEnterWorkspace(user, 'planning')` — cùng một luật
- * với bản cũ. Khai một tập quyền thứ hai cho cùng một phòng là cách chắc chắn
+ * Quyền vào: dùng lại `canEnterWorkspace(user, 'planning')` — CÙNG một luật
+ * với khu cũ. Khai một tập quyền thứ hai cho cùng một phòng là cách chắc chắn
  * để hai bên lệch nhau về ai được vào.
+ *
+ * KHÔNG viết service mới trong khu này. Cần gì thì gọi đúng route
+ * `/api/dept/supply/*`; thiếu API thì bổ sung vào `src/modules/dept/supply/`.
  */
-export default async function CungUngLayout({ children }: { children: React.ReactNode }) {
+export default async function MuaHangLayout({ children }: { children: React.ReactNode }) {
   const user = await authService.currentUser()
   if (!user) redirect('/login')
   if (!(await canEnterWorkspace(user, 'planning'))) redirect('/')
 
-  /**
-   * Số trên nút hộp thư — cùng hàm với trang hộp thư và với badge của bản cũ
-   * (`workspaces/nav-badges.ts`). Nạp cột nhẹ, nuốt lỗi: vỏ không được chết vì
-   * một phép đếm.
-   */
-  let inboxCount = 0
-  try {
-    const rows = await posRepo.listWatchFields()
-    inboxCount = countMyTodos(rows, user.id, todayVn())
-  } catch {
-    inboxCount = 0
-  }
-
-  /*
-    Khu người này vào được — CÙNG NGUỒN với vỏ cũ (`listAccessibleWorkspaces`),
-    không khai tập quyền thứ hai. Thiếu nó thì admin và người xem chéo vào đây
-    là kẹt: rail không còn đường sang phòng khác ngoài gõ URL.
-  */
-  const switchable = (await listAccessibleWorkspaces(user)).map((a) => ({
-    id: a.workspace.id,
-    readonly: a.readonly,
-  }))
-
   return (
-    <SupplyShell
-      user={{ name: user.name ?? user.email, role: 'Mua hàng' }}
-      switchable={switchable}
-      inboxCount={inboxCount}
-    >
-      {children}
-    </SupplyShell>
+    <WorkspaceShell workspace={WORKSPACES.planning} bare>
+      <KitFrame>{children}</KitFrame>
+    </WorkspaceShell>
   )
 }

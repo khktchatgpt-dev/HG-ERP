@@ -155,6 +155,34 @@ async function templateOfLsx(customerId: string): Promise<LsxTemplate> {
   return resolveLsxTemplate(customer?.lsx_template)
 }
 
+/**
+ * Điền ảnh từ hồ sơ SP cho các dòng CHƯA có ảnh — xem lý do đầy đủ ở `sheet()`.
+ * Một truy vấn gộp, và chỉ chạy khi thật sự có dòng thiếu.
+ *
+ * XUẤT RA NGOÀI vì không phải ai cũng đi qua `sheet()`: màn GĐ duyệt lệnh và
+ * bảng việc của tổ đọc thẳng `lsxLinesRepo.listLines`. Trang thống kê thì đã
+ * tự chép tay đúng phép này từ trước — ba bản chép tay là ba chỗ để quên, nên
+ * gom về một hàm.
+ */
+export async function withProductImage<
+  T extends Pick<LsxLine, 'product_id' | 'image_file_id'>,
+>(lines: T[]): Promise<T[]> {
+  const thieu = lines.filter((l) => !l.image_file_id && l.product_id)
+  if (thieu.length === 0) return lines
+  const products = await productsRepo.listByIds([
+    ...new Set(thieu.map((l) => l.product_id as string)),
+  ])
+  const anh = new Map(
+    products.filter((p) => p.image_file_id).map((p) => [p.id, p.image_file_id]),
+  )
+  if (anh.size === 0) return lines
+  return lines.map((l) =>
+    !l.image_file_id && l.product_id && anh.has(l.product_id)
+      ? { ...l, image_file_id: anh.get(l.product_id) ?? null }
+      : l,
+  )
+}
+
 /** So dòng cũ ↔ mới, trả id các dòng đổi nội dung (bỏ qua sort_order). */
 function changedLineIds(before: LsxLine[], after: LsxLine[]): string[] {
   const key = (l: LsxLine) =>
@@ -183,6 +211,25 @@ function changedLineIds(before: LsxLine[], after: LsxLine[]): string[] {
 
 export const lsxLinesService = {
   /** Đọc phiếu (nhóm + dòng + mẫu cột) — mọi NV đã đăng nhập xem được. */
+  /**
+   * ẢNH SP: DÒNG LỆNH CHỈ GIỮ BẢN CHỤP, NÊN PHẢI CÓ ĐƯỜNG LÙI VỀ HỒ SƠ.
+   *
+   * `draftFromOrders` chép `image_file_id` vào dòng lệnh ngay lúc phát lệnh.
+   * Hồ sơ SP lúc đó chưa có ảnh thì dòng giữ `null` VĨNH VIỄN — Kỹ thuật tải
+   * ảnh lên hôm sau cũng không tới được phiếu, vì không ai đi chép lại.
+   *
+   * Đo 15/09/2026: 18 dòng trên 5 lệnh đúng cảnh đó — hồ sơ SP ĐÃ có ảnh mà
+   * màn Bán hàng vẫn hiện ô "—" (chủ dự án báo đúng chỗ này). Còn 185 dòng
+   * khác trống vì hồ sơ SP thật sự chưa có ảnh; hai việc khác nhau, chỉ việc
+   * thứ nhất là lỗi.
+   *
+   * ĐIỀN BÙ, KHÔNG GHI ĐÈ: dòng đã có ảnh riêng thì giữ nguyên — ảnh trên dòng
+   * là lựa chọn của người soạn phiếu. `null` không phải một lựa chọn, nó là
+   * chỗ chưa ai điền.
+   *
+   * Không backfill xuống DB: bản chụp còn dùng để so "khác hồ sơ" ở màn soạn
+   * dòng, ghi đè là đổi nghĩa cột. Ở đây chỉ vá tầng ĐỌC.
+   */
   async sheet(_user: User, lsxId: string): Promise<LsxSheet> {
     const lsx = await productionRepo.findById(lsxId)
     if (!lsx) throw NotFound('LSX không tồn tại')
@@ -191,7 +238,8 @@ export const lsxLinesService = {
       lsxLinesRepo.listLines(lsxId),
       templateOfLsx(lsx.customer_id),
     ])
-    return { template, groups: groupWithLines(groups, lines), totals: sumTotals(lines) }
+    const shown = await withProductImage(lines)
+    return { template, groups: groupWithLines(groups, shown), totals: sumTotals(lines) }
   },
 
   /**

@@ -1,214 +1,110 @@
-import Link from 'next/link'
-import { ArrowDownToLine, CalendarDays, Truck, Undo2 } from 'lucide-react'
 import { authService } from '@/modules/core/auth/auth.service'
-import { isWarehouseUser } from '@/modules/dept/warehouse/warehouse.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
-import { PageHeader } from '@/components/erp/PageHeader'
-import { DocChip } from '@/components/erp/DocChip'
-import { Badge } from '@/components/Badge'
+import { RECEIVABLE, supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { todayVn } from '@/lib/date-vn'
+import type { HangVeRow } from '@/lib/kho-hang-ve'
+import { HangVeScreen } from './HangVeScreen'
 
+export const metadata = { title: 'Kho · Hàng về' }
 export const dynamic = 'force-dynamic'
 
+/** Trần của hai hàm nguồn — chạm trần thì màn phải nói, không im lặng cắt đuôi. */
+const TRAN_DOT = 300
+const TRAN_DON = 200
+
 /**
- * NHẬP KHO — CHỜ NHẬN (plan-kho-redesign GĐ1). Trục nhìn là "hôm nay có gì về":
- * đợt giao NCC đã hẹn (0152) xếp theo ngày, quá hẹn nổi đỏ; dưới là đơn đang mở
- * CHƯA khai đợt (NCC giao lúc nào không biết trước — vẫn phải ngóng).
+ * HÀNG VỀ — cửa vào của khu Kho (Bước 1, `docs/kho-buoc-1-nhap-kho.md`).
  *
- * Nút "Lập phiếu nhập" mở form PNK sẵn có với PO + đợt CHỌN SẴN — Kho không
- * phải dò lại đơn trong dropdown. Tồn chỉ đổi khi phiếu được lập (nguyên tắc:
- * kho xác nhận biến động, không gõ số tồn).
+ * Câu màn trả lời: "xe nào đang tới, cái nào trễ?" — trục là THỜI GIAN.
+ *
+ * KHÔNG VIẾT TRUY VẤN MỚI. Hai nguồn là đúng hai hàm màn Nhận hàng của Mua
+ * hàng và trang Kho cũ đã dùng: `poShipmentsRepo.listOpen` (đợt giao đã hẹn,
+ * planned/arrived) + `supplyRepo.listOpenPos` (đơn đã gửi NCC). Kho và Cung
+ * ứng vì thế không thể đếm khác nhau.
+ *
+ * Một dòng = một lần xe tới: đơn có đợt thì mỗi đợt một dòng; đơn chưa khai
+ * đợt vẫn là một dòng (xếp làn theo hẹn giao của ĐƠN, không có thì "Chưa hẹn
+ * ngày"). Tiến độ "về x/y dòng" là của cả ĐƠN (0126) — Kho nhận từng mã một,
+ * đó mới là câu nói được điều gì còn thiếu.
  */
 export default async function WarehouseInboundPage() {
   const user = await authService.requirePageUser()
-  const isWh = await isWarehouseUser(user)
-  const canEdit = user.role === 'admin' || (user.role === 'manager' && isWh) || isWh
-  const today = new Date().toISOString().slice(0, 10)
+  const today = todayVn()
 
-  const [shipments, openPos] = await Promise.all([
+  const [shipmentsAll, openPos, canEdit] = await Promise.all([
     poShipmentsRepo.listOpen(),
     supplyRepo.listOpenPos(),
+    user.role === 'admin'
+      ? Promise.resolve(true)
+      : canAction(user, 'warehouse.stock.write'),
   ])
-  const poWithShipment = new Set(shipments.map((s) => s.po_id))
-  const posNoShipment = openPos.filter((p) => !poWithShipment.has(p.id))
 
-  const groups: { label: string; tone: string; rows: typeof shipments }[] = [
-    {
-      label: 'Quá hẹn',
-      tone: 'var(--stop)',
-      rows: shipments.filter((s) => s.expected_date < today),
-    },
-    {
-      label: 'Hôm nay',
-      tone: 'var(--warn)',
-      rows: shipments.filter((s) => s.expected_date === today),
-    },
-    {
-      label: 'Sắp tới',
-      tone: 'var(--primary)',
-      rows: shipments.filter((s) => s.expected_date > today),
-    },
-  ].filter((g) => g.rows.length > 0)
+  /*
+    Chỉ đợt giao của đơn CÒN NHẬN ĐƯỢC. `listOpen` chỉ loại đơn huỷ, nên đợt
+    `planned` của một đơn đã "Về đủ" vẫn lọt — đo 16/09/2026: đơn 02/26HG/BT
+    về đủ mà 4 đợt còn planned, hiện thành 3 dòng "quá hẹn" mà bấm vào thì
+    form từ chối. Cùng luật với màn Nhận hàng của Mua hàng (`isIncoming`).
+  */
+  const shipments = shipmentsAll.filter((s) =>
+    (RECEIVABLE as readonly string[]).includes(s.po_status),
+  )
+  const poById = new Map(openPos.map((p) => [p.id, p]))
+  const poIds = Array.from(
+    new Set([...shipments.map((s) => s.po_id), ...openPos.map((p) => p.id)]),
+  )
+  const [lineDone, codes] = await Promise.all([
+    supplyRepo.lineDoneByPoIds(poIds),
+    poShipmentsRepo.codesByShipmentIds(shipments.map((s) => s.id)),
+  ])
 
-  const dmy = (iso: string) =>
-    new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })
+  const rows: HangVeRow[] = shipments.map((s) => {
+    const po = poById.get(s.po_id)
+    const ld = lineDone.get(s.po_id)
+    return {
+      key: s.id,
+      po_id: s.po_id,
+      po_code: s.po_code,
+      supplier_name: s.supplier_name,
+      lsx_code: po?.lsx_code ?? null,
+      shipment_id: s.id,
+      seq: s.seq,
+      arrived: s.status === 'arrived',
+      date: s.expected_date.slice(0, 10),
+      line_count: s.line_count,
+      total_qty: s.total_qty,
+      lines_done: ld?.done ?? 0,
+      lines_total: ld?.total ?? 0,
+      codes: codes.get(s.id) ?? [],
+    }
+  })
+  const coDot = new Set(shipments.map((s) => s.po_id))
+  for (const p of openPos) {
+    if (coDot.has(p.id)) continue
+    const ld = lineDone.get(p.id)
+    rows.push({
+      key: p.id,
+      po_id: p.id,
+      po_code: p.code,
+      supplier_name: p.supplier_name,
+      lsx_code: p.lsx_code,
+      shipment_id: null,
+      seq: null,
+      arrived: false,
+      date: p.expected_at ? p.expected_at.slice(0, 10) : null,
+      line_count: null,
+      total_qty: null,
+      lines_done: ld?.done ?? 0,
+      lines_total: ld?.total ?? 0,
+    })
+  }
+
+  const truncated =
+    shipmentsAll.length >= TRAN_DOT || openPos.length >= TRAN_DON
+      ? { dot: TRAN_DOT, don: TRAN_DON }
+      : null
 
   return (
-    <div className="flex flex-col gap-4">
-      <PageHeader
-        breadcrumbs={[{ label: 'Kho', href: '/warehouse' }, { label: 'Nhập kho' }]}
-        title="Nhập kho — chờ nhận"
-        description="Đợt giao nhà cung cấp đã hẹn, xếp theo ngày. Lập phiếu nhập là tồn tự tăng — không ai gõ số tồn trực tiếp."
-        actions={
-          <div className="flex items-center gap-2">
-            {canEdit && (
-              <>
-                <Link
-                  href="/warehouse/docs?new=return"
-                  className="border-input hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm"
-                >
-                  <Undo2 className="size-4" /> Trả hàng NCC
-                </Link>
-                <Link
-                  href="/warehouse/docs?new=receipt"
-                  className="bg-primary inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-                >
-                  <ArrowDownToLine className="size-4" /> Lập phiếu nhập
-                </Link>
-              </>
-            )}
-          </div>
-        }
-      />
-
-      {shipments.length === 0 && posNoShipment.length === 0 ? (
-        <div className="bg-card flex flex-col items-center rounded-xl border py-14 text-center">
-          <span className="bg-muted grid size-12 place-items-center rounded-xl">
-            <Truck className="text-muted-foreground size-6" strokeWidth={1.8} />
-          </span>
-          <p className="t-title mt-4">Không có hàng nào đang chờ nhận</p>
-          <p className="t-body text-muted-foreground mt-1 max-w-sm">
-            Khi Cung ứng gửi đơn và NCC hẹn lịch, các đợt giao sẽ hiện ở đây.
-          </p>
-        </div>
-      ) : (
-        <>
-          {groups.map((g) => (
-            <section key={g.label} className="bg-card overflow-hidden rounded-xl border">
-              <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-                <span
-                  className="size-2 rounded-full"
-                  style={{ background: g.tone }}
-                  aria-hidden
-                />
-                <b className="text-[13px]">{g.label}</b>
-                <span
-                  className="rounded-full px-2 py-0.5 font-mono text-[11.5px] font-semibold tabular-nums"
-                  style={{
-                    color: g.tone,
-                    background: `color-mix(in srgb, ${g.tone} 12%, transparent)`,
-                  }}
-                >
-                  {g.rows.length}
-                </span>
-              </header>
-              <div className="divide-border/60 divide-y">
-                {g.rows.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-                  >
-                    <span
-                      className="t-data inline-flex w-14 shrink-0 items-center gap-1 text-[12.5px] font-semibold"
-                      style={{ color: g.tone }}
-                    >
-                      <CalendarDays className="size-3.5" strokeWidth={1.8} />
-                      {dmy(s.expected_date)}
-                    </span>
-                    {/* MÃ ĐỢT đứng TRƯỚC mã đơn (0193). Kho làm việc trên lô
-                        hàng trước mặt, không trên đơn: gọi tài xế, ghi lên
-                        thùng, tra lại sau — đều cần một cái tên riêng. "đợt 2"
-                        thì phải hỏi tiếp "đợt 2 của đơn nào". Mã đơn lùi xuống
-                        làm chú thích vì nó là chiều truy ngược, không phải
-                        chiều làm việc. */}
-                    <DocChip className="text-[11px]">{s.code ?? `đợt ${s.seq}`}</DocChip>
-                    <span className="t-body min-w-0 flex-1 truncate font-medium">
-                      {s.supplier_name}
-                    </span>
-                    <span className="text-muted-foreground shrink-0 text-[11.5px]">
-                      <span className="t-data">{s.po_code}</span> · đợt {s.seq} ·{' '}
-                      {s.line_count} dòng ·{' '}
-                      <span className="t-data">
-                        {s.total_qty.toLocaleString('vi-VN')}
-                      </span>
-                    </span>
-                    {s.status === 'arrived' && <Badge tone="blue">Xe tới</Badge>}
-                    {/* K4: Kho xem thẳng đơn (dòng hàng, SL, đợt) — user chốt
-                        16/08: Kho thấy đủ như Cung ứng, khỏi làm màn riêng. */}
-                    <Link
-                      href={`/planning/pos/${s.po_id}`}
-                      className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline"
-                    >
-                      Xem đơn
-                    </Link>
-                    {canEdit && (
-                      <Link
-                        href={`/warehouse/docs?new=receipt&po=${s.po_id}&shipment=${s.id}`}
-                        className="border-input hover:bg-accent inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
-                      >
-                        <ArrowDownToLine className="size-3.5" /> Lập phiếu nhập
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          ))}
-
-          {posNoShipment.length > 0 && (
-            <section className="bg-card overflow-hidden rounded-xl border">
-              <header className="flex items-center gap-2.5 border-b px-4 py-2.5">
-                <b className="text-[13px]">Đơn đang mở — chưa hẹn đợt giao</b>
-                <span className="text-muted-foreground text-xs">
-                  {posNoShipment.length} đơn · NCC giao lúc nào chưa biết, vẫn nhận được
-                </span>
-              </header>
-              <div className="divide-border/60 divide-y">
-                {posNoShipment.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5"
-                  >
-                    <DocChip className="text-[11px]">{p.code}</DocChip>
-                    <span className="t-body min-w-0 flex-1 truncate">
-                      {p.supplier_name}
-                    </span>
-                    {p.lsx_code && (
-                      <span className="t-data text-muted-foreground text-[11px]">
-                        LSX {p.lsx_code}
-                      </span>
-                    )}
-                    <Link
-                      href={`/warehouse/don-ncc/${p.id}`}
-                      className="text-muted-foreground hover:text-foreground shrink-0 text-xs underline-offset-2 hover:underline"
-                    >
-                      Xem đơn
-                    </Link>
-                    {canEdit && (
-                      <Link
-                        href={`/warehouse/docs?new=receipt&po=${p.id}`}
-                        className="border-input hover:bg-accent inline-flex shrink-0 items-center gap-1 rounded-md border px-2.5 py-1 text-xs font-medium transition-colors"
-                      >
-                        <ArrowDownToLine className="size-3.5" /> Lập phiếu nhập
-                      </Link>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-    </div>
+    <HangVeScreen rows={rows} today={today} canEdit={canEdit} truncated={truncated} />
   )
 }

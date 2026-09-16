@@ -62,6 +62,9 @@ export type Action = {
   danger?: boolean
   href?: (id: string) => string
   needReason?: boolean
+  /** Độ dài lý do tối thiểu (mặc định 1) — khớp hàng rào zod ở server, chặn
+   *  ngay ở nút thay vì để server dội lỗi về sau khi người dùng đã bấm. */
+  minReason?: number
   needDate?: boolean
   reasonLabel?: string
   reasonHint?: string
@@ -152,6 +155,9 @@ const REOPEN = (blocked?: string): Action => ({
   stakes: 'nang',
   blocked,
   needReason: true,
+  /* Lý do đi vào ghi chú đơn và vào thông báo gửi Giám đốc — một dấu chấm cho
+     qua cửa thì cả hai chỗ đó thành vô nghĩa. Ngưỡng khớp hàng rào zod ở server. */
+  minReason: 5,
   reasonLabel: 'Vì sao phải sửa lại đơn',
   reasonHint: 'Ghi rõ sai ở đâu — lý do được đóng dấu vào ghi chú đơn để người sau đọc lại hiểu.', // prettier-ignore
   consequence: 'Đơn quay về NHÁP và mất dấu duyệt: Giám đốc phải duyệt lại từ đầu. Chỉ dùng khi số trên đơn nhập sai, không dùng để đổi ý.', // prettier-ignore

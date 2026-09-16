@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { PAGE_SIZE } from '@/app/(workspace)/warehouse/materials/constants'
+import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
 import {
   Btn,
   Cell,

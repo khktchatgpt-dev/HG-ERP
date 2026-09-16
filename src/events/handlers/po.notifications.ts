@@ -47,6 +47,21 @@ export function registerPoNotificationHandlers(): void {
     )
   })
 
+  // Mở lại đơn ĐÃ DUYỆT (16/09/2026): người duyệt phải biết chữ ký của mình
+  // vừa bị gỡ, và đơn sẽ quay lại bàn họ một lần nữa.
+  on('po.reopened', async (e) => {
+    await Promise.all(
+      e.approver_ids.map((rid) =>
+        notificationsService.notify({
+          recipientId: rid,
+          actorId: e.reopened_by,
+          type: 'po_reopened',
+          payload: { title: e.code, reason: e.reason },
+        }),
+      ),
+    )
+  })
+
   // Bàn giao đơn (0128): báo người NHẬN phụ trách.
   on('po.reassigned', async (e) => {
     await notificationsService.notify({

@@ -61,9 +61,20 @@ async function supplyBadges(user: User): Promise<Record<string, number>> {
   ])
   const todo = countMyTodos(rows, user.id, today)
   const soon = countIncomingSoon(rows, today)
+  /*
+    HREF BÁM VÀO MÀN MỚI (16/09/2026) — ba con số không đổi, chỉ đổi chỗ đậu:
+
+      Chờ tôi xử lý     → Hộp thư việc  (/mua-hang/hop-thu)
+      Hàng sắp về       → Nhận hàng     (/mua-hang/nhan-hang)
+      Vấn đề cần xử lý  → Bàn làm việc  (/mua-hang), nơi nó thành một khối
+
+    Badge là { href → số }, mà ba href cũ vừa rời khỏi sidebar — để nguyên là
+    ba phép đếm chạy mỗi lần mở trang rồi rơi vào hư không, và người mua mất
+    đúng thứ khiến họ mở phần mềm lên: con số nói "có việc".
+  */
   const out: Record<string, number> = {}
-  if (todo > 0) out['/planning/viec-cua-toi'] = todo
-  if (soon > 0) out['/planning/hang-sap-ve'] = soon
-  if (issues > 0) out['/planning/van-de'] = issues
+  if (todo > 0) out['/mua-hang/hop-thu'] = todo
+  if (soon > 0) out['/mua-hang/nhan-hang'] = soon
+  if (issues > 0) out['/mua-hang'] = issues
   return out
 }

@@ -119,6 +119,17 @@ export function poStatusOptions(): { value: PoStatus; label: string }[] {
   return PO_STATUSES.map((s) => ({ value: s, label: PO_STATUS_LABEL[s] }))
 }
 
+/** Năm nghĩa vòng đời dùng cho màu dải bước — khớp `TrackTone` của kit. */
+export type PoTrackTone = 'idle' | 'wait' | 'run' | 'done' | 'stop'
+
+/**
+ * Dải NHẬN HÀNG (Chưa nhận · Một phần · Đủ) — tính theo BƯỚC, không theo trạng
+ * thái đơn: đơn có thể đang 'in_transit' mà đã nhận một phần.
+ */
+export function receiptTrackTone(at: number): PoTrackTone {
+  return at >= 2 ? 'done' : at === 1 ? 'wait' : 'idle'
+}
+
 /**
  * MÀU VẠCH TRẠNG THÁI ở mép trái mỗi dòng (xem `.spine` trong globals.css).
  *
@@ -177,28 +188,36 @@ export const PO_TRACK_STEPS = [
 export function poTrackStep(status: PoStatus): {
   /** Chỉ số bước đang ở. `PO_TRACK_STEPS.length` = đã qua hết; `-1` = trục không còn nghĩa. */
   at: number
-  /** Màu của bước đang ở — huỷ thì đỏ, còn lại là màu hành động. */
-  tone: 'act' | 'stop'
+  /**
+   * NGHĨA của bước đang ở — quyết định màu dải (xem `TrackTone` ở kit).
+   *
+   * Bản 15/09 chỉ có `act | stop`, nên bảy trên chín trạng thái ra CÙNG một
+   * màu xanh với nút chính; chủ dự án chấm "chỉ có mỗi màu xanh trắng, rất khó
+   * phân biệt" (16/09). Nay dùng đúng bốn nghĩa của `poSpineColor` bên dưới,
+   * để vạch mép dòng ở màn danh sách và dải bước ở màn chứng từ không nói hai
+   * thứ tiếng về cùng một đơn.
+   */
+  tone: PoTrackTone
   /** Bậc KẾT THÚC ngoài trục — chỉ đơn huỷ mới có. */
   terminal?: string
 } {
   switch (status) {
     case 'draft':
-      return { at: 0, tone: 'act' }
+      return { at: 0, tone: 'idle' }
     case 'pending_approval':
-      return { at: 1, tone: 'act' }
+      return { at: 1, tone: 'wait' }
     case 'approved':
-      return { at: 2, tone: 'act' }
+      return { at: 2, tone: 'wait' }
     case 'ordered':
-      return { at: 3, tone: 'act' }
+      return { at: 3, tone: 'run' }
     case 'confirmed':
-      return { at: 4, tone: 'act' }
+      return { at: 4, tone: 'run' }
     case 'in_transit':
-      return { at: 5, tone: 'act' }
+      return { at: 5, tone: 'run' }
     // Hàng đã bắt đầu về → cả trục phát hành đã xong.
     case 'partial':
     case 'received':
-      return { at: PO_TRACK_STEPS.length, tone: 'act' }
+      return { at: PO_TRACK_STEPS.length, tone: status === 'received' ? 'done' : 'wait' }
     /*
       HUỶ KHÔNG PHẢI MỘT BƯỚC, nó là chỗ vòng đời DỪNG LẠI.
 

@@ -2,9 +2,11 @@
 
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { useLocalPref } from '@/app/(mua-hang)/_shell/use-local-pref'
 import {
   Btn,
   Cell,
+  Chip,
   Code,
   CoverageBar,
   Crumb,
@@ -33,13 +35,130 @@ const conLai = (iso: string | null, today: string): number | null => {
   return Math.round((t(iso) - t(today)) / 86_400_000)
 }
 
+/**
+ * SẢN PHẨM CỦA LỆNH — dải ảnh, dựng 15/09/2026 theo báo cáo của chủ dự án
+ * ("theo các lsx bạn bổ sung thiếu mất ảnh sản phẩm").
+ *
+ * Trước đó màn chỉ đếm "Sản phẩm 17" và hết. Con số đó không nói được lệnh
+ * này làm CÁI GÌ, mà đấy lại là thứ người mua cần khi cầm điện thoại gọi NCC
+ * hoặc khi mở cùng lúc ba bốn lệnh ra so.
+ *
+ * ĐO TRƯỚC KHI DỰNG: 81/110 mã SP trên 19 lệnh đang chạy có ảnh (74%) —
+ * đủ dày để dải ảnh có nghĩa. Mã KHÔNG có ảnh vẫn chiếm chỗ và NÓI RA là
+ * chưa có, thay vì bị giấu đi: chỗ trống đó là việc của Kỹ thuật, và giấu nó
+ * thì không ai biết mà bổ sung.
+ */
+function SanPham({
+  products,
+  imageUrls,
+  coDonKhach,
+}: {
+  products: LsxSupplyDetail['products']
+  imageUrls: Record<string, string>
+  coDonKhach: boolean
+}) {
+  const [mo, setMo] = useLocalPref('hg.mua-hang.lenh.san-pham', '1')
+  const open = mo === '1'
+  const tongCai = products.reduce((s, p) => s + p.qty, 0)
+  const thieuAnh = products.filter((p) => !p.image_file_id).length
+
+  return (
+    <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
+      <div className="flex items-center gap-2 text-[var(--fs-sm)]">
+        <b className="text-[var(--ink)]">Sản phẩm của lệnh</b>
+        <span className="num text-[var(--ink-3)]">
+          {products.length} mã
+          {/* `showNum(0)` trả chuỗi rỗng, nên nối thẳng là ra "0 mã · cái". */}
+          {tongCai > 0 && ` · ${showNum(tongCai)} cái`}
+        </span>
+        {thieuAnh > 0 && products.length > 0 && (
+          <span className="text-[10.5px] text-[var(--warn)]">
+            {thieuAnh} mã chưa có ảnh trong hồ sơ SP
+          </span>
+        )}
+        <span className="ml-auto">
+          <Chip on={open} onClick={() => setMo(open ? '0' : '1')}>
+            {open ? 'Thu gọn' : 'Mở dải ảnh'}
+          </Chip>
+        </span>
+      </div>
+
+      {products.length === 0 ? (
+        /*
+          NÓI LÝ DO, KHÔNG CHỈ NÓI "TRỐNG" — và nói đúng ai còn nợ việc. Dòng
+          lệnh do Bán hàng soạn; lệnh chưa gắn đơn khách thì thường cũng chưa
+          có dòng, nên phân biệt hai cảnh để người đọc biết đi đòi cái gì.
+        */
+        <div className="mt-1 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          {coDonKhach
+            ? 'Bán hàng chưa soạn dòng lệnh — soạn xong thì sản phẩm hiện ở đây.'
+            : 'Lệnh chưa gắn đơn hàng khách và cũng chưa có dòng lệnh nào, nên chưa biết phải làm sản phẩm gì.'}
+        </div>
+      ) : (
+        open && (
+          <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
+            {products.map((p) => {
+              const src = p.image_file_id ? imageUrls[p.image_file_id] : undefined
+              /*
+                DÒNG LỆNH GÕ TAY thì không trỏ vào hồ sơ SP nào — bấm vào sẽ ra
+                trang lỗi. Thẻ vẫn bày đủ mã, số lượng, tên; chỉ là không bấm
+                được, và màu chữ nói ra điều đó.
+              */
+              const Tag = p.product_id ? 'a' : 'span'
+              return (
+                <Tag
+                  key={p.code}
+                  {...(p.product_id ? { href: `/products/${p.product_id}` } : {})}
+                  title={`${p.code} — ${p.name}`}
+                  className="w-[104px] shrink-0 no-underline"
+                >
+                  <span className="flex h-[78px] w-[104px] items-center justify-center overflow-hidden rounded-[3px] border border-[var(--line)] bg-[var(--surface-hover)]">
+                    {src ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- ảnh ngoài, kích thước theo hồ sơ SP; next/image không thêm được gì ở ô 104px
+                      <img
+                        src={src}
+                        alt={p.code}
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-[10.5px] text-[var(--ink-empty)]">
+                        chưa có ảnh
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-1 flex items-baseline gap-1">
+                    <span
+                      className={`num truncate text-[11px] ${p.product_id ? 'text-[var(--act)]' : 'text-[var(--ink-2)]'}`}
+                    >
+                      {p.code}
+                    </span>
+                    <span className="num shrink-0 text-[10.5px] text-[var(--ink-3)]">
+                      ×{showNum(p.qty)}
+                    </span>
+                  </span>
+                  <span className="block truncate text-[10.5px] text-[var(--ink-2)]">
+                    {p.name}
+                  </span>
+                </Tag>
+              )
+            })}
+          </div>
+        )
+      )}
+    </div>
+  )
+}
+
 export function LenhScreen({
   lsx,
   today,
+  imageUrls,
   canEdit,
 }: {
   lsx: LsxSupplyDetail
   today: string
+  imageUrls: Record<string, string>
   canEdit: boolean
 }) {
   const { coverage: cv } = lsx
@@ -57,6 +176,10 @@ export function LenhScreen({
 
   const chuaGui = lsx.pos.filter((p) => p.status === 'draft' || p.status === 'pending_approval').length // prettier-ignore
   const tre = lsx.pos.filter((p) => p.late).length
+  /** Ai đang lo lệnh này — suy từ người phụ trách các đơn, như màn cũ vẫn làm. */
+  const owners = [
+    ...new Set(lsx.pos.map((p) => p.assignee_name).filter((v): v is string => !!v)),
+  ]
 
   return (
     <ScreenFrame>
@@ -71,17 +194,29 @@ export function LenhScreen({
         compact
         eyebrow={lsx.customer_name}
         title={lsx.code}
+        /*
+          DẢI DỮ KIỆN là thứ NHẬN DIỆN lệnh, không phải chỗ bày lại con số.
+          "Mã còn hụt" đã rời khỏi đây 15/09/2026 vì dải hiệu suất ngay dưới có
+          đúng số đó KÈM MẪU SỐ — một con số đứng hai chỗ là sớm muộn lệch nhau.
+          Chỗ trống dành cho hai dữ kiện màn cũ có mà bản này đánh rơi: ngày
+          giao khách và ai đang lo lệnh.
+        */
         facts={[
           { label: 'Sản phẩm', value: String(lsx.products.length) },
-          {
-            label: 'Mã còn hụt',
-            value: String(cv.missing),
-            tone: cv.missing > 0 ? 'stop' : 'done',
-          },
           {
             label: 'Mốc vật tư',
             value: moc ? ngay(moc) : 'chưa có',
             tone: moc ? (con != null && con < 0 ? 'stop' : 'neutral') : 'warn',
+          },
+          {
+            label: 'Ngày giao khách',
+            value: lsx.ship_date ? ngay(lsx.ship_date) : 'chưa có',
+            tone: lsx.ship_date ? 'neutral' : 'warn',
+          },
+          {
+            label: 'Phụ trách',
+            value: owners.length > 0 ? owners.join(', ') : 'chưa giao ai',
+            tone: owners.length > 0 ? 'neutral' : 'warn',
           },
           { label: 'Đơn mua', value: String(lsx.pos.length) },
         ]}
@@ -142,6 +277,12 @@ export function LenhScreen({
           tone={tre > 0 ? 'stop' : undefined}
         />
       </MetricStrip>
+
+      <SanPham
+        products={lsx.products}
+        imageUrls={imageUrls}
+        coDonKhach={lsx.order_codes.length > 0}
+      />
 
       {cv.missing > 0 && cv.missing_top.length > 0 && (
         <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px] text-[var(--fs-sm)]">
@@ -204,6 +345,17 @@ export function LenhScreen({
                       <Code as="a" href={`/mua-hang/don/${p.id}`}>
                         {p.code}
                       </Code>
+                      {/*
+                        SỐ ĐH CỦA NCC — cái người mua đọc lên khi gọi điện.
+                        NCC không biết mã PO- của mình; họ tra theo số trên tờ
+                        giấy họ giữ. 28/66 đơn có số này. Chỉ hiện khi khác mã
+                        đơn, tránh in hai lần cùng một chuỗi.
+                      */}
+                      {p.supplier_doc_no?.trim() && p.supplier_doc_no !== p.code && (
+                        <span className="num text-[10.5px] text-[var(--ink-3)]">
+                          ĐH {p.supplier_doc_no}
+                        </span>
+                      )}
                       {/*
                         ĐƠN MUA CHUNG của lệnh khác (0125) phải nói ra: nó nằm
                         đây vì có mua hộ lệnh này, nhưng tiền và tiến độ của nó

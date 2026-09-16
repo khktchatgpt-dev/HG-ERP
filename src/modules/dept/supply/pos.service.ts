@@ -1084,13 +1084,32 @@ export const posService = {
       approved_at: null,
       ordered_at: null,
       confirmed_at: null,
+      /*
+        XOÁ LUÔN GHI CHÚ XÁC NHẬN của NCC (bổ sung 16/09/2026): đơn hạ về nháp
+        rồi sẽ phải đi lại cửa "NCC xác nhận", mà lượt xác nhận cũ nói về một
+        bản dòng hàng sắp bị sửa. Để lại là đơn nháp vẫn đeo câu "NCC đã xác
+        nhận ngày …" của bản không còn tồn tại.
+      */
+      confirmed_note: null,
       note: reopenNote(before.status, reason.trim(), before.note),
     })
+    /*
+      SỰ KIỆN RIÊNG, không mượn `po.withdrawn` (sửa 16/09/2026).
+
+      Hai việc khác nghĩa: rút về nháp là người soạn tự rút bản CHƯA ai duyệt;
+      hạ về nháp là gỡ chữ ký của một bản ĐÃ duyệt. Mượn chung một sự kiện thì
+      dòng thời gian của đơn ghi "Rút về nháp" cho cả hai, và người duyệt đọc
+      thông báo tưởng mình chưa từng ký. 0201 nới hai check constraint để vết
+      `reopened` và thông báo `po_reopened` ghi được — thiếu nó thì handler
+      nuốt lỗi IM LẶNG và dòng thời gian trống trơn.
+    */
     await emit({
-      name: 'po.withdrawn',
+      name: 'po.reopened',
       po_id: po.id,
       code: po.code,
-      withdrawn_by: user.id,
+      from_status: before.status,
+      reopened_by: user.id,
+      reason: reason.trim(),
       approver_ids: await approverIds(user.id),
     })
     return po

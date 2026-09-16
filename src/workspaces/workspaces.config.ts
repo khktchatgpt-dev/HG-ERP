@@ -280,29 +280,36 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     route: '/warehouse',
     accent: 'amber',
     logoText: 'KH',
+    /*
+     * DỰNG LẠI TỪNG MÀN MỘT (từ 16/09/2026, `docs/kho-buoc-1-nhap-kho.md`).
+     * Khu Kho bị gỡ sạch màn ngày 16/09 (commit 20033fb) sau đợt dựng 31 màn
+     * trong 10 giờ mà không ai nghiệm thu giữa chừng. Lần này mỗi bước một
+     * màn, chạy thật xong mới thêm mục kế: Nhập → Xuất → Tồn → Danh mục.
+     *
+     * `home` trỏ thẳng vào màn đầu tiên: KHÔNG dựng trang chủ khu Kho ở bước
+     * này — bàn làm việc là màn phụ, dựng sau khi bốn màn chính chạy thật.
+     * Mục nav chỉ có thứ ĐÃ CÓ route; để mục trỏ vào route chưa dựng là dẫn
+     * người dùng vào 404.
+     */
     ready: true,
-    // Chia theo NGHIỆP VỤ (plan-kho-redesign GĐ1): nhập / cấp SX là hai luồng
-    // riêng thay vì một màn "Phiếu nhập / xuất" gộp. Sổ chứng từ vẫn giữ —
-    // nơi tra mọi phiếu đã lập + form gốc (các màn nghiệp vụ deep-link vào).
+    home: '/warehouse/nhap',
     sections: [
       {
         heading: 'Nghiệp vụ',
         items: [
-          { href: '/warehouse', label: 'Tổng quan', icon: 'home' },
-          { href: '/warehouse/nhap', label: 'Nhập kho', icon: 'arrow-down-to-line' },
-          // Đơn NCC góc nhìn Kho (16/08): tra tiến độ về hàng theo ĐƠN/LSX +
-          // nhập nhanh — /nhap là "hôm nay nhận gì", đây là "đơn này tới đâu".
-          { href: '/warehouse/don-ncc', label: 'Đơn đặt NCC', icon: 'truck' },
-          { href: '/warehouse/xuat', label: 'Cấp vật tư SX', icon: 'arrow-up-from-line' },
-          { href: '/warehouse/stocktake', label: 'Kiểm kê', icon: 'clipboard-check' },
-        ],
-      },
-      {
-        heading: 'Sổ sách',
-        items: [
-          { href: '/warehouse/stock', label: 'Tồn kho', icon: 'boxes' },
-          { href: '/warehouse/docs', label: 'Sổ chứng từ', icon: 'receipt-text' },
-          { href: '/warehouse/materials', label: 'Danh mục vật tư', icon: 'package' },
+          { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
+          // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
+          { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
+          // Bước 3 (16/09/2026): tra tồn — màn hay mở nhất sau hai màn việc.
+          { href: '/warehouse/ton', label: 'Tồn kho', icon: 'boxes' },
+          // Hoàn thiện A1 (16/09/2026): sổ phiếu CỦA KHO. Ba màn trên từng
+          // trỏ "Xem sổ phiếu" sang /planning/docs — khu Cung ứng, vỏ khác —
+          // và đảo phiếu ghi sai chỉ làm được ở màn cũ.
+          { href: '/warehouse/phieu', label: 'Sổ phiếu', icon: 'book-open' },
+          // Bước 4 (16/09/2026): danh mục BẢN CỦA KHO — chủ dự án chốt dựng
+          // lại, không mượn màn Cung ứng. Kho hỏi ĐVT · kệ · ngưỡng, người
+          // mua hỏi giá · NCC; ranh giới quyền sửa đã có trong service.
+          { href: '/warehouse/vat-tu', label: 'Danh mục vật tư', icon: 'package' },
         ],
       },
     ],
@@ -369,69 +376,63 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     accent: 'violet',
     logoText: 'CƯ',
     ready: true,
-    // Bố cục sidebar theo thiết kế v3 (/design-lab mục 02): MỘT nhóm Nghiệp vụ,
-    // bỏ nhóm "Theo dõi" (chốt 15/08/2026). "Kho & tồn" và "Lệnh sản xuất" là
-    // view tái dùng render trong shell Cung ứng (xem /planning/stock, /planning/lsx).
-    // Route /planning/tracking và /planning/docs VẪN SỐNG (link cũ vào được),
-    // chỉ rút khỏi nav.
     sections: [
+      /*
+        MỘT SIDEBAR CHO CẢ PHÒNG (16/09/2026 — chủ dự án chốt).
+
+        Từ 14/09 phòng Cung ứng sống với HAI thanh điều hướng: sidebar này
+        (240px, theme v3) khi ở `/planning/*`, và một rail 52px riêng khi ở
+        `/mua-hang/*`. Hai cây menu khác nhau, hai nếp bấm khác nhau, và mục
+        nào nằm ở thanh nào thì phải nhớ — chủ dự án gọi đúng tên: "lẫn lộn".
+
+        Chốt: giữ GIAO DIỆN sidebar cũ (được chấm đẹp hơn), đổi RUỘT sang các
+        màn mới. Rail 52px xoá hẳn — đường lùi là `git revert`, không phải nuôi
+        song song thêm một tháng nữa.
+
+        Trang cũ `/planning/*` VẪN SỐNG (bookmark, link trong màn khác, và mục
+        "Khu Cung ứng cũ" cuối menu) — chỉ rút khỏi luồng chính. Bản đồ mục cũ →
+        màn mới có test canh ở `workspaces.config.test.ts`: gỡ một màn mới mà
+        quên đường thay thế thì test đỏ, chứ không phải người dùng phát hiện.
+      */
       {
         heading: 'Nghiệp vụ',
         items: [
-          /*
-            Mục đầu tiên dẫn sang khu mới, cùng lý do với `home` ở trên: ai đang
-            ở trong vỏ cũ bấm mục này cũng ra đúng màn mở đầu mới. Trang
-            `/planning` VẪN SỐNG và vẫn là Cung ứng — vào được từ mục "Khu Cung
-            ứng cũ" của menu mới.
-          */
           { href: '/mua-hang', label: 'Bàn làm việc', icon: 'home' },
-          /*
-            CHUYỂN TỪNG PHẦN SANG MODULE MUA HÀNG MỚI (14/09/2026).
-
-            Đây là mục DUY NHẤT đã trỏ sang `/mua-hang`, và cố ý chỉ một mục.
-            Bảy trong chín mục của cây menu mới còn là trang tạm ("Chưa dựng
-            theo sổ thiết kế mới" → dẫn ngược về bản cũ), nên bật cả cây là
-            giao cho phòng Cung ứng một menu mà phần lớn mở ra chỗ trống. Ba
-            màn đã dựng THẬT — Bàn làm việc, Phiếu mua, Hộp thư việc — thì
-            Phiếu mua là màn người mua ở lì cả ngày, và nó đã đủ logic bản cũ
-            (soạn đơn, duyệt, chốt thiếu, đợt giao). Đưa đúng nó vào luồng
-            chính trước.
-
-            Vì sao phải chuyển chứ không để nút "thử bản mới": khu Tài chính
-            ĐÃ link thẳng `/mua-hang/don/[id]` từ 11/09. Để nguyên thì kế toán
-            và cung ứng nhìn hai màn khác nhau cho cùng một đơn — và người
-            phát hiện lệch sẽ là người dùng, không phải chúng ta.
-
-            `/planning/pos` VẪN SỐNG (bookmark, link cũ trong các màn khác vào
-            được) — chỉ rút khỏi nav. Lùi lại = đổi href này về chỗ cũ.
-          */
-          { href: '/mua-hang/don', label: 'Phiếu mua', icon: 'shopping-cart' },
-          { href: '/planning/materials', label: 'Vật tư & giá mua', icon: 'package' },
-          // building-2 chứ không phải truck: từ vựng icon (/design-lab mục 05)
-          // để truck cho GIAO NHẬN — "Hàng sắp về" bên dưới mới là xe hàng.
-          { href: '/planning/suppliers', label: 'Nhà cung cấp', icon: 'building-2' },
-          { href: '/planning/stock', label: 'Kho & tồn', icon: 'boxes' },
-          // "Vật tư theo lệnh", không phải "Lệnh sản xuất": màn này trả lời câu
-          // của người MUA (lệnh nào còn thiếu đồ), không phải tiến độ xưởng.
-          { href: '/planning/lsx', label: 'Vật tư theo lệnh', icon: 'factory' },
+          // Hộp thư việc: bản mới của "Chờ tôi xử lý" — badge giữ nguyên nguồn
+          // đếm (`countMyTodos`), chỉ đổi href nó bám vào.
+          { href: '/mua-hang/hop-thu', label: 'Hộp thư việc', icon: 'clipboard-check' },
+          { href: '/mua-hang/yeu-cau', label: 'Yêu cầu mua', icon: 'factory' },
+          { href: '/mua-hang/don', label: 'Đơn mua', icon: 'shopping-cart' },
+          // truck dành cho GIAO NHẬN (từ vựng icon — /design-lab mục 05):
+          // đây là màn thay "Hàng sắp về".
+          { href: '/mua-hang/nhan-hang', label: 'Nhận hàng', icon: 'truck' },
+          { href: '/mua-hang/hoa-don', label: 'Hoá đơn NCC', icon: 'receipt' },
         ],
       },
       {
-        // Hai màn THEO DÕI (15/08/2026) — số đếm sống gắn ở `nav-badges.ts`,
-        // cùng nguồn logic với trang (`lib/supply-watch`) nên badge và nội dung
-        // không bao giờ lệch nhau.
-        heading: 'Theo dõi',
+        heading: 'Danh mục & tra cứu',
         items: [
-          {
-            href: '/planning/viec-cua-toi',
-            label: 'Chờ tôi xử lý',
-            icon: 'clipboard-check',
-          },
-          { href: '/planning/hang-sap-ve', label: 'Hàng sắp về', icon: 'truck' },
-          // Hai trang HỌP (05/09/2026) — tách khỏi Tổng quan vì nhiều lệnh, mỗi
-          // trang một câu hỏi: lệnh nào có nguy cơ / họp cần quyết gì.
-          { href: '/planning/van-de', label: 'Vấn đề cần xử lý', icon: 'triangle-alert' },
-          { href: '/planning/hop', label: 'Việc cần quyết định', icon: 'gavel' },
+          { href: '/mua-hang/ncc', label: 'Nhà cung cấp', icon: 'building-2' },
+          { href: '/mua-hang/vat-tu', label: 'Vật tư', icon: 'package' },
+          { href: '/mua-hang/bang-gia', label: 'Bảng giá', icon: 'circle-dollar-sign' },
+          { href: '/mua-hang/ton', label: 'Tồn & cân đối', icon: 'boxes' },
+        ],
+      },
+      /*
+        CẦU TẠM — một mục, không phải năm.
+
+        Mười màn cũ đều đã có màn mới thay (bảng trong test), nên bày lại cả
+        mười là dựng lại đúng cái menu vừa gỡ. Nhưng cắt sạch đường về ngay
+        ngày đầu thì ai phát hiện màn mới thiếu một việc sẽ không có chỗ nào
+        đi tiếp. Một mục dẫn về trang tổng quan cũ là đủ: từ đó vào được mọi
+        trang `/planning/*` như trước.
+
+        XOÁ MỤC NÀY khi phòng đã chạy vài tuần trên bản mới mà không phải lùi.
+      */
+      {
+        heading: 'Bản cũ',
+        items: [
+          { href: '/planning', label: 'Khu Cung ứng cũ', icon: 'arrow-left-right' },
         ],
       },
     ],

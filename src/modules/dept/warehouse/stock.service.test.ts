@@ -15,10 +15,22 @@ vi.mock('./stock.repo', () => ({
     countPending: vi.fn(),
   },
   warehousesRepo: { mainId: vi.fn() },
+  // Khu ảo (0193): mặc định trả null = "kho chưa khai khu nào". Luồng nhận hàng
+  // PHẢI vẫn chạy trong trạng thái đó — ca `khu mặc định` dưới canh chính điều ấy.
+  binsRepo: {
+    byKind: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    findById: vi.fn(async () => null),
+    insert: vi.fn(),
+    patch: vi.fn(),
+    materialCountByBin: vi.fn(async () => new Map()),
+  },
+  stockByBin: vi.fn(async () => []),
   stocktakeRepo: { insertLines: vi.fn(), listByDoc: vi.fn() },
   insertMovements: vi.fn(),
   onHandMany: vi.fn(),
   stockInfoMany: vi.fn(),
+  inspectionGroups: vi.fn(async () => new Set()),
   issuedByLsx: vi.fn(),
   issuedByLsxIds: vi.fn(),
   lsxRemainingByIds: vi.fn(),
@@ -67,8 +79,9 @@ vi.mock('@/modules/core/rbac/rbac.repo', () => ({
   rbacRepo: { userIdsWithPermission: vi.fn(async () => []) },
 }))
 
-import { stockService, smartLsxNeeds } from './stock.service'
+import { stockService, smartLsxNeeds, createTransferDoc } from './stock.service'
 import {
+  binsRepo,
   docsRepo,
   insertMovements,
   issuedByLsx,
@@ -76,7 +89,9 @@ import {
   lsxRemainingByIds,
   lsxNeeds as lsxNeedsRepo,
   onHandMany,
+  stockByBin,
   stockInfoMany,
+  inspectionGroups,
   stocktakeRepo,
   warehousesRepo,
 } from './stock.repo'
@@ -153,7 +168,7 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0090')
       vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
       vi.mocked(stockInfoMany).mockResolvedValue([
-        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 2400, min_stock: 0 }, // prettier-ignore
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', qty_ok: 2400, on_hand: 2400, min_stock: 0 }, // prettier-ignore
       ])
 
       const r = await stockService.createReceiptDoc(admin, {
@@ -170,7 +185,7 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0091')
       vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
       vi.mocked(stockInfoMany).mockResolvedValue([
-        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 500, min_stock: 0 }, // prettier-ignore
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', qty_ok: 500, on_hand: 500, min_stock: 0 }, // prettier-ignore
       ])
       // Cùng một MÃ VẬT TƯ nằm ở hai dòng đơn khác nhau — ca thật khi Cung ứng
       // tách dòng theo lệnh sản xuất.
@@ -195,7 +210,7 @@ describe('createReceiptDoc — phiếu nhập (FR-WMS-02/03, BR-08/10)', () => {
       vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0092')
       vi.mocked(supplyRepo.refreshStatusFromReceipts).mockResolvedValue('partial')
       vi.mocked(stockInfoMany).mockResolvedValue([
-        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', on_hand: 60, min_stock: 0 }, // prettier-ignore
+        { material_id: 'm1', code: 'VT-01', name: 'Nút chân', unit: 'Cái', qty_ok: 60, on_hand: 60, min_stock: 0 }, // prettier-ignore
       ])
 
       const r = await stockService.createReceiptDoc(admin, {
@@ -510,7 +525,17 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
   it('FR-WMS-08: tồn rơi dưới min sau xuất → emit warehouse.stock.low cho admin/manager + phòng Cung ứng', async () => {
     vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
     vi.mocked(stockInfoMany).mockResolvedValue([
-      { material_id: 'm1', code: 'VT-01', name: 'Nhôm', unit: 'Kg', on_hand: 3, min_stock: 20 },
+      // qty_ok là nền tính "dưới mức" từ 0198 — on_hand giữ để thấy rõ hai số
+      // có thể khác nhau (ở đây 3 dùng được / 5 tổng, 2 đang khoá).
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        unit: 'Kg',
+        qty_ok: 3,
+        on_hand: 5,
+        min_stock: 20,
+      },
     ])
     vi.mocked(departmentsRepo.list).mockResolvedValue([
       { id: 'd-sup', name: 'Cung Ứng - Mua Hàng' },
@@ -531,11 +556,11 @@ describe('createIssueDoc — phiếu xuất (FR-WMS-05/06/08, BR-09)', () => {
       .mocked(emit)
       .mock.calls.map((c) => c[0])
       .find((e) => e.name === 'warehouse.stock.low') as {
-      on_hand: number
+      qty_ok: number
       notify_ids: string[]
     }
     expect(evt).toBeTruthy()
-    expect(evt.on_hand).toBe(3)
+    expect(evt.qty_ok).toBe(3)
     // manager + nhân viên phòng Cung ứng; NV phòng khác bị loại. Không dùng excludeId.
     expect(evt.notify_ids).toEqual(['boss', 'sup1'])
   })
@@ -1155,6 +1180,148 @@ describe('reverseDoc — phiếu đảo (K1)', () => {
   })
 })
 
+/**
+ * NƠI CHỐN + TRẠNG THÁI CỦA LƯỢNG (0193/0194 — Đợt 2).
+ *
+ * Bốn ca dưới đây canh đúng bốn quyết định của đợt này, và mỗi ca là một lối
+ * mòn đã đo được chứ không phải một nhánh if cho đủ:
+ *
+ *  1. Hàng không đạt VẪN VÀO SỔ ở trạng thái khoá, không biến mất khỏi hệ thống
+ *     trong khi nằm thật ngoài sân (lối mòn ⑤ của docs/thiet-ke-kho.md).
+ *  2. Khoá BẮT BUỘC kèm lý do — "blocked" trần thì Cung ứng không quyết được gì.
+ *  3. Khu mặc định tra theo LOẠI, và THIẾU khu ảo thì KHÔNG chặn nhận hàng:
+ *     đổi một thiếu sót danh mục thành một sự cố dây chuyền là sai người sai việc.
+ *  4. Khai thẳng kệ thật = nhận một bước, bỏ qua bước cất.
+ */
+describe('createReceiptDoc — nơi chốn & trạng thái của lượng (0193/0194)', () => {
+  it('mặc định: trạng thái ok, hàng vào KHU TIẾP NHẬN để còn đi qua bước cất', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0101')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : ({
+            id: 'bin-lock',
+            code: 'KHOA-01',
+            name: null,
+            kind,
+            is_active: true,
+          } as never),
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ stock_status: 'ok', bin_id: 'bin-recv' })
+  })
+
+  it('dòng khoá: vào SỔ với qty > 0 ở kệ hàng khoá, không biến mất', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0102')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : ({
+            id: 'bin-lock',
+            code: 'KHOA-01',
+            name: null,
+            kind,
+            is_active: true,
+          } as never),
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [
+        { material_id: 'm1', qty: 40, po_line_id: 'pl1' },
+        {
+          material_id: 'm1',
+          qty: 20,
+          po_line_id: 'pl1',
+          stock_status: 'blocked',
+          note: 'Giao sai mã hợp kim — hồ sơ 6063 T5, hàng về dập 6061',
+        },
+      ],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    // Cả hai dòng đều direction 'in' với qty > 0 — nên "NCC đã chở tới" vẫn đếm
+    // đủ 60, đúng như trước khi có trạng thái lượng.
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toMatchObject({ stock_status: 'ok', bin_id: 'bin-recv', qty: 40 })
+    expect(rows[1]).toMatchObject({
+      direction: 'in',
+      stock_status: 'blocked',
+      bin_id: 'bin-lock',
+      qty: 20,
+    })
+  })
+
+  it('khoá mà không ghi lý do → chặn, kèm mã vật tư trong câu lỗi', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0103')
+
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [
+          { material_id: 'm1', qty: 20, po_line_id: 'pl1', stock_status: 'blocked' },
+        ],
+      }),
+    ).rejects.toThrow(/lý do/i)
+    // Chặn TRƯỚC khi ghi bất cứ dòng sổ nào — nửa phiếu vào sổ là sổ nói dối.
+    expect(docsRepo.insert).not.toHaveBeenCalled()
+  })
+
+  it('kho CHƯA khai khu ảo nào → vẫn nhận được, bin_id để null', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0104')
+    vi.mocked(binsRepo.byKind).mockResolvedValue(null)
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ bin_id: null, stock_status: 'ok' })
+  })
+
+  it('khai thẳng kệ thật → nhận một bước, không đi qua khu tiếp nhận', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0105')
+    vi.mocked(binsRepo.byKind).mockImplementation(async (_wh, kind) =>
+      kind === 'receiving'
+        ? ({
+            id: 'bin-recv',
+            code: 'TIEP-NHAN',
+            name: null,
+            kind,
+            is_active: true,
+          } as never)
+        : null,
+    )
+
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 60, po_line_id: 'pl1', bin_id: 'bin-nhom-a1' }],
+    })
+
+    const rows = vi.mocked(insertMovements).mock.calls.at(-1)![0]
+    expect(rows[0]).toMatchObject({ bin_id: 'bin-nhom-a1' })
+  })
+})
+
 describe('createReceiptDoc — HOÀN KHO từ LSX (K2)', () => {
   beforeEach(() => {
     vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0044')
@@ -1209,5 +1376,391 @@ describe('createReceiptDoc — HOÀN KHO từ LSX (K2)', () => {
         lines: [{ material_id: 'm1', qty: 1 }],
       }),
     ).rejects.toMatchObject({ status: 400 })
+  })
+})
+/**
+ * MÃ LÝ DO TRÊN DÒNG SỔ (0197, Đợt 3 §2.1).
+ *
+ * Canh MỌI đường ghi dòng sổ đều gắn mã — vì một đường bị bỏ sót không làm
+ * test nào đỏ, chỉ làm báo cáo kế toán thiếu im lặng. Đó đúng là hạng lỗi mà
+ * cột `reason_code` sinh ra để dẹp, nên nó phải có hàng rào tự động.
+ */
+describe('mã lý do trên dòng sổ (0197)', () => {
+  const maCua = (call = 0) =>
+    vi.mocked(insertMovements).mock.calls[call][0].map((r) => r.reason_code)
+
+  it('nhập theo PO → N1', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0100')
+    await stockService.createReceiptDoc(admin, {
+      po_id: 'po1',
+      lines: [{ material_id: 'm1', qty: 10, po_line_id: 'pl1' }],
+    })
+    expect(maCua()).toEqual(['N1'])
+  })
+
+  it('mua ngoài đơn → N2', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0101')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    expect(maCua()).toEqual(['N2'])
+  })
+
+  it('hoàn kho từ LSX → N3', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0102')
+    await stockService.createReceiptDoc(admin, {
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 4 }],
+    })
+    expect(maCua()).toEqual(['N3'])
+  })
+
+  /**
+   * ĐÍNH CHÍNH một lập luận sai (15/09/2026). Khi chốt đặt mã trên DÒNG, lý do
+   * đưa ra là "phiếu nhập hôm nay đã trộn được dòng N1 và N2". SAI: hai guard
+   * đối xứng ở `createReceiptDoc` chặn đúng việc đó — có `po_id` thì MỌI dòng
+   * phải gắn dòng PO, không có `po_id` thì KHÔNG dòng nào được gắn. Trên đường
+   * nhập, một phiếu chỉ mang một mã.
+   *
+   * Ca này canh chính cái guard ấy, để lần sau không ai lập luận lại từ một
+   * khả năng không tồn tại. Bằng chứng THẬT cho "mã nằm trên dòng" là phiếu
+   * KIỂM KÊ — xem ca N4/X5 dưới: một phiếu, hai mã, và hai HƯỚNG ngược nhau.
+   */
+  it('phiếu nhập KHÔNG trộn được N1 với N2 — guard chặn từ trước khi ghi dòng nào', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0103')
+    await expect(
+      stockService.createReceiptDoc(admin, {
+        po_id: 'po1',
+        lines: [
+          { material_id: 'm1', qty: 10, po_line_id: 'pl1' },
+          { material_id: 'm1', qty: 3 }, // mua thêm ngoài đơn, cùng chuyến xe
+        ],
+      }),
+    ).rejects.toMatchObject({ status: 400 })
+    expect(insertMovements).not.toHaveBeenCalled()
+  })
+
+  it('xuất theo lệnh → X1', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0100')
+    await stockService.createIssueDoc(admin, {
+      kind: 'lsx',
+      production_order_id: 'lsx1',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+    expect(maCua()).toEqual(['X1'])
+  })
+
+  it('xuất theo lệnh BỎ QUA mã người gửi — đường này luôn là X1', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0101')
+    await stockService.createIssueDoc(admin, {
+      kind: 'lsx',
+      production_order_id: 'lsx1',
+      reason_code: 'X4',
+      lines: [{ material_id: 'm1', qty: 5 }],
+    })
+    expect(maCua()).toEqual(['X1'])
+  })
+
+  it('xuất lẻ có chọn mã → ghi đúng mã đó', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0102')
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      reason_code: 'X6',
+      lines: [{ material_id: 'm1', qty: 2 }],
+    })
+    expect(maCua()).toEqual(['X6'])
+  })
+
+  /**
+   * KHÔNG bịa mã cho xuất lẻ chưa chọn. "daily" chỉ nói xuất ngoài lệnh,
+   * không nói xuất cho việc gì — mà sửa máy, làm mẫu và huỷ đi về ba đầu chi
+   * phí khác nhau. Dán X7 lên là cho kế toán một con số không ai kiểm được.
+   */
+  it('xuất lẻ CHƯA chọn mã → để null, không bịa X7', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0103')
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 2 }],
+    })
+    expect(maCua()).toEqual([null])
+  })
+
+  it('trả hàng NCC → X3', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0104')
+    // Trả hàng đòi PO ĐÃ CÓ HÀNG VỀ — beforeEach chung để 'ordered'.
+    vi.mocked(supplyRepo.poStatus).mockResolvedValue({
+      code: 'PO-2026-0001',
+      status: 'partial',
+      assigned_to: 'u-mua',
+      created_by: 'u-mua',
+    })
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc9',
+      code: 'PXK-2026-0104',
+    })
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      {
+        id: 'pl1',
+        po_id: 'po1',
+        material_id: 'm1',
+        qty_ordered: 100,
+        qty_received: 10,
+        qty_rejected: 0,
+        qty_missing: 90,
+        qty_open: 90,
+        closed_short_at: null,
+        over_tolerance_pct: 0,
+        material_code: 'VT-001',
+        material_name: 'Kính 5mm',
+        material_unit: 'tấm',
+      },
+    ])
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 50]]))
+    await stockService.createReturnDoc(admin, {
+      po_id: 'po1',
+      reason: 'Kính trầy mặt',
+      lines: [{ material_id: 'm1', po_line_id: 'pl1', qty: 4 }],
+    })
+    expect(maCua()).toEqual(['X3'])
+  })
+
+  it('kiểm kê: thừa → N4, thiếu → X5 (hai chiều trong cùng một đợt)', async () => {
+    const manager = {
+      id: 'u-qlkho',
+      role: 'manager',
+      department_id: 'd-kho',
+    } as never
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-kk',
+      code: 'KK-2026-0009',
+      kind: 'stocktake',
+      status: 'pending',
+      created_by: 'u-staff',
+    } as never)
+    vi.mocked(stocktakeRepo.listByDoc).mockResolvedValue([
+      { id: 's1', material_id: 'm1', system_qty: 10, counted_qty: 14, diff: 4 }, // thừa
+      { id: 's2', material_id: 'm2', system_qty: 10, counted_qty: 7, diff: -3 }, // thiếu
+    ] as never)
+    vi.mocked(onHandMany).mockResolvedValue(
+      new Map([
+        ['m1', 10],
+        ['m2', 10],
+      ]),
+    )
+    await stockService.approveStocktake(manager, 'doc-kk')
+    expect(maCua()).toEqual(['N4', 'X5'])
+  })
+
+  it('chuyển kệ → C1 trên CẢ HAI chân của cặp', async () => {
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('DCK-2026-0001')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-dc',
+      code: 'DCK-2026-0001',
+    })
+    vi.mocked(stockByBin).mockResolvedValue([
+      { material_id: 'm1', bin_id: 'b1', stock_status: 'ok', qty: 50 },
+    ] as never)
+    await createTransferDoc(admin, {
+      lines: [
+        {
+          material_id: 'm1',
+          qty: 10,
+          from_bin_id: 'b1',
+          to_bin_id: 'b2',
+          stock_status: 'ok',
+        },
+      ],
+    })
+    expect(maCua()).toEqual(['C1', 'C1'])
+  })
+
+  /**
+   * Dòng đảo mang ĐÚNG mã của dòng gốc, không một mã "đảo" riêng: báo cáo phải
+   * NET được. Huỷ 100 rồi đảo thì con số huỷ của tháng bằng 0 — cho dòng đảo
+   * mã khác là báo cáo vẫn thấy 100 đã huỷ và thêm 100 ở một rổ khác.
+   */
+  it('phiếu đảo: mang lại mã của dòng gốc, direction lật', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-g',
+      code: 'PNK-2026-0009',
+      kind: 'receipt',
+      status: 'posted',
+      reversal_of_doc_id: null,
+      created_by: 'u-kho',
+    } as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      {
+        id: 'mv1',
+        material_id: 'm1',
+        direction: 'in',
+        qty: 100,
+        qty_rejected: 0,
+        reason_code: 'N1',
+        po_line_id: 'pl1',
+        production_order_id: null,
+      },
+    ] as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0199')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-rev',
+      code: 'PXK-2026-0199',
+    })
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue([])
+
+    await stockService.reverseDoc(admin, 'doc-g', 'Gõ nhầm 100 thay vì 10')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({ direction: 'out', reason_code: 'N1' })
+  })
+
+  it('phiếu đảo của dòng KHÔNG có mã (dữ liệu trước 0197) → vẫn null, không bịa', async () => {
+    vi.mocked(docsRepo.findById).mockResolvedValue({
+      id: 'doc-g2',
+      code: 'PXK-2026-0005',
+      kind: 'issue',
+      status: 'posted',
+      reversal_of_doc_id: null,
+      created_by: 'u-kho',
+    } as never)
+    vi.mocked(docsRepo.findReversalOf).mockResolvedValue(null)
+    vi.mocked(docsRepo.listLines).mockResolvedValue([
+      {
+        id: 'mv9',
+        material_id: 'm1',
+        direction: 'out',
+        qty: 5,
+        qty_rejected: 0,
+        reason_code: null,
+        po_line_id: null,
+        production_order_id: null,
+      },
+    ] as never)
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0199')
+    vi.mocked(docsRepo.insert).mockResolvedValue({
+      id: 'doc-rev2',
+      code: 'PNK-2026-0199',
+    })
+    vi.mocked(supplyRepo.poIdsByLineIds).mockResolvedValue([])
+
+    await stockService.reverseDoc(admin, 'doc-g2', 'Xuất nhầm')
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0]).toMatchObject({ direction: 'in', reason_code: null })
+  })
+})
+/**
+ * CỜ "CẦN KIỂM" THEO NHÓM (0194 khai, 0198-đợt nối vào — sổ §4.4).
+ *
+ * Trước đây cờ được khai trong header migration rồi để đó: một lời hứa treo.
+ * Ba ca dưới canh đúng ba điều khiến nó đáng giữ — mặc định vô hình, bật được
+ * bằng dữ liệu, và ý người nhận thắng cờ cấu hình.
+ */
+describe('cờ cần kiểm theo nhóm vật tư (§4.4)', () => {
+  it('không nhóm nào bật → mọi dòng vào "dùng được", y hệt trước', async () => {
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set())
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0201')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('ok')
+  })
+
+  it('nhóm của vật tư có bật cờ → dòng chưa khai vào "chờ kiểm"', async () => {
+    vi.mocked(materialsRepo.findById).mockResolvedValue({
+      ...MAT,
+      group_name: 'Nhôm định hình - tấm',
+    } as never)
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set(['Nhôm định hình - tấm']))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0202')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10 }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('qc')
+  })
+
+  /**
+   * Người nhận đang đứng trước lô hàng, cờ cấu hình thì không. Khai rồi thì ý
+   * họ thắng — nếu không, thủ kho thấy hàng đạt mà hệ thống vẫn nhốt vào chờ
+   * kiểm, và lần sau họ thôi khai.
+   */
+  it('dòng ĐÃ KHAI trạng thái → cờ không đè lên', async () => {
+    vi.mocked(materialsRepo.findById).mockResolvedValue({
+      ...MAT,
+      group_name: 'Nhôm định hình - tấm',
+    } as never)
+    vi.mocked(inspectionGroups).mockResolvedValue(new Set(['Nhôm định hình - tấm']))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PNK-2026-0203')
+    await stockService.createReceiptDoc(admin, {
+      lines: [{ material_id: 'm1', qty: 10, stock_status: 'ok' }],
+    })
+    const rows = vi.mocked(insertMovements).mock.calls[0][0]
+    expect(rows[0].stock_status).toBe('ok')
+  })
+})
+
+/**
+ * DƯỚI MỨC đo trên hàng DÙNG ĐƯỢC (0198, sổ §5.3). Ba nơi phải cùng công thức
+ * — view, cron quét sáng, và chỗ này. Ca dưới canh chỗ thứ ba.
+ */
+describe('cảnh báo dưới mức tính trên qty_ok (§5.3)', () => {
+  it('tổng còn nhiều nhưng DÙNG ĐƯỢC dưới min → vẫn cảnh báo', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0301')
+    vi.mocked(stockInfoMany).mockResolvedValue([
+      // 50 tổng nhưng chỉ 3 dùng được (47 đang khoá chờ trả NCC) — mua thay
+      // được chỉ là 3, nên đây PHẢI là cảnh báo.
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        unit: 'Kg',
+        qty_ok: 3,
+        on_hand: 50,
+        min_stock: 20,
+      },
+    ])
+    vi.mocked(usersRepo.list).mockResolvedValue([
+      { id: 'boss', role: 'manager', department_id: null },
+    ] as never)
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 1 }],
+    })
+    const lowEvents = vi
+      .mocked(emit)
+      .mock.calls.map((c) => c[0])
+      .filter((e) => e.name === 'warehouse.stock.low')
+    expect(lowEvents.length).toBeGreaterThan(0)
+  })
+
+  it('dùng được vẫn trên min dù tổng thấp hơn trước → KHÔNG cảnh báo', async () => {
+    vi.mocked(onHandMany).mockResolvedValue(new Map([['m1', 100]]))
+    vi.mocked(docsRepo.nextCode).mockResolvedValue('PXK-2026-0302')
+    vi.mocked(stockInfoMany).mockResolvedValue([
+      {
+        material_id: 'm1',
+        code: 'VT-01',
+        name: 'Nhôm',
+        unit: 'Kg',
+        qty_ok: 30,
+        on_hand: 30,
+        min_stock: 20,
+      },
+    ])
+    await stockService.createIssueDoc(admin, {
+      kind: 'daily',
+      lines: [{ material_id: 'm1', qty: 1 }],
+    })
+    const lowEvents = vi
+      .mocked(emit)
+      .mock.calls.map((c) => c[0])
+      .filter((e) => e.name === 'warehouse.stock.low')
+    expect(lowEvents).toHaveLength(0)
   })
 })

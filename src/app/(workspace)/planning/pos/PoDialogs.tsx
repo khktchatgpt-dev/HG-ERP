@@ -24,7 +24,7 @@ import type { PoRef } from './usePoActions'
  */
 export type ReasonState = {
   po: PoRef
-  kind: 'reject' | 'cancel' | 'close_short'
+  kind: 'reject' | 'cancel' | 'close_short' | 'reopen'
   reason: string
   /** Chốt thiếu (0154): dòng cụ thể — bỏ trống = mọi dòng còn thiếu. */
   lineId?: string | null
@@ -45,6 +45,17 @@ const REASON_COPY = {
     placeholder: 'NCC báo hết hàng · đổi phương án vật tư · lệnh SX bị huỷ…',
     confirm: 'Huỷ đơn',
   },
+  /*
+    16/09/2026 — MỞ LẠI ĐƠN ĐÃ DUYỆT. Câu gợi ý nói thẳng cái giá phải trả
+    (mất chữ ký duyệt, phải xin duyệt lại) vì đây là chỗ duy nhất người dùng
+    đọc trước khi bấm; nói sau khi bấm thì đã muộn.
+  */
+  reopen: {
+    title: 'Mở lại đơn để sửa',
+    hint: 'Đơn quay về NHÁP để sửa dòng hàng và giá. Dấu duyệt của Giám đốc bị gỡ — sửa xong phải gửi duyệt lại từ đầu, và Giám đốc nhận thông báo kèm lý do này. Đơn đã có phiếu nhập thì không mở lại được.',
+    placeholder: 'Sai đơn giá dòng thép hộp · NCC đổi quy cách · thiếu một mã vật tư…',
+    confirm: 'Mở lại để sửa',
+  },
   // 0154 — NCC không giao phần còn thiếu nữa. Số ĐÃ VỀ giữ nguyên trên sổ.
   close_short: {
     title: 'Chốt phần thiếu',
@@ -53,6 +64,12 @@ const REASON_COPY = {
     confirm: 'Chốt phần thiếu',
   },
 } as const
+
+/**
+ * Độ dài lý do tối thiểu, theo từng loại — khớp hàng rào zod ở server. Chỉ khai
+ * chỗ nào ngặt hơn mức mặc định "khác rỗng".
+ */
+const REASON_MIN: Partial<Record<ReasonState['kind'], number>> = { reopen: 5 }
 
 export function ReasonDialog({
   state,
@@ -101,7 +118,9 @@ export function ReasonDialog({
               Quay lại
             </button>
             <button
-              disabled={busy || !state.reason.trim()}
+              disabled={
+                busy || state.reason.trim().length < (REASON_MIN[state.kind] ?? 1)
+              }
               onClick={() => onSubmit(state)}
               className="inline-flex items-center gap-2 rounded-md bg-[var(--stop)] px-4 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             >

@@ -1,4 +1,13 @@
 import { z } from 'zod'
+/*
+  HAI BỘ MÃ LÝ DO ĐANG CÙNG TỒN TẠI (16/09/2026) — đợt Kho 15/09 và đợt dựng
+  lại khu Kho làm song song, mỗi bên một bộ: `ly-do-xuat` (danh sách trong mã
+  nguồn, chỉ cho XUẤT, mã nằm trên PHIẾU) và `kho-ma-ly-do` (bảng
+  `warehouse_reason_codes` có FK, cho cả nhập/xuất/chuyển, mã nằm trên DÒNG
+  SỔ). Giữ cả hai để không bên nào mất luật đã viết; CHỐT GỘP VỀ MỘT là việc
+  nghiệp vụ còn treo, không phải việc của lần merge này.
+*/
+import { doiUngBatBuoc, laMaLyDo, timMaLyDo } from '@/lib/kho-ma-ly-do'
 import { laMaLyDoXuat, thieuDienGiai } from '@/lib/ly-do-xuat'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
@@ -220,15 +229,52 @@ export const issueSchema = z.object({
 // ── Phiếu kho nhiều dòng (0017 warehouse_docs) ─────────────────────────────
 
 /** Dòng phiếu nhập: theo dòng PO (po_line_id) hoặc mua ngoài (không có). */
-export const receiptDocLineSchema = z.object({
-  material_id: z.string().uuid(),
-  qty: z.coerce.number().positive(), // số ĐẠT vào tồn
-  qty_rejected: z.coerce.number().min(0).default(0), // QC loại — KHÔNG vào tồn (BR-10)
-  qc_status: z.enum(['pass', 'partial', 'fail']).optional(),
-  po_line_id: z.string().uuid().optional().nullable(),
-  shelf_location: z.string().trim().max(60).optional().nullable(),
-  note: z.string().trim().max(500).optional().nullable(),
-})
+export const receiptDocLineSchema = z
+  .object({
+    material_id: z.string().uuid(),
+    qty: z.coerce.number().positive(), // số ĐẠT vào tồn
+    qty_rejected: z.coerce.number().min(0).default(0), // QC loại — KHÔNG vào tồn (BR-10)
+    qc_status: z.enum(['pass', 'partial', 'fail']).optional(),
+    po_line_id: z.string().uuid().optional().nullable(),
+    shelf_location: z.string().trim().max(60).optional().nullable(),
+    note: z.string().trim().max(500).optional().nullable(),
+    /**
+     * Trạng thái của lượng (0194) — 'ok' dùng được ngay · 'qc' chờ kiểm · 'blocked'
+     * sai quy cách. Bỏ trống = 'ok'.
+     *
+     * ĐÂY LÀ ĐƯỜNG MỚI CHO HÀNG KHÔNG ĐẠT, thay cho việc từ chối nhận ngoài hệ
+     * thống. `qty_rejected` GIỮ NGUYÊN và không dùng nữa ở luồng mới: nó có 1 dòng
+     * trong toàn DB nhưng 20+ chỗ ở Cung ứng đọc (qty_received = qty + qty_rejected),
+     * nên gỡ nó là một lượt riêng. Hai đường không đánh nhau — hàng khoá vẫn là
+     * `direction='in'` với `qty > 0` nên "NCC đã chở tới" vẫn đếm đủ.
+     */
+    stock_status: z.enum(['ok', 'qc', 'blocked']).optional(),
+    /** Khu/kệ hàng vào (0193). Bỏ trống → service chọn theo trạng thái. */
+    bin_id: z.string().uuid().optional().nullable(),
+  })
+  // Lý do đi theo lô suốt đời nó — Cung ứng đọc đúng câu này để quyết trả NCC
+  // hay nhận giá giảm. Chặn ở schema LẪN service: form có thể bỏ qua, API thì không.
+  .refine((l) => l.stock_status !== 'blocked' || !!l.note?.trim(), {
+    message: 'Dòng khai "khoá" phải ghi lý do',
+    path: ['note'],
+  })
+  /*
+   * HAI CÁCH NÓI "hàng này hỏng" PHẢI KHỚP NHAU (sổ §5.2).
+   *
+   * Form phiếu nhập suy `qc_status` TỪ `stock_status` nên đường đó luôn khớp,
+   * nhưng API thì chưa chặn: gọi thẳng route vẫn gửi được `qc_status:'fail'`
+   * kèm `stock_status:'ok'` — hàng vừa "không đạt" ở đối chiếu NCC vừa "dùng
+   * được" ở kho. Không ai đọc được cặp đó, và nó chỉ lộ ra khi báo cáo chất
+   * lượng NCC lệch với tồn.
+   *
+   * Luật đúng một chiều: `fail` thì lượng KHÔNG được ở trạng thái dùng được.
+   * `partial` không ràng buộc — dòng đạt một phần thì phần vào sổ là phần đạt.
+   */
+  .refine((l) => l.qc_status !== 'fail' || (l.stock_status ?? 'ok') !== 'ok', {
+    message:
+      'Dòng khai QC "không đạt" thì không thể vào trạng thái dùng được — chọn "Chờ kiểm" hoặc "Khoá"',
+    path: ['stock_status'],
+  })
 
 /** Phiếu nhập kho (PNK — FR-WMS-02/03/04). */
 export const receiptDocSchema = z
@@ -239,6 +285,12 @@ export const receiptDocSchema = z
     /** HOÀN KHO từ LSX (K2) — loại trừ với po_id (service enforce). */
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người giao (mẫu 01-VT)
+    /**
+     * VÌ SAO có phiếu này (A2) — chỉ có nghĩa với phiếu MUA NGOÀI: nhập theo
+     * đơn thì lý do chính là đơn mua, ghi thêm một câu là hai nguồn một sự
+     * thật. Cột `warehouse_docs.reason` có sẵn, phiếu nhập trước nay bỏ trống.
+     */
+    reason: z.string().trim().max(200).optional().nullable(),
     /** Số phiếu giao / hoá đơn NCC (K3) — chìa khoá đối chiếu 3 chiều. */
     supplier_doc_no: z.string().trim().max(60).optional().nullable(),
     /** Ngày chứng từ (K3) — lùi tối đa 7 ngày, xa hơn là bất thường. */
@@ -294,12 +346,23 @@ export const issueDocSchema = z
       "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô này bổ sung nhau, không thay thế.
     */
     team_department_id: z.string().uuid().optional().nullable(),
-    /*
-      LÝ DO CÓ MÃ (0195) — quyết định tiền đi về đâu: cấp SX vào giá thành lệnh,
-      sửa máy / nội bộ là chi phí chung, huỷ là tổn thất. `reason` giữ phần diễn
-      giải tự do: mã nói LOẠI, chữ nói CHI TIẾT.
-    */
-    reason_code: z.string().trim().max(32).optional().nullable(),
+    /**
+     * MÃ LÝ DO XUẤT — quyết định tiền đi về đâu: cấp SX vào giá thành lệnh,
+     * sửa máy / nội bộ là chi phí chung, huỷ là tổn thất.
+     *
+     * Nhận mã của CẢ HAI bộ đang tồn tại (xem ghi chú ở đầu file) — bộ nào
+     * cũng phải là mã XUẤT thật, không phải chuỗi tự do. Khi chốt gộp về một
+     * bộ thì siết lại thành một vế.
+     */
+    reason_code: z
+      .string()
+      .trim()
+      .max(32)
+      .refine((v) => (laMaLyDo(v) && timMaLyDo(v)?.huong === 'out') || laMaLyDoXuat(v), {
+        message: 'Mã lý do không hợp lệ hoặc không phải mã xuất',
+      })
+      .optional()
+      .nullable(),
     reason: z.string().trim().max(500).optional().nullable(), // diễn giải lý do
     /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
     doc_date: z.string().date().optional().nullable(),
@@ -312,6 +375,15 @@ export const issueDocSchema = z
   })
   .refine((d) => d.kind !== 'lsx' || !!d.production_order_id, {
     message: 'BR-09: xuất theo LSX phải chọn LSX',
+  })
+  /*
+   * MÃ QUYẾT ĐỊNH TRƯỜNG NÀO BẮT BUỘC (0197) — đây là chỗ luật đó có hiệu lực
+   * lần đầu. X4 (huỷ) và X7 (khác) đòi diễn giải; không đòi thì "Khác" thành
+   * cái thùng rác nuốt mọi phiếu và cả bộ mã mất tác dụng.
+   */
+  .refine((d) => !doiUngBatBuoc(d.reason_code).includes('reason') || !!d.reason?.trim(), {
+    message: 'Mã lý do này bắt buộc ghi rõ diễn giải',
+    path: ['reason'],
   })
   .refine((d) => !d.override_reserved || !!d.override_reason?.trim(), {
     message: 'Xuất vượt khả dụng phải kèm lý do',
@@ -382,4 +454,56 @@ export const movementListQuerySchema = z.object({
   direction: z.enum(['in', 'out']).optional(),
   page: z.coerce.number().int().positive().default(1),
   page_size: z.coerce.number().int().min(1).max(200).default(50),
+})
+
+/**
+ * Khu/kệ (0193). Mã VIẾT HOA, không dấu, không khoảng trắng — nó hiện trên
+ * biển hiệu ngoài kho và trên phiếu in, nên phải gõ lại được không nhầm.
+ */
+export const binCreateSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1, 'Mã khu không được để trống')
+    .max(20)
+    .regex(/^[A-Za-z0-9-]+$/, 'Mã khu chỉ gồm chữ, số và dấu gạch ngang'),
+  name: z.string().trim().max(120).optional().nullable(),
+  kind: z.enum(['store', 'receiving', 'blocked', 'scrap']).default('store'),
+})
+
+export const binUpdateSchema = z
+  .object({
+    name: z.string().trim().max(120).optional().nullable(),
+    is_active: z.coerce.boolean().optional(),
+  })
+  .refine((d) => d.name !== undefined || d.is_active !== undefined, {
+    message: 'Không có gì để sửa',
+  })
+
+/**
+ * Phiếu ĐIỀU CHUYỂN (DCK — 0193). Cất hàng và đổi trạng thái đi chung đường:
+ * cả hai đều là "ra khỏi chỗ cũ, vào chỗ mới".
+ */
+export const transferDocSchema = z.object({
+  reason: z.string().trim().max(500).optional().nullable(),
+  note: z.string().trim().max(2000).optional().nullable(),
+  lines: z
+    .array(
+      z
+        .object({
+          material_id: z.string().uuid(),
+          qty: z.coerce.number().positive(),
+          from_bin_id: z.string().uuid(),
+          to_bin_id: z.string().uuid(),
+          stock_status: z.enum(['ok', 'qc', 'blocked']).default('ok'),
+          note: z.string().trim().max(500).optional().nullable(),
+        })
+        // Chặn ở BIÊN chứ không chỉ ở service: form có thể bỏ sót, API thì không.
+        .refine((l) => l.from_bin_id !== l.to_bin_id, {
+          message: 'Kệ đi và kệ đến trùng nhau',
+          path: ['to_bin_id'],
+        }),
+    )
+    .min(1, 'Phiếu chuyển phải có ít nhất 1 dòng')
+    .max(200),
 })
