@@ -1,7 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
-import { supplyRepo } from '@/modules/dept/supply/supply.repo'
+import { RECEIVABLE, supplyRepo } from '@/modules/dept/supply/supply.repo'
 import { todayVn } from '@/lib/date-vn'
 import type { HangVeRow } from '@/lib/kho-hang-ve'
 import { HangVeScreen } from './HangVeScreen'
@@ -32,7 +32,7 @@ export default async function WarehouseInboundPage() {
   const user = await authService.requirePageUser()
   const today = todayVn()
 
-  const [shipments, openPos, canEdit] = await Promise.all([
+  const [shipmentsAll, openPos, canEdit] = await Promise.all([
     poShipmentsRepo.listOpen(),
     supplyRepo.listOpenPos(),
     user.role === 'admin'
@@ -40,6 +40,15 @@ export default async function WarehouseInboundPage() {
       : canAction(user, 'warehouse.stock.write'),
   ])
 
+  /*
+    Chỉ đợt giao của đơn CÒN NHẬN ĐƯỢC. `listOpen` chỉ loại đơn huỷ, nên đợt
+    `planned` của một đơn đã "Về đủ" vẫn lọt — đo 16/09/2026: đơn 02/26HG/BT
+    về đủ mà 4 đợt còn planned, hiện thành 3 dòng "quá hẹn" mà bấm vào thì
+    form từ chối. Cùng luật với màn Nhận hàng của Mua hàng (`isIncoming`).
+  */
+  const shipments = shipmentsAll.filter((s) =>
+    (RECEIVABLE as readonly string[]).includes(s.po_status),
+  )
   const poById = new Map(openPos.map((p) => [p.id, p]))
   const poIds = Array.from(
     new Set([...shipments.map((s) => s.po_id), ...openPos.map((p) => p.id)]),
@@ -87,7 +96,7 @@ export default async function WarehouseInboundPage() {
   }
 
   const truncated =
-    shipments.length >= TRAN_DOT || openPos.length >= TRAN_DON
+    shipmentsAll.length >= TRAN_DOT || openPos.length >= TRAN_DON
       ? { dot: TRAN_DOT, don: TRAN_DON }
       : null
 

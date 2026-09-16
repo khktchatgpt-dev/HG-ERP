@@ -277,8 +277,7 @@ export function HangVeScreen({
                             {canEdit && (
                               <Btn
                                 primary={g.id === 'late' || g.id === 'today'}
-                                disabled
-                                title="Phiếu nhập dựng ở việc số 3 của Bước 1 — chưa ghi sổ được từ đây"
+                                href={`/warehouse/nhap/${r.po_id}${r.shipment_id ? `?dot=${r.shipment_id}` : ''}`}
                                 className="h-6 px-[9px] text-[12px]"
                               >
                                 Nhận hàng
