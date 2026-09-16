@@ -1,19 +1,23 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { handle, parseJson } from '@/server/http'
 import { authService } from '@/modules/core/auth/auth.service'
 import { posService } from '@/modules/dept/supply/pos.service'
-import { poReopenSchema } from '@/modules/dept/supply/pos.schema'
 
 type Params = { params: Promise<{ id: string }> }
 
+const schema = z.object({ reason: z.string().trim().min(1, 'Phải ghi lý do') })
+
 /**
- * MỞ LẠI ĐƠN ĐÃ DUYỆT để sửa: đơn về nháp, dấu duyệt bị xoá, phải duyệt lại.
- * Chặn khi đơn đã có phiếu nhập — xem `posService.reopen`.
+ * Hạ đơn ĐÃ GỬI về nháp để sửa dữ liệu nhập sai (15/09/2026).
+ *
+ * Bốn hàng rào nằm ở `lib/po-reopen.ts` và service kiểm, KHÔNG ở đây — route
+ * giữ nguyên vai trò mỏng: đọc phiên, đọc thân, gọi service, trả JSON.
  */
 export const POST = handle(async (req: Request, { params }: Params) => {
   const user = await authService.requireUser()
   const { id } = await params
-  const { reason } = await parseJson(req, poReopenSchema)
-  const po = await posService.reopen(user, id, reason)
+  const { reason } = await parseJson(req, schema)
+  const po = await posService.reopenForEdit(user, id, reason)
   return NextResponse.json({ po })
 })

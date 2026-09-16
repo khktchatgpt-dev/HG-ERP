@@ -1,5 +1,6 @@
 import { db } from '@/server/db'
 import { searchTokens } from '@/lib/search-text'
+import { summariseDoc, type DocSummary } from '@/lib/warehouse-doc-summary'
 
 export type StockRow = {
   material_id: string
@@ -358,6 +359,11 @@ export type WarehouseDoc = {
   kind: DocKind
   doc_date: string
   counterparty: string | null
+  /** Tổ NHẬN vật tư (0194) — null = phiếu không xuất cho tổ nào. */
+  team_department_id: string | null
+  team_name: string | null
+  /** Mã lý do xuất (0195) — nhãn tra bằng `nhanLyDo`. */
+  reason_code: string | null
   reason: string | null
   note: string | null
   /**
@@ -387,7 +393,7 @@ export type DocLine = Movement & {
 }
 
 const DOC_COLS =
-  'id, code, kind, doc_date, counterparty, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
+  'id, code, kind, doc_date, counterparty, team_department_id, reason_code, reason, note, status, approved_by, approved_at, reject_reason, reversal_of_doc_id, supplier_doc_no, created_by, created_at'
 /*
  * warehouse_docs nay có HAI FK sang users (created_by + approved_by 0157) —
  * embed `users(name)` trần là mơ hồ, PostgREST trả lỗi. Hint đích danh.
@@ -396,7 +402,110 @@ const DOC_COLS =
  * tra bằng truy vấn phụ (fillReversalCodes), không embed.
  */
 const DOC_JOINS =
-  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name)'
+  'actor:users!warehouse_docs_created_by_fkey(name), approver:users!warehouse_docs_approved_by_fkey(name), team:departments(name)'
+
+/**
+ * TÓM TẮT + NGUỒN của một loạt phiếu — hai truy vấn phụ cho cả trang.
+ *
+ * Sổ chứng từ trước đây chỉ có số phiếu, loại, ngày, người lập. Người giữ kho
+ * nhìn 46 phiếu nhập mà không biết phiếu nào chứa gì — phải mở từng cái.
+ *
+ * Gom theo LÔ (`in(doc_id, …)`) chứ không hỏi từng phiếu: một trang 50 phiếu mà
+ * hỏi riêng từng cái là 50 lượt đi về, đúng cái bẫy N+1 mà repo này tránh ở mọi
+ * chỗ khác.
+ */
+export async function docSummaries(
+  docIds: string[],
+): Promise<
+  Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >
+> {
+  const out = new Map<
+    string,
+    DocSummary & { po_codes: string[]; lsx_codes: string[]; ten_dau: string | null }
+  >()
+  if (docIds.length === 0) return out
+
+  const { data: mvRows } = await db()
+    .from('warehouse_movements')
+    .select(
+      'doc_id, material_id, direction, qty, qty_rejected, unit_cost, po_line_id, production_order_id',
+    )
+    .in('doc_id', docIds)
+    .limit(5000)
+  type Mv = {
+    doc_id: string
+    material_id: string
+    direction: 'in' | 'out'
+    qty: unknown
+    qty_rejected: unknown
+    unit_cost: unknown
+    po_line_id: string | null
+    production_order_id: string | null
+  }
+  const mvs = (mvRows ?? []) as Mv[]
+  if (mvs.length === 0) return out
+
+  // Tên vật tư + mã đơn + mã lệnh: mỗi thứ MỘT truy vấn cho cả trang.
+  const matIds = [...new Set(mvs.map((m) => m.material_id))]
+  const lineIds = [...new Set(mvs.map((m) => m.po_line_id).filter((x): x is string => !!x))] // prettier-ignore
+  const lsxIds = [...new Set(mvs.map((m) => m.production_order_id).filter((x): x is string => !!x))] // prettier-ignore
+
+  const [mats, poLines, lsxs] = await Promise.all([
+    matIds.length
+      ? db().from('warehouse_materials').select('id, name').in('id', matIds)
+      : Promise.resolve({ data: [] }),
+    lineIds.length
+      ? db()
+          .from('supply_purchase_order_lines')
+          .select('id, po:supply_purchase_orders(code)')
+          .in('id', lineIds)
+      : Promise.resolve({ data: [] }),
+    lsxIds.length
+      ? db().from('production_orders').select('id, code').in('id', lsxIds)
+      : Promise.resolve({ data: [] }),
+  ])
+  const tenVt = new Map(
+    ((mats.data ?? []) as { id: string; name: string }[]).map((r) => [r.id, r.name]),
+  )
+  const maDon = new Map<string, string>()
+  for (const r of (poLines.data ?? []) as {
+    id: string
+    po: { code: string } | { code: string }[] | null
+  }[]) {
+    const po = Array.isArray(r.po) ? r.po[0] : r.po
+    if (po?.code) maDon.set(r.id, po.code)
+  }
+  const maLenh = new Map(
+    ((lsxs.data ?? []) as { id: string; code: string }[]).map((r) => [r.id, r.code]),
+  )
+
+  const theoDoc = new Map<string, Mv[]>()
+  for (const m of mvs) {
+    if (!theoDoc.has(m.doc_id)) theoDoc.set(m.doc_id, [])
+    theoDoc.get(m.doc_id)!.push(m)
+  }
+  for (const [docId, rows] of theoDoc) {
+    const tt = summariseDoc(
+      rows.map((r) => ({
+        direction: r.direction,
+        material_id: r.material_id,
+        qty: num(r.qty),
+        qty_rejected: num(r.qty_rejected),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })),
+    )
+    out.set(docId, {
+      ...tt,
+      po_codes: [...new Set(rows.map((r) => (r.po_line_id ? maDon.get(r.po_line_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      lsx_codes: [...new Set(rows.map((r) => (r.production_order_id ? maLenh.get(r.production_order_id) : null)).filter((x): x is string => !!x))], // prettier-ignore
+      ten_dau: tenVt.get(rows[0].material_id) ?? null,
+    })
+  }
+  return out
+}
 
 /** Điền reversal_of_code cho các phiếu đảo trong danh sách — 1 truy vấn phụ. */
 async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> {
@@ -421,6 +530,7 @@ async function fillReversalCodes(rows: WarehouseDoc[]): Promise<WarehouseDoc[]> 
 function toDoc(r: Record<string, unknown>): WarehouseDoc {
   const a = Array.isArray(r.actor) ? r.actor[0] : r.actor
   const ap = Array.isArray(r.approver) ? r.approver[0] : r.approver
+  const tm = Array.isArray(r.team) ? r.team[0] : r.team
   const rev = null as { code?: string } | null
   return {
     id: r.id,
@@ -428,6 +538,9 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     kind: r.kind,
     doc_date: r.doc_date,
     counterparty: r.counterparty ?? null,
+    team_department_id: (r.team_department_id as string | null) ?? null,
+    team_name: (tm as { name?: string } | null)?.name ?? null,
+    reason_code: (r.reason_code as string | null) ?? null,
     reason: r.reason ?? null,
     note: r.note ?? null,
     status: (r.status as WarehouseDoc['status']) ?? 'posted',
@@ -442,6 +555,46 @@ function toDoc(r: Record<string, unknown>): WarehouseDoc {
     created_by_name: (a as { name?: string } | null)?.name ?? null,
     created_at: r.created_at,
   } as WarehouseDoc
+}
+
+/**
+ * MỌI LẦN NHẬP CÓ SỐ LƯỢNG, gom theo vật tư — nuôi cột đơn giá bình quân.
+ *
+ * QUÉT CẢ BẢNG, KHÔNG LỌC THEO DANH SÁCH MÃ. Bản đầu lọc theo "mã đang có tồn"
+ * cho rẻ, nhưng sai hai đường:
+ *
+ *   · mất đơn giá của mã tồn 0 — mà đó vẫn là con số có nghĩa ("lần mua gần
+ *     đây bình quân bao nhiêu"), và ngay sau đợt kiểm kê đưa tồn về 0 thì CẢ
+ *     danh mục rơi vào diện này;
+ *   · `in(...)` với hàng nghìn id làm URL vượt mức PostgREST nhận, và lỗi đó
+ *     IM LẶNG — trả rỗng chứ không báo.
+ *
+ * Bảng chuyển động bị chặn bởi số phiếu kho thật, không theo kích thước danh
+ * mục: đo 15/09/2026 là 265 dòng cho 13.229 mã. Khi nào nó lên hàng chục nghìn
+ * thì mới đáng gom sẵn theo vật tư ở tầng DB.
+ */
+export async function giaVonNhap(): Promise<
+  Map<string, { qty: number; unit_cost: number | null }[]>
+> {
+  const out = new Map<string, { qty: number; unit_cost: number | null }[]>()
+  for (let from = 0; ; from += 1000) {
+    const { data } = await db()
+      .from('warehouse_movements')
+      .select('material_id, qty, unit_cost')
+      .eq('direction', 'in')
+      .range(from, from + 999)
+    const rows = (data as Record<string, unknown>[] | null) ?? []
+    for (const r of rows) {
+      const id = r.material_id as string
+      if (!out.has(id)) out.set(id, [])
+      out.get(id)!.push({
+        qty: num(r.qty),
+        unit_cost: r.unit_cost == null ? null : num(r.unit_cost),
+      })
+    }
+    if (rows.length < 1000) break
+  }
+  return out
 }
 
 export const docsRepo = {
@@ -470,6 +623,10 @@ export const docsRepo = {
     code: string
     kind: DocKind
     counterparty?: string | null
+    /** Tổ NHẬN vật tư (0194) — phiếu xuất cho tổ nào. */
+    team_department_id?: string | null
+    /** Mã lý do xuất (0195). */
+    reason_code?: string | null
     reason?: string | null
     note?: string | null
     /** PNK nhận cho đợt giao nào (0153) — null = không theo đợt. */
@@ -1055,6 +1212,8 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     name: string
     /** DÙNG ĐƯỢC — nền tính "dưới mức" từ 0198, xem header migration. */
     qty_ok: number
+    /** ĐVT — để chỗ gọi in "còn 2.400 Cái" mà không phải tra thêm bảng vật tư. */
+    unit: string
     on_hand: number
     min_stock: number
   }[]
@@ -1062,13 +1221,14 @@ export async function stockInfoMany(materialIds: string[]): Promise<
   if (materialIds.length === 0) return []
   const { data } = await db()
     .from('warehouse_stock')
-    .select('material_id, code, name, qty_ok, on_hand, min_stock')
+    .select('material_id, code, name, unit, qty_ok, on_hand, min_stock')
     .in('material_id', materialIds)
   return (
     (data as
       | {
           material_id: string
           code: string
+          unit: string
           name: string
           qty_ok: unknown
           on_hand: unknown
@@ -1080,6 +1240,7 @@ export async function stockInfoMany(materialIds: string[]): Promise<
     code: r.code,
     name: r.name,
     qty_ok: num(r.qty_ok),
+    unit: r.unit ?? '',
     on_hand: num(r.on_hand),
     min_stock: num(r.min_stock),
   }))
@@ -1102,6 +1263,12 @@ export type LsxNeed = {
   source?: 'components' | 'bom'
   /** Có phần định mức từ SP chưa xác nhận BOM — màn hình phải cảnh báo. */
   unconfirmed?: boolean
+  /**
+   * TỒN HIỆN CÓ của vật tư (0194) — người lập phiếu xuất phải thấy kho còn bao
+   * nhiêu NGAY TẠI DÒNG. Không có nó thì họ gõ số mù rồi bấm Lưu mới biết
+   * không đủ, đúng lỗi "không cho bấm rồi mới báo" mà sổ thiết kế cấm.
+   */
+  on_hand?: number
 }
 
 /** Đã xuất theo LSX gộp theo vật tư — cho nhánh nhu cầu từ bảng chi tiết (P3). */

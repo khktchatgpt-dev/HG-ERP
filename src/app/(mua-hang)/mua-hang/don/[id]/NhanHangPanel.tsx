@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import {
   Btn,
+  Code,
   Consequence,
   DateInput,
   Grid,
@@ -125,7 +126,7 @@ export function DotGiaoGrid({
       )}
       <Grid minWidth={860}>
         <GridHead>
-          <Th width={52}>Đợt</Th>
+          <Th width={116}>Đợt giao</Th>
           <Th width={96}>Ngày hẹn</Th>
           <Th width={90}>Trạng thái</Th>
           <Th>Hàng trong đợt</Th>
@@ -142,7 +143,12 @@ export function DotGiaoGrid({
             const per = got.get(s.id)
             return (
               <GridRow key={s.id}>
-                <Td num>{s.seq}</Td>
+                {/* MÃ chứ không phải số thứ tự: đợt là chứng từ Kho mở ra làm
+                    việc, và hai bên phải gọi nó bằng cùng một cái tên. Đợt cũ
+                    chưa có mã thì vẫn hiện số thứ tự, không để ô trống. */}
+                <Td>
+                  {s.code ? <Code>{s.code}</Code> : <span className="num">đợt {s.seq}</span>}
+                </Td>
                 <Td num tone={overdue ? 'stop' : undefined}>
                   {dmy(s.expected_date)}
                 </Td>

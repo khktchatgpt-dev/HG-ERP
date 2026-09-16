@@ -75,12 +75,12 @@ import {
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
-import { canReopen } from '@/lib/po-reopen'
+import { canReopenForEdit } from '@/lib/po-reopen'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
 import {
   PO_STATUS_LABEL,
   PO_STATUS_TONE,
-  poTrackTone,
+  poTrackStep,
   receiptTrackTone,
   type PoStatus,
 } from '@/lib/po-status'
@@ -453,7 +453,20 @@ export function PoDetailScreen({
     }),
   ].sort((a, b) => b.at.localeCompare(a.at))
 
-  const reopenGuard = canReopen(po.status)
+  /*
+    Bốn hàng rào của canReopenForEdit (lib thuần, có test) — màn này phải đưa
+    đủ bốn dữ kiện, không được đoán ba rồi để service chặn nốt: nút khoá phải
+    nói ĐÚNG lý do ngay tại chỗ, không phải chờ bấm rồi mới ăn lỗi.
+
+    canReassign là đúng tập "admin / trưởng phòng CƯ / người duyệt" mà service
+    gọi là privileged (xem page.tsx: manageAny || canApprove).
+  */
+  const reopenGuard = canReopenForEdit({
+    status: po.status,
+    receivedQty: statusLines.reduce((a, l) => a + (l.qty_received ?? 0), 0),
+    warehouseDocs: warehouseDocs.length,
+    privileged: canReassign,
+  })
 
   async function removeDraft() {
     if (await act.deleteDraft(po)) router.push('/planning/pos')
@@ -759,7 +772,7 @@ export function PoDetailScreen({
             }
             onClick={() => setReasoning({ po, kind: 'reopen', reason: '' })}
           >
-            Mở lại để sửa
+            Hạ về nháp để sửa
           </Action>
           <Action
             disabled={!canEdit || !canReschedule(po.status).ok}
@@ -883,7 +896,7 @@ export function PoDetailScreen({
           label="Trạng thái đơn"
           steps={DOC_STEPS}
           at={docStepAt}
-          tone={poTrackTone(po.status)}
+          tone={poTrackStep(po.status).tone}
         />
         <StatusTrack
           label="Nhận hàng"

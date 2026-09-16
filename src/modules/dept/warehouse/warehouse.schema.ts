@@ -1,5 +1,14 @@
 import { z } from 'zod'
+/*
+  HAI BỘ MÃ LÝ DO ĐANG CÙNG TỒN TẠI (16/09/2026) — đợt Kho 15/09 và đợt dựng
+  lại khu Kho làm song song, mỗi bên một bộ: `ly-do-xuat` (danh sách trong mã
+  nguồn, chỉ cho XUẤT, mã nằm trên PHIẾU) và `kho-ma-ly-do` (bảng
+  `warehouse_reason_codes` có FK, cho cả nhập/xuất/chuyển, mã nằm trên DÒNG
+  SỔ). Giữ cả hai để không bên nào mất luật đã viết; CHỐT GỘP VỀ MỘT là việc
+  nghiệp vụ còn treo, không phải việc của lần merge này.
+*/
 import { doiUngBatBuoc, laMaLyDo, timMaLyDo } from '@/lib/kho-ma-ly-do'
+import { laMaLyDoXuat, thieuDienGiai } from '@/lib/ly-do-xuat'
 import { PO_TEMPLATES } from '@/lib/po-template'
 
 export const materialCreateSchema = z.object({
@@ -331,20 +340,30 @@ export const issueDocSchema = z
     kind: z.enum(['lsx', 'daily']),
     production_order_id: z.string().uuid().optional().nullable(),
     counterparty: z.string().trim().max(200).optional().nullable(), // người nhận (mẫu 02-VT)
-    reason: z.string().trim().max(500).optional().nullable(), // lý do xuất
+    /*
+      TỔ NHẬN (0194) — `counterparty` là TÊN người, tổ là ĐƠN VỊ. Gõ "anh Tuấn"
+      thì tháng sau không ai biết anh Tuấn thuộc tổ nào, và không cộng được
+      "tổ Phôi tháng này lĩnh bao nhiêu". Hai ô này bổ sung nhau, không thay thế.
+    */
+    team_department_id: z.string().uuid().optional().nullable(),
     /**
-     * Mã lý do (0197) cho xuất LẺ. Xuất theo lệnh luôn là X1 nên service bỏ
-     * qua trường này ở đường đó. Còn optional vì màn soạn phiếu chưa có ô
-     * chọn — khi có thì đổi thành bắt buộc cho `kind='daily'`.
+     * MÃ LÝ DO XUẤT — quyết định tiền đi về đâu: cấp SX vào giá thành lệnh,
+     * sửa máy / nội bộ là chi phí chung, huỷ là tổn thất.
+     *
+     * Nhận mã của CẢ HAI bộ đang tồn tại (xem ghi chú ở đầu file) — bộ nào
+     * cũng phải là mã XUẤT thật, không phải chuỗi tự do. Khi chốt gộp về một
+     * bộ thì siết lại thành một vế.
      */
     reason_code: z
       .string()
       .trim()
-      .refine((v) => laMaLyDo(v) && timMaLyDo(v)?.huong === 'out', {
+      .max(32)
+      .refine((v) => (laMaLyDo(v) && timMaLyDo(v)?.huong === 'out') || laMaLyDoXuat(v), {
         message: 'Mã lý do không hợp lệ hoặc không phải mã xuất',
       })
       .optional()
       .nullable(),
+    reason: z.string().trim().max(500).optional().nullable(), // diễn giải lý do
     /** Ngày chứng từ (K3) — cùng luật lùi ≤7 ngày với PNK (service không ép thêm). */
     doc_date: z.string().date().optional().nullable(),
     note: z.string().trim().max(2000).optional().nullable(),
@@ -369,6 +388,16 @@ export const issueDocSchema = z
   .refine((d) => !d.override_reserved || !!d.override_reason?.trim(), {
     message: 'Xuất vượt khả dụng phải kèm lý do',
     path: ['override_reason'],
+  })
+  .refine((d) => !d.reason_code || laMaLyDoXuat(d.reason_code), {
+    message: 'Mã lý do xuất không hợp lệ',
+    path: ['reason_code'],
+  })
+  // "Khác" mà bỏ trống diễn giải thì nó thành thùng rác nuốt mọi phiếu, và bộ
+  // mã mất luôn tác dụng phân loại.
+  .refine((d) => !thieuDienGiai(d.reason_code, d.reason), {
+    message: 'Chọn "Khác" thì phải ghi rõ lý do',
+    path: ['reason'],
   })
 
 /** Dòng phiếu TRẢ HÀNG NCC (0080): gắn dòng PO đã về, trả ≤ số đã về. */

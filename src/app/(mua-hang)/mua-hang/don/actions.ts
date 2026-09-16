@@ -1,5 +1,4 @@
 import { canReschedule } from '@/lib/po-reschedule'
-import { canReopen } from '@/lib/po-reopen'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
@@ -23,6 +22,10 @@ export type Perm = {
   /** Đúng người phụ trách, hoặc trưởng phòng / admin. */
   own: boolean
   approve: boolean
+  /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp. */
+  privileged?: boolean
+  /** Đơn đã có phiếu nhập kho: chặn cứng đường hạ về nháp. */
+  hasReceipts?: boolean
 }
 
 export type ActionId =
@@ -59,14 +62,8 @@ export type Action = {
   danger?: boolean
   href?: (id: string) => string
   needReason?: boolean
-  /**
-   * Độ dài tối thiểu của lý do (mặc định 1 — chỉ cần khác rỗng).
-   *
-   * Có để KHỚP với hàng rào zod ở server: lý do đi vào thông báo gửi Giám đốc
-   * thì một dấu chấm là vô nghĩa. Không khai ở đây thì người dùng gõ "x", bấm
-   * được, rồi mới ăn lỗi — đúng lối mòn "cho bấm rồi mới báo" mà luật kiểm của
-   * sổ thiết kế cấm.
-   */
+  /** Độ dài lý do tối thiểu (mặc định 1) — khớp hàng rào zod ở server, chặn
+   *  ngay ở nút thay vì để server dội lỗi về sau khi người dùng đã bấm. */
   minReason?: number
   needDate?: boolean
   reasonLabel?: string
@@ -141,38 +138,34 @@ const EDIT_TERMS = (blocked?: string): Action => ({
 })
 
 /**
- * MỞ LẠI ĐỂ SỬA — đường DUY NHẤT sửa dòng hàng/giá sau khi Giám đốc duyệt.
+ * HẠ VỀ NHÁP ĐỂ SỬA — đường sửa sai DỮ LIỆU của đơn đã gửi.
  *
- * Trước 16/09/2026 không có đường nào: người mua phát hiện sai một dòng trên
- * đơn đã duyệt thì phải huỷ rồi nhân bản (mất số PO đã gửi NCC, đơn huỷ nằm lại
- * trong sổ), hoặc nhờ Giám đốc "từ chối" — một hành động `decide` chỉ nhận cho
- * đơn ĐANG chờ duyệt, tức là trỏ vào chỗ trống.
+ * Khác `withdraw` ở chỗ dùng cho ai và khi nào: `withdraw` là người soạn tự rút
+ * bản mình vừa gửi duyệt, còn cái này là trưởng phòng / Giám đốc mở lại một đơn
+ * đã đi xa hơn, để sửa số nhập sai. Vì nó VÔ HIỆU HOÁ CHỮ KÝ DUYỆT nên bắt lý
+ * do, và service chặn cứng khi đơn đã có phiếu nhập kho.
  *
- * Nút hiện ở MỌI bước đang chạy, kể cả bước không mở được, và câu khoá lấy
- * thẳng từ `canReopen` — nó trỏ đúng sang nút thay thế đứng ngay cạnh ("Sửa
- * đơn" ở nháp, "Rút về nháp" ở chờ duyệt).
+ * Nút vẫn BÀY khi bị khoá, đúng lối Action Pane — nói rõ vướng gì thay vì biến
+ * mất để người dùng đi tìm.
  */
-const REOPEN = (status: PoStatus, notOwn?: string): Action => {
-  const g = canReopen(status)
-  return {
-    id: 'reopen',
-    label: 'Mở lại để sửa',
-    ui: 'sheet',
-    stakes: 'nang',
-    blocked: notOwn ?? (g.ok ? undefined : g.reason),
-    needReason: true,
-    minReason: 5,
-    reasonLabel: 'Vì sao phải sửa lại đơn đã duyệt',
-    reasonHint: 'Giám đốc đọc câu này trong thông báo — nói rõ sai chỗ nào.',
-    consequence:
-      'Đơn về NHÁP, dấu duyệt bị gỡ, đợt giao đã hẹn giữ nguyên. Sửa xong phải gửi duyệt lại từ đầu. Đơn đã có phiếu nhập thì không mở được.',
-    confirmLabel: 'Mở lại để sửa',
-    done: 'Đã mở lại — sửa xong nhớ gửi duyệt lại',
-    build: ({ id, reason }) => [
-      { path: `/api/dept/supply/pos/${id}/reopen`, method: 'POST', body: { reason } },
-    ],
-  }
-}
+const REOPEN = (blocked?: string): Action => ({
+  id: 'reopen',
+  label: 'Hạ về nháp để sửa',
+  ui: 'sheet',
+  stakes: 'nang',
+  blocked,
+  needReason: true,
+  /* Lý do đi vào ghi chú đơn và vào thông báo gửi Giám đốc — một dấu chấm cho
+     qua cửa thì cả hai chỗ đó thành vô nghĩa. Ngưỡng khớp hàng rào zod ở server. */
+  minReason: 5,
+  reasonLabel: 'Vì sao phải sửa lại đơn',
+  reasonHint: 'Ghi rõ sai ở đâu — lý do được đóng dấu vào ghi chú đơn để người sau đọc lại hiểu.', // prettier-ignore
+  consequence: 'Đơn quay về NHÁP và mất dấu duyệt: Giám đốc phải duyệt lại từ đầu. Chỉ dùng khi số trên đơn nhập sai, không dùng để đổi ý.', // prettier-ignore
+  done: 'Đã hạ về nháp — sửa xong nhớ gửi duyệt lại',
+  build: ({ id, reason }) => [
+    { path: `/api/dept/supply/pos/${id}/reopen`, method: 'POST', body: { reason } },
+  ],
+})
 
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
@@ -189,6 +182,16 @@ const NOTE = (id: string, body: string): ApiCall => ({
  */
 export function actionsFor(status: PoStatus, perm: Perm): Action[] {
   const notOwn = perm.own ? undefined : 'Đơn này do người khác phụ trách'
+  /*
+    Hai hàng rào client BIẾT được thì nói ngay tại nút; hàng rào còn lại (trạng
+    thái) do chính chỗ gọi quyết định bằng cách có bày nút hay không. Server vẫn
+    kiểm đủ cả bốn — đây chỉ là để người dùng không bấm rồi mới biết.
+  */
+  const notReopen = !perm.privileged
+    ? 'Chỉ Giám đốc hoặc trưởng phòng Cung ứng hạ đơn về nháp được'
+    : perm.hasReceipts
+      ? 'Đơn đã có phiếu nhập kho — sửa dòng sẽ làm phiếu nhập mồ côi'
+      : notOwn
 
   switch (status) {
     case 'draft':
@@ -221,7 +224,6 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
         },
         EDIT_TERMS('Đơn nháp thì bấm "Sửa đơn" — sửa được cả dòng hàng lẫn điều khoản'),
-        REOPEN(status, notOwn),
         CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,
       ]
@@ -276,7 +278,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         EDIT_TERMS(notOwn),
-        REOPEN(status, notOwn),
+        REOPEN(notReopen),
         CANCEL(notOwn),
         OPEN,
       ]
@@ -297,8 +299,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         reschedule(status, notOwn),
-        REOPEN(status, notOwn),
         EDIT_TERMS(notOwn),
+        REOPEN(notReopen),
         DUP,
         CANCEL(notOwn),
         OPEN,
@@ -333,8 +335,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           },
         },
         reschedule(status, notOwn),
-        REOPEN(status, notOwn),
         EDIT_TERMS(notOwn),
+        REOPEN(notReopen),
         DUP,
         CANCEL(notOwn),
       ]

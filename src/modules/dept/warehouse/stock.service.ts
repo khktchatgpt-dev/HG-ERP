@@ -13,6 +13,8 @@ import {
   lsxNeeds as lsxNeedsRepo,
   bomAllocationByCode,
   stocktakeRepo,
+  docSummaries,
+  giaVonNhap,
   type LsxNeed,
   type StockRow,
   type StockBucket,
@@ -40,6 +42,7 @@ import { phanLoaiDong, type KetQuaCap } from '@/lib/cap-vat-tu'
 import { computeReservedByMaterial } from '@/lib/reserved-stock'
 import { materialsRepo } from './warehouse.repo'
 import { canViewWarehouse } from './warehouse.service'
+import { giaTriTon } from '@/lib/ton-kho-gia-tri'
 import { assertAction } from '@/modules/core/rbac/rbac.service'
 import { rbacRepo } from '@/modules/core/rbac/rbac.repo'
 import {
@@ -136,6 +139,18 @@ async function bomLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   })
 }
 
+/**
+ * Gắn TỒN HIỆN CÓ vào từng dòng nhu cầu (0194) — một lượt cho cả danh sách.
+ *
+ * Người lập phiếu xuất phải thấy kho còn bao nhiêu ngay tại dòng; thiếu nó thì
+ * họ gõ số mù rồi bấm Lưu mới ăn lỗi, đúng lỗi "không cho bấm rồi mới báo".
+ */
+async function kemTonKho(needs: LsxNeed[]): Promise<LsxNeed[]> {
+  if (needs.length === 0) return needs
+  const ton = await onHandMany([...new Set(needs.map((n) => n.material_id))])
+  return needs.map((n) => ({ ...n, on_hand: ton.get(n.material_id) ?? 0 }))
+}
+
 export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[]> {
   const comp = await componentMaterialNeeds(productionOrderId)
   /*
@@ -146,27 +161,29 @@ export async function smartLsxNeeds(productionOrderId: string): Promise<LsxNeed[
    * view định mức có mã cho 7 lệnh → mọi màn nhu cầu trống suốt từ 23/08.
    * Bảng định hình chỉ THAY định mức khi nó thật sự nói được cần vật tư gì.
    */
-  if (!comp || comp.length === 0) return bomLsxNeeds(productionOrderId)
+  if (!comp || comp.length === 0) return kemTonKho(await bomLsxNeeds(productionOrderId))
 
   const issued = await issuedByLsx(productionOrderId)
-  return comp.map((c) => {
-    const qtyNeeded = c.bars_needed ?? c.kg_needed ?? c.total_components
-    const qtyIssued = issued.get(c.material_id) ?? 0
-    return {
-      production_order_id: productionOrderId,
-      material_id: c.material_id,
-      material_code: c.material_code,
-      material_name: c.material_name,
-      unit: c.unit,
-      qty_needed: qtyNeeded,
-      qty_issued: qtyIssued,
-      qty_remaining: Math.max(qtyNeeded - qtyIssued, 0),
-      kg_needed: c.kg_needed,
-      bars_needed: c.bars_needed,
-      incomplete: c.incomplete,
-      source: 'components' as const,
-    }
-  })
+  return kemTonKho(
+    comp.map((c) => {
+      const qtyNeeded = c.bars_needed ?? c.kg_needed ?? c.total_components
+      const qtyIssued = issued.get(c.material_id) ?? 0
+      return {
+        production_order_id: productionOrderId,
+        material_id: c.material_id,
+        material_code: c.material_code,
+        material_name: c.material_name,
+        unit: c.unit,
+        qty_needed: qtyNeeded,
+        qty_issued: qtyIssued,
+        qty_remaining: Math.max(qtyNeeded - qtyIssued, 0),
+        kg_needed: c.kg_needed,
+        bars_needed: c.bars_needed,
+        incomplete: c.incomplete,
+        source: 'components' as const,
+      }
+    }),
+  )
 }
 
 /**
@@ -235,6 +252,10 @@ export async function reservedByOtherLsx(
 export type StockRowAvail = StockRow & {
   reserved: number
   available: number
+  /** Đơn giá bình quân gia quyền. Null = chưa lần nhập nào có giá. */
+  don_gia_bq: number | null
+  /** Tồn × đơn giá bình quân. Null khi chưa có đơn giá. */
+  gia_tri: number | null
 }
 
 export const stockService = {
@@ -251,9 +272,32 @@ export const stockService = {
       }),
       reservedByCommittedLsx(),
     ])
+    /*
+      GIÁ TRỊ TỒN (0193) — kế toán hỏi mỗi cuối kỳ "tồn này bao nhiêu tiền", mà
+      màn tới nay chỉ trả lời được số LƯỢNG. Bình quân gia quyền theo các lần
+      NHẬP CÓ GIÁ; vì sao không FIFO xem `lib/ton-kho-gia-tri.ts`.
+
+      Đơn giá tính cho MỌI mã từng nhập, kể cả mã tồn đang 0: "lần mua gần đây
+      bình quân bao nhiêu" vẫn là con số có nghĩa, và ngay sau đợt kiểm kê đưa
+      tồn về 0 thì cả danh mục rơi vào diện đó.
+    */
+    const nhapTheoMa = await giaVonNhap()
     return rows.map((r) => {
       const res = reserved.get(r.material_id) ?? 0
-      return { ...r, reserved: res, available: r.qty_ok - res }
+      /*
+        `qty_ok` chứ không phải `on_hand`: view tồn của đợt dựng lại (0198)
+        tách "tồn dùng được" khỏi tổng tồn (hàng chờ kiểm, hàng hỏng không
+        dùng được). Giá trị tồn thì tính trên CHÍNH số dùng được ấy — tính
+        trên tổng tồn là kê cao tài sản bằng hàng không bán/không dùng được.
+      */
+      const gv = giaTriTon(r.qty_ok, (nhapTheoMa.get(r.material_id) ?? []).map((m) => ({ direction: 'in' as const, qty: m.qty, unit_cost: m.unit_cost }))) // prettier-ignore
+      return {
+        ...r,
+        reserved: res,
+        available: r.qty_ok - res,
+        don_gia_bq: gv.donGia,
+        gia_tri: gv.giaTri,
+      }
     })
   },
 
@@ -293,9 +337,21 @@ export const stockService = {
     if (!(await canViewWarehouse(user))) throw Forbidden('Chỉ phòng Kho truy cập được')
 
     const reserved = await reservedByCommittedLsx()
+    /*
+      Đường này KHÔNG tính giá trị tồn (giá vốn bình quân) — nó phục vụ ô đếm
+      rổ và bộ lọc, nơi tiền không tham gia. Trả null tường minh thay vì bỏ
+      trống: cùng một kiểu `StockRowAvail` cho mọi đường đọc tồn, chỗ gọi
+      không phải đoán đường nào có tiền đường nào không.
+    */
     const withRes = (r: StockRow): StockRowAvail => {
       const res = reserved.get(r.material_id) ?? 0
-      return { ...r, reserved: res, available: r.qty_ok - res }
+      return {
+        ...r,
+        reserved: res,
+        available: r.qty_ok - res,
+        don_gia_bq: null,
+        gia_tri: null,
+      }
     }
 
     // Tập có giữ chỗ — nền để đếm rổ `short` VÀ để lọc nó, cùng một nguồn.
@@ -404,12 +460,26 @@ export const stockService = {
 
   // ── Phiếu kho nhiều dòng (0017) ──
 
+  /**
+   * SỔ CHỨNG TỪ — kèm TÓM TẮT từng phiếu.
+   *
+   * Trước 15/09/2026 chỉ trả đầu phiếu, nên màn bày 46 phiếu nhập mà không cột
+   * nào nói phiếu nào chứa gì, bao nhiêu, đáng bao nhiêu tiền — muốn biết phải
+   * mở từng cái (chủ dự án: "nhập kho chẳng biết đã nhập những gì").
+   *
+   * Tóm tắt lấy MỘT LƯỢT cho cả trang, không hỏi từng phiếu.
+   */
   async listDocs(
     user: User,
     opts: { kind?: DocKind; reason_code?: string; page: number; page_size: number },
   ) {
     if (!(await canViewWarehouse(user))) throw Forbidden()
-    return docsRepo.list(opts)
+    const { rows, total } = await docsRepo.list(opts)
+    const tt = await docSummaries(rows.map((r) => r.id))
+    return {
+      rows: rows.map((r) => ({ ...r, summary: tt.get(r.id) ?? null })),
+      total,
+    }
   },
 
   async docDetail(user: User, id: string) {
@@ -596,7 +666,20 @@ export const stockService = {
         bin_id?: string | null
       }[]
     },
-  ): Promise<{ id: string; code: string; po_status: string | null }> {
+  ): Promise<{
+    id: string
+    code: string
+    po_status: string | null
+    /** Tồn SAU KHI ghi phiếu, đúng những vật tư vừa nhập. */
+    stock_after: {
+      material_id: string
+      code: string
+      name: string
+      unit: string
+      on_hand: number
+      received: number
+    }[]
+  }> {
     await assertAction(user, 'warehouse.stock.write')
     if (input.po_id && input.production_order_id) {
       throw BadRequest(
@@ -868,7 +951,36 @@ export const stockService = {
       created_by: user.id,
       notify_ids: [...notifyIds],
     })
-    return { id: doc.id, code: doc.code, po_status: poStatus }
+    /*
+      ĐỌC LẠI TỒN SAU KHI GHI — để màn lập phiếu TRẢ LỜI ĐƯỢC câu người giữ kho
+      hỏi ngay sau khi bấm: "tồn đã cộng vào chưa?".
+
+      Trước đây route chỉ trả mã phiếu, nên giao diện báo "Đã lập PNK-…" rồi
+      thôi. Người dùng không có cách nào biết số đã vào sổ trừ khi tự đi mở màn
+      Tồn kho tra từng mã — và vì `warehouse_stock` là VIEW cộng từ phiếu, họ
+      cũng không có lý do gì để tin là nó tự cộng (chủ dự án hỏi đúng câu này
+      ngày 15/09/2026).
+
+      Đọc SAU khi `insertMovements` xong nên con số này là tồn thật, không phải
+      số mình tự cộng nhẩm rồi đoán — nếu view có sai thì nó hiện ra ở đây chứ
+      không im lặng.
+    */
+    const idsNhap = [...new Set(input.lines.map((l) => l.material_id))]
+    const nhan = new Map<string, number>()
+    for (const l of input.lines) {
+      nhan.set(l.material_id, (nhan.get(l.material_id) ?? 0) + l.qty)
+    }
+    const ton = await stockInfoMany(idsNhap)
+    const stock_after = ton.map((r) => ({
+      material_id: r.material_id,
+      code: r.code,
+      name: r.name,
+      unit: r.unit,
+      on_hand: r.on_hand,
+      received: nhan.get(r.material_id) ?? 0,
+    }))
+
+    return { id: doc.id, code: doc.code, po_status: poStatus, stock_after }
   },
 
   /**
@@ -881,13 +993,16 @@ export const stockService = {
       kind: 'lsx' | 'daily'
       production_order_id?: string | null
       counterparty?: string | null
-      reason?: string | null
+      /** Tổ NHẬN vật tư (0194) — trỏ `departments`, cùng khái niệm với LSX job. */
+      team_department_id?: string | null
       /**
-       * Mã lý do (0197) cho xuất LẺ — `lib/kho-ma-ly-do.ts`, hướng 'out'. Xuất
-       * theo lệnh không nhận trường này: nó luôn là X1. Còn optional vì màn
-       * soạn phiếu chưa có ô chọn; bắt buộc là việc của bước UI.
+       * MÃ LÝ DO XUẤT. Hai bộ mã đang cùng tồn tại sau lần gộp 16/09/2026 —
+       * `lib/ly-do-xuat.ts` (0195) và `lib/kho-ma-ly-do.ts` (0197); zod ở
+       * biên nhận cả hai, xem ghi chú đầu `warehouse.schema.ts`. Xuất theo
+       * lệnh không cần khai: nó luôn là mã "cấp cho sản xuất".
        */
       reason_code?: string | null
+      reason?: string | null
       /** Ngày chứng từ (K3) — xuất chiều tối, sáng sau mới nhập máy. */
       doc_date?: string | null
       note?: string | null
@@ -977,6 +1092,8 @@ export const stockService = {
       code,
       kind: 'issue',
       counterparty: input.counterparty ?? null,
+      team_department_id: input.team_department_id ?? null,
+      reason_code: input.reason_code ?? null,
       reason: input.reason ?? null,
       note,
       ...(input.doc_date ? { doc_date: input.doc_date } : {}),

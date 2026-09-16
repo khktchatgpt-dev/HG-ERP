@@ -119,36 +119,8 @@ export function poStatusOptions(): { value: PoStatus; label: string }[] {
   return PO_STATUSES.map((s) => ({ value: s, label: PO_STATUS_LABEL[s] }))
 }
 
-/**
- * NGHĨA CỦA BƯỚC ĐANG ĐỨNG trên dải `StatusTrack` — quyết định màu dải.
- *
- * Cùng bốn nghĩa với `poSpineColor` bên dưới, và cố ý trùng: vạch mép dòng ở
- * màn danh sách với dải bước ở màn chứng từ đang nói về CÙNG một chuyện, nên
- * chúng phải cùng màu. Khác nhau thì người dùng học hai bảng màu cho một khái
- * niệm.
- *
- * Vì sao cần: tới 16/09/2026 dải bước luôn tô xanh `--act` — cùng màu với nút
- * chính — nên xanh mang hai nghĩa "bấm được" và "đang ở bước này", và cả màn
- * chỉ còn xanh với trắng. Xem `TrackTone` trong `components/kit/Erp.tsx`.
- */
+/** Năm nghĩa vòng đời dùng cho màu dải bước — khớp `TrackTone` của kit. */
 export type PoTrackTone = 'idle' | 'wait' | 'run' | 'done' | 'stop'
-
-export function poTrackTone(status: string): PoTrackTone {
-  switch (status) {
-    case 'draft':
-      return 'idle' // chưa ra khỏi nhà
-    case 'pending_approval':
-    case 'approved':
-    case 'partial':
-      return 'wait' // đang chờ ai đó: chờ GĐ gật, chờ gửi NCC, chờ hàng về nốt
-    case 'received':
-      return 'done'
-    case 'cancelled':
-      return 'stop'
-    default:
-      return 'run' // ordered / confirmed / in_transit — đã chốt, đang chạy
-  }
-}
 
 /**
  * Dải NHẬN HÀNG (Chưa nhận · Một phần · Đủ) — tính theo BƯỚC, không theo trạng
@@ -178,5 +150,87 @@ export function poSpineColor(status: PoStatus): string {
       return 'transparent'
     default:
       return 'var(--primary)'
+  }
+}
+
+/** Sáu bước của trục PHÁT HÀNH đơn — từ bàn soạn tới lúc hàng lên đường. */
+export const PO_TRACK_STEPS = [
+  'Nháp',
+  'Chờ duyệt',
+  'Đã duyệt',
+  'Đã gửi',
+  'NCC xác nhận',
+  'Đang giao',
+] as const
+
+/**
+ * ĐƠN ĐANG Ở BƯỚC NÀO trên trục phát hành — và bước đó đọc ra màu gì.
+ *
+ * VÌ SAO PHẢI CÓ HÀM NÀY. Màn chứng từ trước đây tính thẳng tại chỗ:
+ *
+ *     Math.max(0, ['draft','pending_approval','approved','ordered',
+ *                  'confirmed','in_transit'].indexOf(po.status))
+ *
+ * Danh sách đó thiếu ba trạng thái CUỐI vòng đời — `partial`, `received`,
+ * `cancelled`. `indexOf` trả -1, `Math.max(0, -1)` kéo về 0, nên đơn ĐÃ VỀ MỘT
+ * PHẦN, đơn ĐÃ VỀ ĐỦ và đơn ĐÃ HUỶ đều hiện là **"Nháp"**. Ba trong chín trạng
+ * thái hiện sai, và đúng ba trạng thái mà người đọc cần biết nhất (chủ dự án
+ * báo 15/09/2026: "rất khó nhận biết tình trạng đơn").
+ *
+ * `Math.max(0, …)` là thứ che mất lỗi: nó biến "không tìm thấy" thành "bước
+ * đầu tiên" một cách im lặng. Hàm này khai TƯỜNG MINH cả chín trạng thái, và
+ * có test cho từng cái — thêm trạng thái mới mà quên khai là test đỏ ngay.
+ *
+ * `at >= steps.length` nghĩa là ĐÃ QUA HẾT trục: hàng bắt đầu về rồi thì việc
+ * phát hành đơn xong từ lâu, không còn bước nào "đang" cả — lúc đó trục nhận
+ * hàng mới là trục đang chạy.
+ */
+export function poTrackStep(status: PoStatus): {
+  /** Chỉ số bước đang ở. `PO_TRACK_STEPS.length` = đã qua hết; `-1` = trục không còn nghĩa. */
+  at: number
+  /**
+   * NGHĨA của bước đang ở — quyết định màu dải (xem `TrackTone` ở kit).
+   *
+   * Bản 15/09 chỉ có `act | stop`, nên bảy trên chín trạng thái ra CÙNG một
+   * màu xanh với nút chính; chủ dự án chấm "chỉ có mỗi màu xanh trắng, rất khó
+   * phân biệt" (16/09). Nay dùng đúng bốn nghĩa của `poSpineColor` bên dưới,
+   * để vạch mép dòng ở màn danh sách và dải bước ở màn chứng từ không nói hai
+   * thứ tiếng về cùng một đơn.
+   */
+  tone: PoTrackTone
+  /** Bậc KẾT THÚC ngoài trục — chỉ đơn huỷ mới có. */
+  terminal?: string
+} {
+  switch (status) {
+    case 'draft':
+      return { at: 0, tone: 'idle' }
+    case 'pending_approval':
+      return { at: 1, tone: 'wait' }
+    case 'approved':
+      return { at: 2, tone: 'wait' }
+    case 'ordered':
+      return { at: 3, tone: 'run' }
+    case 'confirmed':
+      return { at: 4, tone: 'run' }
+    case 'in_transit':
+      return { at: 5, tone: 'run' }
+    // Hàng đã bắt đầu về → cả trục phát hành đã xong.
+    case 'partial':
+    case 'received':
+      return { at: PO_TRACK_STEPS.length, tone: status === 'received' ? 'done' : 'wait' }
+    /*
+      HUỶ KHÔNG PHẢI MỘT BƯỚC, nó là chỗ vòng đời DỪNG LẠI.
+
+      Hai cách sai đã thử: để bước cuối cùng đơn đi tới thì nói dối, vì cột
+      `status` bị ghi đè nên không còn biết đơn huỷ lúc nháp hay huỷ sau khi đã
+      gửi NCC. Cho "qua hết trục" thì cả sáu bước tick xanh — đọc ra thành
+      "hoàn thành tốt đẹp", đúng thứ ngược hẳn sự thật.
+
+      Nên: `at: -1` — không bước nào đã qua, không bước nào đang chạy, cả trục
+      lùi về nhạt vì nó KHÔNG CÒN NGHĨA với đơn này — kèm một bậc KẾT THÚC màu
+      dừng đặt ngoài trục.
+    */
+    case 'cancelled':
+      return { at: -1, tone: 'stop', terminal: 'Đã huỷ' }
   }
 }

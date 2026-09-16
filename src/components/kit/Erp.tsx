@@ -331,23 +331,20 @@ export function DocHead({
 /**
  * NGHĨA của bước đang đứng — quyết định MÀU của dải.
  *
- * Tới 16/09/2026 dải trạng thái luôn tô `--act` cho bước hiện tại, tức cùng
- * một màu xanh với nút chính. Đo trên màn đơn mua: nền nút "Duyệt đơn đặt" và
- * nền chip "Đã gửi NCC" đều là `rgb(31,75,184)`, cùng bo góc 10px. Chủ dự án
- * báo đúng triệu chứng đó — "chỉ có mỗi màu xanh trắng rất khó phân biệt".
+ * Tới 16/09/2026 dải chỉ biết hai màu: `act` cho mọi bước đang chạy và `stop`
+ * cho đơn huỷ. Bảy trên chín trạng thái PO rơi vào `act`, tức cùng một màu
+ * xanh với nút chính — chủ dự án chấm "chỉ có mỗi màu xanh trắng, rất khó
+ * phân biệt". Gốc là nguyên tắc 5 của sổ thiết kế bị phá: MỘT màu hành động,
+ * BA màu vòng đời, mà ba màu vòng đời thì không chỗ nào dùng.
  *
- * Gốc là nguyên tắc 5 của sổ thiết kế bị phá: MỘT màu hành động, BA màu vòng
- * đời. Ba màu vòng đời có sẵn trong token nhưng dải trạng thái không dùng cái
- * nào, nên xanh phải gánh cả hai nghĩa "bấm được" và "đang ở bước này".
- *
- *   idle — chưa đi đâu cả (nháp, chưa nhận, chưa trả)   → xám đậm
+ *   idle — chưa đi đâu cả (nháp, chưa nhận, chưa trả)   → xám
  *   wait — ĐANG CHỜ AI ĐÓ (chờ duyệt, về một phần)      → `--warn`
  *   run  — đã chốt, đang chạy đúng đường                → `--act`
  *   done — xong                                          → `--done`
  *   stop — đã huỷ / đã dừng                              → `--stop`
  *
- * Mặc định `run` để mọi chỗ gọi cũ giữ nguyên hình; chỗ nào có nghĩa thật thì
- * khai (xem `poTrackTone` ở màn đơn mua).
+ * Mặc định `run` để mọi chỗ gọi cũ giữ nguyên hình. Chỗ nào có nghĩa thật thì
+ * khai (xem `poTrackStep` ở `lib/po-status.ts`).
  */
 export type TrackTone = 'idle' | 'wait' | 'run' | 'done' | 'stop'
 
@@ -356,13 +353,24 @@ export function StatusTrack({
   steps,
   at,
   tone = 'run',
+  terminal,
   onPick,
 }: {
   label: string
   steps: string[]
-  /** Chỉ số bước hiện tại. */
+  /**
+   * Chỉ số bước hiện tại. Bằng hoặc lớn hơn `steps.length` = ĐÃ QUA HẾT trục,
+   * không bước nào đang chạy (đơn đã về / đã huỷ thì trục phát hành xong rồi).
+   */
   at: number
+  /** Màu bước đang ở. `stop` cho vòng đời dừng giữa chừng (huỷ). */
   tone?: TrackTone
+  /**
+   * BẬC KẾT THÚC ngoài trục — chứng từ dừng hẳn ở một chỗ không nằm trong dãy
+   * bước (đơn huỷ). Đi kèm `at: -1` thì cả trục lùi về nhạt: nó không còn nghĩa
+   * nữa, và nói vậy trung thực hơn là tick xanh những bước đơn chưa hề đi qua.
+   */
+  terminal?: string
   onPick?: (i: number) => void
 }) {
   return (
@@ -382,36 +390,60 @@ export function StatusTrack({
         Chỉ-đọc thì render `<span>`: mắt vẫn thấy đang ở bước nào, mà không hứa
         một thao tác không tồn tại.
       */}
-      {/*
-        BƯỚC ĐÃ QUA phải khác BƯỚC CHƯA TỚI. Trước đây cả hai cùng nền xám nên
-        dải không có chiều: nhìn "Nháp · Chờ duyệt · [Đã gửi NCC] · NCC xác
-        nhận" không đọc ra được đơn đã đi qua đâu, chỉ thấy nó đang ở đâu.
-      */}
       <div
         className={cx('k-steps', `k-steps-${tone}`)}
         role={onPick ? undefined : 'list'}
       >
-        {steps.map((s, i) =>
-          onPick ? (
+        {/*
+          BA TRẠNG THÁI BƯỚC, KHÔNG PHẢI HAI.
+
+          Tới 15/09/2026 dải chỉ biết "đang ở đây" và "không phải đây" — bước ĐÃ
+          QUA và bước CHƯA TỚI tô y hệt nhau (`--surface-raised` + `--ink-3`).
+          Nên cả dải đọc ra một mảng xám có đúng một ô xanh, và không nói được
+          điều quan trọng nhất: đi tới đâu rồi. Chủ dự án báo đúng vậy — "trạng
+          thái 1 màu duy nhất, rất khó nhận biết".
+
+          Bước đã qua mang sắc HOÀN THÀNH nhạt + dấu ✓, KHÔNG mang màu hành
+          động: tô hết bằng màu hành động thì cả dải sáng rực và mắt lại không
+          tìm ra đang ở đâu (đúng lỗi của v3 trên đơn 8 bậc). Bước chưa tới lùi
+          xuống nền thẻ — nhạt hơn bước đã qua, nên hướng đi đọc được ngay cả
+          khi không còn bước nào "đang" (đơn đã về đủ).
+        */}
+        {steps.map((s, i) => {
+          const qua = i < at
+          const dang = i === at
+          const cls = cx('k-step', !onPick && 'k-step-ro', qua && 'past', dang && 'on')
+          const noi = (
+            <>
+              {qua && <span aria-hidden>✓ </span>}
+              {s}
+            </>
+          )
+          return onPick ? (
             <button
               key={s}
               type="button"
-              className={cx('k-step', i < at && 'past', i === at && 'on')}
+              className={cls}
               onClick={() => onPick(i)}
-              aria-current={i === at ? 'step' : undefined}
+              aria-current={dang ? 'step' : undefined}
             >
-              {s}
+              {noi}
             </button>
           ) : (
             <span
               key={s}
               role="listitem"
-              className={cx('k-step', 'k-step-ro', i < at && 'past', i === at && 'on')}
-              aria-current={i === at ? 'step' : undefined}
+              className={cls}
+              aria-current={dang ? 'step' : undefined}
             >
-              {s}
+              {noi}
             </span>
-          ),
+          )
+        })}
+        {terminal && (
+          <span role="listitem" className="k-step k-step-ro on stop" aria-current="step">
+            {terminal}
+          </span>
         )}
       </div>
     </div>

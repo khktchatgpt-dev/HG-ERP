@@ -1,3 +1,7 @@
+-- ĐÁNH SỐ LẠI 16/09/2026 (trước là 0193/0194/0195). Hai nhánh chạy song song
+-- cùng lấy ba số đó cho nội dung khác nhau; quy ước dự án cấm dùng lại số nên
+-- bộ Kho này dời lên cuối. Nội dung KHÔNG đổi và đã áp trên DB thật, nên số mới
+-- chỉ để sổ mã nguồn không còn trùng — thứ tự áp thật xem supabase_migrations.
 -- 0195 — Nạp 13 KHU THẬT cho kho vật tư chính.
 --
 -- BỐI CẢNH. 0193 chỉ nạp ba khu ẢO (TIEP-NHAN / KHOA-01 / PHE-Z) vì tên khu

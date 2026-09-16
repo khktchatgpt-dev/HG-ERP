@@ -1,65 +1,77 @@
 /**
- * MỞ LẠI ĐƠN ĐÃ DUYỆT ĐỂ SỬA.
+ * HẠ ĐƠN ĐÃ GỬI VỀ NHÁP ĐỂ SỬA.
  *
- * `posService.update` chỉ nhận đơn NHÁP: sau khi Giám đốc duyệt, dòng hàng và
- * giá là cam kết với GĐ và là bản NCC đang cầm — sửa thẳng ở đó là âm thầm vô
- * hiệu hoá chữ ký duyệt. Trước 16/09/2026 hệ quả là người mua phát hiện sai một
- * dòng sau khi duyệt thì chỉ còn hai lối, cả hai đều tệ:
+ * VÌ SAO PHẢI CÓ. Luật gốc đúng cho đơn phát sinh mới: sau khi Giám đốc duyệt,
+ * giá và dòng hàng là cam kết với GĐ và bản NCC đang cầm, nên `posService.update`
+ * chỉ mở ở trạng thái nháp. Nhưng luật đó giả định MỌI đơn đều sinh ra trong hệ
+ * thống và đi tuần tự từ nháp.
  *
- *   - Huỷ đơn rồi nhân bản → mất số PO đã gửi NCC, đơn huỷ nằm lại trong sổ;
- *   - Nhờ Giám đốc "từ chối" một đơn đã duyệt → không có đường đó, `decide`
- *     chỉ nhận đơn đang chờ duyệt.
+ * Thực tế phòng Cung ứng đang nhập lại dữ liệu: 19 đơn của tháng 6–9/2026 vào hệ
+ * thống ở thẳng trạng thái "đã gửi" / "đã nhận", vì ngoài đời chúng đã gửi rồi.
+ * Khi đối chiếu phát hiện gõ sai một con số — và đợt rà 15/09/2026 tìm ra 9 dòng
+ * lệch — thì KHÔNG có đường nào sửa: `update` khoá, `withdraw` chỉ nhận đơn đang
+ * chờ duyệt. Người dùng còn mỗi hai lựa chọn tệ: để số sai, hoặc huỷ đơn rồi tạo
+ * lại (mất số PO thật đã gửi NCC, mất luôn vết đối chiếu).
  *
- * Nên mở một lối THỨ BA, đúng một chiều: đơn quay về NHÁP kèm lý do, dấu duyệt
- * bị xoá, và muốn đi tiếp thì phải qua lại cửa duyệt. Người mua sửa được, còn
- * bất biến "số Giám đốc gật = số trên phiếu" vẫn nguyên — vì bản vừa sửa chưa
- * có chữ ký nào cho tới khi GĐ gật lần nữa.
+ * BỐN HÀNG RÀO, không cái nào bỏ được:
  *
- * Luật để ở lib (thuần, có test) vì CẢ HAI phía đều cần nó: service chặn thật,
- * còn `actions.ts` của màn chứng từ cần đúng câu lý do để hiện lên nút bị khoá.
+ *  1. QUYỀN — chỉ admin / trưởng phòng Cung ứng / người duyệt. Đây là thao tác
+ *     vô hiệu hoá chữ ký duyệt, không phải việc thường ngày của nhân viên.
+ *  2. ĐÃ NHẬN HÀNG THÌ KHÔNG. Phiếu nhập kho trỏ vào `po_line_id`; hạ về nháp
+ *     rồi sửa dòng là `update` xoá và ghi lại dòng — phiếu nhập thành mồ côi,
+ *     tồn kho và công nợ mất một chân đối chiếu. Đây là hàng rào CỨNG.
+ *  3. LÝ DO BẮT BUỘC, và nó được đóng dấu vào ghi chú đơn. Ai mở, khi nào, vì
+ *     sao — đọc lại đơn là thấy.
+ *  4. ĐƠN ĐÃ HUỶ / ĐANG NHÁP thì vô nghĩa, chặn luôn cho khỏi nhầm.
+ *
+ * Hàm này THUẦN để test được cả bốn nhánh mà không cần dựng cơ sở dữ liệu.
  */
 
-/** Đã qua cửa duyệt, chưa nhận gì — tập DUY NHẤT mở lại được. */
-const REOPENABLE = ['approved', 'ordered', 'confirmed', 'in_transit']
+import { stampNote } from './po-note'
+
+/** Trạng thái hạ về nháp được — đơn đã rời bàn soạn nhưng chưa có hàng về. */
+const REOPENABLE = ['pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit'] // prettier-ignore
 
 export type ReopenGuard = { ok: true } | { ok: false; reason: string }
 
-/**
- * Mở lại được không, xét theo TRẠNG THÁI.
- *
- * Trạng thái là điều kiện CẦN, không đủ: đơn đã có phiếu nhập dù chỉ một dòng
- * thì service chặn tiếp (xem `posService.reopen`) — sổ kho đã ghi theo dòng
- * hàng của bản cũ, sửa ngược bản ấy là đẻ ra hai nguồn số cho cùng một lô hàng.
- */
-export function canReopen(status: string): ReopenGuard {
-  if (status === 'draft') {
-    return { ok: false, reason: 'Đơn đang là nháp — bấm "Sửa đơn"' }
-  }
-  if (status === 'pending_approval') {
-    return { ok: false, reason: 'Đơn đang chờ duyệt — bấm "Rút về nháp" rồi sửa' }
-  }
-  if (status === 'partial' || status === 'received') {
+export function canReopenForEdit(i: {
+  status: string
+  /** Tổng số lượng ĐÃ NHẬN trên mọi dòng của đơn. > 0 là chặn cứng. */
+  receivedQty: number
+  /** Số phiếu kho đã ghi vào đơn — chặn cả khi phiếu ghi 0 (trả hàng, huỷ dở). */
+  warehouseDocs: number
+  /** Người bấm có phải admin / trưởng phòng CƯ / người duyệt không. */
+  privileged: boolean
+}): ReopenGuard {
+  if (!i.privileged) {
     return {
       ok: false,
-      reason: 'Đơn đã có hàng về — không mở lại được, hãy nhân bản thành đơn mới',
+      reason: 'Chỉ Giám đốc hoặc trưởng phòng Cung ứng hạ đơn về nháp được',
     }
   }
-  if (status === 'cancelled') {
-    return { ok: false, reason: 'Đơn đã huỷ — hãy nhân bản thành đơn mới' }
+  if (i.status === 'draft') return { ok: false, reason: 'Đơn đang là nháp — sửa thẳng được rồi' } // prettier-ignore
+  if (i.status === 'cancelled') return { ok: false, reason: 'Đơn đã huỷ — dùng "Tạo lại từ đơn này"' } // prettier-ignore
+  if (i.receivedQty > 1e-6 || i.warehouseDocs > 0) {
+    return {
+      ok: false,
+      reason:
+        'Đơn đã có phiếu nhập kho — sửa dòng sẽ làm phiếu nhập mồ côi. Điều chỉnh bên Kho, hoặc huỷ đơn rồi tạo lại.',
+    }
   }
-  if (!REOPENABLE.includes(status)) {
-    return { ok: false, reason: `Không mở lại được ở trạng thái "${status}"` }
+  if (!REOPENABLE.includes(i.status)) {
+    return { ok: false, reason: `Không hạ về nháp được ở trạng thái "${i.status}"` }
   }
   return { ok: true }
 }
 
 /**
- * Câu chặn khi đơn CHƯA nhận đủ điều kiện về phiếu nhập.
- *
- * Tách khỏi `canReopen` vì nó cần số liệu từ DB — nhưng vẫn để cạnh nhau, để
- * người đọc thấy đủ hai tầng chặn ở một chỗ.
+ * Dấu vết ghi vào `note` của đơn — cùng quy ước xếp lớp với `[Huỷ]`,
+ * `[Từ chối]`, `[Dời hẹn giao]`: vết mới lên đầu, ghi chú cũ xuống dưới.
  */
-export function receivedBlockReason(receivedLines: number): string | null {
-  if (receivedLines <= 0) return null
-  return `Đơn đã có ${receivedLines} dòng ghi nhận nhập kho — không mở lại được. Muốn dừng phần còn lại thì "Chốt phần thiếu", muốn mua tiếp thì nhân bản thành đơn mới.`
+export function reopenNote(
+  fromStatus: string,
+  reason: string,
+  prev: string | null,
+): string | null {
+  return stampNote(`Hạ về nháp từ "${fromStatus}"`, reason, prev)
 }

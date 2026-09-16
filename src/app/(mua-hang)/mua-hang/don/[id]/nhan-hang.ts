@@ -11,6 +11,8 @@ import type { ShipmentInput } from '@/lib/po-shipments'
 
 export type ShipmentLite = {
   id: string
+  /** Mã chứng từ đợt GH-YYYY-NNNN (0193). Null = đợt tạo trước khi có mã. */
+  code?: string | null
   seq: number
   expected_date: string
   status: string
