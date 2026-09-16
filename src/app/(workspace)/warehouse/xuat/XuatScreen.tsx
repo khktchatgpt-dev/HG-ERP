@@ -6,6 +6,12 @@ import { api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
 import { useToast } from '@/components/ui/Toast'
 import {
+  WarehouseDocPrintSheet,
+  type WarehousePrintLine,
+} from '@/app/print/warehouse/WarehouseDocPrintSheet'
+import type { PrintCompany } from '@/app/print/PrintSheet'
+import type { DocTemplate } from '@/lib/doc-templates'
+import {
   LY_DO_XUAT_LE,
   kiemTruocGhiSoXuat,
   lyDoCanLenh,
@@ -39,6 +45,7 @@ import {
   NumInput,
   Pick,
   PickFind,
+  Sheet,
   ScreenFrame,
   StatusBar,
   StatusTrack,
@@ -162,6 +169,8 @@ export function XuatScreen({
   today,
   nguoiLap,
   canEdit,
+  company,
+  tpl,
 }: {
   lsx: LsxOpt[]
   /** Tên các tổ sản xuất — dải nút "Tổ lấy". */
@@ -171,6 +180,8 @@ export function XuatScreen({
   today: string
   nguoiLap: string
   canEdit: boolean
+  company: PrintCompany
+  tpl: DocTemplate
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -187,6 +198,8 @@ export function XuatScreen({
   const [dangTra, setDangTra] = useState(false)
   /** Đã bấm Ghi sổ ít nhất một lần — từ đó ô thiếu mới đỏ. */
   const [daThu, setDaThu] = useState(false)
+  /** Xem bản in TRƯỚC khi ghi sổ — vẽ bằng ĐÚNG component của trang in. */
+  const [xemIn, setXemIn] = useState(false)
 
   const setH = (p: Partial<DauPhieuXuat>) => setHead((h) => ({ ...h, ...p }))
   const patch = (i: number, p: Partial<DongXuat>) =>
@@ -309,6 +322,9 @@ export function XuatScreen({
             >
               Làm mới
             </Action>
+          </ActionGroup>
+          <ActionGroup label="Bản in">
+            <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
           </ActionGroup>
           <ActionGroup label="Sổ">
             <Action onClick={() => router.push('/planning/docs?kind=issue')}>
@@ -614,6 +630,43 @@ export function XuatScreen({
           ]}
           right={`${rows.length} dòng`}
         />
+      {xemIn && (
+        <Sheet
+          open
+          onClose={() => setXemIn(false)}
+          width={900}
+          title="Xem trước phiếu xuất kho"
+          subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 02-VT sẽ in ra."
+        >
+          <WarehouseDocPrintSheet
+            head={{
+              kind: 'issue',
+              code: null,
+              date: new Date(head.doc_date),
+              counterparty:
+                [head.to, head.nguoi_lay.trim()].filter(Boolean).join(' · ') || null,
+              reason:
+                head.loai === 'lsx'
+                  ? `Cấp cho lệnh ${lsxChon?.code ?? ''}`.trim()
+                  : lyDoChon
+                    ? `${lyDoChon.ma} · ${lyDoChon.nhan}`
+                    : null,
+              creator_name: nguoiLap,
+            }}
+            lines={rows.map<WarehousePrintLine>((r) => ({
+              id: r.id,
+              material_code: r.code,
+              material_name: r.name,
+              material_unit: r.unit,
+              qty_doc: null,
+              qty: r.qty,
+              note: r.note || null,
+            }))}
+            company={company}
+            tpl={tpl}
+          />
+        </Sheet>
+      )}
       </ScreenFrame>
     </div>
   )

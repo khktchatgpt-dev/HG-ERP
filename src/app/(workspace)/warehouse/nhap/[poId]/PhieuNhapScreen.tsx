@@ -7,6 +7,12 @@ import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import {
+  WarehouseDocPrintSheet,
+  type WarehousePrintLine,
+} from '@/app/print/warehouse/WarehouseDocPrintSheet'
+import type { PrintCompany } from '@/app/print/PrintSheet'
+import type { DocTemplate } from '@/lib/doc-templates'
+import {
   danhGiaVuot,
   kiemTruocGhiSo,
   tinhTong,
@@ -81,6 +87,8 @@ export function PhieuNhapScreen({
   today,
   nguoiNhan,
   canEdit,
+  company,
+  tpl,
 }: {
   po: {
     id: string
@@ -97,6 +105,8 @@ export function PhieuNhapScreen({
   today: string
   nguoiNhan: string
   canEdit: boolean
+  company: PrintCompany
+  tpl: DocTemplate
 }) {
   const router = useRouter()
   const toast = useToast()
@@ -107,6 +117,8 @@ export function PhieuNhapScreen({
   const [overReason, setOverReason] = useState('')
   const [overDraft, setOverDraft] = useState('')
   const [sheetOpen, setSheetOpen] = useState(false)
+  /** Xem bản in TRƯỚC khi ghi sổ — vẽ bằng ĐÚNG component của trang in. */
+  const [xemIn, setXemIn] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const patch = (i: number, p: Partial<DongNhan>) =>
@@ -248,7 +260,10 @@ export function PhieuNhapScreen({
               Huỷ
             </Action>
           </ActionGroup>
-          <ActionGroup label="Đơn">
+          <ActionGroup label="Bản in">
+          <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
+        </ActionGroup>
+        <ActionGroup label="Đơn">
             <Action onClick={() => router.push(`/mua-hang/don/${po.id}`)}>
               Mở đơn mua
             </Action>
@@ -602,6 +617,42 @@ export function PhieuNhapScreen({
             </Consequence>
           </Sheet>
         )}
+      {xemIn && (
+        <Sheet
+          open
+          onClose={() => setXemIn(false)}
+          width={900}
+          title="Xem trước phiếu nhập kho"
+          subtitle="Dựng từ bản đang gõ — chưa ghi sổ, chưa có số phiếu. Đúng mẫu 01-VT sẽ in ra."
+        >
+          <WarehouseDocPrintSheet
+            head={{
+              kind: 'receipt',
+              code: null,
+              date: new Date(docDate),
+              supplier_doc_no: supplierDocNo.trim() || null,
+              counterparty: counterparty.trim() || null,
+              creator_name: nguoiNhan,
+            }}
+            lines={rows
+              .filter((r) => r.qty > 0)
+              .map<WarehousePrintLine>((r) => ({
+                id: r.po_line_id,
+                material_code: r.code,
+                material_name: r.name,
+                material_unit: r.unit,
+                qty_doc: r.qty_ordered,
+                qty: r.qty,
+                note:
+                  r.status === 'blocked'
+                    ? [`Sai quy cách`, r.note].filter(Boolean).join(' · ')
+                    : r.note || null,
+              }))}
+            company={company}
+            tpl={tpl}
+          />
+        </Sheet>
+      )}
       </ScreenFrame>
     </div>
   )

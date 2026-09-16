@@ -2,6 +2,8 @@ import { authService } from '@/modules/core/auth/auth.service'
 import { canAction } from '@/modules/core/rbac/rbac.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { departmentsRepo } from '@/modules/core/departments/departments.repo'
+import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { todayVn } from '@/lib/date-vn'
 import { XuatScreen } from './XuatScreen'
 
@@ -36,9 +38,12 @@ export const dynamic = 'force-dynamic'
  */
 export default async function WarehouseIssuePage() {
   const user = await authService.requirePageUser()
-  const [lsx, deps, canEdit] = await Promise.all([
+  const [lsx, deps, company, tpl, canEdit] = await Promise.all([
     productionRepo.listActive(),
     departmentsRepo.list(),
+    // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 02-VT + khối công ty.
+    settingsService.getAll(),
+    docTemplatesService.get('PXK'),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
@@ -68,6 +73,8 @@ export default async function WarehouseIssuePage() {
       today={todayVn()}
       nguoiLap={user.name ?? user.email}
       canEdit={canEdit}
+      company={company}
+      tpl={tpl}
     />
   )
 }

@@ -4,6 +4,8 @@ import { posService } from '@/modules/dept/supply/pos.service'
 import { poShipmentsRepo } from '@/modules/dept/supply/po-shipments.repo'
 import { RECEIVABLE } from '@/modules/dept/supply/supply.repo'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
+import { settingsService } from '@/modules/core/settings/settings.service'
+import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.service'
 import { todayVn } from '@/lib/date-vn'
 import { dungLuoi } from '@/lib/kho-phieu-nhap'
 import { Btn, Empty } from '@/components/kit'
@@ -33,9 +35,12 @@ export default async function Page({
   const user = await authService.requirePageUser()
   const [{ poId }, sp] = await Promise.all([params, searchParams])
 
-  const [{ po, status_lines }, shipments, canEdit] = await Promise.all([
+  const [{ po, status_lines }, shipments, company, tpl, canEdit] = await Promise.all([
     posService.detail(user, poId),
     poShipmentsRepo.listByPo(poId),
+    // Xem bản in TRƯỚC khi ghi sổ (yêu cầu 16/09): mẫu 01-VT + khối công ty.
+    settingsService.getAll(),
+    docTemplatesService.get('PNK'),
     user.role === 'admin'
       ? Promise.resolve(true)
       : canAction(user, 'warehouse.stock.write'),
@@ -94,6 +99,8 @@ export default async function Page({
       today={todayVn()}
       nguoiNhan={user.name ?? user.email}
       canEdit={canEdit}
+      company={company}
+      tpl={tpl}
     />
   )
 }
