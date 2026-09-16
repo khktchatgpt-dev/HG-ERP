@@ -10,7 +10,7 @@ import { DonScreen } from './DonScreen'
 import { DEFAULT_VIEW_ID, PARAM_KEYS, decodeView, namedView } from './views'
 
 export const dynamic = 'force-dynamic'
-export const metadata = { title: 'Mua hàng · Phiếu mua' }
+export const metadata = { title: 'Mua hàng · Đơn mua' }
 
 /**
  * KHUÔN C — PHIẾU MUA. Bản dựng lại của `/planning/pos`.

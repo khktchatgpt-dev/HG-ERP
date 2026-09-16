@@ -58,7 +58,7 @@ import {
 import { groupPosByLsx, type LsxRef } from '@/app/(workspace)/planning/pos/pos-groups'
 import type { Po } from '@/app/(workspace)/planning/pos/po-types'
 import { useLocalPref } from '../../_shell/use-local-pref'
-import { DENSE_KEY } from '../../_shell/SupplyShell'
+import { DENSE_KEY } from '../../_shell/KitFrame'
 import { actionsFor, bulkActionFor, type Action } from './actions'
 import {
   GROUP_LABEL,
@@ -450,7 +450,7 @@ export function DonScreen({
       <ScreenHeader
         compact
         eyebrow="Mua hàng"
-        title="Phiếu mua"
+        title="Đơn mua"
         facts={[
           { label: 'Đang hiện', value: `${shown.length} / ${pos.length}` },
           { label: 'Của tôi', value: String(counts.mine) },
