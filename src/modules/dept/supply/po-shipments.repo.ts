@@ -35,6 +35,42 @@ export type PoShipmentInsert = {
 const COLS = 'id, po_id, seq, expected_date, method, place, note, status, created_at'
 
 export const poShipmentsRepo = {
+  /**
+   * MÃ VẬT TƯ của từng đợt — cho hàng đợi Hàng về của Kho (Bước 1 việc 6):
+   * dòng đợt nói "3 dòng · 96" mà không nói MÃ NÀO thì thủ kho phải mở phiếu
+   * mới biết xe chở gì. Một truy vấn cho cả tập đợt đang mở, thứ tự theo dòng
+   * đơn. Dòng tự do (không mã) bị bỏ — không nhận qua kho.
+   */
+  async codesByShipmentIds(ids: string[]): Promise<Map<string, string[]>> {
+    const out = new Map<string, string[]>()
+    if (ids.length === 0) return out
+    const { data } = await db()
+      .from('supply_po_shipment_lines')
+      .select(
+        'shipment_id, po_line:supply_purchase_order_lines(sort_order, material:warehouse_materials(code))',
+      )
+      .in('shipment_id', ids.slice(0, 300))
+      .limit(5000)
+    type Raw = {
+      shipment_id: string
+      po_line: {
+        sort_order: number | null
+        material: { code: string } | { code: string }[] | null
+      } | null
+    }
+    const rows = ((data ?? []) as unknown as Raw[])
+      .map((r) => {
+        const m = r.po_line?.material
+        const code = Array.isArray(m) ? m[0]?.code : m?.code
+        return { shipment_id: r.shipment_id, sort: r.po_line?.sort_order ?? 0, code }
+      })
+      .filter((r): r is { shipment_id: string; sort: number; code: string } => !!r.code)
+      .sort((a, b) => a.sort - b.sort)
+    for (const r of rows)
+      out.set(r.shipment_id, [...(out.get(r.shipment_id) ?? []), r.code])
+    return out
+  },
+
   async listByPo(poId: string): Promise<PoShipment[]> {
     const { data } = await db()
       .from('supply_po_shipments')

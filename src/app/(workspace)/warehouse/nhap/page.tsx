@@ -53,7 +53,10 @@ export default async function WarehouseInboundPage() {
   const poIds = Array.from(
     new Set([...shipments.map((s) => s.po_id), ...openPos.map((p) => p.id)]),
   )
-  const lineDone = await supplyRepo.lineDoneByPoIds(poIds)
+  const [lineDone, codes] = await Promise.all([
+    supplyRepo.lineDoneByPoIds(poIds),
+    poShipmentsRepo.codesByShipmentIds(shipments.map((s) => s.id)),
+  ])
 
   const rows: HangVeRow[] = shipments.map((s) => {
     const po = poById.get(s.po_id)
@@ -72,6 +75,7 @@ export default async function WarehouseInboundPage() {
       total_qty: s.total_qty,
       lines_done: ld?.done ?? 0,
       lines_total: ld?.total ?? 0,
+      codes: codes.get(s.id) ?? [],
     }
   })
   const coDot = new Set(shipments.map((s) => s.po_id))

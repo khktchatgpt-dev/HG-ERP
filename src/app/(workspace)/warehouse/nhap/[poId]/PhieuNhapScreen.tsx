@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
+import { lichDot, nhanDot, type DotGiao } from '@/lib/kho-dot-giao'
 import { api, apiErrorText } from '@/lib/api'
 import { useToast } from '@/components/ui/Toast'
 import {
@@ -41,6 +42,7 @@ import {
   SheetActions,
   StatusBar,
   StatusTrack,
+  Tag,
   TextArea,
   TextInput,
   Th,
@@ -72,6 +74,7 @@ const fmt = (n: number) => n.toLocaleString('vi-VN')
 export function PhieuNhapScreen({
   po,
   dot,
+  dots,
   rows: initialRows,
   boQuaTuDo,
   today,
@@ -86,6 +89,8 @@ export function PhieuNhapScreen({
     expected_at: string | null
   }
   dot: { id: string; seq: number; total: number; expected_date: string } | null
+  /** Mọi đợt giao của đơn (việc 6) — để nhãn từng dòng và dải lịch giao. */
+  dots: DotGiao[]
   rows: DongNhan[]
   boQuaTuDo: number
   today: string
@@ -190,6 +195,18 @@ export function PhieuNhapScreen({
     }
   }
 
+  // Dòng này thuộc đợt nào — nói ra thay vì để ô Lần này = 0 câm lặng.
+  const nhan = useMemo(
+    () =>
+      nhanDot(
+        rows.map((r) => r.po_line_id),
+        dots,
+        dot?.id ?? null,
+      ),
+    [rows, dots, dot],
+  )
+  const lich = useMemo(() => lichDot(dots, dot?.id ?? null, today), [dots, dot, today])
+
   const dotLabel = dot
     ? `đợt ${dot.seq}/${dot.total} · hẹn ${isoToVn(dot.expected_date)}`
     : po.expected_at
@@ -244,7 +261,36 @@ export function PhieuNhapScreen({
       </DocHead>
 
       <FastTab title="Đầu phiếu" defaultOpen>
-        <FieldGrid>
+        <FieldGrid
+          note={
+            lich.length > 0 ? (
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-semibold text-[var(--ink-label)]">
+                  Lịch giao cả đơn
+                </span>
+                {lich.map((d) => {
+                  const text = `Đợt ${d.seq} · ${isoToVn(d.date).slice(0, 5)} · ${d.label}`
+                  const tone =
+                    d.tone === 'done' || d.tone === 'stop' || d.tone === 'warn'
+                      ? d.tone
+                      : 'neutral'
+                  // Đợt còn nhận được mà không phải đợt đang mở → bấm là đổi đợt.
+                  return d.current || d.status === 'received' ? (
+                    <span key={d.id} className={d.current ? 'font-semibold' : undefined}>
+                      <Tag tone={tone}>{text}</Tag>
+                    </span>
+                  ) : (
+                    <Code key={d.id} as="a" href={`/warehouse/nhap/${po.id}?dot=${d.id}`}>
+                      {text}
+                    </Code>
+                  )
+                })}
+              </span>
+            ) : (
+              'Đơn chưa khai đợt giao — nhận theo phần còn mở của cả đơn; Cung ứng khai đợt ở trang đơn mua.'
+            )
+          }
+        >
           <Field label="Đơn mua">
             <Code as="a" href={`/mua-hang/don/${po.id}`}>
               {po.code}
@@ -315,10 +361,11 @@ export function PhieuNhapScreen({
       </GridToolbar>
 
       <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface-card)]">
-        <Grid minWidth={980}>
+        <Grid minWidth={1100}>
           <GridHead>
             <Th width={30}>#</Th>
             <Th width={96}>Mã</Th>
+            <Th width={128}>Đợt</Th>
             <Th>Tên vật tư</Th>
             <Th width={52}>ĐVT</Th>
             <Th num width={80}>
@@ -341,6 +388,31 @@ export function PhieuNhapScreen({
                   <td className="k-c-n">{i + 1}</td>
                   <td>
                     <Code>{r.code}</Code>
+                  </td>
+                  <td className="text-[var(--fs-micro)]">
+                    {(() => {
+                      const n = nhan.get(r.po_line_id) ?? { kind: 'none' as const }
+                      if (n.kind === 'this')
+                        return (
+                          <Tag tone="neutral">
+                            đợt {n.seq} · {fmt(n.qty)} {r.unit}
+                          </Tag>
+                        )
+                      if (n.kind === 'other')
+                        return (
+                          <span className="text-[var(--ink-3)]">
+                            đợt {n.seq} · {isoToVn(n.date).slice(0, 5)}
+                            {n.arrived ? ' · xe đã tới' : ''}
+                          </span>
+                        )
+                      if (n.kind === 'done')
+                        return <Tag tone="done">đã nhận đợt {n.seq}</Tag>
+                      return (
+                        <span className="text-[var(--ink-empty)]">
+                          {dots.length > 0 ? 'chưa xếp đợt' : '—'}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="max-w-0 truncate" title={r.name}>
                     {r.name}
@@ -428,7 +500,7 @@ export function PhieuNhapScreen({
             })}
           </GridBody>
           <GridFoot>
-            <td colSpan={4}>Tổng</td>
+            <td colSpan={5}>Tổng</td>
             <td className="k-r num">{fmt(tong.tong_dat)}</td>
             <td className="k-r num">{fmt(tong.tong_da_ve)}</td>
             <td className="k-r num">{fmt(tong.lan_nay)}</td>

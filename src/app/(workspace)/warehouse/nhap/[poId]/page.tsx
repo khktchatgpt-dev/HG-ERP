@@ -82,6 +82,13 @@ export default async function Page({
             }
           : null
       }
+      dots={shipments.map((s) => ({
+        id: s.id,
+        seq: s.seq,
+        expected_date: s.expected_date.slice(0, 10),
+        status: s.status,
+        lines: s.lines,
+      }))}
       rows={rows}
       boQuaTuDo={bo_qua_tu_do}
       today={todayVn()}

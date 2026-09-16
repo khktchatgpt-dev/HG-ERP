@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isoToVn } from '@/lib/date-vn'
+import { tomTatMa } from '@/lib/kho-dot-giao'
 import {
   HANG_VE_LANE,
   HANG_VE_LANES,
@@ -73,6 +74,16 @@ export function HangVeScreen({
   const lanUrl = params.get(LANE_PARAM)
   const lan: HangVeLane | 'all' = laMaLan(lanUrl) ? lanUrl : 'all'
   const [q, setQ] = useState('')
+  // Gom theo ĐƠN (việc 6): nhìn cả lịch một đơn nhiều đợt trong một khối,
+  // thay vì các đợt rải ở ba làn. Cũng sống trên URL.
+  const gomDon = params.get('gom') === 'don'
+  const datGom = (on: boolean) => {
+    const p = new URLSearchParams(params.toString())
+    if (on) p.set('gom', 'don')
+    else p.delete('gom')
+    const qs = p.toString()
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false })
+  }
 
   const chonLan = (next: HangVeLane | 'all') => {
     const p = new URLSearchParams(params.toString())
@@ -92,14 +103,41 @@ export function HangVeScreen({
     [rows, lan, q, today],
   )
 
-  const nhom = useMemo(
-    () =>
-      HANG_VE_LANES.map((id) => ({
-        id,
-        rows: kept.filter((r) => laneOf(r.date, today) === id).sort(xepTrongLan),
-      })).filter((g) => g.rows.length > 0),
-    [kept, today],
-  )
+  const nhom = useMemo((): {
+    id: string
+    name: string
+    meta: string
+    rows: HangVeRow[]
+  }[] => {
+    if (gomDon) {
+      const byPo = new Map<string, HangVeRow[]>()
+      for (const r of kept) byPo.set(r.po_id, [...(byPo.get(r.po_id) ?? []), r])
+      return Array.from(byPo.entries())
+        .map(([po_id, rs]) => {
+          const sorted = rs.sort(xepTrongLan)
+          const h = sorted[0]
+          const soDot = sorted.filter((r) => r.shipment_id).length
+          return {
+            id: po_id,
+            name: `${h.po_code} · ${h.supplier_name}`,
+            meta: `${soDot > 0 ? `${soDot} đợt` : 'chưa khai đợt'} · về ${h.lines_done}/${h.lines_total} dòng`,
+            rows: sorted,
+          }
+        })
+        .sort((a, b) => xepTrongLan(a.rows[0], b.rows[0]))
+    }
+    return HANG_VE_LANES.map((id) => ({
+      id,
+      name: HANG_VE_LANE[id].label,
+      meta: '',
+      rows: kept.filter((r) => laneOf(r.date, today) === id).sort(xepTrongLan),
+    }))
+      .map((g) => ({
+        ...g,
+        meta: `${g.rows.length} ${g.id === 'no_eta' ? 'đơn · NCC giao khi có xe' : 'lần xe tới'}`,
+      }))
+      .filter((g) => g.rows.length > 0)
+  }, [kept, today, gomDon])
 
   const dangLoc = lan !== 'all' || q.trim() !== ''
 
@@ -159,6 +197,10 @@ export function HangVeScreen({
           <Chip on={lan === 'all'} count={dem.all} onClick={() => chonLan('all')}>
             Tất cả
           </Chip>
+          <span className="mx-1 h-4 w-px bg-[var(--line)]" aria-hidden />
+          <Chip on={gomDon} onClick={() => datGom(!gomDon)}>
+            Gom theo đơn
+          </Chip>
         </FilterBar>
 
         {kept.length === 0 ? (
@@ -203,14 +245,11 @@ export function HangVeScreen({
             <tbody>
               {nhom.map((g) => (
                 <Fragment key={g.id}>
-                  <GroupRow
-                    name={HANG_VE_LANE[g.id].label}
-                    cols={7}
-                    meta={`${g.rows.length} ${g.id === 'no_eta' ? 'đơn · NCC giao khi có xe' : 'lần xe tới'}`}
-                  />
+                  <GroupRow name={g.name} cols={7} meta={g.meta} />
                   {g.rows.map((r) => {
                     const why = whyOf(r, today)
-                    const laneTone = HANG_VE_LANE[g.id].tone
+                    const lane = laneOf(r.date, today)
+                    const laneTone = HANG_VE_LANE[lane].tone
                     return (
                       <Row key={r.key}>
                         <Cell pin>
@@ -241,15 +280,21 @@ export function HangVeScreen({
                             {r.supplier_name}
                           </span>
                         </Cell>
-                        <Cell num muted>
-                          {r.line_count != null ? (
-                            <>
-                              {r.line_count} dòng ·{' '}
-                              {(r.total_qty ?? 0).toLocaleString('vi-VN')}
-                            </>
-                          ) : (
-                            <>{r.lines_total} dòng · cả đơn</>
+                        <Cell className="text-right">
+                          {/* Xe chở MÃ NÀO — thủ kho xếp chỗ trước khi xe tới (việc 6). */}
+                          {r.codes && r.codes.length > 0 && (
+                            <span
+                              className="num block text-[10.5px] text-[var(--act-text)]"
+                              title={r.codes.join(', ')}
+                            >
+                              {tomTatMa(r.codes)}
+                            </span>
                           )}
+                          <span className="num block text-[11.5px] text-[var(--ink-3)]">
+                            {r.line_count != null
+                              ? `${r.line_count} dòng · ${(r.total_qty ?? 0).toLocaleString('vi-VN')}`
+                              : `${r.lines_total} dòng · cả đơn`}
+                          </span>
                         </Cell>
                         <Cell>
                           {r.lines_total > 0 ? (
@@ -276,7 +321,7 @@ export function HangVeScreen({
                             </a>
                             {canEdit && (
                               <Btn
-                                primary={g.id === 'late' || g.id === 'today'}
+                                primary={lane === 'late' || lane === 'today'}
                                 href={`/warehouse/nhap/${r.po_id}${r.shipment_id ? `?dot=${r.shipment_id}` : ''}`}
                                 className="h-6 px-[9px] text-[12px]"
                               >

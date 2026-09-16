@@ -53,6 +53,8 @@ export type HangVeRow = {
   /** Tiến độ về kho của cả ĐƠN theo dòng (0126). */
   lines_done: number
   lines_total: number
+  /** Mã vật tư của ĐỢT (việc 6) — null khi chưa có đợt (cả đơn). */
+  codes?: string[] | null
 }
 
 /** Số ngày từ hôm nay tới ngày hẹn — âm = đã qua. Cả hai là yyyy-mm-dd. */
