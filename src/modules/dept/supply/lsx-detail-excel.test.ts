@@ -46,6 +46,7 @@ const lsx = (over: Partial<LsxSupplyDetail> = {}): LsxSupplyDetail => ({
   code: '02/26-27 - ROSCO',
   customer_name: 'ROSCO',
   order_codes: ['HG-ROSCO'],
+  container_summary: null,
   status: 'in_progress',
   priority: 0,
   ship_date: '2026-10-17',
@@ -60,6 +61,8 @@ const lsx = (over: Partial<LsxSupplyDetail> = {}): LsxSupplyDetail => ({
   products: [
     {
       product_id: 'p1',
+      unit: 'SP',
+      specs: { son: 'PT-7476' },
       code: '2722875',
       name: 'IBIZA Ghế xoay',
       qty: 8816,

@@ -225,6 +225,8 @@ export type LsxSupplyDetail = {
   ship_date: string | null
   materials_due_at: string | null
   materials_received_at: string | null
+  /** Tóm tắt container của lệnh — mốc thứ tư người mua hỏi tới. */
+  container_summary: string | null
   /**
    * SẢN PHẨM PHẢI LÀM — mang theo id + ảnh (15/09/2026). Bản trước chỉ có
    * mã/tên/số lượng, nên màn chi tiết lệnh chỉ đếm được "17 SP" mà không bày
@@ -236,6 +238,15 @@ export type LsxSupplyDetail = {
     name: string
     qty: number
     image_file_id: string | null
+    /** ĐVT của dòng lệnh — "22.854 SP" và "22.854 Bộ" là hai chuyện khác nhau. */
+    unit: string | null
+    /**
+     * THÔNG SỐ KỸ THUẬT khai trên DÒNG LỆNH (son · go · kinh · nem · may).
+     * Người mua chép chúng sang đơn khi đặt sơn, kính, vải; trước 16/09/2026
+     * khu Mua hàng không bày ở đâu nên phải mở màn của phòng khác để tra.
+     * Gom lại để đọc bằng `lib/lsx-spec-summary`.
+     */
+    specs: Record<string, string>
   }[]
   pos: {
     id: string
@@ -368,6 +379,14 @@ export async function buildLsxSupplyDetail(
         name: pl.name_vi ?? pl.product_code,
         qty: pl.qty,
         image_file_id: pl.image_file_id,
+        unit: pl.unit ?? null,
+        /*
+          Thông số lấy từ DÒNG ĐẦU của mã SP. Một mã nằm nhiều dòng là do tách
+          đợt xuất (cộng dồn số lượng ngay trên), mà các đợt của cùng một mã
+          thì cùng sơn cùng gỗ — khai khác nhau là lỗi nhập liệu, và
+          `gomThongSo` ở màn sẽ bày ra chỗ khác nhau đó chứ không im lặng.
+        */
+        specs: pl.specs ?? {},
       })
   }
 
@@ -381,6 +400,7 @@ export async function buildLsxSupplyDetail(
     ship_date: lsx.ship_date,
     materials_due_at: lsx.materials_due_at,
     materials_received_at: lsx.materials_received_at,
+    container_summary: lsx.container_summary ?? null,
     coverage,
     products,
     pos: pos.map((p) => {

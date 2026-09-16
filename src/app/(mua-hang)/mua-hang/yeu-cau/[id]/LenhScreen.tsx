@@ -228,6 +228,10 @@ export function LenhScreen({
               mua) cộng một sheet mỗi đơn. Khu mới trước nay không có nút nào
               dẫn tới, nên phần công phu nhất của phòng nằm ngoài tầm với.
             */}
+            {/* Đường sang HỒ SƠ LỆNH — màn kia trả lời "lệnh này làm cái gì,
+                thông số ra sao"; màn này trả lời "mua đủ chưa". Không có nút
+                thì người mua phải gõ URL hoặc đi vòng qua khu cũ. */}
+            <Btn href={`/mua-hang/yeu-cau/${lsx.id}/ho-so`}>Hồ sơ lệnh</Btn>
             <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
               Báo cáo lệnh
             </Btn>
