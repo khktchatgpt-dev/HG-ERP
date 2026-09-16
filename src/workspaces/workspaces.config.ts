@@ -298,6 +298,8 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
         heading: 'Nghiệp vụ',
         items: [
           { href: '/warehouse/nhap', label: 'Hàng về', icon: 'arrow-down-to-line' },
+          // Bước 2 (16/09/2026): xuất theo thực tế lấy, không theo định mức.
+          { href: '/warehouse/xuat', label: 'Xuất kho', icon: 'arrow-up-from-line' },
         ],
       },
     ],
