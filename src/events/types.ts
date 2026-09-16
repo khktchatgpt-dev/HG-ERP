@@ -159,6 +159,20 @@ export type DomainEvent =
       withdrawn_by: string
       approver_ids: string[]
     }
+  /**
+   * MỞ LẠI ĐƠN ĐÃ DUYỆT để sửa (16/09/2026): dấu duyệt bị xoá, đơn về nháp.
+   * Báo người duyệt — họ vừa ký lên một bản sắp không còn tồn tại.
+   */
+  | {
+      name: 'po.reopened'
+      po_id: string
+      code: string
+      /** Bước đơn đang đứng lúc bị mở lại — vào thông báo để GĐ biết đã đi xa tới đâu. */
+      from_status: string
+      reopened_by: string
+      reason: string
+      approver_ids: string[]
+    }
   // Bàn giao đơn giữa nhân viên cung ứng (0128): đổi người phụ trách.
   | {
       name: 'po.reassigned'

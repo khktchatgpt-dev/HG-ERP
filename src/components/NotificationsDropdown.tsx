@@ -38,6 +38,7 @@ const TYPE_LABEL: Record<string, string> = {
   wh_stocktake_approved: 'đã duyệt biên bản kiểm kê',
   wh_stocktake_rejected: 'đã từ chối biên bản kiểm kê',
   po_withdrawn: 'đã rút đơn đặt về nháp',
+  po_reopened: 'đã mở lại đơn đã duyệt để sửa',
   po_reassigned: 'đã bàn giao đơn đặt',
   po_closed_short: 'đã chốt phần thiếu đơn đặt',
   po_late: 'đơn đặt quá hẹn giao',

@@ -75,8 +75,15 @@ import {
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { fmtMoney, poLineAmount, poMoney, qtyTotals, roundMoney } from '@/lib/po-line'
 import { canReschedule } from '@/lib/po-reschedule'
+import { canReopen } from '@/lib/po-reopen'
 import { poTemplateMeta, type PoTemplate } from '@/lib/po-template'
-import { PO_STATUS_LABEL, PO_STATUS_TONE, type PoStatus } from '@/lib/po-status'
+import {
+  PO_STATUS_LABEL,
+  PO_STATUS_TONE,
+  poTrackTone,
+  receiptTrackTone,
+  type PoStatus,
+} from '@/lib/po-status'
 import type { ApprovalEvent } from '@/modules/core/approvals/approvals.repo'
 import {
   PoDialogs,
@@ -178,6 +185,7 @@ const HISTORY_LABEL: Record<ApprovalEvent['action'], string> = {
   rejected: 'Giám đốc từ chối',
   withdrawn: 'Rút về nháp',
   reassigned: 'Bàn giao người phụ trách',
+  reopened: 'Mở lại để sửa (gỡ dấu duyệt)',
 }
 const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' | 'red'> =
   {
@@ -186,6 +194,7 @@ const HISTORY_TONE: Record<ApprovalEvent['action'], 'gray' | 'amber' | 'green' |
     rejected: 'red',
     withdrawn: 'gray',
     reassigned: 'gray',
+    reopened: 'amber',
   }
 
 export function PoDetailScreen({
@@ -443,6 +452,8 @@ export function PoDetailScreen({
       }
     }),
   ].sort((a, b) => b.at.localeCompare(a.at))
+
+  const reopenGuard = canReopen(po.status)
 
   async function removeDraft() {
     if (await act.deleteDraft(po)) router.push('/planning/pos')
@@ -716,6 +727,40 @@ export function PoDetailScreen({
               {primary.label}
             </Action>
           )}
+          {/*
+            RÚT VỀ NHÁP — hàm `withdrawPo` có từ 0128 nhưng màn này CHƯA BAO GIỜ
+            có nút gọi nó (đo 16/09/2026): người gửi nhầm phải đi nhờ Giám đốc
+            từ chối, tức là mượn một hành động mang nghĩa khác để làm việc của
+            mình. Nút hiện MỜ ngoài bước "Chờ duyệt" chứ không giấu, theo đúng
+            lối Action Pane của cả thanh này.
+          */}
+          <Action
+            disabled={!canEdit || po.status !== 'pending_approval' || act.busy}
+            title={
+              po.status === 'pending_approval'
+                ? 'Đơn rời bàn Giám đốc, về nháp để sửa — gửi lại thì xếp hàng từ đầu'
+                : 'Chỉ rút được đơn đang chờ Giám đốc duyệt'
+            }
+            onClick={() => void act.withdrawPo(po)}
+          >
+            Rút về nháp
+          </Action>
+          {/*
+            MỞ LẠI ĐỂ SỬA — lối duy nhất sửa được dòng hàng/giá sau khi duyệt.
+            Trước 16/09/2026 người mua phát hiện sai một dòng trên đơn đã duyệt
+            thì chỉ còn "huỷ rồi nhân bản" (mất số PO đã gửi NCC).
+          */}
+          <Action
+            disabled={!canEdit || !reopenGuard.ok}
+            title={
+              reopenGuard.ok
+                ? 'Đưa đơn về nháp để sửa — dấu duyệt bị gỡ, phải gửi duyệt lại'
+                : reopenGuard.reason
+            }
+            onClick={() => setReasoning({ po, kind: 'reopen', reason: '' })}
+          >
+            Mở lại để sửa
+          </Action>
           <Action
             disabled={!canEdit || !canReschedule(po.status).ok}
             title={
@@ -828,13 +873,30 @@ export function PoDetailScreen({
           </>
         }
       >
-        <StatusTrack label="Trạng thái đơn" steps={DOC_STEPS} at={docStepAt} />
+        {/*
+          MÀU BA TRỤC NÓI NGHĨA, không phải trang trí: hổ phách = đang chờ ai
+          đó, lam = đang chạy, lục = xong, đỏ = huỷ, xám = chưa đi đâu. Trước
+          16/09/2026 cả ba trục đều tô xanh `--act` — cùng màu nút chính — nên
+          không phân biệt được cái nào bấm được, cái nào chỉ để đọc.
+        */}
+        <StatusTrack
+          label="Trạng thái đơn"
+          steps={DOC_STEPS}
+          at={docStepAt}
+          tone={poTrackTone(po.status)}
+        />
         <StatusTrack
           label="Nhận hàng"
           steps={['Chưa nhận', 'Một phần', 'Đủ']}
           at={recvStepAt}
+          tone={receiptTrackTone(recvStepAt)}
         />
-        <StatusTrack label="Thanh toán" steps={['Chưa', 'Một phần', 'Xong']} at={0} />
+        <StatusTrack
+          label="Thanh toán"
+          steps={['Chưa', 'Một phần', 'Xong']}
+          at={0}
+          tone="idle"
+        />
       </DocHead>
 
       <HolderBar
@@ -1661,7 +1723,9 @@ export function PoDetailScreen({
               ? await act.reject(st.po, st.reason)
               : st.kind === 'close_short'
                 ? await act.closeShort(st.po, st.reason, st.lineId)
-                : await act.cancelPo(st.po, st.reason)
+                : st.kind === 'reopen'
+                  ? await act.reopenPo(st.po, st.reason)
+                  : await act.cancelPo(st.po, st.reason)
           if (ok) setReasoning(null)
         }}
         busy={act.busy}

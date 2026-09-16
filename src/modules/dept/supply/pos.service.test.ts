@@ -332,6 +332,95 @@ describe('posService.decide — GĐ duyệt (BR-05 nửa đầu)', () => {
   })
 })
 
+describe('posService.reopen — mở lại đơn ĐÃ DUYỆT để sửa (16/09/2026)', () => {
+  const approved = { ...PO, status: 'approved', approved_by: 'u-boss', approved_at: '2026-08-10T02:00:00Z' } // prettier-ignore
+
+  it('approved → draft: GỠ dấu duyệt + dấu gửi/xác nhận NCC, ghi vết lý do', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
+    vi.mocked(posRepo.patch).mockResolvedValue({ ...approved, status: 'draft' } as never)
+
+    await posService.reopen(staff, 'po1', 'Sai đơn giá dòng thép hộp')
+
+    const patch = vi.mocked(posRepo.patch).mock.calls[0][1] as Record<string, unknown>
+    expect(patch.status).toBe('draft')
+    /*
+      Bất biến "số Giám đốc gật = số trên phiếu": bản vừa mở ra để sửa KHÔNG
+      được mang theo chữ ký nào. Sót một trong bốn cột này là đơn nháp vẫn hiện
+      "đã duyệt lúc …" và stepper nhảy lung tung.
+    */
+    expect(patch.approved_by).toBeNull()
+    expect(patch.approved_at).toBeNull()
+    expect(patch.ordered_at).toBeNull()
+    expect(patch.confirmed_at).toBeNull()
+    expect(String(patch.note)).toContain('Sai đơn giá dòng thép hộp')
+    expect(String(patch.note)).toContain('Mở lại để sửa')
+
+    const evt = vi.mocked(emit).mock.calls[0][0] as { name: string; from_status: string }
+    expect(evt.name).toBe('po.reopened')
+    expect(evt.from_status).toBe('approved')
+  })
+
+  it('đơn đã gửi NCC / NCC xác nhận / đang giao đều mở lại được', async () => {
+    for (const st of ['ordered', 'confirmed', 'in_transit']) {
+      vi.clearAllMocks()
+      vi.mocked(assertAction).mockImplementation(
+        makeFakeAssertAction((id) => DEPTS[id] ?? null),
+      )
+      vi.mocked(canAction).mockImplementation(
+        makeFakeCanAction((id) => DEPTS[id] ?? null),
+      )
+      vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: st } as never)
+      vi.mocked(supplyRepo.lineStatus).mockResolvedValue([] as never)
+      vi.mocked(posRepo.patch).mockResolvedValue({ ...PO, status: 'draft' } as never)
+
+      await posService.reopen(staff, 'po1', 'NCC đổi quy cách')
+      expect(vi.mocked(posRepo.patch).mock.calls[0][1]).toMatchObject({ status: 'draft' })
+    }
+  })
+
+  it('đơn nháp / chờ duyệt → chặn, và chỉ sang đúng nút có sẵn', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({ ...PO, status: 'draft' } as never)
+    await expect(posService.reopen(staff, 'po1', 'gõ nhầm giá')).rejects.toMatchObject({
+      status: 400,
+    })
+    vi.mocked(posRepo.findById).mockResolvedValue(PO as never) // pending_approval
+    await expect(posService.reopen(staff, 'po1', 'gõ nhầm giá')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  /*
+    TẦNG CHẶN THEO SỔ KHO — không theo trạng thái đơn. Đơn hỗn hợp (có dòng tự
+    do) nhận hàng một phần vẫn có thể đứng ở 'in_transit', vì
+    syncReceivedStatus chỉ xét dòng vật tư kho. Chỉ hỏi thẳng sổ mới chắc.
+  */
+  it('đã có phiếu nhập dù chỉ MỘT dòng → chặn, dù trạng thái vẫn "đang giao"', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue({
+      ...PO,
+      status: 'in_transit',
+    } as never)
+    vi.mocked(supplyRepo.lineStatus).mockResolvedValue([
+      { id: 'l1', material_id: 'm1', qty_ordered: 10, qty_received: 4, qty_open: 6 },
+      { id: 'l2', material_id: 'm2', qty_ordered: 5, qty_received: 0, qty_open: 5 },
+    ] as never)
+
+    await expect(posService.reopen(staff, 'po1', 'sai quy cách')).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(posRepo.patch).not.toHaveBeenCalled()
+  })
+
+  it('không phải người phụ trách → 403 (0128)', async () => {
+    vi.mocked(posRepo.findById).mockResolvedValue(approved as never)
+    vi.mocked(usersRepo.findById).mockResolvedValue({ id: 'u-sup', name: 'Huy' } as never)
+    await expect(posService.reopen(staff2, 'po1', 'sai giá')).rejects.toMatchObject({
+      status: 403,
+    })
+  })
+})
+
 describe('posService.advance — ⭐ BR-05: chưa duyệt không gửi NCC được', () => {
   it.each(['pending_approval', 'cancelled', 'received'] as const)(
     'từ "%s" KHÔNG chuyển sang ordered được',

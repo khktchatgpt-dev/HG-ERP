@@ -1,4 +1,5 @@
 import { canReschedule } from '@/lib/po-reschedule'
+import { canReopen } from '@/lib/po-reopen'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
@@ -27,6 +28,7 @@ export type Perm = {
 export type ActionId =
   | 'submit'
   | 'withdraw'
+  | 'reopen'
   | 'approve'
   | 'reject'
   | 'send'
@@ -57,6 +59,15 @@ export type Action = {
   danger?: boolean
   href?: (id: string) => string
   needReason?: boolean
+  /**
+   * Độ dài tối thiểu của lý do (mặc định 1 — chỉ cần khác rỗng).
+   *
+   * Có để KHỚP với hàng rào zod ở server: lý do đi vào thông báo gửi Giám đốc
+   * thì một dấu chấm là vô nghĩa. Không khai ở đây thì người dùng gõ "x", bấm
+   * được, rồi mới ăn lỗi — đúng lối mòn "cho bấm rồi mới báo" mà luật kiểm của
+   * sổ thiết kế cấm.
+   */
+  minReason?: number
   needDate?: boolean
   reasonLabel?: string
   reasonHint?: string
@@ -129,6 +140,40 @@ const EDIT_TERMS = (blocked?: string): Action => ({
   blocked,
 })
 
+/**
+ * MỞ LẠI ĐỂ SỬA — đường DUY NHẤT sửa dòng hàng/giá sau khi Giám đốc duyệt.
+ *
+ * Trước 16/09/2026 không có đường nào: người mua phát hiện sai một dòng trên
+ * đơn đã duyệt thì phải huỷ rồi nhân bản (mất số PO đã gửi NCC, đơn huỷ nằm lại
+ * trong sổ), hoặc nhờ Giám đốc "từ chối" — một hành động `decide` chỉ nhận cho
+ * đơn ĐANG chờ duyệt, tức là trỏ vào chỗ trống.
+ *
+ * Nút hiện ở MỌI bước đang chạy, kể cả bước không mở được, và câu khoá lấy
+ * thẳng từ `canReopen` — nó trỏ đúng sang nút thay thế đứng ngay cạnh ("Sửa
+ * đơn" ở nháp, "Rút về nháp" ở chờ duyệt).
+ */
+const REOPEN = (status: PoStatus, notOwn?: string): Action => {
+  const g = canReopen(status)
+  return {
+    id: 'reopen',
+    label: 'Mở lại để sửa',
+    ui: 'sheet',
+    stakes: 'nang',
+    blocked: notOwn ?? (g.ok ? undefined : g.reason),
+    needReason: true,
+    minReason: 5,
+    reasonLabel: 'Vì sao phải sửa lại đơn đã duyệt',
+    reasonHint: 'Giám đốc đọc câu này trong thông báo — nói rõ sai chỗ nào.',
+    consequence:
+      'Đơn về NHÁP, dấu duyệt bị gỡ, đợt giao đã hẹn giữ nguyên. Sửa xong phải gửi duyệt lại từ đầu. Đơn đã có phiếu nhập thì không mở được.',
+    confirmLabel: 'Mở lại để sửa',
+    done: 'Đã mở lại — sửa xong nhớ gửi duyệt lại',
+    build: ({ id, reason }) => [
+      { path: `/api/dept/supply/pos/${id}/reopen`, method: 'POST', body: { reason } },
+    ],
+  }
+}
+
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
   method: 'POST',
@@ -176,6 +221,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
         },
         EDIT_TERMS('Đơn nháp thì bấm "Sửa đơn" — sửa được cả dòng hàng lẫn điều khoản'),
+        REOPEN(status, notOwn),
         CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,
       ]
@@ -230,6 +276,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         EDIT_TERMS(notOwn),
+        REOPEN(status, notOwn),
         CANCEL(notOwn),
         OPEN,
       ]
@@ -250,6 +297,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         reschedule(status, notOwn),
+        REOPEN(status, notOwn),
         EDIT_TERMS(notOwn),
         DUP,
         CANCEL(notOwn),
@@ -285,6 +333,7 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           },
         },
         reschedule(status, notOwn),
+        REOPEN(status, notOwn),
         EDIT_TERMS(notOwn),
         DUP,
         CANCEL(notOwn),

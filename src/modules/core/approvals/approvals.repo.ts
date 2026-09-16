@@ -3,11 +3,18 @@ import { db } from '@/server/db'
 /**
  * Lịch sử phê duyệt (audit) — append-only. Ghi bởi event handler khi
  * po.decided / lsx.decided, và từ 0128 thêm các mốc vòng đời PO:
- * submitted (gửi duyệt) / withdrawn (rút về nháp) / reassigned (bàn giao).
+ * submitted (gửi duyệt) / withdrawn (rút về nháp) / reassigned (bàn giao),
+ * và từ 16/09/2026 thêm reopened (mở lại đơn đã duyệt để sửa).
  * Xem src/events/handlers/approval.audit.ts.
  */
 export type ApprovalAction =
-  'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
+  | 'approved'
+  | 'rejected'
+  | 'submitted'
+  | 'withdrawn'
+  | 'reassigned'
+  // 16/09/2026 — mở lại đơn ĐÃ DUYỆT để sửa (posService.reopen): mốc gỡ chữ ký.
+  | 'reopened'
 // 'quote' từ 0149 — báo giá trình GĐ (tuỳ chọn) cũng để lại vết ký.
 export type ApprovalEntityType = 'po' | 'lsx' | 'quote'
 

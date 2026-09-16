@@ -11,7 +11,13 @@ import { DataTable, type Column } from '@/components/erp/DataTable'
 import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
 
-type EvAction = 'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned'
+type EvAction =
+  | 'approved'
+  | 'rejected'
+  | 'submitted'
+  | 'withdrawn'
+  | 'reassigned'
+  | 'reopened'
 
 type Ev = {
   id: string
@@ -26,7 +32,10 @@ type Ev = {
 }
 
 // 0128 — ngoài duyệt/từ chối còn các mốc vòng đời PO: gửi duyệt / rút về nháp /
-// bàn giao người phụ trách.
+// bàn giao người phụ trách. 16/09/2026 thêm "mở lại": đơn ĐÃ DUYỆT được đưa
+// về nháp để sửa, tức chữ ký duyệt trước đó không còn giá trị — mốc này phải
+// đọc được ở sổ duyệt, không thì dòng thời gian nhảy cóc từ "đã duyệt" sang
+// "gửi duyệt" lần hai mà không giải thích gì.
 const ACTION_META: Record<
   EvAction,
   { label: string; tone: 'green' | 'red' | 'blue' | 'amber' | 'gray' }
@@ -36,6 +45,7 @@ const ACTION_META: Record<
   submitted: { label: 'Gửi duyệt', tone: 'blue' },
   withdrawn: { label: 'Rút về nháp', tone: 'amber' },
   reassigned: { label: 'Bàn giao', tone: 'gray' },
+  reopened: { label: 'Mở lại để sửa', tone: 'amber' },
 }
 
 const fmtDateTime = (d: string) =>

@@ -24,6 +24,7 @@ import {
 import { materialsRepo } from '@/modules/dept/warehouse/warehouse.repo'
 import { BadRequest, Forbidden, NotFound } from '@/server/http'
 import { canReschedule, rescheduleNote } from '@/lib/po-reschedule'
+import { canReopen, receivedBlockReason } from '@/lib/po-reopen'
 import { stampNote } from '@/lib/po-note'
 import { poShipmentsRepo, type PoShipment } from './po-shipments.repo'
 import {
@@ -469,6 +470,72 @@ export const posService = {
       po_id: po.id,
       code: po.code,
       withdrawn_by: user.id,
+      approver_ids: await approverIds(user.id),
+    })
+    return po
+  },
+
+  /**
+   * MỞ LẠI ĐỂ SỬA (16/09/2026) — approved|ordered|confirmed|in_transit → draft.
+   *
+   * Lối thứ ba cho đơn đã duyệt mà phát hiện sai: trước đây chỉ có "huỷ rồi
+   * nhân bản" (mất số PO đã gửi NCC) hoặc nhờ GĐ từ chối (không tồn tại —
+   * `decide` chỉ nhận đơn đang chờ duyệt). Luật trạng thái nằm ở `canReopen`
+   * (lib thuần, có test) vì màn chứng từ cần đúng câu lý do cho nút bị khoá.
+   *
+   * BẤT BIẾN KHÔNG ĐƯỢC PHÁ: "số Giám đốc gật = số trên phiếu". Nên mở lại
+   * XOÁ dấu duyệt (`approved_by/at`) và cả dấu gửi/xác nhận NCC — đơn muốn đi
+   * tiếp phải qua lại cửa duyệt. Không xoá thì đơn quay về nháp mà vẫn đeo chữ
+   * ký của bản cũ, và đó đúng là thứ khoá `update` sinh ra để chặn.
+   *
+   * KHÔNG đụng ĐỢT GIAO: chúng là lịch NCC đã hứa, và form sửa đơn đọc lại
+   * chúng thành cột kế hoạch (`planColumnsFromShipments`) — xoá ở đây thì người
+   * mua mất lịch ngay lúc cần nó nhất. Sửa xong, `update()` tự ghi lại cả bộ.
+   */
+  async reopen(user: User, id: string, reason: string): Promise<Po> {
+    await assertAction(user, 'supply.po.manage')
+    const before = await posRepo.findById(id)
+    if (!before) throw NotFound('Đơn đặt không tồn tại')
+    await assertPoOwner(user, before)
+
+    const guard = canReopen(before.status)
+    if (!guard.ok) throw BadRequest(guard.reason)
+
+    /*
+     * TẦNG CHẶN THỨ HAI — theo SỔ KHO, không theo trạng thái đơn.
+     *
+     * Trạng thái 'partial' đã bị `canReopen` chặn, nhưng phiếu nhập không phải
+     * lúc nào cũng kéo đơn sang 'partial': đơn hỗn hợp có dòng tự do, và
+     * `syncReceivedStatus` chỉ xét dòng vật tư kho. Hỏi thẳng sổ là cách duy
+     * nhất chắc chắn không có lô hàng nào đã ghi theo bản sắp bị sửa.
+     */
+    const lineStatus = await supplyRepo.lineStatus(id)
+    const received = lineStatus.filter((l) => l.qty_received > 1e-6).length
+    const blocked = receivedBlockReason(received)
+    if (blocked) throw BadRequest(blocked)
+
+    const po = await posRepo.patch(id, {
+      status: 'draft',
+      approved_by: null,
+      approved_at: null,
+      ordered_at: null,
+      confirmed_at: null,
+      confirmed_note: null,
+      note: stampNote('Mở lại để sửa', reason, before.note),
+    })
+    await emit({
+      name: 'po.reopened',
+      po_id: po.id,
+      code: po.code,
+      from_status: before.status,
+      reopened_by: user.id,
+      reason,
+      /*
+       * Báo NGƯỜI DUYỆT, không báo NCC: app chưa có kênh gửi ra ngoài, và
+       * người phải biết gấp nhất là người vừa ký lên một bản sắp không còn
+       * tồn tại. Gọi NCC vẫn là việc tay của người mua — vết lý do nằm trên
+       * ghi chú đơn để lần sau còn tra.
+       */
       approver_ids: await approverIds(user.id),
     })
     return po

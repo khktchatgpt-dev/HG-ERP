@@ -197,6 +197,22 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     )
   }
 
+  /**
+   * MỞ LẠI ĐƠN ĐÃ DUYỆT (16/09/2026) — lý do thu bằng `ReasonDialog`, giống
+   * huỷ/từ chối: nó đi vào ghi chú đơn và vào thông báo gửi Giám đốc, nên là dữ
+   * liệu thật. KHÔNG hỏi `confirm` thêm lần nữa — gõ lý do đã là bước cân nhắc.
+   */
+  async function reopenPo(po: PoRef, reason: string) {
+    if (!reason.trim()) return false
+    return done(
+      await send(`/api/dept/supply/pos/${po.id}/reopen`, 'POST', {
+        reason: reason.trim(),
+      }),
+      'Đã mở lại đơn — sửa xong nhớ gửi duyệt lại',
+      po.code,
+    )
+  }
+
   /** DUYỆT — chỉ cần gật, không cần lý do. */
   async function approve(po: PoRef) {
     const ok = await confirm({
@@ -305,7 +321,8 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
       ordered: `Đơn sẽ được đánh dấu đã gửi cho ${po.supplier_name}. In phiếu rồi gửi qua email hoặc Zalo như thường lệ.`,
       confirmed: `Ghi nhận ${po.supplier_name} đã nhận đơn và chốt lịch giao.`,
       in_transit: `${po.supplier_name} báo đã xuất hàng. Đơn chuyển sang "Đang giao" để Kho biết mà chờ nhận — hẹn giao và số lượng không đổi.`,
-      received: 'Đóng đơn không qua phiếu kho — chỉ dùng cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho.',
+      received:
+        'Đóng đơn không qua phiếu kho — chỉ dùng cho đơn toàn dòng tự gõ (gỗ, gia công) nghiệm thu ngoài sổ kho.',
     }
     const ok = await confirm({
       title: `${labels[to]} — ${po.code}?`,
@@ -431,6 +448,7 @@ export function usePoActions({ onDone }: { onDone?: () => void } = {}) {
     bulk,
     submitPo,
     withdrawPo,
+    reopenPo,
     approve,
     reject,
     advance,
