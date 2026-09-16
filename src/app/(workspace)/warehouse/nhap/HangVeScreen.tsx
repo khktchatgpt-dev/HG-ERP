@@ -190,6 +190,7 @@ export function HangVeScreen({
                   NCC lẫn lý do. Nút phụ, không phải nút chính: có đơn thì
                   vẫn phải nhận theo đơn. */}
               <Btn href="/warehouse/nhap/ngoai-don">Nhận không theo đơn</Btn>
+              <Btn href="/warehouse/nhap/hoan-kho">Hoàn kho từ SX</Btn>
               <Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>
             </>
           }

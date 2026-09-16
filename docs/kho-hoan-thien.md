@@ -133,11 +133,50 @@ ghi đầu tiên để chủ dự án tự chạy.
 
 ## B. Đáng làm, chưa chặn
 
-### B1. Hoàn kho từ sản xuất (N3)
+### B1. Hoàn kho từ sản xuất `/warehouse/nhap/hoan-kho` ✅ XONG 16/09/2026
 
 Tổ lấy dư thì trả lại kho. `createReceiptDoc` nhận `production_order_id` sẵn,
 `issuedByLsx` đã tính NET. Chưa có đường ghi nào ở khu Kho. Sổ: 0 lần — nhưng
 cấp cho lệnh cũng mới có 1 lần, nên con số 0 ở đây chưa nói lên điều gì.
+**Đã dựng.** Không migration, không service mới.
+
+| Việc                             | Ở đâu                              |
+| -------------------------------- | ---------------------------------- |
+| Form (Khuôn F)                   | `warehouse/nhap/hoan-kho/`         |
+| Luật trần + kiểm, thuần, 17 test | `lib/kho-hoan-kho.ts`              |
+| Tập lệnh hoàn kho được           | `lsxReturnRepo.list()`             |
+| Lối vào                          | nút "Hoàn kho từ SX" ở màn Hàng về |
+
+**Khác hẳn hai màn nhập kia ở một điểm quyết định cả bố cục: tập vật tư là
+ĐÓNG.** Chỉ trả được thứ lệnh đã lĩnh, tối đa bằng phần đã lĩnh chưa hoàn
+(`issuedByLsx` tính net). Nên không có ô tìm mã — lưới điền sẵn từ chính thứ
+lệnh đang giữ, thủ kho chỉ gõ số trả, và trần từng dòng là con số bên trái nó.
+
+Cũng không có cột Tình trạng: service chặn thẳng `qty_rejected` cho phiếu
+hoàn — hàng lỗi xử ở xưởng, không đẩy sang kho thành "hàng khoá" rồi để đó.
+
+Tập lệnh gồm cả lệnh **đã xong**, không chỉ đang chạy: SX xong mới gom vật tư
+thừa mang trả là chuyện thường, và đó đúng là tập mà service cho phép. Lệch
+nhau thì màn bày một lệnh rồi server từ chối.
+
+Đổi lệnh là đổi URL (`?lsx=`), và trang dựng lại lưới bằng `key` chứ không
+đồng bộ state trong effect. Số đang gõ dở thuộc về lệnh cũ, trần của chúng
+vừa đổi, nên phải mất đi.
+
+**Đo trước khi dựng, và con số đổi cách làm.** 16/09/2026: 14 lệnh hoàn kho
+được, **0 lệnh có dòng cấp gắn lệnh** — dòng `ref_type='lsx'` duy nhất trong
+sổ là dòng mồi từ 06/07, `production_order_id` để trống. Nghĩa là hôm nay mọi
+lệnh đều rơi vào trạng thái rỗng. Đó không phải lỗi: chưa cấp thì không có gì
+để hoàn. Nhưng nó đổi trọng tâm màn: **trạng thái rỗng là màn chính**, phải
+nói thật và chỉ đường, nên nó có nút "Lập phiếu xuất cho lệnh này" và màn Xuất
+kho nay đọc `?lsx=` để điền sẵn lệnh.
+
+Nghiệm thu trên dữ liệu thật: 14 lệnh vào ô chọn; mở 06/26-27 - MX ra đúng câu
+"chưa lĩnh vật tư nào" kèm lý do và nút; bấm nút sang màn Xuất kho thấy
+"Cấp cho lệnh 06/26-27 - MX · MERXX HANDELS GMBH". **Đường GHI chưa chạy thật
+được** — nó cần ít nhất một phiếu xuất trong sổ, cùng một nút thắt với việc
+còn treo của Bước 2.
+
 
 ### B2. Bàn làm việc Kho `/warehouse` (Khuôn A)
 
@@ -168,7 +207,7 @@ nhận nhiều chuyến một ngày.
 ## Thứ tự đề nghị
 
 ```
-A1 Sổ phiếu + đảo phiếu ✅  →  A2 Nhập ngoài đơn ✅  →  B1 Hoàn kho SX  →  B2 Bàn làm việc
+A1 Sổ phiếu + đảo phiếu ✅  →  A2 Nhập ngoài đơn ✅  →  B1 Hoàn kho SX ✅  →  B2 Bàn làm việc
 ```
 
 A1 làm trước vì nó vừa bịt lỗ "đá người dùng ra khu khác", vừa mở đường chữa

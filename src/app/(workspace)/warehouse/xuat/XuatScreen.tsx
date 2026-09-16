@@ -196,7 +196,13 @@ export function XuatScreen({
   const toast = useToast()
   const [head, setHead] = useState<DauPhieuXuat>({
     loai: 'lsx',
-    lsx_id: '',
+    /*
+      `?lsx=<id>` — màn Hoàn kho dẫn sang đây khi lệnh CHƯA lĩnh gì ("không
+      có gì để hoàn, cấp trước đã"). Điền sẵn ngay ở state đầu chứ không qua
+      effect: lệnh có sẵn trong danh sách đã nạp, không phải đi hỏi API như
+      `?ma=`. Id lạ thì rơi về rỗng, ô chọn lệnh vẫn trống như thường.
+    */
+    lsx_id: lsx.some((l) => l.id === params.get('lsx')) ? params.get('lsx')! : '',
     ly_do: '',
     to: '',
     nguoi_lay: '',

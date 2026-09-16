@@ -732,6 +732,41 @@ export type StocktakeLine = {
   material_unit: string | null
 }
 
+/**
+ * LSX HOÀN KHO ĐƯỢC — approved | in_progress | **completed**.
+ *
+ * Ở ĐÂY CHỨ KHÔNG Ở `productionRepo` là có chủ ý: tập này phải khớp ĐÚNG
+ * guard trạng thái của `stockService.createReceiptDoc`, và guard đó nằm ngay
+ * cạnh. Lệch nhau thì màn bày một lệnh rồi server từ chối — đúng lối mòn "cho
+ * bấm rồi mới báo" mà luật kiểm cấm. `productionRepo.listActive` KHÔNG dùng
+ * được: nó bỏ 'completed', mà SX xong mới gom vật tư thừa mang trả mới là
+ * trường hợp hay gặp nhất của việc này.
+ */
+export const lsxReturnRepo = {
+  async list(): Promise<
+    { id: string; code: string; customer_name: string | null; status: string }[]
+  > {
+    // Tên khách nằm ở `sales_customers`, không phải cột của lệnh — embed
+    // đích danh, cùng cách `productionRepo` làm.
+    const { data } = await db()
+      .from('production_orders')
+      .select('id, code, status, customer:sales_customers(name)')
+      .in('status', ['approved', 'in_progress', 'completed'])
+      .order('created_at', { ascending: false })
+      .limit(500)
+    type Raw = {
+      id: string
+      code: string
+      status: string
+      customer: { name: string } | { name: string }[] | null
+    }
+    return ((data as Raw[] | null) ?? []).map((r) => {
+      const c = Array.isArray(r.customer) ? r.customer[0] : r.customer
+      return { id: r.id, code: r.code, status: r.status, customer_name: c?.name ?? null }
+    })
+  },
+}
+
 export const stocktakeRepo = {
   async insertLines(
     rows: {
