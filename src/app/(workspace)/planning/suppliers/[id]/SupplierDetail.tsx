@@ -382,7 +382,12 @@ export function SupplierDetail({
                 canEdit={canEdit}
                 fields={[
                   { key: 'contact_name', label: 'Người liên hệ', value: S.contact_name },
-                  { key: 'phone', label: 'Điện thoại', value: S.phone },
+                  {
+                    key: 'contact_phone',
+                    label: 'Số máy người liên hệ',
+                    value: S.contact_phone,
+                  },
+                  { key: 'phone', label: 'Điện thoại công ty', value: S.phone },
                   { key: 'email', label: 'Email', value: S.email },
                   { key: 'website', label: 'Website', value: S.website },
                   {
@@ -676,9 +681,10 @@ function VendorSidebar({
         </div>
       )}
 
-      {(s.contact_name || s.phone || s.email) && (
+      {(s.contact_name || s.contact_phone || s.phone || s.email) && (
         <SideCard title="Liên hệ mua hàng">
           {s.contact_name && <SideRow k="Người liên hệ" v={s.contact_name} />}
+          {s.contact_phone && <SideRow k="Máy trực tiếp" v={s.contact_phone} mono />}
           {s.phone && <SideRow k="Điện thoại" v={s.phone} mono />}
           {s.email && <SideRow k="Email" v={s.email} />}
         </SideCard>

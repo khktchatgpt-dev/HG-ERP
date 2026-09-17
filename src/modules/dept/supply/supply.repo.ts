@@ -768,6 +768,7 @@ export type Supplier = {
   registered_address: string | null
   // Liên hệ
   contact_name: string | null
+  contact_phone: string | null
   email: string | null
   phone: string | null
   address: string | null
@@ -815,7 +816,7 @@ export type Supplier = {
 }
 
 const SUPPLIER_COLS =
-  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, contact_name, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, vat_rate, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
+  'id, code, name, short_name, type, status, company_name, tax_no, business_license, founded_on, legal_rep, country, registered_address, contact_name, contact_phone, email, phone, address, trading_address, warehouse_address, website, payment_terms, currency, bank_name, bank_account, swift_code, invoice_terms, vat_rate, moq, lead_time_days, incoterms, delivery_method, return_policy, warranty_policy, region, import_export, priority, rating, quality_score, service_score, price_score, complaint_count, evaluated_at, evaluated_by, buyer_id, can_order, lock_reason, is_active, note, created_by, updated_by, created_at, updated_at'
 
 export const suppliersRepo = {
   /**
