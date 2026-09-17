@@ -33,6 +33,39 @@ export type PendingPo = {
   big?: boolean
   /** Ngưỡng đang áp cho tiền tệ này; null = chưa đặt (⇒ luôn coi là lớn). */
   threshold?: number | null
+  /**
+   * GIÁ MUA GẦN NHẤT của từng mã vật tư trên đơn, KHÔNG tính chính đơn này.
+   *
+   * Câu hỏi thật của người ký chi tiền là "giá có tăng không", mà màn duyệt
+   * trước 17/09/2026 không trả lời được — Giám đốc nhìn 28.885 USD và không có
+   * gì để so. Dữ liệu vốn đã có (`pricesRepo.lastPurchases`, dùng ở bảng kê
+   * vật tư của lệnh); ở đây chỉ gọi lại kèm `excludePoId`.
+   *
+   * Khoá theo `material_id`. Mã chưa từng mua thì KHÔNG có khoá — màn hiện
+   * "chưa từng mua", khác hẳn với "giá không đổi".
+   */
+  last_prices?: Record<
+    string,
+    { unit_price: number; currency: string; po_code: string; at: string }
+  >
+}
+
+/**
+ * Bối cảnh ĐI TUYẾN TÍNH qua hộp phiếu chờ — để màn duyệt có `‹ 3/15 ›` và
+ * nút "Ký & sang phiếu sau".
+ *
+ * Không có nó thì ký xong bị đá về danh sách và phải tìm lại chỗ mình dừng;
+ * với 15 phiếu đang chờ đó là 15 lần quay đầu. Tiêu chí 9 của
+ * `docs/tieu-chi-man-chung-tu-erp.md` ("điều hướng bản ghi ‹n/N›").
+ */
+export type ApprovalNav = {
+  /** Vị trí phiếu này trong hộp, đếm từ 1. */
+  index: number
+  total: number
+  prevHref: string | null
+  nextHref: string | null
+  /** Đơn CÙNG LỆNH SX cũng đang chờ chữ ký — kể cả phiếu đang xem. */
+  sameLsxPending: number
 }
 
 /** 1 dòng sản phẩm của LSX (từ đơn hàng) — dữ liệu GĐ cần để thẩm định. */

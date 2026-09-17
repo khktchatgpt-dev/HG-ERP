@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { execService } from '@/modules/core/exec/exec.service'
 import { ExecHomeScreen } from './ExecHomeScreen'
+import { ExecKitFrame } from './_shell/KitFrame'
 
 /**
  * Trang chủ khu Ban Giám đốc = TỔNG QUAN (15/08/2026).
@@ -14,5 +15,9 @@ import { ExecHomeScreen } from './ExecHomeScreen'
 export default async function ExecHome() {
   const user = await authService.requirePageUser()
   const data = await execService.dashboard(user)
-  return <ExecHomeScreen data={data} userName={user.name ?? user.email} />
+  return (
+    <ExecKitFrame>
+      <ExecHomeScreen data={data} userName={user.name ?? user.email} />
+    </ExecKitFrame>
+  )
 }

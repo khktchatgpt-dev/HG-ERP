@@ -600,7 +600,7 @@ export const posService = {
         : // Lý do từ chối CỘNG THÊM vào ghi chú, không thay chỗ nó. Bản trước
           // ghi đè nên câu người soạn viết cho Kho ("giao cổng B") biến mất khi
           // Giám đốc từ chối — lối mòn #2 của tieu-chi-workflow-erp.md.
-          { status: 'draft', note: stampNote('Từ chối', reason, before.note) },
+          { status: 'draft', note: stampNote('Trả lại để sửa', reason, before.note) },
     )
     await emit({
       name: 'po.decided',

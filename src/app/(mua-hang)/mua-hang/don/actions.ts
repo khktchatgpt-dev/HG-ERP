@@ -22,6 +22,8 @@ export type Perm = {
   /** Đúng người phụ trách, hoặc trưởng phòng / admin. */
   own: boolean
   approve: boolean
+  /** Bàn giao đơn cho người khác — trưởng phòng CƯ / Giám đốc / admin. */
+  reassign?: boolean
   /** Admin / trưởng phòng CƯ / người duyệt — đủ quyền hạ đơn về nháp. */
   privileged?: boolean
   /** Đơn đã có phiếu nhập kho: chặn cứng đường hạ về nháp. */
@@ -42,6 +44,7 @@ export type ActionId =
   | 'delete'
   | 'cancel'
   | 'edit_terms'
+  | 'reassign'
   | 'open'
   /** Tab Nhận hàng của màn chứng từ — định nghĩa tại màn, không qua actionsFor. */
   | 'confirm'
@@ -66,6 +69,11 @@ export type Action = {
    *  ngay ở nút thay vì để server dội lỗi về sau khi người dùng đã bấm. */
   minReason?: number
   needDate?: boolean
+  /**
+   * Hỏi CHỌN MỘT NGƯỜI trong sheet. Chỉ `reassign` dùng — và nó là hành động
+   * duy nhất trên màn này không đổi trạng thái đơn mà đổi NGƯỜI GIỮ nó.
+   */
+  needPerson?: boolean
   reasonLabel?: string
   reasonHint?: string
   consequence?: string
@@ -78,8 +86,14 @@ export type Action = {
    */
   confirmLabel?: string
   done?: string
-  build?: (i: { id: string; reason: string; date: string }) => ApiCall[]
-  /** Chạy được hàng loạt khi mọi dòng cùng bước. */
+  build?: (i: {
+    id: string
+    reason: string
+    date: string
+    /** Chỉ hành động `needPerson` dùng tới. */
+    personId?: string
+  }) => ApiCall[]
+  /** Chạy được hàng loạt. */
   bulk?: boolean
 }
 
@@ -167,6 +181,34 @@ const REOPEN = (blocked?: string): Action => ({
   ],
 })
 
+/**
+ * XOÁ NHÁP — và ở mọi bước khác, một cái nút KHOÁ CHỈ ĐƯỜNG.
+ *
+ * Trước 17/09/2026 nút này chỉ tồn tại ở bước `draft`; các bước sau nó biến mất
+ * hẳn. Chủ dự án tìm không ra: _"tôi chưa thấy tính năng xoá đơn khi tạo
+ * nhầm"_ — mà tạo nhầm rồi lỡ bấm gửi duyệt thì đúng là bước `draft` đã qua.
+ *
+ * Đây là chính lối mòn tài liệu đã phê phán khi bày `CANCEL` ở đơn nháp: nút
+ * lúc có lúc không thì người dùng không học được vị trí, và không ai đi tìm
+ * thứ mình không biết là có. Nay nút luôn có mặt, và khi khoá thì lý do phải
+ * CHỈ ĐƯỜNG ĐI TIẾP, không chỉ nói "không được".
+ *
+ * Luật đằng sau không đổi và không nên đổi: nháp chưa vào sổ nên xoá hẳn được;
+ * từ lúc gửi duyệt trở đi tờ giấy đã qua tay người khác, nên chỉ rút về nháp
+ * hoặc huỷ có lý do. Xoá một tờ đã vào sổ là làm sổ nói dối một cách trơn tru.
+ */
+const DELETE = (blocked?: string): Action => ({
+  id: 'delete',
+  label: 'Xoá nháp',
+  ui: 'sheet',
+  stakes: 'nang',
+  danger: true,
+  blocked,
+  consequence: 'Xoá hẳn, không có thùng rác. Chỉ đơn nháp mới xoá được.',
+  done: 'Đã xoá nháp',
+  build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
+})
+
 const NOTE = (id: string, body: string): ApiCall => ({
   path: '/api/doc-notes',
   method: 'POST',
@@ -182,6 +224,9 @@ const NOTE = (id: string, body: string): ApiCall => ({
  */
 export function actionsFor(status: PoStatus, perm: Perm): Action[] {
   const notOwn = perm.own ? undefined : 'Đơn này do người khác phụ trách'
+  const canReassign = perm.reassign
+    ? undefined
+    : 'Chỉ trưởng phòng Cung ứng hoặc Giám đốc bàn giao đơn được'
   /*
     Hai hàng rào client BIẾT được thì nói ngay tại nút; hàng rào còn lại (trạng
     thái) do chính chỗ gọi quyết định bằng cách có bày nút hay không. Server vẫn
@@ -212,18 +257,9 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         },
         EDIT(notOwn),
         DUP,
-        {
-          id: 'delete',
-          label: 'Xoá nháp',
-          ui: 'sheet',
-          stakes: 'nang',
-          danger: true,
-          blocked: notOwn,
-          consequence: 'Xoá hẳn, không có thùng rác. Chỉ đơn nháp mới xoá được.',
-          done: 'Đã xoá nháp',
-          build: ({ id }) => [{ path: `/api/dept/supply/pos/${id}`, method: 'DELETE' }],
-        },
+        DELETE(notOwn),
         EDIT_TERMS('Đơn nháp thì bấm "Sửa đơn" — sửa được cả dòng hàng lẫn điều khoản'),
+        REASSIGN(canReassign),
         CANCEL('Đơn nháp thì xoá hẳn, không cần huỷ'),
         OPEN,
       ]
@@ -262,23 +298,35 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           ],
         },
         {
+          /*
+            TÊN THEO VIỆC ĐÃ XẢY RA. Hành động này đưa đơn về NHÁP kèm lý do,
+            giữ số phiếu và lịch sử, để người soạn sửa rồi gửi lại — mở đường
+            đi tiếp, không đóng cửa. Gọi nó là "Từ chối" thì người duyệt ngần
+            ngại bấm (nghe như đánh trượt cả đơn) còn người soạn tưởng phải làm
+            lại từ đầu.
+
+            `id` và giá trị gửi lên server vẫn là `reject` — đổi nhãn là việc
+            của tầng nhìn, đổi mã đã ghi vào sổ thì không.
+          */
           id: 'reject',
-          label: 'Từ chối',
+          label: 'Trả lại để sửa',
           ui: 'sheet',
-          stakes: 'nang',
-          danger: true,
+          stakes: 'vua',
           blocked: perm.approve ? undefined : 'Cần quyền duyệt đơn mua',
           needReason: true,
-          reasonLabel: 'Lý do từ chối',
+          reasonLabel: 'Cần sửa gì',
           reasonHint: 'Người soạn đọc câu này để sửa — nói rõ thiếu gì, sai gì.',
-          consequence: 'Đơn về nháp kèm lý do. Người soạn nhận thông báo.',
-          done: 'Đã từ chối',
+          consequence:
+            'Đơn về nháp kèm lý do, giữ nguyên số phiếu. Người soạn sửa rồi gửi duyệt lại.',
+          done: 'Đã trả lại để sửa',
           build: ({ id, reason }) => [
             { path: `/api/dept/supply/pos/${id}/decide`, method: 'POST', body: { decision: 'reject', reason } }, // prettier-ignore
           ],
         },
         EDIT_TERMS(notOwn),
         REOPEN(notReopen),
+        DELETE('Đơn đã gửi duyệt — bấm "Rút về nháp" trước, rồi mới xoá được'),
+        REASSIGN(canReassign),
         CANCEL(notOwn),
         OPEN,
       ]
@@ -302,6 +350,8 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         EDIT_TERMS(notOwn),
         REOPEN(notReopen),
         DUP,
+        DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
+        REASSIGN(canReassign),
         CANCEL(notOwn),
         OPEN,
       ]
@@ -338,19 +388,54 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
         EDIT_TERMS(notOwn),
         REOPEN(notReopen),
         DUP,
+        DELETE('Đơn đã ra khỏi cửa — sổ phải giữ lại vết, dùng "Huỷ đơn" thay vì xoá'),
+        REASSIGN(canReassign),
         CANCEL(notOwn),
       ]
 
     case 'received':
-      return [{ ...OPEN, primary: true }, EDIT_TERMS(notOwn), DUP]
+      return [
+        { ...OPEN, primary: true },
+        EDIT_TERMS(notOwn),
+        DUP,
+        DELETE('Đơn đã đóng sổ — không xoá được nữa'),
+      ]
 
     case 'cancelled':
       return [
         { ...OPEN, primary: true },
         { ...DUP, label: 'Tạo lại từ đơn này' },
+        DELETE('Đơn đã đóng sổ — không xoá được nữa'),
       ]
   }
 }
+
+/**
+ * BÀN GIAO — đổi người phụ trách đơn.
+ *
+ * Có mặt ở MỌI bước còn sống, vì lý do dùng nó không liên quan tới bước: người
+ * phụ trách nghỉ phép, nghỉ việc, hay chia lại việc trong phòng. Một phòng
+ * nhiều người thì đây là thao tác hàng ngày, mà trước 16/09/2026 nó chỉ có ở
+ * trang chi tiết — muốn chuyển 12 đơn là mở 12 trang.
+ *
+ * Chạy hàng loạt được, và là hành động hàng loạt DUY NHẤT không đòi mọi đơn
+ * cùng bước: giao việc không phụ thuộc đơn đang ở đâu.
+ */
+const REASSIGN = (blocked?: string): Action => ({
+  id: 'reassign',
+  label: 'Bàn giao',
+  ui: 'sheet',
+  stakes: 'vua',
+  blocked,
+  needPerson: true,
+  done: 'Đã bàn giao',
+  consequence:
+    'Người nhận sẽ phụ trách đơn: sửa nháp, gửi duyệt, theo dõi giao hàng. Việc bàn giao được ghi vào lịch sử.',
+  bulk: true,
+  build: ({ id, personId }) => [
+    { path: `/api/dept/supply/pos/${id}/reassign`, method: 'POST', body: { user_id: personId } }, // prettier-ignore
+  ],
+})
 
 function reschedule(status: PoStatus, notOwn?: string): Action {
   const g = canReschedule(status)
@@ -366,6 +451,9 @@ function reschedule(status: PoStatus, notOwn?: string): Action {
     reasonHint:
       'Ghi vào vết của đơn — sau này ai hỏi "ai dời, dời vì gì" còn có chỗ tra.',
     done: 'Đã đổi hẹn giao',
+    /* Dời hẹn HÀNG LOẠT: nhà cung cấp gọi báo lùi một tuần thì thường lùi cả
+       mấy đơn đang chạy của họ, không phải một đơn. */
+    bulk: true,
     build: ({ id, reason, date }) => [
       { path: `/api/dept/supply/pos/${id}/reschedule`, method: 'POST', body: { expected_at: date, reason } }, // prettier-ignore
     ],
@@ -373,30 +461,62 @@ function reschedule(status: PoStatus, notOwn?: string): Action {
 }
 
 /**
- * Hành động hàng loạt cho một tập đơn — CHỈ khi mọi đơn cùng trạng thái và
- * đều có một hành động `bulk` không bị khoá. Khác bước thì trả lý do, không
- * trả nút: thanh hàng loạt phải nói thẳng vì sao không làm được.
+ * MỌI hành động hàng loạt của một tập đơn, kèm lý do khoá của từng cái.
+ *
+ * Trước 16/09/2026 hàm này trả về ĐÚNG MỘT hành động, và chỉ trả khi mọi đơn
+ * cùng một bước — chọn 5 đơn mà 3 nháp 2 đã duyệt thì thanh chỉ nói "các đơn
+ * đang chọn không cùng một bước" rồi thôi. Người dùng không biết mình vừa mất
+ * những gì, và không biết phải bỏ chọn đơn nào để làm được việc.
+ *
+ * Nay trả ĐỦ DANH SÁCH, mỗi cái tự nói vướng gì — đúng lối Action Pane của
+ * Dynamics, nơi nút luôn có mặt và chỉ xám đi. Hai thay đổi đi kèm:
+ *
+ *  · **Bàn giao** áp cho mọi bước, nên nó là hành động hàng loạt duy nhất chạy
+ *    được khi tập chọn lẫn lộn bước. Giao việc không phụ thuộc đơn đang ở đâu.
+ *  · Lý do khoá ĐẾM ĐƯỢC: "3/5 đơn không ở bước Nháp" chỉ thẳng phải bỏ bao
+ *    nhiêu dòng, thay vì một câu chung chung.
  */
-export function bulkActionFor(
+export function bulkActionsFor(
   rows: { status: PoStatus; own: boolean }[],
-  perm: { approve: boolean },
-): { action: Action } | { reason: string } {
-  if (rows.length === 0) return { reason: 'Chưa chọn đơn nào' }
-  const statuses = new Set(rows.map((r) => r.status))
-  if (statuses.size > 1) return { reason: 'Các đơn đang chọn không cùng một bước' }
-  const status = rows[0].status
+  perm: { approve: boolean; reassign?: boolean },
+): { action: Action; blocked?: string }[] {
+  if (rows.length === 0) return []
   const own = rows.every((r) => r.own)
-  const a = actionsFor(status, { own, approve: perm.approve }).find((x) => x.bulk)
+  const p = { own, approve: perm.approve, reassign: perm.reassign }
+
   /*
-    NHÃN TIẾNG VIỆT, không phải mã trong DB. Trước 15/09/2026 câu này in thẳng
-    `status` nên người dùng đọc ra 'Bước "received" không có việc làm hàng
-    loạt' — một chữ tiếng Anh giữa màn toàn tiếng Việt, và là từ vựng của bảng
-    dữ liệu chứ không phải của người mua.
+    Gom hành động bulk của MỌI bước đang có mặt trong tập chọn, giữ thứ tự xuất
+    hiện và không trùng id. Một hành động chỉ chạy được nếu MỌI dòng đều có nó.
   */
-  if (!a)
-    return {
-      reason: `Bước "${PO_STATUS_LABEL[status] ?? status}" không có việc làm hàng loạt`,
+  const seen = new Map<ActionId, Action>()
+  const countBy = new Map<ActionId, number>()
+  for (const r of rows) {
+    for (const a of actionsFor(r.status, { ...p, own: r.own })) {
+      if (!a.bulk) continue
+      /*
+        BI QUAN khi gộp: giữ bản CÓ lý do khoá. `own` khác nhau giữa các dòng
+        nên cùng một hành động có thể mở ở dòng này và khoá ở dòng kia — giữ
+        bản mở là bày một cái nút bấm vào sẽ hỏng ở giữa chừng.
+      */
+      const cu = seen.get(a.id)
+      if (!cu || (!cu.blocked && a.blocked)) seen.set(a.id, a)
+      countBy.set(a.id, (countBy.get(a.id) ?? 0) + 1)
     }
-  if (a.blocked) return { reason: a.blocked }
-  return { action: a }
+  }
+
+  const steps = [...new Set(rows.map((r) => PO_STATUS_LABEL[r.status] ?? r.status))]
+  return [...seen.values()].map((a) => {
+    const n = countBy.get(a.id) ?? 0
+    if (n < rows.length) {
+      const thieu = rows.length - n
+      return {
+        action: a,
+        blocked:
+          steps.length > 1
+            ? `${thieu}/${rows.length} đơn đang chọn không làm được việc này — tập đang lẫn ${steps.length} bước (${steps.join(' · ')})`
+            : `${thieu}/${rows.length} đơn đang chọn không làm được việc này`,
+      }
+    }
+    return { action: a, blocked: a.blocked }
+  })
 }

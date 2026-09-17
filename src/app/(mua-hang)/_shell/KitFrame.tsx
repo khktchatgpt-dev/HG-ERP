@@ -1,6 +1,6 @@
 'use client'
 
-import { useLocalPref } from './use-local-pref'
+import { useLocalPref } from '@/lib/use-local-pref'
 
 /**
  * LỚP TOKEN CỦA KIT, đặt ngay trong vùng nội dung của vỏ chung.

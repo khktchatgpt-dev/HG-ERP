@@ -100,7 +100,7 @@ import {
   type Num,
   type PoLineDto,
 } from '@/app/(workspace)/planning/pos/new/po-line'
-import { useLocalPref } from '../../../_shell/use-local-pref'
+import { useLocalPref } from '@/lib/use-local-pref'
 import { DENSE_KEY } from '../../../_shell/KitFrame'
 import { actionsFor, type Action as DocAction } from '../actions'
 import { headerFromPo, lineIssues, newHeader, poChecks, retemplate } from './chung-tu'

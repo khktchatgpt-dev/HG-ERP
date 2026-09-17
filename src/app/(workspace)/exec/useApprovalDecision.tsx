@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
@@ -98,8 +99,21 @@ async function callDecide(
 
 export function useApprovalDecision(onSettled?: () => void) {
   const toast = useToast()
+  const router = useRouter()
   const [busy, setBusy] = useState(false)
   const [approveTarget, setApproveTarget] = useState<DecideTarget | null>(null)
+  /*
+    ĐÍCH ĐẾN SAU KHI KÝ — chỉ màn thẩm định dùng, cho nút "Ký & sang phiếu sau".
+
+    Người ký đi hết một chồng 15 tờ; ký xong mà bị đá về danh sách thì phải tìm
+    lại chỗ mình dừng — với 15 phiếu là 15 lần quay đầu. Có đích thì nhảy thẳng
+    sang phiếu kế tiếp; không có thì giữ nguyên hành vi cũ, tức `onSettled` của
+    chỗ gọi.
+
+    Dọn sau mỗi lượt ký: đích là của MỘT lần bấm, giữ lại thì lần ký sau bằng
+    nút "Phê duyệt" thường cũng bị đẩy đi đâu đó.
+  */
+  const [thenHref, setThenHref] = useState<string | null>(null)
   const [rejectTarget, setRejectTarget] = useState<DecideTarget | null>(null)
   const [rejectReason, setRejectReason] = useState('')
   const [manyTargets, setManyTargets] = useState<DecideTarget[] | null>(null)
@@ -138,7 +152,12 @@ export function useApprovalDecision(onSettled?: () => void) {
       await callDecide(approveTarget, 'approve')
       toast.success('Đã duyệt', approveTarget.code)
       setApproveTarget(null)
-      onSettled?.()
+      if (thenHref) {
+        const h = thenHref
+        setThenHref(null)
+        router.push(h)
+        router.refresh()
+      } else onSettled?.()
     } catch (e) {
       toast.error('Thao tác thất bại', apiErrorText(e))
     } finally {
@@ -153,7 +172,7 @@ export function useApprovalDecision(onSettled?: () => void) {
     setBusy(true)
     try {
       await callDecide(rejectTarget, 'reject', reason)
-      toast.success('Đã từ chối', rejectTarget.code)
+      toast.success('Đã trả lại để sửa', rejectTarget.code)
       setRejectTarget(null)
       setRejectReason('')
       onSettled?.()
@@ -223,17 +242,18 @@ export function useApprovalDecision(onSettled?: () => void) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Từ chối {rejectTarget ? KIND_NOUN[rejectTarget.kind] : ''}{' '}
+              Trả lại để sửa — {rejectTarget ? KIND_NOUN[rejectTarget.kind] : ''}{' '}
               {rejectTarget?.code}
             </DialogTitle>
             <DialogDescription>
-              {rejectTarget?.label}. Ghi lý do để bộ phận liên quan biết cần sửa gì.
+              {rejectTarget?.label}. Phiếu quay về NHÁP, giữ nguyên số và lịch sử — người
+              soạn sửa theo lý do rồi gửi duyệt lại. Ghi rõ cần sửa gì.
             </DialogDescription>
           </DialogHeader>
           <Textarea
             autoFocus
             rows={3}
-            placeholder="Lý do từ chối…"
+            placeholder="Cần sửa gì…"
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
           />
@@ -248,12 +268,18 @@ export function useApprovalDecision(onSettled?: () => void) {
             >
               Huỷ
             </Button>
+            {/*
+              KHÔNG CÒN NÚT ĐỎ. Trả lại để sửa không phá gì: phiếu về nháp,
+              giữ số, người soạn sửa rồi gửi lại. Đỏ dành cho việc không lùi
+              được — để ở đây thì người duyệt ngần ngại bấm đúng cái nút họ
+              nên bấm, và quay ra ký bừa hoặc để phiếu nằm im.
+            */}
             <Button
-              variant="destructive"
+              variant="secondary"
               disabled={busy || !rejectReason.trim()}
               onClick={() => void submitReject()}
             >
-              {busy && <Loader2 className="animate-spin" />} Từ chối
+              {busy && <Loader2 className="animate-spin" />} Trả lại để sửa
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -263,7 +289,10 @@ export function useApprovalDecision(onSettled?: () => void) {
 
   return {
     busy,
-    askApprove: setApproveTarget,
+    askApprove: (t: DecideTarget, next?: string) => {
+      setThenHref(next ?? null)
+      setApproveTarget(t)
+    },
     askReject: setRejectTarget,
     askApproveMany: setManyTargets,
     dialogs,

@@ -1,4 +1,10 @@
-import { Package, ShieldCheck, TriangleAlert } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  Package,
+  ShieldCheck,
+  TriangleAlert,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { poLineAmount } from '@/lib/po-line'
 import { colKey, LSX_FORM, specColumnsOf } from '@/modules/dept/sales/lsx-template'
@@ -380,169 +386,221 @@ export function LsxProductTable({ lines }: { lines: ApprovalLsxLine[] }) {
   )
 }
 
-// ── Bảng dòng đơn vật tư (đủ cột như bản in) ─────────────────────────────────
+// ── Bảng dòng đơn vật tư (đủ cột như bản in) ─────────────────────────────────/** Giá mua gần nhất của một mã vật tư, đã loại chính đơn đang duyệt. */
+export type LastPriceOf = Record<
+  string,
+  { unit_price: number; currency: string; po_code: string; at: string }
+>;
+
+/**
+ * So giá dòng này với lần mua gần nhất cùng mã vật tư.
+ *
+ * Trả `null` khi KHÔNG so được — chưa từng mua, dòng tự do không có mã, hoặc
+ * hai lần khác tiền tệ. Không so được thì màn phải NÓI RA chứ không im lặng
+ * hiện "không đổi": hai chuyện đó khác hẳn nhau với người đang ký chi tiền.
+ */
+export function comparePrice(
+  ln: PoLine,
+  last: LastPriceOf | undefined,
+  currency: string,
+): { pct: number; prev: number; poCode: string } | null {
+  if (!last || ln.unit_price == null || !ln.material_id) return null;
+  const p = last[ln.material_id];
+  if (!p || p.currency !== currency || p.unit_price <= 0) return null;
+  return {
+    pct:
+      Math.round(((ln.unit_price - p.unit_price) / p.unit_price) * 1000) / 10,
+    prev: p.unit_price,
+    poCode: p.po_code,
+  };
+}
+
+/**
+ * LƯỚI DÒNG VẬT TƯ — MỘT bố cục cho mọi bề rộng (viết lại 17/09/2026).
+ *
+ * Bản cũ có HAI: thẻ dọc dưới 672px và bảng 9 cột từ 672px lên, ~160 dòng mã
+ * để giữ chúng khớp nhau — cùng lối mòn vừa dọn ở Trung tâm phê duyệt. Lưới
+ * 30px đọc được ở mọi bề rộng, phần thừa thì cuộn ngang.
+ *
+ * CỘT "GIÁ LẦN TRƯỚC" là thứ mới và là lý do màn này đáng viết lại: người ký
+ * nhìn 28.885 USD mà không có gì để so thì chữ ký chỉ là thủ tục. Mũi tên lên
+ * hổ phách khi giá tăng, xuống lục khi giảm, và mã đơn cũ nằm trong `title`
+ * để tra lại.
+ */
 export function PoLineTable({
   lines,
   total,
   currency,
+  lastPrices,
 }: {
-  lines: PoLine[]
-  total: number
-  currency: string
+  lines: PoLine[];
+  total: number;
+  currency: string;
+  lastPrices?: LastPriceOf;
 }) {
-  if (!lines.length) return null
-  const hasQty2 = lines.some((ln) => ln.qty2 != null)
+  if (!lines.length) return null;
+  const hasQty2 = lines.some((ln) => ln.qty2 != null);
+  const missingPrice = lines.filter((ln) => ln.unit_price == null).length;
+
+  const cols = [
+    { k: "stt", t: "", w: 30, num: true },
+    { k: "ten", t: "Tên vật tư" },
+    { k: "dvt", t: "ĐVT", w: 70 },
+    { k: "sl", t: "Số lượng", w: 96, num: true },
+    ...(hasQty2 ? [{ k: "qd", t: "Quy đổi", w: 104, num: true }] : []),
+    { k: "gia", t: "Đơn giá (" + currency + ")", w: 116, num: true },
+    { k: "truoc", t: "Giá lần trước", w: 136, num: true },
+    { k: "tien", t: "Thành tiền (" + currency + ")", w: 130, num: true },
+  ];
+
   return (
-    // Cùng luật với bảng SP: đo bề rộng KHỐI, hẹp thì đổi sang thẻ. Bảng vật tư
-    // có tới 9 cột nên bóp vào cột trái 640px là không đọc nổi.
-    <div className="@container">
-      <div className="mb-2 flex items-center justify-between">
-        <SectionLabel>
-          <span className="inline-flex items-center gap-1">
-            <Package className="size-3.5" /> Chi tiết vật tư
-          </span>
-        </SectionLabel>
-        <span className="text-muted-foreground text-[11px] tabular-nums">
-          {lines.length} dòng
-        </span>
-      </div>
-
-      {/* ── Khối hẹp: mỗi dòng vật tư một thẻ ─────────────────────────────── */}
-      <ul className="divide-border/60 divide-y @2xl:hidden">
-        {lines.map((ln) => (
-          <li key={`c-${ln.id}`} className="py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-medium">{ln.material_name}</div>
-                <div className="text-muted-foreground font-mono text-xs">
-                  {ln.material_code}
-                  {ln.spec ? ` · ${ln.spec}` : ''}
-                </div>
-              </div>
-              <div className="shrink-0 text-right">
-                <div className="font-mono text-sm font-semibold tabular-nums">
-                  {ln.unit_price != null ? (
-                    money(poLineAmount(ln), currency)
-                  ) : (
-                    <span className="text-[var(--warn)]">chưa có giá</span>
-                  )}
-                </div>
-                <div className="text-muted-foreground font-mono text-xs tabular-nums">
-                  {Number(ln.qty_ordered).toLocaleString('vi-VN')} {ln.material_unit}
-                  {ln.unit_price != null && ` × ${fmtVnd(ln.unit_price)}`}
-                </div>
-              </div>
-            </div>
-            {(ln.qty2 != null || (ln.note && ln.note.trim())) && (
-              <div className="text-muted-foreground mt-1 text-xs">
-                {ln.qty2 != null && (
-                  <span className="text-[var(--primary)]">
-                    quy đổi {Number(ln.qty2).toLocaleString('vi-VN')} {ln.unit2 ?? ''}
-                  </span>
-                )}
-                {ln.qty2 != null && ln.note?.trim() ? ' · ' : ''}
-                {ln.note?.trim()}
-              </div>
-            )}
-          </li>
-        ))}
-        <li className="flex items-baseline justify-between py-2.5">
-          <span className="text-muted-foreground text-[11px] font-semibold tracking-wider uppercase">
-            Tổng cộng
-          </span>
-          <span className="font-mono font-semibold tabular-nums">
-            {money(total, currency)}
-          </span>
-        </li>
-      </ul>
-
-      {/* ── Khối rộng: bảng đủ cột như bản in ─────────────────────────────── */}
-      <div className="-mx-1 hidden overflow-x-auto @2xl:block">
-        <table
-          className={cn('w-full text-sm', hasQty2 ? 'min-w-[720px]' : 'min-w-[640px]')}
-        >
-          <thead>
-            <tr className="text-muted-foreground border-border/60 border-b text-left text-[11px] uppercase">
-              <th className="w-8 py-2 pr-2 text-right font-medium">STT</th>
-              <th className="py-2 pr-3 font-medium">Tên vật tư</th>
-              <th className="px-2 py-2 font-medium">Quy cách</th>
-              <th className="px-2 py-2 font-medium">ĐVT</th>
-              <th className="px-2 py-2 text-right font-medium">Số lượng</th>
-              {hasQty2 && (
-                <th className="px-2 py-2 text-right font-medium">SL quy đổi</th>
-              )}
-              {/* Tiền tệ đặt ở TIÊU ĐỀ cột — ô số giữ trần để cột số thẳng hàng. */}
-              <th className="px-2 py-2 text-right font-medium">Đơn giá ({currency})</th>
-              <th className="px-2 py-2 text-right font-medium">
-                Thành tiền ({currency})
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-[var(--fs-body)]">
+        <thead>
+          <tr>
+            {cols.map((c) => (
+              <th
+                key={c.k}
+                style={{ width: c.w, textAlign: c.num ? "right" : "left" }}
+                className="h-[26px] border-b border-[var(--line)] bg-[var(--surface-raised)] px-2 font-bold tracking-[.06em] whitespace-nowrap text-[var(--fs-label)] text-[var(--ink-label)] uppercase"
+              >
+                {c.t}
               </th>
-              <th className="py-2 pl-2 font-medium">Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody className="divide-border/50 divide-y">
-            {lines.map((ln, i) => (
-              <tr key={ln.id}>
-                <td className="text-muted-foreground py-2 pr-2 text-right tabular-nums">
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((ln, i) => {
+            const cmp = comparePrice(ln, lastPrices, currency);
+            /* Ngưỡng 5%: dưới mức đó là dao động thường ngày của thị trường,
+               tô màu mọi chênh lệch thì cột này thành một dải màu vô nghĩa. */
+            const tang = cmp != null && cmp.pct >= 5;
+            const giam = cmp != null && cmp.pct <= -5;
+            return (
+              <tr
+                key={ln.id}
+                className={cn(
+                  "border-b border-[var(--hair)]",
+                  tang && "bg-[var(--warn-wash)]",
+                )}
+              >
+                <td className="num h-[30px] px-2 text-right text-[var(--ink-3)]">
                   {i + 1}
                 </td>
-                <td className="py-2 pr-3">
-                  <div className="font-medium">{ln.material_name}</div>
-                  <div className="text-muted-foreground font-mono text-xs">
-                    {ln.material_code}
-                  </div>
+                <td className="px-2">
+                  <span className="flex min-w-0 items-baseline gap-2">
+                    <span className="truncate">{ln.material_name}</span>
+                    <span className="num shrink-0 text-[var(--fs-micro)] text-[var(--ink-3)]">
+                      {ln.material_code}
+                      {ln.spec ? " · " + ln.spec : ""}
+                    </span>
+                  </span>
                 </td>
-                <td className="text-muted-foreground px-2 py-2 text-xs">
-                  {ln.spec ?? '—'}
-                </td>
-                <td className="px-2 py-2 whitespace-nowrap">{ln.material_unit}</td>
-                <td className="px-2 py-2 text-right tabular-nums">
-                  {Number(ln.qty_ordered).toLocaleString('vi-VN')}
+                <td className="px-2 whitespace-nowrap">{ln.material_unit}</td>
+                <td className="num px-2 text-right">
+                  {Number(ln.qty_ordered).toLocaleString("vi-VN")}
                 </td>
                 {hasQty2 && (
-                  <td className="px-2 py-2 text-right whitespace-nowrap text-[var(--primary)] tabular-nums">
+                  <td className="num px-2 text-right whitespace-nowrap text-[var(--act)]">
                     {ln.qty2 != null
-                      ? `${Number(ln.qty2).toLocaleString('vi-VN')} ${ln.unit2 ?? ''}`
-                      : '—'}
+                      ? Number(ln.qty2).toLocaleString("vi-VN") +
+                        " " +
+                        (ln.unit2 ?? "")
+                      : "—"}
                   </td>
                 )}
-                <td className="px-2 py-2 text-right whitespace-nowrap tabular-nums">
+                <td className="num px-2 text-right whitespace-nowrap">
                   {ln.unit_price != null ? (
                     <>
                       {fmtVnd(ln.unit_price)}
-                      {ln.price_basis === 'unit2' && ln.unit2 && (
-                        <span className="text-xs text-[var(--primary)]">/{ln.unit2}</span>
+                      {ln.price_basis === "unit2" && ln.unit2 && (
+                        <span className="text-[var(--fs-micro)] text-[var(--act)]">
+                          /{ln.unit2}
+                        </span>
                       )}
                     </>
                   ) : (
                     <span className="text-[var(--warn)]">chưa có</span>
                   )}
                 </td>
-                <td className="px-2 py-2 text-right font-medium whitespace-nowrap tabular-nums">
-                  {ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : '—'}
+                <td className="px-2 text-right whitespace-nowrap">
+                  {cmp == null ? (
+                    <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
+                      {ln.unit_price == null
+                        ? "—"
+                        : !ln.material_id
+                          ? "dòng tự do"
+                          : "chưa từng mua"}
+                    </span>
+                  ) : (
+                    <span
+                      title={
+                        "Lần trước " +
+                        fmtVnd(cmp.prev) +
+                        " " +
+                        currency +
+                        " — đơn " +
+                        cmp.poCode
+                      }
+                      className={cn(
+                        "num inline-flex items-center justify-end gap-1 text-[var(--fs-sm)]",
+                        tang
+                          ? "font-semibold text-[var(--warn)]"
+                          : giam
+                            ? "text-[var(--done)]"
+                            : "text-[var(--ink-3)]",
+                      )}
+                    >
+                      {tang && <ArrowUp className="size-[12px]" aria-hidden />}
+                      {giam && (
+                        <ArrowDown className="size-[12px]" aria-hidden />
+                      )}
+                      {fmtVnd(cmp.prev)}
+                      <span>
+                        {" · "}
+                        {Math.abs(cmp.pct) < 0.1
+                          ? "không đổi"
+                          : (cmp.pct > 0 ? "+" : "") + cmp.pct + "%"}
+                      </span>
+                    </span>
+                  )}
                 </td>
-                <td className="text-muted-foreground py-2 pl-2 text-xs">
-                  {ln.note && ln.note.trim() ? ln.note : '—'}
+                <td className="num px-2 text-right font-semibold whitespace-nowrap">
+                  {ln.unit_price != null ? fmtVnd(poLineAmount(ln)) : "—"}
                 </td>
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr className="border-border/60 border-t">
+            );
+          })}
+        </tbody>
+        <tfoot>
+          <tr className="bg-[var(--surface-raised)]">
+            <td
+              colSpan={hasQty2 ? 7 : 6}
+              className="h-[30px] border-t border-[var(--line)] px-2 text-right font-semibold"
+            >
+              Tổng cộng {lines.length} dòng
+            </td>
+            <td className="num border-t border-[var(--line)] px-2 text-right font-bold whitespace-nowrap">
+              {money(total, currency)}
+            </td>
+          </tr>
+          {/*
+            CHÂN BẢNG NÓI PHẦN KHÔNG BAO GỒM — luật "số nào không kiểm được thì
+            không ai tin". Dòng thiếu giá không vào tổng, mà người ký nhìn tổng
+            rồi quyết chi; không nói ra thì họ ký một con số nhỏ hơn sự thật.
+          */}
+          {missingPrice > 0 && (
+            <tr>
               <td
-                colSpan={hasQty2 ? 6 : 5}
-                className="py-2 pr-2 text-right font-semibold"
+                colSpan={hasQty2 ? 8 : 7}
+                className="px-2 py-[5px] text-[var(--fs-micro)] text-[var(--warn)]"
               >
-                Tổng cộng
+                Tổng CHƯA gồm {missingPrice} dòng chưa có đơn giá.
               </td>
-              <td />
-              <td className="px-2 py-2 text-right font-bold whitespace-nowrap tabular-nums">
-                {money(total, currency)}
-              </td>
-              <td />
             </tr>
-          </tfoot>
-        </table>
-      </div>
+          )}
+        </tfoot>
+      </table>
     </div>
-  )
+  );
 }

@@ -96,8 +96,24 @@ export type PoFilterState = {
   /** Ba công tắc dưới đây CỘNG DỒN với nhau và với `bucket`. */
   mine: boolean
   late: boolean
+  /**
+   * QUÁ HẸN VỀ PHÍA AI — chỉ có nghĩa khi `late` đang bật.
+   *
+   * `countPos` đã tách `late` (đơn ĐÃ ra khỏi nhà mà nhà cung cấp chưa giao)
+   * khỏi `lateUnsent` (quá hẹn mà đơn còn nằm ở mình: nháp / chờ ký / đã duyệt
+   * chưa gửi) — vì hai bên là hai việc khác nhau, một bên đi giục, một bên tự
+   * mình phải gửi đơn đi. Nhưng `poMatches` thì không tách, nên một con số hai
+   * cách đếm: thẻ "NCC trễ hẹn" nói 6, bấm vào ra 9.
+   *
+   * Trục này để chỗ hiển thị lọc được ĐÚNG cái nó vừa đếm. Không khai thì là
+   * `'any'` — hành vi y như trước, nên màn `/planning/pos` không đổi gì.
+   */
+  lateSide: 'any' | 'sent' | 'unsent'
   noEta: boolean
 }
+
+/** Trạng thái mà đơn còn nằm ở phía mình — chưa gửi nhà cung cấp. */
+const UNSENT = new Set<string>(['draft', 'pending_approval', 'approved'])
 
 export const EMPTY_FILTER: PoFilterState = {
   q: '',
@@ -109,6 +125,7 @@ export const EMPTY_FILTER: PoFilterState = {
   toDate: '',
   mine: false,
   late: false,
+  lateSide: 'any',
   noEta: false,
 }
 
@@ -134,7 +151,11 @@ export function poMatches(
 ): boolean {
   if (f.bucket !== 'all' && bucketOf(p.status) !== f.bucket) return false
   if (f.mine && p.assigned_to !== ctx.meId) return false
-  if (f.late && assessPoLate(p, ctx.today) !== 'overdue') return false
+  if (f.late) {
+    if (assessPoLate(p, ctx.today) !== 'overdue') return false
+    if (f.lateSide === 'unsent' && !UNSENT.has(p.status)) return false
+    if (f.lateSide === 'sent' && UNSENT.has(p.status)) return false
+  }
   if (f.noEta && !isMissingEta(p)) return false
   if (f.supplierId !== 'all' && p.supplier_id !== f.supplierId) return false
   /*
@@ -188,9 +209,6 @@ export type PoCounts = Record<Exclude<PoBucket, 'all'>, number> & {
  * lối đi, mà lối đi thì phải nói có bao nhiêu thứ ở đầu kia — kể cả khi bộ lọc
  * hiện tại đang giấu chúng đi.
  */
-/** Đơn chưa gửi NCC — quá hẹn ở nhóm này là lỗi của mình, không phải của NCC. */
-const UNSENT = new Set(['draft', 'pending_approval', 'approved'])
-
 export function countPos(pos: Po[], meId: string | null, today: string): PoCounts {
   const c: PoCounts = {
     all: pos.length,

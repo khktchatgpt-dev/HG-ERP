@@ -1,4 +1,5 @@
 import { posRepo } from '@/modules/dept/supply/pos.repo'
+import { pricesRepo } from '@/modules/dept/supply/prices.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { lsxLinesRepo } from '@/modules/dept/production/lsx-lines.repo'
 import { withProductImage } from '@/modules/dept/production/lsx-lines.service'
@@ -37,6 +38,22 @@ export async function loadPendingPoDetail(
   ])
   const total = lines.reduce((s, l) => s + poLineAmount(l), 0)
 
+  /*
+    GIÁ LẦN TRƯỚC — nạp sau khi đã có dòng, vì cần danh sách `material_id`.
+
+    `excludePoId` bắt buộc: không loại chính đơn này thì nó là lần mua mới nhất
+    và cột "giá lần trước" luôn bằng giá lần này. Dòng tự do (không gắn mã vật
+    tư) không có `material_id` nên tự rơi ra ngoài — đúng, vì không có gì để so.
+  */
+  const matIds = [...new Set(lines.map((l) => l.material_id).filter(Boolean))] as string[]
+  const lastPrices = await pricesRepo.lastPurchases(matIds, id)
+  const last_prices = Object.fromEntries(
+    lastPrices.map((p) => [
+      p.material_id,
+      { unit_price: p.unit_price, currency: p.currency, po_code: p.po_code, at: p.at },
+    ]),
+  )
+
   return {
     id: po.id,
     code: po.code,
@@ -53,6 +70,7 @@ export async function loadPendingPoDetail(
     note: po.note,
     big: isBigApprovalWith(total, po.currency, thresholds),
     threshold: Object.hasOwn(thresholds, po.currency) ? thresholds[po.currency] : null,
+    last_prices,
   }
 }
 
