@@ -12,6 +12,8 @@
  * ngay lần đầu họ ngồi đếm tay.
  */
 
+import type { IcoName } from '@/components/kit'
+
 import { assessPoLate, isMissingEta } from './late-risk'
 
 /** Trường tối thiểu để phân loại — mọi màn đều có sẵn từ `posService.list`. */
@@ -37,11 +39,18 @@ export const SUPPLY_TODO: Record<
     /** Vì sao đơn này lọt vào đây (một câu, hiện dưới nhóm). */
     why: string
     tone: 'stop' | 'warn' | 'primary' | 'muted'
+    /**
+     * Icon của làn — khai Ở ĐÂY, cạnh nhãn, để hộp thư và trang Vào việc
+     * không mỗi nơi chọn một hình cho cùng một loại việc. Từ vựng khái niệm
+     * ở `kit/Icon.tsx`; chỉ là kiểu chữ, không kéo mã chạy nào vào lib.
+     */
+    icon: IcoName
     /** Thứ tự khẩn — nhóm nhỏ số hiện trên trước. */
     order: number
   }
 > = {
   overdue: {
+    icon: 'quaHen',
     label: 'Quá hẹn giao',
     action: 'Giục nhà cung cấp',
     why: 'NCC đã nhận đơn nhưng qua ngày hẹn vẫn chưa giao đủ.',
@@ -49,6 +58,7 @@ export const SUPPLY_TODO: Record<
     order: 1,
   },
   unsent: {
+    icon: 'gui',
     label: 'Đã duyệt · chưa gửi NCC',
     action: 'Gửi nhà cung cấp',
     why: 'Giám đốc ký rồi mà đơn chưa ra khỏi cửa — chỗ đơn nằm im lâu nhất.',
@@ -56,6 +66,7 @@ export const SUPPLY_TODO: Record<
     order: 2,
   },
   no_eta: {
+    icon: 'hen',
     label: 'Chưa có hẹn giao',
     action: 'Chốt ngày giao với NCC',
     why: 'Không có ngày hẹn thì mọi cảnh báo trễ đều bỏ qua đơn này.',
@@ -63,6 +74,7 @@ export const SUPPLY_TODO: Record<
     order: 3,
   },
   partial: {
+    icon: 'nhanHang',
     label: 'Về một phần',
     action: 'Theo dõi phần còn thiếu',
     why: 'Đã nhận được một số dòng, phần còn lại chưa về.',
@@ -70,6 +82,7 @@ export const SUPPLY_TODO: Record<
     order: 4,
   },
   draft: {
+    icon: 'banNhap',
     label: 'Nháp chưa gửi duyệt',
     action: 'Hoàn tất rồi gửi Giám đốc',
     why: 'Đơn soạn dở, chưa ai nhìn thấy ngoài bạn.',

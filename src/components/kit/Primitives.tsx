@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
+import { Ico, type IcoName } from './Icon'
 import { isoToVn, maskVnDate, vnToIso } from '@/lib/date-vn'
 import { normalizeSearch, searchTokens } from '@/lib/search-text'
 import { cn } from '@/lib/utils'
@@ -197,12 +198,19 @@ export function Btn({
   primary = false,
   danger = false,
   blockedBy,
+  icon,
   href,
   className,
   ...rest
 }: {
   children: ReactNode
   primary?: boolean
+  /**
+   * Icon ĐỨNG TRƯỚC CHỮ — khái niệm nghiệp vụ, không phải tên hình. Xem từ
+   * vựng ở `kit/Icon.tsx`. Không có icon thì nút vẫn đúng: chữ mới là nội
+   * dung, icon là mốc cho mắt quét một thanh 6-8 nút.
+   */
+  icon?: IcoName
   /**
    * Việc KHÔNG lùi lại được (xoá, huỷ đơn đã gửi). Đỏ chỉ dùng ở đây — dùng
    * cho cả việc thường thì hết là tín hiệu, đúng lỗi badge đỏ của v3.
@@ -237,6 +245,7 @@ export function Btn({
     */
     return (
       <Link href={href} className={cls} title={rest.title}>
+        {icon && <Ico name={icon} />}
         {children}
       </Link>
     )
@@ -248,6 +257,7 @@ export function Btn({
       className={cls}
       {...rest}
     >
+      {icon && <Ico name={icon} />}
       {children}
     </button>
   )

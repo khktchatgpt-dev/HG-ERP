@@ -1,6 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
+import { Ico, type IcoName } from './Icon'
 import { cn } from '@/lib/utils'
 
 /**
@@ -338,11 +339,14 @@ export function FilterBar({ children }: { children: ReactNode }) {
 export function Chip({
   on = false,
   count,
+  icon,
   onClick,
   children,
 }: {
   on?: boolean
   count?: number
+  /** Khái niệm nghiệp vụ, đứng trước chữ — xem từ vựng ở `kit/Icon.tsx`. */
+  icon?: IcoName
   onClick?: () => void
   children: ReactNode
 }) {
@@ -363,6 +367,7 @@ export function Chip({
           : 'border-[var(--line)] bg-[var(--surface-card)] text-[var(--ink-2)] hover:border-[var(--ink-3)] hover:text-[var(--ink)]',
       )}
     >
+      {icon && <Ico name={icon} size={14} />}
       {children}
       {/*
         NHÓM NGHÌN CHO SỐ ĐẾM (15/09/2026). Lộ ra ở màn mẫu Tồn kho của phân

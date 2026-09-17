@@ -400,7 +400,9 @@ export function DonScreen({
         ]}
         actions={
           <>
-            <Btn href="/mua-hang/yeu-cau">Vật tư theo lệnh</Btn>
+            <Btn icon="lenh" href="/mua-hang/yeu-cau">
+              Vật tư theo lệnh
+            </Btn>
             {/*
               XUẤT ĐÚNG CÁI ĐANG NHÌN. Chuyển nguyên bộ lọc hiện hành sang
               route, và route lọc lại bằng chính `decodeView` + `poMatches` mà
@@ -414,13 +416,14 @@ export function DonScreen({
                 const qs = encodeView(view)
                 window.open(`/api/dept/supply/pos/export-list${qs ? `?${qs}` : ''}`, '_blank') // prettier-ignore
               }}
+              icon="excel"
               title={`Xuất ${shown.length} đơn đang hiện ra Excel`}
             >
               Xuất danh sách
             </Btn>
             {canEdit && (
-              <Btn primary href="/mua-hang/don/moi">
-                + Soạn đơn mua
+              <Btn primary icon="them" href="/mua-hang/don/moi">
+                Soạn đơn mua
               </Btn>
             )}
           </>
@@ -510,6 +513,7 @@ export function DonScreen({
         <Chip
           on={view.filter.mine}
           count={counts.mine}
+          icon="toi"
           onClick={() => patchFilter({ mine: !view.filter.mine })}
         >
           Của tôi
@@ -517,6 +521,7 @@ export function DonScreen({
         <Chip
           on={view.filter.noEta}
           count={counts.noEta}
+          icon="hen"
           onClick={() => patchFilter({ noEta: !view.filter.noEta })}
         >
           Chưa hẹn giao
@@ -528,6 +533,7 @@ export function DonScreen({
           chỗ người dùng vừa nhắm chuột vào.
         */}
         <Btn
+          icon="boLoc"
           disabled={!isFilterActive(view.filter)}
           title={isFilterActive(view.filter) ? undefined : 'Chưa có bộ lọc nào đang bật'}
           onClick={() =>

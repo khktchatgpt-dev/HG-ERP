@@ -137,6 +137,9 @@ export function ViecScreen({
   const lanes = KIND_ORDER.map((k) => ({
     id: k,
     label: SUPPLY_TODO[k].label,
+    // Icon lấy từ chính từ vựng làn — hộp thư và trang Vào việc dùng chung
+    // một bảng, nên không thể lệch hình cho cùng một loại việc.
+    icon: SUPPLY_TODO[k].icon,
     rows: inScope.filter((v) => v.kind === k),
     tone: k === 'overdue' ? ('stop' as const) : undefined,
   }))
@@ -260,8 +263,8 @@ export function ViecScreen({
             >
               {scope === 'toi' ? 'Xem cả phòng' : 'Chỉ đơn của tôi'}
             </Btn>
-            <Btn primary href="/mua-hang/don/moi">
-              + Soạn đơn mua
+            <Btn primary icon="them" href="/mua-hang/don/moi">
+              Soạn đơn mua
             </Btn>
           </>
         }
