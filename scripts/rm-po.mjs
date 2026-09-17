@@ -142,7 +142,11 @@ if (DRY) {
 }
 
 const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')
-const backup = `backups/${CODE.toLowerCase()}-xoa-${stamp}.json`
+// Mã đơn của NCC có dấu gạch chéo ("2/2026-HG/NP") — để nguyên thì thành
+// đường dẫn thư mục và ghi backup văng ENOENT. Ghi backup đứng TRƯỚC mọi lệnh
+// xoá nên lỗi này chỉ làm hỏng lượt chạy, không làm mất dữ liệu.
+const safe = CODE.replace(/[^A-Za-z0-9.-]+/g, '-').toLowerCase()
+const backup = `backups/${safe}-xoa-${stamp}.json`
 writeFileSync(
   new URL(`../${backup}`, import.meta.url),
   JSON.stringify(
