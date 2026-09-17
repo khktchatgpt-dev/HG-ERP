@@ -40,6 +40,8 @@ const arg = (k) => {
 const CODE = arg('--code')
 const DRY = args.includes('--dry')
 const YES = args.includes('--yes')
+/** Cho phép xoá KÈM hoá đơn NCC — xem khối ghi chú ở phần hoá đơn bên dưới. */
+const WITH_INVOICES = args.includes('--with-invoices')
 if (!CODE) {
   console.error('Thiếu --code <mã đơn>')
   process.exit(1)
@@ -109,6 +111,28 @@ const invoiceLines = await sel('accounting_supplier_invoice_lines', 'po_line_id'
 const payments = await sel('accounting_supplier_payments', 'po_id', [po.id])
 const plan = await sel('supply_lsx_material_plan', 'po_line_id', lineIds)
 
+/*
+  HOÁ ĐƠN NCC — chỉ đụng tới khi có `--with-invoices`.
+
+  Xoá vài DÒNG hoá đơn rồi bỏ đó là cách chắc chắn làm lệch sổ công nợ: số
+  tổng nằm trên ĐẦU hoá đơn, không tự tính lại theo dòng. Nên ở đây làm trọn
+  gói — xoá cả tờ hoá đơn, kể cả những dòng KHÔNG thuộc đơn này (chúng được
+  liệt kê ra để người chốt biết mình đang mất thêm cái gì).
+*/
+const invoiceIds = [...new Set(invoiceLines.map((l) => l.invoice_id).filter(Boolean))]
+const invoices = await sel('accounting_supplier_invoices', 'id', invoiceIds)
+const invoiceAllLines = await sel(
+  'accounting_supplier_invoice_lines',
+  'invoice_id',
+  invoiceIds,
+)
+// `accounting_supplier_payments` chỉ có cột `po_id`, KHÔNG có `invoice_id` —
+// phiếu trả tiền bám vào ĐƠN chứ không bám vào hoá đơn, nên `payments` ở trên
+// đã là toàn bộ tiền đã chạy liên quan tới đơn này.
+const strayLines = invoiceAllLines.filter(
+  (l) => !l.po_line_id || !lineIds.includes(l.po_line_id),
+)
+
 const n = (a) => a.length
 console.log(`\n${CODE} · ${po.status} · tạo ${String(po.created_at).slice(0, 10)}`)
 console.log('─'.repeat(64))
@@ -126,13 +150,39 @@ console.log(`  phân bổ dòng → lệnh          ${n(lineLsx)}`)
 console.log(`  dòng hoá đơn NCC             ${n(invoiceLines)}`)
 console.log(`  phiếu trả tiền               ${n(payments)}`)
 console.log(`  kế hoạch vật tư của lệnh     ${n(plan)}`)
+
+if (invoiceIds.length > 0) {
+  console.log('  hoá đơn NCC dính tới:')
+  for (const inv of invoices) {
+    const mine = invoiceAllLines.filter(
+      (l) => l.invoice_id === inv.id && l.po_line_id && lineIds.includes(l.po_line_id),
+    ).length
+    const all = invoiceAllLines.filter((l) => l.invoice_id === inv.id).length
+    console.log(
+      `    ${inv.invoice_no} · ${Number(inv.total ?? inv.amount ?? 0).toLocaleString('vi-VN')} ₫ · ${inv.status} · ${mine}/${all} dòng là của đơn này`,
+    )
+  }
+  if (strayLines.length > 0)
+    console.log(`    ⚠ ${strayLines.length} dòng KHÔNG thuộc đơn này cũng sẽ mất theo`)
+}
 console.log('─'.repeat(64))
 
-// HAI THỨ KHÔNG ĐƯỢC PHÉP XOÁ KÈM: hoá đơn NCC và phiếu trả tiền là sổ kế
-// toán, không phải sổ mua hàng. Có chúng thì dừng — người chốt phải biết là
-// mình đang định xoá một đơn đã lên sổ tiền.
-if (invoiceLines.length > 0 || payments.length > 0) {
-  console.error('\nDỪNG: đơn này đã có hoá đơn hoặc phiếu trả tiền. Xử ở Kế toán trước.')
+// PHIẾU TRẢ TIỀN thì DỪNG HẲN, không có cờ nào mở. Tiền đã chạy là việc của
+// Kế toán, không phải của một script dọn đơn.
+if (payments.length > 0) {
+  console.error(
+    '\nDỪNG: đã có phiếu trả tiền bám vào đơn/hoá đơn này. Xử ở Kế toán trước.',
+  )
+  process.exit(2)
+}
+
+// HOÁ ĐƠN NCC là sổ kế toán, không phải sổ mua hàng — mặc định dừng. Muốn xoá
+// kèm thì phải nói ra bằng `--with-invoices`, để không ai xoá nhầm sổ tiền vì
+// gõ thiếu một chữ.
+if (invoiceLines.length > 0 && !WITH_INVOICES) {
+  console.error(
+    '\nDỪNG: đơn này đã có hoá đơn NCC. Thêm --with-invoices nếu muốn xoá cả hoá đơn.',
+  )
   process.exit(2)
 }
 
@@ -150,7 +200,19 @@ const backup = `backups/${safe}-xoa-${stamp}.json`
 writeFileSync(
   new URL(`../${backup}`, import.meta.url),
   JSON.stringify(
-    { po, lines, movements, docs, shipments, shipmentLines, extraLsx, lineLsx, plan },
+    {
+      po,
+      lines,
+      movements,
+      docs,
+      shipments,
+      shipmentLines,
+      extraLsx,
+      lineLsx,
+      plan,
+      invoices,
+      invoiceAllLines,
+    },
     null,
     2,
   ),
@@ -165,6 +227,11 @@ const del = async (table, col, vals, label) => {
 }
 
 // Thứ tự: con trước, cha sau — không dựa vào ON DELETE CASCADE vì mỗi FK một kiểu.
+// Hoá đơn đi TRƯỚC dòng đơn: dòng hoá đơn trỏ vào dòng đơn, không phải ngược lại.
+if (WITH_INVOICES && invoiceIds.length > 0) {
+  await del('accounting_supplier_invoice_lines', 'invoice_id', invoiceIds, 'dòng hoá đơn NCC') // prettier-ignore
+  await del('accounting_supplier_invoices', 'id', invoiceIds, 'hoá đơn NCC')
+}
 await del('supply_lsx_material_plan', 'po_line_id', lineIds, 'kế hoạch vật tư')
 await del('supply_po_line_lsx', 'line_id', lineIds, 'phân bổ dòng → lệnh')
 await del('supply_po_extra_lsx', 'po_id', [po.id], 'lệnh mua chung')
