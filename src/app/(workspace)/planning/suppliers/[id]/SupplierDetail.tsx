@@ -381,6 +381,7 @@ export function SupplierDetail({
                 supplierId={S.id}
                 canEdit={canEdit}
                 fields={[
+                  { key: 'contact_name', label: 'Người liên hệ', value: S.contact_name },
                   { key: 'phone', label: 'Điện thoại', value: S.phone },
                   { key: 'email', label: 'Email', value: S.email },
                   { key: 'website', label: 'Website', value: S.website },
@@ -675,8 +676,9 @@ function VendorSidebar({
         </div>
       )}
 
-      {(s.phone || s.email) && (
+      {(s.contact_name || s.phone || s.email) && (
         <SideCard title="Liên hệ mua hàng">
+          {s.contact_name && <SideRow k="Người liên hệ" v={s.contact_name} />}
           {s.phone && <SideRow k="Điện thoại" v={s.phone} mono />}
           {s.email && <SideRow k="Email" v={s.email} />}
         </SideCard>

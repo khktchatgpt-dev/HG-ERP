@@ -22,6 +22,16 @@ export const supplierCreateSchema = z.object({
   country: optText(100),
   registered_address: optText(500),
   // 3. Liên hệ
+  /**
+   * NGƯỜI LIÊN HỆ — tên người nhấc máy bên NCC (nối lại 17/09/2026).
+   *
+   * Cột `contact_name` có sẵn trong bảng từ lâu nhưng không tầng nào đọc:
+   * không có trong `SUPPLIER_COLS`, không có trong zod, không có ô trên form.
+   * Hệ quả đo được khi nhập NCC "Công ty cổ phần HLC Việt Nam": người nhập
+   * phải nhét tên người liên hệ vào ô Ghi chú, tức là dữ liệu có chỗ đứng
+   * đàng hoàng mà vẫn đi lạc.
+   */
+  contact_name: optText(150),
   email: z.string().trim().email().optional().or(z.literal('')).nullable(),
   phone: optText(30),
   address: optText(500), // địa chỉ giao dịch chính (tương thích cũ)
