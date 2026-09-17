@@ -380,6 +380,19 @@
   color: var(--ink-2);
 }
 
+/* BƯỚC ĐÃ QUA MÀ KHÔNG CÓ MỐC (17/09/2026) — vạch đứt, chữ mờ, không dấu ✓.
+   Trạng thái đơn nói nó đã vượt qua bước này, nhưng không có mốc thời gian nào
+   chứng minh. Vạch đứt là quy ước "chưa chắc" quen thuộc, và nó KHÁC hẳn cả
+   bước đã qua (nét liền, có ✓) lẫn bước chưa tới (nền xám) — ba thứ ba hình. */
+.k-step.past.k-step-unverified {
+  border-style: dashed;
+  color: var(--ink-3);
+}
+.k-step-nomark {
+  font-weight: 700;
+  opacity: 0.75;
+}
+
 /* BƯỚC ĐANG ĐỨNG — màu theo NGHĨA, không mặc định xanh.
    Xanh `--act` từ 16/09/2026 chỉ còn nghĩa "bấm được"; dải trạng thái mượn nó
    thì màn hình chỉ còn xanh với trắng. Xem `TrackTone` trong Erp.tsx. */
@@ -1534,7 +1547,7 @@
 /* Nhãn trục nằm CÙNG HÀNG với các bước ("ĐƠN  Nháp › Chờ duyệt…"): giữ được
    tên trục như màn mẫu mà không tốn hàng. Đo 10/09/2026: bỏ nhãn làm hai trục
    dính thành một dải chip vô danh — chủ dự án chấm "nhạt". */
-.k-doc-compact .k-tracks > div {
+.k-doc-compact .k-tracks .k-track-main {
   display: flex;
   align-items: center;
   gap: 7px;

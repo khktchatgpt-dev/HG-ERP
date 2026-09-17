@@ -353,6 +353,7 @@ export function StatusTrack({
   steps,
   at,
   tone = 'run',
+  marks,
   terminal,
   onPick,
 }: {
@@ -366,6 +367,23 @@ export function StatusTrack({
   /** Màu bước đang ở. `stop` cho vòng đời dừng giữa chừng (huỷ). */
   tone?: TrackTone
   /**
+   * MỐC THỜI GIAN THẬT của từng bước — thứ tự khớp `steps`.
+   *
+   *   'dd/mm/yyyy' — có mốc, bước này THẬT SỰ đã xảy ra
+   *   `null`       — hệ thống CÓ chỗ lưu mốc mà TRỐNG: bước chưa từng chạy
+   *   `undefined`  — hệ thống không lưu mốc cho bước này, không kết luận gì
+   *
+   * VÌ SAO PHẢI CÓ (17/09/2026). Dải bước suy từ `status` cuối, nên đơn nào
+   * mang trạng thái "đã nhận" là sáu bước tick xanh hết — kể cả 43 đơn được
+   * NẠP thẳng vào ở trạng thái cuối, không có `approved_at`, `ordered_at` hay
+   * `confirmed_at` nào. Dải khi đó khẳng định "đã duyệt · đã gửi · NCC xác
+   * nhận" cho những việc chưa ai làm.
+   *
+   * Đó là vi phạm nguyên tắc 6 của sổ thiết kế — số nào không kiểm được thì
+   * không ai tin, và một nhãn bịa làm hỏng lòng tin của cả những nhãn đúng.
+   */
+  marks?: (string | null | undefined)[]
+  /**
    * BẬC KẾT THÚC ngoài trục — chứng từ dừng hẳn ở một chỗ không nằm trong dãy
    * bước (đơn huỷ). Đi kèm `at: -1` thì cả trục lùi về nhạt: nó không còn nghĩa
    * nữa, và nói vậy trung thực hơn là tick xanh những bước đơn chưa hề đi qua.
@@ -373,10 +391,14 @@ export function StatusTrack({
   terminal?: string
   onPick?: (i: number) => void
 }) {
+  const thieuMoc = steps.filter((_, i) => i < at && marks?.[i] === null).length
   return (
     <div>
-      <div className="k-track-lab">{label}</div>
-      {/*
+      {/* Nhãn + dải đi CÙNG MỘT HÀNG ở chế độ gọn; dòng chú thích thiếu mốc
+          phải nằm DƯỚI cả hai, nên chúng có khung riêng. */}
+      <div className="k-track-main">
+        <div className="k-track-lab">{label}</div>
+        {/*
         KHÔNG CÓ `onPick` THÌ KHÔNG PHẢI NÚT.
 
         Tới 14/09/2026 dải này luôn dựng `<button disabled>`, kể cả khi không
@@ -390,11 +412,11 @@ export function StatusTrack({
         Chỉ-đọc thì render `<span>`: mắt vẫn thấy đang ở bước nào, mà không hứa
         một thao tác không tồn tại.
       */}
-      <div
-        className={cx('k-steps', `k-steps-${tone}`)}
-        role={onPick ? undefined : 'list'}
-      >
-        {/*
+        <div
+          className={cx('k-steps', `k-steps-${tone}`)}
+          role={onPick ? undefined : 'list'}
+        >
+          {/*
           BA TRẠNG THÁI BƯỚC, KHÔNG PHẢI HAI.
 
           Tới 15/09/2026 dải chỉ biết "đang ở đây" và "không phải đây" — bước ĐÃ
@@ -409,43 +431,90 @@ export function StatusTrack({
           xuống nền thẻ — nhạt hơn bước đã qua, nên hướng đi đọc được ngay cả
           khi không còn bước nào "đang" (đơn đã về đủ).
         */}
-        {steps.map((s, i) => {
-          const qua = i < at
-          const dang = i === at
-          const cls = cx('k-step', !onPick && 'k-step-ro', qua && 'past', dang && 'on')
-          const noi = (
-            <>
-              {qua && <span aria-hidden>✓ </span>}
-              {s}
-            </>
-          )
-          return onPick ? (
-            <button
-              key={s}
-              type="button"
-              className={cls}
-              onClick={() => onPick(i)}
-              aria-current={dang ? 'step' : undefined}
-            >
-              {noi}
-            </button>
-          ) : (
+          {steps.map((s, i) => {
+            const qua = i < at
+            const dang = i === at
+            /*
+            BƯỚC ĐÃ QUA MÀ KHÔNG CÓ MỐC thì KHÔNG được tick.
+
+            Dấu ✓ là một lời khẳng định: "việc này đã xảy ra". Chỉ đặt nó khi
+            có bằng chứng — mốc thời gian — hoặc khi hệ thống không theo dõi
+            mốc cho bước đó (`undefined`, không kết luận). Mốc `null` là bằng
+            chứng NGƯỢC LẠI: có chỗ ghi mà trống, nên bước này chưa từng chạy
+            dù trạng thái đơn đã vượt qua nó. Vẽ vạch đứt + chữ mờ, và nói ra
+            khi rê chuột.
+          */
+            const moc = marks?.[i]
+            const khongMoc = qua && moc === null
+            const cls = cx(
+              'k-step',
+              !onPick && 'k-step-ro',
+              qua && 'past',
+              khongMoc && 'k-step-unverified',
+              dang && 'on',
+            )
+            const title = khongMoc
+              ? `${s} — không có mốc thời gian. Đơn mang trạng thái đã vượt qua bước này, nhưng hệ thống không ghi được lúc nào nó xảy ra.`
+              : moc
+                ? `${s} — ${moc}`
+                : undefined
+            const noi = (
+              <>
+                {qua && !khongMoc && <span aria-hidden>✓ </span>}
+                {s}
+                {khongMoc && (
+                  <span aria-hidden className="k-step-nomark">
+                    {' '}
+                    ?
+                  </span>
+                )}
+              </>
+            )
+            return onPick ? (
+              <button
+                key={s}
+                type="button"
+                className={cls}
+                title={title}
+                onClick={() => onPick(i)}
+                aria-current={dang ? 'step' : undefined}
+              >
+                {noi}
+              </button>
+            ) : (
+              <span
+                key={s}
+                role="listitem"
+                className={cls}
+                title={title}
+                aria-current={dang ? 'step' : undefined}
+              >
+                {noi}
+              </span>
+            )
+          })}
+          {terminal && (
             <span
-              key={s}
               role="listitem"
-              className={cls}
-              aria-current={dang ? 'step' : undefined}
+              className="k-step k-step-ro on stop"
+              aria-current="step"
             >
-              {noi}
+              {terminal}
             </span>
-          )
-        })}
-        {terminal && (
-          <span role="listitem" className="k-step k-step-ro on stop" aria-current="step">
-            {terminal}
-          </span>
-        )}
+          )}
+        </div>
       </div>
+      {/*
+        NÓI RA MỘT LẦN DƯỚI DẢI, không bắt người đọc rê chuột từng bước mới
+        phát hiện. Một dòng chữ nhỏ là đủ: nó giải thích vì sao mấy bước kia
+        không có dấu ✓, và đó thường là dấu hiệu đơn được nạp từ sổ cũ chứ
+        không đi qua hệ thống.
+      */}
+      {thieuMoc > 0 && (
+        <div className="mt-[5px] text-[var(--fs-micro)] text-[var(--ink-3)]">
+          {thieuMoc} bước không có mốc thời gian — đơn không đi qua bước đó trên hệ thống.
+        </div>
+      )}
     </div>
   )
 }
