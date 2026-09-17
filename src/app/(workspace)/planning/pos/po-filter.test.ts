@@ -209,3 +209,46 @@ describe('countPos — số trên chip', () => {
     expect(c.lateUnsent).toBe(1)
   })
 })
+
+/**
+ * HAI SỐ "QUÁ HẸN" PHẢI LỌC RA ĐÚNG CHỪNG ẤY DÒNG.
+ *
+ * `countPos` tách `late` (đơn đã gửi, lỗi ở nhà cung cấp) khỏi `lateUnsent`
+ * (đơn còn nằm ở mình) từ lâu, nhưng `poMatches` thì không — nên thẻ "NCC trễ
+ * hẹn" nói 6 mà bấm vào ra 9. Trục `lateSide` sinh ra để vá đúng chỗ đó, và
+ * cặp test này canh chính lời hứa ấy: đếm bao nhiêu thì lọc ra bấy nhiêu.
+ */
+describe('quá hẹn — phía nhà cung cấp và phía mình', () => {
+  const OVERDUE = '2026-08-01' // trước TODAY
+  const set: Po[] = [
+    po({ id: 'a', status: 'draft', expected_at: OVERDUE }),
+    po({ id: 'b', status: 'pending_approval', expected_at: OVERDUE }),
+    po({ id: 'c', status: 'approved', expected_at: OVERDUE }),
+    po({ id: 'd', status: 'ordered', expected_at: OVERDUE }),
+    po({ id: 'e', status: 'in_transit', expected_at: OVERDUE }),
+    po({ id: 'g', status: 'ordered', expected_at: '2026-12-01' }), // chưa tới hẹn
+  ]
+  const lọc = (over: Partial<PoFilterState>) =>
+    set.filter((p) => poMatches(p, f(over), ctx)).map((p) => p.id)
+
+  it('đếm và lọc khớp nhau — phía NCC', () => {
+    const c = countPos(set, 'u1', TODAY)
+    expect(c.late).toBe(2)
+    expect(lọc({ late: true, lateSide: 'sent' })).toEqual(['d', 'e'])
+  })
+
+  it('đếm và lọc khớp nhau — phía mình, đơn chưa ra khỏi cửa', () => {
+    const c = countPos(set, 'u1', TODAY)
+    expect(c.lateUnsent).toBe(3)
+    expect(lọc({ late: true, lateSide: 'unsent' })).toEqual(['a', 'b', 'c'])
+  })
+
+  it("'any' giữ nguyên hành vi cũ — cả hai phía", () => {
+    expect(lọc({ late: true })).toEqual(['a', 'b', 'c', 'd', 'e'])
+    expect(lọc({ late: true, lateSide: 'any' })).toEqual(['a', 'b', 'c', 'd', 'e'])
+  })
+
+  it('lateSide không tự lọc gì khi late tắt', () => {
+    expect(lọc({ lateSide: 'sent' })).toHaveLength(set.length)
+  })
+})

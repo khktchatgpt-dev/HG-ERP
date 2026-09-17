@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { PO_STATUSES } from '@/lib/po-status'
-import { actionsFor, bulkActionFor } from './actions'
+import { actionsFor, bulkActionsFor } from './actions'
 
 const own = { own: true, approve: false }
 const boss = { own: true, approve: true, privileged: true }
@@ -143,6 +143,9 @@ describe('route — không mở đường ghi mới', () => {
       '/api/dept/supply/pos/p/cancel',
       // Đường MỚI 15/09/2026: hạ đơn đã gửi về nháp để sửa số nhập sai.
       '/api/dept/supply/pos/p/reopen',
+      // Bàn giao (0128) — route màn chi tiết đã gọi từ lâu; 16/09/2026 đưa
+      // lên danh sách để chuyển nhiều đơn một lượt thay vì mở từng trang.
+      '/api/dept/supply/pos/p/reassign',
     ])
     for (const s of PO_STATUSES) {
       for (const a of actionsFor(s, boss)) {
@@ -182,33 +185,6 @@ describe('route — không mở đường ghi mới', () => {
   })
 })
 
-describe('bulkActionFor — cùng bước mới làm hàng loạt', () => {
-  it('khác bước thì trả lý do chứ không trả nút', () => {
-    const r = bulkActionFor([{ status: 'draft', own: true }, { status: 'approved', own: true }], boss) // prettier-ignore
-    expect('reason' in r && r.reason).toMatch(/không cùng một bước/)
-  })
-
-  it('cùng bước nháp, đều của mình → Gửi duyệt', () => {
-    const r = bulkActionFor([{ status: 'draft', own: true }, { status: 'draft', own: true }], own) // prettier-ignore
-    expect('action' in r && r.action.id).toBe('submit')
-  })
-
-  it('có một đơn không phải của mình → bị khoá kèm lý do', () => {
-    const r = bulkActionFor([{ status: 'draft', own: true }, { status: 'draft', own: false }], own) // prettier-ignore
-    expect('reason' in r && r.reason).toMatch(/người khác phụ trách/)
-  })
-
-  it('chờ duyệt mà không có quyền duyệt → lý do quyền', () => {
-    const r = bulkActionFor([{ status: 'pending_approval', own: true }], own)
-    expect('reason' in r && r.reason).toMatch(/quyền duyệt/)
-  })
-
-  it('đang về không có việc hàng loạt', () => {
-    const r = bulkActionFor([{ status: 'ordered', own: true }], boss)
-    expect('reason' in r).toBe(true)
-  })
-})
-
 describe('hạ về nháp để sửa — đường sửa sai dữ liệu của đơn đã gửi', () => {
   const buoc = ['pending_approval', 'approved', 'ordered', 'confirmed', 'in_transit', 'partial'] as const // prettier-ignore
 
@@ -243,5 +219,155 @@ describe('hạ về nháp để sửa — đường sửa sai dữ liệu của 
     const a = actionsFor('ordered', boss).find((x) => x.id === 'reopen')!
     expect(a.stakes).toBe('nang')
     expect(a.consequence).toMatch(/duyệt lại/)
+  })
+})
+
+/**
+ * HÀNG LOẠT — bày ĐỦ việc, mỗi việc tự nói vướng gì.
+ *
+ * Bản cũ (`bulkActionFor`) trả đúng MỘT hành động và chỉ trả khi mọi đơn cùng
+ * bước; chọn lẫn bước thì thanh nói "không cùng một bước" rồi thôi, người dùng
+ * không biết mình vừa mất gì. Cặp test này canh hành vi mới: danh sách đầy đủ,
+ * lý do khoá ĐẾM ĐƯỢC, và bàn giao chạy được kể cả khi tập lẫn bước.
+ */
+describe('bulkActionsFor — bày đủ việc, khoá kèm lý do đếm được', () => {
+  const boss2 = { approve: true, reassign: true }
+
+  it('không chọn gì thì không có việc nào', () => {
+    expect(bulkActionsFor([], boss2)).toEqual([])
+  })
+
+  it('cùng bước nháp, đều của mình → Gửi duyệt mở', () => {
+    const r = bulkActionsFor([{ status: 'draft', own: true }, { status: 'draft', own: true }], { approve: false }) // prettier-ignore
+    const submit = r.find((x) => x.action.id === 'submit')
+    expect(submit).toBeTruthy()
+    expect(submit!.blocked).toBeUndefined()
+  })
+
+  it('có một đơn của người khác → khoá kèm lý do, nút vẫn có mặt', () => {
+    const r = bulkActionsFor([{ status: 'draft', own: true }, { status: 'draft', own: false }], { approve: false }) // prettier-ignore
+    const submit = r.find((x) => x.action.id === 'submit')!
+    expect(submit.blocked).toMatch(/người khác phụ trách/)
+  })
+
+  it('lẫn bước: việc riêng của một bước bị khoá, lý do ĐẾM được và kể tên bước', () => {
+    const r = bulkActionsFor([{ status: 'draft', own: true }, { status: 'approved', own: true }], boss2) // prettier-ignore
+    const submit = r.find((x) => x.action.id === 'submit')!
+    expect(submit.blocked).toMatch(/1\/2 đơn/)
+    expect(submit.blocked).toMatch(/2 bước/)
+  })
+
+  it('BÀN GIAO chạy được dù tập lẫn bước — giao việc không phụ thuộc đơn ở đâu', () => {
+    const r = bulkActionsFor(
+      [
+        { status: 'draft', own: true },
+        { status: 'approved', own: true },
+        { status: 'ordered', own: true },
+      ],
+      boss2,
+    )
+    const re = r.find((x) => x.action.id === 'reassign')!
+    expect(re.blocked).toBeUndefined()
+  })
+
+  it('không có quyền bàn giao → nút vẫn có mặt, khoá kèm lý do', () => {
+    const r = bulkActionsFor([{ status: 'draft', own: true }], { approve: false })
+    const re = r.find((x) => x.action.id === 'reassign')!
+    expect(re.blocked).toMatch(/trưởng phòng Cung ứng/)
+  })
+
+  it('chờ duyệt mà không có quyền duyệt → Duyệt bị khoá vì quyền', () => {
+    const r = bulkActionsFor([{ status: 'pending_approval', own: true }], { approve: false }) // prettier-ignore
+    const ap = r.find((x) => x.action.id === 'approve')
+    if (ap) expect(ap.blocked).toMatch(/quyền duyệt/)
+  })
+})
+
+/**
+ * XOÁ ĐƠN — nút phải có mặt ở MỌI bước.
+ *
+ * Chủ dự án 17/09/2026: _"tôi chưa thấy tính năng xoá đơn khi tạo nhầm"_. Nút
+ * có thật, nhưng chỉ tồn tại ở bước `draft` — tạo nhầm rồi lỡ gửi duyệt là đi
+ * tìm không thấy gì. Cặp test này canh hai vế: nút luôn có mặt, và khi khoá thì
+ * lý do phải CHỈ ĐƯỜNG đi tiếp chứ không chỉ nói "không được".
+ */
+describe('xoá đơn — nút luôn có mặt, khoá thì chỉ đường', () => {
+  for (const s of PO_STATUSES) {
+    it(`bước ${s} có nút Xoá nháp`, () => {
+      expect(actionsFor(s, boss).some((a) => a.id === 'delete')).toBe(true)
+    })
+  }
+
+  it('nháp của mình: xoá được thật', () => {
+    const d = actionsFor('draft', own).find((a) => a.id === 'delete')!
+    expect(d.blocked).toBeUndefined()
+    expect(d.build!({ id: 'p', reason: '', date: '' })[0].method).toBe('DELETE')
+  })
+
+  it('đã gửi duyệt: khoá, và chỉ sang Rút về nháp', () => {
+    const d = actionsFor('pending_approval', boss).find((a) => a.id === 'delete')!
+    expect(d.blocked).toMatch(/Rút về nháp/)
+  })
+
+  it('đã duyệt / đang về: khoá, và chỉ sang Huỷ đơn', () => {
+    for (const s of ['approved', 'ordered', 'in_transit', 'partial'] as const) {
+      expect(actionsFor(s, boss).find((a) => a.id === 'delete')!.blocked).toMatch(/Huỷ đơn/) // prettier-ignore
+    }
+  })
+
+  it('đã đóng sổ: khoá, nói thẳng là hết đường', () => {
+    for (const s of ['received', 'cancelled'] as const) {
+      expect(actionsFor(s, boss).find((a) => a.id === 'delete')!.blocked).toMatch(/đóng sổ/) // prettier-ignore
+    }
+  })
+
+  it('CHỈ bước nháp mới thật sự xoá được — luật sổ, không phải luật giao diện', () => {
+    const mo = PO_STATUSES.filter(
+      (s) => !actionsFor(s, boss).find((a) => a.id === 'delete')!.blocked,
+    )
+    expect(mo).toEqual(['draft'])
+  })
+})
+
+/**
+ * TRẢ LẠI ĐỂ SỬA — không phải từ chối, và không được bày như việc nguy hiểm.
+ *
+ * `decide('reject')` đưa đơn về NHÁP, giữ số phiếu và lịch sử, người soạn sửa
+ * rồi gửi lại. Đó là *Request change*, không phải đóng cửa. Bày nó bằng nút đỏ
+ * "Từ chối" thì người duyệt ngần ngại bấm đúng cái nút họ nên bấm — và quay ra
+ * ký bừa hoặc để phiếu nằm im, đúng thứ đang xảy ra với 15 đơn chờ 15 ngày.
+ *
+ * Test này canh cả hai vế: nhãn nói đúng việc, và mức độ không bị nâng lên
+ * `nang`/`danger` khi ai đó sửa lại sau này.
+ */
+describe('trả lại để sửa — từ vựng và mức độ', () => {
+  const r = () => actionsFor('pending_approval', boss).find((a) => a.id === 'reject')!
+
+  it('nhãn nói đúng việc đã xảy ra', () => {
+    expect(r().label).toBe('Trả lại để sửa')
+    expect(r().done).toMatch(/trả lại/i)
+  })
+
+  it('KHÔNG phải việc nguy hiểm — đơn về nháp, không mất gì', () => {
+    expect(r().danger).toBeFalsy()
+    expect(r().stakes).not.toBe('nang')
+  })
+
+  it('hậu quả nói rõ đơn đi đâu, để người duyệt dám bấm', () => {
+    expect(r().consequence).toMatch(/nháp/i)
+    expect(r().consequence).toMatch(/gửi duyệt lại|giữ nguyên số/i)
+  })
+
+  it('mã gửi lên server VẪN là reject — đổi nhãn, không đổi sổ', () => {
+    expect(r().build!({ id: 'p', reason: 'thiếu giá', date: '' })[0].body).toEqual({
+      decision: 'reject',
+      reason: 'thiếu giá',
+    })
+  })
+
+  it('huỷ đơn thì vẫn là việc nguy hiểm — hai thứ khác nhau', () => {
+    const c = actionsFor('ordered', boss).find((a) => a.id === 'cancel')!
+    expect(c.danger).toBe(true)
+    expect(c.stakes).toBe('nang')
   })
 })

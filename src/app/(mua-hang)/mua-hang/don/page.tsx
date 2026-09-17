@@ -1,5 +1,4 @@
 import { authService } from '@/modules/core/auth/auth.service'
-import { canAction } from '@/modules/core/rbac/rbac.service'
 import { posService } from '@/modules/dept/supply/pos.service'
 import { posRepo } from '@/modules/dept/supply/pos.repo'
 import { supplyRepo } from '@/modules/dept/supply/supply.repo'
@@ -7,7 +6,7 @@ import { suppliersService, isSupplyStaff } from '@/modules/dept/supply/suppliers
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import { todayIso } from '@/app/(workspace)/planning/_data/watch'
 import { DonScreen } from './DonScreen'
-import { DEFAULT_VIEW_ID, PARAM_KEYS, decodeView, namedView } from './views'
+import { ALL_VIEW, DEFAULT_VIEW, PARAM_KEYS, decodeView } from './views'
 
 export const dynamic = 'force-dynamic'
 export const metadata = { title: 'Mua hàng · Đơn mua' }
@@ -34,11 +33,7 @@ export default async function Page({
 }) {
   const sp = await searchParams
   const user = await authService.requirePageUser()
-  const [supplyStaff, canManageAny, canApprove] = await Promise.all([
-    isSupplyStaff(user),
-    canAction(user, 'supply.po.manage_any'),
-    canAction(user, 'supply.po.approve'),
-  ])
+  const supplyStaff = await isSupplyStaff(user)
   const canEdit = user.role === 'admin' || supplyStaff
 
   const PAGE_CAP = 1000
@@ -56,16 +51,15 @@ export default async function Page({
 
   /**
    * `?mo=<id>` (và `?view=<id>` cho tương thích với form soạn đơn cũ, vốn
-   * redirect về đây sau khi lưu nháp): mở KHAY của đúng đơn đó. Màn cũ đẩy
-   * thẳng sang trang chi tiết — người soạn vừa lưu xong đã bị lôi khỏi danh
-   * sách. Khay giữ chỗ đứng.
+   * redirect về đây sau khi lưu nháp): CUỘN TỚI và TÔ SÁNG đúng dòng đó. Màn
+   * cũ đẩy thẳng sang trang chi tiết — người soạn vừa lưu xong đã bị lôi khỏi
+   * danh sách; ở đây họ giữ chỗ đứng và thấy đơn mình vừa lưu nằm đâu.
    *
-   * Đơn vừa lưu thường là nháp của mình nên nằm trong khung nhìn mặc định;
-   * nếu URL không chỉ khung nhìn nào thì mở "Tất cả" cho chắc — mở khay mà
-   * dòng bị bộ lọc giấu đi thì người dùng tưởng đơn mất.
+   * Đơn vừa lưu thường là nháp của mình nên nằm trong bộ lọc mặc định; nếu
+   * URL không mang bộ lọc nào thì mở CẢ SỔ cho chắc — dòng bị bộ lọc giấu đi
+   * thì người dùng tưởng đơn mất.
    */
   const openId = sp.mo ?? sp.view ?? null
-  const asked = sp.nhin ?? (openId ? 'tat-ca' : DEFAULT_VIEW_ID)
   /*
     DANH SÁCH THAM SỐ LẤY TỪ CHÍNH BỘ MÃ HOÁ, không gõ tay.
 
@@ -73,13 +67,13 @@ export default async function Page({
     hai ngày: thiếu `lsx` (thêm 14/09) rồi thiếu `tu`/`den` (thêm 15/09). Hậu
     quả im lặng và khó thấy: bấm chip thì lọc chạy (đổi state, `replaceState`
     không tải lại), nhưng DÁN LINK cho đồng nghiệp hoặc F5 thì tham số bị coi
-    là "không có gì lạ" và màn rớt về khung nhìn mặc định — đúng thứ khung
-    nhìn-trên-URL sinh ra để tránh.
+    là "không có gì lạ" và màn rớt về bộ lọc mặc định — đúng thứ bộ-lọc-trên-
+    URL sinh ra để tránh.
 
     `PARAM_KEYS` suy từ `encodeView` nên thêm bộ lọc mới là tự có mặt ở đây.
   */
   const hasCustom = Object.keys(sp).some((k) => PARAM_KEYS.has(k))
-  const initial = hasCustom ? decodeView(sp) : (namedView(asked)?.state ?? decodeView(sp))
+  const initial = hasCustom ? decodeView(sp) : openId ? ALL_VIEW : DEFAULT_VIEW
 
   return (
     <DonScreen
@@ -101,8 +95,6 @@ export default async function Page({
       }))}
       meId={user.id}
       canEdit={!!canEdit}
-      canApprove={canApprove}
-      canManageAny={user.role === 'admin' || canManageAny}
       truncatedAt={pos.length >= PAGE_CAP ? PAGE_CAP : null}
       initial={initial}
       openId={openId}

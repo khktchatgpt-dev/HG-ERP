@@ -1,6 +1,7 @@
 import { authService } from '@/modules/core/auth/auth.service'
 import { execService } from '@/modules/core/exec/exec.service'
 import { ApprovalCenterScreen, type ApprovalKind } from './ApprovalCenterScreen'
+import { ExecKitFrame } from '../_shell/KitFrame'
 
 /**
  * TRUNG TÂM PHÊ DUYỆT (/exec/approvals) — 15/08/2026.
@@ -23,5 +24,9 @@ export default async function ApprovalCenterPage({
   const box = await execService.signBox(user)
   const initialKind: ApprovalKind =
     loai === 'lsx' || loai === 'po' || loai === 'quote' ? loai : 'all'
-  return <ApprovalCenterScreen box={box} initialKind={initialKind} />
+  return (
+    <ExecKitFrame>
+      <ApprovalCenterScreen box={box} initialKind={initialKind} />
+    </ExecKitFrame>
+  )
 }

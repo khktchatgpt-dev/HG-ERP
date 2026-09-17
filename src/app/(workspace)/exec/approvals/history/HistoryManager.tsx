@@ -12,12 +12,7 @@ import { EmptyState } from '@/components/erp/EmptyState'
 import { Badge } from '@/components/Badge'
 
 type EvAction =
-  | 'approved'
-  | 'rejected'
-  | 'submitted'
-  | 'withdrawn'
-  | 'reassigned'
-  | 'reopened'
+  'approved' | 'rejected' | 'submitted' | 'withdrawn' | 'reassigned' | 'reopened'
 
 type Ev = {
   id: string
@@ -41,7 +36,26 @@ const ACTION_META: Record<
   { label: string; tone: 'green' | 'red' | 'blue' | 'amber' | 'gray' }
 > = {
   approved: { label: 'Đã duyệt', tone: 'green' },
-  rejected: { label: 'Từ chối', tone: 'red' },
+  /*
+    "TRẢ LẠI ĐỂ SỬA", không phải "Từ chối" — gọi đúng việc đã xảy ra.
+
+    `decide('reject')` đưa đơn về NHÁP, giữ nguyên số phiếu và cả lịch sử, để
+    người soạn sửa theo lý do rồi gửi lại (`pos.service.ts:603`). Đó là
+    *Request change* của Dynamics, không phải từ chối: từ chối là đóng cửa,
+    còn cái này mở đường đi tiếp.
+
+    Ba chỗ từng gọi ba tên cho cùng một việc — nút ghi "Trả lại", sổ này ghi
+    "Từ chối", trạng thái đơn thành "Nháp" — nên không ai chắc mình vừa làm gì
+    với tờ phiếu. Đây là lối mòn #1 của `docs/tieu-chi-workflow-erp.md`: một bộ
+    từ vựng cho cả hệ thống.
+
+    MÃ TRONG DB GIỮ NGUYÊN `rejected`. Đổi nhãn là việc của tầng nhìn; đổi giá
+    trị đã ghi vào sổ là viết lại lịch sử, và không đáng để chữa một cái tên.
+
+    Tone chuyển đỏ → hổ phách cho khớp `withdrawn`: cả hai đều là "quay về
+    nháp", và đỏ ở đây đọc thành hỏng việc trong khi phiếu vẫn đang sống.
+  */
+  rejected: { label: 'Trả lại để sửa', tone: 'amber' },
   submitted: { label: 'Gửi duyệt', tone: 'blue' },
   withdrawn: { label: 'Rút về nháp', tone: 'amber' },
   reassigned: { label: 'Bàn giao', tone: 'gray' },
@@ -171,7 +185,7 @@ export function HistoryManager({ events }: { events: Ev[] }) {
         stats={[
           { label: 'Tổng quyết định', value: events.length, tone: 'default' },
           { label: 'Đã duyệt', value: approved, tone: 'green' },
-          { label: 'Từ chối', value: rejected, tone: rejected ? 'red' : 'gray' },
+          { label: 'Trả lại để sửa', value: rejected, tone: rejected ? 'amber' : 'gray' }, // prettier-ignore
         ]}
       />
 

@@ -24,7 +24,21 @@ import { cn } from '@/lib/utils'
  * vài dòng ở nơi dùng, nhưng không có tầng trung gian phải đọc ngược.
  */
 
-export function Table({ children }: { children: ReactNode }) {
+export function Table({
+  children,
+  inline = false,
+}: {
+  children: ReactNode
+  /**
+   * BẢNG PHỤ NẰM TRONG MỘT KHỐI — không phải bảng chính của màn.
+   *
+   * Bảng chính lấy `flex-1`, tức nuốt hết chỗ còn lại của `ScreenFrame`.
+   * Hai bảng cùng `flex-1` thì chúng chia đôi màn, và bảng chính — thứ người
+   * dùng vào trang để đọc — co lại còn nửa. Bảng phụ vì thế cao theo nội
+   * dung, có TRẦN (`--table-inline-max`, mặc định 240px) rồi tự cuộn.
+   */
+  inline?: boolean
+}) {
   /*
     `min-w-0` trên vùng cuộn là BẮT BUỘC trong flex row: thiếu nó thì bảng
     lấy chiều rộng nội dung làm chiều rộng tối thiểu, đẩy khay kiểm tra bị
@@ -36,7 +50,12 @@ export function Table({ children }: { children: ReactNode }) {
     cột đó mà kéo. Mặc định 680px vừa đủ cho bảng 4-5 cột.
   */
   return (
-    <div className="min-w-0 flex-1 overflow-auto bg-[var(--surface-card)]">
+    <div
+      className={cn(
+        'min-w-0 overflow-auto bg-[var(--surface-card)]',
+        inline ? 'max-h-[var(--table-inline-max,240px)] shrink-0' : 'flex-1',
+      )}
+    >
       <table className="w-full min-w-[var(--table-min,680px)] border-separate border-spacing-0 text-[12.5px]">
         {children}
       </table>
@@ -65,9 +84,23 @@ export function THead({
     <thead
       className={cn(
         '[&_th]:sticky [&_th]:top-0 [&_th]:z-[var(--z-sticky)] [&_th]:border-b [&_th]:border-[var(--line)] [&_th]:bg-[var(--surface-raised)] [&_th]:px-[var(--pad-x)] [&_th]:py-[7px] [&_th]:text-left [&_th]:text-[11px] [&_th]:font-semibold [&_th]:tracking-[.04em] [&_th]:whitespace-nowrap [&_th]:text-[var(--ink-2)] [&_th]:uppercase',
-        // Ô góc phải nằm TRÊN cả hai lớp sticky, không thì bị ô kia phủ.
-        pinFirst &&
-          '[&_th:first-child]:left-0 [&_th:first-child]:z-[calc(var(--z-sticky)+1)]',
+        /*
+        Ô TIÊU ĐỀ GHIM nằm TRÊN các ô tiêu đề khác — nhưng luật đó KHÔNG đặt
+        được ở đây.
+
+        BẪY ĐÃ DÍNH (vá 17/09/2026, chủ dự án: "có lỗi khi kéo bảng"): lớp
+        `[&_th:first-child]:z-…` sinh ra chọn tử `.x th:first-child` = độ ưu
+        tiên (0,2,1), trong khi `erp.css` đã khai `z-index` cho
+        `.kit table:not(.k-grid) thead th` = (0,2,3). Lớp tiện ích THUA, ô "Đơn"
+        giữ z=5 ngang với ô bên cạnh, và ô sau trong DOM vẽ đè lên nó: kéo bảng
+        sang phải thì tiêu đề "Đơn" biến mất dưới "Nhà cung cấp" trong khi thân
+        bảng vẫn ghim — đọc ra như bảng vỡ.
+
+        Nên luật nâng z nằm CÙNG CHỖ với luật đã khai z: `erp.css`, chọn tử
+        `thead.k-pin1 th:first-child` (0,3,3). Lớp `left-0` dưới đây vô hại vì
+        không ai tranh nó.
+      */
+        pinFirst && 'k-pin1 [&_th:first-child]:left-0',
       )}
     >
       <tr>{children}</tr>
@@ -103,12 +136,25 @@ export function GroupRow({
         colSpan={cols}
         className="h-[29px] border-y border-[var(--line)] bg-[var(--surface-raised)] px-[var(--pad-x)] text-[11px] font-bold tracking-[.07em] text-[var(--ink-2)] uppercase"
       >
-        {step != null && (
-          <span className="mr-[9px] inline-block h-[17px] w-[17px] rounded-[3px] border border-[var(--act-line)] bg-[var(--act-wash)] text-center font-[family-name:var(--font-mono)] text-[10px] leading-[15px] font-bold text-[var(--act)]">
-            {step}
-          </span>
-        )}
-        {name}
+        {/*
+          TÊN NHÓM BÁM MÉP TRÁI khi kéo ngang (17/09/2026).
+
+          Dòng tiêu đề khối trải hết bề ngang bảng, nên kéo sang phải là tên
+          nhóm trôi ra khỏi vùng nhìn trong khi cột định danh vẫn ghim — người
+          đọc nhìn một dãy dòng mà không biết chúng thuộc lệnh nào. Bám mép
+          trái thì tên đi theo mắt, còn phần tóm tắt bên phải vẫn trôi (nó là
+          chữ đọc một lần, không phải mốc định vị).
+        */}
+        {/* Nền ĐẶC + chừa lề phải: phần tóm tắt bên phải trôi qua dưới tên
+            nhóm, nền trong suốt là hai dòng chữ chồng nhau. */}
+        <span className="sticky left-0 inline-block bg-[var(--surface-raised)] pr-3">
+          {step != null && (
+            <span className="mr-[9px] inline-block h-[17px] w-[17px] rounded-[3px] border border-[var(--act-line)] bg-[var(--act-wash)] text-center font-[family-name:var(--font-mono)] text-[10px] leading-[15px] font-bold text-[var(--act)]">
+              {step}
+            </span>
+          )}
+          {name}
+        </span>
         {meta && (
           <span className="float-right text-[11.5px] font-medium tracking-[.03em] text-[var(--ink-3)] normal-case">
             {meta}
@@ -129,24 +175,33 @@ export function GroupRow({
 export function Row({
   selected = false,
   onClick,
-  id,
+  anchor,
   children,
 }: {
   selected?: boolean
   onClick?: () => void
-  /** Neo DOM — để màn cuộn tới đúng dòng khi mở bằng link (`?mo=`). */
-  id?: string
+  /**
+   * NEO DOM để cuộn tới đúng dòng khi mở bằng link (`?mo=`).
+   *
+   * Là `data-anchor`, KHÔNG phải `id` (đổi 17/09/2026, chủ dự án: "đôi lúc sẽ
+   * có 1 đơn đặt cho nhiều lsx"). Một bản ghi có thể hiện ở NHIỀU nhóm — đơn
+   * mua chung nằm dưới cả hai lệnh nó mua hộ — và hai dòng cùng một `id` là
+   * DOM không hợp lệ: `getElementById` chỉ thấy cái đầu, còn công cụ kiểm tra
+   * và trình đọc màn hình thì báo lỗi. Thuộc tính `data-` trùng nhau là hợp
+   * lệ, và `querySelector` vẫn trả về dòng đầu tiên — đúng thứ cần để cuộn.
+   */
+  anchor?: string
   children: ReactNode
 }) {
   return (
     <tr
-      id={id}
+      data-anchor={anchor}
       onClick={onClick}
       className={cn(
         'group',
         onClick && 'cursor-pointer',
         selected
-          ? '[&>td]:bg-[var(--act-wash)] [&>td:first-child]:shadow-[inset_2px_0_0_var(--act)]'
+          ? 'k-on [&>td:first-child]:shadow-[inset_2px_0_0_var(--act)]'
           : 'hover:[&>td]:bg-[var(--surface-hover)]',
       )}
     >
@@ -223,7 +278,7 @@ export function TFoot({
     kia; chúng không bao giờ chồng chỗ nhau nên không sinh xung đột mới.
   */
   return (
-    <tfoot className="[&_td]:sticky [&_td]:bottom-0 [&_td]:z-[calc(var(--z-sticky)+2)] [&_td]:h-9 [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold">
+    <tfoot className="[&_td]:sticky [&_td]:bottom-0 [&_td]:z-[calc(var(--z-sticky)_+_2)] [&_td]:h-9 [&_td]:border-t [&_td]:border-[var(--line)] [&_td]:bg-[var(--surface-raised)] [&_td]:px-[var(--pad-x)] [&_td]:font-semibold">
       <tr>
         {label}
         {cells}

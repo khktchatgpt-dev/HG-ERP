@@ -8,15 +8,23 @@ import type { Po } from '@/app/(workspace)/planning/pos/po-types'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 
 /**
- * KHUNG NHÌN CÓ TÊN — chép SAP variant / Dynamics saved view / Odoo favorite.
- *
- * Xem `docs/mua-hang-phieu-mua.md` §4.2. Ba điều màn cũ thiếu mà bốn hệ lớn
- * đều có: khung nhìn ĐẶT TÊN để nhớ, MÃ TRÊN URL để gửi link, và GOM NHÓM là
- * một điều khiển thay vì hai màn cứng.
+ * TRẠNG THÁI XEM của màn Phiếu mua — bộ lọc + gom + sắp, mã hoá lên URL.
  *
  * File này THUẦN: chỉ dữ liệu + hàm mã hoá/giải mã URL + hàm gom. Không React.
  * Lọc thì dùng lại `poMatches` của màn cũ — luật khớp đã có test, không viết
  * bản thứ hai.
+ *
+ * KHUNG NHÌN ĐẶT TÊN ĐÃ GỠ (16/09/2026). Bảy khung nhìn đặt sẵn từng đứng ở
+ * đầu thanh lọc, chép SAP variant / Dynamics saved view. Chủ dự án chốt là
+ * không dùng tới chúng — và chúng làm màn rối theo một cách đo được: mỗi khung
+ * nhìn gói sẵn lọc+gom+sắp, nhưng MỌI mảnh của nó vẫn bày rời ngay cạnh (chip
+ * "Của tôi", ô "Rổ trạng thái", ô "Gom theo"), nên một việc có hai đường làm,
+ * và động vào ô nào thì khung nhìn rơi về "tuỳ chỉnh" — người dùng không bao
+ * giờ biết mình đang đứng ở đâu.
+ *
+ * Đường lùi: `git revert`. Bỏ chúng KHÔNG mất khả năng gửi link — `encodeView`
+ * vốn đã sinh dạng đầy đủ (`?toi=1&gom=lsx`) cho mọi trạng thái không trùng
+ * khung nhìn nào, và đó giờ là dạng duy nhất.
  */
 
 export type GroupBy = 'none' | 'lsx' | 'ncc' | 'trang_thai' | 'phu_trach' | 'tuan_hen'
@@ -44,13 +52,9 @@ export type ViewState = {
   sortBy: SortBy
 }
 
-export type NamedView = {
-  id: string
-  label: string
-  /** Vì sao có khung nhìn này — hiện dưới tên trong menu. */
-  hint: string
-  state: ViewState
-}
+/* ── MẶC ĐỊNH ───────────────────────────────────────────────────────────
+   Hai trạng thái xuất phát, thay cho hai khung nhìn đặt sẵn đã gỡ. Giữ ĐÚNG
+   hành vi cũ, chỉ hết đi qua một cái tên. */
 
 const base = (over: Partial<PoFilterState>): PoFilterState => ({
   ...EMPTY_FILTER,
@@ -58,94 +62,31 @@ const base = (over: Partial<PoFilterState>): PoFilterState => ({
 })
 
 /**
- * BẢY KHUNG NHÌN ĐẶT SẴN. Mỗi cái thay cho đúng một ô số / tab / chip của màn
- * cũ (bảng đối chiếu ở §4.2 của tài liệu), và thêm câu hỏi mà màn cũ không
- * hỏi được — "NCC trễ hẹn, gom theo NCC để gọi điện".
+ * CẢ SỔ, gom theo lệnh sản xuất. Vừa là trạng thái vào trang, vừa là chỗ nút
+ * "Xem tất cả" ở trạng thái rỗng nhảy về.
+ *
+ * KHÔNG TỰ LỌC `mine` NỮA (16/09/2026). Trước đó vào trang là đã lọc sẵn "đơn
+ * tôi phụ trách" — chủ dự án chốt bỏ, và có lý do đo được: sổ 67 đơn mà màn mở
+ * ra chỉ thấy 2, không có gì nói rõ vì sao, nên người dùng đọc thành "hệ thống
+ * mất đơn" chứ không đọc thành "đang lọc". Ai muốn xem việc của mình thì bấm
+ * thẻ "Của tôi" ở đầu trang — một cú bấm, và lúc đó họ BIẾT mình đang lọc.
+ *
+ * Gom theo lệnh thì GIỮ: gom không giấu dòng nào, và nó trả lời đúng câu "đơn
+ * nào của lệnh nào".
  */
-export const NAMED_VIEWS: NamedView[] = [
-  {
-    id: 'toi',
-    label: 'Đơn của tôi',
-    hint: 'Mọi đơn tôi phụ trách, xếp theo lệnh',
-    state: { filter: base({ mine: true }), groupBy: 'lsx', sortBy: 'moi_nhat' },
-  },
-  {
-    id: 'cho-duyet',
-    label: 'Chờ duyệt',
-    hint: 'Đang nằm bàn Giám đốc',
-    state: { filter: base({ bucket: 'pending' }), groupBy: 'none', sortBy: 'moi_nhat' },
-  },
-  {
-    id: 'chua-gui',
-    label: 'Đã duyệt · chưa gửi NCC',
-    hint: 'Ký rồi mà chưa ra khỏi cửa — chỗ đơn nằm im lâu nhất',
-    state: { filter: base({ bucket: 'ready' }), groupBy: 'ncc', sortBy: 'moi_nhat' },
-  },
-  {
-    id: 'tre',
-    label: 'NCC trễ hẹn',
-    hint: 'Đã gửi, qua ngày hẹn chưa về đủ — gom theo NCC để gọi',
-    state: { filter: base({ bucket: 'inflight', late: true }), groupBy: 'ncc', sortBy: 'hen_gan' }, // prettier-ignore
-  },
-  {
-    id: 'dang-ve',
-    label: 'Đang về',
-    hint: 'Xếp theo tuần hẹn giao để chuẩn bị nhận',
-    state: {
-      filter: base({ bucket: 'inflight' }),
-      groupBy: 'tuan_hen',
-      sortBy: 'hen_gan',
-    },
-  },
-  {
-    id: 'chua-hen',
-    label: 'Chưa hẹn giao',
-    hint: 'Đơn đang mở mà không có ngày — mọi cảnh báo trễ đều bỏ qua',
-    state: { filter: base({ noEta: true }), groupBy: 'none', sortBy: 'moi_nhat' },
-  },
-  {
-    id: 'tat-ca',
-    label: 'Tất cả',
-    hint: 'Toàn bộ sổ, xếp theo lệnh',
-    state: { filter: base({}), groupBy: 'lsx', sortBy: 'moi_nhat' },
-  },
-]
-
-export const DEFAULT_VIEW_ID = 'toi'
-
-export function namedView(id: string | null | undefined): NamedView | null {
-  return NAMED_VIEWS.find((v) => v.id === id) ?? null
+export const DEFAULT_VIEW: ViewState = {
+  filter: base({}),
+  groupBy: 'lsx',
+  sortBy: 'moi_nhat',
 }
 
-/** Trạng thái đang xem có TRÙNG HỆT một khung nhìn đặt sẵn không → trả id. */
-export function matchNamedView(s: ViewState): string | null {
-  const hit = NAMED_VIEWS.find((v) => sameState(v.state, s))
-  return hit?.id ?? null
-}
-
-function sameState(a: ViewState, b: ViewState): boolean {
-  const f = a.filter
-  const g = b.filter
-  return (
-    a.groupBy === b.groupBy &&
-    a.sortBy === b.sortBy &&
-    f.q.trim() === g.q.trim() &&
-    f.bucket === g.bucket &&
-    f.supplierId === g.supplierId &&
-    f.lsxId === g.lsxId &&
-    f.fromDate === g.fromDate &&
-    f.toDate === g.toDate &&
-    f.type === g.type &&
-    f.mine === g.mine &&
-    f.late === g.late &&
-    f.noEta === g.noEta
-  )
-}
+/** Cùng một thứ, tên riêng cho chỗ gọi nói rõ ý "về cả sổ". */
+export const ALL_VIEW = DEFAULT_VIEW
 
 /* ── URL ────────────────────────────────────────────────────────────────
-   Khung nhìn đặt sẵn → `?nhin=<id>`. Sửa đi thì rớt về dạng đầy đủ để vẫn gửi
-   link được. Tên tham số tiếng Việt không dấu, ngắn, đọc được trên thanh địa
-   chỉ — người dùng ERP dán link vào Zalo suốt. */
+   Mọi trạng thái xem đều mã hoá thành tham số đầy đủ (`?toi=1&gom=lsx`). Tên
+   tham số tiếng Việt không dấu, ngắn, đọc được trên thanh địa chỉ — người
+   dùng ERP dán link vào Zalo suốt. */
 
 const BUCKETS = new Set<string>(['all', ...PO_BUCKETS.map((b) => b.key)])
 const GROUPS = new Set<string>(Object.keys(GROUP_LABEL))
@@ -163,8 +104,6 @@ const YMD = new RegExp(String.raw`^\d{4}-\d{2}-\d{2}$`)
 const isYmd = (v?: string): boolean => !!v && YMD.test(v)
 
 export function decodeView(sp: Record<string, string | undefined>): ViewState {
-  const named = namedView(sp.nhin)
-  if (named) return named.state
   const f: PoFilterState = {
     q: sp.q ?? '',
     bucket: (BUCKETS.has(sp.trang_thai ?? '') ? sp.trang_thai : 'all') as PoBucket,
@@ -177,6 +116,8 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
     toDate: isYmd(sp.den) ? sp.den! : '',
     mine: sp.toi === '1',
     late: sp.tre === '1',
+    lateSide:
+      sp.tre_ben === 'sent' || sp.tre_ben === 'unsent' ? sp.tre_ben : ('any' as const),
     noEta: sp.chua_hen === '1',
   }
   return {
@@ -187,12 +128,7 @@ export function decodeView(sp: Record<string, string | undefined>): ViewState {
 }
 
 export function encodeView(s: ViewState): string {
-  const named = matchNamedView(s)
   const p = new URLSearchParams()
-  if (named) {
-    p.set('nhin', named)
-    return p.toString()
-  }
   const f = s.filter
   if (f.q.trim()) p.set('q', f.q.trim())
   if (f.bucket !== 'all') p.set('trang_thai', f.bucket)
@@ -203,6 +139,7 @@ export function encodeView(s: ViewState): string {
   if (f.toDate) p.set('den', f.toDate)
   if (f.mine) p.set('toi', '1')
   if (f.late) p.set('tre', '1')
+  if (f.late && f.lateSide !== 'any') p.set('tre_ben', f.lateSide)
   if (f.noEta) p.set('chua_hen', '1')
   if (s.groupBy !== 'none') p.set('gom', s.groupBy)
   if (s.sortBy !== 'moi_nhat') p.set('sap', s.sortBy)
@@ -360,6 +297,7 @@ export const PARAM_KEYS: ReadonlySet<string> = new Set(
         toDate: '2026-12-31',
         mine: true,
         late: true,
+        lateSide: 'sent',
         noEta: true,
       },
       groupBy: 'ncc',

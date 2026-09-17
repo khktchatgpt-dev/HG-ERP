@@ -267,6 +267,64 @@ export function Empty({
  * thành khối riêng chiếm thêm một hàng: nó là DANH TÍNH của trang, không
  * phải một mục nội dung.
  */
+/**
+ * MỘT DỮ KIỆN đầu trang. Không `onClick` thì là chữ thuần, y như trước.
+ *
+ * Có `onClick` thì thành nút — nhưng vẫn giữ nguyên hình chữ: đây là dải nhận
+ * diện, không phải hàng nút. Dấu hiệu bấm được nằm ở gạch chân mờ khi rê chuột
+ * và ở nền nhạt khi đang chọn, đúng luật "nền đặc = bấm được" (không tô đặc
+ * `--act` cho thứ chỉ là bộ lọc đang bật).
+ */
+function Fact({
+  f,
+  num = false,
+}: {
+  f: {
+    label: string
+    value: ReactNode
+    tone?: Tone
+    onClick?: () => void
+    on?: boolean
+  }
+  num?: boolean
+}) {
+  const value = (
+    <b
+      className={cn(
+        num && 'num',
+        'font-semibold',
+        f.tone === 'stop'
+          ? 'text-[var(--stop)]'
+          : f.tone === 'warn'
+            ? 'text-[var(--warn)]'
+            : 'text-[var(--ink)]',
+      )}
+    >
+      {f.value}
+    </b>
+  )
+  if (!f.onClick) {
+    return (
+      <span>
+        {f.label} {value}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      aria-pressed={f.on}
+      onClick={f.onClick}
+      className={cn(
+        '-mx-[5px] rounded-[var(--radius)] px-[5px] hover:bg-[var(--surface-hover)]',
+        f.on && 'bg-[var(--act-wash)] font-semibold text-[var(--act-text)]',
+      )}
+    >
+      {f.label} {value}
+    </button>
+  )
+}
+
 export function ScreenHeader({
   eyebrow,
   title,
@@ -281,7 +339,23 @@ export function ScreenHeader({
   title: ReactNode
   status?: ReactNode
   chain?: ReactNode
-  facts?: { label: string; value: ReactNode; tone?: Tone }[]
+  /**
+   * Dữ kiện đầu trang. Có `onClick` = con số ĐƯA ĐI ĐƯỢC: bấm là lọc danh
+   * sách xuống đúng chừng ấy dòng.
+   *
+   * Vì sao đáng thêm (đo 16/09/2026 ở `/mua-hang/don`): bốn dữ kiện chỉ đọc ở
+   * đây lặp lại đúng số của ba chip lọc ngay bên dưới, nên cùng một khái niệm
+   * hiện hai lần — một lần bấm được, một lần không. Cho chính chúng bấm được
+   * thì bỏ được hàng chip trùng, và con số giữ đúng lời hứa của nó.
+   */
+  facts?: {
+    label: string
+    value: ReactNode
+    tone?: Tone
+    onClick?: () => void
+    /** Đang là bộ lọc hiện hành — chỉ có nghĩa khi có `onClick`. */
+    on?: boolean
+  }[]
   actions?: ReactNode
   children?: ReactNode
   /**
@@ -307,21 +381,7 @@ export function ScreenHeader({
           {facts && (
             <span className="flex flex-wrap gap-x-[16px] text-[var(--fs-sm)] text-[var(--ink-2)]">
               {facts.map((f, i) => (
-                <span key={i}>
-                  {f.label}{' '}
-                  <b
-                    className={cn(
-                      'num font-semibold',
-                      f.tone === 'stop'
-                        ? 'text-[var(--stop)]'
-                        : f.tone === 'warn'
-                          ? 'text-[var(--warn)]'
-                          : 'text-[var(--ink)]',
-                    )}
-                  >
-                    {f.value}
-                  </b>
-                </span>
+                <Fact key={i} f={f} num />
               ))}
             </span>
           )}
@@ -348,21 +408,7 @@ export function ScreenHeader({
           {facts && (
             <div className="mt-[11px] flex flex-wrap gap-[22px] text-[var(--fs-sm)] text-[var(--ink-2)]">
               {facts.map((f, i) => (
-                <span key={i}>
-                  {f.label}{' '}
-                  <b
-                    className={cn(
-                      'font-semibold',
-                      f.tone === 'stop'
-                        ? 'text-[var(--stop)]'
-                        : f.tone === 'warn'
-                          ? 'text-[var(--warn)]'
-                          : 'text-[var(--ink)]',
-                    )}
-                  >
-                    {f.value}
-                  </b>
-                </span>
+                <Fact key={i} f={f} />
               ))}
             </div>
           )}

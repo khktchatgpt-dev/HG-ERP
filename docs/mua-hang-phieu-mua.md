@@ -88,7 +88,7 @@ InspectPanel   đơn đang chọn: đến lượt ai · hai trục trạng thái
 StatusBar
 ```
 
-### 4.2 Khung nhìn có tên — chép SAP variant / Dynamics saved view
+### 4.2 Khung nhìn có tên — ĐÃ GỠ 16/09/2026, xem mục 7
 
 Bảy khung nhìn đặt sẵn, mỗi cái là một tổ hợp lọc + gom + sắp, và **mã nằm trên
 URL** (`?nhin=cho-duyet`). Sửa lọc đi thì URL đổi sang dạng đầy đủ
@@ -180,3 +180,88 @@ một đơn và hỏi "kịp không". Màn cũ chỉ sửa được trong thẻ 
 `po-filter.ts` (rổ, khớp lọc, đếm), `pos-groups.ts` (gom theo lệnh, tiền theo tệ),
 `lib/po-status`, `lib/late-risk`, `lib/po-fit`, `lib/supply-watch`. Màn mới chỉ
 thêm một lớp mỏng: khung nhìn có tên ↔ URL, và gom theo bốn trục còn lại.
+
+---
+
+## 7. Sửa lại 16/09/2026 — gỡ chỗ chồng chéo
+
+Chủ dự án chấm màn là "khá rối và chưa hợp lí". Đo trên mã: **23 điều khiển trên
+bốn dải** trước khi lưới bắt đầu, và **một việc có hai đường làm**.
+
+### 7.1 Lỗi nằm trong chính tài liệu này
+
+Hai mục ở trên nói ngược nhau, và người viết mã làm cả hai:
+
+- **§4.2** — bảng khung nhìn có cột *"Thay cho thứ gì ở màn cũ"*: chip "Của
+  tôi", bốn ô số, bảy tab vòng đời.
+- **§5** — bản đồ tính năng: *"Tìm / NCC / Loại / Của tôi / Chưa hẹn / Bỏ lọc —
+  **giữ nguyên**"*.
+
+Một mục nói THAY, mục kia nói GIỮ. Kết quả là màn có đủ cả hai: bảy khung nhìn
+gói sẵn lọc+gom+sắp, và ngay cạnh là từng mảnh rời của chính chúng.
+
+| Khung nhìn | Làm lại được bằng | Ở đâu |
+|---|---|---|
+| Đơn của tôi | chip **Của tôi** | hàng 2 |
+| NCC trễ hẹn | chip **Quá hẹn** | hàng 2 |
+| Chưa hẹn giao | chip **Chưa hẹn giao** | hàng 2 |
+| Chờ duyệt · Đã duyệt chưa gửi · Đang về | ô **Rổ trạng thái** | hàng 1 |
+| phần gom của mọi khung nhìn | ô **Gom theo** | hàng 2 |
+
+Động vào bất kỳ ô nào thì khung nhìn rơi về "tuỳ chỉnh", nên người dùng không
+bao giờ biết mình đang đứng ở đâu.
+
+### 7.2 Sáu việc đã làm
+
+Giữ nguyên bố cục — vẫn header + hai hàng lọc + bảng + khay. Chỉ gỡ chỗ trùng.
+
+| # | Việc | Vì sao |
+|---|---|---|
+| 1 | **Gỡ khung nhìn đặt tên** (cả `?nhin=`) | Chủ dự án chốt là dùng chip và ô lọc rời. Link vẫn gửi được: `encodeView` vốn đã sinh dạng đầy đủ |
+| 2 | **Bốn số ở header bấm được** | Chúng lặp đúng số của ba chip ngay dưới — một lần bấm được, một lần không |
+| 3 | **Bỏ chip "Quá hẹn"** | Nó đếm `late + lateUnsent` gộp, header tách hai; hai chỗ hai số cho cùng một khái niệm |
+| 4 | **Sắp xếp + Cột + Dày → nút "Hiển thị"** | Ba tuỳ chỉnh hiển thị, đặt một lần rồi thôi, không đứng ngang hàng với lọc |
+| 5 | **Ngày lập + Loại đơn → nút "Lọc thêm"** có số | Ba bộ lọc dùng thưa nhất chiếm chỗ ngang ô hay dùng nhất |
+| 6 | **"Bỏ lọc" luôn hiện, khoá khi rỗng** | Nút hiện/biến mất làm cả hàng bên phải nhảy ngang |
+
+**Gom theo Ở LẠI ngoài.** Nó là câu hỏi nghiệp vụ — xem theo lệnh hay theo nhà
+cung cấp đổi hẳn cách đọc bảng — không phải tuỳ chỉnh hiển thị.
+
+Kết quả: **hai hàng lọc từ 16 điều khiển còn 10**, và không còn chỗ nào nói hai
+lần. Số dải giữ nguyên 4 — nén dải là thiết kế lại, không phải cải thiện.
+
+### 7.3 Trục `lateSide` — con số phải giữ lời hứa
+
+Việc 2 lộ ra một lỗi cũ hơn: `countPos` tách `late` (đơn đã gửi, lỗi ở nhà cung
+cấp) khỏi `lateUnsent` (đơn còn nằm ở mình) **từ 05/09**, nhưng `poMatches` thì
+không tách. Nên thẻ "NCC trễ hẹn" đếm 6 mà bấm vào ra 9.
+
+`PoFilterState.lateSide: 'any' | 'sent' | 'unsent'` vá đúng chỗ đó, mặc định
+`'any'` nên màn cũ `/planning/pos` không đổi gì. Có test canh cặp đếm–lọc trong
+`po-filter.test.ts`.
+
+### 7.4 Đợt hai 16/09/2026 — hành động và cột
+
+Chủ dự án chấm tiếp: _"màn này chỉ có thể thao tác để vào trang chi tiết"_,
+_"nên tối giản thông tin vì đã có trang chi tiết rồi"_, _"bỏ tự lọc khi mới vào
+trang đi"_. Nền đối chiếu ERP cho đợt này ở
+[`quan-ly-don-mua-doi-chieu-erp.md`](./quan-ly-don-mua-doi-chieu-erp.md).
+
+| Việc | Trước | Sau |
+| --- | --- | --- |
+| **Thanh hành động** | 13 hành động nằm trong khay, khay chỉ mở khi bấm chọn dòng — mở màn ra không thấy nút nào | Thanh LUÔN HIỆN trên đầu bảng; chưa chọn thì xám kèm "Chọn một đơn trong bảng trước". Khay còn đúng nút chính |
+| **Bàn giao** | chỉ ở trang chi tiết — chuyển 12 đơn là mở 12 trang | Hành động hạng nhất, có ở mọi bước còn sống, chạy hàng loạt |
+| **Hàng loạt** | một hành động, đòi mọi đơn cùng bước | đủ danh sách, lý do khoá đếm được ("1/2 đơn… lẫn 2 bước"); Bàn giao chạy được cả khi lẫn bước |
+| **Cột "Chuỗi liên kết"** | `<mã đơn khách> › <mã lệnh>`, chữ mờ, không bấm được | cột **"Lệnh SX"**, mã lệnh bấm được để lọc cả màn về lệnh đó |
+| **Lọc thêm** | ba ô ngày/loại nằm trong một `Sheet` trượt ra che màn | HÀNG LỌC PHỤ mở tại chỗ, đẩy bảng xuống 33px rồi trả lại — đang lọc thì phải nhìn được danh sách đổi theo từng ô mình chỉnh (SAP Fiori "Adapt filters") |
+| **Bộ cột mặc định** | 8 cột | **6**: NCC · Lệnh SX · Trạng thái · Hẹn giao · Phụ trách · Giá trị. "Về kho", "Kịp SX?", "Ngày tạo" bật lại ở hộp Hiển thị |
+| **Xoá đơn** | nút `Xoá nháp` CHỈ tồn tại ở bước nháp; các bước sau biến mất hẳn nên tạo nhầm rồi lỡ gửi duyệt là tìm không ra | nút có mặt ở MỌI bước, khoá thì chỉ đường: chờ duyệt → "Rút về nháp trước", đã gửi → "dùng Huỷ đơn", đã đóng → "hết đường". Luật sổ không đổi: chỉ nháp mới xoá thật |
+| **Vào trang** | lọc sẵn `mine` — sổ 67 đơn mà màn mở ra chỉ thấy 2 | cả sổ, gom theo lệnh. Muốn xem việc mình thì bấm thẻ "Của tôi" |
+
+Hai điều rút ra, đáng nhớ hơn từng việc:
+
+- **Lọc sẵn mà không nói là lọc thì đọc thành mất dữ liệu.** Đây là cùng một lỗi
+  với "con số là lời hứa", chỉ ở chiều ngược: màn hứa đang bày cả sổ trong khi
+  nó bày một phần.
+- **Tối giản đúng chỗ là đổi MẶC ĐỊNH, không phải bỏ tính năng.** Ba cột rời
+  khỏi bộ mặc định vẫn bật lại được; người đã lưu bộ cột riêng không bị đụng.
