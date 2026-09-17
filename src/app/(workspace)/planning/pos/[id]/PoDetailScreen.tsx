@@ -892,11 +892,25 @@ export function PoDetailScreen({
           16/09/2026 cả ba trục đều tô xanh `--act` — cùng màu nút chính — nên
           không phân biệt được cái nào bấm được, cái nào chỉ để đọc.
         */}
+        {/*
+          MỐC THẬT — cùng luật với màn chứng từ ở khu Mua hàng (17/09/2026).
+          Ba bước có cột lưu mốc; trống = bước chưa từng chạy, dải không được
+          tick. "Chờ duyệt" và "Đang về" không có cột nào nên truyền `undefined`
+          (không kết luận). Hai màn nói về cùng một đơn thì phải nói một giọng.
+        */}
         <StatusTrack
           label="Trạng thái đơn"
           steps={DOC_STEPS}
           at={docStepAt}
           tone={poTrackStep(po.status).tone}
+          marks={[
+            day(po.created_at),
+            undefined,
+            po.approved_at ? day(po.approved_at) : null,
+            po.ordered_at ? day(po.ordered_at) : null,
+            po.confirmed_at ? day(po.confirmed_at) : null,
+            undefined,
+          ]}
         />
         <StatusTrack
           label="Nhận hàng"

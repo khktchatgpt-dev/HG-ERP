@@ -1260,11 +1260,28 @@ export function DonChungTuScreen(p: Props) {
       >
         {po && (
           <>
+            {/*
+              MỐC THẬT CHO TỪNG BƯỚC — xem `marks` ở `StatusTrack`.
+
+              Ba bước có cột lưu mốc (`approved_at`, `ordered_at`,
+              `confirmed_at`); trống nghĩa là bước đó chưa từng chạy, và dải
+              phải nói ra thay vì tick xanh. Hai bước "Chờ duyệt" và "Đang
+              giao" không có cột nào — truyền `undefined` để dải không kết luận
+              gì về chúng, đúng hơn là bịa ra một dấu ✓ hay một dấu hỏi.
+            */}
             <StatusTrack
               label="Trạng thái đơn"
               steps={[...PO_TRACK_STEPS]}
               at={track.at}
               tone={track.tone}
+              marks={[
+                dmy(po.created_at),
+                undefined,
+                po.approved_at ? dmy(po.approved_at) : null,
+                po.ordered_at ? dmy(po.ordered_at) : null,
+                po.confirmed_at ? dmy(po.confirmed_at) : null,
+                undefined,
+              ]}
               terminal={track.terminal}
             />
             <StatusTrack
