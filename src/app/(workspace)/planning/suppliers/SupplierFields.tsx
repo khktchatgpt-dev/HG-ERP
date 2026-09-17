@@ -49,6 +49,7 @@ export type SupplierFormValues = {
   country?: string | null
   registered_address?: string | null
   contact_name?: string | null
+  contact_phone?: string | null
   email?: string | null
   phone?: string | null
   address?: string | null
@@ -109,6 +110,7 @@ export function toSupplierPayload(v: SupplierFormValues): Record<string, unknown
     country: s(v.country),
     registered_address: s(v.registered_address),
     contact_name: s(v.contact_name),
+    contact_phone: s(v.contact_phone),
     email: (v.email ?? '').trim(),
     phone: s(v.phone),
     address: s(v.address),
@@ -287,7 +289,15 @@ export function SupplierFields({
             onChange={(e) => set('contact_name', e.target.value)}
           />
         </Field>
-        <Field label="Điện thoại">
+        <Field label="Số máy người liên hệ" hint="Máy trực tiếp, nếu có.">
+          <Input
+            maxLength={30}
+            className="t-data"
+            value={txt('contact_phone')}
+            onChange={(e) => set('contact_phone', e.target.value)}
+          />
+        </Field>
+        <Field label="Điện thoại công ty">
           <Input
             maxLength={30}
             className="t-data"

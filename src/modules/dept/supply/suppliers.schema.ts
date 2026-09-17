@@ -32,6 +32,8 @@ export const supplierCreateSchema = z.object({
    * đàng hoàng mà vẫn đi lạc.
    */
   contact_name: optText(150),
+  /** SỐ MÁY TRỰC TIẾP của người đó — khác số tổng đài ở `phone`. */
+  contact_phone: optText(30),
   email: z.string().trim().email().optional().or(z.literal('')).nullable(),
   phone: optText(30),
   address: optText(500), // địa chỉ giao dịch chính (tương thích cũ)
