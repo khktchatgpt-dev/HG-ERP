@@ -39,7 +39,20 @@ const ROLE_LABEL: Record<Role, string> = {
   manager: 'Quản lý',
   employee: 'Nhân viên',
 }
-type StatusFilter = 'all' | 'active' | 'inactive' | 'deleted'
+/**
+ * 'dang_dung' = hoạt động + đã khoá, KHÔNG gồm đã xoá — và là mặc định
+ * (17/09/2026, chủ dự án: "những tài khoản chuyển qua đã xóa … để không hiện
+ * trên hệ thống").
+ *
+ * Tài khoản đã xoá vốn đã biến khỏi mọi ô chọn của app (mọi chỗ nạp người đều
+ * đi qua `active_only`), nhưng danh sách này thì bày cả — nên người quản trị
+ * mở màn ra vẫn đọc thấy tên người đã nghỉ nằm giữa người đang làm.
+ *
+ * KHÔNG xoá cứng khỏi DB: tên người lập/người duyệt trên chứng từ cũ tra ngược
+ * qua chính bản ghi này; xoá hẳn là mấy trăm chứng từ mất tên người chịu trách
+ * nhiệm. Chọn "Đã xoá" thì vẫn xem và khôi phục được.
+ */
+type StatusFilter = 'dang_dung' | 'all' | 'active' | 'inactive' | 'deleted'
 type RoleFilter = 'all' | Role
 type DeptFilter = string // 'all' hoặc '' hoặc dept id
 
@@ -76,7 +89,7 @@ export function UsersManager({
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all')
   const [deptFilter, setDeptFilter] = useState<DeptFilter>('all')
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('dang_dung')
 
   const deptName = (id: string | null) =>
     departments.find((d) => d.id === id)?.name ?? '—'
@@ -86,6 +99,7 @@ export function UsersManager({
     return users.filter((u) => {
       if (roleFilter !== 'all' && u.role !== roleFilter) return false
       if (deptFilter !== 'all' && (u.department_id ?? '') !== deptFilter) return false
+      if (statusFilter === 'dang_dung' && u.deleted_at) return false
       if (statusFilter === 'active' && (!u.is_active || u.deleted_at)) return false
       if (statusFilter === 'inactive' && (u.is_active || u.deleted_at)) return false
       if (statusFilter === 'deleted' && !u.deleted_at) return false
@@ -408,7 +422,8 @@ export function UsersManager({
   ]
 
   const statusOptions = [
-    { value: 'all' as const, label: 'Mọi trạng thái' },
+    { value: 'dang_dung' as const, label: 'Đang dùng' },
+    { value: 'all' as const, label: 'Kể cả đã xoá' },
     { value: 'active' as const, label: 'Hoạt động' },
     { value: 'inactive' as const, label: 'Đã khoá' },
     { value: 'deleted' as const, label: 'Đã xoá' },
@@ -487,13 +502,13 @@ export function UsersManager({
               {(q ||
                 roleFilter !== 'all' ||
                 deptFilter !== 'all' ||
-                statusFilter !== 'all') && (
+                statusFilter !== 'dang_dung') && (
                 <button
                   onClick={() => {
                     setQ('')
                     setRoleFilter('all')
                     setDeptFilter('all')
-                    setStatusFilter('all')
+                    setStatusFilter('dang_dung')
                   }}
                   className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
                 >
