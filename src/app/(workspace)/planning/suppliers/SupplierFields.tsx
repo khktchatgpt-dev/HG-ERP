@@ -48,6 +48,7 @@ export type SupplierFormValues = {
   legal_rep?: string | null
   country?: string | null
   registered_address?: string | null
+  contact_name?: string | null
   email?: string | null
   phone?: string | null
   address?: string | null
@@ -107,6 +108,7 @@ export function toSupplierPayload(v: SupplierFormValues): Record<string, unknown
     legal_rep: s(v.legal_rep),
     country: s(v.country),
     registered_address: s(v.registered_address),
+    contact_name: s(v.contact_name),
     email: (v.email ?? '').trim(),
     phone: s(v.phone),
     address: s(v.address),
@@ -273,6 +275,18 @@ export function SupplierFields({
       </Block>
 
       <Block icon={Contact} title="Liên hệ">
+        {/*
+          NGƯỜI LIÊN HỆ đứng TRƯỚC số máy: người mua gọi cho MỘT NGƯỜI, số
+          máy chỉ là đường tới người đó. Thiếu ô này thì tên người bị nhét
+          vào ô Ghi chú — chỗ không ai tra khi đang cầm điện thoại.
+        */}
+        <Field label="Người liên hệ" hint="Tên người bên NCC mình gọi.">
+          <Input
+            maxLength={150}
+            value={txt('contact_name')}
+            onChange={(e) => set('contact_name', e.target.value)}
+          />
+        </Field>
         <Field label="Điện thoại">
           <Input
             maxLength={30}
