@@ -211,7 +211,22 @@ export function Row({
 }
 
 /**
- * Ô. `grow` cho cột co giãn (tên vật tư) — cần `max-w-0` để ellipsis chạy.
+ * Ô. `grow` cho cột CO GIÃN — tên vật tư, tên nhà cung cấp.
+ *
+ * CỘT TÊN ĐƯỢC ƯU TIÊN CHIỀU RỘNG, KHÔNG PHẢI CỘT SỐ (sửa 17/09/2026).
+ *
+ * Bản trước viết `w-1/3`, và trong bảng `table-layout: auto` thì đó chỉ là một
+ * lời ĐỀ NGHỊ: trình duyệt chia cột theo bề rộng nội dung, mà nội dung cột tên
+ * có `overflow-hidden` + ellipsis nên co được về 0, còn cột ngày/tiền/mã thì
+ * `whitespace-nowrap` nên không co. Kết quả đo trên màn Nhà cung cấp ở khung
+ * 693px: cột "Nhà cung cấp" được **110px** (đọc ra "BAO BÌ ĐẠI THẮN") trong
+ * khi "Đơn gần nhất" chiếm **205px**. Bảng còn chưa tràn khung — chỗ thì đủ,
+ * chỉ là chia ngược. Cùng lỗi ở Vật tư, Bảng giá, Nhận hàng, Đơn mua.
+ *
+ * `w-full` đảo thứ tự ưu tiên đó: cột tên xin toàn bộ phần dư, các cột khác
+ * lấy đúng bề rộng nội dung. `min-w` là SÀN đọc được — hết chỗ thì bảng cuộn
+ * ngang chứ không bóp tên còn ba chữ. Màn có tên dài (vật tư) nới sàn bằng
+ * `--col-grow`. `max-w-0` giữ nguyên vì ellipsis cần nó.
  *
  * `pin` ghim cột vào mép trái khi bảng cuộn ngang. Dùng cho cột ĐỊNH DANH
  * (mã đơn, mã vật tư): đo ở 1280px thì bảng 900px+ phải cuộn ngang và cột
@@ -224,6 +239,7 @@ export function Cell({
   grow = false,
   muted = false,
   pin = false,
+  title,
   className,
 }: {
   children: ReactNode
@@ -231,14 +247,20 @@ export function Cell({
   grow?: boolean
   muted?: boolean
   pin?: boolean
+  /**
+   * Chữ đầy đủ hiện khi rê chuột. Ô nào bị chặn bề rộng thì PHẢI có: cắt chữ
+   * mà không có đường đọc lại nguyên văn là giấu dữ liệu, không phải rút gọn.
+   */
+  title?: string
   className?: string
 }) {
   return (
     <td
+      title={title}
       className={cn(
         'h-[var(--row-h)] overflow-hidden border-b border-[var(--hair)] px-[var(--pad-x)] text-ellipsis whitespace-nowrap',
         num && 'num',
-        grow && 'w-1/3 max-w-0',
+        grow && 'w-full max-w-0 min-w-[var(--col-grow,200px)]',
         muted && 'text-[11.5px] text-[var(--ink-3)]',
         // Nền đặc bắt buộc: trong suốt thì nội dung cuộn qua hiện chồng lên.
         pin &&
