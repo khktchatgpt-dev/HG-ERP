@@ -288,7 +288,14 @@ export function NoticeBar({
   tone?: Tone
   tag: string
   children: ReactNode
-  action: { label: string; onClick?: () => void }
+  /**
+   * Đường đi tiếp. KHÔNG CÓ = thanh chỉ để BIẾT.
+   *
+   * Trước 17/09/2026 prop này bắt buộc, nên mấy thanh thuần thông báo ("sổ
+   * chạm trần", "chưa dựng") phải bịa ra một nhãn rồi để trống `onClick` —
+   * ra một cái nút gạt người: trông bấm được, bấm thì không có gì xảy ra.
+   */
+  action?: { label: string; onClick?: () => void }
 }) {
   return (
     <div
@@ -308,15 +315,17 @@ export function NoticeBar({
         {tag}
       </span>
       <span className="text-[var(--ink-2)]">{children}</span>
-      <button
-        onClick={action.onClick}
-        className={cn(
-          'ml-auto text-[12px] font-semibold whitespace-nowrap hover:underline',
-          TONE_TEXT[tone],
-        )}
-      >
-        {action.label} →
-      </button>
+      {action && (
+        <button
+          onClick={action.onClick}
+          className={cn(
+            'ml-auto text-[12px] font-semibold whitespace-nowrap hover:underline',
+            TONE_TEXT[tone],
+          )}
+        >
+          {action.label} →
+        </button>
+      )}
     </div>
   )
 }
@@ -1061,7 +1070,7 @@ export function Lookup<T>({
                 onMouseEnter={() => setIdx(i)}
                 className={cn(
                   'block w-full border-b border-[var(--hair)] px-3 py-[6px] text-left last:border-b-0',
-                  'text-[var(--fs-sm)] leading-[1.45]',
+                  'leading-[1.45] text-[var(--fs-sm)]',
                   i === idx
                     ? 'bg-[var(--act-wash)] text-[var(--act-text)]'
                     : 'text-[var(--ink)]',

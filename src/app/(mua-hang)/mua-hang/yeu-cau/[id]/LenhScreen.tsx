@@ -1,8 +1,9 @@
 'use client'
 
+import { useState, type CSSProperties } from 'react'
 import type { LsxSupplyDetail } from '@/modules/dept/supply/lsx-supply.service'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
-import { useLocalPref } from '@/app/(mua-hang)/_shell/use-local-pref'
+import { useLocalPref } from '@/lib/use-local-pref'
 import {
   Btn,
   Cell,
@@ -17,6 +18,7 @@ import {
   Row,
   ScreenFrame,
   ScreenHeader,
+  Sheet,
   StatusBar,
   TFoot,
   THead,
@@ -36,17 +38,46 @@ const conLai = (iso: string | null, today: string): number | null => {
 }
 
 /**
- * SẢN PHẨM CỦA LỆNH — dải ảnh, dựng 15/09/2026 theo báo cáo của chủ dự án
- * ("theo các lsx bạn bổ sung thiếu mất ảnh sản phẩm").
+ * TỔNG SỐ LƯỢNG THEO ĐVT — cộng riêng từng đơn vị, KHÔNG quy đổi.
  *
- * Trước đó màn chỉ đếm "Sản phẩm 17" và hết. Con số đó không nói được lệnh
- * này làm CÁI GÌ, mà đấy lại là thứ người mua cần khi cầm điện thoại gọi NCC
- * hoặc khi mở cùng lúc ba bốn lệnh ra so.
+ * Dòng tổng trước đây gõ cứng chữ "cái" cho mọi lệnh, trong khi dòng lệnh có
+ * sẵn `unit`: lệnh khai theo Bộ đọc ra "350 cái" là một con số SAI NGHĨA, và
+ * người mua lấy nó đi đặt bao bì. Nhiều ĐVT trên một lệnh thì bày cạnh nhau
+ * ("350 Cái · 12 Bộ") chứ không cộng gộp — cộng Cái với Bộ không ra số nào.
+ */
+function tongTheoDvt(products: LsxSupplyDetail['products']): string {
+  const theo = new Map<string, number>()
+  for (const p of products) {
+    const dv = p.unit?.trim() ?? ''
+    theo.set(dv, (theo.get(dv) ?? 0) + p.qty)
+  }
+  return [...theo].map(([dv, tong]) => `${sl(tong)}${dv ? ` ${dv}` : ''}`).join(' · ')
+}
+
+/** Số lượng luôn hiện, kể cả 0 — `showNum` trả chuỗi rỗng cho 0. */
+const sl = (v: number) => v.toLocaleString('vi-VN')
+
+/**
+ * SẢN PHẨM CỦA LỆNH — MỘT BẢNG, dựng lại 17/09/2026 theo chốt của chủ dự án
+ * ("chuyển về 1 dạng bảng cho tính năng xem ảnh và in lsx").
  *
- * ĐO TRƯỚC KHI DỰNG: 81/110 mã SP trên 19 lệnh đang chạy có ảnh (74%) —
- * đủ dày để dải ảnh có nghĩa. Mã KHÔNG có ảnh vẫn chiếm chỗ và NÓI RA là
- * chưa có, thay vì bị giấu đi: chỗ trống đó là việc của Kỹ thuật, và giấu nó
- * thì không ai biết mà bổ sung.
+ * Bản trước là dải ảnh cuộn ngang, và nó hỏng ở đúng chỗ người mua cần:
+ *
+ *  · SỐ LƯỢNG KHÔNG ĐỌC ĐƯỢC. `×50` in 10,5px màu `--ink-3`, dán chung hàng
+ *    với mã — mà mã lại `truncate`, nên trên thẻ 104px một mã dài đẩy nó sát
+ *    mép. Số lượng là con số nghiệp vụ, không phải chú thích của mã.
+ *  · ĐVT BỊ GÕ CỨNG. Dòng tổng ghi "cái" cho mọi lệnh, kể cả lệnh khai theo
+ *    Bộ — xem `tongTheoDvt`.
+ *  · CUỘN NGANG GIẤU MẤT NỬA LỆNH. Lệnh 17 mã thì quá nửa số lượng nằm ngoài
+ *    khung, không so được mã nào nặng mã nào nhẹ — đúng thứ quyết định vật tư
+ *    nào phải lo trước.
+ *
+ * Bảng giữ lại được ảnh (ô 30px, bấm vào xem lớn) mà vẫn xếp số theo cột, nên
+ * không phải đánh đổi nhận diện lấy con số.
+ *
+ * XEM ẢNH ĐI BẰNG `Sheet` BÁM MÉP PHẢI, không phải lớp phủ giữa màn: chủ dự án
+ * đã chê đúng kiểu đó ("mở modal che hết màn hình… rất nguy hiểm", 15/09/2026).
+ * Bám mép phải thì bảng đơn mua vẫn đọc được bên trái trong lúc soi ảnh.
  */
 function SanPham({
   products,
@@ -57,30 +88,42 @@ function SanPham({
   imageUrls: Record<string, string>
   coDonKhach: boolean
 }) {
-  const [mo, setMo] = useLocalPref('hg.mua-hang.lenh.san-pham', '1')
-  const open = mo === '1'
-  const tongCai = products.reduce((s, p) => s + p.qty, 0)
+  const [pref, setPref] = useLocalPref('hg.mua-hang.lenh.san-pham', '1')
+  // '0' là giá trị thu gọn của bản dải ảnh — người dùng cũ đã có nó trong máy.
+  const mo = pref !== '0'
+  const [xem, setXem] = useState<LsxSupplyDetail['products'][number] | null>(null)
   const thieuAnh = products.filter((p) => !p.image_file_id).length
+  const anhXem = xem?.image_file_id ? imageUrls[xem.image_file_id] : undefined
 
   return (
-    <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]">
+    <div
+      className="flex shrink-0 flex-col border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]"
+      style={
+        {
+          // Bảng PHỤ 5 cột — không cần bề rộng tối thiểu 680px của bảng chính.
+          '--table-min': '460px',
+          '--table-inline-max': '236px',
+        } as CSSProperties
+      }
+    >
       <div className="flex items-center gap-2 text-[var(--fs-sm)]">
         <b className="text-[var(--ink)]">Sản phẩm của lệnh</b>
         <span className="num text-[var(--ink-3)]">
           {products.length} mã
-          {/* `showNum(0)` trả chuỗi rỗng, nên nối thẳng là ra "0 mã · cái". */}
-          {tongCai > 0 && ` · ${showNum(tongCai)} cái`}
+          {products.length > 0 && ` · ${tongTheoDvt(products)}`}
         </span>
         {thieuAnh > 0 && products.length > 0 && (
           <span className="text-[10.5px] text-[var(--warn)]">
             {thieuAnh} mã chưa có ảnh trong hồ sơ SP
           </span>
         )}
-        <span className="ml-auto">
-          <Chip on={open} onClick={() => setMo(open ? '0' : '1')}>
-            {open ? 'Thu gọn' : 'Mở dải ảnh'}
-          </Chip>
-        </span>
+        {products.length > 0 && (
+          <span className="ml-auto">
+            <Chip on={mo} onClick={() => setPref(mo ? '0' : '1')}>
+              {mo ? 'Thu gọn' : 'Mở bảng'}
+            </Chip>
+          </span>
+        )}
       </div>
 
       {products.length === 0 ? (
@@ -95,57 +138,138 @@ function SanPham({
             : 'Lệnh chưa gắn đơn hàng khách và cũng chưa có dòng lệnh nào, nên chưa biết phải làm sản phẩm gì.'}
         </div>
       ) : (
-        open && (
-          <div className="mt-2 flex gap-3 overflow-x-auto pb-1">
-            {products.map((p) => {
-              const src = p.image_file_id ? imageUrls[p.image_file_id] : undefined
-              /*
-                DÒNG LỆNH GÕ TAY thì không trỏ vào hồ sơ SP nào — bấm vào sẽ ra
-                trang lỗi. Thẻ vẫn bày đủ mã, số lượng, tên; chỉ là không bấm
-                được, và màu chữ nói ra điều đó.
-              */
-              const Tag = p.product_id ? 'a' : 'span'
-              return (
-                <Tag
-                  key={p.code}
-                  {...(p.product_id ? { href: `/products/${p.product_id}` } : {})}
-                  title={`${p.code} — ${p.name}`}
-                  className="w-[104px] shrink-0 no-underline"
-                >
-                  <span className="flex h-[78px] w-[104px] items-center justify-center overflow-hidden rounded-[3px] border border-[var(--line)] bg-[var(--surface-hover)]">
-                    {src ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- ảnh ngoài, kích thước theo hồ sơ SP; next/image không thêm được gì ở ô 104px
-                      <img
-                        src={src}
-                        alt={p.code}
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <span className="text-[10.5px] text-[var(--ink-empty)]">
-                        chưa có ảnh
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-1 flex items-baseline gap-1">
-                    <span
-                      className={`num truncate text-[11px] ${p.product_id ? 'text-[var(--act)]' : 'text-[var(--ink-2)]'}`}
-                    >
-                      {p.code}
-                    </span>
-                    <span className="num shrink-0 text-[10.5px] text-[var(--ink-3)]">
-                      ×{showNum(p.qty)}
-                    </span>
-                  </span>
-                  <span className="block truncate text-[10.5px] text-[var(--ink-2)]">
-                    {p.name}
-                  </span>
-                </Tag>
-              )
-            })}
+        mo && (
+          <div className="mt-2 flex flex-col border-t border-[var(--line)]">
+            <Table inline>
+              <THead>
+                <th className="w-[46px]" />
+                <th>Mã SP</th>
+                <th>Tên sản phẩm</th>
+                <th style={{ textAlign: 'right' }}>Số lượng</th>
+                <th className="w-[68px]">ĐVT</th>
+              </THead>
+              <tbody>
+                {products.map((p) => {
+                  const src = p.image_file_id ? imageUrls[p.image_file_id] : undefined
+                  return (
+                    /*
+                      CẢ DÒNG mở ô xem ảnh, không phải riêng cái ảnh: ô ảnh
+                      rộng 30px là đích bấm quá nhỏ, và dòng không có ảnh vẫn
+                      phải mở được — chỗ đó nói ra là hồ sơ SP còn thiếu ảnh,
+                      kèm đường đi bổ sung.
+                    */
+                    <Row key={p.code} onClick={() => setXem(p)}>
+                      <Cell>
+                        <span className="flex h-[26px] w-[30px] items-center justify-center overflow-hidden rounded-[2px] border border-[var(--line)] bg-[var(--surface-hover)]">
+                          {src ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- ảnh ngoài, kích thước theo hồ sơ SP; next/image không thêm được gì ở ô 30px
+                            <img
+                              src={src}
+                              alt=""
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-[9px] text-[var(--ink-empty)]">—</span>
+                          )}
+                        </span>
+                      </Cell>
+                      <Cell>
+                        {p.product_id ? (
+                          /*
+                            Mã đi thẳng vào hồ sơ SP; chặn nổi bọt để bấm mã
+                            không mở kèm ô xem ảnh phía sau lưng.
+                          */
+                          <Code
+                            as="a"
+                            href={`/products/${p.product_id}`}
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                          >
+                            {p.code}
+                          </Code>
+                        ) : (
+                          <span
+                            className="num text-[var(--ink-2)]"
+                            title="Dòng lệnh gõ tay — không trỏ vào hồ sơ SP nào"
+                          >
+                            {p.code}
+                          </span>
+                        )}
+                      </Cell>
+                      <Cell grow>
+                        <span className="truncate" title={p.name}>
+                          {p.name}
+                        </span>
+                      </Cell>
+                      <Cell num>
+                        <Num value={sl(p.qty)} strong />
+                      </Cell>
+                      <Cell muted>{p.unit ?? '—'}</Cell>
+                    </Row>
+                  )
+                })}
+              </tbody>
+              {/*
+                Chân bảng KHÔNG cộng chéo ĐVT — lệnh khai vừa Cái vừa Bộ thì
+                bày hai con số cạnh nhau, chứ một số gộp thì không đọc ra cái
+                gì mà vẫn trông như một con số dùng được.
+              */}
+              <TFoot
+                label={<td colSpan={3}>Cộng {products.length} mã</td>}
+                cells={
+                  <td className="num" colSpan={2}>
+                    {tongTheoDvt(products)}
+                  </td>
+                }
+              />
+            </Table>
           </div>
         )
       )}
+
+      <Sheet
+        open={!!xem}
+        onClose={() => setXem(null)}
+        stakes="nhe"
+        width={460}
+        title={xem?.code ?? ''}
+        subtitle={xem?.name}
+        footer={
+          xem?.product_id ? (
+            <Btn href={`/products/${xem.product_id}`}>Mở hồ sơ sản phẩm</Btn>
+          ) : (
+            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+              Dòng lệnh gõ tay — không trỏ vào hồ sơ SP nào
+            </span>
+          )
+        }
+      >
+        {anhXem ? (
+          // eslint-disable-next-line @next/next/no-img-element -- ảnh ngoài, không biết trước kích thước
+          <img
+            src={anhXem}
+            alt={xem?.code ?? ''}
+            className="max-h-[54vh] w-full rounded-[var(--radius)] border border-[var(--line)] bg-[var(--surface-hover)] object-contain"
+          />
+        ) : (
+          /* Trạng thái rỗng phải nói LÝ DO và VIỆC LÀM TIẾP — ảnh nằm ở hồ sơ
+             SP do Kỹ thuật giữ, nên chỉ đường sang đó chứ không dừng ở "trống". */
+          <div className="rounded-[var(--radius)] border border-dashed border-[var(--line)] px-4 py-8 text-center text-[var(--fs-sm)] text-[var(--ink-3)]">
+            Hồ sơ sản phẩm chưa có ảnh. Kỹ thuật nạp ảnh vào hồ sơ thì màn này hiện theo.
+          </div>
+        )}
+        <div className="mt-3 flex items-baseline gap-4 text-[var(--fs-sm)]">
+          <span className="text-[var(--ink-3)]">Số lượng phải làm</span>
+          <span className="num text-[15px] font-semibold text-[var(--ink)]">
+            {xem ? sl(xem.qty) : ''}
+            {xem?.unit && (
+              <span className="ml-1 text-[11px] font-normal text-[var(--ink-3)]">
+                {xem.unit}
+              </span>
+            )}
+          </span>
+        </div>
+      </Sheet>
     </div>
   )
 }
@@ -232,6 +356,16 @@ export function LenhScreen({
                 thông số ra sao"; màn này trả lời "mua đủ chưa". Không có nút
                 thì người mua phải gõ URL hoặc đi vòng qua khu cũ. */}
             <Btn href={`/mua-hang/yeu-cau/${lsx.id}/ho-so`}>Hồ sơ lệnh</Btn>
+            {/*
+              IN PHIẾU LỆNH — mẫu chính thức xưởng đang cầm (`/print/lsx/[id]`,
+              đã có sẵn từ 0114). Khu Mua hàng trước nay không có đường tới, nên
+              người mua muốn đối chiếu tờ giấy trên tay với màn hình thì phải đi
+              vòng qua khu Bán hàng. Mở TAB MỚI: in xong còn quay lại chỗ đang
+              dở, mà điều hướng cùng tab thì mất bộ lọc đơn đang đặt.
+            */}
+            <Btn onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
+              In LSX
+            </Btn>
             <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
               Báo cáo lệnh
             </Btn>

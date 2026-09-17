@@ -972,6 +972,14 @@
   top: 0;
   z-index: var(--z-sticky);
 }
+/* Ô tiêu đề của CỘT ĐỊNH DANH ghim trái (`<THead pinFirst>`). Phải nằm trên
+   các ô tiêu đề khác, và phải khai Ở ĐÂY: luật `thead th` ngay trên đã đặt
+   z-index với độ ưu tiên (0,2,3), lớp tiện ích Tailwind (0,2,1) không thắng
+   nổi — xem ghi chú ở `THead`. */
+.kit table:not(.k-grid) thead.k-pin1 th:first-child {
+  left: 0;
+  z-index: calc(var(--z-sticky) + 1);
+}
 .kit table:not(.k-grid) tbody td {
   border-bottom: 1px solid var(--hair);
   border-right: 1px solid var(--hair);
@@ -982,12 +990,26 @@
 .kit table:not(.k-grid) tbody td:last-child {
   border-right: 0;
 }
-/* Sọc chẵn: cố ý dùng màu pha trong suốt thay vì một token mới — nó là sắc
-   độ của chính mặt bảng, không phải một màu riêng ai đó cần chỉnh. */
+/* Sọc chẵn: cố ý pha từ chính mặt bảng thay vì thêm một token mới — nó là
+   sắc độ của mặt bảng, không phải một màu riêng ai đó cần chỉnh.
+
+   PHA VỚI --surface-card, KHÔNG PHA VỚI transparent (vá 17/09/2026, chủ dự
+   án: "có lỗi khi kéo bảng"). Nền trong suốt trên một ô GHIM là nền không
+   che được gì: kéo bảng ngang thì chữ của cột bên cạnh chạy dưới cột ghim và
+   hiện xuyên qua, hai dòng chữ chồng lên nhau. Mà luật này thắng về độ ưu
+   tiên (0,3,4) trước lớp `bg-…` của ô ghim (0,1,0), nên ô ghim không tự cứu
+   được mình. Pha với mặt thẻ cho ra ĐÚNG màu cũ trên nền thường, nhưng ĐỤC. */
 .kit table:not(.k-grid) tbody tr:nth-child(even) > td {
-  background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
+  background: color-mix(in srgb, var(--surface-raised) 45%, var(--surface-card));
 }
 .kit table:not(.k-grid) tbody tr:hover > td {
+  background: var(--act-wash);
+}
+/* DÒNG ĐANG CHỌN — khai ở đây chứ không bằng lớp `bg-…` trên `<Row>`: luật
+   sọc chẵn ngay trên có độ ưu tiên (0,3,4), một lớp tiện ích (0,1,1) thua nó,
+   nên dòng đang chọn nằm ở hàng CHẴN thì không đổi màu — cùng họ với bẫy ô
+   ghim đã vá 17/09/2026. Đặt sau sọc chẵn, cùng độ ưu tiên, nên thắng. */
+.kit table:not(.k-grid) tbody tr.k-on > td {
   background: var(--act-wash);
 }
 .kit table:not(.k-grid) tfoot td {
