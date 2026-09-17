@@ -371,3 +371,31 @@ describe('trả lại để sửa — từ vựng và mức độ', () => {
     expect(c.stakes).toBe('nang')
   })
 })
+
+describe('gửi NCC đòi hẹn giao (17/09/2026)', () => {
+  const approved = { own: true, approve: false }
+  it('thiếu hẹn giao thì nút "Gửi nhà cung cấp" KHOÁ, lý do chỉ luôn cách gỡ', () => {
+    const send = actionsFor('approved', { ...approved, noEta: true }).find(
+      (a) => a.id === 'send',
+    )!
+    expect(send.blocked).toMatch(/Chưa có hẹn giao/)
+    expect(send.blocked).toMatch(/Đổi hẹn giao/)
+    // Nút gỡ phải có mặt ngay trong cùng bảng hành động, không thì lời khuyên
+    // kia là lời khuyên suông.
+    expect(
+      actionsFor('approved', { ...approved, noEta: true }).some(
+        (a) => a.id === 'reschedule',
+      ),
+    ).toBe(true)
+  })
+  it('có hẹn giao thì nút mở', () => {
+    const send = actionsFor('approved', approved).find((a) => a.id === 'send')!
+    expect(send.blocked).toBeUndefined()
+  })
+  it('không phải người phụ trách thì lý do đó ĐỨNG TRƯỚC — nói cái gần nhất', () => {
+    const send = actionsFor('approved', { own: false, approve: false, noEta: true }).find(
+      (a) => a.id === 'send',
+    )!
+    expect(send.blocked).toMatch(/người khác phụ trách/)
+  })
+})

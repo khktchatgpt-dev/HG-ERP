@@ -84,6 +84,47 @@ describe('poChecks — năm luật của màn chi tiết cũ', () => {
   })
 })
 
+describe('hẹn giao — nhắc ở bước soạn, CHẶN ở bước gửi NCC (17/09/2026)', () => {
+  const du = [{ unit_price: 1 }]
+  it('đơn nháp thiếu hẹn giao chỉ bị NHẮC, vẫn gửi duyệt được', () => {
+    const c = poChecks(
+      { status: 'draft', production_order_id: 'l', expected_at: null },
+      du,
+      '2026-09-10',
+    )
+    const eta = c.find((x) => /hẹn giao/.test(x.what))!
+    expect(eta.level).toBe('warn')
+    expect(eta.fix).toMatch(/bắt buộc/)
+  })
+  it('đơn ĐÃ DUYỆT thiếu hẹn giao thì thành lỗi CHẶN, và nói cách gỡ', () => {
+    const c = poChecks(
+      { status: 'approved', production_order_id: 'l', expected_at: null },
+      du,
+      '2026-09-10',
+    )
+    const eta = c.find((x) => /hẹn giao/.test(x.what))!
+    expect(eta.level).toBe('stop')
+    expect(eta.fix).toMatch(/Đổi hẹn giao/)
+  })
+  it('đơn đã duyệt mà CÓ hẹn giao thì không còn lỗi chặn nào', () => {
+    const c = poChecks(
+      { status: 'approved', production_order_id: 'l', expected_at: '2026-09-20' },
+      du,
+      '2026-09-10',
+    )
+    expect(c.filter((x) => x.level === 'stop')).toEqual([])
+  })
+  it('gửi NCC rồi thì bảng kiểm tắt — hàng rào đã qua', () => {
+    expect(
+      poChecks(
+        { status: 'ordered', production_order_id: 'l', expected_at: null },
+        du,
+        '2026-09-10',
+      ),
+    ).toEqual([])
+  })
+})
+
 describe('newHeader — loại đơn mặc định', () => {
   it('mặc định THEO LỆNH: đơn nào của phòng cũng gắn lệnh, ô lệnh không được khoá sẵn', () => {
     expect(newHeader({}).poType).toBe('lsx')
