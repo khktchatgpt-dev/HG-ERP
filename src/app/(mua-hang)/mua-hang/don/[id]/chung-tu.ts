@@ -115,13 +115,26 @@ export function poChecks(
   lines: { unit_price: number | null }[],
   today: string,
 ): Check[] {
-  if (po.status !== 'draft' && po.status !== 'pending_approval') return []
+  /*
+    BẢNG KIỂM SỐNG TỚI BƯỚC GỬI NCC, không dừng ở bước gửi duyệt (17/09/2026).
+
+    Bản trước tắt bảng kiểm ngay khi đơn được duyệt — đúng lúc câu "chưa có
+    hẹn giao" trở thành hàng rào thật (xem `advance` ở `pos.service`). Người
+    dùng thấy nút "Gửi nhà cung cấp" khoá mà không biết vì sao, vì thứ giải
+    thích vừa biến mất ở màn trước đó.
+  */
+  const SỐNG = ['draft', 'pending_approval', 'approved']
+  if (!SỐNG.includes(po.status)) return []
+  /** Đơn đã duyệt = đang đứng trước cửa gửi NCC, lời nhắc thành lời chặn. */
+  const sapGui = po.status === 'approved'
   const out: Check[] = []
   const noPrice = lines.filter((l) => l.unit_price == null).length
   if (lines.length === 0) out.push({ level: 'stop', what: 'Đơn chưa có dòng vật tư nào', fix: 'Thêm ít nhất một dòng' }) // prettier-ignore
   if (noPrice > 0) out.push({ level: 'stop', what: `${noPrice} dòng chưa có đơn giá`, fix: 'Nhập giá hoặc ghi “chờ báo giá”' }) // prettier-ignore
   if (!po.production_order_id) out.push({ level: 'warn', what: 'Chưa gắn lệnh sản xuất', fix: 'Gắn lệnh, hoặc bỏ qua nếu mua bù tồn' }) // prettier-ignore
-  if (!po.expected_at) out.push({ level: 'warn', what: 'Chưa có hạn giao', fix: 'Điền hạn giao' }) // prettier-ignore
+  if (!po.expected_at) out.push(sapGui
+    ? { level: 'stop', what: 'Chưa có hẹn giao', fix: 'Bấm "Đổi hẹn giao" khai ngày dự kiến — chưa có ngày thì gửi NCC xong không ai đo được trễ' }
+    : { level: 'warn', what: 'Chưa có hẹn giao', fix: 'Điền hạn giao — tới bước gửi NCC là bắt buộc' }) // prettier-ignore
   else if (po.expected_at.slice(0, 10) < today) out.push({ level: 'warn', what: `Hạn giao ${dmy(po.expected_at)} đã qua`, fix: 'Cập nhật hạn hoặc ghi lý do' }) // prettier-ignore
   return out
 }

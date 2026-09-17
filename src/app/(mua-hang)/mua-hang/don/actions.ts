@@ -28,6 +28,20 @@ export type Perm = {
   privileged?: boolean
   /** Đơn đã có phiếu nhập kho: chặn cứng đường hạ về nháp. */
   hasReceipts?: boolean
+  /**
+   * Đơn CHƯA CÓ HẸN GIAO — chặn đường gửi NCC.
+   *
+   * Đo 17/09/2026: 44/63 đơn trống `expected_at`, vì ô hẹn giao không bắt
+   * buộc lúc soạn và không ai bị hỏi lại lúc gửi. Hệ quả dây chuyền: màn Nhận
+   * hàng xếp chúng vào rổ "chưa hẹn ngày", cột "Về" ở Tồn & cân đối in "chưa
+   * hẹn", ô "Hàng về 7 ngày tới" luôn rỗng, và cảnh báo NCC trễ hẹn không thể
+   * bắn — không có ngày thì không có gì để trễ.
+   *
+   * Chặn ở bước GỬI chứ không phải bước soạn: lúc gõ nháp chưa cần biết ngày,
+   * nhưng gửi một tờ đơn ra khỏi cửa mà không biết bao giờ hàng về thì cả dây
+   * chuyền phía sau mù.
+   */
+  noEta?: boolean
 }
 
 export type ActionId =
@@ -339,7 +353,12 @@ export function actionsFor(status: PoStatus, perm: Perm): Action[] {
           primary: true,
           ui: 'direct',
           stakes: 'vua',
-          blocked: notOwn,
+          // Lý do NÓI LUÔN CÁCH GỠ, và nút gỡ ("Đổi hẹn giao") đứng ngay dưới.
+          blocked:
+            notOwn ??
+            (perm.noEta
+              ? 'Chưa có hẹn giao — bấm "Đổi hẹn giao" khai ngày dự kiến trước, không thì không ai đo được NCC trễ hay đúng'
+              : undefined),
           done: 'Đã gửi NCC',
           bulk: true,
           build: ({ id }) => [

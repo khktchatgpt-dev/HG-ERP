@@ -561,7 +561,7 @@ export function DonChungTuScreen(p: Props) {
   const hasReceipts =
     p.warehouseDocs.length > 0 ||
     p.statusLines.some((l) => Number(l.qty_received ?? 0) > 1e-6)
-  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove, privileged: perms.privileged, hasReceipts }) : [] // prettier-ignore
+  const docActions = po ? actionsFor(po.status as PoStatus, { own: perms.canEdit, approve: perms.canApprove, privileged: perms.privileged, hasReceipts, noEta: !po.expected_at }) : [] // prettier-ignore
   async function runAction(a: DocAction) {
     if (!po || !a.build) return
     setBusy(true)
@@ -1365,7 +1365,13 @@ export function DonChungTuScreen(p: Props) {
         <Checks
           compact={blockers.length === 0}
           title={
-            blockers.length > 0 ? 'Chưa gửi duyệt được' : 'Lưu ý trước khi gửi duyệt'
+            po?.status === 'approved'
+              ? blockers.length > 0
+                ? 'Chưa gửi NCC được'
+                : 'Lưu ý trước khi gửi NCC'
+              : blockers.length > 0
+                ? 'Chưa gửi duyệt được'
+                : 'Lưu ý trước khi gửi duyệt'
           }
           items={checks}
         />
