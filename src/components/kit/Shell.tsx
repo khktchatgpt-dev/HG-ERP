@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/utils'
 import { useLayoutEffect, useRef, useState } from 'react'
+import { Ico } from './Icon'
 import type { Lane, Tone } from './kit-core'
 
 /**
@@ -103,7 +104,7 @@ export function WorkLanes<T>({
   return (
     <div
       role="tablist"
-      className="-mb-px flex items-end gap-[2px] px-[var(--gutter)] pt-[13px]"
+      className="-mb-px flex items-end gap-[2px] overflow-x-auto px-[var(--gutter)] pt-[13px]"
     >
       {lanes.map((l) => {
         const on = l.id === activeId
@@ -114,12 +115,13 @@ export function WorkLanes<T>({
             aria-selected={on}
             onClick={() => onPick(l.id)}
             className={cn(
-              'relative flex h-[37px] items-center gap-[9px] rounded-t-[var(--radius)] border border-b-0 px-[15px] text-[13px]',
+              'relative flex h-[37px] shrink-0 items-center gap-[9px] rounded-t-[var(--radius)] border border-b-0 px-[15px] text-[13px] whitespace-nowrap',
               on
                 ? 'border-[var(--line)] bg-[var(--surface)] font-semibold text-[var(--ink)] after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-[var(--surface)] after:content-[""]'
                 : 'border-transparent font-medium text-[var(--ink-2)] hover:bg-[var(--surface)] hover:text-[var(--ink)]',
             )}
           >
+            {l.icon && <Ico name={l.icon} size={15} />}
             {l.label}
             <span
               className={cn(

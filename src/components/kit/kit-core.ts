@@ -10,6 +10,8 @@
  */
 
 /** Trạng thái vòng đời dữ liệu. Ba cái, không hơn. */
+import type { IcoName } from './Icon'
+
 export type Tone = 'neutral' | 'stop' | 'warn' | 'done'
 
 /**
@@ -78,8 +80,7 @@ export function rowAction(r: {
   hasSupplier: boolean
   blockedByBom: boolean
 }): { label: string; tone: Tone } {
-  if (r.blockedByBom)
-    return { label: 'Kỹ thuật chưa xác nhận BOM', tone: 'warn' }
+  if (r.blockedByBom) return { label: 'Kỹ thuật chưa xác nhận BOM', tone: 'warn' }
   if (r.suggest <= 0) return { label: 'Đủ', tone: 'done' }
   if (!r.hasSupplier) return { label: 'Chưa biết mua ở đâu', tone: 'stop' }
   if (!r.hasPrice) return { label: 'Chưa có giá — hỏi giá', tone: 'warn' }
@@ -95,7 +96,14 @@ export function rowAction(r: {
  * Cùng ranh giới với `splitBangKe` bên file Excel — cố ý, để tờ giấy in ra
  * và màn hình không bao giờ đếm khác nhau.
  */
-export type Lane<T> = { id: string; label: string; rows: T[]; tone?: Tone }
+export type Lane<T> = {
+  id: string
+  label: string
+  rows: T[]
+  tone?: Tone
+  /** Khái niệm nghiệp vụ của làn — từ vựng ở `kit/Icon.tsx`. */
+  icon?: IcoName
+}
 
 export function toLanes<T>(
   rows: T[],
