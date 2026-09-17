@@ -406,7 +406,15 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           // truck dành cho GIAO NHẬN (từ vựng icon — /design-lab mục 05):
           // đây là màn thay "Hàng sắp về".
           { href: '/mua-hang/nhan-hang', label: 'Nhận hàng', icon: 'truck' },
-          { href: '/mua-hang/hoa-don', label: 'Hoá đơn NCC', icon: 'receipt' },
+          /*
+            HOÁ ĐƠN NCC ĐÃ RỜI KHU CUNG ỨNG (17/09/2026, chủ dự án: "cung ứng
+            không quản lí về hoá đơn").
+
+            Mục này vốn chỉ dẫn tới một trang nói "chưa dựng" rồi trỏ tiếp sang
+            Kế toán — một dòng nav chiếm chỗ trong sáu dòng nghiệp vụ mà không
+            làm được việc gì. Hoá đơn và công nợ là sổ của Kế toán; ai cần thì
+            vào khu Tài chính. Đường cũ chuyển hướng ở proxy.ts.
+          */
         ],
       },
       {

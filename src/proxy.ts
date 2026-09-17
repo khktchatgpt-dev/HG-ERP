@@ -38,6 +38,9 @@ const IMAGE_PATH = /^\/api\/files\/[0-9a-f-]{36}\/img$/i
  */
 const MOVED_PREFIXES: ReadonlyArray<readonly [from: string, to: string]> = [
   ['/technical/products', '/products'],
+  // Hoá đơn NCC không phải việc của Cung ứng — trang bên khu Mua hàng đã bỏ
+  // 17/09/2026, ai còn giữ link cũ thì đẩy thẳng sang sổ của Kế toán.
+  ['/mua-hang/hoa-don', '/finance/hoa-don-ncc'],
 ]
 
 /**
