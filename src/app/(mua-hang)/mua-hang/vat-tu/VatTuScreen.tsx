@@ -196,7 +196,11 @@ export function VatTuScreen({
                     {r.code}
                   </Code>
                 </Cell>
-                <Cell grow>
+                {/*
+                  TÊN VẬT TƯ LÀ CỘT NGƯỜI TA TÌM, nên nó ăn phần dư và có sàn
+                  rộng hơn mặc định — tên ở đây dài ("Ắc quy Delkor 95D 26L").
+                */}
+                <Cell grow className="min-w-[260px]">
                   <span className="flex items-center gap-2">
                     <span className="truncate" title={r.name}>
                       {r.name}
@@ -204,7 +208,19 @@ export function VatTuScreen({
                     {r.needs_review && <Tag tone="warn">Chờ rà</Tag>}
                   </span>
                 </Cell>
-                <Cell muted>{r.sub_group ?? r.group_name ?? ''}</Cell>
+                {/*
+                  NHÓM CON BỊ CHẶN BỀ RỘNG. Không chặn thì chuỗi dài nhất của
+                  cột ("Ắc – tăng đơ – đầu nối lắp ráp") kéo cột lên 221px —
+                  RỘNG HƠN cả cột tên (đo 17/09/2026). Nhóm là thứ đọc lướt để
+                  định vị, không phải thứ đọc từng chữ.
+                */}
+                <Cell
+                  muted
+                  className="max-w-[150px]"
+                  title={r.sub_group ?? r.group_name ?? ''}
+                >
+                  {r.sub_group ?? r.group_name ?? ''}
+                </Cell>
                 <Cell muted>{r.spec ?? ''}</Cell>
                 <Cell muted>{r.unit}</Cell>
                 <Cell num>

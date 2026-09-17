@@ -273,7 +273,14 @@ export function BanLamViecScreen({
                         <Cell>
                           <Tag tone={TONE[MEETING_LEVEL[i.level].tone]}>{i.label}</Tag>
                         </Cell>
-                        <Cell grow>{i.reason}</Cell>
+                        {/*
+                          "VÌ SAO" LÀ CỘT NỘI DUNG của bảng này — nó là câu trả
+                          lời, không phải chú thích, nên sàn rộng hơn mặc định
+                          và có tooltip đọc nguyên văn khi câu dài hơn ô.
+                        */}
+                        <Cell grow className="min-w-[320px]" title={i.reason}>
+                          {i.reason}
+                        </Cell>
                         <Cell muted>{i.owner}</Cell>
                         <Cell num>
                           <Num value={dmy(i.due)} />

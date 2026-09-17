@@ -235,10 +235,18 @@ export function NccScreen({
                     />
                   </Cell>
                   <Cell muted>
+                    {/*
+                      MÃ ĐƠN TRÊN, NGÀY DƯỚI — không nằm ngang.
+                      Xếp ngang thì cột này đòi 205px (đo 17/09/2026), nhiều
+                      hơn cả cột TÊN nhà cung cấp, và đẩy bảng tràn khung. Nó
+                      là cột tra cứu phụ, không đáng hơn cột định danh.
+                    */}
                     {r.last_po ? (
-                      <span className="flex items-baseline gap-2">
+                      <span className="flex flex-col leading-tight">
                         <span className="num">{r.last_po}</span>
-                        <span className="text-[var(--ink-3)]">{ngay(r.last_po_at)}</span>
+                        <span className="text-[10.5px] text-[var(--ink-3)]">
+                          {ngay(r.last_po_at)}
+                        </span>
                       </span>
                     ) : (
                       ''
