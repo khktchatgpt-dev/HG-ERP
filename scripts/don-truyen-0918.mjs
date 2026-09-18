@@ -24,6 +24,11 @@ const APPLY = process.argv.includes('--apply')
 const NGUON = 'Nạp từ tập scan đơn đặt hàng anh Truyền ký, nhận 18/09/2026.'
 
 // Lệnh sản xuất. MX = MERXX; IBIZA nằm trong lệnh ROSCO 02.
+// Người ký ô NGƯỜI ĐẶT HÀNG trên cả 11 tờ. Phải gắn vào đơn, nếu không danh sách
+// hiện "chưa giao ai": đơn thành vô chủ, không lọt bộ lọc "Của tôi" của chính người
+// đang giữ nó và không ai bị nhắc khi NCC trễ hẹn.
+const TRUYEN = 'e99f2f40-7965-46de-9d38-2989f73cb81f' // Trương Thanh Truyền · Cung ứng
+
 const LSX = {
   MX09: 'f547e535-48c8-40a6-8426-8e23d88bc39b', // 09/26-27 - MX
   MX10: '278873c2-bfc7-43eb-8aaf-21fb0b3835b9', // 10/26-27 - MX
@@ -1114,6 +1119,8 @@ for (const d of [...DON, ONGMAI]) {
       vat_rate: d.vat,
       price_includes_vat: false,
       template: d.template,
+      assigned_to: TRUYEN,
+      created_by: TRUYEN,
       note,
     })
     .select('id, code')
