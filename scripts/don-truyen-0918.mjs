@@ -138,8 +138,11 @@ const DON = [
     ncc: NCC.KIMTUAN,
     ngay: '09/09/2026',
     so_to: 'ĐH SỐ 02/2026',
-    lsx_ghi: 'ĐƠN HÀNG IBIZA THÁNG 10',
-    lsx: LSX.ROSCO02,
+    // Tờ này ĐỂ TRỐNG ô lệnh sản xuất — chín tờ kia đều điền. Chữ "ĐƠN HÀNG IBIZA
+    // THÁNG 10" nằm ở cột TÊN CHI TIẾT của bốn dòng hàng, là mô tả món hàng chứ
+    // không phải ô lệnh; suy từ đó ra lệnh ROSCO 02 là bịa. Để trống.
+    lsx_ghi: '(ô lệnh trên tờ để trống)',
+    lsx: null,
     template: 'metal_kg',
     vat: 0,
     tong: 95010000,
