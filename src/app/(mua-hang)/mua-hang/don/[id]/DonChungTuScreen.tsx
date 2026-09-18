@@ -297,7 +297,14 @@ export function DonChungTuScreen(p: Props) {
   )
   const [lines, setLines] = useState<Line[]>(() =>
     p.lines.map((l) =>
-      lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null),
+      lineFromPo(
+        l,
+        l.material_id ? (p.stock[l.material_id] ?? null) : null,
+        // Đơn đã phát hành: tiền đã chốt, lấy tổng kg đã lưu thay vì dẫn xuất
+        // lại — NCC ghi tổng kg làm tròn nên tính lại sẽ ra số khác cả màn danh
+        // sách lẫn phiếu in. Đơn nháp thì vẫn chạy theo ô nhập.
+        !!po && po.status !== 'draft',
+      ),
     ),
   )
   const [sel, setSel] = useState<string[]>([])
@@ -545,7 +552,14 @@ export function DonChungTuScreen(p: Props) {
     )
     setLines(
       p.lines.map((l) =>
-        lineFromPo(l, l.material_id ? (p.stock[l.material_id] ?? null) : null),
+        lineFromPo(
+        l,
+        l.material_id ? (p.stock[l.material_id] ?? null) : null,
+        // Đơn đã phát hành: tiền đã chốt, lấy tổng kg đã lưu thay vì dẫn xuất
+        // lại — NCC ghi tổng kg làm tròn nên tính lại sẽ ra số khác cả màn danh
+        // sách lẫn phiếu in. Đơn nháp thì vẫn chạy theo ô nhập.
+        !!po && po.status !== 'draft',
+      ),
       ),
     )
     setSel([])
