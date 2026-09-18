@@ -355,7 +355,9 @@ export function LenhScreen({
             {/* Đường sang HỒ SƠ LỆNH — màn kia trả lời "lệnh này làm cái gì,
                 thông số ra sao"; màn này trả lời "mua đủ chưa". Không có nút
                 thì người mua phải gõ URL hoặc đi vòng qua khu cũ. */}
-            <Btn href={`/mua-hang/yeu-cau/${lsx.id}/ho-so`}>Hồ sơ lệnh</Btn>
+            <Btn icon="lenh" href={`/mua-hang/yeu-cau/${lsx.id}/ho-so`}>
+              Hồ sơ lệnh
+            </Btn>
             {/*
               IN PHIẾU LỆNH — mẫu chính thức xưởng đang cầm (`/print/lsx/[id]`,
               đã có sẵn từ 0114). Khu Mua hàng trước nay không có đường tới, nên
@@ -363,20 +365,25 @@ export function LenhScreen({
               vòng qua khu Bán hàng. Mở TAB MỚI: in xong còn quay lại chỗ đang
               dở, mà điều hướng cùng tab thì mất bộ lọc đơn đang đặt.
             */}
-            <Btn onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
+            <Btn icon="in" onClick={() => window.open(`/print/lsx/${lsx.id}`, '_blank')}>
               In LSX
             </Btn>
-            <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
+            <Btn icon="excel" href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=lsx`}>
               Báo cáo lệnh
             </Btn>
-            <Btn href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke`}>
+            <Btn
+              icon="excel"
+              href={`/api/dept/supply/lsx-report?lsx=${lsx.id}&loai=bangke`}
+            >
               Bảng kê vật tư
             </Btn>
             {canEdit && (
               <>
-                <Btn href={`/mua-hang/don?lsx=${lsx.id}`}>Lọc đơn của lệnh</Btn>
-                <Btn primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
-                  + Đặt thêm
+                <Btn icon="don" href={`/mua-hang/don?lsx=${lsx.id}`}>
+                  Lọc đơn của lệnh
+                </Btn>
+                <Btn primary icon="them" href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
+                  Đặt thêm
                 </Btn>
               </>
             )}

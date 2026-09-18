@@ -104,7 +104,13 @@ export function BangGiaScreen({
             tone: nhieuNcc.size > 0 ? 'done' : 'neutral',
           },
         ]}
-        actions={canEdit ? <Btn href="/mua-hang/don/moi">+ Soạn đơn mua</Btn> : undefined}
+        actions={
+          canEdit ? (
+            <Btn primary icon="them" href="/mua-hang/don/moi">
+              Soạn đơn mua
+            </Btn>
+          ) : undefined
+        }
       />
 
       <FilterBar>

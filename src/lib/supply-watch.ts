@@ -146,13 +146,19 @@ export type IncomingBucket = 'overdue' | 'today' | 'week' | 'later' | 'no_eta'
 
 export const INCOMING_BUCKET: Record<
   IncomingBucket,
-  { label: string; tone: 'stop' | 'warn' | 'primary' | 'muted'; order: number }
+  {
+    label: string
+    tone: 'stop' | 'warn' | 'primary' | 'muted'
+    order: number
+    /** Icon của rổ — khai cạnh nhãn, cùng luật với `SUPPLY_TODO`. */
+    icon: IcoName
+  }
 > = {
-  overdue: { label: 'Quá hẹn', tone: 'stop', order: 1 },
-  today: { label: 'Đến hẹn hôm nay', tone: 'warn', order: 2 },
-  week: { label: 'Trong 7 ngày tới', tone: 'primary', order: 3 },
-  later: { label: 'Sau đó', tone: 'muted', order: 4 },
-  no_eta: { label: 'Chưa hẹn ngày', tone: 'warn', order: 5 },
+  overdue: { label: 'Quá hẹn', tone: 'stop', order: 1, icon: 'quaHen' },
+  today: { label: 'Đến hẹn hôm nay', tone: 'warn', order: 2, icon: 'hen' },
+  week: { label: 'Trong 7 ngày tới', tone: 'primary', order: 3, icon: 'lich' },
+  later: { label: 'Sau đó', tone: 'muted', order: 4, icon: 'lich' },
+  no_eta: { label: 'Chưa hẹn ngày', tone: 'warn', order: 5, icon: 'cho' },
 }
 
 export const INCOMING_BUCKETS = (Object.keys(INCOMING_BUCKET) as IncomingBucket[]).sort(
