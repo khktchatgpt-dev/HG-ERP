@@ -119,7 +119,19 @@ export function VatTuScreen({
           },
           { label: 'Đang hiện', value: `${tu}–${den}` },
         ]}
-        actions={canEdit ? <Btn href="/planning/materials">Sửa ở bản cũ</Btn> : undefined}
+        /*
+          NHÃN NÓI THẲNG NÓ DẪN ĐI ĐÂU (18/09/2026) — cùng luật với nút thêm
+          NCC. Khu mới chưa có hồ sơ vật tư, nên đây vẫn là đường sang danh
+          mục cũ; giả vờ "Sửa" rồi đổi cả vỏ giữa chừng là thứ làm người dùng
+          tưởng mình bấm nhầm.
+        */
+        actions={
+          canEdit ? (
+            <Btn icon="mo" href="/planning/materials">
+              Sửa ở danh mục cũ
+            </Btn>
+          ) : undefined
+        }
       />
 
       <FilterBar>

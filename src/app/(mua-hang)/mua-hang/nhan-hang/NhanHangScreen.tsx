@@ -155,6 +155,7 @@ export function NhanHangScreen({
             key={b}
             on={moc === b}
             count={dem[b] ?? 0}
+            icon={INCOMING_BUCKET[b].icon}
             onClick={() => setMoc(moc === b ? 'all' : b)}
           >
             {INCOMING_BUCKET[b].label}
@@ -174,7 +175,7 @@ export function NhanHangScreen({
           }
           next={
             rows.length === 0 ? (
-              <Btn primary href="/mua-hang/don">
+              <Btn primary icon="don" href="/mua-hang/don">
                 Mở danh sách đơn mua
               </Btn>
             ) : (

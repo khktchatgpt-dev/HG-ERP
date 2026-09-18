@@ -126,9 +126,11 @@ export function BanLamViecScreen({
         ]}
         actions={
           <>
-            <Btn href="/mua-hang/don">Đơn mua</Btn>
-            <Btn primary href="/mua-hang/don/moi">
-              + Soạn đơn mua
+            <Btn icon="don" href="/mua-hang/don">
+              Đơn mua
+            </Btn>
+            <Btn primary icon="them" href="/mua-hang/don/moi">
+              Soạn đơn mua
             </Btn>
           </>
         }
