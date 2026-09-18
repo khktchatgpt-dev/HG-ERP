@@ -1,6 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@/components/ui/Toast'
+import { api, apiErrorText } from '@/lib/api'
 import { PO_STATUS_LABEL, type PoStatus } from '@/lib/po-status'
 import {
   Btn,
@@ -9,19 +12,27 @@ import {
   Code,
   Crumb,
   Empty,
+  Field,
+  FieldGrid,
   FilterBar,
   MasterWarn,
   Metric,
   MetricStrip,
   Num,
+  NumInput,
+  Pick,
   Row,
   ScreenFrame,
   ScreenHeader,
+  Sheet,
+  SheetActions,
   StatusBar,
   TFoot,
   THead,
   Table,
   Tag,
+  TextArea,
+  TextInput,
   showMoney,
 } from '@/components/kit'
 
@@ -41,6 +52,10 @@ type Ncc = {
   address: string | null
   legal_rep: string | null
   payment_terms: string | null
+  payment_net_days: number | null
+  lead_time_days: number | null
+  contact_name: string | null
+  contact_phone: string | null
   note: string | null
 }
 
@@ -72,6 +87,228 @@ const ngay = (iso: string | null) =>
 const DONE = new Set(['received'])
 const MO = new Set(['ordered', 'confirmed', 'in_transit', 'partial'])
 
+/**
+ * SỬA HỒ SƠ NGAY TRONG KHU MỚI (17/09/2026).
+ *
+ * Tới hôm nay, nút "Sửa hồ sơ" và "Thêm / sửa hồ sơ" đều đá người dùng sang
+ * `/planning/suppliers` — khu cũ, vỏ khác, từ vựng khác, mất luôn thanh điều
+ * hướng của Mua hàng. Đây là hai đường cuối cùng trong khu còn làm vậy trên
+ * đường đi hằng ngày.
+ *
+ * CHỈ MƯỜI BA Ô, KHÔNG PHẢI CẢ HỒ SƠ. Form bên khu cũ có sáu mảng và hơn 40 ô
+ * (pháp lý, ngân hàng, đánh giá, incoterms…). Người MUA không khai mấy thứ đó
+ * — kế toán và trưởng phòng mới khai, và họ khai một lần lúc lập hồ sơ. Ở đây
+ * giữ đúng những ô người mua sửa trong ngày: gọi ai, số nào, địa chỉ nào, trả
+ * tiền kiểu gì. Ô nào không có ở đây thì khu cũ vẫn còn, và nút dưới cùng nói
+ * thẳng điều đó thay vì giấu.
+ *
+ * `TextInput` của kit chốt giá trị khi RỜI Ô (`onCommit`), nên state ở đây là
+ * bản nháp của cả phiếu; bấm Lưu mới gọi API — không có chuyện gõ nửa chừng đã
+ * ghi xuống CSDL.
+ */
+function SuaHoSo({
+  ncc,
+  onClose,
+  onSaved,
+}: {
+  ncc: Ncc
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  const [f, setF] = useState({
+    name: ncc.name,
+    short_name: ncc.short_name ?? '',
+    type: ncc.type ?? '',
+    status: ncc.status,
+    contact_name: ncc.contact_name ?? '',
+    contact_phone: ncc.contact_phone ?? '',
+    phone: ncc.phone ?? '',
+    email: ncc.email ?? '',
+    tax_no: ncc.tax_no ?? '',
+    address: ncc.address ?? '',
+    payment_terms: ncc.payment_terms ?? '',
+    payment_net_days: ncc.payment_net_days == null ? '' : String(ncc.payment_net_days),
+    lead_time_days: ncc.lead_time_days == null ? '' : String(ncc.lead_time_days),
+    note: ncc.note ?? '',
+  })
+  const set = (k: keyof typeof f) => (v: string) => setF((s) => ({ ...s, [k]: v }))
+
+  async function save() {
+    if (!f.name.trim()) return
+    setBusy(true)
+    try {
+      const s = (x: string) => x.trim() || null
+      await api(`/api/dept/supply/suppliers/${ncc.id}`, {
+        method: 'PATCH',
+        body: {
+          name: f.name.trim(),
+          short_name: s(f.short_name),
+          type: s(f.type),
+          status: f.status,
+          contact_name: s(f.contact_name),
+          contact_phone: s(f.contact_phone),
+          phone: s(f.phone),
+          email: f.email.trim(),
+          tax_no: s(f.tax_no),
+          address: s(f.address),
+          payment_terms: s(f.payment_terms),
+          // Ô số trống = CHƯA KHAI (null), khác hẳn 0 = trả ngay / về trong ngày.
+          payment_net_days: f.payment_net_days.trim() === '' ? null : Number(f.payment_net_days), // prettier-ignore
+          lead_time_days: f.lead_time_days.trim() === '' ? null : Number(f.lead_time_days), // prettier-ignore
+          note: s(f.note),
+        },
+      })
+      toast.success('Đã lưu hồ sơ', ncc.name)
+      onClose()
+      onSaved()
+    } catch (e) {
+      toast.error('Lưu không được', apiErrorText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet
+      open
+      onClose={onClose}
+      title="Sửa hồ sơ nhà cung cấp"
+      subtitle={ncc.code ? `${ncc.name} · ${ncc.code}` : ncc.name}
+      stakes="nhe"
+      width={520}
+      footer={
+        <SheetActions
+          stakes="nhe"
+          busy={busy}
+          disabled={!f.name.trim()}
+          onCancel={onClose}
+          onConfirm={() => void save()}
+          confirmLabel="Lưu hồ sơ"
+        />
+      }
+    >
+      <FieldGrid>
+        <Field label="Tên nhà cung cấp">
+          <TextInput value={f.name} onCommit={set('name')} label="Tên nhà cung cấp" />
+        </Field>
+        <Field label="Tên viết tắt">
+          <TextInput
+            value={f.short_name}
+            onCommit={set('short_name')}
+            label="Tên viết tắt"
+            placeholder="hiện ở ô chọn NCC lúc soạn đơn"
+          />
+        </Field>
+        <Field label="Mặt hàng">
+          <TextInput
+            value={f.type}
+            onCommit={set('type')}
+            label="Mặt hàng"
+            placeholder="Bao bì, Sơn, Gia công…"
+          />
+        </Field>
+        <Field label="Trạng thái">
+          <Pick
+            label="Trạng thái"
+            value={f.status}
+            onChange={set('status')}
+            options={[
+              { value: 'active', label: 'Đang giao dịch' },
+              { value: 'suspended', label: 'Tạm ngưng' },
+              { value: 'terminated', label: 'Ngừng hợp tác' },
+            ]}
+          />
+        </Field>
+      </FieldGrid>
+
+      <div className="k-sec">Liên hệ</div>
+      <FieldGrid>
+        <Field label="Người liên hệ">
+          <TextInput
+            value={f.contact_name}
+            onCommit={set('contact_name')}
+            label="Người liên hệ"
+            placeholder="tên người mình gọi"
+          />
+        </Field>
+        <Field label="Số máy người liên hệ">
+          <TextInput
+            value={f.contact_phone}
+            onCommit={set('contact_phone')}
+            label="Số máy người liên hệ"
+            mono
+          />
+        </Field>
+        <Field label="Điện thoại công ty">
+          <TextInput value={f.phone} onCommit={set('phone')} label="Điện thoại" mono />
+        </Field>
+        <Field label="Email">
+          <TextInput value={f.email} onCommit={set('email')} label="Email" />
+        </Field>
+        <Field label="Mã số thuế">
+          <TextInput value={f.tax_no} onCommit={set('tax_no')} label="Mã số thuế" mono />
+        </Field>
+        <Field label="Địa chỉ giao dịch">
+          <TextInput value={f.address} onCommit={set('address')} label="Địa chỉ" />
+        </Field>
+      </FieldGrid>
+
+      <div className="k-sec">Thanh toán &amp; giao hàng</div>
+      <FieldGrid note="Ba ô này là thứ form soạn đơn đọc để MỒI xuống đơn mới. Bỏ trống thì mỗi lần soạn phải gõ lại từ đầu — đo 17/09/2026: 2/170 NCC có điều khoản, 1/170 có lead time.">
+        <Field label="Điều khoản thanh toán">
+          <TextInput
+            value={f.payment_terms}
+            onCommit={set('payment_terms')}
+            label="Điều khoản thanh toán"
+            placeholder="COD, NET 30, cuối tháng…"
+          />
+        </Field>
+        <Field label="Số ngày công nợ">
+          <NumInput
+            value={f.payment_net_days}
+            onCommit={set('payment_net_days')}
+            aria-label="Số ngày công nợ"
+          />
+        </Field>
+        <Field label="Lead time">
+          <NumInput
+            value={f.lead_time_days}
+            onCommit={set('lead_time_days')}
+            aria-label="Lead time — số ngày"
+          />
+        </Field>
+      </FieldGrid>
+
+      <div className="k-sec">Ghi chú</div>
+      <TextArea
+        value={f.note}
+        onChange={set('note')}
+        rows={3}
+        placeholder="Điều cần nhớ khi làm việc với NCC này"
+      />
+
+      {/*
+        NÓI THẲNG CHỖ CÒN THIẾU. Mười ba ô trên là phần người mua sửa hằng
+        ngày; pháp lý, ngân hàng, chứng chỉ, chấm điểm vẫn nằm ở hồ sơ đầy đủ.
+        Giấu đường đó đi thì người cần khai số tài khoản sẽ đi tìm trong vô
+        vọng — tệ hơn là cứ để một dòng nhỏ ở đáy phiếu.
+      */}
+      <div className="mt-4 text-[var(--fs-sm)] text-[var(--ink-3)]">
+        Pháp lý, ngân hàng, chứng chỉ và chấm điểm nằm ở{' '}
+        <a
+          className="font-semibold text-[var(--act)] hover:underline"
+          href={`/planning/suppliers/${ncc.id}`}
+        >
+          hồ sơ đầy đủ
+        </a>{' '}
+        — ít sửa nên không đưa vào đây.
+      </div>
+    </Sheet>
+  )
+}
+
 export function HoSoNccScreen({
   ncc,
   pos,
@@ -84,6 +321,8 @@ export function HoSoNccScreen({
   canEdit: boolean
 }) {
   const [tab, setTab] = useState<'don' | 'gia'>('don')
+  const [sua, setSua] = useState(false)
+  const router = useRouter()
 
   const song = useMemo(() => pos.filter((p) => p.status !== 'cancelled'), [pos])
   const daNhan = song.filter((p) => DONE.has(p.status))
@@ -131,10 +370,14 @@ export function HoSoNccScreen({
         actions={
           canEdit ? (
             <>
-              <Btn href={`/mua-hang/don?ncc=${ncc.id}`}>Lọc đơn của NCC</Btn>
-              <Btn href={`/planning/suppliers/${ncc.id}`}>Sửa hồ sơ</Btn>
-              <Btn primary href={`/mua-hang/don/moi?ncc=${ncc.id}`}>
-                + Soạn đơn
+              <Btn icon="don" href={`/mua-hang/don?ncc=${ncc.id}`}>
+                Lọc đơn của NCC
+              </Btn>
+              <Btn icon="sua" onClick={() => setSua(true)}>
+                Sửa hồ sơ
+              </Btn>
+              <Btn primary icon="them" href={`/mua-hang/don/moi?ncc=${ncc.id}`}>
+                Soạn đơn
               </Btn>
             </>
           ) : undefined
@@ -351,6 +594,14 @@ export function HoSoNccScreen({
             caveat="Giá của lần mua gần nhất. So giá giữa các NCC thì mở trang Bảng giá."
           />
         </Table>
+      )}
+
+      {sua && (
+        <SuaHoSo
+          ncc={ncc}
+          onClose={() => setSua(false)}
+          onSaved={() => router.refresh()}
+        />
       )}
 
       <StatusBar

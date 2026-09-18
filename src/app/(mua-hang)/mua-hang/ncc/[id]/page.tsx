@@ -63,6 +63,12 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
         address: ncc.address,
         legal_rep: ncc.legal_rep,
         payment_terms: ncc.payment_terms,
+        // Bốn trường phiếu sửa cần — hai ô liên hệ (nối 17/09) và hai ô MỒI
+        // xuống đơn mới (số ngày nợ, lead time).
+        payment_net_days: ncc.payment_net_days,
+        lead_time_days: ncc.lead_time_days,
+        contact_name: ncc.contact_name,
+        contact_phone: ncc.contact_phone,
         note: ncc.note,
       }}
       pos={pos.map((p) => ({
