@@ -431,17 +431,6 @@ export const ACTIONS: Action[] = [
     rowLevel: 'Xoá dòng đã ghi: người tạo hoặc GĐ/QL; sổ đã chốt ngày thì khoá.',
   },
   {
-    key: 'production.jobs.confirm',
-    label: 'Tổ xác nhận Bắt đầu / Xong công đoạn',
-    domain: 'production',
-    // 0175: trước đây mở cho MỌI `production.member` nên THỐNG KÊ tự xác nhận
-    // được số của chính mình — phạm vi 26/08 cấm điều đó. Nay chỉ tổ trưởng
-    // (quyền riêng) + GĐ/QL.
-    rule: anyOf(role('admin', 'manager'), perm('production.jobs.confirm')),
-    rowLevel:
-      'Tổ trưởng chỉ thao tác việc tổ mình; CHẶN xong khi số chưa đủ — GĐ/QL ép kèm lý do.',
-  },
-  {
     key: 'production.progress.track',
     label: 'Báo hoàn thành LSX / xác nhận nhận vật tư',
     // 0175: thêm lối GĐ/QL vì quyền này vừa được gỡ khỏi vai nền xưởng (thống

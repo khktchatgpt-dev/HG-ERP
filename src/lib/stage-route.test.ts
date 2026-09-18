@@ -36,7 +36,9 @@ describe('clipRoute — cắt lộ trình về khoảng [first..final] (0088)', 
 describe('resolveComponentRoute/routeForGroup — giữ hợp đồng cũ', () => {
   it('kế hoạch thắng nhóm; không kế hoạch thì suy nhóm; nhóm lạ rỗng', () => {
     expect(resolveComponentRoute(['moc'], 'FRAME')).toEqual(['moc'])
-    expect(resolveComponentRoute(null, 'FRAME')).toEqual(R)
+    // Lộ trình MẶC ĐỊNH của khung KHÔNG còn 'mai' (chốt 18/09/2026) — khác
+    // với hằng R ở trên, vốn là lộ trình tuỳ ý để thử phép cắt.
+    expect(resolveComponentRoute(null, 'FRAME')).toEqual(['phoi', 'han', 'nguoi', 'son'])
     expect(routeForGroup('NGU_KIM')).toEqual([])
     expect(routeForGroup(null)).toEqual([])
   })

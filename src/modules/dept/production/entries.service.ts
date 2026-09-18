@@ -28,6 +28,15 @@ import {
   resolveCountingPlan,
   type CountingPlan,
 } from '@/lib/default-assembly'
+import {
+  FINISH_ROW_NAME,
+  FINISH_STAGES,
+  finishRouteOverride,
+  finishRowId,
+  finishRowLineId,
+  isFinishRow,
+  isFinishRowId,
+} from '@/lib/finish-stages'
 import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
 import { entryDocsRepo, type EntryDocJoined } from './entry-docs.repo'
@@ -219,8 +228,12 @@ export const entriesService = {
       const line = orderLines.find((l) => l.id === lineId)
       if (!line) throw BadRequest('Có dòng sổ gắn cụm mặc nhiên không thuộc lệnh này')
       const lineComps = components.filter((c) => c.production_order_line_id === lineId)
-      // Đã vật chất hoá (lượt ghi trước / màn khác vừa ghi) → dùng lại dòng thật.
-      let real = lineComps.find((c) => c.kind === 'assembly' && c.cluster == null)
+      // Đã vật chất hoá (lượt ghi trước / màn khác vừa ghi) → dùng lại dòng
+      // thật. Loại dòng THÀNH PHẨM ra: nó cũng là assembly/cluster null nhưng
+      // bắt đầu ở lắp ráp — vớ nhầm nó thì sổ hàn ghi vào dòng đóng gói.
+      let real = lineComps.find(
+        (c) => c.kind === 'assembly' && c.cluster == null && !isFinishRow(c),
+      )
       if (!real) {
         const plan = resolveCountingPlan(lineComps, routeByLine.get(lineId))
         if (plan.virtual_stages.length === 0) {
@@ -279,6 +292,59 @@ export const entriesService = {
       }
       idRemap.set(vid, real.id)
     }
+
+    // ── DÒNG THÀNH PHẨM → VẬT CHẤT HOÁ (chặng sau sơn, 18/09) ────────────────
+    // Cùng lối đi với cụm mặc nhiên, khác ở chỗ KHÔNG gộp chi tiết nào và
+    // không chốt final_stage cho ai: bốn bước này không ăn vào chi tiết, chúng
+    // đếm cả bộ. Nên dòng sinh ra cũng không mang group_code.
+    for (const vid of new Set(
+      input.entries.map((e) => e.component_id).filter(isFinishRowId),
+    )) {
+      const lineId = finishRowLineId(vid)!
+      const line = orderLines.find((l) => l.id === lineId)
+      if (!line) throw BadRequest('Có dòng sổ gắn bộ thành phẩm không thuộc lệnh này')
+      const lineComps = components.filter((c) => c.production_order_line_id === lineId)
+      let real = lineComps.find(isFinishRow)
+      if (!real) {
+        const fields = {
+          production_order_id: lsxId,
+          production_order_line_id: lineId,
+          kind: 'assembly' as const,
+          cluster: null,
+          name: FINISH_ROW_NAME,
+          group_code: null,
+          unit: 'bộ',
+          qty_per_unit: 1,
+          first_stage: FINISH_STAGES[0],
+          final_stage: FINISH_STAGES[FINISH_STAGES.length - 1],
+          note: null,
+        }
+        const newId = await componentsRepo.insertOne(fields)
+        real = {
+          ...fields,
+          id: newId,
+          material_id: null,
+          material_type: null,
+          spec_thickness_mm: null,
+          spec_width_mm: null,
+          spec_length_mm: null,
+          wall_thickness_mm: null,
+          dm_kg: null,
+          pcs_per_bar: null,
+          qty_per_assembly: null,
+          sort_order: 9999,
+          material_code: null,
+          material_name: null,
+          material_unit: null,
+        }
+        components.push(real)
+        byId.set(real.id, real)
+        // 1 bộ thành phẩm / SP → tổng cần = SL đặt của dòng.
+        totalByComponent.set(real.id, Number(line.qty) || 0)
+      }
+      idRemap.set(vid, real.id)
+    }
+
     // Từ đây trở đi mọi phép tính dùng bản đã trỏ về dòng thật.
     const recEntries = input.entries.map((e) =>
       idRemap.has(e.component_id)
@@ -318,6 +384,10 @@ export const entriesService = {
     // thì nhập tự do — cùng chính sách lệnh cũ).
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)!
+      // Dòng thành phẩm đứng NGOÀI kế hoạch công đoạn: Kế hoạch SX lên lộ
+      // trình cho phần gia công (phôi→sơn), còn lắp ráp/đóng gói thì bộ nào
+      // cũng phải qua. Bắt nó khớp kế hoạch là chặn đúng thứ luôn hợp lệ.
+      if (isFinishRow(comp)) continue
       const route = routeByLine.get(comp.production_order_line_id)
       if (route && !route.includes(input.stage)) {
         throw BadRequest(
@@ -345,6 +415,7 @@ export const entriesService = {
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)!
       const eff =
+        finishRouteOverride(comp) ??
         planOf(comp.production_order_line_id).own_route.get(comp.id) ??
         clipRoute(
           resolveComponentRoute(
@@ -542,6 +613,44 @@ export const entriesService = {
       [...affectedLines].map((lineId) => jobsRepo.markDoing(lsxId, lineId, input.stage)),
     )
 
+    // ── CÔNG ĐOẠN XONG KHI ĐỦ SỐ (chốt 18/09/2026) ──────────────────────────
+    //
+    // Quyền "tổ trưởng xác nhận xong công đoạn" đã gỡ — tổ trưởng chỉ xem. Nên
+    // trạng thái `done` không còn ai bấm; nó phải SUY từ chính con số vừa ghi,
+    // nếu không mọi việc sẽ kẹt ở "đang làm" vĩnh viễn và cổng đóng lệnh
+    // (`lsxService.complete`) không bao giờ mở.
+    //
+    // ĐỦ SỐ = mọi chi tiết của dòng SP CÓ ĐẾM ở công đoạn này đều đạt tổng cần.
+    // Dòng chưa có chi tiết nào thì KHÔNG tự xong: không có mẫu số thì không
+    // kết luận được, và tự xong ở đó là giấu mất việc chưa ai định hình.
+    const doneAfter = new Map(doneByCompStage)
+    for (const e of recEntries) {
+      const k = `${e.component_id}|${input.stage}`
+      doneAfter.set(k, (doneAfter.get(k) ?? 0) + Number(e.qty))
+    }
+    const readyLines = [...affectedLines].filter((lineId) => {
+      const mine = components.filter(
+        (c) =>
+          c.production_order_line_id === lineId &&
+          (
+            finishRouteOverride(c) ??
+            clipRoute(
+              resolveComponentRoute(routeByLine.get(lineId), c.group_code),
+              c.first_stage,
+              c.final_stage,
+            )
+          ).includes(input.stage),
+      )
+      if (mine.length === 0) return false
+      return mine.every((c) => {
+        const need = totalByComponent.get(c.id) ?? 0
+        return need > 0 && (doneAfter.get(`${c.id}|${input.stage}`) ?? 0) >= need
+      })
+    })
+    await Promise.all(
+      readyLines.map((lineId) => jobsRepo.markDone(lsxId, lineId, input.stage)),
+    )
+
     // Lần ghi sổ đầu tiên của lệnh đã duyệt → lệnh sang "đang sản xuất".
     if (lsx.status === 'approved') {
       await productionRepo.patch(lsxId, { status: 'in_progress' })
@@ -636,7 +745,11 @@ export const entriesService = {
       // công đoạn nào cho tới khi được phân nhóm hoặc lên kế hoạch.
       // Chi tiết bị gộp vào cụm mặc nhiên → lộ trình đã cắt (chỉ còn trước
       // hàn); còn lại giữ nguyên lộ trình đầy đủ.
+      // Dòng THÀNH PHẨM không có nhóm vật tư (nó không làm từ vật tư nào), nên
+      // lộ trình suy-theo-nhóm trả rỗng và dòng sẽ biến mất khỏi mọi tab. Ép
+      // lộ trình bốn bước sau sơn cho nó.
       const route =
+        finishRouteOverride(c) ??
         planByLine.get(c.production_order_line_id)?.own_route.get(c.id) ??
         resolveComponentRoute(routeByLine.get(c.production_order_line_id), c.group_code)
       const summary = summarizeComponent(
@@ -705,6 +818,32 @@ export const entriesService = {
       })
     }
 
+    // CHẶNG THÀNH PHẨM per dòng SP (18/09): lắp ráp → bao bì → đóng gói →
+    // hoàn thiện, đơn vị BỘ, tổng cần = SL đặt. Sản lượng KHÔNG suy từ chi tiết
+    // — không chi tiết nào làm bốn việc đó — nên trước lượt ghi đầu tiên dòng
+    // này đứng 0; ghi phát đầu thì `record` vật chất hoá nó và từ đó nó là
+    // component thật, đi đường chung ở trên.
+    for (const l of orderLines) {
+      const lineComps = components.filter((c) => c.production_order_line_id === l.id)
+      if (lineComps.length === 0 || lineComps.some(isFinishRow)) continue
+      views.push({
+        id: finishRowId(l.id),
+        order_line_id: l.id,
+        kind: 'assembly',
+        cluster: null,
+        name: FINISH_ROW_NAME,
+        unit: 'bộ',
+        total_needed: l.qty,
+        dm_kg: null,
+        material_type: null,
+        material_code: null,
+        material_name: null,
+        allowed_stages: [...FINISH_STAGES],
+        summary: summarizeComponent(l.qty, [...FINISH_STAGES], []),
+        is_virtual: true,
+      })
+    }
+
     // Đồng bộ per dòng SP: min theo bộ phận "đầu ra cuối" của floor(done_final /
     // đơn-vị-trên-SP). Chỉ tính component TOP-LEVEL (cụm + chi tiết KHÔNG bị gộp
     // vào cụm) — chi tiết đã hàn thành cụm thì cụm quyết định đồng bộ, không đếm
@@ -724,6 +863,11 @@ export const entriesService = {
         // Chi tiết bị gộp vào cụm mặc nhiên: đầu ra cuối của nó giờ là PHÔI —
         // đem vào đồng bộ là đếm phôi thành SP xong. Cụm mặc nhiên thay mặt.
         .filter((c) => !plan.own_route.has(c.id))
+        // Dòng thành phẩm KHÔNG vào đồng bộ. "Đồng bộ" trả lời "có đủ bộ phận
+        // cho bao nhiêu bộ" — tức đầu VÀO của lắp ráp. Cộng cả số đã hoàn
+        // thiện vào đó là trộn hai câu hỏi làm một, và đồng bộ sẽ đứng 0 suốt
+        // cho tới khi tổ lắp ráp bắt đầu.
+        .filter((c) => !isFinishRow(c))
         .map((c) => ({
           qty_per_unit: c.qty_per_unit,
           done_final: views.find((v) => v.id === c.id)?.summary.done_final ?? 0,

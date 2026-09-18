@@ -46,6 +46,14 @@ describe('entryLineSchema', () => {
     expect(r.success).toBe(true)
   })
 
+  it('id ảo bộ thành phẩm finish:<uuid> → hợp lệ (18/09)', () => {
+    const r = entryLineSchema.safeParse({
+      component_id: 'finish:5f0e8db4-6f65-4f5e-9c8b-1a2b3c4d5e6f',
+      qty: 12,
+    })
+    expect(r.success).toBe(true)
+  })
+
   it('id không phải uuid / tiền tố lạ → từ chối', () => {
     expect(entryLineSchema.safeParse({ component_id: 'abc', qty: 1 }).success).toBe(false)
     expect(

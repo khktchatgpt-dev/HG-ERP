@@ -6,15 +6,20 @@ import { z } from 'zod'
  * Phế phẩm = số + lý do text tự do (bỏ danh mục mã lỗi — user chốt 07/2026).
  */
 /**
- * id chi tiết/cụm — nhận CẢ id ảo cụm mặc nhiên `default-asm:<line_id>`
- * (lib/default-assembly, 27/08): service record sẽ vật chất hoá thành dòng
- * thật ở lượt ghi đầu tiên. Chỉ uuid trần thì phiếu ghi theo BỘ bị đá ngay
- * ở biên validate.
+ * id chi tiết/cụm — nhận CẢ hai loại id ẢO mà service `record` sẽ vật chất hoá
+ * thành dòng thật ở lượt ghi đầu tiên:
+ *   - `default-asm:<line_id>` — cụm khung mặc nhiên, hàn→sơn (27/08,
+ *     lib/default-assembly)
+ *   - `finish:<line_id>`      — bộ thành phẩm, lắp ráp→hoàn thiện (18/09,
+ *     lib/finish-stages)
+ *
+ * Chỉ uuid trần thì mọi phiếu ghi theo BỘ bị đá ngay ở biên validate — lỗi chỉ
+ * lộ ra lúc có người bấm Ghi sổ, vì tầng tổng hợp vẫn bày dòng ra bình thường.
  */
 const componentIdSchema = z
   .string()
   .regex(
-    /^(default-asm:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    /^(default-asm:|finish:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
     'id chi tiết không hợp lệ',
   )
 

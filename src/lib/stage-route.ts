@@ -24,9 +24,7 @@
 const PHOI = 'phoi'
 const HAN = 'han'
 const NGUOI = 'nguoi'
-const MAI = 'mai'
 const SON = 'son'
-const MOC = 'moc'
 const DAN = 'dan'
 const MAY = 'may'
 const BAO_BI = 'bao_bi'
@@ -37,13 +35,25 @@ const DONG_GOI = 'dong_goi'
  * thuật (technical_product_parts.group_code).
  */
 const ROUTE_BY_GROUP: Record<string, string[]> = {
-  // Khung sắt/nhôm: cắt phôi → hàn thành khung → làm nguội/mài → sơn.
-  FRAME: [PHOI, HAN, NGUOI, MAI, SON],
-  // Gỗ: gia công mộc rồi sơn hoàn thiện.
-  WOOD: [MOC, SON],
-  // Tấm / polywood: chỉ qua xưởng mộc.
-  PANEL: [MOC],
-  POLYWOOD: [MOC],
+  // Khung sắt/nhôm: cắt phôi → hàn thành khung → làm nguội → sơn.
+  //
+  // KHÔNG CÓ "MÀI" (chủ dự án chốt 18/09/2026): xưởng không tách mài ra đếm
+  // riêng, nó nằm trong công việc của tổ nguội. Để nó trong lộ trình thì màn
+  // ghi sổ mở một tab vĩnh viễn 0 và không tổ nào nhận — đúng thứ làm người
+  // dùng hết tin vào con số. Mã `mai` VẪN CÒN trong danh mục công đoạn, nên
+  // lệnh nào thật sự cần thì Kế hoạch lên lộ trình tay là có ngay.
+  FRAME: [PHOI, HAN, NGUOI, SON],
+  // Gỗ / tấm / polywood: chỉ còn SƠN.
+  //
+  // Cũng theo quyết định trên — xưởng không tách "mộc" ra đếm riêng. Hệ quả
+  // phải biết: 117 dòng gỗ nay chỉ có MỘT công đoạn trên sổ. Nếu thật ra
+  // xưởng có làm mộc và muốn đếm, cách đúng là gán `stage_code` cho tổ làm
+  // việc đó rồi trả `moc` về đây, KHÔNG phải nhét tạm vào công đoạn khác.
+  WOOD: [SON],
+  // KHÔNG để rỗng: rỗng ≡ "hàng mua" (xem `isPurchasedGroup`), và tấm/polywood
+  // bị coi là hàng mua thì chúng biến mất khỏi sổ mà không ai biết.
+  PANEL: [SON],
+  POLYWOOD: [SON],
   // Nệm và vải: cắt vải rồi may.
   CUSHION: [MAY],
   FABRIC: [MAY],

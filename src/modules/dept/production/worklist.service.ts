@@ -11,6 +11,14 @@ import {
   defaultAssemblyId,
   resolveCountingPlan,
 } from '@/lib/default-assembly'
+import {
+  FINISH_ROW_NAME,
+  FINISH_STAGES,
+  finishRouteOverride,
+  finishRowId,
+  isFinishRow,
+  isFinishStage,
+} from '@/lib/finish-stages'
 import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
 import { shiftIso, vnTodayIso } from '@/lib/local-date'
@@ -174,11 +182,13 @@ export const worklistService = {
           // Cắt về khoảng [first..final] của chính nó (0088): chi tiết đã gộp
           // vào cụm dừng trước hàn; cụm (kể cả cụm vật chất hoá từ cụm mặc
           // nhiên) chỉ đếm từ công đoạn đầu của nó trở đi.
-          const r = clipRoute(
-            resolveComponentRoute(plannedRoute.get(line.id), c.group_code),
-            c.first_stage,
-            c.final_stage,
-          )
+          const r =
+            finishRouteOverride(c) ??
+            clipRoute(
+              resolveComponentRoute(plannedRoute.get(line.id), c.group_code),
+              c.first_stage,
+              c.final_stage,
+            )
           // Đếm CHƯA BIẾT lộ trình — KHÔNG gồm hàng mua. Ngũ kim (vít, bulong)
           // cũng có lộ trình rỗng nhưng đó là ĐÚNG: tổ không gia công chúng.
           // Gộp hai thứ này lại là bảo người đi vá thứ không hỏng. Cụm cũng
@@ -189,11 +199,50 @@ export const worklistService = {
           routeOf.set(c.id, r)
           for (const s of r) stagesOfLine.add(s)
         }
+        // CHẶNG THÀNH PHẨM (18/09): mọi dòng SP đều đi qua bốn bước sau sơn,
+        // kể cả khi chưa ai ghi sổ bước nào — đó chính là việc còn phải làm.
+        for (const s of FINISH_STAGES) stagesOfLine.add(s)
 
         for (const stage of [...stagesOfLine].sort(
           (a, b) => (stageOrder.get(a) ?? 99) - (stageOrder.get(b) ?? 99),
         )) {
           if (filter.stage && stage !== filter.stage) continue
+
+          // Bốn bước sau sơn đếm thẳng theo BỘ trên MỘT dòng thành phẩm, không
+          // suy từ chi tiết nào — chưa ai ghi thì dòng thật chưa tồn tại và số
+          // đạt là 0, phần còn lại đúng bằng cả lệnh.
+          if (isFinishStage(stage)) {
+            const fr = mine.find(isFinishRow)
+            const t = fr ? tally.get(`${fr.id}|${stage}`) : undefined
+            const done = Math.min(t?.confirmed.qty ?? 0, line.qty)
+            const withPending = Math.min(
+              (t?.confirmed.qty ?? 0) + (t?.pending.qty ?? 0),
+              line.qty,
+            )
+            const fp = stageProgress(line.qty, {
+              confirmed: { qty: done, defect: 0 },
+              pending: { qty: Math.max(0, withPending - done), defect: 0 },
+            })
+            rows.push({
+              lsx_id: lsx.id,
+              lsx_code: lsx.code,
+              customer_name: lsx.customer_name,
+              ship_date: lsx.ship_date,
+              order_line_id: line.id,
+              product_code: line.product_code,
+              product_name: line.name_vi ?? line.product_code,
+              stage,
+              stage_label: stageLabel.get(stage) ?? stage,
+              planned: fp.planned,
+              done: fp.done,
+              pending: fp.pending_qty,
+              remaining: fp.remaining,
+              pct: fp.pct,
+              status: fp.status,
+            })
+            continue
+          }
+
           // Chỉ chi tiết THỰC SỰ đi qua công đoạn này mới tính vào bộ.
           const inStage = mine.filter((c) => routeOf.get(c.id)?.includes(stage))
           if (inStage.length === 0) continue
@@ -423,6 +472,7 @@ export async function loadEntrySheet(
     planByLine.set(line.id, plan)
     for (const c of lineComps) {
       const r =
+        finishRouteOverride(c) ??
         plan.own_route.get(c.id) ??
         clipRoute(
           resolveComponentRoute(plannedByLine.get(line.id), c.group_code),
@@ -433,6 +483,9 @@ export async function loadEntrySheet(
       for (const s of r) worked.add(s)
     }
     for (const s of plan.virtual_stages) worked.add(s)
+    // Chặng thành phẩm có mặt trên mọi dòng SP đã định hình — tab bốn bước sau
+    // sơn phải mở được ngay cả khi chưa ai ghi số nào.
+    if (lineComps.length > 0) for (const s of FINISH_STAGES) worked.add(s)
   }
   const stages = stagesCat.filter((s) => worked.has(s.code))
   if (stages.length === 0) return null
@@ -542,6 +595,25 @@ export async function loadEntrySheet(
         done: vDone,
         pending: Math.max(0, vAll - vDone),
         remaining: Math.max(0, line.qty - vDone),
+        today_qty: 0,
+      })
+    }
+
+    // Dòng BỘ THÀNH PHẨM: chỉ hiện khi chưa vật chất hoá — ghi rồi thì nó là
+    // component thật và đã nằm trong `out` qua đường chung ở trên.
+    if (isFinishStage(stage) && !lineComps.some(isFinishRow)) {
+      out.push({
+        component_id: finishRowId(line.id),
+        kind: 'assembly',
+        is_virtual: true,
+        cluster: null,
+        name: FINISH_ROW_NAME,
+        unit: 'bộ',
+        dm_kg: null,
+        needed: line.qty,
+        done: 0,
+        pending: 0,
+        remaining: line.qty,
         today_qty: 0,
       })
     }

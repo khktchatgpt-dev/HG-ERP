@@ -24,7 +24,7 @@ vi.mock('./production.repo', () => ({
   },
 }))
 vi.mock('./jobs.repo', () => ({
-  jobsRepo: { listByLsx: vi.fn(), markDoing: vi.fn() },
+  jobsRepo: { listByLsx: vi.fn(), markDoing: vi.fn(), markDone: vi.fn() },
 }))
 vi.mock('./day-locks.repo', () => ({
   dayLocksRepo: {
@@ -182,6 +182,33 @@ describe('entriesService.record', () => {
     expect(jobsRepo.markDoing).toHaveBeenCalledWith('lsx1', 'line1', 'han')
     expect(productionRepo.patch).toHaveBeenCalledWith('lsx1', { status: 'in_progress' })
     expect(ordersRepo.patch).toHaveBeenCalledWith('o1', { status: 'in_production' })
+  })
+
+  it('ĐỦ SỐ → job tự sang "xong", không cần ai bấm xác nhận (18/09)', async () => {
+    // Cần 100 (2 CT/SP × 50 SP). Đã có 70, ghi thêm 30 → vừa đủ.
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      { component_id: 'c1', stage: 'han', qty: 70, defect_qty: 0 } as never,
+    ])
+    await entriesService.record(thongKe, 'lsx1', record())
+    expect(jobsRepo.markDone).toHaveBeenCalledWith('lsx1', 'line1', 'han')
+  })
+
+  it('CHƯA đủ số → KHÔNG tự xong', async () => {
+    // Đã có 10, ghi thêm 30 = 40 < 100.
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      { component_id: 'c1', stage: 'han', qty: 10, defect_qty: 0 } as never,
+    ])
+    await entriesService.record(thongKe, 'lsx1', record())
+    expect(jobsRepo.markDone).not.toHaveBeenCalled()
+  })
+
+  it('dòng CHƯA có bảng chi tiết → KHÔNG tự xong (không có mẫu số thì không kết luận)', async () => {
+    // Tự xong ở đây là giấu mất việc chưa ai định hình.
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([] as never)
+    await expect(entriesService.record(thongKe, 'lsx1', record())).rejects.toMatchObject({
+      status: 400,
+    })
+    expect(jobsRepo.markDone).not.toHaveBeenCalled()
   })
 
   it('dòng CHỈ CÓ PHẾ (qty 0, defect > 0) → vẫn ghi được (0173)', async () => {
@@ -360,6 +387,97 @@ describe('entriesService.record', () => {
       asm,
     ] as never)
     vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({ entries: [{ component_id: 'default-asm:line1', qty: 5, defect_qty: 0 }] }),
+    )
+    expect(componentsRepo.insertOne).not.toHaveBeenCalled()
+    expect(entriesRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ component_id: 'asm-cu', qty: 5 }),
+    ])
+  })
+
+  it('ghi id ảo finish → VẬT CHẤT HOÁ dòng thành phẩm, KHÔNG động vào chi tiết nào', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue(FLAT_PARTS as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(componentsRepo.insertOne).mockResolvedValue('fin-real')
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({
+        stage: 'dong_goi',
+        entries: [{ component_id: 'finish:line1', qty: 12, defect_qty: 0 }],
+      }),
+    )
+    expect(componentsRepo.insertOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        production_order_line_id: 'line1',
+        kind: 'assembly',
+        cluster: null,
+        // Không mang nhóm vật tư: bộ thành phẩm không làm từ vật tư nào cả.
+        group_code: null,
+        unit: 'bộ',
+        qty_per_unit: 1,
+        first_stage: 'lap_rap',
+        final_stage: 'hoan_thien',
+      }),
+    )
+    // Chặng sau sơn KHÔNG gộp chi tiết nào → không chốt final_stage cho ai.
+    expect(componentsRepo.setFinalStages).not.toHaveBeenCalled()
+    expect(entriesRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ component_id: 'fin-real', stage: 'dong_goi', qty: 12 }),
+    ])
+  })
+
+  it('đã có dòng thành phẩm → dùng lại; cụm khung cùng dòng KHÔNG bị vớ nhầm', async () => {
+    // Ca nguy hiểm: cụm mặc nhiên và dòng thành phẩm cùng là assembly/cluster
+    // null trên CÙNG một dòng SP. Tra nhầm thì sổ đóng gói rơi vào cụm hàn.
+    const asm = {
+      id: 'asm-cu',
+      production_order_id: 'lsx1',
+      production_order_line_id: 'line1',
+      kind: 'assembly',
+      cluster: null,
+      name: 'Cụm khung (mặc nhiên)',
+      group_code: 'FRAME',
+      qty_per_unit: 1,
+      qty_per_assembly: null,
+      first_stage: 'han',
+      final_stage: 'son',
+      dm_kg: null,
+      pcs_per_bar: null,
+    }
+    const fin = {
+      ...asm,
+      id: 'fin-cu',
+      name: 'Bộ thành phẩm',
+      group_code: null,
+      first_stage: 'lap_rap',
+      final_stage: 'hoan_thien',
+    }
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      { ...FLAT_PARTS[0], final_stage: 'phoi' },
+      asm,
+      fin,
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+
+    await entriesService.record(
+      thongKe,
+      'lsx1',
+      record({
+        stage: 'dong_goi',
+        entries: [{ component_id: 'finish:line1', qty: 7, defect_qty: 0 }],
+      }),
+    )
+    expect(componentsRepo.insertOne).not.toHaveBeenCalled()
+    expect(entriesRepo.insertMany).toHaveBeenCalledWith([
+      expect.objectContaining({ component_id: 'fin-cu', qty: 7 }),
+    ])
+
+    // Và chiều ngược lại: ghi cụm khung vẫn rơi vào ĐÚNG dòng cụm.
+    vi.mocked(entriesRepo.insertMany).mockClear()
     await entriesService.record(
       thongKe,
       'lsx1',
@@ -802,7 +920,7 @@ describe('entriesService.summary — cụm mặc nhiên (27/08, lib/default-asse
     expect(asm.is_virtual).toBe(true)
     expect(asm.kind).toBe('assembly')
     expect(asm.total_needed).toBe(50)
-    expect(asm.allowed_stages).toEqual(['han', 'nguoi', 'mai', 'son'])
+    expect(asm.allowed_stages).toEqual(['han', 'nguoi', 'son'])
     const han = asm.summary.stages.find((x) => x.stage === 'han')!
     expect(han.done).toBe(10)
     expect(han.defect).toBe(2)
@@ -823,9 +941,129 @@ describe('entriesService.summary — cụm mặc nhiên (27/08, lib/default-asse
     ] as never)
     vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
     const s = await entriesService.summary(admin, 'lsx1')
-    expect(s.components.some((c) => c.is_virtual)).toBe(false)
+    // Không sinh CỤM MẶC NHIÊN. (Dòng thành phẩm vẫn có — nó thuộc chặng sau
+    // sơn, độc lập với chuyện lệnh khai cụm hay không; xem finish-stages.)
+    expect(s.components.some((c) => c.id.startsWith('default-asm:'))).toBe(false)
     const asm = s.components.find((c) => c.id === 'asm1')!
     // Cụm thật kế thừa nhóm FRAME → lộ trình suy được, cắt từ hàn.
-    expect(asm.summary.stages.map((x) => x.stage)).toEqual(['han', 'nguoi', 'mai', 'son'])
+    expect(asm.summary.stages.map((x) => x.stage)).toEqual(['han', 'nguoi', 'son'])
+  })
+})
+
+describe('entriesService.summary — chặng thành phẩm (18/09, lib/finish-stages)', () => {
+  const flat = (id: string, name: string, qtyPerUnit: number) => ({
+    id,
+    production_order_id: 'lsx1',
+    production_order_line_id: 'line1',
+    kind: 'part',
+    cluster: null,
+    name,
+    group_code: 'FRAME',
+    qty_per_unit: qtyPerUnit,
+    qty_per_assembly: null,
+    first_stage: null,
+    final_stage: null,
+    dm_kg: null,
+    pcs_per_bar: null,
+  })
+
+  it('mọi dòng SP có một dòng "Bộ thành phẩm" ảo, đếm BỘ, cần = SL đặt', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      flat('p1', 'CHÂN', 4),
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([] as never)
+
+    const s = await entriesService.summary(admin, 'lsx1')
+    const fin = s.components.find((c) => c.id === 'finish:line1')!
+    expect(fin.is_virtual).toBe(true)
+    expect(fin.kind).toBe('assembly')
+    expect(fin.unit).toBe('bộ')
+    expect(fin.total_needed).toBe(50)
+    expect(fin.allowed_stages).toEqual(['lap_rap', 'bao_bi', 'dong_goi', 'hoan_thien'])
+  })
+
+  it('chưa ai ghi → bốn bước đứng 0 (KHÔNG suy từ chi tiết đã sơn)', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      flat('p1', 'CHÂN', 4),
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    // Chi tiết sơn xong sạch — nhưng chưa ai lắp ráp thì thành phẩm vẫn là 0.
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'p1',
+        stage: 'son',
+        entry_date: '2026-07-24',
+        qty: 200,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+
+    const s = await entriesService.summary(admin, 'lsx1')
+    const fin = s.components.find((c) => c.id === 'finish:line1')!
+    for (const st of fin.summary.stages) expect(st.done).toBe(0)
+  })
+
+  it('dòng thành phẩm ĐÃ vật chất hoá → hết dòng ảo, số đọc từ sổ của nó', async () => {
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      flat('p1', 'CHÂN', 4),
+      {
+        ...flat('fin1', 'Bộ thành phẩm', 1),
+        kind: 'assembly',
+        group_code: null,
+        first_stage: 'lap_rap',
+        final_stage: 'hoan_thien',
+      },
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'fin1',
+        stage: 'dong_goi',
+        entry_date: '2026-07-24',
+        qty: 12,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+
+    const s = await entriesService.summary(admin, 'lsx1')
+    expect(s.components.some((c) => c.id === 'finish:line1')).toBe(false)
+    const fin = s.components.find((c) => c.id === 'fin1')!
+    // Không có group_code → nếu thiếu lộ trình ép thì dòng này rơi khỏi mọi tab.
+    expect(fin.allowed_stages).toEqual(['lap_rap', 'bao_bi', 'dong_goi', 'hoan_thien'])
+    expect(fin.summary.stages.find((x) => x.stage === 'dong_goi')!.done).toBe(12)
+  })
+
+  it('đồng bộ SP KHÔNG tính dòng thành phẩm — nó là đầu RA, không phải đầu vào', async () => {
+    // Chi tiết xong trọn vòng (200/200 qua tới sơn) → đồng bộ phải là 50 bộ,
+    // dù chưa ai lắp ráp bộ nào. Dòng thành phẩm ở đây ĐÃ vật chất hoá và
+    // đang đứng 0 — nếu nó lọt vào phép min thì đồng bộ tụt về 0 và mọi màn
+    // tiến độ báo xưởng chưa làm gì.
+    vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
+      { ...flat('p1', 'CHÂN', 4), final_stage: 'son' },
+      {
+        ...flat('fin1', 'Bộ thành phẩm', 1),
+        kind: 'assembly',
+        group_code: null,
+        first_stage: 'lap_rap',
+        final_stage: 'hoan_thien',
+      },
+    ] as never)
+    vi.mocked(jobsRepo.listByLsx).mockResolvedValue([])
+    vi.mocked(entriesRepo.listByLsx).mockResolvedValue([
+      {
+        component_id: 'p1',
+        stage: 'son',
+        entry_date: '2026-07-24',
+        qty: 200,
+        defect_qty: 0,
+        kg: null,
+      },
+    ] as never)
+
+    const s = await entriesService.summary(admin, 'lsx1')
+    expect(s.synced_by_line[0].synced_sets).toBe(50)
   })
 })

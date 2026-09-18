@@ -1,4 +1,5 @@
 import { jobsRepo, type Job } from './jobs.repo'
+import { resolveHolder, type Holder } from '@/lib/lsx-holder'
 import { lsxLinesRepo } from './lsx-lines.repo'
 import { withProductImage } from './lsx-lines.service'
 import { productionRepo, type ProductionOrderWithOrders } from './production.repo'
@@ -122,6 +123,24 @@ export type OverviewRow = {
     late: 'overdue' | 'at_risk' | null
   }
   chips: StageChip[]
+  /**
+   * Số dòng CHI TIẾT đã định hình của lệnh (`production_components`).
+   *
+   * Tách hẳn khỏi `qty_needed`: hai con số này trông giống nhau nhưng trả lời
+   * hai câu khác nhau, và gộp chúng là nói dối. `qty_needed` tính từ KẾ HOẠCH
+   * (jobs) nên bằng 0 ở mọi lệnh chưa ai lên lộ trình — kể cả lệnh đã định
+   * hình 306 chi tiết. Dùng nó để đếm "chưa định hình" thì màn danh sách báo
+   * 14/14 lệnh chưa định hình trong khi 7 lệnh đã có 875 dòng (đo 18/09/2026).
+   */
+  component_count: number
+  /**
+   * Ai đang giữ lệnh + đã bao lâu (lib/lsx-holder).
+   *
+   * Tính Ở ĐÂY chứ không đẩy dãy mốc thời gian xuống client: hai màn dùng
+   * chung (danh sách + chi tiết) thì phải cùng một câu trả lời, và luật "đã
+   * duyệt tách làm hai người giữ" không nên có hai bản.
+   */
+  holder: Holder
   jobs_total: number
   jobs_done: number
   /** Hạn kế hoạch trễ nhất đã quá mà job chưa xong (planned_end < hôm nay). */
@@ -336,6 +355,9 @@ export const jobsService = {
     const byLsx = new Map(active.map((l) => [l.id, l]))
     const stagesByLine = lineStagesOf(jobs)
     const today = new Date().toISOString().slice(0, 10)
+    // MỘT mốc giờ cho cả lượt tính: mỗi dòng gọi new Date() riêng thì hai lệnh
+    // cạnh nhau có thể lệch ngày nếu lượt chạy rơi đúng nửa đêm.
+    const nowTs = new Date()
 
     // Thông tin dòng SP per lệnh tổ có việc — dùng dòng IN LSX (kèm ảnh +
     // thông số kỹ thuật đã gộp override) để tổ trưởng thấy đúng thứ in trên lệnh.
@@ -430,6 +452,9 @@ export const jobsService = {
     // "Hôm nay" theo UTC-day — CÙNG quy ước với entry_date của sổ thống kê
     // (LogbookScreen), để KPI đọc đúng ngày sổ mà thống kê đang ghi.
     const today = new Date().toISOString().slice(0, 10)
+    // MỘT mốc giờ cho cả lượt tính: gọi `new Date()` riêng ở mỗi dòng thì hai
+    // lệnh cạnh nhau có thể lệch một ngày nếu lượt chạy rơi đúng nửa đêm.
+    const nowTs = new Date()
     const [
       { active, jobs, components, entries, doneByCompStage },
       stages,
@@ -472,6 +497,15 @@ export const jobsService = {
       acc.needed += p.needed
       acc.done += Math.min(p.done, p.needed) // làm dư không kéo % lệnh quá 100
       lsxQty.set(j.production_order_id, acc)
+    }
+    // Đã định hình bao nhiêu dòng chi tiết — đếm thẳng từ `components` đang
+    // cầm sẵn, không thêm truy vấn nào.
+    const componentCount = new Map<string, number>()
+    for (const c of components) {
+      componentCount.set(
+        c.production_order_id,
+        (componentCount.get(c.production_order_id) ?? 0) + 1,
+      )
     }
     const lsxDaily = new Map<string, Map<string, number>>()
     for (const e of entries) {
@@ -526,6 +560,8 @@ export const jobsService = {
           ...v,
         })),
         jobs_total: js.length,
+        component_count: componentCount.get(lsx.id) ?? 0,
+        holder: resolveHolder(lsx, nowTs),
         jobs_done: js.filter((j) => j.status === 'done').length,
         plan_overdue: js.filter(
           (j) => j.status !== 'done' && j.planned_end && j.planned_end < today,
@@ -771,124 +807,4 @@ export const jobsService = {
     return { rows }
   },
 
-  /** Tổ đánh dấu BẮT ĐẦU (tuỳ chọn — có sổ là tự doing rồi). */
-  async start(user: User, jobId: string): Promise<Job> {
-    const job = await this.assertJobActor(user, jobId)
-    if (job.status !== 'todo') return job
-    return jobsRepo.patch(jobId, { status: 'doing' })
-  },
-
-  /**
-   * XÁC NHẬN XONG công đoạn — điểm bàn giao. CHẶN khi số thống kê nhập chưa đủ
-   * so với bảng chi tiết (hoặc dòng SP chưa có bảng chi tiết). Admin/manager
-   * được ép qua (override) kèm lý do — ghi vào note.
-   */
-  async confirmDone(
-    user: User,
-    jobId: string,
-    opts: { override?: boolean; note?: string | null } = {},
-  ): Promise<Job> {
-    const job = await this.assertJobActor(user, jobId)
-    if (job.status === 'done') return job
-
-    const { components, doneByCompStage, jobs } = await loadActiveContext([
-      job.production_order_id,
-    ])
-    const lineStages =
-      lineStagesOf(jobs).get(
-        `${job.production_order_id}|${job.production_order_line_id}`,
-      ) ?? []
-    const progress = assessJobProgress(job, lineStages, components, doneByCompStage)
-
-    if (!progress.ready) {
-      if (!opts.override) {
-        const detail = progress.has_components
-          ? progress.shortfalls
-              .map((s) => `${s.name}: còn thiếu ${s.missing} (đã ${s.done}/${s.needed})`)
-              .join('; ')
-          : 'dòng SP chưa có bảng chi tiết để đối chiếu'
-        throw BadRequest(
-          `Chưa đủ số để xong công đoạn — ${detail}. Nhờ thống kê ghi sổ đủ, hoặc Ban quản lý ép xác nhận kèm lý do.`,
-          'JOB_NOT_READY',
-        )
-      }
-      if (user.role !== 'admin' && user.role !== 'manager') {
-        throw Forbidden('Chỉ Ban quản lý được ép xác nhận khi chưa đủ số')
-      }
-      if (!opts.note?.trim()) {
-        throw BadRequest('Ép xác nhận phải ghi lý do')
-      }
-    }
-
-    const done = await jobsRepo.patch(jobId, {
-      status: 'done',
-      done_by: user.id,
-      done_at: new Date().toISOString(),
-      note: opts.note?.trim()
-        ? `${opts.override && !progress.ready ? '[ép xác nhận] ' : ''}${opts.note.trim()}`
-        : job.note,
-    })
-
-    // Bàn giao: báo tổ giữ công đoạn KẾ TIẾP trên lộ trình dòng SP + quản đốc.
-    const lsx = (await productionRepo.findById(
-      job.production_order_id,
-    )) as ProductionOrderWithOrders
-    const stages = await productionRepo.listStages()
-    const labelOf = (c: string) => stages.find((s) => s.code === c)?.label ?? c
-    const next = jobs
-      .filter(
-        (j) =>
-          j.production_order_line_id === job.production_order_line_id &&
-          j.seq > job.seq &&
-          j.status !== 'done',
-      )
-      .sort((a, b) => a.seq - b.seq)[0]
-    let notifyNext: string[] = []
-    if (next?.team_department_id) {
-      const users = await usersRepo.list()
-      notifyNext = users
-        .filter((u) => u.department_id === next.team_department_id)
-        .map((u) => u.id)
-    }
-    await emit({
-      name: 'production.stage.done',
-      production_order_id: job.production_order_id,
-      code: lsx?.code ?? '?',
-      stage: job.stage,
-      stage_label: labelOf(job.stage),
-      next_stages: next ? [next.stage] : [],
-      next_stage_labels: next ? [labelOf(next.stage)] : [],
-      done_by: user.id,
-      notify_next_ids: notifyNext,
-      coordinator_ids: await coordinatorIds(user.id),
-    })
-    return done
-  },
-
-  /** Tổ trưởng sửa ghi chú việc của tổ mình (yêu cầu: sửa được thông tin/ghi chú). */
-  async updateNote(user: User, jobId: string, note: string | null): Promise<Job> {
-    await this.assertJobActor(user, jobId)
-    return jobsRepo.patch(jobId, { note })
-  },
-
-  /**
-   * Guard chung thao tác trên job: quyền jobs.confirm + row-level "đúng tổ
-   * mình" cho NV xưởng; lệnh phải đang chạy.
-   */
-  async assertJobActor(user: User, jobId: string): Promise<Job> {
-    await assertAction(user, 'production.jobs.confirm')
-    const job = await jobsRepo.findById(jobId)
-    if (!job) throw NotFound('Công việc không tồn tại')
-    if (user.role === 'employee') {
-      if (!job.team_department_id || job.team_department_id !== user.department_id) {
-        throw Forbidden('Chỉ thao tác được việc tổ mình phụ trách')
-      }
-    }
-    const lsx = await productionRepo.findById(job.production_order_id)
-    if (!lsx) throw NotFound('LSX không tồn tại')
-    if (lsx.status !== 'approved' && lsx.status !== 'in_progress') {
-      throw BadRequest('LSX không ở trạng thái đang chạy')
-    }
-    return job
-  },
 }
