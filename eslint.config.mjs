@@ -25,13 +25,25 @@ const baseline = JSON.parse(
 const escapeGlob = (p) => p.replace(/[()[\]{}]/g, (ch) => `\\${ch}`)
 
 /* Kit và trang mẫu ĐƯỢC PHÉP dùng thẻ thô + màu thật: chúng là nơi định nghĩa
- * ra chuẩn, không phải nơi tiêu thụ chuẩn. */
+ * ra chuẩn, không phải nơi tiêu thụ chuẩn.
+ *
+ * `src/app/print/**` miễn trừ vì lý do KHÁC (chốt 18/09/2026): nó không phải
+ * giao diện, nó là GIẤY A4. Bảng của kit dựng cho màn hình — tiêu đề dính, tự
+ * cuộn, vòng focus, chế độ tối — bốn thứ vô nghĩa hoặc có hại khi in. Phiếu in
+ * cần đúng `<table>` viền đen của `PrintSheet`, và màu thì luôn là đen trên
+ * trắng chứ không theo token. Bảy trang in cũ từng nằm trong danh sách nợ và
+ * bị canh nhầm bằng thước của màn hình.
+ *
+ * DANH SÁCH NÀY PHẢI KHỚP `ignores` trong `scripts/ui-baseline.mjs` — hai bên
+ * đã trôi khỏi nhau một lần và hậu quả là baseline tự dài ra.
+ */
 const KIT = [
   'src/components/erp/**',
   'src/components/shadcn/**',
   'src/components/ui/**',
   'src/components/kit/**',
   'src/app/design-lab/**',
+  'src/app/print/**',
 ]
 
 export default defineConfig([
