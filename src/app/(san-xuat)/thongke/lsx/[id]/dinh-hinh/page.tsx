@@ -32,7 +32,12 @@ export default async function DinhHinhPage({
   const groupTitle = new Map(groups.map((g) => [g.id, g.title ?? '']))
   const rawLines = await lsxLinesRepo.listLines(id)
 
+  // MÀN CŨ (theme v3) TRONG KHU VỎ TRỐNG. Khu `(san-xuat)` dùng vỏ `bare` để
+  // màn kit tự chốt chiều cao, nên vùng nội dung KHÔNG có đệm. Màn này chưa
+  // chuyển sang kit nên phải tự trả lại đệm 24px + trần bề ngang mà vỏ thường
+  // vẫn cấp. Bỏ lớp bọc này khi màn được dựng lại bằng kit.
   return (
+    <div className="mx-auto max-w-[1600px] p-6">
     <DinhHinhScreen
       lsx={{ id: lsx.id, code: lsx.code, customer_name: lsx.customer_name }}
       orderLines={rawLines.map((l) => ({
@@ -67,5 +72,6 @@ export default async function DinhHinhPage({
       lsxClosed={data.lsx_status === 'completed' || data.lsx_status === 'cancelled'}
       canEdit={canEdit}
     />
+    </div>
   )
 }

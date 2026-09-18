@@ -1,0 +1,337 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import {
+  Btn,
+  Cell,
+  Chip,
+  CoverageBar,
+  Empty,
+  FilterBar,
+  Row,
+  ScreenFrame,
+  ScreenHeader,
+  SearchInput,
+  TFoot,
+  THead,
+  Table,
+  Tag,
+} from '@/components/kit'
+import { isStale } from '@/lib/lsx-holder'
+import { VIEWS } from './views'
+import type { OverviewRow } from '@/modules/dept/production/jobs.service'
+
+/**
+ * M2 — LỆNH SẢN XUẤT, Khuôn C.
+ *
+ * BỐN LUẬT CỦA KHUÔN C áp ở đây:
+ *
+ *  1. Mỗi chip lọc ĐẾM BẰNG ĐÚNG HÀM mà nó lọc (`VIEWS` bên dưới) — nguyên
+ *     tắc 3 của /design-lab: "con số là một lời hứa". Đếm một đằng lọc một nẻo
+ *     là bấm vào ra khác số, và người dùng hết tin cả trang.
+ *  2. Mỗi dòng nói VIỆC PHẢI LÀM, không nói tên trạng thái: cột "Vướng" ghi
+ *     "thiếu 106 mã vật tư", không ghi "materials_pending".
+ *  3. Cột định danh GHIM TRÁI — bảng cuộn ngang mà mất mã lệnh là đọc sai dòng.
+ *  4. Trạng thái rỗng phải nói LÝ DO và VIỆC TIẾP (`Empty`), không để bảng trắng.
+ */
+
+const fmt = (n: number) => n.toLocaleString('vi-VN')
+const fmtDate = (iso: string) => iso.split('-').reverse().join('/')
+
+function daysLeft(iso: string): number {
+  const d = new Date(`${iso}T00:00:00`)
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  return Math.round((d.getTime() - now.getTime()) / 86400000)
+}
+
+/** Câu "vướng gì" của một lệnh — nói thứ CẤP nhất, không liệt kê hết. */
+function snag(r: OverviewRow): { text: string; tone: 'stop' | 'warn' } | null {
+  const m = r.materials
+  if (m && m.due_overdue_days != null && m.due_overdue_days > 0) {
+    return { text: `vật tư quá hẹn ${m.due_overdue_days} ngày`, tone: 'stop' }
+  }
+  if (m && m.missing_count > 0) {
+    return { text: `thiếu ${fmt(m.missing_count)} mã vật tư`, tone: 'warn' }
+  }
+  if (r.component_count === 0) return { text: 'chưa định hình chi tiết', tone: 'warn' }
+  if (r.jobs_total === 0) return { text: 'chưa lên kế hoạch công đoạn', tone: 'warn' }
+  if (r.plan_overdue > 0) {
+    return { text: `${r.plan_overdue} việc quá hạn kế hoạch`, tone: 'warn' }
+  }
+  return null
+}
+
+/**
+ * DẢI CÔNG ĐOẠN — thứ tự CỐ ĐỊNH theo danh mục, không theo lệnh.
+ *
+ * Cố định mới đọc được theo CỘT: mắt lướt dọc một cột là so được mọi lệnh ở
+ * cùng công đoạn. Xếp theo lộ trình riêng từng lệnh thì ô thứ ba của dòng này
+ * là Nguội, của dòng kia là May — bảng thành vô nghĩa khi so sánh.
+ *
+ * Ô SỌC = công đoạn KHÔNG nằm trong lộ trình của lệnh. Khác hẳn ô 0% (có
+ * trong lộ trình nhưng chưa ai làm) — gộp hai thứ này là người đọc tưởng
+ * xưởng đang chậm ở một công đoạn mà lệnh đó không hề đi qua.
+ */
+function StageStrip({
+  chips,
+  stages,
+}: {
+  chips: OverviewRow['chips']
+  stages: { code: string; label: string }[]
+}) {
+  const byCode = new Map(chips.map((c) => [c.stage, c]))
+  return (
+    <span className="flex gap-[2px]">
+      {stages.map((s) => {
+        const c = byCode.get(s.code)
+        if (!c || c.total === 0) {
+          return (
+            <span
+              key={s.code}
+              title={`${s.label} — không nằm trong lộ trình của lệnh này`}
+              className="h-[14px] w-[15px] rounded-[2px] bg-[repeating-linear-gradient(45deg,var(--track),var(--track)_2px,transparent_2px,transparent_4px)]"
+            />
+          )
+        }
+        const pct = Math.min(1, c.done / c.total)
+        const full = pct >= 1
+        return (
+          <span
+            key={s.code}
+            title={`${s.label}: ${fmt(c.done)}/${fmt(c.total)}${c.doing > 0 ? ` · ${fmt(c.doing)} đang làm` : ''}`}
+            className="relative h-[14px] w-[15px] overflow-hidden rounded-[2px] bg-[var(--track)]"
+          >
+            <i
+              className={`absolute bottom-0 left-0 w-full ${full ? 'bg-[var(--done)]' : 'bg-[var(--act)]'}`}
+              style={{ height: `${Math.max(pct * 100, pct > 0 ? 12 : 0)}%` }}
+            />
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+export function LenhScreen({
+  rows,
+  stages,
+  canRecord,
+  initialView,
+}: {
+  rows: OverviewRow[]
+  stages: { code: string; label: string }[]
+  canRecord: boolean
+  /** Khung nhìn mở sẵn khi tới từ một ô việc (?view=). */
+  initialView?: string
+}) {
+  const [q, setQ] = useState('')
+  const [view, setView] = useState(initialView ?? 'all')
+
+  const counts = useMemo(
+    () => Object.fromEntries(VIEWS.map((v) => [v.id, rows.filter(v.test).length])),
+    [rows],
+  )
+
+  const shown = useMemo(() => {
+    const kw = q.trim().toLowerCase()
+    const test = VIEWS.find((v) => v.id === view)?.test ?? (() => true)
+    return rows.filter((r) => {
+      if (!test(r)) return false
+      if (!kw) return true
+      return `${r.lsx.code} ${r.lsx.customer_name} ${r.lsx.order_codes.join(' ')}`
+        .toLowerCase()
+        .includes(kw)
+    })
+  }, [rows, q, view])
+
+  const totalSets = shown.reduce((a, r) => a + r.qty_needed, 0)
+  const doneSets = shown.reduce((a, r) => a + r.qty_done, 0)
+
+  return (
+    <ScreenFrame>
+      <ScreenHeader
+        eyebrow="Sản xuất"
+        title="Lệnh sản xuất"
+        facts={[
+          { label: 'Đang chạy', value: fmt(rows.length) },
+          {
+            label: 'Trễ hạn xuất',
+            value: fmt(counts.late ?? 0),
+            onClick: () => setView('late'),
+          },
+          {
+            label: 'Thiếu vật tư',
+            value: fmt(counts.short ?? 0),
+            onClick: () => setView('short'),
+          },
+          {
+            label: 'Chưa định hình',
+            value: fmt(counts.noshape ?? 0),
+            onClick: () => setView('noshape'),
+          },
+        ]}
+      />
+
+      <FilterBar>
+        <SearchInput
+          value={q}
+          onChange={setQ}
+          placeholder="Tìm mã lệnh, khách hàng, số đơn…"
+          width={280}
+        />
+        {VIEWS.map((v) => (
+          <Chip
+            key={v.id}
+            on={view === v.id}
+            count={counts[v.id]}
+            onClick={() => setView(v.id)}
+          >
+            {v.label}
+          </Chip>
+        ))}
+      </FilterBar>
+
+      {shown.length === 0 ? (
+        <Empty
+          headline="Không có lệnh nào ở khung nhìn này"
+          reason={
+            q.trim()
+              ? `Không lệnh nào khớp “${q.trim()}”. Ô tìm soi mã lệnh, tên khách và số đơn.`
+              : 'Khung nhìn đang lọc hẹp — con số trên chip là 0 nên bảng trống đúng, không phải hỏng.'
+          }
+          next={
+            <Btn
+              onClick={() => {
+                setQ('')
+                setView('all')
+              }}
+            >
+              Xem tất cả lệnh
+            </Btn>
+          }
+        />
+      ) : (
+        <Table>
+          <THead pinFirst>
+            <th>Lệnh</th>
+            <th>Khách hàng</th>
+            <th>Hạn xuất</th>
+            <th>Công đoạn</th>
+            <th style={{ textAlign: 'right' }}>Bộ xong</th>
+            <th>Dự kiến xong</th>
+            <th>Ai đang giữ</th>
+            <th>Vướng gì</th>
+            <th />
+          </THead>
+          <tbody>
+            {shown.map((r) => {
+              const d = r.lsx.ship_date ? daysLeft(r.lsx.ship_date) : null
+              const s = snag(r)
+              return (
+                <Row key={r.lsx.id}>
+                  <Cell pin title={r.lsx.code}>
+                    <b className="num">{r.lsx.code}</b>
+                    {r.lsx.order_codes.length > 0 && (
+                      <span className="mt-[2px] block text-[var(--fs-sm)] text-[var(--ink-3)]">
+                        {r.lsx.order_codes.join(' · ')}
+                      </span>
+                    )}
+                  </Cell>
+                  <Cell grow title={r.lsx.customer_name}>
+                    {r.lsx.customer_name}
+                  </Cell>
+                  <Cell>
+                    {r.lsx.ship_date ? (
+                      <>
+                        <span className="num">{fmtDate(r.lsx.ship_date)}</span>
+                        {d != null && (
+                          <span
+                            className={`ml-1 text-[var(--fs-sm)] ${
+                              d < 0
+                                ? 'font-semibold text-[var(--stop)]'
+                                : d <= 7
+                                  ? 'font-semibold text-[var(--warn)]'
+                                  : 'text-[var(--ink-3)]'
+                            }`}
+                          >
+                            {d < 0
+                              ? `trễ ${fmt(-d)}đ`
+                              : d === 0
+                                ? 'HÔM NAY'
+                                : `còn ${fmt(d)}đ`}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-[var(--ink-3)]">chưa có hạn</span>
+                    )}
+                  </Cell>
+                  <Cell>
+                    <StageStrip chips={r.chips} stages={stages} />
+                  </Cell>
+                  <Cell num>
+                    {r.qty_needed > 0 ? (
+                      <CoverageBar
+                        ratio={r.qty_done / r.qty_needed}
+                        label={`${Math.round((r.qty_done / r.qty_needed) * 100)}%`}
+                      />
+                    ) : (
+                      <span className="text-[var(--ink-3)]">—</span>
+                    )}
+                  </Cell>
+                  <Cell>
+                    {r.forecast_date ? (
+                      <span className="num">{fmtDate(r.forecast_date)}</span>
+                    ) : (
+                      // Không bịa ngày: chưa có nhịp ghi sổ thì không suy được.
+                      <span className="text-[var(--ink-3)]">chưa đoán được</span>
+                    )}
+                  </Cell>
+                  <Cell title={r.holder.what}>
+                    {r.holder.who}
+                    {r.holder.days != null && !r.holder.closed && (
+                      <span
+                        className={`ml-1 text-[var(--fs-sm)] ${
+                          isStale(r.holder)
+                            ? 'font-semibold text-[var(--warn)]'
+                            : 'text-[var(--ink-3)]'
+                        }`}
+                      >
+                        {r.holder.days === 0 ? 'từ hôm nay' : `${r.holder.days}đ`}
+                      </span>
+                    )}
+                  </Cell>
+                  <Cell>
+                    {s ? <Tag tone={s.tone}>{s.text}</Tag> : <Tag tone="done">trôi</Tag>}
+                  </Cell>
+                  <Cell>
+                    <span className="flex justify-end gap-1">
+                      {canRecord && r.component_count > 0 && (
+                        <Btn href={`/thongke/ghi?lsx=${r.lsx.id}`}>Ghi sổ</Btn>
+                      )}
+                      <Btn href={`/thongke/lsx/${r.lsx.id}`}>Mở</Btn>
+                    </span>
+                  </Cell>
+                </Row>
+              )
+            })}
+          </tbody>
+          <TFoot
+            label={<td>Cộng {fmt(shown.length)} lệnh</td>}
+            cells={
+              <>
+                <td colSpan={3} />
+                <td className="num" style={{ textAlign: 'right' }}>
+                  {totalSets > 0 ? `${Math.round((doneSets / totalSets) * 100)}%` : '—'}
+                </td>
+                <td colSpan={4} />
+              </>
+            }
+            caveat="“Bộ xong” cộng theo Σ cần / Σ đã làm của mọi công đoạn — không phải số bộ đã đóng gói."
+          />
+        </Table>
+      )}
+    </ScreenFrame>
+  )
+}

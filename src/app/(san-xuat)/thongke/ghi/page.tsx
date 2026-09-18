@@ -11,8 +11,8 @@ import { isProductionStaff } from '@/modules/dept/production/perms'
 import { PageHeader } from '@/components/erp/PageHeader'
 import { DocChip } from '@/components/erp/DocChip'
 import { EmptyState } from '@/components/erp/EmptyState'
+import { Btn, Empty } from '@/components/kit'
 import { EntrySheetForm } from './EntrySheetForm'
-import { LsxSwitcher } from './LsxSwitcher'
 
 export const dynamic = 'force-dynamic'
 
@@ -141,40 +141,32 @@ export default async function GhiSanLuongPage({
   const sheet = await loadEntrySheet(chosen.lsx_id, sp.stage ?? null)
 
   return (
-    <div className="flex flex-col gap-3">
-      <PageHeader
-        breadcrumbs={[
-          { label: 'Thống kê xưởng', href: '/thongke' },
-          { label: 'Ghi sản lượng', href: '/thongke/ghi' },
-          { label: chosen.lsx_code },
-        ]}
-        title="Ghi sản lượng"
-        description={chosen.customer_name}
-      />
+    // KHÔNG có PageHeader: khuôn F cấm mọi hàng đầu trang thừa — mỗi hàng là
+    // một hàng lưới bị lấy mất. Nhận dạng lệnh nằm trong dải chip ngay trên
+    // lưới (chip "Lệnh" đổi được luôn). Lớp token `.kit` do layout khu lo.
+    <>
       {sheet ? (
         <EntrySheetForm
           key={`${sheet.lsx.id}|${sheet.stage}`}
           sheet={sheet}
           userTeamId={user.department_id ?? null}
-          lsxSwitcher={
-            <LsxSwitcher
-              options={cards.map((c) => ({
-                id: c.lsx_id,
-                code: c.lsx_code,
-                customer_name: c.customer_name,
-                open_count: c.open_count,
-              }))}
-              current={chosen.lsx_id}
-            />
-          }
+          lsxOptions={cards.map((c) => ({
+            id: c.lsx_id,
+            code: c.lsx_code,
+            open_count: c.open_count,
+          }))}
         />
       ) : (
-        <EmptyState
-          icon="▦"
-          title="Lệnh này chưa định hình chi tiết"
-          description="Nạp từ BOM kỹ thuật hoặc gõ tay ở màn Định hình — xong là ghi được ngay."
+        <Empty
+          headline="Lệnh này chưa định hình chi tiết"
+          reason="Không có bảng chi tiết thì không biết phải ghi sản lượng cho cái gì — sổ sẽ trắng."
+          next={
+            <Btn primary href={`/thongke/lsx/${chosen.lsx_id}/dinh-hinh`}>
+              Định hình từ BOM
+            </Btn>
+          }
         />
       )}
-    </div>
+    </>
   )
 }
