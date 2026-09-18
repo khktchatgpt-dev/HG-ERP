@@ -37,7 +37,7 @@ for (const p of pos.sort((a, b) => a.code.localeCompare(b.code))) {
   const { data: ln } = await db
     .from('supply_purchase_order_lines')
     .select(
-      'sort_order, line_name, line_unit, spec, qty_ordered, unit_price, weight_per_unit, material_id, note',
+      'sort_order, line_name, line_unit, spec, qty_ordered, unit_price, weight_per_unit, qty2, unit2, price_basis, material_id, note',
     )
     .eq('po_id', p.id)
     .order('sort_order')
@@ -46,7 +46,12 @@ for (const p of pos.sort((a, b) => a.code.localeCompare(b.code))) {
     .select('id, code, name, needs_review')
     .in('id', [...new Set(ln.map((l) => l.material_id))])
   const M = new Map(mm.map((m) => [m.id, m]))
-  const tien = ln.reduce((a, b) => a + Number(b.qty_ordered) * Number(b.unit_price), 0)
+  // ĐÚNG công thức poLineAmount: đơn tính theo kg thì tiền = qty2 × đơn giá.
+  // Tự nhân qty_ordered × unit_price là cách đọc sai đã làm hỏng lần nạp đầu.
+  const amt = (l) =>
+    (l.price_basis === 'unit2' ? Number(l.qty2 ?? 0) : Number(l.qty_ordered)) *
+    Number(l.unit_price)
+  const tien = ln.reduce((a, b) => a + amt(b), 0)
   out.push({
     code: p.code,
     ncc: S.get(p.supplier_id),
@@ -66,7 +71,8 @@ for (const p of pos.sort((a, b) => a.code.localeCompare(b.code))) {
       spec: l.spec,
       sl: Number(l.qty_ordered),
       gia: Number(l.unit_price),
-      tt: Math.round(Number(l.qty_ordered) * Number(l.unit_price)),
+      tt: Math.round(amt(l)),
+      tong_kg: l.qty2 != null ? Number(l.qty2) : null,
       kg_don_vi: l.weight_per_unit != null ? Number(l.weight_per_unit) : null,
       vt_code: M.get(l.material_id)?.code ?? null,
       vt_ten: M.get(l.material_id)?.name ?? null,
