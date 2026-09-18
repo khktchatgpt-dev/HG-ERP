@@ -25,6 +25,7 @@ import {
 } from '@/components/kit'
 import { assessPoLate, isMissingEta } from '@/lib/late-risk'
 import { assessPoFit } from '@/lib/po-fit'
+import { fmtMoney } from '@/lib/po-line'
 import {
   PO_NEXT_HINT,
   PO_STATUS_LABEL,
@@ -306,14 +307,14 @@ export function DonScreen({
                 {' '}
                 ·{' '}
                 <span className="num">
-                  {x.total.toLocaleString('vi-VN')} {x.currency}
+                  {fmtMoney(x.total, x.currency)} {x.currency}
                 </span>
               </span>
             )}{' '}
             {/* prettier-ignore */}
             {x.otherTotals.map(
               (t) =>
-              <span key={t.currency}> · <span className="num">{t.total.toLocaleString('vi-VN')} {t.currency}</span></span>, // prettier-ignore
+              <span key={t.currency}> · <span className="num">{fmtMoney(t.total, t.currency)} {t.currency}</span></span>, // prettier-ignore
             )}
             {x.late > 0 && (
               <span className="text-[var(--stop)]"> · {x.late} quá hẹn</span>
@@ -809,7 +810,7 @@ export function DonScreen({
                               <Num
                                 value={
                                   p.total
-                                    ? `${p.total.toLocaleString('vi-VN')} ${p.currency}`
+                                    ? `${fmtMoney(p.total, p.currency)} ${p.currency}`
                                     : ''
                                 }
                                 strong
