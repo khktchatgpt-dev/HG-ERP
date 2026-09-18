@@ -25,4 +25,29 @@ describe('resolveWorkspaceFromPath', () => {
     // /salesforce không phải /sales
     expect(resolveWorkspaceFromPath('/salesforce')).toBeNull()
   })
+
+  describe('altRoutes — ba khu Sản xuất gộp làm một (18/09/2026)', () => {
+    it('/thongke và /kehoach-sx thuộc khu production', () => {
+      expect(resolveWorkspaceFromPath('/thongke')?.id).toBe('production')
+      expect(resolveWorkspaceFromPath('/kehoach-sx')?.id).toBe('production')
+    })
+
+    it('sub-path của altRoute cũng thuộc khu đó', () => {
+      // Nếu hỏng, mọi trang ghi sổ mất sidebar và mất luôn màu khu.
+      expect(resolveWorkspaceFromPath('/thongke/ghi')?.id).toBe('production')
+      expect(resolveWorkspaceFromPath('/thongke/lsx/abc/dinh-hinh')?.id).toBe(
+        'production',
+      )
+      expect(resolveWorkspaceFromPath('/kehoach-sx/chi-tieu')?.id).toBe('production')
+    })
+
+    it('bề mặt XƯỞNG vẫn là workspace riêng', () => {
+      expect(resolveWorkspaceFromPath('/to')?.id).toBe('team')
+      expect(resolveWorkspaceFromPath('/to/lenh')?.id).toBe('team')
+    })
+
+    it('altRoute không nuốt path chỉ GIỐNG tiền tố', () => {
+      expect(resolveWorkspaceFromPath('/thongkexyz')).toBeNull()
+    })
+  })
 })

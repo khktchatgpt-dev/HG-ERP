@@ -35,17 +35,13 @@ import {
 const SENSITIVE: ReadonlySet<WorkspaceId> = new Set(['hr', 'finance', 'system'])
 
 /**
- * GIA ĐÌNH Sản xuất (mỗi vai một workspace — user chốt 07/2026): tổ /to,
- * thống kê /thongke, kế hoạch /kehoach-sx, điều hành /production. Nhà của
- * NV xưởng (dept.workspace_id='production') mở cửa CẢ family — nội bộ xưởng
- * xem lẫn nhau (đã chốt); người ngoài cần 'workspace.view.production'.
+ * GIA ĐÌNH Sản xuất — từ 18/09/2026 còn HAI BỀ MẶT: `production` (văn phòng:
+ * điều hành + ghi sổ + kế hoạch, gộp từ /production + /thongke + /kehoach-sx)
+ * và `team` (mặt xưởng, /to). Nhà của NV xưởng
+ * (dept.workspace_id='production') mở cửa CẢ hai — nội bộ xưởng xem lẫn nhau
+ * (đã chốt); người ngoài cần 'workspace.view.production'.
  */
-const PRODUCTION_FAMILY: ReadonlySet<WorkspaceId> = new Set([
-  'production',
-  'team',
-  'stat',
-  'prodplan',
-])
+const PRODUCTION_FAMILY: ReadonlySet<WorkspaceId> = new Set(['production', 'team'])
 
 /** Phần quyết định ĐƯỢC bằng dữ liệu sync (admin / nhà / khu nhạy cảm). */
 export function canEnterWorkspaceSync(
@@ -85,8 +81,9 @@ export async function userHomeWorkspaceId(user: User): Promise<WorkspaceId | nul
 export async function canEnterWorkspace(user: User, id: WorkspaceId): Promise<boolean> {
   const sync = canEnterWorkspaceSync(user, id, await userHomeWorkspaceId(user))
   if (sync !== 'need-permission') return sync
-  // Kế hoạch SX: planner vào bằng chính quyền nghiệp vụ của vai.
-  if (id === 'prodplan') {
+  // Khu Sản xuất: planner vào bằng chính quyền nghiệp vụ của vai (kế hoạch SX
+  // nay nằm trong khu này — gộp 18/09/2026).
+  if (id === 'production') {
     if (await isPlannerStaff(user)) return true
     if (await canManagePlan(user)) return true
   }
@@ -146,32 +143,33 @@ export async function resolveNavCapabilities(user: User): Promise<Set<string>> {
  */
 export async function hasCrossRole(user: User, id: WorkspaceId): Promise<boolean> {
   if (id === 'production') return isPlannerStaff(user)
-  if (id === 'prodplan') return isPlannerStaff(user)
   if (id === 'warehouse') return isSupplyStaff(user)
   return false
 }
 
 /**
- * Workspace gia đình SX nào HIỂN THỊ trên switcher cho user này — vào được
- * (gate) là một chuyện, switcher chỉ bày đúng "nhà" của vai để đỡ loạn:
- *   NV xưởng nhãn thống kê  → Thống kê + Tổ
+ * Bề mặt Sản xuất nào HIỂN THỊ trên switcher cho user này — vào được (gate)
+ * là một chuyện, switcher chỉ bày đúng bề mặt của vai để đỡ loạn:
+ *   NV xưởng nhãn thống kê  → Sản xuất (văn phòng) + Tổ
  *   NV xưởng khác (tổ)      → Tổ
- *   planner                 → Kế hoạch SX (+ Điều hành để xem toàn cảnh)
- *   quản đốc/GĐ (manager)   → cả 4
- *   người ngoài có quyền xem→ Điều hành (đại diện khu SX)
+ *   planner                 → Sản xuất
+ *   quản đốc/GĐ (manager)   → cả hai
+ *   người ngoài có quyền xem→ Sản xuất
  */
 async function visibleProductionFamily(
   user: User,
   homeId: WorkspaceId | null,
 ): Promise<ReadonlySet<WorkspaceId>> {
   if (user.role === 'admin' || user.role === 'manager') {
-    return new Set(['production', 'team', 'stat', 'prodplan'])
+    return new Set(['production', 'team'])
   }
   if (homeId === 'production') {
-    return (await isProductionStat(user)) ? new Set(['stat', 'team']) : new Set(['team'])
+    return (await isProductionStat(user))
+      ? new Set(['production', 'team'])
+      : new Set(['team'])
   }
   if ((await isPlannerStaff(user)) || (await canManagePlan(user))) {
-    return new Set(['prodplan', 'production'])
+    return new Set(['production'])
   }
   return new Set(['production'])
 }
@@ -199,7 +197,7 @@ export async function listAccessibleWorkspaces(
       let ok: boolean
       if (sync !== 'need-permission') ok = sync
       else if (
-        id === 'prodplan' &&
+        id === 'production' &&
         ((await isPlannerStaff(user)) || (await canManagePlan(user)))
       )
         ok = true

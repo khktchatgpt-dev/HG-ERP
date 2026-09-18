@@ -34,8 +34,8 @@ export async function WorkspaceTopbar({
   // Cung ứng định hình trong Sản xuất) cũng không phải "chỉ xem".
   const accent = ACCENT_CLASSES[workspace.accent]
   const homeId = await userHomeWorkspaceId(user)
-  // Gia đình SX (0087): NV xưởng coi team/stat/prodplan/production đều là nhà.
-  const PRODUCTION_FAMILY = ['production', 'team', 'stat', 'prodplan']
+  // Gia đình SX: NV xưởng coi cả hai bề mặt (văn phòng + tổ) đều là nhà.
+  const PRODUCTION_FAMILY = ['production', 'team']
   const isHome =
     homeId === workspace.id ||
     (homeId === 'production' && PRODUCTION_FAMILY.includes(workspace.id))

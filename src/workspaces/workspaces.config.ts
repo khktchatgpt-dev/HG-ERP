@@ -58,10 +58,12 @@ export type WorkspaceId =
   | 'planning'
   | 'qc'
   | 'production'
-  // Gia đình Sản xuất tách theo VAI (user chốt 07/2026): mỗi vai một workspace.
+  // HAI BỀ MẶT (chốt 18/09/2026, thay cách tách theo VAI của 07/2026):
+  // `production` = bề mặt VĂN PHÒNG (điều hành + ghi sổ + kế hoạch, nav lọc
+  // theo vai), `team` = bề mặt XƯỞNG (tablet, một việc mỗi lần). Xem
+  // docs/san-xuat-thiet-ke-giao-dien.md §4 — bốn hệ ERP lớn đều chia theo TƯ
+  // THẾ LÀM VIỆC chứ không theo phòng ban.
   | 'team'
-  | 'stat'
-  | 'prodplan'
   | 'hr'
   | 'exec'
   | 'system'
@@ -83,6 +85,16 @@ export type WorkspaceConfig = {
    * phải là Cung ứng vì nó còn phục vụ.
    */
   home?: string
+  /**
+   * Đường dẫn PHỤ mà workspace này cũng sở hữu — `resolveWorkspaceFromPath`
+   * nhận diện chúng y như `route`.
+   *
+   * Sinh ra khi gộp ba khu Sản xuất làm một (18/09/2026): `/thongke/*` và
+   * `/kehoach-sx/*` vẫn là địa chỉ thật của hàng chục trang đã chạy, nhưng
+   * chúng thuộc về khu `production`. Khai ở đây RẺ hơn nhiều so với dời thư
+   * mục + `MOVED_PREFIXES`, và giữ nguyên mọi link đã phát ra ngoài.
+   */
+  altRoutes?: readonly string[]
   /** Tailwind color name — dùng để tô accent bar, badge, hover. */
   accent:
     | 'orange'
@@ -467,19 +479,76 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
     label: 'Sản xuất',
     short: 'Điều hành SX',
     route: '/production',
+    altRoutes: ['/thongke', '/kehoach-sx'],
     accent: 'red',
     logoText: 'SX',
     ready: true,
-    // Workspace ĐIỀU HÀNH của quản đốc/GĐ — gia đình SX tách theo VAI (07/2026):
-    // tổ ở /to, kế hoạch ở /kehoach-sx. Từ đây quản đốc nhảy sang các
-    // workspace kia qua switcher. (Khu thống kê /thongke đã xoá 26/08/2026.)
+    // BỀ MẶT VĂN PHÒNG của Sản xuất — gộp ba khu cũ (điều hành `/production`,
+    // thống kê `/thongke`, kế hoạch `/kehoach-sx`) làm một, 18/09/2026.
+    //
+    // Vì sao gộp: bốn hệ ERP sản xuất lớn (SAP PP, Dynamics SCM, Odoo MRP,
+    // NetSuite) đều KHÔNG chia module theo phòng ban — họ chia theo TƯ THẾ làm
+    // việc: văn phòng (màn rộng, nhiều bộ lọc) vs mặt xưởng (tablet, nút to,
+    // một việc mỗi lần). Người kiêm nhiệm — thống kê ôm nhiều tổ, quản đốc
+    // kiêm kế hoạch — trước phải nhảy ba khu và tự nhớ mình còn nợ gì bên kia.
+    // Vai xử bằng `capability` ngay dưới đây, không bằng workspace riêng.
+    // Bề mặt XƯỞNG vẫn tách: workspace `team` (/to).
+    //
+    // NAV ĐÃ VỀ ĐÍCH 6 MỤC + 1 công cụ (18/09/2026, sau khi M1–M5 dựng xong).
+    // "Kế hoạch tuần" và "Theo tổ" rút khỏi nav nhưng KHÔNG xoá: chúng là hai
+    // LĂNG KÍNH của cùng bộ số, nên đứng làm đường dẫn ngay cạnh khối tương
+    // ứng ở màn Tình hình xưởng — đúng chỗ người ta nảy ra nhu cầu xem sâu
+    // hơn. Bỏ khỏi nav mà không để đường vào thì là xoá chức năng.
     sections: [
       {
         heading: 'Điều hành xưởng',
         items: [
-          { href: '/production', label: 'Toàn cảnh xưởng', icon: 'factory' },
-          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
+          {
+            href: '/production',
+            label: 'Tình hình xưởng',
+            icon: 'factory',
+            capability: 'production.overview',
+          },
+          { href: '/thongke/lenh', label: 'Lệnh sản xuất', icon: 'factory' },
         ],
+      },
+      {
+        heading: 'Ghi sổ',
+        items: [
+          {
+            href: '/thongke/ghi',
+            label: 'Ghi sản lượng',
+            icon: 'notebook-pen',
+            capability: 'production.record',
+          },
+          {
+            href: '/thongke/ngay',
+            label: 'Sổ ngày & chốt sổ',
+            icon: 'calendar-check',
+            capability: 'production.record',
+          },
+        ],
+      },
+      {
+        heading: 'Kế hoạch',
+        items: [
+          {
+            href: '/kehoach-sx',
+            label: 'Kế hoạch sản xuất',
+            icon: 'calendar-range',
+            capability: 'production.plan',
+          },
+          {
+            href: '/kehoach-sx/chi-tieu',
+            label: 'Chỉ tiêu ngày',
+            icon: 'list-todo',
+            capability: 'production.plan',
+          },
+        ],
+      },
+      {
+        heading: 'Công cụ',
+        items: [{ href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' }],
       },
     ],
   },
@@ -500,54 +569,6 @@ export const WORKSPACES: Record<WorkspaceId, WorkspaceConfig> = {
           { href: '/to', label: 'Việc của tổ', icon: 'hammer' },
           { href: '/to/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
           { href: '/to/qua-trinh', label: 'Quá trình tổ', icon: 'history' },
-          { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
-        ],
-      },
-    ],
-  },
-
-  stat: {
-    id: 'stat',
-    label: 'Thống kê xưởng',
-    short: 'Thống kê',
-    route: '/thongke',
-    accent: 'purple',
-    logoText: 'TK',
-    ready: true,
-    // Dựng lại 26/08/2026 theo khung 5 bước. "Sổ sản lượng" (/thongke) đã XOÁ
-    // 27/08/2026 theo yêu cầu — trang gốc nay redirect sang /thongke/lenh, nên
-    // `route` vẫn để '/thongke' (đích redirect sau đăng nhập vẫn đúng chỗ).
-    sections: [
-      {
-        heading: 'Thống kê',
-        items: [
-          { href: '/thongke/ghi', label: 'Ghi sản lượng', icon: 'notebook-pen' },
-          { href: '/thongke/lenh', label: 'Tiến độ theo lệnh', icon: 'factory' },
-          { href: '/thongke/ngay', label: 'Sổ ngày & chốt sổ', icon: 'calendar-check' },
-        ],
-      },
-    ],
-  },
-
-  prodplan: {
-    id: 'prodplan',
-    label: 'Kế hoạch sản xuất',
-    short: 'Kế hoạch SX',
-    route: '/kehoach-sx',
-    accent: 'violet',
-    logoText: 'KS',
-    ready: true,
-    // Workspace của TRƯỞNG PHÒNG KẾ HOẠCH (planner): lộ trình + giao tổ + hạn.
-    sections: [
-      {
-        heading: 'Kế hoạch',
-        items: [
-          { href: '/kehoach-sx', label: 'Kế hoạch sản xuất', icon: 'calendar-range' },
-          { href: '/kehoach-sx/tuan', label: 'Kế hoạch tuần', icon: 'calendar-check' },
-          { href: '/kehoach-sx/tien-do', label: 'Tiến độ', icon: 'chart-gantt' },
-          { href: '/kehoach-sx/chi-tieu', label: 'Chỉ tiêu ngày', icon: 'list-todo' },
-          { href: '/kehoach-sx/theo-to', label: 'Theo tổ', icon: 'users-round' },
-          { href: '/kehoach-sx/lenh', label: 'Lệnh đang chạy', icon: 'factory' },
           { href: '/cat-phoi', label: 'Quy cắt phôi', icon: 'scissors' },
         ],
       },

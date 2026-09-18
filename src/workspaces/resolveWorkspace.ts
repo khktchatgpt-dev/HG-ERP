@@ -8,10 +8,10 @@ import { WORKSPACES, type WorkspaceConfig, type WorkspaceId } from './workspaces
  *
  * Ưu tiên:
  *   1. Admin không có dept → 'system' (workspace admin)
- *   2. Phòng thuộc workspace 'production' → tách theo VAI (07/2026):
- *      nhãn thống kê → 'stat'; manager (quản đốc) → 'production' điều hành;
- *      còn lại (tổ trưởng/tổ viên) → 'team'.
- *   3. Phòng 'Kế Hoạch Sản Xuất' (planner thuần) → 'prodplan';
+ *   2. Phòng thuộc workspace 'production' → tách theo BỀ MẶT (18/09/2026):
+ *      quản đốc + thống kê → 'production' (văn phòng);
+ *      tổ trưởng/tổ viên → 'team' (mặt xưởng).
+ *   3. Phòng 'Kế Hoạch Sản Xuất' (planner thuần) → 'production';
  *      phòng gộp/Cung ứng giữ 'planning'.
  *   4. User có dept.workspace_id → workspace tương ứng
  *   5. Fallback → null (caller redirect về /tasks)
@@ -36,15 +36,16 @@ export async function resolveDefaultWorkspace(
     return user.role === 'admin' ? WORKSPACES.system : null
   }
 
-  // Gia đình SX: mỗi vai một workspace (nhãn 0087 + role).
+  // HAI BỀ MẶT (18/09/2026): quản đốc và thống kê ngồi máy tính → bề mặt VĂN
+  // PHÒNG `production`; tổ trưởng/tổ viên đứng máy → bề mặt XƯỞNG `team`.
   if (workspaceId === 'production') {
     if (user.role === 'manager' || user.role === 'admin') return WORKSPACES.production
-    if (await hasRoleTag(user, 'production_stat')) return WORKSPACES.stat
+    if (await hasRoleTag(user, 'production_stat')) return WORKSPACES.production
     return WORKSPACES.team
   }
-  // Planner thuần (phòng Kế Hoạch Sản Xuất tách) → workspace Kế hoạch SX.
+  // Planner thuần (phòng Kế Hoạch Sản Xuất tách) cũng ngồi bề mặt văn phòng.
   if (workspaceId === 'planning' && data?.name === 'Kế Hoạch Sản Xuất') {
-    return WORKSPACES.prodplan
+    return WORKSPACES.production
   }
   return WORKSPACES[workspaceId]
 }
@@ -63,8 +64,10 @@ export async function resolveDefaultRoute(user: User): Promise<string> {
  */
 export function resolveWorkspaceFromPath(pathname: string): WorkspaceConfig | null {
   for (const ws of Object.values(WORKSPACES)) {
-    if (pathname === ws.route || pathname.startsWith(ws.route + '/')) {
-      return ws
+    // `altRoutes` cho một workspace sở hữu nhiều gốc đường dẫn — khu Sản xuất
+    // gộp ba khu cũ nên còn giữ `/thongke` và `/kehoach-sx` (18/09/2026).
+    for (const base of [ws.route, ...(ws.altRoutes ?? [])]) {
+      if (pathname === base || pathname.startsWith(base + '/')) return ws
     }
   }
   return null
