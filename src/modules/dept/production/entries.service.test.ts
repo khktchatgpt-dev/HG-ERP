@@ -37,6 +37,13 @@ vi.mock('./day-locks.repo', () => ({
 vi.mock('./transfers.repo', () => ({
   transfersRepo: { listRawByLsx: vi.fn() },
 }))
+// Ô riêng theo công đoạn (0207): không lệnh nào trong các ca dưới đây khai ô
+// nào, nên trả rỗng. `fieldsForStage` giữ hàm THẬT — nó thuần, và mock nó thì
+// mất luôn phần kiểm "khoá lạ bị loại".
+vi.mock('./stage-fields.repo', async (orig) => ({
+  ...(await orig<typeof import('./stage-fields.repo')>()),
+  stageFieldsRepo: { listActive: vi.fn().mockResolvedValue([]) },
+}))
 vi.mock('./outsource.repo', () => ({
   outsourceRepo: { listByLsx: vi.fn() },
 }))
@@ -417,7 +424,7 @@ describe('entriesService.record', () => {
         cluster: null,
         // Không mang nhóm vật tư: bộ thành phẩm không làm từ vật tư nào cả.
         group_code: null,
-        unit: 'bộ',
+        unit: 'cái', // theo dòng lệnh, không còn ghi cứng (19/09)
         qty_per_unit: 1,
         first_stage: 'lap_rap',
         final_stage: 'hoan_thien',
@@ -451,7 +458,7 @@ describe('entriesService.record', () => {
     const fin = {
       ...asm,
       id: 'fin-cu',
-      name: 'Bộ thành phẩm',
+      name: 'Thành phẩm',
       group_code: null,
       first_stage: 'lap_rap',
       final_stage: 'hoan_thien',
@@ -967,7 +974,7 @@ describe('entriesService.summary — chặng thành phẩm (18/09, lib/finish-st
     pcs_per_bar: null,
   })
 
-  it('mọi dòng SP có một dòng "Bộ thành phẩm" ảo, đếm BỘ, cần = SL đặt', async () => {
+  it('mọi dòng SP có một dòng "Thành phẩm" ảo, đơn vị THEO DÒNG LỆNH, cần = SL đặt', async () => {
     vi.mocked(componentsRepo.listByLsx).mockResolvedValue([
       flat('p1', 'CHÂN', 4),
     ] as never)
@@ -978,7 +985,9 @@ describe('entriesService.summary — chặng thành phẩm (18/09, lib/finish-st
     const fin = s.components.find((c) => c.id === 'finish:line1')!
     expect(fin.is_virtual).toBe(true)
     expect(fin.kind).toBe('assembly')
-    expect(fin.unit).toBe('bộ')
+    // Dòng lệnh trong fixture mang đơn vị 'cái' → dòng thành phẩm phải theo
+    // nó. Trước 19/09 chỗ này ghi cứng 'bộ', sai với 88% dòng lệnh thật.
+    expect(fin.unit).toBe('cái')
     expect(fin.total_needed).toBe(50)
     expect(fin.allowed_stages).toEqual(['lap_rap', 'bao_bi', 'dong_goi', 'hoan_thien'])
   })

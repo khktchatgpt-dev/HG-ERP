@@ -34,9 +34,11 @@ import {
   finishRouteOverride,
   finishRowId,
   finishRowLineId,
+  lineUnit,
   isFinishRow,
   isFinishRowId,
 } from '@/lib/finish-stages'
+import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
 import { entryDocsRepo, type EntryDocJoined } from './entry-docs.repo'
@@ -70,8 +72,14 @@ type RecordInput = {
     qty: number
     kg?: number | null
     defect_qty?: number
+    /** Hỏng nhưng cứu được (0206) — không trừ tổng cần, không chạy tiếp. */
+    rework_qty?: number
+    /** Mã lý do từ danh mục — tuỳ chọn, dùng chung cho phế và sửa lại. */
+    defect_code?: string | null
     defect_reason?: string | null
     machine_note?: string | null
+    /** Ô riêng theo công đoạn (0207) — khoá khai ở production_stage_fields. */
+    stage_meta?: Record<string, string | number> | null
     worker_name?: string | null
     finish_state?: 'tran' | 'dang_may' | null
     note?: string | null
@@ -197,6 +205,30 @@ async function loadLsxContext(lsxId: string) {
   }
 }
 
+/**
+ * Lọc ô riêng theo công đoạn (0207) trước khi ghi: bỏ khoá KHÔNG được khai cho
+ * công đoạn này, bỏ giá trị rỗng, và trả null nếu chẳng còn gì.
+ *
+ * Vì sao lọc ở server chứ không tin lưới: khoá đi vào jsonb nên không có ràng
+ * buộc nào ở tầng DB chặn hộ. Một khoá gõ sai (hoặc còn sót lại khi người dùng
+ * đổi tab công đoạn giữa chừng) sẽ nằm im trong sổ, không ai thấy, cho tới lúc
+ * có người gom báo cáo theo khoá đó và số không khớp.
+ */
+function cleanStageMeta(
+  meta: Record<string, string | number> | null | undefined,
+  fields: StageField[],
+): Record<string, string | number> | null {
+  if (!meta) return null
+  const allow = new Map(fields.map((f) => [f.field_key, f]))
+  const out: Record<string, string | number> = {}
+  for (const [k, v] of Object.entries(meta)) {
+    if (!allow.has(k)) continue
+    if (typeof v === 'string' && !v.trim()) continue
+    out[k] = typeof v === 'string' ? v.trim() : v
+  }
+  return Object.keys(out).length ? out : null
+}
+
 export const entriesService = {
   /**
    * Nhập sổ theo LÔ (1 công đoạn + 1 ngày + 1 tổ, nhiều chi tiết).
@@ -214,6 +246,20 @@ export const entriesService = {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
     }
     const byId = new Map(components.map((c) => [c.id, c]))
+    // Ô riêng của công đoạn đang ghi (0207) — dùng để lọc khoá lạ và bắt ô
+    // buộc phải khai. Một truy vấn cho cả lượt, bảng chỉ vài chục dòng.
+    const metaFields = fieldsForStage(await stageFieldsRepo.listActive(), input.stage)
+    for (const e of input.entries) {
+      const meta = cleanStageMeta(e.stage_meta, metaFields)
+      const thieu = metaFields
+        .filter((f) => f.required && meta?.[f.field_key] == null)
+        .map((f) => f.label)
+      if (thieu.length) {
+        throw BadRequest(
+          `"${byId.get(e.component_id)?.name ?? 'Dòng'}" chưa khai: ${thieu.join(' · ')}`,
+        )
+      }
+    }
 
     // ── CỤM MẶC NHIÊN → VẬT CHẤT HOÁ (bậc 2 thang đơn vị đếm, 27/08) ─────────
     // Sổ gửi id ảo `default-asm:<line_id>` khi ghi số BỘ ở hàn+ cho BOM phẳng.
@@ -251,7 +297,7 @@ export const entriesService = {
           // Kế thừa nhóm vật tư của chi tiết bị gộp (FRAME) — nhờ đó lộ trình
           // của cụm suy được cả khi dòng chưa lên kế hoạch SX.
           group_code: absorbed.find((c) => c.group_code)?.group_code ?? null,
-          unit: 'bộ',
+          unit: lineUnit(orderLines.find((l) => l.id === lineId)?.unit),
           qty_per_unit: 1,
           first_stage: plan.virtual_stages[0],
           final_stage: plan.virtual_stages[plan.virtual_stages.length - 1],
@@ -313,7 +359,7 @@ export const entriesService = {
           cluster: null,
           name: FINISH_ROW_NAME,
           group_code: null,
-          unit: 'bộ',
+          unit: lineUnit(line.unit),
           qty_per_unit: 1,
           first_stage: FINISH_STAGES[0],
           final_stage: FINISH_STAGES[FINISH_STAGES.length - 1],
@@ -596,8 +642,18 @@ export const entriesService = {
         // Bỏ trống kg → backflush ĐM × SL (Excel cũng tính, không nhập tay).
         kg: backflushKg(e.kg, byId.get(e.component_id)!.dm_kg, e.qty),
         defect_qty: e.defect_qty ?? 0,
-        defect_reason: (e.defect_qty ?? 0) > 0 ? (e.defect_reason ?? null) : null,
+        rework_qty: e.rework_qty ?? 0,
+        // Lý do chỉ có nghĩa khi dòng CÓ phần không đạt. Dòng toàn đạt mà mang
+        // theo lý do là rác — lưới giữ lại chữ cũ khi người dùng xoá số.
+        ...(() => {
+          const bad = (e.defect_qty ?? 0) > 0 || (e.rework_qty ?? 0) > 0
+          return {
+            defect_code: bad ? (e.defect_code ?? null) : null,
+            defect_reason: bad ? (e.defect_reason ?? null) : null,
+          }
+        })(),
         machine_note: e.machine_note ?? null,
+        stage_meta: cleanStageMeta(e.stage_meta, metaFields),
         worker_name: e.worker_name ?? null,
         finish_state: e.finish_state ?? null,
         note: e.note ?? null,
@@ -694,17 +750,33 @@ export const entriesService = {
     // Gộp sản lượng theo (chi tiết, công đoạn). NHẬN VỀ gia công có công đoạn
     // (0171) cộng vào "đã làm" như Excel gộp cột "Gia công" vào từng khâu —
     // theo dõi riêng phần GC để màn sổ tổng bày "trong đó gia công".
-    const agg = new Map<string, Map<string, { done: number; defect: number }>>()
-    const add = (compId: string, stage: string, qty: number, defect: number) => {
+    const agg = new Map<
+      string,
+      Map<string, { done: number; defect: number; rework: number }>
+    >()
+    const add = (
+      compId: string,
+      stage: string,
+      qty: number,
+      defect: number,
+      rework = 0,
+    ) => {
       const perStage = agg.get(compId) ?? new Map()
-      const cur = perStage.get(stage) ?? { done: 0, defect: 0 }
+      const cur = perStage.get(stage) ?? { done: 0, defect: 0, rework: 0 }
       cur.done += qty
       cur.defect += defect
+      cur.rework += rework
       perStage.set(stage, cur)
       agg.set(compId, perStage)
     }
     for (const en of entries) {
-      add(en.component_id, en.stage, Number(en.qty), Number(en.defect_qty))
+      add(
+        en.component_id,
+        en.stage,
+        Number(en.qty),
+        Number(en.defect_qty),
+        Number(en.rework_qty ?? 0),
+      )
     }
     const gcByCompStage = new Map<string, number>()
     for (const oe of outsource) {
@@ -734,6 +806,7 @@ export const entriesService = {
         stage,
         done: v.done,
         defect: v.defect,
+        rework: v.rework,
       }))
       // Lộ trình của chi tiết: kế hoạch SX thắng; chưa lên kế hoạch thì SUY
       // THEO NHÓM VẬT TƯ (0174 + stage-route).
@@ -802,7 +875,7 @@ export const entriesService = {
         kind: 'assembly',
         cluster: null,
         name: DEFAULT_ASSEMBLY_NAME,
-        unit: 'bộ',
+        unit: lineUnit(l.unit),
         total_needed: l.qty,
         dm_kg: null,
         material_type: null,
@@ -832,7 +905,7 @@ export const entriesService = {
         kind: 'assembly',
         cluster: null,
         name: FINISH_ROW_NAME,
-        unit: 'bộ',
+        unit: lineUnit(l.unit),
         total_needed: l.qty,
         dm_kg: null,
         material_type: null,
@@ -1074,18 +1147,27 @@ export const entriesService = {
     _user: User,
     lsxId: string,
   ): Promise<
-    (EntryDocJoined & { total_qty: number; total_defect: number; line_count: number })[]
+    (EntryDocJoined & {
+      total_qty: number
+      total_defect: number
+      total_rework: number
+      line_count: number
+    })[]
   > {
     const [docs, entries] = await Promise.all([
       entryDocsRepo.listByLsx(lsxId),
       entriesRepo.listByLsx(lsxId),
     ])
-    const sums = new Map<string, { qty: number; defect: number; lines: number }>()
+    const sums = new Map<
+      string,
+      { qty: number; defect: number; rework: number; lines: number }
+    >()
     for (const e of entries) {
       if (!e.doc_id) continue
-      const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, lines: 0 }
+      const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, rework: 0, lines: 0 }
       s.qty += Number(e.qty)
       s.defect += Number(e.defect_qty)
+      s.rework += Number(e.rework_qty ?? 0)
       s.lines++
       sums.set(e.doc_id, s)
     }
@@ -1095,6 +1177,7 @@ export const entriesService = {
         ...d,
         total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
         total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
+        total_rework: Math.round((s?.rework ?? 0) * 100) / 100,
         line_count: s?.lines ?? 0,
       }
     })

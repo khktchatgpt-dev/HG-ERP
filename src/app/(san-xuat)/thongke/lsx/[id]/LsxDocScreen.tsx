@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   Btn,
   Chip,
@@ -16,13 +17,17 @@ import {
   HolderBar,
   Metric,
   MetricStrip,
+  NoticeBar,
   StatusTrack,
   Tag,
   Td,
   Th,
+  TextInput,
   type TrackTone,
 } from '@/components/kit'
 import { DocNotesPanel } from '@/components/doc/DocNotesPanel'
+import { useToast } from '@/components/ui/Toast'
+import { api, apiErrorText } from '@/lib/api'
 import { isStale, type Holder } from '@/lib/lsx-holder'
 import type { WorklistRow } from '@/modules/dept/production/worklist.service'
 import { PhieuTab, type DocRow } from './PhieuTab'
@@ -98,6 +103,8 @@ export function LsxDocScreen({
   rows,
   docs,
   canRecord,
+  canComplete,
+  canForceComplete,
   imageByLine,
   meId,
   meName,
@@ -108,12 +115,20 @@ export function LsxDocScreen({
   rows: WorklistRow[]
   docs: DocRow[]
   canRecord: boolean
+  canComplete: boolean
+  canForceComplete: boolean
   imageByLine: Record<string, string>
   meId: string
   meName: string
 }) {
+  const router = useRouter()
+  const toast = useToast()
   const [onlyOpen, setOnlyOpen] = useState(false)
   const [stage, setStage] = useState('')
+  const [closing, setClosing] = useState(false)
+  /** Ô lý do chỉ mở khi người dùng chọn đường ép — mặc định không bày ra. */
+  const [forceOpen, setForceOpen] = useState(false)
+  const [forceNote, setForceNote] = useState('')
 
   const stagesInLsx = useMemo(
     () => stages.filter((s) => rows.some((r) => r.stage === s.code)),
@@ -165,6 +180,7 @@ export function LsxDocScreen({
   const doneSets = [...lastByLine.values()].reduce((a, x) => a + x.done, 0)
   const openCount = rows.filter((r) => r.status !== 'done').length
   const defect = Math.round(docs.reduce((a, d) => a + d.total_defect, 0) * 100) / 100
+  const rework = Math.round(docs.reduce((a, d) => a + d.total_rework, 0) * 100) / 100
   const drafts = docs.filter((d) => d.status === 'nhap' || d.status === 'tu_choi').length
   const shipLeft =
     lsx.ship_date != null
@@ -176,6 +192,42 @@ export function LsxDocScreen({
       : null
 
   const track = TRACK[lsx.status] ?? { at: 0, tone: 'idle' as TrackTone }
+
+  /**
+   * ĐÓNG LỆNH (lỗ hổng B) — trước 18/09 không có đường nào, nên 5 lệnh đã quá
+   * hạn xuất vẫn nằm ở "đang sản xuất" vĩnh viễn.
+   *
+   * Ba trạng thái, và thứ tự kiểm phải đúng như service:
+   *  - chưa có việc nào  → lệnh chưa lên kế hoạch, đóng là đóng một cái vỏ;
+   *  - còn việc chưa xong → chặn, nhưng nói RÕ còn bao nhiêu và cho xem ngay;
+   *  - xong hết          → nút chính.
+   * Ép qua chỉ dành cho admin/manager, và service bắt buộc có lý do.
+   */
+  const closable = lsx.status === 'approved' || lsx.status === 'in_progress'
+  const noPlan = rows.length === 0
+  const blocked = noPlan || openCount > 0
+
+  async function doComplete(override: boolean) {
+    if (override && !forceNote.trim()) {
+      toast.error('Ép đóng lệnh phải ghi lý do')
+      return
+    }
+    setClosing(true)
+    try {
+      await api(`/api/dept/production/lsx/${lsx.id}/complete`, {
+        method: 'POST',
+        body: { override, note: override ? forceNote.trim() : null },
+      })
+      setForceOpen(false)
+      setForceNote('')
+      toast.success(`Đã đóng lệnh ${lsx.code}`, 'Đơn hàng chuyển sang hoàn thành')
+      router.refresh()
+    } catch (e) {
+      toast.error('Không đóng được lệnh', apiErrorText(e))
+    } finally {
+      setClosing(false)
+    }
+  }
 
   return (
     <DocScreen>
@@ -221,6 +273,56 @@ export function LsxDocScreen({
         }
       />
 
+      {canComplete && closable && !blocked && (
+        <div className="flex items-center gap-[11px] border-b border-[var(--line)] px-[var(--gutter)] py-[9px]">
+          <span className="text-[12.5px] text-[var(--ink-2)]">
+            Mọi công việc đã xong — đóng lệnh để đơn hàng chuyển sang hoàn thành.
+          </span>
+          <Btn primary onClick={() => doComplete(false)} disabled={closing}>
+            {closing ? 'Đang đóng…' : 'Đóng lệnh'}
+          </Btn>
+        </div>
+      )}
+
+      {canComplete && closable && blocked && (
+        <>
+          <NoticeBar
+            tag="Chưa đóng được"
+            action={
+              noPlan
+                ? undefined
+                : forceOpen
+                  ? undefined
+                  : canForceComplete
+                    ? { label: 'Ép đóng kèm lý do', onClick: () => setForceOpen(true) }
+                    : { label: 'Xem việc còn lại', onClick: () => setOnlyOpen(true) }
+            }
+          >
+            {noPlan
+              ? 'Lệnh chưa có công việc nào — cần định hình chi tiết và lên kế hoạch trước.'
+              : `Còn ${fmt(openCount)} việc chưa xong. Công đoạn tự chuyển sang “xong” khi sổ ghi đủ số.`}
+          </NoticeBar>
+          {forceOpen && (
+            <div className="flex items-center gap-[9px] border-b border-[var(--line)] px-[var(--gutter)] py-[9px]">
+              {/*
+                `onCommit` chốt lúc RỜI Ô. Bấm "Ép đóng" vẫn lấy được chữ vừa
+                gõ vì blur chạy trước click; nhưng gõ xong mà bấm Enter thì
+                chưa chắc, nên service vẫn là hàng rào cuối (bắt buộc lý do).
+              */}
+              <TextInput
+                value={forceNote}
+                onCommit={setForceNote}
+                placeholder={`Vì sao đóng lệnh khi còn ${fmt(openCount)} việc dở?`}
+              />
+              <Btn primary onClick={() => doComplete(true)} disabled={closing}>
+                {closing ? 'Đang đóng…' : 'Ép đóng'}
+              </Btn>
+              <Btn onClick={() => setForceOpen(false)}>Thôi</Btn>
+            </div>
+          )}
+        </>
+      )}
+
       <MetricStrip>
         <Metric
           label="Bộ đã xong"
@@ -240,6 +342,18 @@ export function LsxDocScreen({
           basis={`trên ${fmt(docs.length)} phiếu`}
           tone={defect > 0 ? 'warn' : undefined}
         />
+        {/*
+          Chỉ bày khi CÓ hàng chờ sửa. Một ô vĩnh viễn 0 làm loãng dải chỉ số,
+          và ô này là lời nhắc có việc phải làm chứ không phải số thống kê.
+        */}
+        {rework > 0 && (
+          <Metric
+            label="Chờ sửa lại"
+            value={fmt(rework)}
+            basis="chưa tính vào đã xong"
+            tone="warn"
+          />
+        )}
         <Metric
           label="Phiếu nháp"
           value={fmt(drafts)}
@@ -414,4 +528,3 @@ export function LsxDocScreen({
     </DocScreen>
   )
 }
-

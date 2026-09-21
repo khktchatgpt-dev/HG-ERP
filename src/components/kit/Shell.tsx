@@ -447,7 +447,23 @@ export function ScreenHeader({
  * đề trang cụt thành "UNG ỨNG"). Một chỗ giữ lề, một chỗ giữ chiều cao —
  * gộp về cùng component thì không còn hai bên đánh nhau.
  */
-export function ScreenFrame({ children }: { children: ReactNode }) {
+export function ScreenFrame({
+  children,
+  dense = false,
+}: {
+  children: ReactNode
+  /**
+   * Bật mật độ DÀY (`.kit-dense`: hàng 25px thay 30px, đệm dọc 2px thay 5px)
+   * cho riêng màn này.
+   *
+   * Dành cho MÀN NHẬP LƯỚI (khuôn F), nơi người dùng gõ hàng trăm dòng mỗi
+   * ngày và thứ quý nhất là số hàng nhìn thấy cùng lúc. Fiori tách mật độ
+   * thành ba bậc (cozy / compact / condensed) đúng vì lý do đó, và cảnh báo
+   * **không trộn hai mật độ trong cùng một cây DOM** — nên bật ở ĐÂY, ngay
+   * thẻ bọc cả màn, chứ đừng rắc `.kit-dense` vào vài khối con.
+   */
+  dense?: boolean
+}) {
   const ref = useRef<HTMLDivElement>(null)
   const [box, setBox] = useState<{ h: string; m: string } | null>(null)
 
@@ -477,7 +493,9 @@ export function ScreenFrame({ children }: { children: ReactNode }) {
     <div
       ref={ref}
       style={{ height: box?.h ?? 'calc(100dvh - 60px)', margin: box?.m }}
-      className="flex flex-col overflow-hidden"
+      // `kit` phải đi CÙNG `kit-dense` trên một thẻ: token dày khai ở
+      // `.kit.kit-dense`, thiếu vế đầu là không ăn.
+      className={cn('flex flex-col overflow-hidden', dense && 'kit kit-dense')}
     >
       {children}
     </div>

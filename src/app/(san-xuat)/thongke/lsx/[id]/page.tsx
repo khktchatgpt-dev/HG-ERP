@@ -1,4 +1,5 @@
 import { authService } from '@/modules/core/auth/auth.service'
+import { canAction } from '@/modules/core/rbac/rbac.service'
 import { worklistService } from '@/modules/dept/production/worklist.service'
 import { entriesService } from '@/modules/dept/production/entries.service'
 import { productionRepo } from '@/modules/dept/production/production.repo'
@@ -81,6 +82,11 @@ export default async function LsxDocPage({
   )
 
   const canRecord = user.role === 'admin' || (await isProductionStaff(user))
+  // Đóng lệnh = `production.progress.track` (quản đốc, GĐ, admin). Ép đóng khi
+  // còn việc dở thì service chỉ cho admin/manager — hỏi TRƯỚC ở đây để nút nói
+  // đúng thứ bấm được, thay vì cho bấm rồi trả 403.
+  const canComplete = await canAction(user, 'production.progress.track')
+  const canForceComplete = user.role === 'admin' || user.role === 'manager'
 
   return (
     <LsxDocScreen
@@ -111,9 +117,12 @@ export default async function LsxDocPage({
         note: d.note,
         total_qty: d.total_qty,
         total_defect: d.total_defect,
+        total_rework: d.total_rework,
         line_count: d.line_count,
       }))}
       canRecord={canRecord}
+      canComplete={canComplete}
+      canForceComplete={canForceComplete}
       imageByLine={imageByLine}
       meId={user.id}
       meName={user.name ?? user.email}

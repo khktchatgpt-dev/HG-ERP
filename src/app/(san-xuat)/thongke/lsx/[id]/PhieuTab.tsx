@@ -37,6 +37,7 @@ export type DocRow = {
   note: string | null
   total_qty: number
   total_defect: number
+  total_rework: number
   line_count: number
 }
 
@@ -120,6 +121,7 @@ export function PhieuTab({
         <Th num>Dòng</Th>
         <Th num>Σ đạt</Th>
         <Th num>Phế</Th>
+        <Th num>Sửa lại</Th>
         <Th>Trạng thái</Th>
         <Th>Người lập</Th>
         <Th />
@@ -137,6 +139,9 @@ export function PhieuTab({
             <Td num>{fmt(d.total_qty)}</Td>
             <Td num tone={d.total_defect > 0 ? 'warn' : undefined}>
               {d.total_defect > 0 ? fmt(d.total_defect) : ''}
+            </Td>
+            <Td num tone={d.total_rework > 0 ? 'warn' : undefined}>
+              {d.total_rework > 0 ? fmt(d.total_rework) : ''}
             </Td>
             <Td>
               <Tag tone={TONE[d.status]}>{STATUS_LABEL[d.status]}</Tag>

@@ -28,8 +28,17 @@ import { cn } from '@/lib/utils'
 export function Table({
   children,
   inline = false,
+  onScroll,
 }: {
   children: ReactNode
+  /**
+   * Bắt sự kiện cuộn của chính vùng cuộn bảng.
+   *
+   * Cần vì bảng chính cuộn TRONG `ScreenFrame` chứ không cuộn theo trang —
+   * `window.scroll` không bao giờ bắn, nên màn muốn co đầu trang khi người
+   * dùng cuộn xuống (mẫu Dynamic Page của Fiori) phải nghe ở đây.
+   */
+  onScroll?: React.UIEventHandler<HTMLDivElement>
   /**
    * BẢNG PHỤ NẰM TRONG MỘT KHỐI — không phải bảng chính của màn.
    *
@@ -52,6 +61,7 @@ export function Table({
   */
   return (
     <div
+      onScroll={onScroll}
       className={cn(
         'min-w-0 overflow-auto bg-[var(--surface-card)]',
         inline ? 'max-h-[var(--table-inline-max,240px)] shrink-0' : 'flex-1',
@@ -285,10 +295,22 @@ export function TFoot({
   label,
   cells,
   caveat,
+  caveatSpan = 2,
 }: {
   label: ReactNode
   cells: ReactNode
   caveat?: ReactNode
+  /**
+   * Số cột ô caveat chiếm. Mặc định 2 — hợp với phần lớn bảng, và giữ nguyên
+   * cho 10 màn đã dựng trước 21/09/2026.
+   *
+   * VÌ SAO PHẢI MỞ RA CHO CALLER CHỈNH: tổng cột của chân bảng =
+   * nhãn + `cells` + caveat, và nó PHẢI bằng số cột của `THead`. Lệch thì
+   * trình duyệt không ném lỗi nào — nó bóp cột cuối lại và chữ caveat xếp
+   * DỌC một ký tự mỗi dòng, ăn hết chiều cao bảng. Đã dính đúng vậy ở màn ghi
+   * sản lượng (8 cột, nhưng chân bảng cộng ra 9).
+   */
+  caveatSpan?: number
 }) {
   /*
     z-index của chân bảng phải CAO HƠN cột ghim trái.
@@ -306,7 +328,10 @@ export function TFoot({
         {label}
         {cells}
         {caveat && (
-          <td className="text-[11.5px] font-normal text-[var(--ink-3)]" colSpan={2}>
+          <td
+            className="text-[11.5px] font-normal text-[var(--ink-3)]"
+            colSpan={caveatSpan}
+          >
             {caveat}
           </td>
         )}

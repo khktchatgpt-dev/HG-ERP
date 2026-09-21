@@ -193,6 +193,8 @@ export type TodayPulse = {
   qty: number
   kg: number
   defect: number
+  /** Đang chờ sửa (0206) — không nằm trong `qty`, món chưa mất cũng chưa xong. */
+  rework: number
   /** Σ chỉ tiêu hôm nay suy từ lộ trình (deriveDailyTarget) — 0 = chưa lệnh
    *  nào lên kế hoạch. So với `qty` để ra % tiến độ ngày. */
   target: number
@@ -581,10 +583,12 @@ export const jobsService = {
     let pulseQty = 0
     let pulseKg = 0
     let pulseDefect = 0
+    let pulseRework = 0
     for (const e of todayEntries) {
       pulseQty += e.qty
       pulseKg += e.kg ?? 0
       pulseDefect += e.defect_qty
+      pulseRework += e.rework_qty ?? 0
       if (e.team_department_id) {
         const t = todayByTeam.get(e.team_department_id) ?? { qty: 0, defect: 0 }
         t.qty += e.qty
@@ -716,6 +720,7 @@ export const jobsService = {
       qty: pulseQty,
       kg: Math.round(pulseKg * 10) / 10,
       defect: pulseDefect,
+      rework: pulseRework,
       target: Math.round(planTarget),
       teams_active: activeTeamIds.size,
       teams_locked: [...activeTeamIds].filter((id) => lockedTeams.has(id)).length,

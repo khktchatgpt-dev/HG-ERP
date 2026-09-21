@@ -161,6 +161,15 @@ export function TinhHinhScreen({
             basis={pulse.qty > 0 ? `trên ${fmt(pulse.qty)} đạt` : 'chưa có sổ'}
             tone={pulse.defect > 0 ? 'warn' : undefined}
           />
+          {/* Chỉ bày khi có — ô vĩnh viễn 0 làm loãng dải nhịp ngày. */}
+          {pulse.rework > 0 && (
+            <Metric
+              label="Chờ sửa lại"
+              value={fmt(pulse.rework)}
+              basis="chưa tính vào đạt"
+              tone="warn"
+            />
+          )}
           <Metric
             label="Tổ đã chốt sổ"
             value={fmt(pulse.teams_locked)}

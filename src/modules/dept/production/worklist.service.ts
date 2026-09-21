@@ -1,4 +1,6 @@
 import { componentsRepo } from './components.repo'
+import { codesForStage, defectCodesRepo, type DefectCode } from './defect-codes.repo'
+import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { entriesRepo } from './entries.repo'
 import { productionRepo } from './production.repo'
 import { jobsRepo } from './jobs.repo'
@@ -18,6 +20,7 @@ import {
   finishRowId,
   isFinishRow,
   isFinishStage,
+  lineUnit,
 } from '@/lib/finish-stages'
 import { countsAsOfficial, countsAsPending } from '@/lib/entry-doc-flow'
 import type { EntryDocStatus } from '@/lib/entry-doc-flow'
@@ -400,26 +403,40 @@ export type EntrySheetLine = {
 
 export type EntrySheetGroup = {
   order_line_id: string
+  /** Lệnh chứa dòng SP này — lưới gom theo LỆNH rồi mới tới SP (21/09). */
+  lsx_id: string
+  lsx_code: string
+  customer_name: string
   product_code: string
   product_name: string
-  /** SL đặt của dòng — đơn vị BỘ. */
+  /** SL đặt của dòng. Đơn vị nằm ở `unit` — KHÔNG mặc định "bộ" nữa (19/09). */
   qty: number
+  /**
+   * Đơn vị của dòng lệnh. Chủ dự án chốt 19/09: mọi SP tính theo CÁI trong sản
+   * xuất, đóng gói mới tuỳ khách — và 88% dòng lệnh thật vốn đã là "cái".
+   */
+  unit: string
   /** Ảnh SP (URL ký HMAC ổn định) — thống kê đối chiếu với sổ giấy bằng mắt. */
   image_src: string | null
   lines: EntrySheetLine[]
 }
 
 export type EntrySheet = {
+  /**
+   * Lệnh đang được LỌC HẸP, null = đang mở mọi lệnh đang chạy (mặc định).
+   * Không còn là "lệnh của phiếu" nữa: một lượt gõ có thể trải nhiều lệnh và
+   * lúc Ghi sổ sẽ tách thành nhiều phiếu, mỗi lệnh một phiếu.
+   */
   lsx: {
     id: string
     code: string
     customer_name: string
     ship_date: string | null
     status: string
-  }
+  } | null
   stage: string
   stage_label: string
-  /** Công đoạn CÓ VIỆC của lệnh, đúng thứ tự danh mục — dải chip chuyển tab. */
+  /** Công đoạn CÓ VIỆC trong phạm vi, đúng thứ tự danh mục — dải chip đổi tab. */
   stages: { code: string; label: string }[]
   /** Tổ xưởng + công đoạn phụ trách — mặc định chọn tổ khớp công đoạn. */
   teams: { id: string; name: string; stage_code: string | null }[]
@@ -428,6 +445,15 @@ export type EntrySheet = {
   suggested: { component_id: string; team_id: string }[]
   /** Lý do phế dùng 30 ngày gần đây — gợi ý gõ nhanh. */
   recent_defect_reasons: string[]
+  /** Mã lý do dùng được ở CÔNG ĐOẠN ĐANG MỞ (riêng + dùng chung), đã xếp. */
+  defect_codes: DefectCode[]
+  /**
+   * Số dòng bị CẮT vì vượt trần hiển thị. > 0 = lưới chưa bày hết, người dùng
+   * phải lọc hẹp lại (chọn một lệnh). 0 = đang thấy đủ.
+   */
+  truncated: number
+  /** Ô nhập RIÊNG của công đoạn đang mở (0207) — khai ở production_stage_fields. */
+  stage_fields: StageField[]
   today: string
   /** false = lệnh chưa duyệt / đã kết thúc → màn chỉ xem. */
   can_record: boolean
@@ -437,22 +463,53 @@ export type EntrySheet = {
  * Tải dữ liệu màn lập phiếu. `stage` bỏ trống / không có việc → công đoạn đầu
  * tiên có việc của lệnh. Trả null khi lệnh không tồn tại hoặc không có việc.
  */
+/**
+ * PHẠM VI MỞ MÀN — đổi 21/09/2026 từ "một LỆNH" sang "mọi lệnh đang chạy".
+ *
+ * Vì sao: đối chiếu bốn hệ ERP cho thấy **không hệ hiện đại nào lấy LỆNH làm
+ * phạm vi bắt buộc của màn ghi sản lượng** — SAP Fiori "Confirm Production
+ * Operations" mở theo work center của người dùng và lệnh chỉ là ô tìm; D365
+ * Production floor execution mở thẳng "All jobs" với LỆNH LÀ MỘT CỘT; chỉ
+ * NetSuite còn bắt chọn một lệnh. Sổ Excel thật của thống kê cũng tổ chức theo
+ * "tổ/công đoạn/ngày trước, LSX sau".
+ *
+ * Số lệnh một tổ đụng trong một ngày là KHÔNG CỐ ĐỊNH (chủ dự án 21/09). Bắt
+ * chọn lệnh trước nghĩa là hôm nào tổ làm 3 lệnh thì phải mở màn 3 lần.
+ *
+ * `lsxId` giữ lại nhưng thành TUỲ CHỌN: ai muốn hẹp về một lệnh vẫn hẹp được.
+ */
 export async function loadEntrySheet(
-  lsxId: string,
-  stageWanted?: string | null,
+  filter: { stage?: string | null; lsxId?: string | null } = {},
 ): Promise<EntrySheet | null> {
-  const [lsx, components, lines, jobs, entries, stagesCat, depts, transfers] =
-    await Promise.all([
-      productionRepo.findById(lsxId),
-      componentsRepo.listByLsx(lsxId),
-      lsxLinesRepo.listLines(lsxId),
-      jobsRepo.listByLsx(lsxId),
-      entriesRepo.listByLsxWithStatus(lsxId),
-      productionRepo.listStages(),
-      departmentsRepo.list(),
-      transfersRepo.listRawByLsx(lsxId),
-    ])
-  if (!lsx || lines.length === 0) return null
+  const activeLsx = await productionRepo.listActive()
+  const scope = filter.lsxId ? activeLsx.filter((l) => l.id === filter.lsxId) : activeLsx
+  const ids = scope.map((l) => l.id)
+  if (ids.length === 0) return null
+  const stageWanted = filter.stage
+
+  const [
+    components,
+    lines,
+    jobs,
+    entries,
+    stagesCat,
+    depts,
+    transfers,
+    allDefectCodes,
+    allStageFields,
+  ] = await Promise.all([
+    componentsRepo.listByLsxBulk(ids),
+    lsxLinesRepo.listLinesBulk(ids),
+    jobsRepo.listByLsxBulk(ids),
+    entriesRepo.listByLsxWithStatusBulk(ids),
+    productionRepo.listStages(),
+    departmentsRepo.list(),
+    transfersRepo.listRawByLsxBulk(ids),
+    defectCodesRepo.listActive(),
+    stageFieldsRepo.listActive(),
+  ])
+  if (lines.length === 0) return null
+  const lsxById = new Map(scope.map((l) => [l.id, l]))
 
   const plannedByLine = new Map<string, string[]>()
   for (const j of [...jobs].sort((a, b) => a.seq - b.seq)) {
@@ -589,7 +646,7 @@ export async function loadEntrySheet(
         is_virtual: true,
         cluster: null,
         name: DEFAULT_ASSEMBLY_NAME,
-        unit: 'bộ',
+        unit: lineUnit(line.unit),
         dm_kg: null,
         needed: line.qty,
         done: vDone,
@@ -608,7 +665,7 @@ export async function loadEntrySheet(
         is_virtual: true,
         cluster: null,
         name: FINISH_ROW_NAME,
-        unit: 'bộ',
+        unit: lineUnit(line.unit),
         dm_kg: null,
         needed: line.qty,
         done: 0,
@@ -619,11 +676,16 @@ export async function loadEntrySheet(
     }
 
     if (out.length > 0) {
+      const own = lsxById.get(line.production_order_id)
       groups.push({
         order_line_id: line.id,
+        lsx_id: line.production_order_id,
+        lsx_code: own?.code ?? '',
+        customer_name: own?.customer_name ?? '',
         product_code: line.product_code,
         product_name: line.name_vi ?? line.product_code,
         qty: line.qty,
+        unit: lineUnit(line.unit),
         image_src: imageOf(line),
         lines: out,
       })
@@ -674,14 +736,46 @@ export async function loadEntrySheet(
   }
   reasons.sort((a, b) => b.at.localeCompare(a.at))
 
+  // Lệnh đang lọc hẹp (nếu có). Mở toàn phạm vi thì null — lệnh nằm ở từng
+  // nhóm của lưới, không phải một thuộc tính của cả phiếu nữa.
+  const only = filter.lsxId ? scope[0] : null
+
+  /*
+    TRẦN HIỂN THỊ. Mở mọi lệnh ở công đoạn Phôi ra 414 dòng nhập (đo
+    21/09/2026) — quá dài để gõ, và đúng nỗi lo "đừng đổ hết mọi lệnh vào một
+    bảng" đã nêu 27/08.
+
+    SAPUI5 khuyến cáo không quá 200 mục một lượt trong responsive table và
+    "hãy chắc rằng người dùng lọc được dữ liệu"; D365 khi vượt trần thì BÁO
+    NGƯỜI DÙNG LỌC HẸP LẠI chứ không im lặng cắt. Làm đúng vậy: cắt ở mốc
+    tròn, trả về số bị cắt để màn nói ra và chỉ đường lọc.
+
+    Cắt theo NHÓM nguyên vẹn, không cắt giữa một dòng SP — nửa bảng chi tiết
+    của một SP là thứ không ai đối chiếu được với sổ giấy.
+  */
+  const MAX_LINES = 200
+  let shown = 0
+  let truncated = 0
+  const capped: EntrySheetGroup[] = []
+  for (const g of groups) {
+    if (shown >= MAX_LINES) {
+      truncated += g.lines.length
+      continue
+    }
+    capped.push(g)
+    shown += g.lines.length
+  }
+
   return {
-    lsx: {
-      id: lsx.id,
-      code: lsx.code,
-      customer_name: lsx.customer_name,
-      ship_date: lsx.ship_date,
-      status: lsx.status,
-    },
+    lsx: only
+      ? {
+          id: only.id,
+          code: only.code,
+          customer_name: only.customer_name,
+          ship_date: only.ship_date,
+          status: only.status,
+        }
+      : null,
     stage,
     stage_label: stagesCat.find((s) => s.code === stage)?.label ?? stage,
     stages,
@@ -692,10 +786,17 @@ export async function loadEntrySheet(
         name: d.name,
         stage_code: resolveTeamStage(d, stagesCat),
       })),
-    groups,
+    groups: capped,
     suggested,
     recent_defect_reasons: reasons.slice(0, 15).map((r) => r.reason),
+    defect_codes: codesForStage(allDefectCodes, stage),
+    truncated,
+    stage_fields: fieldsForStage(allStageFields, stage),
     today: todayIso,
-    can_record: lsx.status === 'approved' || lsx.status === 'in_progress',
+    // `listActive` vốn chỉ trả lệnh approved/in_progress, nên mọi lệnh trong
+    // phạm vi đều ghi được. Lọc hẹp về một lệnh thì vẫn kiểm lại cho chắc.
+    can_record: only
+      ? only.status === 'approved' || only.status === 'in_progress'
+      : scope.length > 0,
   }
 }

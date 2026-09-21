@@ -5,6 +5,7 @@ import { docTemplatesService } from '@/modules/core/doc-templates/doc-templates.
 import { resolveSignatures } from '@/lib/doc-templates'
 import { entryDocsRepo } from '@/modules/dept/production/entry-docs.repo'
 import { entriesRepo } from '@/modules/dept/production/entries.repo'
+import { defectCodesRepo } from '@/modules/dept/production/defect-codes.repo'
 import { productionRepo } from '@/modules/dept/production/production.repo'
 import {
   PrintLetterhead,
@@ -27,8 +28,8 @@ import {
  * Mọi khối khung (đầu phiếu, tiêu đề, chữ ký) dùng chung `PrintSheet` nên tờ
  * này trông cùng một nhà với phiếu mua, phiếu kho, lệnh sản xuất.
  *
- * DỌC chứ không ngang: phiếu chỉ 6 cột và thường dưới 30 dòng; in ngang là
- * phí nửa tờ giấy.
+ * DỌC chứ không ngang: phiếu 7 cột và thường dưới 30 dòng; in ngang là phí
+ * nửa tờ giấy.
  */
 export default async function PhieuSxPrintPage({
   params,
@@ -42,7 +43,7 @@ export default async function PhieuSxPrintPage({
   const doc = await entryDocsRepo.findById(id)
   if (!doc) redirect('/thongke/lenh')
 
-  const [lines, lsx, stages, company, tpl] = await Promise.all([
+  const [lines, lsx, stages, company, tpl, defectCodes] = await Promise.all([
     entriesRepo.listByDoc(id),
     productionRepo.findById(doc.production_order_id),
     productionRepo.listStages(),
@@ -50,11 +51,19 @@ export default async function PhieuSxPrintPage({
     // Mẫu in (0164) — tiêu đề và các cột ký sửa được ở /admin/doc-templates,
     // không phải sửa mã.
     docTemplatesService.get('PBS'),
+    defectCodesRepo.listActive(),
   ])
 
   const stageLabel = stages.find((s) => s.code === doc.stage)?.label ?? doc.stage
   const totalQty = lines.reduce((a, l) => a + Number(l.qty), 0)
   const totalDefect = lines.reduce((a, l) => a + Number(l.defect_qty), 0)
+  const totalRework = lines.reduce((a, l) => a + Number(l.rework_qty ?? 0), 0)
+
+  // Sổ lưu MÃ lý do; tờ giấy phải in chữ người đọc được. Dòng gõ tự do không
+  // có mã thì in nguyên chữ đã gõ.
+  const labelByCode = new Map(defectCodes.map((c) => [c.code, c.label]))
+  const reasonText = (l: { defect_code: string | null; defect_reason: string | null }) =>
+    (l.defect_code ? labelByCode.get(l.defect_code) : null) ?? l.defect_reason ?? ''
   const vnDate = (iso: string) => iso.split('-').reverse().join('/')
 
   return (
@@ -87,7 +96,8 @@ export default async function PhieuSxPrintPage({
             <th className={`${printCell} text-left`}>Chi tiết / cụm</th>
             <th className={`${printCell} w-20`}>SL đạt</th>
             <th className={`${printCell} w-16`}>Phế</th>
-            <th className={`${printCell} text-left`}>Lý do phế</th>
+            <th className={`${printCell} w-16`}>Sửa lại</th>
+            <th className={`${printCell} text-left`}>Lý do</th>
             <th className={`${printCell} w-24`}>Người làm</th>
           </tr>
         </thead>
@@ -105,7 +115,12 @@ export default async function PhieuSxPrintPage({
                   ? Number(l.defect_qty).toLocaleString('vi-VN')
                   : ''}
               </td>
-              <td className={`${printCell} text-left`}>{l.defect_reason ?? ''}</td>
+              <td className={printCell}>
+                {Number(l.rework_qty ?? 0) > 0
+                  ? Number(l.rework_qty).toLocaleString('vi-VN')
+                  : ''}
+              </td>
+              <td className={`${printCell} text-left`}>{reasonText(l)}</td>
               <td className={printCell}>{l.worker_name ?? ''}</td>
             </tr>
           ))}
@@ -116,6 +131,9 @@ export default async function PhieuSxPrintPage({
             <td className={printCell}>{totalQty.toLocaleString('vi-VN')}</td>
             <td className={printCell}>
               {totalDefect > 0 ? totalDefect.toLocaleString('vi-VN') : ''}
+            </td>
+            <td className={printCell}>
+              {totalRework > 0 ? totalRework.toLocaleString('vi-VN') : ''}
             </td>
             <td className={printCell} colSpan={2} />
           </tr>

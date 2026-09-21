@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   FINISH_ROW_NAME,
+  lineUnit,
   FINISH_STAGES,
   finishRouteOverride,
   finishRowId,
@@ -85,6 +86,24 @@ describe('finish-stages — chặng thành phẩm', () => {
   })
 
   it('tên dòng cố định — màn ghi sổ và sổ tổng gọi cùng một tên', () => {
-    expect(FINISH_ROW_NAME).toBe('Bộ thành phẩm')
+    expect(FINISH_ROW_NAME).toBe('Thành phẩm')
+  })
+
+  /**
+   * Chủ dự án chốt 19/09: mọi SP tính theo CÁI trong sản xuất, đóng gói mới
+   * tuỳ khách. Đơn vị dòng thành phẩm vì thế phải theo DÒNG LỆNH, không phải
+   * hằng số "bộ" — 88% dòng lệnh thật mang đơn vị "cái".
+   */
+  describe('lineUnit', () => {
+    it('lấy đúng đơn vị của dòng lệnh', () => {
+      expect(lineUnit('cái')).toBe('cái')
+      expect(lineUnit('bộ')).toBe('bộ')
+    })
+
+    it('trống / chỉ khoảng trắng → "cái", không đoán "bộ"', () => {
+      expect(lineUnit(null)).toBe('cái')
+      expect(lineUnit(undefined)).toBe('cái')
+      expect(lineUnit('   ')).toBe('cái')
+    })
   })
 })

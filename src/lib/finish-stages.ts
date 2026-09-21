@@ -42,8 +42,28 @@ export const FINISH_STAGES: readonly string[] = [
   'hoan_thien',
 ]
 
-/** Tên dòng thành phẩm hiện trên sổ. */
-export const FINISH_ROW_NAME = 'Bộ thành phẩm'
+/**
+ * Tên dòng thành phẩm hiện trên sổ.
+ *
+ * KHÔNG gọi là "Bộ thành phẩm" (tên cũ, sửa 19/09): chủ dự án chốt **mọi sản
+ * phẩm đều tính theo CÁI để tách biệt trong sản xuất**, còn đóng gói mới tuỳ
+ * khách. Đo cùng ngày: 257/291 dòng lệnh (88%) vốn đã mang đơn vị "cái", nên
+ * tên và đơn vị ghi cứng "bộ" là sai với gần như toàn bộ sổ. Đơn vị thật lấy
+ * theo dòng lệnh; tên để trung tính.
+ */
+export const FINISH_ROW_NAME = 'Thành phẩm'
+
+/**
+ * Đơn vị đếm của một dòng SP. Dùng cho CẢ cụm mặc nhiên lẫn dòng thành phẩm —
+ * hai dòng suy này đại diện cho nguyên một sản phẩm, nên đơn vị của chúng phải
+ * là đơn vị của sản phẩm đó, không phải một hằng số.
+ *
+ * Rơi về 'cái' khi dòng lệnh bỏ trống: đó là đơn vị áp đảo trong dữ liệu thật,
+ * và đoán "bộ" cho một cái ghế thì sai nặng hơn đoán "cái" cho một bộ.
+ */
+export function lineUnit(unit: string | null | undefined): string {
+  return unit?.trim() || 'cái'
+}
 
 /** id ảo — KHÔNG trỏ vào bảng nào; service ghi sổ vật chất hoá khi cần. */
 const FINISH_ROW_ID_PREFIX = 'finish:'
