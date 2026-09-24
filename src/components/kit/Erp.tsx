@@ -620,6 +620,7 @@ export function StatusTrack({
  *              im) và vạch `waiting_days >= 7` của Trung tâm duyệt.
  *
  * Dưới 3 ngày: không tô, chữ đậm thường — vừa chuyển bước thì chưa có gì để báo.
+ * Chủ dự án CHỐT ngưỡng này 24/09/2026.
  */
 export const HOLD_AGE_DAYS = { warn: 3, stop: 7 } as const
 
