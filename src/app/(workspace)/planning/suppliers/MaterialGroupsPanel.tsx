@@ -57,7 +57,7 @@ export function MaterialGroupsPanel({
   }
 
   return (
-    <section className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+    <section className="rounded-lg border border-zinc-200 p-3">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-xs font-semibold tracking-wide text-zinc-500 uppercase">
           Nhóm hàng cung cấp
@@ -65,7 +65,7 @@ export function MaterialGroupsPanel({
         {canEdit && !editing && (
           <button
             onClick={() => setEditing(true)}
-            className="text-xs font-medium text-sky-600 hover:underline dark:text-sky-400"
+            className="text-xs font-medium text-sky-600 hover:underline"
           >
             Sửa
           </button>
@@ -90,13 +90,13 @@ export function MaterialGroupsPanel({
             {allGroups.map((g) => (
               <label
                 key={g.id}
-                className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm dark:border-zinc-800"
+                className="flex items-center gap-2 rounded-md border border-zinc-200 px-2.5 py-1.5 text-sm"
               >
                 <input
                   type="checkbox"
                   checked={sel.has(g.id)}
                   onChange={() => toggle(g.id)}
-                  className="h-4 w-4 rounded border-zinc-300 dark:border-zinc-700"
+                  className="h-4 w-4 rounded border-zinc-300"
                 />
                 {g.label}
               </label>
@@ -108,7 +108,7 @@ export function MaterialGroupsPanel({
                 setSel(new Set(initialGroupIds))
                 setEditing(false)
               }}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
             >
               Huỷ
             </button>

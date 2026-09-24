@@ -38,7 +38,7 @@ export function ProgressSlider({
         <div className="mb-1 text-xs font-semibold text-zinc-500 uppercase">
           % hoàn thành
         </div>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-200">
           <div
             className="h-full bg-green-500 transition-all"
             style={{ width: `${initial}%` }}
@@ -65,7 +65,7 @@ export function ProgressSlider({
         onMouseUp={() => save(value)}
         onTouchEnd={() => save(value)}
         disabled={busy}
-        className="w-full accent-zinc-900 dark:accent-white"
+        className="w-full accent-zinc-900"
       />
       {savedFor === value && (
         <p className="mt-1 text-xs text-green-600">Đã lưu {savedFor}%</p>

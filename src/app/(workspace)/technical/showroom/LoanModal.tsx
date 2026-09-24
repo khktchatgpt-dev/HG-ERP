@@ -96,7 +96,7 @@ export function LoanModal({
   return (
     <Modal open onClose={onClose} title={`Ghi mượn — ${sample.code}`}>
       <form onSubmit={submit} className="flex flex-col gap-3">
-        <p className="rounded-md bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-500 dark:bg-zinc-900">
+        <p className="rounded-md bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-500">
           {sample.product_code ? `${sample.product_code} — ` : ''}
           {sample.display_name}
         </p>
@@ -110,8 +110,8 @@ export function LoanModal({
                 onClick={() => setKind(k)}
                 className={`flex-1 rounded-md border px-2 py-1.5 text-xs ${
                   kind === k
-                    ? 'border-sky-500 bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300'
-                    : 'border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900'
+                    ? 'border-sky-500 bg-sky-50 text-sky-700'
+                    : 'border-zinc-300 hover:bg-zinc-50'
                 }`}
               >
                 {BORROWER_KIND_LABEL[k]}

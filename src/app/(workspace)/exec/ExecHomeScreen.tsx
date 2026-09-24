@@ -1,17 +1,8 @@
 import Link from 'next/link'
 import {
-  AlertTriangle,
-  Clock,
-  Factory,
-  FileText,
-  Hourglass,
-  Send,
-  ShoppingCart,
-  Stamp,
-  Warehouse,
-} from 'lucide-react'
-import {
   Btn,
+  Ico,
+  type IcoName,
   Cell,
   NoticeBar,
   Row,
@@ -73,14 +64,14 @@ function pendingHint(
 
 /** Một dòng cảnh báo trong khối "Cần chú ý". */
 function IssueRow({
-  icon: Icon,
+  icon,
   tone,
   count,
   label,
   samples,
   href,
 }: {
-  icon: typeof AlertTriangle
+  icon: IcoName
   tone: 'stop' | 'warn'
   count: number
   label: string
@@ -91,14 +82,14 @@ function IssueRow({
   return (
     <Row>
       <Cell>
-        <Link href={href} className="flex min-w-0 items-center gap-[9px]">
-          <Icon className="size-[14px] shrink-0" style={{ color }} aria-hidden />
-          <b className="num w-[28px] text-right text-[15px]" style={{ color }}>
+        <Link href={href} className="flex min-w-0 items-center gap-2">
+          <Ico name={icon} size={14} className="shrink-0" style={{ color }} />
+          <b className="num text-k-lg w-[28px] text-right" style={{ color }}>
             {count}
           </b>
           <span className="shrink-0">{label}</span>
           {samples.length > 0 && (
-            <span className="num truncate text-[var(--fs-micro)] text-[var(--ink-3)]">
+            <span className="num text-k-label truncate text-[var(--ink-3)]">
               {samples.join(' · ')}
             </span>
           )}
@@ -158,12 +149,12 @@ export function ExecHomeScreen({
         actions={
           <>
             <Btn href="/exec/approvals/history">
-              <FileText className="size-4" aria-hidden />
+              <Ico name="lichSu" />
               Lịch sử ký
             </Btn>
             {pendingTotal > 0 && (
               <Btn primary href="/exec/approvals">
-                <Stamp className="size-4" aria-hidden />
+                <Ico name="duyet" />
                 Duyệt ngay ({pendingTotal})
               </Btn>
             )}
@@ -172,8 +163,8 @@ export function ExecHomeScreen({
       />
 
       {/* ── 1. Chờ tôi phê duyệt ─────────────────────────────────────────── */}
-      <Section icon={Stamp} title="Chờ tôi phê duyệt" />
-      <div className="px-[var(--gutter)] py-[9px]">
+      <Section icon="duyet" title="Chờ tôi phê duyệt" />
+      <div className="px-[var(--gutter)] py-2">
         <WorkTiles>
           <WorkTile
             href="/exec/approvals?loai=lsx"
@@ -209,7 +200,7 @@ export function ExecHomeScreen({
           thể là chưa ai từng lập phiếu trên hệ thống.
         */}
         {pendingTotal === 0 && !(poEverExists && lsxEverExists) && (
-          <p className="mt-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm mt-2 text-[var(--ink-3)]">
             {!lsxEverExists && !poEverExists
               ? 'Hệ thống chưa từng có phiếu nào được lập — không phải bạn đã ký hết.'
               : !poEverExists
@@ -221,7 +212,7 @@ export function ExecHomeScreen({
 
       {/* ── 2. Tình hình hoạt động ───────────────────────────────────────── */}
       <Section title="Tình hình hoạt động" />
-      <div className="px-[var(--gutter)] py-[9px]">
+      <div className="px-[var(--gutter)] py-2">
         <WorkTiles>
           <WorkTile
             href="/exec/orders"
@@ -262,9 +253,9 @@ export function ExecHomeScreen({
       </div>
 
       {/* ── 3. Cần chú ý ─────────────────────────────────────────────────── */}
-      <Section icon={AlertTriangle} title="Cần chú ý" />
+      <Section icon="canhBao" title="Cần chú ý" />
       {issueCount === 0 ? (
-        <p className="px-[var(--gutter)] py-[10px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <p className="text-k-sm px-[var(--gutter)] py-2.5 text-[var(--ink-3)]">
           Không có cảnh báo nào — đơn hàng đúng hạn, hàng mua về đúng hẹn, tồn kho trên
           mức tối thiểu.
         </p>
@@ -273,7 +264,7 @@ export function ExecHomeScreen({
           <tbody>
             {issues.overdue_orders.length > 0 && (
               <IssueRow
-                icon={AlertTriangle}
+                icon="canhBao"
                 tone="stop"
                 count={issues.overdue_orders.length}
                 label="đơn hàng trễ hạn giao"
@@ -285,7 +276,7 @@ export function ExecHomeScreen({
             )}
             {issues.late_pos.length > 0 && (
               <IssueRow
-                icon={AlertTriangle}
+                icon="canhBao"
                 tone="stop"
                 count={issues.late_pos.length}
                 label="đơn mua quá hẹn giao của NCC"
@@ -297,7 +288,7 @@ export function ExecHomeScreen({
             )}
             {issues.stuck_pos.length > 0 && (
               <IssueRow
-                icon={Send}
+                icon="gui"
                 tone="warn"
                 count={issues.stuck_pos.length}
                 label="đơn đã duyệt nhưng chưa gửi NCC"
@@ -309,7 +300,7 @@ export function ExecHomeScreen({
             )}
             {issues.low_stock.length > 0 && (
               <IssueRow
-                icon={Warehouse}
+                icon="kho"
                 tone="warn"
                 count={issues.low_stock.length}
                 label="vật tư dưới mức tồn tối thiểu"
@@ -324,7 +315,7 @@ export function ExecHomeScreen({
       {/* ── 4. Sắp tới hạn giao — GĐ cần thấy trước khi khách gọi ────────── */}
       {sales.due_soon.length > 0 && (
         <>
-          <Section icon={Hourglass} title="Sắp tới hạn giao (≤ 7 ngày)" />
+          <Section icon="hen" title="Sắp tới hạn giao (≤ 7 ngày)" />
           <Table>
             <THead>
               <th style={{ width: 140 }}>Đơn hàng</th>
@@ -345,7 +336,7 @@ export function ExecHomeScreen({
                   <Cell>{o.customer_name}</Cell>
                   <Cell>
                     <Tag tone={o.days_left <= 2 ? 'stop' : 'warn'}>
-                      <Clock className="size-[13px]" aria-hidden />
+                      <Ico name="cho" size={13} />
                       {o.days_left === 0 ? 'hôm nay' : `còn ${o.days_left}n`}
                     </Tag>
                   </Cell>
@@ -388,10 +379,10 @@ export function ExecHomeScreen({
  * Nền xám nhạt + một vạch trên: đủ để mắt chia màn thành từng phần mà không
  * cần thẻ nổi, đúng luật "khối ngăn nhau bằng một vạch mảnh".
  */
-function Section({ icon: Icon, title }: { icon?: typeof Stamp; title: string }) {
+function Section({ icon, title }: { icon?: IcoName; title: string }) {
   return (
-    <div className="flex h-[26px] items-center gap-[6px] border-t border-b border-t-[var(--line)] border-b-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] font-bold tracking-[.08em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
-      {Icon && <Icon className="size-[14px]" aria-hidden />}
+    <div className="text-k-label flex h-[26px] items-center gap-1.5 border-t border-b border-t-[var(--line)] border-b-[var(--hair)] bg-[var(--surface-raised)] px-[var(--gutter)] font-bold tracking-[.08em] text-[var(--ink-label)] uppercase">
+      {icon && <Ico name={icon} size={14} />}
       {title}
     </div>
   )

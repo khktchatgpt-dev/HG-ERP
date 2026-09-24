@@ -4,17 +4,9 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  AlertTriangle,
-  Check,
-  Clock,
-  Factory,
-  FileSearch,
-  FileText,
-  ShoppingCart,
-  Undo2,
-} from 'lucide-react'
-import {
   Btn,
+  Ico,
+  type IcoName,
   Cell,
   Chip,
   Code,
@@ -59,7 +51,7 @@ import type { SignBox, SignItem } from '@/modules/core/exec/exec.service'
  */
 
 const KIND_LABEL = { lsx: 'Lệnh SX', po: 'Đơn mua', quote: 'Báo giá' } as const
-const KIND_ICON = { lsx: Factory, po: ShoppingCart, quote: FileText } as const
+const KIND_ICON: Record<'lsx' | 'po' | 'quote', IcoName> = { lsx: 'lenh', po: 'don', quote: 'baoGia' } // prettier-ignore
 
 export type ApprovalKind = 'all' | 'lsx' | 'po' | 'quote'
 
@@ -170,25 +162,25 @@ export function ApprovalCenterScreen({
         ]}
         actions={
           <Btn href="/exec/approvals/history">
-            <FileText className="size-4" aria-hidden />
+            <Ico name="lichSu" />
             Lịch sử ký
           </Btn>
         }
       />
 
       {box.stats.total > 0 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[5px]">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
           {(['all', 'lsx', 'po', 'quote'] as const).map((k) => {
-            const Icon = k === 'all' ? null : KIND_ICON[k]
+            const icon = k === 'all' ? null : KIND_ICON[k]
             return (
               <Chip key={k} on={kind === k} count={counts[k]} onClick={() => setKind(k)}>
-                {Icon && <Icon className="size-[14px]" aria-hidden />}
+                {icon && <Ico name={icon} size={14} />}
                 {k === 'all' ? 'Tất cả' : KIND_LABEL[k]}
               </Chip>
             )
           })}
           {bulkable.length > 1 && (
-            <label className="ml-auto flex cursor-pointer items-center gap-2 text-[var(--fs-sm)] text-[var(--ink-2)]">
+            <label className="text-k-sm ml-auto flex cursor-pointer items-center gap-2 text-[var(--ink-2)]">
               <Tick
                 checked={bulkable.every((i) => pickedKeys.has(key(i)))}
                 label={`Chọn ${bulkable.length} phiếu ký nhanh được`}
@@ -208,15 +200,15 @@ export function ApprovalCenterScreen({
           <div
             className={
               nhieu
-                ? 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-[5px]'
-                : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-[5px]'
+                ? 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-1'
+                : 'flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--line)] bg-[var(--surface-raised)] px-[var(--gutter)] py-1'
             }
           >
             <span
               className={
                 nhieu
-                  ? 'num mr-1 shrink-0 font-semibold text-[var(--act-text)] text-[var(--fs-sm)]'
-                  : 'mr-1 shrink-0 text-[var(--fs-sm)] text-[var(--ink-3)]'
+                  ? 'num text-k-sm mr-1 shrink-0 font-semibold text-[var(--act-text)]'
+                  : 'text-k-sm mr-1 shrink-0 text-[var(--ink-3)]'
               }
             >
               {nhieu
@@ -238,7 +230,7 @@ export function ApprovalCenterScreen({
                   : sel && askApprove(target(sel))
               }
             >
-              <Check className="size-4" aria-hidden />
+              <Ico name="duyet" />
               {nhieu ? `Ký ${picked.length} phiếu` : 'Ký duyệt'}
             </Btn>
             <Btn
@@ -248,15 +240,15 @@ export function ApprovalCenterScreen({
               }
               onClick={() => sel && askReject(target(sel))}
             >
-              <Undo2 className="size-4" aria-hidden />
+              <Ico name="traLai" />
               Trả lại để sửa
             </Btn>
             <Btn disabled={!sel} title={lyDo} href={sel ? hrefOf(sel) : undefined}>
-              <FileSearch className="size-4" aria-hidden />
+              <Ico name="mo" />
               Xem kỹ
             </Btn>
             {bigCount > 0 && (
-              <span className="ml-auto text-[var(--fs-micro)] text-[var(--ink-3)]">
+              <span className="text-k-label ml-auto text-[var(--ink-3)]">
                 {bigCount} phiếu <b>Giá trị lớn</b> phải mở ra đọc, không ký hàng loạt
                 được
               </span>
@@ -274,7 +266,7 @@ export function ApprovalCenterScreen({
             </THead>
             <tbody>
               {items.map((i) => {
-                const Icon = KIND_ICON[i.kind]
+                const icon = KIND_ICON[i.kind]
                 const gap = i.waiting_days >= 7
                 return (
                   <Row
@@ -293,13 +285,13 @@ export function ApprovalCenterScreen({
                       )}
                     </Cell>
                     <Cell muted>
-                      <span className="flex items-center gap-[5px] font-semibold tracking-[.04em] text-[var(--fs-micro)] uppercase">
-                        <Icon className="size-[13px]" aria-hidden />
+                      <span className="text-k-label flex items-center gap-1 font-semibold tracking-[.04em] uppercase">
+                        <Ico name={icon} size={13} />
                         {KIND_LABEL[i.kind]}
                       </span>
                     </Cell>
                     <Cell>
-                      <span className="flex items-center gap-[6px]">
+                      <span className="flex items-center gap-1.5">
                         <Code as="a" href={hrefOf(i)}>
                           {i.code}
                         </Code>
@@ -309,7 +301,7 @@ export function ApprovalCenterScreen({
                     <Cell>
                       {i.party}
                       {i.facts.length > 0 && (
-                        <span className="ml-1 text-[var(--fs-micro)] text-[var(--ink-3)]">
+                        <span className="text-k-label ml-1 text-[var(--ink-3)]">
                           · {i.facts.join(' · ')}
                         </span>
                       )}
@@ -319,14 +311,14 @@ export function ApprovalCenterScreen({
                       <span
                         className={
                           gap
-                            ? 'flex items-center gap-[5px] font-semibold text-[var(--fs-sm)] text-[var(--stop)]'
-                            : 'flex items-center gap-[5px] text-[var(--fs-sm)] text-[var(--ink-2)]'
+                            ? 'text-k-sm flex items-center gap-1 font-semibold text-[var(--stop)]'
+                            : 'text-k-sm flex items-center gap-1 text-[var(--ink-2)]'
                         }
                       >
                         {gap ? (
-                          <AlertTriangle className="size-[13px]" aria-hidden />
+                          <Ico name="canhBao" size={13} />
                         ) : (
-                          <Clock className="size-[13px]" aria-hidden />
+                          <Ico name="cho" size={13} />
                         )}
                         {i.waiting_days <= 0 ? 'hôm nay' : `${i.waiting_days} ngày`}
                       </span>
@@ -340,16 +332,31 @@ export function ApprovalCenterScreen({
               hỏi đầu tiên của người ký ("tổng bao nhiêu tiền đang chờ tôi")
               phải tự cộng bằng mắt.
             */}
+            {/*
+              CỘT CHÂN BẢNG = 6, BẰNG `THead`. Bản cũ cộng ra 7 (4 + 1 +
+              caveat 2): ô caveat tràn ra ngoài bảng, và vì nó `sticky
+              bottom-0` nên đè lên thân. Chú thích gộp vào ô nhãn — cột cuối
+              ("Chờ") chỉ rộng 104px, nhét câu dài vào đó là chữ xếp dọc.
+            */}
             <TFoot
-              label={<td colSpan={4}>Cộng {items.length} phiếu đang chờ</td>}
-              cells={
-                <td className="num">
-                  {sumByCurrency(items)
-                    .map(([cur, v]) => money(v, cur))
-                    .join(' · ') || '—'}
+              label={
+                <td colSpan={4}>
+                  Cộng {items.length} phiếu đang chờ
+                  <span className="text-k-sm ml-1.5 font-normal text-[var(--ink-3)]">
+                    · cộng riêng từng loại tiền, KHÔNG quy đổi
+                  </span>
                 </td>
               }
-              caveat="Cộng riêng từng loại tiền, KHÔNG quy đổi."
+              cells={
+                <>
+                  <td className="num">
+                    {sumByCurrency(items)
+                      .map(([cur, v]) => money(v, cur))
+                      .join(' · ') || '—'}
+                  </td>
+                  <td />
+                </>
+              }
             />
           </Table>
         </>
@@ -397,11 +404,11 @@ function EmptyCenter({ box, filtered }: { box: SignBox; filtered: boolean }) {
         next={
           <>
             <Btn href="/exec/approvals/history">
-              <FileText className="size-4" aria-hidden />
+              <Ico name="lichSu" />
               Xem lịch sử ký
             </Btn>
             {neverUsed && (
-              <span className="self-center text-[var(--fs-sm)] text-[var(--ink-3)]">
+              <span className="text-k-sm self-center text-[var(--ink-3)]">
                 Cần Kinh doanh phát lệnh sản xuất và Cung ứng lập đơn mua trên hệ thống
                 thì phiếu mới chảy về đây.
               </span>

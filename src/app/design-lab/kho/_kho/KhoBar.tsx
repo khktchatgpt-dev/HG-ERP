@@ -71,7 +71,7 @@ export function KhoBar() {
       className="flex min-h-[38px] flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[3px]"
       aria-label="Màn mẫu phân hệ Kho"
     >
-      <span className="font-bold tracking-[.14em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+      <span className="text-k-label font-bold tracking-[.14em] text-[var(--ink-3)] uppercase">
         Kho · 12 màn
       </span>
       {GROUPS.map((g, gi) => (
@@ -80,7 +80,7 @@ export function KhoBar() {
           {gi === GROUPS.length - 1 && (
             <span className="mr-2 h-[16px] w-px bg-[var(--line)]" aria-hidden />
           )}
-          <span className="mr-1 font-bold tracking-[.1em] text-[var(--fs-micro)] text-[var(--ink-3)] uppercase">
+          <span className="text-k-label mr-1 font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
             {g.label}
           </span>
           {g.items.map((it) => {
@@ -92,13 +92,11 @@ export function KhoBar() {
                 aria-current={on ? 'page' : undefined}
                 className={
                   on
-                    ? 'inline-flex h-[24px] items-center gap-1.5 rounded-[var(--radius)] bg-[var(--act-wash)] px-2.5 font-semibold text-[var(--act-text)] text-[var(--fs-sm)]'
-                    : 'inline-flex h-[24px] items-center gap-1.5 rounded-[var(--radius)] px-2.5 text-[var(--fs-sm)] text-[var(--ink-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--ink)]'
+                    ? 'text-k-sm inline-flex h-[24px] items-center gap-1.5 rounded-[var(--radius)] bg-[var(--act-wash)] px-2.5 font-semibold text-[var(--act-text)]'
+                    : 'text-k-sm inline-flex h-[24px] items-center gap-1.5 rounded-[var(--radius)] px-2.5 text-[var(--ink-2)] hover:bg-[var(--surface-hover)] hover:text-[var(--ink)]'
                 }
               >
-                <span className="num font-bold text-[var(--fs-micro)] opacity-60">
-                  {it.khuon}
-                </span>
+                <span className="num text-k-label font-bold opacity-60">{it.khuon}</span>
                 {it.label}
               </Link>
             )

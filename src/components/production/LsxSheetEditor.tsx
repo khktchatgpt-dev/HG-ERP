@@ -497,7 +497,7 @@ export function LsxSheetEditor({
             <p className="text-muted-foreground mt-1 text-sm">
               {customerName} · mẫu cột: {template.label}
               {revision > 1 && (
-                <span className="text-amber-700 dark:text-amber-400">
+                <span className="text-amber-700">
                   {' '}
                   · đang ở bản chỉnh sửa lần {revision}
                 </span>
@@ -631,7 +631,7 @@ export function LsxSheetEditor({
                         <tr
                           className={`${open ? '' : 'border-b last:border-0'} ${
                             r.level === 'block'
-                              ? 'border-l-2 border-l-red-500 bg-red-50/40 dark:bg-red-950/10'
+                              ? 'border-l-2 border-l-red-500 bg-red-50/40'
                               : ''
                           }`}
                         >
@@ -932,7 +932,7 @@ export function LsxSheetEditor({
 
             {isDraft && sheet.blocked.length > 0 && (
               <div className="basis-full text-xs">
-                <span className="font-medium text-red-600 dark:text-red-400">
+                <span className="font-medium text-red-600">
                   <TriangleAlert className="mr-1 inline size-3.5" aria-hidden />
                   Chưa gửi được: {sheet.blocked.length} dòng thiếu Mã SP / Số lượng / ĐVT
                 </span>

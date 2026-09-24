@@ -119,7 +119,10 @@ export function WarehouseDocPrintSheet({
         ]}
       />
 
-      {/* eslint-disable-next-line hg/no-raw-control -- mẫu in TT200 kẻ bảng đen trắng, không phải bảng kit */}
+      {/* Mẫu in TT200 kẻ bảng đen trắng, không phải bảng kit. (Chú thích
+          `eslint-disable` ở đây đã bỏ 18/09/2026: cả `src/app/print/**` được
+          miễn luật giao diện, nên dòng tắt luật trỏ vào một luật không còn áp
+          và tự nó thành lỗi.) */}
       <table className="w-full border-collapse border border-black text-center text-[12px]">
         <thead>
           <tr className="font-semibold">

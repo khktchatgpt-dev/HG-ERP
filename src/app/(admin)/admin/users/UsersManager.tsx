@@ -309,12 +309,12 @@ export function UsersManager({
             value={u.role}
             disabled={busy || self || deleted}
             onChange={(e) => patch(u.id, { role: e.target.value })}
-            className={`w-full truncate rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs disabled:opacity-50 dark:border-zinc-700 ${
+            className={`w-full truncate rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs disabled:opacity-50 ${
               u.role === 'admin'
-                ? 'text-purple-600 dark:text-purple-400'
+                ? 'text-purple-600'
                 : u.role === 'manager'
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-zinc-700 dark:text-zinc-300'
+                  ? 'text-blue-600'
+                  : 'text-zinc-700'
             }`}
           >
             {(['employee', 'manager', 'admin'] as const).map((r) => (
@@ -338,7 +338,7 @@ export function UsersManager({
             value={u.department_id ?? ''}
             disabled={busy || deleted}
             onChange={(e) => patch(u.id, { department_id: e.target.value || null })}
-            className="w-full truncate rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs disabled:opacity-50 dark:border-zinc-700"
+            className="w-full truncate rounded border border-zinc-200 bg-transparent px-2 py-1 text-xs disabled:opacity-50"
           >
             <option value="">— Chưa gán —</option>
             {departments.map((d) => (
@@ -430,11 +430,11 @@ export function UsersManager({
   ]
 
   const btnSecondary =
-    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900'
+    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50'
   const btnPrimary =
-    'rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-black dark:hover:bg-zinc-200'
+    'rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800'
   const btnDanger =
-    'rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:border-red-900 dark:bg-zinc-950 dark:hover:bg-red-950/40'
+    'rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm text-red-600 hover:bg-red-50'
 
   return (
     <div className="flex flex-col gap-4">
@@ -510,7 +510,7 @@ export function UsersManager({
                     setDeptFilter('all')
                     setStatusFilter('dang_dung')
                   }}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  className="text-xs text-zinc-500 hover:text-zinc-900"
                 >
                   Xoá lọc
                 </button>
@@ -535,7 +535,7 @@ export function UsersManager({
                 </button>
                 <button
                   onClick={() => setSelected([])}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  className="text-xs text-zinc-500 hover:text-zinc-900"
                 >
                   Bỏ chọn
                 </button>

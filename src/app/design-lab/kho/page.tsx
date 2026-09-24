@@ -104,8 +104,10 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/kho/ton">Xem tồn kho</Btn>
-            <Btn primary href="/design-lab/kho/hang-ve">
+            <Btn icon="kho" href="/design-lab/kho/ton">
+              Xem tồn kho
+            </Btn>
+            <Btn icon="nhanHang" primary href="/design-lab/kho/hang-ve">
               Nhận hàng
             </Btn>
           </>
@@ -166,7 +168,7 @@ export default function Page() {
         </div>
 
         <section className="mt-[15px]">
-          <h2 className="mb-[7px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-2)] uppercase">
+          <h2 className="text-k-label mb-[7px] font-bold tracking-[.1em] text-[var(--ink-2)] uppercase">
             Việc chờ tôi
           </h2>
           <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">
@@ -194,7 +196,7 @@ export default function Page() {
                       <tr className="bg-[var(--surface)]">
                         <td
                           colSpan={6}
-                          className="border-y border-[var(--line)] px-[10px] py-[5px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase"
+                          className="text-k-label border-y border-[var(--line)] px-[10px] py-[5px] font-bold tracking-[.1em] text-[var(--ink-3)] uppercase"
                         >
                           {LANE_LABEL[lane]} · {rows.length}
                         </td>
@@ -223,7 +225,7 @@ export default function Page() {
               </tbody>
             </Table>
           </div>
-          <p className="mt-[7px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm mt-[7px] text-[var(--ink-3)]">
             Cột giữa nói <b>việc phải làm</b>, không nói tên trạng thái. Ba loại chứng từ
             khác nhau nằm chung một bảng — thủ kho không phải mở ba màn để biết mình còn
             nợ gì.
@@ -231,7 +233,7 @@ export default function Page() {
         </section>
 
         <section className="mt-[15px]">
-          <h2 className="mb-[7px] font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-2)] uppercase">
+          <h2 className="text-k-label mb-[7px] font-bold tracking-[.1em] text-[var(--ink-2)] uppercase">
             Lệnh sắp vào chuyền
           </h2>
           <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--line)]">

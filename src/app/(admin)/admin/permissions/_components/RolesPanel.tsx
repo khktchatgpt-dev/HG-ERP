@@ -100,9 +100,9 @@ export function RolesPanel({
     <div className="grid gap-4 lg:grid-cols-[280px_1fr]">
       <TopProgressBar active={busy} />
       <div
-        className={`flex flex-col rounded-lg border border-zinc-200 dark:border-zinc-800 ${selected ? 'hidden lg:flex' : 'flex'}`}
+        className={`flex flex-col rounded-lg border border-zinc-200 ${selected ? 'hidden lg:flex' : 'flex'}`}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-zinc-200 p-2 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-2 border-b border-zinc-200 p-2">
           <span className="text-sm font-medium text-zinc-500">{roles.length} vai</span>
           <button
             onClick={() => setOpenCreate(true)}
@@ -119,10 +119,10 @@ export function RolesPanel({
               <button
                 key={r.id}
                 onClick={() => select(r.id)}
-                className={`flex w-full items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-left last:border-0 dark:border-zinc-900 ${on ? 'bg-sky-50 dark:bg-sky-950/40' : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'}`}
+                className={`flex w-full items-center justify-between gap-2 border-b border-zinc-100 px-3 py-2 text-left last:border-0 ${on ? 'bg-sky-50' : 'hover:bg-zinc-50'}`}
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  <span className="block truncate text-sm font-medium text-zinc-800">
                     {r.label}
                     {!r.is_active && <span className="ml-1 text-amber-500">✕</span>}
                   </span>
@@ -138,7 +138,7 @@ export function RolesPanel({
       </div>
 
       {selected ? (
-        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+        <div className="flex flex-col gap-4 rounded-lg border border-zinc-200 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <button
@@ -150,12 +150,12 @@ export function RolesPanel({
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-lg font-semibold">{selected.label}</h2>
                 {selected.is_system && (
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800">
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500">
                     hệ thống
                   </span>
                 )}
                 {!selected.is_active && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] text-amber-700">
                     đã tắt
                   </span>
                 )}
@@ -168,12 +168,12 @@ export function RolesPanel({
             <div className="flex shrink-0 gap-2">
               <button
                 onClick={() => setEditingRole(selected)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
               >
                 Sửa
               </button>
               {selected.key !== 'admin' && (
-                <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700">
+                <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-zinc-300 px-3 py-1.5 text-sm">
                   <input
                     type="checkbox"
                     checked={edit}
@@ -187,7 +187,7 @@ export function RolesPanel({
           </div>
 
           {selected.key === 'admin' ? (
-            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800 dark:border-violet-900 dark:bg-violet-950/50 dark:text-violet-200">
+            <div className="rounded-md border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
               Vai admin bỏ qua mọi kiểm tra quyền — không cần gán từng quyền.
             </div>
           ) : (
@@ -205,17 +205,13 @@ export function RolesPanel({
                           key={p.key}
                           disabled={!edit || busy}
                           onClick={() => toggle(selected, p.key)}
-                          className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm ${on ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/40' : 'border-zinc-200 dark:border-zinc-800'} ${edit && !busy ? 'cursor-pointer hover:border-sky-300' : 'cursor-default'}`}
+                          className={`flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-sm ${on ? 'border-emerald-200 bg-emerald-50' : 'border-zinc-200'} ${edit && !busy ? 'cursor-pointer hover:border-sky-300' : 'cursor-default'}`}
                         >
-                          <span
-                            className={
-                              on ? 'text-emerald-500' : 'text-zinc-300 dark:text-zinc-700'
-                            }
-                          >
+                          <span className={on ? 'text-emerald-500' : 'text-zinc-300'}>
                             {on ? '✓' : '○'}
                           </span>
                           <span className="min-w-0">
-                            <span className="block truncate text-zinc-800 dark:text-zinc-100">
+                            <span className="block truncate text-zinc-800">
                               {p.label}
                             </span>
                             <span className="block truncate font-mono text-[10px] text-zinc-400">
@@ -239,7 +235,7 @@ export function RolesPanel({
               {(membersByRole.get(selected.id) ?? []).map((u) => (
                 <span
                   key={u.user_id}
-                  className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-xs text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  className="rounded border border-zinc-200 bg-zinc-50 px-1.5 py-0.5 text-xs text-zinc-600"
                   title={`${u.user_email} · ${u.source === 'derived' ? 'tự đồng bộ' : 'gán tay'}`}
                 >
                   {u.user_name ?? u.user_email}

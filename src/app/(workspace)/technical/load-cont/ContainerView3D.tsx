@@ -320,7 +320,7 @@ export function ContainerView3D({ container, colors, maxOrder, highlightId }: Pr
   return (
     <div
       ref={wrapRef}
-      className="relative h-[420px] w-full cursor-grab touch-none overflow-hidden rounded-lg border border-zinc-200 bg-gradient-to-b from-white to-zinc-50 select-none active:cursor-grabbing dark:border-zinc-800 dark:from-zinc-950 dark:to-zinc-900"
+      className="relative h-[420px] w-full cursor-grab touch-none overflow-hidden rounded-lg border border-zinc-200 bg-gradient-to-b from-white to-zinc-50 select-none active:cursor-grabbing"
       onPointerDown={(e) => {
         drag.current = { x: e.clientX, y: e.clientY }
         e.currentTarget.setPointerCapture(e.pointerId)
@@ -343,7 +343,7 @@ export function ContainerView3D({ container, colors, maxOrder, highlightId }: Pr
       }}
     >
       <canvas ref={canvasRef} />
-      <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/70 px-2 py-0.5 text-[10px] text-zinc-500 backdrop-blur dark:bg-zinc-900/70">
+      <div className="pointer-events-none absolute bottom-2 left-2 rounded bg-white/70 px-2 py-0.5 text-[10px] text-zinc-500 backdrop-blur">
         Kéo để xoay · Lăn chuột để zoom · Nhấn đúp để đặt lại
       </div>
     </div>

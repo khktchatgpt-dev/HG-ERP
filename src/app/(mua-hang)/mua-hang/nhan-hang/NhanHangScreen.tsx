@@ -180,6 +180,7 @@ export function NhanHangScreen({
               </Btn>
             ) : (
               <Btn
+                icon="boLoc"
                 primary
                 onClick={() => {
                   setQ('')
@@ -220,7 +221,7 @@ export function NhanHangScreen({
                             {r.code}
                           </Code>
                           {r.lsx_code && (
-                            <span className="num text-[10.5px] text-[var(--ink-3)]">
+                            <span className="num text-k-label text-[var(--ink-3)]">
                               {r.lsx_code}
                             </span>
                           )}

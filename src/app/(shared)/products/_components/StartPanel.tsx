@@ -129,7 +129,7 @@ function Shortcut({
     <button
       type="button"
       onClick={onClick}
-      className="bg-background text-muted-foreground focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded-full border py-1.5 pr-3 pl-2.5 text-xs font-medium transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 focus-visible:ring-[3px] focus-visible:outline-none dark:hover:border-sky-800 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"
+      className="bg-background text-muted-foreground focus-visible:ring-ring/50 inline-flex items-center gap-1.5 rounded-full border py-1.5 pr-3 pl-2.5 text-xs font-medium transition-colors hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 focus-visible:ring-[3px] focus-visible:outline-none"
     >
       <Icon className="size-3.5" aria-hidden />
       <span className="max-w-40 truncate">{label}</span>

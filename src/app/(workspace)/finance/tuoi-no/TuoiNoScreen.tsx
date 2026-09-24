@@ -46,8 +46,10 @@ export function TuoiNoScreen({
           title="Tuổi nợ nhà cung cấp"
           actions={
             <>
-              <Btn href="/finance/cong-no-ncc">Sổ công nợ</Btn>
-              <Btn primary href="/api/dept/accounting/bao-cao/export">
+              <Btn icon="so" href="/finance/cong-no-ncc">
+                Sổ công nợ
+              </Btn>
+              <Btn icon="excel" primary href="/api/dept/accounting/bao-cao/export">
                 Xuất Excel
               </Btn>
             </>
@@ -80,10 +82,12 @@ export function TuoiNoScreen({
               reason="Bảng tuổi nợ dựng từ HOÁ ĐƠN nhà cung cấp đã vào sổ — tuổi nợ cần hạn thanh toán, mà hạn chỉ có trên tờ hoá đơn. Hiện chưa hoá đơn nào vào sổ."
               next={
                 <>
-                  <Btn primary href="/finance/cong-no-ncc">
+                  <Btn icon="so" primary href="/finance/cong-no-ncc">
                     Xem công nợ theo phiếu nhập
                   </Btn>
-                  <Btn href="/finance/bao-cao">Xem báo cáo mua hàng</Btn>
+                  <Btn icon="baoCao" href="/finance/bao-cao">
+                    Xem báo cáo mua hàng
+                  </Btn>
                 </>
               }
             />
@@ -107,7 +111,7 @@ export function TuoiNoScreen({
                     <Td>
                       {r.supplier_name}
                       {r.worst_days > 0 && (
-                        <span className="k-t-stop ml-1 text-[11px]">
+                        <span className="k-t-stop text-k-label ml-1">
                           quá {r.worst_days}n
                         </span>
                       )}

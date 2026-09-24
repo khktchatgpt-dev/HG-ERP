@@ -26,8 +26,7 @@ import {
 type OrderLine = { id: string; product_code: string; product_name: string }
 
 const FIELD_OPTIONS = Object.entries(BOM_FIELD_LABELS) as [BomField, string][]
-const sel =
-  'rounded border border-zinc-300 px-1.5 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900'
+const sel = 'rounded border border-zinc-300 px-1.5 py-1 text-xs'
 
 /** Tối đa mã vật tư dò một lượt — file BOM thật vài chục dòng, chặn cho chắc. */
 const MAX_LOOKUPS = 60
@@ -201,7 +200,7 @@ export function ImportBomDialog({
               </option>
             ))}
           </select>
-          <label className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900">
+          <label className="cursor-pointer rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-50">
             📄 Chọn file (.xlsx / .csv)
             <input
               type="file"
@@ -235,7 +234,7 @@ export function ImportBomDialog({
               placeholder={
                 'Cụm\tChi tiết\tMã VT\tCT/SP\tĐM kg\nCỤM KHUNG\tKHUNG CHÂN\tVT-SAT-H25\t2\t1,5'
               }
-              className="rounded-lg border border-dashed border-zinc-300 px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-lg border border-dashed border-zinc-300 px-3 py-2 font-mono text-xs"
             />
           </div>
         )}
@@ -268,9 +267,9 @@ export function ImportBomDialog({
               </button>
             </div>
 
-            <div className="max-h-[45vh] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+            <div className="max-h-[45vh] overflow-auto rounded-lg border border-zinc-200">
               <table className="w-full min-w-[720px] text-xs">
-                <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+                <thead className="sticky top-0 bg-zinc-50">
                   <tr>
                     {mapping.map((f, i) => (
                       <th key={i} className="px-1.5 py-1.5 text-left">
@@ -297,10 +296,7 @@ export function ImportBomDialog({
                 </thead>
                 <tbody>
                   {cells.slice(0, 30).map((row, ri) => (
-                    <tr
-                      key={ri}
-                      className="border-t border-zinc-100 dark:border-zinc-900"
-                    >
+                    <tr key={ri} className="border-t border-zinc-100">
                       {mapping.map((_, ci) => (
                         <td key={ci} className="px-1.5 py-1 whitespace-nowrap">
                           {row[ci] ?? ''}
@@ -323,7 +319,7 @@ export function ImportBomDialog({
                   reset()
                   onClose()
                 }}
-                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-sm"
               >
                 Huỷ
               </button>

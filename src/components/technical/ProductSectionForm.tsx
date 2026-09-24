@@ -60,7 +60,7 @@ export type SectionSpec = {
 }
 
 const cls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none'
 
 /**
  * Cảnh báo MỀM khi con số trông như nhập nhầm hệ đơn vị. Không chặn lưu — có SP
@@ -269,7 +269,7 @@ export function ProductSectionForm({
                     className={cn(
                       f.mono ? `${cls} font-mono` : cls,
                       f.unit && 'pe-12',
-                      warn[f.name] && 'border-amber-400 dark:border-amber-600',
+                      warn[f.name] && 'border-amber-400',
                     )}
                   />
                   {f.unit && (
@@ -279,7 +279,7 @@ export function ProductSectionForm({
                   )}
                 </div>
                 {warn[f.name] && (
-                  <span className="text-[11px] leading-tight text-amber-700 dark:text-amber-500">
+                  <span className="text-[11px] leading-tight text-amber-700">
                     ⚠ {warn[f.name]}
                   </span>
                 )}
@@ -301,7 +301,7 @@ export function ProductSectionForm({
           type="button"
           onClick={onClose}
           disabled={busy}
-          className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          className="rounded-md border border-zinc-300 px-4 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50"
         >
           Huỷ
         </button>

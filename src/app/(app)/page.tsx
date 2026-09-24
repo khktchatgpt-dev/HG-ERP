@@ -65,10 +65,10 @@ export default async function Home() {
                 key={c.label}
                 className={`rounded-lg border p-4 ${
                   c.tone === 'red'
-                    ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30'
+                    ? 'border-red-200 bg-red-50'
                     : c.tone === 'amber'
-                      ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
-                      : 'border-zinc-200 dark:border-zinc-800'
+                      ? 'border-amber-200 bg-amber-50'
+                      : 'border-zinc-200'
                 }`}
               >
                 <div className="text-xs text-zinc-500 uppercase">{c.label}</div>
@@ -84,28 +84,28 @@ export default async function Home() {
               Toàn hệ thống
             </h2>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+              <div className="rounded-lg border border-zinc-200 p-4">
                 <div className="text-xs text-zinc-500 uppercase">Tổng công việc</div>
                 <div className="mt-1 text-3xl font-semibold">{org.total}</div>
               </div>
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <div className="text-xs text-zinc-500 uppercase">Chờ duyệt</div>
                 <div className="mt-1 text-3xl font-semibold">{org.pending_approvals}</div>
               </div>
-              <div className="rounded-lg border border-green-200 bg-green-50 p-4 dark:border-green-900 dark:bg-green-950/30">
+              <div className="rounded-lg border border-green-200 bg-green-50 p-4">
                 <div className="text-xs text-zinc-500 uppercase">Hoàn thành</div>
                 <div className="mt-1 text-3xl font-semibold">{org.by_status.done}</div>
               </div>
               <Link
                 href="/admin/users"
-                className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50"
               >
                 <div className="text-xs text-zinc-500 uppercase">Nhân viên</div>
                 <div className="mt-1 text-3xl font-semibold">{org.users}</div>
               </Link>
               <Link
                 href="/admin/departments"
-                className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                className="rounded-lg border border-zinc-200 p-4 hover:bg-zinc-50"
               >
                 <div className="text-xs text-zinc-500 uppercase">Phòng ban</div>
                 <div className="mt-1 text-3xl font-semibold">{org.departments}</div>
@@ -119,12 +119,12 @@ export default async function Home() {
             <h2 className="mb-3 text-sm font-semibold text-zinc-500 uppercase">
               Việc chờ duyệt gần đây
             </h2>
-            <ul className="divide-y divide-zinc-200 rounded border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+            <ul className="divide-y divide-zinc-200 rounded border border-zinc-200">
               {pending.rows.map((t) => (
                 <li key={t.id}>
                   <Link
                     href={`/tasks/${t.id}`}
-                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
+                    className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-zinc-50"
                   >
                     <span className="truncate font-medium">{t.title}</span>
                     <span className="shrink-0 text-xs text-zinc-500">

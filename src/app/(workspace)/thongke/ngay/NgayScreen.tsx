@@ -32,6 +32,7 @@ type DocRow = {
   created_by_name: string | null
   total_qty: number
   total_defect: number
+  total_rework: number
   line_count: number
 }
 
@@ -362,6 +363,7 @@ export function NgayScreen({
                         <th className="py-1.5 pr-2 text-right">Dòng</th>
                         <th className="py-1.5 pr-2 text-right">Σ đạt</th>
                         <th className="py-1.5 pr-2 text-right">Phế</th>
+                        <th className="py-1.5 pr-2 text-right">Sửa lại</th>
                         <th className="py-1.5 pr-2">Trạng thái</th>
                         <th className="py-1.5 pr-4">Người lập</th>
                       </tr>
@@ -391,6 +393,15 @@ export function NgayScreen({
                             {d.total_defect > 0 ? (
                               <span className="text-[var(--warn)]">
                                 {fmt(d.total_defect)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground/40">—</span>
+                            )}
+                          </td>
+                          <td className="t-data py-1.5 pr-2 text-right">
+                            {d.total_rework > 0 ? (
+                              <span className="text-[var(--warn)]">
+                                {fmt(d.total_rework)}
                               </span>
                             ) : (
                               <span className="text-muted-foreground/40">—</span>

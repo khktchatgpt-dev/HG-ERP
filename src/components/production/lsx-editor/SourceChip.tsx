@@ -36,7 +36,7 @@ export function SourceChip({
   return (
     <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[10px] leading-tight">
       {origin === 'profile' && (
-        <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1 text-emerald-700">
           <Database className="size-2.5" aria-hidden />
           từ hồ sơ SP
         </span>
@@ -45,7 +45,7 @@ export function SourceChip({
       {origin === 'edited' && (
         <>
           <span
-            className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+            className="inline-flex items-center gap-1 text-amber-700"
             title={refValue ? `Hồ sơ SP đang ghi: “${refValue}”` : undefined}
           >
             <PencilLine className="size-2.5" aria-hidden />
@@ -91,7 +91,7 @@ export function SourceChip({
 
       {pending && (
         <span
-          className="inline-flex items-center gap-1 text-amber-700 dark:text-amber-400"
+          className="inline-flex items-center gap-1 text-amber-700"
           title="Ô này đang ghi giá trị tạm — chưa chốt"
         >
           <Clock3 className="size-2.5" aria-hidden />

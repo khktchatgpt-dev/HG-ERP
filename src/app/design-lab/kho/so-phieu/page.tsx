@@ -90,8 +90,10 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/kho/phieu-moi">+ Soạn phiếu</Btn>
-            <Btn>Xuất Excel cho kế toán</Btn>
+            <Btn icon="them" href="/design-lab/kho/phieu-moi">
+              Soạn phiếu
+            </Btn>
+            <Btn icon="excel">Xuất Excel cho kế toán</Btn>
           </>
         }
       >
@@ -115,7 +117,7 @@ export default function Page() {
           {/* prettier-ignore */}
         </FilterBar>
         <div className="flex flex-wrap items-center gap-1.5 px-[var(--gutter)] pb-[7px]">
-          <span className="font-bold tracking-[.1em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+          <span className="text-k-label font-bold tracking-[.1em] text-[var(--ink-3)] uppercase">
             Mã lý do
           </span>
           <Chip on={rc === null} onClick={() => setRc(null)}>
@@ -146,6 +148,7 @@ export default function Page() {
               }
               next={
                 <Btn
+                  icon="boLoc"
                   primary
                   onClick={() => {
                     setBucket('all')

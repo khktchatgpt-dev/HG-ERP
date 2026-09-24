@@ -416,7 +416,7 @@ export function QuoteForm(props: {
         title={`Dòng sản phẩm (${lines.length})`}
         right={
           missingSpecCount > 0 ? (
-            <span className="text-xs text-amber-600 dark:text-amber-500">
+            <span className="text-xs text-amber-600">
               ⚠ {missingSpecCount} SP thiếu quy cách — nhờ Kỹ thuật bổ sung
             </span>
           ) : null
@@ -485,9 +485,7 @@ export function QuoteForm(props: {
                           {p.has_image ? (
                             <span>🖼 có ảnh</span>
                           ) : (
-                            <span className="text-amber-600 dark:text-amber-500">
-                              🖼 chưa có ảnh
-                            </span>
+                            <span className="text-amber-600">🖼 chưa có ảnh</span>
                           )}
                           {p.description_en && (
                             <span className="italic">{p.description_en}</span>
@@ -498,7 +496,7 @@ export function QuoteForm(props: {
                     <button
                       type="button"
                       onClick={() => removeLine(l.key)}
-                      className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                      className="text-muted-foreground shrink-0 rounded p-1.5 hover:bg-red-50 hover:text-red-600"
                       aria-label="Xoá dòng"
                     >
                       ✕
@@ -513,9 +511,7 @@ export function QuoteForm(props: {
                           <span className="text-muted-foreground text-[10px] font-medium tracking-wide uppercase">
                             {label}
                           </span>
-                          <span
-                            className={val ? '' : 'text-amber-600 dark:text-amber-500'}
-                          >
+                          <span className={val ? '' : 'text-amber-600'}>
                             {val ?? '— thiếu'}
                           </span>
                         </div>
@@ -523,7 +519,7 @@ export function QuoteForm(props: {
                     </div>
                   )}
                   {noSpec && p && (
-                    <p className="mt-1.5 text-[11px] text-amber-600 dark:text-amber-500">
+                    <p className="mt-1.5 text-[11px] text-amber-600">
                       ⚠ SP <b>{p.code}</b> thiếu quy cách — in báo giá sẽ trống. Điền ngay
                       bên dưới, hoặc nhờ Kỹ thuật bổ sung.
                     </p>
@@ -612,7 +608,7 @@ export function QuoteForm(props: {
         <div className="flex items-center justify-between gap-3">
           <div className="text-muted-foreground min-w-0 text-sm">
             {invalid ? (
-              <span className="block truncate text-xs text-amber-600 dark:text-amber-400">
+              <span className="block truncate text-xs text-amber-600">
                 Còn thiếu: {missing.join(' · ')}
               </span>
             ) : (

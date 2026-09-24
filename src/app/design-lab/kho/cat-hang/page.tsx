@@ -77,7 +77,11 @@ export default function Page() {
           { label: 'Dòng', value: String(rowsLeft) },
           { label: 'Sớm nhất', value: '08:05', tone: 'warn' },
         ]}
-        actions={<Btn href="/design-lab/kho">Về bàn làm việc</Btn>}
+        actions={
+          <Btn icon="quayLai" href="/design-lab/kho">
+            Về bàn làm việc
+          </Btn>
+        }
       />
 
       <div className="min-h-0 flex-1 overflow-auto bg-[var(--surface)] px-[var(--gutter)] py-[13px]">
@@ -102,8 +106,8 @@ export default function Page() {
                 >
                   <header className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-[var(--line)] px-[12px] py-[8px]">
                     <Code>{d.doc}</Code>
-                    <b className="text-[var(--fs-body)]">{d.supplier}</b>
-                    <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                    <b className="text-k-body">{d.supplier}</b>
+                    <span className="text-k-sm text-[var(--ink-3)]">
                       nhận {d.at} · {d.rows.length} dòng
                     </span>
                     <span className="ml-auto">
@@ -126,28 +130,28 @@ export default function Page() {
                         >
                           <div className="min-w-[210px] flex-1">
                             <div className="flex items-baseline gap-2">
-                              <b className="num text-[var(--fs-body)]">{r.code}</b>
+                              <b className="num text-k-body">{r.code}</b>
                               {r.locked && <Tag tone="stop">khoá</Tag>}
                             </div>
-                            <div className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                            <div className="text-k-sm text-[var(--ink-3)]">
                               {mat.name}
                             </div>
                           </div>
 
                           <div className="num min-w-[92px] text-right text-[15px] font-bold">
                             {n(r.qty)}{' '}
-                            <span className="font-normal text-[var(--fs-sm)] text-[var(--ink-3)]">
+                            <span className="text-k-sm font-normal text-[var(--ink-3)]">
                               {mat.unit}
                             </span>
                           </div>
 
                           <div className="flex items-center gap-2">
-                            <span className="num text-[var(--fs-sm)] text-[var(--ink-3)]">
+                            <span className="num text-k-sm text-[var(--ink-3)]">
                               TIEP-NHAN →
                             </span>
                             {r.locked ? (
                               <span
-                                className="num inline-flex h-[30px] items-center rounded-[var(--radius)] border border-[var(--stop)] bg-[color-mix(in_srgb,var(--stop)_10%,transparent)] px-2.5 font-semibold text-[var(--fs-sm)] text-[var(--stop)]"
+                                className="num text-k-sm inline-flex h-[30px] items-center rounded-[var(--radius)] border border-[var(--stop)] bg-[color-mix(in_srgb,var(--stop)_10%,transparent)] px-2.5 font-semibold text-[var(--stop)]"
                                 title="Hàng khoá đi thẳng kệ khoá — không phải quyết định của thủ kho"
                               >
                                 KHOA-01
@@ -206,7 +210,7 @@ export default function Page() {
                     </Btn>
                     <Btn>Quét mã vạch</Btn>
                     {missing.length > 0 && (
-                      <span className="text-[var(--fs-sm)] text-[var(--warn)]">
+                      <span className="text-k-sm text-[var(--warn)]">
                         Chưa xác nhận được: {missing.map((x) => x.code).join(', ')} chưa
                         có kệ.
                       </span>
@@ -218,7 +222,7 @@ export default function Page() {
           </div>
         )}
 
-        <p className="mt-[13px] max-w-[70ch] leading-relaxed text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <p className="text-k-sm mt-[13px] max-w-[70ch] leading-relaxed text-[var(--ink-3)]">
           Thu hẹp cửa sổ trình duyệt xuống khổ điện thoại để thấy thẻ tự xếp dọc mà không
           cuộn ngang. Ô chọn kệ cao 30px và ô số cỡ 15px là mức bấm được bằng ngón cái —
           lưới chín cột ở khổ đó chỉ còn là lưới cuộn ngang, và cuộn ngang bằng một tay

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ApiError, api, apiErrorText } from '@/lib/api'
 import { isoToVn } from '@/lib/date-vn'
-import { useToast } from '@/components/ui/Toast'
 import { DaGhiSoBar } from '@/components/warehouse/DaGhiSoBar'
 import {
   WarehouseDocPrintSheet,
@@ -25,38 +24,7 @@ import {
   type VatTuChon,
 } from '@/lib/kho-phieu-xuat'
 import { cn } from '@/lib/utils'
-import {
-  Action,
-  ActionGroup,
-  ActionPane,
-  Btn,
-  CellHint,
-  Code,
-  CommitBar,
-  Crumb,
-  DateInput,
-  DocHead,
-  Grid,
-  GridBody,
-  GridBtn,
-  GridFoot,
-  GridHead,
-  GridRow,
-  Consequence,
-  Lookup,
-  NumInput,
-  Pick,
-  PickFind,
-  ScreenFrame,
-  Sheet,
-  SheetActions,
-  StatusBar,
-  StatusTrack,
-  Tag,
-  TextArea,
-  TextInput,
-  Th,
-} from '@/components/kit'
+import { Action, ActionGroup, ActionPane, Btn, CellHint, Code, CommitBar, Crumb, DateInput, DocHead, Grid, GridBody, GridBtn, GridFoot, GridHead, GridRow, Consequence, NumInput, Pick, ScreenFrame, Sheet, SheetActions, StatusBar, StatusTrack, Tag, TextArea, TextInput, Th, useToast, Combobox } from '@/components/kit'
 
 const fmt = (n: number) => n.toLocaleString('vi-VN')
 
@@ -86,13 +54,13 @@ function Buoc({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-[6px] font-bold tracking-[.07em] whitespace-nowrap text-[var(--fs-label)] uppercase',
+        'text-k-label inline-flex items-center gap-1.5 font-bold tracking-[.07em] whitespace-nowrap uppercase',
         need ? 'text-[var(--stop)]' : 'text-[var(--ink-label)]',
       )}
     >
       <i
         className={cn(
-          'grid h-4 w-4 place-items-center rounded-full text-[10px] font-bold tracking-normal not-italic',
+          'text-k-label grid h-4 w-4 place-items-center rounded-full font-bold tracking-normal not-italic',
           need
             ? 'bg-[var(--stop)] text-white'
             : dim
@@ -141,7 +109,7 @@ function Seg<T extends string>({
           role="radio"
           onClick={() => onChange(o.value)}
           className={cn(
-            'h-full rounded-none border-0 border-r border-[var(--line)] px-[11px] text-[12.5px] last:border-r-0',
+            'text-k-sm h-full rounded-none border-0 border-r border-[var(--line)] px-3 last:border-r-0',
             o.value !== value && 'bg-[var(--surface-card)] font-medium',
           )}
         >
@@ -423,6 +391,7 @@ export function XuatScreen({
               {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
             <Action
+              icon="lamMoi"
               onClick={lamMoi}
               disabled={busy || (rows.length === 0 && !head.to && !head.lsx_id)}
             >
@@ -430,10 +399,12 @@ export function XuatScreen({
             </Action>
           </ActionGroup>
           <ActionGroup label="Bản in">
-            <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
+            <Action icon="in" onClick={() => setXemIn(true)}>
+              Xem bản in
+            </Action>
           </ActionGroup>
           <ActionGroup label="Sổ">
-            <Action onClick={() => router.push('/warehouse/phieu?ro=issue')}>
+            <Action icon="so" onClick={() => router.push('/warehouse/phieu?ro=issue')}>
               Sổ phiếu xuất
             </Action>
           </ActionGroup>
@@ -458,7 +429,7 @@ export function XuatScreen({
         </DocHead>
 
         {/* ── Đầu phiếu, hàng 1: xuất cho → lệnh / lý do → ngày ───────────── */}
-        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+        <div className="flex flex-wrap items-center gap-x-4.5 gap-y-1.5 border-b border-[var(--hair)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
           <span className="inline-flex items-center gap-2">
             <Buoc n={1}>Xuất cho</Buoc>
             <Seg<LoaiXuat>
@@ -501,7 +472,7 @@ export function XuatScreen({
                 Lệnh
               </Buoc>
               <span id="xuat-lenh" tabIndex={-1} className="min-w-0 flex-1">
-                <PickFind
+                <Combobox
                   value={head.lsx_id}
                   onChange={(v) => setH({ lsx_id: v })}
                   options={lsx.map((l) => ({
@@ -534,13 +505,14 @@ export function XuatScreen({
                 label="Ngày chứng từ"
               />
             ) : (
-              <span className="inline-flex items-center gap-[6px] text-[var(--fs-sm)] text-[var(--ink-2)]">
+              <span className="text-k-sm inline-flex items-center gap-1.5 text-[var(--ink-2)]">
                 {head.doc_date === today ? 'hôm nay · ' : ''}
                 <b className="num font-semibold text-[var(--ink)]">
                   {isoToVn(head.doc_date)}
                 </b>
                 <Btn
-                  className="h-[22px] border-0 bg-transparent px-1 text-[11px] text-[var(--act-text)]"
+                  icon="sua"
+                  className="text-k-label h-[22px] border-0 bg-transparent px-1 text-[var(--act-text)]"
                   onClick={() => setSuaNgay(true)}
                 >
                   sửa
@@ -551,7 +523,7 @@ export function XuatScreen({
         </div>
 
         {/* ── Đầu phiếu, hàng 2: tổ lấy / bộ phận nhận → người lấy ────────── */}
-        <div className="flex flex-wrap items-center gap-x-[18px] gap-y-[6px] border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[7px]">
+        <div className="flex flex-wrap items-center gap-x-4.5 gap-y-1.5 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
           <span className="inline-flex items-center gap-2" id="xuat-to" tabIndex={-1}>
             <Buoc n={3} need={thieu('to')}>
               {head.loai === 'lsx' ? 'Tổ lấy' : 'Bộ phận nhận'}
@@ -565,7 +537,7 @@ export function XuatScreen({
                 onChange={(v) => setH({ to: v })}
               />
             ) : (
-              <PickFind
+              <Combobox
                 value={head.to}
                 onChange={(v) => setH({ to: v })}
                 options={phong.map((p) => ({ value: p, label: p }))}
@@ -577,7 +549,7 @@ export function XuatScreen({
             )}
           </span>
           <span className="inline-flex items-center gap-2">
-            <span className="font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+            <span className="text-k-label font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
               Người lấy
             </span>
             <TextInput
@@ -588,7 +560,7 @@ export function XuatScreen({
               style={{ width: 200 }}
             />
           </span>
-          <span className="ml-auto text-[var(--fs-micro)] text-[var(--ink-3)]">
+          <span className="text-k-label ml-auto text-[var(--ink-3)]">
             Thêm dòng: gõ ở ô ngay trên lưới · Enter chọn · Tab sang số
           </span>
         </div>
@@ -599,11 +571,11 @@ export function XuatScreen({
           một dòng đè lên hàng Tổng — chủ dự án chụp màn 16/09. Ở đây gợi ý
           rơi xuống lưới, không bị cắt; dòng mới vẫn vào cuối lưới, focus ô số.
         */}
-        <div className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[5px]">
-          <span className="font-bold tracking-[.07em] text-[var(--act-text)] text-[var(--fs-label)] uppercase">
+        <div className="flex items-center gap-3 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1">
+          <span className="text-k-label font-bold tracking-[.07em] text-[var(--act-text)] uppercase">
             + Thêm dòng
           </span>
-          <Lookup<VatTuChon>
+          <Combobox<VatTuChon>
             search={timVatTu}
             onPick={(vt) => void chonVatTu(vt)}
             keyOf={(m) => m.id}
@@ -621,7 +593,7 @@ export function XuatScreen({
             width={460}
             disabled={dangTra}
           />
-          <span className="ml-auto text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <span className="text-k-sm ml-auto text-[var(--ink-3)]">
             {rows.length} dòng
           </span>
         </div>
@@ -728,10 +700,14 @@ export function XuatScreen({
           onGoBlocked={daThu && !kiem.ok ? ghiSo : undefined}
           actions={
             <>
-              <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-                Ctrl + Enter
-              </span>
-              <Action primary onClick={ghiSo} disabled={!canEdit} title={blocked}>
+              <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
+              <Action
+                icon="ghiSo"
+                primary
+                onClick={ghiSo}
+                disabled={!canEdit}
+                title={blocked}
+              >
                 Ghi sổ
               </Action>
             </>
@@ -768,7 +744,7 @@ export function XuatScreen({
             {/* Câu NGUYÊN VĂN của server: mã nào, cần bao nhiêu, khả dụng bao nhiêu. */}
             <div className="k-note k-note-text">{lanSheet}</div>
             <div className="mt-3">
-              <div className="mb-1 font-bold tracking-[.09em] text-[var(--fs-label)] text-[var(--ink-label)] uppercase">
+              <div className="text-k-label mb-1 font-bold tracking-[.09em] text-[var(--ink-label)] uppercase">
                 Lý do vẫn xuất · bắt buộc
               </div>
               <TextArea

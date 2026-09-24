@@ -204,6 +204,11 @@
   white-space: nowrap;
 }
 .k-act {
+  /* inline-flex + gap: chỗ cho icon đứng trước chữ (bước icon, 24/09/2026) —
+     cùng khoảng 8px với Btn để hai loại nút đứng cạnh nhau không so le. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--line);
   background: var(--surface-card);
   border-radius: var(--radius);
@@ -250,9 +255,21 @@
   color: var(--act-ink);
   font-weight: 600;
 }
-.k-act-p:hover:not(:disabled) {
+.k-act-p:hover:not(:disabled):not(.k-act-off) {
   background: var(--act);
   filter: brightness(1.08);
+}
+/* NÚT CHÍNH BỊ KHOÁ — PHẢI ĐỨNG SAU `.k-act-p` (B7½, 24/09/2026).
+   `.k-act-off` và `.k-act-p` cùng độ ưu tiên, nên luật đứng SAU thắng. Khi luật
+   khoá nằm trước, nút chính bị khoá mềm vẫn tô `--act` đặc — cùng nền với nút
+   bấm được, phạm luật "NỀN ĐẶC = BẤM ĐƯỢC" (CLAUDE.md, nguyên tắc 5). Lộ ra khi
+   viết sách tra B7: demo "Gửi duyệt" khoá ở /design-lab/thanh-phan dính đúng. */
+.k-act-p:disabled,
+.k-act-p.k-act-off {
+  background: var(--surface-raised);
+  border-color: var(--line-faint);
+  color: var(--ink-3);
+  font-weight: 600;
 }
 
 /* Lý do nút bị khoá — hiện TẠI CHỖ khi bấm vào nút mờ, thay cho tooltip. */
@@ -278,7 +295,7 @@
   margin-left: auto;
   border: 0;
   background: none;
-  font-size: 16px;
+  font-size: var(--fs-lg);
   line-height: 1;
   color: var(--ink-3);
   cursor: pointer;
@@ -482,9 +499,19 @@
 .k-hold-what {
   color: var(--ink-2);
 }
+/* Tuổi ở bước hiện tại tô THEO NGƯỠNG (B7½, 24/09/2026): mặc định là mực chữ,
+   `-warn` / `-stop` do `HolderBar` gắn theo số ngày. Trước đây mọi tuổi đều
+   `--stop` — "1 ngày" cũng đỏ, tức số 0-ngày-trễ bị tô như tin xấu (nguyên
+   tắc 3 của sổ: số nào cũng đỏ thì đỏ không còn nghĩa). */
 .k-hold-age {
   margin-left: auto;
   font-weight: 700;
+  color: var(--ink-2);
+}
+.k-hold-age-warn {
+  color: var(--warn);
+}
+.k-hold-age-stop {
   color: var(--stop);
 }
 
@@ -537,7 +564,7 @@
   padding: 2px 0;
 }
 .k-check-lvl {
-  font-size: 10px;
+  font-size: var(--fs-label);
   font-weight: 700;
   letter-spacing: 0.06em;
   text-align: center;
@@ -615,7 +642,7 @@
 }
 .k-caret {
   display: inline-block;
-  font-size: 10px;
+  font-size: var(--fs-label);
   color: var(--ink-3);
   transition: transform 0.12s;
 }
@@ -811,9 +838,14 @@
 .k-gb:hover:not(:disabled) {
   background: var(--act-wash);
 }
-.k-gb:disabled {
+/* Khoá = nền xám đặc, KHÔNG làm mờ — cùng cách `.k-act-off` bỏ `opacity` từ
+   16/09/2026 vì chữ tụt ~2,2:1 (trượt AA). B7½ đưa GridBtn về cùng một luật. */
+.k-gb:disabled,
+.k-gb[aria-disabled='true'] {
   cursor: not-allowed;
-  opacity: 0.5;
+  background: var(--surface-raised);
+  border-color: var(--line-faint);
+  color: var(--ink-3);
 }
 /* Dòng gợi ý dưới ô lưới — nhỏ, căn phải như con số nó nói về. */
 .k-cellhint {
@@ -821,7 +853,7 @@
   width: 100%;
   margin-top: 1px;
   text-align: right;
-  font-size: 11px;
+  font-size: var(--fs-label);
   line-height: 1.3;
   white-space: nowrap;
   color: var(--ink-3);
@@ -834,7 +866,7 @@
   background: transparent;
   padding: 0;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--fs-label);
   font-weight: 600;
   color: var(--act-text);
   cursor: pointer;
@@ -1145,17 +1177,33 @@
    con số không kiểm được: 89% của 9 đơn và 89% của 900 đơn là hai mức tin
    cậy khác hẳn nhau, mà ô thì trông y hệt. Kiểu bắt buộc ở tầng TypeScript,
    xem `Metric` trong Erp.tsx. */
+/* VẠCH NGĂN VẼ BẰNG BÓNG ĐỔ, KHÔNG BẰNG NỀN CONTAINER.
+
+   Bản cũ dùng thủ pháp quen thuộc: `gap: 1px` + nền container màu vạch, ô con
+   nền trắng đè lên, khe hở 1px lộ ra thành đường kẻ. Thủ pháp đó CHỈ đúng khi
+   lưới đầy — mà `auto-fit` thì gần như không bao giờ đầy.
+
+   Đo 23/09/2026 ở màn chi tiết lệnh: 5 ô, khung vừa 4 ô/hàng ⇒ hàng hai còn
+   BA Ô TRỐNG, và nền container `--line` lộ nguyên ~37.000px² thành một khối
+   xám đặc nằm giữa trang — đọc ra như màn đang tải dở hoặc hỏng.
+
+   Bóng đổ không chiếm chỗ trong lưới nên vạch chỉ mọc ở ô CÓ THẬT; phần lưới
+   trống giữ nền thẻ. `overflow: hidden` cắt vạch thừa của ô cuối mỗi hàng —
+   mép phải và mép dưới đã có `border-block` của container lo. */
 .k-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 1px;
-  background: var(--line);
+  background: var(--surface-card);
   border-block: 1px solid var(--line);
+  overflow: hidden;
 }
 .k-metric {
   background: var(--surface-card);
   padding: 9px var(--gutter);
   min-width: 0;
+  box-shadow:
+    1px 0 0 var(--line),
+    0 1px 0 var(--line);
 }
 .k-metric-l {
   font-size: var(--fs-label);
@@ -1248,6 +1296,11 @@
 .k-headchip:hover {
   border-color: var(--ink-3);
 }
+/* Chip CHỈ-BÀY (không `onClick`, là `<span>`): rê chuột không đổi viền — đổi
+   viền là hứa bấm được (B7½, 24/09/2026). */
+.k-headchip-ro:not(.k-headchip-need):hover {
+  border-color: var(--line);
+}
 .k-headchip > span:first-child {
   font-size: var(--fs-label);
   font-weight: 700;
@@ -1327,7 +1380,7 @@
 .k-commit-g > b {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
-  font-size: 19px;
+  font-size: var(--fs-title);
   font-weight: 700;
 }
 /* Câu chặn lưu BẤM ĐƯỢC — nhảy tới đúng ô phải sửa. Một câu chặn không dẫn
@@ -1388,13 +1441,21 @@
   color: var(--ink-2);
   cursor: pointer;
 }
-.k-smart-b:hover:not(:disabled) {
+.k-smart-b:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--act);
   color: var(--act-text);
 }
-.k-smart-b:disabled {
-  cursor: default;
-  opacity: 0.55;
+/* Khoá MỀM từ B7½ (`aria-disabled`, lý do qua `aria-describedby`) nên phải bắt
+   cả hai dạng; nền xám đặc thay cho `opacity` — cùng luật `.k-act-off`. */
+.k-smart-b:disabled,
+.k-smart-b[aria-disabled='true'] {
+  cursor: help;
+  background: var(--surface-raised);
+  border-color: var(--line-faint);
+  color: var(--ink-3);
+}
+.k-smart-b[aria-disabled='true'] .k-smart-n {
+  color: var(--ink-3);
 }
 .k-smart-n {
   font-family: var(--font-mono), ui-monospace, monospace;
@@ -1535,7 +1596,7 @@
   margin: 0;
 }
 .k-doc-compact .k-doc-no {
-  font-size: 20px;
+  font-size: var(--fs-title);
   margin: 0;
 }
 .k-doc-compact .k-doc-sub {
@@ -1604,4 +1665,185 @@
   .k-sheet-in {
     animation: none;
   }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   LỊCH THẢ CỦA DateInput — react-day-picker (B4, 24/09/2026)
+
+   Mặc định thư viện: màu nhấn `blue`, ô ngày 44px tròn, chữ `large` cho ngày
+   chọn. Trên màn ERP 13px nó thành một khối to lạc lõng. Ở đây đưa về token:
+   ô 30px bo góc nhỏ như mọi điều khiển kit, ngày đang chọn dùng NỀN NHẠT
+   `--act-wash` (cùng cách tô dòng đang sáng của Combobox) chứ không nền đặc —
+   luật 16/09: nền đặc chỉ dành cho nút. Hôm nay = chữ đậm gạch dưới, không
+   mượn màu hành động.
+   ══════════════════════════════════════════════════════════════════════ */
+.kit .rdp-root {
+  --rdp-accent-color: var(--act);
+  --rdp-accent-background-color: var(--act-wash);
+  --rdp-day-height: 30px;
+  --rdp-day-width: 32px;
+  --rdp-day_button-height: 28px;
+  --rdp-day_button-width: 30px;
+  --rdp-day_button-border-radius: var(--radius-sm);
+  --rdp-day_button-border: 1px solid transparent;
+  --rdp-selected-border: 1px solid var(--act-line);
+  --rdp-today-color: var(--ink);
+  --rdp-nav-height: 32px;
+  --rdp-nav_button-height: 28px;
+  --rdp-nav_button-width: 28px;
+  --rdp-weekday-padding: 4px 0;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+.kit .rdp-month_caption {
+  font-size: var(--fs-body);
+  padding-left: 4px;
+}
+.kit .rdp-caption_label::first-letter {
+  text-transform: uppercase;
+}
+.kit .rdp-weekday {
+  font-size: var(--fs-label);
+  font-weight: 600;
+  color: var(--ink-3);
+  opacity: 1;
+}
+.kit .rdp-chevron {
+  fill: var(--ink-2);
+}
+.kit .rdp-day_button:hover:not(:disabled) {
+  background: var(--surface-raised);
+}
+.kit .rdp-day_button:focus-visible {
+  outline: 2px solid var(--act);
+  outline-offset: 1px;
+}
+.kit .rdp-today:not(.rdp-outside) {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.kit .rdp-selected {
+  font-size: inherit;
+  font-weight: 600;
+}
+.kit .rdp-selected .rdp-day_button {
+  background: var(--act-wash);
+  color: var(--act-text);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   T6 — ĐỆM CUỘN cho vùng cuộn của Table (B5, 24/09/2026)
+
+   Tiêu đề (dính trên), chân (dính dưới), cột định danh (ghim trái) cùng che
+   một phần vùng nhìn. `scroll-padding` bảo trình duyệt: khi cuộn một ô ĐANG
+   FOCUS vào tầm nhìn (Tab, hoặc `scrollIntoView`), chừa ra đúng các dải đó —
+   không thì ô focus nằm lọt dưới tiêu đề hay sau cột ghim (WCAG 2.2 · 2.4.11).
+   `--k-pin-w` do Table tự đo bề rộng cột ghim (đổi theo dữ liệu).
+   ══════════════════════════════════════════════════════════════════════ */
+.k-tscroll {
+  /* Dự phòng trước khi đo xong (lượt vẽ đầu); sau đó là SỐ ĐO THẬT của
+     `useStickyPadding`. Cộng 4px để viền focus (2px + lệch 1px) cũng không bị
+     dải dính cắt mất. */
+  scroll-padding-top: calc(var(--k-head-h, calc(var(--row-h) + 6px)) + 4px);
+  scroll-padding-bottom: calc(var(--k-foot-h, 40px) + 4px);
+  scroll-padding-left: var(--k-pin-w, 0px);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BẢNG CHÉO — MatrixTable (B6, 24/09/2026)
+
+   Tiêu đề hai tầng dính trên, nhiều cột ghim trái, chân dính dưới. Thứ tự
+   lớp (z): ô thân < ô ghim < tiêu đề < tiêu đề ghim < chân — mỗi lớp dính
+   phải nằm trên thứ cuộn qua dưới nó, và góc trên-trái (tiêu đề ghim) trên cả
+   hai trục. Nền ĐẶC ở mọi ô dính: trong suốt thì nội dung cuộn qua hiện chồng.
+   ══════════════════════════════════════════════════════════════════════ */
+.k-mx-th {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--line);
+  padding: 4px var(--pad-x);
+  font-size: var(--fs-label);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  text-align: left;
+  white-space: nowrap;
+}
+/* Tầng nhóm: căn giữa trên cột con, vạch dưới mảnh hơn để hai tầng đọc như
+   một khối chứ không như hai hàng tiêu đề rời. */
+.k-mx-grp {
+  text-align: center;
+  border-bottom-color: var(--hair);
+  border-left: 1px solid var(--line);
+}
+.k-mx-td {
+  height: var(--row-h);
+  padding: 0 var(--pad-x);
+  border-bottom: 1px solid var(--hair);
+  white-space: nowrap;
+  vertical-align: middle;
+  text-align: left;
+  font-weight: 400;
+}
+.k-mx-pin {
+  position: sticky;
+  z-index: 2;
+  background: var(--surface-card);
+}
+.k-mx-th.k-mx-pin {
+  z-index: calc(var(--z-sticky) + 1);
+  background: var(--surface-raised);
+}
+/* Vạch dọc ngăn phần ghim với phần cuộn — thấy được chỗ "trôi" bắt đầu. */
+.k-mx [data-pin-last] {
+  box-shadow: inset -1px 0 0 var(--line);
+}
+.k-mx tbody tr:hover > .k-mx-td {
+  background: var(--surface-hover);
+}
+/* Ô NGOÀI LỘ TRÌNH: nền sọc 135°, khác hẳn ô 0 (có trong lộ trình, chưa làm).
+   Cùng cách bày với dải công đoạn ở màn danh sách lệnh. */
+.k-mx-off {
+  text-align: center;
+  color: var(--ink-3);
+  background: repeating-linear-gradient(135deg, var(--track) 0 2px, transparent 2px 6px);
+}
+/* BẪY (đo 24/09): kiểu chung của mọi bảng kit tô nền dòng chẵn / dòng rê bằng
+   `.kit table:not(.k-grid) tbody tr:nth-child(even) > td` — độ ưu tiên (0,3,4),
+   đè mất nền sọc ở dòng chẵn: ô ngoài lộ trình trông y hệt ô trống. Chọn tử
+   dưới đây cùng (0,3,4) và đứng SAU nên thắng, cả khi rê chuột. */
+.kit table.k-mx tbody tr > td.k-mx-off,
+.kit table.k-mx tbody tr:hover > td.k-mx-off {
+  background: repeating-linear-gradient(135deg, var(--track) 0 2px, transparent 2px 6px);
+}
+.k-mx-btn {
+  display: block;
+  width: 100%;
+  text-align: inherit;
+  padding: 3px 0;
+  border-radius: var(--radius-sm);
+}
+.k-mx-btn:hover {
+  box-shadow: inset 0 0 0 1px var(--act-line);
+}
+.k-mx-btn:focus-visible {
+  outline: 2px solid var(--act);
+  outline-offset: 1px;
+}
+.k-mx-tf {
+  position: sticky;
+  bottom: 0;
+  z-index: calc(var(--z-sticky) + 2);
+  background: var(--surface-raised);
+  border-top: 1px solid var(--line);
+  padding: 6px var(--pad-x);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.k-mx-tf.k-mx-pin {
+  z-index: calc(var(--z-sticky) + 3);
 }

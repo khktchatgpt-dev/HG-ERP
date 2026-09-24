@@ -238,7 +238,7 @@ export function KhuonDetailScreen({
                   alt={`Mặt cắt khuôn ${die.code}`}
                   className="max-h-[260px] max-w-full object-contain"
                 />
-                <div className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                <div className="text-k-sm text-[var(--ink-3)]">
                   Ảnh bóc từ file Excel của Kỹ thuật (gốc quanh 150×100 px), đã kéo giãn
                   mức xám cho nét thành đen liền. Cần kích thước chính xác thì tra bản vẽ
                   gốc.

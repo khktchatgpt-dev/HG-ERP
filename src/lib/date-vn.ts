@@ -51,8 +51,23 @@ export function maskVnDate(raw: string): string {
   const s = raw.trim()
   const seg = s.split(/[^0-9]+/)
   if (seg.length > 1) {
-    const parts = [seg[0].slice(0, 2), (seg[1] ?? '').slice(0, 2), (seg[2] ?? '').slice(0, 4)]
-    return parts.slice(0, Math.min(seg.length, 3)).join('/')
+    // Đoạn nào dài quá bề rộng của nó thì phần TRÀN sang đoạn kế — không cắt
+    // bỏ. Gõ tay từng phím, ô đã tự chèn "/" ở lượt trước nên lượt sau nhận
+    // "03/082": chữ "2" là đầu của NĂM, không phải số thừa của tháng.
+    const W = [2, 2, 4]
+    const parts: string[] = []
+    for (let s of seg) {
+      while (parts.length < 3) {
+        const w = W[parts.length]
+        if (s.length <= w) {
+          parts.push(s)
+          break
+        }
+        parts.push(s.slice(0, w))
+        s = s.slice(w)
+      }
+    }
+    return parts.join('/')
   }
   const digits = s.replace(/\D/g, '').slice(0, 8)
   if (digits.length <= 2) return digits

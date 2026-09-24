@@ -205,7 +205,7 @@ export function BangGiaScreen({
                         })}
                         strong
                       />
-                      <span className="text-[10.5px] text-[var(--ink-3)]">
+                      <span className="text-k-label text-[var(--ink-3)]">
                         {r.currency === 'VND' ? '₫' : r.currency}
                         {r.price_unit ? `/${r.price_unit}` : `/${r.unit}`}
                       </span>

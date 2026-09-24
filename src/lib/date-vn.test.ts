@@ -53,6 +53,23 @@ describe('maskVnDate', () => {
   it('cắt phần thừa', () => {
     expect(maskVnDate('030820261')).toBe('03/08/2026')
   })
+
+  /*
+    GÕ TỪNG PHÍM (24/09/2026 — bắt được khi viết test cho DateInput B4). Các
+    test trên đưa CẢ CHUỖI vào một lần, tức đường DÁN. Người gõ tay thì mỗi phím
+    là một lượt: ô đã tự chèn "/" ở lượt trước, nên lượt sau nhận "03/082" —
+    và bản cũ hiểu đó là người dùng TỰ chia hai đoạn, cắt đoạn hai còn 2 số,
+    nuốt mất năm. Ô kẹt ở "03/08", gõ gì tiếp cũng không vào.
+  */
+  it('gõ liền từng phím vẫn ra đủ ngày — số tràn đoạn thì sang đoạn sau', () => {
+    const go = (keys: string) => [...keys].reduce((s, k) => maskVnDate(s + k), '')
+    expect(go('03082026')).toBe('03/08/2026')
+    expect(go('24092026')).toBe('24/09/2026')
+    // Tràn giữa chừng khi người dùng đã tự gõ một dấu ngăn.
+    expect(maskVnDate('03/082')).toBe('03/08/2')
+    // Ranh giới người dùng tự chia vẫn giữ.
+    expect(go('3-8-2026')).toBe('3/8/2026')
+  })
 })
 
 describe('todayVn — hôm nay theo giờ Việt Nam', () => {

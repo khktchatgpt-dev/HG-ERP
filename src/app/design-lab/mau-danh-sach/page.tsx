@@ -147,9 +147,9 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn>Xuất Excel</Btn>
-            <Btn primary href="/design-lab/mau-erp">
-              + Đơn mới
+            <Btn icon="excel">Xuất Excel</Btn>
+            <Btn icon="them" primary href="/design-lab/mau-erp">
+              Đơn mới
             </Btn>
           </>
         }
@@ -179,6 +179,7 @@ export default function Page() {
           reason={`Bộ lọc “${CHIPS.find((c) => c.id === chip)?.label}” cộng với từ khoá “${q}” không còn dòng nào.`}
           next={
             <Btn
+              icon="boLoc"
               onClick={() => {
                 setQ('')
                 setChip('all')

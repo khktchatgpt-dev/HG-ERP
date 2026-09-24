@@ -52,7 +52,7 @@ export function NavRailLink({
     <Link
       href={href}
       aria-current={active ? 'page' : undefined}
-      className={`relative flex h-8 items-center gap-2.5 rounded-[5px] text-[13px] transition-colors ${
+      className={`text-k-body relative flex h-8 items-center gap-2.5 rounded-[5px] transition-colors ${
         compact ? 'w-8 justify-center' : 'px-2.5'
       } ${
         active
@@ -81,7 +81,7 @@ export function NavRailLink({
       {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {!compact && badge != null && badge > 0 && (
         <span
-          className={`shrink-0 text-[11px] leading-none font-semibold tabular-nums ${
+          className={`text-k-label shrink-0 leading-none font-semibold tabular-nums ${
             urgent ? 'text-[var(--destructive)]' : 'text-muted-foreground'
           }`}
         >

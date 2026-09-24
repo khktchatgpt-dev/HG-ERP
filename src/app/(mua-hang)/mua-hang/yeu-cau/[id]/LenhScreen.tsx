@@ -97,7 +97,7 @@ function SanPham({
 
   return (
     <div
-      className="flex shrink-0 flex-col border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px]"
+      className="flex shrink-0 flex-col border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2"
       style={
         {
           // Bảng PHỤ 5 cột — không cần bề rộng tối thiểu 680px của bảng chính.
@@ -106,14 +106,14 @@ function SanPham({
         } as CSSProperties
       }
     >
-      <div className="flex items-center gap-2 text-[var(--fs-sm)]">
+      <div className="text-k-sm flex items-center gap-2">
         <b className="text-[var(--ink)]">Sản phẩm của lệnh</b>
         <span className="num text-[var(--ink-3)]">
           {products.length} mã
           {products.length > 0 && ` · ${tongTheoDvt(products)}`}
         </span>
         {thieuAnh > 0 && products.length > 0 && (
-          <span className="text-[10.5px] text-[var(--warn)]">
+          <span className="text-k-label text-[var(--warn)]">
             {thieuAnh} mã chưa có ảnh trong hồ sơ SP
           </span>
         )}
@@ -132,7 +132,7 @@ function SanPham({
           lệnh do Bán hàng soạn; lệnh chưa gắn đơn khách thì thường cũng chưa
           có dòng, nên phân biệt hai cảnh để người đọc biết đi đòi cái gì.
         */
-        <div className="mt-1 text-[var(--fs-sm)] text-[var(--ink-3)]">
+        <div className="text-k-sm mt-1 text-[var(--ink-3)]">
           {coDonKhach
             ? 'Bán hàng chưa soạn dòng lệnh — soạn xong thì sản phẩm hiện ở đây.'
             : 'Lệnh chưa gắn đơn hàng khách và cũng chưa có dòng lệnh nào, nên chưa biết phải làm sản phẩm gì.'}
@@ -170,7 +170,9 @@ function SanPham({
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <span className="text-[9px] text-[var(--ink-empty)]">—</span>
+                            <span className="text-k-label text-[var(--ink-empty)]">
+                              —
+                            </span>
                           )}
                         </span>
                       </Cell>
@@ -236,9 +238,11 @@ function SanPham({
         subtitle={xem?.name}
         footer={
           xem?.product_id ? (
-            <Btn href={`/products/${xem.product_id}`}>Mở hồ sơ sản phẩm</Btn>
+            <Btn icon="mo" href={`/products/${xem.product_id}`}>
+              Mở hồ sơ sản phẩm
+            </Btn>
           ) : (
-            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+            <span className="text-k-sm text-[var(--ink-3)]">
               Dòng lệnh gõ tay — không trỏ vào hồ sơ SP nào
             </span>
           )
@@ -254,16 +258,16 @@ function SanPham({
         ) : (
           /* Trạng thái rỗng phải nói LÝ DO và VIỆC LÀM TIẾP — ảnh nằm ở hồ sơ
              SP do Kỹ thuật giữ, nên chỉ đường sang đó chứ không dừng ở "trống". */
-          <div className="rounded-[var(--radius)] border border-dashed border-[var(--line)] px-4 py-8 text-center text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <div className="text-k-sm rounded-[var(--radius)] border border-dashed border-[var(--line)] px-4 py-8 text-center text-[var(--ink-3)]">
             Hồ sơ sản phẩm chưa có ảnh. Kỹ thuật nạp ảnh vào hồ sơ thì màn này hiện theo.
           </div>
         )}
-        <div className="mt-3 flex items-baseline gap-4 text-[var(--fs-sm)]">
+        <div className="text-k-sm mt-3 flex items-baseline gap-4">
           <span className="text-[var(--ink-3)]">Số lượng phải làm</span>
-          <span className="num text-[15px] font-semibold text-[var(--ink)]">
+          <span className="num text-k-lg font-semibold text-[var(--ink)]">
             {xem ? sl(xem.qty) : ''}
             {xem?.unit && (
-              <span className="ml-1 text-[11px] font-normal text-[var(--ink-3)]">
+              <span className="text-k-label ml-1 font-normal text-[var(--ink-3)]">
                 {xem.unit}
               </span>
             )}
@@ -430,7 +434,7 @@ export function LenhScreen({
       />
 
       {cv.missing > 0 && cv.missing_top.length > 0 && (
-        <div className="shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[9px] text-[var(--fs-sm)]">
+        <div className="text-k-sm shrink-0 border-b border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-2">
           <b className="text-[var(--ink)]">Còn phải đặt:</b>{' '}
           {cv.missing_top.map((m, i) => (
             <span key={m.code}>
@@ -461,11 +465,13 @@ export function LenhScreen({
           }
           next={
             canEdit ? (
-              <Btn primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
+              <Btn icon="them" primary href={`/mua-hang/don/moi?lsx=${lsx.id}`}>
                 Soạn đơn cho lệnh này
               </Btn>
             ) : (
-              <Btn href="/mua-hang/yeu-cau">Về danh sách lệnh</Btn>
+              <Btn icon="quayLai" href="/mua-hang/yeu-cau">
+                Về danh sách lệnh
+              </Btn>
             )
           }
         />
@@ -497,7 +503,7 @@ export function LenhScreen({
                         đơn, tránh in hai lần cùng một chuỗi.
                       */}
                       {p.supplier_doc_no?.trim() && p.supplier_doc_no !== p.code && (
-                        <span className="num text-[10.5px] text-[var(--ink-3)]">
+                        <span className="num text-k-label text-[var(--ink-3)]">
                           ĐH {p.supplier_doc_no}
                         </span>
                       )}
@@ -571,7 +577,7 @@ export function LenhScreen({
                         Nói ngay cạnh nó, không để người đọc mang đi cộng.
                       */}
                       {p.unpriced_lines > 0 && (
-                        <span className="text-[10.5px] text-[var(--warn)]">
+                        <span className="text-k-label text-[var(--warn)]">
                           {p.unpriced_lines} dòng chưa giá
                         </span>
                       )}

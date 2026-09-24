@@ -19,9 +19,9 @@ import {
   Td,
   Th,
   WhyBox,
+  useToast,
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 
 export type SoHoaDonRow = {
   id: string
@@ -125,8 +125,12 @@ export function SoHoaDonScreen({
           title="Sổ hoá đơn nhà cung cấp"
           actions={
             <>
-              <Btn href="/finance/hoa-don-ncc">Đối chiếu · lập tờ mới</Btn>
-              <Btn href="/finance/so-cong-no">Sổ công nợ TK 331</Btn>
+              <Btn icon="hoaDon" href="/finance/hoa-don-ncc">
+                Đối chiếu · lập tờ mới
+              </Btn>
+              <Btn icon="so" href="/finance/so-cong-no">
+                Sổ công nợ TK 331
+              </Btn>
             </>
           }
         />
@@ -178,11 +182,13 @@ export function SoHoaDonScreen({
               }
               next={
                 rows.length === 0 ? (
-                  <Btn primary href="/finance/hoa-don-ncc">
+                  <Btn icon="hoaDon" primary href="/finance/hoa-don-ncc">
                     Mở màn đối chiếu
                   </Btn>
                 ) : (
-                  <Btn onClick={() => setFilter('all')}>Xem tất cả</Btn>
+                  <Btn icon="boLoc" onClick={() => setFilter('all')}>
+                    Xem tất cả
+                  </Btn>
                 )
               }
             />
@@ -206,7 +212,7 @@ export function SoHoaDonScreen({
                     <Td>
                       <span className="num k-strong">{r.invoice_no}</span>
                       {r.note && (
-                        <div className="max-w-64 truncate text-[11px] text-[var(--ink-3)]">
+                        <div className="text-k-label max-w-64 truncate text-[var(--ink-3)]">
                           {r.note}
                         </div>
                       )}

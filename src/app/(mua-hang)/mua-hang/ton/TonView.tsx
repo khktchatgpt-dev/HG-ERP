@@ -8,6 +8,7 @@ import type {
   SupplyStockRow,
 } from '@/modules/dept/supply/supply-stock.service'
 import {
+  Ico,
   Btn,
   Cell,
   Chip,
@@ -113,7 +114,11 @@ export function TonView({
             ? [{ label: 'Tiền đang đặt', value: showMoney(counts.ordered_value) + ' ₫' }]
             : []),
         ]}
-        actions={<Btn href="/mua-hang/don/moi">+ Soạn đơn mua</Btn>}
+        actions={
+          <Btn icon="them" href="/mua-hang/don/moi">
+            Soạn đơn mua
+          </Btn>
+        }
       />
 
       <FilterBar>
@@ -155,6 +160,7 @@ export function TonView({
           }
           next={
             <Btn
+              icon="boLoc"
               primary
               onClick={() => doiLoc({ loc: 'all', q: '', nhom: '', trang: '1' })}
             >
@@ -187,7 +193,7 @@ export function TonView({
                     <span className="truncate" title={r.name}>
                       {r.name}
                     </span>
-                    <span className="shrink-0 text-[10.5px] text-[var(--ink-3)]">
+                    <span className="text-k-label shrink-0 text-[var(--ink-3)]">
                       {r.unit}
                     </span>
                   </span>
@@ -266,16 +272,18 @@ export function TonView({
         left={[
           <span key="p" className="flex items-center gap-2">
             <Btn
+              icon="truoc"
               disabled={page <= 1 || dangChay}
               onClick={() => doiLoc({ trang: String(page - 1) })}
             >
-              ‹ Trước
+              Trước
             </Btn>
             <Btn
               disabled={page >= soTrang || dangChay}
               onClick={() => doiLoc({ trang: String(page + 1) })}
             >
-              Sau ›
+              Sau
+              <Ico name="sau" />
             </Btn>
           </span>,
           dangChay ? 'Đang tải…' : `Khung nhìn: ${chip?.label ?? ''}`,

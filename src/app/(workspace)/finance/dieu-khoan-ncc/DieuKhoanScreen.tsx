@@ -20,9 +20,9 @@ import {
   Td,
   Th,
   WhyBox,
+  useToast,
 } from '@/components/kit'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import { SOURCE_LABEL, termLabel, type Term, type TermSource } from '@/lib/payment-terms'
 import type { DueBoard, DueRow } from '@/modules/dept/accounting/payment-terms.service'
 
@@ -178,8 +178,12 @@ export function DieuKhoanScreen({
                   label: p.term ? `Mặc định: ${p.label}` : p.label,
                 }))}
               />
-              <Btn href="/finance/so-cong-no">Sổ công nợ</Btn>
-              <Btn href="/finance/cong-no-ncc">Ghi thanh toán</Btn>
+              <Btn icon="so" href="/finance/so-cong-no">
+                Sổ công nợ
+              </Btn>
+              <Btn icon="tien" href="/finance/cong-no-ncc">
+                Ghi thanh toán
+              </Btn>
             </>
           }
         />
@@ -242,11 +246,12 @@ export function DieuKhoanScreen({
               }
               next={
                 board.rows.length === 0 ? (
-                  <Btn primary href="/finance/so-cong-no">
+                  <Btn icon="so" primary href="/finance/so-cong-no">
                     Xem sổ công nợ
                   </Btn>
                 ) : (
                   <Btn
+                    icon="boLoc"
                     onClick={() => {
                       setFilter('all')
                       setQ('')
@@ -288,7 +293,7 @@ export function DieuKhoanScreen({
                       </Td>
                       <Td num>
                         {money(r.amount, r.currency)}{' '}
-                        <span className="text-[11px] text-[var(--ink-3)]">
+                        <span className="text-k-label text-[var(--ink-3)]">
                           {r.currency}
                         </span>
                       </Td>
@@ -301,7 +306,7 @@ export function DieuKhoanScreen({
                       */}
                       <Td tone={SOURCE_TONE[r.source]}>
                         {termLabel(r.term)}
-                        <div className="text-[11px] text-[var(--ink-3)]">
+                        <div className="text-k-label text-[var(--ink-3)]">
                           {SOURCE_LABEL[r.source]}
                         </div>
                       </Td>

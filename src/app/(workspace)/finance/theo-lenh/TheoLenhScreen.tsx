@@ -93,6 +93,7 @@ export function TheoLenhScreen({
                 {activeOnly ? 'Xem cả lệnh đã đóng' : 'Chỉ lệnh đang chạy'}
               </Btn>
               <Btn
+                icon="excel"
                 primary
                 href={`/api/dept/accounting/bao-cao/export${activeOnly ? '' : '?tatca=1'}`}
               >
@@ -108,7 +109,7 @@ export function TheoLenhScreen({
         Mỗi lần xem đúng MỘT tiền tệ thì mọi con số trên màn đều cộng được.
       */}
         {currencies.length > 1 && (
-          <div className="flex items-center gap-2 border-b border-[var(--hair)] px-[var(--gutter)] py-2 text-[var(--fs-sm)]">
+          <div className="text-k-sm flex items-center gap-2 border-b border-[var(--hair)] px-[var(--gutter)] py-2">
             <span className="text-[var(--ink-3)]">Tiền tệ</span>
             {currencies.map((c) => (
               <Btn
@@ -167,7 +168,7 @@ export function TheoLenhScreen({
               headline="Chưa có lệnh sản xuất nào"
               reason="Bảng này gộp tiền theo lệnh, nên cần ít nhất một lệnh đã duyệt."
               next={
-                <Btn primary href="/kehoach-sx">
+                <Btn icon="lich" primary href="/kehoach-sx">
                   Mở kế hoạch sản xuất
                 </Btn>
               }
@@ -250,11 +251,11 @@ export function TheoLenhScreen({
           <>
             <div className="flex flex-wrap items-center gap-2 border-t border-[var(--hair)] px-[var(--gutter)] pt-3 pb-2">
               <h3 className="k-fgrp-h">Lệnh × Nhà cung cấp</h3>
-              <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+              <span className="text-k-sm text-[var(--ink-3)]">
                 nợ thuộc về NCC, chi phí thuộc về lệnh — bảng này đọc được cả hai chiều
               </span>
               {pick && (
-                <Btn onClick={() => setPick(null)}>
+                <Btn icon="boLoc" onClick={() => setPick(null)}>
                   Bỏ lọc: {pick.label} ({crossShown.length}/{cross.length})
                 </Btn>
               )}

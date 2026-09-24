@@ -71,7 +71,7 @@ export function ReturnModal({
         </Field>
 
         {condition === 'damaged' && (
-          <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+          <p className="rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700">
             Mẫu hỏng sẽ chuyển sang <b>Đang sửa</b> thay vì về showroom — tránh đem cho
             mượn tiếp.
           </p>

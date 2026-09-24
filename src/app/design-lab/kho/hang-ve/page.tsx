@@ -111,8 +111,12 @@ export default function Page() {
         ]}
         actions={
           <>
-            <Btn href="/design-lab/kho">Về bàn làm việc</Btn>
-            <Btn href="/design-lab/kho/phieu-nhap">+ Nhận không theo đơn</Btn>
+            <Btn icon="quayLai" href="/design-lab/kho">
+              Về bàn làm việc
+            </Btn>
+            <Btn icon="them" href="/design-lab/kho/phieu-nhap">
+              Nhận không theo đơn
+            </Btn>
           </>
         }
       >
@@ -178,7 +182,7 @@ export default function Page() {
               <>
                 <PrimaryStep label="Lập phiếu nhập" href="/design-lab/kho/phieu-nhap" />
                 <Btn>Báo NCC trễ hẹn</Btn>
-                <Btn>Xem đơn mua</Btn>
+                <Btn icon="don">Xem đơn mua</Btn>
               </>
             }
           >

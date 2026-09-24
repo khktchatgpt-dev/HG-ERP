@@ -28,6 +28,17 @@ import {
   resolveCountingPlan,
   type CountingPlan,
 } from '@/lib/default-assembly'
+import {
+  FINISH_ROW_NAME,
+  FINISH_STAGES,
+  finishRouteOverride,
+  finishRowId,
+  finishRowLineId,
+  lineUnit,
+  isFinishRow,
+  isFinishRowId,
+} from '@/lib/finish-stages'
+import { fieldsForStage, stageFieldsRepo, type StageField } from './stage-fields.repo'
 import { transfersRepo } from './transfers.repo'
 import { outsourceRepo } from './outsource.repo'
 import { entryDocsRepo, type EntryDocJoined } from './entry-docs.repo'
@@ -61,8 +72,14 @@ type RecordInput = {
     qty: number
     kg?: number | null
     defect_qty?: number
+    /** Hỏng nhưng cứu được (0206) — không trừ tổng cần, không chạy tiếp. */
+    rework_qty?: number
+    /** Mã lý do từ danh mục — tuỳ chọn, dùng chung cho phế và sửa lại. */
+    defect_code?: string | null
     defect_reason?: string | null
     machine_note?: string | null
+    /** Ô riêng theo công đoạn (0207) — khoá khai ở production_stage_fields. */
+    stage_meta?: Record<string, string | number> | null
     worker_name?: string | null
     finish_state?: 'tran' | 'dang_may' | null
     note?: string | null
@@ -188,6 +205,30 @@ async function loadLsxContext(lsxId: string) {
   }
 }
 
+/**
+ * Lọc ô riêng theo công đoạn (0207) trước khi ghi: bỏ khoá KHÔNG được khai cho
+ * công đoạn này, bỏ giá trị rỗng, và trả null nếu chẳng còn gì.
+ *
+ * Vì sao lọc ở server chứ không tin lưới: khoá đi vào jsonb nên không có ràng
+ * buộc nào ở tầng DB chặn hộ. Một khoá gõ sai (hoặc còn sót lại khi người dùng
+ * đổi tab công đoạn giữa chừng) sẽ nằm im trong sổ, không ai thấy, cho tới lúc
+ * có người gom báo cáo theo khoá đó và số không khớp.
+ */
+function cleanStageMeta(
+  meta: Record<string, string | number> | null | undefined,
+  fields: StageField[],
+): Record<string, string | number> | null {
+  if (!meta) return null
+  const allow = new Map(fields.map((f) => [f.field_key, f]))
+  const out: Record<string, string | number> = {}
+  for (const [k, v] of Object.entries(meta)) {
+    if (!allow.has(k)) continue
+    if (typeof v === 'string' && !v.trim()) continue
+    out[k] = typeof v === 'string' ? v.trim() : v
+  }
+  return Object.keys(out).length ? out : null
+}
+
 export const entriesService = {
   /**
    * Nhập sổ theo LÔ (1 công đoạn + 1 ngày + 1 tổ, nhiều chi tiết).
@@ -205,6 +246,20 @@ export const entriesService = {
       throw BadRequest('Chỉ nhập sổ cho LSX đã duyệt / đang sản xuất')
     }
     const byId = new Map(components.map((c) => [c.id, c]))
+    // Ô riêng của công đoạn đang ghi (0207) — dùng để lọc khoá lạ và bắt ô
+    // buộc phải khai. Một truy vấn cho cả lượt, bảng chỉ vài chục dòng.
+    const metaFields = fieldsForStage(await stageFieldsRepo.listActive(), input.stage)
+    for (const e of input.entries) {
+      const meta = cleanStageMeta(e.stage_meta, metaFields)
+      const thieu = metaFields
+        .filter((f) => f.required && meta?.[f.field_key] == null)
+        .map((f) => f.label)
+      if (thieu.length) {
+        throw BadRequest(
+          `"${byId.get(e.component_id)?.name ?? 'Dòng'}" chưa khai: ${thieu.join(' · ')}`,
+        )
+      }
+    }
 
     // ── CỤM MẶC NHIÊN → VẬT CHẤT HOÁ (bậc 2 thang đơn vị đếm, 27/08) ─────────
     // Sổ gửi id ảo `default-asm:<line_id>` khi ghi số BỘ ở hàn+ cho BOM phẳng.
@@ -219,8 +274,12 @@ export const entriesService = {
       const line = orderLines.find((l) => l.id === lineId)
       if (!line) throw BadRequest('Có dòng sổ gắn cụm mặc nhiên không thuộc lệnh này')
       const lineComps = components.filter((c) => c.production_order_line_id === lineId)
-      // Đã vật chất hoá (lượt ghi trước / màn khác vừa ghi) → dùng lại dòng thật.
-      let real = lineComps.find((c) => c.kind === 'assembly' && c.cluster == null)
+      // Đã vật chất hoá (lượt ghi trước / màn khác vừa ghi) → dùng lại dòng
+      // thật. Loại dòng THÀNH PHẨM ra: nó cũng là assembly/cluster null nhưng
+      // bắt đầu ở lắp ráp — vớ nhầm nó thì sổ hàn ghi vào dòng đóng gói.
+      let real = lineComps.find(
+        (c) => c.kind === 'assembly' && c.cluster == null && !isFinishRow(c),
+      )
       if (!real) {
         const plan = resolveCountingPlan(lineComps, routeByLine.get(lineId))
         if (plan.virtual_stages.length === 0) {
@@ -238,7 +297,7 @@ export const entriesService = {
           // Kế thừa nhóm vật tư của chi tiết bị gộp (FRAME) — nhờ đó lộ trình
           // của cụm suy được cả khi dòng chưa lên kế hoạch SX.
           group_code: absorbed.find((c) => c.group_code)?.group_code ?? null,
-          unit: 'bộ',
+          unit: lineUnit(orderLines.find((l) => l.id === lineId)?.unit),
           qty_per_unit: 1,
           first_stage: plan.virtual_stages[0],
           final_stage: plan.virtual_stages[plan.virtual_stages.length - 1],
@@ -279,6 +338,59 @@ export const entriesService = {
       }
       idRemap.set(vid, real.id)
     }
+
+    // ── DÒNG THÀNH PHẨM → VẬT CHẤT HOÁ (chặng sau sơn, 18/09) ────────────────
+    // Cùng lối đi với cụm mặc nhiên, khác ở chỗ KHÔNG gộp chi tiết nào và
+    // không chốt final_stage cho ai: bốn bước này không ăn vào chi tiết, chúng
+    // đếm cả bộ. Nên dòng sinh ra cũng không mang group_code.
+    for (const vid of new Set(
+      input.entries.map((e) => e.component_id).filter(isFinishRowId),
+    )) {
+      const lineId = finishRowLineId(vid)!
+      const line = orderLines.find((l) => l.id === lineId)
+      if (!line) throw BadRequest('Có dòng sổ gắn bộ thành phẩm không thuộc lệnh này')
+      const lineComps = components.filter((c) => c.production_order_line_id === lineId)
+      let real = lineComps.find(isFinishRow)
+      if (!real) {
+        const fields = {
+          production_order_id: lsxId,
+          production_order_line_id: lineId,
+          kind: 'assembly' as const,
+          cluster: null,
+          name: FINISH_ROW_NAME,
+          group_code: null,
+          unit: lineUnit(line.unit),
+          qty_per_unit: 1,
+          first_stage: FINISH_STAGES[0],
+          final_stage: FINISH_STAGES[FINISH_STAGES.length - 1],
+          note: null,
+        }
+        const newId = await componentsRepo.insertOne(fields)
+        real = {
+          ...fields,
+          id: newId,
+          material_id: null,
+          material_type: null,
+          spec_thickness_mm: null,
+          spec_width_mm: null,
+          spec_length_mm: null,
+          wall_thickness_mm: null,
+          dm_kg: null,
+          pcs_per_bar: null,
+          qty_per_assembly: null,
+          sort_order: 9999,
+          material_code: null,
+          material_name: null,
+          material_unit: null,
+        }
+        components.push(real)
+        byId.set(real.id, real)
+        // 1 bộ thành phẩm / SP → tổng cần = SL đặt của dòng.
+        totalByComponent.set(real.id, Number(line.qty) || 0)
+      }
+      idRemap.set(vid, real.id)
+    }
+
     // Từ đây trở đi mọi phép tính dùng bản đã trỏ về dòng thật.
     const recEntries = input.entries.map((e) =>
       idRemap.has(e.component_id)
@@ -309,8 +421,11 @@ export const entriesService = {
     }
     const lock = await dayLocksRepo.find(team, input.entry_date)
     if (lock) {
+      // KHÔNG bảo "nhờ quản lý": từ 0205 (18/09/2026) chính thống kê có
+      // `production.daylock.unlock`, tự mở được ở màn Sổ ngày. Câu cũ đẩy họ đi
+      // xin phép thứ họ tự làm được — đo thấy 22/09 lúc chạy test case.
       throw BadRequest(
-        `Sổ ngày ${input.entry_date} của tổ đã chốt — nhờ quản lý mở khoá trước khi ghi thêm`,
+        `Sổ ngày ${input.entry_date} của tổ đã chốt — mở khoá ở màn Sổ ngày rồi ghi tiếp`,
       )
     }
 
@@ -318,6 +433,10 @@ export const entriesService = {
     // thì nhập tự do — cùng chính sách lệnh cũ).
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)!
+      // Dòng thành phẩm đứng NGOÀI kế hoạch công đoạn: Kế hoạch SX lên lộ
+      // trình cho phần gia công (phôi→sơn), còn lắp ráp/đóng gói thì bộ nào
+      // cũng phải qua. Bắt nó khớp kế hoạch là chặn đúng thứ luôn hợp lệ.
+      if (isFinishRow(comp)) continue
       const route = routeByLine.get(comp.production_order_line_id)
       if (route && !route.includes(input.stage)) {
         throw BadRequest(
@@ -345,6 +464,7 @@ export const entriesService = {
     for (const e of recEntries) {
       const comp = byId.get(e.component_id)!
       const eff =
+        finishRouteOverride(comp) ??
         planOf(comp.production_order_line_id).own_route.get(comp.id) ??
         clipRoute(
           resolveComponentRoute(
@@ -525,8 +645,18 @@ export const entriesService = {
         // Bỏ trống kg → backflush ĐM × SL (Excel cũng tính, không nhập tay).
         kg: backflushKg(e.kg, byId.get(e.component_id)!.dm_kg, e.qty),
         defect_qty: e.defect_qty ?? 0,
-        defect_reason: (e.defect_qty ?? 0) > 0 ? (e.defect_reason ?? null) : null,
+        rework_qty: e.rework_qty ?? 0,
+        // Lý do chỉ có nghĩa khi dòng CÓ phần không đạt. Dòng toàn đạt mà mang
+        // theo lý do là rác — lưới giữ lại chữ cũ khi người dùng xoá số.
+        ...(() => {
+          const bad = (e.defect_qty ?? 0) > 0 || (e.rework_qty ?? 0) > 0
+          return {
+            defect_code: bad ? (e.defect_code ?? null) : null,
+            defect_reason: bad ? (e.defect_reason ?? null) : null,
+          }
+        })(),
         machine_note: e.machine_note ?? null,
+        stage_meta: cleanStageMeta(e.stage_meta, metaFields),
         worker_name: e.worker_name ?? null,
         finish_state: e.finish_state ?? null,
         note: e.note ?? null,
@@ -540,6 +670,44 @@ export const entriesService = {
     )
     await Promise.all(
       [...affectedLines].map((lineId) => jobsRepo.markDoing(lsxId, lineId, input.stage)),
+    )
+
+    // ── CÔNG ĐOẠN XONG KHI ĐỦ SỐ (chốt 18/09/2026) ──────────────────────────
+    //
+    // Quyền "tổ trưởng xác nhận xong công đoạn" đã gỡ — tổ trưởng chỉ xem. Nên
+    // trạng thái `done` không còn ai bấm; nó phải SUY từ chính con số vừa ghi,
+    // nếu không mọi việc sẽ kẹt ở "đang làm" vĩnh viễn và cổng đóng lệnh
+    // (`lsxService.complete`) không bao giờ mở.
+    //
+    // ĐỦ SỐ = mọi chi tiết của dòng SP CÓ ĐẾM ở công đoạn này đều đạt tổng cần.
+    // Dòng chưa có chi tiết nào thì KHÔNG tự xong: không có mẫu số thì không
+    // kết luận được, và tự xong ở đó là giấu mất việc chưa ai định hình.
+    const doneAfter = new Map(doneByCompStage)
+    for (const e of recEntries) {
+      const k = `${e.component_id}|${input.stage}`
+      doneAfter.set(k, (doneAfter.get(k) ?? 0) + Number(e.qty))
+    }
+    const readyLines = [...affectedLines].filter((lineId) => {
+      const mine = components.filter(
+        (c) =>
+          c.production_order_line_id === lineId &&
+          (
+            finishRouteOverride(c) ??
+            clipRoute(
+              resolveComponentRoute(routeByLine.get(lineId), c.group_code),
+              c.first_stage,
+              c.final_stage,
+            )
+          ).includes(input.stage),
+      )
+      if (mine.length === 0) return false
+      return mine.every((c) => {
+        const need = totalByComponent.get(c.id) ?? 0
+        return need > 0 && (doneAfter.get(`${c.id}|${input.stage}`) ?? 0) >= need
+      })
+    })
+    await Promise.all(
+      readyLines.map((lineId) => jobsRepo.markDone(lsxId, lineId, input.stage)),
     )
 
     // Lần ghi sổ đầu tiên của lệnh đã duyệt → lệnh sang "đang sản xuất".
@@ -585,17 +753,33 @@ export const entriesService = {
     // Gộp sản lượng theo (chi tiết, công đoạn). NHẬN VỀ gia công có công đoạn
     // (0171) cộng vào "đã làm" như Excel gộp cột "Gia công" vào từng khâu —
     // theo dõi riêng phần GC để màn sổ tổng bày "trong đó gia công".
-    const agg = new Map<string, Map<string, { done: number; defect: number }>>()
-    const add = (compId: string, stage: string, qty: number, defect: number) => {
+    const agg = new Map<
+      string,
+      Map<string, { done: number; defect: number; rework: number }>
+    >()
+    const add = (
+      compId: string,
+      stage: string,
+      qty: number,
+      defect: number,
+      rework = 0,
+    ) => {
       const perStage = agg.get(compId) ?? new Map()
-      const cur = perStage.get(stage) ?? { done: 0, defect: 0 }
+      const cur = perStage.get(stage) ?? { done: 0, defect: 0, rework: 0 }
       cur.done += qty
       cur.defect += defect
+      cur.rework += rework
       perStage.set(stage, cur)
       agg.set(compId, perStage)
     }
     for (const en of entries) {
-      add(en.component_id, en.stage, Number(en.qty), Number(en.defect_qty))
+      add(
+        en.component_id,
+        en.stage,
+        Number(en.qty),
+        Number(en.defect_qty),
+        Number(en.rework_qty ?? 0),
+      )
     }
     const gcByCompStage = new Map<string, number>()
     for (const oe of outsource) {
@@ -625,6 +809,7 @@ export const entriesService = {
         stage,
         done: v.done,
         defect: v.defect,
+        rework: v.rework,
       }))
       // Lộ trình của chi tiết: kế hoạch SX thắng; chưa lên kế hoạch thì SUY
       // THEO NHÓM VẬT TƯ (0174 + stage-route).
@@ -636,7 +821,11 @@ export const entriesService = {
       // công đoạn nào cho tới khi được phân nhóm hoặc lên kế hoạch.
       // Chi tiết bị gộp vào cụm mặc nhiên → lộ trình đã cắt (chỉ còn trước
       // hàn); còn lại giữ nguyên lộ trình đầy đủ.
+      // Dòng THÀNH PHẨM không có nhóm vật tư (nó không làm từ vật tư nào), nên
+      // lộ trình suy-theo-nhóm trả rỗng và dòng sẽ biến mất khỏi mọi tab. Ép
+      // lộ trình bốn bước sau sơn cho nó.
       const route =
+        finishRouteOverride(c) ??
         planByLine.get(c.production_order_line_id)?.own_route.get(c.id) ??
         resolveComponentRoute(routeByLine.get(c.production_order_line_id), c.group_code)
       const summary = summarizeComponent(
@@ -689,7 +878,7 @@ export const entriesService = {
         kind: 'assembly',
         cluster: null,
         name: DEFAULT_ASSEMBLY_NAME,
-        unit: 'bộ',
+        unit: lineUnit(l.unit),
         total_needed: l.qty,
         dm_kg: null,
         material_type: null,
@@ -701,6 +890,32 @@ export const entriesService = {
           plan.virtual_stages,
           defaultAssemblyOutputs(plan.virtual_stages, l.qty, absorbed),
         ),
+        is_virtual: true,
+      })
+    }
+
+    // CHẶNG THÀNH PHẨM per dòng SP (18/09): lắp ráp → bao bì → đóng gói →
+    // hoàn thiện, đơn vị BỘ, tổng cần = SL đặt. Sản lượng KHÔNG suy từ chi tiết
+    // — không chi tiết nào làm bốn việc đó — nên trước lượt ghi đầu tiên dòng
+    // này đứng 0; ghi phát đầu thì `record` vật chất hoá nó và từ đó nó là
+    // component thật, đi đường chung ở trên.
+    for (const l of orderLines) {
+      const lineComps = components.filter((c) => c.production_order_line_id === l.id)
+      if (lineComps.length === 0 || lineComps.some(isFinishRow)) continue
+      views.push({
+        id: finishRowId(l.id),
+        order_line_id: l.id,
+        kind: 'assembly',
+        cluster: null,
+        name: FINISH_ROW_NAME,
+        unit: lineUnit(l.unit),
+        total_needed: l.qty,
+        dm_kg: null,
+        material_type: null,
+        material_code: null,
+        material_name: null,
+        allowed_stages: [...FINISH_STAGES],
+        summary: summarizeComponent(l.qty, [...FINISH_STAGES], []),
         is_virtual: true,
       })
     }
@@ -724,6 +939,11 @@ export const entriesService = {
         // Chi tiết bị gộp vào cụm mặc nhiên: đầu ra cuối của nó giờ là PHÔI —
         // đem vào đồng bộ là đếm phôi thành SP xong. Cụm mặc nhiên thay mặt.
         .filter((c) => !plan.own_route.has(c.id))
+        // Dòng thành phẩm KHÔNG vào đồng bộ. "Đồng bộ" trả lời "có đủ bộ phận
+        // cho bao nhiêu bộ" — tức đầu VÀO của lắp ráp. Cộng cả số đã hoàn
+        // thiện vào đó là trộn hai câu hỏi làm một, và đồng bộ sẽ đứng 0 suốt
+        // cho tới khi tổ lắp ráp bắt đầu.
+        .filter((c) => !isFinishRow(c))
         .map((c) => ({
           qty_per_unit: c.qty_per_unit,
           done_final: views.find((v) => v.id === c.id)?.summary.done_final ?? 0,
@@ -930,18 +1150,27 @@ export const entriesService = {
     _user: User,
     lsxId: string,
   ): Promise<
-    (EntryDocJoined & { total_qty: number; total_defect: number; line_count: number })[]
+    (EntryDocJoined & {
+      total_qty: number
+      total_defect: number
+      total_rework: number
+      line_count: number
+    })[]
   > {
     const [docs, entries] = await Promise.all([
       entryDocsRepo.listByLsx(lsxId),
       entriesRepo.listByLsx(lsxId),
     ])
-    const sums = new Map<string, { qty: number; defect: number; lines: number }>()
+    const sums = new Map<
+      string,
+      { qty: number; defect: number; rework: number; lines: number }
+    >()
     for (const e of entries) {
       if (!e.doc_id) continue
-      const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, lines: 0 }
+      const s = sums.get(e.doc_id) ?? { qty: 0, defect: 0, rework: 0, lines: 0 }
       s.qty += Number(e.qty)
       s.defect += Number(e.defect_qty)
+      s.rework += Number(e.rework_qty ?? 0)
       s.lines++
       sums.set(e.doc_id, s)
     }
@@ -951,6 +1180,7 @@ export const entriesService = {
         ...d,
         total_qty: Math.round((s?.qty ?? 0) * 100) / 100,
         total_defect: Math.round((s?.defect ?? 0) * 100) / 100,
+        total_rework: Math.round((s?.rework ?? 0) * 100) / 100,
         line_count: s?.lines ?? 0,
       }
     })

@@ -29,8 +29,8 @@ import {
   Tick,
   WhyBox,
   WorkLanes,
+  useToast,
 } from '@/components/kit'
-import { useToast } from '@/components/ui/Toast'
 import { api, apiErrorText } from '@/lib/api'
 import { SUPPLY_TODO, type SupplyTodoKind } from '@/lib/supply-watch'
 import { KIND_ACTION, type ActionSpec } from './actions'
@@ -299,6 +299,7 @@ export function ViecScreen({
                   </Btn>
                 ) : scope === 'toi' ? (
                   <Btn
+                    icon="boLoc"
                     onClick={() => {
                       setScope('phong')
                       reset()
@@ -307,7 +308,9 @@ export function ViecScreen({
                     Xem cả phòng
                   </Btn>
                 ) : (
-                  <Btn href="/mua-hang">Về trang vào việc</Btn>
+                  <Btn icon="quayLai" href="/mua-hang">
+                    Về trang vào việc
+                  </Btn>
                 )
               }
             />
@@ -375,8 +378,8 @@ export function ViecScreen({
               "các đơn đang chọn không cùng một bước" như màn danh sách.
             */}
             {chosen.length > 0 && spec.kindOfUi !== 'link' && (
-              <div className="flex shrink-0 items-center gap-3 border-t border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-[9px]">
-                <span className="num font-semibold text-[var(--act-text)] text-[var(--fs-sm)]">
+              <div className="flex shrink-0 items-center gap-3 border-t border-[var(--line)] bg-[var(--act-wash)] px-[var(--gutter)] py-2">
+                <span className="num text-k-sm font-semibold text-[var(--act-text)]">
                   {chosen.length} đơn đã chọn
                 </span>
                 <Btn onClick={() => setTicked([])}>Bỏ chọn</Btn>
@@ -409,7 +412,9 @@ export function ViecScreen({
                 >
                   {spec.label}
                 </Btn>
-                <Btn href={`/mua-hang/don/${sel.id}`}>Mở đơn đầy đủ</Btn>
+                <Btn icon="don" href={`/mua-hang/don/${sel.id}`}>
+                  Mở đơn đầy đủ
+                </Btn>
               </>
             }
           >
@@ -446,7 +451,7 @@ export function ViecScreen({
             </InspectSection>
 
             <InspectSection title="Về kho">
-              <div className="text-[var(--fs-sm)] text-[var(--ink-2)]">
+              <div className="text-k-sm text-[var(--ink-2)]">
                 {sel.lines_total > 0 ? (
                   <>
                     Đã về <b className="num">{sel.lines_done}</b> trên{' '}
@@ -520,7 +525,7 @@ export function ViecScreen({
 
           {sheet.spec.needDate && (
             <label className="mb-3 block">
-              <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 Ngày giao mới
               </span>
               <DateInput value={newDate} onChange={setNewDate} label="Ngày giao mới" />
@@ -529,7 +534,7 @@ export function ViecScreen({
 
           {sheet.spec.needNote && (
             <label className="block">
-              <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 {sheet.spec.noteLabel}
               </span>
               <TextArea
@@ -538,7 +543,7 @@ export function ViecScreen({
                 rows={3}
                 placeholder={sheet.spec.notePlaceholder}
               />
-              <span className="mt-1 block text-[11.5px] leading-relaxed text-[var(--ink-3)]">
+              <span className="text-k-sm mt-1 block leading-relaxed text-[var(--ink-3)]">
                 {sheet.spec.noteWhy}
               </span>
             </label>
@@ -558,7 +563,7 @@ export function ViecScreen({
           )}
 
           {sheetInvalid && (
-            <p className="mt-3 font-semibold text-[var(--fs-sm)] text-[var(--warn)]">
+            <p className="text-k-sm mt-3 font-semibold text-[var(--warn)]">
               {sheet.spec.needDate && newDate.length === 0
                 ? 'Chọn ngày giao mới trước đã.'
                 : 'Viết một câu nói bạn vừa làm gì — đây là thứ người sau đọc để khỏi làm lại.'}

@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { api, apiErrorText } from '@/lib/api'
-import { useToast } from '@/components/ui/Toast'
 import {
   WarehouseDocPrintSheet,
   type WarehousePrintLine,
@@ -22,39 +21,7 @@ import {
   type TinhTrangNhan,
   type VatTuNhan,
 } from '@/lib/kho-nhap-ngoai-don'
-import {
-  Action,
-  ActionGroup,
-  ActionPane,
-  CellHint,
-  Code,
-  CommitBar,
-  Crumb,
-  DateInput,
-  DocHead,
-  FastTab,
-  Field,
-  FieldGrid,
-  Grid,
-  GridBody,
-  GridBtn,
-  GridFoot,
-  GridHead,
-  GridRow,
-  GridToolbar,
-  Lookup,
-  NoticeBar,
-  NumInput,
-  Pick,
-  PickFind,
-  ScreenFrame,
-  Sheet,
-  StatusBar,
-  StatusTrack,
-  Tag,
-  TextInput,
-  Th,
-} from '@/components/kit'
+import { Action, ActionGroup, ActionPane, CellHint, Code, CommitBar, Crumb, DateInput, DocHead, FastTab, Field, FieldGrid, Grid, GridBody, GridBtn, GridFoot, GridHead, GridRow, GridToolbar, NoticeBar, NumInput, Pick, ScreenFrame, Sheet, StatusBar, StatusTrack, Tag, TextInput, Th, useToast, Combobox } from '@/components/kit'
 
 const TINH_TRANG: { value: TinhTrangNhan; label: string }[] = [
   { value: 'ok', label: 'Đạt' },
@@ -263,15 +230,21 @@ export function NhapNgoaiDonScreen({
             >
               {busy ? 'Đang ghi sổ…' : 'Ghi sổ'}
             </Action>
-            <Action disabled={busy} onClick={() => router.push('/warehouse/nhap')}>
+            <Action
+              icon="huy"
+              disabled={busy}
+              onClick={() => router.push('/warehouse/nhap')}
+            >
               Huỷ
             </Action>
           </ActionGroup>
           <ActionGroup label="Bản in">
-            <Action onClick={() => setXemIn(true)}>Xem bản in</Action>
+            <Action icon="in" onClick={() => setXemIn(true)}>
+              Xem bản in
+            </Action>
           </ActionGroup>
           <ActionGroup label="Theo đơn">
-            <Action onClick={() => router.push('/warehouse/nhap')}>
+            <Action icon="nhanHang" onClick={() => router.push('/warehouse/nhap')}>
               Nhận theo đơn mua
             </Action>
           </ActionGroup>
@@ -306,7 +279,7 @@ export function NhapNgoaiDonScreen({
               />
             </Field>
             <Field label="Lấy tên từ danh mục">
-              <PickFind
+              <Combobox
                 value=""
                 onChange={(v) => {
                   const s = ncc.find((x) => x.id === v)
@@ -396,7 +369,7 @@ export function NhapNgoaiDonScreen({
         )}
 
         <GridToolbar count={`${rows.length} dòng${dangTra ? ' · đang tra tồn…' : ''}`}>
-          <Lookup<VatTuNhan>
+          <Combobox<VatTuNhan>
             search={timVatTu}
             onPick={(vt) => void chonVatTu(vt)}
             keyOf={(vt) => vt.id}
@@ -412,7 +385,7 @@ export function NhapNgoaiDonScreen({
             width={320}
             disabled={busy}
           />
-          <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <span className="text-k-sm text-[var(--ink-3)]">
             Không có cột <b>Đặt</b> vì không có đơn để so — cột Tồn nay chỉ để đối chiếu
             bằng mắt
           </span>
@@ -540,9 +513,7 @@ export function NhapNgoaiDonScreen({
           onGoBlocked={kiem.ok ? undefined : nhayToi}
           actions={
             <>
-              <span className="text-[var(--fs-micro)] text-[var(--ink-3)]">
-                Ctrl + Enter
-              </span>
+              <span className="text-k-label text-[var(--ink-3)]">Ctrl + Enter</span>
               <Action
                 primary
                 disabled={!ghiDuoc}

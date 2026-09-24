@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { isoToVn } from '@/lib/date-vn'
 import { MA_LY_DO_KHO, nhanLyDo } from '@/lib/kho-ma-ly-do'
 import {
+  Ico,
   Btn,
   Cell,
   Chip,
@@ -110,8 +111,12 @@ export function SoPhieuScreen({
           actions={
             canEdit ? (
               <>
-                <Btn href="/warehouse/nhap">Nhận hàng</Btn>
-                <Btn href="/warehouse/xuat">Xuất kho</Btn>
+                <Btn icon="nhanHang" href="/warehouse/nhap">
+                  Nhận hàng
+                </Btn>
+                <Btn icon="xuatKho" href="/warehouse/xuat">
+                  Xuất kho
+                </Btn>
               </>
             ) : undefined
           }
@@ -140,8 +145,9 @@ export function SoPhieuScreen({
           ))}
           {lyDo && (
             <Btn
+              icon="boLoc"
               onClick={() => dat({ ly_do: null })}
-              className="h-[26px] px-[9px] text-[12px]"
+              className="text-k-sm h-[26px] px-2"
             >
               Bỏ lọc lý do
             </Btn>
@@ -175,7 +181,7 @@ export function SoPhieuScreen({
                 : `Rổ “${RO_PHIEU_NHAN[ro]}” đang trống. Sổ đang có ${fmt(dem.all)} phiếu.`
             }
             next={
-              <Btn primary onClick={() => dat({ ro: null, ly_do: null })}>
+              <Btn icon="boLoc" primary onClick={() => dat({ ro: null, ly_do: null })}>
                 Xem cả {fmt(dem.all)} phiếu
               </Btn>
             }
@@ -208,7 +214,7 @@ export function SoPhieuScreen({
                       <Code>{d.code}</Code>
                       {d.da_bi_dao && <Tag tone="stop">đã bị đảo</Tag>}
                       {d.reversal_of_code && (
-                        <span className="text-[10.5px] text-[var(--ink-3)]">
+                        <span className="text-k-label text-[var(--ink-3)]">
                           đảo của {d.reversal_of_code}
                         </span>
                       )}
@@ -223,11 +229,11 @@ export function SoPhieuScreen({
                       ) : (
                         <>
                           <MaLyDo ma={d.ma_ly_do[0]} />
-                          <span className="truncate text-[11.5px] text-[var(--ink-2)]">
+                          <span className="text-k-sm truncate text-[var(--ink-2)]">
                             {nhanLyDo(d.ma_ly_do[0])}
                           </span>
                           {d.ma_ly_do.length > 1 && (
-                            <span className="num text-[10.5px] text-[var(--ink-3)]">
+                            <span className="num text-k-label text-[var(--ink-3)]">
                               +{d.ma_ly_do.length - 1}
                             </span>
                           )}
@@ -244,8 +250,9 @@ export function SoPhieuScreen({
                   <Cell>
                     <span className="flex justify-end">
                       <Btn
+                        icon="mo"
                         href={`/warehouse/phieu/${d.id}`}
-                        className="h-6 px-[9px] text-[12px]"
+                        className="text-k-sm h-6 px-2"
                       >
                         Mở
                       </Btn>
@@ -258,14 +265,15 @@ export function SoPhieuScreen({
         )}
 
         {soTrang > 1 && (
-          <div className="flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[6px] text-[var(--fs-sm)]">
+          <div className="text-k-sm flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
             <span className="text-[var(--ink-3)]">Trang</span>
             <Btn
+              icon="truoc"
               disabled={trang <= 1}
               onClick={() => dat({ trang: String(trang - 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              ‹ Trước
+              Trước
             </Btn>
             <span className="num">
               {trang} / {soTrang}
@@ -273,9 +281,10 @@ export function SoPhieuScreen({
             <Btn
               disabled={trang >= soTrang}
               onClick={() => dat({ trang: String(trang + 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              Sau ›
+              Sau
+              <Ico name="sau" />
             </Btn>
             <span className="ml-auto text-[var(--ink-3)]">50 phiếu mỗi trang</span>
           </div>

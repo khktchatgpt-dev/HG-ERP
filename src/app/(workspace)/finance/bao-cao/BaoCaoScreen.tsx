@@ -47,7 +47,7 @@ export function BaoCaoScreen({
             headline="Chưa có đơn mua nào"
             reason="Báo cáo dựng từ dòng đơn mua; chưa có đơn thì không có gì để cộng."
             next={
-              <Btn primary href="/mua-hang/don">
+              <Btn icon="don" primary href="/mua-hang/don">
                 Mở danh sách đơn mua
               </Btn>
             }
@@ -65,8 +65,10 @@ export function BaoCaoScreen({
           title="Báo cáo mua hàng — tiền đang nằm ở đâu"
           actions={
             <>
-              <Btn href="/finance/theo-lenh">Xem theo lệnh</Btn>
-              <Btn primary href="/api/dept/accounting/bao-cao/export">
+              <Btn icon="lenh" href="/finance/theo-lenh">
+                Xem theo lệnh
+              </Btn>
+              <Btn icon="excel" primary href="/api/dept/accounting/bao-cao/export">
                 Xuất Excel
               </Btn>
             </>
@@ -93,7 +95,7 @@ export function BaoCaoScreen({
           khi sự thật là chưa ai khai hạn giao.
         */}
         {gaps.length > 0 && (
-          <div className="border-b border-[var(--hair)] px-[var(--gutter)] py-2 text-[var(--fs-sm)]">
+          <div className="text-k-sm border-b border-[var(--hair)] px-[var(--gutter)] py-2">
             <span className="text-[var(--ink-3)]">Chưa phân tích được:</span>{' '}
             {gaps.map((g, i) => (
               <span key={g.label}>
@@ -118,7 +120,11 @@ export function BaoCaoScreen({
             <Empty
               headline="Chưa nhà cung cấp nào có đơn được xác nhận"
               reason="Bảng này lấy theo đơn ở bước “NCC xác nhận” trở đi. Hiện chưa đơn nào tới bước đó."
-              next={<Btn href="/mua-hang/don">Mở danh sách đơn mua</Btn>}
+              next={
+                <Btn icon="don" href="/mua-hang/don">
+                  Mở danh sách đơn mua
+                </Btn>
+              }
             />
           ) : (
             <Grid minWidth={840}>
@@ -175,7 +181,7 @@ export function BaoCaoScreen({
             <>
               <div className="px-[var(--gutter)] pt-4">
                 <h3 className="k-fgrp-h">Rủi ro một nguồn cung</h3>
-                <p className="pt-1 text-[var(--fs-sm)] text-[var(--ink-2)]">
+                <p className="text-k-sm pt-1 text-[var(--ink-2)]">
                   <b className="k-t-stop">
                     {single_source.length}/{bought_material_count}
                   </b>{' '}
@@ -279,7 +285,7 @@ function SpendTable({
     <>
       <div className="px-[var(--gutter)] pt-4">
         <h3 className="k-fgrp-h">{title}</h3>
-        <p className="pt-1 text-[var(--fs-sm)] text-[var(--ink-2)]">{sub}</p>
+        <p className="text-k-sm pt-1 text-[var(--ink-2)]">{sub}</p>
       </div>
       <Grid minWidth={820}>
         <GridHead>
@@ -317,7 +323,7 @@ function FunnelBlock({ f }: { f: FunnelRow }) {
   return (
     <div className="border-b border-[var(--hair)] px-[var(--gutter)] py-3">
       <div className="mb-2 flex items-baseline gap-2">
-        <span className="font-bold tracking-[.07em] text-[var(--fs-label)] uppercase">
+        <span className="text-k-label font-bold tracking-[.07em] uppercase">
           Dòng tiền mua hàng
         </span>
         <span className="num k-strong">{f.currency}</span>
@@ -326,11 +332,11 @@ function FunnelBlock({ f }: { f: FunnelRow }) {
         const meta = STAGE_META[s]
         const uoc = meta.kind === 'uoc_tinh'
         return (
-          <div key={s} className="flex items-center gap-3 py-[3px]">
-            <span className="w-[168px] shrink-0 text-[var(--fs-sm)]">
+          <div key={s} className="flex items-center gap-3 py-1">
+            <span className="text-k-sm w-[168px] shrink-0">
               {meta.label}
               {uoc && (
-                <span className="k-t-warn ml-1 text-[10px] font-bold">ƯỚC TÍNH</span>
+                <span className="k-t-warn text-k-label ml-1 font-bold">ƯỚC TÍNH</span>
               )}
             </span>
             <span
@@ -341,14 +347,14 @@ function FunnelBlock({ f }: { f: FunnelRow }) {
                 opacity: uoc ? 0.55 : 1,
               }}
             />
-            <span className="num w-[150px] shrink-0 text-right text-[var(--fs-sm)]">
+            <span className="num text-k-sm w-[150px] shrink-0 text-right">
               {money(f[s], f.currency)}
             </span>
-            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">{meta.hint}</span>
+            <span className="text-k-sm text-[var(--ink-3)]">{meta.hint}</span>
           </div>
         )
       })}
-      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <div className="text-k-sm mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[var(--ink-2)]">
         <span>
           Chưa được xác nhận <b className="num">{money(f.unconfirmed, f.currency)}</b>
         </span>

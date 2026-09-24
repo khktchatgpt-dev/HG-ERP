@@ -66,9 +66,9 @@ export function AuditHistoryPanel({
         <p className="text-sm text-zinc-500">Chưa có thao tác nào được ghi.</p>
       )}
       {entries.length > 0 && (
-        <div className="max-h-96 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="max-h-96 overflow-auto rounded-md border border-zinc-200">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+            <thead className="sticky top-0 bg-zinc-50">
               <tr>
                 <th className="px-2 py-1.5">Thời gian</th>
                 <th className="px-2 py-1.5">Hành động</th>
@@ -76,7 +76,7 @@ export function AuditHistoryPanel({
                 <th className="px-2 py-1.5">Ghi chú</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-100">
               {entries.map((e) => (
                 <tr key={e.id}>
                   <td className="px-2 py-1 whitespace-nowrap text-zinc-500">

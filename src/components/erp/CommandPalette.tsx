@@ -160,10 +160,10 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-950"
+        className="w-full max-w-lg overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-zinc-200 p-2 dark:border-zinc-800">
+        <div className="border-b border-zinc-200 p-2">
           <input
             autoFocus
             value={q}
@@ -193,23 +193,17 @@ export function CommandPalette() {
                   onMouseEnter={() => setIdx(realIdx)}
                   onClick={() => runIdx(realIdx)}
                   className={`flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-sm ${
-                    realIdx === idx
-                      ? 'bg-zinc-100 dark:bg-zinc-800'
-                      : 'hover:bg-zinc-50 dark:hover:bg-zinc-900'
+                    realIdx === idx ? 'bg-zinc-100' : 'hover:bg-zinc-50'
                   }`}
                 >
                   <span>{c.label}</span>
-                  {c.hint && (
-                    <span className="text-xs text-zinc-400 dark:text-zinc-500">
-                      {c.hint}
-                    </span>
-                  )}
+                  {c.hint && <span className="text-xs text-zinc-400">{c.hint}</span>}
                 </button>
               ))}
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex items-center justify-between border-t border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs text-zinc-500">
           <span>↑↓ chọn · ↵ chạy · Esc thoát</span>
           <span>Ctrl+K</span>
         </div>

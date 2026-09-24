@@ -456,7 +456,7 @@ export function ProductsManager({
       {/* Kết quả gần đúng phải NÓI RA: người tra mã mà nhận nhầm sản phẩm khác
           là chuyện tốn tiền, không được lặng lẽ đưa thứ na ná. */}
       {fuzzy && (
-        <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+        <div className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
           Không có kết quả khớp đúng “<b>{filters.q}</b>” — đây là {products.length} sản
           phẩm có tên/mã <b>gần giống</b>, xếp theo độ giống. Kiểm lại mã trước khi dùng.
         </div>

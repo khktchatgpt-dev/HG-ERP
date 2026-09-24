@@ -22,7 +22,7 @@ export function AssignRolesButton({
     <>
       <button
         onClick={() => setOpen(true)}
-        className="shrink-0 rounded-md border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950"
+        className="shrink-0 rounded-md border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50"
       >
         Sửa vai
       </button>

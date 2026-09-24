@@ -25,13 +25,25 @@ const baseline = JSON.parse(
 const escapeGlob = (p) => p.replace(/[()[\]{}]/g, (ch) => `\\${ch}`)
 
 /* Kit và trang mẫu ĐƯỢC PHÉP dùng thẻ thô + màu thật: chúng là nơi định nghĩa
- * ra chuẩn, không phải nơi tiêu thụ chuẩn. */
+ * ra chuẩn, không phải nơi tiêu thụ chuẩn.
+ *
+ * `src/app/print/**` miễn trừ vì lý do KHÁC (chốt 18/09/2026): nó không phải
+ * giao diện, nó là GIẤY A4. Bảng của kit dựng cho màn hình — tiêu đề dính, tự
+ * cuộn, vòng focus, chế độ tối — bốn thứ vô nghĩa hoặc có hại khi in. Phiếu in
+ * cần đúng `<table>` viền đen của `PrintSheet`, và màu thì luôn là đen trên
+ * trắng chứ không theo token. Bảy trang in cũ từng nằm trong danh sách nợ và
+ * bị canh nhầm bằng thước của màn hình.
+ *
+ * DANH SÁCH NÀY PHẢI KHỚP `ignores` trong `scripts/ui-baseline.mjs` — hai bên
+ * đã trôi khỏi nhau một lần và hậu quả là baseline tự dài ra.
+ */
 const KIT = [
   'src/components/erp/**',
   'src/components/shadcn/**',
   'src/components/ui/**',
   'src/components/kit/**',
   'src/app/design-lab/**',
+  'src/app/print/**',
 ]
 
 export default defineConfig([
@@ -54,6 +66,32 @@ export default defineConfig([
     rules: {
       'hg/no-hardcoded-color': 'error',
       'hg/no-raw-control': 'error',
+    },
+  },
+  /* Thang chữ + khoảng của kit (B3, 24/09/2026). Luật TỰ DÒ file thuộc hệ kit
+   * (import `@/components/kit`), nên màn hệ cũ không bị đụng và baseline không
+   * phải dài ra. Khác khối trên ở chỗ `components/kit/**` KHÔNG được miễn: kit
+   * định nghĩa màu thật được, nhưng cỡ và khoảng của nó phải đi qua thang như
+   * mọi màn khác. `design-lab` vẫn miễn — nó trưng cả giá trị thô để so sánh. */
+  {
+    name: 'hg/kit-scale',
+    files: ['src/app/**/*.tsx', 'src/components/**/*.tsx'],
+    ignores: KIT.filter((p) => p !== 'src/components/kit/**'),
+    plugins: { hg: hgUi },
+    rules: {
+      'hg/no-arbitrary-size': 'error',
+      'hg/no-arbitrary-space': 'error',
+      'hg/kit-icon': 'error',
+    },
+  },
+  /* Cấm lớp `dark:` ở MỌI file src (24/09/2026) — kể cả kit, shadcn, ui: chế độ
+   * tối tắt cho cả app, và sau lượt gỡ con số là 0 nên không cần baseline. */
+  {
+    name: 'hg/no-dark',
+    files: ['src/**/*.tsx', 'src/**/*.ts'],
+    plugins: { hg: hgUi },
+    rules: {
+      'hg/no-dark-variant': 'error',
     },
   },
   {

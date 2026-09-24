@@ -189,9 +189,15 @@ export function HangVeScreen({
                   không màn nào ghi được, nên ba dòng cũ trong sổ đều trống
                   NCC lẫn lý do. Nút phụ, không phải nút chính: có đơn thì
                   vẫn phải nhận theo đơn. */}
-              <Btn href="/warehouse/nhap/ngoai-don">Nhận không theo đơn</Btn>
-              <Btn href="/warehouse/nhap/hoan-kho">Hoàn kho từ SX</Btn>
-              <Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>
+              <Btn icon="nhapKho" href="/warehouse/nhap/ngoai-don">
+                Nhận không theo đơn
+              </Btn>
+              <Btn icon="nhapKho" href="/warehouse/nhap/hoan-kho">
+                Hoàn kho từ SX
+              </Btn>
+              <Btn icon="so" href="/warehouse/phieu">
+                Xem sổ phiếu
+              </Btn>
             </>
           }
         />
@@ -251,11 +257,12 @@ export function HangVeScreen({
             }
             next={
               rows.length === 0 ? (
-                <Btn primary href="/mua-hang/don">
+                <Btn icon="don" primary href="/mua-hang/don">
                   Mở danh sách đơn mua
                 </Btn>
               ) : (
                 <Btn
+                  icon="boLoc"
                   primary
                   onClick={() => {
                     setQ('')
@@ -305,7 +312,7 @@ export function HangVeScreen({
                               {r.po_code}
                             </Code>
                             {r.lsx_code && (
-                              <span className="num text-[10.5px] text-[var(--ink-3)]">
+                              <span className="num text-k-label text-[var(--ink-3)]">
                                 {r.lsx_code}
                               </span>
                             )}
@@ -320,13 +327,13 @@ export function HangVeScreen({
                           {/* Xe chở MÃ NÀO — thủ kho xếp chỗ trước khi xe tới (việc 6). */}
                           {r.codes && r.codes.length > 0 && (
                             <span
-                              className="num block text-[10.5px] text-[var(--act-text)]"
+                              className="num text-k-label block text-[var(--act-text)]"
                               title={r.codes.join(', ')}
                             >
                               {tomTatMa(r.codes)}
                             </span>
                           )}
-                          <span className="num block text-[11.5px] text-[var(--ink-3)]">
+                          <span className="num text-k-sm block text-[var(--ink-3)]">
                             {r.line_count != null
                               ? `${r.line_count} dòng · ${(r.total_qty ?? 0).toLocaleString('vi-VN')}`
                               : `${r.lines_total} dòng · cả đơn`}
@@ -343,7 +350,7 @@ export function HangVeScreen({
                           )}
                         </Cell>
                         <Cell>
-                          <span className={`text-[11.5px] ${TONE_TEXT[why.tone]}`}>
+                          <span className={`text-k-sm ${TONE_TEXT[why.tone]}`}>
                             {why.text}
                           </span>
                         </Cell>
@@ -351,15 +358,16 @@ export function HangVeScreen({
                           <span className="flex items-center justify-end gap-3">
                             <a
                               href={`/mua-hang/don/${r.po_id}`}
-                              className="text-[12px] text-[var(--act-text)]"
+                              className="text-k-sm text-[var(--act-text)]"
                             >
                               Đơn ›
                             </a>
                             {canEdit && (
                               <Btn
+                                icon="nhanHang"
                                 primary={lane === 'late' || lane === 'today'}
                                 href={`/warehouse/nhap/${r.po_id}${r.shipment_id ? `?dot=${r.shipment_id}` : ''}`}
-                                className="h-6 px-[9px] text-[12px]"
+                                className="text-k-sm h-6 px-2"
                               >
                                 Nhận hàng
                               </Btn>

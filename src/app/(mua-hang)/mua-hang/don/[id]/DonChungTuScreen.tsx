@@ -2,60 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import {
-  Action,
-  ActionGroup,
-  ActionPane,
-  Affected,
-  Checks,
-  Consequence,
-  CoverageBar,
-  Crumb,
-  DateInput,
-  DocBody,
-  DocHead,
-  DocScreen,
-  FactBox,
-  FactKv,
-  FactSection,
-  FastTab,
-  Field,
-  FieldGroup,
-  Grid,
-  Btn,
-  GridBody,
-  GridBtn,
-  GridCheck,
-  GridFoot,
-  GridHead,
-  GridRow,
-  GridSep,
-  GridToolbar,
-  HolderBar,
-  LineDetail,
-  LineStatus,
-  Lookup,
-  NoticeBar,
-  NumInput,
-  Pick,
-  PickFind,
-  Sheet,
-  SheetActions,
-  SmartLinks,
-  StatusBar,
-  StatusTrack,
-  CellHint,
-  Td,
-  TextArea,
-  TextInput,
-  Th,
-  Tag,
-  Tick,
-  Timeline,
-  poHolder,
-  type Mark,
-} from '@/components/kit'
-import { useToast } from '@/components/ui/Toast'
+import { Action, ActionGroup, ActionPane, Affected, Checks, Consequence, CoverageBar, Crumb, DateInput, DocBody, DocHead, DocScreen, FactBox, FactKv, FactSection, FastTab, Field, FieldGroup, Grid, Btn, GridBody, GridBtn, GridCheck, GridFoot, GridHead, GridRow, GridSep, GridToolbar, HolderBar, LineDetail, LineStatus, NoticeBar, NumInput, Pick, Sheet, SheetActions, SmartLinks, StatusBar, StatusTrack, CellHint, Td, TextArea, TextInput, Th, Tag, Tick, Timeline, poHolder, type Mark, useToast, Combobox } from '@/components/kit'
 import { DocumentFiles } from '@/components/DocumentFiles'
 import { PoNotesPanel } from '@/app/(workspace)/planning/pos/[id]/PoNotesPanel'
 import { api, apiErrorText } from '@/lib/api'
@@ -618,7 +565,7 @@ export function DonChungTuScreen(p: Props) {
   const supplierOpt = p.suppliers.find((s) => s.id === header.supplierId)
 
   /*
-    Hai danh sách này đi vào ô chọn CÓ TÌM (`PickFind`), nên tên khách và mã
+    Hai danh sách này đi vào ô chọn CÓ TÌM (`Combobox`), nên tên khách và mã
     đơn hàng phải nằm ở `hint` chứ không nối hết vào `label`: `hint` cũng được
     lọc, mà dòng trên vẫn ngắn để đọc lướt. Trước đây mọi thứ nối bằng dấu "·"
     thành một dòng dài, cuộn trong `<select>` 168 dòng.
@@ -1029,7 +976,7 @@ export function DonChungTuScreen(p: Props) {
             >
               Lưu điều khoản
             </Action>
-            <Action disabled={busy} onClick={cancelTermsEdit}>
+            <Action icon="huy" disabled={busy} onClick={cancelTermsEdit}>
               Huỷ
             </Action>
           </ActionGroup>
@@ -1044,7 +991,7 @@ export function DonChungTuScreen(p: Props) {
               >
                 {p.mode === 'create' ? 'Tạo đơn' : 'Lưu'}
               </Action>
-              <Action disabled={busy} onClick={askCancelEdit}>
+              <Action icon="huy" disabled={busy} onClick={askCancelEdit}>
                 Huỷ
               </Action>
             </ActionGroup>
@@ -1066,6 +1013,7 @@ export function DonChungTuScreen(p: Props) {
             */}
             <ActionGroup label="Kiểm">
               <Action
+                icon="in"
                 disabled={!p.company}
                 title={
                   p.company
@@ -1092,6 +1040,7 @@ export function DonChungTuScreen(p: Props) {
                 NCC xác nhận
               </Action>
               <Action
+                icon="them"
                 disabled={busy || !recv.addShipment.ok}
                 title={recv.addShipment.why}
                 onClick={() => setXacNhan('add')}
@@ -1099,6 +1048,7 @@ export function DonChungTuScreen(p: Props) {
                 Thêm đợt giao
               </Action>
               <Action
+                icon="nhanHang"
                 disabled={busy || !recv.transit.ok}
                 title={recv.transit.why}
                 onClick={() => start(TRANSIT)}
@@ -1110,6 +1060,7 @@ export function DonChungTuScreen(p: Props) {
               {/* Lập phiếu nhập là việc của KHO và màn đó đã có. Dựng lại một
                   form nhập ở đây là hai đường ghi vào cùng một sổ. Nút DẪN. */}
               <Action
+                icon="ghiSo"
                 primary={['confirmed', 'in_transit', 'partial'].includes(po.status)}
                 disabled={!recv.receive.ok}
                 title={recv.receive.why ?? 'Mở màn lập phiếu nhập bên Kho cho đơn này'}
@@ -1145,6 +1096,7 @@ export function DonChungTuScreen(p: Props) {
           <>
             <ActionGroup label="Duy trì">
               <Action
+                icon="sua"
                 strong
                 disabled={!editAct || !!editAct.blocked}
                 title={
@@ -1155,7 +1107,9 @@ export function DonChungTuScreen(p: Props) {
               >
                 Sửa
               </Action>
-              <Action onClick={() => router.push('/mua-hang/don/moi')}>Mới</Action>
+              <Action icon="them" onClick={() => router.push('/mua-hang/don/moi')}>
+                Mới
+              </Action>
               {secondary
                 .filter((a) => a.id === 'duplicate' || a.id === 'delete')
                 .map((a) => (
@@ -1202,12 +1156,14 @@ export function DonChungTuScreen(p: Props) {
             </ActionGroup>
             <ActionGroup label="In &amp; xuất">
               <Action
+                icon="in"
                 disabled={!po}
                 onClick={() => po && window.open(`/print/supply/${po.id}`, '_blank')}
               >
                 Phiếu đặt hàng
               </Action>
               <Action
+                icon="excel"
                 disabled={!po}
                 onClick={() =>
                   po && window.open(`/api/dept/supply/pos/${po.id}/export`, '_blank')
@@ -1440,7 +1396,7 @@ export function DonChungTuScreen(p: Props) {
                 {p.supplier?.name ?? supplierOpt?.name ?? '—'}
               </div>
               {!p.supplier && !supplierOpt ? (
-                <div className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                <div className="text-k-sm text-[var(--ink-3)]">
                   Chọn nhà cung cấp ở Đầu đơn — tiền tệ và điều khoản thanh toán tự theo
                   hồ sơ.
                 </div>
@@ -1533,7 +1489,7 @@ export function DonChungTuScreen(p: Props) {
                       dùng đọc dải vàng đầu trang rồi tự đoán ô nào. Chữ nằm cùng
                       hàng với ô chọn nên không tốn thêm chiều cao. */}
                   <span className="flex items-center gap-2">
-                    <PickFind
+                    <Combobox
                       label="Lệnh sản xuất"
                       disabled={header.poType !== 'lsx'}
                       value={header.lsxId}
@@ -1543,7 +1499,7 @@ export function DonChungTuScreen(p: Props) {
                       options={lsxOptions}
                     />
                     {header.poType === 'lsx' && !header.lsxId && (
-                      <span className="k-t-warn shrink-0 whitespace-nowrap text-[var(--fs-micro)]">
+                      <span className="k-t-warn text-k-label shrink-0 whitespace-nowrap">
                         bắt buộc
                       </span>
                     )}
@@ -1561,7 +1517,7 @@ export function DonChungTuScreen(p: Props) {
                           {p.lsxs.find((l) => l.id === id)?.code ?? '?'} ×
                         </GridBtn>
                       ))}
-                      <PickFind
+                      <Combobox
                         label="Gộp thêm lệnh"
                         value=""
                         onChange={(v) => v && toggleExtraLsx(v, true)}
@@ -1579,7 +1535,7 @@ export function DonChungTuScreen(p: Props) {
               <FieldGroup title="Đặt của ai">
                 <Field label="Nhà cung cấp">
                   <span className="flex items-center gap-2">
-                    <PickFind
+                    <Combobox
                       label="Nhà cung cấp"
                       value={header.supplierId}
                       onChange={(v) => {
@@ -1596,7 +1552,7 @@ export function DonChungTuScreen(p: Props) {
                       options={supplierOptions}
                     />
                     {!header.supplierId && (
-                      <span className="k-t-warn shrink-0 whitespace-nowrap text-[var(--fs-micro)]">
+                      <span className="k-t-warn text-k-label shrink-0 whitespace-nowrap">
                         bắt buộc
                       </span>
                     )}
@@ -1672,7 +1628,7 @@ export function DonChungTuScreen(p: Props) {
             {/* Nút của chính bộ kit, không phải <button> tự vẽ: cổng
                 `hg/no-raw-control` chặn thẻ thô, mà gợi ý của nó
                 (shadcn/button) sẽ TRỘN hai hệ token trong cùng một file. */}
-            <div className="col-span-full flex justify-end border-t border-[var(--hair)] px-[var(--gutter)] py-[5px]">
+            <div className="col-span-full flex justify-end border-t border-[var(--hair)] px-[var(--gutter)] py-1">
               <GridBtn
                 title="Năm điều khoản in nguyên văn lên phiếu gửi nhà cung cấp"
                 onClick={() => {
@@ -1729,7 +1685,7 @@ export function DonChungTuScreen(p: Props) {
               }
             >
               <>
-                <Lookup<PoMaterial>
+                <Combobox<PoMaterial>
                   label="Thêm vật tư"
                   placeholder="Gõ mã, tên hoặc quy cách (50x50, 8x15…) rồi Enter"
                   width={400}
@@ -1759,7 +1715,7 @@ export function DonChungTuScreen(p: Props) {
                         </span>
                         <span className="min-w-0 flex-1 truncate">{m.name}</span>
                       </span>
-                      <span className="flex flex-wrap items-baseline gap-x-2.5 text-[var(--fs-micro)]">
+                      <span className="text-k-label flex flex-wrap items-baseline gap-x-2.5">
                         {m.spec ? (
                           <span className="num font-semibold text-[var(--ink-2)]">
                             {m.spec}
@@ -2330,7 +2286,7 @@ export function DonChungTuScreen(p: Props) {
             {editing ? (
               <ChiaDotSoanGrid lines={lines} columns={shipCols} onChange={setShipCols} />
             ) : !po ? null : po.status === 'cancelled' ? (
-              <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-2)]">
+              <div className="text-k-sm px-[var(--gutter)] py-3 text-[var(--ink-2)]">
                 Đơn đã huỷ — kế hoạch giao và chứng từ kho không còn áp dụng.
               </div>
             ) : (
@@ -2386,7 +2342,7 @@ export function DonChungTuScreen(p: Props) {
                 {p.warehouseDocs.length > 0 ? (
                   <ChungTuKhoGrid docs={p.warehouseDocs} />
                 ) : (
-                  <div className="px-[var(--gutter)] pb-3 text-[var(--fs-sm)] text-[var(--ink-2)]">
+                  <div className="text-k-sm px-[var(--gutter)] pb-3 text-[var(--ink-2)]">
                     Chưa có phiếu nhập hay xuất trả nào ghi vào đơn này.
                   </div>
                 )}
@@ -2445,7 +2401,7 @@ export function DonChungTuScreen(p: Props) {
                             </GridBtn>
                           ))}
                           <span className="min-w-[180px]">
-                            <PickFind
+                            <Combobox
                               label="Gộp thêm lệnh"
                               value=""
                               onChange={(v) => v && toggleExtraLsx(v, true)}
@@ -2632,7 +2588,7 @@ export function DonChungTuScreen(p: Props) {
             {termsEditing && (
               <div
                 style={{ gridColumn: '1 / -1' }}
-                className="flex flex-wrap items-center gap-2 pt-1 text-[var(--fs-sm)] text-[var(--ink-3)]"
+                className="text-k-sm flex flex-wrap items-center gap-2 pt-1 text-[var(--ink-3)]"
               >
                 <GridBtn
                   title={`Nạp lại năm điều khoản và người ký theo mẫu ${meta.label.toLowerCase()}`}
@@ -2661,7 +2617,7 @@ export function DonChungTuScreen(p: Props) {
                   placeholder="Ghi chú nội bộ — nhà cung cấp không thấy"
                 />
                 {noteOver > 0 && (
-                  <p className="mt-1 font-semibold text-[var(--fs-sm)] text-[var(--stop)]">
+                  <p className="text-k-sm mt-1 font-semibold text-[var(--stop)]">
                     Dài hơn mức cho phép {noteOver} ký tự — xoá bớt vết cũ ở cuối ghi chú
                     rồi lưu lại.
                   </p>
@@ -2864,7 +2820,7 @@ export function DonChungTuScreen(p: Props) {
           )}
           {sheet.action.needDate && (
             <label className="mb-3 block">
-              <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 Ngày giao mới
               </span>
               <DateInput value={date} onChange={setDate} label="Ngày giao mới" />
@@ -2872,17 +2828,17 @@ export function DonChungTuScreen(p: Props) {
           )}
           {sheet.action.needReason && (
             <label className="block">
-              <span className="mb-1 block font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <span className="text-k-label mb-1 block font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 {sheet.action.reasonLabel}
               </span>
               <TextArea value={reason} onChange={setReason} rows={3} />
-              <span className="mt-1 block text-[11.5px] leading-relaxed text-[var(--ink-3)]">
+              <span className="text-k-sm mt-1 block leading-relaxed text-[var(--ink-3)]">
                 {sheet.action.reasonHint}
               </span>
             </label>
           )}
           {sheetInvalid && (
-            <p className="mt-3 font-semibold text-[var(--fs-sm)] text-[var(--warn)]">
+            <p className="text-k-sm mt-3 font-semibold text-[var(--warn)]">
               {sheet.action.needDate && !date
                 ? 'Chọn ngày giao mới trước đã.'
                 : 'Viết một câu — người sau đọc để khỏi hỏi lại.'}

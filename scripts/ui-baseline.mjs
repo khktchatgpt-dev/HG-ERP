@@ -26,11 +26,20 @@ const eslint = new ESLint({
   overrideConfig: [
     {
       files: ['**/*.tsx'],
+      // PHẢI KHỚP hằng `KIT` trong eslint.config.mjs. Hai danh sách này đã
+      // trôi khỏi nhau một lần (18/09/2026): `components/kit/**` được thêm vào
+      // eslint.config nhưng quên ở đây, nên lần chạy lại baseline đầu tiên sau
+      // đó hút 7 file kit vào danh sách nợ — đúng những file ĐỊNH NGHĨA chuẩn.
+      // Lỗi im lặng: script vẫn chạy xong, baseline chỉ dài ra.
       ignores: [
         'src/components/erp/**',
         'src/components/shadcn/**',
         'src/components/ui/**',
+        'src/components/kit/**',
         'src/app/design-lab/**',
+        // Phiếu in: giấy A4, không phải màn hình — xem lý do đầy đủ ở
+        // eslint.config.mjs.
+        'src/app/print/**',
       ],
       languageOptions: {
         parser: tsParser,

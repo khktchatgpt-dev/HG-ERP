@@ -127,32 +127,39 @@ export default function Page() {
         ]}
       >
         <ActionGroup label="Duy trì">
-          <Action strong>Sửa</Action>
-          <Action>Mới</Action>
-          <Action>Sao chép</Action>
-          <Action>Xoá</Action>
+          <Action icon="sua" strong>
+            Sửa
+          </Action>
+          <Action icon="them">Mới</Action>
+          <Action icon="saoChep">Sao chép</Action>
+          <Action icon="xoa">Xoá</Action>
         </ActionGroup>
         <ActionGroup label="Luồng phê duyệt">
-          <Action primary disabled title="Còn 2 lỗi chặn — xem bảng kiểm phía trên">
+          <Action
+            icon="gui"
+            primary
+            disabled
+            title="Còn 2 lỗi chặn — xem bảng kiểm phía trên"
+          >
             Gửi duyệt
           </Action>
-          <Action>Trả lại người soạn</Action>
-          <Action>Uỷ quyền duyệt</Action>
-          <Action>Huỷ đơn</Action>
+          <Action icon="traLai">Trả lại người soạn</Action>
+          <Action icon="toi">Uỷ quyền duyệt</Action>
+          <Action icon="huy">Huỷ đơn</Action>
         </ActionGroup>
         <ActionGroup label="Nhận hàng">
           <Action>Đóng thiếu dòng</Action>
-          <Action>Ghi nhận nhận hàng</Action>
+          <Action icon="ghiSo">Ghi nhận nhận hàng</Action>
         </ActionGroup>
         <ActionGroup label="In &amp; xuất">
-          <Action>Phiếu đặt hàng</Action>
-          <Action>Bảng kê</Action>
-          <Action>Xuất Excel</Action>
+          <Action icon="in">Phiếu đặt hàng</Action>
+          <Action icon="excel">Bảng kê</Action>
+          <Action icon="excel">Xuất Excel</Action>
         </ActionGroup>
         <ActionGroup label="Chứng từ liên quan">
-          <Action>Lệnh sản xuất</Action>
-          <Action>Phiếu nhập kho</Action>
-          <Action>Nhà cung cấp</Action>
+          <Action icon="lenh">Lệnh sản xuất</Action>
+          <Action icon="in">Phiếu nhập kho</Action>
+          <Action icon="ncc">Nhà cung cấp</Action>
         </ActionGroup>
       </ActionPane>
 

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
+  Ico,
   Btn,
   Cell,
   Chip,
@@ -138,7 +139,11 @@ export function TonKhoScreen({
               tone: counts.short > 0 ? 'stop' : 'neutral',
             },
           ]}
-          actions={<Btn href="/warehouse/phieu">Xem sổ phiếu ›</Btn>}
+          actions={
+            <Btn icon="so" href="/warehouse/phieu">
+              Xem sổ phiếu
+            </Btn>
+          }
         />
 
         <FilterBar>
@@ -148,7 +153,9 @@ export function TonKhoScreen({
             placeholder="Tìm mã hoặc tên vật tư…"
             width={280}
           />
-          <Btn onClick={() => dat({ q: q.trim() || null })}>Tìm</Btn>
+          <Btn icon="tim" onClick={() => dat({ q: q.trim() || null })}>
+            Tìm
+          </Btn>
           <Pick
             value={nhom}
             onChange={(v) => dat({ nhom: v || null })}
@@ -183,11 +190,15 @@ export function TonKhoScreen({
             }
             next={
               dangLoc ? (
-                <Btn primary onClick={() => dat({ ro: null, q: null, nhom: null })}>
+                <Btn
+                  icon="boLoc"
+                  primary
+                  onClick={() => dat({ ro: null, q: null, nhom: null })}
+                >
                   Bỏ lọc
                 </Btn>
               ) : (
-                <Btn primary href="/warehouse/nhap">
+                <Btn icon="nhanHang" primary href="/warehouse/nhap">
                   Sang Hàng về để nhận hàng
                 </Btn>
               )
@@ -237,8 +248,9 @@ export function TonKhoScreen({
                   <Cell>
                     <span className="flex justify-end">
                       <Btn
+                        icon="xuatKho"
                         href={`/warehouse/xuat?ma=${encodeURIComponent(r.code)}`}
-                        className="h-6 px-[9px] text-[12px]"
+                        className="text-k-sm h-6 px-2"
                       >
                         Xuất
                       </Btn>
@@ -264,14 +276,15 @@ export function TonKhoScreen({
         )}
 
         {soTrang > 1 && (
-          <div className="flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-[6px] text-[var(--fs-sm)]">
+          <div className="text-k-sm flex items-center gap-2 border-t border-[var(--line)] bg-[var(--surface-card)] px-[var(--gutter)] py-1.5">
             <span className="text-[var(--ink-3)]">Trang</span>
             <Btn
+              icon="truoc"
               disabled={trang <= 1}
               onClick={() => dat({ trang: String(trang - 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              ‹ Trước
+              Trước
             </Btn>
             <span className="num">
               {trang} / {soTrang}
@@ -279,9 +292,10 @@ export function TonKhoScreen({
             <Btn
               disabled={trang >= soTrang}
               onClick={() => dat({ trang: String(trang + 1) })}
-              className="h-6 px-[9px] text-[12px]"
+              className="text-k-sm h-6 px-2"
             >
-              Sau ›
+              Sau
+              <Ico name="sau" />
             </Btn>
             <span className="ml-auto text-[var(--ink-3)]">50 dòng mỗi trang</span>
           </div>

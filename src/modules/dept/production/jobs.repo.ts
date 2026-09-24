@@ -158,6 +158,29 @@ export const jobsRepo = {
     return unwrap([data as unknown as Raw])[0]
   },
 
+  /**
+   * Đánh dấu XONG công đoạn — auto từ `entries.service` khi sổ đã ĐỦ SỐ.
+   *
+   * Không còn ai bấm tay: quyền "tổ trưởng xác nhận xong" đã gỡ 18/09/2026 vì
+   * tổ trưởng chỉ xem. Công đoạn xong hay chưa là chuyện của CON SỐ, và con số
+   * nằm trong sổ sản lượng — để người bấm một nút riêng là mở đường cho trạng
+   * thái lệch với sổ.
+   */
+  async markDone(
+    productionOrderId: string,
+    orderLineId: string,
+    stage: string,
+  ): Promise<void> {
+    const { error } = await db()
+      .from('production_jobs')
+      .update({ status: 'done', done_at: new Date().toISOString() })
+      .eq('production_order_id', productionOrderId)
+      .eq('production_order_line_id', orderLineId)
+      .eq('stage', stage)
+      .neq('status', 'done')
+    if (error) throw new Error(error.message)
+  },
+
   /** Nhích todo → doing khi có sản lượng đầu tiên (auto từ entries.service). */
   async markDoing(
     productionOrderId: string,

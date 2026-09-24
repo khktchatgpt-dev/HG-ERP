@@ -246,12 +246,12 @@ export default function Page() {
                 placeholder="Gõ mã hoặc tên vật tư rồi Enter…"
                 width={300}
               />
-              <Btn>Duyệt theo nhóm</Btn>
-              <Btn>Dán từ Excel</Btn>
-              <Btn>+ Khai vật tư mới</Btn>
+              <Btn icon="duyet">Duyệt theo nhóm</Btn>
+              <Btn icon="excel">Dán từ Excel</Btn>
+              <Btn icon="them">Khai vật tư mới</Btn>
             </div>
             <div className="mt-[9px] flex flex-wrap items-center gap-2">
-              <span className="font-bold tracking-[.07em] text-[var(--fs-label)] text-[var(--ink-3)] uppercase">
+              <span className="text-k-label font-bold tracking-[.07em] text-[var(--ink-3)] uppercase">
                 Lệnh còn thiếu 3 vật tư
               </span>
               {NEEDS.map((x) => (
@@ -259,8 +259,8 @@ export default function Page() {
                   {x.code} · {x.qty}
                 </Chip>
               ))}
-              <Btn>Thêm cả 3</Btn>
-              <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+              <Btn icon="them">Thêm cả 3</Btn>
+              <span className="text-k-sm text-[var(--ink-3)]">
                 số nháp — đối chiếu trước khi dùng
               </span>
             </div>
@@ -277,8 +277,8 @@ export default function Page() {
         blocked={blocked}
         actions={
           <>
-            <Btn>Xem trước phiếu in</Btn>
-            <Btn primary disabled={!!blocked} title={blocked}>
+            <Btn icon="in">Xem trước phiếu in</Btn>
+            <Btn icon="luuNhap" primary disabled={!!blocked} title={blocked}>
               Lưu nháp
             </Btn>
           </>

@@ -54,11 +54,11 @@ export function NhuCauGrid({
   onAdd: (list: Need[]) => void
 }) {
   if (loading) {
-    return <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-3)]">Đang nạp nhu cầu của lệnh…</div> // prettier-ignore
+    return <div className="px-[var(--gutter)] py-3 text-k-sm text-[var(--ink-3)]">Đang nạp nhu cầu của lệnh…</div> // prettier-ignore
   }
   if (needs.length === 0) {
     return (
-      <div className="px-[var(--gutter)] py-3 text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <div className="text-k-sm px-[var(--gutter)] py-3 text-[var(--ink-2)]">
         <b>Lệnh này chưa có định mức để gợi ý.</b> Nhu cầu lấy từ bảng chi tiết lệnh (ưu
         tiên số nhập tay, thiếu mới nhân BOM × SL). Cứ chọn vật tư ở ô tìm như thường.
       </div>
@@ -93,7 +93,7 @@ export function NhuCauGrid({
               <Td num tone={n.suggest > 0 ? 'warn' : undefined}>
                 <b>{num(n.suggest)}</b>
                 {cap != null && n.suggest > cap && (
-                  <span className="k-t-warn block text-[11px]">
+                  <span className="k-t-warn text-k-label block">
                     vượt trần tồn {num(cap)}
                   </span>
                 )}
@@ -201,7 +201,9 @@ export function DanExcelSheet({
       footer={
         rows ? (
           <>
-            <Btn onClick={() => setRows(null)}>‹ Dán lại</Btn>
+            <Btn icon="quayLai" onClick={() => setRows(null)}>
+              ‹ Dán lại
+            </Btn>
             <SheetActions
               busy={busy}
               disabled={total === 0}
@@ -227,15 +229,15 @@ export function DanExcelSheet({
             placeholder={'Thép hộp 40x40x1.2\t2000\t18000\nSơn tĩnh điện đen\t120\t80000'}
           />{' '}
           {/* prettier-ignore */}
-          <p className="mt-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="mt-2 text-k-sm text-[var(--ink-3)]">
             Nhận cả bảng có tiêu đề lẫn không; số kiểu Việt (1.234,5) và Excel Anh (1,234.5)
             đều đọc được. Dòng “Cộng”, dòng trống tên bị bỏ và được đếm.
           </p>
-          {err && <p className="k-t-stop mt-2 text-[var(--fs-sm)]">{err}</p>}
+          {err && <p className="k-t-stop text-k-sm mt-2">{err}</p>}
         </>
       ) : (
         <>
-          <div className="mb-2 flex flex-wrap gap-x-4 text-[var(--fs-sm)] text-[var(--ink-2)]">
+          <div className="text-k-sm mb-2 flex flex-wrap gap-x-4 text-[var(--ink-2)]">
             <span>
               Đọc được <b className="num">{rows.length}</b> dòng
             </span>
@@ -363,7 +365,7 @@ export function ChiaDotSoanGrid({
   /* Trạng thái rỗng phải nói lý do VÀ việc làm tiếp (luật kiểm màn, mục 05). */
   if (rows.length === 0) {
     return (
-      <div className="px-[var(--gutter)] py-3 leading-relaxed text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <div className="text-k-sm px-[var(--gutter)] py-3 leading-relaxed text-[var(--ink-2)]">
         <b className="text-[var(--ink)]">Chưa có dòng hàng nào để chia đợt.</b>
         <div className="mt-1 text-[var(--ink-3)]">
           Thêm dòng ở khối <b>Dòng đơn hàng</b> phía trên, rồi quay lại đây xếp lịch giao.
@@ -373,7 +375,7 @@ export function ChiaDotSoanGrid({
   }
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 px-[var(--gutter)] py-2 text-[var(--fs-sm)] text-[var(--ink-2)]">
+      <div className="text-k-sm flex flex-wrap items-center gap-2 px-[var(--gutter)] py-2 text-[var(--ink-2)]">
         {drafts.length > 0 ? (
           <span>
             <b className="num">{drafts.length}</b> đợt — in lên phiếu gửi NCC. Ô để trống

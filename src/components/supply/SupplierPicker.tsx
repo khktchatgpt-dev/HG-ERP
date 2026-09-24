@@ -141,9 +141,7 @@ export function SupplierPicker({
                 onMouseEnter={() => setActive(i)}
                 onClick={() => choose(s)}
                 className={`flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left ${
-                  i === active
-                    ? 'bg-sky-50 dark:bg-sky-950/40'
-                    : 'hover:bg-sky-50 dark:hover:bg-sky-950/40'
+                  i === active ? 'bg-sky-50' : 'hover:bg-sky-50'
                 }`}
               >
                 <span className="flex w-full items-center gap-2 text-[13px]">
@@ -160,7 +158,7 @@ export function SupplierPicker({
               </button>
             ))}
             {!q.trim() && suppliers.length > list.length && (
-              <div className="border-t border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-400 dark:border-zinc-800">
+              <div className="border-t border-zinc-100 px-3 py-1.5 text-[11px] text-zinc-400">
                 Đang hiện {list.length}/{suppliers.length} — gõ để tìm tiếp.
               </div>
             )}

@@ -15,12 +15,20 @@ export type StageOutput = {
   stage: string
   done: number
   defect: number
+  /** Hỏng nhưng cứu được, đang chờ sửa (0206). Không phải một phần của `done`. */
+  rework?: number
 }
 
 export type ComponentStageSummary = {
   stage: string
   done: number
   defect: number
+  /**
+   * Đang CHỜ SỬA ở công đoạn này (0206). Đứng ngoài mọi phép tính tiến độ:
+   * không vào `done`, không trừ `missing`. Món đó vẫn còn — sửa xong thống kê
+   * ghi lần thứ hai vào ô đạt, và lúc ấy nó mới thành `done`.
+   */
+  rework: number
   /** Thiếu/(Dư) = tổng cần − đã làm (âm = dư). */
   missing: number
   /** 0..1, cap 1; tổng cần 0 → 0 (không chia 0). */
@@ -73,6 +81,7 @@ export function summarizeComponent(
       stage,
       done,
       defect: o?.defect ?? 0,
+      rework: o?.rework ?? 0,
       missing: r2(totalNeeded - done),
       pct: totalNeeded > 0 ? Math.min(done / totalNeeded, 1) : 0,
     }

@@ -54,8 +54,10 @@ export default async function Page({
           reason={`Đơn đang ở trạng thái "${PO_STATUS_LABEL[po.status as PoStatus] ?? po.status}". Chỉ đơn đã gửi nhà cung cấp và còn phần chưa về mới lập được phiếu nhập.`}
           next={
             <>
-              <Btn href="/warehouse/nhap">Về Hàng về</Btn>
-              <Btn primary href={`/mua-hang/don/${po.id}`}>
+              <Btn icon="quayLai" href="/warehouse/nhap">
+                Về Hàng về
+              </Btn>
+              <Btn icon="don" primary href={`/mua-hang/don/${po.id}`}>
                 Mở đơn {po.code}
               </Btn>
             </>

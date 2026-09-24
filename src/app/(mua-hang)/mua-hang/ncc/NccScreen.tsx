@@ -3,23 +3,22 @@
 import { useMemo, useState } from 'react'
 import {
   Btn,
-  Cell,
   Chip,
   Code,
   Empty,
   FilterBar,
   NoticeBar,
   Num,
-  Row,
   ScreenFrame,
   ScreenHeader,
   SearchInput,
   StatusBar,
-  TFoot,
-  THead,
   Table,
   Tag,
   showMoney,
+  TableSettings,
+  useKitTable,
+  type KitCol,
 } from '@/components/kit'
 
 export type NccRow = {
@@ -75,6 +74,126 @@ function tienTheoLoai(spend: Record<string, number>): string[] {
     )
 }
 
+/**
+ * CỘT CỦA BẢNG NCC — khai ở module, chỉ phần tổng đổi theo dữ liệu.
+ *
+ * CỘT ĐỊNH DANH LÀ TÊN, KHÔNG PHẢI MÃ. Đo 14/09/2026: chỉ 44/164 NCC có mã
+ * (27%) — ghim cột mã lên đầu thì 120 dòng mở ra một cột toàn dấu gạch, và
+ * người đọc cuộn ngang xong không biết dòng đang xem là của ai. Mã vẫn hiện,
+ * nhưng đi kèm tên.
+ */
+function cotNcc({
+  tongDon,
+  tongMo,
+}: {
+  tongDon: number
+  tongMo: number
+}): KitCol<NccRow>[] {
+  return [
+    {
+      id: 'ten',
+      header: 'Nhà cung cấp',
+      pin: true,
+      // Tên NCC là TÊN DÒNG: trình đọc nói "Thép Asia, Đơn đặt 12…" khi đi
+      // ngang một dòng thay vì đọc số trơ (B7½, 24/09/2026).
+      rowHeader: true,
+      grow: true,
+      sort: (r) => r.name,
+      cell: (r) => (
+        <span className="flex items-center gap-2">
+          <Code as="a" href={profileHref(r.id)} title={r.name}>
+            {r.name}
+          </Code>
+          {r.code && (
+            <span className="num text-k-label text-[var(--ink-3)]">{r.code}</span>
+          )}
+          {ngung(r) && <Tag tone="warn">Ngừng</Tag>}
+          {!r.can_order && <Tag tone="stop">Khoá đặt</Tag>}
+        </span>
+      ),
+    },
+    {
+      id: 'loai',
+      header: 'Mặt hàng',
+      muted: true,
+      sort: (r) => r.type,
+      cell: (r) => r.type ?? '',
+    },
+    {
+      id: 'dat',
+      header: 'Đã đặt',
+      num: true,
+      sort: (r) => r.po_count,
+      foot: tongDon || '',
+      cell: (r) => <Num value={String(r.po_count || '')} />,
+    },
+    {
+      id: 'dang',
+      header: 'Dở dang',
+      num: true,
+      sort: (r) => r.open_po_count,
+      foot: tongMo || '',
+      /*
+        ✓ CHỈ cho NCC đã từng đặt mà nay không còn đơn dở dang — đó mới là
+        "xong". NCC chưa đặt đơn nào cũng có số 0, nhưng 0 đó nghĩa là "chưa có
+        việc", không phải "hết việc": tô ✓ xanh cho 132 hồ sơ như vậy là hứa một
+        điều không có.
+      */
+      cell: (r) => (
+        <Num
+          value={String(r.open_po_count || '')}
+          strong
+          zero={r.po_count > 0 ? 'done' : 'dash'}
+        />
+      ),
+    },
+    {
+      id: 'ganNhat',
+      header: 'Đơn gần nhất',
+      muted: true,
+      sort: (r) => r.last_po_at,
+      /*
+        MÃ ĐƠN TRÊN, NGÀY DƯỚI — không nằm ngang. Xếp ngang thì cột này đòi 205px
+        (đo 17/09/2026), nhiều hơn cả cột TÊN nhà cung cấp, và đẩy bảng tràn
+        khung. Nó là cột tra cứu phụ, không đáng hơn cột định danh.
+      */
+      cell: (r) =>
+        r.last_po ? (
+          <span className="flex flex-col leading-tight">
+            <span className="num">{r.last_po}</span>
+            <span className="text-k-label text-[var(--ink-3)]">{ngay(r.last_po_at)}</span>
+          </span>
+        ) : (
+          ''
+        ),
+    },
+    {
+      id: 'chi',
+      header: 'Tổng chi',
+      num: true,
+      /*
+        KHÔNG cho sắp. NCC mua bằng hai loại tiền (VND + USD) không có MỘT con số
+        để xếp hạng; sắp theo phần VND thì NCC mua bằng USD tụt xuống đáy như
+        thể mua ít nhất — một thứ tự bịa. Nguyên tắc 3 của sổ: con số là lời hứa.
+      */
+      cell: (r) => {
+        const chi = tienTheoLoai(r.spend)
+        return chi.length === 0 ? (
+          <Num value="" />
+        ) : (
+          // Hai loại tiền thì bày hai dòng, không gộp — cột cao thêm một dòng vẫn
+          // hơn một con số không có thật.
+          <span className="num flex flex-col items-end leading-tight">
+            {chi.map((t) => (
+              <span key={t}>{t}</span>
+            ))}
+          </span>
+        )
+      },
+    },
+  ]
+}
+
 export function NccScreen({
   rows,
   canEdit,
@@ -109,6 +228,21 @@ export function NccScreen({
   for (const r of kept)
     for (const [cur, v] of Object.entries(r.spend)) tongChi[cur] = (tongChi[cur] ?? 0) + v
   const chiText = tienTheoLoai(tongChi)
+
+  const columns = useMemo(() => cotNcc({ tongDon, tongMo }), [tongDon, tongMo])
+  const engine = useKitTable({
+    rows: kept,
+    columns,
+    rowKey: (r) => r.id,
+    prefsKey: 'mua-hang-ncc',
+    foot: {
+      label: `Cộng ${kept.length} nhà cung cấp đang hiện`,
+      note:
+        chiText.length === 0
+          ? 'Chưa đơn nào có tiền — tổng chi để trống, không phải bằng 0.'
+          : `Tổng chi ${chiText.join(' · ')} — cộng riêng từng loại tiền, KHÔNG quy đổi. Chưa gồm đơn đã huỷ.`,
+    },
+  })
 
   const dangGiaoDich = rows.filter((r) => !ngung(r)).length
   const chuaDat = rows.filter((r) => r.po_count === 0).length
@@ -179,6 +313,9 @@ export function NccScreen({
             {c.label}
           </Chip>
         ))}
+        <span className="ml-auto">
+          <TableSettings engine={engine} />
+        </span>
       </FilterBar>
 
       {kept.length === 0 ? (
@@ -187,6 +324,7 @@ export function NccScreen({
           reason={`Bộ lọc “${CHIPS.find((c) => c.id === chip)?.label}”${q.trim() ? ` cộng với từ khoá “${q.trim()}”` : ''} không còn dòng nào.`}
           next={
             <Btn
+              icon="boLoc"
               onClick={() => {
                 setQ('')
                 setChip('all')
@@ -197,109 +335,12 @@ export function NccScreen({
           }
         />
       ) : (
-        <Table>
-          <THead pinFirst>
-            {/*
-              CỘT ĐỊNH DANH LÀ TÊN, KHÔNG PHẢI MÃ. Đo 14/09/2026: chỉ 44/164
-              NCC có mã (27%) — ghim cột mã lên đầu thì 120 dòng mở ra một cột
-              toàn dấu gạch, và người đọc cuộn ngang xong không biết dòng đang
-              xem là của ai. Mã vẫn hiện, nhưng đi kèm tên.
-            */}
-            <th>Nhà cung cấp</th>
-            <th>Mặt hàng</th>
-            <th style={{ textAlign: 'right' }}>Đã đặt</th>
-            <th style={{ textAlign: 'right' }}>Dở dang</th>
-            <th>Đơn gần nhất</th>
-            <th style={{ textAlign: 'right' }}>Tổng chi</th>
-          </THead>
-          <tbody>
-            {kept.map((r) => {
-              const chi = tienTheoLoai(r.spend)
-              return (
-                <Row key={r.id}>
-                  <Cell pin grow>
-                    <span className="flex items-center gap-2">
-                      <Code as="a" href={profileHref(r.id)} title={r.name}>
-                        {r.name}
-                      </Code>
-                      {r.code && (
-                        <span className="num text-[10.5px] text-[var(--ink-3)]">
-                          {r.code}
-                        </span>
-                      )}
-                      {ngung(r) && <Tag tone="warn">Ngừng</Tag>}
-                      {!r.can_order && <Tag tone="stop">Khoá đặt</Tag>}
-                    </span>
-                  </Cell>
-                  <Cell muted>{r.type ?? ''}</Cell>
-                  <Cell num>
-                    <Num value={String(r.po_count || '')} />
-                  </Cell>
-                  <Cell num>
-                    {/*
-                      ✓ CHỈ cho NCC đã từng đặt mà nay không còn đơn dở dang —
-                      đó mới là "xong". NCC chưa đặt đơn nào cũng có số 0, nhưng
-                      0 đó nghĩa là "chưa có việc", không phải "hết việc": tô ✓
-                      xanh cho 132 hồ sơ như vậy là hứa một điều không có.
-                    */}
-                    <Num
-                      value={String(r.open_po_count || '')}
-                      strong
-                      zero={r.po_count > 0 ? 'done' : 'dash'}
-                    />
-                  </Cell>
-                  <Cell muted>
-                    {/*
-                      MÃ ĐƠN TRÊN, NGÀY DƯỚI — không nằm ngang.
-                      Xếp ngang thì cột này đòi 205px (đo 17/09/2026), nhiều
-                      hơn cả cột TÊN nhà cung cấp, và đẩy bảng tràn khung. Nó
-                      là cột tra cứu phụ, không đáng hơn cột định danh.
-                    */}
-                    {r.last_po ? (
-                      <span className="flex flex-col leading-tight">
-                        <span className="num">{r.last_po}</span>
-                        <span className="text-[10.5px] text-[var(--ink-3)]">
-                          {ngay(r.last_po_at)}
-                        </span>
-                      </span>
-                    ) : (
-                      ''
-                    )}
-                  </Cell>
-                  <Cell num>
-                    {chi.length === 0 ? (
-                      <Num value="" />
-                    ) : (
-                      /*
-                        NCC mua bằng hai loại tiền thì bày hai dòng, không gộp.
-                        Cột cao thêm một dòng vẫn hơn một con số không có thật.
-                      */
-                      <span className="num flex flex-col items-end leading-tight">
-                        {chi.map((t) => (
-                          <span key={t}>{t}</span>
-                        ))}
-                      </span>
-                    )}
-                  </Cell>
-                </Row>
-              )
-            })}
-          </tbody>
-          <TFoot
-            label={<td colSpan={2}>Cộng {kept.length} nhà cung cấp đang hiện</td>}
-            cells={
-              <>
-                <td className="num">{tongDon || ''}</td>
-                <td className="num">{tongMo || ''}</td>
-              </>
-            }
-            caveat={
-              chiText.length === 0
-                ? 'Chưa đơn nào có tiền — tổng chi để trống, không phải bằng 0.'
-                : `Tổng chi ${chiText.join(' · ')} — cộng riêng từng loại tiền, KHÔNG quy đổi. Chưa gồm đơn đã huỷ.`
-            }
-          />
-        </Table>
+        /*
+          MÁY BẢNG (B5, 24/09/2026): bấm tiêu đề để sắp, nút "Cột" trên thanh
+          lọc để ẩn cột / đổi mật độ — người mua nhớ theo máy của họ. Chân bảng
+          do máy tự chia cột, nên ẩn cột nào cũng không lệch.
+        */
+        <Table engine={engine} />
       )}
 
       <StatusBar

@@ -182,16 +182,16 @@ export default async function SalesHomePage() {
           Việc cần làm
         </h2>
         {todos.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400 dark:border-zinc-700">
+          <p className="rounded-lg border border-dashed border-zinc-300 py-6 text-center text-sm text-zinc-400">
             Không có việc gấp — mọi đơn và báo giá đều trong tầm kiểm soát 🎉
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-900">
+          <ul className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             {todos.slice(0, 12).map((t, i) => (
               <li key={i}>
                 <Link
                   href={t.href}
-                  className="flex items-start gap-2.5 px-4 py-2.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+                  className="flex items-start gap-2.5 px-4 py-2.5 text-sm hover:bg-zinc-50"
                 >
                   <span
                     className={
@@ -200,7 +200,7 @@ export default async function SalesHomePage() {
                         ? 'bg-red-500'
                         : t.severity === 'amber'
                           ? 'bg-amber-500'
-                          : 'bg-zinc-300 dark:bg-zinc-600')
+                          : 'bg-zinc-300')
                     }
                   />
                   <span className="min-w-0">
@@ -259,15 +259,11 @@ function Kpi({
   href: string
 }) {
   const valueColor =
-    tone === 'red'
-      ? 'text-red-600 dark:text-red-400'
-      : tone === 'amber'
-        ? 'text-amber-600 dark:text-amber-500'
-        : ''
+    tone === 'red' ? 'text-red-600' : tone === 'amber' ? 'text-amber-600' : ''
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+      className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
     >
       <div className="text-xs font-medium text-zinc-500 uppercase">{label}</div>
       <div
@@ -284,7 +280,7 @@ function QuickLink({ href, title, desc }: { href: string; title: string; desc: s
   return (
     <Link
       href={href}
-      className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-600"
+      className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-400"
     >
       <div className="font-medium">{title}</div>
       <div className="mt-1 text-xs text-zinc-500">{desc}</div>

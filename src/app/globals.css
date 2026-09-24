@@ -1,4 +1,14 @@
-@import 'tailwindcss';
+/*
+ * TAILWIND CHỈ QUÉT `src/` (24/09/2026). Mặc định v4 quét MỌI file không bị
+ * gitignore — cả CLAUDE.md, docs/, skill, test luật lint. Hai hậu quả đã đo:
+ *   · chuỗi ví dụ trong .md (hàm var rỗng) làm vỡ CSS TOÀN APP — dính hai lần
+ *     ngày 24/09 (chú thích kit, rồi SKILL.md của erp-ui);
+ *   · test luật lint CỐ Ý chứa lớp sai (`bg-zinc-50`, hex, `dark:…`) và ví dụ
+ *     trong CLAUDE.md sinh CSS thật: sau khi gỡ 1.207 lớp `dark:` vẫn còn 7 luật
+ *     `dark` trong CSS của app chỉ vì chúng có mặt trong tài liệu và test.
+ * Giao diện chỉ sống ở `src/`, nên gốc quét là `src/` (đường dẫn tính từ file này).
+ */
+@import 'tailwindcss' source('../');
 @import 'tw-animate-css';
 /*
  * KIT — bảng token ngôn ngữ ERP, sống trong `.kit` nên KHÔNG đụng tới v3.
@@ -10,22 +20,35 @@
  */
 @import '../components/kit/tokens.css';
 @import '../components/kit/erp.css';
+/* Lịch thả của `DateInput` (B4). Màu + cỡ đổi sang token ở cuối erp.css
+   (`.kit .rdp-root`) — bộ chọn hai lớp thắng mặc định một lớp của thư viện dù
+   file này nạp SAU. */
+@import 'react-day-picker/style.css';
 
 /*
  * DARK MODE TẮT (chốt 06/08/2026 — chủ dự án: "bỏ chế độ dark mode").
  *
- * Không xoá hàng trăm class `dark:` rải khắp code — chỉ đổi ĐIỀU KIỆN kích
- * hoạt: mặc định Tailwind v4 bám `prefers-color-scheme`, nay buộc phải có class
- * `.dark` trên cây DOM mới ăn. Không chỗ nào gắn class đó → app luôn nền sáng,
- * kể cả máy đang để giao diện tối. Muốn bật lại sau thì thêm `.dark` vào <html>.
+ * Dòng dưới là CÔNG TẮC, không phải tàn dư: mặc định Tailwind v4 bật lớp
+ * `dark:` theo `prefers-color-scheme`; dòng này buộc phải có class `.dark` trên
+ * cây DOM, mà không chỗ nào gắn → app luôn nền sáng kể cả máy để giao diện tối.
+ *
+ * 24/09/2026 đã gỡ SẠCH 1.207 lớp `dark:` / 121 file (253 luật CSS, ~33 KB
+ * không bao giờ có tác dụng), và luật `hg/no-dark-variant` chặn lớp mới. Dòng
+ * này vẫn GIỮ làm hàng rào thứ hai: lớp `dark:` nào lọt qua lint (tắt luật tại
+ * chỗ, file ngoài `src`) cũng không lật màn sang tối trên máy người dùng.
+ *
+ * Bảng token tối `.dark { … }` và `.dark .theme-v2 { … }` đã gỡ 24/09/2026:
+ * không ai gắn `.dark`, và dù có gắn thì `.theme-v3` ở gốc shell vẫn đè màu
+ * sáng lên — tức bảng đó không bật lại được thật. Chế độ tối cho kit mới (câu
+ * Q3 của docs/he-thiet-ke-erp-ke-hoach.md) sẽ khai ở kit/tokens.css.
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens. Base app dùng --background/--foreground; khối token shadcn
- * (--card, --primary, --border, …) map theo palette zinc/slate của ERP kit để
- * 2 hệ (ERP kit + shadcn) nhìn liền mạch. Bảng token tối cũng đổi sang selector
- * `.dark` cho khớp — cùng ngủ đông với các class `dark:`.
+ * Token GỐC — cho màn nằm NGOÀI shell workspace (đăng nhập, admin, trang in).
+ * Màn trong shell ăn `.theme-v3` bên dưới (đè lên đây); màn kit mới ăn `.kit`
+ * (kit/tokens.css). Tên biến theo khuôn shadcn (--card, --primary, --border…)
+ * để các thành phần `components/shadcn/*` dùng được ở cả ba nơi.
  */
 :root {
   --background: #ffffff;
@@ -61,10 +84,10 @@
   --radius: 0.5rem;
 
   /*
-   * MÀU TÍN HIỆU — phải khai ở :ROOT, không chỉ trong `.theme-v2`.
+   * MÀU TÍN HIỆU — phải khai ở :ROOT, không chỉ trong `.theme-v3`.
    *
    * `Badge` dùng ở 45 tệp, có cả màn nằm NGOÀI shell workspace (admin, đăng
-   * nhập, trang in). Ở đó không có `.theme-v2`, nên nếu ba biến này chỉ sống
+   * nhập, trang in). Ở đó không có `.theme-v3`, nên nếu ba biến này chỉ sống
    * trong đó thì `color-mix(... var(--warn) ...)` thành giá trị không hợp lệ và
    * nhãn rụng hết màu — hỏng im lặng, đúng loại lỗi khó lần ra nhất.
    */
@@ -101,57 +124,34 @@
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
-}
 
-/* Bảng token tối — chỉ ăn khi <html> có class `.dark` (hiện không ai gắn). */
-.dark {
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  /*
+    THANG CHỮ CỦA KIT thành lớp Tailwind thật: `text-k-label / k-sm / k-body /
+    k-lg / k-title / k-doc` (B3, 24/09/2026 — docs/he-thiet-ke-erp-ke-hoach.md).
 
-  /* shadcn tokens (dark) */
-  --card: #18181b; /* zinc-900 — trùng thẻ ERP dark */
-  --card-foreground: #ededed;
-  --popover: #09090b; /* zinc-950 */
-  --popover-foreground: #ededed;
-  --primary: #ffffff; /* trùng Button primary dark bespoke */
-  --primary-foreground: #0f172a;
-  --secondary: #27272a; /* zinc-800 */
-  --secondary-foreground: #fafafa;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa; /* zinc-400 */
-  --accent: #27272a;
-  --accent-foreground: #fafafa;
-  --destructive: #ef4444; /* red-500 */
-  --destructive-foreground: #ffffff;
-  --border: #27272a; /* zinc-800 */
-  --input: #3f3f46; /* zinc-700 */
-  --ring: #f59e0b;
+    Vì sao phải khai ở đây: Tailwind v4 hiểu `text-[var(--fs-sm)]` là MÀU chứ
+    không phải cỡ chữ — không đoán được kiểu của biến. Đo 24/09: 226 chỗ trong
+    mã nguồn viết như vậy, và KHÔNG chỗ nào có tác dụng; chữ hiện theo cỡ của
+    phần tử cha. Khai trong không gian `--text-*` của @theme thì Tailwind biết
+    chắc đây là cỡ chữ.
 
-  /* Nền tối phải sáng hơn mới đọc được ở cỡ 11px. */
-  --warn: #f59e0b;
-  --stop: #f87171;
-  --done: #34d399;
+    `inline`: lớp sinh ra trỏ THẲNG vào `var(--fs-*)` của `.kit`, nên cỡ chữ vẫn
+    đi theo token (và theo mật độ) chứ không bị chép cứng lúc dựng.
+
+    Tailwind quét MỌI file không bị gitignore (cả .md, cả chú thích): một chuỗi
+    giống lớp tuỳ ý bọc hàm var rỗng là CẢ TỆP này hỏng. Canh bằng test
+    src/test/tailwind-trap.test.ts (dính hai lần ngày 24/09/2026).
+  */
+  --text-k-label: var(--fs-label);
+  --text-k-sm: var(--fs-sm);
+  --text-k-body: var(--fs-body);
+  --text-k-lg: var(--fs-lg);
+  --text-k-title: var(--fs-title);
+  --text-k-doc: var(--fs-doc);
 }
 
 /*
- * THEME V2 — "phiếu giấy ấm", style mẫu mới (chốt 06/08/2026, thí điểm ở
- * /sales/lsx). Trung tính stone thay zinc, primary = emerald-700 (hành động
- * nghiệp vụ), radius mềm hơn. Scoped bằng class để trang cũ không đổi; duyệt
- * xong style thì dời khối này lên :root.
- *
- * LƯU Ý: Radix portal (Dialog/Popover/DropdownMenu/Select) render ra <body>,
- * NGOÀI wrapper — phải gắn `theme-v2` vào cả className của *Content.
- */
-/*
- * MÀU TÍN HIỆU — chỉ ba, và chỉ để mã hoá trạng thái.
- *
- * Trước đây mỗi màn tự chọn: sky 95 chỗ, emerald 25, violet 20, blue 18, indigo
- * 3, purple 1 — không ai biết màu nào là màu chính, nên màu mất hết nghĩa. Nay
- * `primary` (emerald) là màu HÀNH ĐỘNG duy nhất, còn ba màu dưới đây là màu
- * TRẠNG THÁI. Không có màu trang trí.
- */
-/*
- * THANG CHỮ — 5 bậc, thay cho 391 chỗ đang gõ cỡ pixel tuỳ ý (9/10/11/12/13px
+ * THANG CHỮ CỦA THEME V3 — 5 bậc, thay cho 391 chỗ đang gõ cỡ pixel tuỳ ý (9/10/11/12/13px
  * lẫn với text-xs/sm). Cỡ tuỳ ý làm mỗi bảng lệch nhau vài pixel, và mắt đọc ra
  * là "cẩu thả" dù không chỉ được tên.
  *
@@ -206,34 +206,10 @@
   background: var(--spine, transparent);
 }
 
-.dark .theme-v2 {
-  --background: #0c0a09; /* stone-950 */
-  --foreground: #e7e5e4; /* stone-200 */
-  --card: #1c1917; /* stone-900 */
-  --card-foreground: #e7e5e4;
-  --popover: #1c1917;
-  --popover-foreground: #e7e5e4;
-  --primary: #10b981; /* emerald-500 — nổi trên nền tối */
-  --primary-foreground: #022c22; /* emerald-950 */
-  --secondary: #292524; /* stone-800 */
-  --secondary-foreground: #fafaf9;
-  --muted: #292524;
-  /* Nền tối thì phải đi ngược: SÁNG hơn (stone-300) mới đọc được cỡ 11px. */
-  --muted-foreground: #d6d3d1; /* stone-300 */
-  --placeholder: #78716c; /* stone-500 */
-  --accent: #292524;
-  --accent-foreground: #fafaf9;
-  --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #292524; /* stone-800 */
-  --input: #44403c; /* stone-700 */
-  --ring: #10b981;
-}
-
 /*
- * THEME V3 — "HG Ledger" (sổ chứng từ số), bản đề xuất thay theme-v2.
- * Thí điểm ở /design-lab; duyệt xong thì dời khối này lên :root (hoặc đổi
- * class ở WorkspaceShell từ theme-v2 → theme-v3).
+ * THEME V3 — "HG Ledger" (sổ chứng từ số). Đang chạy thật: gắn ở gốc
+ * `WorkspaceShell` từ 15/08/2026, phủ mọi màn CŨ trong shell (màn kit mới ăn
+ * `.kit` riêng). theme-v2 trước nó đã xoá hẳn 09/09/2026.
  *
  * Định hướng: bỏ tông "giấy ấm" stone/emerald — chuyển sang nền xám-XANH lạnh
  * + mực navy (đọc số liệu dày đỡ mỏi), màu hành động duy nhất là ROYAL COBALT
@@ -243,8 +219,9 @@
  * Điểm nhận diện: --accent là TINT cobalt (không phải xám) — hover menu, dòng
  * bảng, tab đang chọn đều ánh xanh nhẹ, cả app "cùng một giọng".
  *
- * LƯU Ý (như theme-v2): Radix portal render ra <body>, NGOÀI wrapper — phải
- * gắn `theme-v3` vào cả className của *Content (Dialog/Popover/Select/Menu).
+ * Radix portal render ra <body>, NGOÀI shell — nhưng KHÔNG phải gắn lớp này
+ * tay nữa: mỗi `*Content` của components/shadcn tự gắn lại qua
+ * `usePortalTheme()` (vá ở primitive 02/09/2026).
  */
 .theme-v3 {
   --background: #f5f6f8; /* canvas xám-xanh lạnh */
@@ -258,7 +235,7 @@
   --secondary: #eef0f4;
   --secondary-foreground: #1d2939;
   --muted: #f2f4f7;
-  /* Cùng nguyên tắc theme-v2: phụ chú 11–12px phải đạt ~7:1 trên nền trắng. */
+  /* Phụ chú 11–12px phải đạt ~7:1 trên nền trắng (user chốt 13/08/2026). */
   --muted-foreground: #475467;
   --placeholder: #98a2b3;
   --accent: #eef1fc; /* tint cobalt — hover/selected có "giọng" thương hiệu */
@@ -276,16 +253,16 @@
   --done: #1f7a4c;
 }
 
+/*
+ * Placeholder NHẠT hơn phụ chú — shadcn để `placeholder:text-muted-foreground`,
+ * mà muted-foreground đã đậm lên cho dễ đọc, dùng chung thì ô trống trông như
+ * đã điền.
+ */
 .theme-v3 ::placeholder {
   color: var(--placeholder);
   opacity: 1;
 }
 
-/*
- * Placeholder của theme v2 nhạt hơn phụ chú — shadcn để
- * `placeholder:text-muted-foreground`, mà muted-foreground nay đã đậm lên cho
- * dễ đọc, dùng chung sẽ khiến ô trống trông như đã điền.
- */
 /* shadcn cần default border-color = --border (Tailwind v4 mặc định currentColor). */
 @layer base {
   *,

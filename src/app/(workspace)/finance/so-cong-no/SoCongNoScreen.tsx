@@ -76,11 +76,18 @@ export function SoCongNoScreen(p: ApLedgerResult) {
                     : [{ value: p.month, label: monthLabel(p.month) }]
                 }
               />
-              <Btn href={`/api/dept/accounting/so-cong-no/export?ky=${p.month}`}>
+              <Btn
+                icon="excel"
+                href={`/api/dept/accounting/so-cong-no/export?ky=${p.month}`}
+              >
                 Xuất Excel
               </Btn>
-              <Btn href="/finance/cong-no-ncc">Ghi thanh toán</Btn>
-              <Btn href="/finance/tuoi-no">Tuổi nợ</Btn>
+              <Btn icon="tien" href="/finance/cong-no-ncc">
+                Ghi thanh toán
+              </Btn>
+              <Btn icon="so" href="/finance/tuoi-no">
+                Tuổi nợ
+              </Btn>
             </>
           }
         />
@@ -91,15 +98,15 @@ export function SoCongNoScreen(p: ApLedgerResult) {
           bốn số nằm cạnh nhau với dấu +, −, = ở giữa thì sai lệch lộ ra ngay.
           Bày bốn thẻ KPI rời rạc là giấu mất quan hệ giữa chúng.
         */}
-        <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[10px]">
+        <div className="flex flex-wrap items-stretch gap-x-6 gap-y-2 border-b border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-2.5">
           {p.totals.length === 0 ? (
-            <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+            <span className="text-k-sm text-[var(--ink-3)]">
               Kỳ {monthLabel(p.month)} không có phát sinh và không có số dư.
             </span>
           ) : (
             p.totals.map((t) => (
               <div key={t.currency} className="flex items-center gap-3">
-                <span className="num rounded-[var(--radius)] border border-[var(--line)] px-[7px] py-[1px] text-[11px] font-bold text-[var(--ink-2)]">
+                <span className="num text-k-label rounded-[var(--radius)] border border-[var(--line)] px-2 py-px font-bold text-[var(--ink-2)]">
                   {t.currency}
                 </span>
                 <Eq label="Dư đầu kỳ" value={money(t.opening, t.currency)} />
@@ -182,11 +189,15 @@ export function SoCongNoScreen(p: ApLedgerResult) {
               reason="Sổ TK 331 ghi theo HOÁ ĐƠN nhà cung cấp đã vào sổ và phiếu chi — không phải theo phiếu nhập kho hay đơn đặt hàng. Chưa có hoá đơn nào vào sổ thì công nợ chưa phát sinh, dù đã cam kết mua."
               next={
                 <>
-                  <Btn primary href="/finance/hoa-don-ncc">
+                  <Btn icon="hoaDon" primary href="/finance/hoa-don-ncc">
                     Lập hoá đơn từ đơn mua
                   </Btn>
-                  <Btn href="/finance/hoa-don-ncc/so">Sổ hoá đơn NCC</Btn>
-                  <Btn href="/finance/bao-cao">Xem cam kết mua hàng</Btn>
+                  <Btn icon="hoaDon" href="/finance/hoa-don-ncc/so">
+                    Sổ hoá đơn NCC
+                  </Btn>
+                  <Btn icon="don" href="/finance/bao-cao">
+                    Xem cam kết mua hàng
+                  </Btn>
                 </>
               }
             />
@@ -275,12 +286,12 @@ export function SoCongNoScreen(p: ApLedgerResult) {
 
           {p.detail && (
             <>
-              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-[9px]">
+              <div className="flex flex-wrap items-center gap-2 border-t border-[var(--line)] bg-[var(--surface)] px-[var(--gutter)] py-2">
                 <h3 className="k-fgrp-h">
                   Sổ chi tiết · {p.detail.supplier_name} ·{' '}
                   <span className="num">{p.detail.currency}</span>
                 </h3>
-                <span className="text-[var(--fs-sm)] text-[var(--ink-3)]">
+                <span className="text-k-sm text-[var(--ink-3)]">
                   {dmy(p.from)} → {dmy(p.to)}
                 </span>
                 <GridBtn onClick={() => go({ ncc: undefined, tt: undefined })}>
@@ -342,7 +353,7 @@ export function SoCongNoScreen(p: ApLedgerResult) {
                 </GridFoot>
               </Grid>
               {p.detail.lines.length === 0 && (
-                <div className="px-[var(--gutter)] py-2 text-[var(--fs-sm)] text-[var(--ink-3)]">
+                <div className="text-k-sm px-[var(--gutter)] py-2 text-[var(--ink-3)]">
                   Kỳ này không có giao dịch — số dư giữ nguyên từ kỳ trước.
                 </div>
               )}
@@ -399,27 +410,27 @@ function Eq({
 }) {
   return (
     <div className="leading-tight">
-      <div className="text-[10.5px] tracking-[.04em] text-[var(--ink-3)] uppercase">
+      <div className="text-k-label tracking-[.04em] text-[var(--ink-3)] uppercase">
         {label}
       </div>
       <div
         className={
           strong
-            ? 'num text-[15px] font-bold text-[var(--ink)]'
-            : 'num text-[14px] text-[var(--ink-2)]'
+            ? 'num text-k-lg font-bold text-[var(--ink)]'
+            : 'num text-k-body text-[var(--ink-2)]'
         }
       >
         {value}
       </div>
-      {sub && <div className="num text-[10.5px] text-[var(--ink-3)]">{sub}</div>}
-      {note && <div className="num text-[10.5px] text-[var(--ink-3)]">{note}</div>}
-      {warn && <div className="k-t-stop num text-[10.5px]">{warn}</div>}
+      {sub && <div className="num text-k-label text-[var(--ink-3)]">{sub}</div>}
+      {note && <div className="num text-k-label text-[var(--ink-3)]">{note}</div>}
+      {warn && <div className="k-t-stop num text-k-label">{warn}</div>}
     </div>
   )
 }
 
 function Op({ children }: { children: string }) {
-  return <span className="num text-[15px] font-bold text-[var(--ink-3)]">{children}</span>
+  return <span className="num text-k-lg font-bold text-[var(--ink-3)]">{children}</span>
 }
 
 /** Chân bảng: mỗi tiền tệ một cụm, không bao giờ cộng lẫn. */

@@ -87,10 +87,7 @@ export function TrackingDetail({
         )}
         <span className="text-zinc-500">· Hạn giao {day(order.due_date)}</span>
         {lsxHref && lsxCode && (
-          <a
-            href={lsxHref}
-            className="font-mono text-blue-600 hover:underline dark:text-blue-400"
-          >
+          <a href={lsxHref} className="font-mono text-blue-600 hover:underline">
             {lsxCode} →
           </a>
         )}
@@ -100,7 +97,7 @@ export function TrackingDetail({
         Dòng tổng đứng TRƯỚC bảng: câu hỏi đầu tiên của khách là "xong bao nhiêu
         phần trăm", không phải "dòng thứ tư ra sao".
       */}
-      <div className="rounded-md bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-900">
+      <div className="rounded-md bg-zinc-50 px-3 py-2 text-xs">
         Đã xuất <b>{num(shippedTotal)}</b> / {num(qtyTotal)} sản phẩm
         {qtyTotal > 0 && (
           <span className="text-zinc-500">
@@ -114,7 +111,7 @@ export function TrackingDetail({
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
+            <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase">
               <th className="py-2 pr-2">Sản phẩm</th>
               <th className="w-20 py-2 pr-2 text-right">SL đặt</th>
               <th className="w-20 py-2 pr-2 text-right">Đã xuất</th>
@@ -128,7 +125,7 @@ export function TrackingDetail({
               const shipped = shippedByLine[l.id] ?? 0
               const left = l.qty - shipped
               return (
-                <tr key={l.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                <tr key={l.id} className="border-b border-zinc-100">
                   <td className="py-1.5 pr-2">
                     <div className="flex flex-col">
                       <span>
@@ -168,9 +165,9 @@ export function TrackingDetail({
 
       {/* Các đợt thực xuất (0120) — bằng chứng cho con số "đã xuất" ở trên. */}
       {shipments.length > 0 && (
-        <div className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
+        <div className="rounded-md border border-zinc-200 p-3">
           <b className="text-xs">Các đợt đã xuất</b>
-          <ul className="mt-1.5 flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-400">
+          <ul className="mt-1.5 flex flex-col gap-1 text-xs text-zinc-600">
             {shipments.map((s) => {
               const line = lines.find((l) => l.id === s.order_line_id)
               return (

@@ -1245,11 +1245,45 @@ export type Database = {
           },
         ]
       }
+      production_defect_codes: {
+        Row: {
+          code: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          stage_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          stage_code?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       production_entries: {
         Row: {
           component_id: string
           created_at: string
           created_by: string | null
+          defect_code: string | null
           defect_qty: number
           defect_reason: string | null
           doc_id: string | null
@@ -1261,7 +1295,9 @@ export type Database = {
           note: string | null
           production_order_id: string
           qty: number
+          rework_qty: number
           stage: string
+          stage_meta: Json | null
           team_department_id: string | null
           worker_name: string | null
         }
@@ -1269,6 +1305,7 @@ export type Database = {
           component_id: string
           created_at?: string
           created_by?: string | null
+          defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
           doc_id?: string | null
@@ -1280,7 +1317,9 @@ export type Database = {
           note?: string | null
           production_order_id: string
           qty: number
+          rework_qty?: number
           stage: string
+          stage_meta?: Json | null
           team_department_id?: string | null
           worker_name?: string | null
         }
@@ -1288,6 +1327,7 @@ export type Database = {
           component_id?: string
           created_at?: string
           created_by?: string | null
+          defect_code?: string | null
           defect_qty?: number
           defect_reason?: string | null
           doc_id?: string | null
@@ -1299,7 +1339,9 @@ export type Database = {
           note?: string | null
           production_order_id?: string
           qty?: number
+          rework_qty?: number
           stage?: string
+          stage_meta?: Json | null
           team_department_id?: string | null
           worker_name?: string | null
         }
@@ -2110,6 +2152,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      production_stage_fields: {
+        Row: {
+          created_at: string
+          field_key: string
+          id: string
+          is_active: boolean
+          kind: string
+          label: string
+          max_value: number | null
+          min_value: number | null
+          options: Json | null
+          required: boolean
+          sort_order: number
+          stage_code: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          field_key: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          label: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          required?: boolean
+          sort_order?: number
+          stage_code: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          field_key?: string
+          id?: string
+          is_active?: boolean
+          kind?: string
+          label?: string
+          max_value?: number | null
+          min_value?: number | null
+          options?: Json | null
+          required?: boolean
+          sort_order?: number
+          stage_code?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       production_transfers: {
         Row: {

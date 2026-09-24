@@ -110,7 +110,7 @@ export function DoiChieuTable({
                 <span className="num k-strong">{r.material_code ?? '—'}</span> ·{' '}
                 {r.material_name}
                 {r.closed_short && (
-                  <span className="k-t-warn block text-[11px]">đã chốt thiếu</span>
+                  <span className="k-t-warn text-k-label block">đã chốt thiếu</span>
                 )}
               </Td>
               <Td num>

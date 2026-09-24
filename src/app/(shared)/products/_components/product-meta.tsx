@@ -27,8 +27,7 @@ export type DocState = 'ok' | 'partial' | 'missing'
 const DOC_TONE: Record<DocState, string> = {
   ok: 'bg-emerald-600 text-white',
   partial: 'bg-amber-500 text-white',
-  missing:
-    'bg-zinc-50 text-zinc-400 ring-1 ring-inset ring-zinc-300 dark:bg-zinc-900 dark:text-zinc-600 dark:ring-zinc-700',
+  missing: 'bg-zinc-50 text-zinc-400 ring-1 ring-inset ring-zinc-300',
 }
 
 const DM_TITLE: Record<BomStatus, string> = {

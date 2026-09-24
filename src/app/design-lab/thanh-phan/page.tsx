@@ -10,11 +10,16 @@ import {
   Btn,
   Checks,
   Code,
+  Combobox,
   CommitBar,
   Consequence,
   Count,
   CoverageBar,
   Crumb,
+  DateInput,
+  DayStrip,
+  DeltaNum,
+  DualPct,
   DocChain,
   DocHead,
   Empty,
@@ -40,8 +45,11 @@ import {
   LineStatus,
   Loading,
   MasterWarn,
+  MatrixTable,
   Metric,
   MetricStrip,
+  MiniBars,
+  NGOAI_LO_TRINH,
   NextAction,
   NoteComposer,
   NoteStream,
@@ -52,17 +60,22 @@ import {
   PrimaryStep,
   Sheet,
   SheetActions,
-  StageBar,
   StatusBar,
   StatusTrack,
+  Table,
+  TableSettings,
   Td,
   Th,
   Timeline,
   Tip,
   type Mark,
   type StreamRow,
+  useKitTable,
+  useToast,
+  type KitCol,
 } from '@/components/kit'
 import { Doc, Hero, Sec } from '../_lab/Doc'
+import { KIT_FAMILIES, KIT_GROUPS } from '../_lab/kit-families'
 
 /**
  * THƯ VIỆN THÀNH PHẦN.
@@ -137,11 +150,165 @@ const STREAM: StreamRow[] = [
   },
 ]
 
+/*
+  1.000 DÒNG TỔNG HỢP cho mẫu máy bảng — đủ để ảo hoá bật (> 200) và để đo
+  cuộn. Sinh cố định (không Math.random) để ảnh chụp và số đo lặp lại được.
+*/
+type VtDong = { ma: string; ten: string; nhom: string; ton: number; gia: number | null }
+const NHOM_MAU = ['Thép hộp', 'Gỗ tràm', 'Vít - bu lông', 'Sơn tĩnh điện', 'Vải bọc', 'Thùng carton'] // prettier-ignore
+const VT_1000: VtDong[] = Array.from({ length: 1000 }, (_, i) => ({
+  ma: `VT-${String(i + 1).padStart(4, '0')}`,
+  ten: `${NHOM_MAU[i % 6]} mẫu số ${i + 1}`,
+  nhom: NHOM_MAU[i % 6],
+  ton: (i * 37) % 900,
+  gia: i % 7 === 0 ? null : 1000 + ((i * 131) % 50) * 1000,
+}))
+const COT_VT: KitCol<VtDong>[] = [
+  { id: 'ma', header: 'Mã', pin: true, sort: (r) => r.ma, cell: (r) => <Code as="a" href="#">{r.ma}</Code> }, // prettier-ignore
+  { id: 'ten', header: 'Tên vật tư', grow: true, sort: (r) => r.ten, cell: (r) => r.ten },
+  { id: 'nhom', header: 'Nhóm', muted: true, sort: (r) => r.nhom, cell: (r) => r.nhom },
+  { id: 'ton', header: 'Tồn', num: true, sort: (r) => r.ton, foot: 'Σ', cell: (r) => r.ton.toLocaleString('vi-VN') }, // prettier-ignore
+  { id: 'gia', header: 'Giá gần nhất', num: true, sort: (r) => r.gia, cell: (r) => (r.gia == null ? '' : r.gia.toLocaleString('vi-VN')) }, // prettier-ignore
+]
+
+function BangDai() {
+  const t = useKitTable({
+    rows: VT_1000,
+    columns: COT_VT,
+    rowKey: (r) => r.ma,
+    prefsKey: 'design-lab-1000',
+    foot: {
+      label: '1.000 mã',
+      note: '143 mã chưa có giá — ô để trống, không phải bằng 0.',
+    },
+  })
+  return (
+    <div style={{ display: 'grid', gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <TableSettings engine={t} />
+      </div>
+      <div
+        style={{ height: 420, display: 'flex', flexDirection: 'column', ['--table-min' as string]: '640px' }} // prettier-ignore
+      >
+        <Table engine={t} />
+      </div>
+    </div>
+  )
+}
+
+/*
+  MẪU THỐNG KÊ (B6) — số giả, cố định, để NHÌN được năm thành phần bày số khi
+  có dữ liệu. Màn thật (`/thongke/lsx/[id]`, `/thongke/ghi`) đang dùng chúng,
+  nhưng sổ sản lượng thật đang trống (đo 22/09) nên ở đó mọi cột là 0.
+*/
+const NGAY_MAU = [0, 80, 120, 110, 0, 0, 60, 140, 150, 90, 0, 0, 30, 45].map((v, i) => ({
+  date: `2026-09-${String(11 + i).padStart(2, '0')}`,
+  value: v,
+  note: v ? `${1 + (i % 2)} phiếu` : undefined,
+}))
+type SpMau = {
+  id: string
+  ma: string
+  sl: number
+  cd: Record<string, [number, number] | null>
+}
+const SP_MAU: SpMau[] = [
+  { id: 'a', ma: 'FDA50089N', sl: 400, cd: { phoi: [400, 1], han: [250, 0.7], son: [250, 0.625], dg: [0, 0] } }, // prettier-ignore
+  { id: 'b', ma: 'FDA50090N', sl: 200, cd: { phoi: [200, 1], han: null, son: [120, 0.8], dg: [0, 0.1] } }, // prettier-ignore
+]
+const CD_MAU = [
+  ['phoi', 'Phôi'],
+  ['han', 'Hàn'],
+  ['son', 'Sơn'],
+  ['dg', 'Đóng gói'],
+] as const
+
+function ThongKeMau() {
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-wrap items-center gap-6">
+        <span className="text-k-sm text-[var(--ink-2)]">Chân trước · Tổ Phôi</span>
+        <DayStrip days={NGAY_MAU} today="2026-09-24" label="Chân trước · 14 ngày" />
+        <DualPct pieces={0.98} sets={0.62} />
+        <DeltaNum value={-300} unit="bộ" />
+        <DeltaNum value={120} unit="bộ" />
+        <DeltaNum value={0} />
+      </div>
+      <div className="max-w-[520px]">
+        <MiniBars
+          label="Nội bộ và gia công ngoài theo công đoạn"
+          series={['Nội bộ', 'GC ngoài']}
+          rows={[
+            { id: 'phoi', label: 'Phôi', value: 0.9, value2: 0.1 },
+            { id: 'han', label: 'Hàn', value: 0.55, value2: 0.15 },
+            { id: 'son', label: 'Sơn', value: 0.3 },
+            { id: 'dg', label: 'Đóng gói', value: 0.05 },
+          ]}
+        />
+      </div>
+      <MatrixTable
+        label="Bảng đồng bộ mẫu"
+        rows={SP_MAU}
+        rowKey={(r) => r.id}
+        maxHeight={220}
+        pinned={[
+          { id: 'ma', header: 'Mã SP', width: 120, cell: (r) => <b className="num">{r.ma}</b> },
+          { id: 'sl', header: 'SL bộ', width: 70, num: true, foot: '600', cell: (r) => r.sl },
+        ]} // prettier-ignore
+        groups={[
+          {
+            id: 'cd',
+            header: 'Công đoạn — theo lộ trình',
+            cols: CD_MAU.map(([id, header]) => ({
+              id,
+              header,
+              width: 124,
+              cell: (r: SpMau) => {
+                const v = r.cd[id]
+                if (!v) return NGOAI_LO_TRINH
+                return (
+                  <span className="grid justify-items-end leading-tight">
+                    <b className="num">{v[0]}</b>
+                    <DualPct pieces={v[1]} sets={v[0] / r.sl} />
+                  </span>
+                )
+              },
+            })),
+          },
+          {
+            id: 'kl',
+            header: 'Kết luận',
+            cols: [
+              { id: 'du', header: 'Bộ hoàn chỉnh', num: true, foot: '0', cell: () => 0 },
+              { id: 'thieu', header: 'Thiếu / dư', num: true, cell: (r) => <DeltaNum value={-r.sl} unit="bộ" /> }, // prettier-ignore
+            ],
+          },
+        ]}
+        foot={{ label: 'Cộng 2 SP', note: 'Bộ hoàn chỉnh = công đoạn CHẬM NHẤT.' }}
+      />
+    </div>
+  )
+}
+
+const NCC_MAU = [
+  { value: 'n1', label: 'CÔNG TY TNHH SX TM MINH ĐẠT', hint: 'NCC-0012' },
+  { value: 'n2', label: 'CÔNG TY NHỰA SƠN TÍN PHÁT', hint: 'NCC-0043' },
+  { value: 'n3', label: 'CƠ KHÍ THÀNH ĐẠT', hint: 'NCC-0101' },
+]
+const VT_MAU = [
+  { ma: 'ONG-2525', ten: 'Ống thép 25×25×1.2' },
+  { ma: 'ONG-3030', ten: 'Ống thép 30×30×1.4' },
+  { ma: 'VIT-7M', ten: 'Vít 7 màu 4×20' },
+]
+
 export default function Page() {
+  const toast = useToast()
   const [sheet, setSheet] = useState(false)
   const [qty, setQty] = useState('68')
   const [muted, setMuted] = useState(false)
   const [ticked, setTicked] = useState(true)
+  const [ncc, setNcc] = useState('n1')
+  const [ngay, setNgay] = useState('2026-09-24')
 
   return (
     <Doc>
@@ -155,7 +322,39 @@ export default function Page() {
           Mọi thứ ở đây import từ <code>@/components/kit</code> — cửa vào duy nhất. Đừng
           import thẳng file con: đổi cấu trúc bên trong thì nơi dùng không phải sửa.
         </p>
+        {/*
+          Trang này là TỦ TRƯNG BÀY — thành phần trong ngữ cảnh. SÁCH TRA từng họ
+          (đủ 6 mục: khi nào · biến thể · thuộc tính · trạng thái · truy cập ·
+          nên/đừng) liệt kê ngay dưới, dựng từ kit-families.ts nên không thể sót họ.
+        */}
       </Hero>
+
+      <Sec
+        n={0}
+        id="sach-tra"
+        title="Sách tra — một trang mỗi họ"
+        why={`${KIT_FAMILIES.length} họ, phủ ${KIT_FAMILIES.reduce((a, f) => a + f.members.length, 0)} thành phần. Mỗi trang đủ sáu mục; bảng thuộc tính sinh từ mã nguồn.`}
+      >
+        <div className="lab-demo grid gap-4">
+          {KIT_GROUPS.map((g) => (
+            <div key={g}>
+              <p>
+                <b>{g}</b>
+              </p>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-x-4 gap-y-1">
+                {KIT_FAMILIES.filter((f) => f.group === g).map((f) => (
+                  <div key={f.slug} className="text-k-sm">
+                    <Code as="a" href={`/design-lab/thanh-phan/${f.slug}`}>
+                      {f.title}
+                    </Code>{' '}
+                    <span className="text-[var(--ink-2)]">{f.blurb}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Sec>
 
       <Sec
         n={1}
@@ -173,14 +372,16 @@ export default function Page() {
             tabs={[{ label: 'Đơn hàng', active: true }, { label: 'Nhận hàng' }]}
           >
             <ActionGroup label="Duy trì">
-              <Action strong>Sửa</Action>
-              <Action>Sao chép</Action>
+              <Action icon="sua" strong>
+                Sửa
+              </Action>
+              <Action icon="saoChep">Sao chép</Action>
             </ActionGroup>
             <ActionGroup label="Luồng phê duyệt">
-              <Action primary disabled title="Còn 2 lỗi chặn">
+              <Action icon="gui" primary disabled title="Còn 2 lỗi chặn">
                 Gửi duyệt
               </Action>
-              <Action>Trả lại người soạn</Action>
+              <Action icon="traLai">Trả lại người soạn</Action>
             </ActionGroup>
           </ActionPane>
           <DocHead
@@ -464,11 +665,17 @@ export default function Page() {
       >
         <div className="lab-demo">
           <div className="lab-pad" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Btn primary>Gửi duyệt</Btn>
-            <Btn>Lưu nháp</Btn>
-            <Btn danger>Huỷ đơn</Btn>
-            <Btn blockedBy="Kế toán">Ghi nhận thanh toán</Btn>
-            <Tip label="Tooltip tự dựng, hiện sau 120ms">
+            <Btn icon="gui" primary>
+              Gửi duyệt
+            </Btn>
+            <Btn icon="luuNhap">Lưu nháp</Btn>
+            <Btn icon="huy" danger>
+              Huỷ đơn
+            </Btn>
+            <Btn icon="tien" blockedBy="Kế toán">
+              Ghi nhận thanh toán
+            </Btn>
+            <Tip label="Tooltip trên Radix: hiện sau 120ms, Esc tắt, không bị vùng cuộn cắt">
               <Btn>Rê chuột vào đây</Btn>
             </Tip>
           </div>
@@ -500,16 +707,11 @@ export default function Page() {
       >
         <div className="lab-demo">
           <div className="lab-pad">
-            <StageBar
-              stages={[
-                'Nháp',
-                'Chờ duyệt',
-                'Đã duyệt',
-                'Đã gửi NCC',
-                'Về một phần',
-                'Đủ',
-              ]}
-              current={1}
+            <StatusTrack
+              label="Trạng thái đơn"
+              steps={['Nháp', 'Chờ duyệt', 'Đã duyệt', 'Đã gửi NCC', 'Về một phần', 'Đủ']}
+              at={1}
+              tone="wait"
             />
             <p
               style={{
@@ -519,8 +721,10 @@ export default function Page() {
                 maxWidth: '72ch',
               }}
             >
-              Chỉ bậc HIỆN TẠI có màu. Tô đậm hết các bậc đã qua thì cả dải sáng rực và
-              mắt không tìm ra đang đứng ở đâu — đúng lỗi của bản v3 trên đơn 8 bậc.
+              Chỉ bậc HIỆN TẠI có màu — và màu theo NGHĨA (chờ ai đó = hổ phách), không
+              phải màu nút. Tới 24/09/2026 kit còn một dải thứ hai, <code>StageBar</code>,
+              tô bậc hiện tại bằng nền <code>--act</code> đặc — cùng nền với nút chính,
+              đúng thứ luật 16/09 cấm. Không màn nghiệp vụ nào dùng nó; B4 đã gỡ.
             </p>
           </div>
           <div className="lab-pad lab-card">
@@ -586,8 +790,38 @@ export default function Page() {
       >
         <div className="lab-demo">
           <div className="lab-pad" style={{ display: 'flex', gap: 8 }}>
-            <Btn danger onClick={() => setSheet(true)}>
+            <Btn icon="mo" danger onClick={() => setSheet(true)}>
               Mở hộp xác nhận mức nặng
+            </Btn>
+          </div>
+          {/*
+            TOAST (B2, 24/09/2026) — trưng ở đây vì nó thuộc cùng một câu chuyện với
+            hộp xác nhận: bấm xác nhận xong thì toast báo kết quả. Bốn sắc thái,
+            và điều không nhìn thấy được mới là điều quan trọng: tin thành công
+            đọc NHẸ cho trình đọc màn hình, tin lỗi thì NGẮT LỜI; rê chuột vào là
+            đồng hồ dừng; phím F8 nhảy vào khay.
+          */}
+          <div className="lab-pad" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <Btn
+              onClick={() => toast.success('Đã ghi phiếu PBS-0042', '12 dòng · Tổ Phôi')}
+            >
+              Toast thành công
+            </Btn>
+            <Btn
+              onClick={() =>
+                toast.error(
+                  'Không lưu được phiếu',
+                  'Sổ ngày 22/09 đã chốt — mở khoá ở Sổ ngày',
+                )
+              }
+            >
+              Toast lỗi
+            </Btn>
+            <Btn onClick={() => toast.warning('Ghi dư 20 so với phần còn thiếu')}>
+              Toast cảnh báo
+            </Btn>
+            <Btn onClick={() => toast.info('Đã chuyển sang lệnh 03/26-27 - MX')}>
+              Toast thường
             </Btn>
           </div>
           <Sheet
@@ -654,6 +888,100 @@ export default function Page() {
       </Sec>
 
       <Sec
+        n={8.5}
+        id="o-chon"
+        title="Tìm-rồi-chọn · ngày · nút (B4)"
+        why="Ba điều khiển gõ nhiều nhất của người nhập liệu. Combobox thay hai bản cũ (PickFind + Lookup) từng cùng một lỗi: danh sách bị cắt trong bảng cuộn. Ô ngày luôn dd/mm/yyyy, lịch tiếng Việt, tuần bắt đầu thứ Hai. Nút khoá theo quyền vẫn Tab tới được để nghe lý do."
+      >
+        <div className="lab-demo">
+          <div
+            className="lab-pad"
+            style={{ display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'end' }}
+          >
+            <label style={{ display: 'grid', gap: 4, fontSize: 'var(--fs-sm)' }}>
+              Chọn — lọc tại chỗ (gõ “son tin”)
+              <Combobox
+                label="Nhà cung cấp"
+                width={280}
+                options={NCC_MAU}
+                value={ncc}
+                onChange={setNcc}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4, fontSize: 'var(--fs-sm)' }}>
+              Tra — hỏi server sau khi ngừng gõ
+              <Combobox
+                label="Thêm vật tư"
+                width={280}
+                search={async (q) =>
+                  VT_MAU.filter((v) =>
+                    `${v.ma} ${v.ten}`.toLowerCase().includes(q.toLowerCase()),
+                  )
+                }
+                keyOf={(v) => v.ma}
+                render={(v) => (
+                  <>
+                    <b className="num">{v.ma}</b> · {v.ten}
+                  </>
+                )}
+                onPick={(v) => toast.success('Đã thêm dòng', v.ma)}
+              />
+            </label>
+            <label
+              style={{ display: 'grid', gap: 4, fontSize: 'var(--fs-sm)', width: 150 }}
+            >
+              Ngày (Alt+↓ mở lịch)
+              <DateInput label="Ngày giao" value={ngay} onChange={setNgay} />
+            </label>
+          </div>
+          <div
+            className="lab-pad lab-card"
+            style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}
+          >
+            <Btn primary icon="gui">
+              Gửi duyệt
+            </Btn>
+            <Btn icon="sua">Sửa</Btn>
+            <Btn danger icon="xoa">
+              Xoá nháp
+            </Btn>
+            <Btn primary icon="duyet" blockedBy="Giám đốc">
+              Duyệt chi
+            </Btn>
+            <Btn primary icon="luuNhap" busy>
+              Đang lưu…
+            </Btn>
+          </div>
+        </div>
+      </Sec>
+
+      <Sec
+        n={8.6}
+        id="may-bang"
+        title="Máy bảng — sắp xếp, chọn cột, mật độ, 1.000 dòng (B5)"
+        why="Một máy (useKitTable, trên @tanstack/react-table) cho cả hai vỏ Table và Grid. Bấm tiêu đề để sắp (so chữ theo tiếng Việt, ô trống luôn nằm cuối); nút Cột để ẩn cột và đổi mật độ — nhớ theo máy người xem. Quá 200 dòng thì tự ảo hoá: bảng dưới đây 1.000 dòng mà chỉ vài chục dòng nằm trong DOM. Chân bảng do máy tự chia cột — ẩn cột nào cũng không lệch."
+      >
+        <div className="lab-demo">
+          <div className="lab-pad">
+            <BangDai />
+          </div>
+        </div>
+      </Sec>
+
+      <Sec
+        n={8.7}
+        id="bay-so"
+        title="Bày số cho Thống kê — DualPct, DeltaNum, DayStrip, MiniBars, MatrixTable (B6)"
+        why="Năm mảnh lấy CÁCH BÀY của file Excel xưởng (bảng chéo, dải ngày, số lệch trong ngoặc) mà giữ CÁCH GHI có vết của app. Màu dữ liệu --viz-1/--viz-2 chọn bằng bộ kiểm màu, không trùng nghĩa với màu hành động hay màu vòng đời. Ô sọc = ngoài lộ trình, khác ô 0 = chưa làm."
+      >
+        <div className="lab-demo">
+          <div className="lab-pad">
+            <ThongKeMau />
+          </div>
+        </div>
+      </Sec>
+
+      <Sec
         n={9}
         id="trang-thai"
         title="Trạng thái rỗng và đang tải"
@@ -664,7 +992,11 @@ export default function Page() {
             <Empty
               headline="Chưa có đơn nào cho lệnh này"
               reason="LSX 07/26-14 có 15 mã vật tư nhưng chưa mã nào được đưa vào đơn mua."
-              next={<Btn primary>Soạn đơn từ định mức lệnh</Btn>}
+              next={
+                <Btn icon="them" primary>
+                  Soạn đơn từ định mức lệnh
+                </Btn>
+              }
             />
           </div>
           <div className="lab-pad lab-card">
@@ -748,7 +1080,7 @@ export default function Page() {
             grand={{ label: 'Tổng thanh toán', value: '127.713.024 ₫' }}
             blocked="chưa chọn nhà cung cấp"
             actions={
-              <Btn primary disabled title="chưa chọn nhà cung cấp">
+              <Btn icon="luuNhap" primary disabled title="chưa chọn nhà cung cấp">
                 Lưu nháp
               </Btn>
             }

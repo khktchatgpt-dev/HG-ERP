@@ -184,7 +184,7 @@ export function MaterialCombo({
             }
           }}
           placeholder="mã hoặc tên vật tư…"
-          className="w-full rounded border border-sky-500 px-1.5 py-1 text-xs focus:outline-none dark:bg-zinc-900"
+          className="w-full rounded border border-sky-500 px-1.5 py-1 text-xs focus:outline-none"
         />
       ) : (
         <div className="flex items-center gap-1">
@@ -193,10 +193,8 @@ export function MaterialCombo({
             onClick={openPicker}
             disabled={disabled}
             title={label || 'Chưa gắn vật tư'}
-            className={`w-full truncate rounded border px-1.5 py-1 text-left text-xs disabled:opacity-60 dark:bg-zinc-900 ${
-              value
-                ? 'border-zinc-300 dark:border-zinc-700'
-                : 'border-amber-400 text-amber-700 dark:text-amber-400'
+            className={`w-full truncate rounded border px-1.5 py-1 text-left text-xs disabled:opacity-60 ${
+              value ? 'border-zinc-300' : 'border-amber-400 text-amber-700'
             }`}
           >
             {label || placeholder}
@@ -206,7 +204,7 @@ export function MaterialCombo({
               type="button"
               onClick={() => onPick(null)}
               title="Bỏ gắn vật tư"
-              className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              className="shrink-0 rounded p-0.5 text-zinc-400 hover:text-zinc-700"
             >
               <X className="size-3" aria-hidden />
             </button>
@@ -218,7 +216,7 @@ export function MaterialCombo({
         <div
           data-material-combo-list
           style={{ left: rect.left, top: rect.top, width: rect.width }}
-          className="fixed z-50 max-h-64 overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-950"
+          className="fixed z-50 max-h-64 overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg"
         >
           {loading && (
             <div className="flex items-center gap-2 px-2 py-2 text-xs text-zinc-500">
@@ -238,7 +236,7 @@ export function MaterialCombo({
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(m)}
                 className={`block w-full px-2 py-1.5 text-left text-xs ${
-                  i === active ? 'bg-sky-50 dark:bg-sky-950/40' : ''
+                  i === active ? 'bg-sky-50' : ''
                 }`}
               >
                 <span className="font-mono text-[11px] text-zinc-500">{m.code}</span>{' '}
@@ -251,7 +249,7 @@ export function MaterialCombo({
             <button
               type="button"
               onClick={keepTyped}
-              className="block w-full border-t border-zinc-200 px-2 py-1.5 text-left text-xs text-amber-700 dark:border-zinc-800 dark:text-amber-400"
+              className="block w-full border-t border-zinc-200 px-2 py-1.5 text-left text-xs text-amber-700"
             >
               Dùng nguyên “<span className="font-mono">{q.trim()}</span>” — kho chưa có mã
               này

@@ -307,7 +307,7 @@ export function MaterialsManager({
       header: 'ĐVT',
       width: '90px',
       sortValue: (m) => m.unit,
-      cell: (m) => <span className="text-zinc-600 dark:text-zinc-300">{m.unit}</span>,
+      cell: (m) => <span className="text-zinc-600">{m.unit}</span>,
     },
     {
       key: 'group_name',
@@ -412,7 +412,7 @@ export function MaterialsManager({
   ]
 
   const btnSecondary =
-    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900'
+    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50'
   const btnPrimary =
     'rounded-md bg-amber-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-700'
 
@@ -501,8 +501,8 @@ export function MaterialsManager({
                 aria-pressed={filters.review}
                 className={`rounded-full border px-2.5 py-1 text-xs transition-colors ${
                   filters.review
-                    ? 'border-amber-400 bg-amber-50 font-medium text-amber-700 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-400'
-                    : 'border-zinc-300 text-zinc-500 hover:border-amber-400 hover:text-amber-700 dark:border-zinc-700'
+                    ? 'border-amber-400 bg-amber-50 font-medium text-amber-700'
+                    : 'border-zinc-300 text-zinc-500 hover:border-amber-400 hover:text-amber-700'
                 }`}
                 title="Vật tư Cung ứng khai nhanh từ form đơn — Kho rà xong gỡ cờ ở menu dòng"
               >
@@ -630,7 +630,7 @@ export function MaterialsManager({
               {canEdit && filters.group && (
                 <button
                   onClick={() => setGroupTol('')}
-                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:border-sky-400 hover:text-sky-700 dark:border-zinc-700"
+                  className="rounded-full border border-zinc-300 px-2.5 py-1 text-xs text-zinc-500 transition-colors hover:border-sky-400 hover:text-sky-700"
                   title={`Đặt dung sai nhận vượt chung cho mọi vật tư nhóm "${filters.group}"`}
                 >
                   Dung sai nhóm…
@@ -646,7 +646,7 @@ export function MaterialsManager({
                     setStatusFilter('all')
                     pushFilter({ q: '', group: '', review: '' })
                   }}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  className="text-xs text-zinc-500 hover:text-zinc-900"
                 >
                   Xoá lọc
                 </button>
@@ -695,20 +695,18 @@ export function MaterialsManager({
         {/* Phân trang — trang này từng nạp cứng 1.000 dòng đầu và im lặng cắt
             phần còn lại; giờ nói rõ đang ở đâu trong bao nhiêu. */}
         {counts.total > PAGE_SIZE && (
-          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500 dark:border-zinc-800">
+          <div className="flex items-center justify-between gap-3 border-t border-zinc-100 px-3 py-2 text-xs text-zinc-500">
             <span>
               {((page - 1) * PAGE_SIZE + 1).toLocaleString('vi-VN')}–
               {Math.min(page * PAGE_SIZE, counts.total).toLocaleString('vi-VN')} trên{' '}
-              <b className="text-zinc-700 dark:text-zinc-200">
-                {counts.total.toLocaleString('vi-VN')}
-              </b>
+              <b className="text-zinc-700">{counts.total.toLocaleString('vi-VN')}</b>
             </span>
             <span className="flex items-center gap-2">
               {navigating && <Spinner size={12} />}
               <button
                 disabled={page <= 1 || navigating}
                 onClick={() => pushFilter({ page: String(page - 1) })}
-                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40"
               >
                 ← Trước
               </button>
@@ -718,7 +716,7 @@ export function MaterialsManager({
               <button
                 disabled={page * PAGE_SIZE >= counts.total || navigating}
                 onClick={() => pushFilter({ page: String(page + 1) })}
-                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40 dark:border-zinc-700"
+                className="rounded border border-zinc-300 px-2 py-0.5 disabled:opacity-40"
               >
                 Sau →
               </button>
@@ -1012,7 +1010,7 @@ function MaterialForm({
         label="Mã vật tư"
         hint={
           codeVal.trim() !== (initial?.code ?? '').trim() && codeWarning(codeVal) ? (
-            <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+            <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700">
               ⚠ {codeWarning(codeVal)}
             </span>
           ) : initial ? undefined : (
@@ -1209,11 +1207,11 @@ function MaterialForm({
       {/* NHỊP 2 của xác nhận null-đè: liệt kê từng trường sắp mất kèm giá trị
           cũ — thường do đổi nhóm (corePayload ghi null trường ngoài nhóm mới). */}
       {clearWarn && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm dark:border-red-900 dark:bg-red-950/40">
-          <p className="font-medium text-red-700 dark:text-red-400">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm">
+          <p className="font-medium text-red-700">
             Lưu sẽ XOÁ {clearWarn.cleared.length} thông số đang có (thường do đổi nhóm):
           </p>
-          <ul className="mt-1 list-disc pl-5 text-red-700 dark:text-red-400">
+          <ul className="mt-1 list-disc pl-5 text-red-700">
             {clearWarn.cleared.map((c) => (
               <li key={c.field}>
                 {c.label}: <b>{c.oldValue}</b> → trống
@@ -1243,9 +1241,9 @@ function MaterialForm({
 
       {/* Nút lưu ghim đáy hộp thoại: form bốn mảng dài hơn một màn, cuộn tới
           cuối mới thấy nút là bắt người khai đi tìm. */}
-      <div className="sticky bottom-0 -mx-6 -mb-5 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white/95 px-6 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+      <div className="sticky bottom-0 -mx-6 -mb-5 flex items-center justify-end gap-3 border-t border-zinc-100 bg-white/95 px-6 py-3 backdrop-blur">
         {core.invalid && (
-          <span className="mr-auto text-xs text-amber-600 dark:text-amber-500">
+          <span className="mr-auto text-xs text-amber-600">
             {/* Nói đúng lý do khoá nút — "Cần tên và ĐVT" trong khi thiếu xác
                 nhận barem thì người khai không biết đi tìm ở đâu. */}
             {core.baremBlocked && !core.baremConfirmed

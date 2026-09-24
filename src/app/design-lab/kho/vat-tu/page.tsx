@@ -202,18 +202,20 @@ export default function Page() {
         ]}
       >
         <ActionGroup label="Duy trì">
-          <Action strong>Sửa hồ sơ</Action>
+          <Action icon="sua" strong>
+            Sửa hồ sơ
+          </Action>
           <Action>Đổi nhóm</Action>
-          <Action>Ngừng dùng</Action>
+          <Action icon="huy">Ngừng dùng</Action>
         </ActionGroup>
         <ActionGroup label="Việc kho">
           <Action>Chuyển kệ</Action>
-          <Action>Khoá một lô</Action>
+          <Action icon="khoa">Khoá một lô</Action>
           <Action>Đưa vào đợt kiểm kê</Action>
         </ActionGroup>
         <ActionGroup label="Mua hàng">
           <Action primary>Xin mua bù</Action>
-          <Action>Xem giá các NCC</Action>
+          <Action icon="tien">Xem giá các NCC</Action>
         </ActionGroup>
       </ActionPane>
 
@@ -321,7 +323,7 @@ export default function Page() {
             xong — và ở ERP thì kết luận đó là một VIỆC PHẢI LÀM, có ngày.
           */}
           {firstLow && (
-            <p className="mt-[11px] leading-relaxed text-[var(--fs-body)]">
+            <p className="text-k-body mt-[11px] leading-relaxed">
               <b className="text-[var(--warn)]">
                 Tụt xuống {n(firstLow.after)} cây ngày {firstLow.ev.day}
               </b>{' '}
@@ -418,7 +420,7 @@ export default function Page() {
               </GridRow>
             </GridBody>
           </Grid>
-          <p className="px-[var(--gutter)] py-[9px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm px-[var(--gutter)] py-[9px] text-[var(--ink-3)]">
             Một mã nằm ở <b>ba kệ</b> là chuyện bình thường, và bảng này là chỗ duy nhất
             nói ra điều đó. Khi vị trí là thuộc tính của <i>vật tư</i> thay vì của{' '}
             <i>lượng</i> thì bảng này không tồn tại được.
@@ -476,7 +478,7 @@ export default function Page() {
               <Td num>1.500</Td>
             </GridFoot>
           </Grid>
-          <p className="px-[var(--gutter)] py-[9px] text-[var(--fs-sm)] text-[var(--ink-3)]">
+          <p className="text-k-sm px-[var(--gutter)] py-[9px] text-[var(--ink-3)]">
             Bảng này là thứ phải xem <b>trước khi ngừng dùng</b> một mã. Chứng từ không có
             câu hỏi “đang đỡ bao nhiêu thứ” — hồ sơ danh mục thì có, và đó là một trong
             bốn chỗ khuôn E khác khuôn D.

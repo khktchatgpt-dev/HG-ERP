@@ -184,8 +184,8 @@ const FIELD_LABEL: Record<string, string> = {
 const BOM_LABEL = { none: 'Chưa có', drawing: 'Đang vẽ', done: 'Đã vẽ' } as const
 const BOM_TONE = {
   none: 'bg-muted text-muted-foreground',
-  drawing: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+  drawing: 'bg-amber-100 text-amber-700',
+  done: 'bg-emerald-100 text-emerald-700',
 } as const
 
 const LSX_LABEL: Record<string, string> = {
@@ -746,12 +746,12 @@ export function OrderDetailView({
         <Tile label="Hạn giao">
           <div className="text-sm font-medium tabular-nums">{fmtD(order.due_date)}</div>
           {dueDays !== null && !dueClosed && dueDays < 0 && (
-            <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
+            <div className="text-[11px] font-medium text-red-600">
               ⚠ quá {-dueDays} ngày
             </div>
           )}
           {dueDays !== null && !dueClosed && dueDays >= 0 && dueDays <= 7 && (
-            <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+            <div className="text-[11px] font-medium text-amber-600">
               còn {dueDays} ngày
             </div>
           )}
@@ -763,9 +763,7 @@ export function OrderDetailView({
             {totalShipped > 0 && (
               <span
                 className={
-                  totalShipped >= totalQty
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : 'text-amber-600 dark:text-amber-400'
+                  totalShipped >= totalQty ? 'text-emerald-600' : 'text-amber-600'
                 }
               >
                 {' '}
@@ -794,7 +792,7 @@ export function OrderDetailView({
       </div>
 
       {bomPending > 0 && (
-        <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/15 dark:text-amber-300">
+        <div className="rounded-xl border border-amber-200/70 bg-amber-50/60 px-4 py-2.5 text-xs text-amber-800">
           ⚠ {bomPending}/{lines.length} dòng SP chưa xong BOM — phát LSX vẫn được (BR-07)
           nhưng Cung ứng thiếu định mức để đặt vật tư.
         </div>
@@ -1098,9 +1096,7 @@ export function OrderDetailView({
                         {l.shipped > 0 ? (
                           <div
                             className={`text-[11px] font-medium tabular-nums ${
-                              l.shipped >= l.qty
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-amber-600 dark:text-amber-400'
+                              l.shipped >= l.qty ? 'text-emerald-600' : 'text-amber-600'
                             }`}
                           >
                             {l.shipped >= l.qty
@@ -1204,7 +1200,7 @@ export function OrderDetailView({
                           {canEdit && editable && (
                             <button
                               onClick={() => void removeShipment(s)}
-                              className="text-muted-foreground rounded p-1 text-xs hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                              className="text-muted-foreground rounded p-1 text-xs hover:bg-red-50 hover:text-red-600"
                               aria-label="Gỡ đợt xuất"
                               title="Gỡ (ghi nhầm)"
                             >
@@ -1217,7 +1213,7 @@ export function OrderDetailView({
                   </ul>
                 )}
                 {totalShipped >= totalQty && order.status === 'completed' && (
-                  <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  <p className="text-xs text-emerald-600">
                     ✓ Đã xuất đủ toàn bộ — bấm “Xác nhận đã giao” ở đầu trang để khép đơn.
                   </p>
                 )}
@@ -1422,7 +1418,7 @@ export function OrderDetailView({
               Xem hệ quả bên dưới rồi ghi lý do — lý do vào dòng thời gian của đơn.
             </DialogDescription>
           </DialogHeader>
-          <ul className="flex flex-col gap-1.5 rounded-lg border border-red-200/70 bg-red-50/60 p-3 text-xs text-red-800 dark:border-red-900/40 dark:bg-red-950/15 dark:text-red-300">
+          <ul className="flex flex-col gap-1.5 rounded-lg border border-red-200/70 bg-red-50/60 p-3 text-xs text-red-800">
             {cancelEffects.map((e) => (
               <li key={e}>· {e}</li>
             ))}

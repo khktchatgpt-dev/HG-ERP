@@ -280,26 +280,17 @@ export function QuoteDetailView({
           {isDraft ? (
             <Badge variant="secondary">Nháp — sửa/xoá được</Badge>
           ) : isPending ? (
-            <Badge className="bg-amber-500 text-white dark:bg-amber-600">
-              Chờ GĐ duyệt
-            </Badge>
+            <Badge className="bg-amber-500 text-white">Chờ GĐ duyệt</Badge>
           ) : isApproved ? (
-            <Badge className="bg-sky-600 text-white dark:bg-sky-700">
-              GĐ đã duyệt — chưa gửi khách
-            </Badge>
+            <Badge className="bg-sky-600 text-white">GĐ đã duyệt — chưa gửi khách</Badge>
           ) : isRejected ? (
             <Badge variant="destructive">GĐ từ chối — sửa rồi trình lại</Badge>
           ) : expired ? (
-            <Badge
-              variant="outline"
-              className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-400"
-            >
+            <Badge variant="outline" className="border-red-300 text-red-700">
               Hết hiệu lực
             </Badge>
           ) : (
-            <Badge className="bg-emerald-600 text-white dark:bg-emerald-700">
-              Đã gửi khách
-            </Badge>
+            <Badge className="bg-emerald-600 text-white">Đã gửi khách</Badge>
           )}
         </Tile>
         <Tile label="Hiệu lực">
@@ -309,7 +300,7 @@ export function QuoteDetailView({
                 {fmtD(quote.valid_from)} → {fmtD(quote.valid_to)}
               </div>
               {expired && (
-                <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                <div className="text-[11px] font-medium text-red-600">
                   ⚠ đã quá hạn — làm báo giá mới nếu khách còn quan tâm
                 </div>
               )}
@@ -321,7 +312,7 @@ export function QuoteDetailView({
         <Tile label="Sản phẩm">
           <div className="text-sm font-medium tabular-nums">{lines.length} dòng</div>
           {missingSpec > 0 && (
-            <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+            <div className="text-[11px] font-medium text-amber-600">
               {missingSpec} SP thiếu quy cách
             </div>
           )}
@@ -351,7 +342,7 @@ export function QuoteDetailView({
       </div>
 
       {isRejected && quote.rejected_reason && (
-        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm dark:border-red-900 dark:bg-red-950/30">
+        <div className="rounded-xl border border-red-300 bg-red-50 px-4 py-2.5 text-sm">
           <b>Giám đốc từ chối:</b> {quote.rejected_reason}
         </div>
       )}
@@ -406,7 +397,7 @@ export function QuoteDetailView({
                   ? `${pk.nw_kg ?? '—'} / ${pk.gw_kg ?? '—'}`
                   : null
               const cell = (v: string | null) =>
-                v ?? <span className="text-amber-600 dark:text-amber-500">—</span>
+                v ?? <span className="text-amber-600">—</span>
               return (
                 <TableRow key={i} className="align-top">
                   <TableCell className="p-1">
@@ -420,7 +411,7 @@ export function QuoteDetailView({
                         className="mx-auto h-14 w-20 object-contain"
                       />
                     ) : (
-                      <span className="text-amber-600 dark:text-amber-500">—</span>
+                      <span className="text-amber-600">—</span>
                     )}
                   </TableCell>
                   <TableCell className="p-1.5 text-left whitespace-normal">
@@ -464,8 +455,8 @@ export function QuoteDetailView({
           </TableBody>
         </Table>
         <p className="text-muted-foreground border-t px-4 py-2 text-xs">
-          Ô <span className="text-amber-600 dark:text-amber-500">—</span> là quy cách Kỹ
-          thuật chưa khai — in báo giá sẽ trống ô đó.
+          Ô <span className="text-amber-600">—</span> là quy cách Kỹ thuật chưa khai — in
+          báo giá sẽ trống ô đó.
         </p>
       </div>
 

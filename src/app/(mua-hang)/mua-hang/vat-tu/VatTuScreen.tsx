@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { PAGE_SIZE } from '@/components/warehouse/materials-constants'
 import {
+  Ico,
   Btn,
   Cell,
   Chip,
@@ -159,7 +160,10 @@ export function VatTuScreen({
           Chờ Kho rà
         </Chip>
         {dangLoc && (
-          <Btn onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}>
+          <Btn
+            icon="boLoc"
+            onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}
+          >
             Bỏ lọc
           </Btn>
         )}
@@ -174,7 +178,11 @@ export function VatTuScreen({
               : 'Danh mục vật tư đang trống. Kiểm lại kết nối dữ liệu — đây không phải trạng thái bình thường.'
           }
           next={
-            <Btn primary onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}>
+            <Btn
+              icon="boLoc"
+              primary
+              onClick={() => doiLoc({ q: '', nhom: '', ra: '', trang: '1' })}
+            >
               Bỏ lọc, về trang 1
             </Btn>
           }
@@ -246,7 +254,7 @@ export function VatTuScreen({
                     strong={(r.last_purchase_price ?? 0) > 0}
                   />
                   {(r.last_purchase_price ?? 0) > 0 && r.price_unit && (
-                    <span className="ml-1 text-[10.5px] text-[var(--ink-3)]">
+                    <span className="text-k-label ml-1 text-[var(--ink-3)]">
                       /{r.price_unit}
                     </span>
                   )}
@@ -273,16 +281,18 @@ export function VatTuScreen({
         left={[
           <span key="p" className="flex items-center gap-2">
             <Btn
+              icon="truoc"
               disabled={page <= 1 || dangChay}
               onClick={() => doiLoc({ trang: String(page - 1) })}
             >
-              ‹ Trước
+              Trước
             </Btn>
             <Btn
               disabled={page >= soTrang || dangChay}
               onClick={() => doiLoc({ trang: String(page + 1) })}
             >
-              Sau ›
+              Sau
+              <Ico name="sau" />
             </Btn>
           </span>,
           dangChay
