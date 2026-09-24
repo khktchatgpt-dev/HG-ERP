@@ -90,7 +90,7 @@ export function ProductTable({
       cell: (p) => (
         <Link
           href={`/products/${p.id}`}
-          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
+          className="flex min-w-0 flex-col text-left hover:text-sky-600"
         >
           <span className="text-muted-foreground font-mono text-xs">
             {p.code}
@@ -150,7 +150,7 @@ export function ProductTable({
       cell: (p) => (
         <div className="flex flex-col items-start gap-1">
           {p.is_active ? (
-            <Badge className="border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+            <Badge className="border-transparent bg-emerald-100 text-emerald-700">
               <CircleCheck /> Đang dùng
             </Badge>
           ) : (
@@ -185,7 +185,7 @@ export function ProductTable({
         <RowMenu
           items={rowActions(p)}
           trigger={<Ellipsis className="size-4" />}
-          triggerClassName="grid size-7 place-items-center rounded-md border text-muted-foreground hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700 dark:hover:border-sky-800 dark:hover:bg-sky-950/40 dark:hover:text-sky-300"
+          triggerClassName="grid size-7 place-items-center rounded-md border text-muted-foreground hover:border-sky-300 hover:bg-sky-50 hover:text-sky-700"
         />
       ),
     },

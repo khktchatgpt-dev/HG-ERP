@@ -348,7 +348,8 @@ const kitIcon = {
       JSXElement(node) {
         if (!kit) return
         const open = node.openingElement
-        if (open.name.type !== 'JSXIdentifier' || !ICON_BUTTONS.has(open.name.name)) return
+        if (open.name.type !== 'JSXIdentifier' || !ICON_BUTTONS.has(open.name.name))
+          return
         const text = node.children
           .filter((c) => c.type === 'JSXText')
           .map((c) => c.value)
@@ -382,9 +383,50 @@ const kitIcon = {
   },
 }
 
+/*
+  CẤM LỚP `dark:` (24/09/2026). Chế độ tối TẮT từ 06/08/2026; `@custom-variant
+  dark` ở globals.css buộc lớp `dark:` chỉ bật khi có `.dark` trên cây DOM, mà
+  không nơi nào gắn. 1.207 lớp `dark:` / 121 file từng nằm đó: 253 luật CSS
+  (~33 KB) mà không bao giờ có tác dụng, và mỗi màn mới chép theo thói quen lại
+  đẻ thêm. Gỡ sạch một lượt; luật này giữ cho con số ở 0.
+
+  Bật lại chế độ tối (câu Q3 của docs/he-thiet-ke-erp-ke-hoach.md) thì làm bằng
+  TOKEN ở kit/tokens.css — đổi biến màu theo `.dark`, không rải lớp `dark:` lên
+  từng thẻ. Đó là lý do luật này cấm hẳn chứ không chỉ cảnh báo.
+*/
+const DARK = new RegExp(
+  String.raw`(?:^|[\s"'` + '`' + String.raw`])(dark:[^\s"'` + '`' + String.raw`]+)`,
+)
+
+/** @type {import('eslint').Rule.RuleModule} */
+const noDarkVariant = {
+  meta: {
+    type: 'problem',
+    docs: {
+      description: 'Cấm lớp Tailwind dark: — chế độ tối tắt, bật lại thì đi bằng token',
+    },
+    schema: [],
+    messages: {
+      dark: 'Lớp "{{hit}}" không bao giờ có tác dụng: chế độ tối đang TẮT (globals.css). Bỏ đi. Muốn có chế độ tối thì đổi TOKEN ở kit/tokens.css, không rải lớp dark: lên từng thẻ.',
+    },
+  },
+  create(ctx) {
+    const check = (node, text) => {
+      if (typeof text !== 'string') return
+      const m = text.match(DARK)
+      if (m) ctx.report({ node, messageId: 'dark', data: { hit: m[1] } })
+    }
+    return {
+      Literal: (n) => check(n, n.value),
+      TemplateElement: (n) => check(n, n.value.raw),
+    }
+  },
+}
+
 const hgUiPlugin = {
   meta: { name: 'hg-ui' },
   rules: {
+    'no-dark-variant': noDarkVariant,
     'no-hardcoded-color': noHardcodedColor,
     'no-raw-control': noRawControl,
     'no-arbitrary-size': noArbitrarySize,

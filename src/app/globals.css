@@ -1,4 +1,14 @@
-@import 'tailwindcss';
+/*
+ * TAILWIND CHỈ QUÉT `src/` (24/09/2026). Mặc định v4 quét MỌI file không bị
+ * gitignore — cả CLAUDE.md, docs/, skill, test luật lint. Hai hậu quả đã đo:
+ *   · chuỗi ví dụ trong .md (hàm var rỗng) làm vỡ CSS TOÀN APP — dính hai lần
+ *     ngày 24/09 (chú thích kit, rồi SKILL.md của erp-ui);
+ *   · test luật lint CỐ Ý chứa lớp sai (`bg-zinc-50`, hex, `dark:…`) và ví dụ
+ *     trong CLAUDE.md sinh CSS thật: sau khi gỡ 1.207 lớp `dark:` vẫn còn 7 luật
+ *     `dark` trong CSS của app chỉ vì chúng có mặt trong tài liệu và test.
+ * Giao diện chỉ sống ở `src/`, nên gốc quét là `src/` (đường dẫn tính từ file này).
+ */
+@import 'tailwindcss' source('../');
 @import 'tw-animate-css';
 /*
  * KIT — bảng token ngôn ngữ ERP, sống trong `.kit` nên KHÔNG đụng tới v3.
@@ -21,8 +31,11 @@
  * Dòng dưới là CÔNG TẮC, không phải tàn dư: mặc định Tailwind v4 bật lớp
  * `dark:` theo `prefers-color-scheme`; dòng này buộc phải có class `.dark` trên
  * cây DOM, mà không chỗ nào gắn → app luôn nền sáng kể cả máy để giao diện tối.
- * CHỪNG NÀO còn lớp `dark:` trong mã (đo 24/09/2026: 1.207 chỗ / 123 file) thì
- * KHÔNG được xoá dòng này — xoá là cả trăm màn lật tối trên máy người dùng.
+ *
+ * 24/09/2026 đã gỡ SẠCH 1.207 lớp `dark:` / 121 file (253 luật CSS, ~33 KB
+ * không bao giờ có tác dụng), và luật `hg/no-dark-variant` chặn lớp mới. Dòng
+ * này vẫn GIỮ làm hàng rào thứ hai: lớp `dark:` nào lọt qua lint (tắt luật tại
+ * chỗ, file ngoài `src`) cũng không lật màn sang tối trên máy người dùng.
  *
  * Bảng token tối `.dark { … }` và `.dark .theme-v2 { … }` đã gỡ 24/09/2026:
  * không ai gắn `.dark`, và dù có gắn thì `.theme-v3` ở gốc shell vẫn đè màu

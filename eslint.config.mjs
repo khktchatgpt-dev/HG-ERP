@@ -84,6 +84,16 @@ export default defineConfig([
       'hg/kit-icon': 'error',
     },
   },
+  /* Cấm lớp `dark:` ở MỌI file src (24/09/2026) — kể cả kit, shadcn, ui: chế độ
+   * tối tắt cho cả app, và sau lượt gỡ con số là 0 nên không cần baseline. */
+  {
+    name: 'hg/no-dark',
+    files: ['src/**/*.tsx', 'src/**/*.ts'],
+    plugins: { hg: hgUi },
+    rules: {
+      'hg/no-dark-variant': 'error',
+    },
+  },
   {
     name: 'hg/ui-consistency-legacy',
     files: baseline.files.map(escapeGlob),

@@ -192,7 +192,7 @@ export function BomEditor({
             onClick={() =>
               setRows((rs) => [...rs, { material_id: '', qty_per_unit: '', note: '' }])
             }
-            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-sm hover:border-sky-400 hover:text-sky-600 dark:hover:border-sky-700 dark:hover:text-sky-400"
+            className="text-muted-foreground inline-flex items-center gap-1.5 rounded-md border border-dashed px-3 py-1.5 text-sm hover:border-sky-400 hover:text-sky-600"
           >
             <Plus className="size-4" /> Thêm dòng vật tư
           </button>

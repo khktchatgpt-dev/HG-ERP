@@ -98,7 +98,7 @@ export function CertsPanel({
   }
 
   const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none'
 
   return (
     <div className="flex flex-col gap-3">
@@ -167,7 +167,7 @@ export function CertsPanel({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-zinc-200 text-left text-xs tracking-wide text-zinc-500 uppercase dark:border-zinc-800">
+              <tr className="border-b border-zinc-200 text-left text-xs tracking-wide text-zinc-500 uppercase">
                 <th className="py-1.5 pr-2">Chứng chỉ</th>
                 <th className="py-1.5 pr-2">Số</th>
                 <th className="py-1.5 pr-2">Ngày cấp</th>
@@ -177,7 +177,7 @@ export function CertsPanel({
             </thead>
             <tbody>
               {rows.map((c) => (
-                <tr key={c.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                <tr key={c.id} className="border-b border-zinc-100">
                   <td className="py-1.5 pr-2">
                     <Badge tone="blue">{c.cert_type}</Badge>
                   </td>

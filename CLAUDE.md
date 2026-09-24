@@ -260,6 +260,17 @@ KHÔNG được miễn ở ba luật này:
   `Action` (bản đồ khái niệm `kit/Icon.tsx`, tra ở `/design-lab/thanh-phan/icon`);
   nút có động từ quen thuộc phải có icon; nút chỉ có icon phải có `aria-label`.
 
+`hg/no-dark-variant` (24/09/2026) chạy trên MỌI file `src/**/*.{ts,tsx}`, KHÔNG
+miễn chỗ nào: cấm lớp `dark:`. Chế độ tối tắt từ 06/08/2026; đã gỡ sạch 1.207
+lớp `dark:` / 121 file (253 luật CSS ~33 KB không bao giờ chạy). Bật lại chế độ
+tối thì đổi TOKEN ở `kit/tokens.css`, không rải `dark:` lên từng thẻ.
+
+**Tailwind chỉ quét `src/`** (`@import 'tailwindcss' source('../')` ở
+globals.css, 24/09/2026). Trước đó nó quét cả CLAUDE.md, `docs/`, skill và test
+lint — chuỗi ví dụ trong `.md` từng làm vỡ CSS toàn app, và lớp sai cố ý trong
+test lint thành CSS thật. Viết ví dụ lớp trong tài liệu nay vô hại; trong
+`src/` (kể cả chú thích) thì vẫn bị quét — `src/test/tailwind-trap.test.ts` canh.
+
 **Được miễn**: `components/erp/*`, `components/shadcn/*`, `components/ui/*`,
 `app/design-lab/*` — đó là nơi ĐỊNH NGHĨA chuẩn, không phải nơi tiêu thụ chuẩn.
 

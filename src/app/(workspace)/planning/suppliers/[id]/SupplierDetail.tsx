@@ -163,7 +163,7 @@ export function SupplierDetail({
       width: '140px',
       sortValue: (p) => p.code,
       cell: (p) => (
-        <span className="font-mono text-xs text-violet-600 dark:text-violet-400">
+        <span className="font-mono text-xs text-violet-600">
           {p.code}
         </span>
       ),
@@ -182,7 +182,7 @@ export function SupplierDetail({
             ]}
           />
         ) : (
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-500">
             Ngoài LSX
           </span>
         ),
@@ -228,13 +228,13 @@ export function SupplierDetail({
       {/* Topbar */}
       <div>
         <nav className="mb-2 flex items-center gap-1.5 text-xs text-zinc-400">
-          <Link href="/planning" className="hover:text-zinc-600 dark:hover:text-zinc-300">
+          <Link href="/planning" className="hover:text-zinc-600">
             Cung ứng
           </Link>
           <span>/</span>
           <Link
             href="/planning/suppliers"
-            className="hover:text-zinc-600 dark:hover:text-zinc-300"
+            className="hover:text-zinc-600"
           >
             Nhà cung cấp
           </Link>
@@ -264,7 +264,7 @@ export function SupplierDetail({
                 onClick={() => void toggleActive()}
                 className={
                   S.is_active
-                    ? 'rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900'
+                    ? 'rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50'
                     : 'rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700'
                 }
               >
@@ -288,7 +288,7 @@ export function SupplierDetail({
 
         <div className="min-w-0">
           {/* Tabs */}
-          <div className="mb-3 flex gap-1 overflow-x-auto border-b border-zinc-200 dark:border-zinc-800">
+          <div className="mb-3 flex gap-1 overflow-x-auto border-b border-zinc-200">
             {tabs.map((t) => (
               <button
                 key={t.id}
@@ -296,8 +296,8 @@ export function SupplierDetail({
                 className={
                   'border-b-2 px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors ' +
                   (tab === t.id
-                    ? 'border-violet-500 text-violet-600 dark:text-violet-400'
-                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200')
+                    ? 'border-violet-500 text-violet-600'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800')
                 }
               >
                 {t.label}
@@ -530,9 +530,9 @@ export function SupplierDetail({
                 description="NCC này chưa có dòng vật tư nào trong các đơn đặt."
               />
             ) : (
-              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <div className="overflow-x-auto rounded-lg border border-zinc-200">
                 <table className="w-full text-sm">
-                  <thead className="bg-zinc-50 dark:bg-zinc-900/50">
+                  <thead className="bg-zinc-50">
                     <tr className="text-left text-[11px] tracking-wide text-zinc-500 uppercase">
                       <th className="px-3 py-2">Vật tư</th>
                       <th className="px-3 py-2 text-right">Tổng SL đặt</th>
@@ -540,11 +540,11 @@ export function SupplierDetail({
                       <th className="px-3 py-2 text-right">Mua gần nhất</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+                  <tbody className="divide-y divide-zinc-100">
                     {purchased.map((m) => (
                       <tr
                         key={m.material_id}
-                        className="hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                        className="hover:bg-zinc-50"
                       >
                         <td className="px-3 py-2">
                           <span className="font-mono text-xs text-zinc-400">
@@ -610,7 +610,7 @@ export function SupplierDetail({
           )}
 
           {tab === 'certs' && (
-            <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+            <div className="rounded-lg border border-zinc-200 p-4">
               <CertsPanel supplierId={S.id} canEdit={canEdit} />
             </div>
           )}
@@ -643,7 +643,7 @@ function VendorSidebar({
   ]
   return (
     <aside className="flex flex-col gap-3 lg:sticky lg:top-4">
-      <div className="rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="rounded-xl border border-zinc-200 bg-white p-4 text-center shadow-sm">
         <div className="mt-2.5 text-base font-bold">{s.name}</div>
         <div className="mt-0.5 font-mono text-[11px] text-zinc-400">
           {s.code ?? '—'}
@@ -659,7 +659,7 @@ function VendorSidebar({
           )}
         </div>
         {groupLabels.length > 0 && (
-          <div className="mt-3 flex flex-wrap justify-center gap-1.5 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <div className="mt-3 flex flex-wrap justify-center gap-1.5 border-t border-zinc-100 pt-3">
             {groupLabels.map((g) => (
               <Badge key={g} tone="purple">
                 {g}
@@ -713,7 +713,7 @@ function Mini({
   small?: boolean
 }) {
   return (
-    <div className="bg-white px-3 py-2.5 dark:bg-zinc-900">
+    <div className="bg-white px-3 py-2.5">
       <div className="text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
         {label}
       </div>
@@ -725,7 +725,7 @@ function Mini({
 }
 function SideCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-xl border border-zinc-200 bg-white p-3">
       <div className="mb-2 text-[10px] font-semibold tracking-wide text-zinc-400 uppercase">
         {title}
       </div>
@@ -806,16 +806,16 @@ function EditableSection({
 
   const filled = fields.filter((f) => f.value != null && f.value !== '')
   const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none'
 
   return (
-    <section className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-      <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
+    <section className="rounded-xl border border-zinc-200 bg-white">
+      <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-2.5">
         <b className="text-[13px]">{title}</b>
         {canEdit && !editing && (
           <button
             onClick={startEdit}
-            className="text-xs font-semibold text-violet-600 hover:underline dark:text-violet-400"
+            className="text-xs font-semibold text-violet-600 hover:underline"
           >
             ✎ Sửa mục này
           </button>
@@ -878,7 +878,7 @@ function EditableSection({
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setEditing(false)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
               >
                 Huỷ
               </button>
@@ -900,7 +900,7 @@ function EditableSection({
             {filled.map((f) => (
               <div
                 key={f.key}
-                className={`flex justify-between gap-3 border-b border-dashed border-zinc-100 py-2 text-[13px] dark:border-zinc-800 ${f.full ? 'sm:col-span-2 lg:col-span-3' : ''}`}
+                className={`flex justify-between gap-3 border-b border-dashed border-zinc-100 py-2 text-[13px] ${f.full ? 'sm:col-span-2 lg:col-span-3' : ''}`}
               >
                 <span className="whitespace-nowrap text-zinc-400">{f.label}</span>
                 <span

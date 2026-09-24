@@ -167,8 +167,8 @@ export const BOM_LABEL: Record<BomStatus, string> = {
 /** Badge định mức — dùng chung class với trang chi tiết ([id]/layout.tsx). */
 export const BOM_BADGE: Record<BomStatus, string> = {
   none: 'bg-muted text-muted-foreground',
-  drawing: 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400',
-  done: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400',
+  drawing: 'bg-amber-100 text-amber-700',
+  done: 'bg-emerald-100 text-emerald-700',
 }
 
 /**
@@ -180,5 +180,4 @@ export const BOM_BADGE: Record<BomStatus, string> = {
 export const ACCENT_SOLID = 'bg-sky-600 text-white hover:bg-sky-700'
 
 /** Nền chuyển sắc cho khung ảnh — dùng ở cả thẻ lưới lẫn hộp xem ảnh lớn. */
-export const IMAGE_FRAME_BG =
-  'bg-linear-to-b from-zinc-50 to-zinc-200/70 dark:from-zinc-900 dark:to-zinc-950'
+export const IMAGE_FRAME_BG = 'bg-linear-to-b from-zinc-50 to-zinc-200/70'

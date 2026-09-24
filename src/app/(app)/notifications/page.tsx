@@ -49,19 +49,17 @@ export default async function NotificationsPage() {
     <AppShell title="Thông báo" actions={<MarkAllRead />}>
       <div className="mx-auto max-w-3xl">
         {items.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500 dark:border-zinc-700 dark:bg-zinc-950">
+          <p className="rounded-lg border border-dashed border-zinc-300 bg-white p-12 text-center text-zinc-500">
             Chưa có thông báo nào.
           </p>
         ) : (
-          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+          <ul className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200 bg-white">
             {items.map((n) => {
               const title = (n.payload as { title?: string })?.title
               return (
                 <li
                   key={n.id}
-                  className={`px-4 py-3 ${
-                    n.read_at ? 'opacity-60' : 'bg-zinc-50 dark:bg-zinc-900/30'
-                  }`}
+                  className={`px-4 py-3 ${n.read_at ? 'opacity-60' : 'bg-zinc-50'}`}
                 >
                   <div className="flex items-center justify-between gap-3 text-sm">
                     <div>

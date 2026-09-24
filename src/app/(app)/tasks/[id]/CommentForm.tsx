@@ -34,7 +34,7 @@ export function CommentForm({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-zinc-200 p-3 dark:border-zinc-800">
+    <div className="flex flex-col gap-2 rounded border border-zinc-200 p-3">
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
@@ -42,14 +42,14 @@ export function CommentForm({
           canReport ? 'Viết bình luận hoặc báo cáo tiến độ…' : 'Viết bình luận…'
         }
         rows={3}
-        className="rounded border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        className="rounded border border-zinc-300 px-3 py-2 text-sm"
       />
       <div className="flex items-center justify-between gap-2">
         {canReport ? (
           <select
             value={kind}
             onChange={(e) => setKind(e.target.value as 'comment' | 'progress_report')}
-            className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded border border-zinc-300 px-2 py-1 text-xs"
           >
             <option value="comment">Bình luận</option>
             <option value="progress_report">Báo cáo tiến độ</option>
@@ -60,7 +60,7 @@ export function CommentForm({
         <button
           onClick={submit}
           disabled={busy || !body.trim()}
-          className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
         >
           Gửi
         </button>

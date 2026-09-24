@@ -98,7 +98,7 @@ export function DocumentFiles({
   }
 
   return (
-    <div className="rounded-md bg-zinc-50 p-3 dark:bg-zinc-900">
+    <div className="rounded-md bg-zinc-50 p-3">
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs font-semibold text-zinc-500 uppercase">
           {title} ({files.length})
@@ -117,13 +117,13 @@ export function DocumentFiles({
           Chưa có file — tải bản gốc (PDF/Excel/scan) lên để lưu vào hồ sơ.
         </p>
       ) : (
-        <ul className="flex flex-col divide-y divide-zinc-200 dark:divide-zinc-800">
+        <ul className="flex flex-col divide-y divide-zinc-200">
           {files.map((f) => (
             <li key={f.id} className="flex items-center gap-2 py-1.5 text-sm">
               <span aria-hidden>{fileIcon(f.mime_type)}</span>
               <button
                 onClick={() => void download(f)}
-                className="min-w-0 flex-1 truncate text-left text-sky-600 hover:underline dark:text-sky-400"
+                className="min-w-0 flex-1 truncate text-left text-sky-600 hover:underline"
                 title={f.filename}
               >
                 {f.filename}
@@ -135,7 +135,7 @@ export function DocumentFiles({
               {canEdit && (
                 <button
                   onClick={() => void remove(f)}
-                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                  className="shrink-0 rounded p-1 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                   aria-label="Xoá file"
                 >
                   ✕

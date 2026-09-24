@@ -10,9 +10,7 @@ import type { Role } from '@/modules/core/rbac/rbac.repo'
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-        {label}
-      </span>
+      <span className="text-xs font-medium text-zinc-600">{label}</span>
       {children}
     </label>
   )
@@ -33,10 +31,7 @@ function ModalActions({
 }) {
   return (
     <div className="mt-2 flex justify-end gap-2">
-      <button
-        onClick={onCancel}
-        className="rounded-md px-3 py-2 text-sm text-zinc-600 dark:text-zinc-300"
-      >
+      <button onClick={onCancel} className="rounded-md px-3 py-2 text-sm text-zinc-600">
         Huỷ
       </button>
       <button
@@ -51,8 +46,7 @@ function ModalActions({
   )
 }
 
-const inputCls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
+const inputCls = 'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm'
 
 export function CreateRoleModal({
   onClose,
@@ -256,7 +250,7 @@ export function AssignRolesModal({
     <Modal open onClose={onClose} title={`Gán vai · ${userLabel}`} maxWidth="sm:max-w-md">
       <div className="flex flex-col gap-3">
         {derivedIds.size > 0 && (
-          <div className="rounded-md bg-zinc-50 p-2 text-xs text-zinc-500 dark:bg-zinc-900">
+          <div className="rounded-md bg-zinc-50 p-2 text-xs text-zinc-500">
             ⛓ Vai tự đồng bộ (theo phòng/chức danh) không sửa ở đây:{' '}
             {roles
               .filter((r) => derivedIds.has(r.id))
@@ -264,11 +258,11 @@ export function AssignRolesModal({
               .join(', ')}
           </div>
         )}
-        <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="max-h-72 overflow-y-auto rounded-md border border-zinc-200">
           {assignable.map((r) => (
             <label
               key={r.id}
-              className="flex cursor-pointer items-center gap-2 border-b border-zinc-100 px-3 py-2 text-sm last:border-0 hover:bg-zinc-50 dark:border-zinc-900 dark:hover:bg-zinc-900"
+              className="flex cursor-pointer items-center gap-2 border-b border-zinc-100 px-3 py-2 text-sm last:border-0 hover:bg-zinc-50"
             >
               <input
                 type="checkbox"

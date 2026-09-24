@@ -4,7 +4,7 @@ Mỗi bẫy dưới đây đã làm hỏng một màn thật trong dự án, và
 
 ## CSS / Tailwind
 
-1. **Tailwind v4 quét MỌI file, kể cả chú thích và chuỗi.**
+1. **Tailwind quét mọi file trong `src/`, kể cả chú thích và chuỗi.** (Từ 24/09/2026 `globals.css` giới hạn nguồn quét là `src/` bằng `source('../')`; trước đó Tailwind quét cả `.md`, tài liệu và test lint.)
    - Viết trong chú thích một thứ trông giống lớp tuỳ ý, có `...` hay `*` trong ngoặc vuông, là Tailwind sinh ra CSS hỏng và **cả app mất CSS**.
    - Chữa: diễn đạt bằng chữ, đừng viết ví dụ lớp có ký tự đại diện. (Ghi chú BẪY trong `eslint-rules/hg-ui.mjs`, 24/09/2026.)
 2. **Lớp `text-` bọc `var(...)` trong ngoặc vuông, Tailwind hiểu là MÀU chứ không phải cỡ chữ.**

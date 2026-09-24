@@ -137,7 +137,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
         actions={
           <Link
             href="/planning/pos"
-            className="border-border hover:bg-muted dark:border-border dark:bg-card dark:hover:bg-card rounded-md border bg-white px-3 py-1.5 text-sm"
+            className="border-border hover:bg-muted rounded-md border bg-white px-3 py-1.5 text-sm"
           >
             Mở màn Cung ứng →
           </Link>
@@ -167,7 +167,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       />
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+        <div className="border-border rounded-xl border bg-white p-4">
           <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Giá trị đơn đang chạy
           </h3>
@@ -178,7 +178,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
             Đã duyệt trở đi, chưa về đủ — tiền đã cam kết với nhà cung cấp.
           </p>
         </div>
-        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+        <div className="border-border rounded-xl border bg-white p-4">
           <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             Đang chờ chữ ký của bạn
           </h3>
@@ -239,7 +239,7 @@ export function PurchasingOverview({ data }: { data: ExecPurchasing }) {
       </div>
 
       {data.suppliers.length > 0 && (
-        <div className="border-border dark:border-border dark:bg-card rounded-xl border bg-white p-4">
+        <div className="border-border rounded-xl border bg-white p-4">
           <h3 className="text-muted-foreground mb-2 text-xs font-semibold tracking-wider uppercase">
             Nhà cung cấp theo giá trị đang chạy
           </h3>

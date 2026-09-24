@@ -391,7 +391,7 @@ export function QuotesManager({
                               </span>
                             ) : (
                               <span
-                                className="text-amber-600 dark:text-amber-400"
+                                className="text-amber-600"
                                 title="Chưa có dòng sản phẩm — chưa chốt được"
                               >
                                 0
@@ -431,11 +431,11 @@ export function QuotesManager({
                                   {fmtD(r.valid_to)}
                                 </div>
                                 {expired ? (
-                                  <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
+                                  <div className="text-[11px] font-medium text-red-600">
                                     hết hiệu lực
                                   </div>
                                 ) : daysLeft != null && daysLeft <= 7 ? (
-                                  <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                                  <div className="text-[11px] font-medium text-amber-600">
                                     còn {daysLeft} ngày
                                   </div>
                                 ) : null}
@@ -449,24 +449,22 @@ export function QuotesManager({
                             {r.status === 'draft' ? (
                               <Badge variant="secondary">Nháp</Badge>
                             ) : r.status === 'pending_approval' ? (
-                              <Badge className="bg-amber-500 text-white dark:bg-amber-600">
+                              <Badge className="bg-amber-500 text-white">
                                 Chờ GĐ duyệt
                               </Badge>
                             ) : r.status === 'approved' ? (
-                              <Badge className="bg-sky-600 text-white dark:bg-sky-700">
-                                GĐ đã duyệt
-                              </Badge>
+                              <Badge className="bg-sky-600 text-white">GĐ đã duyệt</Badge>
                             ) : r.status === 'rejected' ? (
                               <Badge variant="destructive">GĐ từ chối</Badge>
                             ) : expired ? (
                               <Badge
                                 variant="outline"
-                                className="border-red-300 text-red-700 dark:border-red-900 dark:text-red-400"
+                                className="border-red-300 text-red-700"
                               >
                                 Hết hiệu lực
                               </Badge>
                             ) : (
-                              <Badge className="bg-emerald-600 text-white dark:bg-emerald-700">
+                              <Badge className="bg-emerald-600 text-white">
                                 Đã gửi khách
                               </Badge>
                             )}

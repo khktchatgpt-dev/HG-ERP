@@ -476,7 +476,7 @@ function BaremConfirm({ s }: { s: MaterialCoreState }) {
       <button
         type="button"
         onClick={s.confirmBarem}
-        className="rounded border border-red-300 px-1.5 py-0.5 hover:bg-red-100 dark:border-red-800"
+        className="rounded border border-red-300 px-1.5 py-0.5 hover:bg-red-100"
       >
         xác nhận dùng số này
       </button>{' '}
@@ -575,7 +575,7 @@ function SuggestInput({
         <ul
           id={listId}
           role="listbox"
-          className="absolute top-full right-0 left-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-md dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute top-full right-0 left-0 z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-md"
         >
           {filtered.map((o, i) => (
             <li
@@ -589,9 +589,7 @@ function SuggestInput({
                 pick(o)
               }}
               className={`cursor-pointer px-3 py-1.5 ${
-                i === hi
-                  ? 'bg-zinc-100 dark:bg-zinc-800'
-                  : 'hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                i === hi ? 'bg-zinc-100' : 'hover:bg-zinc-100'
               }`}
             >
               {o}
@@ -627,7 +625,7 @@ export function Field({
 }) {
   return (
     <label className={`flex flex-col gap-1 text-sm ${span ? 'sm:col-span-2' : ''}`}>
-      <span className="font-medium text-zinc-700 dark:text-zinc-300">
+      <span className="font-medium text-zinc-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>
@@ -654,7 +652,7 @@ export function FormSection({
   children: React.ReactNode
 }) {
   return (
-    <section className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+    <section className="rounded-lg border border-zinc-200 p-3">
       <div className="mb-2.5 flex flex-wrap items-baseline gap-x-2">
         <h3 className="text-[11px] font-semibold tracking-wide text-zinc-500 uppercase">
           {title}
@@ -714,7 +712,7 @@ export function MaterialCoreFields({
           span
           hint={
             s.similar.length > 0 ? (
-              <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700">
                 ⚠ Tên gần giống vật tư đã có:{' '}
                 {s.similar.map((x) => `${x.code} — ${x.name}`).join(' · ')}. Nếu là cùng
                 một món, tìm lại ở ô lọc thay vì tạo mã mới.
@@ -735,7 +733,7 @@ export function MaterialCoreFields({
           required
           hint={
             s.unitWarn && !s.unitConfirmed ? (
-              <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+              <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700">
                 {s.unitWarn.kind === 'suggest' ? (
                   <>
                     ⚠ &quot;{s.f.unit}&quot; không có trong danh mục — gần giống{' '}
@@ -748,14 +746,14 @@ export function MaterialCoreFields({
                           unit: (s.unitWarn as { suggest: string }).suggest,
                         }))
                       }
-                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100"
                     >
                       Sửa thành {s.unitWarn.suggest}
                     </button>{' '}
                     <button
                       type="button"
                       onClick={s.confirmUnit}
-                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100"
                     >
                       Vẫn dùng &quot;{s.f.unit}&quot;
                     </button>
@@ -767,7 +765,7 @@ export function MaterialCoreFields({
                     <button
                       type="button"
                       onClick={s.confirmUnit}
-                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100 dark:border-amber-800"
+                      className="rounded border border-amber-300 px-1.5 py-0.5 hover:bg-amber-100"
                     >
                       xác nhận dùng
                     </button>{' '}
@@ -803,11 +801,9 @@ export function MaterialCoreFields({
           hint={
             s.specPrev ? (
               s.specPrev.ok ? (
-                <span className="text-emerald-700 dark:text-emerald-400">
-                  {s.specPrev.text}
-                </span>
+                <span className="text-emerald-700">{s.specPrev.text}</span>
               ) : (
-                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700">
                   ⚠ {s.specPrev.warn}
                 </span>
               )
@@ -817,7 +813,7 @@ export function MaterialCoreFields({
                 <button
                   type="button"
                   onClick={() => s.setF((x) => ({ ...x, spec: s.specSuggest! }))}
-                  className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                  className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50"
                 >
                   điền &quot;{s.specSuggest}&quot; từ tên
                 </button>{' '}
@@ -968,13 +964,11 @@ export function MaterialCoreFields({
             // dụ nhảy 10 lần — số vô lý lộ ngay lúc gõ, không đợi lên đơn.
             s.packPrev ? (
               s.packPrev.warn ? (
-                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                <span className="block rounded-md bg-amber-50 px-2 py-1 text-amber-700">
                   ⚠ {s.packPrev.warn}
                 </span>
               ) : (
-                <span className="text-emerald-700 dark:text-emerald-400">
-                  {s.packPrev.text}
-                </span>
+                <span className="text-emerald-700">{s.packPrev.text}</span>
               )
             ) : (
               'vd 1 bì = 500 con — form đặt sẽ gợi ý SL tròn bao.'
@@ -999,7 +993,7 @@ export function MaterialCoreFields({
           ("Trọng lượng tấm (kg)"), nên ở đây đưa hai ô đó ra là mời gõ nhầm.
         */}
         {s.needsWeight && s.sheetLike && (
-          <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:col-span-2 dark:bg-sky-950/30">
+          <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:col-span-2">
             <Field
               label={`Khối lượng mỗi ${f.unit.trim() || 'đơn vị đặt'} (kg)`}
               hint={
@@ -1021,7 +1015,7 @@ export function MaterialCoreFields({
               />
             </Field>
             {!f.kg_per_unit.trim() && (
-              <p className="text-xs text-amber-700 dark:text-amber-400">
+              <p className="text-xs text-amber-700">
                 ⚠ Bỏ trống thì mỗi lần đặt phải gõ tay theo phiếu cân NCC — mà dòng đơn bị
                 chặn gửi khi thiếu số này, nên rất dễ gõ đại cho qua.
               </p>
@@ -1029,7 +1023,7 @@ export function MaterialCoreFields({
             {/* Đối chiếu kg/đơn-vị với kg/m × dài cây khi cả hai barem cùng có
                 trong state (13/08) — cùng ngưỡng 5% với ô kg/m. */}
             {s.kgUnitOff != null && s.kgUnitOff > 0.05 && (
-              <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-400">
+              <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">
                 ⚠ Số đang nhập lệch {Math.round(s.kgUnitOff * 100)}% so với kg/m × dài cây
                 đã khai (
                 {(Number(f.kg_per_m) * Number(f.default_bar_length_m)).toFixed(2)} kg).
@@ -1041,7 +1035,7 @@ export function MaterialCoreFields({
         )}
 
         {s.needsBarWeight && (
-          <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:col-span-2 sm:grid-cols-2 dark:bg-sky-950/30">
+          <div className="grid gap-3 rounded-md bg-sky-50 p-3 sm:col-span-2 sm:grid-cols-2">
             <Field label="kg/m">
               <input
                 value={f.kg_per_m}
@@ -1053,7 +1047,7 @@ export function MaterialCoreFields({
                   s.derived?.kg ? `${s.derived.kg} (máy đọc được)` : 'vd 0.248'
                 }
                 className={`${inputClass} tabular-nums ${
-                  s.kgMismatch ? 'border-red-400 dark:border-red-600' : ''
+                  s.kgMismatch ? 'border-red-400' : ''
                 }`}
               />
             </Field>
@@ -1072,7 +1066,7 @@ export function MaterialCoreFields({
             {/* Máy đọc được barem từ quy cách trong tên → đưa số ra, không bắt gõ. */}
             {s.derived?.kg != null && (
               <p className="flex flex-wrap items-center gap-2 text-xs sm:col-span-2">
-                <span className="text-emerald-700 dark:text-emerald-400">
+                <span className="text-emerald-700">
                   Máy đọc được <b className="tabular-nums">{s.derived.kg}</b> kg/m từ quy
                   cách trong tên.
                 </span>
@@ -1082,7 +1076,7 @@ export function MaterialCoreFields({
                     onClick={() =>
                       setF((v) => ({ ...v, kg_per_m: String(s.derived!.kg) }))
                     }
-                    className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400"
+                    className="rounded border border-emerald-300 px-1.5 py-0.5 text-emerald-700 hover:bg-emerald-50"
                   >
                     Dùng số này
                   </button>
@@ -1096,7 +1090,7 @@ export function MaterialCoreFields({
               </p>
             )}
             {s.kgMismatch && s.derived?.kg != null && (
-              <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 sm:col-span-2 dark:bg-red-950/40 dark:text-red-400">
+              <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700 sm:col-span-2">
                 ⚠ Số đang nhập lệch {Math.round(s.kgOff * 100)}% so với {s.derived.kg}{' '}
                 kg/m máy tính từ quy cách. Kiểm lại dấu chấm thập phân — sai chỗ này là
                 sai thẳng số tiền trên đơn.

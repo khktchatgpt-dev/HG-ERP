@@ -195,7 +195,7 @@ export function TrackingManager({
       cell: (r) => (
         <button
           onClick={() => void openDetail(r)}
-          className="flex min-w-0 flex-col text-left hover:text-sky-600 dark:hover:text-sky-400"
+          className="flex min-w-0 flex-col text-left hover:text-sky-600"
           title="Xem nhanh dòng sản phẩm & tiến độ giao"
         >
           <span className="font-mono text-xs text-zinc-400">
@@ -223,7 +223,7 @@ export function TrackingManager({
               {p.label}
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+              <span className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-100">
                 <span
                   className={`block h-full rounded-full ${p.tone}`}
                   style={{ width: `${p.pct}%` }}
@@ -250,7 +250,7 @@ export function TrackingManager({
           <div className="flex flex-col gap-1">
             <a
               href={`${lsxBase}/${r.production_order_id}`}
-              className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+              className="font-mono text-xs text-blue-600 hover:underline"
               title="Chi tiết lệnh sản xuất"
             >
               {r.lsx_code} →
@@ -347,7 +347,7 @@ export function TrackingManager({
         r.lsx_status !== 'cancelled' ? (
           <button
             onClick={() => void completeLsx(r)}
-            className="rounded-md border border-green-300 px-2 py-1 text-xs text-green-700 hover:bg-green-50 dark:border-green-800 dark:text-green-400 dark:hover:bg-green-950"
+            className="rounded-md border border-green-300 px-2 py-1 text-xs text-green-700 hover:bg-green-50"
           >
             ✓ Hoàn thành
           </button>

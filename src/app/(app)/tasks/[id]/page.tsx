@@ -84,9 +84,9 @@ export default async function TaskDetail({
     <AppShell title={task.task_code} subtitle={task.title}>
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="flex flex-col gap-6 lg:col-span-2">
-          <section className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+          <section className="rounded-lg border border-zinc-200 bg-white p-6">
             <div className="mb-4 flex items-center gap-2">
-              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium dark:bg-zinc-800">
+              <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium">
                 {STATUS_LABEL[task.status]}
               </span>
               <DeadlinePill
@@ -96,7 +96,7 @@ export default async function TaskDetail({
               />
             </div>
             {task.description ? (
-              <p className="mb-5 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+              <p className="mb-5 text-sm whitespace-pre-wrap text-zinc-700">
                 {task.description}
               </p>
             ) : (
@@ -126,15 +126,12 @@ export default async function TaskDetail({
                 <li className="text-sm text-zinc-500">Chưa có bình luận.</li>
               )}
               {comments.map((c) => (
-                <li
-                  key={c.id}
-                  className="rounded border border-zinc-200 p-3 dark:border-zinc-800"
-                >
+                <li key={c.id} className="rounded border border-zinc-200 p-3">
                   <div className="mb-1 flex items-center gap-2 text-xs text-zinc-500">
-                    <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    <span className="font-medium text-zinc-700">
                       {c.user_name ?? c.user_email}
                     </span>
-                    <span className="rounded bg-zinc-100 px-1.5 py-0.5 dark:bg-zinc-800">
+                    <span className="rounded bg-zinc-100 px-1.5 py-0.5">
                       {KIND_LABEL[c.kind] ?? c.kind}
                     </span>
                     <time>{new Date(c.created_at).toLocaleString('vi-VN')}</time>
@@ -147,7 +144,7 @@ export default async function TaskDetail({
         </div>
 
         <aside className="flex flex-col gap-4 text-sm">
-          <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="rounded-lg border border-zinc-200 p-4">
             <h3 className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
               Thông tin
             </h3>
@@ -187,7 +184,7 @@ export default async function TaskDetail({
             </dl>
           </div>
 
-          <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
+          <div className="rounded-lg border border-zinc-200 p-4">
             <h3 className="mb-2 text-xs font-semibold text-zinc-500 uppercase">
               Lịch sử
             </h3>

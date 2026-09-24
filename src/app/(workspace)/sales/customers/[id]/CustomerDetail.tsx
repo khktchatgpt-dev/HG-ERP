@@ -283,7 +283,7 @@ export function CustomerDetail({
           href={`/print/quotes/${q.id}`}
           target="_blank"
           rel="noopener"
-          className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+          className="font-mono text-xs text-blue-600 hover:underline"
         >
           {q.code}
         </a>
@@ -327,7 +327,7 @@ export function CustomerDetail({
         <div className="flex flex-col">
           <a
             href={`/sales/orders/${o.id}`}
-            className="font-mono text-xs text-blue-600 hover:underline dark:text-blue-400"
+            className="font-mono text-xs text-blue-600 hover:underline"
           >
             {o.code}
           </a>
@@ -485,7 +485,7 @@ export function CustomerDetail({
 
       {/* Tabs lịch sử */}
       <div>
-        <div className="mb-3 flex gap-1 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="mb-3 flex gap-1 border-b border-zinc-200">
           <TabBtn active={tab === 'quotes'} onClick={() => setTab('quotes')}>
             Báo giá ({quotes.length})
           </TabBtn>
@@ -533,7 +533,7 @@ export function CustomerDetail({
               description="Chưa có báo giá / đơn hàng nào với khách này."
             />
           ) : (
-            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white dark:divide-zinc-800 dark:border-zinc-800 dark:bg-zinc-950">
+            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-lg border border-zinc-200 bg-white">
               {activity.map((ev, i) => {
                 const inner = (
                   <span className="flex items-start gap-2.5">
@@ -565,10 +565,7 @@ export function CustomerDetail({
                 return (
                   <li key={i}>
                     {ev.href ? (
-                      <a
-                        href={ev.href}
-                        className="block px-4 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
-                      >
+                      <a href={ev.href} className="block px-4 py-2.5 hover:bg-zinc-50">
                         {inner}
                       </a>
                     ) : (
@@ -609,7 +606,7 @@ export function CustomerDetail({
 
 function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+    <div className="rounded-lg border border-zinc-200 bg-white p-4">
       <h2 className="mb-3 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
         {title}
       </h2>
@@ -643,8 +640,8 @@ function TabBtn({
       onClick={onClick}
       className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition ${
         active
-          ? 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-          : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-zinc-500 hover:text-zinc-800'
       }`}
     >
       {children}

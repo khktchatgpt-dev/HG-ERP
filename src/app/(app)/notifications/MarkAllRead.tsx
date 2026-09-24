@@ -15,7 +15,7 @@ export function MarkAllRead() {
         setBusy(false)
         router.refresh()
       }}
-      className="rounded border border-zinc-300 px-3 py-1 text-sm dark:border-zinc-700"
+      className="rounded border border-zinc-300 px-3 py-1 text-sm"
     >
       Đánh dấu đã đọc
     </button>

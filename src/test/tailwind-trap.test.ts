@@ -17,6 +17,11 @@ import { describe, expect, it } from 'vitest'
  *
  * Chỉ bắt dạng LÀM VỠ CSS. Dạng như màu hex với dấu ba chấm thì vô hại (Tailwind
  * bỏ qua giá trị màu hỏng), nên không chặn để khỏi báo oan.
+ *
+ * Cùng ngày đã chữa GỐC: globals.css đặt `source('../')` nên Tailwind nay CHỈ
+ * quét `src/` — tài liệu, skill, test lint không còn đổ lớp vào CSS. Test vẫn
+ * quét cả repo, CỐ Ý rộng hơn cần: rẻ, và đổi `source` sau này mà quên thì nó
+ * vẫn còn canh.
  */
 const ROOT = path.resolve(__dirname, '../..')
 const TRAP = /[a-z][\w:-]*-\[[^\]\s]*(?:\(\)|var\([^)\]\s]*(?:\*|\.\.\.|…))[^\]\s]*\]/g

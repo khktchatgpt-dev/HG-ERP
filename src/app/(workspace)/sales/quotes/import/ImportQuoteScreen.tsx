@@ -188,7 +188,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
           <a
             href="/api/dept/sales/quotes/import/template"
             download
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50"
           >
             ⭳ Tải file mẫu
           </a>
@@ -196,7 +196,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
       />
 
       {!preview && (
-        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center dark:border-zinc-700 dark:bg-zinc-950">
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center">
           <p className="mb-1 text-sm font-medium">Chọn file báo giá (.xlsx)</p>
           <p className="mb-4 text-xs text-zinc-500">
             Dùng mẫu <b>BÁO GIÁ — SẢN PHẨM MỚI</b>. Ảnh chèn đè lên ô cột “Ảnh” của đúng
@@ -235,7 +235,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
             ]}
           />
 
-          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-4">
             <label className="flex flex-col gap-1 text-sm">
               <span className="font-medium">
                 Khách hàng <span className="text-red-500">*</span>
@@ -247,7 +247,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
                   const c = customers.find((x) => x.id === e.target.value)
                   if (c?.default_currency) setCurrency(c.default_currency)
                 }}
-                className="h-9 min-w-64 rounded-md border border-zinc-300 px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="h-9 min-w-64 rounded-md border border-zinc-300 px-2 text-sm"
               >
                 <option value="">— chọn khách hàng —</option>
                 {customers.map((c) => (
@@ -262,13 +262,13 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
               <input
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value.toUpperCase().slice(0, 3))}
-                className="h-9 w-24 rounded-md border border-zinc-300 px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                className="h-9 w-24 rounded-md border border-zinc-300 px-2 text-sm"
               />
             </label>
             <div className="ml-auto flex items-center gap-2">
               <button
                 onClick={() => setPreview(null)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-900"
+                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50"
               >
                 Chọn file khác
               </button>
@@ -283,9 +283,9 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
             <table className="w-full text-sm">
-              <thead className="bg-zinc-50 text-left text-xs text-zinc-500 uppercase dark:bg-zinc-900">
+              <thead className="bg-zinc-50 text-left text-xs text-zinc-500 uppercase">
                 <tr>
                   <th className="w-10 px-2 py-2">Lấy</th>
                   <th className="w-14 px-2 py-2">Dòng</th>
@@ -302,7 +302,7 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
                   return (
                     <tr
                       key={r.row}
-                      className={`border-t border-zinc-100 dark:border-zinc-900 ${off ? 'opacity-50' : ''}`}
+                      className={`border-t border-zinc-100 ${off ? 'opacity-50' : ''}`}
                     >
                       <td className="px-2 py-1.5">
                         <input
@@ -325,15 +325,12 @@ export function ImportQuoteScreen({ customers }: { customers: Customer[] }) {
                               .join(' · ') || '—'}
                           </span>
                           {r.warnings.map((w) => (
-                            <span
-                              key={w}
-                              className="text-[11px] text-amber-600 dark:text-amber-500"
-                            >
+                            <span key={w} className="text-[11px] text-amber-600">
                               ⚠ {w}
                             </span>
                           ))}
                           {r.blocked_reason && (
-                            <span className="text-[11px] text-red-600 dark:text-red-400">
+                            <span className="text-[11px] text-red-600">
                               {r.blocked_reason}
                             </span>
                           )}

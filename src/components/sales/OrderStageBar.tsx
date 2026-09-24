@@ -28,12 +28,12 @@ const BAR: Record<string, string> = {
   delivered: 'bg-emerald-500',
 }
 const TEXT: Record<string, string> = {
-  confirmed: 'text-blue-700 dark:text-blue-400',
-  lsx_pending: 'text-amber-700 dark:text-amber-400',
-  lsx_issued: 'text-blue-700 dark:text-blue-400',
-  in_production: 'text-amber-700 dark:text-amber-400',
-  completed: 'text-emerald-700 dark:text-emerald-400',
-  delivered: 'text-emerald-700 dark:text-emerald-400',
+  confirmed: 'text-blue-700',
+  lsx_pending: 'text-amber-700',
+  lsx_issued: 'text-blue-700',
+  in_production: 'text-amber-700',
+  completed: 'text-emerald-700',
+  delivered: 'text-emerald-700',
 }
 
 export function OrderStageBar({

@@ -184,7 +184,7 @@ export function CustomersManager({
           {c.code && <span className="font-mono text-xs text-zinc-400">{c.code}</span>}
           <Link
             href={`/sales/customers/${c.id}`}
-            className="truncate font-medium text-blue-600 hover:underline dark:text-blue-400"
+            className="truncate font-medium text-blue-600 hover:underline"
           >
             {c.name}
           </Link>
@@ -225,9 +225,7 @@ export function CustomersManager({
               {a.quotes} báo giá · {a.orders} đơn
             </span>
             {a.openOrders > 0 && (
-              <span className="text-xs text-amber-600 dark:text-amber-500">
-                {a.openOrders} đơn đang mở
-              </span>
+              <span className="text-xs text-amber-600">{a.openOrders} đơn đang mở</span>
             )}
           </div>
         )
@@ -242,7 +240,7 @@ export function CustomersManager({
         if (parts.length === 0) {
           return (
             <span
-              className="text-xs text-amber-600 dark:text-amber-500"
+              className="text-xs text-amber-600"
               title="Báo giá cho KH này sẽ không tự điền điều khoản"
             >
               chưa khai
@@ -250,7 +248,7 @@ export function CustomersManager({
           )
         }
         return (
-          <div className="flex flex-col text-xs text-zinc-600 dark:text-zinc-400">
+          <div className="flex flex-col text-xs text-zinc-600">
             <span>{parts.join(' · ')}</span>
             {c.default_payment_terms && (
               <span className="truncate" title={c.default_payment_terms}>
@@ -272,7 +270,7 @@ export function CustomersManager({
             {c.owner_name}
           </Badge>
         ) : (
-          <span className="text-xs text-amber-600 dark:text-amber-500">— chưa gán —</span>
+          <span className="text-xs text-amber-600">— chưa gán —</span>
         ),
     },
     {

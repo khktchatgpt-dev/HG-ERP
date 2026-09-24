@@ -152,7 +152,7 @@ export function PricesPanel({
   }
 
   const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none'
 
   return (
     <div className="flex flex-col gap-3">
@@ -161,7 +161,7 @@ export function PricesPanel({
           <button
             type="button"
             onClick={() => setBulkOpen(true)}
-            className="rounded-md border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50 dark:border-sky-800 dark:text-sky-300 dark:hover:bg-sky-950/40"
+            className="rounded-md border border-sky-300 px-3 py-1.5 text-sm font-medium text-sky-700 hover:bg-sky-50"
           >
             📋 Nhập báo giá (nhiều dòng)
           </button>
@@ -246,8 +246,8 @@ export function PricesPanel({
       ) : (
         <div className="max-h-96 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white dark:bg-zinc-950">
-              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase">
                 <th className="py-1.5 pr-2">Vật tư</th>
                 <th className="py-1.5 pr-2 text-right">Giá</th>
                 <th className="py-1.5 pr-2">Hiệu lực từ</th>
@@ -257,7 +257,7 @@ export function PricesPanel({
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-900">
+                <tr key={r.id} className="border-b border-zinc-100">
                   <td className="py-1.5 pr-2">
                     <span className="font-mono text-xs text-zinc-400">
                       {r.material_code}
@@ -387,7 +387,7 @@ function BulkQuoteForm({
   }
 
   const inp =
-    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'w-full rounded-md border border-zinc-300 px-2 py-1.5 text-sm focus:border-sky-500 focus:outline-none'
 
   return (
     <div className="flex flex-col gap-3">
@@ -421,8 +421,8 @@ function BulkQuoteForm({
       ) : (
         <div className="max-h-80 overflow-auto">
           <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-white dark:bg-zinc-950">
-              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase dark:border-zinc-800">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b border-zinc-200 text-left text-xs text-zinc-500 uppercase">
                 <th className="py-1.5 pr-2">Vật tư</th>
                 <th className="w-40 py-1.5 pr-2 text-right">Giá</th>
                 <th className="w-8 py-1.5" />
@@ -430,10 +430,7 @@ function BulkQuoteForm({
             </thead>
             <tbody>
               {lines.map((l, i) => (
-                <tr
-                  key={l.material_id}
-                  className="border-b border-zinc-100 dark:border-zinc-900"
-                >
+                <tr key={l.material_id} className="border-b border-zinc-100">
                   <td className="py-1 pr-2">
                     <span className="font-mono text-xs text-zinc-400">{l.code}</span>{' '}
                     {l.name}
@@ -488,7 +485,7 @@ function BulkQuoteForm({
           type="button"
           onClick={addMaterial}
           disabled={!addId}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-700 dark:hover:bg-zinc-900"
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-40"
         >
           Thêm
         </button>

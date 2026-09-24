@@ -120,7 +120,7 @@ export function AuditLogView({
         actions={
           <button
             onClick={exportCsv}
-            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900"
+            className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50"
           >
             Export CSV
           </button>
@@ -154,7 +154,7 @@ export function AuditLogView({
               {hasFilter && (
                 <button
                   onClick={() => router.push('?')}
-                  className="text-xs text-zinc-500 hover:text-zinc-900 dark:hover:text-white"
+                  className="text-xs text-zinc-500 hover:text-zinc-900"
                 >
                   Xoá lọc
                 </button>
@@ -163,9 +163,9 @@ export function AuditLogView({
           }
         />
 
-        <div className="overflow-x-auto rounded-b-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="overflow-x-auto rounded-b-lg border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="bg-zinc-50 text-xs text-zinc-500 uppercase dark:bg-zinc-900/50">
+            <thead className="bg-zinc-50 text-xs text-zinc-500 uppercase">
               <tr>
                 <th className="px-3 py-2">Thời gian</th>
                 <th className="px-3 py-2">Hành động</th>
@@ -175,7 +175,7 @@ export function AuditLogView({
                 <th className="px-3 py-2"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-200">
               {entries.length === 0 && (
                 <tr>
                   <td
@@ -215,10 +215,7 @@ export function AuditLogView({
                       </td>
                     </tr>
                     {isExpanded && hasDetail && (
-                      <tr
-                        key={`${e.id}-detail`}
-                        className="bg-zinc-50 dark:bg-zinc-900/40"
-                      >
+                      <tr key={`${e.id}-detail`} className="bg-zinc-50">
                         <td colSpan={6} className="px-3 py-2 text-xs">
                           {e.before && (
                             <div>

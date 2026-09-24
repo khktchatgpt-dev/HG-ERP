@@ -452,7 +452,7 @@ export function ProductFilesPanel({
                           </span>
                         )}
                         {f.is_current && (
-                          <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                          <span className="shrink-0 rounded-full bg-emerald-100 px-1.5 text-[10px] font-medium text-emerald-700">
                             ĐANG DÙNG
                           </span>
                         )}
@@ -535,7 +535,7 @@ export function ProductFilesPanel({
                         onClick={() => void remove(f)}
                         aria-label="Xoá file"
                         title="Xoá file"
-                        className="text-muted-foreground shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950"
+                        className="text-muted-foreground shrink-0 rounded p-1 hover:bg-red-50 hover:text-red-600"
                       >
                         <Trash2 className="size-4" aria-hidden />
                       </button>

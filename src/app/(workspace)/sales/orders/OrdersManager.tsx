@@ -161,14 +161,10 @@ function DueCell({ o, today }: { o: OrderRow; today: string }) {
     <div>
       <div className="text-sm tabular-nums">{fmtD(o.due_date)}</div>
       {!isClosed(o) && days < 0 && (
-        <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
-          ⚠ quá {-days} ngày
-        </div>
+        <div className="text-[11px] font-medium text-red-600">⚠ quá {-days} ngày</div>
       )}
       {!isClosed(o) && days >= 0 && days <= 7 && (
-        <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-          còn {days} ngày
-        </div>
+        <div className="text-[11px] font-medium text-amber-600">còn {days} ngày</div>
       )}
     </div>
   )
@@ -404,15 +400,13 @@ export function OrdersManager({
         <section
           className={
             hasOverdue
-              ? 'overflow-hidden rounded-xl border border-red-200/70 bg-red-50/60 dark:border-red-900/40 dark:bg-red-950/15'
-              : 'overflow-hidden rounded-xl border border-amber-200/70 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/15'
+              ? 'overflow-hidden rounded-xl border border-red-200/70 bg-red-50/60'
+              : 'overflow-hidden rounded-xl border border-amber-200/70 bg-amber-50/60'
           }
         >
           <div
             className={`px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider uppercase ${
-              hasOverdue
-                ? 'text-red-800/80 dark:text-red-300/80'
-                : 'text-amber-800/80 dark:text-amber-300/80'
+              hasOverdue ? 'text-red-800/80' : 'text-amber-800/80'
             }`}
           >
             Cần để mắt · {attention.filter((r) => r.days < 0).length} đơn quá hạn ·{' '}
@@ -420,9 +414,7 @@ export function OrdersManager({
           </div>
           <div
             className={
-              hasOverdue
-                ? 'divide-y divide-red-200/50 dark:divide-red-900/30'
-                : 'divide-y divide-amber-200/50 dark:divide-amber-900/30'
+              hasOverdue ? 'divide-y divide-red-200/50' : 'divide-y divide-amber-200/50'
             }
           >
             {/*
@@ -435,9 +427,7 @@ export function OrdersManager({
                 key={o.id}
                 href={`/sales/orders/${o.id}`}
                 className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 ${
-                  hasOverdue
-                    ? 'hover:bg-red-100/50 dark:hover:bg-red-950/30'
-                    : 'hover:bg-amber-100/50 dark:hover:bg-amber-950/30'
+                  hasOverdue ? 'hover:bg-red-100/50' : 'hover:bg-amber-100/50'
                 }`}
               >
                 <span className="min-w-0 flex-none basis-44 truncate font-mono text-xs font-medium">
@@ -446,9 +436,7 @@ export function OrdersManager({
                 <span className="min-w-0 flex-1 truncate text-sm">{o.customer_name}</span>
                 <span
                   className={`text-xs font-medium whitespace-nowrap ${
-                    days < 0
-                      ? 'text-red-700 dark:text-red-400'
-                      : 'text-amber-700 dark:text-amber-400'
+                    days < 0 ? 'text-red-700' : 'text-amber-700'
                   }`}
                 >
                   {days < 0
@@ -467,8 +455,8 @@ export function OrdersManager({
               onClick={() => setShowAllAttention((v) => !v)}
               className={`flex w-full items-center gap-1 border-t px-4 py-1.5 text-xs ${
                 hasOverdue
-                  ? 'border-red-200/50 text-red-800/80 hover:bg-red-100/50 dark:border-red-900/30 dark:text-red-300/80 dark:hover:bg-red-950/30'
-                  : 'border-amber-200/50 text-amber-800/80 hover:bg-amber-100/50 dark:border-amber-900/30 dark:text-amber-300/80 dark:hover:bg-amber-950/30'
+                  ? 'border-red-200/50 text-red-800/80 hover:bg-red-100/50'
+                  : 'border-amber-200/50 text-amber-800/80 hover:bg-amber-100/50'
               }`}
             >
               <ChevronDown
@@ -860,7 +848,7 @@ export function OrdersManager({
             {filtered.length}/{scope.length} đơn · {groups.length} khách hàng
             {mineOnly && ` · đang xem đơn của ${me.name}`}
             {total > orders.length && (
-              <span className="ml-2 font-medium text-amber-600 dark:text-amber-400">
+              <span className="ml-2 font-medium text-amber-600">
                 ⚠ sổ có {fmtN(total)} đơn, trang này mới tải {fmtN(orders.length)} đơn mới
                 nhất
               </span>

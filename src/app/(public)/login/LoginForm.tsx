@@ -80,10 +80,10 @@ export function LoginForm({ next }: { next?: string }) {
       </div>
 
       {/* Form panel */}
-      <div className="flex items-center justify-center bg-zinc-50 p-6 dark:bg-zinc-950">
+      <div className="flex items-center justify-center bg-zinc-50 p-6">
         <form
           onSubmit={onSubmit}
-          className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+          className="flex w-full max-w-sm flex-col gap-4 rounded-xl border border-zinc-200 bg-white p-8 shadow-sm"
         >
           {/* Mobile brand */}
           <div className="mb-1 flex items-center gap-2 lg:hidden">
@@ -104,7 +104,7 @@ export function LoginForm({ next }: { next?: string }) {
               autoFocus
               autoComplete="email"
               disabled={loading}
-              className="rounded-md border border-zinc-300 px-3 py-2 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+              className="rounded-md border border-zinc-300 px-3 py-2 disabled:opacity-60"
             />
           </label>
 
@@ -117,14 +117,14 @@ export function LoginForm({ next }: { next?: string }) {
                 required
                 autoComplete="current-password"
                 disabled={loading}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 pr-14 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 pr-14 disabled:opacity-60"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
                 tabIndex={-1}
                 aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                className="absolute inset-y-0 right-0 px-3 text-xs font-medium text-zinc-500 hover:text-zinc-800"
               >
                 {showPassword ? 'Ẩn' : 'Hiện'}
               </button>
@@ -134,7 +134,7 @@ export function LoginForm({ next }: { next?: string }) {
           {error && (
             <p
               role="alert"
-              className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950/40 dark:text-red-400"
+              className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700"
             >
               {error}
             </p>
@@ -142,7 +142,7 @@ export function LoginForm({ next }: { next?: string }) {
 
           <button
             disabled={loading}
-            className="flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50 dark:bg-white dark:text-slate-900"
+            className="flex items-center justify-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
           >
             {loading && <Spinner />}
             {loading ? 'Đang đăng nhập…' : 'Đăng nhập'}

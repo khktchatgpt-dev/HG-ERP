@@ -31,7 +31,7 @@ export type CustomerView = {
 export type MemberOption = { id: string; label: string }
 
 const cls =
-  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+  'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm focus:border-sky-500 focus:outline-none'
 
 /**
  * Form hồ sơ khách hàng — dùng chung cho hộp Thêm/Sửa ở danh sách VÀ nút Sửa trên
@@ -293,7 +293,7 @@ export function CustomerForm({
             </L>
           </Row>
           {withActive && (
-            <label className="flex items-start gap-2 rounded-md bg-zinc-50 p-2.5 text-sm dark:bg-zinc-900">
+            <label className="flex items-start gap-2 rounded-md bg-zinc-50 p-2.5 text-sm">
               <input
                 type="checkbox"
                 name="is_active"
@@ -312,7 +312,7 @@ export function CustomerForm({
         </Section>
       </div>
 
-      <div className="mt-4 flex justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+      <div className="mt-4 flex justify-end gap-2 border-t border-zinc-200 pt-4">
         {onCancel && (
           <Button type="button" onClick={onCancel}>
             Huỷ
@@ -342,7 +342,7 @@ function Section({
 }) {
   return (
     <section className="flex flex-col gap-3">
-      <div className="border-b border-zinc-200 pb-1.5 dark:border-zinc-800">
+      <div className="border-b border-zinc-200 pb-1.5">
         <h3 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
           {title}
         </h3>
@@ -374,7 +374,7 @@ function L({
 }) {
   return (
     <label className={`flex flex-col gap-1 text-sm ${grow ? '@xl:col-span-2' : ''}`}>
-      <span className="text-zinc-700 dark:text-zinc-300">
+      <span className="text-zinc-700">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
         {hint && <span className="ml-1.5 text-xs text-zinc-400">({hint})</span>}

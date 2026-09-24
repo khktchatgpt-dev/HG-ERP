@@ -204,3 +204,30 @@ ruleTester.run('kit-icon', hgUi.rules['kit-icon'], {
     { code: kit('<Action strong>Sao chép</Action>'), errors: [{ messageId: 'missing' }] },
   ],
 })
+
+ruleTester.run('no-dark-variant', hgUi.rules['no-dark-variant'], {
+  valid: [
+    wrap('<div className="bg-card text-foreground" />'),
+    // Chữ "dark" không phải tiền tố biến thể thì không bắt.
+    wrap('<div className="theme-dark-ish" title="dark mode đã tắt" />'),
+    // Nhắc tới `dark:` trong chữ thường (chú thích, lời văn) — sau dấu hai chấm
+    // không có tên lớp thì không phải lớp.
+    `const s = 'lớp dark: đã gỡ'`,
+    // Biến thể khác vẫn hợp lệ.
+    wrap('<div className="hover:bg-accent md:p-4" />'),
+  ],
+  invalid: [
+    {
+      code: wrap('<div className="text-foreground dark:text-white" />'),
+      errors: [{ messageId: 'dark' }],
+    },
+    // Đứng ĐẦU chuỗi, trong cn(), và trong template literal.
+    { code: `cn('dark:bg-zinc-900 p-2')`, errors: [{ messageId: 'dark' }] },
+    {
+      code: 'const c = `rounded ${x} dark:border-zinc-700`',
+      errors: [{ messageId: 'dark' }],
+    },
+    // Biến thể lồng + giá trị tuỳ ý.
+    { code: `cn('p-2 dark:hover:bg-[#111]')`, errors: [{ messageId: 'dark' }] },
+  ],
+})

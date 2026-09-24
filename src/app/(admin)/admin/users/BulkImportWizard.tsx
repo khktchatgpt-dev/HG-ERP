@@ -124,7 +124,7 @@ export function BulkImportWizard({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-md bg-zinc-50 p-3 text-xs text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+      <div className="rounded-md bg-zinc-50 p-3 text-xs text-zinc-600">
         <p className="font-medium">Cách dùng</p>
         <ol className="mt-1 list-decimal space-y-0.5 pl-4">
           <li>Trong Excel: chọn vùng cần import (kể cả dòng tiêu đề), Ctrl+C</li>
@@ -145,14 +145,14 @@ export function BulkImportWizard({
           placeholder={
             'email\tpassword\tname\trole\tdepartment\nnv1@hg.com\tpass1234\tNV 1\temployee\tKỹ thuật'
           }
-          className="rounded-md border border-zinc-300 px-3 py-2 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          className="rounded-md border border-zinc-300 px-3 py-2 font-mono text-xs"
         />
       </label>
 
       {parsed.length > 0 && (
-        <div className="max-h-64 overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+        <div className="max-h-64 overflow-auto rounded-md border border-zinc-200">
           <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 bg-zinc-50 dark:bg-zinc-900">
+            <thead className="sticky top-0 bg-zinc-50">
               <tr>
                 <th className="px-2 py-1.5">Email</th>
                 <th className="px-2 py-1.5">Tên</th>
@@ -161,12 +161,9 @@ export function BulkImportWizard({
                 <th className="px-2 py-1.5">Lỗi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-100">
               {parsed.map((r, i) => (
-                <tr
-                  key={i}
-                  className={r._error ? 'bg-red-50 dark:bg-red-900/20' : undefined}
-                >
+                <tr key={i} className={r._error ? 'bg-red-50' : undefined}>
                   <td className="px-2 py-1">{r.email}</td>
                   <td className="px-2 py-1">{r.name ?? '—'}</td>
                   <td className="px-2 py-1">{r.role}</td>
@@ -199,14 +196,14 @@ export function BulkImportWizard({
         <button
           onClick={onClose}
           disabled={busy}
-          className="rounded-md border border-zinc-300 px-4 py-2 text-sm dark:border-zinc-700"
+          className="rounded-md border border-zinc-300 px-4 py-2 text-sm"
         >
           Huỷ
         </button>
         <button
           onClick={submit}
           disabled={busy || valid.length === 0}
-          className="inline-flex items-center gap-2 rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="inline-flex items-center gap-2 rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy && <Spinner size={14} />}
           {busy ? 'Đang import…' : `Import ${valid.length} tài khoản`}

@@ -163,14 +163,10 @@ function ShipCell({ r, today }: { r: LsxRow; today: string }) {
     <div>
       <div className="text-sm tabular-nums">{fmtD(r.ship_date)}</div>
       {!closed && days < 0 && (
-        <div className="text-[11px] font-medium text-red-600 dark:text-red-400">
-          ⚠ quá {-days} ngày
-        </div>
+        <div className="text-[11px] font-medium text-red-600">⚠ quá {-days} ngày</div>
       )}
       {!closed && days >= 0 && days <= 7 && (
-        <div className="text-[11px] font-medium text-amber-600 dark:text-amber-400">
-          còn {days} ngày
-        </div>
+        <div className="text-[11px] font-medium text-amber-600">còn {days} ngày</div>
       )}
     </div>
   )
@@ -353,11 +349,11 @@ export function LsxWorkbench({
 
       {/* ── Dải "Chờ phát lệnh" — việc cần làm, mỗi khách một dòng ──────────── */}
       {canIssue && pendingByCustomer.length > 0 && (
-        <section className="overflow-hidden rounded-xl border border-amber-200/70 bg-amber-50/60 dark:border-amber-900/40 dark:bg-amber-950/15">
-          <div className="px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider text-amber-800/80 uppercase dark:text-amber-300/80">
+        <section className="overflow-hidden rounded-xl border border-amber-200/70 bg-amber-50/60">
+          <div className="px-4 pt-2.5 pb-1 text-[11px] font-medium tracking-wider text-amber-800/80 uppercase">
             Chờ phát lệnh · {awaiting.length} đơn / {pendingByCustomer.length} khách
           </div>
-          <div className="divide-y divide-amber-200/50 dark:divide-amber-900/30">
+          <div className="divide-y divide-amber-200/50">
             {pendingShown.map((c) => {
               const qty = c.orders.reduce((s, o) => s + o.qty, 0)
               const due = earliestDue(c.orders)
@@ -392,7 +388,7 @@ export function LsxWorkbench({
           {pendingByCustomer.length > 3 && (
             <button
               onClick={() => setShowAllPending((v) => !v)}
-              className="flex w-full items-center gap-1 border-t border-amber-200/50 px-4 py-1.5 text-xs text-amber-800/80 hover:bg-amber-100/50 dark:border-amber-900/30 dark:text-amber-300/80 dark:hover:bg-amber-950/30"
+              className="flex w-full items-center gap-1 border-t border-amber-200/50 px-4 py-1.5 text-xs text-amber-800/80 hover:bg-amber-100/50"
             >
               <ChevronDown
                 className={`size-3.5 transition-transform ${showAllPending ? 'rotate-180' : ''}`}
@@ -533,7 +529,7 @@ export function LsxWorkbench({
                         {r.revision > 1 && (
                           <Badge
                             variant="outline"
-                            className="shrink-0 border-amber-300 bg-amber-50 text-[11px] text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400"
+                            className="shrink-0 border-amber-300 bg-amber-50 text-[11px] text-amber-700"
                           >
                             sửa lần {r.revision}
                           </Badge>

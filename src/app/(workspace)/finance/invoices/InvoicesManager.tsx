@@ -85,7 +85,7 @@ export function InvoicesManager({
           <select
             defaultValue={sp.get('direction') ?? ''}
             onChange={(e) => setParam('direction', e.target.value)}
-            className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-zinc-300 px-2 py-1.5"
           >
             <option value="">Mọi chiều</option>
             <option value="incoming">NCC gửi</option>
@@ -94,7 +94,7 @@ export function InvoicesManager({
           <select
             defaultValue={sp.get('status') ?? ''}
             onChange={(e) => setParam('status', e.target.value)}
-            className="rounded-md border border-zinc-300 px-2 py-1.5 dark:border-zinc-700 dark:bg-zinc-900"
+            className="rounded-md border border-zinc-300 px-2 py-1.5"
           >
             <option value="">Mọi trạng thái</option>
             {Object.entries(STATUS_LABEL).map(([k, v]) => (
@@ -121,9 +121,9 @@ export function InvoicesManager({
           }
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+        <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
           <table className="w-full text-left text-sm">
-            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase dark:border-zinc-800 dark:bg-zinc-900/50">
+            <thead className="border-b border-zinc-200 bg-zinc-50 text-xs text-zinc-500 uppercase">
               <tr>
                 <th className="px-4 py-2.5">Số / Bên</th>
                 <th className="px-4 py-2.5">Chiều</th>
@@ -133,7 +133,7 @@ export function InvoicesManager({
                 <th className="px-4 py-2.5 text-right">Hành động</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+            <tbody className="divide-y divide-zinc-200">
               {initial.map((inv) => {
                 const overdue =
                   inv.due_date &&
@@ -235,8 +235,7 @@ function InvoiceForm({
   onSubmit: (body: Record<string, unknown>) => Promise<void> | void
 }) {
   const [busy, setBusy] = useState(false)
-  const cls =
-    'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900'
+  const cls = 'w-full rounded-md border border-zinc-300 px-3 py-2 text-sm'
 
   async function handle(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -306,7 +305,7 @@ function InvoiceForm({
       <div className="mt-2 flex justify-end sm:col-span-2">
         <button
           disabled={busy}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-slate-900"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {busy ? 'Đang lưu…' : 'Thêm'}
         </button>

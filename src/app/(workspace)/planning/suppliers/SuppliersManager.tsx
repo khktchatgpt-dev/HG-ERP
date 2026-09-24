@@ -138,7 +138,7 @@ export function SuppliersManager({
       cell: (s) => (
         <Link
           href={`/planning/suppliers/${s.id}`}
-          className="flex min-w-0 flex-col hover:text-sky-600 dark:hover:text-sky-400"
+          className="flex min-w-0 flex-col hover:text-sky-600"
         >
           {s.code && <span className="font-mono text-xs text-zinc-400">{s.code}</span>}
           <span className="truncate font-medium">{s.name}</span>

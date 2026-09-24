@@ -128,30 +128,30 @@ export function PlanBoard({
       {/* Quick add */}
       <form
         onSubmit={quickAdd}
-        className="flex flex-wrap gap-2 rounded-lg border border-zinc-200 p-2 dark:border-zinc-800"
+        className="flex flex-wrap gap-2 rounded-lg border border-zinc-200 p-2"
       >
         <input
           value={quickTitle}
           onChange={(e) => setQuickTitle(e.target.value)}
           placeholder="+ Thêm việc nhanh… (Enter để tạo)"
-          className="min-w-48 flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          className="min-w-48 flex-1 rounded-md border border-zinc-200 px-3 py-2 text-sm"
         />
         <input
           type="date"
           value={quickDate}
           onChange={(e) => setQuickDate(e.target.value)}
-          className="rounded-md border border-zinc-200 px-2 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-900"
+          className="rounded-md border border-zinc-200 px-2 py-2 text-sm"
         />
         <button
           disabled={busy || !quickTitle.trim()}
-          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="rounded-md bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           Thêm
         </button>
       </form>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-200 text-sm dark:border-zinc-800">
+      <div className="flex gap-1 border-b border-zinc-200 text-sm">
         {TABS.map((t) => {
           const count = initial[t.id].length
           return (
@@ -159,17 +159,15 @@ export function PlanBoard({
               key={t.id}
               onClick={() => setTab(t.id)}
               className={`-mb-px border-b-2 px-3 py-2 ${
-                tab === t.id
-                  ? 'border-black dark:border-white'
-                  : 'border-transparent text-zinc-500'
+                tab === t.id ? 'border-black' : 'border-transparent text-zinc-500'
               }`}
             >
               {t.label}{' '}
               <span
                 className={`ml-1 rounded-full px-1.5 py-0.5 text-xs ${
                   t.id === 'overdue' && count > 0
-                    ? 'bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300'
-                    : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-zinc-100 text-zinc-600'
                 }`}
               >
                 {count}
@@ -180,13 +178,13 @@ export function PlanBoard({
       </div>
 
       {error && (
-        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
+        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       )}
 
       {tasks.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-zinc-300 p-12 text-center text-sm text-zinc-500 dark:border-zinc-700">
+        <div className="rounded-lg border border-dashed border-zinc-300 p-12 text-center text-sm text-zinc-500">
           {tab === 'overdue'
             ? 'Tuyệt vời — không có việc nào quá hạn.'
             : tab === 'today'
@@ -194,12 +192,9 @@ export function PlanBoard({
               : 'Trống.'}
         </div>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+        <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200">
           {tasks.map((t) => (
-            <li
-              key={t.id}
-              className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-900"
-            >
+            <li key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-50">
               <input
                 type="checkbox"
                 checked={t.status === 'done'}

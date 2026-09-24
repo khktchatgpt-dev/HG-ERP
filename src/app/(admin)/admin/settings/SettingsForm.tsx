@@ -65,12 +65,12 @@ export function SettingsForm({ initial }: { initial: Settings }) {
   }
 
   const cls =
-    'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-950'
+    'w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:border-zinc-500 focus:outline-none'
 
   const btnSecondary =
-    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-900'
+    'rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm hover:bg-zinc-50 disabled:opacity-50'
   const btnPrimary =
-    'rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-white dark:text-black dark:hover:bg-zinc-200'
+    'rounded-md bg-black px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50'
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -103,8 +103,8 @@ export function SettingsForm({ initial }: { initial: Settings }) {
         }
       />
 
-      <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-        <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+      <section className="rounded-lg border border-zinc-200 bg-white">
+        <div className="border-b border-zinc-200 px-4 py-2.5">
           <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
             Thông tin công ty
           </h2>
@@ -279,10 +279,8 @@ export function SettingsForm({ initial }: { initial: Settings }) {
       </Section>
 
       {dirty && (
-        <div className="sticky bottom-4 flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm dark:border-amber-700 dark:bg-amber-950/50">
-          <span className="text-amber-800 dark:text-amber-200">
-            Có thay đổi chưa lưu.
-          </span>
+        <div className="sticky bottom-4 flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm">
+          <span className="text-amber-800">Có thay đổi chưa lưu.</span>
           <div className="flex gap-2">
             <button type="button" onClick={reset} className={btnSecondary}>
               Huỷ
@@ -304,8 +302,8 @@ export function SettingsForm({ initial }: { initial: Settings }) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="border-b border-zinc-200 px-4 py-2.5 dark:border-zinc-800">
+    <section className="rounded-lg border border-zinc-200 bg-white">
+      <div className="border-b border-zinc-200 px-4 py-2.5">
         <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
           {title}
         </h2>
@@ -331,7 +329,7 @@ function Field({
 }) {
   return (
     <label className={`flex flex-col gap-1 ${className}`}>
-      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
+      <span className="text-xs font-medium text-zinc-600">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </span>

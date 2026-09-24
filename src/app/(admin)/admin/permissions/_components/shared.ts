@@ -20,15 +20,15 @@ export const DOMAIN_LABEL: Record<string, string> = {
 export const GLOBAL_ROLE: Record<string, { label: string; cls: string }> = {
   admin: {
     label: 'Admin',
-    cls: 'bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300',
+    cls: 'bg-violet-100 text-violet-700',
   },
   manager: {
     label: 'Quản lý',
-    cls: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+    cls: 'bg-amber-100 text-amber-800',
   },
   employee: {
     label: 'Nhân viên',
-    cls: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300',
+    cls: 'bg-zinc-100 text-zinc-600',
   },
 }
 

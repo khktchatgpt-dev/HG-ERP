@@ -285,12 +285,12 @@ export function LoadContCalculator() {
   }, [current])
 
   const inputCls =
-    'h-8 w-full rounded border border-zinc-300 bg-white px-2 text-sm tabular-nums focus:border-sky-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900'
+    'h-8 w-full rounded border border-zinc-300 bg-white px-2 text-sm tabular-nums focus:border-sky-500 focus:outline-none'
 
   return (
     <div className="flex flex-col gap-4">
       {/* ── Chọn cont ── */}
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <section className="rounded-lg border border-zinc-200 bg-white p-4">
         <h2 className="mb-3 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
           1 · Loại container
         </h2>
@@ -300,7 +300,7 @@ export function LoadContCalculator() {
             <select
               value={contKey}
               onChange={(e) => setContKey(e.target.value)}
-              className="h-8 rounded border border-zinc-300 bg-white px-2 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+              className="h-8 rounded border border-zinc-300 bg-white px-2 text-sm"
             >
               {CONTAINER_PRESETS.map((c) => (
                 <option key={c.key} value={c.key}>
@@ -352,7 +352,7 @@ export function LoadContCalculator() {
             />
           </label>
           <label
-            className="flex items-center gap-2 pb-1.5 text-xs text-zinc-600 dark:text-zinc-300"
+            className="flex items-center gap-2 pb-1.5 text-xs text-zinc-600"
             title="Cho phép tấm phẳng cứng (mặt/chân bàn…) gác ngang qua nóc nhiều cột đế cùng độ cao (vd cột ghế) để lấp khoảng không phía trên. Tải tấm được phân bổ xuống các cột đế; CHỈ gác khi từng cột đế còn chịu nổi — muốn gác được hàng nặng phải khai 'Chịu nén (kg)' cho kiện làm đế (vd thùng ghế chịu 120kg). Chưa khai đủ thì tự quay lại phương án cột cho an toàn."
           >
             <input
@@ -363,7 +363,7 @@ export function LoadContCalculator() {
             Cho phép gác tấm
           </label>
           <label
-            className="flex items-center gap-2 pb-1.5 text-xs text-amber-700 dark:text-amber-400"
+            className="flex items-center gap-2 pb-1.5 text-xs text-amber-700"
             title="CHẾ ĐỘ TEST (nhồi tối đa) — bỏ MỌI ràng buộc an toàn: nặng-trên-nhẹ, sức chịu nén, độ mảnh, kín-thùng-mới-đè, VÀ cả an toàn vùng cửa (lấp kín tới cửa như bản xếp tay 1 cont). CHỈ giữ hình học (không lơ lửng/chèn/tràn) + tải trọng cont. Dùng để ước lượng SỐ CONT TỐI THIỂU. ĐÂY KHÔNG phải phương án xếp an toàn thật."
           >
             <input
@@ -377,7 +377,7 @@ export function LoadContCalculator() {
       </section>
 
       {/* ── Danh sách kiện ── */}
-      <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <section className="rounded-lg border border-zinc-200 bg-white p-4">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-xs font-semibold tracking-wider text-zinc-500 uppercase">
             2 · Danh sách kiện hàng (cm / kg)
@@ -402,7 +402,7 @@ export function LoadContCalculator() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[900px] text-left text-sm">
             <thead className="text-[11px] tracking-wider text-zinc-500 uppercase">
-              <tr className="border-b border-zinc-200 dark:border-zinc-800">
+              <tr className="border-b border-zinc-200">
                 <th className="py-1.5 pr-2">Tên kiện</th>
                 <th className="w-20 py-1.5 pr-2">Dài</th>
                 <th className="w-20 py-1.5 pr-2">Rộng</th>
@@ -430,7 +430,7 @@ export function LoadContCalculator() {
                 <th className="w-10 py-1.5" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
+            <tbody className="divide-y divide-zinc-100">
               {rows.map((r, i) => (
                 <tr key={r.key}>
                   <td className="py-1.5 pr-2">
@@ -489,7 +489,7 @@ export function LoadContCalculator() {
                   <td className="py-1.5 text-right">
                     <button
                       onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))}
-                      className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                      className="rounded px-1.5 py-0.5 text-zinc-400 hover:bg-red-50 hover:text-red-600"
                       title="Xoá dòng"
                     >
                       ✕
@@ -553,7 +553,7 @@ export function LoadContCalculator() {
 
           {/* Trạng thái kiểm tra an toàn — chạy lại độc lập sau mỗi lần tính */}
           {resultTestMode ? (
-            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               ⚠ CHẾ ĐỘ TEST (nhồi tối đa) — đã BỎ mọi ràng buộc an toàn (nặng-trên-nhẹ,
               sức chịu nén, độ mảnh) VÀ cả an toàn vùng cửa (lấp kín tới cửa). Chỉ còn
               kiểm hình học + tải trọng cont
@@ -562,12 +562,12 @@ export function LoadContCalculator() {
               thật.
             </div>
           ) : violations.length === 0 ? (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800 dark:border-green-900 dark:bg-green-950/40 dark:text-green-300">
+            <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
               ✓ Đã kiểm tra {totalPlaced} kiện: không gác lệch, không đè lên kiện không
               cho chồng, nặng dưới nhẹ trên; vùng cửa cont chỉ có cột thấp + vững.
             </div>
           ) : (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
               <div className="font-semibold">
                 ⚠ Phát hiện {violations.length} vi phạm an toàn (báo lại đội phát triển):
               </div>
@@ -582,7 +582,7 @@ export function LoadContCalculator() {
           )}
 
           {result.unplaced.length > 0 && (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
               <div className="font-semibold">Kiện không xếp được:</div>
               <ul className="mt-1 list-inside list-disc">
                 {result.unplaced.map((u, i) => (
@@ -608,8 +608,8 @@ export function LoadContCalculator() {
                       }}
                       className={`rounded-md border px-3 py-1.5 text-sm transition ${
                         c.index === contIndex
-                          ? 'border-sky-500 bg-sky-50 font-medium text-sky-700 dark:bg-sky-950/40 dark:text-sky-300'
-                          : 'border-zinc-300 bg-white text-zinc-600 hover:border-sky-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300'
+                          ? 'border-sky-500 bg-sky-50 font-medium text-sky-700'
+                          : 'border-zinc-300 bg-white text-zinc-600 hover:border-sky-300'
                       }`}
                     >
                       Cont {c.index + 1}
@@ -653,8 +653,8 @@ export function LoadContCalculator() {
                           }
                           className={`flex items-center gap-1.5 rounded border px-2 py-1 text-xs transition ${
                             highlightId === l.id
-                              ? 'border-sky-500 bg-sky-50 dark:bg-sky-950/40'
-                              : 'border-zinc-200 bg-white hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900'
+                              ? 'border-sky-500 bg-sky-50'
+                              : 'border-zinc-200 bg-white hover:border-zinc-400'
                           }`}
                         >
                           <span
@@ -677,9 +677,9 @@ export function LoadContCalculator() {
                 <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">
                   Thứ tự xếp — Cont {contIndex + 1} (từ vách trong ra cửa, dưới lên trên)
                 </h3>
-                <div className="max-h-[540px] overflow-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+                <div className="max-h-[540px] overflow-auto rounded-lg border border-zinc-200">
                   <table className="w-full text-left text-xs">
-                    <thead className="sticky top-0 bg-zinc-50 text-[10px] tracking-wider text-zinc-500 uppercase dark:bg-zinc-900">
+                    <thead className="sticky top-0 bg-zinc-50 text-[10px] tracking-wider text-zinc-500 uppercase">
                       <tr>
                         <th className="px-2 py-1.5">#</th>
                         <th className="px-2 py-1.5">Kiện</th>
@@ -696,7 +696,7 @@ export function LoadContCalculator() {
                         <th className="px-2 py-1.5">Ghi chú</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-100 bg-white dark:divide-zinc-900 dark:bg-zinc-950">
+                    <tbody className="divide-y divide-zinc-100 bg-white">
                       {current?.placements.map((p) => (
                         <tr
                           key={p.order}
